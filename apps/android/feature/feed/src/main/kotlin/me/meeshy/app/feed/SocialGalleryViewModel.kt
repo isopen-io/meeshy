@@ -6,6 +6,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.post.CommentQuotationStore
 import me.meeshy.sdk.post.PostGalleryCommentSource
 import me.meeshy.sdk.session.SessionRepository
 
@@ -14,6 +15,7 @@ import me.meeshy.sdk.session.SessionRepository
 class SocialGalleryViewModel @Inject constructor(
     private val source: PostGalleryCommentSource,
     private val session: SessionRepository,
+    private val quotations: CommentQuotationStore,
 ) : ViewModel() {
 
     val preferences: LanguageResolver.ContentLanguagePreferences
@@ -21,4 +23,9 @@ class SocialGalleryViewModel @Inject constructor(
 
     fun comments(postId: String, commentCount: Int): Flow<List<ApiPostComment>> =
         source.comments(postId = postId, embedded = emptyList(), commentCount = commentCount)
+
+    /** « Commenter ce média » : désigne le média de [gallery] dont le prochain commentaire de [postId] parlera. */
+    fun quoteMedia(gallery: FeedGallery, postId: String, postMediaId: String) {
+        GalleryMediaQuotation.of(gallery, postMediaId)?.let { quotations.designate(it, postId) }
+    }
 }

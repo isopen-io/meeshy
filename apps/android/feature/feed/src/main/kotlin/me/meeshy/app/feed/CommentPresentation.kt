@@ -6,7 +6,9 @@ import me.meeshy.sdk.model.servedAudioUrl
 import me.meeshy.sdk.model.CommentLikeState
 import me.meeshy.sdk.model.CommentEffects
 import me.meeshy.sdk.model.CommentPieceKind
+import me.meeshy.sdk.model.CommentQuotedMedia
 import me.meeshy.sdk.model.CommentVeilRules
+import me.meeshy.sdk.model.quotedCitation
 import me.meeshy.sdk.model.MessageEffects
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
@@ -70,6 +72,8 @@ data class CommentPresentation(
     val effects: MessageEffects = MessageEffects(),
     /** Le lieu joint au commentaire (#14387), rendu en carte touchable sous son corps. */
     val place: FeedLocationPresentation? = null,
+    /** Le média du post que le commentaire cite (#6578) : le bandeau de sa ligne ; sa cible a pu disparaître. */
+    val quotedMedia: CommentQuotedMedia? = null,
 ) {
     /** Un commentaire flouté se lit sous un voile, en le touchant (iOS `CommentVeilRules`). */
     val isBlurred: Boolean get() = CommentVeilRules.isVeiled(effects, isRevealed = false)
@@ -147,6 +151,7 @@ object CommentProjection {
             media = mediaPreviews(comment, mediaBaseUrl, ReaderPrism.resolve(preferences)),
             effects = CommentEffects.served(comment.effectFlags),
             place = FeedPostLocationBuilder.build(comment.location),
+            quotedMedia = comment.quotedCitation,
         )
     }
 
