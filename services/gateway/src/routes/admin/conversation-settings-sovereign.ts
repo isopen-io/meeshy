@@ -362,6 +362,7 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
       const adminId = acteurId(request);
       announceParticipantRoleUpdated({
         manager: fastify.socketIOHandler?.getManager?.(),
+        prisma: fastify.prisma,
         conversationId,
         targetUserId: userId,
         newRole: role,

@@ -23,10 +23,11 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import type { ConversationViewerCapabilities } from '@meeshy/shared/types/conversation';
-import { ROOMS, SERVER_EVENTS, type ConversationNewEventData } from '@meeshy/shared/types/socketio-events';
+import { ROOMS, SERVER_EVENTS, type ConversationNewEventData, type ParticipantRoleUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import { NOT_YET_ACCEPTED } from '../messaging/messageRequests';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
+import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
 
 export const DIRECT_CONVERSATION_MAX_ACTIVE_PARTICIPANTS = 2;
 
@@ -286,4 +287,63 @@ export async function announceConversationNew(
   } catch (error) {
     params.onError(error);
   }
+}
+
+/**
+ * `participant:role-updated` (#15987) : la salle l'apprend telle quelle, et la
+ * CIBLE — seule, dans sa room personnelle — le reçoit augmenté de SA capacité
+ * recalculée pour son nouveau rang. Un changement de rang ne touche pas
+ * `conversation.updatedAt` : sans elle, la synchronisation delta ne relirait
+ * jamais la ligne et un membre promu garderait le `false` de son ancien rang.
+ *
+ * Exclure sa room de la diffusion de salle est ce qui lui évite l'événement en
+ * double ; ses appareils hors du fil l'apprennent du même coup. La lecture ne
+ * précède QUE son exemplaire, la salle ne l'attend pas ; les exemplaires d'une
+ * même cible partent dans l'ordre (`inTargetLane`). Ne rejette jamais : un
+ * échec de lecture lui livre l'événement sans capacité, et le client relit.
+ */
+export async function announceParticipantRoleWithCapabilities(
+  prisma: Pick<PrismaClient, 'participant' | 'user'>,
+  params: {
+    readonly io: ConversationRoomEmitter;
+    readonly payload: ParticipantRoleUpdatedEventData;
+    readonly onError: (error: unknown) => void;
+  },
+): Promise<void> {
+  const { io, payload, onError } = params;
+  const targetRoom = ROOMS.user(payload.userId);
+  try {
+    io.to(ROOMS.conversation(payload.conversationId)).except(targetRoom).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, payload);
+  } catch (error) {
+    onError(error);
+  }
+  await inTargetLane(`${payload.conversationId}:${payload.userId}`, async () => {
+    try {
+      const capabilitiesOf = await loadMemberCapabilities(prisma, {
+        conversationId: payload.conversationId,
+        userIds: [payload.userId],
+        onError,
+      });
+      io.to(targetRoom).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, withViewerCapabilities(payload, capabilitiesOf(payload.userId)));
+    } catch (error) {
+      onError(error);
+    }
+  });
+}
+
+/**
+ * Les exemplaires d'une même cible partent dans l'ORDRE des changements : sa
+ * lecture n°2 ne commence qu'après l'émission n°1. Sans cette file, deux
+ * changements rapprochés (promu puis rétrogradé) pouvaient lui livrer en
+ * DERNIER la capacité de l'ancien rang. La dernière lecture suit la dernière
+ * écriture : l'état final remis est celui de la base. Par processus.
+ */
+const targetLanes = new Map<string, Promise<void>>();
+
+function inTargetLane(key: string, task: () => Promise<void>): Promise<void> {
+  const next = (targetLanes.get(key) ?? Promise.resolve()).then(task, task);
+  targetLanes.set(key, next);
+  return next.finally(() => {
+    if (targetLanes.get(key) === next) targetLanes.delete(key);
+  });
 }
