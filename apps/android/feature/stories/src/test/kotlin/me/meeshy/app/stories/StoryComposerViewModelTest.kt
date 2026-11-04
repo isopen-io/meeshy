@@ -1012,7 +1012,7 @@ class StoryComposerViewModelTest {
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
 
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
-        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
+        assertThat(vm.state.value.deck.slides.flatMap { it.mediaIds }).containsExactly("up-1")
         assertThat(vm.state.value.errorMessage).isNotNull()
         assertThat(vm.state.value.isPreparingMedia).isFalse()
     }
