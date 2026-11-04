@@ -2,6 +2,7 @@ package me.meeshy.sdk.model
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
@@ -59,7 +60,8 @@ sealed interface BridgeAnnouncement {
 }
 
 object BridgeAnnouncementSerializer : KSerializer<BridgeAnnouncement> {
-    override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
+    /** Nullable : `coerceInputValues` ne doit pas rabattre un `null` explicite sur le défaut (absent). */
+    override val descriptor: SerialDescriptor = JsonElement.serializer().nullable.descriptor
 
     override fun deserialize(decoder: Decoder): BridgeAnnouncement {
         val input = decoder as? JsonDecoder ?: return BridgeAnnouncement.NotComputed
@@ -85,4 +87,44 @@ object BridgeAnnouncementSerializer : KSerializer<BridgeAnnouncement> {
 /** Qui dit « modifié » : jamais un avis d'appel réécrit sur place par la passerelle (`callNoticeUpdated`, `marksEdited = false`). */
 object MessageEditMarks {
     fun marksEdited(message: ApiMessage): Boolean = message.callSummary == null && message.isEdited
+}
+
+/**
+ * Le registre des mentions non lues, par conversation : un ensemble d'identifiants de MESSAGES, donc `mention:created`
+ * rejoué (reconnexion) ne compte jamais deux fois. La passerelle annonce une mention par deux voies — `mention:created`
+ * et `notification:new` — : [onNotification] retient le message déjà annoncé par la seconde pour que la première ne
+ * déclenche pas de seconde alerte in-app, et le badge, lui, ne dépend que des identifiants.
+ */
+data class MentionLedger(
+    val unread: Map<String, Set<String>> = emptyMap(),
+    val announced: List<String> = emptyList(),
+) {
+    /** Ce que [onMentionCreated] décide : le registre suivant et si une alerte in-app est due. */
+    data class Outcome(val ledger: MentionLedger, val alertDue: Boolean)
+
+    val total: Int get() = unread.values.sumOf { it.size }
+
+    fun count(conversationId: String): Int = unread[conversationId]?.size ?: 0
+
+    fun onMentionCreated(event: MentionCreatedEvent, viewerId: String?, conversationIsOpen: Boolean): Outcome {
+        val aimedElsewhere = event.mentionedUserId != null && viewerId != null && event.mentionedUserId != viewerId
+        val own = event.senderId != null && event.senderId == viewerId
+        if (aimedElsewhere || own || conversationIsOpen) return Outcome(this, alertDue = false)
+        val known = unread[event.conversationId].orEmpty()
+        if (event.messageId in known) return Outcome(this, alertDue = false)
+        val next = copy(unread = unread + (event.conversationId to (known + event.messageId)))
+        return Outcome(next, alertDue = event.messageId !in announced)
+    }
+
+    /** Un `notification:new` de mention a déjà annoncé [messageId] : pas de seconde alerte. */
+    fun onNotification(messageId: String): MentionLedger =
+        if (messageId in announced) this else copy(announced = (announced + messageId).takeLast(ANNOUNCED_CAP))
+
+    /** La conversation est lue : ses mentions s'effacent. */
+    fun onRead(conversationId: String): MentionLedger =
+        if (conversationId in unread) copy(unread = unread - conversationId) else this
+
+    companion object {
+        const val ANNOUNCED_CAP = 200
+    }
 }

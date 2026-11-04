@@ -5,7 +5,7 @@ import kotlinx.serialization.json.Json
 import org.junit.Test
 
 class BridgeTriStateTest {
-    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = false; coerceInputValues = true }
 
     private fun decode(raw: String): UnreadUpdateEvent = json.decodeFromString(UnreadUpdateEvent.serializer(), raw)
 
