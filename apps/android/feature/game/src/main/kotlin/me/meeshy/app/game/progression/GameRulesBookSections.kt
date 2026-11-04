@@ -1,5 +1,8 @@
 package me.meeshy.app.game.progression
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,9 +17,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -28,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.GameNumberFormat
 import me.meeshy.sdk.model.game.rules.GameRulesBook
+import me.meeshy.sdk.model.game.rules.GameRulesFocus
 import me.meeshy.sdk.model.game.rules.GlossaryKey
 import me.meeshy.sdk.model.game.rules.GuideFilms
 import me.meeshy.sdk.model.game.rules.GuideSpeaker
@@ -57,15 +64,32 @@ internal fun RulesIntro(modifier: Modifier = Modifier) {
 
 /** « Les règles en une page » (iOS `GameRulesPage.rules`) : huit règles numérotées, titre et phrase, lues d'un tenant. */
 @Composable
-internal fun RulesList(modifier: Modifier = Modifier) {
+internal fun RulesList(
+    modifier: Modifier = Modifier,
+    highlighted: Int? = null,
+    reduceMotion: Boolean = false,
+    onRulePositioned: (Int, Float) -> Unit = { _, _ -> },
+) {
     val tokens = MeeshyTheme.tokens
     val locale = LocalConfiguration.current.locales[0]
     Column(modifier.fillMaxWidth().testTag(RULES_RULES_TAG), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         SectionTitle(stringResource(R.string.game_rules_section_rules))
         GameRulesBook.ruleIndices.forEach { index ->
             val copy = RulesBookCopy.rule(index)
+            val tint by animateFloatAsState(
+                targetValue = if (highlighted == index) GameRulesFocus.TINT_ALPHA else 0f,
+                animationSpec = if (reduceMotion) snap() else tween(GameRulesFocus.FADE_MILLIS),
+                label = "rules.rule.tint",
+            )
             Row(
-                Modifier.fillMaxWidth().padding(MeeshySpacing.xs).semantics(mergeDescendants = true) {}.testTag(rulesRuleTag(index)),
+                Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { onRulePositioned(index, it.positionInParent().y) }
+                    .clip(RoundedCornerShape(MeeshyRadius.md))
+                    .background(MeeshyPalette.Indigo500.copy(alpha = tint))
+                    .padding(MeeshySpacing.xs)
+                    .semantics(mergeDescendants = true) {}
+                    .testTag(rulesRuleTag(index)),
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 verticalAlignment = Alignment.Top,
             ) {

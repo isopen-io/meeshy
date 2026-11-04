@@ -12,10 +12,11 @@ public sealed interface GameRulesFocus {
     }
 
     public data class Rule(val index: Int) : GameRulesFocus {
-        override val wire: String get() = "rule-$index"
+        override val wire: String get() = "$RULE_PREFIX$index"
     }
 
     public companion object {
+        private const val RULE_PREFIX: String = "rule-"
         public const val ANCHOR: Float = 0.18f
         public const val SETTLE_MILLIS: Int = 250
         public const val SCROLL_MILLIS: Int = 350
@@ -24,8 +25,10 @@ public sealed interface GameRulesFocus {
         public const val FADE_MILLIS: Int = 400
 
         public fun parse(wire: String?): GameRulesFocus? {
+            if (wire == null) return null
             if (wire == Badges.wire) return Badges
-            val index = wire?.removePrefix("rule-")?.takeIf { wire.startsWith("rule-") }?.toIntOrNull() ?: return null
+            if (!wire.startsWith(RULE_PREFIX)) return null
+            val index = wire.removePrefix(RULE_PREFIX).toIntOrNull() ?: return null
             return Rule(index).takeIf { index in GameRulesBook.ruleIndices }
         }
     }
