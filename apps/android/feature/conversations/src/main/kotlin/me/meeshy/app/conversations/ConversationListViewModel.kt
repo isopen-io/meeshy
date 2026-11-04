@@ -75,6 +75,7 @@ class ConversationListViewModel @Inject constructor(
     dialogDeps: ConversationListDialogDeps = ConversationListDialogDeps.detached(),
     messageSearchSource: ListMessageSearchSource = NoListMessageSearch,
     entryRequests: ConversationListEntryRequests = ConversationListEntryRequests(),
+    private val sectionExpansion: ConversationSectionExpansionStore = ConversationSectionExpansionStore(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -145,7 +146,18 @@ class ConversationListViewModel @Inject constructor(
         categorySocketManager = categorySocketManager,
         storyRepository = storyRepository,
         statusBarCache = statusBarCache,
+        sectionExpansion = sectionExpansion,
     )
+    private val sectionController = ConversationSectionController(
+        viewModelScope, sectionExpansion, categoryRepository,
+    ) { _state.value.categories }
+
+    /** Les sections dépliées gardées pour la session (`null` = défauts de première ouverture). */
+    val rememberedSections: StateFlow<Set<String>?> = sectionExpansion.rememberedSections
+
+    /** Replie ou déplie [section] : mémoire de session à l'instant, serveur en silence pour une catégorie. */
+    fun onSectionToggled(section: ConversationSection, expanded: Boolean) =
+        sectionController.onToggled(section, expanded)
 
     private val messageSearcher = ConversationListMessageSearcher(
         scope = viewModelScope,

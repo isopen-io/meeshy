@@ -40,6 +40,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.theme.MeeshyPalette
@@ -55,6 +56,10 @@ import me.meeshy.ui.theme.MeeshyTheme
  * `SectionFoldedUnread`, #8694) — in the section's colour;
  * the body reveals its child rows with a size animation.
  *
+ * Uncontrolled by default (owns a saveable fold state); a host that keeps the state itself
+ * passes [expanded] and hears the user's gesture through [onExpandedChange]. [stateDescription]
+ * is the localized value TalkBack reads after the title (« Développée » / « Réduite, 3 non lus »).
+ *
  * SDK-pure: the icon and the rows are opaque slots, the accent is a plain [Color], and
  * the component owns only its own expand/collapse UI state. The product decision of what
  * a section contains stays app-side.
@@ -68,12 +73,21 @@ public fun CollapsibleSection(
     foldedUnread: Int = 0,
     foldedUnreadDescription: String? = null,
     initiallyExpanded: Boolean = true,
+    expanded: Boolean? = null,
+    onExpandedChange: ((Boolean) -> Unit)? = null,
+    stateDescription: String? = null,
     icon: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
+    var ownExpanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
+    val isExpanded = expanded ?: ownExpanded
+    val fold: () -> Unit = {
+        val next = !isExpanded
+        if (expanded == null) ownExpanded = next
+        onExpandedChange?.invoke(next)
+    }
     val chevronRotation by animateFloatAsState(
-        targetValue = if (expanded) 0f else -90f,
+        targetValue = if (isExpanded) 0f else -90f,
         label = "collapsible-chevron",
     )
     val tokens = MeeshyTheme.tokens
@@ -83,7 +97,7 @@ public fun CollapsibleSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(MeeshyRadius.md))
-                .foldsOnShortTap { expanded = !expanded }
+                .foldsOnShortTap(stateDescription, fold)
                 .padding(vertical = MeeshySpacing.sm, horizontal = MeeshySpacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -104,7 +118,7 @@ public fun CollapsibleSection(
                 color = tokens.textPrimary,
                 modifier = Modifier.weight(1f),
             )
-            if (!expanded && foldedUnread > 0) {
+            if (!isExpanded && foldedUnread > 0) {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(MeeshyRadius.pill))
@@ -142,7 +156,7 @@ public fun CollapsibleSection(
                 modifier = Modifier.rotate(chevronRotation),
             )
         }
-        AnimatedVisibility(visible = expanded) {
+        AnimatedVisibility(visible = isExpanded) {
             Column(content = content)
         }
     }
@@ -155,12 +169,13 @@ public fun CollapsibleSection(
  * garde le retour visuel d'un bouton (indication du thème), que `clickable` donnait.
  */
 @Composable
-private fun Modifier.foldsOnShortTap(onFold: () -> Unit): Modifier {
+private fun Modifier.foldsOnShortTap(stateDescription: String?, onFold: () -> Unit): Modifier {
     val fold by rememberUpdatedState(onFold)
     val interaction = remember { MutableInteractionSource() }
     return this
         .semantics(mergeDescendants = true) {
             role = Role.Button
+            stateDescription?.let { this.stateDescription = it }
             onClick { fold(); true }
         }
         .indication(interaction, LocalIndication.current)

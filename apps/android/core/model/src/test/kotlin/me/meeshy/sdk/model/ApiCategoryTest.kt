@@ -20,16 +20,23 @@ class ApiCategoryTest {
     ) = ApiCategory(id = id, name = name, color = color, icon = icon, order = order, isExpanded = isExpanded)
 
     @Test
-    fun `toOption keeps id, name and order`() {
+    fun `toOption keeps id, name, order and the render attributes`() {
         assertThat(wire(id = "abc", name = "Family", order = 5).toOption())
-            .isEqualTo(CategoryOption(id = "abc", name = "Family", order = 5))
+            .isEqualTo(
+                CategoryOption(
+                    id = "abc", name = "Family", order = 5,
+                    color = "#3B82F6", icon = "briefcase", isExpanded = true,
+                ),
+            )
     }
 
     @Test
-    fun `toOption drops the render-only color, icon and expansion fields`() {
+    fun `toOption exposes the category's own colour, icon and fold state to the UI`() {
         val option = wire(color = "#FF0000", icon = "star", isExpanded = false).toOption()
 
-        assertThat(option).isEqualTo(CategoryOption(id = "c1", name = "Work", order = 2))
+        assertThat(option.color).isEqualTo("#FF0000")
+        assertThat(option.icon).isEqualTo("star")
+        assertThat(option.isExpanded).isFalse()
     }
 
     @Test
@@ -76,5 +83,16 @@ class ApiCategoryExpansionTest {
         val json = kotlinx.serialization.json.Json.encodeToString(CategoryPatchBody.serializer(), CategoryPatchBody(false))
 
         assertThat(json).isEqualTo("""{"isExpanded":false}""")
+    }
+
+    @Test
+    fun `an old snapshot written without the render attributes still decodes`() {
+        val old = kotlinx.serialization.json.Json.decodeFromString(
+            CategoryOption.serializer(),
+            """{"id":"c1","name":"Work","order":2}""",
+        )
+
+        assertThat(old).isEqualTo(CategoryOption(id = "c1", name = "Work", order = 2))
+        assertThat(old.isExpanded).isNull()
     }
 }
