@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.app.chat.audio.ConversationAudioQueueFeed
+import me.meeshy.app.chat.audio.QuotedAudioPlayback
 import me.meeshy.core.common.IoDispatcher
 import me.meeshy.sdk.media.TypedMediaCache
 import me.meeshy.sdk.media.UploadedAttachmentIds
@@ -76,6 +77,9 @@ internal interface ChatVoicePlayback {
 
     /** La pastille de retour en bas : jouer le vocal [attachmentId] du fil lié (pause/reprise s'il est le courant, sinon la file). */
     fun tapAttachment(attachmentId: String)
+
+    /** Toucher la citation d'un vocal : il joue seul, sans file (pause/reprise s'il est déjà le courant). */
+    fun playQuoted(quoted: BubbleAudio, bubble: BubbleContent)
 
     /** Un vocal du hub média, joué seul. */
     fun tapLone(audio: BubbleAudio, messageId: String, senderName: String, sentAtEpochMs: Long)
@@ -169,6 +173,11 @@ internal class ChatAudioViewModel @Inject constructor(
     override fun tapAttachment(attachmentId: String) {
         val bubble = thread?.messages?.firstOrNull { message -> message.audios.any { it.attachmentId == attachmentId } } ?: return
         tap(bubble.audios.first { it.attachmentId == attachmentId }, bubble)
+    }
+
+    override fun playQuoted(quoted: BubbleAudio, bubble: BubbleContent) {
+        val voice = QuotedAudioPlayback.resolve(quoted, bubble.replyToId, bubble.replyToSenderName, thread?.messages.orEmpty()) ?: return
+        tapLone(voice.audio, voice.messageId, voice.senderName, voice.sentAtEpochMs)
     }
 
     override fun tapLone(audio: BubbleAudio, messageId: String, senderName: String, sentAtEpochMs: Long) {
@@ -278,6 +287,7 @@ internal fun BubbleCallbacks.withVoice(voice: ChatVoicePlayback?, bubble: Bubble
             onAudioClick = { audio -> voice.tap(audio, bubble) },
             onAudioSeek = { audio, seconds -> voice.seekSeconds(audio, seconds) },
             onAudioSeekFraction = { audio, fraction -> voice.seekFraction(audio, fraction) },
+            onQuotedAudioClick = { quoted -> voice.playQuoted(quoted, bubble) },
             onAudioCycleSpeed = voice::cycleSpeed,
             audioSamples = voice::samples,
         )

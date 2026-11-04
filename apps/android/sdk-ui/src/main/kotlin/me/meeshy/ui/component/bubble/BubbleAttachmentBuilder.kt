@@ -196,7 +196,7 @@ internal object BubbleAttachmentBuilder {
      * attachment carries no explicit `duration`, matching the gateway's two sources.
      * Both are milliseconds (`MessageAttachment.duration`, packages/shared/prisma/schema.prisma).
      */
-    private fun buildAudio(
+    internal fun buildAudio(
         attachment: ApiMessageAttachment,
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,

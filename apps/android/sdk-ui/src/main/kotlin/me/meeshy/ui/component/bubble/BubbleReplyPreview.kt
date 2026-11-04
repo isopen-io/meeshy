@@ -10,7 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,12 +42,15 @@ internal fun BubbleReplySection(
     content: BubbleContent,
     onColor: Color,
     onReplyPreviewClick: (() -> Unit)?,
+    onQuotedAudioClick: ((BubbleAudio) -> Unit)? = null,
 ) {
     if (content.replyToText == null && !content.replyToDeleted) return
-    val mediaLabel = when (content.replyToMediaKind) {
-        ReplyMediaKind.Image -> stringResource(R.string.bubble_reply_photo)
-        ReplyMediaKind.File -> stringResource(R.string.bubble_reply_attachment)
-        ReplyMediaKind.None -> null
+    val voice = content.replyToAudio?.takeIf { !content.replyToDeleted }
+    val mediaLabel = when {
+        voice != null -> stringResource(R.string.media_label_audio)
+        content.replyToMediaKind == ReplyMediaKind.Image -> stringResource(R.string.bubble_reply_photo)
+        content.replyToMediaKind == ReplyMediaKind.File -> stringResource(R.string.bubble_reply_attachment)
+        else -> null
     }
     val replyText = content.replyToText?.takeIf { it.isNotBlank() }
         ?: mediaLabel
@@ -56,6 +62,7 @@ internal fun BubbleReplySection(
         thumbnailUrl = content.replyToThumbnailUrl,
         accentColor = onColor,
         onClick = onReplyPreviewClick?.takeIf { content.replyToId != null },
+        onPlayVoice = voice?.let { audio -> onQuotedAudioClick?.let { click -> { click(audio) } } },
         modifier = Modifier.padding(bottom = MeeshySpacing.xs),
     )
 }
@@ -69,6 +76,7 @@ private fun ReplyPreview(
     accentColor: Color,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    onPlayVoice: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -135,5 +143,17 @@ private fun ReplyPreview(
                 )
             }
         }
+        if (onPlayVoice != null) {
+            IconButton(onClick = onPlayVoice, modifier = Modifier.size(QUOTED_VOICE_TOUCH_TARGET)) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = stringResource(R.string.media_audio_play),
+                    tint = accentColor,
+                )
+            }
+        }
     }
 }
+
+/** La cible tactile du ▶ d'une citation de vocal : 48 dp, la même que tout bouton de la bulle. */
+private val QUOTED_VOICE_TOUCH_TARGET = 48.dp
