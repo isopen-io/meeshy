@@ -60,7 +60,7 @@ class AudioFullscreenAuthorAndDownloadTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             MeeshyTheme {
-                CompositionLocalProvider(LocalPresenceStore provides live?.let(::store)) {
+                CompositionLocalProvider(LocalPresenceStore provides live?.let { store(it) }) {
                     AudioFullscreenScreen(
                         sources = listOf(source),
                         startAttachmentId = source.id,
