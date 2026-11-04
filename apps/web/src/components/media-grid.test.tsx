@@ -20,6 +20,8 @@ import { mediaGridCellSizes, mediaGridSlots, soloVideoSlot } from '@/lib/view/me
 
 import { HighlightedPieceContext } from '@/lib/view/highlighted-piece';
 
+import { mediaDownloadStore } from '@/lib/media/media-download-preferences';
+
 import { MediaGrid } from './media-grid';
 
 /**
@@ -483,5 +485,65 @@ describe('MediaGrid — chaque case se nomme, la tuile citée s’éclaire (#990
     const html = render(items, items[5]!.id);
     expect(html.match(/data-piece-highlighted/g)?.length).toBe(1);
     expect(html).toMatch(new RegExp(`data-piece="${items[3]!.id}"[^>]*data-piece-highlighted|data-piece-highlighted[^>]*data-piece="${items[3]!.id}"`));
+  });
+});
+
+/**
+ * **AU-DELÀ DE LA POLITIQUE, LA BULLE DEMANDE** (#6333) — une image que la
+ * politique de l'appareil ne laisse pas partir seule n'est pas demandée au
+ * serveur : sa case dit sa taille, un toucher la télécharge. Sous 100 Ko elle
+ * part toujours seule ; une taille absente n'est pas « petite ».
+ */
+describe('MediaGrid — le téléchargement automatique des images (#6333)', () => {
+  const images = () => attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID).filter((a) => a.mimeType.startsWith('image/'));
+  const solo = (fileSize: number): Attachment => ({ ...images()[0]!, fileSize });
+  const ask = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[data-media-download-ask]');
+
+  afterEach(() => {
+    mediaDownloadStore().setPolicy('image', 'wifiAndGoodCellular');
+  });
+
+  test('par défaut (Wi-Fi + bon cellulaire, réseau sans indice) : l’image se télécharge comme avant', () => {
+    const el = mount([solo(2_400_000)], () => {});
+    expect(el.querySelector('img[data-attachment-image]')).not.toBeNull();
+    expect(ask(el)).toBeNull();
+  });
+
+  test('politique « jamais » : aucune <img>, la case dit sa taille, un toucher la télécharge sans ouvrir la visionneuse', () => {
+    mediaDownloadStore().setPolicy('image', 'never');
+    const opened: number[] = [];
+    const el = mount([solo(2_400_000)], (index) => opened.push(index));
+    expect(el.querySelector('img[data-attachment-image]')).toBeNull();
+    expect(ask(el)?.getAttribute('aria-label')).toMatch(/^Télécharger .+, 2[.,]\d+ Mo$/u);
+    expect(el.querySelector('[data-media-download-pill]')?.textContent).toMatch(/Mo/u);
+
+    act(() => ask(el)?.click());
+
+    expect(el.querySelector('img[data-attachment-image]')).not.toBeNull();
+    expect(ask(el)).toBeNull();
+    expect(opened).toEqual([]);
+  });
+
+  test('sous 100 Ko, l’image part seule malgré « jamais » ; une taille absente (0) demande', () => {
+    mediaDownloadStore().setPolicy('image', 'never');
+    expect(mount([solo(99_999)], () => {}).querySelector('img[data-attachment-image]')).not.toBeNull();
+    act(() => root.unmount());
+    container.remove();
+    const unsized = mount([solo(0)], () => {});
+    expect(unsized.querySelector('img[data-attachment-image]')).toBeNull();
+    expect(ask(unsized)?.getAttribute('aria-label')).toMatch(/^Télécharger /u);
+  });
+
+  test('dans une grille, la case demande aussi, et un toucher la télécharge au lieu de l’ouvrir', () => {
+    mediaDownloadStore().setPolicy('image', 'never');
+    const opened: number[] = [];
+    const pair = images().map((a) => ({ ...a, fileSize: 1_500_000 }));
+    expect(pair.length).toBe(2);
+    const el = mount(pair, (index) => opened.push(index));
+    const asks = el.querySelectorAll<HTMLButtonElement>('[data-media-download-ask]');
+    expect(asks.length).toBe(2);
+    act(() => asks[0]!.click());
+    expect(opened).toEqual([]);
+    expect(el.querySelectorAll('img[data-attachment-image]').length).toBe(1);
   });
 });

@@ -60,32 +60,85 @@ object ConversationEventDeltas {
 
     /**
      * Une vue unique ouverte par quelqu'un (#7579) : seul le compteur bouge chez les autres ; quand
-     * c'est CE lecteur qui l'a ouverte (autre appareil), la bulle passe à « déjà ouverte ».
+     * c'est CE lecteur qui l'a ouverte (autre appareil), la bulle passe à « déjà ouverte » ET se scelle
+     * comme à la purge ([sealedAsOpened], iso iOS `sealAsOpenedViewOnce`, #15897) : rien du contenu ne
+     * reste lisible en Room une fois la vue consommée par soi. Un `consumed` d'un autre ne vide rien.
      */
     fun consumed(message: ApiMessage, event: MessageConsumedEvent, viewerId: String?): ApiMessage {
         val openedByViewer = viewerId != null && (event.userId == viewerId || event.participantId == viewerId)
-        val nextConsumedByMe = if (openedByViewer) true else message.consumedByMe
-        if (message.viewOnceCount == event.viewOnceCount && message.consumedByMe == nextConsumedByMe) return message
-        return message.copy(viewOnceCount = event.viewOnceCount, consumedByMe = nextConsumedByMe)
+        val base = if (openedByViewer) sealedAsOpened(message) else message
+        if (base.viewOnceCount == event.viewOnceCount) return base
+        return base.copy(viewOnceCount = event.viewOnceCount)
     }
 
     /**
-     * Le CONTENU d'une vue unique est purgé (#7578) : texte, traductions, média, vignette,
-     * transcription et traductions audio disparaissent ; la bulle et son état « ouvert » restent.
+     * Ce lecteur vient d'ouvrir (et de refermer) la vue unique : même scellement que [consumed] par soi, sans attendre
+     * l'écho du serveur. Idempotent.
      */
-    fun viewOncePurged(message: ApiMessage): ApiMessage {
-        val purgedAttachments = message.attachments.map { it.purgedContent() }
-        if (message.content.isEmpty() && message.translations.isEmpty() && purgedAttachments == message.attachments) {
-            return message
-        }
-        return message.copy(content = "", translations = emptyList(), attachments = purgedAttachments)
+    fun sealedAsOpened(message: ApiMessage): ApiMessage {
+        val purged = viewOncePurged(message)
+        return if (purged.consumedByMe == true) purged else purged.copy(consumedByMe = true)
     }
 
-    /** Le résumé AUTORITAIRE des réactions d'une pièce (`attachment:reaction-*`) remplace le local. */
-    fun attachmentReactions(message: ApiMessage, attachmentId: String, summary: Map<String, Int>?): ApiMessage {
+    /**
+     * Le scellement que toute écriture d'une ligne doit rendre (#15897, iso iOS `APIMessageUpsert+Merge`) : une VUE UNIQUE
+     * ([holdsViewOnce]) que ce lecteur a ouverte — la ligne le sait ([openedHere], colonne `viewOnceOpenedAt`) ou la
+     * charge le dit (`consumedByMe`) — sort par [sealedAsOpened]. Tout autre message est rendu tel quel : un message
+     * ordinaire n'est jamais vidé par une colonne d'ouverture posée à tort.
+     */
+    fun sealedIfOpened(message: ApiMessage, openedHere: Boolean): ApiMessage {
+        val opened = openedHere || message.consumedByMe == true
+        return if (opened && holdsViewOnce(message)) sealedAsOpened(message) else message
+    }
+
+    /** Le message est une vue unique, déclarée par lui (drapeau ou effet) ou par l'une de ses pièces. */
+    fun holdsViewOnce(message: ApiMessage): Boolean =
+        message.isViewOnce == true ||
+            MessageEffectFlags.has((message.effectFlags ?: 0).toLong(), MessageEffectFlags.VIEW_ONCE) ||
+            message.attachments.any { it.isViewOnce == true || MessageEffectFlags.has(it.effectFlags ?: 0L, MessageEffectFlags.VIEW_ONCE) }
+
+    /**
+     * Le CONTENU d'une vue unique est purgé (#7578) : texte, traductions, cryptogramme, lieu, sticker, liens suivis,
+     * métadonnées, et par pièce le média, la vignette, la transcription, les traductions audio, le texte alternatif, le
+     * nom de fichier et les coordonnées — tout ce que le serveur retient à un lecteur qui l'a ouverte
+     * (`viewOnceAudience.ts` `WITHHELD_CONTENT`, iso iOS `sealAsOpenedViewOnce`, #15897). La bulle, son type, ses
+     * drapeaux de protection et son état « ouvert » restent.
+     */
+    fun viewOncePurged(message: ApiMessage): ApiMessage {
+        val purged = message.copy(
+            content = "",
+            translations = emptyList(),
+            attachments = message.attachments.map { it.purgedContent() },
+            encryptedContent = null,
+            location = null,
+            sticker = null,
+            trackingLinks = null,
+            metadata = null,
+        )
+        return if (purged == message) message else purged
+    }
+
+    /**
+     * Le résumé AUTORITAIRE des réactions d'une pièce (`attachment:reaction-*`) remplace le local. [ownEmoji] est posé
+     * quand l'auteur de l'événement EST ce lecteur (son `User.id`, depuis un autre appareil) : « ma réaction » suit.
+     */
+    fun attachmentReactions(
+        message: ApiMessage,
+        attachmentId: String,
+        summary: Map<String, Int>?,
+        ownEmoji: String? = null,
+        ownAdding: Boolean = true,
+    ): ApiMessage {
         val normalized = summary?.filterValues { it > 0 }?.ifEmpty { null }
         return message.updatingAttachment(attachmentId) { attachment ->
-            if (attachment.reactionSummary == normalized) attachment else attachment.copy(reactionSummary = normalized)
+            val mine = attachment.currentUserReactions.orEmpty()
+            val nextMine = when {
+                ownEmoji.isNullOrEmpty() -> attachment.currentUserReactions
+                ownAdding -> if (ownEmoji in mine) attachment.currentUserReactions else mine + ownEmoji
+                else -> (mine - ownEmoji).ifEmpty { null }
+            }
+            if (attachment.reactionSummary == normalized && attachment.currentUserReactions == nextMine) attachment
+            else attachment.copy(reactionSummary = normalized, currentUserReactions = nextMine)
         }
     }
 
@@ -125,6 +178,11 @@ object ConversationEventDeltas {
             imageVariants = null,
             transcription = null,
             translations = null,
+            alt = null,
+            originalName = null,
+            fileName = null,
+            latitude = null,
+            longitude = null,
         )
         return if (purged == this) this else purged
     }

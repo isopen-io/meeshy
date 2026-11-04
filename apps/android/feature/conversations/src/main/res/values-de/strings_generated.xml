@@ -91,6 +91,7 @@
     <string name="conversations_lock_title_verify_master">Master-PIN überprüfen</string>
     <string name="conversations_logout">Abmelden</string>
     <string name="conversations_new">Neue Unterhaltung</string>
+    <string name="conversations_obsolete_error">Die Unterhaltung konnte nicht als veraltet markiert werden.</string>
     <string name="conversations_open_dashboard">Übersicht</string>
     <string name="conversations_preview_draft_label">Entwurf</string>
     <string name="conversations_preview_draft_prefix">Entwurf:</string>

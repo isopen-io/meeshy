@@ -435,6 +435,9 @@ struct ThemedFeedOverlay: View {
                 }
             },
             onRepost: { postId in togglePostRepost(postId: postId) },
+            onQuote: { postId in
+                quoteOriginalPost = viewModel.posts.first(where: { $0.id == postId })
+            },
             onBookmark: { postId in togglePostBookmark(postId: postId) },
             onShare: { postId in sharePostWithLink(postId: postId) },
             onTapAuthor: { authorId in

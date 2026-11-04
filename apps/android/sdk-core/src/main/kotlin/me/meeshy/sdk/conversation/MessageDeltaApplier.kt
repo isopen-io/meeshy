@@ -87,7 +87,12 @@ class MessageDeltaApplier internal constructor(
             }
             is MessageCitedPostWithdrawnEvent -> withdrawCitedPost(event)
             is AttachmentReactionUpdateEvent -> transform(event.messageId) {
-                ConversationEventDeltas.attachmentReactions(it, event.attachmentId, event.reactionSummary)
+                val mine = viewerId != null && event.userId == viewerId
+                ConversationEventDeltas.attachmentReactions(
+                    it, event.attachmentId, event.reactionSummary,
+                    ownEmoji = event.emoji.takeIf { mine },
+                    ownAdding = !event.isRemoval,
+                )
             }
             is AttachmentStatusUpdatedEvent -> transform(event.messageId) { AttachmentLiveDeltas.status(it, event, viewerId) }
             is MessageAttachmentUpdatedEvent -> enrich(event.messageId, event.conversationId, event.servedAttachmentId, event.attachment)
@@ -132,7 +137,7 @@ class MessageDeltaApplier internal constructor(
     }
 
     private suspend fun transform(messageId: String, delta: (ApiMessage) -> ApiMessage) {
-        updater.update(messageId, requireSynced = false, transform = delta)
+        updater.update(messageId, requireSynced = false, openedAt = clock.nowMillis(), transform = delta)
     }
 
     /** Une suppression pour tous laisse une pierre tombale ; une expiration retire la ligne. */
@@ -170,8 +175,13 @@ class MessageDeltaApplier internal constructor(
      */
     suspend fun expireLocally(messageIds: List<String>) = erasing(messageIds) { purge(messageIds) }
 
-    /** La vue unique que CE lecteur vient de refermer : son clair E2EE quitte le coffre sans attendre l'écho (#14633). */
-    suspend fun erasePlaintexts(messageIds: List<String>) = erasing(messageIds) {}
+    /**
+     * La vue unique que CE lecteur vient de refermer : son clair E2EE quitte le coffre sans attendre l'écho (#14633), et
+     * la ligne Room se scelle comme à un `message:consumed` par soi (contenu, traductions, pièces vidés, #15897).
+     */
+    suspend fun erasePlaintexts(messageIds: List<String>) = erasing(messageIds) {
+        messageIds.forEach { id -> transform(id) { ConversationEventDeltas.sealedAsOpened(it) } }
+    }
 
     /** Une vue unique ouverte par CE lecteur (ici ou sur un autre de ses appareils) : son clair quitte le coffre. */
     private suspend fun consumed(event: MessageConsumedEvent, viewerId: String?) {

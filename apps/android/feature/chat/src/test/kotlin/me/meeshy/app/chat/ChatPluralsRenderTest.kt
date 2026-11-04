@@ -18,6 +18,8 @@ class ChatPluralsRenderTest {
         return RuntimeEnvironment.getApplication().resources.getQuantityString(id, count, count)
     }
 
+    private fun arabicNumber(count: Int): String = String.format(java.util.Locale.forLanguageTag("ar"), "%d", count)
+
     @Test
     fun `english pinned count agrees with its number`() {
         assertThat(render("en", R.plurals.chat_pinned_count, 1)).isEqualTo("1 pinned message")
@@ -56,13 +58,23 @@ class ChatPluralsRenderTest {
     @Test
     fun `arabic header members has six forms`() {
         val forms = listOf(0, 1, 2, 5, 11, 100).map { render("ar", R.plurals.chat_header_members, it) }
-        assertThat(forms).containsExactly("لا أعضاء", "عضو واحد", "عضوان", "5 أعضاء", "11 عضوًا", "100 عضو").inOrder()
+        assertThat(forms).containsExactly(
+            "لا أعضاء",
+            "عضو واحد",
+            "عضوان",
+            "${arabicNumber(5)} أعضاء",
+            "${arabicNumber(11)} عضوًا",
+            "${arabicNumber(100)} عضو",
+        ).inOrder()
     }
 
     @Test
     fun `arabic pinned count has six forms`() {
         val forms = listOf(0, 1, 2, 5, 11, 100).map { render("ar", R.plurals.chat_pinned_count, it) }
-        assertThat(forms.toSet()).hasSize(5)
+        assertThat(forms.toSet()).hasSize(6)
+        assertThat(forms[3]).isEqualTo("${arabicNumber(5)} رسائل مثبتة")
+        assertThat(forms[4]).isEqualTo("${arabicNumber(11)} رسالة مثبتة")
+        assertThat(forms[5]).isEqualTo("${arabicNumber(100)} رسالة مثبتة")
         assertThat(forms[0]).isEqualTo("لا رسائل مثبتة")
         assertThat(forms[2]).isEqualTo("رسالتان مثبتتان")
     }

@@ -75,6 +75,7 @@ class ConversationListViewModel @Inject constructor(
     dialogDeps: ConversationListDialogDeps = ConversationListDialogDeps.detached(),
     messageSearchSource: ListMessageSearchSource = NoListMessageSearch,
     entryRequests: ConversationListEntryRequests = ConversationListEntryRequests(),
+    private val sectionExpansion: ConversationSectionExpansionStore = ConversationSectionExpansionStore(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -116,6 +117,7 @@ class ConversationListViewModel @Inject constructor(
         workManager = workManager,
         activeConversationId = { loadingDeps.activeConversation.conversationId.value },
         obsoleter = dialogDeps.obsoleter,
+        remover = dialogDeps.remover,
     )
     /** Les dialogues confirmés de la liste (bloquer, masquer, quitter, renommer, signaler, verrou). */
     internal val dialogs: ConversationListDialogController = ConversationListDialogController(
@@ -145,7 +147,18 @@ class ConversationListViewModel @Inject constructor(
         categorySocketManager = categorySocketManager,
         storyRepository = storyRepository,
         statusBarCache = statusBarCache,
+        sectionExpansion = sectionExpansion,
     )
+    private val sectionController = ConversationSectionController(
+        viewModelScope, sectionExpansion, categoryRepository,
+    ) { _state.value.categories }
+
+    /** Les sections dépliées gardées pour la session (`null` = défauts de première ouverture). */
+    val rememberedSections: StateFlow<Set<String>?> = sectionExpansion.rememberedSections
+
+    /** Replie ou déplie [section] : mémoire de session à l'instant, serveur en silence pour une catégorie. */
+    fun onSectionToggled(section: ConversationSection, expanded: Boolean) =
+        sectionController.onToggled(section, expanded)
 
     private val messageSearcher = ConversationListMessageSearcher(
         scope = viewModelScope,
@@ -268,8 +281,6 @@ class ConversationListViewModel @Inject constructor(
     fun leaveConversation(id: String) = actions.leaveConversation(id)
     fun deleteConversationForMe(id: String) = actions.deleteConversationForMe(id)
     fun deleteConversationForAll(id: String) = actions.deleteConversationForAll(id)
-
-    fun makeConversationObsolete(id: String) = actions.makeConversationObsolete(id)
     fun discardDraft(id: String) = actions.discardDraft(id)
 
     /** Loads (once, cache-only) the hard-press preview card's recent messages. */

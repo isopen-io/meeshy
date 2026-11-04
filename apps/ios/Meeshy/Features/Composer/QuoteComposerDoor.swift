@@ -72,6 +72,60 @@ struct QuoteComposerDoor: View {
     }
 }
 
+/// Ce que la porte de citation exige d'un hôte qui n'est pas le fil — le
+/// lecteur de réels, monté par les trois racines (#15869).
+struct QuoteComposerHost {
+    let storyViewModel: StoryViewModel
+    let router: Router
+    let conversationListViewModel: ConversationListViewModel?
+    let statusViewModel: StatusViewModel
+}
+
+/// **La porte de citation offerte à toute surface de publication** (#15911).
+///
+/// Les posts d'un profil, le détail d'un post, les résultats d'un hashtag et
+/// les favoris vivent dans des FEUILLES ou des pages poussées qui ne lisent
+/// aucun objet de la racine (`SheetEnvironmentObjectGuardTests`). Sans hôte,
+/// « Citer » ouvrait le détail du post au lieu de la porte, ou publiait une
+/// citation sans commentaire. Chaque racine pose l'hôte en valeur
+/// d'ENVIRONNEMENT, au-dessus de ses feuilles : elles en héritent, et `nil`
+/// retire « Citer » (loi 4) au lieu de trapper.
+private struct MeeshyQuoteComposerHostKey: EnvironmentKey {
+    static let defaultValue: QuoteComposerHost? = nil
+}
+
+extension EnvironmentValues {
+    var meeshyQuoteComposerHost: QuoteComposerHost? {
+        get { self[MeeshyQuoteComposerHostKey.self] }
+        set { self[MeeshyQuoteComposerHostKey.self] = newValue }
+    }
+}
+
+/// La porte de citation présentée par ITEM : l'item retombe à `nil` à la
+/// fermeture. Sans hôte, rien ne se monte — et l'appelant n'offre pas « Citer ».
+struct QuoteComposerCover: ViewModifier {
+    @Binding var quoted: FeedPost?
+    let host: QuoteComposerHost?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let host {
+            content.fullScreenCover(item: $quoted) { source in
+                QuoteComposerDoor(
+                    quoted: source,
+                    storyViewModel: host.storyViewModel,
+                    router: host.router,
+                    conversationListViewModel: host.conversationListViewModel,
+                    statusViewModel: host.statusViewModel,
+                    onFinish: { quoted = nil }
+                )
+            }
+        } else {
+            content
+        }
+    }
+}
+
 nonisolated enum ComposerQuoteCopy {
     static var textOnly: String {
         String(localized: "composer.quote.refusal.textOnly",

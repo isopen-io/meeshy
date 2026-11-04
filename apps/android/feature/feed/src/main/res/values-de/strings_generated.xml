@@ -62,6 +62,7 @@
     <string name="feed_post_deleted">Beitrag gelöscht</string>
     <string name="feed_post_detail_document">Dokument</string>
     <string name="feed_post_detail_pages">Seiten</string>
+    <string name="feed_post_detail_story_unavailable">Story nicht verfügbar</string>
     <string name="feed_post_open">Öffnen</string>
     <string name="feed_post_pinned">Beitrag angeheftet</string>
     <string name="feed_post_reposted_from">hat von @%1$s geteilt</string>

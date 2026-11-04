@@ -91,7 +91,7 @@ internal fun ChatListHost(
     val listState = rememberLazyListState()
     val expansionHost = rememberLongMessageExpansionHost(listState)
     // La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `selectedProfileUser`).
-    val profileTap = rememberProfileTap(state.conversationId, accentColor, state.viewerRole)
+    val profileTap = rememberProfileTap(state.conversationId, accentColor, host.viewerRole)
     // L'en-tête efface sa grappe d'actions pendant le défilement (iOS `hiddenWhileScrolling`).
     LaunchedEffect(listState) {
         try {
@@ -131,14 +131,14 @@ internal fun ChatListHost(
     // every pure function below that scrolls/indexes into rendered rows.
     val orientation = ChatListOrientation.BottomUp
     val startName = ConversationStartName.of(state.conversationTitle, state.hasMoreOlder, state.showSkeleton)
-    val listItems = remember(state.messages, state.firstUnreadMessageId, state.unreadAtOpening, state.showEncryptionDisclaimer, startName) {
+    val listItems = remember(state.messages, state.firstUnreadMessageId, host.unreadAtOpening, state.showEncryptionDisclaimer, startName) {
         buildChatListItems(
             state.messages,
             ZoneId.systemDefault(),
             state.firstUnreadMessageId,
             showEncryptionNotice = state.showEncryptionDisclaimer,
             conversationStartName = startName,
-            serverUnreadCount = state.unreadAtOpening,
+            serverUnreadCount = host.unreadAtOpening,
         )
     }
     val renderedItems = remember(listItems) { listItems.asReversed() }

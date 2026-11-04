@@ -24,6 +24,9 @@ public interface StoryDao {
     @Query("DELETE FROM stories WHERE id = :id")
     public suspend fun deleteById(id: String)
 
+    @Query("DELETE FROM stories WHERE id IN (:ids)")
+    public suspend fun deleteByIds(ids: List<String>)
+
     @Query("DELETE FROM stories")
     public suspend fun clear()
 

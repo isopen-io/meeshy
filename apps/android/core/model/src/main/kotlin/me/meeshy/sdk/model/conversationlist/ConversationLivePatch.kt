@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.conversationlist
 
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.BridgeAnnouncement
 import me.meeshy.sdk.model.ApiConversationLastMessage
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
 import me.meeshy.sdk.model.LastMessageIdentity
@@ -39,10 +40,16 @@ object ConversationLivePatch {
     }
 
     /** `conversation:unread-updated` : le compteur absolu du serveur. */
-    fun applyUnread(conversation: ApiConversation, unreadCount: Int): ApiConversation? =
-        unreadCount.coerceAtLeast(0).let { count ->
-            if (count == conversation.unreadCount) null else conversation.copy(unreadCount = count)
-        }
+    fun applyUnread(
+        conversation: ApiConversation,
+        unreadCount: Int,
+        bridge: BridgeAnnouncement = BridgeAnnouncement.NotComputed,
+    ): ApiConversation? {
+        val count = unreadCount.coerceAtLeast(0)
+        val nextBridge = bridge.applyTo(conversation.bridge)
+        if (count == conversation.unreadCount && nextBridge == conversation.bridge) return null
+        return conversation.copy(unreadCount = count, bridge = nextBridge)
+    }
 
     /**
      * Effectif de membres. La valeur absolue du serveur est prioritaire (un delta ne converge pas

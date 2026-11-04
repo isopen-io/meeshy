@@ -134,6 +134,10 @@ internal class ChatHostContext(
     /** #15269 — ce qui ferme le composeur (bandeau de lecture seule) et ce que le rang du lecteur permet. */
     val composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
     val capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
+    /** [ConversationGovernanceController.viewerRole] : le rôle connu du lecteur, garde du cache de la fiche d'un participant. */
+    val viewerRole: String? = null,
+    /** [ChatViewModel.unreadAtOpening] : le compte serveur que le séparateur des non-lus annonce (#7525). */
+    val unreadAtOpening: Int? = null,
 )
 
 /** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
@@ -185,13 +189,15 @@ internal fun rememberChatHostContext(
     composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
     capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
     listGate: ChatListUpdateGate? = null,
+    viewerRole: String? = null,
+    unreadAtOpening: Int? = null,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember(listGate) { ChatChromeState(listGate) }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities, viewerRole, unreadAtOpening)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */

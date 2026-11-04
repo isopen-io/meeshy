@@ -61,6 +61,11 @@ data class StoryRing(
 data class StoryTrayPresentation(
     val self: StoryRing?,
     val others: List<StoryRing>,
+    /**
+     * Mon groupe même entièrement expiré : le grand plateau le range sous « Votre story / historique », la bande
+     * épinglée en fait sa première cellule (iOS `ownGroup`, qui ne filtre PAS l'expiration).
+     */
+    val ownHistory: StoryRing? = null,
 ) {
     val isEmpty: Boolean get() = self == null && others.isEmpty()
 }
@@ -80,7 +85,9 @@ object StoryTrayBuilder {
             .map { it.toRing(currentUserId, mediaBaseUrl, nowMillis, coverOf, localCoverOf) }
         val self = rings.firstOrNull { it.isMine }
         val others = rings.filterNot { it.isMine }
-        return StoryTrayPresentation(self = self, others = others)
+        val ownHistory = self ?: groups.firstOrNull { currentUserId != null && it.id == currentUserId && it.stories.isNotEmpty() }
+            ?.toRing(currentUserId, mediaBaseUrl, nowMillis, coverOf, localCoverOf)
+        return StoryTrayPresentation(self = self, others = others, ownHistory = ownHistory)
     }
 
     private fun StoryGroup.toRing(

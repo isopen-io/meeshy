@@ -241,6 +241,7 @@
     <string name="conversation_appearance_section_photo">Conversation photo</string>
     <string name="conversation_appearance_section_solid">Solid color</string>
     <string name="conversation_appearance_sheet_title">Background and accent</string>
+    <string name="conversation_appearance_shop">More in the shop</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">End-to-end encryption turned on: new messages are encrypted on your devices.</string>
     <string name="conversation_info_created_on">Created on %1$s</string>

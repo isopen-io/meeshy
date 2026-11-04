@@ -25,7 +25,7 @@ public object ConversationFold {
     ): ApiConversation = ConversationLivePatch.applyUpdated(conversation, event, readerId, youLabel) ?: conversation
 
     public fun unread(conversation: ApiConversation, event: UnreadUpdateEvent): ApiConversation =
-        ConversationLivePatch.applyUnread(conversation, event.unreadCount) ?: conversation
+        ConversationLivePatch.applyUnread(conversation, event.unreadCount, event.bridge) ?: conversation
 
     /** La conversation à retirer, `null` quand l'événement ne nomme rien d'utilisable. */
     public fun removedBy(event: ConversationDeletedSocketEvent): String? = event.conversationId.takeIf { it.isNotBlank() }

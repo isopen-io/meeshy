@@ -376,7 +376,12 @@ private fun StickerGlyphOrImage(sticker: StoryStickerView, glyphSize: androidx.c
  * scène que chez l'auteur.
  */
 @Composable
-internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = Modifier, chipModifier: Modifier = Modifier) {
+internal fun StoryAudioChipLayer(
+    chip: StoryAudioChipView,
+    modifier: Modifier = Modifier,
+    chipModifier: Modifier = Modifier,
+    muted: Boolean = false,
+) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val unit = maxWidth / AUDIO_CHIP_REFERENCE_WIDTH
         val contentWidth = unit * if (chip.credit != null) AUDIO_CHIP_CREDIT_WIDTH else AUDIO_CHIP_WAVE_WIDTH
@@ -391,13 +396,14 @@ internal fun StoryAudioChipLayer(chip: StoryAudioChipView, modifier: Modifier = 
                 )
                 .size(width = chipWidth, height = chipHeight)
                 .then(chipModifier)
+                .alpha(if (muted) AUDIO_CHIP_MUTED_ALPHA else 1f)
                 .background(Color.Black.copy(alpha = 0.28f), CircleShape)
                 .border(width = unit, color = Color.White.copy(alpha = 0.25f), shape = CircleShape)
                 .padding(horizontal = unit * AUDIO_CHIP_PAD_X, vertical = unit * AUDIO_CHIP_PAD_Y),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                Icons.Filled.GraphicEq,
+                if (muted) me.meeshy.ui.icons.MeeshyIcons.VolumeOff else Icons.Filled.GraphicEq,
                 contentDescription = null,
                 tint = MeeshyPalette.Indigo500,
                 modifier = Modifier.size(unit * AUDIO_CHIP_ICON),
@@ -449,6 +455,7 @@ private fun audioChipBars(samples: List<Float>): List<Float> {
     }
 }
 
+private const val AUDIO_CHIP_MUTED_ALPHA = 0.5f
 private const val AUDIO_CHIP_REFERENCE_WIDTH = 390f
 private const val AUDIO_CHIP_PAD_X = 12f
 private const val AUDIO_CHIP_PAD_Y = 8f

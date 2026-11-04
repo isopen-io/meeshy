@@ -13,11 +13,15 @@ import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.conversation.CategoryCreation
 import me.meeshy.sdk.conversation.ConversationPreferenceActions
 import me.meeshy.sdk.conversation.ConversationObsoleting
+import me.meeshy.sdk.conversation.ConversationRemoval
+import me.meeshy.sdk.conversation.ConversationRemovalWrite
+import me.meeshy.sdk.conversation.ConversationRemoving
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.conversation.PreferenceWrite
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.conversationlist.ConversationPreviewIntent
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 
@@ -38,6 +42,8 @@ internal class ConversationListRowActions(
     private val activeConversationId: () -> String? = { null },
     /** « Rendre obsolète » (#14645). */
     private val obsoleter: ConversationObsoleting = ConversationObsoleting.Unavailable,
+    /** Quitter / supprimer (#15920) : la rangée tombe à l'instant, la requête part au retour du réseau. */
+    private val remover: ConversationRemoving = ConversationRemoving.Unavailable,
 ) {
 
     /** L'écrivain partagé des préférences (le même que les Options de la fiche Conversation, #13777). */
@@ -164,21 +170,32 @@ internal class ConversationListRowActions(
         }
     }
 
-    /** Quitte [id] : aucun retrait local, la purge socket fait tomber la rangee. */
-    fun leaveConversation(id: String) = remote { repository.leave(id) }
+    /** Quitte [id] : la rangée tombe à l'instant, même hors ligne ; [onFailed] quand rien n'a pu être mis en file. */
+    fun leaveConversation(id: String, onFailed: () -> Unit = {}) = removeConversation(id, ConversationRemoval.LEAVE, onFailed)
 
     /**
-     * Masque [id] pour soi seul : la rangee tombe tout de suite ([ConversationListUiState.pendingRemovals]),
-     * la purge socket l'efface du cache, un refus de la passerelle la rend.
+     * Masque [id] pour soi seul : la rangée tombe tout de suite ([ConversationListUiState.pendingRemovals]) et dans
+     * Room, la requête part au retour du réseau, un refus définitif de la passerelle la rend ([ConversationRemoving.refusals]).
      */
-    fun deleteConversationForMe(id: String) {
+    fun deleteConversationForMe(id: String, onFailed: () -> Unit = {}) =
+        removeConversation(id, ConversationRemoval.DELETE_FOR_ME, onFailed)
+
+    /** Termine [id] pour tous : la rangée tombe à l'instant, la requête part au retour du réseau. */
+    fun deleteConversationForAll(id: String, onFailed: () -> Unit = {}) =
+        removeConversation(id, ConversationRemoval.DELETE_FOR_ALL, onFailed)
+
+    /** Retire [id] de la liste et met le retrait en file ; si la file refuse, la rangée revient et l'erreur se dit. */
+    private fun removeConversation(id: String, removal: ConversationRemoval, onFailed: () -> Unit) {
         state.update { it.copy(pendingRemovals = it.pendingRemovals + id).withVisible(rawConversations()) }
         scope.launch {
-            when (val result = repository.deleteForMe(id)) {
-                is NetworkResult.Success -> reportError(null)
-                is NetworkResult.Failure -> state.update {
-                    it.copy(pendingRemovals = it.pendingRemovals - id, errorMessage = result.error.message)
-                        .withVisible(rawConversations())
+            when (val write = remover.remove(id, removal)) {
+                ConversationRemovalWrite.Queued -> reportError(null)
+                is ConversationRemovalWrite.Failed -> {
+                    state.update {
+                        it.copy(pendingRemovals = it.pendingRemovals - id, errorMessage = write.message)
+                            .withVisible(rawConversations())
+                    }
+                    onFailed()
                 }
             }
         }
@@ -187,23 +204,23 @@ internal class ConversationListRowActions(
     /**
      * Rend [id] obsolète (#14645) : la rangee tombe tout de suite ([ConversationListUiState.pendingRemovals]),
      * l'accord de la passerelle l'efface du cache (et la purge socket chez les autres), un refus la rend
-     * avec son message.
+     * et passe la raison à [onRefused] (#14690).
      */
-    fun makeConversationObsolete(id: String) {
+    fun makeConversationObsolete(id: String, onRefused: (ApiError) -> Unit = {}) {
         state.update { it.copy(pendingRemovals = it.pendingRemovals + id).withVisible(rawConversations()) }
         scope.launch {
             when (val result = obsoleter.makeObsolete(id)) {
                 is NetworkResult.Success -> reportError(null)
-                is NetworkResult.Failure -> state.update {
-                    it.copy(pendingRemovals = it.pendingRemovals - id, errorMessage = result.error.message)
-                        .withVisible(rawConversations())
+                is NetworkResult.Failure -> {
+                    state.update {
+                        it.copy(pendingRemovals = it.pendingRemovals - id, errorMessage = result.error.message)
+                            .withVisible(rawConversations())
+                    }
+                    onRefused(result.error)
                 }
             }
         }
     }
-
-    /** Termine [id] pour tous : la purge socket `conversation:closed` fait tomber la rangee. */
-    fun deleteConversationForAll(id: String) = remote { repository.deleteForAll(id) }
 
     /**
      * Jette le brouillon de [id] : retrait optimiste de l'etat, puis effacement du
@@ -244,15 +261,6 @@ internal class ConversationListRowActions(
 
     private fun reportError(message: String?) {
         state.update { it.copy(errorMessage = message) }
-    }
-
-    private fun remote(call: suspend () -> NetworkResult<*>) {
-        scope.launch {
-            when (val result = call()) {
-                is NetworkResult.Success -> reportError(null)
-                is NetworkResult.Failure -> reportError(result.error.message)
-            }
-        }
     }
 
     /** Lance une ecriture de preference ; l'ecrivain partage reveille l'outbox, l'echec s'affiche. */

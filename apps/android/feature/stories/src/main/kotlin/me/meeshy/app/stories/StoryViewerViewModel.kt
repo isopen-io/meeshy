@@ -155,6 +155,9 @@ class StoryViewerViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(StoryViewerUiState())
     val state: StateFlow<StoryViewerUiState> = _state.asStateFlow()
+    private val prefetchDirection = StoryPrefetchDirectionTracker()
+    private val _prefetch = MutableStateFlow(StoryPrefetchPlan())
+    val prefetch: StateFlow<StoryPrefetchPlan> = _prefetch.asStateFlow()
 
     /**
      * The slide currently on screen — owns membership of the post room (`ROOMS.post`). Held
@@ -696,6 +699,7 @@ class StoryViewerViewModel @Inject constructor(
                 textObjects = textObjects,
             )
         }
+        _prefetch.value = StoryPrefetchPlanner.planWindow(playback, prefetchDirection.observe(playback))
         _state.value = StoryViewerUiState(
             authorName = playback.authorName,
             slides = slides,
