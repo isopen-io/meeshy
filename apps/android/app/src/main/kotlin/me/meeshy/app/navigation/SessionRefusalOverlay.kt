@@ -33,18 +33,12 @@ class SessionRefusalOverlay @Inject constructor() : AppOverlay {
         val refusals: SessionRefusalViewModel = hiltViewModel()
         val auth: AuthViewModel = hiltViewModel()
         val screen by refusals.screen.collectAsStateWithLifecycle()
-        // L'appareil est déjà purgé : la racine retombe sur la connexion, sans l'avis « vous avez été déconnecté » en double.
+        // L'appareil est déjà purgé : la racine retombe sur la connexion.
         LaunchedEffect(screen) {
-            if (screen == SessionRefusalScreen.SESSION_CLOSED) {
-                auth.onExternalSessionOpened()
-                auth.dismissSessionClosedNotice()
-            }
+            if (screen == SessionRefusalScreen.SESSION_CLOSED) auth.onExternalSessionOpened()
         }
         when (screen) {
-            SessionRefusalScreen.SESSION_CLOSED -> SessionClosedScreen(onContinue = {
-                refusals.acknowledgeClosed()
-                auth.dismissSessionClosedNotice()
-            })
+            SessionRefusalScreen.SESSION_CLOSED -> SessionClosedScreen(onContinue = { refusals.acknowledgeClosed() })
             SessionRefusalScreen.AGE_BELOW_MINIMUM -> AgeRefusalScreen(onAcknowledge = {
                 if (refusals.acknowledgeAge()) auth.logout()
             })

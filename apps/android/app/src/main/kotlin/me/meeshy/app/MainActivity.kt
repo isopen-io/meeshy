@@ -67,7 +67,6 @@ import me.meeshy.ui.profile.LocalProfileGameSlot
 import me.meeshy.ui.theme.MeeshyTheme
 import javax.inject.Inject
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
-import me.meeshy.sdk.net.SessionExpiryNotifier
 import me.meeshy.sdk.media.MediaDownloadPreferencesStore
 import me.meeshy.sdk.media.NetworkConditionMonitor
 import me.meeshy.ui.component.bubble.BubbleMediaAutoDownload
@@ -82,10 +81,6 @@ class MainActivity : ComponentActivity() {
      */
     @Inject
     lateinit var floatingButtonPositions: FloatingButtonPositionStore
-
-    /** Emet quand la passerelle refuse l'identite : [MeeshyApp] y deconnecte. */
-    @Inject
-    lateinit var sessionExpiry: SessionExpiryNotifier
 
     /** La base d'API configuree : [LocalMediaBaseUrl] la fournit a tous les avatars (#12569). */
     @Inject
@@ -215,7 +210,6 @@ class MainActivity : ComponentActivity() {
                         ProvideRootSplash {
                             MeeshyApp(
                                 floatingButtonPositions = floatingButtonPositions,
-                                sessionExpiry = sessionExpiry,
                                 launchRoute = launchRoute,
                                 onLaunchRouteConsumed = {
                                     launchRoute = null

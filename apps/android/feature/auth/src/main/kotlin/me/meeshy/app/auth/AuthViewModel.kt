@@ -68,8 +68,6 @@ data class AuthUiState(
     val verificationResend: VerificationResend = VerificationResend.IDLE,
     /** iOS `SettingsView` : le voile « Déconnexion en cours… » tient l'écran le temps de l'appel serveur. */
     val isLoggingOut: Boolean = false,
-    /** iOS `SessionClosedNoticeView` : la session a été fermée sans que l'utilisateur l'ait demandé. */
-    val sessionClosedNotice: Boolean = false,
     /** iOS `LoginView.keepSignedIn` : la case « Rester connecté sur cet appareil », cochée par défaut. */
     val keepSignedIn: Boolean = true,
     /** iOS `AuthManager.offersKeepSignedIn` : un AUTRE compte garde déjà sa session — sinon la case ne se montre pas. */
@@ -504,20 +502,14 @@ class AuthViewModel @Inject constructor(
         _state.update { it.copy(isAuthenticated = authRepository.isAuthenticated, hasAccount = authRepository.hasAccountSession) }
     }
 
-    /**
-     * Ferme la session. [closedByServer] : la passerelle a refusé l'identité (session révoquée,
-     * expirée, compte fermé) ; l'écran de connexion dit alors pourquoi on y revient. Un second
-     * appel pendant la fermeture est sans effet.
-     */
-    fun logout(closedByServer: Boolean = false) {
-        val current = _state.value
-        if (current.isLoggingOut) return
-        val explain = closedByServer && current.isAuthenticated
+    /** Ferme la session. Un second appel pendant la fermeture est sans effet. */
+    fun logout() {
+        if (_state.value.isLoggingOut) return
         _state.update { it.copy(isLoggingOut = true) }
         viewModelScope.launch {
             authRepository.logout()
             realtimeCoordinator.onAuthenticatedChanged(false)
-            applySignedOutState(explain)
+            applySignedOutState()
         }
     }
 
@@ -526,10 +518,18 @@ class AuthViewModel @Inject constructor(
      * propre overlay) vient de se terminer : la racine bascule sur la connexion.
      */
     fun onSignedOutExternally() {
-        applySignedOutState(explain = false)
+        applySignedOutState()
     }
 
-    private fun applySignedOutState(explain: Boolean) {
+    /**
+     * Le SDK a fermé la session parce que le serveur l'a fermée (`SessionRevocationCenter`, qui l'explique lui-même) : la
+     * racine bascule sur la connexion. Sans effet si l'écran n'était plus connecté ou si une session s'est rouverte depuis.
+     */
+    fun onSessionClosedBySdk() {
+        if (_state.value.isAuthenticated && !authRepository.isAuthenticated) applySignedOutState()
+    }
+
+    private fun applySignedOutState() {
         // The saved-account list AND the developer/QA environment selection are
         // both device-level, cross-account state — neither is part of what a
         // logout should reset (SessionTeardown.wipe() doesn't touch either).
@@ -538,14 +538,8 @@ class AuthViewModel @Inject constructor(
             selectedEnvironment = serverEnvironmentStore.selectedEnvironment,
             customHostInput = serverEnvironmentStore.customHost,
             showEnvironmentSelector = config.enableLogging,
-            sessionClosedNotice = explain,
             offersKeepSignedIn = offersKeepSignedIn(savedAccountsStore.accounts.value),
         )
-    }
-
-    /** « Se reconnecter » de l'avis de session fermée. */
-    fun dismissSessionClosedNotice() {
-        _state.update { it.copy(sessionClosedNotice = false) }
     }
 
     private companion object {
