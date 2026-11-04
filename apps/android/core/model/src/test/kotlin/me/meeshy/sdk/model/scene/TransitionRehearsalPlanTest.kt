@@ -14,8 +14,8 @@ class TransitionRehearsalPlanTest {
         assertThat(both.phaseAt(1.19)).isEqualTo(TransitionRehearsalPlan.Phase.Opening)
         assertThat(both.phaseAt(1.2)).isEqualTo(TransitionRehearsalPlan.Phase.Hold)
         assertThat(both.phaseAt(1.79)).isEqualTo(TransitionRehearsalPlan.Phase.Hold)
-        assertThat(both.phaseAt(1.8)).isEqualTo(TransitionRehearsalPlan.Phase.Closing(0.0))
-        assertThat(both.phaseAt(2.4)).isEqualTo(TransitionRehearsalPlan.Phase.Closing(0.5))
+        assertThat((both.phaseAt(1.8) as TransitionRehearsalPlan.Phase.Closing).progress).isWithin(1e-9).of(0.0)
+        assertThat((both.phaseAt(2.4) as TransitionRehearsalPlan.Phase.Closing).progress).isWithin(1e-9).of(0.5)
         assertThat(both.phaseAt(3.0)).isEqualTo(TransitionRehearsalPlan.Phase.Finished)
         assertThat(both.totalDurationSeconds).isWithin(1e-9).of(3.0)
     }
