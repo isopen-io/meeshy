@@ -18,7 +18,7 @@ data class CommunityCreateDraft(
 
     fun withName(value: String): CommunityCreateDraft = copy(name = value.take(MAX_NAME_LENGTH))
 
-    fun withIdentifier(value: String): CommunityCreateDraft = copy(identifier = value.filter(::isIdentifierChar))
+    fun withIdentifier(value: String): CommunityCreateDraft = copy(identifier = value.lowercase().filter(::isIdentifierChar))
 
     /** Choisir l'emoji déjà choisi le retire (bascule). */
     fun withEmojiToggled(value: String): CommunityCreateDraft = copy(emoji = if (emoji == value) "" else value)
