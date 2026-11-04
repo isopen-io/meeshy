@@ -241,7 +241,7 @@ public class OutboxDrainer(
                 SendResult.Cancelled -> outbox.markCancelledByAuthor(row.cmid)
                 SendResult.TransientFailure -> {
                     val attempts = (outbox.row(row.cmid)?.attempts ?: row.attempts) + 1
-                    val backoff = OutboxBackoff.delayMs(attempts)
+                    val backoff = OutboxBackoff.delayMs(kind, attempts)
                     if (outbox.markFailed(row.cmid, "Transient delivery failure", backoff) == OutboxState.EXHAUSTED) {
                         onExhausted(settled(row, "Transient delivery failure"))
                         exhausted++

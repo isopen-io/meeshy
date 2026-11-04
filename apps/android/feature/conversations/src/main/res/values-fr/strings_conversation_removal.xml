@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_removal_refused_delete">Impossible de supprimer la conversation. Elle est revenue dans votre liste.</string>
+</resources>
