@@ -50,6 +50,8 @@ public sealed interface CoalesceDecision {
  *   (each carries the full preference block — an offline toggle burst collapses to one PATCH);
  *   notification and privacy settings coalesce independently (distinct kinds share the settings
  *   lane but never supersede one another);
+ * - a repeated write of the same preference CATEGORY (target = the category's route name) keeps only the latest
+ *   snapshot; two categories never supersede one another;
  * - an edit of a message still queued for sending is folded INTO that send (one request carrying the final text);
  *   a delete of it cancels the send and any edit, a delete after an edit replaces the edit;
  * - « supprimer pour moi » / « restaurer » du même message sont deux états terminaux opposés : ils s'annulent ; un
@@ -87,6 +89,8 @@ public object OutboxCoalescer {
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_AUDIO_SETTINGS)
             OutboxKind.UPDATE_APPLICATION_SETTINGS ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_APPLICATION_SETTINGS)
+            OutboxKind.UPDATE_PREFERENCE_CATEGORY ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PREFERENCE_CATEGORY)
             OutboxKind.REACT_STORY -> replaceSameStoryEmoji(incoming, sameTarget)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)

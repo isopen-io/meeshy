@@ -70,6 +70,13 @@ public enum class OutboxKind {
 
     /** L'accusé de RÉCEPTION de toute une conversation : informatif, jamais compté dans la pastille de synchronisation. */
     MARK_RECEIVED,
+
+    /**
+     * Le bloc de préférences d'UNE catégorie (`PATCH /me/preferences/{categorie}`), cliché complet : la catégorie est la
+     * CIBLE de la ligne, donc deux écritures de la même catégorie ne font qu'une ligne et deux catégories ne se
+     * supplantent jamais. Un seul type pour les sept catégories (iOS `updateSettings`).
+     */
+    UPDATE_PREFERENCE_CATEGORY,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -218,6 +225,7 @@ public object OutboxLaneMap {
         OutboxKind.MODERATION_DELETE,
         -> OutboxLaneAssignment.Shared(OutboxChatLanes.CONTENT_REMOVAL)
         OutboxKind.MARK_RECEIVED -> OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT)
+        OutboxKind.UPDATE_PREFERENCE_CATEGORY -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
     }
 
     /**

@@ -6,6 +6,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.audio.AudioPreferencesStore
+import me.meeshy.sdk.model.PreferenceCategory
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.apiCall
@@ -76,15 +77,13 @@ import timber.log.Timber
  * could already race its own echo. The connection trigger only turns a narrow race into the
  * nominal one.
  *
- * ## Which categories are handled, and why only three
+ * ## Which categories are handled
  *
- * The gateway has seven (`privacy`, `audio`, `message`, `notification`, `video`,
- * `document`, `application`). Android caches exactly three of them locally (notification, privacy, audio), so only those
- * three can go stale — and only those two are worth a request. The other four are read on
- * demand by the screens that use them: they have no store to invalidate and no store to
- * hydrate, and giving them one now would cache blocks nothing reads between screens
- * (decided for #4197, criterion 5). An unknown or unhandled name is ignored, not logged as
- * an error — it is the nominal case for four of seven.
+ * All seven (`privacy`, `audio`, `message`, `notification`, `video`, `document`, `application`). Notification, privacy
+ * and audio fold onto their own stores; the four others are read and merged by [CategorySyncRepository], which also
+ * holds the persisted list of categories edited locally and not yet confirmed. Every category is vetoed by that list
+ * and by a deliverable outbox row of its kind, so a re-read never overwrites a change this device still owes the server.
+ * An unknown name is ignored, not logged as an error.
  *
  * Constructed by `SdkModule` rather than by `@Inject`, for the reason every store in
  * that module is: the graph binds no `CoroutineScope`, so each owner of a long-lived
@@ -105,6 +104,11 @@ class PreferencesSyncCoordinator(
     private val privacyStore: PrivacyPreferencesStore,
     private val audioStore: AudioPreferencesStore,
     private val scope: CoroutineScope,
+    /**
+     * Le côté durable des sept catégories : le veto des attentes locales et la relecture des quatre blocs que seul
+     * lui tient. Absent (`null`), le coordinateur se comporte comme avant — trois catégories, veto par la file.
+     */
+    private val categorySync: CategorySyncRepository? = null,
 ) {
     private var job: Job? = null
 
@@ -159,12 +163,19 @@ class PreferencesSyncCoordinator(
             NOTIFICATION -> refreshNotification()
             PRIVACY -> refreshPrivacy()
             AUDIO -> refreshAudio()
-            else -> Unit
+            else -> refreshOtherBlock(category)
         }
     }
 
+    /** Message, vidéo, document, application : relus par le dépôt de catégories, qui porte aussi leur veto. */
+    private suspend fun refreshOtherBlock(category: String) {
+        val repository = categorySync ?: return
+        val named = me.meeshy.sdk.model.PendingPreferenceCategories.categoryNamed(category) ?: return
+        repository.refreshBlock(named)
+    }
+
     internal suspend fun refreshNotification() {
-        if (owesServerAWrite(OutboxKind.UPDATE_SETTINGS)) return
+        if (owesWrite(PreferenceCategory.NOTIFICATION, OutboxKind.UPDATE_SETTINGS)) return
         when (val result = apiCall { preferencesApi.getNotification() }) {
             is NetworkResult.Success ->
                 notificationStore.setPreferences(
@@ -176,7 +187,7 @@ class PreferencesSyncCoordinator(
     }
 
     internal suspend fun refreshPrivacy() {
-        if (owesServerAWrite(OutboxKind.UPDATE_PRIVACY_SETTINGS)) return
+        if (owesWrite(PreferenceCategory.PRIVACY, OutboxKind.UPDATE_PRIVACY_SETTINGS)) return
         when (val result = apiCall { preferencesApi.getPrivacy() }) {
             is NetworkResult.Success ->
                 privacyStore.setPreferences(result.data.toPreferences(privacyStore.preferences.value))
@@ -186,7 +197,7 @@ class PreferencesSyncCoordinator(
     }
 
     internal suspend fun refreshAudio() {
-        if (owesServerAWrite(OutboxKind.UPDATE_AUDIO_SETTINGS)) return
+        if (owesWrite(PreferenceCategory.AUDIO, OutboxKind.UPDATE_AUDIO_SETTINGS)) return
         when (val result = apiCall { preferencesApi.getAudio() }) {
             is NetworkResult.Success ->
                 audioStore.setPreferences(result.data.toPreferences(audioStore.preferences.value))
@@ -205,6 +216,9 @@ class PreferencesSyncCoordinator(
      * not a queue that failed to answer, and swallowing it here would let a stopped
      * coordinator run one more fold on its way out.
      */
+    private suspend fun owesWrite(category: PreferenceCategory, legacyKind: OutboxKind): Boolean =
+        owesServerAWrite(legacyKind) || (categorySync?.owesWrite(category) ?: false)
+
     private suspend fun owesServerAWrite(kind: OutboxKind): Boolean =
         try {
             outboxRepository.hasDeliverable(OutboxLanes.SETTINGS, kind)
@@ -221,6 +235,6 @@ class PreferencesSyncCoordinator(
         const val AUDIO = "audio"
 
         /** The blocks this device caches, and therefore the only ones a connection re-reads. */
-        val CACHED_CATEGORIES = listOf(NOTIFICATION, PRIVACY, AUDIO)
+        val CACHED_CATEGORIES = listOf(NOTIFICATION, PRIVACY, AUDIO, "message", "video", "document", "application")
     }
 }
