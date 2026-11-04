@@ -5,14 +5,13 @@ import type {
   LastMessageSticker,
   LastMessageSystemEvent,
 } from '@meeshy/shared/types/conversation-preview';
-import { previewStickerOf } from '../../routes/conversations/utils/last-message-media';
+import { previewStickerOf, servedAttachmentSummary } from '../../routes/conversations/utils/last-message-media';
 import { sharedPlaceFromMetadata, type SharedPlace } from '../../services/location/sharedPlace';
 import {
   PREVIEW_ATTACHMENT_SUMMARY_LIMIT,
   isPreviewWithheld,
   resolveLastMessageNature,
   resolvePreviewProtection,
-  summarizeAttachments,
 } from '../../routes/conversations/utils/last-message-nature';
 import {
   toIsoOrNull,
@@ -123,8 +122,9 @@ export function resolveLastMessagePreviewGroup(
   reader: PreviewGroupReaderContext = {},
 ): LastMessagePreviewGroup {
   const quotedDeathAt = reader.quotedDeathAt ?? null;
-  const withheld = message != null && isPreviewWithheld(resolvePreviewProtection({ ...message, quotedDeathAt }, now));
-  const media = resolvePreviewMediaFields(message, withheld);
+  const protection = message != null ? resolvePreviewProtection({ ...message, quotedDeathAt }, now) : null;
+  const withheld = isPreviewWithheld(protection);
+  const media = resolvePreviewMediaFields(message, protection);
   const place = withheld ? null : sharedPlaceFromMetadata(message?.metadata);
   const nature = message ? resolveLastMessageNature(message) : null;
   return {
@@ -144,9 +144,7 @@ export function resolveLastMessagePreviewGroup(
     lastMessageIsForwarded: nature?.isForwarded ?? false,
     lastMessageSystemEvent: nature?.systemEvent ?? null,
     lastMessageCallSummary: nature?.callSummary ?? null,
-    lastMessageAttachmentSummary: withheld
-      ? null
-      : summarizeAttachments(message?.attachments ?? [], message?._count?.attachments),
+    lastMessageAttachmentSummary: servedAttachmentSummary(message?.attachments ?? [], message?._count?.attachments, protection),
     lastMessageSticker: previewStickerOf(message?.metadata, {
       messageWithheld: withheld,
       attachments: message?.attachments ?? [],
