@@ -80,6 +80,7 @@ class ReplyThreadViewModel @Inject constructor(
     private fun open(event: ReplyThreadUiEvent.Open) {
         if (parentId == event.parentId && conversationId == event.conversationId) {
             _state.update { it.copy(canReply = event.canReply) }
+            if (loadJob?.isActive != true) refresh()
             return
         }
         conversationId = event.conversationId
