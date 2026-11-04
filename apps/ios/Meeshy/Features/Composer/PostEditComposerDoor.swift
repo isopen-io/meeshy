@@ -55,11 +55,17 @@ struct PostEditComposerDoor: View {
     /// brouillon par format, et le second réécrirait le premier.
     @State private var saved = false
 
-    @EnvironmentObject private var router: Router
+    @Environment(\.meeshyRouter) private var router
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     var body: some View {
+        composerHost.modifier(PostEditPreviewCover(assets: $previewAssets, storyViewModel: storyViewModel,
+                                                   statusViewModel: statusViewModel, router: router,
+                                                   conversationList: conversationListViewModel))
+    }
+
+    private var composerHost: some View {
         MeeshyComposerHost(
             intent: ComposerIntent(origin: .edit(postId: session.baseline.postId,
                                                  documentFormat: session.baseline.format)),
@@ -80,13 +86,6 @@ struct PostEditComposerDoor: View {
             },
             onDismiss: onFinish
         )
-        .modifier(StoryPreviewReaderCover(
-            assets: $previewAssets,
-            storyViewModel: storyViewModel,
-            statusViewModel: statusViewModel,
-            router: router,
-            conversationList: conversationListViewModel
-        ))
     }
 
     private func save(_ draft: ComposerDocumentDraft) async -> Bool {
@@ -107,6 +106,27 @@ struct PostEditComposerDoor: View {
         HapticFeedback.error()
         FeedbackToastManager.shared.showError(PostEditComposerCopy.refusal(raison))
         return false
+    }
+}
+
+/// L'aperçu de l'œil, monté si le routeur est là — `MeeshyRouterInjection` le
+/// pose aux deux racines ; sans lui l'aperçu ne s'ouvre pas, il ne trappe pas.
+private struct PostEditPreviewCover: ViewModifier {
+    @Binding var assets: StoryPreviewAssets?
+    let storyViewModel: StoryViewModel
+    let statusViewModel: StatusViewModel
+    let router: Router?
+    let conversationList: ConversationListViewModel?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let router {
+            content.modifier(StoryPreviewReaderCover(assets: $assets, storyViewModel: storyViewModel,
+                                                     statusViewModel: statusViewModel, router: router,
+                                                     conversationList: conversationList))
+        } else {
+            content
+        }
     }
 }
 

@@ -83,7 +83,7 @@ nonisolated enum PostEditComposerOutcome {
 /// est celui d'aujourd'hui. Le canevas ne part PAS : la scène sert à montrer la
 /// publication et à en retirer un média, et ce qu'elle ne sait pas encore
 /// enregistrer, elle le refuse plutôt que de le perdre en silence.
-nonisolated enum PostEditComposerSave {
+enum PostEditComposerSave {
 
     static let maxLength = ReelPublishedContent.maxLength
 

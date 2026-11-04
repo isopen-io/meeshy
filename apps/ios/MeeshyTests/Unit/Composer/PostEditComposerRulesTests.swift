@@ -188,7 +188,7 @@ final class PostEditComposerRulesTests: XCTestCase {
         return e
     }
 
-    private func draft(format: ComposerFormat = .post, text: String?, visibility: PostVisibility = .public,
+    private func draft(format: ComposerFormat = .post, text: String, visibility: PostVisibility = .public,
                        ids: [String] = [], language: String? = "fr", location: SharedPlace? = nil,
                        localMedia: [ComposerDocumentMedia] = []) -> ComposerDocumentDraft {
         ComposerDocumentDraft.document(
