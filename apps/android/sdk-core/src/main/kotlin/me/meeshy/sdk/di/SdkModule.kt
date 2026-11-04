@@ -180,6 +180,7 @@ object SdkModule {
         notificationStore: NotificationPreferencesStore,
         privacyStore: PrivacyPreferencesStore,
         audioStore: me.meeshy.sdk.audio.AudioPreferencesStore,
+        categorySync: me.meeshy.sdk.preferences.CategorySyncRepository,
     ): me.meeshy.sdk.preferences.PreferencesSyncCoordinator =
         me.meeshy.sdk.preferences.PreferencesSyncCoordinator(
             socketManager = socketManager,
@@ -190,6 +191,7 @@ object SdkModule {
             privacyStore = privacyStore,
             audioStore = audioStore,
             scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+            categorySync = categorySync,
         )
 
     @Provides
