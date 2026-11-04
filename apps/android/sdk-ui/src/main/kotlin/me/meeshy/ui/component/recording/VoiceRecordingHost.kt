@@ -23,6 +23,9 @@ public interface VoiceRecordingHost {
     public fun publish(startedAtEpochMs: Long)
 
     public fun retire()
+
+    /** Le titre de la conversation et les dernières mesures du micro, relayés pendant la prise (sans effet par défaut). */
+    public fun updateTake(title: String, levels: List<Float>): Unit = Unit
 }
 
 /** Sans hôte (aperçus, tests) : la prise se passe dans l'écran, sans notification. */
