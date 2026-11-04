@@ -1,5 +1,7 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { useStore } from 'zustand/react';
+
+import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 
 import { endToEndRegimeLedger, endToEndSealed } from '@/lib/end-to-end-regime-ledger';
 import { translateConversationEncryption } from '@/lib/i18n-conversation-encryption-catalog';
@@ -17,10 +19,11 @@ import { PlaintextDirectAction } from './plaintext-direct-action';
  * la fiche Chiffrement d'iOS (`ConversationEncryptionDetailSheet` +
  * `ConversationEncryptionExplanationSections`) : en mots simples, le mode de la
  * conversation ouverte, qui peut la lire, ce qui fonctionne et ce qui manque,
- * ce qui n'est pas encore livré, les appareils et la bascule. Le web change le
- * mode d'un tête-à-tête que le serveur lit, au rôle autorisé (#14648,
- * `conversation-encryption-switch.tsx`), sans jamais activer ni quitter le bout
- * en bout. Le résumé se lit d'emblée, et,
+ * ce qui n'est pas encore livré, les appareils et la bascule. Le web MONTE le
+ * mode d'une conversation que le serveur lit, tête-à-tête ou groupe, au droit
+ * servi (#14648, `conversation-encryption-switch.tsx`), sans jamais le faire
+ * redescendre, ni activer ni quitter le bout en bout. Le résumé se lit
+ * d'emblée, et,
  * pour le bout en bout, sa RÈGLE aussi (il ne se désactive jamais ; une autre
  * conversation, sans chiffrement de bout en bout, reste toujours possible) ;
  * le détail s'ouvre d'un geste (`<details>`, clavier et lecteur d'écran
@@ -47,6 +50,7 @@ export function ConversationEncryptionSection({
   const language = currentInterfaceLanguage();
   const ready = useConversationEncryptionCatalog(language);
   const headingId = useId();
+  const [shown, setShown] = useState<{ readonly conversationId: string; readonly mode: CreationEncryptionMode; readonly over: string | null } | null>(null);
   const sealedIds = useStore(endToEndRegimeLedger, (state) => state.sealed);
   const heldIds = useStore(endToEndRegimeLedger, (state) => state.held);
   const sealed = conversation.id !== undefined && endToEndSealed({ sealed: sealedIds }, { conversationId: conversation.id });
@@ -54,12 +58,21 @@ export function ConversationEncryptionSection({
     conversation.id !== undefined &&
     encryptionSwitchLock({ sealed: sealedIds, held: heldIds }, { conversationId: conversation.id, servedMode: conversation.encryptionMode }) !== null;
 
+  const showFor =
+    (conversationId: string, over: string | null) =>
+    (mode: CreationEncryptionMode | null): void =>
+      setShown((current) =>
+        mode !== null ? { conversationId, mode, over } : current?.conversationId === conversationId ? null : current,
+      );
+
   if (!ready) return <div aria-busy="true" className="px-4 pb-6" data-conversation-encryption-catalog-loading />;
 
   const t = (key: Parameters<typeof translateConversationEncryption>[1], params?: Readonly<Record<string, string>>): string =>
     translateConversationEncryption(language, key, params);
   const isDirect = conversation.type === 'direct';
-  const explanation = encryptionExplanation({ mode: sealed ? 'e2ee' : conversation.encryptionMode, isDirect });
+  const servedMode = conversation.encryptionMode ?? null;
+  const shownMode = shown !== null && shown.conversationId === conversation.id && shown.over === servedMode ? shown.mode : servedMode;
+  const explanation = encryptionExplanation({ mode: sealed ? 'e2ee' : shownMode, isDirect });
   const offeredGesture = isDirect && explanation.regime === 'end-to-end' ? plaintextDirect : undefined;
 
   return (
@@ -79,10 +92,11 @@ export function ConversationEncryptionSection({
       )}
       {modeSwitch === undefined || conversation.id === undefined ? null : (
         <ConversationEncryptionSwitch
-          conversation={{ id: conversation.id, type: conversation.type, encryptionMode: conversation.encryptionMode ?? null }}
+          key={conversation.id}
           locked={switchLocked}
           gesture={modeSwitch}
           t={t}
+          onShownMode={showFor(conversation.id, servedMode)}
         />
       )}
       <details className="px-4">

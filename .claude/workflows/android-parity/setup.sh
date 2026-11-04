@@ -12,9 +12,12 @@ mkdir -p "$RUN/lots" "$RUN/drain" "$RUN/plan"
 cp "$KIT"/track-v2.js "$KIT"/merge-backlog.js "$KIT"/dev-green.js "$KIT"/ready_core.py "$KIT"/lot.py \
    "$KIT"/pr_body.py "$KIT"/issue_body.py "$KIT"/cleanup.py "$KIT"/CONVENTIONS.md "$KIT"/blocked.txt "$RUN"/
 cp "$KIT"/plan/*.json "$RUN"/plan/
+ln -sf ready_core.py "$RUN/ready.py"
 touch "$RUN/drain/gen1" "$RUN/rescue-enabled" "$RUN/active.txt"
 echo 8 > "$RUN/max-inflight"
-sed -i "s#https://claude.ai/code/session_01EP6Bfac7sFfP8RkuHTATHN#${SESSION}#g" "$RUN"/*.js "$RUN"/*.py
+for f in "$RUN"/*.js "$RUN"/*.py; do
+  sed "s#https://claude.ai/code/session_01EP6Bfac7sFfP8RkuHTATHN#${SESSION}#g" "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 if [ ! -d "$RUN/ledger.git" ]; then
   git init -q --bare "$RUN/ledger.git"
   git -C "$RUN/ledger.git" remote add origin https://github.com/isopen-io/meeshy

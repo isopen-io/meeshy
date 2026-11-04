@@ -63,6 +63,7 @@ const es = {
   'conversationEncryption.switch.held': 'Un mensaje de esta conversación usa un cifrado que este navegador no reconoce: el modo no se puede cambiar desde aquí.',
   'conversationEncryption.switch.regimeChanged': 'Otro miembro acaba de cambiar el cifrado: el estado se ha actualizado.',
   'conversationEncryption.switch.restricted': 'Durante la fase de prueba, solo un miembro con un rol del equipo Meeshy (analista o superior) puede cambiar el modo de cifrado.',
+  'conversationEncryption.switch.forbidden': 'No tienes permiso para cambiar el modo de cifrado de esta conversación: en un grupo, hay que ser uno de sus moderadores.',
   'conversationEncryption.switch.unavailable': 'El cifrado en nuestros servidores no está disponible por el momento. Inténtalo más tarde.',
   'conversationEncryption.switch.failed': 'No se pudo cambiar el modo. Inténtalo de nuevo.',
   'conversationEncryption.switch.offline': 'Sin conexión: vuelve a conectarte para cambiar el modo de cifrado.',

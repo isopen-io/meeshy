@@ -28,40 +28,46 @@ const modes = (targets: ReturnType<typeof encryptionSwitchTargets>) => targets.m
 
 describe('les modes proposés', () => {
   test('serveur : hybride proposé, le bout en bout affiché mais réservé aux applications installées', () => {
-    const targets = encryptionSwitchTargets({ servedMode: 'server', sealed: false, isDirect: true, mayToggle: true });
+    const targets = encryptionSwitchTargets({ servedMode: 'server', sealed: false, mayToggle: true });
     expect(targets).toEqual([
       { mode: 'hybrid', available: true, unavailability: null },
       { mode: 'e2ee', available: false, unavailability: 'client-not-yet' },
     ]);
   });
 
-  test('hybride : serveur proposé, comme iOS (tous les modes sauf le sien)', () => {
-    expect(modes(encryptionSwitchTargets({ servedMode: 'hybrid', sealed: false, isDirect: true, mayToggle: true }))).toEqual(['server', 'e2ee']);
+  test('hybride : le mode ne redescend jamais au serveur, seul le bout en bout se voit, grisé', () => {
+    expect(modes(encryptionSwitchTargets({ servedMode: 'hybrid', sealed: false, mayToggle: true }))).toEqual(['e2ee']);
+    expect(encryptionSwitchTargets({ servedMode: 'hybrid', sealed: false, mayToggle: true }).some((target) => target.available)).toBe(false);
+  });
+
+  test('l’ordre de montée est clair → serveur → hybride → bout en bout, la casse et les blancs repliés', () => {
+    expect(modes(encryptionSwitchTargets({ servedMode: ' Server ', sealed: false, mayToggle: true }))).toEqual(['hybrid', 'e2ee']);
+    expect(modes(encryptionSwitchTargets({ servedMode: 'HYBRID', sealed: false, mayToggle: true }))).toEqual(['e2ee']);
+  });
+
+  test('un groupe monte de mode au droit SERVI (rang de modérateur compris côté passerelle)', () => {
+    expect(modes(encryptionSwitchTargets({ servedMode: 'server', sealed: false, mayToggle: true }))).toEqual(['hybrid', 'e2ee']);
   });
 
   test('créée avant le chiffrement systématique : serveur et hybride s’activent', () => {
-    const targets = encryptionSwitchTargets({ servedMode: null, sealed: false, isDirect: true, mayToggle: true });
+    const targets = encryptionSwitchTargets({ servedMode: null, sealed: false, mayToggle: true });
     expect(targets.filter((target) => target.available).map((target) => target.mode)).toEqual(['server', 'hybrid']);
   });
 
   test('bout en bout servi : rien ne se propose, aucune rétrogradation', () => {
-    expect(encryptionSwitchTargets({ servedMode: 'e2ee', sealed: false, isDirect: true, mayToggle: true })).toEqual([]);
+    expect(encryptionSwitchTargets({ servedMode: 'e2ee', sealed: false, mayToggle: true })).toEqual([]);
   });
 
   test('vue e2ee par ce compte puis servie en serveur : la rétrogradation servie est ignorée, rien ne se propose', () => {
-    expect(encryptionSwitchTargets({ servedMode: 'server', sealed: true, isDirect: true, mayToggle: true })).toEqual([]);
+    expect(encryptionSwitchTargets({ servedMode: 'server', sealed: true, mayToggle: true })).toEqual([]);
   });
 
   test('un mode inconnu se lit bout en bout : rien ne se propose (fermé par défaut)', () => {
-    expect(encryptionSwitchTargets({ servedMode: 'signal_v9', sealed: false, isDirect: true, mayToggle: true })).toEqual([]);
+    expect(encryptionSwitchTargets({ servedMode: 'signal_v9', sealed: false, mayToggle: true })).toEqual([]);
   });
 
   test('sans le droit servi, rien ne se propose', () => {
-    expect(encryptionSwitchTargets({ servedMode: 'server', sealed: false, isDirect: true, mayToggle: false })).toEqual([]);
-  });
-
-  test('un groupe ne change pas de mode depuis le web, comme sur iOS (#12844)', () => {
-    expect(encryptionSwitchTargets({ servedMode: 'server', sealed: false, isDirect: false, mayToggle: true })).toEqual([]);
+    expect(encryptionSwitchTargets({ servedMode: 'server', sealed: false, mayToggle: false })).toEqual([]);
   });
 });
 
@@ -223,6 +229,18 @@ describe('changer de mode', () => {
   test('une requête qui lève se dit échouée', async () => {
     const ports: EncryptionSwitchPorts = { online: () => true, post: () => Promise.reject(new Error('boom')), learn: () => undefined };
     expect(await switchConversationEncryption(ports, { conversationId: 'c7', servedMode: 'server', target: 'hybrid' })).toEqual({ kind: 'failed' });
+  });
+
+  test('une descente hybride → serveur ne part jamais : refus local, aucune requête', async () => {
+    const ports = portsOf(ok('server'));
+    expect(await switchConversationEncryption(ports, { conversationId: 'c9', servedMode: 'hybrid', target: 'server' })).toEqual({ kind: 'refused' });
+    expect(ports.posted).toEqual([]);
+    expect(ports.learned).toEqual([]);
+  });
+
+  test('403 sans code (rang de groupe insuffisant) se dit comme tel', async () => {
+    const ports = portsOf(refused(403));
+    expect(await switchConversationEncryption(ports, { conversationId: 'c11', servedMode: 'server', target: 'hybrid' })).toEqual({ kind: 'forbidden' });
   });
 
   test('le mode déjà porté ne repart pas', async () => {
