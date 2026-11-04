@@ -106,6 +106,31 @@ class BubbleVoiceProjectionTest {
             .isEqualTo(VoiceTap.Step.START_QUEUE)
     }
 
+    private val acknowledged: (String) -> String? = { if (it == "cmid_voice") "att_server" else null }
+
+    @Test
+    fun `la bulle accusee montre le vocal en cours sous son id serveur, au meme point`() {
+        val live = BubbleVoiceProjection.live(engine(id = "cmid_voice", positionMs = 5_000), listOf("att_server"), acknowledged)
+
+        assertThat(live?.attachmentId).isEqualTo("att_server")
+        assertThat(live?.isPlaying).isTrue()
+        assertThat(live?.elapsedSeconds).isEqualTo(5.0)
+    }
+
+    @Test
+    fun `un autre vocal n'est jamais pris pour la jumelle accusee`() {
+        assertThat(BubbleVoiceProjection.live(engine(id = "cmid_voice"), listOf("att_other"), acknowledged)).isNull()
+        assertThat(BubbleVoiceProjection.live(engine(id = "cmid_other"), listOf("att_server"), acknowledged)).isNull()
+    }
+
+    @Test
+    fun `toucher la jumelle accusee du vocal en cours le met en pause au lieu de le relancer`() {
+        assertThat(VoiceTap.step("cmid_voice", "att_server", "https://gate.meeshy.me/voice.m4a", acknowledged))
+            .isEqualTo(VoiceTap.Step.TOGGLE)
+        assertThat(VoiceTap.step("cmid_voice", "att_other", "https://gate.meeshy.me/other.m4a", acknowledged))
+            .isEqualTo(VoiceTap.Step.START_QUEUE)
+    }
+
     @Test
     fun `une piece sans adresse est refusee, meme active`() {
         assertThat(VoiceTap.step(activeAttachmentId = null, tappedAttachmentId = "A", url = null)).isEqualTo(VoiceTap.Step.REFUSE)
