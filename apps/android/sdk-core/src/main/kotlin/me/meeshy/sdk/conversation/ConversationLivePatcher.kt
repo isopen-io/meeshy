@@ -26,7 +26,6 @@ import me.meeshy.sdk.model.conversationlist.applyingLastMessage
 import me.meeshy.sdk.model.conversationlist.revertingDeletion
 import me.meeshy.sdk.model.sync.ConversationPatch
 import me.meeshy.sdk.model.sync.ParticipantFold
-import me.meeshy.sdk.model.sync.ParticipantFold
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.ConversationApi
