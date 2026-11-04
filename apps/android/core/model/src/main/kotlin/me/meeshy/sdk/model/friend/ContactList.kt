@@ -51,16 +51,24 @@ data class ContactFilterCounts(
     val all: Int,
     val online: Int,
     val offline: Int,
+    val phonebook: Int = 0,
+    val affiliates: Int = 0,
 ) {
     /**
-     * The count a filter chip displays. The pass-through filters ([ContactFilter.Phonebook]/
-     * [ContactFilter.Affiliates]) mirror [ContactFilter.All] since they narrow nothing yet.
+     * The count a filter chip displays. [ContactFilter.Phonebook] and [ContactFilter.Affiliates]
+     * count rows the friend roster does not hold (device phonebook, affiliate graph): their
+     * numbers are INJECTED by the hub that owns those sources, 0 until it provides them.
      */
     fun forFilter(filter: ContactFilter): Int = when (filter) {
         ContactFilter.Online -> online
         ContactFilter.Offline -> offline
-        ContactFilter.All, ContactFilter.Phonebook, ContactFilter.Affiliates -> all
+        ContactFilter.All -> all
+        ContactFilter.Phonebook -> phonebook
+        ContactFilter.Affiliates -> affiliates
     }
+
+    /** The chip suffix « (n) » — hidden at 0, as on iOS. */
+    fun badgeFor(filter: ContactFilter): Int? = forFilter(filter).takeIf { it > 0 }
 
     companion object {
         val Zero = ContactFilterCounts(all = 0, online = 0, offline = 0)
@@ -166,13 +174,20 @@ object ContactList {
      * `visible(friends, Online, query).size`. [online] and [offline] partition
      * [all] by construction (Offline is exactly "not online").
      */
-    fun counts(friends: List<FriendRequestUser>, query: String): ContactFilterCounts {
+    fun counts(
+        friends: List<FriendRequestUser>,
+        query: String,
+        phonebook: Int = 0,
+        affiliates: Int = 0,
+    ): ContactFilterCounts {
         val matching = visible(friends, ContactFilter.All, query)
         val online = matching.count { it.isOnline == true }
         return ContactFilterCounts(
             all = matching.size,
             online = online,
             offline = matching.size - online,
+            phonebook = phonebook.coerceAtLeast(0),
+            affiliates = affiliates.coerceAtLeast(0),
         )
     }
 
@@ -190,6 +205,17 @@ object ContactList {
         val currentIds = current.mapTo(mutableSetOf()) { it.id }
         val additions = cacheFriendIds.any { it !in currentIds }
         return ContactReconcile(friends = kept, needsRefetch = additions)
+    }
+
+    /**
+     * The roster caption under a row's @handle (iOS `ContactRow`): « En ligne » when the live
+     * [state] is online, « Vu … » when a last-activity instant is served, nothing otherwise —
+     * a presence the server withheld is never fabricated.
+     */
+    fun caption(state: me.meeshy.sdk.model.PresenceState?, lastActiveAt: String?, nowMillis: Long): ContactPresenceCaption {
+        if (state == me.meeshy.sdk.model.PresenceState.ONLINE) return ContactPresenceCaption.Online
+        val at = isoToEpochMillisOrNull(lastActiveAt) ?: return ContactPresenceCaption.None
+        return ContactPresenceCaption.LastSeen(me.meeshy.sdk.model.PresenceLabels.lastSeen(at, nowMillis))
     }
 
     private fun counterparty(
@@ -211,4 +237,11 @@ object ContactList {
             .thenByDescending { isoToEpochMillisOrNull(it.lastActiveAt) ?: Long.MIN_VALUE }
 
     private const val ACCEPTED = "accepted"
+}
+
+/** What a contact row says about presence under the handle. */
+sealed interface ContactPresenceCaption {
+    data object Online : ContactPresenceCaption
+    data class LastSeen(val since: me.meeshy.sdk.model.PresenceLastSeen) : ContactPresenceCaption
+    data object None : ContactPresenceCaption
 }
