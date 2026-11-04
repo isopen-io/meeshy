@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="contacts_list_online">En línea</string>
+    <string name="contacts_list_last_seen_minutes">Visto hace %1$d min</string>
+    <string name="contacts_list_last_seen_hours">Visto hace %1$d h</string>
+    <string name="contacts_list_last_seen_days">Visto hace %1$d d</string>
+    <string name="contacts_list_offline_lower">sin conexión</string>
+    <string name="contacts_list_row_a11y">%1$s, @%2$s, %3$s</string>
+    <string name="contacts_filter_phonebook">Agenda</string>
+    <string name="contacts_filter_affiliates">Afiliados</string>
+    <string name="contacts_filter_a11y">Filtro: %1$s</string>
+    <string name="contacts_search_clear">Borrar búsqueda</string>
+    <string name="contacts_list_mood_a11y">Abrir el estado de %1$s</string>
+</resources>
