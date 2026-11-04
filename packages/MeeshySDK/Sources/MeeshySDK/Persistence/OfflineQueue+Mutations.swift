@@ -80,9 +80,11 @@ extension OfflineQueue {
         let now = Date()
         let shouldCoalesce = OutboxMutationRules.coalescesByAnchor(kind: kind)
 
+        let superseded: [String]
         do {
-            try await pool.write { db in
+            superseded = try await pool.write { db -> [String] in
                 var finalPayload: Data = encoded
+                var replaced: [String] = []
                 if shouldCoalesce {
                     // Latest-state-wins kinds (e.g. `markStoryViewed`): drop
                     // every earlier `.pending` / `.failed` row for the same
@@ -107,6 +109,7 @@ extension OfflineQueue {
                         try OutboxRecord
                             .filter(staleIds.contains(Column("id")))
                             .deleteAll(db)
+                        replaced = stale.map(\.clientMessageId).filter { $0 != cmid }
                     }
                 }
                 try OutboxRecord(
@@ -119,12 +122,17 @@ extension OfflineQueue {
                     status: .pending,
                     createdAt: now
                 ).insert(db)
+                return replaced
             }
         } catch {
             logger.error("Outbox write failed for \(kind.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw OfflineQueueError.writeFailed(underlying: error)
         }
 
+        // #16010 — une ligne remplacée n'aura jamais d'issue : ceux qui
+        // l'observaient (écrivains du like, du favori) se terminent ici, sans
+        // valeur — donc sans retour arrière —, au lieu d'attendre à vie.
+        superseded.forEach(endOutcomeObservers(for:))
         logger.info("Enqueued \(kind.rawValue, privacy: .public) outbox row \(outboxId, privacy: .public)")
         await refreshPendingCount()
         mutationEnqueued.send(())
