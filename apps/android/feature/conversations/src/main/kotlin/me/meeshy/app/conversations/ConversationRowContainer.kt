@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +72,8 @@ internal fun ConversationRowContainer(
     val currentTags = prefs?.tags.orEmpty()
     val title = conversation.displayTitle(model.currentUserId)
     var menuExpanded by remember { mutableStateOf(false) }
+    // Un appui long suivi d'un déplacement lève la rangée : le menu s'efface devant le glisser-déposer.
+    LaunchedEffect(model.isDragging) { if (model.isDragging) menuExpanded = false }
 
     val previewLabels = lastMessagePreviewLabels()
     val draftLine = draftPreview(model.draft, previewLabels)
