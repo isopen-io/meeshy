@@ -355,7 +355,7 @@
     "Meeshy::ConversationView": 4197,
     "Meeshy::ConversationViewModel": 3933,
     "Meeshy::FeedPostCard": 1732,
-    "Meeshy::FeedViewModel": 1744,
+    "Meeshy::FeedViewModel": 1703,
     "Meeshy::MeeshyComposerHost": 7798,
     "Meeshy::MessageListViewController": 4290,
     "Meeshy::PostDetailView": 2926,

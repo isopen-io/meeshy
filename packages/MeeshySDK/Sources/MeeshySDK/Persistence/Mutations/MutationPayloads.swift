@@ -668,6 +668,21 @@ public struct ToggleLikePostPayload: Codable, Sendable, Equatable {
     }
 }
 
+/// #15997 — « Enregistrer » rejoué depuis la file durable
+/// (`POST|DELETE /posts/:id/bookmark`). L'état VOULU voyage explicitement,
+/// jamais une bascule : un rejeu ne peut que le poser.
+public struct ToggleBookmarkPostPayload: Codable, Sendable, Equatable {
+    public let clientMutationId: String
+    public let postId: String
+    public let bookmarked: Bool
+
+    public init(clientMutationId: String, postId: String, bookmarked: Bool) {
+        self.clientMutationId = clientMutationId
+        self.postId = postId
+        self.bookmarked = bookmarked
+    }
+}
+
 public struct CreateCommentPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
     public let postId: String

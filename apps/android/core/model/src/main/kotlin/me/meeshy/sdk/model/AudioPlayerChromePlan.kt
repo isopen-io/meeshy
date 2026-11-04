@@ -87,3 +87,12 @@ public data class AudioPlayerChromePlan(
         }
     }
 }
+
+/**
+ * **Quelle posture pour quelle rangée** — la décision côté application que [AudioPlayerChrome] laisse ouverte (iOS
+ * `FocalAudioBlock.flatChrome`) : la ligne focale élue prend la bande enrichie, toute autre garde la carte riche.
+ */
+public object AudioPlayerChromeElection {
+    public fun of(isElectedFocalRow: Boolean): AudioPlayerChrome =
+        if (isElectedFocalRow) AudioPlayerChrome.FlatFocused else AudioPlayerChrome.Card
+}

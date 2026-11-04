@@ -1,11 +1,17 @@
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
+import type { PreviewProtection } from '@meeshy/shared/types/conversation-preview';
 import type { LastMessagePreviewAttachment } from '@meeshy/shared/types/socketio-events/conversation';
 import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview,
 } from '../../routes/conversations/utils/last-message-preview';
-import { previewAltOf, previewAttachmentProtection } from '../../routes/conversations/utils/last-message-media';
+import { isPreviewWithheld } from '../../routes/conversations/utils/last-message-nature';
+import {
+  previewAltOf,
+  previewAttachmentProtection,
+  servedPreviewAttachment,
+} from '../../routes/conversations/utils/last-message-media';
 
 /**
  * Le fragment `select` Prisma que TOUT émetteur d'aperçu de ligne de liste doit
@@ -265,7 +271,7 @@ export interface PreviewMediaFields {
  */
 export function resolvePreviewMediaFields(
   message: PreviewMediaMessage | null | undefined,
-  messageWithheld = false,
+  messageProtection: PreviewProtection | null = null,
 ): PreviewMediaFields {
   const attachments = message?.attachments ?? [];
   return {
@@ -279,7 +285,7 @@ export function resolvePreviewMediaFields(
     // sa requête Prisma à `take: 1` (optimisation légitime, conservée) ; les
     // deux autres émetteurs chargent le `Message` partagé, dont
     // `attachments` porte la liste COMPLÈTE.
-    lastMessageAttachments: attachments.slice(0, 1).map((attachment) => normalizePreviewAttachment(attachment, messageWithheld)),
+    lastMessageAttachments: attachments.slice(0, 1).map((attachment) => normalizePreviewAttachment(attachment, messageProtection)),
     lastMessageAttachmentCount: Math.max(message?._count?.attachments ?? 0, attachments.length),
     lastMessageIsBlurred: message?.isBlurred ?? false,
     lastMessageIsViewOnce: message?.isViewOnce ?? false,
@@ -289,9 +295,9 @@ export function resolvePreviewMediaFields(
 
 function normalizePreviewAttachment(
   attachment: PreviewMediaAttachmentInput,
-  messageWithheld: boolean,
+  messageProtection: PreviewProtection | null,
 ): LastMessagePreviewAttachment {
-  return {
+  return servedPreviewAttachment({
     id: attachment.id,
     mimeType: attachment.mimeType,
     thumbnailUrl: attachment.thumbnailUrl ?? null,
@@ -303,7 +309,7 @@ function normalizePreviewAttachment(
     pageCount: attachment.pageCount ?? null,
     // #7594 — le texte alternatif est du CONTENU, retenu sous protection du
     // message ou de la pièce ; la protection de la pièce part toujours.
-    alt: previewAltOf(attachment, messageWithheld),
+    alt: previewAltOf(attachment, isPreviewWithheld(messageProtection)),
     ...previewAttachmentProtection(attachment),
-  };
+  }, messageProtection);
 }

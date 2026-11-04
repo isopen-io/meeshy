@@ -154,4 +154,40 @@ class ConversationListLockCoordinatorTest {
 
         assertThat(session.admits("c1", isLocked = true)).isFalse()
     }
+
+    @Test
+    fun `le toucher d'avatar sous verrou ouvre les details une fois le code accepte, jamais le fil`() {
+        val store = InMemoryConversationLockStore().apply { setLock("c1", "1111") }
+        val opened = mutableListOf<String>()
+        val info = mutableListOf<String>()
+        val coordinator = ConversationListLockCoordinator(
+            state = MutableStateFlow(ConversationListUiState()),
+            lockStore = store,
+            openInfo = { info += it },
+            openConversation = { opened += it },
+        )
+
+        coordinator.onAvatarInfo("c1")
+        "1111".forEach { coordinator.onLockDigit(it - '0') }
+
+        assertThat(info).containsExactly("c1")
+        assertThat(opened).isEmpty()
+    }
+
+    @Test
+    fun `le toucher d'avatar d'une conversation ouverte montre les details sans code`() {
+        val state = MutableStateFlow(ConversationListUiState())
+        val info = mutableListOf<String>()
+        val coordinator = ConversationListLockCoordinator(
+            state = state,
+            lockStore = InMemoryConversationLockStore(),
+            openInfo = { info += it },
+            openConversation = {},
+        )
+
+        coordinator.onAvatarInfo("c1")
+
+        assertThat(info).containsExactly("c1")
+        assertThat(state.value.lockPrompt).isNull()
+    }
 }

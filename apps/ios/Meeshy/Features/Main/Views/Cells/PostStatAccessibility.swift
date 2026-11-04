@@ -1,7 +1,7 @@
 import Foundation
 
-/// La source unique des libellés « N j'aime / N commentaires / N repartages /
-/// N réponses » du fil. Chaque clé (`feed.post.stat.*`) porte une
+/// La source unique des libellés « N j'aime / N commentaires / N réponses » du
+/// fil. Chaque clé (`feed.post.stat.*`) porte une
 /// `variations.plural` complète — 2 formes dans les 6 locales latines, **6 en
 /// arabe** — donc l'accord est celui du CATALOGUE, jamais du code.
 ///
@@ -46,17 +46,6 @@ enum PostStatAccessibility {
         String(
             localized: "feed.post.stat.comments",
             defaultValue: "\(count) \(count == 1 ? "comment" : "comments")",
-            bundle: bundle,
-            locale: locale
-        )
-    }
-
-    static func repostsLabel(_ count: Int,
-                             bundle: Bundle = .main,
-                             locale: Locale = .current) -> String {
-        String(
-            localized: "feed.post.stat.reposts",
-            defaultValue: "\(count) \(count == 1 ? "repost" : "reposts")",
             bundle: bundle,
             locale: locale
         )
