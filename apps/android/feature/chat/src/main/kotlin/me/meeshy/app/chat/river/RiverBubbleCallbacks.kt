@@ -1,8 +1,8 @@
 package me.meeshy.app.chat.river
 
-import me.meeshy.app.chat.ChatAudioPlayer
+import me.meeshy.app.chat.ChatVoicePlayback
 import me.meeshy.app.chat.ChatMessageRowActions
-import me.meeshy.app.chat.voiceTrackSource
+import me.meeshy.app.chat.withVoice
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
 
@@ -13,7 +13,7 @@ import me.meeshy.ui.component.bubble.BubbleContent
  */
 internal object RiverBubbleCallbacks {
 
-    fun attachments(bubble: BubbleContent, rows: ChatMessageRowActions, audioPlayer: ChatAudioPlayer?): BubbleCallbacks {
+    fun attachments(bubble: BubbleContent, rows: ChatMessageRowActions, audioPlayer: ChatVoicePlayback?): BubbleCallbacks {
         val id = bubble.messageId
         return BubbleCallbacks(
             onLongPress = { rows.onLongPress(id) },
@@ -23,9 +23,7 @@ internal object RiverBubbleCallbacks {
                 if (attachmentId == null) rows.onLongPress(id) else rows.onImageLongPress(id, attachmentId)
             },
             onLocationClick = { location -> rows.onLocationClick(id, location) },
-            onAudioClick = { audio -> audioPlayer?.toggle(audio, bubble.voiceTrackSource()) },
-            onAudioSeek = { audio, seconds -> audioPlayer?.seek(audio, seconds) },
             onFileClick = { file -> rows.onFileClick(id, file.attachmentId) },
-        )
+        ).withVoice(audioPlayer, bubble)
     }
 }

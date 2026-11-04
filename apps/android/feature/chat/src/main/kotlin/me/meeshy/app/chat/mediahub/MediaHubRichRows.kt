@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,7 +32,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import android.view.WindowManager
-import me.meeshy.app.chat.ChatAudioPlayer
+import me.meeshy.app.chat.ChatVoicePlayback
+import me.meeshy.app.chat.rememberBubbleVoicePlayback
 import me.meeshy.app.chat.LinkPreviewCard
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.link.LinkPreviewState
@@ -41,7 +43,8 @@ import me.meeshy.sdk.model.mediahub.MediaHubPayload
 import me.meeshy.sdk.model.mediahub.MediaHubRendering
 import me.meeshy.sdk.model.mediahub.MediaHubRowRules
 import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.component.bubble.AudioBubble
+import me.meeshy.ui.component.bubble.BubbleCallbacks
+import me.meeshy.ui.component.bubble.BubbleVoicePlayer
 import me.meeshy.ui.component.bubble.BubbleAudio
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyFontSize
@@ -55,6 +58,7 @@ internal fun MediaHubAttachment.toBubbleAudio(): BubbleAudio = BubbleAudio(
     url = url.takeUnless { isEncrypted },
     durationSeconds = durationMs?.let { it / 1000 },
     sizeBytes = sizeBytes?.toInt(),
+    isProtected = isProtected,
 )
 
 /**
@@ -62,13 +66,29 @@ internal fun MediaHubAttachment.toBubbleAudio(): BubbleAudio = BubbleAudio(
  * LE lecteur du fil — une seule lecture à la fois, la session média et la carte de l'écran verrouillé comprises.
  */
 @Composable
-internal fun MediaHubAudioBody(attachment: MediaHubAttachment, player: ChatAudioPlayer, modifier: Modifier = Modifier) {
+internal fun MediaHubAudioBody(item: MediaHubItem, attachment: MediaHubAttachment, player: ChatVoicePlayback?, accent: Color, modifier: Modifier = Modifier) {
     val audio = remember(attachment) { attachment.toBubbleAudio() }
-    AudioBubble(
+    val audios = remember(audio) { listOf(audio) }
+    val playback by rememberBubbleVoicePlayback(player, audios)
+    val callbacks = remember(player, item, audio) {
+        if (player == null) {
+            BubbleCallbacks.None
+        } else {
+            BubbleCallbacks(
+                onAudioClick = { player.tapLone(it, item.messageId, item.senderName, item.sentAtMillis) },
+                onAudioSeek = { tapped, seconds -> player.seekSeconds(tapped, seconds) },
+                onAudioSeekFraction = { tapped, fraction -> player.seekFraction(tapped, fraction) },
+                onAudioCycleSpeed = player::cycleSpeed,
+                audioSamples = player::samples,
+            )
+        }
+    }
+    BubbleVoicePlayer(
         audio = audio,
-        playback = player.bubbleFor(audio),
+        playback = playback,
         onColor = MeeshyTheme.tokens.textPrimary,
-        onClick = if (audio.isPlayable) ({ player.toggle(audio) }) else null,
+        accent = accent,
+        callbacks = callbacks,
         modifier = modifier.fillMaxWidth(),
     )
 }
@@ -180,7 +200,7 @@ internal fun MediaHubRichRow(
     accent: Color,
     rendering: MediaHubRendering,
     mayLeave: Boolean,
-    audioPlayer: ChatAudioPlayer,
+    audioPlayer: ChatVoicePlayback?,
     onOpen: () -> Unit,
     onOpenLink: (String) -> Unit,
     onGoToMessage: (() -> Unit)?,
@@ -189,7 +209,7 @@ internal fun MediaHubRichRow(
     when {
         rendering == MediaHubRendering.AUDIO && payload is MediaHubPayload.Attachment ->
             Column(Modifier.padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs)) {
-                MediaHubAudioBody(payload.attachment, audioPlayer)
+                MediaHubAudioBody(item, payload.attachment, audioPlayer, accent)
                 MediaHubRowFooter(meta, accent, onGoToMessage)
             }
         rendering == MediaHubRendering.CONTACT_CARD && payload is MediaHubPayload.Attachment ->
