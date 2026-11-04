@@ -169,7 +169,7 @@ class ActivationInviteViewModelTest {
     fun `un code refuse reste dit sous le champ et ne prouve rien`() = runTest(dispatcher) {
         val rig = rig()
         coEvery { rig.auth.resendEmailVerification(any()) } returns NetworkResult.Success(Unit)
-        coEvery { rig.auth.confirmEmail(any()) } returns NetworkResult.Failure(ApiError(message = "bad", httpStatus = 400, code = "INVALID_CODE"))
+        coEvery { rig.auth.confirmEmail(any()) } returns NetworkResult.Failure(ApiError(message = "bad", httpStatus = 400, code = "INVALID_VERIFICATION"))
         advanceUntilIdle()
         rig.viewModel.onEvent(ActivationInviteEvent.SendCode)
         advanceUntilIdle()

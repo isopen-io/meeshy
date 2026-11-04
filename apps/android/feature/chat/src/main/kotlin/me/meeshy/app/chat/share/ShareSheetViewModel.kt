@@ -1,4 +1,4 @@
-package me.meeshy.app.chat
+package me.meeshy.app.chat.share
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,12 +8,16 @@ import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.app.chat.ShareSheetModel
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.DirectConversationResolution
@@ -44,6 +48,11 @@ import me.meeshy.sdk.model.share.SharePlan
 import me.meeshy.sdk.model.share.SharePlanner
 import me.meeshy.sdk.model.share.ShareRecipient
 import me.meeshy.sdk.model.share.ShareRecipientListing
+import me.meeshy.sdk.model.share.ShareRequest
+import me.meeshy.sdk.model.share.ShareLimits
+import me.meeshy.sdk.model.share.movingMedia
+import me.meeshy.sdk.model.share.removingMedia
+import me.meeshy.sdk.model.share.trimmingOverflow
 import me.meeshy.sdk.model.share.ShareSheetState
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.sdk.model.share.TrackedShareCard
@@ -55,22 +64,6 @@ import me.meeshy.sdk.post.PostShareLinkService
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.asCoroutineContext
 import me.meeshy.sdk.share.ShareRecipientDirectory
-
-/** Tout ce que l'hôte d'application de la feuille unique sait (#13477) ; la vue lit [AppShareSheetViewModel.model]. */
-internal data class AppShareState(
-    val subject: ShareSubject? = null,
-    val sheet: ShareSheetState = ShareSheetState(),
-    val conversations: List<ShareRecipient> = emptyList(),
-    val people: List<ShareRecipient> = emptyList(),
-    val contentLines: List<String> = emptyList(),
-    /** Ce que le partage entrant a laissé derrière lui (source refusée, trop lourd, illisible, au-delà du plafond), une ligne par sorte. */
-    val notices: List<String> = emptyList(),
-    val isLoading: Boolean = true,
-    val isOffline: Boolean = false,
-    /** La session se restaure encore (démarrage à froid d'un partage entrant) : un chargement, jamais « connectez-vous » à tort. */
-    val isSessionLoading: Boolean = false,
-    val isSignedOut: Boolean = false,
-)
 
 /**
  * Le moteur de **la feuille de partage unique** hors du fil (#13469, #13474, #13476, #13477) : une story,
@@ -96,7 +89,7 @@ internal data class AppShareState(
  *   carte le porte à sa place ; hors ligne ou en échec, l'adresse directe reste.
  */
 @HiltViewModel
-internal class AppShareSheetViewModel @Inject constructor(
+internal class ShareSheetViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
     private val messageRepository: MessageRepository,
     private val sessionRepository: SessionRepository,
@@ -111,8 +104,15 @@ internal class AppShareSheetViewModel @Inject constructor(
     private val previews: PendingMediaPreviewing = PendingMediaPreviewing.None,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(AppShareState())
-    val state: StateFlow<AppShareState> = _state.asStateFlow()
+    private val effectChannel = Channel<ShareSheetEffect>(Channel.BUFFERED)
+
+    /** Les effets ponctuels : la fermeture automatique après un envoi sans échec. */
+    val effects: Flow<ShareSheetEffect> = effectChannel.receiveAsFlow()
+
+    private var autoCloseArmed = true
+
+    private val _state = MutableStateFlow(ShareSheetUiState())
+    val state: StateFlow<ShareSheetUiState> = _state.asStateFlow()
 
     private var conversations: List<ApiConversation> = emptyList()
     private var friends: List<me.meeshy.sdk.model.FriendRequestUser> = emptyList()
@@ -168,13 +168,27 @@ internal class AppShareSheetViewModel @Inject constructor(
      * s'ouvre pas : la feuille n'a rien à envoyer.
      */
     fun bindIncoming(text: String?, items: List<MediaUploadItem>, notices: List<String> = emptyList()) {
-        release(incomingItems.filterNot { it in items })
-        incomingItems = items
         val media = items.mapIndexed { index, item ->
             ShareMedia(id = "incoming:$index", mimeType = item.mimeType, bytes = item.sizeBytes)
         }
-        val subject = ShareSubject.Incoming(text?.trim()?.takeIf { it.isNotEmpty() }, media)
-        open(subject, lines = listOfNotNull(subject.text) + items.map { it.fileName }, notices = notices)
+        val request = ShareRequest.incoming(text, media) ?: return
+        bind(request, items, notices)
+    }
+
+    /** La porte unique (#15688) : une [ShareRequest] ; [items] sont les fichiers déjà copiés, numérotés `incoming:<rang>`. */
+    fun bind(request: ShareRequest, items: List<MediaUploadItem> = emptyList(), notices: List<String> = emptyList()) {
+        release(incomingItems.filterNot { it in items })
+        incomingItems = items
+        val subject = request.subject
+        val lines = when (subject) {
+            is ShareSubject.Incoming -> listOfNotNull(subject.text) + items.map { it.fileName }
+            else -> linesOf(subject)
+        }
+        open(subject, lines = lines, notices = notices)
+        if (subject !is ShareSubject.Incoming) {
+            bound = subject
+            mintTrackedLink(subject)
+        }
     }
 
     /** La feuille est fermée : rien n'est gardé, la prochaine porte repart d'un état neuf. */
@@ -220,26 +234,64 @@ internal class AppShareSheetViewModel @Inject constructor(
     }
 
     /** Toucher une rangée la coche ; la retoucher la décoche ; une rangée déjà servie est inerte. */
-    fun toggle(recipient: ShareRecipient) = update { it.copy(sheet = it.sheet.toggled(recipient)) }
+    fun toggle(recipient: ShareRecipient) = update { state ->
+        val ticking = !state.sheet.isSelected(recipient)
+        // Le onzième est refusé en silence : dix destinataires au plus (D10).
+        if (ticking && state.selectionIsFull) state else state.copy(sheet = state.sheet.toggled(recipient))
+    }
+
+    /** La croix d'un message de « Ce qui part » : il ne part pas, les autres partent. */
+    fun removeMessage(id: String) = update { it.copy(sheet = it.sheet.removingMessage(id)) }
+
+    /** « Tout le message » : la pièce seule s'élargit au message qui la porte, sans fermer la feuille. */
+    fun widenToWholeMessage() = update { state ->
+        val wide = state.subject?.widenedToWholeMessage ?: return@update state
+        state.copy(subject = wide, sheet = state.sheet.copy(removedMessageIds = emptySet()))
+    }
+
+    fun removeIncoming(key: String) = updateIncoming { it.removingMedia(key) }
+
+    fun moveIncoming(key: String, offset: Int) = updateIncoming { it.movingMedia(key, offset) }
+
+    /** « Retirer les N derniers » : ôte ce qui dépasse les plafonds communs. */
+    fun trimOverflow() = update { state ->
+        val incoming = state.subject as? ShareSubject.Incoming ?: return@update state
+        val count = planOf(state)?.limits?.trimCount ?: return@update state
+        state.copy(subject = incoming.trimmingOverflow(count))
+    }
+
+    private fun updateIncoming(change: (ShareSubject.Incoming) -> ShareSubject.Incoming) = update { state ->
+        val incoming = state.subject as? ShareSubject.Incoming ?: return@update state
+        state.copy(subject = change(incoming))
+    }
+
+    fun onGroupingChange(grouping: me.meeshy.sdk.model.share.ShareGrouping) = update { it.copy(sheet = it.sheet.copy(grouping = grouping)) }
+
+    /** « Tout réessayer » : ne renvoie que les rangées en échec — les servies sont inertes. */
+    fun retryAll() = send()
+
+    /** « Réessayer » sur une rangée : elle seule repart. */
+    fun retry(recipient: ShareRecipient) = send(only = setOf(recipient.id))
 
     /**
      * Envoie vers chaque destinataire coché pas encore servi. La rangée passe à « envoi » tout de suite ;
      * la copie est une bulle locale et une entrée durable. Le plan est relu au toucher : rien ne part s'il
      * ne le permet pas.
      */
-    fun send() {
+    fun send(only: Set<String>? = null) {
         val state = _state.value
         val subject = state.subject ?: return
         val user = sessionRepository.currentUser.value ?: return
         if (planOf(state)?.canSend != true) return
-        val pending = state.sheet.pending.filter { it.id !in inFlight }
+        val pending = state.sheet.pending.filter { it.id !in inFlight && (only == null || it.id in only) }
         if (pending.isEmpty()) return
-        val built = ShareOutgoingBuilder.build(subject, emptySet(), state.sheet.caption, state.sheet.chosenDurationSeconds)
+        val built = ShareOutgoingBuilder.build(subject, state.sheet.removedMessageIds, state.sheet.caption, state.sheet.chosenDurationSeconds)
         if (built is ShareOutgoingResult.Refused) {
             pending.forEach { mark(it, ShareDelivery.Failed(built.failure)) }
             return
         }
         val posts = (built as ShareOutgoingResult.Ready).messages
+        autoCloseArmed = true
         pending.forEach { inFlight += it.id; mark(it, ShareDelivery.Sending) }
         // #13558 : le partage appartient au compte qui a touché « Envoyer ».
         val gesture = mediaUploadQueue.ticket()
@@ -272,6 +324,7 @@ internal class AppShareSheetViewModel @Inject constructor(
             }
         }
         workManager.enqueue(OutboxFlushWorker.buildRequest())
+        settle()
     }
 
     private sealed interface Outcome {
@@ -361,7 +414,7 @@ internal class AppShareSheetViewModel @Inject constructor(
         val language = user.systemLanguage?.takeIf { it.isNotBlank() } ?: LanguageResolver.FALLBACK_LANGUAGE
         val incoming = subject as? ShareSubject.Incoming
         if (incoming != null && incomingItems.isNotEmpty()) {
-            postFiles(conversationId, incoming.composedText(caption).orEmpty(), language, user)
+            postFiles(conversationId, incoming.composedText(caption).orEmpty(), language, user, orderedFiles(incoming))
             return
         }
         posts.forEach { post ->
@@ -379,8 +432,8 @@ internal class AppShareSheetViewModel @Inject constructor(
     }
 
     /** Un message par fichier reçu, dans l'ordre ; le texte joint part avec le premier. */
-    private suspend fun postFiles(conversationId: String, text: String, language: String, user: MeeshyUser) {
-        incomingItems.forEachIndexed { index, item ->
+    private suspend fun postFiles(conversationId: String, text: String, language: String, user: MeeshyUser, files: List<MediaUploadItem>) {
+        files.forEachIndexed { index, item ->
             val uploadCmid = mediaUploadQueue.enqueue(item, conversationId = conversationId)
             val effects = MessageEffects()
             val preview = previews.render(uploadCmid, item, effects)
@@ -409,6 +462,23 @@ internal class AppShareSheetViewModel @Inject constructor(
         }
     }
 
+    /** Le fichier d'une pièce entrante, pour sa vignette ; nul si la copie n'est pas sur disque. */
+    fun thumbnailFile(media: ShareMedia): java.io.File? =
+        media.id?.removePrefix("incoming:")?.toIntOrNull()?.let(incomingItems::getOrNull)
+            ?.let { (it.source as? me.meeshy.sdk.media.MediaUploadSource.OnDisk)?.file }
+
+    /** Les fichiers copiés, dans l'ordre que la bande a laissé (retirés écartés, réordonnés suivis) : la clé `incoming:<rang>` les retrouve. */
+    private fun orderedFiles(subject: ShareSubject.Incoming): List<MediaUploadItem> =
+        subject.media.mapNotNull { media -> media.id?.removePrefix("incoming:")?.toIntOrNull()?.let(incomingItems::getOrNull) }
+
+    /** Tout est servi sans échec : la feuille peut se refermer d'elle-même, une fois par envoi. */
+    private fun settle() {
+        if (autoCloseArmed && _state.value.autoCloses) {
+            autoCloseArmed = false
+            effectChannel.trySend(ShareSheetEffect.AutoClose)
+        }
+    }
+
     /** La copie en clair du média reçu ne survit pas à la feuille. */
     override fun onCleared() {
         cleared = true
@@ -422,7 +492,7 @@ internal class AppShareSheetViewModel @Inject constructor(
 
     // --- Dérivation -------------------------------------------------------------------------------------
 
-    private fun update(transform: (AppShareState) -> AppShareState) {
+    private fun update(transform: (ShareSheetUiState) -> ShareSheetUiState) {
         _state.update(transform)
         recompute()
     }
@@ -431,7 +501,7 @@ internal class AppShareSheetViewModel @Inject constructor(
         _state.update { it.copy(sheet = it.sheet.withDelivery(recipient.id, delivery)) }
     }
 
-    private fun planOf(state: AppShareState): SharePlan? =
+    private fun planOf(state: ShareSheetUiState): SharePlan? =
         state.subject?.let { SharePlanner.plan(it.entry(state.sheet.removedMessageIds), state.sheet.selection.map { r -> r.destination }) }
 
     private fun recompute() {
@@ -465,7 +535,7 @@ internal class AppShareSheetViewModel @Inject constructor(
     }
 
     /** Ce que la feuille dessine. */
-    fun model(state: AppShareState): ShareSheetModel {
+    fun model(state: ShareSheetUiState): ShareSheetModel {
         val plan = planOf(state)
         return ShareSheetModel(
             plan = plan,
@@ -486,5 +556,15 @@ internal class AppShareSheetViewModel @Inject constructor(
             shareOutText = plan?.takeIf { it.offers(ShareAction.SHARE_OUT) }?.let { state.subject?.composedText("") },
             recipientLimitExceeded = (plan?.limits?.overRecipients ?: 0) > 0,
         )
+    }
+}
+
+/** Les effets ponctuels de la feuille de partage. */
+internal sealed interface ShareSheetEffect {
+    /** Rien n'a échoué : haptique de succès, fermeture après [AUTO_CLOSE_DELAY_MILLIS], puis le toast « Envoyé à X · Ouvrir ». */
+    data object AutoClose : ShareSheetEffect
+
+    companion object {
+        const val AUTO_CLOSE_DELAY_MILLIS: Long = 600L
     }
 }

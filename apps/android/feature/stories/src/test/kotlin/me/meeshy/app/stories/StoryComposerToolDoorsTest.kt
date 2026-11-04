@@ -171,6 +171,7 @@ class StoryComposerToolDoorsTest {
         vm.onAddSticker("😀")
         show(vm)
         compose.onNodeWithContentDescription(canvas).performTouchInput { click(Offset(width * 0.15f, height * 0.35f)) }
+        compose.passSceneDoubleTapWindow()
         compose.onNodeWithContentDescription("Sticker").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("sheet:${StoryComposerSheet.STICKERS}").assertExists()

@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Chantier #15537 de bout en bout, sans s'arrêter, sur iOS et Android : la pastille dit qui écrit et mène à la conversation, l'aperçu montre l'auteur et le détail des pièces jointes, l'avatar de ligne ouvre profil ou détails, le rail de stories reste en haut au défilement. Cartographie features × plateformes, registre des lots (plan de parité + compléments iOS, Android, partagés), puis deux voies en parallèle : DÉVELOPPEMENT (issue, cadrage contre dev vivant, TDD, revue-correction, audit des lots sensibles, PR) et GUICHET CI (resynchronisation sur dev, preuve par workflow_dispatch, corrections, fusion au vert, clôture avec preuve) — opus cadre, relit et corrige ; sonnet développe et prouve ; haiku fait le mécanique",
   whenToUse:
-    "Lancer ou reprendre le chantier « liste iso iOS » (#15537, milestone #232). Args, tous optionnels : { run ('/home/user/meeshy-quatre-run'), date, attribution, recartographier (false), devPar (1), maxFix (4), tentatives (2), maxIdle (36), maxResync (3), guichetMax (4), sauter [clés], seulement [clés], base ('dev') }.",
+    "Lancer ou reprendre le chantier « liste iso iOS » (#15537, milestone #232). Args, tous optionnels : { run ('/home/user/meeshy-quatre-run'), date, attribution, recartographier (false), devPar (1), maxFix (4), tentatives (2), maxIdle (36), maxResync (3), guichetMax (4), sauter [clés], seulement [clés], base ('dev'), aVerifier [{ key, platform, pr, issue }] — PR déjà fusionnées dont la preuve reste à lire }.",
   phases: [
     { title: 'Préparer', detail: "répertoire d'exécution, registre, PR de l'outillage, restauration du registre depuis #15537", model: 'sonnet' },
     { title: 'Cartographier', detail: 'une feature à la fois : chaque clause confrontée à iOS et Android sur dev vivant, lots manquants', model: 'opus' },
@@ -148,6 +148,9 @@ FAITS DE L'ENVIRONNEMENT (mesurés le 2026-11-03) :
 - D'autres sessions Android sont ACTIVES sur le programme de parité (branches claude/android-*). Une branche vivante d'une autre session
   qui écrit tes fichiers ⇒ tu cèdes (CLAUDE.md, #5243) : statut tenu-ailleurs, jamais de doublon ni de fusion en avance.
 - Une PR vers ${BASE} ferme ses issues « Closes #n » (${BASE} est la branche par défaut) ; vérifie et ferme toi-même sinon.
+- Une PR ouverte et prête peut être fusionnée par un tiers AVANT sa preuve (mesuré le 2026-11-04 : #15700 fusionnée pendant que ses
+  CI tournaient). Une PR de ce chantier reste donc en BROUILLON (draft) tant qu'elle n'est pas prouvée ; seul l'agent de livraison
+  la passe prête, juste avant de la fusionner.
 
 INTERDITS : écrire dans ${REPO} (lecture seule ; tes clones vivent sous ${LOTS}) ; pousser sur ${BASE} ou main ; git push --force ; rebase
 d'une branche poussée ; git stash ; git worktree ; désactiver, affaiblir ou supprimer un témoin ; affaiblir une garde (pièce ou message
@@ -262,6 +265,10 @@ const VERDICT = { type: 'object', properties: {
 }, required: ['key', 'pr', 'etat', 'head_sha', 'dev_base', 'runs', 'echecs', 'prealables', 'checks_pr', 'detail'] }
 
 const GUICHET = { type: 'object', properties: { verdicts: { type: 'array', items: VERDICT }, attendu_min: { type: 'integer' } }, required: ['verdicts', 'attendu_min'] }
+
+const REPARATION = { type: 'object', properties: {
+  pushed: { type: 'boolean' }, pr: { type: 'integer' }, branch: { type: 'string' }, head_sha: { type: 'string' }, cause: { type: 'string' }, change: { type: 'string' },
+}, required: ['pushed', 'pr', 'branch', 'head_sha', 'cause', 'change'] }
 
 const FIX = { type: 'object', properties: {
   pushed: { type: 'boolean' }, head_sha: { type: 'string' }, cause: { type: 'string' }, change: { type: 'string' },
@@ -454,8 +461,10 @@ MISSION — OUVRIR LA PR DU LOT (mécanique). Branche ${branche(info.platform, c
    « Closes #${issue} », le résumé, les fichiers, les témoins, les critères tenus.
    Résumé : ${JSON.stringify(String(resume || '').replace(/"/g, "'").slice(0, 1200))}
    Ajoute, avant la ligne « 🤖 Generated… » : « Refs #${CHANTIER} » et « Preuve : workflow_dispatch des CI concernées sur cette branche (la CI des PR est
-   gelée) — liens en commentaire. » La fin du corps est : une ligne vide, « 🤖 Generated with [Claude Code](https://claude.com/claude-code) », une ligne vide, ${SESSION_URL}.
-3. mcp__github__create_pull_request owner isopen-io repo meeshy base ${BASE} head ${branche(info.platform, cle)}. ${REG} set ${RUN} ${cle} pr <numéro>.
+   gelée) — liens en commentaire. Brouillon jusqu'à la preuve verte. » La fin du corps est : une ligne vide, « 🤖 Generated with [Claude Code](https://claude.com/claude-code) », une ligne vide, ${SESSION_URL}.
+3. mcp__github__create_pull_request owner isopen-io repo meeshy base ${BASE} head ${branche(info.platform, cle)} draft true (BROUILLON jusqu'à sa preuve :
+   l'agent de livraison la passera prête juste avant de la fusionner ; une PR existante non brouillon ⇒ mcp__github__update_pull_request draft true).
+   ${REG} set ${RUN} ${cle} pr <numéro>.
 Rends {pr, head_sha}.`
 
 // ---------------------------------------------------------------------------
@@ -467,8 +476,14 @@ ${BASE} est permis) et tu ne fusionnes rien. Lots :
 ${JSON.stringify(items.map((i) => ({ key: i.key, platform: i.platform, branch: i.branch, pr: i.pr || 0, issue: i.issue || 0, suites_ios: i.suites_ios || [], nouvelle_preuve: !i.preuveEnCours, dernier_sha_prouve: i.dernierSha || '' }))).slice(0, 5000)}
 0. ToolSearch « select:mcp__github__pull_request_read,mcp__github__list_pull_requests,mcp__github__actions_list,mcp__github__actions_get,mcp__github__actions_run_trigger,mcp__github__get_job_logs,mcp__github__add_issue_comment ».
 POUR CHAQUE LOT :
-1. PR : pr = 0 ⇒ retrouve-la (list_pull_requests head « isopen-io:<branch> » state all) ; aucune ⇒ etat erreur. pull_request_read get : fusionnée ⇒
-   etat fusionnee-ailleurs ; fermée ⇒ etat fermee ; mergeable_state dirty ⇒ etat conflit.
+1. PR : pr = 0 ⇒ retrouve-la (list_pull_requests head « isopen-io:<branch> » state all) ; aucune ⇒ etat erreur. pull_request_read get :
+   - FUSIONNÉE (par un tiers, avant ou pendant sa preuve) : ne synchronise rien, ne relance rien. La preuve à lire est celle du SHA fusionné : les
+     exécutions workflow_dispatch de la branche au head.sha ; s'il n'y en a aucune, les exécutions « push » de ${BASE} au merge_commit_sha. En cours ⇒
+     attends-les comme au point 5 (non terminées à l'échéance ⇒ etat en-cours) ; terminées ⇒ etat fusionnee-ailleurs avec echecs et prealables jugés comme
+     au point 6 (un échec du lot qui n'est pas préalable est un défaut désormais DANS ${BASE} : dis-le dans detail) ; aucune exécution ⇒ fusionnee-ailleurs,
+     echecs vides, detail « aucune preuve trouvée ». Passe ensuite au lot suivant.
+   - fermée sans fusion ⇒ etat fermee ; mergeable_state dirty ⇒ etat conflit.
+   - ouverte et PAS en brouillon ⇒ mcp__github__update_pull_request draft true (personne ne doit la fusionner avant sa preuve).
 2. SYNCHRONISATION — seulement si nouvelle_preuve=true OU si aucune exécution non annulée n'existe pour le SHA de tête : dans ${LOTS}/<key>
    (sinon clone frais de la branche : git clone -q --filter=blob:none https://github.com/${GH} ${LOTS}/<key> -b <branch>), git fetch -q origin ${BASE}
    <branch> && git checkout -q -B <branch> origin/<branch> && git merge -q origin/${BASE} && git push origin <branch> (conflit ⇒ git merge --abort,
@@ -506,15 +521,18 @@ ${GATES[item.platform]}
 ${garde(item.platform)}
 Commit « fix(${portee(item.platform)}/liste): … » (Refs #${item.issue || CHANTIER} puis les lignes d'attribution), git push origin ${item.branch} sans force. Rends pushed, head_sha, cause, change.`
 
-const livrerPrompt = (item, verdict, autoriserDerive) => `${socle(item.key, item.platform)}
-MISSION — LIVRER LA PR #${verdict.pr} (lot « ${item.key} », issue #${item.issue || '?'}). Preuve : ${JSON.stringify(verdict).slice(0, 3500)}
+const livrerPrompt = (item, verdict, autoriserDerive, dejaFusionnee) => `${socle(item.key, item.platform)}
+MISSION — ${dejaFusionnee ? `CONSIGNER LA PR #${verdict.pr}, DÉJÀ FUSIONNÉE par un tiers (lot « ${item.key} », issue #${item.issue || '?'}) : ne fusionne rien, saute les points 1 à 3,
+et dis dans la clôture qu'elle a été fusionnée avant la fin de sa preuve, puis ce que la preuve a dit ensuite` : `LIVRER LA PR #${verdict.pr} (lot « ${item.key} », issue #${item.issue || '?'})`}. Preuve : ${JSON.stringify(verdict).slice(0, 3500)}
 Contexte du lot : ${JSON.stringify({ revue: item.revue || null, followups: item.followups || [] }).slice(0, 2500)}
 1. pull_request_read get #${verdict.pr} : head.sha ≠ ${verdict.head_sha} ⇒ etat non-fusionnee (la preuve ne vaut plus). mergeable_state dirty ⇒ non-fusionnee.
 2. DÉRIVE DE ${BASE} (synchronisation) : dans un clone (${LOTS}/${item.key}, sinon frais), git fetch -q origin ${BASE} ; fichiers du lot = git diff --name-only
    ${verdict.dev_base || 'origin/' + BASE}...${verdict.head_sha} ; fichiers touchés par ${BASE} depuis la preuve = git diff --name-only ${verdict.dev_base || 'HEAD'} origin/${BASE}.
    Intersection non vide ⇒ derive = l'intersection${autoriserDerive ? " ; ce lot a déjà été resynchronisé plusieurs fois : continue si mergeable_state n'est pas dirty, et nomme la dérive dans la clôture" : ' et etat resync (le guichet re-synchronisera et re-prouvera) — ne fusionne pas'}.
-3. mcp__github__merge_pull_request owner isopen-io repo meeshy pullNumber ${verdict.pr} merge_method « merge » expectedHeadSha ${verdict.head_sha}, SANS commit_title
-   ni commit_message (le titre par défaut « Merge pull request #… from isopen-io/${item.branch} » est le registre du programme). Refus ⇒ non-fusionnee.
+3. mcp__github__update_pull_request pullNumber ${verdict.pr} draft false (la PR quitte le brouillon maintenant qu'elle est prouvée), puis aussitôt
+   mcp__github__merge_pull_request owner isopen-io repo meeshy pullNumber ${verdict.pr} merge_method « merge » expectedHeadSha ${verdict.head_sha}, SANS commit_title
+   ni commit_message (le titre par défaut « Merge pull request #… from isopen-io/${item.branch} » est le registre du programme). Refus ⇒ remets-la en
+   brouillon (draft true) et etat non-fusionnee.
 4. Issue #${item.issue || '?'} : si elle est encore ouverte, ferme-la (issue_write update state closed state_reason completed). Commentaire de clôture : PR, SHA de
    fusion, preuve (runs${verdict.etat === 'rouge-prealable' ? ', échecs PRÉALABLES de ' + BASE + ' avec leur run' : ''}), critères tenus et non tenus, dimensions mûres et non mûres,
    ce qui reste à rejouer sur appareil réel, et la dérive de ${BASE} s'il y en a.
@@ -522,6 +540,20 @@ Contexte du lot : ${JSON.stringify({ revue: item.revue || null, followups: item.
    ${item.platform === 'android' ? '["android"]' : item.platform === 'ios' ? '["ios"]' : '[]'}, milestone ${MILESTONE}, parent_issue_number ${CHANTIER}.
 6. rm -rf ${LOTS}/${item.key}.
 Tout corps finit par une ligne vide, « --- » et « _Generated by [Claude Code](https://claude.ai/code)_ ». Rends etat, merge_sha, derive, issue_close, issues_ouvertes, rapport.`
+
+const reparerPrompt = (item, verdict) => `${socle(item.key, item.platform)}
+MISSION — RÉPARER ${BASE} : la PR #${verdict.pr} (lot « ${item.key} », issue #${item.issue || '?'}) a été fusionnée par un tiers avant la fin de sa preuve, et
+la preuve du SHA fusionné est ROUGE pour des raisons qui ne sont pas préalables : ${JSON.stringify({ echecs: verdict.echecs, runs: verdict.runs, detail: verdict.detail }).slice(0, 3500)}
+1. Vérifie d'abord que ${BASE} porte encore le défaut : git fetch -q origin ${BASE} ; une autre session l'a peut-être déjà corrigé (git log origin/${BASE} --since=<fusion>
+   -- <fichiers cités>, gh api -X GET search/issues -f q='repo:${GH} is:pr <symbole ou test>'). Déjà corrigé ⇒ pushed=false, cause « déjà corrigé sur ${BASE} : <commit|PR> ».
+2. Sinon, nouvelle branche ${branche(item.platform, item.key + '-reparation')} depuis origin/${BASE} dans ${LOTS}/${item.key}-reparation (clone frais) ; cause racine
+   de chaque échec, témoin qui la reproduit d'abord quand c'est un comportement ; jamais un témoin désactivé ou affaibli.
+${GATES[item.platform]}
+${garde(item.platform)}
+3. Commit « fix(${portee(item.platform)}/liste): … » (Refs #${item.issue || CHANTIER} puis les lignes d'attribution), push, PR vers ${BASE} en BROUILLON (draft true) :
+   titre sémantique (ce que la réparation rend), corps « Refs #${item.issue || CHANTIER} », « Refs #${CHANTIER} », la cause et la preuve rouge citée, puis une ligne vide,
+   « 🤖 Generated with [Claude Code](https://claude.com/claude-code) », une ligne vide, ${SESSION_URL}.
+Rends pushed, pr, branch, head_sha, cause, change.`
 
 const satisfaitPrompt = (cle, info, issue, cadrage) => `${socle(cle, info.platform)}
 MISSION — CONSIGNER UN LOT DÉJÀ TENU (mécanique). Le cadrage prouve que chaque critère est tenu sur origin/${BASE} : ${JSON.stringify({ preuve: cadrage.preuve }).slice(0, 3000)}
@@ -711,7 +743,22 @@ const finirCI = (item, resultat, detail) => {
 const traiterVerdict = async (item, v) => {
   if (v.pr) item.pr = v.pr
   if (v.head_sha) item.dernierSha = v.head_sha
-  if (v.etat === 'fusionnee-ailleurs') return finirCI(item, 'fusionne', `PR #${item.pr} fusionnée hors de ce guichet`)
+  if (v.etat === 'fusionnee-ailleurs') {
+    const defauts = (v.echecs || []).filter((e) => !(v.prealables || []).includes(e))
+    if (defauts.length && !item.reparation) {
+      const rep = await agent(reparerPrompt(item, v), { label: `reparer:${item.key}`, phase: 'Corriger', schema: REPARATION, model: MODELE.corriger, effort: 'high' })
+      finirCI(item, 'fusionne', `PR #${item.pr} fusionnée par un tiers avant sa preuve, preuve ROUGE : ${defauts.slice(0, 3).join(' ; ')}`)
+      if (rep && rep.pushed && rep.pr) {
+        const cle = `${item.key}-reparation`
+        enVol.add(cle)
+        queueCI.push({ key: cle, platform: item.platform, branch: rep.branch, pr: rep.pr, issue: item.issue, essai: 0, attentes: 0, resync: 0, preuveEnCours: false, reparation: true })
+        log(`${item.key} : réparation de dev en PR #${rep.pr} (${String(rep.cause).slice(0, 160)})`)
+      } else log(`${item.key} : réparation non poussée — ${rep ? rep.cause : 'aucun rendu'}`)
+      return
+    }
+    await agent(livrerPrompt(item, v, true, true), { label: `consigner:${item.key}`, phase: 'Livrer', schema: LIVRAISON, model: MODELE.livrer, effort: 'medium' })
+    return finirCI(item, 'fusionne', `PR #${item.pr} fusionnée par un tiers ; preuve ${defauts.length ? 'ROUGE (réparation déjà tentée)' : (v.echecs || []).length ? 'rouge préalable' : v.detail || 'verte'}`)
+  }
   if (v.etat === 'fermee' || v.etat === 'erreur') {
     await bloquer(item.key, item, item.issue, `PR ${v.etat} : ${v.detail}`, true)
     return finirCI(item, 'bloque', `PR ${v.etat}`)
@@ -796,6 +843,14 @@ if (!prep.registre_restaure || A.recartographier) {
   log(`registre : +${conso.lots_ajoutes.length} lots (${conso.lots_ajoutes.join(', ')}) ; exclus ${conso.exclus.join(', ') || '—'} ; manques ${conso.manques.length}`)
   conso.manques.forEach((m) => log(`MANQUE : ${m}`))
 }
+
+const A_VERIFIER = Array.isArray(A.aVerifier) ? A.aVerifier.filter((x) => x && x.key && x.pr) : []
+A_VERIFIER.forEach((x) => {
+  const plateforme = x.platform || 'android'
+  enVol.add(x.key)
+  queueCI.push({ key: x.key, platform: plateforme, branch: branche(plateforme, x.key), pr: x.pr, issue: x.issue || 0, essai: 0, attentes: 0, resync: 0, preuveEnCours: true, adopte: true })
+  log(`${x.key} : PR #${x.pr} fusionnée avant sa preuve — le guichet lit la preuve a posteriori`)
+})
 
 phase('Ordonnancer')
 const travailleurs = Array.from({ length: DEV_PAR }, (_, i) => devWorker(i + 1))

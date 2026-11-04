@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.PowerManager
+import android.os.Trace
 import android.provider.Settings
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.effects.CallVideoDegradation
@@ -75,6 +76,15 @@ internal class CallVideoEffectsProcessor(
             out.onFrame(frame)
             return
         }
+        Trace.beginSection(TRACE_FRAME)
+        try {
+            processEffects(frame, input, plan, out)
+        } finally {
+            Trace.endSection()
+        }
+    }
+
+    private fun processEffects(frame: VideoFrame, input: VideoFrame.TextureBuffer, plan: CallVideoEffectsPlan, out: VideoSink) {
         val start = clock()
         val face = trackFace(plan, input, frame.rotation)
         if (!plan.draws(faceKnown = face != null)) {
@@ -161,6 +171,7 @@ internal class CallVideoEffectsProcessor(
     }
 
     private companion object {
+        const val TRACE_FRAME = "meeshy.call.effects.frame"
         const val NANOS_PER_MS = 1_000_000.0
         const val NANOS_PER_SECOND = 1_000_000_000.0
     }

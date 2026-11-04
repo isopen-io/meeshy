@@ -1,6 +1,9 @@
 package me.meeshy.app.feed
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -90,7 +93,7 @@ class FeedMediaCellsSemanticsTest {
         val taps = mutableListOf<Int>()
         show(listOf(feedMediaItem(id = "m1", alt = "Only one")), taps)
 
-        compose.onNodeWithContentDescription("Only one").performClick()
+        compose.onNodeWithContentDescription("Only one").performTouchInput { click(Offset(8f, 8f)) }
 
         assertThat(taps).containsExactly(0)
     }

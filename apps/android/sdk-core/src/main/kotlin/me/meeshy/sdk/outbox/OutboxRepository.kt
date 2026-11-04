@@ -493,6 +493,38 @@ class OutboxRepository @Inject constructor(
         return retry(cmid)
     }
 
+    /**
+     * « Supprimer » une publication (iOS `OfflineQueue+PublicationCancel`) : dans UNE transaction, la ligne est retirée si
+     * aucun drainer ne l'a réservée ([OutboxWithdrawal.Removed]), sinon elle porte la marque d'annulation
+     * ([OutboxWithdrawal.Marked]) ; sans ligne, elle est déjà partie ([OutboxWithdrawal.Absent]). Les deux écritures sont
+     * conditionnées dans leur requête : une réservation qui passe entre la lecture et l'écriture ne peut pas produire un
+     * « retiré » sur une ligne en vol.
+     */
+    suspend fun withdrawUnlessInflight(cmid: String): OutboxWithdrawal {
+        val withdrawal = database.withTransaction<OutboxWithdrawal> {
+            val row = outboxDao.find(cmid) ?: return@withTransaction OutboxWithdrawal.Absent
+            when {
+                outboxDao.deleteUnlessInflight(cmid) == 1 -> OutboxWithdrawal.Removed(row)
+                outboxDao.requestCancelIfInflight(cmid, now()) == 1 -> OutboxWithdrawal.Marked
+                else -> OutboxWithdrawal.Absent
+            }
+        }
+        if (withdrawal is OutboxWithdrawal.Removed) registry.end(cmid)
+        return withdrawal
+    }
+
+    /** La marque d'annulation de [cmid], relue EN BASE — jamais sur la copie que le drainer a lue avant sa réservation. */
+    suspend fun isCancelRequested(cmid: String): Boolean = outboxDao.find(cmid)?.cancelRequestedAt != null
+
+    /**
+     * L'auteur a supprimé la ligne pendant son vol et le sender l'a honoré ([SendResult.Cancelled]) : elle quitte la file
+     * avec l'issue [OutboxOutcome.Cancelled] — jamais [OutboxOutcome.Succeeded], rien n'a été livré.
+     */
+    suspend fun markCancelledByAuthor(cmid: String) {
+        outboxDao.deleteAll(listOf(cmid))
+        emit(OutboxOutcome.Cancelled(cmid))
+    }
+
     /** The queued row [cmid], or `null` once it is gone (delivered or discarded). */
     suspend fun row(cmid: String): OutboxEntity? = outboxDao.find(cmid)
 
