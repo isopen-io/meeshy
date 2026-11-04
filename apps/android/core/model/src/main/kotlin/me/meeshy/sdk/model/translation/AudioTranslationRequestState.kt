@@ -29,6 +29,19 @@ public sealed interface AudioTranslationRequestState {
     public companion object {
 
         /**
+         * Plusieurs vocaux dans un message : la langue se lit par son état le plus urgent — le refus de chiffrement, le
+         * consentement manquant, l'échec, l'attente ; prête seulement quand TOUS les vocaux le sont ; au repos sinon.
+         */
+        public fun aggregate(states: List<AudioTranslationRequestState>): AudioTranslationRequestState = when {
+            states.isEmpty() -> Idle
+            states.any { it is Refused } -> Refused
+            else -> states.firstOrNull { it is ConsentRequired }
+                ?: states.firstOrNull { it is Failed }
+                ?: states.firstOrNull { it is InFlight }
+                ?: if (states.all { it is Ready }) Ready else Idle
+        }
+
+        /**
          * Le réducteur. Priorité : le refus de chiffrement, puis la piste arrivée (elle dément tout échec resté), puis le
          * consentement manquant, l'échec reçu, l'attente sous le plafond de silence ([ServerTranscriptionWait]), le repos.
          */
