@@ -212,6 +212,10 @@ data class ApiParticipant(
      */
     val isOnline: Boolean? = null,
     val lastActiveAt: String? = null,
+    /** Servi `true` seulement quand le compte est supprimé ou désactivé (#15717). */
+    val accountClosed: Boolean? = null,
+    /** `user` ou `anonymous` (`ParticipantType`) ; absent d'une vieille passerelle. */
+    val type: String? = null,
 )
 
 /**
