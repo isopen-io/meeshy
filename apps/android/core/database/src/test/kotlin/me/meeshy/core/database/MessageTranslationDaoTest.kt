@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.entity.MessageAudioTranslationEntity
+import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.MessageTranscriptionEntity
 import me.meeshy.core.database.entity.MessageTranslationEntity
 import org.junit.After
@@ -20,6 +21,10 @@ private fun transcription(messageId: String = "m1", attachmentId: String = "a1",
 
 private fun audio(messageId: String = "m1", attachmentId: String = "a1", language: String = "fr", url: String = "https://x/fr.m4a") =
     MessageAudioTranslationEntity(messageId, attachmentId, language, url, "", null, null, false, null, null, null, 1L)
+
+/** Le préchauffage du L1 ne relit que les traductions dont le message est encore en cache. */
+private fun cachedMessage(id: String) =
+    MessageEntity(id = id, conversationId = "c1", seq = null, payload = "{}", createdAt = 1L, cachedAt = 0L)
 
 @RunWith(RobolectricTestRunner::class)
 class MessageTranslationDaoTest {
@@ -87,6 +92,7 @@ class MessageTranslationDaoTest {
 
     @Test
     fun `les messages traduits les plus recemment viennent en premier`() = runTest {
+        db.messageDao().upsertAll(listOf(cachedMessage("old"), cachedMessage("new")))
         dao.upsertText(text(messageId = "old", updatedAt = 1L))
         dao.upsertText(text(messageId = "new", updatedAt = 9L))
 
