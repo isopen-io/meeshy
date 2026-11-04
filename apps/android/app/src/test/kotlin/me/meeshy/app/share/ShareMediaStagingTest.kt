@@ -11,6 +11,8 @@ import java.io.OutputStream
 import me.meeshy.sdk.model.share.ShareStagingBudget
 import me.meeshy.sdk.model.share.ShareStagingError
 import me.meeshy.sdk.model.share.ShareStagingPolicy
+import kotlin.coroutines.cancellation.CancellationException
+import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -24,20 +26,30 @@ class ShareMediaStagingTest {
     private val context = ApplicationProvider.getApplicationContext<android.app.Application>()
     private val mib = 1024L * 1024L
 
-    private fun staging(budget: ShareStagingBudget = ShareStagingBudget(), free: Long = Long.MAX_VALUE) =
-        ShareMediaStaging(context.contentResolver, { File(folder.root, it) }, budget, { free })
+    private val directory get() = File(folder.root, "media-intake")
+
+    private fun staging(
+        budget: ShareStagingBudget = ShareStagingBudget(),
+        free: (File) -> Long = { Long.MAX_VALUE },
+        ensureActive: () -> Unit = {},
+    ) = ShareMediaStaging(context.contentResolver, directory, budget, free, ensureActive = ensureActive)
+
+    private fun staged(name: String) = File(directory, name)
 
     private fun register(uri: Uri, stream: InputStream) = shadowOf(context.contentResolver).registerInputStream(uri, stream)
 
-    /** Un flux de [size] octets qui n'existe nulle part : rien n'est alloué, et la plus grande lecture demandée est notée. */
-    private class VirtualStream(private val size: Long) : InputStream() {
+    /**
+     * Un flux de [size] octets qui n'existe nulle part : rien n'est alloué, et la plus grande lecture demandée est notée.
+     * [chunk] borne chaque lecture, comme un tube qui rend moins que ce qu'on lui demande.
+     */
+    private class VirtualStream(private val size: Long, private val chunk: Int = Int.MAX_VALUE) : InputStream() {
         var served = 0L
         var largestRequest = 0
         override fun read(): Int = if (served >= size) -1 else { served++; 0 }
         override fun read(b: ByteArray, off: Int, len: Int): Int {
             largestRequest = maxOf(largestRequest, len)
             if (served >= size) return -1
-            val n = minOf(len.toLong(), size - served).toInt()
+            val n = minOf(len.toLong(), chunk.toLong(), size - served).toInt()
             served += n
             return n
         }
@@ -54,8 +66,8 @@ class ShareMediaStagingTest {
         val media = result.outcome.getOrThrow()
         assertThat(media.bytes).isEqualTo(3 * mib + 5)
         assertThat(media.mime).isEqualTo("video/mp4")
-        assertThat(media.relPath).isEqualTo("share1/0.mp4")
-        assertThat(File(folder.root, "share1/0.mp4").length()).isEqualTo(3 * mib + 5)
+        assertThat(media.relPath).isEqualTo("media-intake/share-share1-0.mp4")
+        assertThat(staged("share-share1-0.mp4").length()).isEqualTo(3 * mib + 5)
         assertThat(stream.largestRequest).isAtMost(ShareStagingPolicy.COPY_BUFFER_BYTES)
     }
 
@@ -85,7 +97,7 @@ class ShareMediaStagingTest {
 
         assertThat(result.error).isInstanceOf(ShareStagingError.ByteBudgetExceeded::class.java)
         assertThat(stream.served).isLessThan(9 * mib)
-        assertThat(File(folder.root, "share2/0.mp4").exists()).isFalse()
+        assertThat(staged("share-share2-0.mp4").exists()).isFalse()
         assertThat(budget.reservedBytes).isEqualTo(0L)
         assertThat(budget.reservedFiles).isEqualTo(0)
     }
@@ -104,7 +116,7 @@ class ShareMediaStagingTest {
 
         assertThat(kept.error).isNull()
         assertThat(surplus.error).isInstanceOf(ShareStagingError.FileCountExceeded::class.java)
-        assertThat(File(folder.root, "share3/1.png").exists()).isFalse()
+        assertThat(staged("share-share3-1.png").exists()).isFalse()
     }
 
     @Test
@@ -112,10 +124,10 @@ class ShareMediaStagingTest {
         val uri = Uri.parse("content://com.example.gallery/clip.mp4")
         register(uri, VirtualStream(mib))
 
-        val result = staging(free = 64 * mib).stage(uri, "share4", 0, "video/mp4")
+        val result = staging(free = { 64 * mib }).stage(uri, "share4", 0, "video/mp4")
 
         assertThat(result.error).isInstanceOf(ShareStagingError.InsufficientFreeSpace::class.java)
-        assertThat(File(folder.root, "share4/0.mp4").exists()).isFalse()
+        assertThat(staged("share-share4-0.mp4").exists()).isFalse()
     }
 
     @Test
@@ -132,7 +144,7 @@ class ShareMediaStagingTest {
         val result = staging(budget).stage(uri, "share5", 0, "image/jpeg")
 
         assertThat(result.error).isInstanceOf(ShareStagingError.CopyFailed::class.java)
-        assertThat(File(folder.root, "share5/0.jpg").exists()).isFalse()
+        assertThat(staged("share-share5-0.jpg").exists()).isFalse()
         assertThat(budget.reservedBytes).isEqualTo(0L)
         assertThat(budget.reservedFiles).isEqualTo(0)
     }
@@ -144,7 +156,7 @@ class ShareMediaStagingTest {
 
         val media = staging().stage(uri, "share6", 3, null).outcome.getOrThrow()
 
-        assertThat(media.relPath).isEqualTo("share6/3.pdf")
+        assertThat(media.relPath).isEqualTo("media-intake/share-share6-3.pdf")
         assertThat(media.mime).isEqualTo("application/pdf")
         assertThat(media.originalName).isEqualTo("contrat.pdf")
         assertThat(media.uploadFileName).isEqualTo("contrat.pdf")
@@ -158,6 +170,61 @@ class ShareMediaStagingTest {
         val result = staging().stage(uri, "share7", 0, "application/pdf")
 
         assertThat(result.error).isInstanceOf(ShareStagingError.CopyFailed::class.java)
-        assertThat(File(folder.root, "share7/0.pdf").exists()).isFalse()
+        assertThat(staged("share-share7-0.pdf").exists()).isFalse()
+    }
+
+    @Test
+    fun `the disk is checked again at every 16 MiB step even when reads never land on a multiple of it`() {
+        val uri = Uri.parse("content://com.example.pipe/clip.mp4")
+        val stream = VirtualStream(40 * mib, chunk = 65_535)
+        register(uri, stream)
+        val budget = ShareStagingBudget()
+        var checksAfterFirstByte = 0
+
+        val result = staging(budget, free = {
+            if (stream.served > 0) checksAfterFirstByte++
+            if (stream.served < 20 * mib) Long.MAX_VALUE else 64 * mib
+        }).stage(uri, "share8", 0, "video/mp4")
+
+        assertThat(result.error).isInstanceOf(ShareStagingError.InsufficientFreeSpace::class.java)
+        assertThat(checksAfterFirstByte).isEqualTo(2)
+        assertThat(stream.served).isLessThan(33 * mib)
+        assertThat(staged("share-share8-0.mp4").exists()).isFalse()
+        assertThat(budget.reservedBytes).isEqualTo(0L)
+        assertThat(budget.reservedFiles).isEqualTo(0)
+    }
+
+    @Test
+    fun `a piece past the 50 MB direct upload ceiling is refused by name and leaves nothing behind`() {
+        val uri = Uri.parse("content://com.example.gallery/vacances.mp4")
+        val stream = VirtualStream(1536 * mib)
+        register(uri, stream)
+        val budget = ShareStagingBudget()
+
+        val result = staging(budget).stage(uri, "share9", 0, "video/mp4")
+
+        val error = result.error as ShareStagingError.TooLarge
+        assertThat(error.fileName).isEqualTo("vacances.mp4")
+        assertThat(error.limit).isEqualTo(ShareStagingPolicy.MAX_FILE_BYTES)
+        assertThat(stream.served).isAtMost(ShareStagingPolicy.MAX_FILE_BYTES + ShareStagingPolicy.COPY_BUFFER_BYTES)
+        assertThat(staged("share-share9-0.mp4").exists()).isFalse()
+        assertThat(budget.reservedBytes).isEqualTo(0L)
+        assertThat(budget.reservedFiles).isEqualTo(0)
+    }
+
+    @Test
+    fun `a share closed mid-copy stops writing, deletes the partial copy and lets the cancellation through`() {
+        val uri = Uri.parse("content://com.example.gallery/long.mp4")
+        val stream = VirtualStream(40 * mib)
+        register(uri, stream)
+        val budget = ShareStagingBudget()
+        val cancelled = staging(budget, ensureActive = { if (stream.served > 2 * mib) throw CancellationException("fermé") })
+
+        assertThrows(CancellationException::class.java) { cancelled.stage(uri, "share10", 0, "video/mp4") }
+
+        assertThat(stream.served).isLessThan(3 * mib)
+        assertThat(staged("share-share10-0.mp4").exists()).isFalse()
+        assertThat(budget.reservedBytes).isEqualTo(0L)
+        assertThat(budget.reservedFiles).isEqualTo(0)
     }
 }
