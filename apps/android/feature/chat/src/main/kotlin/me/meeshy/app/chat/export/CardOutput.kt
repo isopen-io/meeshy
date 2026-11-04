@@ -4,15 +4,21 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.OutputStream
 import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.media.MediaSaveLedgers
+import me.meeshy.sdk.model.MediaFingerprint
+import me.meeshy.sdk.model.MediaSaveLedger
+import me.meeshy.sdk.model.MediaSaveOutcome
 
 /** SharedPreferences, sous les mêmes clés que le web et iOS. */
 class AndroidCardPreferenceStore(context: Context) : CardPreferenceStore {
@@ -53,28 +59,42 @@ object CardOutput {
      * `WRITE_EXTERNAL_STORAGE`, que l'appelant obtient d'abord par la porte unique
      * (`PermissionNature.PHOTO_LIBRARY_ADD`) : le fichier est écrit dans `Pictures/Meeshy` puis
      * indexé par MediaStore, pour paraître dans la galerie.
+     *
+     * Une même carte n'y entre qu'UNE fois (#14651) : ses octets PNG passent par le registre partagé
+     * [MediaSaveLedgers], comme toute pièce enregistrée ; une carte déjà présente est un succès.
      */
     suspend fun saveToGallery(context: Context, input: CardInput, pictures: Map<String, Bitmap> = emptyMap()): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val bitmap = CardRenderer.render(input, pictures = pictures).bitmap
-            try {
-                val name = fileName()
+            val png = encode(CardRenderer.render(input, pictures = pictures).bitmap)
+            val name = fileName()
+            val outcome = saveOnce(MediaSaveLedgers.shared(context), png) { bytes ->
                 when (CardGalleryRoute.of(Build.VERSION.SDK_INT)) {
-                    CardGalleryRoute.SCOPED -> saveScoped(context, name) { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    CardGalleryRoute.SCOPED -> saveScoped(context, name) { it.write(bytes) }
                     CardGalleryRoute.LEGACY -> saveLegacy(
                         context,
                         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
                         name,
-                    ) { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                }
-            } finally {
-                bitmap.recycle()
+                    ) { it.write(bytes) }
+                }.toString()
             }
-            Unit
+            check(outcome.isInGallery) { "gallery" }
         }
     }
 
-    private fun saveScoped(context: Context, name: String, write: (OutputStream) -> Unit) {
+    /** Écrit [png] par [write] — qui rend l'URI MediaStore créé — sauf si la galerie a déjà ces octets. */
+    internal suspend fun saveOnce(ledger: MediaSaveLedger, png: ByteArray, write: (ByteArray) -> String): MediaSaveOutcome =
+        ledger.saveOnce(MediaFingerprint.of(png)) { write(png) }
+
+    private fun encode(bitmap: Bitmap): ByteArray = try {
+        ByteArrayOutputStream().use { out ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            out.toByteArray()
+        }
+    } finally {
+        bitmap.recycle()
+    }
+
+    private fun saveScoped(context: Context, name: String, write: (OutputStream) -> Unit): Uri {
         val resolver = context.contentResolver
         val pending = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
@@ -90,11 +110,12 @@ object CardOutput {
             resolver.delete(item, null, null)
             throw t
         }
+        return item
     }
 
     /** Android 8–9 : le fichier public, puis son entrée MediaStore. Un échec ne laisse ni fichier ni entrée. */
     @Suppress("DEPRECATION")
-    internal fun saveLegacy(context: Context, pictures: File, name: String, write: (OutputStream) -> Unit): File {
+    internal fun saveLegacy(context: Context, pictures: File, name: String, write: (OutputStream) -> Unit): Uri {
         val album = File(pictures, ALBUM).apply { mkdirs() }
         val file = File(album, name)
         try {
@@ -104,12 +125,11 @@ object CardOutput {
                 put(MediaStore.MediaColumns.MIME_TYPE, MIME)
                 put(MediaStore.MediaColumns.DATA, file.absolutePath)
             }
-            checkNotNull(context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)) { "insert" }
+            return checkNotNull(context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)) { "insert" }
         } catch (t: Throwable) {
             file.delete()
             throw t
         }
-        return file
     }
 
     private const val ALBUM = "Meeshy"
