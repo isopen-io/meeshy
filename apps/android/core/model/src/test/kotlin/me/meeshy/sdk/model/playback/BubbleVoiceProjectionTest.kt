@@ -168,4 +168,17 @@ class BubbleVoiceAvailabilityTest {
         assertThat(BubbleVoiceProjection.isOfflineBlocked(MediaAvailabilityState.NeedsDownload(offline = false))).isFalse()
         assertThat(BubbleVoiceProjection.isOfflineBlocked(MediaAvailabilityState.Ready)).isFalse()
     }
+
+    @Test
+    fun `la forme d'onde ne se mesure que sur un vocal deja sur l'appareil, jamais en devancant la politique de telechargement`() {
+        assertThat(BubbleVoiceProjection.measuresWaveform(MediaAvailabilityState.Ready, isProtected = false)).isTrue()
+        assertThat(BubbleVoiceProjection.measuresWaveform(MediaAvailabilityState.NeedsDownload(sizeBytes = 850_000), isProtected = false)).isFalse()
+        assertThat(BubbleVoiceProjection.measuresWaveform(MediaAvailabilityState.Downloading(410, 820), isProtected = false)).isFalse()
+        assertThat(BubbleVoiceProjection.measuresWaveform(MediaAvailabilityState.Failed(), isProtected = false)).isFalse()
+    }
+
+    @Test
+    fun `un vocal protege ne se mesure jamais, meme deja sur l'appareil`() {
+        assertThat(BubbleVoiceProjection.measuresWaveform(MediaAvailabilityState.Ready, isProtected = true)).isFalse()
+    }
 }
