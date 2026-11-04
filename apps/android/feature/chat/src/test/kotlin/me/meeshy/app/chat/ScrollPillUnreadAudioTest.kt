@@ -81,6 +81,7 @@ class ScrollPillUnreadAudioTest {
             UploadedAttachmentIds(),
             TypedMediaCache(MediaCacheDirs(root, root)),
             UnconfinedTestDispatcher(),
+            ChatRestingPositions { null },
         )
     }
 

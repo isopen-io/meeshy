@@ -20,6 +20,9 @@ import me.meeshy.ui.component.audio.AudioFullscreenPlayer
 import me.meeshy.ui.component.audio.AudioFullscreenScreen
 import me.meeshy.ui.component.audio.AudioFullscreenSource
 import me.meeshy.ui.component.bubble.BubbleContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import me.meeshy.ui.component.viewer.viewerDialogProperties
 
 /**
@@ -78,6 +81,7 @@ internal class CoordinatorAudioFullscreenPlayer(
     private val artworkUrl: () -> String?,
     private val accentHex: () -> String?,
     private val samplesOf: (AudioFullscreenSource) -> StateFlow<List<Float>>,
+    private val restingOf: (String) -> Long?,
     scope: CoroutineScope,
 ) : AudioFullscreenPlayer {
 
@@ -120,12 +124,18 @@ internal class CoordinatorAudioFullscreenPlayer(
 
     override fun replaceUpcoming(upcoming: List<QueuedAudio>) = coordinator.replaceUpcoming(upcoming)
 
+    override fun restingPositionMs(attachmentId: String): Long? = restingOf(attachmentId)
+
     override fun samples(source: AudioFullscreenSource): StateFlow<List<Float>> = samplesOf(source)
 }
 
 /**
  * Le plein écran audio du fil, ouvert par la bulle d'un vocal ou par un vocal cité — l'hôte unique des présentations
  * ([ChatMediaHost]) garantit qu'un seul est ouvert. Sans page possible (pièce protégée, disparue), il se referme.
+ *
+ * Télécharger passe par [onDownload] (le circuit « Enregistrer » du fil, qui revérifie la loi de sortie) ; l'avancement
+ * et les échecs d'un enregistrement d'une de SES pages se peignent DANS la fenêtre ([download]), sans quoi le bandeau
+ * du fil resterait caché derrière elle.
  */
 @Composable
 internal fun ChatAudioFullscreen(
@@ -137,6 +147,11 @@ internal fun ChatAudioFullscreen(
     accent: Color,
     onDismiss: () -> Unit,
     onDismissToMessage: (String) -> Unit = {},
+    conversationIsEndToEnd: Boolean = true,
+    onDownload: ((AudioFullscreenSource) -> Unit)? = null,
+    download: FileAttachmentDownloadUiState? = null,
+    onDismissDownload: () -> Unit = {},
+    onRetryDownload: () -> Unit = {},
 ) {
     val player = voice?.fullscreenPlayer()
     val sources = remember(attachmentId, thread, conversationId, conversationName) {
@@ -146,15 +161,25 @@ internal fun ChatAudioFullscreen(
         androidx.compose.runtime.LaunchedEffect(attachmentId) { onDismiss() }
         return
     }
+    val pageIds = remember(sources) { sources.map { it.id }.toSet() }
     Dialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = false)) {
-        AudioFullscreenScreen(
-            sources = sources,
-            startAttachmentId = attachmentId,
-            player = player,
-            accent = accent,
-            onDismiss = onDismiss,
-            conversationTail = voice::conversationTail,
-            onDismissToMessage = onDismissToMessage,
-        )
+        Box(Modifier.fillMaxSize()) {
+            AudioFullscreenScreen(
+                sources = sources,
+                startAttachmentId = attachmentId,
+                player = player,
+                accent = accent,
+                onDismiss = onDismiss,
+                conversationTail = voice::conversationTail,
+                onDismissToMessage = onDismissToMessage,
+                onDownload = onDownload,
+                conversationIsEndToEnd = conversationIsEndToEnd,
+            )
+            FileAttachmentDownloadBanner(
+                download = download?.takeIf { it.attachmentId in pageIds },
+                onDismiss = onDismissDownload,
+                onRetry = { onRetryDownload() },
+            )
+        }
     }
 }

@@ -51,7 +51,7 @@ class ChatAudioBinderTest {
     ) {
         val dirs = MediaCacheDirs(cacheRoot, cacheRoot)
         val coordinator = ConversationAudioCoordinator(engine, UnconfinedTestDispatcher())
-        val viewModel = ChatAudioViewModel(coordinator, waveforms, UploadedAttachmentIds(), TypedMediaCache(dirs), UnconfinedTestDispatcher())
+        val viewModel = ChatAudioViewModel(coordinator, waveforms, UploadedAttachmentIds(), TypedMediaCache(dirs), UnconfinedTestDispatcher(), ChatRestingPositions { null })
 
         /** Le vocal de [url] téléchargé EN ENTIER dans le cache typé : la copie que la bulle a le droit de mesurer. */
         fun wholeCopyOf(url: String): File =
