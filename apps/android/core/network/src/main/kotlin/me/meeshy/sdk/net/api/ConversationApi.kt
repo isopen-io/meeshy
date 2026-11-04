@@ -336,6 +336,17 @@ interface ConversationApi {
         @Path("participantId") participantId: String,
         @Body body: HistoryGrantUpdate,
     ): ApiResponse<ParticipantRightsUpdateResult>
+
+    /**
+     * Pose UN droit d'un participant : [ParticipantRightsUpdate.single] ne laisse partir que la clé touchée, la
+     * surcharge étant un delta côté gateway. Rend l'état RÉSOLU, que l'appelant pose tel quel.
+     */
+    @PATCH("conversations/{id}/participants/{participantId}/rights")
+    suspend fun updateParticipantRight(
+        @Path("id") id: String,
+        @Path("participantId") participantId: String,
+        @Body body: me.meeshy.sdk.model.ParticipantRightsUpdate,
+    ): ApiResponse<ParticipantRightsUpdateResult>
 }
 
 /**

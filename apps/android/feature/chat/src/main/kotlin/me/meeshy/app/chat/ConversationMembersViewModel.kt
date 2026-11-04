@@ -24,6 +24,7 @@ import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.PaginatedParticipant
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.currentUserRole
+import me.meeshy.sdk.model.knownUserRole
 import me.meeshy.sdk.model.matches
 import me.meeshy.sdk.model.role
 import me.meeshy.sdk.net.NetworkResult
@@ -41,6 +42,8 @@ data class ConversationMembersUiState(
     val isLoadingMore: Boolean = false,
     val searchQuery: String = "",
     val viewerRole: MemberRole = MemberRole.MEMBER,
+    /** Le rôle du lecteur quand il est CONNU (`knownUserRole`), `null` sinon : la garde de rôle du cache de la fiche (ADR-032). */
+    val readerRole: String? = null,
     val currentUserId: String? = null,
     val actionFailed: Boolean = false,
     /** #15269 — la loi des actions accorde « Inviter » à ce lecteur (Global : administrateurs de la plateforme seuls). */
@@ -295,6 +298,7 @@ class ConversationMembersViewModel @Inject constructor(
                     it.copy(
                         currentUserId = userId ?: it.currentUserId,
                         viewerRole = conversation.currentUserRole(userId),
+                        readerRole = conversation.knownUserRole(userId)?.name,
                         mayInvite = ConversationRowMenuCapabilities.forViewer(conversation, sessionRepository.currentUser.value).invite,
                     )
                 }
