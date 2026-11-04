@@ -10,10 +10,11 @@ nonisolated enum RepostChoice: Equatable, Hashable {
     case repost
     case quote
 
-    /// « Citer » sans porte de citation serait un contrôle sans effet : il est
-    /// absent, jamais inerte.
-    static func offered(canQuote: Bool) -> [RepostChoice] {
-        canQuote ? [.repost, .quote] : [.repost]
+    /// « Citer » sans porte de citation, ou « Repartager » sans écrivain,
+    /// serait un contrôle sans effet : il est absent, jamais inerte (#15934 —
+    /// les favoris et les hashtags offraient « Repartager » sans action).
+    static func offered(canRepost: Bool = true, canQuote: Bool) -> [RepostChoice] {
+        (canRepost ? [.repost] : []) + (canQuote ? [.quote] : [])
     }
 
     static var dialogTitle: String { RepostChoice.repost.title }
@@ -29,12 +30,12 @@ nonisolated enum RepostChoice: Equatable, Hashable {
 /// Le choix Repartager / Citer, présenté par le bouton Repost qui le porte.
 struct RepostChoiceDialog: ViewModifier {
     @Binding var isPresented: Bool
-    let onRepost: () -> Void
+    let onRepost: (() -> Void)?
     let onQuote: (() -> Void)?
 
     func body(content: Content) -> some View {
         content.alert(RepostChoice.dialogTitle, isPresented: $isPresented) {
-            ForEach(RepostChoice.offered(canQuote: onQuote != nil), id: \.self) { choice in
+            ForEach(RepostChoice.offered(canRepost: onRepost != nil, canQuote: onQuote != nil), id: \.self) { choice in
                 Button(choice.title) { choose(choice) }
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
@@ -43,7 +44,7 @@ struct RepostChoiceDialog: ViewModifier {
 
     private func choose(_ choice: RepostChoice) {
         switch choice {
-        case .repost: onRepost()
+        case .repost: onRepost?()
         case .quote: onQuote?()
         }
     }

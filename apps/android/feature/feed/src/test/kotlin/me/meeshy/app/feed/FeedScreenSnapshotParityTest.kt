@@ -33,6 +33,9 @@ class FeedScreenSnapshotParityTest {
             onClick = {},
             onOpenPost = {},
             onImageTap = {},
+            // Le fil câble son écrivain : sans lui, le bouton Repost n'est pas dessiné (#12234).
+            onRepost = {},
+            onQuote = {},
         )
     }
 

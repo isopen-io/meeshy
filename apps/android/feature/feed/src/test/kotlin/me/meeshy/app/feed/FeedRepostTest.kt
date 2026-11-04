@@ -67,8 +67,8 @@ class FeedRepostTest {
         feed.value = CacheResult.Fresh(posts.toList(), 0L)
     }
 
-    private fun viewModel(): FeedViewModel {
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+    private fun viewModel(reader: MeeshyUser? = null): FeedViewModel {
+        every { session.currentUser } returns MutableStateFlow(reader)
         every { repository.feedHasMore } returns MutableStateFlow(true)
         every { repository.gestureRefusals } returns MutableSharedFlow()
         every { repository.feedStream(any(), any()) } returns feed
@@ -205,5 +205,17 @@ class FeedRepostTest {
         reposted.emit(SocketPostRepostedData(originalPostId = "p0", repost = card("rp", type = "POST")))
 
         assertThat(vm.state.value.posts.map { it.id }).containsExactly("rp", "p1").inOrder()
+    }
+
+    @Test
+    fun `the quote composer of the feed shows the quoted text the card serves (#16001)`() = runTest {
+        serve(QuotePrism.post("p1"), QuotePrism.share("s1"))
+        val vm = viewModel(QuotePrism.reader)
+
+        vm.beginQuote("p1")
+        assertThat(vm.state.value.quoteComposer?.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
+        vm.cancelQuote()
+        vm.beginQuote("s1")
+        assertThat(vm.state.value.quoteComposer?.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
     }
 }

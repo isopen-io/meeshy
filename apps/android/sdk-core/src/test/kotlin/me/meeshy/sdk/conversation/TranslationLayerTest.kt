@@ -6,7 +6,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
-import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MessageHiddenForMeEvent
 import me.meeshy.sdk.model.MessageRemoved
@@ -14,8 +13,6 @@ import me.meeshy.sdk.model.MessageViewOncePurgedEvent
 import me.meeshy.sdk.model.PersonalMessageVisibilityRef
 import me.meeshy.sdk.model.StoredTextTranslation
 import me.meeshy.sdk.net.api.MessageApi
-import me.meeshy.sdk.net.api.TranslateRequest
-import me.meeshy.sdk.net.api.TranslateResponse
 import me.meeshy.sdk.net.api.TranslationApi
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,18 +21,6 @@ import org.robolectric.RobolectricTestRunner
 /** Les traductions déjà reçues vivent dans des lignes dédiées, uniques par (message, langue), superposées au message. */
 @RunWith(RobolectricTestRunner::class)
 class TranslationLayerTest {
-
-    private class NoTranslator : TranslationApi {
-        var calls = 0
-        override suspend fun translate(body: TranslateRequest): ApiResponse<TranslateResponse> {
-            calls += 1
-            return ApiResponse(success = false)
-        }
-
-        override suspend fun job(jobId: String): ApiResponse<me.meeshy.sdk.model.TranslationJob> = ApiResponse(success = false)
-
-        override suspend fun cancelJob(jobId: String): ApiResponse<kotlinx.serialization.json.JsonElement> = ApiResponse(success = false)
-    }
 
     private fun message(id: String = "m1") =
         ApiMessage(id = id, conversationId = "c1", content = "hello", originalLanguage = "en", createdAt = "2026-06-01T10:00:00Z")

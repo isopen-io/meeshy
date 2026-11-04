@@ -121,6 +121,9 @@ public data class ConversationGallery(
  * the clear. It enters only when its OWN bubble opened the viewer — then as a
  * non-exportable page — and never again once this reader has burnt it.
  *
+ * A photo still waiting to upload is painted from its local preview; [sharpOf] hands its sanitized full-resolution copy
+ * when one is ready (#15970) — the page then shows it sharp over the preview as backdrop. Never for a protected piece.
+ *
  * Each page carries its owning message's text as the caption (trimmed, null when
  * blank) — every image of a multi-image message shares that one caption, exactly
  * as iOS's `captionMap` keys every attachment of a message to the message body.
@@ -133,6 +136,7 @@ public object ConversationMediaGallery {
         messages: List<BubbleContent>,
         messageId: String,
         imageIndex: Int,
+        sharpOf: (attachmentId: String) -> String? = { null },
     ): ConversationGallery {
         val pages = mutableListOf<GalleryPage>()
         var startIndex = 0
@@ -157,10 +161,11 @@ public object ConversationMediaGallery {
             }
             val createdAtIso = message.createdAtIso?.trim()?.ifBlank { null }
             images.forEach {
+                val sharp = if (isProtected || it.isBlurred || it.isViewOnce || !it.url.startsWith(LOCAL_SCHEME)) null else sharpOf(it.attachmentId)
                 pages.add(
                     GalleryPage(
-                        url = it.url,
-                        thumbnailUrl = it.thumbnailUrl,
+                        url = sharp ?: it.url,
+                        thumbnailUrl = if (sharp != null) it.thumbnailUrl ?: it.url else it.thumbnailUrl,
                         caption = caption,
                         senderName = senderName,
                         author = author,
@@ -176,6 +181,8 @@ public object ConversationMediaGallery {
         return ConversationGallery(pages, startIndex.coerceIn(0, pages.lastIndex))
     }
 }
+
+private const val LOCAL_SCHEME = "file://"
 
 private val BubbleContent.isProtectedMedia: Boolean
     get() = isViewOnce || isBlurred || blurReveal != null

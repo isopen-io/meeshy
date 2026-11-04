@@ -639,16 +639,7 @@ class PostDetailViewModel @Inject constructor(
      */
     fun beginQuote() {
         val post = rawPost.value ?: return
-        status.update {
-            it.copy(
-                quoteComposer = QuoteComposerState(
-                    postId = post.id,
-                    sourceAuthorName = (post.author?.displayName ?: post.author?.username)
-                        ?.takeIf { name -> name.isNotBlank() },
-                    sourceContentPreview = post.content.orEmpty().trim(),
-                ),
-            )
-        }
+        status.update { it.copy(quoteComposer = QuoteComposerState.quoting(post, sessionRepository.currentUser.value)) }
     }
 
     fun onQuoteTextChange(text: String) {

@@ -36,6 +36,7 @@ class FeedPostOptionsMenuSemanticsTest {
                         post = feedPostPresentation(),
                         onLike = {}, onBookmark = {}, onFlagTap = {}, onClick = { opened++ },
                         onOpenPost = {}, onOpenReel = {}, onImageTap = {}, isOwn = isOwn,
+                        onShare = {}, onPin = {}, onReport = {}, onDelete = {},
                     )
                 }
             }

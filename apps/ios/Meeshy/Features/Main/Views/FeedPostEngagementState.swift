@@ -206,18 +206,6 @@ enum FeedPostEngagementRequests {
         } catch { return false }
     }
 
-    static func callBookmarkAPI(postId: String, bookmark: Bool) async -> Bool {
-        do {
-            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                PostsEndpoint.byPostIdBookmark(postId: postId),
-                method: bookmark ? "POST" : "DELETE"
-            )
-            return true
-        } catch {
-            return false
-        }
-    }
-
     /// Cache-first, never hits the network. `nil` when the cache holds nothing
     /// usable (expired / empty).
     static func cachedBookmarks() async -> [FeedPost]? {

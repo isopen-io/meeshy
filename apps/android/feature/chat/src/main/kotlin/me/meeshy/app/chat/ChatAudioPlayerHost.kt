@@ -18,9 +18,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import dagger.hilt.android.EntryPointAccessors
 import java.time.ZoneId
 import java.util.Locale
 import kotlinx.coroutines.delay
+import me.meeshy.sdk.media.UploadedAttachmentIdsEntryPoint
 import me.meeshy.sdk.model.playback.ContentPlaybackSessionLaw
 import me.meeshy.sdk.model.playback.InterruptionResumeLedger
 import me.meeshy.sdk.model.playback.MediaSessionEvent
@@ -45,6 +47,11 @@ import timber.log.Timber
  * break — new voice note, play, pause, seek — and obeys the host's [commands][VoicePlaybackHost.commands].
  * An interruption (call, other app's sound) or an unplugged headset pauses it; what resumes and what
  * does not is the shared [InterruptionResumeLedger], never decided here.
+ *
+ * #15969 — a voice note listened to WHILE its send is acknowledged keeps playing: the bubble now names it by its server
+ * id ([acknowledgedIdOf] bridges the upload's `cmid` to it), and the player follows it under that name without reloading.
+ * Should the device copy it was reading go away (adopted into the cache at the ack), the engine is retargeted once at the
+ * same position onto the served address, which the AUDIO cache already holds.
  */
 @Stable
 internal class ChatAudioPlayer internal constructor(
@@ -54,6 +61,7 @@ internal class ChatAudioPlayer internal constructor(
     conversationTitle: String? = null,
     private val locale: Locale = Locale.getDefault(),
     private val zone: ZoneId = ZoneId.systemDefault(),
+    private val acknowledgedIdOf: (String) -> String? = { null },
 ) {
 
     var playback: ChatAudioPlayback by mutableStateOf(ChatAudioPlayback.Idle)
@@ -66,6 +74,8 @@ internal class ChatAudioPlayer internal constructor(
     var conversationId: String? = null
 
     private var card: VoicePlaybackCard? = null
+    private var engineUrl: String? = null
+    private var retarget: Retarget? = null
     private val ledger = InterruptionResumeLedger()
     private val focus = audioManager?.let { ChatAudioFocus(it, ::onSystemEvent) }
     private val handler = Handler(Looper.getMainLooper())
@@ -77,6 +87,7 @@ internal class ChatAudioPlayer internal constructor(
 
     /** Touch on a bubble's voice note: load it, pause it, resume it, or switch to it. */
     fun toggle(audio: BubbleAudio, source: VoiceTrackSource? = null) {
+        follow(audio, source)
         val next = playback.toggle(audio)
         val prev = playback
         val url = next.transport.currentUrl
@@ -85,7 +96,9 @@ internal class ChatAudioPlayer internal constructor(
             next.transport.isLoading && url != null && switched ->
                 runCatching {
                     player.reset()
+                    retarget = null
                     if (source?.isProtected == true) player.loadUncached(url) else player.load(url)
+                    engineUrl = url
                 }.onFailure { playback = next.failed(); return }
             next.transport.isPlaying && !prev.transport.isPlaying -> {
                 if (!startPlayer()) {
@@ -110,14 +123,30 @@ internal class ChatAudioPlayer internal constructor(
 
     /** A touch on a word of [audio]'s transcript (#13878): seek there, only if [audio] is the voice note loaded. */
     fun seek(audio: BubbleAudio, positionSeconds: Double) {
+        follow(audio, null)
         if (audio.attachmentId != playback.attachmentId || playback.transport.currentUrl == null) return
         tick()
         seekTo((positionSeconds * 1000).toLong())
     }
 
     /** What the bubble owning [audio] shows, or `null` when another voice note is loaded. */
-    fun bubbleFor(audio: BubbleAudio): BubbleAudioPlayback? =
-        playback.bubbleFor(audio.attachmentId, audio.durationSeconds)
+    fun bubbleFor(audio: BubbleAudio): BubbleAudioPlayback? {
+        val loaded = playback.attachmentId
+        if (loaded == null || !isAcknowledgedTwin(loaded, audio)) return playback.bubbleFor(audio.attachmentId, audio.durationSeconds)
+        return playback.bubbleFor(loaded, audio.durationSeconds)?.copy(attachmentId = audio.attachmentId)
+    }
+
+    /** The bubble of [audio] is the acknowledged form of the voice note loaded: the player takes its name and address. */
+    private fun follow(audio: BubbleAudio, source: VoiceTrackSource?) {
+        val loaded = playback.attachmentId ?: return
+        val url = audio.url?.takeIf { it.isNotBlank() } ?: return
+        if (!isAcknowledgedTwin(loaded, audio)) return
+        playback = playback.followed(audio.attachmentId, url)
+        card = card?.copy(attachmentId = audio.attachmentId, messageId = source?.messageId ?: card?.messageId)
+    }
+
+    private fun isAcknowledgedTwin(loaded: String, audio: BubbleAudio): Boolean =
+        audio.attachmentId != loaded && acknowledgedIdOf(loaded) == audio.attachmentId
 
     /** An order from the notification, the lock screen or a headset button. */
     fun handle(command: VoicePlaybackCommand) {
@@ -149,6 +178,8 @@ internal class ChatAudioPlayer internal constructor(
     }
 
     internal fun onPrepared() {
+        val resumed = retarget
+        if (resumed != null) return onRetargeted(resumed)
         if (startPlayer()) {
             playback = playback.ready()
             card = card?.copy(durationMs = player.durationMs)
@@ -167,12 +198,41 @@ internal class ChatAudioPlayer internal constructor(
     }
 
     internal fun onError() {
+        if (retargetOntoServedAddress()) return
+        retarget = null
         playback = playback.failed()
         card = null
         ledger.handle(InterruptionResumeLedger.Signal.ContentReleased)
         focus?.abandon()
         host.retire()
     }
+
+    /**
+     * The device copy the engine was reading is gone (adopted into the cache at the ack): reload ONCE, at the same position,
+     * the address the voice note now answers to. `false` when there is nothing to retarget — a real failure.
+     */
+    private fun retargetOntoServedAddress(): Boolean {
+        val served = playback.transport.currentUrl ?: return false
+        if (retarget != null || engineUrl == null || engineUrl == served) return false
+        val resume = Retarget(positionMs = player.positionMs, playing = playback.transport.isPlaying)
+        val reloaded = runCatching {
+            player.reset()
+            player.load(served)
+        }.isSuccess
+        if (!reloaded) return false
+        engineUrl = served
+        retarget = resume
+        return true
+    }
+
+    private fun onRetargeted(resume: Retarget) {
+        retarget = null
+        runCatching { player.seekTo(resume.positionMs) }
+        if (resume.playing && !startPlayer()) playback = playback.paused()
+        publish()
+    }
+
+    private class Retarget(val positionMs: Long, val playing: Boolean)
 
     internal fun tick() {
         val duration = player.durationMs
@@ -217,6 +277,8 @@ internal class ChatAudioPlayer internal constructor(
 
     private fun stopPlayback() {
         runCatching { player.reset() }
+        engineUrl = null
+        retarget = null
         playback = playback.stopped()
         card = null
         ledger.handle(InterruptionResumeLedger.Signal.ContentReleased)
@@ -276,11 +338,15 @@ internal fun rememberChatAudioPlayer(conversationTitle: String? = null, conversa
     val context = LocalContext.current
     val host = LocalVoicePlaybackHost.current
     val audioPlayer = remember(host) {
+        val acknowledged = runCatching {
+            EntryPointAccessors.fromApplication(context.applicationContext, UploadedAttachmentIdsEntryPoint::class.java).uploadedAttachmentIds()
+        }.getOrNull()
         ChatAudioPlayer(
             player = ExoVoiceNoteEngine(context),
             host = host,
             audioManager = context.getSystemService(AudioManager::class.java),
             conversationTitle = conversationTitle,
+            acknowledgedIdOf = { cmid -> acknowledged?.serverIdOf(cmid) },
         )
     }
     SideEffect {

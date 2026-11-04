@@ -308,7 +308,7 @@ public class OutboxDrainer(
      */
     private suspend fun sendUnder(ticket: AccountTicket?, sender: MutationSender, row: OutboxEntity): Attempt {
         val send: suspend () -> Attempt = {
-            outbox.sendingLive(row.cmid) { withMutationId(row.cmid) { sender.send(row) } }
+            outbox.sendingLive(row.cmid, now()) { withMutationId(row.cmid) { sender.send(row) } }
                 ?.let(Attempt::Sent) ?: Attempt.Claimed
         }
         val fence = fence
