@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,22 +24,28 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import me.meeshy.sdk.media.MediaRequest
 import me.meeshy.sdk.model.AudioPlayerChrome
 import me.meeshy.sdk.model.AudioTranscriptionPending
+import me.meeshy.sdk.model.AudioTranscriptionBlock
 import me.meeshy.sdk.model.AudioTranscriptionReveal
 import me.meeshy.sdk.model.MediaKind
+import me.meeshy.sdk.model.MessageTranscriptionFiche
 import me.meeshy.sdk.model.media.LocalFileUrl
 import me.meeshy.sdk.model.media.MediaAvailabilityState
 import me.meeshy.sdk.model.media.MediaPlayerContext
 import me.meeshy.sdk.model.media.PlaybackSpeed
 import me.meeshy.sdk.model.playback.BubbleVoiceProjection
+import me.meeshy.ui.R
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.audio.AudioPlayerActions
 import me.meeshy.ui.component.audio.AudioPlayerState
@@ -77,6 +84,13 @@ public fun BubbleVoicePlayer(
     receivedAtEpochMs: Long? = null,
 ) {
     val reservesTranscript = rememberTranscriptReservation(audio, receivedAtEpochMs)
+    val request by rememberTranscriptionRequest(audio, callbacks)
+    val block = AudioTranscriptionBlock.of(
+        hasTranscription = audio.hasTranscription,
+        reservedPassively = reservesTranscript,
+        request = request,
+        canRequest = callbacks.onRequestTranscription != null && !audio.isProtected && audio.url?.let(LocalFileUrl::isLocal) != true,
+    )
     val availability = rememberVoiceAvailability(audio)
     val measures = BubbleVoiceProjection.measuresWaveform(availability.state, audio.isProtected)
     val samplesFlow = remember(audio.attachmentId, audio.url, measures, callbacks.audioSamples) {
@@ -113,21 +127,34 @@ public fun BubbleVoicePlayer(
             actions = actions,
             chrome = chrome,
             modifier = modifier,
-            bottomSlot = if (audio.hasTranscription) {
-                {
-                    BubbleVoiceTranscript(
-                        audio = audio,
-                        playback = playback,
-                        onColor = onColor,
-                        autoReveal = autoRevealTranscription,
-                        onReveal = haptics::light,
-                        onSeek = callbacks.onAudioSeek?.let { seek -> { seconds: Double -> seek(audio, seconds) } },
-                    )
+            bottomSlot = when (block) {
+                AudioTranscriptionBlock.Kind.TRANSCRIPT -> {
+                    {
+                        BubbleVoiceTranscript(
+                            audio = audio,
+                            playback = playback,
+                            onColor = onColor,
+                            autoReveal = autoRevealTranscription,
+                            onReveal = haptics::light,
+                            onSeek = callbacks.onAudioSeek?.let { seek -> { seconds: Double -> seek(audio, seconds) } },
+                        )
+                    }
                 }
-            } else if (reservesTranscript) {
-                { PendingTranscriptSkeleton() }
-            } else {
-                null
+                AudioTranscriptionBlock.Kind.SKELETON -> {
+                    { PendingTranscriptSkeleton(inFlight = request == MessageTranscriptionFiche.Request.IN_FLIGHT) }
+                }
+                AudioTranscriptionBlock.Kind.REQUEST -> {
+                    {
+                        RevealTranscriptionCta(
+                            onColor = onColor,
+                            onReveal = {
+                                haptics.light()
+                                latestCallbacks.onRequestTranscription?.invoke(audio)
+                            },
+                        )
+                    }
+                }
+                AudioTranscriptionBlock.Kind.NONE -> null
             },
         )
     }
@@ -254,15 +281,31 @@ private fun rememberTranscriptReservation(audio: BubbleAudio, receivedAtEpochMs:
     return reserved && !expired
 }
 
-/** Trois lignes qui pulsent à la place de la transcription attendue (iOS `transcriptionBlock`, squelette). */
+/**
+ * L'état de la demande de transcription de [audio] (l'hôte le tient) : au repos tant qu'il n'en dit rien. Aucune
+ * souscription pour un vocal protégé : la demande ne lui est jamais offerte.
+ */
 @Composable
-private fun PendingTranscriptSkeleton() {
+private fun rememberTranscriptionRequest(audio: BubbleAudio, callbacks: BubbleCallbacks): State<MessageTranscriptionFiche.Request> {
+    val flow = remember(audio.attachmentId, audio.isProtected, callbacks.transcriptionRequest) {
+        callbacks.transcriptionRequest?.takeIf { !audio.isProtected }?.invoke(audio) ?: flowOf(MessageTranscriptionFiche.Request.IDLE)
+    }
+    return flow.collectAsState(initial = MessageTranscriptionFiche.Request.IDLE)
+}
+
+/**
+ * Trois lignes qui pulsent à la place de la transcription attendue (iOS `transcriptionBlock`, squelette). Quand une
+ * demande tourne ([inFlight]) le lecteur d'écran annonce « Transcription en cours » ; l'attente passive reste muette.
+ */
+@Composable
+private fun PendingTranscriptSkeleton(inFlight: Boolean = false) {
+    val label = if (inFlight) stringResource(R.string.media_audio_transcribing) else null
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = MeeshySpacing.smPlus)
             .padding(bottom = MeeshySpacing.xs)
-            .clearAndSetSemantics {},
+            .clearAndSetSemantics { label?.let { contentDescription = it } },
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
         PENDING_LINE_FRACTIONS.forEach { fraction ->

@@ -2,6 +2,8 @@ package me.meeshy.ui.component.bubble
 
 import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.runtime.Immutable
+import kotlinx.coroutines.flow.Flow
+import me.meeshy.sdk.model.MessageTranscriptionFiche
 
 /**
  * Every callback a [MessageBubble] can raise, bundled in one immutable value so that adding a
@@ -50,6 +52,16 @@ public data class BubbleCallbacks(
      * déjà sur l'appareil et jamais pour un vocal protégé : la bulle garde sinon sa forme de repli déterministe.
      */
     val audioSamples: ((BubbleAudio) -> StateFlow<List<Float>>)? = null,
+    /**
+     * Tap sur « Transcrire » d'un vocal que rien ne transcrit encore (iOS `onRequestTranscription`) : l'hôte demande la
+     * transcription au serveur. Nul ⇒ aucun bouton de demande (jamais offert pour un vocal protégé ni un brouillon local).
+     */
+    val onRequestTranscription: ((BubbleAudio) -> Unit)? = null,
+    /**
+     * L'état de la demande de transcription de ce vocal (au repos, en cours, en échec), tenu par l'hôte : « Transcription… »
+     * reste affiché tant que la tâche tourne, « Transcrire » revient au plafond de silence ou à l'échec reçu.
+     */
+    val transcriptionRequest: ((BubbleAudio) -> Flow<MessageTranscriptionFiche.Request>)? = null,
     /** Tap on a file attachment that has a url. */
     val onFileClick: ((BubbleFile) -> Unit)? = null,
     /** Tap on the quoted-reply preview (only wired when the quoted message id is known). */
