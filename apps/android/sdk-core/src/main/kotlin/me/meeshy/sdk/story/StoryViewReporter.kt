@@ -29,13 +29,21 @@ fun interface StoryViewReporting {
  * vues — et part au retour du réseau. Un refus définitif (story disparue) ne se rejoue pas.
  */
 @Singleton
-class StoryViewReporter @Inject constructor(
+class StoryViewReporter internal constructor(
     private val stories: StoryRepository,
     private val outbox: OutboxRepository,
     private val flush: OutboxFlushScheduler,
-    private val ledger: StoryViewedLedger = InMemoryStoryViewedLedger(),
-    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val ledger: StoryViewedLedger,
+    private val nowMillis: () -> Long,
 ) : StoryViewReporting {
+
+    @Inject
+    constructor(
+        stories: StoryRepository,
+        outbox: OutboxRepository,
+        flush: OutboxFlushScheduler,
+        ledger: StoryViewedLedger,
+    ) : this(stories, outbox, flush, ledger, System::currentTimeMillis)
 
     /**
      * Le registre durable passe EN PREMIER (iOS #9804) : la vue est sur disque avant que l'app puisse être tuée, et
