@@ -58,7 +58,7 @@ internal object SqlCipherRuntime {
             try {
                 SearchIndexSchema.dropStatements.forEach(db::rawExecSQL)
                 val version = db.compileStatement("PRAGMA user_version").simpleQueryForLong()
-                db.rawExecSQL("ATTACH DATABASE '${target.path.replace("'", "''")}' AS encrypted KEY '$phrase'")
+                db.rawExecSQL("ATTACH DATABASE '${target.path.replace("'", "''")}' AS encrypted KEY '${phrase.replace("'", "''")}'")
                 db.rawExecSQL("SELECT sqlcipher_export('encrypted')")
                 db.rawExecSQL("PRAGMA encrypted.user_version = $version")
                 db.rawExecSQL("DETACH DATABASE encrypted")
