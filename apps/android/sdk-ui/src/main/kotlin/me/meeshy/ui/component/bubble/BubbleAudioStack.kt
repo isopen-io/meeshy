@@ -92,13 +92,14 @@ internal fun BubbleContent.showsVoiceConsentNotice(): Boolean =
 
 /**
  * Les drapeaux du pied UNIQUE d'une pile (iOS `AudioStackView.sharedFooterModel`) : l'union ordonnée des langues de
- * toutes les pistes ([VoiceStackPlan.footerLanguages]), le drapeau actif suivant la piste servie. Un message à un seul
- * vocal, ou dont aucune piste ne dit encore sa langue, garde les drapeaux de son texte.
+ * toutes les pistes ([VoiceStackPlan.footerLanguages]), le drapeau actif suivant la piste servie. Un vocal SEUL porte
+ * les drapeaux de ses pistes (iOS `audioFooter` : l'origine d'abord, puis chaque piste traduite) ; sans langue de piste, ou
+ * protégé (rien ne part à côté d'un vocal scellé), le pied garde les drapeaux du texte.
  */
 public object BubbleVoiceStackFooter {
 
     public fun chips(content: BubbleContent): List<LanguageChip> {
-        if (content.audios.size < 2) return content.languageStrip
+        if (content.audios.isEmpty() || content.audios.any { it.isProtected }) return content.languageStrip
         val codes = VoiceStackPlan.footerLanguages(
             content.audios.map { VoiceTrackLanguages(it.attachmentId, it.originalLanguage, it.translatedLanguages) },
         )
