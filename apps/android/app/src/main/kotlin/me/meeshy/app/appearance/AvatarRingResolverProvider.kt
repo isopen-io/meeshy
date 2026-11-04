@@ -34,7 +34,7 @@ class AvatarRingResolverProvider @Inject constructor(
 
     @Composable
     override fun Provide(content: @Composable () -> Unit) {
-        LaunchedEffect(loader) { loader.catalog() }
+        LaunchedEffect(loader) { runCatching { loader.catalog() } }
         val catalog = loader.state.collectAsState().value
         val resolver = remember(catalog) { avatarRingResolver(catalog) }
         CompositionLocalProvider(LocalAvatarRingResolver provides resolver, content = content)
