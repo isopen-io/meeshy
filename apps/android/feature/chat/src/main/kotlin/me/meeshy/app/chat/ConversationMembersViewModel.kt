@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.MemberRoleAction
 import me.meeshy.sdk.model.MemberRoster
 import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.PaginatedParticipant
+import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.currentUserRole
 import me.meeshy.sdk.model.matches
 import me.meeshy.sdk.model.role
@@ -42,6 +43,8 @@ data class ConversationMembersUiState(
     val viewerRole: MemberRole = MemberRole.MEMBER,
     val currentUserId: String? = null,
     val actionFailed: Boolean = false,
+    /** #15269 — la loi des actions accorde « Inviter » à ce lecteur (Global : administrateurs de la plateforme seuls). */
+    val mayInvite: Boolean = false,
 ) {
     val members: List<PaginatedParticipant> get() = roster.members
     val memberCount: Int get() = roster.displayCount
@@ -292,6 +295,7 @@ class ConversationMembersViewModel @Inject constructor(
                     it.copy(
                         currentUserId = userId ?: it.currentUserId,
                         viewerRole = conversation.currentUserRole(userId),
+                        mayInvite = ConversationRowMenuCapabilities.forViewer(conversation, sessionRepository.currentUser.value).invite,
                     )
                 }
             }

@@ -51,6 +51,7 @@ CATALOGS: Dict[str, str] = {
     "nse": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
     "nce": "apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings",
     "infoplist": "apps/ios/Meeshy/InfoPlist.xcstrings",
+    "share": "apps/ios/MeeshyShareExtension/InfoPlist.xcstrings",
 }
 
 _ENTRY_FIELDS = {"catalog", "iosKey", "androidName", "kind", "status", "fillMissingQuantities"}

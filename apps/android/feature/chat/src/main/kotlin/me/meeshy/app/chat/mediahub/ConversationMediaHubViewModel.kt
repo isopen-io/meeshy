@@ -141,7 +141,7 @@ class ConversationMediaHubViewModel @Inject constructor(
 
     private suspend fun open(kind: ConversationMediaKind) {
         val id = conversationId ?: return
-        val cached = index.read(id, kind)
+        val cached = index.load(id, kind)
         val seeded = (segments[kind] ?: MediaHubSegment()).withCache(cached?.carriers.orEmpty(), cached?.isComplete == true)
         segments[kind] = seeded
         publish()

@@ -37,13 +37,13 @@ extension FeedViewModel {
 
             switch cacheResult {
             case .fresh(let cachedPosts, _):
-                posts = PendingPublicationCancel.excludingWithdrawn(cachedPosts)
+                posts = PendingPublicationCancel.excludingWithdrawn(PendingPublicationLocalMedia.rebased(cachedPosts))
                 hasLoaded = true
                 prefetchMedia(around: 0)
                 return
 
             case .stale(let cachedPosts, _):
-                posts = PendingPublicationCancel.excludingWithdrawn(cachedPosts)
+                posts = PendingPublicationCancel.excludingWithdrawn(PendingPublicationLocalMedia.rebased(cachedPosts))
                 hasLoaded = true
                 prefetchMedia(around: 0)
                 Task {
@@ -286,9 +286,10 @@ extension FeedViewModel {
     /// Pre-loads comments for a visible post into the cache so that opening the post
     /// detail does not require a network round-trip. Cache-first: skips the network
     /// call when the cache is already fresh. Coalesced: concurrent calls for the
-    /// same `postId` are no-ops while a prefetch is in flight.
+    /// same `postId` are no-ops while a prefetch is in flight. A card still in
+    /// the outbox (#15123) has only a cmid: nothing to ask the server.
     func prefetchComments(_ postId: String) {
-        guard !prefetchingComments.contains(postId) else { return }
+        guard !PendingPublicationMarker.isPending(postId: postId), !prefetchingComments.contains(postId) else { return }
         prefetchingComments.insert(postId)
 
         Task(priority: .utility) { [weak self] in

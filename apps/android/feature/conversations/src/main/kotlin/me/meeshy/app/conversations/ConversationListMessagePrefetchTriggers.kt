@@ -21,14 +21,22 @@ import me.meeshy.sdk.socket.SocketManager
 class ConversationListMessagePrefetchTriggers @Inject constructor(
     private val prefetcher: ConversationListMessagePrefetcher,
     private val foreground: AppForegroundSignal,
+    private val storyPrefetch: ConversationStoryPrefetch,
 ) {
+    /** Sans préchargement de stories (témoins de la passe de messages). */
+    constructor(prefetcher: ConversationListMessagePrefetcher, foreground: AppForegroundSignal) :
+        this(prefetcher, foreground, ConversationStoryPrefetch.inert())
+
     fun start(
         scope: CoroutineScope,
         session: SessionRepository,
         socketManager: SocketManager,
         conversations: () -> List<ApiConversation>,
     ) {
-        fun requestPass() = schedule(session, conversations())
+        fun requestPass() {
+            schedule(session, conversations())
+            storyPrefetch.start()
+        }
         scope.launch { foreground.entered.collect { requestPass() } }
         scope.launch {
             socketManager.connected.collect {
@@ -42,6 +50,7 @@ class ConversationListMessagePrefetchTriggers @Inject constructor(
     fun onListLoaded(session: SessionRepository, conversations: List<ApiConversation>) {
         prefetcher.takeReloadArm()
         schedule(session, conversations)
+        storyPrefetch.start()
     }
 
     private fun schedule(session: SessionRepository, conversations: List<ApiConversation>) {

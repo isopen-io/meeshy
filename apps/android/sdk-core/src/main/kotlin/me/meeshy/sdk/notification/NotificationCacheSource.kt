@@ -35,6 +35,9 @@ interface NotificationCacheStore {
 
     /** N'écrit rien si [stillValid] a cessé de l'être (le compte a changé pendant l'attente). */
     suspend fun write(snapshot: PersistedNotifications, stillValid: () -> Boolean)
+
+    /** Vide le disque (déconnexion, changement de compte) : rien d'un compte ne survit chez le suivant. */
+    suspend fun clear() = Unit
 }
 
 object NoNotificationCacheStore : NotificationCacheStore {
@@ -109,6 +112,13 @@ class RoomNotificationCacheStore @Inject constructor(
                 dao.upsertAll(rows.first)
                 keyed.upsert(KeyedJsonCacheEntity(NAMESPACE, KEY, rows.second, now))
             }
+        }
+    }
+
+    override suspend fun clear() {
+        database.withTransaction {
+            dao.deleteScope(NotificationScope.ALL_KEY)
+            keyed.delete(NAMESPACE, KEY)
         }
     }
 

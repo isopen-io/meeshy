@@ -281,6 +281,28 @@ class NewConversationViewModelTest {
     }
 
     @Test
+    fun create_offline_queues_the_conversation_and_closes_without_an_error() = runTest(dispatcher) {
+        val users = mockk<UserRepository>()
+        coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
+        val conversations = mockk<ConversationRepository>()
+        coEvery { conversations.create(any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError(code = "NETWORK", message = "offline"))
+        coEvery { conversations.createOptimistic(any(), any(), any(), any()) } returns "pending_1"
+        val vm = viewModel(users = users, conversations = conversations)
+
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+        vm.create()
+        advanceUntilIdle()
+
+        coVerify { conversations.createOptimistic(NewConversationLogic.TYPE_DIRECT, null, listOf("u1"), "server") }
+        assertThat(vm.state.value.queuedOffline).isTrue()
+        assertThat(vm.state.value.error).isNull()
+        assertThat(vm.state.value.createdConversationId).isNull()
+    }
+
+    @Test
     fun creating_with_a_user_who_blocked_me_says_so_in_words() = runTest(dispatcher) {
         val users = mockk<UserRepository>()
         coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))

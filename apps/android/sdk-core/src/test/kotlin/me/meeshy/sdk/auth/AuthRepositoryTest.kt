@@ -87,7 +87,7 @@ class AuthRepositoryTest {
         override suspend fun requestMagicLink(body: me.meeshy.sdk.net.api.MagicLinkRequestBody) =
             me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.MagicLinkRequestData>(success = false)
         override suspend fun listSessions() =
-            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.SessionsListData>(success = false)
+            me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.session.UserSessionsPayload>(success = false)
         override suspend fun revokeSession(sessionId: String) =
             me.meeshy.sdk.model.ApiResponse<Unit>(success = true)
         override suspend fun revokeOtherSessions() =
@@ -301,6 +301,98 @@ class AuthRepositoryTest {
         assertThat(store.jwt).isEqualTo("jwt-123")
         assertThat(store.sessionToken).isEqualTo("sess-456")
         assertThat(session.currentUser.value?.id).isEqualTo("u1")
+    }
+
+    @Test
+    fun registerHoldingSession_created_doesNotStoreTheSessionBeforeAnExplicitInstall() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(
+                success = true,
+                data = RegisterResponse(
+                    user = MeeshyUser(id = "u1", username = "atabeth"),
+                    token = "jwt-123",
+                    sessionToken = "sess-456",
+                    pendingSessionToken = "pending-789",
+                ),
+            ),
+        )
+        val (repo, session) = repository(api, store)
+
+        val result = repo.registerHoldingSession(RegisterRequest(email = "a@b.co", password = "secret"))
+
+        val created = result.getOrNull() as RegisterOutcome.Created
+        assertThat(created.session.token).isEqualTo("jwt-123")
+        assertThat(created.pendingSessionToken).isEqualTo("pending-789")
+        assertThat(store.jwt).isNull()
+        assertThat(store.sessionToken).isNull()
+        assertThat(session.currentUser.value).isNull()
+
+        repo.adoptSession(created.session)
+
+        assertThat(store.jwt).isEqualTo("jwt-123")
+        assertThat(session.currentUser.value?.id).isEqualTo("u1")
+    }
+
+    @Test
+    fun registerHoldingSession_phoneOwnershipConflict_holdsNothing() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(success = true, data = RegisterResponse(phoneOwnershipConflict = true)),
+        )
+        val (repo, _) = repository(api, store)
+
+        val result = repo.registerHoldingSession(RegisterRequest(email = "a@b.co", password = "secret"))
+
+        assertThat(result.getOrNull()).isEqualTo(RegisterOutcome.PhoneOwnershipConflict)
+        assertThat(store.jwt).isNull()
+    }
+
+    @Test
+    fun registerHoldingSession_claimedAddress_awaitsTheCodeWithoutAnySession() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(
+                success = true,
+                data = RegisterResponse(
+                    status = "verification-required", email = "a@b.co", accountCreated = true, pendingSessionToken = "pend",
+                ),
+            ),
+        )
+        val (repo, _) = repository(api, store)
+
+        val result = repo.registerHoldingSession(RegisterRequest(email = "typed@b.co", password = "secret", claimEmail = true))
+
+        assertThat(result.getOrNull()).isEqualTo(RegisterOutcome.VerificationRequired("a@b.co", "pend"))
+        assertThat(store.jwt).isNull()
+    }
+
+    @Test
+    fun register_verificationRequiredBesideAnIdentity_awaitsTheCodeAndAdoptsNothing() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(
+                success = true,
+                data = RegisterResponse(
+                    user = MeeshyUser(id = "u1", username = "ada"),
+                    token = "jwt-123",
+                    sessionToken = "sess-456",
+                    status = "verification-required",
+                    email = "a@b.co",
+                ),
+            ),
+        )
+        val (repo, session) = repository(api, store)
+
+        val result = repo.register(RegisterRequest(email = "a@b.co", password = "secret", claimEmail = true))
+
+        assertThat(result.getOrNull()).isEqualTo(RegisterOutcome.VerificationRequired("a@b.co", null))
+        assertThat(store.jwt).isNull()
+        assertThat(session.currentUser.value).isNull()
     }
 
     @Test

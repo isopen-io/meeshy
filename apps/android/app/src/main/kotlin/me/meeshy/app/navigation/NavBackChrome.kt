@@ -6,6 +6,7 @@ import me.meeshy.app.navigation.graph.FriendRequestsDestinations
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.LinksRoutes
 import me.meeshy.app.navigation.graph.StoryRoutes
+import me.meeshy.app.navigation.graph.VoiceProfileWizardDestinations
 
 /**
  * Comment un écran quitte la pile, comme sur iOS (#13364).
@@ -111,6 +112,7 @@ internal object NavBackChrome {
         modal("Routes.REELS", Routes.REELS, IosPresentation.COVER, "$FEATURE/reels/src/main/kotlin/me/meeshy/app/reels/ReelsScreen.kt"),
         modal("Routes.STORY_VIEWER", Routes.STORY_VIEWER, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerScreen.kt"),
         modal("StoryRoutes.STORY_POST", StoryRoutes.STORY_POST, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerScreen.kt"),
+        arrow("StoryRoutes.STORY_TARGET", StoryRoutes.STORY_TARGET, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryNotificationTargetScreen.kt"),
         modal("Routes.STORY_COMPOSER_ROUTE", Routes.STORY_COMPOSER_ROUTE, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryComposerScreen.kt"),
         modal("Routes.COMPOSER", Routes.COMPOSER, IosPresentation.COVER, "app/src/main/kotlin/me/meeshy/app/composer/host/ComposerHostScreen.kt"),
         // Réglages.
@@ -122,7 +124,7 @@ internal object NavBackChrome {
         sheet("Routes.SECURITY", Routes.SECURITY, IosPresentation.SHEET, settings("SecurityScreen.kt")),
         sheet("Routes.DELETE_ACCOUNT", Routes.DELETE_ACCOUNT, IosPresentation.SHEET, settings("AccountDeletionScreen.kt")),
         sheet("Routes.MEDIA_DOWNLOAD", Routes.MEDIA_DOWNLOAD, IosPresentation.SHEET, settings("MediaDownloadScreen.kt")),
-        sheet("Routes.MEDIA_CACHE", Routes.MEDIA_CACHE, IosPresentation.SHEET, settings("MediaCacheScreen.kt")),
+        sheet("Routes.MEDIA_CACHE", Routes.MEDIA_CACHE, IosPresentation.SHEET, settings("DataStorageScreen.kt")),
         sheet("Routes.PACK_SHOP", "${Routes.PACK_SHOP}?domain={domain}&pack={pack}", IosPresentation.SHEET, settings("PackShopScreen.kt")),
         sheet("Routes.DATA_EXPORT", Routes.DATA_EXPORT, IosPresentation.SHEET, settings("DataExportScreen.kt")),
         sheet("Routes.DIAGNOSTICS", Routes.DIAGNOSTICS, IosPresentation.SHEET, settings("CrashReportScreen.kt")),
@@ -134,6 +136,7 @@ internal object NavBackChrome {
         sheet("Routes.ACTIVE_SESSIONS", Routes.ACTIVE_SESSIONS, IosPresentation.SHEET, settings("ActiveSessionsScreen.kt")),
         sheet("Routes.ENCRYPTED_DEVICES", Routes.ENCRYPTED_DEVICES, IosPresentation.SHEET, settings("EncryptedDevicesScreen.kt")),
         arrow("BirthDateDestinations.ROUTE", BirthDateDestinations.ROUTE, settings("BirthDateDeclarationScreen.kt"), IosPresentation.NONE),
+        sheet("VoiceProfileWizardDestinations.ROUTE", VoiceProfileWizardDestinations.ROUTE, IosPresentation.SHEET, settings("VoiceProfileWizardScreen.kt")),
         // Contacts, notifications, profils.
         arrow("Routes.CONTACTS", Routes.CONTACTS, contacts),
         arrow("Routes.CONTACTS_DISCOVER", Routes.CONTACTS_DISCOVER, contacts),

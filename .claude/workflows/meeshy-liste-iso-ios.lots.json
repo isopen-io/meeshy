@@ -1,0 +1,113 @@
+{
+ "chantier": 15537,
+ "outillage": 15538,
+ "demande": "Directive porteur du 2026-11-03, verbatim : « 1. avoir la feature de SyncPill iOS pour annoter les différents états dont l'écriture dans une conversation avec lorsqu'on touche une personne qui écrit ça mène vers la conversation 2. Avoir dans la liste des conversations le dernier message correctement avec l'auteur si les attachements, préciser, les tailles, nombre poids, dimension et un logo... avec toujours l'auteur devant 3. le touché d'un avatar d'une ligne de conversation affiche son profile si c'est un interlocuteur ou affiche les details de la conversation si c'est une conversation à plusieurs (l'avatar montre la décoration l'humeur si existant, la présence en ligne si présent) et se distingue de la ligne qui ouvre la conversation ou affiche les options au longpress 4. Lorsqu'on scroll les conversations et les postes du feed, maintenir le rails des story en petit rails en haut. » Plateformes retenues par le porteur : Android natif et iOS (compléments). Le web n'est pas dans le chantier : ses écarts deviennent des issues de dette.",
+ "features": {
+  "F1": {
+   "titre": "La pastille de synchronisation annonce chaque état, dont la frappe, et toucher quelqu'un qui écrit ouvre sa conversation",
+   "clauses": [
+    "La pastille (SyncPill) annonce les états de synchronisation et de connexion : hors ligne, reconnexion, envois en cours par nature, échecs, retour en ligne.",
+    "La pastille annonce la frappe : « X écrit… » dans une conversation, avec l'emphase ×1,1 d'iOS (TypingAnnouncementLaw) au début d'une frappe.",
+    "Toucher une entrée de frappe ouvre la conversation où la personne écrit ; toucher une entrée en échec la relance ; toucher une entrée avec source va à sa source.",
+    "Visible sur tous les écrans où iOS la montre, à la place qu'iOS lui donne (SyncPillPlacement), masquée là où iOS la masque."
+   ],
+   "ios_reference_files": [
+    "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",
+    "apps/ios/Meeshy/Features/Main/ViewModels/SyncPillViewModel.swift",
+    "apps/ios/Meeshy/Features/Main/Components/TypingAnnouncementLaw.swift",
+    "apps/ios/Meeshy/Features/Main/Components/SyncPillLabels.swift",
+    "apps/ios/Meeshy/Features/Main/Components/SyncPillPlacement.swift",
+    "apps/ios/Meeshy/Features/Main/Components/SyncPillRotator.swift",
+    "apps/ios/Meeshy/Features/Main/Components/SyncPillMarquee.swift",
+    "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift"
+   ],
+   "android_existant": "core/model …/syncpill/* et …/connection/SyncPillReducer.kt + SyncPillEntry.kt (TYPING_SCALE vaut 1.6f là où iOS dit 1.1) : la loi existe, aucune peau Compose n'est montée (le slot searchSyncPill de ConversationListScreen vaut {}).",
+   "plan_targets": [
+    "pastille-synchro-globale-affichage"
+   ]
+  },
+  "F2": {
+   "titre": "L'aperçu du dernier message montre toujours son auteur devant, et détaille une pièce jointe : pictogramme, nombre, poids, dimensions, durée",
+   "clauses": [
+    "L'aperçu de la ligne de conversation décrit UN seul message, le dernier, correctement (Prisme rang par rang, jamais translations.first).",
+    "L'auteur est TOUJOURS devant l'aperçu : « Vous : » pour mes messages, le nom de l'expéditeur sinon, en conversation directe comme en groupe. La directive du 2026-11-03 prime sur une convention iOS antérieure qui le tairait ; un tel changement côté iOS s'écrit dans apps/ios/decisions/.",
+    "Une pièce jointe est précisée : un pictogramme par nature (photo, vidéo, vocal, audio, fichier, contact, lieu, sticker…), le nombre (« 3 photos »), le poids (« 2,4 Mo »), les dimensions d'une image ou d'une vidéo (« 1920 × 1080 »), la durée d'un audio ou d'une vidéo, le nom et l'extension d'un fichier ; pluriels et mélanges ont une forme définie.",
+    "Un message ou une pièce protégés (éphémère, vue unique, flouté, chiffré, expiré) ne livrent AUCUN détail de pièce : ni poids, ni dimensions, ni durée, ni nom (leçon 275).",
+    "La loi est UNE : packages/shared/utils/conversation-preview.ts + packages/shared/fixtures/conversation-preview-cases.json, rejoués par le composeur Swift et la loi Kotlin ; un détail que la passerelle ne sert pas dans la ligne de liste s'ajoute de façon rétrocompatible (champ additif)."
+   ],
+   "ios_reference_files": [
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreview/ConversationPreviewComposer.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreview/ConversationPreviewBody.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationPreview/ConversationPreviewStrings.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationListAuthor.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/LastMessageFacet.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationPreviewLine.swift",
+    "packages/shared/utils/conversation-preview.ts",
+    "packages/shared/fixtures/conversation-preview-cases.json"
+   ],
+   "android_existant": "Fondations fusionnées : liste-conversations-fil-complet-et-contrat-apercu, piece-jointe-fil-complet-et-protection, conversation-derniere-ligne-facette-atomique, apercu-conversation-donnees. Restent la loi du composeur et le rendu de ligne.",
+   "plan_targets": [
+    "conversation-apercu-compositeur-loi",
+    "ligne-apercu-rendu"
+   ]
+  },
+  "F3": {
+   "titre": "Toucher l'avatar d'une ligne ouvre le profil de l'interlocuteur ou les détails du groupe, et l'avatar montre décoration, humeur et présence",
+   "clauses": [
+    "Toucher l'avatar d'une conversation directe ouvre la fiche profil de l'interlocuteur ; d'une conversation à plusieurs (groupe, public, communauté) ouvre les détails de la conversation — jamais le fil.",
+    "Le geste d'avatar est distinct : toucher la ligne ouvre la conversation, l'appui long sur la ligne ouvre ses options, et la zone de l'avatar est exclue de ces deux gestes.",
+    "L'avatar montre la décoration équipée (contour), l'humeur si elle existe, la présence si le serveur l'a servie (amis acceptés ; hors ligne = aucun point ; Ami = en ligne ou rien, Proche = détaillée — #13928).",
+    "Accessibilité : l'avatar est un bouton à part entière, libellé (« Voir le profil de X » / « Détails de Y »), cible 44 pt / 48 dp, actions annoncées par VoiceOver et TalkBack.",
+    "Un interlocuteur supprimé, bloqué ou anonyme a un repli défini (détails de la conversation) au lieu d'un geste mort."
+   ],
+   "ios_reference_files": [
+    "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",
+    "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift"
+   ],
+   "android_existant": "Fondations fusionnées : atomes-d-avatar-loi-humeur-et-non-lus, avatar-unique-et-branchement-social, racine-fiches-profil-partage, profile-entry-points-messaging, ligne-lentille-plate. Reste le branchement des gestes de la ligne.",
+   "plan_targets": [
+    "ligne-avatar-gestes"
+   ]
+  },
+  "F4": {
+   "titre": "En faisant défiler la liste des conversations et le fil, le rail des stories reste en haut, réduit en petit rail",
+   "clauses": [
+    "Dans la liste des conversations, le grand plateau de stories défile avec la liste puis, une fois sorti, une bande compacte (PinnedStoryTrailBand d'iOS) prend la place du titre dans l'en-tête réduit.",
+    "Même comportement dans le fil des posts (FeedView d'iOS), même composant, même pipeline de données.",
+    "Toucher un anneau de la bande ouvre le lecteur de stories comme le grand plateau ; la bande ne recompose ni la liste ni le fil à chaque image de défilement (fluidité, dimension 4)."
+   ],
+   "ios_reference_files": [
+    "apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift",
+    "apps/ios/Meeshy/Features/Stories/Views/StoryEntryMetrics.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationListView+StoryRail.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift",
+    "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",
+    "apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift"
+   ],
+   "android_existant": "feature/stories porte StoryTray.kt, StoryRailPlan.kt, StoryEntryMetrics.kt ; la bande compacte et l'en-tête repliable de la liste restent à faire.",
+   "plan_targets": [
+    "liste-entete-et-plateau-stories",
+    "story-tray-pinned-band"
+   ]
+  }
+ },
+ "exclusions": {
+  "racine-couches-globales": "ordre z global du chrome : la pastille s'inscrit déjà par @IntoSet dans GlobalOverlays (critère de pastille-synchro-globale-affichage) ; hors des quatre demandes",
+  "porte-mise-a-jour-obligatoire": "dépendance de racine-couches-globales seulement",
+  "persist-messages-fenetre-ui-saut": "le saut à un message ancré n'est pas demandé : toucher une frappe ouvre la conversation",
+  "status-bubble-reply": "toucher le badge d'humeur pour ouvrir la bulle de statut n'est pas demandé, et sa fermeture tire la pile analytics, outbox des posts et composeur d'humeur"
+ },
+ "sensibles": [
+  "pastille-synchro-globale-affichage",
+  "ephemere-echeance-par-lecteur-et-reveil-unique",
+  "conversation-apercu-compositeur-loi",
+  "ligne-apercu-rendu",
+  "ligne-avatar-gestes"
+ ],
+ "lourds": [
+  "ephemere-echeance-par-lecteur-et-reveil-unique",
+  "conversation-apercu-compositeur-loi",
+  "ligne-apercu-rendu"
+ ]
+}

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.playback.AudioTrackActivationLaw
 import me.meeshy.sdk.model.playback.MediaSessionEvent
 import me.meeshy.sdk.model.playback.MuteStretchEffect
 import me.meeshy.sdk.model.playback.PlaybackLoopQueue
@@ -38,6 +39,7 @@ public class SharedVideoPlayerManager(
     private val coordinator: PlaybackCoordinator,
     private val scope: CoroutineScope,
     private val tickMs: Long = 250L,
+    private val tickIntervalMs: () -> Long = { tickMs },
     private val onOutgoingPort: (VideoPlayerPort) -> Unit = { it.release() },
 ) : CoordinatedPlayer, VideoPlayerPort.Listener {
 
@@ -92,7 +94,7 @@ public class SharedVideoPlayerManager(
         val previous = _state.value.mute
         if (next == previous) return
         _state.update { it.copy(mute = next) }
-        port?.setMuted(next.effectiveMuted)
+        port?.let { applyOutput(it, playerIsMuted = previous.effectiveMuted, wantsMuted = next.effectiveMuted) }
         when (next.stretchEffect(previous)) {
             MuteStretchEffect.CLOSE_STRETCH -> reportWatch(complete = false)
             MuteStretchEffect.REOPEN_STRETCH, MuteStretchEffect.NONE -> Unit
@@ -123,7 +125,8 @@ public class SharedVideoPlayerManager(
         if (prepared != null && adopted == null) prepared.port.release()
         port = next
         next.setListener(this)
-        next.setMuted(_state.value.effectiveMuted)
+        val wantsMuted = _state.value.effectiveMuted
+        applyOutput(next, playerIsMuted = !wantsMuted, wantsMuted = wantsMuted)
         next.setLooping(_state.value.isLooping)
         val source = media.localFileUri?.let { VideoSource(it, isLocalFile = true) } ?: VideoSource(media.url, isLocalFile = false)
         if (adopted != null) {
@@ -141,6 +144,24 @@ public class SharedVideoPlayerManager(
         }
         queue = PlaybackLoopQueue.withCurrentItem()
         refreshLoopSuccessor()
+    }
+
+    /** La loi d'activation : sortie coupée AVANT la piste, piste rallumée sous la sortie encore muette. */
+    private fun applyOutput(target: VideoPlayerPort, playerIsMuted: Boolean, wantsMuted: Boolean) {
+        AudioTrackActivationLaw.steps(playerIsMuted, wantsMuted).forEach { step ->
+            when (step) {
+                AudioTrackActivationLaw.Step.SILENCE_PLAYER -> target.setMuted(true)
+                AudioTrackActivationLaw.Step.DISABLE_AUDIO_TRACKS -> target.setAudioTracksEnabled(false)
+                AudioTrackActivationLaw.Step.ENABLE_AUDIO_TRACKS -> target.setAudioTracksEnabled(true)
+                AudioTrackActivationLaw.Step.SOUND_PLAYER -> target.setMuted(false)
+            }
+        }
+    }
+
+    /** Les pistes d'un élément n'existent qu'une fois prêt : l'état voulu se réconcilie alors (boucle comprise). */
+    private fun reconcileAudioTracks() {
+        val wantsMuted = _state.value.effectiveMuted
+        port?.setAudioTracksEnabled(!AudioTrackActivationLaw.audioTracksDisabled(wantsMuted))
     }
 
     private fun recycleOrRelease(outgoing: VideoPlayerPort) {
@@ -260,6 +281,7 @@ public class SharedVideoPlayerManager(
 
     override fun onPrepared(generation: Int, durationMs: Long) {
         if (generation != this.generation) return
+        reconcileAudioTracks()
         val held = (PlaybackProgressLaw.heldDuration(durationMs / 1000.0, _state.value.durationMs / 1000.0, _state.value.isLooping) * 1000).toLong()
         _state.update { it.copy(durationMs = held) }
     }
@@ -277,6 +299,7 @@ public class SharedVideoPlayerManager(
     override fun onLoopTurn(generation: Int) {
         if (generation != this.generation) return
         emitComplete()
+        reconcileAudioTracks()
         queue = queue.advanced()
         endedReported = false
         _state.update { it.copy(positionMs = 0L) }
@@ -344,7 +367,7 @@ public class SharedVideoPlayerManager(
         if (ticker?.isActive == true) return
         ticker = scope.launch {
             while (isActive) {
-                delay(tickMs)
+                delay(tickIntervalMs())
                 publishPosition()
             }
         }

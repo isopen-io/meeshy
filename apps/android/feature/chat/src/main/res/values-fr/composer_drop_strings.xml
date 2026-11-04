@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="composer_drop_here">Déposer ici</string>
+    <string name="composer_drop_import_failed">Impossible d\'importer : %1$s</string>
+    <string name="composer_drop_unnamed_item">élément sans nom</string>
+</resources>

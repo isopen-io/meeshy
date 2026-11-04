@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -49,6 +50,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
@@ -87,16 +89,22 @@ internal fun ChatListHost(
     val accentColor = host.accentColor
     val bubbleFrames = host.bubbleFrames
     val listState = rememberLazyListState()
+    val expansionHost = rememberLongMessageExpansionHost(listState)
     // La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `selectedProfileUser`).
     val profileTap = rememberProfileTap(state.conversationId, accentColor)
     // L'en-tête efface sa grappe d'actions pendant le défilement (iOS `hiddenWhileScrolling`).
     LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }
-            .distinctUntilChanged()
-            .collect {
-                host.chrome.isScrolling = it
-                if (!it) host.chrome.isUserScrolling = false
-            }
+        try {
+            snapshotFlow { listState.isScrollInProgress }
+                .distinctUntilChanged()
+                .collect {
+                    host.chrome.listGate?.setScrolling(it)
+                    host.chrome.isScrolling = it
+                    if (!it) host.chrome.isUserScrolling = false
+                }
+        } finally {
+            host.chrome.listGate?.setScrolling(false)
+        }
     }
     // Seul un glissé du doigt arme le défilement « utilisateur » ; il retombe à l'arrêt de l'élan.
     LaunchedEffect(listState) {
@@ -105,28 +113,7 @@ internal fun ChatListHost(
         }
     }
     // Script / Focal : la rangée plate d'iOS (`FocalRow`) ; Bulles, Résumé, Rivière : la bulle.
-    val flatRows = host.readingMode?.state?.mode?.usesFlatRow == true
-    // L'heure et les coches de la rangée plate : visibles pendant le défilement du doigt puis
-    // 900 ms (ScrollTimePillLaw), fondu de 280 ms — lues au dessin, sans recomposer les rangées.
-    var metaRevealed by remember { mutableStateOf(false) }
-    LaunchedEffect(flatRows) {
-        if (!flatRows) return@LaunchedEffect
-        snapshotFlow { host.chrome.isUserScrolling }
-            .collectLatest { scrolling ->
-                if (scrolling) {
-                    metaRevealed = true
-                } else if (metaRevealed) {
-                    delay(ScrollTimePillLaw.LINGER_MS.toLong())
-                    metaRevealed = false
-                }
-            }
-    }
-    val metaAlphaState = animateFloatAsState(
-        targetValue = if (metaRevealed) 1f else 0f,
-        animationSpec = tween(FocalMetrics.Pill.FADE_DURATION_MS.toInt()),
-        label = "flat-meta",
-    )
-    val metaAlpha = remember(metaAlphaState) { { metaAlphaState.value } }
+    val flatRows = ThreadRowMux.rendering(host.readingMode?.state?.mode) == ThreadRowRendering.Flat
     val scope = rememberCoroutineScope()
     // Async OpenGraph link previews: one screen-scoped store dedupes fetches across bubbles and
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
@@ -143,12 +130,15 @@ internal fun ChatListHost(
     // the cheap `asReversed()` VIEW actually fed to the `LazyColumn` and to
     // every pure function below that scrolls/indexes into rendered rows.
     val orientation = ChatListOrientation.BottomUp
-    val listItems = remember(state.messages, state.firstUnreadMessageId, state.showEncryptionDisclaimer) {
+    val startName = ConversationStartName.of(state.conversationTitle, state.hasMoreOlder, state.showSkeleton)
+    val listItems = remember(state.messages, state.firstUnreadMessageId, state.unreadAtOpening, state.showEncryptionDisclaimer, startName) {
         buildChatListItems(
             state.messages,
             ZoneId.systemDefault(),
             state.firstUnreadMessageId,
             showEncryptionNotice = state.showEncryptionDisclaimer,
+            conversationStartName = startName,
+            serverUnreadCount = state.unreadAtOpening,
         )
     }
     val renderedItems = remember(listItems) { listItems.asReversed() }
@@ -213,9 +203,12 @@ internal fun ChatListHost(
     val affordanceMessages = remember(state.messages) {
         state.messages.map { it.toAffordanceMessage() }
     }
+    // Seuil iOS (`nearBottomFollowThreshold`, 200 pt) : sous cette distance au bas, le bouton « dernier
+    // message » reste caché ; la tolérance en rangées d'avant garde son rôle pour les rangées hautes.
+    val nearBottomThresholdPx = with(LocalDensity.current) { ChatScrollGeometry.NEAR_BOTTOM_THRESHOLD_DP.dp.toPx() }
     val isNearBottom by remember(listItems) {
         derivedStateOf {
-            ChatScrollGeometry.isNearBottom(
+            listState.isNearBottomPx(nearBottomThresholdPx) || ChatScrollGeometry.isNearBottom(
                 edgeIndex = ChatScrollGeometry.bottomEdgeIndex(
                     firstVisibleIndex = listState.firstVisibleItemIndex,
                     lastVisibleIndex = listState.lastVisibleItemIndex(),
@@ -253,28 +246,15 @@ internal fun ChatListHost(
         chrome = host.chrome,
         reduceMotion = reduceMotion,
     )
-    val pinnedDayMillis by remember(renderedItems, readingLinePx, flatRows) {
-        derivedStateOf {
-            if (host.chrome.isHeaderExpanded) return@derivedStateOf null
-            // Rangée plate : la pastille de jour se retire pendant le défilement (iOS).
-            if (flatRows && host.chrome.isUserScrolling) return@derivedStateOf null
-            val info = listState.layoutInfo
-            val height = info.viewportSize.height.toFloat()
-            val before = info.beforeContentPadding.toFloat()
-            val visible = info.visibleItemsInfo.filter { it.index < renderedItems.size }
-            // `reverseLayout` : l'offset court depuis le bas du fil ; on le ramène à l'écran.
-            val rows = visible.map { item ->
-                val bottom = height - before - item.offset
-                PinnedDayHeader.Row(
-                    isDayHeader = renderedItems[item.index] is ChatListItem.DayHeader,
-                    minY = bottom - item.size,
-                    maxY = bottom,
-                )
-            }
-            val row = PinnedDayHeader.stickyRow(rows, readingLinePx, height) ?: return@derivedStateOf null
-            PinnedDayHeader.governingDayMillis(renderedItems, visible[row].index, orientation)
-        }
-    }
+    // La pilule jour·heure, la révélation de l'heure des rangées plates (loi des 900 ms) et le clavier d'abord.
+    val timePill = rememberScrollTimePillDriver(listState, renderedItems, host.chrome, readingLinePx)
+    val scrollConnection = rememberKeyboardFirstScrollConnection(listState, host.chrome.threadScroll)
+    val metaAlphaState = animateFloatAsState(
+        targetValue = if (timePill.reveal.isRevealed && flatRows) 1f else 0f,
+        animationSpec = tween(FocalMetrics.Pill.FADE_DURATION_MS.toInt()),
+        label = "flat-meta",
+    )
+    val metaAlpha = remember(metaAlphaState) { { metaAlphaState.value } }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     val media = rememberChatMediaHost(actions.dismissImageViewer)
     LaunchedEffect(state.imageViewer == null) { if (state.imageViewer == null) media.onImageViewerClosed() }
@@ -289,7 +269,7 @@ internal fun ChatListHost(
     val openMessageMenu: (String) -> Unit = { id ->
         MessageMenuKeyboard.open(id, { focusManager.clearFocus(force = true); keyboardController?.hide() }, actions.onMessageLongPress)
     }
-    val rowActions = remember(actions, bubbleFrames, profileTap, haptics, capReachedMessage, host.navigation, media) {
+    val rowActions = remember(actions, bubbleFrames, profileTap, haptics, capReachedMessage, host.navigation, media, state.quickReactions) {
         ChatMessageRowActions(
             onReply = { messageId -> actions.startReply(messageId) },
             onForward = { messageId -> actions.openForward(messageId) },
@@ -325,7 +305,26 @@ internal fun ChatListHost(
             onReplyCountLongPress = { messageId -> actions.openReplyThread(messageId) },
             onRetry = { messageId -> actions.retryMessage(messageId) },
             onSenderTap = { bubble -> bubble.senderProfile?.let(profileTap) },
-            onAddReaction = { messageId -> actions.openEmojiPicker(messageId) },
+            onQuotedAuthorTap = { bubble -> bubble.replyToAuthor?.let(profileTap) },
+            onQuotedMediaTap = { messageId, quotedId ->
+                val quoted = currentMessages.firstOrNull { it.messageId == quotedId }
+                if (quoted?.images?.isNotEmpty() == true && !quoted.isBlurred && quoted.blurReveal == null) {
+                    media.open(MediaPresentation.Image(quotedId, 0))
+                    actions.openImageViewer(quotedId, 0)
+                } else {
+                    actions.onReplyPreviewTap(messageId)
+                }
+            },
+            onOpenJoinProfile = { bubble -> bubble.joinNotice?.toProfileSheetUser()?.let(profileTap) },
+            onCallBack = { bubble ->
+                val isVideo = bubble.callSummary?.callType == me.meeshy.sdk.model.CallSummaryMetadata.MediaType.VIDEO
+                host.navigation.onStartCall(state.conversationTitle.orEmpty(), isVideo)
+            },
+            onAddReaction = { messageId ->
+                val quick = state.quickReactions.firstOrNull()
+                if (quick == null) actions.openEmojiPicker(messageId) else actions.toggleReaction(messageId, quick)
+            },
+            onOpenReactPicker = { messageId -> actions.openEmojiPicker(messageId) },
             onTranslationDetail = { messageId -> actions.openLanguageExplorer(messageId) },
             onBubbleFramed = { messageId, frame -> bubbleFrames[messageId] = frame },
             onStoryCitationOpen = { postId -> host.navigation.onOpenCitedPost(postId) },
@@ -347,6 +346,16 @@ internal fun ChatListHost(
     LaunchedEffect(affordanceMessages, isAtPresent) {
         scrollAffordance = ScrollAffordance.next(scrollAffordance, affordanceMessages, isAtPresent)
     }
+    // Un défilement programmatique (saut vers une citation, retour au bas) ne passe par aucun geste :
+    // à son arrêt, le compteur et l'aperçu se resynchronisent sur la position RÉELLE (iOS `noteNearBottomTransition`).
+    val latestAffordanceMessages by rememberUpdatedState(affordanceMessages)
+    val latestAtPresent by rememberUpdatedState(isAtPresent)
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .filter { settled -> !settled }
+            .collect { scrollAffordance = ScrollAffordance.next(scrollAffordance, latestAffordanceMessages, latestAtPresent) }
+    }
 
     // #13995 — la preuve d'affichage de la flamme-œil : les bulles que le fil MONTRE.
     val shownItems by rememberUpdatedState(renderedItems)
@@ -363,23 +372,16 @@ internal fun ChatListHost(
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { actions.consumeAfterReadOnExit() }
     val viewOnceConsumer = remember(actions) { ViewOnceConsumer { id -> actions.consumeViewOnce(id) } }
 
+    // ROULEAU : l'ancien est demandé à 4 hauteurs d'écran du bord chargé — on ne le frappe jamais.
+    // Le nombre de rangées est dans la clé : une page arrivée trop courte relance la demande.
     LaunchedEffect(listState) {
         snapshotFlow {
-            ChatScrollGeometry.topEdgeIndex(
-                firstVisibleIndex = listState.firstVisibleItemIndex,
-                lastVisibleIndex = listState.lastVisibleItemIndex(),
-                orientation = orientation,
-            )
+            val lastIndex = shownItems.lastIndex
+            val viewportPx = (listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset).toFloat()
+            ChatScrollGeometry.shouldLoadOlder(listState.distanceToOldEdgePx(lastIndex), viewportPx) to lastIndex
         }
             .distinctUntilChanged()
-            .collect { index ->
-                val nearOldEnd = ChatScrollGeometry.isNearOldEnd(
-                    edgeIndex = index,
-                    lastIndex = listItems.lastIndex,
-                    orientation = orientation,
-                )
-                if (nearOldEnd) actions.loadOlder()
-            }
+            .collect { (nearOldEdge, _) -> if (nearOldEdge) actions.loadOlder() }
     }
 
     val storageAccess = rememberPermissionFlow()
@@ -431,12 +433,9 @@ internal fun ChatListHost(
         when {
             state.loadingPhase(host.landing.isLoadingNewer).isBlockingSpinnerNeeded -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }
 
-            state.messages.isEmpty() && state.errorMessage != null -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) {
-                ChatNotice(state.errorMessage!!, onRetry = actions.refresh)
-            }
-
             state.messages.isEmpty() -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) {
-                ChatNotice(stringResource(R.string.chat_no_messages), onRetry = null)
+                val notice = state.emptyThreadNotice()
+                ChatNotice(stringResource(notice.text), onRetry = actions.refresh.takeIf { notice.offersRetry })
             }
 
             else -> Box(Modifier.fillMaxSize()) {
@@ -468,7 +467,8 @@ internal fun ChatListHost(
                     renderedItems = renderedItems,
                     accentColor = accentColor,
                     isLoadingOlder = state.isLoadingOlder,
-                    pinnedDayMillis = pinnedDayMillis,
+                    scrollTimePill = timePill.pill,
+                    scrollConnection = scrollConnection,
                     scrollAffordance = scrollAffordance,
                     typingParticipants = state.typingParticipants,
                     isOffline = state.isOffline,
@@ -509,15 +509,23 @@ internal fun ChatListHost(
                         focalScale = scale,
                         selecting = host.selection.isActive,
                         selectedIds = host.selection.ids,
+                        translatingLanguages = state.translatingLanguages,
                         overlayMessageId = state.actionMessageId,
                     ) }
+                    val framed: @Composable (Boolean, Float) -> Unit = { elected, scale ->
+                        if (item is ChatListItem.Message) {
+                            LongMessageExpansionRow(item.bubble.messageId, expansionHost) { row(elected, scale) }
+                        } else {
+                            row(elected, scale)
+                        }
+                    }
                     val landed = item is ChatListItem.Message && item.bubble.messageId == host.landing.highlightedMessageId
                     if (focalMode) {
-                        FocalPassageItem(item.key, focalScene, renderedIndexOf) { elected -> row(elected, focalScene.contentScale) }
+                        FocalPassageItem(item.key, focalScene, renderedIndexOf) { elected -> framed(elected, focalScene.contentScale) }
                     } else if (landed) {
-                        LandingHighlight(accentColor) { row(false, 1f) }
+                        LandingHighlight(accentColor) { framed(false, 1f) }
                     } else {
-                        row(false, 1f)
+                        framed(false, 1f)
                     }
                 }
             }
@@ -545,6 +553,12 @@ internal fun ChatListHost(
         val riverMode = host.readingMode?.state?.let {
             it.mode == ConversationReadingMode.RIVER && RiverModeGate.isSelectable(it.capabilities)
         } == true
+        // Sous un panneau opaque, la liste s'endort : les flux continuent, l'état est rejoué au réveil.
+        val threadVisible = ChatListQuiescence.rendersThread(host.readingMode?.state?.mode, riverOpen = riverMode)
+        DisposableEffect(threadVisible) {
+            host.chrome.listGate?.setAsleep(!threadVisible)
+            onDispose { host.chrome.listGate?.setAsleep(false) }
+        }
         AnimatedVisibility(
             visible = riverMode,
             enter = fadeIn(tween(modeFadeMs)),

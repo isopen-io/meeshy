@@ -6,7 +6,7 @@ import MeeshyUI
 
 extension FeedViewModel {
     func likePost(_ postId: String) async {
-        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        guard !PendingPublicationMarker.isPending(postId: postId), let index = posts.firstIndex(where: { $0.id == postId }) else { return }
 
         // Snapshot pre-mutation state so both the synchronous enqueue-refusal
         // path and the async `.exhausted` observer roll back to the exact prior
@@ -122,7 +122,7 @@ extension FeedViewModel {
     }
 
     func bookmarkPost(_ postId: String) async {
-        guard let post = posts.first(where: { $0.id == postId }) else { return }
+        guard !PendingPublicationMarker.isPending(postId: postId), let post = posts.first(where: { $0.id == postId }) else { return }
 
         // Optimistic: insert into the local "bookmarks" cache so opening the
         // Favoris tab shows the post immediately. Mirror BookmarksViewModel's

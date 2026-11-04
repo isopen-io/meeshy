@@ -2,8 +2,6 @@ package me.meeshy.app.stories
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -16,6 +14,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.story.StoryOptionsMenuEntry
+import me.meeshy.sdk.model.story.StoryRepostDestination
 import me.meeshy.sdk.model.story.StoryOptionsMenuPlan
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -57,7 +56,7 @@ internal fun StoryOptionsMenu(
     Box {
         IconButton(onClick = { chrome.showOptions = true }) {
             Icon(
-                Icons.Filled.MoreVert,
+                MeeshyIcons.MoreVert,
                 contentDescription = stringResource(R.string.stories_options),
                 tint = MeeshyPalette.White,
             )
@@ -86,7 +85,13 @@ private fun StoryOptionsMenuItem(
     }
     val handler = actions.entryHandlers[entry]
     when (entry) {
-        StoryOptionsMenuEntry.Share -> StoryMenuRow(R.string.stories_action_share, MeeshyIcons.Share) { act(actions.share) }
+        StoryOptionsMenuEntry.Share -> {
+            StoryMenuRow(R.string.stories_action_share, MeeshyIcons.Share) { act(actions.share) }
+            actions.repostTo?.let { repostTo ->
+                StoryMenuRow(R.string.story_repost_menu_feed, MeeshyIcons.Repeat) { act { repostTo(StoryRepostDestination.POST) } }
+                StoryMenuRow(R.string.story_repost_menu_reel, MeeshyIcons.Repeat) { act { repostTo(StoryRepostDestination.REEL) } }
+            }
+        }
         StoryOptionsMenuEntry.ExportVideo -> StoryVideoExportMenuEntries(onPick = { mode -> act { videoExport.start(mode) } })
         StoryOptionsMenuEntry.Compose -> StoryMenuRow(R.string.story_viewer_compose, MeeshyIcons.MagicWand) {
             act { storyId?.let { id -> actions.onComposeStory?.invoke(id) } }

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "bubble.footer.translation.request",
+          "androidName": "bubble_footer_translation_request",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

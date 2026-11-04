@@ -33,12 +33,14 @@ internal fun PostCard(
     onReport: () -> Unit = {},
     onDelete: () -> Unit = {},
     onComments: () -> Unit = onClick,
+    onReplyToComment: (String) -> Unit = {},
     onOpenHashtag: (String) -> Unit = {},
     translatingCodes: Set<String> = emptySet(),
     onSelectLanguage: (String) -> Unit = onFlagTap,
+    pendingSend: PendingSendActions? = null,
     modifier: Modifier = Modifier,
 ) {
-    val reelCover = post.reelCover?.takeIf { post.showsReelCard }
+    val reelCover = post.reelCover?.takeIf { post.showsReelCard && pendingSend == null }
     if (reelCover != null) {
         ReelPostCard(
             post = post,
@@ -83,15 +85,18 @@ internal fun PostCard(
                 onReport = onReport,
                 onDelete = onDelete,
                 onOpen = onClick,
+                pendingSend = pendingSend,
             )
             FeedPostCardBody(
                 post = post,
                 onFlagTap = onFlagTap,
                 onOpenHashtag = onOpenHashtag,
+                onOpenProfile = onOpenProfile,
                 translatingCodes = translatingCodes,
                 onSelectLanguage = onSelectLanguage,
             )
             FeedPostCardMediaSlot(post = post, onImageTap = onImageTap, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
+            if (pendingSend != null) return@Column
             FeedPostCardFooter(
                 post = post,
                 onLike = onLike,
@@ -101,7 +106,7 @@ internal fun PostCard(
                 onQuote = onQuote,
                 onSend = onSend,
             )
-            post.commentsPreview?.let { FeedCommentsPreview(preview = it, onOpen = onComments) }
+            post.commentsPreview?.let { FeedCommentsPreview(preview = it, onOpen = onComments, onReplyTo = onReplyToComment, onOpenProfile = onOpenProfile) }
         }
     }
 }

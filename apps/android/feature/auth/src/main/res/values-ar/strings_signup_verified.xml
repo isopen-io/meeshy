@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="signup_verified_open_failed">تم تأكيد حسابك، لكن تعذّر على هذا الجهاز فتح الجلسة. حاول مرة أخرى.</string>
+    <string name="signup_verified_no_session">تم تأكيد حسابك. سجّل الدخول للمتابعة.</string>
+</resources>

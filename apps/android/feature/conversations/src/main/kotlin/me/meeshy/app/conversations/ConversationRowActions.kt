@@ -104,7 +104,7 @@ internal data class ConversationRowActions(
             onAssignCategory = { viewModel.reassignCategory(conversationId, it) },
             onCreateCategory = { viewModel.createCategoryAndAssign(conversationId, it) },
             onRemoveCategory = { viewModel.removeCategory(conversationId) },
-            onLoadPreview = { viewModel.loadPreviewMessages(conversationId) },
+            onLoadPreview = { viewModel.openPreview(conversationId) },
             onLockToggle = { viewModel.dialogs.requestLock(conversationId) },
             onRemove = { viewModel.dialogs.requestRemoval(conversationId) },
             onRequestRename = { viewModel.dialogs.requestRename(conversationId) },
@@ -139,6 +139,7 @@ internal data class ConversationRowModel(
     val typingDisplayName: String?,
     val categories: List<CategoryOption>,
     val previewMessages: List<LocalMessage>?,
+    val previewUnavailable: Boolean = false,
     val isLocked: Boolean,
     /** The list's minute clock: relative time, preview countdowns and heat age with it. */
     val nowMillis: Long,

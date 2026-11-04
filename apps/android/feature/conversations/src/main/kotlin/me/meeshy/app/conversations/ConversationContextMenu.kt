@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.model.reading.mode.ReadingModeChoice
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.conversationoptions.CategoryReassignment
 import me.meeshy.sdk.model.conversationoptions.ConversationMoveMenu
@@ -67,6 +68,7 @@ internal fun ConversationContextMenu(
     panelState: ConversationMenuPanelState,
     accent: Color,
     previewMessages: List<LocalMessage>?,
+    previewUnavailable: Boolean,
     previewShowSender: Boolean,
     currentUserId: String?,
     currentUserPrefs: MeeshyUser?,
@@ -75,6 +77,7 @@ internal fun ConversationContextMenu(
     currentTags: List<String>,
     actions: ConversationRowActions,
     onManageMembers: (() -> Unit)?,
+    onSelectReadingMode: (ReadingModeChoice) -> Unit = {},
 ) {
     var showObsoleteConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForAllConfirm by remember(expanded) { mutableStateOf(false) }
@@ -98,6 +101,7 @@ internal fun ConversationContextMenu(
             isPinned = isPinned,
             isMuted = isMuted,
             messages = previewMessages,
+            isUnavailable = previewUnavailable,
             isSealed = isLocked,
             showSender = previewShowSender,
             currentUserId = currentUserId,
@@ -120,6 +124,7 @@ internal fun ConversationContextMenu(
                 onDismiss()
             },
             onCreateCategory = { name -> actions.onCreateCategory(name); onDismiss() },
+            onSelectReadingMode = { choice -> onSelectReadingMode(choice); onDismiss() },
         )
     }
 
@@ -258,6 +263,7 @@ private fun ConversationPreviewCard(
     isPinned: Boolean,
     isMuted: Boolean,
     messages: List<LocalMessage>?,
+    isUnavailable: Boolean,
     isSealed: Boolean,
     showSender: Boolean,
     currentUserId: String?,
@@ -317,6 +323,11 @@ private fun ConversationPreviewCard(
                     color = MeeshyTheme.tokens.textMuted,
                 )
             }
+            messages == null && isUnavailable -> Text(
+                text = stringResource(R.string.preview_messages_unavailable),
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textMuted,
+            )
             messages == null -> Text(
                 text = stringResource(R.string.conversations_preview_loading),
                 style = MaterialTheme.typography.bodySmall,

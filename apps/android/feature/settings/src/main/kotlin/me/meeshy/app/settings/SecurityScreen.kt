@@ -50,8 +50,8 @@ import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * Page Sécurité unique (SecurityView iOS) : Mot de passe, authentification à deux
- * facteurs, E-mail, Téléphone, Mes appareils chiffrés, puis Sessions. (Conversations verrouillées s'insère entre
- * Téléphone et Sessions quand son lot est livré.) Au retour au premier plan, le statut
+ * facteurs, E-mail, Téléphone, Conversations verrouillées, Mes appareils chiffrés, puis Sessions.
+ * Au retour au premier plan, le statut
  * 2FA est relu et, si un e-mail est en attente, la session aussi.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,6 +115,7 @@ fun SecurityScreen(
                 )
                 SecurityEmailSection(contact, contactViewModel)
                 SecurityPhoneSection(contact, contactViewModel)
+                SecurityLockSection()
                 SecuritySectionCard(MeeshyIcons.Shield, stringResource(R.string.security_section_encrypted_devices)) {
                     SecurityLinkRow(MeeshyIcons.Shield, stringResource(R.string.encrypted_devices_title), onOpenEncryptedDevices)
                 }

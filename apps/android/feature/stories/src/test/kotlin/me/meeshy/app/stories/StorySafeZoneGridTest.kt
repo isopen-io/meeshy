@@ -41,25 +41,22 @@ class StorySafeZoneGridTest {
     }
 
     @Test
-    fun `the grid draws the two rule-of-thirds lines on each axis`() {
-        val g = StorySafeZoneGrid.geometry(900f, 1800f)
+    fun `the lines are the five iOS snap targets on each axis`() {
+        val g = StorySafeZoneGrid.geometry(1000f, 2000f)
 
-        assertThat(g.verticalThirds).hasSize(2)
-        assertThat(g.verticalThirds[0]).isWithin(tol).of(300f)
-        assertThat(g.verticalThirds[1]).isWithin(tol).of(600f)
-
-        assertThat(g.horizontalThirds).hasSize(2)
-        assertThat(g.horizontalThirds[0]).isWithin(tol).of(600f)
-        assertThat(g.horizontalThirds[1]).isWithin(tol).of(1200f)
+        assertThat(g.verticalLines).hasSize(5)
+        listOf(180f, 250f, 500f, 750f, 820f).forEachIndexed { i, x -> assertThat(g.verticalLines[i]).isWithin(tol).of(x) }
+        listOf(360f, 500f, 1000f, 1500f, 1640f).forEachIndexed { i, y -> assertThat(g.horizontalLines[i]).isWithin(tol).of(y) }
     }
 
     @Test
-    fun `the thirds lines omit the centre line so it is left to the transient snap guide`() {
-        val g = StorySafeZoneGrid.geometry(1000f, 1000f)
+    fun `the old rule-of-thirds lines are not drawn`() {
+        val g = StorySafeZoneGrid.geometry(900f, 1800f)
 
-        // centre (500f on a 1000px axis) must NOT appear among the persistent grid lines.
-        assertThat(g.verticalThirds).doesNotContain(500f)
-        assertThat(g.horizontalThirds).doesNotContain(500f)
+        assertThat(g.verticalLines).doesNotContain(300f)
+        assertThat(g.verticalLines).doesNotContain(600f)
+        assertThat(g.horizontalLines).doesNotContain(600f)
+        assertThat(g.horizontalLines).doesNotContain(1200f)
     }
 
     // --- degenerate guards (draw nothing) ---
@@ -69,8 +66,8 @@ class StorySafeZoneGridTest {
         val g = StorySafeZoneGrid.geometry(0f, 1920f)
 
         assertThat(g.isEmpty).isTrue()
-        assertThat(g.verticalThirds).isEmpty()
-        assertThat(g.horizontalThirds).isEmpty()
+        assertThat(g.verticalLines).isEmpty()
+        assertThat(g.horizontalLines).isEmpty()
     }
 
     @Test
@@ -78,7 +75,7 @@ class StorySafeZoneGridTest {
         val g = StorySafeZoneGrid.geometry(1080f, 0f)
 
         assertThat(g.isEmpty).isTrue()
-        assertThat(g.verticalThirds).isEmpty()
+        assertThat(g.verticalLines).isEmpty()
     }
 
     @Test

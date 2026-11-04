@@ -114,4 +114,39 @@ class StoryPrefetchPlannerTest {
         )
         assertThat(StoryPrefetchPlanner.plan(pb, lookahead = 5)).containsExactly("url://a2")
     }
+
+    private fun videoSlide(id: String, videoUrl: String) =
+        StorySlideView(id = id, text = id, isTranslated = false, imageUrl = null, accentHex = "FF6B6B", backgroundVideoUrl = videoUrl)
+
+    @Test
+    fun `the lookahead is the window's two slides ahead`() {
+        assertThat(StoryPrefetchPlanner.DEFAULT_LOOKAHEAD).isEqualTo(2)
+    }
+
+    @Test
+    fun `planVideos warms the upcoming video backgrounds in order and skips image slides`() {
+        val pb = playbackAt(
+            0, 0,
+            group("a", slide("a1", "url://a1"), slide("a2", "url://a2"), videoSlide("a3", "v://a3"), videoSlide("a4", "v://a4"), videoSlide("a5", "v://a5")),
+        )
+        assertThat(StoryPrefetchPlanner.planVideos(pb)).containsExactly("v://a3", "v://a4").inOrder()
+    }
+
+    @Test
+    fun `planVideos is empty once dismissed or without lookahead`() {
+        val pb = playbackAt(0, 0, group("a", slide("a1"), videoSlide("a2", "v://a2")))
+        assertThat(StoryPrefetchPlanner.planVideos(pb, lookahead = 0)).isEmpty()
+    }
+
+    @Test
+    fun `planBehind keeps the previous slide of the group warm for a back-swipe`() {
+        val pb = playbackAt(0, 2, group("a", slide("a1", "url://a1"), videoSlide("a2", "v://a2"), slide("a3", "url://a3")))
+        assertThat(StoryPrefetchPlanner.planBehind(pb)).isEqualTo(StoryBehindMedia(imageUrl = null, videoUrl = "v://a2"))
+    }
+
+    @Test
+    fun `planBehind is empty on the first slide of a group`() {
+        val pb = playbackAt(0, 0, group("a", slide("a1", "url://a1"), slide("a2", "url://a2")))
+        assertThat(StoryPrefetchPlanner.planBehind(pb)).isEqualTo(StoryBehindMedia())
+    }
 }

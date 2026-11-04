@@ -367,7 +367,7 @@ class StoryRepository @Inject constructor(
         }
 
     /** Une republication faite ne devient pas un échec parce que le cache local a refusé l'écriture. */
-    private suspend fun adoptRepost(story: ApiPost) {
+    internal suspend fun adoptRepost(story: ApiPost) {
         if (postTypeFromWire(story.type) != PostType.STORY) return
         try {
             adoptPublished(story)
@@ -469,6 +469,7 @@ class StoryRepository @Inject constructor(
             originalLanguage = request.originalLanguage,
             createdAtMillis = createdAt,
             mediaIds = request.mediaIds,
+            cmid = cmid,
         )
     }
 
@@ -492,6 +493,20 @@ class StoryRepository @Inject constructor(
 
     /** Permanently discards an exhausted publish the user no longer wants to retry. */
     suspend fun discardPublish(cmid: String) = outboxRepository.discard(cmid)
+
+    /** Ce qu'un échec de publication portait, pour le reprendre en brouillon ; `null` si la ligne n'est plus un échec lisible. */
+    suspend fun failedPublishRequest(cmid: String): StoryFailedRequest? {
+        val row = outboxRepository.row(cmid)?.takeIf { it.kindEnum == OutboxKind.PUBLISH_STORY && it.stateEnum == OutboxState.EXHAUSTED }
+            ?: return null
+        val request = runCatching { MeeshyApi.json.decodeFromString<CreateStoryRequest>(row.payload) }.getOrNull() ?: return null
+        return StoryFailedRequest(
+            content = request.content,
+            mediaIds = request.mediaIds.orEmpty(),
+            visibility = request.visibility,
+            visibilityUserIds = request.visibilityUserIds.orEmpty(),
+            repostOfId = request.repostOfId,
+        )
+    }
 
     private fun OutboxEntity.toFailedStoryPublish(): FailedStoryPublish? {
         val request = decodeStoryPublish() ?: return null

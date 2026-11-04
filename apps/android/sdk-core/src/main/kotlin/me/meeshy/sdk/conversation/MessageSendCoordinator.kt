@@ -1,6 +1,7 @@
 package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -11,7 +12,9 @@ import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaAdoption
+import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.media.MediaLocationRefusal
+import me.meeshy.sdk.model.ConversationWriteRestriction
 import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -20,14 +23,21 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageEffectsEncoder
 import me.meeshy.sdk.model.MessageSticker
-import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.send.MessageRelation
+import me.meeshy.sdk.model.send.OutgoingAttachments
+import me.meeshy.sdk.model.send.OutgoingMessage
+import me.meeshy.sdk.model.send.SendAttemptContext
+import me.meeshy.sdk.model.socket.SendMessageAck
+import me.meeshy.sdk.model.socket.acknowledgedBy
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.outbox.OutboxEnqueueResult
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.session.AccountClosedException
 
 /**
@@ -44,7 +54,12 @@ internal class MessageSendCoordinator(
     private val regime: EndToEndRegimeKeeper? = null,
     /** #14890 — à l'accusé, le fichier local d'un média envoyé rejoint le cache typé sous son adresse canonique. */
     private val adoption: MediaAdoption? = null,
+    /** #15104 — l'aperçu local d'un média en attente part avec sa bulle : accusé, annulation, retrait. */
+    private val previews: PendingMediaPreviewing? = null,
+    /** L'aperçu de la liste suit mon envoi : posé à l'envoi optimiste, recalculé quand la bulle est retirée. */
+    listPreviews: SendPreviewSink? = null,
 ) {
+    private val stager = OptimisticMessageStager(database, messageDao, listPreviews)
 
     /**
      * Optimistic send: the message appears instantly as a `SENDING` bubble backed by Room, and a
@@ -83,6 +98,8 @@ internal class MessageSendCoordinator(
         forwardedAttachmentIds: List<String>? = null,
         sticker: MessageSticker? = null,
         clientMessageId: String? = null,
+        attachmentReplyToId: String? = null,
+        copyAttachmentsFromMessageId: String? = null,
     ): String {
         require(clientMessageId == null || OutboxIds.isValidCid(clientMessageId)) { "clientMessageId must be a cid_ id" }
         val cid = clientMessageId ?: OutboxIds.cid()
@@ -95,6 +112,8 @@ internal class MessageSendCoordinator(
         // drainer grafts the real gateway id in (MessageMediaWriteBack); an empty
         // list keeps a text-only send exactly as before (null attachmentIds).
         val placeholderIds = attachmentUploadCmids.filter { it.isNotBlank() }.distinct()
+        // Fan-out de partage : la cible 2..N dépend de la ligne de son origine (son `cid_`), qui greffe l'id serveur à l'accusé.
+        val fanoutOrigin = copyAttachmentsFromMessageId?.takeIf { OutboxIds.isValidCid(it) && it != cid }
         val chosenPieces = forwardedAttachmentIds?.filter { it.isNotBlank() }?.distinct()?.takeIf { it.isNotEmpty() }
         val optimistic = ApiMessage(
             id = cid,
@@ -118,50 +137,56 @@ internal class MessageSendCoordinator(
             sticker = sticker,
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
-            metadata = ForwardedPieces.stamp(chosenPieces),
+            metadata = SendTrace(
+                forwardedAttachmentIds = chosenPieces,
+                ephemeralDuration = wire.ephemeralDuration,
+                attachmentReplyToId = attachmentReplyToId,
+                copyAttachmentsFromMessageId = copyAttachmentsFromMessageId,
+            ).stamp(),
             effectFlags = wire.effectFlags,
             isBlurred = wire.isBlurred,
             isViewOnce = wire.isViewOnce,
             expiresAt = wire.expiresAt,
         )
-        val request = SendMessageRequest(
+        val outgoing = OutgoingMessage(
+            conversationId = conversationId,
             content = content,
-            originalLanguage = originalLanguage,
+            relation = MessageRelation.legacy(
+                replyToId, storyReplyToId, forwardedFromId, forwardedFromConversationId, attachmentReplyToId,
+            ),
+            attachments = OutgoingAttachments(placeholderIds.ifEmpty { null }),
             messageType = messageType,
-            replyToId = replyToId,
-            storyReplyToId = storyReplyToId,
-            clientMessageId = cid,
-            attachmentIds = placeholderIds.ifEmpty { null },
-            forwardedFromId = forwardedFromId,
-            forwardedFromConversationId = forwardedFromConversationId,
-            forwardedAttachmentIds = chosenPieces,
-            effectFlags = wire.effectFlags,
-            isBlurred = wire.isBlurred,
-            isViewOnce = wire.isViewOnce,
-            ephemeralDuration = wire.ephemeralDuration,
-            expiresAt = wire.expiresAt,
-            maxViewOnceCount = wire.maxViewOnceCount,
             location = location,
             sticker = sticker,
+            copyAttachmentsFromMessageId = copyAttachmentsFromMessageId,
+            forwardedAttachmentIds = chosenPieces,
         )
-        database.withTransaction {
-            messageDao.upsertAll(listOf(MessageEntityFactory.local(optimistic, now, LocalSendState.SENDING)))
-        }
+        // #7451 — la requête ne porte que la durée et le bit ; l'échéance locale reste sur la bulle d'affichage.
+        val request = outgoing.wireRequest(
+            SendAttemptContext(cid, now, effects, originalLanguage, reusesExistingRow = clientMessageId != null),
+            content = content,
+        )
+        stager.stage(optimistic, now)
         try {
-            outboxRepository.enqueue(
+            val queued = outboxRepository.tryEnqueue(
                 OutboxMutation(
                     kind = OutboxKind.SEND_MESSAGE,
                     lane = OutboxLanes.forMessage(conversationId),
                     targetId = conversationId,
                     payload = MeeshyApi.json.encodeToString(request),
-                    dependsOn = placeholderIds.toSet(),
+                    dependsOn = placeholderIds.toSet() + listOfNotNull(fanoutOrigin),
                     cmid = cid,
                 ),
                 ticket,
             )
+            if (queued is OutboxEnqueueResult.QueueFull) markSendFailed(cid)
         } catch (closed: AccountClosedException) {
-            withContext(NonCancellable) { messageDao.deleteByIds(listOf(cid)) }
+            stager.withdraw(cid)
             throw closed
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            withContext(NonCancellable) { stager.failEnqueue(cid, failure) }
         }
         return cid
     }
@@ -172,7 +197,7 @@ internal class MessageSendCoordinator(
      */
     suspend fun reconcileSent(cmid: String, serverMessage: ApiMessage) {
         val now = clock.nowMillis()
-        val optimisticAttachments = adoption?.let { optimisticAttachmentsOf(cmid) }.orEmpty()
+        val optimisticAttachments = if (adoption != null || previews != null) optimisticAttachmentsOf(cmid) else emptyList()
         database.withTransaction {
             messageDao.deleteByIds(listOf(cmid))
             messageDao.upsertAll(listOf(MessageEntityFactory.cached(serverMessage, now)))
@@ -180,6 +205,27 @@ internal class MessageSendCoordinator(
         }
         regime?.learnFromServed(listOf(serverMessage))
         adoption?.adopt(optimisticAttachments, serverMessage.attachments)
+        previews?.release(optimisticAttachments)
+    }
+
+    /** Le pont `cid_ -> id serveur` écrit à l'accusé ([MessageIdReconciliation.recordAck]) ; `null` tant que non acquitté. */
+    suspend fun serverIdOf(localId: String): String? = database.pendingIdDao().byLocalId(localId)?.serverId
+
+    /**
+     * Accusé de la SOCKET (repli du REST) : il ne porte que `messageId` et `createdAt`, la bulle optimiste fournit le reste.
+     * Même réconciliation atomique que [reconcileSent] — la bulle devient le message serveur, sans doublon. Une bulle déjà
+     * remplacée (le `message:new` est arrivé le premier) n'a plus rien à réconcilier.
+     */
+    suspend fun reconcileAcknowledged(cmid: String, ack: SendMessageAck) {
+        val bubble = messageDao.find(cmid)?.let { runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(it.payload) }.getOrNull() } ?: return
+        reconcileSent(cmid, bubble.acknowledgedBy(ack))
+    }
+
+    /** Retire la bulle optimiste [cmid] et, avec elle, les aperçus locaux de ses médias. */
+    private suspend fun dropBubble(cmid: String) {
+        val optimisticAttachments = previews?.let { optimisticAttachmentsOf(cmid) }.orEmpty()
+        stager.withdraw(cmid)
+        previews?.release(optimisticAttachments)
     }
 
     private suspend fun optimisticAttachmentsOf(cmid: String): List<ApiMessageAttachment> =
@@ -212,40 +258,67 @@ internal class MessageSendCoordinator(
         val row = messageDao.find(cmid) ?: return
         if (isDefinitive(row.lastError)) {
             outboxRepository.discard(cmid)
-            messageDao.deleteByIds(listOf(cmid))
+            dropBubble(cmid)
             return
         }
         messageDao.updateSendState(cmid, LocalSendState.SENDING.name)
         if (outboxRepository.retryWithPrerequisites(cmid)) return
         val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
+        val trace = SendTrace.read(message)
+        val outgoing = OutgoingMessage(
+            conversationId = message.conversationId,
+            content = message.content,
+            relation = MessageRelation.legacy(
+                message.replyToId, message.storyReplyToId, message.forwardedFromId,
+                message.forwardedFromConversationId, trace.attachmentReplyToId,
+            ),
+            messageType = message.messageType,
+            location = message.location,
+            sticker = message.sticker,
+            copyAttachmentsFromMessageId = trace.copyAttachmentsFromMessageId,
+            forwardedAttachmentIds = trace.forwardedAttachmentIds,
+        )
+        val effects = message.effects.copy(ephemeralDuration = trace.ephemeralDuration)
+        val context = SendAttemptContext(
+            cmid, clock.nowMillis(), effects, message.originalLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
+            reusesExistingRow = true,
+        )
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.SEND_MESSAGE,
                 lane = OutboxLanes.forMessage(message.conversationId),
                 targetId = message.conversationId,
-                payload = MeeshyApi.json.encodeToString(
-                    SendMessageRequest(
-                        content = message.content,
-                        originalLanguage = message.originalLanguage
-                            ?: LanguageResolver.FALLBACK_LANGUAGE,
-                        replyToId = message.replyToId,
-                        storyReplyToId = message.storyReplyToId,
-                        clientMessageId = cmid,
-                        forwardedFromId = message.forwardedFromId,
-                        forwardedFromConversationId = message.forwardedFromConversationId,
-                        forwardedAttachmentIds = ForwardedPieces.read(message),
-                        effectFlags = message.effectFlags,
-                        isBlurred = message.isBlurred,
-                        isViewOnce = message.isViewOnce,
-                        expiresAt = message.expiresAt,
-                        location = message.location,
-                        sticker = message.sticker,
-                    ),
-                ),
+                payload = MeeshyApi.json.encodeToString(outgoing.wireRequest(context, content = message.content)),
                 cmid = cmid,
             ),
         )
     }
 
-    private fun isDefinitive(reason: String?): Boolean = MediaLocationRefusal.isReason(reason) || MediaLoss.isReason(reason)
+    /** Relance la bulle en échec [cmid] — son état repasse à l'envoi, sa ligne et ses téléversements repartent. */
+    suspend fun retryByClientMessageId(cmid: String) = retrySend(cmid)
+
+    /** Relance tous les envois en échec du compte : chaque bulle relancée repasse à l'envoi. */
+    suspend fun retryAllFailed(): Int {
+        val revived = outboxRepository.retryAll()
+        revived.forEach { messageDao.updateSendState(it, LocalSendState.SENDING.name) }
+        return revived.size
+    }
+
+    /**
+     * L'utilisateur annule l'envoi EN ATTENTE [cmid] : sa ligne d'outbox ET sa bulle optimiste disparaissent. Un envoi déjà
+     * parti (en vol) n'est pas annulé — sa bulle reste.
+     */
+    suspend fun cancelPendingSend(cmid: String) {
+        if (outboxRepository.cancelPendingSend(cmid)) dropBubble(cmid)
+    }
+
+    /** Retire la ligne d'outbox d'un envoi échoué (quel que soit son état sauf en vol) et sa bulle optimiste. */
+    suspend fun clearSendMessageRow(cmid: String) {
+        if (outboxRepository.row(cmid)?.state == OutboxState.INFLIGHT.name) return
+        outboxRepository.clearSendMessageRow(cmid)
+        dropBubble(cmid)
+    }
+
+    private fun isDefinitive(reason: String?): Boolean =
+        MediaLocationRefusal.isReason(reason) || MediaLoss.isReason(reason) || ConversationWriteRestriction.fromReason(reason) != null
 }

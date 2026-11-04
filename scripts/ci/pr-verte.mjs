@@ -19,12 +19,22 @@
 // un verdict. `--attendre <min>` relit toutes les 60 s, pannes de lecture comprises,
 // jusqu'à un verdict ou l'échéance.
 //
+// En session distante, GraphQL est refusé (`gh pr view` rend 403) : on lit alors la PR par
+// l'API REST ou par MCP (`pull_request_read` get, get_check_runs page par page, get_status)
+// et on remet la charge à `--rest`, qui applique la MÊME règle. La charge :
+//   { "state": "open", "head_sha": "…", "total_count": 22, "check_runs": [ …REST… ], "statuses": [ …REST… ] }
+// `statuses` est le tableau, ou le statut combiné de get_status tel quel.
+// Une relance se range avec son exécution par l'identifiant de run de son URL
+// (`/actions/runs/<id>`) ; moins de check runs que `total_count` n'est jamais un verdict (sortie 2).
+//
 // Usage :
 //   node scripts/ci/pr-verte.mjs <numéro> [--attendre 45]
+//   node scripts/ci/pr-verte.mjs --rest <charge.json>
 //   node scripts/ci/pr-verte.mjs --self-test
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 export const VERDICT = 'Verdict CI';
 const VERTS = new Set(['SUCCESS', 'SKIPPED', 'NEUTRAL']);
@@ -54,6 +64,28 @@ export const juge = (rollup) => {
   return { etat: 'vert', code: 0, detail: [`${checks.length} checks`] };
 };
 
+const runDe = (url) => (String(url ?? '').match(/\/actions\/runs\/(\d+)/) ?? [])[1] ?? '';
+const majuscule = (valeur) => String(valeur ?? '').toUpperCase();
+
+const statutsDe = (statuses) => (Array.isArray(statuses) ? statuses : (statuses?.statuses ?? []));
+
+export const depuisRest = ({ check_runs = [], statuses }) => [
+  ...check_runs.map((c) => ({
+    __typename: 'CheckRun', name: c.name, status: majuscule(c.status), conclusion: majuscule(c.conclusion),
+    startedAt: c.started_at ?? '', workflowName: runDe(c.details_url ?? c.html_url),
+  })),
+  ...statutsDe(statuses).map((s) => ({ __typename: 'StatusContext', context: s.context, state: majuscule(s.state), startedAt: s.updated_at ?? s.created_at ?? '' })),
+];
+
+export const jugeRest = (charge) => {
+  const lus = (charge.check_runs ?? []).length;
+  if (Number.isInteger(charge.total_count) && lus < charge.total_count) {
+    return { etat: 'lecture incomplète', code: 2, detail: [`${lus}/${charge.total_count} check runs lus`] };
+  }
+  if (charge.state !== undefined && charge.state !== 'open') return { etat: 'rouge', code: 1, detail: [`PR ${charge.state}`] };
+  return juge(depuisRest(charge));
+};
+
 const run = (nom, conclusion, quand = '2026-10-24T10:00:00Z', status = 'COMPLETED', workflowName = 'CI') => ({
   __typename: 'CheckRun', name: nom, conclusion, status, startedAt: quand, workflowName,
 });
@@ -72,7 +104,24 @@ const autoTest = () => {
   assert.equal(juge([run(VERDICT, 'SUCCESS'), { __typename: 'StatusContext', context: 'ext', state: 'PENDING' }]).etat, 'en cours');
   assert.equal(juge([run(VERDICT, 'SUCCESS'), { __typename: 'StatusContext', context: 'ext', state: 'ERROR' }]).etat, 'rouge');
   assert.deepEqual(juge([run(VERDICT, 'SUCCESS'), run('b', 'FAILURE'), run('a', 'CANCELLED')]).detail, ['a (CANCELLED)', 'b (FAILURE)']);
-  console.log('pr-verte --self-test : 13 cas tenus');
+  const rest = (name, conclusion, { runId = '1', status = 'completed', quand = '2026-10-24T10:00:00Z' } = {}) => ({
+    name, status, conclusion, started_at: quand, details_url: `https://github.com/isopen-io/meeshy/actions/runs/${runId}/job/9`,
+  });
+  const charge = (check_runs, extra = {}) => ({ state: 'open', total_count: check_runs.length, check_runs, ...extra });
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success'), rest('a', 'skipped'), rest('b', 'neutral')])).etat, 'vert');
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success'), rest('a', 'cancelled')])).etat, 'rouge');
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success'), rest('a', null, { status: 'in_progress' })])).etat, 'en cours');
+  assert.equal(jugeRest(charge([rest('a', 'success')])).etat, 'en cours');
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success'), rest('a', 'failure', { quand: '2026-10-24T09:00:00Z' }), rest('a', 'success', { quand: '2026-10-24T10:30:00Z' })])).etat, 'vert');
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success'), rest('a', 'success', { runId: '1', quand: '2026-10-24T10:30:00Z' }), rest('a', 'failure', { runId: '2', quand: '2026-10-24T09:00:00Z' })])).etat, 'rouge');
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success')], { statuses: [{ context: 'ext', state: 'pending', created_at: '2026-10-24T10:00:00Z' }] })).etat, 'en cours');
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success')], { statuses: [{ context: 'ext', state: 'error', created_at: '2026-10-24T10:00:00Z' }] })).etat, 'rouge');
+  assert.deepEqual(jugeRest({ ...charge([rest(VERDICT, 'success')]), total_count: 30 }), { etat: 'lecture incomplète', code: 2, detail: ['1/30 check runs lus'] });
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success')], { state: 'closed' })).etat, 'rouge');
+  const statutCombine = { state: 'failure', statuses: [{ context: 'ext', state: 'failure', created_at: '2026-10-24T10:00:00Z' }] };
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success')], { statuses: statutCombine })).etat, 'rouge');
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success')], { statuses: { state: 'pending', statuses: [] } })).etat, 'vert');
+  console.log('pr-verte --self-test : 25 cas tenus');
 };
 
 const lit = (numero) => {
@@ -80,11 +129,20 @@ const lit = (numero) => {
   return JSON.parse(sortie);
 };
 
+const jugeFichier = (chemin) => {
+  const charge = JSON.parse(readFileSync(chemin, 'utf8'));
+  const v = jugeRest(charge);
+  console.log(`PR @ ${String(charge.head_sha ?? '?').slice(0, 10)} : ${v.etat} — ${v.detail.join(', ')}`);
+  process.exit(v.code);
+};
+
 const main = async () => {
   if (process.argv.includes('--self-test')) return autoTest();
+  const r = process.argv.indexOf('--rest');
+  if (r !== -1) return jugeFichier(process.argv[r + 1]);
   const numero = process.argv[2];
   if (!/^\d+$/.test(numero ?? '')) {
-    console.error('usage : node scripts/ci/pr-verte.mjs <numéro> [--attendre <min>]');
+    console.error('usage : node scripts/ci/pr-verte.mjs <numéro> [--attendre <min>] | --rest <charge.json> | --self-test');
     process.exit(2);
   }
   const i = process.argv.indexOf('--attendre');

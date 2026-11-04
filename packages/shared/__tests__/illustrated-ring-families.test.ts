@@ -51,7 +51,7 @@ const filmOf = (ref: Ref): { readonly film: Film; readonly bytes: Buffer } => {
 describe('les familles culturelles de cadres illustrés (#13960)', () => {
   it('suivent la vitrine dans l’ordre de la boutique, une par famille, et le compositeur les rend toutes', () => {
     expect(ILLUSTRATED_PACKS.map((pack) => pack.slug)).toEqual(['cadres-illustres', ...FAMILIES.map((family) => family.slug)]);
-    const illustrated = packs.filter((pack) => pack.order >= 9);
+    const illustrated = packs.filter((pack) => pack.order >= 9 && pack.order <= 18);
     expect(illustrated.map((pack) => pack.slug)).toEqual(['cadres-illustres', ...FAMILIES.map((family) => family.slug)]);
     expect(illustrated.map((pack) => pack.order)).toEqual([9, ...FAMILIES.map((family) => family.order)]);
   });

@@ -53,6 +53,9 @@ import coil.compose.AsyncImage
 import java.util.Locale
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.appearance.AppearancePackDomain
+import me.meeshy.sdk.model.packs.PackRowAction
+import me.meeshy.sdk.model.packs.PackRowPresentation
+import me.meeshy.sdk.model.packs.PackShelfPhase
 import me.meeshy.sdk.model.packs.PackShopFailure
 import me.meeshy.sdk.model.packs.ShopPack
 import me.meeshy.sdk.util.resolveMediaUrl
@@ -92,7 +95,7 @@ fun PackShopScreen(
     val generic = stringResource(R.string.pack_shop_failed)
     val failureText = when (ui.failure) {
         PackShopFailure.INSUFFICIENT_MEESHES -> insufficient
-        PackShopFailure.GENERIC -> generic
+        PackShopFailure.GENERIC, PackShopFailure.OFFLINE -> generic
         null -> null
     }
 
@@ -208,15 +211,15 @@ private fun Shelf(
     onBuy: (String) -> Unit,
 ) {
     val packs = ui.packs
-    when {
-        ui.loadFailed -> LoadFailure(onRetry)
-        packs == null -> repeat(SKELETON_ROWS) { Skeleton() }
-        packs.isEmpty() -> Text(
+    when (PackShelfPhase.of(packs, ui.loadFailed)) {
+        PackShelfPhase.ERROR -> LoadFailure(onRetry)
+        PackShelfPhase.SKELETON -> repeat(SKELETON_ROWS) { Skeleton() }
+        PackShelfPhase.EMPTY -> Text(
             text = stringResource(R.string.pack_shop_empty),
             style = meeshyText(MeeshyFontSize.subhead),
             color = MeeshyTheme.tokens.textSecondary,
         )
-        else -> packs.forEach { pack ->
+        PackShelfPhase.CONTENT -> packs.orEmpty().forEach { pack ->
             PackRow(
                 pack = pack,
                 language = language,
@@ -281,6 +284,7 @@ internal fun PackRow(
 ) {
     val requester = remember { BringIntoViewRequester() }
     LaunchedEffect(focused) { if (focused) requester.bringIntoView() }
+    val presentation = remember(pack) { PackRowPresentation.of(pack) }
     val name = pack.localizedName(language)
     val description = pack.localizedDescription(language)
     val outline = if (focused) Modifier.border(BorderStroke(2.dp, MeeshyPalette.Indigo500), RoundedCornerShape(MeeshyRadius.md)).padding(6.dp) else Modifier
@@ -304,13 +308,13 @@ internal fun PackRow(
             pack.author?.takeIf { it.isNotBlank() }?.let {
                 Text(stringResource(R.string.pack_shop_by, it), style = meeshyText(MeeshyFontSize.small), color = MeeshyTheme.tokens.textSecondary)
             }
-            if (pack.meeshes != null && pack.isOwned) {
+            if (presentation.showsOwned) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(MeeshyIcons.CheckCircleFilled, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
                     Text(stringResource(R.string.pack_shop_owned), style = meeshyText(MeeshyFontSize.small, FontWeight.Medium), color = MeeshyTheme.tokens.textSecondary)
                 }
             }
-            if (pack.showsFree) {
+            if (presentation.showsFree) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(MeeshyIcons.Gift, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
                     Text(stringResource(R.string.pack_shop_free), style = meeshyText(MeeshyFontSize.small, FontWeight.Medium), color = MeeshyTheme.tokens.textSecondary)
@@ -326,20 +330,15 @@ internal fun PackRow(
                 )
             }
         }
-        when {
-            pack.isLocked && !pack.isOwned -> LockedBadge()
-            pack.canBuy -> BuyButton(name, pack.meeshes ?: 0, busy, onBuy)
-            pack.canToggleInstall && (!pack.installed || pack.removable) ->
-                InstallButton(name, installed = pack.installed, busy = busy, onClick = onToggleInstall)
+        when (val action = presentation.action) {
+            PackRowAction.Locked -> LockedBadge()
+            is PackRowAction.Buy -> BuyButton(name, action.meeshes, busy, onBuy)
+            PackRowAction.Install -> InstallButton(name, installed = false, busy = busy, onClick = onToggleInstall)
+            PackRowAction.Remove -> InstallButton(name, installed = true, busy = busy, onClick = onToggleInstall)
+            PackRowAction.None -> Unit
         }
     }
 }
-
-/**
- * Un pack sans prix, à moi et pas verrouillé le dit (« Gratuit »), et offre en plus « Installer / Retirer ». Un pack à
- * gagner que le jeu n'a pas encore donné n'est pas gratuit, même sans prix.
- */
-internal val ShopPack.showsFree: Boolean get() = meeshes == null && isOwned && !isLocked
 
 @Composable
 private fun LockedBadge() {

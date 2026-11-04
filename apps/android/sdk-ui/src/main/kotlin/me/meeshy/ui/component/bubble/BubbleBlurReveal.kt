@@ -177,7 +177,9 @@ public fun BubbleBlurReveal(
                 onRetouch = ::closeViewOnce,
             ),
         ) {
-            content()
+            androidx.compose.runtime.CompositionLocalProvider(
+                me.meeshy.ui.component.focal.LocalFocalMessageRevealed provides (isRevealing && !isViewOnceText),
+            ) { content() }
         }
         if (!opened && scrimAlpha > 0.01f) {
             val revealActionLabel = stringResource(R.string.bubble_blur_reveal_action)

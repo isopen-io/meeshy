@@ -17,6 +17,8 @@ import me.meeshy.sdk.model.AudioPlayQueue
 import me.meeshy.sdk.model.CoordinatorSpeedCycle
 import me.meeshy.sdk.model.QueuedAudio
 import me.meeshy.sdk.model.playback.PlaybackCommandOrigin
+import me.meeshy.sdk.model.playback.PreviousStep
+import me.meeshy.sdk.model.playback.QueueStepRule
 import me.meeshy.sdk.session.PerAccountCache
 import timber.log.Timber
 
@@ -88,7 +90,7 @@ public class ConversationAudioCoordinator(
         conversationArtworkUrl: String?,
         accentHex: String? = null,
     ) {
-        val accepted = engine.play(current.attachmentId, current.fileUrl, PlaybackCommandOrigin.InApp)
+        val accepted = engine.play(current.attachmentId, current.fileUrl, PlaybackCommandOrigin.InApp, current.isProtected)
         if (!accepted) return
         dismissGrace()
         val queue = mutableSnapshot.value.queue.started(current, tail)
@@ -117,15 +119,20 @@ public class ConversationAudioCoordinator(
         switchTo(snapshot.queue.advanced(), origin)
     }
 
-    /** Au-delà de [RESTART_THRESHOLD_MS] de lecture, « précédent » recommence le vocal ; sinon il recule. */
+    /** [QueueStepRule] : au-delà de trois secondes de lecture, « précédent » recommence le vocal ; sinon il recule. */
     public fun previous(origin: PlaybackCommandOrigin = PlaybackCommandOrigin.InApp) {
         val snapshot = mutableSnapshot.value
-        if (!snapshot.queue.hasPrevious || engine.state.value.currentTimeMs > RESTART_THRESHOLD_MS) {
-            engine.seekToMs(0L)
-            return
+        when (QueueStepRule.previous(engine.state.value.currentTimeMs, snapshot.queue.hasPrevious)) {
+            PreviousStep.Restart -> engine.seekToMs(0L)
+            PreviousStep.Rewind -> switchTo(snapshot.queue.rewound(), origin)
         }
-        switchTo(snapshot.queue.rewound(), origin)
     }
+
+    /** La barre de la carte système : se placer à [positionMs] dans le vocal en cours. */
+    public fun seekToMs(positionMs: Long) = engine.seekToMs(positionMs)
+
+    /** ±15 s de la carte système, depuis la position du moteur. */
+    public fun skip(seconds: Double) = engine.skip(seconds)
 
     public fun cycleSpeed() = engine.setSpeed(CoordinatorSpeedCycle.next(engine.state.value.speed))
 
@@ -174,7 +181,7 @@ public class ConversationAudioCoordinator(
 
     private fun switchTo(queue: AudioPlayQueue, origin: PlaybackCommandOrigin) {
         val target = queue.current ?: return stop()
-        if (!engine.play(target.attachmentId, target.fileUrl, origin)) return
+        if (!engine.play(target.attachmentId, target.fileUrl, origin, target.isProtected)) return
         mutableSnapshot.value = mutableSnapshot.value.let { it.copy(queue = queue, context = it.context?.copy(audio = target)) }
     }
 
@@ -192,7 +199,6 @@ public class ConversationAudioCoordinator(
     }
 
     private companion object {
-        const val RESTART_THRESHOLD_MS = 3_000L
         const val GRACE_MS = 5_000L
     }
 }

@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.MeeshyMediaConsumption
 import me.meeshy.sdk.model.MessageTranscriptionSegment
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 
@@ -22,6 +23,12 @@ public data class BubbleImage(
     val isProtected: Boolean = false,
     /** Le poids du fichier original, s'il est connu : sous 100 Ko, il descend seul (#14639). */
     val sizeBytes: Long? = null,
+    /** La pièce se déclare floutée (son propre drapeau, indépendant de celui du message). */
+    val isBlurred: Boolean = false,
+    /** La pièce se déclare à vue unique. */
+    val isViewOnce: Boolean = false,
+    /** Combien de fois la vue unique a été ouverte (le compteur du coin de la case). */
+    val viewOnceCount: Int = 0,
 )
 
 @Immutable
@@ -44,7 +51,39 @@ public data class BubbleFile(
     val thumbnailUrl: String? = null,
     val width: Int? = null,
     val height: Int? = null,
+    /** Le type MIME déclaré : la carte de document en tire sa famille (PDF distinct de Word) et son icône. */
+    val mimeType: String? = null,
+    /** Le nombre de pages d'un document, quand le serveur le connaît (« N pages » sur la carte). */
+    val pageCount: Int? = null,
 )
+
+/**
+ * Une vidéo jointe (iOS `visualGrid` : images et vidéos dans UNE grille). Elle reste aussi dans [BubbleContent.files]
+ * (lecteurs existants) ; ce modèle porte ce que la grille lit : vignette, dimensions, durée.
+ */
+@Immutable
+public data class BubbleVideo(
+    val attachmentId: String,
+    val url: String? = null,
+    val thumbnailUrl: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val durationSeconds: Int? = null,
+    val sizeBytes: Int? = null,
+    /** À vue unique, floue, éphémère ou retenue : ni vignette ni lecture. */
+    val isProtected: Boolean = false,
+    /** Envoi local (`file:` / `content:`) : le poster est celui de l'appareil, tout de suite, sans badge de téléchargement. */
+    val isOnDevice: Boolean = false,
+    /** Ce que la passerelle sert de la consommation de CE lecteur : alimente la barre de reprise. */
+    val servedConsumption: MeeshyMediaConsumption? = null,
+    val isBlurred: Boolean = false,
+    val isViewOnce: Boolean = false,
+    val viewOnceCount: Int = 0,
+) {
+    /** Le ratio servi par la métadonnée (niveau 3 de [me.meeshy.sdk.model.media.VideoDisplayAspect]) ; `null` sans dimensions. */
+    val metadataRatio: Double?
+        get() = if (width != null && height != null && width > 0 && height > 0) width.toDouble() / height else null
+}
 
 /**
  * A shared contact card (vCard attachment). [name] is the card's display name when known, else

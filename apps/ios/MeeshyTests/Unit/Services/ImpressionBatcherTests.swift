@@ -353,6 +353,31 @@ extension ImpressionBatcherTests {
         XCTAssertEqual(online.recordedImpressionPostIds, ["p1"])
         XCTAssertEqual(stamps(online).flatMap { $0 }.map(\.eventId), stamps(failing).flatMap { $0 }.map(\.eventId))
     }
+
+    // MARK: - #15123 — une publication en attente n'a pas d'impression
+
+    func test_record_onPendingPublication_sendsNothing() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        let cmid = ClientMutationId.generate()
+
+        sut.record(cmid)
+        let listed = sut.recordListed(cmid, position: 0, isVideo: false)
+        await sut.flushNow()
+
+        XCTAssertNil(listed, "aucune mesure de visibilité ne s'ouvre pour un cmid")
+        XCTAssertEqual(service.recordSocialEventsCallCount, 0,
+                       "le serveur ne connaît pas un cmid : aucune impression ne part sous cet id")
+    }
+
+    func test_record_onPendingPublication_keepsTheServerPostsOfTheSameBatch() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+
+        sut.record(ClientMutationId.generate())
+        sut.record("p1")
+        await sut.flushNow()
+
+        XCTAssertEqual(service.lastSocialEventPostIds, ["p1"])
+    }
 }
 
 @MainActor

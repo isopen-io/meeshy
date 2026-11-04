@@ -14,6 +14,11 @@
     <string name="feed_action_share">Compartir</string>
     <string name="feed_action_view_profile">Ver el perfil</string>
     <string name="feed_bookmark_success">Añadido a favoritos</string>
+    <string name="feed_caption_collapse">menos</string>
+    <string name="feed_caption_expand">más…</string>
+    <string name="feed_carousel_a11y_position">Medio %1$d de %2$d</string>
+    <string name="feed_carousel_next">Medio siguiente</string>
+    <string name="feed_carousel_previous">Medio anterior</string>
     <string name="feed_comment_card_folded">+%1$d respuestas</string>
     <string name="feed_comment_card_thread">Hilo de comentarios</string>
     <string name="feed_comment_imagine">Crear imagen</string>
@@ -29,6 +34,7 @@
     <string name="feed_load_error">No se pudo cargar el feed</string>
     <string name="feed_location_shared">Ubicación compartida</string>
     <string name="feed_media_page_counter">%1$d/%2$d</string>
+    <string name="feed_media_view_fullscreen">Toca para ampliar</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d publicación nueva</item>
         <item quantity="many">%1$d publicaciones nuevas</item>
@@ -44,7 +50,12 @@
     <string name="feed_notice_reported">Publicación denunciada</string>
     <string name="feed_notice_repost_failed">Error al republicar</string>
     <string name="feed_notice_translation_failed">Error de traducción</string>
+    <string name="feed_pending_cancel_send">Cancelar el envío</string>
+    <string name="feed_pending_waiting">En espera de envío</string>
+    <string name="feed_pending_withdrawn">Envío cancelado</string>
     <string name="feed_post_deleted">Publicación eliminada</string>
+    <string name="feed_post_detail_document">Documento</string>
+    <string name="feed_post_detail_pages">páginas</string>
     <string name="feed_post_open">Abrir</string>
     <string name="feed_post_pinned">Publicación fijada</string>
     <string name="feed_post_reposted_from">ha republicado de @%1$s</string>
@@ -109,8 +120,10 @@
     <string name="feed_translated">Traducción disponible</string>
     <string name="feed_translation_available">Traducciones disponibles</string>
     <string name="feed_translation_close">Cerrar</string>
+    <string name="feed_translation_confidence_a11y">Confianza de traducción %1$s</string>
     <string name="feed_translation_original">Original</string>
     <string name="feed_translation_other_languages">Otros idiomas</string>
+    <string name="feed_translation_requested">Solicitada</string>
     <string name="feed_translation_title">Idiomas</string>
     <string name="feed_translation_translate">Traducir</string>
     <string name="feed_translations_badge">Traducciones</string>
@@ -123,6 +136,7 @@
         <item quantity="other">Ver los %1$d comentarios</item>
     </plurals>
     <string name="hashtag_results_empty">Sin publicaciones con #%1$s</string>
+    <string name="media_download_video">Descargar el vídeo</string>
     <string name="mood_bubble_react">Reacción %1$s</string>
     <string name="mood_bubble_reply">Responder</string>
     <string name="mood_spotlight_close">Cerrar</string>
@@ -133,6 +147,9 @@
     <string name="mood_spotlight_reply_sent">Respuesta enviada</string>
     <string name="mood_spotlight_unavailable">Este estado de ánimo ya no está disponible</string>
     <string name="nearby_back">Atrás</string>
+    <string name="nearby_denied_action">Abrir Ajustes</string>
+    <string name="nearby_denied_detail">Meeshy no tiene acceso a tu ubicación. Permítelo en Ajustes o mueve el mapa manualmente.</string>
+    <string name="nearby_denied_title">Ubicación no autorizada</string>
     <string name="nearby_retry">Reintentar</string>
     <string name="nearby_title">Cerca</string>
     <string name="post_bookmark_removed">Quitado de favoritos</string>
@@ -173,8 +190,23 @@
         <item quantity="other">Ver %1$d respuestas</item>
     </plurals>
     <string name="post_detail_back">Volver</string>
+    <string name="post_detail_media_image">Imagen compartida</string>
+    <string name="post_detail_media_more">Ver los %1$d archivos multimedia</string>
+    <string name="post_detail_media_open_hint">Abrir en pantalla completa</string>
+    <string name="post_detail_media_video">Vídeo compartido</string>
     <string name="post_detail_title">Publicación</string>
     <string name="post_detail_viewers">Visualizaciones</string>
+    <string name="profile_posts_empty">Ninguna publicación</string>
+    <string name="profile_posts_empty_filter_subtitle">Toca de nuevo el mosaico para verlo todo</string>
+    <string name="profile_posts_empty_posts">Sin publicaciones</string>
+    <string name="profile_posts_empty_reels">Sin reels</string>
+    <string name="profile_posts_empty_subtitle">Las publicaciones aparecerán aquí</string>
+    <string name="profile_posts_end_of_content">Ya has visto todo</string>
+    <string name="profile_posts_first_published_at">Primer contenido publicado el %1$s</string>
+    <string name="profile_posts_load_error">Error al cargar las publicaciones</string>
+    <string name="profile_posts_stat_posts">Publicaciones</string>
+    <string name="profile_posts_stat_reels">Reels</string>
+    <string name="profile_posts_stat_stories">Historias</string>
     <string name="status_bubble_republish">Volver a publicar</string>
     <string name="status_bubble_via">vía @%1$s</string>
     <string name="status_composer_bare_add">Añadir unas palabras</string>

@@ -37,6 +37,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":core:common"))
     implementation(project(":sdk-core"))
     implementation(project(":sdk-ui"))
 

@@ -65,6 +65,10 @@ data class RepostEmbedPresentation(
     val isUnavailable: Boolean = false,
     /** Ce que le réel cité montre au repos (iOS `ReelRepostEmbedCell.poster`) ; `null` pour tout autre repost. */
     val reelCover: ReelCover? = null,
+    /** Les médias du post cité, dans l'ordre serveur : le détail y lit l'audio, la vidéo et les documents de l'auteur CITÉ. */
+    val media: List<FeedMediaItem> = emptyList(),
+    /** Langue d'origine du post cité : repli du Prisme audio de ses médias (iOS `DetailMediaAuthor.originalLanguage`). */
+    val originalLanguage: String? = null,
 )
 
 object RepostEmbedBuilder {
@@ -142,6 +146,8 @@ object RepostEmbedBuilder {
             isStory = repost.type.equals("story", ignoreCase = true),
             isReel = repost.type.equals("reel", ignoreCase = true),
             location = FeedPostLocationBuilder.build(repost.location),
+            media = FeedMediaMapper.map(repost.media, ReaderPrism.resolve(preferences), mediaBaseUrl),
+            originalLanguage = repost.originalLanguage,
             reelCover = repost.takeIf { it.type.equals("reel", ignoreCase = true) }?.let {
                 ReelCoverResolver.resolve(
                     media = FeedMediaMapper.map(it.media, ReaderPrism.resolve(preferences), mediaBaseUrl),

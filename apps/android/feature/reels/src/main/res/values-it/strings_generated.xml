@@ -21,6 +21,7 @@
     <string name="reels_like">Mi piace</string>
     <string name="reels_menu_copy_text">Copia il testo</string>
     <string name="reels_menu_delete">Elimina</string>
+    <string name="reels_menu_edit">Modifica</string>
     <string name="reels_menu_hint">Apre il menu delle azioni</string>
     <string name="reels_menu_open">Apri</string>
     <string name="reels_menu_pin">Fissa</string>
@@ -28,6 +29,13 @@
     <string name="reels_menu_share">Condividi</string>
     <string name="reels_mute">Disattiva audio</string>
     <string name="reels_open_failure_back">Indietro</string>
+    <string name="reels_report_reason_harassment">Molestie</string>
+    <string name="reels_report_reason_hate_speech">Incitamento all\'odio</string>
+    <string name="reels_report_reason_impersonation">Furto d\'identità</string>
+    <string name="reels_report_reason_inappropriate">Contenuto inappropriato</string>
+    <string name="reels_report_reason_other">Altro</string>
+    <string name="reels_report_reason_spam">Spam</string>
+    <string name="reels_report_reason_violence">Violenza</string>
     <string name="reels_scrub">Avanti o indietro</string>
     <string name="reels_share">Condividi</string>
     <string name="reels_toast_delete_failed">Errore durante l\'eliminazione del post</string>

@@ -47,6 +47,29 @@ final class StoryViewModelRealtimeTests: StoryViewModelTestCase {
         XCTAssertEqual(sut.storyGroups[0].stories.count, 1, "Story should remain on failure")
     }
 
+    // MARK: - #15127 — une story en attente n'a pas d'id serveur
+
+    func test_deleteStory_onPendingStory_sendsNoDelete() async {
+        let pendingId = "\(StoryViewModel.pendingStoryIdPrefix)\(UUID().uuidString)#0"
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: pendingId)])]
+
+        let result = await sut.deleteStory(storyId: pendingId)
+
+        XCTAssertFalse(result, "une story en attente s'annule par la file, jamais par un DELETE")
+        XCTAssertEqual(mockStoryService.deleteCallCount, 0)
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), [pendingId])
+    }
+
+    func test_applyVisibility_onPendingStory_sendsNoUpdate() async {
+        let pendingId = "\(StoryViewModel.pendingStoryIdPrefix)\(UUID().uuidString)#0"
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: pendingId)])]
+
+        let result = await sut.applyVisibility(storyId: pendingId, visibility: "FRIENDS", userIds: [])
+
+        XCTAssertFalse(result)
+        XCTAssertEqual(mockPostService.updateCallCount, 0)
+    }
+
     func test_deleteStory_callsServiceDelete() async {
         let item = makeStoryItem(id: "tracked-delete")
         let group = makeStoryGroup(userId: "u1", stories: [item])

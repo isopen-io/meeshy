@@ -109,6 +109,21 @@ object StoryComposerAutosave {
         return previous.uploadCmids() - kept?.uploadCmids().orEmpty()
     }
 
+    /**
+     * Écrit le brouillon ([save]) PUIS sa couverture ([cover]) : la couverture est un luxe de la grille, jamais une condition
+     * de la sauvegarde. Elle vient après, et son échec — quel qu'il soit, hors annulation — est avalé.
+     */
+    suspend fun saveThenCover(save: suspend () -> Unit, cover: suspend () -> Unit) {
+        save()
+        try {
+            cover()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            Unit
+        }
+    }
+
     /** Les envois durables que [snapshot] nomme par leur `cmid`. */
     fun namedUploads(snapshot: StoryComposerDraftSnapshot?): Set<String> = snapshot?.uploadCmids().orEmpty()
 
@@ -190,7 +205,7 @@ fun StorySlideDeck.toDraftSnapshot(
             backgroundLoop = it.backgroundLoop,
             elements = it.elements.map { element -> element.toDraftSnapshot() },
             stickers = it.stickers.filterNot { sticker -> sticker.isAwaitingImage }.map { sticker -> sticker.toDraftSnapshot() },
-            audio = it.audio,
+            audio = it.audio.filterNot { track -> track.awaitsUpload },
             fitMode = it.frame.fitMode,
             backdrop = it.frame.backdrop,
             opening = it.frame.opening?.let(SceneFrame::wire),
@@ -209,6 +224,7 @@ fun StorySlideDeck.toDraftSnapshot(
             videosDuckUnderSound = it.videosDuckUnderSound,
             mediaLooks = it.mediaLooks.filterKeys { id -> id in it.mediaIds },
             strokes = it.strokes,
+            canvasFormat = it.canvasFormat.wire,
         )
     },
     selectedId = selectedId,
@@ -264,6 +280,7 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 videosDuckUnderSound = it.videosDuckUnderSound,
                 mediaLooks = it.mediaLooks.filterKeys { id -> id in it.mediaIds },
                 strokes = it.strokes,
+                canvasFormat = me.meeshy.sdk.model.scene.CanvasFormat.fromWire(it.canvasFormat),
                 frame = SceneFrame(
                     fitMode = it.fitMode,
                     backdrop = it.backdrop,

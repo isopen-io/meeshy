@@ -40,8 +40,9 @@ import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.currentUserRole
 import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.model.resolvedLastMessagePreview
-import me.meeshy.sdk.theme.accentColorPalette
+import me.meeshy.ui.theme.displayPaletteInTheme
 import me.meeshy.sdk.theme.displayTitle
+import me.meeshy.ui.component.chrome.conversationEngagementDescription
 import me.meeshy.ui.theme.LentilleMetrics
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
@@ -94,12 +95,14 @@ internal fun ConversationRowContainer(
     val capabilities = remember(conversation, model.currentUserPrefs) {
         ConversationRowMenuCapabilities.make(conversation, model.currentUserPrefs)
     }
-    val palette = remember(conversation) { conversation.accentColorPalette() }
+    val palette = conversation.displayPaletteInTheme()
     val accent = hexColor(palette.primary)
     val secondary = hexColor(palette.secondary)
     val timeLabel = conversationRowRelativeTime(conversation, model.nowMillis)
 
-    val label = rowAccessibilityLabel(model, title, rowPreview, timeLabel, isPinned, isMuted)
+    val engagement = rememberRowEngagement(conversation)
+    val spokenPoints = engagement?.let { conversationEngagementDescription(it) }
+    val label = rowAccessibilityLabel(model, title, rowPreview, timeLabel, isPinned, isMuted, spokenPoints)
     val opensHint = stringResource(R.string.conversations_row_opens_conversation)
     val joinCallDescription = stringResource(R.string.row_join_call_a11y)
     val showsJoin = ConversationRowJoinCall.isVisible(
@@ -162,6 +165,7 @@ internal fun ConversationRowContainer(
                 line2 = line2,
                 timeLabel = timeLabel,
                 onJoinCall = actions.onJoinCall.takeIf { showsJoin },
+                engagement = engagement,
             )
             if (model.isSelected) {
                 Box(
@@ -179,6 +183,8 @@ internal fun ConversationRowContainer(
 
         if (menuExpanded) {
             val peerBlocked = remember { actions.peerBlocked() }
+            val readingModes = rememberConversationReadingModes()
+            val readingModeEntries = remember(conversation.id) { readingModes?.entries(conversation) }
             val menuModel = ConversationMenuModel.make(
                 ConversationMenuInput(
                     capabilities = capabilities,
@@ -191,6 +197,7 @@ internal fun ConversationRowContainer(
                     isArchived = prefs?.isArchived == true,
                     isPeerBlocked = peerBlocked,
                     isCreator = conversation.currentUserRole(model.currentUserId) == MemberRole.CREATOR,
+                    offersReadingModes = readingModeEntries != null,
                     destinations = ConversationMenuDestinations(
                         details = actions.onViewInfo != null,
                         profile = actions.onViewProfile != null,
@@ -211,9 +218,11 @@ internal fun ConversationRowContainer(
                     currentReaction = prefs?.reaction,
                     categories = model.categories,
                     currentCategoryId = prefs?.categoryId,
+                    readingModes = readingModeEntries.orEmpty(),
                 ),
                 accent = accent,
                 previewMessages = model.previewMessages,
+                previewUnavailable = model.previewUnavailable,
                 previewShowSender = conversation.type != "direct",
                 currentUserId = model.currentUserId,
                 currentUserPrefs = model.currentUserPrefs,
@@ -222,6 +231,7 @@ internal fun ConversationRowContainer(
                 currentTags = currentTags,
                 actions = actions,
                 onManageMembers = actions.onManageMembers?.let { open -> { open(accent) } },
+                onSelectReadingMode = { choice -> readingModes?.choose(conversation, choice) },
             )
         }
     }
@@ -235,6 +245,7 @@ private fun rowAccessibilityLabel(
     timeLabel: String?,
     isPinned: Boolean,
     isMuted: Boolean,
+    spokenPoints: String? = model.spokenPoints,
 ): String {
     val unread = model.conversation.unreadCount
     val spokenPreview = ConversationRowAccessibility.spokenPreview(rowPreview)
@@ -247,7 +258,7 @@ private fun rowAccessibilityLabel(
         muted = stringResource(R.string.accessibility_muted).takeIf { isMuted },
         pinned = stringResource(R.string.accessibility_pinned).takeIf { isPinned },
         locked = stringResource(R.string.conversations_badge_locked).takeIf { model.isLocked },
-        points = model.spokenPoints,
+        points = spokenPoints,
         pendingSync = stringResource(R.string.row_a11y_pending_sync).takeIf { model.hasPendingSync },
     )
 }

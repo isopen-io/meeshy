@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.ConversationEngagementSnapshot
 import me.meeshy.sdk.model.displayedAvatar
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ internal fun ConversationFlatRow(
     timeLabel: String?,
     modifier: Modifier = Modifier,
     onJoinCall: (() -> Unit)? = null,
+    engagement: ConversationEngagementSnapshot? = null,
 ) {
     Row(
         modifier = modifier
@@ -74,7 +76,7 @@ internal fun ConversationFlatRow(
                 onJoinCall = onJoinCall,
             )
             ConversationRowLine2(line2 = line2, preview = rowPreview, accent = accent)
-            ConversationRowDateLine(timeLabel = timeLabel)
+            ConversationRowDateLine(timeLabel = timeLabel, engagement = engagement)
         }
     }
 }

@@ -47,7 +47,6 @@ class StorySceneSheetLayoutTest {
                 Box(Modifier.size(width = width, height = height)) {
                     StorySceneFirstLayout(
                         onDismiss = {},
-                        reduced = false,
                         scene = { modifier -> Box(modifier.testTag(SCENE)) },
                         top = { SceneTopBar(onClose = {}, history = null, onUndo = {}, onRedo = {}) },
                         trailing = {

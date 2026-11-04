@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "androidName": "composer_panel_handle_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_panel_handle_label",
+          "status": "android-only"
+        },
+        {
+          "androidName": "composer_panel_handle_open_library",
+          "status": "android-only"
+        },
+        {
+          "androidName": "send_failure_ineligible",
+          "status": "android-only"
+        },
+        {
+          "androidName": "send_failure_offline_enqueue_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "send_failure_queued_for_retry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "send_failure_recipient_blocked",
+          "status": "android-only"
+        },
+        {
+          "androidName": "send_failure_retry_enqueue_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "send_failure_slow_mode",
+          "status": "android-only"
+        },
+        {
+          "androidName": "send_failure_write_restricted",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

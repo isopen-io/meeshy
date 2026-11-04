@@ -83,6 +83,7 @@ class CallViewModel @Inject constructor(
     private val reliability: CallReliability = CallReliability.Inert,
     private val preflightAnnouncer: CallPreflightAnnouncer = CallPreflightAnnouncer.None,
     private val ringGuard: CallRingGuarding = CallRingGuarding.Inert,
+    private val hold: CallHolding = CallHolding.Inert,
 ) : ViewModel() {
 
     /** Appel établi, socket de signalisation tombée : la bannière « Signalisation interrompue » (le média tient). */
@@ -126,6 +127,20 @@ class CallViewModel @Inject constructor(
         setCapture = { enabled -> coordinator.setCameraEnabled(enabled) },
         announceVideo = { enabled -> emitIfIdentified { signalManager.emitToggleVideo(it, enabled = enabled) } },
     )
+
+    /** La mise en attente lit l'appel et lui commande la vidéo sortante (jamais l'intention de l'utilisateur). */
+    private val holdHost = object : CallHoldHost {
+        override val isVideoCall get() = config.isVideo
+        override val userCameraOn get() = media.isCameraOn
+        override val survivalSuspended get() = videoAutoPaused
+        override val backgroundSuspended get() = lifecycle.isSuspended
+        override val hidden get() = lifecycle.isHidden
+        override fun setCapture(enabled: Boolean) = coordinator.setCameraEnabled(enabled)
+        override fun announceVideo(enabled: Boolean) = emitIfIdentified { signalManager.emitToggleVideo(it, enabled = enabled) }
+        override fun adoptBackgroundSuspension() = lifecycle.adoptSuspension()
+        override fun reevaluateLifecycle() = lifecycle.reevaluate(config.isVideo, media.isCameraOn)
+        override fun onHoldChanged() = publish()
+    }
 
     /** `true` quand la vidéo est née en plein appel (audio vers vidéo) : la couper la ramène à l'audio, caméra libérée. */
     private var videoUpgradedMidCall: Boolean = false
@@ -182,6 +197,7 @@ class CallViewModel @Inject constructor(
         override fun publish() = this@CallViewModel.publish()
         override fun routesGroupMediaToggle(toggle: CallMediaTogglePayload): Boolean =
             coordinator.routesGroupMediaToggle(toggle)
+        override val isGroupCall: Boolean get() = coordinator.isGroupCall
     }
 
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
@@ -213,6 +229,8 @@ class CallViewModel @Inject constructor(
         coordinator.onPrimaryVacated = ::onPrimaryVacated
         coordinator.onVideoUnavailable = ::onVideoUnavailable
         coordinator.onThermalCritical = ::onThermalCritical
+        coordinator.onAudioFocusChanged = hold::onAudioFocus
+        hold.attach(holdHost)
         peers.attach(host)
         waiting.attach(host)
         watchdogs.attach(host) { reliability.catchUpConnected() }
@@ -301,6 +319,7 @@ class CallViewModel @Inject constructor(
     private fun onVideoHealthChanged(paused: Boolean) {
         if (paused == videoAutoPaused) return
         videoAutoPaused = paused
+        hold.onSurvivalChanged(paused)
         publish()
     }
 
@@ -325,7 +344,7 @@ class CallViewModel @Inject constructor(
     private fun onAppStateChanged(foreground: Boolean?) {
         if (foreground == null) return
         if (!callState.isActive || callId.isBlank()) return
-        lifecycle.onAppState(foreground, isVideoCall = config.isVideo, userCameraOn = media.isCameraOn)
+        lifecycle.onAppState(foreground, isVideoCall = config.isVideo, userCameraOn = media.isCameraOn, onHold = hold.isOnHold.value)
         val self = selfId
         if (self.isBlank()) return
         if (foreground) signalManager.emitForegrounded(callId, self)
@@ -562,6 +581,7 @@ class CallViewModel @Inject constructor(
 
     /** Toggle the local camera (only meaningful on a video call) and signal the peer. */
     fun toggleCamera() {
+        if (hold.refusesCameraActivation(enabling = !media.isCameraOn)) return
         lifecycle.reset()
         if (!config.isVideo || localCameraPending) return upgradeToVideo()
         if (media.isCameraOn && videoUpgradedMidCall) return downgradeFromVideo()
@@ -838,7 +858,7 @@ class CallViewModel @Inject constructor(
             peer.qualityDegraded, peer.screenCapturing, peer.caption,
             peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
             peerScreenSharing = peer.screenSharing, videoNotice = videoNotice,
-        ).withGroupTitle(groupTitle?.text(groupTitleWording.current()))
+        ).withGroupTitle(groupTitle?.text(groupTitleWording.current())).copy(isOnHold = hold.isOnHold.value)
         syncPreview()
     }
 

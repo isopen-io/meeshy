@@ -2,7 +2,13 @@ package me.meeshy.app.stories
 
 import androidx.annotation.StringRes
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.story.StoryRepostDestination
+import me.meeshy.sdk.model.story.StoryRepostFailure
 import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.story.StoryDirectRepostOutcome
+import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.sdk.story.StoryRepostPublisher
 import me.meeshy.ui.component.FeedbackKind
 import me.meeshy.ui.component.FeedbackToastRequest
 
@@ -41,18 +47,39 @@ internal enum class StoryRepostRefusal(@StringRes val messageRes: Int) {
     ;
 
     companion object {
-        fun of(error: ApiError): StoryRepostRefusal = when (error.httpStatus) {
-            HTTP_NOT_FOUND -> SOURCE_GONE
-            HTTP_FORBIDDEN -> AUDIENCE_WIDENING
-            else -> OTHER
+        fun of(error: ApiError): StoryRepostRefusal = of(StoryRepostFailure.classify(error.httpStatus))
+
+        fun of(failure: StoryRepostFailure): StoryRepostRefusal = when (failure) {
+            StoryRepostFailure.SOURCE_GONE -> SOURCE_GONE
+            StoryRepostFailure.AUDIENCE_WIDENING -> AUDIENCE_WIDENING
+            StoryRepostFailure.OTHER -> OTHER
         }
+    }
+}
 
-        /** Ce que le lecteur dit une fois la réponse venue : la republication faite, ou la raison du refus. */
-        fun toast(refusal: StoryRepostRefusal?): FeedbackToastRequest =
-            refusal?.let { FeedbackToastRequest(it.messageRes, FeedbackKind.Error) }
-                ?: FeedbackToastRequest(R.string.my_stories_repost_success, FeedbackKind.Success)
+/** La republication a tenu (publiée, ou en file pour le retour du réseau) : la marque et le compteur du lecteur restent. */
+internal val StoryDirectRepostOutcome.isDone: Boolean
+    get() = this is StoryDirectRepostOutcome.Published || this is StoryDirectRepostOutcome.Queued
 
-        private const val HTTP_FORBIDDEN = 403
-        private const val HTTP_NOT_FOUND = 404
+/** Ce que le lecteur DIT d'une republication, par destination ; un geste avalé en double ne dit rien. */
+internal fun StoryDirectRepostOutcome.toast(destination: StoryRepostDestination): FeedbackToastRequest? = when (this) {
+    StoryDirectRepostOutcome.Published, StoryDirectRepostOutcome.Queued ->
+        FeedbackToastRequest(successMessage(destination), FeedbackKind.Success)
+    StoryDirectRepostOutcome.Duplicate -> null
+    is StoryDirectRepostOutcome.Refused -> FeedbackToastRequest(StoryRepostRefusal.of(failure).messageRes, FeedbackKind.Error)
+}
+
+@StringRes
+internal fun successMessage(destination: StoryRepostDestination): Int = when (destination) {
+    StoryRepostDestination.STORY -> R.string.my_stories_repost_success
+    StoryRepostDestination.POST -> R.string.story_repost_success
+    StoryRepostDestination.REEL -> R.string.story_repost_success_reel
+}
+
+/** Le lecteur sans file : la republication en story par le dépôt, un refus nommé par son statut (le repli du constructeur). */
+internal fun StoryRepository.asRepostPublisher(): StoryRepostPublisher = StoryRepostPublisher { storyId, _ ->
+    when (val result = repost(storyId)) {
+        is NetworkResult.Success -> StoryDirectRepostOutcome.Published
+        is NetworkResult.Failure -> StoryDirectRepostOutcome.Refused(StoryRepostFailure.classify(result.error.httpStatus))
     }
 }

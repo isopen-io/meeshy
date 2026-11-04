@@ -16,9 +16,11 @@ import me.meeshy.app.feed.HashtagResultsViewModel
 import me.meeshy.app.feed.MoodSpotlightScreen
 import me.meeshy.app.feed.MoodSpotlightViewModel
 import me.meeshy.app.feed.NearbyScreen
+import me.meeshy.app.feed.PendingPostDetailScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.navigation.MeeshyStoryRail
+import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.navigation.LegacyStoryComposerRedirect
 import me.meeshy.app.navigation.storyDoor
@@ -77,6 +79,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onCreateStory = { navController.navigateKeepingSheet(storyDoor) },
             onOpenStory = { userId -> navController.navigateKeepingSheet(Routes.story(userId)) },
             onEditStory = { storyId -> navController.navigateKeepingSheet(Routes.storyComposerEdit(storyId)) },
+            onResumeDraft = { navController.navigateKeepingSheet(storyDoor) },
         )
     }
     composable(Routes.SAVED_POSTS) {
@@ -104,7 +107,12 @@ internal fun NavGraphBuilder.feedNavGraph(
             navArgument(PostDetailViewModel.PARENT_COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
         deepLinks = (Routes.POST_SHARE_DEEP_LINKS + Routes.STORY_SHARE_DEEP_LINKS.filter { "/story/" !in it }).map { pattern -> navDeepLink { uriPattern = pattern } },
-    ) {
+    ) { entry ->
+        val postId = entry.arguments?.getString(PostDetailViewModel.POST_ID_ARG)
+        if (postId != null && OutboxIds.isCmid(postId)) {
+            PendingPostDetailScreen(cmid = postId, onBack = { navController.popBackStack() })
+            return@composable
+        }
         PostDetailScreen(
             onBack = { navController.popBackStack() },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },

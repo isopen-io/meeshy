@@ -73,10 +73,11 @@ object StoryTrayBuilder {
         mediaBaseUrl: String?,
         nowMillis: Long = System.currentTimeMillis(),
         coverOf: (StoryGroup) -> String? = { it.avatarURL },
+        localCoverOf: (StoryGroup) -> String? = { null },
     ): StoryTrayPresentation {
         val rings = groups
             .filterNot { it.isFullyExpired(nowMillis) }
-            .map { it.toRing(currentUserId, mediaBaseUrl, nowMillis, coverOf) }
+            .map { it.toRing(currentUserId, mediaBaseUrl, nowMillis, coverOf, localCoverOf) }
         val self = rings.firstOrNull { it.isMine }
         val others = rings.filterNot { it.isMine }
         return StoryTrayPresentation(self = self, others = others)
@@ -87,13 +88,16 @@ object StoryTrayBuilder {
         mediaBaseUrl: String?,
         nowMillis: Long,
         coverOf: (StoryGroup) -> String?,
+        localCoverOf: (StoryGroup) -> String?,
     ): StoryRing {
         val live = stories.filterNot { it.isExpired(nowMillis) }
         val unviewed = live.count { !it.isViewed }
         return StoryRing(
             userId = id,
             displayName = username,
-            avatarUrl = resolveServedImageUrl(coverOf(this), mediaBaseUrl),
+            // La couverture composite rendue sur CET appareil (fichier de notre cache) l'emporte ; une adresse `file:` servie par
+            // le réseau, elle, reste refusée par resolveServedImageUrl.
+            avatarUrl = localCoverOf(this)?.let { "file://$it" } ?: resolveServedImageUrl(coverOf(this), mediaBaseUrl),
             accentHex = avatarColor,
             hasUnviewed = unviewed > 0,
             storyCount = live.size,

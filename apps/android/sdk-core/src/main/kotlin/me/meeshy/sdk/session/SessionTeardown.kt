@@ -3,6 +3,7 @@ package me.meeshy.sdk.session
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.meeshy.core.database.DatabaseRecovery
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.CategorySnapshotStore
 import me.meeshy.sdk.preferences.PreferenceSnapshotStore
@@ -11,6 +12,8 @@ import me.meeshy.sdk.feedback.FeedbackToastCenter
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.model.session.LogoutPurgePolicy
+import me.meeshy.sdk.model.session.PurgeCause
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.story.StoryComposerDraftStore
 import timber.log.Timber
@@ -39,6 +42,25 @@ import timber.log.Timber
 public interface SessionTeardown {
     /** Clears every per-account store. Idempotent — safe to call on an already-clear device. */
     public suspend fun wipe()
+
+    /**
+     * La même purge, quand la passerelle a elle-même clos la session (compte supprimé, accès d'invité retiré) :
+     * si des envois en attente sont perdus, l'utilisateur en est prévenu. Par défaut, une purge ordinaire.
+     */
+    public suspend fun wipeAfterServerInvalidation() {
+        wipe()
+    }
+
+    /**
+     * La purge d'un appareil qui démarre déconnecté : [stillSignedOut] est relu À L'INTÉRIEUR de la barrière de compte,
+     * juste avant de vider — une restauration de session survenue entre-temps n'est jamais effacée. Rend `true` quand
+     * la purge a eu lieu.
+     */
+    public suspend fun wipeIfStillSignedOut(stillSignedOut: () -> Boolean): Boolean {
+        if (!stillSignedOut()) return false
+        wipe()
+        return true
+    }
 }
 
 public class DefaultSessionTeardown(
@@ -55,6 +77,7 @@ public class DefaultSessionTeardown(
     private val guestSessions: AnonymousSessionStore? = null,
     private val fence: AccountFence? = null,
     private val feedbackToasts: FeedbackToastCenter? = null,
+    private val lostSends: LostSendsNotifier? = null,
 ) : SessionTeardown {
 
     /**
@@ -63,7 +86,42 @@ public class DefaultSessionTeardown(
      * survives into the next one.
      */
     override suspend fun wipe() {
-        if (fence == null) clearAll() else fence.close { clearAll() }
+        purge(PurgeCause.USER_LOGOUT)
+    }
+
+    override suspend fun wipeAfterServerInvalidation() {
+        purge(PurgeCause.SERVER_INVALIDATION)
+    }
+
+    override suspend fun wipeIfStillSignedOut(stillSignedOut: () -> Boolean): Boolean =
+        purge(PurgeCause.SIGNED_OUT_AT_LAUNCH, stillSignedOut)
+
+    /**
+     * La purge est inconditionnelle ([LogoutPurgePolicy]) ; seul l'avertissement dépend de la cause et de la file.
+     * [admitted] est lu sous la barrière AVANT de fermer le compte — faux, la barrière ne change rien (ni génération, ni
+     * envoi annulé) —, puis relu après l'arrêt des envois en vol : faux, rien n'est vidé. Une ouverture de session
+     * ([AccountFence.opening]) ne s'intercale jamais entre ces lectures et la fin du vidage.
+     */
+    private suspend fun purge(cause: PurgeCause, admitted: () -> Boolean = { true }): Boolean {
+        var decision = LogoutPurgePolicy.decide(cause, pendingSends = 0)
+        var purged = false
+        val run: suspend () -> Unit = body@{
+            if (!admitted()) return@body
+            decision = LogoutPurgePolicy.decide(cause, pendingSends())
+            clearAll()
+            purged = true
+        }
+        if (fence == null) run() else fence.closeIf(admitted) { run() }
+        if (purged && decision.warnLostSends) lostSends?.notify(decision.lostSends)
+        return purged
+    }
+
+    private suspend fun pendingSends(): Int = try {
+        withContext(Dispatchers.IO) { database.outboxDao().pendingCount() }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        0
     }
 
     /**
@@ -76,6 +134,7 @@ public class DefaultSessionTeardown(
         val owed = erasures.all().filter { it.account.isNotEmpty() }
         database.clearAllTables()
         if (owed.isNotEmpty()) erasures.restore(owed)
+        runCatching { DatabaseRecovery.clearStaleCorruptionMarker(database.openHelper.writableDatabase) }
     }
 
     private suspend fun clearAll() {

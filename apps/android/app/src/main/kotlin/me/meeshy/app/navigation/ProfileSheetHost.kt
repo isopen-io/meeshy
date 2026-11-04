@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,6 +29,7 @@ import me.meeshy.app.startup.AppOverlay
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.ui.profile.LocalProfileSheetOpener
+import me.meeshy.ui.profile.LocalProfileSheetPresented
 import me.meeshy.ui.profile.ProfileSheetOpener
 
 /**
@@ -69,7 +71,13 @@ class ProfileSheetLocalsProvider @Inject constructor(
 ) : AppLocalsProvider {
     @Composable
     override fun Provide(content: @Composable () -> Unit) {
-        CompositionLocalProvider(LocalProfileSheetOpener provides host, content = content)
+        val presented = host.presented.collectAsStateWithLifecycle()
+        val isPresented = remember(presented) { derivedStateOf { presented.value != null } }
+        CompositionLocalProvider(
+            LocalProfileSheetOpener provides host,
+            LocalProfileSheetPresented provides isPresented,
+            content = content,
+        )
     }
 }
 

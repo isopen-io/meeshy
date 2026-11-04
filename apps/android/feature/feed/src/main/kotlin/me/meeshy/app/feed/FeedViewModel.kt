@@ -59,7 +59,7 @@ data class FeedUiState(
     val newPostsCount: Int = 0,
     /** L'id de l'utilisateur connecte — decide quel menu d'options porte chaque card. */
     val currentUserId: String? = null,
-    /** Le nom et l'avatar de l'utilisateur connecté : le visage du placeholder de composeur (iOS `MeeshyAvatar(.feedComposer)`). */
+    /** Le nom et l'avatar de l'utilisateur connecté : le visage du placeholder de composeur (iOS `MeeshyAvatar`, mode `.feedComposer`). */
     val currentUserName: String? = null,
     val currentUserAvatarUrl: String? = null,
     /**
@@ -367,6 +367,11 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    /** Rend la carte à la résolution du Prisme : défait le choix manuel de langue (iOS `clearTranslationOverride`). */
+    fun clearLanguageOverride(postId: String) {
+        activeLanguageOverride.update { it - postId }
+    }
+
     /**
      * Pick in the post's language explorer sheet (iOS `PostTranslationSheet.onSelectLanguage`):
      * the chosen language becomes the card's text. Unlike a flag chip, picking the language already
@@ -427,7 +432,7 @@ class FeedViewModel @Inject constructor(
      */
     fun openImageViewer(postId: String, imageIndex: Int) {
         val post = _state.value.posts.firstOrNull { it.id == postId } ?: return
-        val gallery = FeedMediaGallery.of(post, imageIndex)
+        val gallery = FeedMediaGallery.ofVisuals(post, imageIndex)
         _state.update { it.copy(imageViewer = gallery.takeUnless(FeedGallery::isEmpty)) }
     }
 
@@ -480,6 +485,12 @@ class FeedViewModel @Inject constructor(
     /** The toast for [FeedUiState.notice] has been shown. */
     fun consumeNotice() {
         _state.update { it.copy(notice = null) }
+    }
+
+    /** Un commentaire de l'utilisateur vient d'être confirmé depuis la feuille : le compteur de la carte suit, sans attendre l'écho. */
+    fun onCommentSent(postId: String) {
+        val current = _state.value.posts.firstOrNull { it.id == postId }?.commentCount ?: return
+        realtimeHead.update { FeedRealtimeReducer.comment(it, postId, me.meeshy.sdk.model.comments.CommentsTitleCount.afterSend(current)) }
     }
 
     /**

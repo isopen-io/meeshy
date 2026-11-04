@@ -133,7 +133,7 @@ fun RepostEmbedCell(
         Spacer(Modifier.height(MeeshySpacing.sm))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            MeeshyAvatar(name = embed.authorName ?: unknownAuthor, size = 28.dp, imageUrl = embed.authorAvatarUrl, presence = rememberPresence(embed.authorId))
+            MeeshyAvatar(name = embed.authorName ?: unknownAuthor, size = 28.dp, imageUrl = embed.authorAvatarUrl, presence = rememberPresence(embed.authorId), modifier = Modifier.opensAuthorProfile(embed.authorProfile()))
             Spacer(Modifier.width(MeeshySpacing.sm))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -143,6 +143,7 @@ fun RepostEmbedCell(
                     color = MeeshyTheme.tokens.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.opensAuthorProfile(embed.authorProfile()),
                 )
                 embed.createdAtIso?.let {
                     Text(

@@ -189,6 +189,28 @@ internal class MessageHistoryReader(
             .asReversed()
             .map { it.toLocalMessage() }
 
+    /** Whether the cached window was synced within the messages policy's freshness window. */
+    suspend fun isCacheFresh(conversationId: String): Boolean {
+        val syncedAt = syncMetaDao.lastSyncedAt("messages:$conversationId") ?: return false
+        return clock.nowMillis() - syncedAt < CachePolicy.Messages.freshForMillis
+    }
+
+    /**
+     * The aperçu's network read: the [limit] newest messages of the conversation, oldest first,
+     * served as-is and NOT merged into Room (the preview never rewrites the cache the thread
+     * paints from). `null` on any failure — the caller keeps what it already shows.
+     */
+    suspend fun recentMessagesFromNetwork(conversationId: String, limit: Int = PREVIEW_LIMIT): List<ApiMessage>? {
+        val ticket = fence?.currentTicket()
+        val response = when (val result = rawApiCall { messageApi.list(conversationId, offset = 0, limit = limit) }) {
+            is NetworkResult.Success -> result.data
+            is NetworkResult.Failure -> return null
+        }
+        val page = response.data?.takeIf { response.success } ?: return null
+        if (ticket != null && fence?.isCurrent(ticket) == false) return null
+        return page.sortedBy { isoToEpochMillisOrNull(it.createdAt) ?: 0L }.takeLast(limit)
+    }
+
     /**
      * Backwards pagination: fetches the page of messages older than the oldest
      * cached server row (`before` cursor) and appends it to the Room cache.

@@ -17,6 +17,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import me.meeshy.sdk.model.story.StoryComposingFocus
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -29,6 +31,7 @@ import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.sdk.model.scene.export.StoryExportMode
+import me.meeshy.sdk.story.isExpired
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -48,6 +51,8 @@ internal fun StoryViewerShell(
     playing: Boolean,
     lap: Int,
     waiting: Boolean,
+    awaitingStart: Boolean,
+    scrubber: StoryProgressScrubber,
     composing: Boolean,
     railPlan: StoryRailPlan,
     commentThread: PostCommentsViewModel?,
@@ -61,6 +66,7 @@ internal fun StoryViewerShell(
     actions: StoryViewerActions,
     haptics: MeeshyHaptics,
     viewModel: StoryViewerViewModel,
+    groupIntro: StoryGroupIntroUi,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -89,6 +95,10 @@ internal fun StoryViewerShell(
         viewModel.closeLanguageExplorer()
     }
     val chromeVisible = StoryFullscreenChrome.chromeVisible(isFullscreen = cardMotion.fullscreen.enabled, isHeld = state.isPaused)
+    // Écrire un commentaire fait le silence (iOS StoryComposingFocus) : clavier ouvert sur le composeur épinglé.
+    val isComposingFocus = keyboardVisible && commentThread != null && railPlan.pinsCommentComposer && slide != null && !state.isDismissed
+    val chromeShown = StoryComposingFocus.showsChrome(chromeVisible = chromeVisible, isComposing = isComposingFocus)
+    val chromeAlpha = storyFocusAlpha(chromeShown)
     StoryDragAxisRelease(cardMotion, groupIndex = state.groupIndex, index = state.index)
     StoryCubeEntryOnAuthorChange(cardMotion, authorKey = state.authorUserId, groupIndex = state.groupIndex)
     StoryCardAppearOnOpen(cardMotion)
@@ -136,6 +146,24 @@ internal fun StoryViewerShell(
                 .onGloballyPositioned { rail.boxOriginInRoot = it.positionInRoot() },
         ) {
             if (slide != null) {
+                StorySlideChangeAnnouncement(slide.id, state.index, state.slides.size)
+                val spoken = chrome.transcript.text(currentItem?.storyEffects, viewModel.transcriptLanguageChain())
+                val canvasActions = remember(cardMotion, actions, haptics, viewModel) {
+                    StoryCanvasA11yActions(
+                        onNext = { haptics.light(); viewModel.advance() },
+                        onPrevious = { haptics.light(); viewModel.back() },
+                        onTogglePause = viewModel::onCanvasDoubleTap,
+                        onToggleFullscreen = cardMotion.fullscreen::toggle,
+                        onClose = actions.onClose,
+                    )
+                }
+                Box(
+                    Modifier.fillMaxSize().storyCanvasAccessibility(
+                        slide = slide, index = state.index, count = state.slides.size, authorName = state.authorName,
+                        transcript = spoken, paused = state.isPaused, fullscreen = cardMotion.fullscreen.enabled,
+                        actions = canvasActions,
+                    ),
+                ) {
                 StoryViewerReaderScene(
                     slide = slide,
                     item = currentItem,
@@ -148,8 +176,10 @@ internal fun StoryViewerShell(
                     chromeVisible = chromeVisible,
                     fullscreen = cardMotion.fullscreen.enabled,
                     viewModel = viewModel,
+                    captionExpanded = chrome.captionExpanded,
                 )
-                StoryReadingScrims(chromeVisible = chromeVisible)
+                }
+                StoryReadingScrims(chromeVisible = chromeShown)
             }
 
             StoryStallIndicator(waiting = waiting, modifier = Modifier.align(Alignment.Center))
@@ -161,14 +191,32 @@ internal fun StoryViewerShell(
                 commentThread = commentThread,
                 composerPinned = composerPinned,
                 onComposerHeight = { composerHeightPx = it },
+                comments = StoryCommentsOverlayRequest(
+                    open = chrome.showComments,
+                    storyId = state.currentStoryId,
+                    isStoryExpired = currentItem?.isExpired(System.currentTimeMillis()) == true,
+                    targetCommentId = chrome.targetCommentId,
+                    targetParentCommentId = chrome.targetParentCommentId,
+                    topReservedPx = headerHeightPx,
+                    onListTop = { dragFrames.scrollableSurfaceTop = it },
+                ),
+                currentItem = currentItem,
+                chrome = chrome,
+                haptics = haptics,
+                viewModel = viewModel,
+                chromeVisible = chromeVisible,
+                decorationsShown = StoryComposingFocus.showsContentDecorations(isComposing = isComposingFocus),
             )
 
-            if (chromeVisible) {
+            if (chromeAlpha > 0f && chromeVisible) {
+                Box(Modifier.graphicsLayer { alpha = chromeAlpha }) {
                 StoryViewerTopBar(
                     state = state,
                     slide = slide,
                     accent = accent,
-                    progress = { progress.value },
+                    progress = { scrubber.fraction() },
+                    scrubber = scrubber,
+                    awaitingStart = awaitingStart,
                     chrome = chrome,
                     videoExport = videoExport,
                     actions = actions,
@@ -176,11 +224,12 @@ internal fun StoryViewerShell(
                     viewModel = viewModel,
                     onHeight = { headerHeightPx = it },
                 )
+                }
             }
 
             val railFrame = StoryRailFrame.of(headerHeightPx, composerHeightPx, composerPinned, with(density) { MeeshySpacing.sm.roundToPx() })
-            StoryDragFrameSync(dragFrames, railShown = chromeVisible, composerHeightPx = if (composerPinned) composerHeightPx else 0, hasScrollableSurface = false)
-            if (slide != null && !state.isDismissed && chromeVisible && !keyboardVisible) {
+            StoryDragFrameSync(dragFrames, railShown = chromeVisible, composerHeightPx = if (composerPinned) composerHeightPx else 0, hasScrollableSurface = chrome.showComments)
+            if (slide != null && !state.isDismissed && chromeAlpha > 0f && chromeVisible && (!keyboardVisible || isComposingFocus)) {
                 StoryActionRail(
                     plan = railPlan,
                     counts = StoryRailCounts(
@@ -216,6 +265,7 @@ internal fun StoryViewerShell(
                     onLanguageBounds = { rail.languageButtonBounds = it },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
+                        .graphicsLayer { alpha = chromeAlpha }
                         .trackStoryRailRegion(dragFrames)
                         .padding(top = with(density) { railFrame.topPx.toDp() }, bottom = with(density) { railFrame.bottomPx.toDp() })
                         .padding(end = MeeshySpacing.sm),
@@ -235,6 +285,7 @@ internal fun StoryViewerShell(
                 toasts = viewModel.toasts,
                 modifier = Modifier.padding(bottom = with(density) { (if (composerPinned) composerHeightPx else 0).toDp() }),
             )
+            StoryGroupIntroLayer(groupIntro)
         }
     }
 }

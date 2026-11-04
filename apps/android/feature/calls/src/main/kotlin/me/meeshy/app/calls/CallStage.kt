@@ -36,6 +36,7 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallDuoStageLayout
 import me.meeshy.sdk.model.call.CallSelfTileMemory
+import me.meeshy.sdk.model.call.ScreenShareCapturePolicy
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import org.webrtc.EglBase
@@ -82,7 +83,7 @@ internal fun CallDuoVideoStage(
             }
         } else {
             val featuresLocal = layout.isMyImageFullScreen
-            val fit = rememberCallVideoFit()
+            val fit = ScreenShareCapturePolicy.remoteFits(state.isPeerScreenSharing, rememberCallVideoFit())
             if (!framed) {
                 if (featuresLocal && localTrack != null) {
                     VideoRenderer(track = localTrack, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.mirrorsLocalPreview, fit = fit)
@@ -110,7 +111,7 @@ internal fun CallDuoVideoStage(
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .let { if (pinchZoom != null) it.callCameraPinch(enabled = true, zoom = pinchZoom) else it }
+                        .let { if (pinchZoom != null) it.callCameraPinch(enabled = true, zoom = pinchZoom).callCameraZoomAdjustable(pinchZoom) else it }
                         .pointerInput(onSceneTap, pinchZoom) {
                             detectTapGestures(
                                 onDoubleTap = pinchZoom?.let { zoom ->

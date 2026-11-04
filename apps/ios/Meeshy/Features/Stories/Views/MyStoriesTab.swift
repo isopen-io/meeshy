@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// Les quatre onglets de « Mes stories » (C7a, 2026-08-23 — la File et
 /// l'Archive existaient déjà comme MATIÈRE avant d'avoir un onglet : la
@@ -36,6 +37,13 @@ enum MyStoriesTab: String, CaseIterable, Identifiable {
 /// Décide quel onglet s'ouvre en premier, quels onglets sont visibles, et si
 /// un onglet doit montrer son état vide.
 enum MyStoriesTabResolver {
+
+    /// Ce que « Publiées », « Archive » et la sélection montrent : les stories
+    /// que le serveur connaît. Une story encore en attente (#15127) n'a qu'un
+    /// id local ; elle vit dans « File », où seule l'horloge dit l'attente.
+    static func sentStories(_ stories: [StoryItem]) -> [StoryItem] {
+        stories.filter { !PendingStoryMarker.isPending(storyId: $0.id) }
+    }
 
     /// L'onglet d'ouverture. On atterrit sur « File » quand rien n'est publié
     /// mais qu'un upload ou un échec de publication attend une action — c'est
@@ -81,5 +89,31 @@ enum MyStoriesTabResolver {
         case .archive:
             return !hasArchivedStories
         }
+    }
+}
+
+/// Une story optimiste, pas encore publiée : son id est local
+/// (`pending_<uuid>#<slide>`), aucun appel serveur ne le porte (#15127). Le
+/// préfixe sert aussi à la réconcilier et à la préserver à travers un refetch
+/// réseau (`StoryViewModel.fetchStoriesFromNetwork`).
+nonisolated enum PendingStoryMarker {
+    static let prefix = "pending_"
+
+    static func isPending(storyId: String) -> Bool {
+        storyId.hasPrefix(prefix)
+    }
+
+    /// L'adresse d'une story pour le serveur : `nil` tant qu'elle attend dans
+    /// la file — ni salle, ni session d'engagement, ni route ne la portent.
+    static func serverId(of storyId: String?) -> String? {
+        guard let storyId, !isPending(storyId: storyId) else { return nil }
+        return storyId
+    }
+
+    /// L'item de file qui porte une story en attente se retrouve par son id
+    /// temporaire (`pending_<uuid>`), ce qui précède le numéro de slide.
+    static func tempStoryId(of storyId: String) -> String? {
+        guard isPending(storyId: storyId) else { return nil }
+        return storyId.split(separator: "#", maxSplits: 1).first.map(String.init)
     }
 }

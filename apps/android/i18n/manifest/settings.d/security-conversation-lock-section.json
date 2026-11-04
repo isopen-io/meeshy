@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "common.edit",
+          "androidName": "common_edit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.configure",
+          "androidName": "security_lock_configure",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.configured",
+          "androidName": "security_lock_configured",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.locked_conversations",
+          "androidName": "security_lock_section",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.locks",
+          "androidName": "security_lock_locks",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.master_pin",
+          "androidName": "security_lock_master_pin",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.not_configured",
+          "androidName": "security_lock_not_configured",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.unlock_all",
+          "androidName": "security_lock_unlock_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.a11y.delete",
+          "androidName": "security_lock_delete_digit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.a11y.progress-value",
+          "androidName": "security_lock_dots_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.createMasterPin",
+          "androidName": "security_lock_title_create_master",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.confirmMasterPin",
+          "androidName": "security_lock_title_confirm_master",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.verifyMasterPin",
+          "androidName": "security_lock_title_verify_master",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.newMasterPin",
+          "androidName": "security_lock_title_new_master",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.confirmNewPin",
+          "androidName": "security_lock_title_confirm_new",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.removeMasterPin",
+          "androidName": "security_lock_title_remove_master",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.title.unlockAll",
+          "androidName": "security_lock_title_unlock_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.chooseMasterPin",
+          "androidName": "security_lock_subtitle_create_master",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.reenterMasterPin",
+          "androidName": "security_lock_subtitle_confirm_master",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.enterCurrentMasterPin",
+          "androidName": "security_lock_subtitle_change_verify",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.chooseNewMasterPin",
+          "androidName": "security_lock_subtitle_new_master",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.confirmNewMasterPin",
+          "androidName": "security_lock_subtitle_confirm_new",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.confirmRemoval",
+          "androidName": "security_lock_subtitle_remove_master",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.subtitle.unlockAll",
+          "androidName": "security_lock_subtitle_unlock_all",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.error.masterPinIncorrect",
+          "androidName": "security_lock_error_master_incorrect",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.lock.error.pinMismatch",
+          "androidName": "security_lock_error_pin_mismatch",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

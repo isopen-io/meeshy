@@ -102,6 +102,15 @@ data class ConversationRowMenuCapabilities(
             )
         }
 
+        /**
+         * Les verdicts pour le lecteur d'une conversation OUVERTE : le rôle servi sur la ligne, à défaut celui de sa
+         * participation (#15269). Une conversation qui ne le dit pas laisse le lecteur simple membre — fermé par défaut.
+         */
+        fun forViewer(conversation: ApiConversation, currentUser: MeeshyUser?): ConversationRowMenuCapabilities {
+            val participantRole = conversation.participants.firstOrNull { currentUser != null && it.userId == currentUser.id }?.role
+            return make(conversation.copy(currentUserRole = conversation.currentUserRole ?: participantRole), currentUser)
+        }
+
         /** Le lecteur tel que la loi le lit, pour une rangée de SA liste. */
         fun viewer(conversation: ApiConversation, currentUser: MeeshyUser?): ConversationViewerAuthority {
             val isAnonymous = currentUser?.isAnonymous == true

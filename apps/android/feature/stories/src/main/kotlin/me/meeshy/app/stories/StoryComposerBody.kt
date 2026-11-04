@@ -13,6 +13,7 @@ import androidx.compose.ui.res.stringResource
 import me.meeshy.app.stories.composer.scene.ComposerSceneInvite
 import me.meeshy.app.stories.composer.scene.sceneInviteShown
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.composer.ComposerAudienceSelection
 import me.meeshy.sdk.model.composer.ComposerEditingChrome
 import me.meeshy.sdk.model.composer.ComposerHistoryPlace
 import me.meeshy.sdk.model.composer.ComposerMediaSource
@@ -53,7 +54,8 @@ internal class StoryComposerDoors(
  * l'audience et Publier se retirent, et la colonne des outils porte, à la même place, ses options ; le pinceau en main n'a
  * que sa barre de dessin. [formatChevron] est le menu « Publier comme » de
  * l'hôte ; la route autonome n'en a pas. [sheet] est la feuille ouverte (stickers, sons, audience, ou celles de l'élément
- * sélectionné), ancrée en bas : la scène se réduit au-dessus d'elle (#13838). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
+ * sélectionné), ancrée en bas : la scène se réduit au-dessus d'elle (#13838) ; le panneau du geste et la bande d'un réglage
+ * se posent par-dessus la scène, qui garde sa taille (#15192). Un texte qu'on écrit, ou la légende, prend l'état de frappe (#13835) : la
  * scène réduite au-dessus d'une barre collée au clavier, et rien d'autre. Quand la fenêtre a la place de deux rails
  * (#13837), les outils et le « ⋯ » vont dans un rail gauche libellé, la sélection et ↶↷ dans un rail droit, et Publier
  * sous la scène.
@@ -92,6 +94,7 @@ private fun SceneFirstFrame(
     capture: StorySceneCapture?,
 ) {
     val comparison = remember { LookComparison() }
+    val zoom = rememberComposerViewportZoom()
     val armed = capture?.armed == true
     val panel = state.scenePanel(morePanel)?.takeIf { !armed }
     val typing = rememberStoryTyping(state, viewModel, morePanel, onMorePanel, keyboard)
@@ -103,8 +106,8 @@ private fun SceneFirstFrame(
     val edition = rememberSceneEdition(state, viewModel, SceneEditionHost(sheet, doors, capture), besideScene.editing && openSheet == null, selection,
         quiet = panel != null || typing != null || armed)
     val raised = panel?.takeIf { it.raisedAtBottom }
-    val reduced = typing == null && (raised != null || edition.anyBand)
-    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, sceneReduced = reduced)
+    val bottomPanelOpen = typing == null && (raised != null || edition.anyBand)
+    val editing = state.editingChrome(viewfinderArmed = armed, gestureOpen = panel != null || typing != null, bottomPanelOpen = bottomPanelOpen)
     val chrome = editing.sceneControls
     val levels = edition.levels
     val edited = edition.edited
@@ -117,16 +120,15 @@ private fun SceneFirstFrame(
     Box(Modifier.fillMaxSize()) {
         StorySceneFirstLayout(
             onDismiss = doors.onClose,
-            reduced = reduced,
             scene = { modifier ->
                 CompositionLocalProvider(LocalPlacedReframe provides placedReframe(edition.placedBand, placed, viewModel)) {
                     Box(modifier) {
-                        StoryComposerScene(state, viewModel, comparison, Modifier.fillMaxSize(), capture, captureOffered)
+                        StoryComposerScene(state, viewModel, comparison, Modifier.fillMaxSize(), capture, captureOffered, zoom)
                         ComposerSceneInvite(sceneInviteShown(state, armed, panel != null || typing != null || openSheet != null))
                     }
                 }
             },
-            top = { StorySceneTop(state, viewModel, doors.onClose, editing) },
+            top = { if (!zoom.zoomed) StorySceneTop(state, viewModel, doors.onClose, editing) },
             strip = { if (chrome) StorySlideStrip(state, viewModel) },
             trailing = {
                 SceneRail(
@@ -147,6 +149,7 @@ private fun SceneFirstFrame(
                             StoryComposerPanel(state, viewModel, onPickMedia = doors.onPickMedia, onOpenSoundShelf = doors.onOpenSoundShelf)
                         },
                         onCloseLocal = { onMorePanel(null) },
+                        zoom = zoom,
                     )
                 } ?: SceneEditingBand(edition, state, viewModel, comparison)
             },
@@ -158,8 +161,7 @@ private fun SceneFirstFrame(
             sheetContent = { open -> SceneSheetContent(open, state, viewModel, comparison, sheet, edited.background) },
             typing = typing,
             rails = rails,
-            incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
-            clearsTrailingLane = editing.cedesLane && openSheet == null,
+            incoming = incomingLayer(state, viewModel),
         )
         EditingAnnouncer(editing = editedWord(state, editing.editing))
         edited.background?.let { BackgroundRemoveConfirmation(it) }
@@ -460,7 +462,7 @@ private fun storySceneRails(
                 onRedo = viewModel::onRedo,
             )
         },
-        socle = { if (chrome) StorySocleNotice(state, viewModel::onRetryMediaPick) },
+        socle = { if (chrome) StorySocleNotice(state, viewModel) },
         below = { if (chrome && editing.publication) StoryPublish(state, viewModel, doors, formatChevron) },
     )
 }
@@ -493,7 +495,7 @@ private fun rememberSceneToolAction(
     val addText = rememberGuardedAddition(state.deck.selectedCanAddTextElement, R.string.composer_scene_cap_text, viewModel::onAddTextElement)
     val openStickers = rememberGuardedAddition(state.deck.selectedCanAddSticker, R.string.composer_scene_cap_sticker, doors.onOpenStickers)
     val pickMedia = rememberGuardedAddition(state.deck.selectedCanAddMedia, R.string.composer_scene_cap_media, doors.onPickMedia)
-    val hasMedia = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() || state.isUploadingMedia
+    val hasMedia = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() || state.isPreparingMedia
     return { tool ->
         more.onMorePanel(null)
         when (tool) {
@@ -599,18 +601,27 @@ private fun StorySocle(
             onMentions = { onOpenSheet(StoryComposerSheet.MENTION) },
         )
     }
-    StorySocleNotice(state, viewModel::onRetryMediaPick)
+    StorySocleNotice(state, viewModel)
     EditingChromeVisibility(publication) {
         StoryPublish(state, viewModel, doors, formatChevron)
     }
 }
 
 @Composable
-private fun StorySocleNotice(state: StoryComposerUiState, onRetryMedia: () -> Unit) {
+private fun StorySocleNotice(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
+    val audienceEmpty = !ComposerAudienceSelection.isPublishable(state.draft.visibility, state.draft.visibilityUserIds)
     val block = state.publishBlock?.let { stringResource(it.messageRes()) }
+        ?: if (audienceEmpty) stringResource(R.string.composer_socle_blocked_audience) else null
     val notice = block ?: sceneNotice(state) ?: return
-    val retries = block == null && state.canRetryMedia && state.errorMessage == StoryComposerViewModel.MEDIA_FAILED
-    SceneNoticeLine(notice, onRetry = onRetryMedia.takeIf { retries })
+    SceneNoticeLine(notice, onRetry = noticeRetry(state, viewModel).takeIf { block == null })
+}
+
+/** Ce que « Réessayer » relance sous la ligne d'erreur : le média, le sticker (#15597) ou le son (#15598) qui a échoué. */
+private fun noticeRetry(state: StoryComposerUiState, viewModel: StoryComposerViewModel): (() -> Unit)? = when (state.errorMessage) {
+    StoryComposerViewModel.MEDIA_FAILED -> if (state.canRetryMedia) viewModel::onRetryMediaPick else null
+    StoryComposerViewModel.STICKER_IMAGE_FAILED -> if (state.canRetrySticker) viewModel::onRetryStickerIntake else null
+    StoryComposerViewModel.SOUND_FAILED -> if (state.failedSounds.isNotEmpty()) viewModel::onRetrySoundUploads else null
+    else -> null
 }
 
 /**
@@ -657,4 +668,11 @@ private fun StoryPublishBlock.messageRes(): Int = when (this) {
 @Composable
 private fun StaleSheetReleased(stale: Boolean, onRelease: () -> Unit) {
     if (stale) LaunchedEffect(Unit) { onRelease() }
+}
+
+/** Ce qui entre dans la scène et voile le reste (R5 de #13863) : un média qui se prépare, ou un sticker image qui arrive (#15597). */
+private fun incomingLayer(state: StoryComposerUiState, viewModel: StoryComposerViewModel): (@Composable () -> Unit)? {
+    state.incomingPlaceholder()?.let { placeholder -> return { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } }
+    val sticker = state.incomingSticker() ?: return null
+    return { IncomingStickerPlaceholderLayer(sticker, viewModel::onCancelStickerIntake) }
 }

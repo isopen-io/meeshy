@@ -35,6 +35,8 @@ internal class ChatNavigationActions(
     val onRejoinCall: (call: ActiveCallSession, peerName: String) -> Unit,
     val onCreateShareLink: () -> Unit,
     val hasLocalLiveCall: Boolean,
+    /** L'appel de cet appareil vu de l'en-tête (pastille « Toucher pour revenir »). */
+    val localCall: ChatLocalCall = ChatLocalCall.NONE,
     /** Ouvre le post (story) cité par un message : la carte de citation du fil (#13296). */
     val onOpenCitedPost: (postId: String) -> Unit = {},
     /** Ouvre une autre conversation (« Écrire » depuis une carte de visite du fil, #13495). */
@@ -59,7 +61,6 @@ internal class ChatSheetVisibility {
     var settings by mutableStateOf(false)
     var members by mutableStateOf(false)
     var stats by mutableStateOf(false)
-    var analysis by mutableStateOf(false)
 
     /** La fiche Conversation, ouverte par l'avatar de l'en-tête (parité iOS `ConversationInfoSheet`). */
     var info by mutableStateOf(false)
@@ -82,7 +83,7 @@ internal class ChatSheetVisibility {
  * efface alors sa grappe d'actions (iOS `hiddenWhileScrolling`).
  */
 @Stable
-internal class ChatChromeState {
+internal class ChatChromeState(val listGate: ChatListUpdateGate? = null) {
     var isScrolling by mutableStateOf(false)
     /**
      * Un défilement parti du DOIGT est en cours (glissé puis son élan) — jamais un saut
@@ -92,6 +93,8 @@ internal class ChatChromeState {
     var isUserScrolling by mutableStateOf(false)
     /** L'en-tête est déplié : la pastille de jour flottante se retire (iOS `isHeaderExpanded`). */
     var isHeaderExpanded by mutableStateOf(false)
+    /** Le geste en cours : clavier d'abord, puis repli du chrome (en-tête, barre de saisie). */
+    val threadScroll = ThreadChromeScroll()
 }
 
 /**
@@ -128,6 +131,9 @@ internal class ChatHostContext(
     val takeLandingMessageId: () -> String? = { null },
     /** #14670 — la fenêtre ancrée sur un message ancien et le message allumé à l'arrivée. */
     val landing: ChatLandingState = ChatLandingState(),
+    /** #15269 — ce qui ferme le composeur (bandeau de lecture seule) et ce que le rang du lecteur permet. */
+    val composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
+    val capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
 )
 
 /** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
@@ -176,13 +182,16 @@ internal fun rememberChatHostContext(
     downloadedFileIds: Set<String> = emptySet(),
     takeLandingMessageId: () -> String? = { null },
     landing: ChatLandingState = ChatLandingState(),
+    composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
+    capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
+    listGate: ChatListUpdateGate? = null,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
-    val chrome = remember { ChatChromeState() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing)
+    val chrome = remember(listGate) { ChatChromeState(listGate) }
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
@@ -199,6 +208,7 @@ internal class ChatHostActions(
     val previousSearchMatch: () -> Unit,
     val nextSearchMatch: () -> Unit,
     val closeSearch: () -> Unit,
+    val selectSearchResult: (String) -> Unit = {},
     val startReply: (String) -> Unit,
     val onMessageLongPress: (String) -> Unit,
     val toggleReaction: (String, String) -> Unit,
@@ -323,6 +333,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     previousSearchMatch = this::previousSearchMatch,
     nextSearchMatch = this::nextSearchMatch,
     closeSearch = this::closeSearch,
+    selectSearchResult = this::selectSearchResult,
     startReply = this::startReply,
     onMessageLongPress = this::onMessageLongPress,
     toggleReaction = this::toggleReaction,

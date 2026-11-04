@@ -80,4 +80,28 @@ class BubbleContentBuilderSystemNoticeTest {
         assertThat(content.text).isEqualTo("repli")
         assertThat(content.joinNotice).isNull()
     }
+
+    @Test
+    fun `a join notice carries the participant to open and its entry rules`() {
+        val content = build(
+            notice(
+                """{"kind":"member-joined","participantId":"p7","displayName":"Zoé","username":"zoe",
+                   "linkRules":{"canSendMessages":true,"canSendFiles":false,"canSendImages":true}}""",
+            ),
+        )
+        val join = content.joinNotice!!
+        assertThat(join.participantId).isEqualTo("p7")
+        assertThat(join.opensProfile).isTrue()
+        assertThat(join.rules?.canSendFiles).isFalse()
+        assertThat(join.handle).isEqualTo("@zoe")
+    }
+
+    @Test
+    fun `a system message without rich metadata is a plain system line on its stored text`() {
+        val content = build(notice("""{"foo":"bar"}""", content = "Le groupe a changé de nom"))
+        assertThat(content.isSystem).isTrue()
+        assertThat(content.joinNotice).isNull()
+        assertThat(content.isArrivalsNotice).isFalse()
+        assertThat(content.text).isEqualTo("Le groupe a changé de nom")
+    }
 }

@@ -156,11 +156,12 @@ final class ComposerSelectionChromeTests: XCTestCase {
         XCTAssertEqual(Set(cles).count, 4)
     }
 
-    func test_lowZone_propertiesTakeTheBottom_andLiftTheScene() {
+    func test_lowZone_propertiesTakeTheBottom_overTheFullScene() {
         XCTAssertEqual(ComposerLowZone.resolve(toolIsOpen: false, band: .palette, properties: true), .properties)
         XCTAssertEqual(ComposerLowZone.resolve(toolIsOpen: true, band: nil, properties: true), .properties)
-        XCTAssertTrue(ComposerSceneLift.panelIsOpen(lowZone: .properties, toolOptionsServed: false),
-                      "la scène se réduit au-dessus : rien ne la recouvre")
+        XCTAssertTrue(ComposerSceneLift.overlaysScene(lowZone: .properties, bottomPanelIsOpen: false,
+                                                      drawingBarIsShown: false),
+                      "les propriétés se posent par-dessus une scène pleine")
     }
 
     func test_propertiesSheet_neverTakesMoreThanHalfTheWindow() {

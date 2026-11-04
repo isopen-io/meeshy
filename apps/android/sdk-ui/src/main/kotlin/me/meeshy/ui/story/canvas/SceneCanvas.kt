@@ -39,7 +39,9 @@ public fun SceneCanvas(
     background: @Composable () -> Unit = {},
     cornerRadius: Dp = 0.dp,
     playbackSeconds: Double? = null,
+    rootTransition: SceneRootTransitionSpec? = null,
 ) {
+    val rootPose = rememberSceneRootPose(rootTransition, playbackSeconds)
     val resolved = rememberUpdatedState(events)
     val pending = remember(items.map { it.id to it.kind }, mediaEnvironment.isReader) { SceneReadiness(items, mediaUrlOf, mediaEnvironment.isReader) }
     val tracked = remember(pending, events) {
@@ -50,7 +52,7 @@ public fun SceneCanvas(
     }
     LaunchedEffect(pending) { if (pending.isReady) resolved.value.onContentReady?.invoke() }
     LaunchedEffect(playbackSeconds) { playbackSeconds?.let { resolved.value.onPlaybackTime?.invoke(it) } }
-    Box(modifier.then(if (cornerRadius > 0.dp) Modifier.clip(RoundedCornerShape(cornerRadius)) else Modifier).fillMaxSize()) {
+    Box(modifier.then(if (cornerRadius > 0.dp) Modifier.clip(RoundedCornerShape(cornerRadius)) else Modifier).fillMaxSize().sceneRootTransition(rootPose)) {
         SceneBackdropHost(content = background)
         if (drawingBelowObjects) SceneDrawingLayer(strokes)
         items.forEach { item ->

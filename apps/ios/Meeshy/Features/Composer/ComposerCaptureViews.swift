@@ -331,7 +331,8 @@ struct ComposerCaptureChrome: View {
         }
     }
 
-    /// **Les formats, PAR-DESSUS le cadre** (#10930), au bas de la scène.
+    /// **Les formats, PAR-DESSUS le cadre** (#15193), au-dessus de ses crochets
+    /// du bas, et « Annuler » en tête (#15355).
     @ViewBuilder
     private var cropPresets: some View {
         if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
@@ -339,8 +340,14 @@ struct ComposerCaptureChrome: View {
                 let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
                                                   framed: session.editFramesScene, playback: session.offersEditPlayback)
                 let rangee = ComposerEditPresetsLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone))
-                ScrollView(.horizontal, showsIndicators: false) {
-                    ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
+                HStack(spacing: 0) {
+                    ComposerCropCancelButton { ComposerCropFlow.cancel(session) }
+                        .padding(.leading, ComposerEditPresetsLayout.leadingInset)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        ComposerCropPresetBar(selected: ComposerCropFlow.preset(of: session)) {
+                            ComposerCropFlow.apply($0, to: session)
+                        }
+                    }
                 }
                 .frame(width: rangee.width, height: rangee.height)
                 .position(x: rangee.midX, y: rangee.midY)

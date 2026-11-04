@@ -107,8 +107,18 @@ class RouteManifestRatchetTest {
          * autocollants), que portent `GameApi.kt` et `ProfileDecorApi.kt`.
          * 191 : moins `POST /relations/:userId/level` (#14910 : rétrograder un lien ou l'annuler depuis le profil), que
          * porte `RelationsApi.lower`.
+         * 151 : moins les dix-neuf routes `/voice/…` et les deux de `/me/consents` (#15085 : le profil vocal, le consentement
+         * au clonage et la traduction vocale suivie par job), que portent `VoiceApi` et `ConsentsApi`.
+         * 150 : moins `PATCH /guest-sessions/me`, la sonde de session d'invité que porte `GuestSessionApi.me` (elle partait en GET,
+         * verbe que la passerelle ne sert pas).
+         * 143 : moins sept routes que des lots fusionnés le 2026-11-03 ont implémentées : les cinq lectures
+         * `GET /me/preferences/{application,document,encryption,message,video}` (`PreferencesApi`),
+         * `GET /user/deleted-conversations` et `POST /user-preferences/communities/reorder`.
+         * 127 : moins les seize routes du chat que `ConversationChatRestApi` et `MessageChatRestApi` déclarent depuis
+         * #15470 (accusés de réception et de lecture, masquer et restaurer pour moi, fil, épinglés, statut, capture,
+         * nouveau lien, invitation, débannissement, vider l'historique) : le lot les a portées sans les retirer d'ici.
          */
-        const val TO_PORT_CEILING = 190
+        const val TO_PORT_CEILING = 127
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="stories_comment_attach">Anexar uma foto, um vídeo ou um arquivo</string>
+    <string name="stories_comment_attach_remove">Remover o anexo</string>
+    <string name="stories_comment_attach_uploading">Enviando…</string>
+    <string name="stories_comment_attach_failed">Não foi possível enviar o anexo</string>
+</resources>

@@ -46,6 +46,10 @@ public sealed interface FrameUseContext {
 
 public object FrameUsageLaw {
 
+    /** `describeFrameUsage` : le libellé de puce d'un usage (« Rang Or II », « Appels vidéo »…), clé du catalogue + paramètres. */
+    public fun describeFrameUsage(usage: FrameUsage): me.meeshy.sdk.model.pack.FrameUsageLabel =
+        me.meeshy.sdk.model.pack.FrameUsageWire.describe(usage)
+
     /** LA règle : ce cadre peut-il servir ce contexte ? Un cadre libre ne sert jamais le jeu, un cadre du jeu ne sert que SON contexte. */
     public fun canUseFrame(usage: FrameUsage, context: FrameUseContext): Boolean = when (usage) {
         is FrameUsage.Free -> freeServes(usage.surfaces, context)

@@ -1,5 +1,6 @@
 package me.meeshy.app.chat.river
 
+import me.meeshy.sdk.model.ForwardAttribution
 import me.meeshy.sdk.model.ServedProfileDecorItem
 import androidx.compose.runtime.Immutable
 import java.time.ZoneId
@@ -61,7 +62,7 @@ internal data class RiverBubbleContent(
     val groupPosition: RiverGroupPosition,
     val identity: RiverBubbleIdentity?,
     val isForwarded: Boolean,
-    val forwardedFromName: String?,
+    val forwardAttribution: ForwardAttribution,
     val blurReveal: BubbleBlurRevealSpec?,
     val protection: RiverProtection,
     val isPending: Boolean,
@@ -154,7 +155,7 @@ internal object RiverRenderingBuilder {
                 avatarRing = source.senderRing,
             ),
             isForwarded = source.isForwarded,
-            forwardedFromName = source.forwardedFromName,
+            forwardAttribution = source.forwardAttribution,
             blurReveal = source.blurReveal,
             protection = protection(source),
             isPending = source.isPending,

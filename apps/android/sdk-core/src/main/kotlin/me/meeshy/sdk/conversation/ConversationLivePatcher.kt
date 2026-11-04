@@ -19,10 +19,11 @@ import me.meeshy.sdk.model.ParticipantJoinedEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
 import me.meeshy.sdk.model.ParticipantUnbannedEvent
 import me.meeshy.sdk.model.conversationlist.ConversationLivePatch
+import me.meeshy.sdk.model.conversationlist.ConversationPreviewOnSend
 import me.meeshy.sdk.model.conversationlist.LastMessageFacet
-import me.meeshy.sdk.model.conversationlist.admitsLastMessage
 import me.meeshy.sdk.model.conversationlist.applyingLastMessage
 import me.meeshy.sdk.model.conversationlist.revertingDeletion
+import me.meeshy.sdk.model.sync.ConversationPatch
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.ConversationApi
@@ -51,6 +52,7 @@ class ConversationLivePatcher @Inject constructor(
     private val conversationApi: ConversationApi,
     private val session: SessionRepository,
     private val readerLabel: ReaderLabelProvider,
+    private val openConversations: OpenConversationLookup = OpenConversationLookup.None,
 ) {
     private val discoveries: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
@@ -63,11 +65,47 @@ class ConversationLivePatcher @Inject constructor(
             viewerLanguages = viewerLanguages(),
         )
         val alias = message.clientMessageId?.let(::listOf).orEmpty()
+        val me = readerId()
+        val mine = !me.isNullOrBlank() && (message.senderId == me || message.sender?.resolvedUserId == me)
+        val countsAsUnread = !mine && !openConversations.isOpen(message.conversationId)
         val known = mutate(message.conversationId) { row ->
-            if (!row.admitsLastMessage(facet.id, facet.createdAtMillis, alias)) row else row.applyingLastMessage(facet)
+            ConversationPatch.receivingMessage(row, facet, alias, countsAsUnread)
         }
         if (known == Known.ABSENT) discover(message.conversationId)
         return known != Known.ABSENT
+    }
+
+    /**
+     * MON envoi optimiste : la ligne remonte avec la facette de la bulle `cid_…` avant tout accusé, hors ligne
+     * comprise. Le non-lu ne bouge pas (c'est mon message) ; un aperçu plus récent n'est pas reculé.
+     */
+    suspend fun applyStaged(message: ApiMessage): Boolean {
+        val facet = LastMessageFacet.of(
+            message = message,
+            readerId = readerId(),
+            youLabel = readerLabel.youLabel(),
+            viewerLanguages = viewerLanguages(),
+        )
+        return mutate(message.conversationId) { row -> ConversationPreviewOnSend.staging(row, facet) } != Known.ABSENT
+    }
+
+    /**
+     * La bulle optimiste [sentId] a été retirée : si elle était l'aperçu, la ligne revient au dernier message
+     * restant de Room (jamais le texte de ce qui a disparu), sinon elle ne bouge pas.
+     */
+    suspend fun applyRolledBack(conversationId: String, sentId: String) {
+        val previous = messageDao.recentForConversation(conversationId, ROLLBACK_LOOKBACK)
+            .firstOrNull { it.id != sentId && it.sendState != LocalSendState.FAILED.name }
+            ?.toLocalMessage()?.message
+        val facet = previous?.let {
+            LastMessageFacet.of(
+                message = it,
+                readerId = readerId(),
+                youLabel = readerLabel.youLabel(),
+                viewerLanguages = viewerLanguages(),
+            )
+        }
+        mutate(conversationId) { row -> ConversationPreviewOnSend.rollingBack(row, sentId, facet) }
     }
 
     /**
@@ -230,6 +268,7 @@ class ConversationLivePatcher @Inject constructor(
         session.currentUser.value?.let(ReaderPrism::resolve).orEmpty()
 
     private companion object {
+        const val ROLLBACK_LOOKBACK = 8
         val DISCOVERY_PUSH_TYPES = setOf("new_conversation_direct", "new_conversation_group", "added_to_conversation")
     }
 }

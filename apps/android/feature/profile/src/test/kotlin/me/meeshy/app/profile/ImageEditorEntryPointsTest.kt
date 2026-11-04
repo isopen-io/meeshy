@@ -10,6 +10,7 @@ import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.imageedit.CropRatio
 import me.meeshy.sdk.model.imageedit.ImageEditorContext
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -79,5 +80,19 @@ class ImageEditorEntryPointsTest {
         flow.passthrough()
         assertThat(sent).containsExactly(original)
         assertThat(flow.pending).isNull()
+    }
+
+    @Test
+    fun `Termine compresse le rendu sous le budget de l'avatar et libere la photo d'origine`() = runBlocking {
+        val sent = mutableListOf<MediaUploadItem>()
+        val flow = ProfileImageEditorFlow(context) { _, item -> sent += item }
+        val original = source()
+        flow.offer(ImageUploadTarget.AVATAR, original)
+        flow.acceptCompressed(ImageUploadTarget.AVATAR, original, edited())
+        assertThat(flow.pending).isNull()
+        assertThat(flow.compressing).isFalse()
+        assertThat(sent).hasSize(1)
+        assertThat(sent.single().mimeType).isEqualTo("image/jpeg")
+        assertThat(sent.single().sizeBytes).isAtMost(500L * 1024)
     }
 }

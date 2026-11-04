@@ -590,6 +590,23 @@ fait fuiter une vidéo privée entre comptes. Le coût (re-téléchargement de r
 
 **Consequences.** Premier réel du compte suivant à froid ; plus aucune vidéo du compte quitté sur disque.
 
+**Amendement 2026-11-03 (#15486, chantier #15462).** La fin de session vide aussi : (1) le cache des FORMES D'ONDE, mémoire
+et disque (`com.meeshy.waveforms.v2`, `WaveformModule.waveformsOnLogout` → `WaveformCache.clearAll`), car un relevé dérive
+du contenu du compte quitté ; (2) la mémoire des POSITIONS de lecture (`PlaybackModule.positionsOnLogout`, déjà un
+`PerAccountCache`, désormais prouvée par témoin). Le moteur partagé (`ConversationAudioCoordinator`) lit par le cache AUDIO
+de `MeeshyMediaCache` (clôture d'époque, bail contre l'éviction) via la couture `AudioPlaybackSources` liée par `:app` ; son
+cache séparé `cacheDir/audio-playback` (64 Mo, sans clôture de compte) disparaît et le dossier est purgé une fois au
+démarrage (`LegacyAudioPlaybackCache`). Un vocal protégé (éphémère, vue unique, flouté, chiffré) se lit en direct : ni cache,
+ni bail, aucun octet sur le disque.
+
+**Condition de la garde (audit 2026-11-04, #15486).** « Protégé » n'est vrai que si la FILE le dit : la protection naît
+dans `AudioQueueBuilder`, depuis les champs REQUIS `AudioQueueMessage.isProtected` et `AudioQueueAttachment.isProtected`
+(un vocal est protégé si son message OU sa pièce l'est, leçon 275), que le producteur calcule par la loi unique
+`VoiceQueueProtection` (`ofMessage` : vue unique, flou, éphémère — échéance, durée ou bit, flamme comprise —, chiffré ;
+`ofPiece` : la pièce masquée ou scellée, ou son message). Aucun maillon n'a plus de défaut `false` : `QueuedAudio`,
+`AudioPlaybackEngine.play` et `AudioSource.Remote` exigent la valeur, un oubli ne compile pas. Le producteur du fil
+(#14899) DOIT bâtir sa file par ces deux lois ; tant qu'il n'existe pas, aucun appelant ne joue par le coordinateur.
+
 ---
 
 ## ADR-028 — L'app native reprend la fiche Play `me.meeshy.app` ; la coque devient `me.meeshy.webapp`
@@ -702,3 +719,16 @@ la déconnexion (même compte, même historique, comme iOS) ; un autre compte le
 `unapprovedOwnDevices` et ne reçoivent rien), signaux chiffrés (gardés au coffre, pas encore appliqués), pièces jointes
 `client-v1`, groupes (Sender Keys), aperçu déchiffré dans la liste et la notification, numéros de sécurité.
 
+
+## ADR-031 — Le drapeau de la bulle ouvre un panneau secondaire, comme iOS (#15471, remplace la divergence du `LanguageFlagTapResolver`)
+
+Le toucher d'un drapeau changeait jusqu'ici la langue PRIMAIRE de la bulle (« un seul texte cohérent », écart assumé
+avec iOS). La directive #11570 vise l'iso : `BubbleFlagTap` (`:core:model`, miroir de `BubbleLanguageFlagController`)
+décide — langue d'origine ou primaire du Prisme : le texte principal y revient et le panneau se ferme ; autre langue
+avec contenu : le panneau SECONDAIRE sous le texte s'ouvre (second toucher : il se ferme) ; langue sans contenu : la
+traduction est demandée (indicateur d'attente sur le drapeau). L'état ouvert/fermé est un état de VUE de la bulle
+(`ChatMessageRow`, comme `@State secondaryLangCode`), jamais du fil. Le bouton traduire est en première position stable
+du pied et disparaît dès qu'un drapeau existe ; les drapeaux ne sont plus rendus en `FlowRow` sous le texte.
+`LanguageFlagTapResolver.resolve` (fil, commentaires, stories) garde son modèle à texte unique : la divergence n'y reste
+qu'en dehors de la bulle de chat. Le Prisme (rangs 1 à 4, original si rien ne correspond) n'a pas changé : une seule
+fonction, `PrismTranslationResolver`.

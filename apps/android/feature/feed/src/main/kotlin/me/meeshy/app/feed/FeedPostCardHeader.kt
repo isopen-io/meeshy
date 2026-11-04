@@ -7,9 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,6 +24,7 @@ import java.util.Locale
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.bubble.PendingSendClock
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
@@ -53,10 +51,11 @@ internal fun FeedPostCardHeader(
     onReport: () -> Unit,
     onDelete: () -> Unit,
     onOpen: (() -> Unit)? = null,
+    pendingSend: PendingSendActions? = null,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+        val profileTap = Modifier.opensAuthorProfile(post.authorProfile())
         MeeshyAvatar(
             name = post.authorName ?: unknownAuthor,
             size = 40.dp,
@@ -82,14 +81,25 @@ internal fun FeedPostCardHeader(
                 }
                 post.repostAttribution?.let { handle -> RepostAttribution(handle) }
             }
-            post.createdAtIso?.let {
-                Text(
-                    text = postRelativeTime(it),
-                    style = MaterialTheme.typography.bodySmall,
+            if (post.isPendingSend) {
+                PendingSendClock(
                     color = MeeshyTheme.tokens.textSecondary,
+                    description = stringResource(R.string.feed_pending_waiting),
+                    modifier = Modifier.padding(top = MeeshySpacing.xxs),
                 )
+            } else {
+                post.createdAtIso?.let {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = postRelativeTime(it),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MeeshyTheme.tokens.textSecondary,
+                        )
+                        PostViewerPointsMark(postId = post.id, seed = post.viewerPoints, color = MeeshyTheme.tokens.textSecondary)
+                    }
+                }
+                if (isOwn) AuthorReachLine(post)
             }
-            if (isOwn) AuthorReachLine(post)
         }
         PostOptionsButton(
             isOwn = isOwn,
@@ -106,6 +116,7 @@ internal fun FeedPostCardHeader(
             onDelete = onDelete,
             onImager = rememberPostImager(post),
             onOpen = onOpen,
+            pendingSend = pendingSend,
         )
     }
 }
@@ -172,9 +183,9 @@ private fun AuthorReachLine(post: FeedPostPresentation) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = spoken },
     ) {
-        ReachFigure(Icons.Filled.BarChart, reach.impressions.orEmpty())
+        ReachFigure(MeeshyIcons.ChartBar, reach.impressions.orEmpty())
         Spacer(Modifier.width(MeeshySpacing.sm))
-        ReachFigure(Icons.Filled.Visibility, reach.views.orEmpty())
+        ReachFigure(MeeshyIcons.EyeFilled, reach.views.orEmpty())
     }
 }
 

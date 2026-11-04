@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +39,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.sdk.model.BubbleSecondaryPanel
+import me.meeshy.sdk.model.RetryBarState
 import me.meeshy.sdk.model.BubbleSkinLaw
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.ui.R
@@ -118,11 +121,8 @@ internal fun BubbleStandardLayout(
         }
         val bubbleBorder = if (isFreeEmoji || content.isOutgoing) null else receivedTint.stroke
         Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
-            if (content.pinnedAtIso != null && !content.isDeleted) BubblePinnedIndicator()
-            // iOS pose le badge « Transféré » au-dessus de la bulle, hors de son fond.
-            if (content.isForwarded && !content.isDeleted) {
-                BubbleForwardedBadge(content.forwardedFromName, MeeshyTheme.tokens.textMuted)
-            }
+            // iOS pose « épinglé » et « Transféré » au-dessus de la bulle, hors de son fond.
+            BubbleTopChrome(content)
             // iOS `detachedStoryCitation` : la story répondue est CITÉE au-dessus de la bulle, hors de
             // son fond — jamais aplatie sur une ligne (une humeur garde sa ligne, dans la bulle).
             content.storyReply?.takeUnless { it.isMood }?.let { story ->
@@ -145,7 +145,7 @@ internal fun BubbleStandardLayout(
                     // La story citée reste au-dessus de l'emoji, hors de tout fond (iOS
                     // `detachedStoryCitation`) ; l'emoji flotte dessous.
                     Column(horizontalAlignment = if (content.isOutgoing) Alignment.End else Alignment.Start) {
-                        FreeEmojiBody(content = content, onLongPress = callbacks.onLongPress)
+                        FreeEmojiBody(content = content, callbacks = callbacks)
                     }
                 } else {
                     BubbleBlurRevealBoundary(messageId = content.messageId, spec = content.blurReveal) {
@@ -241,8 +241,23 @@ private fun BubbleBody(
                             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
                         )
                     }
-                    BubbleAttachmentSections(content, onColor, callbacks, audioPlayback)
+                    BubbleAttachmentSections(content, onColor, callbacks, audioPlayback, accent = options.accentColor)
                     BubbleTextBody(content, onColor, options.decor)
+                    if (!content.isDeleted) {
+                        BubbleSecondaryContent(
+                            panel = remember(content.openSecondaryCode, content.secondaryTexts, content.languageStrip) {
+                                BubbleSecondaryPanel.of(
+                                    content.openSecondaryCode,
+                                    content.languageStrip.firstOrNull { it.isActive }?.code,
+                                    content.secondaryTexts,
+                                )
+                            },
+                            onColor = onColor,
+                            tint = options.accentColor,
+                            decor = options.decor,
+                            linksActive = content.senderHasAccount,
+                        )
+                    }
                     if (!content.isDeleted) options.bodyAccessory?.invoke(onColor)
                 }
             },
@@ -253,7 +268,9 @@ private fun BubbleBody(
                     content = content,
                     onColor = onColor,
                     onFlagTap = callbacks.onFlagTap,
+                    onTranslate = callbacks.onTranslate,
                     onSenderTap = callbacks.onSenderTap,
+                    onShowReadStatus = callbacks.onShowReadStatus,
                     modifier = Modifier.padding(
                         start = if (hasIdentity) MeeshySpacing.smPlus else MeeshySpacing.mdPlus,
                         end = if (hasIdentity) MeeshySpacing.smPlus else MeeshySpacing.mdPlus,
@@ -268,10 +285,10 @@ private fun BubbleBody(
 }
 
 /** Largeur de la bande de renvoi d'un envoi échoué (iOS `retryBandWidth`). */
-private val RetryBandWidth = 34.dp
+private val RetryBandWidth = RetryBarState.BAND_WIDTH_DP.dp
 
 /**
- * Envoi échoué, port d'iOS `BubbleFailedRetryBar` : une bande orange de 34 dp INTÉGRÉE au bord
+ * Envoi échoué, port d'iOS `BubbleFailedRetryBar` : une bande orange de 32 dp INTÉGRÉE au bord
  * droit de la bulle (rognée par son coin arrondi), le contenu décalé d'autant pour que l'heure
  * reste lisible ; un tap renvoie. Refusé pour le lieu d'un fichier (#13550) ou média perdu (#13554), la bulle le dit et le tap la retire.
  * Sans échec, le contenu passe tel quel.
@@ -288,7 +305,6 @@ private fun BubbleFailedRetryEdge(
         content()
         return
     }
-    val label = BubbleFailedTap.label(failure)
     Box {
         Column(modifier = Modifier.padding(end = RetryBandWidth)) {
             content()
@@ -300,24 +316,11 @@ private fun BubbleFailedRetryEdge(
                 )
             }
         }
-        Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .width(RetryBandWidth)
-                .fillMaxHeight()
-                .background(MeeshyPalette.Warning)
-                .let { base -> if (onRetry == null) base else base.clickable(onClickLabel = label, onClick = onRetry) }
-                .semantics { contentDescription = label },
-        ) {
-            Icon(
-                imageVector = BubbleFailedTap.icon(failure),
-                contentDescription = null,
-                tint = MeeshyPalette.White,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-        }
+        BubbleFailedRetryBar(
+            failure = failure,
+            onRetry = onRetry,
+            modifier = Modifier.matchParentSize().wrapContentSize(Alignment.CenterEnd),
+        )
     }
 }
 
@@ -341,18 +344,25 @@ private fun BubbleReactionsAnchor(
         bubble()
         return
     }
+    val showsAdd = !content.isOutgoing && content.isLastReceivedMessage
     Box {
         bubble()
         ReactionStrip(
             reactions = content.reactions,
             accent = accent,
-            showsAddButton = !content.isOutgoing && content.isLastReceivedMessage,
+            showsAddButton = showsAdd,
             onReactionClick = callbacks.onReactionClick,
             onReactionLongPress = callbacks.onReactionLongPress,
             onAddReaction = callbacks.onAddReaction,
+            messageId = content.messageId,
+            onOpenReactPicker = callbacks.onOpenReactPicker,
+            expandsAddHit = showsAdd,
             modifier = Modifier
                 .align(if (content.isOutgoing) Alignment.BottomStart else Alignment.BottomEnd)
-                .offset(x = if (content.isOutgoing) (-4).dp else 4.dp, y = ReactionsRestingOffset),
+                .offset(
+                    x = if (content.isOutgoing) (-4).dp else 4.dp,
+                    y = if (showsAdd) ReactionsRestingOffset - AddHitOverflow else ReactionsRestingOffset,
+                ),
         )
     }
 }
@@ -384,6 +394,9 @@ private fun VisualMediaBody(content: BubbleContent, callbacks: BubbleCallbacks) 
             content = content,
             metaColor = MeeshyMediaChromeColors.OnMedia,
             readTint = MeeshyPalette.Indigo400,
+            onShowReadStatus = callbacks.onShowReadStatus,
+            onRetry = callbacks.onRetry,
+            retryBandShown = false,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(MeeshySpacing.sm)
@@ -400,7 +413,8 @@ private fun VisualMediaBody(content: BubbleContent, callbacks: BubbleCallbacks) 
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FreeEmojiBody(content: BubbleContent, onLongPress: (() -> Unit)?) {
+private fun FreeEmojiBody(content: BubbleContent, callbacks: BubbleCallbacks) {
+    val onLongPress = callbacks.onLongPress
     val fontSize = EmojiDetector.fontSizeSp(content.emojiOnlyCount) ?: return
     Row(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
@@ -416,66 +430,10 @@ private fun FreeEmojiBody(content: BubbleContent, onLongPress: (() -> Unit)?) {
         BubbleMetaTrailing(
             content = content,
             metaColor = MeeshyTheme.tokens.textMuted,
+            onShowReadStatus = callbacks.onShowReadStatus,
+            onRetry = callbacks.onRetry,
+            retryBandShown = false,
             modifier = Modifier.alignByBaseline(),
-        )
-    }
-}
-
-/**
- * Corps et pied empilés à 4 dp, port d'iOS `BubbleBodyFooterLayout` : la bulle épouse son contenu
- * (jamais étirée à sa largeur maximale) et le pied prend exactement la largeur retenue — celle du
- * corps, ou la sienne propre si elle est plus large — si bien que l'heure tombe au bord droit.
- */
-@Composable
-private fun BubbleBodyFooterLayout(
-    body: @Composable () -> Unit,
-    footer: @Composable () -> Unit,
-) {
-    Layout(
-        content = {
-            Box { body() }
-            Box { footer() }
-        },
-    ) { measurables, constraints ->
-        val gap = MeeshySpacing.xs.roundToPx()
-        val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val bodyPlaceable = measurables[0].measure(loose)
-        val footerNatural = measurables[1].maxIntrinsicWidth(Constraints.Infinity)
-        val width = maxOf(bodyPlaceable.width, footerNatural, constraints.minWidth)
-            .coerceAtMost(constraints.maxWidth)
-        val footerPlaceable = measurables[1].measure(
-            Constraints(minWidth = width, maxWidth = width, minHeight = 0, maxHeight = constraints.maxHeight),
-        )
-        val bodyGap = if (bodyPlaceable.height > 0) gap else 0
-        val height = bodyPlaceable.height + bodyGap + footerPlaceable.height
-        layout(width, height) {
-            bodyPlaceable.place(0, 0)
-            footerPlaceable.place(0, bodyPlaceable.height + bodyGap)
-        }
-    }
-}
-
-/** "Forwarded" / "Forwarded from <conversation>" italic badge at the top of the bubble. */
-@Composable
-internal fun BubbleForwardedBadge(forwardedFromName: String?, onColor: Color) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = MeeshySpacing.xs),
-    ) {
-        Icon(
-            imageVector = MeeshyIcons.Send,
-            contentDescription = null,
-            tint = onColor.copy(alpha = 0.6f),
-            modifier = Modifier.size(13.dp),
-        )
-        Text(
-            text = forwardedFromName
-                ?.let { stringResource(R.string.bubble_forwarded_from, it) }
-                ?: stringResource(R.string.bubble_forwarded),
-            style = MaterialTheme.typography.labelSmall,
-            fontStyle = FontStyle.Italic,
-            color = onColor.copy(alpha = 0.6f),
-            modifier = Modifier.padding(start = 3.dp),
         )
     }
 }

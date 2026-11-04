@@ -54,10 +54,13 @@ public class StickerLibraryStore(
     }
 
     /** Garde [bytes] en tête de la bibliothèque ; `null` sans compte ou si l'écriture échoue. */
-    public suspend fun save(bytes: ByteArray): StickerLibraryItem? = withContext(Dispatchers.IO) {
+    public suspend fun save(bytes: ByteArray): StickerLibraryItem? = save(bytes, newId())
+
+    /** Garde [bytes] sous l'identifiant stable [id] (un contenu reçu) ; refusé s'il ne sert pas de nom de fichier. */
+    public suspend fun save(bytes: ByteArray, id: String): StickerLibraryItem? = withContext(Dispatchers.IO) {
         synchronized(lock) {
             val dir = directory ?: return@synchronized null
-            val id = newId().takeIf(StickerLibraryIndex::isFileSafe) ?: return@synchronized null
+            if (!StickerLibraryIndex.isFileSafe(id)) return@synchronized null
             val written = runCatching { dir.mkdirs(); File(dir, id).writeBytes(bytes) }.isSuccess
             if (!written) return@synchronized null
             val (next, evicted) = index.saving(id, bytes.size.toLong(), budgetBytes)
@@ -68,6 +71,9 @@ public class StickerLibraryStore(
             StickerLibraryItem(id, File(dir, id))
         }
     }
+
+    /** Ce sticker est-il déjà dans la bibliothèque du compte ? */
+    public fun contains(id: String): Boolean = file(id) != null
 
     /** Le fichier d'un sticker gardé, `null` s'il n'est pas (ou plus) dans la bibliothèque du compte. */
     public fun file(id: String): File? = synchronized(lock) {

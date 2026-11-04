@@ -37,13 +37,7 @@ public object ProgressionPieceDetails {
     public fun levelRing(block: GameLevel): PieceDetail {
         val level = block.shown
         val atTop = level.nextThreshold == null
-        val ledger = ProgressionLevelPiece.ledger(block)
-        val pairs = listOf(
-            PieceDetailFact(GameText(GameTextKey.SparksPocketLabel), GameCopyLaws.points(bounded(ledger.pocket))),
-            PieceDetailFact(GameText(GameTextKey.SparksLifetimeLabel), cumulValue(ledger.cycle, ledger.lifetime)),
-            PieceDetailFact(GameText(GameTextKey.SparksLevelLabel), number(level.level)),
-            PieceDetailFact(GameText(GameTextKey.SparksLevelMaxLabel), number(block.shownLevelMaxLifetime)),
-        )
+        val pairs = GameSparkPairs.of(block).facts
         val top = if (atTop) PieceDetailFact(GameText(GameTextKey.FactNextLevel), ProgressionConceptModel.levelTopShort(level.cap)) else null
         val record = if (level.record > level.level) {
             PieceDetailFact(GameText(GameTextKey.FactRecord), GameText.of(GameTextKey.BannerLevel, GameTextArg.Count(level.record)))
@@ -108,16 +102,6 @@ public object ProgressionPieceDetails {
     }
 
     private fun share(done: Int, total: Int): Double? = if (total > 0) (done.toDouble() / total).coerceIn(0.0, 1.0) else null
-
-    /** `GameSparksCopy.cumulValue` : sans renaissance le total seul ; après, cet Âge d'abord, puis le tout. */
-    private fun cumulValue(cycle: Long, lifetime: Long): GameText =
-        if (cycle < lifetime) {
-            GameText.of(GameTextKey.SparksCumulRecord, GameTextArg.Count(bounded(cycle)), GameTextArg.Count(bounded(lifetime)))
-        } else {
-            number(bounded(lifetime))
-        }
-
-    private fun number(value: Int): GameText = GameText(GameTextKey.JoinedBySpace, listOf(GameTextArg.Count(value)))
 
     private fun bounded(value: Long): Int = value.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
 }

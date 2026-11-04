@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,23 +35,26 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.text.HashtagLink
 import me.meeshy.ui.component.bubble.LanguageChip
-import me.meeshy.ui.component.bubble.RichMessageText
+import me.meeshy.ui.component.bubble.RichPostText
+import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
 
 /**
- * Corps de la carte : texte du post (sélectionnable) puis bandeau de langues du Prisme.
+ * Corps de la carte : texte du post (texte riche, abrégé en mots, façade YouTube) puis bandeau de langues du Prisme.
  */
 @Composable
 internal fun FeedPostCardBody(
     post: FeedPostPresentation,
     onFlagTap: (String) -> Unit,
     onOpenHashtag: (String) -> Unit = {},
+    onOpenProfile: ((String) -> Unit)? = null,
     translatingCodes: Set<String> = emptySet(),
     onSelectLanguage: (String) -> Unit = onFlagTap,
 ) {
+    val profileOpener = LocalProfileSheetOpener.current
     var explorerOpen by rememberSaveable(post.id) { mutableStateOf(false) }
     post.languageExplorer?.takeIf { explorerOpen }?.let { explorer ->
         PostTranslationSheet(
@@ -65,15 +67,17 @@ internal fun FeedPostCardBody(
     Column {
         if (post.content.isNotBlank()) {
             Spacer(Modifier.height(MeeshySpacing.md))
-            HashtagAwareLinks(onOpenHashtag) {
-                SelectionContainer {
-                    RichMessageText(
-                        text = post.content,
-                        color = MeeshyTheme.tokens.textPrimary,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
+            RichPostText(
+                text = post.content,
+                color = MeeshyTheme.tokens.textPrimary,
+                postId = post.id,
+                style = MaterialTheme.typography.bodyMedium,
+                trackedLinks = post.trackedLinks.takeIf { it.isNotEmpty() },
+                validUsernames = post.mentionUserIds.keys,
+                mentionDisplayNames = post.mentionDisplayNames.takeIf { it.isNotEmpty() },
+                onHashtagClick = onOpenHashtag,
+                onMentionClick = { username -> post.mentionProfile(username)?.let(profileOpener::open) },
+            )
         }
 
         if (post.languageStrip.isNotEmpty() || post.languageExplorer != null) {

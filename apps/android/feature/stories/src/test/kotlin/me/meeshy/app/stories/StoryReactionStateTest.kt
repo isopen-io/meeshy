@@ -107,4 +107,39 @@ class StoryReactionStateTest {
         assertThat(StoryReactionState().hasReacted).isFalse()
         assertThat(StoryReactionState().count).isEqualTo(0)
     }
+
+    @Test
+    fun `withdrawing a refused tap takes back exactly that count and mark`() {
+        val tapped = StoryReactionState(count = 2, mine = setOf("❤️")).reactedLocally("🔥")
+
+        val withdrawn = tapped.withdrawnLocally("🔥")
+
+        assertThat(withdrawn).isEqualTo(StoryReactionState(count = 2, mine = setOf("❤️")))
+    }
+
+    @Test
+    fun `withdrawing keeps the reactions other viewers added since the tap`() {
+        val tapped = StoryReactionState(count = 2).reactedLocally("🔥")
+            .applyDelta("😂", delta = 1, isOwn = false)
+
+        val withdrawn = tapped.withdrawnLocally("🔥")
+
+        assertThat(withdrawn.count).isEqualTo(3)
+        assertThat(withdrawn.mine).isEmpty()
+    }
+
+    @Test
+    fun `withdrawing an emoji that is not mine is inert`() {
+        val state = StoryReactionState(count = 5, mine = setOf("❤️"))
+
+        assertThat(state.withdrawnLocally("🔥")).isEqualTo(state)
+    }
+
+    @Test
+    fun `the heart only lights for this reader's own reactions`() {
+        val others = StoryReactionState(count = 1).applyDelta("🔥", delta = 1, isOwn = false)
+
+        assertThat(others.hasReacted).isFalse()
+        assertThat(others.reactedLocally("🔥").hasReacted).isTrue()
+    }
 }

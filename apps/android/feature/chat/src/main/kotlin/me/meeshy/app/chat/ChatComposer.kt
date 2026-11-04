@@ -75,6 +75,7 @@ internal fun ChatComposer(
     affordances: ComposerAffordances,
     slowMode: SlowModeState,
     isEndToEnd: Boolean = false,
+    closure: me.meeshy.sdk.model.ComposerClosure? = null,
     replyBanner: ComposerReplyBanner?,
     clipboardContent: ClipboardContent?,
     languageCode: String,
@@ -146,7 +147,8 @@ internal fun ChatComposer(
         receivePicked,
     )
     val openPhotos: () -> Unit = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
-    val voice = rememberComposerVoice(onStageVoiceFile, onPickFile)
+    PasteContentReceiverEffect(onPickFile)
+    val voice = rememberComposerVoice(onStageVoiceFile, onPickFile, conversationTitle = conversationTitle)
     me.meeshy.ui.component.permission.PermissionFlowHost(voice.permissions, accent = accentColor)
     var minimized by rememberSaveable { mutableStateOf(false) }
     var fieldFocused by remember { mutableStateOf(false) }
@@ -181,6 +183,7 @@ internal fun ChatComposer(
         }
     }
     var cameraChooserOpen by remember { mutableStateOf(false) }
+    me.meeshy.app.chat.camera.ComposerCameraPrewarm(offered = configuration.offers(ComposerCapability.CAMERA))
     val ladderTiles = remember(affordances, onLocationRequest != null, guestAllowance, configuration) {
         ComposerAttachmentLadder.tiles(
             affordances,
@@ -340,6 +343,12 @@ internal fun ChatComposer(
         minimized = true
     }
 
+    ComposerDropBand(
+        enabled = canSend && !affordances.isReadOnly,
+        accentColor = accentColor,
+        onPickFile = onPickFile,
+        onText = ::insertEmoji,
+    ) {
     ComposerShellLayout(
         minimized = minimized,
         canMinimize = canMinimize,
@@ -454,6 +463,7 @@ internal fun ChatComposer(
                         onFold = if (foldable && configuration.offersFold(minimized, isComposing)) fold else null,
                         configuration = configuration,
                         onSticker = openStickers,
+                        counter = me.meeshy.sdk.model.composer.ComposerCounterLaw.state(draft.length, configuration.maxLength),
                     )
                 }
                 when {
@@ -468,6 +478,11 @@ internal fun ChatComposer(
                             sendVoiceWhenStaged = true
                         },
                         modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.smPlus),
+                    )
+                    closure != null -> ComposerClosureNotice(
+                        closure = closure,
+                        accentColor = accentColor,
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
                     )
                     isEndToEnd -> ComposerEndToEndNotice(
                         modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
@@ -588,6 +603,12 @@ internal fun ChatComposer(
                     ComposerAttachmentTray(
                         tiles = ladderTiles,
                         recentMedia = recentStrip.takeIf { configuration.offers(ComposerCapability.PHOTO_LIBRARY) },
+                        handle = {
+                            ComposerPanelHandle(
+                                onOpenFullLibrary = { dock.closePanels(); openPhotos() },
+                                onClose = { dock.closePanels() },
+                            )
+                        },
                         onTileClick = { kind ->
                             dock.closePanels()
                             when (kind) {
@@ -610,6 +631,7 @@ internal fun ChatComposer(
             }
         },
     )
+    }
     if (guestSheetOpen) {
         GuestAttachmentSheet(
             conversationTitle = conversationTitle,

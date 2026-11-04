@@ -90,8 +90,8 @@ internal class Media3AudioPlaybackEngine(
 
     // ── Chargement ───────────────────────────────────────────────────────────────────────────────
 
-    override fun play(attachmentId: String, url: String, origin: PlaybackCommandOrigin): Boolean =
-        start(attachmentId, url.takeIf { it.isNotBlank() }?.let(AudioSource::Remote), origin)
+    override fun play(attachmentId: String, url: String, origin: PlaybackCommandOrigin, isProtected: Boolean): Boolean =
+        start(attachmentId, url.takeIf { it.isNotBlank() }?.let { AudioSource.Remote(it, isProtected) }, origin)
 
     override fun playLocal(attachmentId: String, fileUri: String, origin: PlaybackCommandOrigin): Boolean =
         start(attachmentId, fileUri.takeIf { it.isNotBlank() }?.let(AudioSource::Local), origin)

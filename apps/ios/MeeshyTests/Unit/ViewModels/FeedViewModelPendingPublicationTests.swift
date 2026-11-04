@@ -8,13 +8,14 @@ import XCTest
 final class FeedViewModelPendingPublicationTests: XCTestCase {
 
     private func makeSUT(
-        cancellation: PublicationCancellation = .removed
+        cancellation: PublicationCancellation = .removed,
+        api: MockAPIClientForApp = MockAPIClientForApp()
     ) -> (sut: FeedViewModel, queue: MockOfflineQueue, postService: MockPostService) {
         let queue = MockOfflineQueue()
         queue.cancelPendingPublicationResult = cancellation
         let postService = MockPostService()
         let sut = FeedViewModel(
-            api: MockAPIClientForApp(),
+            api: api,
             socialSocket: MockSocialSocket(),
             postService: postService,
             languageProvider: MockLanguageProvider(preferredLanguages: []),
@@ -71,6 +72,41 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
         XCTAssertEqual(sut.posts.map(\.id), [cmid])
     }
 
+    // MARK: - #15095 — la carte d'un post en attente montre sa photo
+
+    func test_offlineMediaPost_pointsItsCardAtTheCopyTheQueueKeeps() async {
+        let (sut, queue, _) = makeSUT()
+
+        await sut.createOfflineMediaPost(
+            localMediaURLs: [URL(fileURLWithPath: NSTemporaryDirectory() + "photo-composee.jpg")],
+            content: "Hors ligne",
+            mobileTranscription: nil, storyEffects: nil,
+            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
+            allowSoundExtraction: nil
+        )
+
+        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
+        let expected = URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(forStored: "photo-composee.jpg")).absoluteString
+        XCTAssertEqual(sut.posts.first?.media.map(\.url), [expected],
+                       "la source est effacée par la file : la carte vise la copie gardée jusqu'à l'envoi")
+        XCTAssertEqual(sut.posts.first?.media.first?.type, .image)
+    }
+
+    func test_rebased_movesAPendingCardsLocalMediaIntoTheCurrentContainer() {
+        let home = "/Users/x/Library/Developer/CoreSimulator/Devices/D/data/Containers/Data/Application/NEW"
+        let stale = "file:///Users/x/Library/Developer/CoreSimulator/Devices/D/data/Containers/Data/Application/OLD/Documents/pending-media/c/0.jpg"
+        let pending = FeedPost(id: ClientMutationId.generate(), author: "moi", content: "",
+                               media: [FeedMedia(type: .image, url: stale)])
+        let published = FeedPost(id: "665f1c2e9b1d4a0012345678", author: "moi", content: "",
+                                 media: [FeedMedia(type: .image, url: stale)])
+
+        let rebased = PendingPublicationLocalMedia.rebased([pending, published], ontoHome: home)
+
+        XCTAssertEqual(rebased[0].media.first?.url, URL(fileURLWithPath: home + "/Documents/pending-media/c/0.jpg").absoluteString)
+        XCTAssertEqual(rebased[0].media.first?.id, pending.media.first?.id)
+        XCTAssertEqual(rebased[1].media.first?.url, stale, "une carte publiée n'est jamais réécrite")
+    }
+
     func test_deletePost_onServerPost_neverTouchesTheOutbox() async {
         let (sut, queue, postService) = makeSUT()
 
@@ -86,6 +122,82 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
         await sut.supersedeRecoveredPost(clientMutationId: "cmid_p")
 
         XCTAssertEqual(queue.cancelCreatePostCalls, ["cmid_p"])
+    }
+
+    // MARK: - #15123 — la carte en attente n'engage rien au serveur
+
+    func test_engagement_onPendingPublication_sendsNothingAndChangesNothing() async throws {
+        let api = MockAPIClientForApp()
+        let (sut, queue, postService) = makeSUT(api: api)
+        let cmid = try await queuedPostId(sut, queue)
+        let rowsBefore = queue.enqueueCalls.count
+
+        await sut.likePost(cmid)
+        await sut.bookmarkPost(cmid)
+        await sut.repostPost(cmid)
+        await sut.repostPost(cmid, content: "cité", isQuote: true)
+        let link = await sut.sharePost(cmid, generateLink: true)
+
+        XCTAssertEqual(queue.enqueueCalls.count, rowsBefore, "aucun like ni repost ne s'écrit dans la file sous un cmid")
+        XCTAssertEqual(api.requestCount, 0, "ni favori ni partage ne part vers le serveur")
+        XCTAssertEqual(postService.repostCallCount, 0)
+        XCTAssertNil(link)
+        XCTAssertEqual(sut.posts.first?.isLiked, false, "le cœur ne promet rien qui ne partira pas")
+        XCTAssertEqual(sut.posts.first?.likes, 0)
+    }
+
+    func test_engagement_onServerPost_stillLeaves() async {
+        let api = MockAPIClientForApp()
+        let (sut, queue, _) = makeSUT(api: api)
+        sut.posts = [FeedPost(id: "665f1c2e9b1d4a0012345678", author: "Awa", content: "En ligne")]
+
+        await sut.likePost("665f1c2e9b1d4a0012345678")
+        _ = await sut.sharePost("665f1c2e9b1d4a0012345678")
+
+        XCTAssertEqual(queue.enqueueCalls.count, 1)
+        XCTAssertEqual(api.requestCount, 1)
+    }
+
+    func test_prefetchComments_onPendingPublication_asksNothing() async throws {
+        let (sut, queue, postService) = makeSUT()
+        let cmid = try await queuedPostId(sut, queue)
+
+        sut.prefetchComments(cmid)
+        sut.prefetchComments("665f1c2e9b1d4a0012345678")
+        for _ in 0..<100 where postService.getCommentsCallCount == 0 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(postService.getCommentsCallCount, 1,
+                       "seul le post en ligne précharge ses commentaires ; un cmid n'a rien à demander")
+    }
+
+    func test_rowActions_onPendingPublication_areInert() {
+        let calls = RowActionCalls()
+        let pending = FeedPost(id: ClientMutationId.generate(), author: "Moi", content: "En attente")
+
+        let actions = calls.actions.offered(for: pending)
+        actions.onHeart(pending)
+        actions.onRepost(pending.id)
+        actions.onQuote(pending.id)
+        actions.onBookmark(pending.id)
+        actions.onShare(pending.id)
+        actions.onEdit(pending)
+        actions.onOpenReelComments(pending)
+
+        XCTAssertEqual(calls.count, 0, "aucun geste d'une carte en attente n'atteint l'hôte")
+    }
+
+    func test_rowActions_onServerPost_reachTheHost() {
+        let calls = RowActionCalls()
+        let online = FeedPost(id: "665f1c2e9b1d4a0012345678", author: "Awa", content: "En ligne")
+
+        let actions = calls.actions.offered(for: online)
+        actions.onHeart(online)
+        actions.onShare(online.id)
+
+        XCTAssertEqual(calls.count, 2)
     }
 
     // MARK: - #10331 — la carte en file se voit comme telle
@@ -219,5 +331,26 @@ private final class PendingFeedCache: FeedCacheStoring {
     func removeEverywhere(itemId: String) async {
         removedIds.append(itemId)
         posts.removeAll { $0.id == itemId }
+    }
+}
+
+@MainActor
+private final class RowActionCalls {
+    nonisolated deinit {}
+    var count = 0
+
+    var actions: FeedPostRowActions {
+        FeedPostRowActions(
+            onHeart: { [self] _ in count += 1 },
+            onRepost: { [self] _ in count += 1 },
+            onBookmark: { [self] _ in count += 1 },
+            onShare: { [self] _ in count += 1 },
+            onQuote: { [self] _ in count += 1 },
+            onEdit: { [self] _ in count += 1 },
+            onOpenReelComments: { [self] _ in count += 1 },
+            onAuthorMoodTap: { _, _ in },
+            moodLookup: { _ in (emoji: nil, tapHandler: nil) },
+            onViewAuthorStory: { _ in }
+        )
     }
 }

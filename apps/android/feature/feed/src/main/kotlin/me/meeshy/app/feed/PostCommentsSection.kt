@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.CommentThreadLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -65,12 +66,12 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.comments.CommentThreadList
 import me.meeshy.sdk.model.composer.ComposerConfiguration
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.SharedPlace
-import me.meeshy.ui.component.bubble.BubbleBlurReveal
-import me.meeshy.ui.component.bubble.BubbleBlurRevealSpec
-import me.meeshy.ui.component.bubble.messageEffects
+import me.meeshy.ui.component.comments.CommentBody
+import me.meeshy.ui.component.comments.commentSwipeToReply
 import me.meeshy.ui.component.composer.LocalUniversalComposer
 import me.meeshy.ui.component.composer.UniversalComposerSpec
 import me.meeshy.ui.component.composer.rememberComposerMediaIntake
@@ -144,63 +145,39 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
             )
         }
 
-        when {
-            state.showSkeleton -> CommentsSkeleton()
-            state.loadFailed -> Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = MeeshySpacing.sm),
-            ) {
-                Text(
-                    text = stringResource(R.string.post_comments_load_error),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MeeshyTheme.tokens.textSecondary,
-                    modifier = Modifier.weight(1f),
+        val offline by viewModel.isOffline.collectAsStateWithLifecycle()
+        CommentThreadList(
+            state = state.listState(offline),
+            labels = rememberCommentsLabels(stringResource(R.string.post_comments_title)),
+            rows = state.comments,
+            rowKey = { it.id },
+            onRetry = viewModel::retryLoad,
+            onLoadMore = viewModel::loadMore,
+            skeleton = { CommentsSkeleton() },
+        ) { comment ->
+            Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+                CommentRow(
+                    comment = comment,
+                    mentionDisplayNames = state.mentionDisplayNames,
+                    onToggleLike = viewModel::toggleLike,
+                    onReply = viewModel::beginReply,
+                    onFlagTap = viewModel::onCommentFlagTap,
+                    onDelete = viewModel::deleteComment,
+                    imaging = imaging,
                 )
-                TextButton(onClick = viewModel::retryLoad) {
-                    Text(stringResource(R.string.feed_retry), color = MeeshyPalette.Indigo500)
-                }
-            }
-            state.isEmpty -> Text(
-                text = stringResource(R.string.post_comments_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MeeshyTheme.tokens.textSecondary,
-                modifier = Modifier.padding(vertical = MeeshySpacing.md),
-            )
-            else -> Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-                state.comments.forEach { comment ->
-                    CommentRow(
-                        comment = comment,
-                        mentionDisplayNames = state.mentionDisplayNames,
-                        onToggleLike = viewModel::toggleLike,
-                        onReply = viewModel::beginReply,
-                        onFlagTap = viewModel::onCommentFlagTap,
-                        onDelete = viewModel::deleteComment,
-                        imaging = imaging,
-                    )
-                    ReplyThread(
-                        comment = comment,
-                        thread = state.replyThreads[comment.id],
-                        mentionDisplayNames = state.mentionDisplayNames,
-                        onToggleReplies = viewModel::toggleReplies,
-                        onToggleLike = viewModel::toggleLike,
-                        onReply = viewModel::beginReply,
-                        onFlagTap = viewModel::onCommentFlagTap,
-                        onDelete = viewModel::deleteComment,
-                        imaging = imaging,
-                    )
-                }
+                ReplyThread(
+                    comment = comment,
+                    thread = state.replyThreads[comment.id],
+                    mentionDisplayNames = state.mentionDisplayNames,
+                    onToggleReplies = viewModel::toggleReplies,
+                    onToggleLike = viewModel::toggleLike,
+                    onReply = viewModel::beginReply,
+                    onFlagTap = viewModel::onCommentFlagTap,
+                    onDelete = viewModel::deleteComment,
+                    imaging = imaging,
+                )
             }
         }
-
-        if (state.canLoadMore) {
-            TextButton(
-                onClick = viewModel::loadMore,
-                enabled = !state.isLoadingMore,
-            ) {
-                Text(stringResource(R.string.post_comments_load_more), color = MeeshyPalette.Indigo500)
-            }
-        }
-
     }
 }
 
@@ -267,9 +244,10 @@ private fun CommentRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (comment.isPending) 0.5f else 1f),
+            .alpha(if (comment.isPending) 0.5f else 1f)
+            .commentSwipeToReply { if (!comment.isPending) onReply(comment.id) },
     ) {
-        MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl, presence = rememberPresence(comment.authorId))
+        MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl, presence = rememberPresence(comment.authorId), modifier = Modifier.opensAuthorProfile(comment.authorProfile(), minTarget = true))
         Spacer(Modifier.width(MeeshySpacing.sm))
         Column(Modifier.weight(1f)) {
             Column(textBlockSemantics) {
@@ -279,6 +257,7 @@ private fun CommentRow(
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MeeshyTheme.tokens.textPrimary,
+                    modifier = Modifier.opensAuthorProfile(comment.authorProfile()),
                 )
                 if (comment.isReply) {
                     Spacer(Modifier.width(MeeshySpacing.xs))
@@ -302,7 +281,7 @@ private fun CommentRow(
                 }
             }
             }
-            CommentBody(comment) {
+            CommentBody(commentId = comment.id, effects = comment.effects, isBlurred = comment.isBlurred) {
                 if (comment.hasBody) {
                     SelectionContainer {
                         RichMessageText(
@@ -337,24 +316,6 @@ private fun CommentRow(
                 CommentMoreMenu(comment = comment, onDelete = onDelete, imaging = imaging)
             }
         }
-    }
-}
-
-/**
- * #14385 — le corps d'un commentaire (texte + médias) avec ses effets, comme iOS `commentBody(effects:)` : les effets
- * permanents l'habillent, et un commentaire flouté se lit sous le voile de la bulle ([BubbleBlurReveal] — on touche, on
- * lit, ça se referme). Sans effet, le corps est rendu tel quel.
- */
-@Composable
-private fun CommentBody(comment: CommentPresentation, content: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(MeeshyRadius.sm)
-    val dressed: @Composable () -> Unit = {
-        Column(if (comment.effects.hasPersistentEffect) Modifier.messageEffects(comment.effects, shape = shape) else Modifier) { content() }
-    }
-    if (comment.isBlurred) {
-        BubbleBlurReveal(messageId = comment.id, spec = BubbleBlurRevealSpec(isViewOnce = false), shape = shape) { dressed() }
-    } else {
-        dressed()
     }
 }
 

@@ -70,6 +70,7 @@ internal fun rememberStoryTyping(
             options = { option -> ComposerTypingOptions(option, edited, viewModel) },
             onKeyboardRaised = { surface = ComposerKeyboardOrOptions.keyboardRaised(surface) },
             keyboard = keyboard,
+            onKeyboardClosed = viewModel::onInlineEditSuspended,
         )
         caption -> StoryTypingSlot(
             surface = TypingSurface.Keyboard,

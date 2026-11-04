@@ -112,7 +112,31 @@ data class RegisterResponse(
     val sessionToken: String? = null,
     val expiresIn: Int? = null,
     val phoneOwnershipConflict: Boolean = false,
+    /** Le jeton d'attente (#8083) : il apprend à la carte d'inscription que le lien a été ouvert ailleurs. */
+    val pendingSessionToken: String? = null,
+    /**
+     * `verification-required` (#8214) : la revendication d'une adresse crée le compte SANS session, un code est
+     * parti à l'adresse. Absent des réponses nominales (vieille passerelle comprise).
+     */
+    val status: String? = null,
+    val email: String? = null,
+    val accountCreated: Boolean? = null,
 ) {
+    /**
+     * L'adresse dont le code est parti, quand la réponse ne rend AUCUNE session mais demande la preuve ; `null`
+     * sinon. L'adresse SERVIE fait foi, [typedEmail] n'en est que le repli.
+     */
+    fun pendingVerification(typedEmail: String): me.meeshy.sdk.model.auth.PendingEmailVerification? {
+        if (status != me.meeshy.sdk.model.auth.LoginResponse.VERIFICATION_REQUIRED_STATUS) return null
+        val address = email?.trim()?.takeIf { it.isNotEmpty() } ?: typedEmail.trim().takeIf { it.isNotEmpty() }
+            ?: return null
+        return me.meeshy.sdk.model.auth.PendingEmailVerification(
+            email = address,
+            accountCreated = accountCreated ?: false,
+            pendingSessionToken = pendingSessionToken?.takeIf { it.isNotEmpty() },
+        )
+    }
+
     /** La session créée, ou `null` quand la réponse ne porte pas d'identité. */
     fun asSession(): AuthSession? {
         val account = user ?: return null

@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.conversationlist.SectionFoldedUnread
+import me.meeshy.sdk.model.renderFingerprint
 import me.meeshy.sdk.model.search.ListMessageHit
 import me.meeshy.sdk.model.search.ListMessageSearchState
 import me.meeshy.sdk.theme.otherParticipantUserId
@@ -98,17 +100,19 @@ private fun LazyListScope.populatedItems(
 ) {
     if (!ConversationSections.showsHeaders(sections)) {
         sections.forEach { section ->
-            items(section.items, key = { "row-${it.id}" }) { conversation ->
-                ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
+            items(section.items, key = { "row-${it.id}" }, contentType = { ROW_CONTENT_TYPE }) { conversation ->
+                Box(Modifier.animateItem()) {
+                    ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
+                }
             }
         }
         messages()
-        item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
+        item(key = "list-tail", contentType = "tail") { Spacer(Modifier.height(tailHeight)) }
         return
     }
     sections.forEach { section ->
         val key = section.categoryId?.let { "section-cat-$it" } ?: "section-${section.kind}"
-        item(key = key) {
+        item(key = key, contentType = "section-header") {
             CollapsibleSection(
                 title = section.title ?: stringResource(section.kind.titleRes()),
                 count = section.items.size,
@@ -130,11 +134,13 @@ private fun LazyListScope.populatedItems(
         }
     }
     messages()
-    item(key = "list-tail") { Spacer(Modifier.height(tailHeight)) }
+    item(key = "list-tail", contentType = "tail") { Spacer(Modifier.height(tailHeight)) }
 }
 
 /** Marge de fin de liste (iOS `Color.clear.frame(height: 60)`) : les disques flottants ne réservent rien, comme iOS (#13671). */
 private val LIST_TAIL_HEIGHT = 60.dp
+
+private const val ROW_CONTENT_TYPE = "conversation-row"
 
 @Composable
 private fun ConversationListRow(
@@ -150,9 +156,11 @@ private fun ConversationListRow(
         ConversationRowActions.forConversation(viewModel, conversation.id)
             .withNavigation(rowNavigation, conversation, currentUserId)
     }
+    val fingerprint = conversation.renderFingerprint()
+    val stableConversation = remember(conversation.id, fingerprint) { conversation }
     ConversationRow(
         model = ConversationRowModel(
-            conversation = conversation,
+            conversation = stableConversation,
             currentUserId = state.currentUserId,
             currentUserPrefs = state.currentUser,
             peerUserId = conversation.otherParticipantUserId(currentUserId),
@@ -162,6 +170,7 @@ private fun ConversationListRow(
             typingDisplayName = state.typingDisplayNameFor(conversation.id),
             categories = state.categories,
             previewMessages = state.previewFor(conversation.id),
+            previewUnavailable = state.isPreviewUnavailable(conversation.id),
             isLocked = state.isLocked(conversation.id),
             nowMillis = now,
             hasPendingSync = signals.hasPendingSync(conversation.id),

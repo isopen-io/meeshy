@@ -82,9 +82,8 @@ struct WaitingStoryCancelButton: View {
 // MARK: - Failed Story Row
 
 /// One entry in the permanently-failed publish history
-/// (`StoryPublishService.failedItems`). No rich thumbnail for the MVP — the
-/// local media backing `item` is preserved on disk but decoding a preview
-/// frame from it is a separate feature.
+/// (`StoryPublishService.failedItems`), with the thumbnail of the media the
+/// queue keeps on disk (#15095).
 ///
 /// « Reprendre » (incrément 5) est l'action PRIMAIRE : convertir l'échec en
 /// brouillon éditable est le seul chemin qui débloque un rejet serveur
@@ -103,12 +102,13 @@ struct FailedStoryRow: View {
 
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
-            ZStack {
-                Circle().fill(MeeshyColors.error.opacity(0.15))
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(MeeshyColors.error)
+            StoryQueueThumbnailView(item: item, stroke: MeeshyColors.error) {
+                ZStack {
+                    Circle().fill(MeeshyColors.error.opacity(0.15))
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(MeeshyColors.error)
+                }
             }
-            .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(String(localized: "story.mine.failed.title", defaultValue: "Story non publiée"))
@@ -166,12 +166,13 @@ struct WaitingStoryRow: View {
 
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
-            ZStack {
-                Circle().fill(Color.secondary.opacity(0.15))
-                Image(systemName: "clock.arrow.circlepath")
-                    .foregroundStyle(Color.secondary)
+            StoryQueueThumbnailView(item: item, stroke: MeeshyColors.indigo400) {
+                ZStack {
+                    Circle().fill(Color.secondary.opacity(0.15))
+                    Image(systemName: "clock.arrow.circlepath")
+                        .foregroundStyle(Color.secondary)
+                }
             }
-            .frame(width: 44, height: 44)
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
@@ -206,5 +207,63 @@ enum StoryFailureText {
         guard let lastError else { return nil }
         guard lastError == StoryPublishQueue.missingLocalMediaError else { return lastError }
         return String(localized: "story.mine.failed.missingMedia", defaultValue: "Un média local est introuvable", bundle: .main)
+    }
+}
+
+// MARK: - Vignette d'une story dans la file
+
+/// **Une story en attente ou en échec se reconnaît à sa vignette** (#15095) :
+/// le premier visuel que la file garde sur l'appareil, réduit à la taille de
+/// la ligne. Sans visuel (story de texte) ou sans fichier lisible, l'icône
+/// d'état de la ligne reste.
+nonisolated enum StoryQueueThumbnail {
+    static let side: CGFloat = 44
+
+    static func source(in references: [StoryMediaReference]) -> StoryMediaReference? {
+        references.first { $0.mediaType == "image" || $0.mediaType == "video" }
+    }
+
+    @concurrent
+    static func image(for reference: StoryMediaReference, maxPixel: CGFloat) async -> UIImage? {
+        let file = URL(fileURLWithPath: reference.localFilePath)
+        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
+        if reference.mediaType == "video" {
+            return try? await StoryMediaDecoder.firstFrame(of: file, maxDimension: maxPixel)
+        }
+        return ImageDownsampler.thumbnail(fileURL: file, maxPixelSize: maxPixel, decodeImmediately: true)
+            .map(UIImage.init(cgImage:))
+    }
+}
+
+struct StoryQueueThumbnailView<Fallback: View>: View {
+    let item: StoryPublishQueueItem
+    let stroke: Color
+    @ViewBuilder let fallback: () -> Fallback
+
+    @Environment(\.displayScale) private var displayScale
+    @State private var thumbnail: UIImage?
+
+    var body: some View {
+        Group {
+            if let thumbnail {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: StoryQueueThumbnail.side, height: StoryQueueThumbnail.side)
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+                            .stroke(stroke, lineWidth: 1)
+                    )
+                    .accessibilityIdentifier("story.mine.queue.thumbnail")
+            } else {
+                fallback()
+                    .frame(width: StoryQueueThumbnail.side, height: StoryQueueThumbnail.side)
+            }
+        }
+        .task(id: item.id) {
+            guard let reference = StoryQueueThumbnail.source(in: item.mediaReferences) else { return }
+            thumbnail = await StoryQueueThumbnail.image(for: reference, maxPixel: StoryQueueThumbnail.side * displayScale)
+        }
     }
 }

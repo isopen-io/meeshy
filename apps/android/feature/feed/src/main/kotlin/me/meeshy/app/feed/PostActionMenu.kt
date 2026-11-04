@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.PendingSendMenu
 import me.meeshy.sdk.model.PostMenuContext
 import me.meeshy.sdk.model.PostMenuEntry
 import me.meeshy.sdk.model.PostMenuPolicy
@@ -25,6 +26,9 @@ enum class PostAction {
     NearHere,
     Report,
     Delete,
+    RetrySend,
+    ReopenSend,
+    CancelSend,
 }
 
 /** Description UI-free d'un post au moment d'ouvrir son menu d'options. */
@@ -42,6 +46,8 @@ data class PostActionContext(
     val hasSaveableMedia: Boolean = false,
     val editable: Boolean = false,
     val hasLocation: Boolean = false,
+    /** La publication est encore sur l'appareil : son menu n'offre que ce qui vaut sans serveur (#14902). */
+    val pendingSend: PendingSendMenu? = null,
 )
 
 /**
@@ -69,6 +75,7 @@ object PostActionMenu {
             imageable = ctx.imageable,
             editable = ctx.editable,
             hasLocation = ctx.hasLocation,
+            pendingSend = ctx.pendingSend,
         ),
     ).map(PostMenuEntry::asAction)
 }
@@ -90,4 +97,7 @@ private fun PostMenuEntry.asAction(): PostAction = when (this) {
     PostMenuEntry.NearHere -> PostAction.NearHere
     PostMenuEntry.Report -> PostAction.Report
     PostMenuEntry.Delete -> PostAction.Delete
+    PostMenuEntry.RetrySend -> PostAction.RetrySend
+    PostMenuEntry.ReopenSend -> PostAction.ReopenSend
+    PostMenuEntry.CancelSend -> PostAction.CancelSend
 }

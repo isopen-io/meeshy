@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.composer.StoryRepostAudience
 import me.meeshy.sdk.model.story.StoryReplyRules
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.profile.LocalProfileSheetPresented
 
 /**
  * L'HÔTE du lecteur de stories : il choisit entre chargement, introuvable et lecture, puis assemble les fichiers
@@ -53,7 +54,11 @@ fun StoryViewerScreen(
 
     val chrome = rememberStoryViewerChromeState()
     LaunchedEffect(state.currentStoryId) {
-        when (viewModel.consumeEntryIntent()?.action) {
+        val intent = viewModel.consumeEntryIntent()
+        chrome.targetCommentId = intent?.targetCommentId
+        chrome.targetParentCommentId = intent?.targetParentCommentId
+        if (intent?.targetCommentId != null) chrome.showComments = true
+        when (intent?.action) {
             StoryViewerInitialAction.COMMENTS -> chrome.showComments = true
             StoryViewerInitialAction.VIEWS -> chrome.showViewers = true
             null -> Unit
@@ -85,12 +90,16 @@ fun StoryViewerScreen(
         StoryRailFreezeInput(state.currentStoryId, liveRailPlan, slide?.hasSound == true, rememberStoryCommentsReconciled(commentThread)),
     )
     val composing = railPlan.pinsCommentComposer && storyCommentHolds(commentThread)
+    val groupIntro = rememberStoryGroupIntro(state, slide?.opening, viewModel)
     val cover = StoryViewerCover(
         sheet = chrome.sheetOpen || state.languageExplorer != null,
         railBar = rail.overlayActive,
         menu = chrome.showOptions,
         dialog = chrome.dialogOpen || videoExport.busy,
         composing = composing,
+        reading = chrome.captionExpanded || chrome.transcript.requested,
+        groupIntro = groupIntro.shown,
+        profile = LocalProfileSheetPresented.current.value,
     )
     val actions = rememberStoryViewerActions(
         state = state,
@@ -118,6 +127,8 @@ fun StoryViewerScreen(
         playing = playback.playing,
         lap = playback.lap,
         waiting = playback.waiting,
+        awaitingStart = playback.awaitingStart,
+        scrubber = playback.scrubber,
         composing = cover.composing,
         railPlan = railPlan,
         commentThread = commentThread,
@@ -131,6 +142,7 @@ fun StoryViewerScreen(
         actions = actions,
         haptics = meeshyHaptics,
         viewModel = viewModel,
+        groupIntro = groupIntro,
     )
     }
     StoryViewerSheetsHost(

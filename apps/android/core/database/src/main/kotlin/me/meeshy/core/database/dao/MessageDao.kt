@@ -49,6 +49,16 @@ public interface MessageDao {
     )
     public suspend fun endToEndCandidates(conversationId: String, window: Int): List<MessageEntity>
 
+    /**
+     * Le dernier message ACQUITTÉ du fil : celui qu'un résumé de lecture non nommé (passerelle d'avant #7433)
+     * décrit. Un envoi en vol (`sendState` posé, pas d'id serveur) ou supprimé n'est jamais ce message-là.
+     */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId AND sendState IS NULL " +
+            "AND serverId IS NOT NULL AND deletedAt IS NULL ORDER BY createdAt DESC LIMIT 1",
+    )
+    public suspend fun latestAcknowledged(conversationId: String): MessageEntity?
+
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId")
     public suspend fun listForConversation(conversationId: String): List<MessageEntity>
 
@@ -234,6 +244,10 @@ public interface MessageDao {
     )
     public suspend fun newestSyncedCreatedAt(conversationId: String): Long?
 
+    /** The ids of the local send bubbles in [sendState] (`SENDING` / `FAILED`) — the boot reconciliation's input. */
+    @Query("SELECT id FROM messages WHERE sendState = :sendState")
+    public suspend fun idsInSendState(sendState: String): List<String>
+
     @Query("UPDATE messages SET sendState = :sendState, changeVersion = changeVersion + 1 WHERE id = :id")
     public suspend fun updateSendState(id: String, sendState: String?)
 
@@ -245,6 +259,17 @@ public interface MessageDao {
 
     @Query("DELETE FROM messages")
     public suspend fun clear()
+
+    /** Purge du cache : une page de charges, toutes lignes confondues (l'attribution des médias les relit). */
+    @Query("SELECT payload FROM messages ORDER BY id LIMIT :limit OFFSET :offset")
+    public suspend fun payloadPage(limit: Int, offset: Int): List<String>
+
+    /** Octets réels des charges que la purge peut retirer : jamais une ligne optimiste ni une vue unique ouverte. */
+    @Query("SELECT COALESCE(SUM(LENGTH(CAST(payload AS BLOB))), 0) FROM messages WHERE sendState IS NULL AND viewOnceOpenedAt IS NULL")
+    public suspend fun purgeablePayloadBytes(): Long
+
+    @Query("DELETE FROM messages WHERE sendState IS NULL AND viewOnceOpenedAt IS NULL")
+    public suspend fun clearPurgeable()
 
     /** Rétention — les lignes confirmées par le serveur plus vieilles que [cutoff] (une ligne optimiste n'est jamais purgée). */
     @Query("SELECT id, serverId FROM messages WHERE sendState IS NULL AND createdAt < :cutoff LIMIT :limit")

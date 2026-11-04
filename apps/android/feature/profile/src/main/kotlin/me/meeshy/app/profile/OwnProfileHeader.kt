@@ -40,7 +40,11 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.sdk.model.appearance.AvatarRingDesign
 import me.meeshy.ui.profile.ProfileAvatar as SocialProfileAvatar
+
+/** Le voile sombre à 40 % posé sur l'image pendant son envoi (iOS `Color.black.opacity(0.4)`). */
+private val UploadVeil = MeeshyMediaChromeColors.MediaBackdrop.copy(alpha = 0.4f)
 
 /** Les mesures de l'en-tête de MA page (iOS `bannerAndAvatarSection`). */
 internal object OwnProfileHeaderMetrics {
@@ -69,6 +73,7 @@ internal fun OwnProfileHeader(
     onOpenImage: (ProfileFullscreenImage) -> Unit,
     onMoodTap: (() -> Unit)?,
     banner: @Composable BoxScope.() -> Unit,
+    ring: AvatarRingDesign? = null,
 ) {
     val name = user.effectiveDisplayName
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -102,6 +107,7 @@ internal fun OwnProfileHeader(
                     avatarUrl = user.avatar,
                     accent = MeeshyPalette.Indigo500,
                     size = OwnProfileHeaderMetrics.AvatarSize,
+                    ring = ring,
                     moodEmoji = OwnProfileMood.shown(moodEmoji, isEditing = false),
                     onOpenImage = onOpenImage,
                     onMoodTap = onMoodTap ?: {},
@@ -185,7 +191,7 @@ private fun OwnProfileBannerFrame(
         }
         if (isUploading) {
             Box(
-                Modifier.matchParentSize().background(MeeshyMediaChromeColors.ScrimSoft),
+                Modifier.matchParentSize().background(UploadVeil),
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(color = MeeshyMediaChromeColors.OnMedia, modifier = Modifier.size(28.dp))
@@ -225,7 +231,7 @@ private fun OwnProfileEditableAvatar(
         )
         if (isUploading) {
             Box(
-                Modifier.matchParentSize().clip(CircleShape).background(MeeshyMediaChromeColors.ScrimSoft),
+                Modifier.matchParentSize().clip(CircleShape).background(UploadVeil),
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(color = MeeshyMediaChromeColors.OnMedia, modifier = Modifier.size(24.dp))

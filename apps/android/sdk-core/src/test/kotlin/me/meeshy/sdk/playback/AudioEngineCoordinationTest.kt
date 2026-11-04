@@ -39,14 +39,14 @@ class AudioEngineCoordinationTest {
     fun `demarrer un vocal eteint un autre lecteur du registre`() = coordinationTest { rig ->
         val other = FakePlayer(CoordinatedPlayerKind.Video, playing = true).also(rig.coordinator::register)
 
-        rig.engine.play("a", "https://cdn/a.mp3")
+        rig.engine.play("a", "https://cdn/a.mp3", isProtected = false)
 
         assertThat(other.stops).isEqualTo(1)
     }
 
     @Test
     fun `un appel met le vocal en pause puis le raccrochage le reprend`() = coordinationTest { rig ->
-        rig.engine.play("a", "https://cdn/a.mp3")
+        rig.engine.play("a", "https://cdn/a.mp3", isProtected = false)
         rig.port.prepare(30_000L)
         assertThat(rig.engine.state.value.isPlaying).isTrue()
 
@@ -59,7 +59,7 @@ class AudioEngineCoordinationTest {
 
     @Test
     fun `une pause de l'utilisateur pendant l'interruption empeche la reprise`() = coordinationTest { rig ->
-        rig.engine.play("a", "https://cdn/a.mp3")
+        rig.engine.play("a", "https://cdn/a.mp3", isProtected = false)
         rig.port.prepare(30_000L)
         rig.coordinator.interruptAllForCall()
 
@@ -71,7 +71,7 @@ class AudioEngineCoordinationTest {
 
     @Test
     fun `un vocal en pause avant l'appel ne reprend pas au raccrochage`() = coordinationTest { rig ->
-        rig.engine.play("a", "https://cdn/a.mp3")
+        rig.engine.play("a", "https://cdn/a.mp3", isProtected = false)
         rig.port.prepare(30_000L)
         rig.engine.pause()
 

@@ -235,6 +235,21 @@ class ConversationListRealtimeBinderPatchTest {
     }
 
     @Test
+    fun `a conversation updated frame is patched in place without rereading the list`() = runTest(StandardTestDispatcher()) {
+        val frames = Frames()
+        val rig = rig()
+        binder(frames, rig)
+        runCurrent()
+        val event = ConversationUpdatedSocketEvent(conversationId = "c1", title = "Renamed")
+
+        frames.updated.emit(event)
+        runCurrent()
+
+        coVerify(exactly = 1) { rig.patcher.applyUpdated(event) }
+        coVerify(exactly = 0) { rig.repo.refresh() }
+    }
+
+    @Test
     fun `a failing patch never stops the lane`() = runTest(StandardTestDispatcher()) {
         val frames = Frames()
         val rig = rig()

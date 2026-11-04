@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_two_factor_error_invalid_code">Ese código no es correcto. Revisa tu aplicación de autenticación e inténtalo de nuevo.</string>
+    <string name="login_two_factor_error_too_many_attempts">Demasiados intentos. Vuelve a intentarlo en unos minutos.</string>
+    <string name="login_two_factor_error_token_expired">Este inicio de sesión ha caducado. Vuelve a introducir tu contraseña.</string>
+    <string name="login_two_factor_description_with_backup">Introduce el código de verificación de 6 dígitos de tu aplicación de autenticación, o uno de tus códigos de respaldo.</string>
+</resources>

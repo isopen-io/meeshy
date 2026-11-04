@@ -12,13 +12,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -31,9 +34,28 @@ import me.meeshy.ui.theme.MeeshySpacing
  * et la pastille « traduit » de son en-tête. Un lot qui change leur rendu édite CE fichier, pas l'hôte.
  */
 @Composable
-internal fun SegmentedProgress(count: Int, index: Int, currentProgress: () -> Float) {
+internal fun SegmentedProgress(
+    count: Int,
+    index: Int,
+    currentProgress: () -> Float,
+    scrubber: StoryProgressScrubber = StoryProgressScrubber.None,
+) {
+    val position = stringResource(R.string.story_viewer_a11y_position, index + 1, count)
+    val resources = LocalContext.current.resources
+    StoryScrubTouchArea(
+        scrubber = scrubber,
+        label = position,
+        percentLabel = { percent -> resources.getString(R.string.story_viewer_a11y_percent, percent) },
+        onScrubbingChanged = {},
+    ) { scrubbing ->
+        SegmentRow(count, index, currentProgress, Modifier.align(Alignment.Center).alpha(if (scrubbing) 0f else 1f))
+    }
+}
+
+@Composable
+private fun SegmentRow(count: Int, index: Int, currentProgress: () -> Float, modifier: Modifier) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         repeat(count) { i ->

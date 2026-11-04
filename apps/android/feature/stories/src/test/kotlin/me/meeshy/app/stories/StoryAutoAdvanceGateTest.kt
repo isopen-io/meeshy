@@ -58,4 +58,17 @@ class StoryAutoAdvanceGateTest {
 
         assertThat(StoryAutoAdvanceGate.shouldCountdown(image, setOf("https://cdn/x.jpg"), StoryMediaReadiness.Ready)).isTrue()
     }
+
+    @Test
+    fun `a foreground clip not ready holds the start of the countdown`() {
+        val pending = StoryMediaReadiness(foregroundPending = true)
+
+        assertThat(StoryAutoAdvanceGate.shouldCountdown(slide(), emptySet(), pending)).isFalse()
+        assertThat(StoryAutoAdvanceGate.shouldCountdown(slide(), emptySet(), StoryMediaReadiness.Ready)).isTrue()
+    }
+
+    @Test
+    fun `a foreground clip not ready never counts as a playback stall`() {
+        assertThat(StoryMediaReadiness(foregroundPending = true).waiting).isFalse()
+    }
 }

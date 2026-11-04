@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ContentRemovalReason
 import me.meeshy.sdk.model.STORY_COMMENT_HEART
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.model.StoryCommentChase
@@ -19,8 +20,25 @@ import me.meeshy.sdk.model.StoryCommentChaseOutcome
 import me.meeshy.sdk.model.StoryCommentPage
 import me.meeshy.sdk.model.StoryCommentsReducer
 import me.meeshy.sdk.model.StoryCommentsState
+import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.StoryCommentStatus
+import me.meeshy.sdk.media.MediaIntake
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadSource
+import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.story.StoryCommentAttachmentTray
+import me.meeshy.sdk.model.story.StoryCommentDraft
+import me.meeshy.sdk.model.story.StoryCommentPiece
+import me.meeshy.sdk.model.story.StoryCommentPublish
+import me.meeshy.sdk.model.story.StoryViewerParticipationMark
+import me.meeshy.sdk.story.StoryCommentPublication
+import me.meeshy.sdk.story.StoryCommentPublisher
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import me.meeshy.sdk.model.toStoryComment
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.PostModerationRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.StoryCommentsRepository
@@ -37,6 +55,11 @@ data class StoryCommentsUiState(
     val showingOriginal: Set<String> = emptySet(),
     /** `null` hors chasse ; vrai quand le commentaire ciblé est chargé, faux quand le serveur ne le sert pas. */
     val targetFound: Boolean? = null,
+    /** Le commentaire auquel le composeur répond (bouton « Répondre », glissé) ; `null` : commentaire de premier niveau. */
+    val replyTarget: me.meeshy.sdk.model.StoryComment? = null,
+    /** Le lecteur : d'où se lisent les entrées du menu « … » de chaque ligne (auteur, modération, autre). */
+    val viewerId: String? = null,
+    val viewerRole: String? = null,
 )
 
 /**
@@ -50,7 +73,41 @@ class StoryCommentsViewModel @Inject constructor(
     private val repository: StoryCommentsRepository,
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
+    private val moderation: PostModerationRepository,
+    private val reports: ReportRepository,
+    private val publisher: StoryCommentPublisher? = null,
+    private val drafts: StoryCommentDraftStore? = null,
+    private val participation: StoryViewerParticipationStore? = null,
+    private val mediaUploader: StoryCommentMediaUploader? = null,
 ) : ViewModel() {
+
+    /** Un commentaire que la file a refusé : son texte (et son parent) retournent au composeur. */
+    data class RefusedComment(
+        val text: String,
+        val parentId: String?,
+        val pieces: List<StoryCommentPiece> = emptyList(),
+        val place: SharedPlace? = null,
+    )
+
+    /** Ce qui part À CÔTÉ du texte : les pièces téléversées, le lieu et les effets (flou, éphémère). */
+    private data class Extras(val pieces: List<StoryCommentPiece>, val effectFlags: Int?, val place: SharedPlace?) {
+        val attachmentIds: List<String>? get() = pieces.mapNotNull { it.uploadedId }.takeIf { it.isNotEmpty() }
+    }
+
+    private val _tray = MutableStateFlow(StoryCommentAttachmentTray())
+    val tray: StateFlow<StoryCommentAttachmentTray> = _tray.asStateFlow()
+    private val _place = MutableStateFlow<SharedPlace?>(null)
+    val place: StateFlow<SharedPlace?> = _place.asStateFlow()
+    private var effectFlags: Int? = null
+    private var pieceSeq = 0
+    private val sentExtras = mutableMapOf<String, Extras>()
+    private val mediaFailures = Channel<Unit>(Channel.BUFFERED)
+    /** Une pièce n'a pas pu être téléversée : elle a quitté le plateau, l'écran le dit. */
+    val mediaFailed: kotlinx.coroutines.flow.Flow<Unit> = mediaFailures.receiveAsFlow()
+
+    private val refusals = Channel<RefusedComment>(Channel.BUFFERED)
+    val refused: kotlinx.coroutines.flow.Flow<RefusedComment> = refusals.receiveAsFlow()
+    private var pendingSeq = 0
 
     private val _state = MutableStateFlow(StoryCommentsUiState())
     val state: StateFlow<StoryCommentsUiState> = _state.asStateFlow()
@@ -76,7 +133,15 @@ class StoryCommentsViewModel @Inject constructor(
         storyId?.let { socialSocket.leavePostRoom(it) }
         loadJob?.cancel()
         storyId = newStoryId?.takeIf { it.isNotBlank() }
-        _state.value = StoryCommentsUiState(comments = StoryCommentsState(count = payloadCount))
+        _tray.value = StoryCommentAttachmentTray()
+        _place.value = null
+        effectFlags = null
+        val viewer = sessionRepository.currentUser.value
+        _state.value = StoryCommentsUiState(
+            comments = StoryCommentsState(count = payloadCount),
+            viewerId = viewer?.id,
+            viewerRole = viewer?.role,
+        )
         val id = storyId ?: return
         socialSocket.joinPostRoom(id)
         loadJob = viewModelScope.launch { loadRoots(id) }
@@ -175,6 +240,155 @@ class StoryCommentsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Envoi optimiste depuis la barre unique (iOS `sendComment`) : la ligne paraît aussitôt (Pending, compteurs +1), le
+     * brouillon de la story tombe, l'action « commenté » est notée pour le contour du rail, puis la file durable prend
+     * le relais. Répondre à une réponse cible le parent RACINE. Rend faux quand rien ne part (texte vide, pas de session).
+     */
+    fun send(text: String, language: String?): Boolean {
+        val id = storyId ?: return false
+        if (publisher == null) return false
+        val clean = text.trim()
+        val user = sessionRepository.currentUser.value ?: return false
+        val tray = _tray.value
+        val place = _place.value
+        if (tray.isUploading || (clean.isEmpty() && !tray.hasMedia && place == null)) return false
+        val target = _state.value.replyTarget
+        val parentId = target?.let { it.parentId?.takeIf { p -> p.isNotBlank() } ?: it.id }
+        val tempId = "pending-${pendingSeq++}"
+        val author = user.displayName?.takeIf { it.isNotBlank() } ?: user.username
+        update { StoryCommentPublish.optimistic(it, StoryCommentPublish.pendingRow(tempId, clean, parentId, author, user.id, user.avatar)) }
+        _state.update { it.copy(replyTarget = null) }
+        drafts?.sent(id)
+        participation?.note(StoryViewerParticipationMark.COMMENTED, id)
+        val extras = Extras(tray.pieces, effectFlags, place)
+        _tray.value = StoryCommentAttachmentTray()
+        _place.value = null
+        effectFlags = null
+        sentExtras[tempId] = extras
+        dispatch(id, tempId, clean, parentId, language, extras)
+        return true
+    }
+
+    /** Réessaie un commentaire en échec : la ligne repasse en attente et repart par la file. */
+    fun retrySend(tempId: String, language: String?) {
+        val id = storyId ?: return
+        val row = _state.value.comments.find(tempId)?.takeIf { it.status == StoryCommentStatus.Failed } ?: return
+        update { StoryCommentPublish.retrying(it, tempId) }
+        dispatch(id, tempId, row.originalContent, row.parentId, language, sentExtras[tempId] ?: Extras(emptyList(), null, null))
+    }
+
+    private fun dispatch(id: String, tempId: String, text: String, parentId: String?, language: String?, extras: Extras) {
+        val queue = publisher ?: return
+        viewModelScope.launch {
+            val outcome = guarded { queue.publish(id, text, parentId, language, extras.attachmentIds, extras.effectFlags, extras.place) }
+            if (!isViewing(id)) return@launch
+            if (outcome == StoryCommentPublication.Delivered || outcome == StoryCommentPublication.Dropped) sentExtras.remove(tempId)
+            when (outcome) {
+                StoryCommentPublication.Delivered -> update { StoryCommentPublish.delivered(it, tempId) }
+                StoryCommentPublication.Dropped -> Unit
+                null, StoryCommentPublication.Failed -> update { StoryCommentPublish.failed(it, tempId) }
+                is StoryCommentPublication.Refused -> {
+                    update { current -> StoryCommentPublish.refused(current, tempId)?.state ?: current }
+                    sentExtras.remove(tempId)
+                    drafts?.refused(id, outcome.text, System.currentTimeMillis(), extras.pieces, extras.place)
+                    _tray.update { it.restoring(extras.pieces) }
+                    if (_place.value == null) _place.value = extras.place
+                    refusals.trySend(RefusedComment(outcome.text, parentId, extras.pieces, extras.place))
+                }
+            }
+        }
+    }
+
+    /** Joint une photo, une vidéo, un fichier ou une voix : elle entre au plateau et se téléverse aussitôt. */
+    fun attachMedia(item: MediaUploadItem) {
+        val path = (item.source as? MediaUploadSource.OnDisk)?.file?.path.orEmpty()
+        val piece = StoryCommentPiece("piece-${pieceSeq++}", path, item.fileName, item.mimeType, item.durationMs)
+        val before = _tray.value
+        val after = before.adding(piece)
+        if (after === before) {
+            MediaIntake.release(item)
+            return
+        }
+        _tray.value = after
+        viewModelScope.launch {
+            val outcome = mediaUploader?.upload(item) ?: StoryCommentUpload.Failed
+            val stillThere = _tray.value.piece(piece.id) != null
+            when {
+                !stillThere -> Unit
+                outcome is StoryCommentUpload.Done -> _tray.update { it.uploaded(piece.id, outcome.serverId) }
+                else -> {
+                    _tray.update { it.failed(piece.id) }
+                    MediaIntake.release(item)
+                    mediaFailures.trySend(Unit)
+                }
+            }
+        }
+    }
+
+    fun removeMedia(pieceId: String) {
+        val piece = _tray.value.piece(pieceId) ?: return
+        _tray.update { it.removing(pieceId) }
+        if (piece.localPath.isNotBlank()) {
+            MediaIntake.release(MediaUploadItem.onDisk(java.io.File(piece.localPath), piece.fileName, piece.mimeType, piece.durationMs))
+        }
+    }
+
+    fun setPlace(place: SharedPlace?) {
+        _place.value = place
+    }
+
+    fun setEffectFlags(flags: Int?) {
+        effectFlags = flags?.takeIf { it > 0 }
+    }
+
+    /** Le brouillon de la story : le texte saisi, avec les pièces et le lieu du plateau. */
+    fun saveDraft(text: String) {
+        val id = storyId ?: return
+        drafts?.save(id, text, _tray.value.pieces, _place.value)
+    }
+
+    /** Rouvre le brouillon de la story : ses pièces et son lieu reprennent leur place ; rend le texte à replacer. */
+    fun restoreDraft(): StoryCommentDraft? {
+        val draft = storyId?.let { drafts?.draftOf(it) } ?: return null
+        _tray.update { it.restoring(draft.pieces) }
+        if (_place.value == null) _place.value = draft.place
+        return draft
+    }
+
+    /** « Répondre » : le composeur épinglé répond à ce commentaire ; le fil le met en vue. */
+    fun setReplyTarget(comment: me.meeshy.sdk.model.StoryComment) {
+        _state.update { it.copy(replyTarget = comment) }
+    }
+
+    fun clearReplyTarget() {
+        _state.update { it.copy(replyTarget = null) }
+    }
+
+    /**
+     * Retrait par la modération, avec son motif (3 à 500 caractères, sinon rien ne part). Optimiste : la ligne
+     * quitte le fil aussitôt, et revient telle quelle si la passerelle refuse.
+     */
+    fun remove(commentId: String, reason: String) {
+        val id = storyId ?: return
+        val clean = ContentRemovalReason.normalized(reason) ?: return
+        val snapshot = _state.value.comments
+        if (!snapshot.contains(commentId)) return
+        update { StoryCommentsReducer.removed(it, commentId) }
+        viewModelScope.launch {
+            val result = guarded { moderation.removeComment(id, commentId, clean) }
+            if (result !is NetworkResult.Success && isViewing(id)) update { snapshot }
+        }
+    }
+
+    /** Signale un commentaire d'un autre ; [done] reçoit l'issue (vrai : le signalement est parti). */
+    fun report(commentId: String, reason: ReportReason, details: String?, done: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val result = guarded { reports.reportComment(commentId, reason, details?.trim()?.takeIf { it.isNotEmpty() }) }
+            done(result is NetworkResult.Success)
+        }
+    }
+
     fun toggleOriginal(commentId: String) {
         _state.update {
             it.copy(showingOriginal = if (commentId in it.showingOriginal) it.showingOriginal - commentId else it.showingOriginal + commentId)
@@ -219,7 +433,7 @@ class StoryCommentsViewModel @Inject constructor(
     private fun observeRealtime() {
         viewModelScope.launch {
             socialSocket.commentAdded.collect { event ->
-                safely { if (isViewing(event.postId)) update { StoryCommentsReducer.added(it, event.comment.toStoryComment(prefs), event.commentCount) } }
+                safely { if (isViewing(event.postId)) update { StoryCommentPublish.echoed(it, event.comment.toStoryComment(prefs), event.commentCount) } }
             }
         }
         viewModelScope.launch {

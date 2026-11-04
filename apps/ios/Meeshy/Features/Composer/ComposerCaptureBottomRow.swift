@@ -171,8 +171,7 @@ struct ComposerCaptureBottomRow: View {
                     mediaTrack { ComposerSoundTrack(session: session, url: trimClip.url) }
                 }
             case .presets, .band, .none:
-                // Les proportions : leur place est retenue sous la scène, leur
-                // bande pleine largeur s'y pose (`ComposerEditPresetsLayout`).
+                // Les proportions flottent sur le cadre (`ComposerEditPresetsLayout`).
                 EmptyView()
             }
         }

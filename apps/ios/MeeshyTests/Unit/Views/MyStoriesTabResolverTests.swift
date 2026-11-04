@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 
 // MARK: - MyStoriesTabResolverTests
 //
@@ -140,5 +141,33 @@ final class MyStoriesTabResolverTests: XCTestCase {
             tab: .archive, hasPublishedStories: false,
             hasDrafts: false, hasActiveUpload: false, hasFailedItems: false, hasArchivedStories: true
         ))
+    }
+
+    // MARK: - #15127 — une story en attente ne vit que dans « File »
+
+    func test_sentStories_leavesThePendingStoriesToTheQueue() {
+        let pending = story(id: "\(StoryViewModel.pendingStoryIdPrefix)\(UUID().uuidString)#0")
+        let sent = story(id: "665f1c2e9b1d4a0012345678")
+
+        XCTAssertEqual(MyStoriesTabResolver.sentStories([pending, sent]).map(\.id), [sent.id],
+                       "« Publiées » et « Archive » ne montrent que ce que le serveur connaît")
+        XCTAssertTrue(PendingStoryMarker.isPending(storyId: pending.id))
+        XCTAssertFalse(PendingStoryMarker.isPending(storyId: sent.id))
+    }
+
+    /// #15198 — l'adresse serveur d'une story en attente n'existe pas, et sa
+    /// file se retrouve par l'id temporaire qui précède le numéro de slide.
+    func test_serverId_isNilForAPendingStory_andItsQueueIdPrecedesTheSlide() {
+        let tempStoryId = "\(PendingStoryMarker.prefix)\(UUID().uuidString)"
+
+        XCTAssertNil(PendingStoryMarker.serverId(of: "\(tempStoryId)#2"))
+        XCTAssertEqual(PendingStoryMarker.serverId(of: "665f1c2e9b1d4a0012345678"), "665f1c2e9b1d4a0012345678")
+        XCTAssertNil(PendingStoryMarker.serverId(of: nil))
+        XCTAssertEqual(PendingStoryMarker.tempStoryId(of: "\(tempStoryId)#2"), tempStoryId)
+        XCTAssertNil(PendingStoryMarker.tempStoryId(of: "665f1c2e9b1d4a0012345678"))
+    }
+
+    private func story(id: String) -> StoryItem {
+        StoryItem(id: id, content: id, media: [], storyEffects: nil, createdAt: Date(), expiresAt: nil, isViewed: false)
     }
 }

@@ -4,7 +4,9 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -83,6 +85,9 @@ class NotificationRepository @Inject constructor(
     private val persistScope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private var lastPersisted: PersistedNotifications? = null
 
+    /** Le vidage disque de [clear] : toute relecture ou écriture du compte suivant l'attend, jamais l'inverse. */
+    @Volatile private var pendingDiskClear: Job? = null
+
     init {
         if (store !== NoNotificationCacheStore) startPersisting()
     }
@@ -136,6 +141,17 @@ class NotificationRepository @Inject constructor(
     suspend fun refresh() = revalidateNotifications()
 
     /**
+     * La relecture silencieuse des 30 dernières notifications (resynchro après un trou, une reconnexion ou un retour au
+     * premier plan). Le compteur est lu INDÉPENDAMMENT de la liste et posé même quand la liste échoue ; un échec
+     * laisse le cache intact et se rend à l'appelant, qui le journalise. `null` = tout a abouti.
+     */
+    suspend fun resync(): Throwable? {
+        var failure: Throwable? = null
+        revalidateNotifications { failure = it }
+        return failure
+    }
+
+    /**
      * A real-time `notification:new` arrival (feature-parity §M) prepends into the SAME cache
      * [notificationsStream] serves — a live notification is never silently overwritten by the
      * next observer's re-read or a concurrent revalidate. Dedupes by id (a REST-list race or a
@@ -181,6 +197,20 @@ class NotificationRepository @Inject constructor(
         _nextCursor.value = nextCursor
         _notificationsCache.value = items
         _notificationsSyncedAt.value = clock.nowMillis()
+    }
+
+    /**
+     * Applique [transform] à la liste « all » ET à chaque liste de portée chargée dans la session : un marquage « lu » se
+     * lit dans TOUTES les vues montées (cloche, onglets, non lues seulement), pas seulement dans la liste complète.
+     */
+    fun patchEverywhere(transform: (List<ApiNotification>) -> List<ApiNotification>) {
+        _notificationsCache.update { current -> current?.let(transform) }
+        scopedLists.replaceAll { _, current -> transform(current) }
+    }
+
+    /** Corrige le compteur de non-lues d'un [delta] relatif (jamais en dessous de zéro) : atomique, contrairement à lire puis écrire. */
+    fun adjustUnreadCount(delta: Int) {
+        _unreadCount.update { (it + delta).coerceAtLeast(0) }
     }
 
     /** La liste en mémoire d'une portée autre que « all » ; `null` tant qu'elle n'a pas été chargée dans cette session. */
@@ -291,6 +321,39 @@ class NotificationRepository @Inject constructor(
                 types = NotificationTypeSelection.csv(types),
                 hideReadTypes = NotificationTypeSelection.csv(hideReadTypes),
             )
+        }
+
+    /**
+     * Une page de la liste de [scope] avec sa pagination PROPRE (curseur servi, sinon rang [offset]) : chaque catégorie
+     * de la cloche pagine sa liste, indépendamment de la liste « all ». Rien n'est écrit ici — l'appelant range le
+     * résultat par [replaceAll].
+     */
+    suspend fun listScopePage(
+        scope: NotificationScope,
+        cursor: String? = null,
+        offset: Int = 0,
+        limit: Int = PAGE_SIZE,
+    ): NetworkResult<NotificationScopePage> =
+        when (
+            val result = pagedApiCall {
+                notificationApi.list(
+                    offset = if (cursor === null) offset else null,
+                    limit = limit,
+                    unreadOnly = if (scope.unreadOnly) true else null,
+                    cursor = cursor,
+                    types = NotificationTypeSelection.csv(scope.types.sorted()),
+                    hideReadTypes = NotificationTypeSelection.csv(scope.hideReadTypes.sorted()),
+                )
+            }
+        ) {
+            is NetworkResult.Success -> NetworkResult.Success(
+                NotificationScopePage(
+                    items = result.data.data,
+                    hasMore = result.data.pagination?.hasMore ?: (result.data.data.size >= limit),
+                    nextCursor = result.data.pagination?.nextCursor,
+                ),
+            )
+            is NetworkResult.Failure -> result
         }
 
     /** Les totaux de toute la boîte par type brut, tels que le serveur les compte (même prédicat que la liste). */
@@ -587,6 +650,17 @@ class NotificationRepository @Inject constructor(
         epoch += 1
         lastPersisted = null
         hydrated = false
+        if (store !== NoNotificationCacheStore) {
+            pendingDiskClear = persistScope.launch {
+                try {
+                    store.clear()
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Le disque est un confort ; la barrière de compte l'a de toute façon purgé.
+                }
+            }
+        }
     }
 
     /**
@@ -597,8 +671,9 @@ class NotificationRepository @Inject constructor(
         if (hydrated) return
         hydration.withLock {
             if (hydrated) return
+            pendingDiskClear?.join()
             val loaded = try {
-                store.read()
+                store.read()?.withinRetention()
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -616,6 +691,15 @@ class NotificationRepository @Inject constructor(
         }
     }
 
+    /** Rétention et plafond du disque (24 h, 200) : une liste plus vieille que la fenêtre n'est pas rejouée. */
+    private fun PersistedNotifications.withinRetention(): PersistedNotifications? {
+        val policy = CachePolicy.Notifications
+        val age = syncedAt?.let { clock.nowMillis() - it }
+        if (age != null && age > policy.keepForMillis) return null
+        val cap = policy.maxItemCount ?: return this
+        return if (items.size <= cap) this else copy(items = items.take(cap), nextCursor = null, hasMore = true)
+    }
+
     @OptIn(FlowPreview::class)
     private fun startPersisting() {
         combine(_notificationsCache, _notificationsSyncedAt, _unreadCount, _hasMore, _nextCursor) { items, syncedAt, unread, hasMore, cursor ->
@@ -625,6 +709,8 @@ class NotificationRepository @Inject constructor(
             .onEach { snapshot ->
                 if (snapshot == null || snapshot == lastPersisted) return@onEach
                 val written = epoch
+                pendingDiskClear?.join()
+                if (written != epoch) return@onEach
                 try {
                     store.write(snapshot) { written == epoch }
                     if (written == epoch) lastPersisted = snapshot

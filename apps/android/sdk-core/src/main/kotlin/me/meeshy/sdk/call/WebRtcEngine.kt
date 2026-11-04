@@ -216,6 +216,9 @@ class WebRtcEngine internal constructor(
         onMessage = { dataMessages.tryEmit(it) },
     )
 
+    /** Le relais DTMF de l'appel en cours : les touches d'un clavier de voiture ou de montre vers le pair. */
+    val dtmf: CallDtmf = CallDtmf { CallDtmf.lineOf(peerConnection) }
+
     fun setAudioEnabled(enabled: Boolean) = media.setAudioEnabled(enabled)
 
     fun setVideoEnabled(enabled: Boolean) = media.setVideoEnabled(enabled)

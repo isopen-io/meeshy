@@ -8,7 +8,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
+import androidx.compose.ui.Alignment
+import me.meeshy.ui.component.chrome.DisableEdgeBackWhile
 import me.meeshy.sdk.model.chrome.FloatingButtonGeometry
 import me.meeshy.sdk.model.chrome.RevealGeometry
 import me.meeshy.ui.accessibility.LocalReduceMotion
@@ -57,6 +58,10 @@ import me.meeshy.ui.component.chrome.StatusBarIconsOverDark
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.video.rememberVideoWindowShown
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.ofAuthor
+import me.meeshy.ui.profile.LocalProfileSheetOpener
+import me.meeshy.ui.profile.LocalProfileSheetPresented
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.ui.unit.LayoutDirection
 
@@ -80,8 +85,10 @@ fun ReelsScreen(
     onOpenPost: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
     onOpenStory: (String) -> Unit = {},
+    onEditPost: ((String) -> Unit)? = null,
     authorHasStory: (String) -> Boolean = { false },
     viewModel: ReelsViewModel = hiltViewModel(),
+    preloadViewModel: ReelPreloadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -91,7 +98,10 @@ fun ReelsScreen(
     var muted by rememberSaveable { mutableStateOf(false) }
     val probedAudio = remember { mutableStateMapOf<String, Boolean>() }
     // Mode immersif : un appui long efface tout le chrome, un toucher le rend.
-    var chromeHidden by rememberSaveable { mutableStateOf(false) }
+    val chrome = rememberReelChromeHolder()
+    val chromeHidden = chrome.hidden
+    val isCallActive by viewModel.isCallActive.collectAsStateWithLifecycle()
+    val edgeSwipe = rememberReelEdgeSwipeState()
     // Dans la fenêtre Picture-in-Picture, la vidéo seule : aucun chrome, aucun toast, aucune feuille (#13814).
     val inVideoWindow = rememberVideoWindowShown()
     val chromeOff = chromeHidden || inVideoWindow
@@ -103,34 +113,12 @@ fun ReelsScreen(
     val pagerState = rememberPagerState(pageCount = { state.reels.size })
 
     val feedButtonStorage by viewModel.feedButtonStorage.collectAsStateWithLifecycle()
-    val reduceMotion = LocalReduceMotion.current
-    val reveal = remember { Animatable(0f) }
-    var closing by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val closeNow by rememberUpdatedState(onClose)
-    // Le dévoilement circulaire s'ouvre avec l'écran (0,35 s ease-out) ; la fermeture le rejoue à l'envers.
-    LaunchedEffect(Unit) {
-        reveal.animateTo(1f, tween(RevealGeometry.durationMillis(opening = true, reduceMotion = reduceMotion), easing = EaseOut))
-    }
-    // Fermer = tout couper (vidéo + audio), une haptique légère, le disque se referme (0,3 s ease-in) pendant que
-    // la navigation retire l'écran sans le démonter avant la fin de la transition (voir `StackTransitions`).
-    val requestClose: () -> Unit = remember(viewModel, haptics, scope, reduceMotion) {
-        fun() {
-            if (closing) return
-            closing = true
-            viewModel.stopAllMedia()
-            haptics.light()
-            scope.launch {
-                launch { closeNow() }
-                reveal.animateTo(0f, tween(RevealGeometry.durationMillis(opening = false, reduceMotion = reduceMotion), easing = EaseIn))
-            }
-        }
-    }
-    BackHandler(enabled = !closing) { requestClose() }
-
     LaunchedEffect(seed) { viewModel.load(seed) }
     // Fond noir en plein cadre : heure et icônes claires, rendues à la fenêtre en quittant l'écran.
     StatusBarIconsOverDark()
+    ReelsSystemBarsHidden()
+    // Le retour depuis le bord est celui du lecteur : l'hôte de navigation ne double pas le geste.
+    DisableEdgeBackWhile()
 
     // Leaving the reels thread closes the last dwell session (records its view if
     // it qualified) — the pager's per-settle end never fires for the final reel.
@@ -158,65 +146,81 @@ fun ReelsScreen(
             },
         )
     }
-    val openProfile by rememberUpdatedState(onOpenProfile)
     val openStory by rememberUpdatedState(onOpenStory)
     val hasStory by rememberUpdatedState(authorHasStory)
-    // Un auteur qui a une story non vue : son avatar ouvre cette story (un seul groupe), sinon son profil (iOS).
-    val openAuthor = remember { { id: String -> if (hasStory(id)) openStory(id) else openProfile(id) } }
+    val profileOpener = LocalProfileSheetOpener.current
+    // Un auteur qui a une story non vue : son avatar ouvre cette story (un seul groupe), sinon sa fiche (iOS).
+    val openAuthor: (String) -> Unit = remember(profileOpener) {
+        { id: String ->
+            if (hasStory(id)) {
+                openStory(id)
+            } else {
+                val reel = reelsNow.firstOrNull { it.authorId == id }
+                ProfileSheetUser.ofAuthor(id, reel?.username, reel?.authorName, reel?.authorAvatarUrl)?.let(profileOpener::open)
+            }
+        }
+    }
+    // La fiche ouverte fige le lecteur (même verrou qu'un appel) : il reprend à sa fermeture.
+    val profileSheetOpen = LocalProfileSheetPresented.current.value
 
-    val safeInsets = currentMeeshyWindowInfo().safeInsets
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val center = remember(maxWidth, maxHeight, safeInsets, feedButtonStorage) {
-            val geometry = FloatingButtonGeometry(maxWidth.value, maxHeight.value, safeInsets)
-            val point = geometry.centerForStorage(feedButtonStorage, FloatingButtonGeometry.DEFAULT_FEED_STORAGE)
-            RevealGeometry.unitCenter(point.x, point.y, maxWidth.value, maxHeight.value)
-        }
-    CircularRevealMask(progress = { reveal.value }, center = center, reduceMotion = reduceMotion) {
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-    ) {
-        val seedFailure = state.seedFailure
-        if (seedFailure != null) {
-            ReelOpenFailure(failure = seedFailure, onRetry = viewModel::retry, onClose = requestClose)
-        } else if (state.reels.isEmpty()) {
-            ReelEmptyStates(state = state, onRetry = viewModel::retry)
-        } else {
-            ReelsPager(
-                pagerState = pagerState,
-                reels = state.reels,
-                viewModel = viewModel,
-                muted = muted,
-                onSoundProbed = { id, hasTrack -> probedAudio[id] = hasTrack },
+    ReelsRevealContainer(
+        feedButtonStorage = feedButtonStorage,
+        onClose = onClose,
+        onBeforeClose = viewModel::stopAllMedia,
+    ) { requestClose, revealCompleted ->
+        Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .reelEdgeSwipeOffset(edgeSwipe),
+        ) {
+            val seedFailure = state.seedFailure
+            if (seedFailure != null) {
+                ReelOpenFailure(failure = seedFailure, onRetry = viewModel::retry, onClose = requestClose)
+            } else if (state.reels.isEmpty()) {
+                ReelEmptyStates(state = state, onRetry = viewModel::retry)
+            } else {
+                ReelsPager(
+                    pagerState = pagerState,
+                    reels = state.reels,
+                    viewModel = viewModel,
+                    preloadViewModel = preloadViewModel,
+                    muted = muted,
+                    onSoundProbed = { id, hasTrack -> probedAudio[id] = hasTrack },
+                    chromeHidden = chromeOff,
+                    revealCompleted = revealCompleted,
+                    isCallActive = isCallActive || profileSheetOpen,
+                    quickEmojis = quickEmojis,
+                    railActions = railActions,
+                    onChromeHidden = chrome::setHidden,
+                    onOpenAuthor = openAuthor,
+                    onSettled = {
+                        // Jamais de chrome masqué porté sur le réel suivant ; un haptique léger pose le passage.
+                        chrome.onPageChanged()
+                        haptics.light()
+                    },
+                )
+            }
+            ReelTopChrome(
+                reel = state.reels.getOrNull(pagerState.currentPage),
                 chromeHidden = chromeOff,
-                quickEmojis = quickEmojis,
-                railActions = railActions,
-                onChromeHidden = { chromeHidden = it },
-                onOpenAuthor = openAuthor,
-                onSettled = {
-                    // Jamais de chrome masqué porté sur le réel suivant ; un haptique léger pose le passage.
-                    chromeHidden = false
-                    haptics.light()
-                },
+                muted = muted,
+                showsMute = state.reels.getOrNull(pagerState.currentPage)?.let { ReelSound.showsMuteButton(it, probedAudio[it.id]) } == true,
+                viewModel = viewModel,
+                onClose = requestClose,
+                onToggleMute = { muted = !muted },
+                onReveal = { chrome.setHidden(false) },
+                onOpen = { id -> onOpenPost(id) },
+                onEdit = onEditPost,
+                // « Partager » (menu « ⋯ ») : la feuille du système, avec le lien suivi de l'utilisateur.
+                onShare = { reel -> shareOut(reel.shareCard(context)) },
             )
+            if (!inVideoWindow) FeedbackToastHost(toasts = viewModel.toasts, modifier = Modifier.navigationBarsPadding())
         }
-        ReelTopChrome(
-            reel = state.reels.getOrNull(pagerState.currentPage),
-            chromeHidden = chromeOff,
-            muted = muted,
-            showsMute = state.reels.getOrNull(pagerState.currentPage)?.let { ReelSound.showsMuteButton(it, probedAudio[it.id]) } == true,
-            viewModel = viewModel,
-            onClose = requestClose,
-            onToggleMute = { muted = !muted },
-            onReveal = { chromeHidden = false },
-            onOpen = { id -> onOpenPost(id) },
-            // « Partager » (menu « ⋯ ») : la feuille du système, avec le lien suivi de l'utilisateur.
-            onShare = { reel -> shareOut(reel.shareCard(context)) },
-        )
-        if (!inVideoWindow) FeedbackToastHost(toasts = viewModel.toasts, modifier = Modifier.navigationBarsPadding())
-    }
-    }
+        // Hors du contenu qui suit le doigt : une bande qui bouge avec son propre geste en annulerait la mesure.
+        ReelEdgeSwipeStrip(state = edgeSwipe, onClose = requestClose, modifier = Modifier.align(Alignment.CenterStart))
+        }
     }
 
     val openCommentsReelId = commentsReelId
@@ -225,6 +229,7 @@ fun ReelsScreen(
             reelId = openCommentsReelId,
             serverCommentCount = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentCount,
             onDismiss = { commentsReelId = null },
+            onCommentSent = viewModel::commentSent,
             onOpenPost = {
                 commentsReelId = null
                 onOpenPost(openCommentsReelId)
@@ -239,9 +244,12 @@ private fun ReelsPager(
     pagerState: PagerState,
     reels: List<ReelPresentation>,
     viewModel: ReelsViewModel,
+    preloadViewModel: ReelPreloadViewModel,
     muted: Boolean,
     onSoundProbed: (String, Boolean) -> Unit,
     chromeHidden: Boolean,
+    revealCompleted: Boolean,
+    isCallActive: Boolean,
     quickEmojis: List<String>,
     railActions: ReelRailActions,
     onChromeHidden: (Boolean) -> Unit,
@@ -254,19 +262,24 @@ private fun ReelsPager(
     // qui est une nouvelle liste a chaque like optimiste.
     val reelIds = reels.map { it.id }
     val currentOnSettled by rememberUpdatedState(onSettled)
+    val reelsNow by rememberUpdatedState(reels)
     // Hors premier plan (ON_STOP), aucun lecteur ne vit : les décodeurs sont rendus au système,
     // la page affichée reprend à sa position au retour (voir ReelPage).
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+    val election by rememberReelElection(pagerState, reelIds)
     LaunchedEffect(pagerState, reelIds) {
-        snapshotFlow { pagerState.currentPage }
+        snapshotFlow { pagerState.settledPage }
             .distinctUntilChanged()
             .collect { page ->
                 viewModel.setCurrentReel(reelIds.getOrNull(page))
                 // Infinite scroll: fetch the next cursor page a few reels before
                 // the pager runs out, so the fetch lands before the user does.
                 if (page >= reelIds.size - LOAD_MORE_THRESHOLD) viewModel.loadMore()
+                // Le suivant ET le précédent se préparent, la fenêtre suit l'usage et les contraintes de l'appareil.
+                preloadViewModel.onSettled(page, reelsNow.map { it.prepTarget() })
             }
     }
+    DisposableEffect(preloadViewModel) { onDispose { preloadViewModel.releaseAll() } }
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
             .distinctUntilChanged()
@@ -282,8 +295,11 @@ private fun ReelsPager(
         key = { index -> reels.getOrNull(index)?.id ?: index },
     ) { page ->
         val reel = reels[page]
-        val isElected by remember(pagerState, page) { derivedStateOf { pagerState.currentPage == page } }
-        val isSettled by remember(pagerState, page) { derivedStateOf { pagerState.settledPage == page } }
+        val pageKey by remember(reel.id, chromeHidden) {
+            derivedStateOf { ReelPageKey.of(reel.id, election, chromeHidden) }
+        }
+        val isElected = pageKey.isElected
+        val isSettled = pageKey.isSettled
         val loadsMedia by remember(pagerState, page) {
             derivedStateOf {
                 ReelPreload.loads(
@@ -298,9 +314,11 @@ private fun ReelsPager(
             isElected = isElected,
             isEngaged = ReelSwitchWork.engages(isElected = isElected, isSettled = isSettled),
             loadsMedia = loadsMedia,
+            revealCompleted = revealCompleted,
+            isCallActive = isCallActive,
             muted = muted,
             onSoundProbed = { hasTrack -> onSoundProbed(reel.id, hasTrack) },
-            chromeHidden = chromeHidden,
+            chromeHidden = pageKey.chromeHidden,
             isOwn = viewModel.isOwn(reel),
             quickEmojis = quickEmojis,
             railActions = railActions,
@@ -316,3 +334,11 @@ private fun ReelPresentation.shareCard(context: android.content.Context): ShareC
     val sentence = authorName?.takeIf { it.isNotBlank() }?.let { context.getString(R.string.share_reel_text, it, link) } ?: link
     return ShareCards.reel(id, title = caption.orEmpty(), authorId = authorId, messageText = sentence)
 }
+
+/** Ce qu'un réel voisin offre au préchargeur : son fichier vidéo, son poster, les sons qu'il jouera. */
+private fun ReelPresentation.prepTarget(): ReelPrepTarget = ReelPrepTarget(
+    id = id,
+    videoUrl = videoUrl.takeIf { stage.showsVideoSurface },
+    posterUrl = posterUrl ?: imageUrls.firstOrNull(),
+    audioUrls = listOfNotNull(audioUrl, scene?.backgroundAudioUrl, scene?.foregroundAudioUrl).distinct(),
+)

@@ -160,6 +160,7 @@ class SocketManager internal constructor(
     private val _connectionRTT = MutableStateFlow<Double?>(null)
     private val _socketErrors = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 8)
     private val _serverErrors = MutableSharedFlow<SocketServerError>(replay = 0, extraBufferCapacity = 8)
+    private val _sessionRevocations = MutableSharedFlow<SocketSessionRevocation>(replay = 0, extraBufferCapacity = 8)
 
     val connected: SharedFlow<Unit> = _connected.asSharedFlow()
     val disconnected: SharedFlow<Unit> = _disconnected.asSharedFlow()
@@ -175,6 +176,9 @@ class SocketManager internal constructor(
 
     /** Événement `error` du serveur : exposé, jamais cause de déconnexion. */
     val socketErrors: SharedFlow<String> = _socketErrors.asSharedFlow()
+
+    /** `auth:session-revoked` avec sa charge brute et le JWT présenté au handshake : `deletedAccountId` y nomme un compte purgé. */
+    val sessionRevocations: SharedFlow<SocketSessionRevocation> = _sessionRevocations.asSharedFlow()
 
     /** Le même événement `error`, marqué du jeton d'invité présenté au handshake de LA socket qui l'a reçu. */
     val serverErrors: SharedFlow<SocketServerError> = _serverErrors.asSharedFlow()
@@ -259,12 +263,13 @@ class SocketManager internal constructor(
         socket.on(EVENT_SESSION_REVOKED) { args ->
             Timber.w("Socket: session revoked")
             _sessionRevoked.tryEmit(reasonOf(args))
+            _sessionRevocations.tryEmit(SocketSessionRevocation(args.firstOrNull()?.toString().orEmpty(), presented))
         }
         socket.on(EVENT_ERROR) { args ->
             Timber.w("Socket error event: %s", args.firstOrNull())
             val payload = args.firstOrNull()?.toString().orEmpty()
             _socketErrors.tryEmit(payload)
-            _serverErrors.tryEmit(SocketServerError(payload, presentedGuestToken))
+            _serverErrors.tryEmit(SocketServerError(payload, presentedGuestToken, presented))
         }
     }
 
@@ -567,7 +572,7 @@ class SocketManager internal constructor(
         private const val EVENT_SESSION_REVOKED = SocketEventNames.AUTH_SESSION_REVOKED
         private const val EVENT_ERROR = "error"
         private const val EVENT_HEARTBEAT = "heartbeat"
-        private const val EVENT_HEARTBEAT_ACK = "heartbeat:ack"
+        private const val EVENT_HEARTBEAT_ACK = SocketEventNames.HEARTBEAT_ACK
 
         /** L'erreur d'un accusé refusé parce que la session de l'émission est finie (#13566). */
         const val SESSION_ENDED: String = "SESSION_ENDED"
@@ -579,4 +584,7 @@ class SocketManager internal constructor(
  * socket de compte). Pendant un appel, la coupure d'une socket est différée : son refus doit viser SA session, jamais
  * celle ouverte depuis sur l'appareil.
  */
-data class SocketServerError(val payload: String, val guestSessionToken: String?)
+data class SocketServerError(val payload: String, val guestSessionToken: String?, val accountJwt: String? = null)
+
+/** `auth:session-revoked` : la charge brute et le JWT de compte présenté au handshake de la socket qui l'a reçu (`null` pour un invité). */
+data class SocketSessionRevocation(val payload: String, val accountJwt: String?)

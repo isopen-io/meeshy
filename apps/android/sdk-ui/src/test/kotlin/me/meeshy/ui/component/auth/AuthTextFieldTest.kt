@@ -20,6 +20,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.auth.AuthFieldBorder
@@ -143,6 +144,14 @@ class AuthTextFieldTest {
     }
 
     @Test
+    fun `a two-factor field keeps the one-time code autofill`() {
+        val tree = AutofillTree()
+        show(contentType = AuthContentType.TwoFactorCode, autofillTree = tree)
+
+        assertThat(tree.children.values.flatMap { it.autofillTypes }).containsExactly(AutofillType.SmsOtpCode)
+    }
+
+    @Test
     fun `a field with no declared content asks the autofill for nothing`() {
         val tree = AutofillTree()
         show(contentType = AuthContentType.None, autofillTree = tree)
@@ -171,6 +180,8 @@ class AuthTextFieldTest {
     fun `each content type picks the keyboard that suits it`() {
         assertThat(AuthContentType.Email.keyboardType).isEqualTo(KeyboardType.Email)
         assertThat(AuthContentType.OneTimeCode.keyboardType).isEqualTo(KeyboardType.Number)
+        assertThat(AuthContentType.TwoFactorCode.keyboardType).isEqualTo(KeyboardType.Ascii)
+        assertThat(AuthContentType.TwoFactorCode.capitalization).isEqualTo(KeyboardCapitalization.Characters)
         assertThat(AuthContentType.Password.keyboardType).isEqualTo(KeyboardType.Password)
         assertThat(AuthContentType.NewPassword.keyboardType).isEqualTo(KeyboardType.Password)
         assertThat(AuthContentType.Username.keyboardType).isEqualTo(KeyboardType.Text)
