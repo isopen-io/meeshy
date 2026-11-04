@@ -13,12 +13,16 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.crop",
           "androidName": "composer_column_media_crop",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.rail.media.takePhoto",
           "androidName": "composer_media_from_camera",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "story_recompose_preparing",

@@ -5,16 +5,22 @@
       "resDir": "feature/stories/src/main/res",
       "entries": [
         {
+          "catalog": "app",
+          "iosKey": "common.close",
           "androidName": "composer_scene_close",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.more.animation",
           "androidName": "composer_scene_more_animation",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.selection.time",
           "androidName": "composer_scene_more_timing",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "composer_scene_done",

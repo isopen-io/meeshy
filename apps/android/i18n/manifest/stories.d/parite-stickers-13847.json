@@ -21,8 +21,10 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.selection.makeSticker",
           "androidName": "story_sticker_make",
-          "status": "android-only"
+          "status": "adopted"
         }
       ]
     }
