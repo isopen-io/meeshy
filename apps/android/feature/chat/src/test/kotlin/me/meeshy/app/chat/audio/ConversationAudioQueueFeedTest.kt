@@ -63,13 +63,15 @@ class ConversationAudioQueueFeedTest {
     @Test
     fun `l'arriere present avant la lecture ne rejoint pas la file`() = runTest {
         val rig = Rig(this) { emptySet() }
+        val m2 = voiceMessage("m2", "2026-11-04T08:01:00Z", voice("b"))
+        val m3 = voiceMessage("m3", "2026-11-04T08:02:00Z", voice("c"))
         rig.show(m1)
-        rig.show(m1, voiceMessage("m2", "2026-11-04T08:01:00Z", voice("b")))
-        rig.play(m1, "a")
+        rig.show(m1, m2, m3)
+        rig.play(m3, "c")
 
-        rig.show(m1, rig.threads.value!!.messages[1], voiceMessage("m3", "2026-11-04T08:02:00Z", voice("c")))
+        rig.show(m1, m2, m3, voiceMessage("m4", "2026-11-04T08:03:00Z", voice("d")))
 
-        assertThat(rig.upcoming).containsExactly("c")
+        assertThat(rig.upcoming).containsExactly("d")
     }
 
     @Test
