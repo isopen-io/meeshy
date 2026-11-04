@@ -44,10 +44,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import me.meeshy.sdk.model.QueuedAudio
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenArrangement
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenLayout
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenPageProgress
+import me.meeshy.sdk.model.fullscreen.AudioFullscreenPlaybackScope
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeSymbol
 import me.meeshy.sdk.model.media.formatMediaDurationMillis
 import me.meeshy.sdk.model.playback.AudioPlaybackState
@@ -78,7 +81,6 @@ internal fun AudioFullscreenPage(
     source: AudioFullscreenSource,
     pageIndex: Int,
     pageCount: Int,
-    playback: AudioPlaybackState,
     player: AudioFullscreenPlayer,
     heardPositionMs: Long?,
     upcoming: () -> List<QueuedAudio>,
@@ -92,6 +94,9 @@ internal fun AudioFullscreenPage(
     onNext: (() -> Unit)?,
     onPrevious: (() -> Unit)?,
 ) {
+    val playback by remember(player, source.id) {
+        player.playback.map { AudioFullscreenPlaybackScope.of(it, source.id) }.distinctUntilChanged()
+    }.collectAsState(initial = AudioFullscreenPlaybackScope.of(player.playback.value, source.id))
     val isLoaded = playback.attachmentId == source.id
     val stored = remember(source.id) { player.restingPositionMs(source.id) }
     val resting = heardPositionMs ?: stored
