@@ -85,14 +85,14 @@ public final class TwoFactorService: TwoFactorServiceProviding, Sendable {
     }
 
     public func disable(code: String, password: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.post(
+        let _: APIResponse<DiscardedResponseBody> = try await api.post(
             AuthEndpoint.n2FaDisable,
             body: ["code": code, "password": password]
         )
     }
 
     public func verify(code: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.post(
+        let _: APIResponse<DiscardedResponseBody> = try await api.post(
             AuthEndpoint.n2FaVerify,
             body: TwoFactorCodeRequest(code: code)
         )

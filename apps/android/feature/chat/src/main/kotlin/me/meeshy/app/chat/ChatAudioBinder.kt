@@ -10,6 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.app.chat.audio.ConversationAudioQueueFeed
+import me.meeshy.app.chat.audio.QuotedAudioPlayback
 import me.meeshy.core.common.IoDispatcher
 import me.meeshy.sdk.media.TypedMediaCache
 import me.meeshy.sdk.media.UploadedAttachmentIds
@@ -72,6 +75,12 @@ internal interface ChatVoicePlayback {
     /** Toucher un vocal : pause/reprise s'il est le courant, sinon la file démarre depuis lui. */
     fun tap(audio: BubbleAudio, bubble: BubbleContent)
 
+    /** La pastille de retour en bas : jouer le vocal [attachmentId] du fil lié (pause/reprise s'il est le courant, sinon la file). */
+    fun tapAttachment(attachmentId: String)
+
+    /** Toucher la citation d'un vocal : il joue seul, sans file (pause/reprise s'il est déjà le courant). */
+    fun playQuoted(quoted: BubbleAudio, bubble: BubbleContent)
+
     /** Un vocal du hub média, joué seul. */
     fun tapLone(audio: BubbleAudio, messageId: String, senderName: String, sentAtEpochMs: Long)
 
@@ -102,11 +111,23 @@ internal class ChatAudioViewModel @Inject constructor(
 ) : ViewModel(), ChatVoicePlayback {
 
     private var thread: ChatVoiceThread? = null
+    private val threads = MutableStateFlow<ChatVoiceThread?>(null)
     private val listened = MutableStateFlow<Set<String>>(emptySet())
     private val waveformByPiece = HashMap<String, StateFlow<List<Float>>>()
     private val acknowledgedIdOf: (String) -> String? = { cmid -> uploads.serverIdOf(cmid) }
 
+    private val queueFeed = ConversationAudioQueueFeed(coordinator) { listened.value }
+
     init {
+        viewModelScope.launch {
+            try {
+                queueFeed.follow(threads)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                Timber.e(failure, "Lecteur du fil : arrivées en direct mal suivies")
+            }
+        }
         viewModelScope.launch {
             try {
                 coordinator.attachmentFinished.collect { event ->
@@ -126,6 +147,7 @@ internal class ChatAudioViewModel @Inject constructor(
 
     override fun bind(thread: ChatVoiceThread) {
         this.thread = thread
+        threads.value = thread
         followAcknowledgedIn(thread.messages)
     }
 
@@ -146,6 +168,16 @@ internal class ChatAudioViewModel @Inject constructor(
                 coordinator.play(start.current, start.tail, bound?.conversationName.orEmpty(), bound?.artworkUrl, bound?.accentHex)
             }
         }
+    }
+
+    override fun tapAttachment(attachmentId: String) {
+        val bubble = thread?.messages?.firstOrNull { message -> message.audios.any { it.attachmentId == attachmentId } } ?: return
+        tap(bubble.audios.first { it.attachmentId == attachmentId }, bubble)
+    }
+
+    override fun playQuoted(quoted: BubbleAudio, bubble: BubbleContent) {
+        val voice = QuotedAudioPlayback.resolve(quoted, bubble.replyToId, bubble.replyToSenderName, thread?.messages.orEmpty()) ?: return
+        tapLone(voice.audio, voice.messageId, voice.senderName, voice.sentAtEpochMs)
     }
 
     override fun tapLone(audio: BubbleAudio, messageId: String, senderName: String, sentAtEpochMs: Long) {
@@ -255,6 +287,7 @@ internal fun BubbleCallbacks.withVoice(voice: ChatVoicePlayback?, bubble: Bubble
             onAudioClick = { audio -> voice.tap(audio, bubble) },
             onAudioSeek = { audio, seconds -> voice.seekSeconds(audio, seconds) },
             onAudioSeekFraction = { audio, fraction -> voice.seekFraction(audio, fraction) },
+            onQuotedAudioClick = { quoted -> voice.playQuoted(quoted, bubble) },
             onAudioCycleSpeed = voice::cycleSpeed,
             audioSamples = voice::samples,
         )

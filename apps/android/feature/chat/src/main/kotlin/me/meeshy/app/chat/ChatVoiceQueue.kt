@@ -20,7 +20,7 @@ internal data class ChatVoiceStart(val current: QueuedAudio, val tail: List<Queu
 internal object ChatVoiceQueue {
 
     /** L'auteur « moi » : la bulle sortante ne connaît pas toujours l'identifiant de son compte. */
-    private const val SELF = "\u0000self"
+    internal const val SELF = "\u0000self"
 
     fun start(
         tapped: BubbleAudio,
@@ -31,14 +31,12 @@ internal object ChatVoiceQueue {
     ): ChatVoiceStart? {
         val url = tapped.url?.takeIf { it.isNotBlank() } ?: return null
         val thread = if (messages.any { it.messageId == bubble.messageId }) messages else messages + bubble
-        val queueMessages = thread.filter { it.audios.isNotEmpty() && !it.isDeleted }.map { it.toQueueMessage(conversationId) }
-        val served = thread.flatMap { it.audios }.filter { it.listenedComplete }.mapTo(HashSet()) { it.attachmentId }
         val tail = AudioQueueBuilder.build(
-            messages = queueMessages,
+            messages = queueMessages(thread, conversationId),
             startingAfterAttachmentId = tapped.attachmentId,
             currentUserId = SELF,
-            listenedAttachmentIds = listenedAttachmentIds + served,
-        ).map { queued -> queued.withServedTrack(thread) }
+            listenedAttachmentIds = listenedAttachmentIds,
+        )
         return ChatVoiceStart(current = bubble.queued(tapped, url, conversationId), tail = tail)
     }
 
@@ -54,7 +52,7 @@ internal object ChatVoiceQueue {
             senderName = senderName,
             senderAvatarUrl = null,
             receivedAtEpochMs = sentAtEpochMs,
-            trackLanguage = audio.audioLanguage,
+            trackLanguage = audio.playedLanguage,
             isTranslatedTrack = audio.isAudioTranslated,
             isProtected = audio.isProtected,
         )
@@ -66,6 +64,10 @@ internal object ChatVoiceQueue {
 
     /** Un vocal de [bubble] ne s'écrit pas sur le disque et ne montre rien de lui-même : message OU pièce. */
     fun isProtected(bubble: BubbleContent, audio: BubbleAudio): Boolean = isMessageProtected(bubble) || audio.isProtected
+
+    /** Les bulles à vocaux du fil, projetées pour [AudioQueueBuilder] et [me.meeshy.sdk.model.AudioQueueAppendTracker]. */
+    fun queueMessages(thread: List<BubbleContent>, conversationId: String): List<AudioQueueMessage> =
+        thread.filter { it.audios.isNotEmpty() && !it.isDeleted }.map { it.toQueueMessage(conversationId) }
 
     private fun BubbleContent.toQueueMessage(conversationId: String): AudioQueueMessage = AudioQueueMessage(
         messageId = messageId,
@@ -81,6 +83,9 @@ internal object ChatVoiceQueue {
                 fileUrl = audio.url.orEmpty(),
                 durationMs = audio.declaredDurationMs,
                 isProtected = audio.isProtected,
+                listenedComplete = audio.listenedComplete,
+                trackLanguage = audio.playedLanguage,
+                isTranslatedTrack = audio.isAudioTranslated,
             )
         },
         attachmentIds = audios.map { it.attachmentId },
@@ -95,15 +100,10 @@ internal object ChatVoiceQueue {
         senderName = senderName.orEmpty(),
         senderAvatarUrl = senderAvatarUrl,
         receivedAtEpochMs = epochMs(createdAtIso),
-        trackLanguage = audio.audioLanguage,
+        trackLanguage = audio.playedLanguage,
         isTranslatedTrack = audio.isAudioTranslated,
         isProtected = isProtected(this, audio),
     )
-
-    private fun QueuedAudio.withServedTrack(thread: List<BubbleContent>): QueuedAudio {
-        val audio = thread.firstOrNull { it.messageId == messageId }?.audios?.firstOrNull { it.attachmentId == attachmentId } ?: return this
-        return copy(trackLanguage = audio.audioLanguage, isTranslatedTrack = audio.isAudioTranslated)
-    }
 
     private fun epochMs(iso: String?): Long = iso?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() } ?: 0L
 }

@@ -58,6 +58,10 @@ public enum OutboxKind: String, Codable, CaseIterable, Sendable {
     /// même story ne stacke pas de doublons).
     case markStoryViewed
     case toggleLikePost
+    /// #15997 — « Enregistrer » / « Retirer des favoris », durable hors ligne.
+    /// Porte l'état VOULU (`ToggleBookmarkPostPayload.bookmarked`) et se
+    /// coalesce par post : seule la dernière intention part au rejeu.
+    case toggleBookmarkPost
     case createComment
     case deleteComment
     case toggleLikeComment
@@ -156,6 +160,7 @@ extension OutboxKind {
              .blockUser,
              .unblockUser,
              .toggleLikePost,
+             .toggleBookmarkPost,
              .toggleLikeComment,
              .deleteMessage,
              .deleteComment:

@@ -10,9 +10,10 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { ConversationEncryptionSection } from './conversation-encryption-section';
 
 /**
- * **LA FICHE CHIFFREMENT MONTE LE MODE D'UN TÊTE-À-TÊTE DEPUIS LE WEB** (#14648)
- * — miroir de la section « Changer de mode » de la fiche iOS : au rôle que la
- * passerelle autorise, serveur ⇄ hybride d'un geste ; le bout en bout se voit,
+ * **LA FICHE CHIFFREMENT MONTE LE MODE D'UNE CONVERSATION DEPUIS LE WEB** (#14648)
+ * — miroir de la section « Changer de mode » de la fiche iOS : au droit que la
+ * passerelle sert (rang de groupe compris), clair → serveur → hybride d'un
+ * geste, jamais dans l'autre sens ; le bout en bout se voit,
  * grisé, avec la raison (#12975) ; une conversation chiffrée de bout en bout,
  * servie ou vue telle, ne propose rien.
  */
@@ -103,8 +104,9 @@ describe('changer de mode depuis la fiche (#14648)', () => {
     await settle();
     expect(calls.switches).toEqual(['hybrid']);
     expect(feedback()).toBe('Le mode de chiffrement est maintenant : Hybride.');
-    expect(target('server')).not.toBeNull();
+    expect(target('server')).toBeNull();
     expect(target('hybrid')).toBeNull();
+    expect(target('e2ee')?.disabled).toBe(true);
   });
 
   test('passée au bout en bout après la bascule : la fiche ne dit plus « maintenant Hybride »', async () => {
@@ -198,8 +200,163 @@ describe('changer de mode depuis la fiche (#14648)', () => {
     expect(feedback()).toBe('Un message de ce fil utilise un chiffrement que ce navigateur ne reconnaît pas : le mode ne peut pas être changé d’ici.');
   });
 
-  test('un groupe ne change pas de mode depuis le web', async () => {
-    await mount({ id: 'g1', type: 'group', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true });
+  test('un groupe monte de mode au droit servi par la passerelle', async () => {
+    const calls = await mount({ id: 'g1', type: 'group', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true });
+    expect(calls.reads).toBe(1);
+    await act(async () => {
+      target('hybrid')?.click();
+    });
+    await settle();
+    expect(calls.switches).toEqual(['hybrid']);
+  });
+
+  test('un groupe sans le droit servi (pas modérateur) : rien ne se propose', async () => {
+    await mount({ id: 'g1', type: 'group', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: false });
     expect(document.querySelector('[data-conversation-encryption-switch]')).toBeNull();
+  });
+
+  test('hybride : aucune descente vers le serveur ne se propose', async () => {
+    await mount({ id: 'c1', type: 'direct', encryptionMode: 'hybrid' }, { mode: 'hybrid', canToggleEncryption: true });
+    expect(target('server')).toBeNull();
+    expect(target('e2ee')?.disabled).toBe(true);
+  });
+
+  test('clair : serveur et hybride se proposent, jamais un retour au clair', async () => {
+    await mount({ id: 'c1', type: 'group', encryptionMode: null }, { mode: null, canToggleEncryption: true });
+    expect(target('server')?.disabled).toBe(false);
+    expect(target('hybrid')?.disabled).toBe(false);
+  });
+
+  test('403 sans code dans un groupe : le refus dit le rang requis', async () => {
+    await mount({ id: 'g1', type: 'group', encryptionMode: 'server' }, { mode: 'server', canToggleEncryption: true }, { kind: 'forbidden' });
+    await act(async () => {
+      target('hybrid')?.click();
+    });
+    await settle();
+    expect(feedback()).toBe('Vous n’avez pas le droit de changer le mode de chiffrement de cette conversation : dans un groupe, il faut en être modérateur.');
+  });
+});
+
+describe('la montée est optimiste, et revient en arrière sur un refus (#14648)', () => {
+  const deferredMount = async (conversation: Conversation) => {
+    const pending: { resolve: (outcome: EncryptionSwitchOutcome) => void } = { resolve: () => undefined };
+    const gesture: EncryptionModeSwitchGesture = {
+      readStatus: async () => ({ mode: conversation.encryptionMode, canToggleEncryption: true }),
+      switchTo: () =>
+        new Promise<EncryptionSwitchOutcome>((resolve) => {
+          pending.resolve = resolve;
+        }),
+    };
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<ConversationEncryptionSection conversation={conversation} modeSwitch={gesture} />);
+    });
+    for (let tries = 0; tries < 50 && document.querySelector('[data-conversation-encryption]') === null; tries += 1) await settle();
+    await settle();
+    return pending;
+  };
+  const regime = () => document.querySelector('[data-conversation-encryption]')?.getAttribute('data-conversation-encryption');
+
+  test('la fiche décrit le mode visé dès le geste, sans annoncer de succès avant la réponse', async () => {
+    const pending = await deferredMount({ id: 'c1', type: 'direct', encryptionMode: 'server' });
+    await act(async () => {
+      target('hybrid')?.click();
+    });
+    expect(regime()).toBe('hybrid');
+    expect(target('hybrid')?.textContent).toContain('Changement du mode…');
+    expect(target('hybrid')?.disabled).toBe(true);
+    expect(feedback()).toBe('');
+    await act(async () => {
+      pending.resolve({ kind: 'switched', mode: 'hybrid' });
+    });
+    await settle();
+    expect(feedback()).toBe('Le mode de chiffrement est maintenant : Hybride.');
+  });
+
+  test('à la réponse, l’optimisme s’efface : un retour ultérieur au mode serveur (autre client) se dit serveur', async () => {
+    const pending: { resolve: (outcome: EncryptionSwitchOutcome) => void } = { resolve: () => undefined };
+    const gesture: EncryptionModeSwitchGesture = {
+      readStatus: async () => ({ mode: 'server', canToggleEncryption: true }),
+      switchTo: () =>
+        new Promise<EncryptionSwitchOutcome>((resolve) => {
+          pending.resolve = resolve;
+        }),
+    };
+    const render = (encryptionMode: string) =>
+      act(() => {
+        root.render(<ConversationEncryptionSection conversation={{ id: 'g1', type: 'group', encryptionMode }} modeSwitch={gesture} />);
+      });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    render('server');
+    for (let tries = 0; tries < 50 && document.querySelector('[data-conversation-encryption]') === null; tries += 1) await settle();
+    await settle();
+    await act(async () => {
+      target('hybrid')?.click();
+    });
+    await act(async () => {
+      pending.resolve({ kind: 'switched', mode: 'hybrid' });
+    });
+    await settle();
+    render('hybrid');
+    await settle();
+    expect(regime()).toBe('hybrid');
+    render('server');
+    await settle();
+    expect(regime()).toBe('server');
+  });
+
+  test('le mode visé d’une conversation ne se montre jamais sur une autre', async () => {
+    const pending = await deferredMount({ id: 'c1', type: 'direct', encryptionMode: 'server' });
+    const gesture: EncryptionModeSwitchGesture = {
+      readStatus: async () => ({ mode: 'server', canToggleEncryption: true }),
+      switchTo: async () => ({ kind: 'failed' }),
+    };
+    await act(async () => {
+      target('hybrid')?.click();
+    });
+    expect(regime()).toBe('hybrid');
+    act(() => {
+      root.render(<ConversationEncryptionSection conversation={{ id: 'c2', type: 'direct', encryptionMode: 'server' }} modeSwitch={gesture} />);
+    });
+    await settle();
+    expect(regime()).toBe('server');
+    await act(async () => {
+      pending.resolve({ kind: 'switched', mode: 'hybrid' });
+    });
+    await settle();
+    expect(regime()).toBe('server');
+  });
+
+  test('un refus remet le mode d’avant et le dit', async () => {
+    const pending = await deferredMount({ id: 'c1', type: 'direct', encryptionMode: 'server' });
+    await act(async () => {
+      target('hybrid')?.click();
+    });
+    expect(regime()).toBe('hybrid');
+    await act(async () => {
+      pending.resolve({ kind: 'failed' });
+    });
+    await settle();
+    expect(regime()).toBe('server');
+    expect(target('hybrid')?.disabled).toBe(false);
+    expect(feedback()).toBe('Le mode n’a pas pu être changé. Réessayez.');
+  });
+
+  test('un 409 E2EE_IRREVERSIBLE pendant la montée : le mode optimiste s’efface, la fiche dit le bout en bout', async () => {
+    const pending = await deferredMount({ id: 'c1', type: 'direct', encryptionMode: 'server' });
+    await act(async () => {
+      target('hybrid')?.click();
+    });
+    await act(async () => {
+      endToEndRegimeLedger.getState().learnEndToEnd('c1');
+      pending.resolve({ kind: 'irreversible' });
+    });
+    await settle();
+    expect(regime()).toBe('end-to-end');
+    expect(document.querySelector('[data-conversation-encryption-switch-target]')).toBeNull();
   });
 });
