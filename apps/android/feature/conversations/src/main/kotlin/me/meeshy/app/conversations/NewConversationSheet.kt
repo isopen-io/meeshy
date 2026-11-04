@@ -111,14 +111,6 @@ internal fun NewConversationSheet(state: NewConversationUiState, actions: NewCon
             if (state.selected.isNotEmpty()) {
                 SelectedChips(selected = state.selected, onRemove = actions.onToggleUser)
             }
-            state.error?.let { error ->
-                Text(
-                    text = stringResource(error.messageRes()),
-                    color = MeeshyPalette.Error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
-                )
-            }
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 if (state.showsEncryption) encryptionItems(state, actions)
                 if (state.showsContacts) contactItems(state, actions.onToggleUser) else resultItems(state, actions)
