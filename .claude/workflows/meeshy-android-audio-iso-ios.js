@@ -79,7 +79,7 @@ const branche = (key) => `claude/android-${key}`
 // ---------------------------------------------------------------------------
 // SOCLE COMMUN
 // ---------------------------------------------------------------------------
-const JVM_CHECK = `cd "$D/apps/android" && ./meeshy.sh jvm-check -PjvmCheckModelOnly --no-daemon -q -Dorg.gradle.jvmargs=-Xmx6g -Pkotlin.compiler.execution.strategy=in-process`
+const JVM_CHECK = `cd "$D/apps/android" && flock ${RUN}/jvm-check.lock ./meeshy.sh jvm-check -PjvmCheckModelOnly --no-daemon -q -Dorg.gradle.jvmargs=-Xmx4g -Pkotlin.compiler.execution.strategy=in-process`
 
 const clone = (key, existante) => `D=${LOTS}/${key}
 rm -rf "$D" && { git clone -q --shared --no-checkout ${REPO} "$D" || git clone -q --filter=blob:none --no-checkout https://github.com/${REPO_GH} "$D"; } && cd "$D" \\
@@ -110,7 +110,9 @@ FAITS DE CET ENVIRONNEMENT (mesurés le 2026-11-03) :
   N'y touche pas ; un TEST rouge identique sur dev est PRÉEXISTANT, une erreur de COMPILATION ne l'est jamais (rien n'est alors prouvé).
 - :core:model se prouve en local, sans crypto ni e2ee (libsignal est refusé par le proxy) :
   ${JVM_CHECK}
-  (5 à 15 min ; jamais deux en même temps sur cette machine : si un autre jvm-check tourne — pgrep -f jvm-check — attends qu'il finisse).
+  (5 à 15 min ; le verrou flock n'en laisse tourner qu'UN à la fois sur la machine — deux compilations parallèles ont fait redémarrer
+  le conteneur. N'enlève jamais le flock, ne lance jamais ./gradlew en parallèle, et commit + push AVANT chaque jvm-check : un redémarrage
+  efface tout ce qui n'est pas poussé).
 - GitHub : outils MCP mcp__github__* pour TOUT (issues, PR, checks, actions, fusion), chargés par ToolSearch. La CLI gh ne sert QU'À la
   recherche (gh api -X GET search/issues -f q='repo:${REPO_GH} is:issue …'). GraphQL est refusé. Verdict des checks d'une PR : écris
   { state, head_sha, total_count, check_runs (toutes les pages de pull_request_read get_check_runs), statuses (get_status) } dans un
