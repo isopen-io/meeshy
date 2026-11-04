@@ -305,8 +305,8 @@ final class QuoteComposerDoorTests: XCTestCase {
         let sites = sources.filter { $0.code.contains("QuoteComposerDoor(") }
             .map { URL(fileURLWithPath: $0.chemin).lastPathComponent }
             .sorted()
-        XCTAssertEqual(sites, ["FeedView.swift", "RootViewComponents.swift"],
-                       "« Citer » depuis le fil et depuis la feuille de détail ouvrent le compositeur.")
+        XCTAssertEqual(sites, ["FeedView.swift", "QuoteComposerDoor.swift", "RootViewComponents.swift"],
+                       "« Citer » depuis le fil, la feuille de détail et le lecteur de réels (`QuoteComposerCover`, #15869) ouvrent le compositeur.")
     }
 
     func test_plusRienNeMonteLaFeuilleHistorique_etElleAQuitteLeDepot() throws {

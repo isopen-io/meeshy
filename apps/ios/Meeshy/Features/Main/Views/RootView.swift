@@ -231,35 +231,7 @@ struct RootView: View {
                                 onClose: { closeReels() }
                             )
                         } else {
-                            ReelsPlayerView(
-                                seedPosts: launch.seedPosts,
-                                startId: launch.startId,
-                                commentTargetId: launch.commentId,
-                                commentParentTargetId: launch.parentCommentId,
-                                revealCompleted: reelsRevealCompleted,
-                                safeArea: safeArea,
-                                onClose: { closeReels() },
-                                onOpenProfile: { userId, username in
-                                    router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
-                                },
-                                onOpenStory: { userId in
-                                    storyViewerCoordinator.present(StoryViewerRequest(
-                                        id: userId,
-                                        startAtFirstUnviewed: true,
-                                        singleGroup: true
-                                    ))
-                                },
-                                onOpenDetail: { postId in
-                                    // Ferme le lecteur immersif avant de pousser le détail —
-                                    // sinon la page se pousse SOUS l'overlay (zIndex 60) et
-                                    // reste invisible tant que l'utilisateur ne ferme pas.
-                                    closeReels()
-                                    router.push(.postDetail(postId))
-                                },
-                                authorHasStory: { userId in
-                                    storyViewModel.storyRingState(forUserId: userId) != .none
-                                }
-                            )
+                            reelsPlayer(launch, safeArea: safeArea)
                         }
                     }
                 )
@@ -848,6 +820,43 @@ struct RootView: View {
     /// full (so the reel is already running when revealed), and the mask drops at
     /// full screen (so the live `AVPlayer` surface renders instead of staying
     /// frozen under a persistent `.mask()`). Reduce Motion uses a quick cross-fade.
+    /// Le lecteur de réels monté par l'overlay — sorti de `body`, qui portait
+    /// ses vingt-cinq lignes d'arguments (cohésion, #15869).
+    private func reelsPlayer(_ launch: ReelsPresenter.Launch, safeArea: EdgeInsets) -> some View {
+        ReelsPlayerView(
+            seedPosts: launch.seedPosts,
+            startId: launch.startId,
+            commentTargetId: launch.commentId,
+            commentParentTargetId: launch.parentCommentId,
+            revealCompleted: reelsRevealCompleted,
+            safeArea: safeArea,
+            onClose: { closeReels() },
+            onOpenProfile: { userId, username in
+                router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
+            },
+            onOpenStory: { userId in
+                storyViewerCoordinator.present(StoryViewerRequest(
+                    id: userId,
+                    startAtFirstUnviewed: true,
+                    singleGroup: true
+                ))
+            },
+            onOpenDetail: { postId in
+                // Ferme le lecteur immersif avant de pousser le détail —
+                // sinon la page se pousse SOUS l'overlay (zIndex 60) et
+                // reste invisible tant que l'utilisateur ne ferme pas.
+                closeReels()
+                router.push(.postDetail(postId))
+            },
+            authorHasStory: { userId in
+                storyViewModel.storyRingState(forUserId: userId) != .none
+            },
+            quoteHost: QuoteComposerHost(storyViewModel: storyViewModel, router: router,
+                                         conversationListViewModel: conversationViewModel,
+                                         statusViewModel: statusViewModel)
+        )
+    }
+
     private func openReels() {
         reelsRevealCompleted = false
         reelsRevealClosing = false
