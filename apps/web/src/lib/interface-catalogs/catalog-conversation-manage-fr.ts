@@ -75,6 +75,7 @@ const fr = {
   'conversationManage.obsolete.title': 'Rendre la conversation obsolète ?',
   'conversationManage.obsolete.message': 'Elle disparaîtra pour tous les participants. Son contenu deviendra illisible et sera effacé sous 48 heures.',
   'conversationManage.obsolete.error': 'Impossible de rendre la conversation obsolète.',
+  'conversationManage.obsolete.requestSender': 'Seul le destinataire de la demande peut supprimer cette conversation.',
   'conversationManage.header.created_on': 'Créé le {date}',
   'conversationManage.header.muted': 'Notifications désactivées',
 } as const;

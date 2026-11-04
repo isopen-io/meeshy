@@ -175,8 +175,13 @@ class MessageDeltaApplier internal constructor(
      */
     suspend fun expireLocally(messageIds: List<String>) = erasing(messageIds) { purge(messageIds) }
 
-    /** La vue unique que CE lecteur vient de refermer : son clair E2EE quitte le coffre sans attendre l'écho (#14633). */
-    suspend fun erasePlaintexts(messageIds: List<String>) = erasing(messageIds) {}
+    /**
+     * La vue unique que CE lecteur vient de refermer : son clair E2EE quitte le coffre sans attendre l'écho (#14633), et
+     * la ligne Room se scelle comme à un `message:consumed` par soi (contenu, traductions, pièces vidés, #15897).
+     */
+    suspend fun erasePlaintexts(messageIds: List<String>) = erasing(messageIds) {
+        messageIds.forEach { id -> transform(id) { ConversationEventDeltas.sealedAsOpened(it) } }
+    }
 
     /** Une vue unique ouverte par CE lecteur (ici ou sur un autre de ses appareils) : son clair quitte le coffre. */
     private suspend fun consumed(event: MessageConsumedEvent, viewerId: String?) {

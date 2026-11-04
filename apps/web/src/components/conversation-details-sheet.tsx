@@ -11,7 +11,7 @@ import {
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { sessionStore } from '@/lib/api/session';
 import type { Conversation } from '@/lib/api/types';
-import { departureKindsOf, type DepartureKind } from '@/lib/conversation-departure';
+import { departureKindsOf, departureStore, type DepartureKind } from '@/lib/conversation-departure';
 import { conversationStore, effectiveFlagsOf } from '@/lib/conversation-store';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { translateConversationManage } from '@/lib/i18n-conversation-manage-catalog';
@@ -186,9 +186,12 @@ export function ConversationDetailsSheet({
     [deps, queryClient, conversation.id],
   );
 
-  /* RENDRE OBSOLÈTE (#14645, #14653) — la loi du menu de la ligne (`obsolete`), le mot du catalogue de gestion. */
+  /* RENDRE OBSOLÈTE (#14645, #14653) — la loi du menu de la ligne (`obsolete`), le mot du catalogue de gestion ;
+     un refus de la passerelle le retire aussitôt, feuille ouverte (#14690). */
+  const obsoleteRefused = useStore(departureStore, (state) => state.obsoleteRefused.includes(conversation.id));
   const mayObsolete =
     manageReady &&
+    !obsoleteRefused &&
     rowConversationActions({
       conversation,
       viewer: {

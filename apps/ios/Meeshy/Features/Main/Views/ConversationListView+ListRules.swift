@@ -102,8 +102,9 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
     /// à autorité ouvert (`deleteForAll`), ou, dans un tête-à-tête ouvert, l'un
     /// OU l'autre membre inscrit et actif (`hide`) — même expression que le web
     /// (`rowConversationActions`) et Android. L'expéditeur d'une demande non
-    /// acceptée reçoit 403 de la passerelle : iOS ne connaît pas encore l'état
-    /// de la demande (#14690).
+    /// acceptée reçoit 403 de la passerelle, qui ne lui sert jamais l'état de sa
+    /// demande : la ligne revient et le toast dit pourquoi
+    /// (`ConversationObsolescence.Refusal`, #14690).
     let obsolete: Bool
     /// Appeler le pair d'un direct — l'appel du menu compose UN pair, donc
     /// jamais un groupe ni soi-même (`CallPermission.canStartCall`).
