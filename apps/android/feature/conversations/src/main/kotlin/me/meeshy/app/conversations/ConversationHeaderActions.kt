@@ -24,3 +24,9 @@ fun conversationHeaderActions(
     add(ConversationHeaderAction.CREATE_SHARE_LINK)
     add(ConversationHeaderAction.NEW_CONVERSATION)
 }
+
+/** Gabarit des cercles de verre de l'en-tête Chats (cibles 44 dp, glyphe 24 dp semibold). */
+object ConversationHeaderMetrics {
+    const val ACTION_DIAMETER_DP = 44
+    const val ACTION_ICON_DP = 24
+}
