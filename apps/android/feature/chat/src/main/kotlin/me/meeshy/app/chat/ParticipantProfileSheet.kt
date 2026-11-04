@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -46,7 +47,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.MutableSharedFlow
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.model.people.BlockEntry
+import me.meeshy.ui.component.FeedbackKind
+import me.meeshy.ui.component.FeedbackToastHost
+import me.meeshy.ui.component.FeedbackToastRequest
+import me.meeshy.ui.component.people.BlockConfirmDialog
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -84,8 +92,28 @@ internal fun ParticipantProfileSheet(
     viewModel: ParticipantProfileViewModel = hiltViewModel(key = "participant-profile/$conversationId/$participantId"),
     avatarUrl: String? = null,
     readerRole: String? = null,
+    blockViewModel: ParticipantBlockViewModel = hiltViewModel(key = "participant-block/$conversationId/$participantId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val blockState by blockViewModel.state.collectAsStateWithLifecycle()
+    val blockToasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 2) }
+    val haptics = rememberMeeshyHaptics()
+    LaunchedEffect(state.profile?.userId, state.profile?.isAnonymous) {
+        blockViewModel.bind(state.profile?.userId, state.profile?.isAnonymous == true)
+    }
+    LaunchedEffect(blockViewModel) {
+        blockViewModel.effectFlow.collect { effect ->
+            if (effect is ParticipantBlockEffect.Failed) {
+                haptics.error()
+                blockToasts.tryEmit(
+                    FeedbackToastRequest(
+                        if (effect.wasBlocking) R.string.participant_block_failed else R.string.participant_unblock_failed,
+                        FeedbackKind.Error,
+                    ),
+                )
+            }
+        }
+    }
     var datePickerOpen by remember { mutableStateOf(false) }
 
     // Le rôle est une clé : un lecteur rétrogradé pendant que la fiche est ouverte la relit sous son nouveau rôle.
@@ -171,6 +199,10 @@ internal fun ParticipantProfileSheet(
 
                     // Les droits ne concernent que les visiteurs sans compte : pour un inscrit, le gateway sert
                     // `null` et la section disparaît.
+                    blockState.entry?.let { entry ->
+                        ParticipantBlockEntry(entry = entry, name = shownName, onClick = blockViewModel::onEntryTapped)
+                    }
+
                     if (state.profile?.entryCapabilities != null) {
                         ParticipantRightsSection(state = state, onToggle = viewModel::toggleRight)
                     }
@@ -225,6 +257,20 @@ internal fun ParticipantProfileSheet(
             }
         }
     }
+
+    if (blockState.confirming) {
+        BlockConfirmDialog(
+            displayName = state.profile?.let(ParticipantCardPresenter::fullName) ?: displayName,
+            fallbackName = stringResource(R.string.participant_block_fallback_name),
+            title = stringResource(R.string.participant_block_confirm_title),
+            message = { name -> stringResource(R.string.participant_block_confirm_message, name) },
+            confirmLabel = stringResource(R.string.participant_block_confirm_action),
+            cancelLabel = stringResource(R.string.participant_block_cancel),
+            onConfirm = blockViewModel::confirmBlock,
+            onDismiss = blockViewModel::dismissConfirmation,
+        )
+    }
+    FeedbackToastHost(toasts = blockToasts)
 
     if (datePickerOpen) {
         val pickerState = rememberDatePickerState(
@@ -328,3 +374,33 @@ private fun formatDay(iso: String): String = runCatching {
     DateFormat.getDateInstance(DateFormat.MEDIUM)
         .format(Date.from(Instant.parse(iso)))
 }.getOrDefault(iso)
+
+/** L'entrée rouge « Bloquer » / « Débloquer » de la fiche : cible de 48 dp, libellé TalkBack avec le nom. */
+@Composable
+private fun ParticipantBlockEntry(entry: BlockEntry, name: String, onClick: () -> Unit) {
+    val blocking = entry == BlockEntry.BLOCK
+    val label = stringResource(if (blocking) R.string.participant_block_entry else R.string.participant_unblock_entry)
+    val description = stringResource(
+        if (blocking) R.string.participant_block_entry_a11y else R.string.participant_unblock_entry_a11y,
+        name,
+    )
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .semantics { contentDescription = description },
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Block,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.error,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = label,
+            color = MeeshyTheme.tokens.error,
+            modifier = Modifier.padding(start = MeeshySpacing.sm),
+        )
+    }
+}
