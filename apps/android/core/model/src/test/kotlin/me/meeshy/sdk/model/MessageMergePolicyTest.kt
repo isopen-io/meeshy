@@ -184,6 +184,67 @@ class MessageMergePolicyTest {
         assertThat(outcome.message.consumedByMe).isTrue()
     }
 
+    private fun viewOnceWithContent(consumedByMe: Boolean? = null) = message(
+        content = "secret",
+        translations = listOf(translation("en", "secret-en")),
+        attachments = listOf(ApiMessageAttachment(id = "a1", fileUrl = "https://cdn/a1.jpg", thumbnailUrl = "https://cdn/a1_t.jpg", originalName = "passeport.jpg", alt = "ma clé")),
+        consumedByMe = consumedByMe,
+    ).copy(
+        isViewOnce = true,
+        encryptedContent = "ciphertext==",
+        location = SharedPlace(latitude = 48.85, longitude = 2.35),
+        sticker = MessageSticker(emoji = "🔥"),
+    )
+
+    @Test
+    fun `a served page does not rehydrate a view-once the reader already sealed`() {
+        val sealed = ConversationEventDeltas.sealedAsOpened(viewOnceWithContent())
+
+        val outcome = MessageMergePolicy.merge(sealed, viewOnceWithContent(consumedByMe = false))
+
+        assertThat(outcome.message.consumedByMe).isTrue()
+        assertThat(outcome.message.content).isEmpty()
+        assertThat(outcome.message.translations).isEmpty()
+        assertThat(outcome.message.encryptedContent).isNull()
+        assertThat(outcome.message.location).isNull()
+        assertThat(outcome.message.sticker).isNull()
+        assertThat(outcome.message.attachments.single().fileUrl).isNull()
+        assertThat(outcome.message.attachments.single().thumbnailUrl).isNull()
+        assertThat(outcome.message.attachments.single().originalName).isNull()
+        assertThat(outcome.changed).isFalse()
+    }
+
+    @Test
+    fun `a view-once opened on another device while this one was offline is sealed by the withheld page`() {
+        val cached = viewOnceWithContent()
+        val withheld = message(content = "", consumedByMe = true).copy(isViewOnce = true)
+
+        val merged = MessageMergePolicy.merge(cached, withheld).message
+
+        assertThat(merged.consumedByMe).isTrue()
+        assertThat(merged.content).isEmpty()
+        assertThat(merged.translations).isEmpty()
+        assertThat(merged.encryptedContent).isNull()
+        assertThat(merged.location).isNull()
+        assertThat(merged.sticker).isNull()
+        assertThat(merged.attachments.all { it.fileUrl == null && it.thumbnailUrl == null && it.alt == null }).isTrue()
+    }
+
+    @Test
+    fun `an ordinary message marked consumed is never emptied by the merge`() {
+        val ordinary = message(content = "salut", consumedByMe = true)
+
+        assertThat(MessageMergePolicy.merge(ordinary, message(content = "salut")).message.content).isEqualTo("salut")
+    }
+
+    @Test
+    fun `a view-once not yet opened by the reader keeps the served content`() {
+        val merged = MessageMergePolicy.merge(viewOnceWithContent(), viewOnceWithContent(consumedByMe = false)).message
+
+        assertThat(merged.content).isEqualTo("secret")
+        assertThat(merged.attachments.single().fileUrl).isEqualTo("https://cdn/a1.jpg")
+    }
+
     @Test
     fun `a light socket echo does not erase the rich blocks of the cache`() {
         val rich = message(

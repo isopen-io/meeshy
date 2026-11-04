@@ -91,10 +91,15 @@ public interface OutboxDao {
     public suspend fun updateState(cmid: String, state: String, attempts: Int, now: Long)
 
     /**
-     * Réserve [cmid] pour un envoi : `PENDING` → `INFLIGHT` seulement si la ligne est encore `PENDING`. Room sérialise les
-     * écritures, donc deux passes qui se chevauchent se réduisent à deux réservations successives et une seule rend 1.
+     * Réserve [cmid] pour un envoi : `PENDING` → `INFLIGHT` seulement si la ligne est encore `PENDING` ET due à [now]. Room
+     * sérialise les écritures, donc deux passes qui se chevauchent se réduisent à deux réservations successives et une seule
+     * rend 1 ; une passe qui a lu la ligne avant qu'une autre l'envoie, échoue et la remette à plus tard ne la renvoie pas
+     * sur sa lecture périmée (#15541).
      */
-    @Query("UPDATE outbox SET state = 'INFLIGHT', updatedAt = :now WHERE cmid = :cmid AND state = 'PENDING'")
+    @Query(
+        "UPDATE outbox SET state = 'INFLIGHT', updatedAt = :now WHERE cmid = :cmid AND state = 'PENDING' " +
+            "AND (nextAttemptAt IS NULL OR nextAttemptAt <= :now)",
+    )
     public suspend fun claimPending(cmid: String, now: Long): Int
 
     /** Crash-safe boot recovery: any row left INFLIGHT becomes PENDING again. */
@@ -121,6 +126,13 @@ public interface OutboxDao {
      */
     @Query("UPDATE outbox SET state = 'PENDING', updatedAt = :now WHERE state = 'INFLIGHT' AND updatedAt < :staleBefore")
     public suspend fun reclaimStaleInflight(staleBefore: Long, now: Long): Int
+
+    /** [reclaimStaleInflight], sparing the rows a live send of this process still holds ([live]) — #15541. */
+    @Query(
+        "UPDATE outbox SET state = 'PENDING', updatedAt = :now WHERE state = 'INFLIGHT' AND updatedAt < :staleBefore " +
+            "AND cmid NOT IN (:live)",
+    )
+    public suspend fun reclaimStaleInflightExcept(live: List<String>, staleBefore: Long, now: Long): Int
 
     /** Rows the "Synchronisation…" indicator counts: not exhausted, minus the background [excludedKinds]. */
     @Query("SELECT COUNT(*) FROM outbox WHERE state != 'EXHAUSTED' AND kind NOT IN (:excludedKinds)")

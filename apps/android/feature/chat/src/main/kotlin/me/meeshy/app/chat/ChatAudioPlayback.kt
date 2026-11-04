@@ -33,6 +33,13 @@ internal class ChatAudioPlayback private constructor(
         return if (!transport.isPlaying && !transport.isLoading) with(transport.toggle(url)) else this
     }
 
+    /**
+     * #15969 — le vocal chargé a été accusé : il s'appelle désormais [serverAttachmentId] et se sert depuis [url]. La
+     * lecture continue telle quelle, sous son nouveau nom — aucun rechargement, aucun retour à zéro.
+     */
+    fun followed(serverAttachmentId: String, url: String): ChatAudioPlayback =
+        if (attachmentId == null) this else ChatAudioPlayback(serverAttachmentId, transport.relabeled(url))
+
     /** « Arrêter » : le vocal est lâché, plus aucune bulle ne le montre chargé. */
     fun stopped(): ChatAudioPlayback = Idle
 

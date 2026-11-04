@@ -8,11 +8,13 @@ Sous-commandes (RUN = répertoire d'exécution, qui contient plan/ et ledger.git
   exclude RUN CLE MOTIF      retire un lot du périmètre, avec son motif
   set RUN CLE CHAMP VALEUR   pose issue | pr | note (entier pour issue et pr)
   mark RUN CLE ETAT          satisfait | bloque | debloque | reprendre
+  sans-fichiers RUN CLE F…   fichiers que le lot s'interdit de toucher (critère écrit) : ils ne comptent plus dans les chevauchements
   depend RUN CLE DEP         ajoute une dépendance à un lot (du plan ou de la cartographie), refusée si elle crée un cycle
   criteres RUN CLE FICHIER   critères ajoutés à un lot du plan (liste JSON) : la demande du porteur que le plan ne disait pas
   plan-cible RUN CLE FEATURE ajoute un lot du plan (et la fermeture de ses dépendances) comme cible d'une feature
   spec RUN CLE               la spécification complète d'un lot (plan : plan/*.json ; cartographie : registre)
-  status RUN [--inflight a,b] [--trailer URL] [--stale-hours 6] [--pr-stale-hours 3]
+  status RUN [--inflight a,b] [--trailer 'Claude-Session: …|Claude-Session: …'] [--stale-hours 6] [--pr-stale-hours 3]
+                             --trailer accepte plusieurs signatures séparées par « | » : celles des sessions qui ont déjà travaillé au chantier
   export RUN / import RUN FICHIER   les lots de cartographie, pour les garder dans un commentaire de #15537
   self-test
 """
@@ -54,9 +56,24 @@ def sh(cmd):
     return subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout
 
 
+def depot_nu(gitdir, url=GH):
+    if not os.path.isdir(gitdir):
+        subprocess.run(f'git init -q --bare {gitdir} && git -C {gitdir} remote add origin {url}', shell=True)
+
+
 def fusionnees(run):
+    """Le registre des fusions : git log --merges de dev, dans un dépôt nu COMPLET.
+
+    Il ne doit JAMAIS devenir superficiel : un seul fetch --depth y greffe des bornes, et git log dev s'arrête à la première
+    (mesuré le 2026-11-04 : 16 fusions Android visibles sur plus de 620, tout le plan paraissait à faire). Il se répare s'il l'est."""
+    depot_nu(f'{run}/ledger.git')
     with open(f'{run}/ledger.lock', 'w') as lk:
         fcntl.flock(lk, fcntl.LOCK_EX)
+        if os.path.exists(f'{run}/ledger.git/shallow'):
+            subprocess.run(f'git -C {run}/ledger.git fetch -q --unshallow --filter=tree:0 origin +refs/heads/dev:refs/heads/dev', shell=True)
+            if os.path.exists(f'{run}/ledger.git/shallow'):
+                subprocess.run(f'rm -rf {run}/ledger.git', shell=True)
+                depot_nu(f'{run}/ledger.git')
         for _ in range(4):
             if subprocess.run(f'git -C {run}/ledger.git fetch -q --filter=tree:0 origin +refs/heads/dev:refs/heads/dev', shell=True).returncode == 0:
                 break
@@ -212,6 +229,15 @@ def cmd_depend(run, cle, dep):
     print(json.dumps({cle: {'deps_extra': lot['deps_extra']}}))
 
 
+def cmd_sans_fichiers(run, cle, fichiers):
+    reg = charger(run)
+    if cle not in reg['lots'] or not fichiers:
+        sys.exit(f'lot inconnu ou aucun fichier : {cle}')
+    reg['lots'][cle]['sans_fichiers'] = sorted(set(reg['lots'][cle].get('sans_fichiers', []) + fichiers))
+    ecrire(run, reg)
+    print(json.dumps({cle: {'sans_fichiers': reg['lots'][cle]['sans_fichiers']}}))
+
+
 def cmd_criteres(run, cle, fichier):
     reg = charger(run)
     crit = json.load(open(fichier))
@@ -277,7 +303,7 @@ def spec(run, cle, reg=None, pl=None):
              'effort': p.get('effort'), 'est_lines': p.get('est_kotlin_lines')}
     else:
         s = dict(lot)
-    s.update({k: lot[k] for k in ('features', 'role', 'issue', 'pr', 'excluded', 'statut_manuel', 'note', 'sensible', 'lourd', 'deps_extra', 'criteres_ajoutes') if k in lot})
+    s.update({k: lot[k] for k in ('features', 'role', 'issue', 'pr', 'excluded', 'statut_manuel', 'note', 'sensible', 'lourd', 'deps_extra', 'criteres_ajoutes', 'sans_fichiers') if k in lot})
     s['deps'] = deps_de(cle, reg['lots'], pl)
     s['branch'] = branche(s['platform'], cle)
     return s
@@ -295,29 +321,45 @@ def heads_et_prs():
     return heads, prs
 
 
+def lignee(gitdir, ref, n=5):
+    """Âge du commit de tête, et messages des n derniers commits de la lignée PRINCIPALE (premier parent).
+
+    Une branche resynchronisée porte en tête un commit de fusion de dev, dont le message n'a pas la signature de la session ;
+    le second parent amène les commits d'autres sessions. Seule la lignée du premier parent dit qui écrit la branche."""
+    ts = sh(f'git -C {gitdir} log -1 --format=%ct {ref}').strip()
+    corps = sh(f'git -C {gitdir} log --first-parent -n {n} --format=%B%x01 {ref}')
+    return (int(ts or 0), corps) if ts else None
+
+
 def ages(run, branches):
+    """Âge et lignée des branches, lus dans ages.git — un dépôt À PART : le fetch y est superficiel (--depth), ce que le
+    registre des fusions ne doit jamais devenir."""
     if not branches:
         return {}
+    url = sh(f'git -C {run}/ledger.git remote get-url origin').strip() or GH
+    depot_nu(f'{run}/ages.git', url)
     specs = ' '.join(f'+refs/heads/{b}:refs/remotes/origin/{b}' for b in branches)
-    subprocess.run(f'git -C {run}/ledger.git fetch -q --filter=tree:0 --depth=1 origin {specs}', shell=True)
+    subprocess.run(f'git -C {run}/ages.git fetch -q --filter=tree:0 --depth=6 origin {specs}', shell=True)
     out = {}
     for b in branches:
-        brut = sh(f'git -C {run}/ledger.git log -1 --format=%ct%x00%B refs/remotes/origin/{b}')
-        if '\x00' in brut:
-            ts, corps = brut.split('\x00', 1)
-            out[b] = (int(ts.strip() or 0), corps)
+        l = lignee(f'{run}/ages.git', f'refs/remotes/origin/{b}')
+        if l:
+            out[b] = l
     return out
 
 
 def evaluer(reg, pl, fusion, heads, prs, ages_, maintenant, inflight, trailer, stale_h, pr_stale_h, bloques):
+    signatures = [t for t in (trailer or '').split('|') if t.strip()]
+    est_nous = lambda corps: any(t in corps for t in signatures)
     lots = {k: l for k, l in reg['lots'].items() if not l.get('excluded')}
     fait = {k for k, l in lots.items() if branche(l['platform'], k) in fusion or l.get('statut_manuel') == 'satisfait'}
     fait |= {k for k in pl if branche('android', k) in fusion}
 
     def fichiers(k):
+        exclus = set(lots.get(k, {}).get('sans_fichiers', []))
         if k in lots and lots[k]['source'] != 'plan':
-            return {f for f in lots[k].get('files', []) if not SHARED.search(f)}
-        return {f for f in pl.get(k, {}).get('android_files_touched', []) if not SHARED.search(f)}
+            return {f for f in lots[k].get('files', []) if not SHARED.search(f) and f not in exclus}
+        return {f for f in pl.get(k, {}).get('android_files_touched', []) if not SHARED.search(f) and f not in exclus}
 
     def vivant(b):
         if b not in heads:
@@ -325,7 +367,7 @@ def evaluer(reg, pl, fusion, heads, prs, ages_, maintenant, inflight, trailer, s
         if heads[b] in prs:
             return True
         ts, corps = ages_.get(b, (0, ''))
-        return (maintenant - ts) < stale_h * 3600 or (trailer and trailer in corps)
+        return (maintenant - ts) < stale_h * 3600 or est_nous(corps)
 
     autres_en_vol = [k for k in pl if k not in lots and branche('android', k) in heads and k not in fait and vivant(branche('android', k))]
     res = {}
@@ -333,7 +375,7 @@ def evaluer(reg, pl, fusion, heads, prs, ages_, maintenant, inflight, trailer, s
         b = branche(l['platform'], k)
         ts, corps = ages_.get(b, (0, ''))
         age_h = round((maintenant - ts) / 3600, 1) if ts else None
-        nous = bool(trailer and trailer in corps)
+        nous = est_nous(corps)
         deps = deps_de(k, lots, pl)
         manquantes = [d for d in deps if d not in fait]
         info = {'branch': b, 'platform': l['platform'], 'issue': l.get('issue'), 'pr': l.get('pr'), 'age_h': age_h, 'nous': nous, 'deps_manquantes': manquantes,
@@ -390,6 +432,8 @@ def cmd_export(run):
            'issues': {k: l['issue'] for k, l in reg['lots'].items() if l.get('issue')},
            'deps_extra': {k: l['deps_extra'] for k, l in reg['lots'].items() if l.get('deps_extra')},
            'criteres_ajoutes': {k: l['criteres_ajoutes'] for k, l in reg['lots'].items() if l.get('criteres_ajoutes')},
+           'sans_fichiers': {k: l['sans_fichiers'] for k, l in reg['lots'].items() if l.get('sans_fichiers')},
+           'drapeaux': {k: {d: True for d in ('sensible', 'lourd') if l.get(d)} for k, l in reg['lots'].items() if l['source'] == 'plan' and (l.get('sensible') or l.get('lourd'))},
            'plan_cibles': {k: l.get('features', []) for k, l in reg['lots'].items() if l['source'] == 'plan' and l.get('role') == 'cible'}}
     print(json.dumps(out, ensure_ascii=False, separators=(',', ':')))
 
@@ -410,10 +454,13 @@ def cmd_import(run, fichier):
     for k, n in data.get('issues', {}).items():
         if k in reg['lots'] and not reg['lots'][k].get('issue'):
             reg['lots'][k]['issue'] = n
-    for champ in ('deps_extra', 'criteres_ajoutes'):
+    for champ in ('deps_extra', 'criteres_ajoutes', 'sans_fichiers'):
         for k, v in data.get(champ, {}).items():
             if k in reg['lots']:
                 reg['lots'][k][champ] = v
+    for k, v in data.get('drapeaux', {}).items():
+        if k in reg['lots']:
+            reg['lots'][k].update(v)
     if cycle(reg['lots'], plan(run)):
         sys.exit('cycle de dépendances dans l import')
     ecrire(run, reg)
@@ -464,12 +511,46 @@ def self_test():
     assert valider({'key': 'bonne-cle', 'platform': 'ios', 'title': 't', 'goal': 'g', 'acceptance': ['a'], 'tests': ['t'], 'files': ['f']}, {}) is None
     assert valider({'key': 'a', 'platform': 'android', 'title': 't', 'goal': 'g', 'acceptance': ['a'], 'tests': ['t'], 'files': ['f']}, reg['lots']) is not None
     assert fermeture(['b'], pl, set()) == ['b', 'a'] and fermeture(['b'], pl, {'claude/android-a'}) == ['b']
+    reg['lots']['c']['sans_fichiers'] = ['x/C.kt']
+    res_sf, _ = evaluer(reg, pl, {'claude/android-a'}, heads, set(), ages_, now, set(), T, 6, 3, set())
+    assert res_sf['c']['etat'] == 'pret', res_sf['c']
+    del reg['lots']['c']['sans_fichiers']
+    T2 = 'Claude-Session: https://claude.ai/code/session_NOUVELLE'
+    res_t2, _ = evaluer(reg, pl, {'claude/android-a'}, heads, set(), ages_, now, set(), f'{T2}|{T}', 6, 3, set())
+    assert res_t2['ios-y']['nous'] is True and res_t2['ios-w']['nous'] is False, res_t2
     reg['lots']['c']['deps_extra'] = ['loi-x']
     assert deps_de('c', reg['lots'], pl) == ['loi-x']
     res5, _ = evaluer(reg, pl, {'claude/android-a'}, heads, set(), ages_, now, set(), T, 6, 3, set())
     assert res5['c']['etat'] == 'attente' and res5['c']['deps_manquantes'] == ['loi-x'], res5['c']
     reg['lots']['loi-x']['deps_extra'] = ['c']
     assert cycle(reg['lots'], pl) is not None
+    with tempfile.TemporaryDirectory() as g:
+        env = 'GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t'
+        sh(f'cd {g} && git init -q -b dev . && {env} git commit -q --allow-empty -m base && git checkout -q -b lot'
+           f' && {env} git commit -q --allow-empty -m "feat: lot" -m "{T}" && git checkout -q dev'
+           f' && {env} git commit -q --allow-empty -m "autre" -m "Claude-Session: https://claude.ai/code/session_AUTRE"'
+           f' && git checkout -q lot && {env} git merge -q --no-edit dev')
+        ts, corps = lignee(g, 'lot')
+        assert ts > 0 and T in corps and 'session_AUTRE' not in corps, corps
+        assert T not in sh(f'git -C {g} log -1 --format=%B lot'), 'la tête doit être le commit de fusion sans signature'
+        for i in range(8):
+            sh(f'cd {g} && git checkout -q dev && {env} git commit -q --allow-empty -m "dev {i}"')
+        sh(f'cd {g} && git checkout -q dev && git branch -q -f claude/android-longue dev && git checkout -q lot && {env} git merge -q --no-edit dev'
+           f' && git checkout -q dev && {env} git merge -q --no-ff --no-edit -m "Merge pull request #1 from isopen-io/claude/android-lot" lot')
+        run = f'{g}/run'
+        os.makedirs(run)
+        sh(f'git init -q --bare {run}/ledger.git && git -C {run}/ledger.git remote add origin {g}')
+        fusion, _ = fusionnees(run)
+        assert 'claude/android-lot' in fusion, fusion
+        a = ages(run, ['claude/android-longue', 'lot'])
+        assert set(a) == {'claude/android-longue', 'lot'}, a
+        assert not os.path.exists(f'{run}/ledger.git/shallow'), 'le registre des fusions est devenu superficiel'
+        fusion2, _ = fusionnees(run)
+        assert fusion2 == fusion
+        sh(f'git -C {run}/ledger.git fetch -q --depth=2 origin +refs/heads/lot:refs/remotes/origin/lot')
+        assert os.path.exists(f'{run}/ledger.git/shallow')
+        fusion3, _ = fusionnees(run)
+        assert 'claude/android-lot' in fusion3 and not os.path.exists(f'{run}/ledger.git/shallow'), 'le registre superficiel ne s est pas réparé'
     print('self-test vert')
 
 
@@ -488,7 +569,7 @@ def main():
     r = a.run.rstrip('/')
     {'init': lambda: cmd_init(r, a.rest[0]), 'add': lambda: cmd_add(r, a.rest[0]), 'exclude': lambda: cmd_exclude(r, a.rest[0], ' '.join(a.rest[1:])),
      'set': lambda: cmd_set(r, a.rest[0], a.rest[1], ' '.join(a.rest[2:])), 'mark': lambda: cmd_mark(r, a.rest[0], a.rest[1]),
-     'depend': lambda: cmd_depend(r, a.rest[0], a.rest[1]), 'criteres': lambda: cmd_criteres(r, a.rest[0], a.rest[1]),
+     'depend': lambda: cmd_depend(r, a.rest[0], a.rest[1]), 'sans-fichiers': lambda: cmd_sans_fichiers(r, a.rest[0], a.rest[1:]), 'criteres': lambda: cmd_criteres(r, a.rest[0], a.rest[1]),
      'plan-cible': lambda: cmd_plan_cible(r, a.rest[0], a.rest[1]),
      'spec': lambda: print(json.dumps(spec(r, a.rest[0]), ensure_ascii=False)), 'status': lambda: cmd_status(r, a),
      'export': lambda: cmd_export(r), 'import': lambda: cmd_import(r, a.rest[0])}[a.cmd]()

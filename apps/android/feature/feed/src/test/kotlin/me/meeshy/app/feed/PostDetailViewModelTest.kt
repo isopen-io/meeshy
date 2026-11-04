@@ -1106,4 +1106,13 @@ class PostDetailViewModelTest {
         assertThat(vm.state.value.post?.authorAvatarUrl)
             .isEqualTo("https://gate.meeshy.me/api/v1/attachments/file/avatars/user/u1.jpg")
     }
+
+    @Test
+    fun `the quote composer of the detail shows the quoted text the card serves (#16001)`() = runTest {
+        val vm = loadedVm(loaded = QuotePrism.post("p1"), currentUser = QuotePrism.reader)
+
+        vm.beginQuote()
+
+        assertThat(vm.state.value.quoteComposer?.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
+    }
 }

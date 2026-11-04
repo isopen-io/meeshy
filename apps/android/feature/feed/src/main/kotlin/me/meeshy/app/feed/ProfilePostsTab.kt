@@ -15,13 +15,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
 import kotlinx.coroutines.CoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +37,6 @@ import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
-import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -98,15 +96,8 @@ fun rememberProfilePostsItems(
             haptic = haptics::medium,
         )
     }
-    val actions = ProfilePostCardActions(
-        clipboard = LocalClipboardManager.current,
-        shareLauncher = LocalShareLauncher.current,
-        shareOut = rememberContentShareOut(),
-        linkCopier = rememberPostLinkCopy(),
-        linkCopied = stringResource(R.string.feed_link_copied),
-        toasts = viewModel.toasts,
-        context = context,
-    )
+    val linkCopied = stringResource(R.string.feed_link_copied)
+    val actions = rememberPostCardShareActions(onLinkCopied = { viewModel.toasts.show(linkCopied, FeedbackToastKind.SUCCESS) })
     ProfilePostDialogs(state.dialog, onEvent)
     val locale = Locale.getDefault()
     return {
@@ -118,7 +109,7 @@ internal fun LazyListScope.profilePostsItems(
     state: ProfilePostsUiState,
     onEvent: (ProfilePostsEvent) -> Unit,
     opening: ProfilePostOpening,
-    actions: ProfilePostCardActions,
+    actions: PostCardShareActions,
     onOpenMyStories: (() -> Unit)?,
     onOpenProfile: ((String) -> Unit)?,
     locale: Locale,
@@ -164,6 +155,7 @@ internal fun LazyListScope.profilePostsItems(
             onCopyText = { actions.copyText(post) },
             onOpenProfile = onOpenProfile,
             onRepost = { onEvent(ProfilePostsEvent.Repost(post.id)) },
+            onQuote = { onEvent(ProfilePostsEvent.BeginQuote(post.id)) },
             onPin = { onEvent(ProfilePostsEvent.Pin(post.id)) },
             onReport = { onEvent(ProfilePostsEvent.RequestReport(post.id)) },
             onDelete = { onEvent(ProfilePostsEvent.RequestDelete(post.id)) },

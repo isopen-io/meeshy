@@ -52,7 +52,7 @@ class NearbyViewModelTest {
 
     private fun viewModel(): NearbyViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
-        return NearbyViewModel(repository, session, config)
+        return NearbyViewModel(repository, mockk(relaxed = true), session, config)
     }
 
     @Test

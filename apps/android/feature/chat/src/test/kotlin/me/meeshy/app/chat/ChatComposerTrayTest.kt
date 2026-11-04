@@ -72,6 +72,11 @@ class ChatComposerTrayTest {
             return thumbnailPath?.let { "file:///previews/$cmid.jpg" }
         }
         override suspend fun render(cmid: String, item: MediaUploadItem, effects: MessageEffects): PendingMediaPreview? = null
+        val playable = mutableListOf<Triple<String, String, MessageEffects>>()
+        override suspend fun keepPlayable(cmid: String, item: MediaUploadItem, effects: MessageEffects): String? {
+            playable += Triple(cmid, item.mimeType, effects)
+            return "file:///previews/$cmid.voice.m4a".takeIf { item.mimeType.startsWith("audio/") }
+        }
         override suspend fun release(attachments: List<ApiMessageAttachment>) = Unit
     }
 
@@ -374,5 +379,44 @@ class ChatComposerTrayTest {
 
         assertThat(r.previews.kept.single().third.has(MessageEffectFlags.VIEW_ONCE)).isTrue()
         assertThat(r.sentAttachments().single().isProtected).isTrue()
+    }
+
+    @Test
+    fun `a staged voice note leaves with a playable local copy so the pending bubble plays it offline`() = runTest {
+        val r = rig()
+        r.tray.stageBytes(byteArrayOf(1, 2), "voice_1.m4a", "audio/mp4")
+        advanceUntilIdle()
+
+        r.composer.send()
+        advanceUntilIdle()
+
+        val sent = r.sentAttachments().single()
+        assertThat(sent.fileUrl).isEqualTo("file:///previews/upload-0.voice.m4a")
+        assertThat(r.previews.playable.single().first).isEqualTo("upload-0")
+    }
+
+    @Test
+    fun `the playable copy is asked under the effects armed at send`() = runTest {
+        val r = rig()
+        r.composer.toggleEffect(MessageEffectFlags.VIEW_ONCE)
+        r.tray.stageBytes(byteArrayOf(1, 2), "voice_1.m4a", "audio/mp4")
+        advanceUntilIdle()
+
+        r.composer.send()
+        advanceUntilIdle()
+
+        assertThat(r.previews.playable.single().third.has(MessageEffectFlags.VIEW_ONCE)).isTrue()
+    }
+
+    @Test
+    fun `a staged photo keeps no playable copy`() = runTest {
+        val r = rig()
+        r.tray.stageBytes(byteArrayOf(1), "a.jpg", "image/jpeg")
+        advanceUntilIdle()
+
+        r.composer.send()
+        advanceUntilIdle()
+
+        assertThat(r.sentAttachments().single().fileUrl).isNull()
     }
 }

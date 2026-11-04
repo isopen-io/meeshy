@@ -20,7 +20,7 @@ final class ReactionServiceTests: XCTestCase {
     // MARK: - add
 
     func test_add_validReaction_postsToReactionsEndpoint() async throws {
-        let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/reactions", result: response)
 
         try await service.add(messageId: "msg001", emoji: "thumbsup")
@@ -31,7 +31,7 @@ final class ReactionServiceTests: XCTestCase {
     }
 
     func test_add_differentEmoji_postsToReactionsEndpoint() async throws {
-        let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/reactions", result: response)
 
         try await service.add(messageId: "msg002", emoji: "heart")
@@ -43,7 +43,7 @@ final class ReactionServiceTests: XCTestCase {
     // MARK: - remove
 
     func test_remove_validEmoji_callsDeleteWithEncodedEmoji() async throws {
-        let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/reactions/msg001/thumbsup", result: response)
 
         try await service.remove(messageId: "msg001", emoji: "thumbsup")
@@ -56,7 +56,7 @@ final class ReactionServiceTests: XCTestCase {
     func test_remove_unicodeEmoji_encodesEmojiInEndpoint() async throws {
         let emoji = "\u{1F44D}"
         let encoded = emoji.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? emoji
-        let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
+        let response = APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/reactions/msg001/\(encoded)", result: response)
 
         try await service.remove(messageId: "msg001", emoji: emoji)

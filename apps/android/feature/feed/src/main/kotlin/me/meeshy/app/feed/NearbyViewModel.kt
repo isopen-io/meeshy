@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
@@ -39,11 +40,16 @@ data class NearbyUiState(
     val awaitingAccess: Boolean = false,
     val locationUnavailable: Boolean = false,
     val errorMessage: String? = null,
+    /** Le compositeur de citation ouvert par « Citer » ; `null` quand il est fermé. */
+    val quoteComposer: QuoteComposerState? = null,
+    /** L'issue d'un geste d'une carte, dite une fois puis consommée. */
+    val notice: FeedNotice? = null,
 )
 
 @HiltViewModel
 class NearbyViewModel @Inject constructor(
     private val postRepository: PostRepository,
+    reports: ReportRepository,
     private val sessionRepository: SessionRepository,
     private val config: MeeshyConfig,
 ) : ViewModel() {
@@ -56,10 +62,16 @@ class NearbyViewModel @Inject constructor(
     private val _state = MutableStateFlow(NearbyUiState())
     val state: StateFlow<NearbyUiState> = _state.asStateFlow()
 
+    /** Les gestes du fil sur les publications d'à côté (#13244). */
+    private val actions = ListedPostActions(viewModelScope, postRepository, reports, listState) { sessionRepository.currentUser.value }
+
+    /** Ce que font les cartes de la liste : les gestes du fil, chacun câblé ([ListedPostCardActions]). */
+    val cards: ListedPostCardActions get() = actions
+
     init {
         viewModelScope.launch {
-            combine(listState, sessionRepository.currentUser, status) { list, user, st ->
-                project(list, user, st)
+            combine(listState, sessionRepository.currentUser, status, actions.state) { list, user, st, gestures ->
+                project(list, user, st, gestures)
             }.collect { projected -> _state.value = projected }
         }
     }
@@ -174,9 +186,11 @@ class NearbyViewModel @Inject constructor(
         }
     }
 
-    private fun project(list: NearbyListState, user: MeeshyUser?, st: NearbyStatus): NearbyUiState {
+    private fun project(list: NearbyListState, user: MeeshyUser?, st: NearbyStatus, gestures: ListedPostCardsState): NearbyUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
-        val projected = list.posts.map { FeedPostBuilder.build(it, prefs, config.apiBaseUrl) }
+        val projected = list.posts.map {
+            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, gestures.languageOverrides[it.id], currentUserId = user?.id)
+        }
         val showSkeleton = st.isLoading && !list.hasLoaded && projected.isEmpty() && st.error == null
         return NearbyUiState(
             posts = projected,
@@ -191,6 +205,8 @@ class NearbyViewModel @Inject constructor(
             awaitingAccess = st.awaitingAccess,
             locationUnavailable = st.locationUnavailable,
             errorMessage = st.error,
+            quoteComposer = gestures.quoteComposer,
+            notice = gestures.notice,
         )
     }
 

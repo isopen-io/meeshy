@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import Meeshy
 import MeeshySDK
 
@@ -236,6 +237,57 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertNil(sut.errorMessage)
         XCTAssertEqual(sut.createdConversation?.id, "conv-1")
         XCTAssertEqual(api.postCount, 1)
+    }
+
+    // MARK: - openDirect (décision porteur du 2026-11-04, #14646)
+
+    func test_openDirect_oneTap_postsADirectAndOpensIt() async {
+        let (sut, api) = makeSUT(currentUserId: "u-current")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+
+        XCTAssertEqual(api.postCount, 1)
+        XCTAssertEqual(lastPostedBody(api)?["type"] as? String, "direct")
+        XCTAssertEqual(lastPostedBody(api)?["participantIds"] as? [String], ["u-1"])
+        XCTAssertNil(lastPostedBody(api)?["title"])
+        XCTAssertEqual(sut.createdConversation?.id, "conv-1")
+        XCTAssertFalse(sut.isCreating)
+        XCTAssertNil(sut.openingUserId)
+    }
+
+    func test_openDirect_carriesTheCheckedEncryptionMode() async {
+        let (sut, api) = makeSUT(platformRole: "USER")
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))
+        sut.chooseEncryptionMode(.hybrid, isGroup: false)
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+
+        XCTAssertEqual(lastPostedBody(api)?["encryptionMode"] as? String, "hybrid")
+    }
+
+    func test_openDirect_marksTheTouchedRowWhileItOpens() async {
+        let (sut, api) = makeSUT()
+        api.stub("/conversations", result: Self.makeConversationResponse(id: "conv-1"))
+        var seen: [String?] = []
+        let watch = sut.$openingUserId.sink { seen.append($0) }
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+        watch.cancel()
+
+        XCTAssertEqual(seen, [nil, "u-1", nil])
+    }
+
+    func test_openDirect_failure_keepsTheSheetWithTheMessage() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = NSError(domain: "TestNetwork", code: 500)
+
+        await sut.openDirect(with: Self.makeUser(id: "u-1", username: "alice"))
+
+        XCTAssertNil(sut.createdConversation)
+        XCTAssertNotNil(sut.errorMessage)
+        XCTAssertFalse(sut.isCreating)
+        XCTAssertNil(sut.openingUserId)
     }
 
     // MARK: - Encryption (directive porteur du 2026-11-01)

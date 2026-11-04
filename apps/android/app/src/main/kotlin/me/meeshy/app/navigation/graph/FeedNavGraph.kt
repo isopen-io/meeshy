@@ -90,6 +90,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
         )
     }
     composable(Routes.NEARBY_DISCOVERY) {
@@ -98,6 +99,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
         )
     }
     composable(

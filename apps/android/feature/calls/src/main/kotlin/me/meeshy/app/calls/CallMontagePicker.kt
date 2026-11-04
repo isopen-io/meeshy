@@ -199,107 +199,7 @@ internal fun CallMontagePicker(
     }
 }
 
-@Composable
-private fun MontageCell(
-    item: CallMontageChoice,
-    posed: CallMontageChoice,
-    isSelected: Boolean,
-    previews: CallCapturePreviews,
-    people: List<CallFramePerson>,
-    onDecline: (String) -> Unit,
-) {
-    val shape = RoundedCornerShape(MeeshyRadius.sm)
-    Box(
-        Modifier
-            .fillMaxSize()
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.08f))
-            .border(if (isSelected) 2.dp else 1.dp, if (isSelected) Color.White else Color.White.copy(alpha = 0.3f), shape),
-        contentAlignment = Alignment.Center,
-    ) {
-        when (item) {
-            is CallMontageChoice.Classic -> {
-                val thumbnail = previews.thumbnails[item.style]
-                if (thumbnail != null) {
-                    Image(thumbnail.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                } else {
-                    Icon(styleGlyph(item.style), contentDescription = null, tint = CallPalette.InkSecondary, modifier = Modifier.size(20.dp))
-                }
-            }
-            is CallMontageChoice.Frame -> {
-                val declinations = remember(item.id) { CallFrameStyleRule.declinations(item.id) }
-                val posedId = (posed as? CallMontageChoice.Frame)?.id ?: item.id
-                if (isSelected && declinations.size > 1) {
-                    CallFrameDeclinationPager(declinations = declinations, selected = posedId, onSelect = onDecline) { declined ->
-                        FrameTile(declined, previews.frameThumbnails[declined.id], people)
-                    }
-                } else {
-                    val design = remember(item.id) { CallMontageFrameRule.design(item.id) }
-                    design?.let { FrameTile(it, previews.frameThumbnails[it.id], people) }
-                }
-            }
-        }
-    }
-}
 
-/** La vignette d'un cadre peinte sur les visages de l'appel ; en attendant, le cadre avec les initiales — jamais un spinner. */
-@Composable
-private fun FrameTile(design: CallFrameDesign, painted: Bitmap?, people: List<CallFramePerson>) {
-    if (painted != null) {
-        Image(painted.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-    } else {
-        FrameThumbnail(design, people)
-    }
-}
-
-@Composable
-private fun MoodChips(
-    chips: List<CallMontageMoodChip>,
-    selected: CallMontageMoodChip,
-    isEnabled: Boolean,
-    toggle: CallMontageScopeToggle?,
-    onScope: (Boolean) -> Unit,
-    onSelect: (CallMontageMoodChip) -> Unit,
-) {
-    val list = rememberLazyListState()
-    val index = chips.indexOf(selected)
-    LaunchedEffect(index) { if (index >= 0) list.animateScrollToItem(index) }
-    LazyRow(
-        state = list,
-        contentPadding = PaddingValues(horizontal = MeeshySpacing.lg),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-        userScrollEnabled = isEnabled,
-    ) {
-        items(chips) { chip ->
-            MoodChip(chipLabel(chip), selected = chip == selected, isEnabled = isEnabled) { if (chip != selected) onSelect(chip) }
-        }
-        toggle?.let { scope ->
-            item {
-                val label = stringResource(if (scope.showsAll) R.string.call_frames_less else R.string.call_frames_more)
-                val hint = stringResource(if (scope.showsAll) R.string.call_frames_less_hint else R.string.call_frames_more_hint)
-                MoodChip(label, selected = false, isEnabled = isEnabled, hint = hint) { onScope(scope.showsAll) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MoodChip(label: String, selected: Boolean, isEnabled: Boolean, hint: String? = null, onClick: () -> Unit) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = if (selected) MeeshyPalette.Indigo950 else CallPalette.Ink.copy(alpha = if (isEnabled) 1f else 0.5f),
-        modifier = Modifier
-            .heightIn(min = 48.dp)
-            .padding(vertical = MeeshySpacing.xs)
-            .clip(CircleShape)
-            .background(if (selected) Color.White else Color.White.copy(alpha = 0.16f))
-            .clickable(enabled = isEnabled, role = Role.Tab, onClickLabel = hint, onClick = onClick)
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
-            .semantics { this.selected = selected },
-    )
-}
 
 /**
  * Quitter à gauche, puis « Cadre » quand le cadre affiché peut se garder pendant l'appel, puis « Chaque visage »
@@ -390,16 +290,7 @@ private fun TrimThumbnailsOnMemoryPressure() {
     }
 }
 
-private fun choiceName(choice: CallMontageChoice, classicNames: Map<CallMontageStyle, String>, language: String?): String = when (choice) {
-    is CallMontageChoice.Classic -> classicNames[choice.style].orEmpty()
-    is CallMontageChoice.Frame -> CallMontageFrameRule.frameName(choice.id, language = language).orEmpty()
-}
 
-@Composable
-private fun chipLabel(chip: CallMontageMoodChip): String = when (chip) {
-    CallMontageMoodChip.Classics -> stringResource(R.string.call_frames_classics)
-    is CallMontageMoodChip.Mood -> stringResource(moodLabel(chip.mood))
-}
 
 /** Le nom d'un classique, celui d'iOS (`CallCaptureCopy.styleName`). */
 @StringRes
@@ -417,36 +308,4 @@ internal fun styleName(style: CallMontageStyle): Int = when (style) {
     CallMontageStyle.NOIR -> R.string.call_capture_style_noir
     CallMontageStyle.COMIC -> R.string.call_capture_style_comic
     CallMontageStyle.HEART -> R.string.call_capture_style_heart
-}
-
-/** Le glyphe qui tient la place d'une vignette tant qu'elle n'est pas peinte (iOS `CallCaptureCopy.styleSymbol`) — jamais un spinner. */
-private fun styleGlyph(style: CallMontageStyle): ImageVector = when (style) {
-    CallMontageStyle.SCREEN -> MeeshyIcons.PictureInPicture
-    CallMontageStyle.COVER -> MeeshyIcons.Article
-    CallMontageStyle.GOLD -> MeeshyIcons.Premium
-    CallMontageStyle.REDCARPET -> MeeshyIcons.Star
-    CallMontageStyle.GRID -> MeeshyIcons.GridView
-    CallMontageStyle.STRIP -> MeeshyIcons.VerticalSplit
-    CallMontageStyle.POLAROID -> MeeshyIcons.Photo
-    CallMontageStyle.MAGAZINE -> MeeshyIcons.Dictionary
-    CallMontageStyle.FILM -> MeeshyIcons.Movie
-    CallMontageStyle.NEON -> MeeshyIcons.Sparkles
-    CallMontageStyle.NOIR -> MeeshyIcons.Camera
-    CallMontageStyle.COMIC -> MeeshyIcons.TextBubble
-    CallMontageStyle.HEART -> MeeshyIcons.Heart
-}
-
-private fun moodLabel(mood: CallFrameMood): Int = when (mood) {
-    CallFrameMood.CORPORATE -> R.string.call_frames_mood_corporate
-    CallFrameMood.DECONNECTE -> R.string.call_frames_mood_deconnecte
-    CallFrameMood.DISTINGUE -> R.string.call_frames_mood_distingue
-    CallFrameMood.ELEGANT -> R.string.call_frames_mood_elegant
-    CallFrameMood.FANTASTIQUE -> R.string.call_frames_mood_fantastique
-    CallFrameMood.FEERIQUE -> R.string.call_frames_mood_feerique
-    CallFrameMood.FUTURISTE -> R.string.call_frames_mood_futuriste
-    CallFrameMood.GLAUQUE -> R.string.call_frames_mood_glauque
-    CallFrameMood.HORS_NORME -> R.string.call_frames_mood_hors_norme
-    CallFrameMood.JOVIAL -> R.string.call_frames_mood_jovial
-    CallFrameMood.MORBIDE -> R.string.call_frames_mood_morbide
-    CallFrameMood.SIGNATURE -> R.string.call_frames_mood_signature
 }

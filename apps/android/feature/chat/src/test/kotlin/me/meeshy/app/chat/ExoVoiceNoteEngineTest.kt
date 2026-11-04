@@ -256,6 +256,23 @@ class ExoVoiceNoteEngineTest {
         loading(url).assertPrepared()
     }
 
+    /**
+     * (#15428) Le vocal qu'on vient d'envoyer est rangé, à l'accusé, ENTIER dans le cache typé AUDIO
+     * (`MediaAdoption`) sous l'adresse servie. Relu aussitôt hors ligne, il doit jouer depuis ce fichier,
+     * pas attendre un réseau qui n'est pas là.
+     */
+    @Test
+    fun `a voice note adopted whole at the ack plays again with no network`() {
+        val url = "https://gate.meeshy.me/api/v1/static/${UUID.randomUUID()}.m4a"
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val typed = me.meeshy.sdk.media.TypedMediaCache(me.meeshy.sdk.media.MediaCacheDirs(context.cacheDir, context.cacheDir))
+        val staged = File(typed.stagingDir(MediaCacheCategory.AUDIO), "sent.m4a")
+        File(URI(fixture("original-voice-note.m4a"))).copyTo(staged, overwrite = true)
+        kotlinx.coroutines.runBlocking { typed.store(MediaCacheCategory.AUDIO, url, staged) }
+
+        loading(url).assertPrepared()
+    }
+
     private companion object {
         const val CODEC_BUFFER_BYTES = 64 * 1024
 
