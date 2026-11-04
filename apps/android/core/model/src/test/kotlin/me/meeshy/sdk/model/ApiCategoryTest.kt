@@ -53,9 +53,9 @@ class ApiCategoryTest {
         ).toOptions()
 
         assertThat(options).containsExactly(
-            CategoryOption(id = "a", name = "A", order = 0),
-            CategoryOption(id = "b", name = "B", order = null),
-            CategoryOption(id = "c", name = "C", order = 1),
+            CategoryOption(id = "a", name = "A", order = 0, color = "#3B82F6", icon = "briefcase", isExpanded = true),
+            CategoryOption(id = "b", name = "B", order = null, color = "#3B82F6", icon = "briefcase", isExpanded = true),
+            CategoryOption(id = "c", name = "C", order = 1, color = "#3B82F6", icon = "briefcase", isExpanded = true),
         ).inOrder()
     }
 
