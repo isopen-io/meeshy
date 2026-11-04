@@ -181,6 +181,10 @@ struct ProfileUserPostsList: View {
     /// profil : le bouton commentaire ne répondait plus, et celui d'un réel
     /// fermait carrément la feuille de profil (openReel).
     @State private var commentingPost: FeedPost?
+    /// Poste ou réel cité (#15911) — la porte de citation s'ouvre par-dessus le
+    /// profil, comme depuis le fil ; sans hôte de racine, « Citer » est absent.
+    @State private var quotedPost: FeedPost?
+    @Environment(\.meeshyQuoteComposerHost) private var quoteHost
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     private var isDark: Bool { theme.mode.isDark }
@@ -286,6 +290,7 @@ struct ProfileUserPostsList: View {
         .postEditCover(item: $editingPost) { post, draft in
             await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
         }
+        .modifier(QuoteComposerCover(quoted: $quotedPost, host: quoteHost))
     }
 
     // MARK: - Card routing (reel vs post)
@@ -326,6 +331,7 @@ struct ProfileUserPostsList: View {
                 commentingPost = post
             },
             onRepost: { id in Task { await viewModel.toggleRepost(id) } },
+            onQuote: quote(post),
             onBookmark: { id in Task { await viewModel.toggleBookmark(id) } },
             onShare: { id in Task { await share(id) } },
             // We are already inside this user's profile sheet — tapping the
@@ -355,7 +361,7 @@ struct ProfileUserPostsList: View {
             onOpenComments: { commentingPost = post },
             onLike: { id in Task { await viewModel.toggleLike(id) } },
             onRepost: { id in Task { await viewModel.toggleRepost(id) } },
-            onQuote: { _ in openPost(post) },
+            onQuote: quote(post),
             onShare: { id in Task { await share(id) } },
             onBookmark: { id in Task { await viewModel.toggleBookmark(id) } },
             onSelectLanguage: { postId, language in
@@ -377,6 +383,13 @@ struct ProfileUserPostsList: View {
     }
 
     // MARK: - Open
+
+    /// « Citer » ouvre la porte de citation sur la carte touchée — la porte
+    /// remonte elle-même à la RACINE d'une chaîne de republication.
+    private func quote(_ post: FeedPost) -> ((String) -> Void)? {
+        guard quoteHost != nil else { return nil }
+        return { _ in quotedPost = post }
+    }
 
     /// L'ouverture se compte à DESTINATION (#10483) : le détail
     /// (`PostDetailViewModel.registerDetailOpen`) et le lecteur de réels

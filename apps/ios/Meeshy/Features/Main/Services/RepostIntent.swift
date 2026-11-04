@@ -125,54 +125,6 @@ nonisolated struct RepostIntent: Equatable, Sendable {
             visibility: visibility
         )
     }
-
-    /// Le geste « **je repartage en CITANT** » — depuis une surface qui recueille
-    /// vraiment un commentaire.
-    ///
-    /// Un commentaire vide ou blanc n'est PAS une citation : c'est la règle que
-    /// trois des quatre sites de citation appliquaient déjà, chacun de son côté
-    /// et avec sa propre écriture. Elle vit ici désormais, une fois.
-    static func quoted(
-        postId: String,
-        targetType: PostType?,
-        comment: String?,
-        visibility: String?
-    ) -> RepostIntent {
-        let ebarbe = comment?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cite = !(ebarbe?.isEmpty ?? true)
-        return RepostIntent(
-            clientMutationId: ClientMutationId.generate(),
-            postId: postId,
-            targetType: targetType,
-            content: cite ? ebarbe : nil,
-            isQuote: cite,
-            visibility: visibility
-        )
-    }
-
-    /// Le geste « **je repartage en CITANT** » d'une surface qui DÉCLARE la
-    /// citation sans recueillir de commentaire — l'alerte « Citer » de la
-    /// feuille de détail, qui n'a aucun champ de saisie.
-    ///
-    /// Ce geste existe pour rester FIDÈLE, pas par élégance. Le normaliser en
-    /// repartage sec serait un changement de PRODUIT : côté serveur, `isQuote`
-    /// décide où s'enracinent les réactions. La dette — une citation sans champ
-    /// de citation — est donc NOMMÉE ici plutôt que corrigée à l'aveugle par un
-    /// lot qui ne possède pas cette surface.
-    static func declaredQuote(
-        postId: String,
-        targetType: PostType?,
-        visibility: String?
-    ) -> RepostIntent {
-        RepostIntent(
-            clientMutationId: ClientMutationId.generate(),
-            postId: postId,
-            targetType: targetType,
-            content: nil,
-            isQuote: true,
-            visibility: visibility
-        )
-    }
 }
 
 // MARK: - Les deux échecs TERMINAUX, nommés

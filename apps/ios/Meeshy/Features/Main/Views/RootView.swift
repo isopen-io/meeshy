@@ -343,7 +343,10 @@ struct RootView: View {
             feedWasVisibleBeforeNav: $feedWasVisibleBeforeNav,
             deepLinkRouter: deepLinkRouter,
             upgradeGate: upgradeGate,
-            onDeepLink: handleDeepLink
+            onDeepLink: handleDeepLink,
+            quoteHost: QuoteComposerHost(storyViewModel: storyViewModel, router: router,
+                                         conversationListViewModel: conversationViewModel,
+                                         statusViewModel: statusViewModel)
         ))
         .inAppLinks(router: router)
     }

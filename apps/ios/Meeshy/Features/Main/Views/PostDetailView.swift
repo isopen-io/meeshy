@@ -130,6 +130,10 @@ struct PostDetailView: View {
     @State var isPostReposted: Bool = false
     @State var isRepostInFlight: Bool = false
     @State private var showRepostOptions: Bool = false
+    /// Publication citée (#15911) : « Citer » ouvre la porte de citation, comme
+    /// au fil — elle publiait une citation SANS commentaire.
+    @State var quotedPost: FeedPost?
+    @Environment(\.meeshyQuoteComposerHost) var quoteHost
     @State var isEditing: Bool = false
     /// Flux « Enregistrer en local » du menu « … » — déclenché uniquement
     /// quand le post a un média (sinon Enregistrer bascule le favori in-app).
@@ -171,7 +175,7 @@ struct PostDetailView: View {
     }
 
     @MainActor
-    private func toggleDetailRepost(quote: Bool) {
+    private func toggleDetailRepost() {
         guard !isRepostInFlight, !isPendingPublication else { return }
         isPostReposted = true
         isRepostInFlight = true
@@ -189,13 +193,7 @@ struct PostDetailView: View {
             repostOfId: carte?.repost?.id,
             originalRepostOfId: carte?.repost?.originalRepostOfId
         )
-        // « Citer » ouvre une alerte SANS champ de saisie : ce site DÉCLARE la
-        // citation sans recueillir de commentaire. `declaredQuote` porte ce
-        // geste tel qu'il est plutôt que de le normaliser en repartage sec —
-        // `isQuote` change côté serveur où s'enracinent les réactions.
-        let intention: RepostIntent = quote
-            ? RepostIntent.declaredQuote(postId: cible.postId, targetType: cible.targetType, visibility: nil)
-            : RepostIntent.simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
+        let intention = RepostIntent.simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
         Task {
             defer { Task { @MainActor in isRepostInFlight = false } }
             do {
@@ -209,6 +207,12 @@ struct PostDetailView: View {
     }
 
     var displayPost: FeedPost? { viewModel.post ?? initialPost }
+
+    /// « Citer » sans porte ni publication chargée serait inerte : il est absent.
+    private var detailQuote: (() -> Void)? {
+        guard quoteHost != nil, let post = displayPost else { return nil }
+        return { quotedPost = post }
+    }
 
     /// Non `private` : `PostDetailView+Canvas.swift` en a besoin pour monter la
     /// mosaïque de scènes. Un `private` sur une propriété d'une `View` la rend
@@ -876,15 +880,11 @@ EngagementGlyph(
             .accessibilityLabel(String(localized: "a11y.post.repost", defaultValue: "Republier", bundle: .main))
             .accessibilityValue(isPostReposted ? String(localized: "a11y.post.reposted", defaultValue: "Republié", bundle: .main) : "")
             .accessibilityHint(String(localized: "a11y.post.repost.hint", defaultValue: "Republier ou citer cette publication", bundle: .main))
-            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
-                Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) {
-                    toggleDetailRepost(quote: false)
-                }
-                Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) {
-                    toggleDetailRepost(quote: true)
-                }
-                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
-            }
+            .modifier(RepostChoiceDialog(
+                isPresented: $showRepostOptions,
+                onRepost: { toggleDetailRepost() },
+                onQuote: detailQuote
+            ))
 
             Spacer()
 

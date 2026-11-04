@@ -3,8 +3,8 @@ import MeeshySDK
 import MeeshyUI
 
 /// **Ce que le détail d'un post présente par-dessus lui** — traductions,
-/// profil, partage système, édition, lieu, galerie, plein écran audio et
-/// enregistrement local. Extrait du `body` de `PostDetailView.swift` (#10956).
+/// profil, partage système, édition, lieu, galerie, plein écran audio,
+/// enregistrement local et porte de citation. Extrait du `body` de `PostDetailView.swift` (#10956).
 extension PostDetailView {
 
     func detailPresentations(_ content: some View) -> some View {
@@ -89,5 +89,6 @@ extension PostDetailView {
             )
             .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
             .mediaSaveFlow(mediaSaveCoordinator)
+            .modifier(QuoteComposerCover(quoted: $quotedPost, host: quoteHost))
     }
 }

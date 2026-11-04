@@ -278,6 +278,9 @@ struct RootSheetsLayer: ViewModifier {
     @ObservedObject var deepLinkRouter: DeepLinkRouter
     @ObservedObject var upgradeGate: UpgradeGateController
     let onDeepLink: (DeepLink?) -> Void
+    /// La porte de citation, posée par la couche la plus EXTERNE (#15911) :
+    /// les feuilles de profil ci-dessous et toutes les pages en héritent.
+    let quoteHost: QuoteComposerHost
 
     func body(content: Content) -> some View {
         content
@@ -400,6 +403,7 @@ struct RootSheetsLayer: ViewModifier {
             // referme que ceux de cette fenêtre (#10543).
             // La demande d'un lien d'appel : confirmée ici, dans la fenêtre principale.
             .callLinkConfirmationSheet()
+            .environment(\.meeshyQuoteComposerHost, quoteHost)
             .environment(\.presentedSurfaceScope, router.surfaceScope)
     }
 }
