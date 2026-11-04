@@ -178,7 +178,7 @@ fun ChatScreen(
         LocalChatSignalClearance provides signalClearance,
         LocalBubbleSkin provides remember(appearance.personalAccentHex) { BubbleSkin.of(appearance.personalAccentHex) },
     ) {
-    ChatBackgroundHost(appearance) {
+    ChatBackgroundHost(appearance, state) {
         // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :
         // sa hauteur mesurée décale le haut du fil (`bandHeight`), et les bulles passent dessous.
         var headerHeightPx by remember { mutableIntStateOf(0) }
