@@ -101,26 +101,16 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         return compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
     }
 
-    /// **T3.1 — garde de source, sur le COMPTE, jamais sur l'absence.**
-    ///
-    /// Depuis T3.1 le PLEIN composer du fil passe par `DocumentComposerDoor` ;
-    /// `RootViewComponents` ne monte donc plus `FeedComposerSheet(` qu'UNE fois
-    /// — la CITATION (`.fullScreenCover(item: $quoteOriginalPost)`), que T3.2
-    /// retient tant que 7.5 (un écrivain durable du repost) n'a pas d'appelant.
-    /// Assérer `0` serait un rouge injustifié ET la tentation de recâbler la
-    /// citation sur une porte qui la REFUSE ; assérer `>= 1` cesserait de
-    /// compter — un second montage du plein composer repasserait sans un mot.
-    func test_rootViewComponents_neMonteFeedComposerSheet_quePourLaCitation() throws {
+    /// **La citation du fil ouvre le compositeur** (#15628) : `RootViewComponents`
+    /// monte `QuoteComposerDoor(` exactement une fois, et plus aucune
+    /// `FeedComposerSheet(`. Compter les deux tient aussi un second montage.
+    func test_rootViewComponents_monteLaCitation_parLaPorteDuCompositeur() throws {
         let code = try rootViewComponentsCompact()
         XCTAssertTrue(code.contains("structThemedFeedOverlay"), "Le fichier lu n'est pas RootViewComponents")
-        let montages = code.components(separatedBy: "FeedComposerSheet(").count - 1
-        XCTAssertEqual(
-            montages, 1,
-            "RootViewComponents doit monter `FeedComposerSheet(` EXACTEMENT une fois — la citation "
-                + "(`.fullScreenCover(item: $quoteOriginalPost)`). Le plein composer du fil est passé au "
-                + "meuble à T3.1 ; zéro dirait que la citation a été recâblée sur une porte qui la refuse "
-                + "(levée 7.5), deux ou plus qu'un second montage du plein composer est revenu."
-        )
+        XCTAssertEqual(code.components(separatedBy: "QuoteComposerDoor(").count - 1, 1,
+                       "La citation (`.fullScreenCover(item: $quoteOriginalPost)`) monte la porte du compositeur.")
+        XCTAssertEqual(code.components(separatedBy: "FeedComposerSheet(").count - 1, 0,
+                       "La feuille historique a quitté le dépôt : plus rien ne la monte.")
     }
 
     // MARK: - V3-2 : le meuble a un APPELANT
@@ -1530,9 +1520,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // (`PostEditComposerDoor`) rouvre le meuble sur la publication. Elle
             // passe les trois canaux ; son canal de document ENREGISTRE la
             // modification au lieu de publier.
+            //
+            // **Une porte de plus** (#15628) : « Citer » un post ou un réel
+            // (`QuoteComposerDoor`) ouvre le meuble, la source affichée sur sa
+            // scène ; son canal de document publie par l'écrivain du repost.
             ["StoryTrayActions.swift", "MoodComposerDoor.swift", "DocumentComposerDoor.swift",
              "MediaComposerDoor.swift", "ShareComposeDoor.swift",
-             "StoryEditComposer.swift", "StoryRepublishComposer.swift", "PostEditComposerDoor.swift"],
+             "StoryEditComposer.swift", "StoryRepublishComposer.swift", "PostEditComposerDoor.swift",
+             "QuoteComposerDoor.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
                 + "et la reprise hors-ligne que `MoodComposerDoor` et `DocumentComposerDoor` tiennent une "

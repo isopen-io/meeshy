@@ -268,8 +268,6 @@ class ConversationListViewModel @Inject constructor(
     fun leaveConversation(id: String) = actions.leaveConversation(id)
     fun deleteConversationForMe(id: String) = actions.deleteConversationForMe(id)
     fun deleteConversationForAll(id: String) = actions.deleteConversationForAll(id)
-
-    fun makeConversationObsolete(id: String) = actions.makeConversationObsolete(id)
     fun discardDraft(id: String) = actions.discardDraft(id)
 
     /** Loads (once, cache-only) the hard-press preview card's recent messages. */

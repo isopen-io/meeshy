@@ -31,6 +31,13 @@ extension MeeshyComposerHost {
             || viewModel.isDrawingActive
     }
 
+    /// La bande se referme sur le choix : la couleur se voit déjà sur la scène.
+    func pickSceneBandColor(_ hex: String) {
+        documentBackground = hex
+        viewModel.applyBackground(hex: hex)
+        requestedSceneBand = nil
+    }
+
     func applySceneFitMode(_ mode: String) {
         var slide = viewModel.currentSlide
         slide.effects.backgroundTransform = ComposerBackdropFraming.applying(

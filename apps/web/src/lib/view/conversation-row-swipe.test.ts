@@ -13,7 +13,7 @@ import {
   rowSwipeSettle,
   rowSwipeWidths,
 } from './conversation-row-swipe';
-import { rowMenuItems } from './row-actions';
+import { rowConversationActions, rowMenuItems } from './row-actions';
 
 /**
  * **LA LOI DU BALAYAGE D'UNE LIGNE DE CONVERSATION** (#10580) — les côtés et
@@ -190,5 +190,49 @@ describe('rowSwipePaint — le décalage voyage en `translate`, jamais en largeu
 
   test('au retour à zéro le côté caché ne change pas : la fermeture glisse vers SON bord', () => {
     expect(rowSwipePaint({ offset: 0, sign: 1 }).hide).toBeNull();
+  });
+});
+
+describe('conversationRowSwipeSides — rendre obsolète en un geste (#14645)', () => {
+  const viewer = { id: 'me', hasAccount: true, isAnonymous: false, platformRole: null };
+  const actionsFor = (conversation: Parameters<typeof rowConversationActions>[0]['conversation']) => rowConversationActions({ conversation, viewer });
+
+  test('permis par le serveur ⇒ « Rendre obsolète » se balaie au bord de début, après épingler et sourdine', () => {
+    const sides = conversationRowSwipeSides({
+      flags: flags(),
+      unread: true,
+      canDelete: true,
+      language: 'fr',
+      actions: actionsFor({ type: 'group', currentUserRole: 'admin' }),
+    });
+    expect(idsOf(sides.leading)).toEqual(['pin', 'mute', 'obsolete']);
+    expect(idsOf(sides.trailing)).toEqual(['archive', 'read', 'delete']);
+    const obsolete = sides.leading[2];
+    expect(obsolete?.label).toBe('Rendre obsolète');
+    expect(obsolete?.destructive).toBe(true);
+  });
+
+  test('un membre d’un tête-à-tête ouvert le balaie aussi', () => {
+    const sides = conversationRowSwipeSides({ flags: flags(), unread: false, canDelete: true, language: 'fr', actions: actionsFor({ type: 'direct', currentUserRole: 'member' }) });
+    expect(idsOf(sides.leading)).toContain('obsolete');
+  });
+
+  test('refusé par la loi (simple membre d’un groupe), sans compte ou sans verdict : il ne se balaie pas', () => {
+    const member = conversationRowSwipeSides({ flags: flags(), unread: false, canDelete: true, language: 'fr', actions: actionsFor({ type: 'group', currentUserRole: 'member' }) });
+    const guest = conversationRowSwipeSides({ flags: flags(), unread: false, canDelete: false, language: 'fr', actions: actionsFor({ type: 'group', currentUserRole: 'admin' }) });
+    const unknown = conversationRowSwipeSides({ flags: flags(), unread: false, canDelete: true, language: 'fr' });
+    for (const sides of [member, guest, unknown]) expect(idsOf([...sides.leading, ...sides.trailing])).not.toContain('obsolete');
+  });
+
+  test('les verdicts du rôle n’ajoutent au balayage AUCUNE autre entrée du menu (quitter, administrer)', () => {
+    const sides = conversationRowSwipeSides({
+      flags: flags(),
+      unread: true,
+      canDelete: true,
+      language: 'fr',
+      actions: rowConversationActions({ conversation: { type: 'group', currentUserRole: 'admin' }, viewer: { ...viewer, platformRole: 'ADMIN' } }),
+    });
+    expect(idsOf([...sides.leading, ...sides.trailing]).sort()).toEqual(['archive', 'delete', 'mute', 'obsolete', 'pin', 'read']);
+    expect(sides.leading.length).toBeLessThanOrEqual(ROW_SWIPE_MAX_ACTIONS);
   });
 });

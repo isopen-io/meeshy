@@ -342,6 +342,7 @@ extension MeeshyComposerHost {
             // surface, aucun overlay posé sur elle ne pouvait le couvrir.
             cameraStage: sceneCameraStage,
             quickCaptureHint: sceneQuickCaptureHint,
+            quotedPublication: hydration?.quotedPublication,
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
             // écrit dans un corps de vue ne s'interroge qu'à la garde de
@@ -431,14 +432,7 @@ extension MeeshyComposerHost {
             band: ComposerSceneBand.opened(requestedSceneBand,
                                            served: openableSceneBands),
             bandColors: StoryBackgroundPalette.colors,
-            onPickBandColor: { hex in
-                documentBackground = hex
-                viewModel.applyBackground(hex: hex)
-                // La bande se referme sur le choix : la couleur est visible sur
-                // la scène juste au-dessus, donc la garder ouverte occuperait
-                // l'espace pour montrer ce que l'écran montre déjà.
-                requestedSceneBand = nil
-            },
+            onPickBandColor: { pickSceneBandColor($0) },
             bandOpeningEffect: sceneTransitions.opening,
             // **La bande NE se referme PAS sur un effet d'ouverture**, et c'est
             // la différence avec la couleur juste au-dessus : une couleur se
