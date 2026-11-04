@@ -139,6 +139,7 @@ internal fun StoryViewerShell(
                 onCommitFeedback = haptics::light,
             ),
     ) {
+        StoryGroupCubeNeighbors(cardMotion, previous = viewModel.groupAt(state.groupIndex - 1), next = viewModel.groupAt(state.groupIndex + 1))
         Box(
             modifier = Modifier
                 .fillMaxSize()

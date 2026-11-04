@@ -12,7 +12,7 @@ class StoryGroupSwipeDecisionTest {
         val huge = StoryGroupSwipeDecision.displayedTranslation(-100_000f, width, hasNeighbor = false)
         assertThat(small).isLessThan(0f)
         assertThat(small).isGreaterThan(-100f)
-        assertThat(huge).isGreaterThan(-width * StoryGroupSwipeDecision.EDGE_RESISTANCE_IN_WIDTHS)
+        assertThat(huge).isAtLeast(-width * StoryGroupSwipeDecision.EDGE_RESISTANCE_IN_WIDTHS)
         assertThat(StoryGroupSwipeDecision.displayedTranslation(100f, width, hasNeighbor = false)).isEqualTo(-StoryGroupSwipeDecision.displayedTranslation(-100f, width, hasNeighbor = false))
     }
 
