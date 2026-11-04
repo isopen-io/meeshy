@@ -23,7 +23,7 @@ function clone(key, existing) {
   return 'D=' + LOTS + '/' + key + '\n' +
     'rm -rf "$D" && git clone -q --shared --no-checkout /home/user/meeshy "$D" && cd "$D" \\\n' +
     '  && git remote set-url origin https://github.com/isopen-io/meeshy \\\n' +
-    '  && git sparse-checkout set --cone apps/android packages/shared/fixtures packages/shared/types packages/shared/utils .github \\\n' +
+    '  && git sparse-checkout set --cone apps/android packages/shared/fixtures packages/shared/types packages/shared/utils packages/MeeshySDK/Sources packages/MeeshySDK/Tests .github \\\n' +
     '  && git fetch -q origin dev' + fetchExtra + ' \\\n' +
     '  && git checkout -q -B claude/android-' + key + ' ' + base
 }
@@ -47,7 +47,7 @@ ${COMPILE_SAFETY}
 Validate what you can locally (cd apps/android && ./meeshy.sh jvm-check --no-daemon -q when :core:model is involved). Commit "fix(android/<domaine>): …" ending with:
 ${ATTR}
 then git push origin claude/android-${p.key} (no force). Delete the clone directory afterwards.
-Return {pushed, head_sha, cause, change}.`
+Never subscribe to PR activity and never create scheduled tasks or reminders. Return {pushed, head_sha, cause, change}.`
 }
 
 
@@ -62,7 +62,7 @@ Load tools with ToolSearch "select:mcp__github__list_pull_requests,mcp__github__
    - exit 0 → green. Call mcp__github__pull_request_read method "get" for mergeable_state and head.sha: "dirty" → conflict; otherwise merge it: mcp__github__merge_pull_request owner isopen-io repo meeshy pullNumber <n> merge_method "merge" expectedHeadSha <head sha>; do NOT pass commit_title or commit_message (the default title "Merge pull request #n from isopen-io/claude/android-<key>" is the program's merge ledger). Success → merged. Refused for conflicts → conflict; other refusal → merge-failed with the message in note.
    - red → failed = [{name, url: details_url}].
 3. If this pass merged nothing and found nothing red, conflicted or merge-failed, run "sleep 300" in Bash and do the pass again; at most 4 passes in total.
-Return {"open_count": <number of kept open PRs at the start>, "prs": [{pr, key, state, head_sha, failed, note}] } — include every kept PR with its final state.`
+Never subscribe to PR activity and never create scheduled tasks or reminders. Return {"open_count": <number of kept open PRs at the start>, "prs": [{pr, key, state, head_sha, failed, note}] } — include every kept PR with its final state.`
 }
 
 const attempts = {}

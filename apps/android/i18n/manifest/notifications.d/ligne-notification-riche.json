@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:notifications": {
+      "resDir": "feature/notifications/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "notification.milestone.level.name", "androidName": "notification_milestone_level_name", "status": "adopted"},
+        {"catalog": "app", "iosKey": "notification.milestone.streak.name", "androidName": "notification_milestone_streak_name", "status": "adopted"},
+        {"catalog": "app", "iosKey": "notification.milestone.badge.reason", "androidName": "notification_milestone_badge_reason", "status": "adopted"},
+        {"catalog": "app", "iosKey": "notification.milestone.inviteJoined.reason", "androidName": "notification_milestone_invite_joined_reason", "status": "adopted"},
+        {"androidName": "notifications_footer_expired", "status": "android-only"}
+      ]
+    }
+  }
+}

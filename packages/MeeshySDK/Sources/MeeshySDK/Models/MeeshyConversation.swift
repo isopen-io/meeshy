@@ -109,6 +109,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     /// Ce que le lecteur ne peut pas écrire ici (#9929) — servi par la liste et
     /// le détail, gardé en cache pour que le bandeau précède le réseau.
     public var viewerWriteRestriction: ConversationWriteRestriction? = nil
+    /// Ce que la passerelle accorde au lecteur (#14690), gardé en cache : une
+    /// liste rouverte hors ligne ne repropose pas une action refusée.
+    public var viewerCapabilities: ConversationViewerCapabilities? = nil
     public var recentMessages: [RecentMessagePreview] = []
     /// Display-layer tags (separate concept from `userState.tags`, which
     /// is the wire-format `String[]` from `UserConversationPreferences`).
@@ -135,6 +138,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var participantBanner: String? = nil
     /// Le contour d'avatar équipé du pair d'une directe (#10713) — posé après l'init, comme `bridge`.
     public var participantRing: ServedProfileDecorItem? = nil
+    /// Le compte du pair d'une directe est supprimé ou désactivé (#15717) — posé après l'init, comme `participantRing`.
+    public var participantAccountClosed: Bool = false
     public var lastSeenAt: Date? = nil
 
     public var closedAt: Date? = nil
@@ -354,10 +359,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(userState.mentionsOnly)
         h.combine(userState.customName)
         h.combine(avatar)
-        h.combine(participantUsername)
-        h.combine(participantAvatarURL)
-        h.combine(participantBanner)
-        h.combine(participantRing)
+        combineInterlocutor(into: &h)
         h.combine(tags)
         h.combine(userState.reaction)
         // Catégorie — AFFICHÉE par l'encoche haut-gauche de la carte de focus
@@ -530,11 +532,11 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case lastMessageSenderName, lastMessageSenderUserId, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
         case lastMessageLocation
         case lastMessageNature, lastReaction, lastReactionTargetsReader, activeCall, listRankAt
-        case viewerEngagement, viewerWriteRestriction
+        case viewerEngagement, viewerWriteRestriction, viewerCapabilities
         case recentMessages, tags
         case bridge
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
-        case participantUserId, participantUsername, participantAvatarURL, participantBanner, participantRing, lastSeenAt
+        case participantUserId, participantUsername, participantAvatarURL, participantBanner, participantRing, participantAccountClosed, lastSeenAt
         case closedAt, closedBy, currentUserRole, currentUserJoinedAt
         case language, theme, colorPalette
 
@@ -595,8 +597,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.lastReactionTargetsReader = (try? c.decodeIfPresent(Bool.self, forKey: .lastReactionTargetsReader)) ?? false
         self.listRankAt = (try? c.decodeIfPresent(Date.self, forKey: .listRankAt)) ?? nil
         self.activeCall = (try? c.decodeIfPresent(ConversationActiveCall.self, forKey: .activeCall))
-        self.viewerEngagement = (try? c.decodeIfPresent(ConversationEngagementSnapshot.self, forKey: .viewerEngagement))
-        self.viewerWriteRestriction = (try? c.decodeIfPresent(ConversationWriteRestriction.self, forKey: .viewerWriteRestriction)) ?? nil
+        (self.viewerEngagement, self.viewerWriteRestriction, self.viewerCapabilities) = Self.decodeViewerFacets(c)
         self.recentMessages = try c.decodeIfPresent([RecentMessagePreview].self, forKey: .recentMessages) ?? []
         self.tags = try c.decodeIfPresent([MeeshyConversationTag].self, forKey: .tags) ?? []
         // Tolérance dans les DEUX sens, même patron que `callSummary` /
@@ -612,11 +613,6 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.slowModeSeconds = try c.decodeIfPresent(Int.self, forKey: .slowModeSeconds)
         self.autoTranslateEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoTranslateEnabled)
 
-        self.participantUserId = try c.decodeIfPresent(String.self, forKey: .participantUserId)
-        self.participantUsername = try c.decodeIfPresent(String.self, forKey: .participantUsername)
-        self.participantAvatarURL = try c.decodeIfPresent(String.self, forKey: .participantAvatarURL)
-        self.participantBanner = try c.decodeIfPresent(String.self, forKey: .participantBanner)
-        self.participantRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .participantRing)
         self.lastSeenAt = try c.decodeIfPresent(Date.self, forKey: .lastSeenAt)
         self.closedAt = try c.decodeIfPresent(Date.self, forKey: .closedAt)
         self.closedBy = try c.decodeIfPresent(String.self, forKey: .closedBy)
@@ -663,6 +659,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             lastSyncedAt: try c.decodeIfPresent(Date.self, forKey: .lastSyncedAt),
             pendingMutationCount: try c.decodeIfPresent(Int.self, forKey: .pendingMutationCount) ?? 0
         )
+        try decodeInterlocutor(from: c)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -702,8 +699,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encode(lastReactionTargetsReader, forKey: .lastReactionTargetsReader)
         try c.encodeIfPresent(listRankAt, forKey: .listRankAt)
         try c.encodeIfPresent(activeCall, forKey: .activeCall)
-        try c.encodeIfPresent(viewerEngagement, forKey: .viewerEngagement)
-        try c.encodeIfPresent(viewerWriteRestriction, forKey: .viewerWriteRestriction)
+        try encodeViewerFacets(into: &c)
         try c.encode(recentMessages, forKey: .recentMessages)
         try c.encode(tags, forKey: .tags)
         try c.encodeIfPresent(bridge, forKey: .bridge)
@@ -713,11 +709,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(slowModeSeconds, forKey: .slowModeSeconds)
         try c.encodeIfPresent(autoTranslateEnabled, forKey: .autoTranslateEnabled)
 
-        try c.encodeIfPresent(participantUserId, forKey: .participantUserId)
-        try c.encodeIfPresent(participantUsername, forKey: .participantUsername)
-        try c.encodeIfPresent(participantAvatarURL, forKey: .participantAvatarURL)
-        try c.encodeIfPresent(participantBanner, forKey: .participantBanner)
-        try c.encodeIfPresent(participantRing, forKey: .participantRing)
+        try encodeInterlocutor(into: &c)
         try c.encodeIfPresent(lastSeenAt, forKey: .lastSeenAt)
         try c.encodeIfPresent(closedAt, forKey: .closedAt)
         try c.encodeIfPresent(closedBy, forKey: .closedBy)
@@ -754,6 +746,56 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(userState.draftPreview, forKey: .draftPreview)
         try c.encodeIfPresent(userState.appearance, forKey: .appearance)
     }
+
+    /// L'interlocuteur d'une directe se lit, s'écrit et se replie D'UN BLOC
+    /// (`DirectInterlocutor.swift`) : ses champs sont vrais ensemble.
+    private mutating func decodeInterlocutor(from c: KeyedDecodingContainer<CodingKeys>) throws {
+        participantUserId = try c.decodeIfPresent(String.self, forKey: .participantUserId)
+        participantUsername = try c.decodeIfPresent(String.self, forKey: .participantUsername)
+        participantAvatarURL = try c.decodeIfPresent(String.self, forKey: .participantAvatarURL)
+        participantBanner = try c.decodeIfPresent(String.self, forKey: .participantBanner)
+        participantRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .participantRing)
+        participantAccountClosed = (try? c.decodeIfPresent(Bool.self, forKey: .participantAccountClosed)) ?? false
+    }
+
+    private func encodeInterlocutor(into c: inout KeyedEncodingContainer<CodingKeys>) throws {
+        try c.encodeIfPresent(participantUserId, forKey: .participantUserId)
+        try c.encodeIfPresent(participantUsername, forKey: .participantUsername)
+        try c.encodeIfPresent(participantAvatarURL, forKey: .participantAvatarURL)
+        try c.encodeIfPresent(participantBanner, forKey: .participantBanner)
+        try c.encodeIfPresent(participantRing, forKey: .participantRing)
+        try c.encode(participantAccountClosed, forKey: .participantAccountClosed)
+    }
+
+    /// La fermeture est repliée : elle décide de ce qu'ouvre l'avatar de la ligne
+    /// (`ConversationAvatarTarget`), et la ligne est `.equatable()` sur ce hash.
+    private func combineInterlocutor(into h: inout Hasher) {
+        h.combine(participantUsername)
+        h.combine(participantAvatarURL)
+        h.combine(participantBanner)
+        h.combine(participantRing)
+        h.combine(participantAccountClosed)
+    }
 }
 
 extension MeeshyConversation: CacheIdentifiable {}
+
+/// Ce que la passerelle sert pour le LECTEUR — série, restriction d'écriture, capacités
+/// (#8906, #9929, #14690) : chacun décodé en tolérant, une forme qui a bougé ne jette pas la ligne.
+extension MeeshyConversation {
+    private static func decodeViewerFacets(
+        _ c: KeyedDecodingContainer<CodingKeys>
+    ) -> (ConversationEngagementSnapshot?, ConversationWriteRestriction?, ConversationViewerCapabilities?) {
+        (
+            (try? c.decodeIfPresent(ConversationEngagementSnapshot.self, forKey: .viewerEngagement)) ?? nil,
+            (try? c.decodeIfPresent(ConversationWriteRestriction.self, forKey: .viewerWriteRestriction)) ?? nil,
+            (try? c.decodeIfPresent(ConversationViewerCapabilities.self, forKey: .viewerCapabilities)) ?? nil
+        )
+    }
+
+    private func encodeViewerFacets(into c: inout KeyedEncodingContainer<CodingKeys>) throws {
+        try c.encodeIfPresent(viewerEngagement, forKey: .viewerEngagement)
+        try c.encodeIfPresent(viewerWriteRestriction, forKey: .viewerWriteRestriction)
+        try c.encodeIfPresent(viewerCapabilities, forKey: .viewerCapabilities)
+    }
+}

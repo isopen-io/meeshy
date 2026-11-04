@@ -29,6 +29,9 @@ import type { GuestAttachmentKind } from './guest-attachment-kinds.js';
  */
 import type { MemberRoleType } from './role-types.js';
 import { isMemberAdmin as isMemberAdminRole, isMemberModerator as isMemberModeratorRole } from './role-types.js';
+import type { ConversationViewerCapabilities } from './conversation-viewer-capabilities.js';
+
+export type { ConversationViewerCapabilities } from './conversation-viewer-capabilities.js';
 
 /**
  * Langue parlee avec statistiques
@@ -467,6 +470,16 @@ export interface Conversation {
    * Source : `viewerWriteRestrictionOf` (`utils/global-minor-restriction.ts`).
    */
   readonly viewerWriteRestriction?: ViewerWriteRestriction | null;
+
+  /**
+   * Ce que le LECTEUR peut faire de cette conversation (#14690), calculé serveur
+   * par la décision même qui garde la route. ABSENT = serveur antérieur, ou
+   * lecture impossible : le client garde son comportement d'avant. C'est un
+   * INSTANTANÉ : après `participant:role-updated` le concernant, le client le
+   * relit (`GET /conversations/:id?fields=viewerCapabilities`) ; la route
+   * reste seule juge.
+   */
+  readonly viewerCapabilities?: ConversationViewerCapabilities;
 
   /** Date d'adhésion du lecteur — borne son historique visible. */
   readonly currentUserJoinedAt?: Date | string;

@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.ReelThreadOrder
 import me.meeshy.sdk.model.PostType
+import me.meeshy.app.feed.QuoteComposerState
 import me.meeshy.app.feed.RepostCommand
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -61,6 +62,8 @@ data class ReelsUiState(
      * posee, le lecteur dit la cause au lieu d'atterrir sur un autre reel (iOS `ReelOpenFailureView`).
      */
     val seedFailure: ContentFetchFailure? = null,
+    /** Le compositeur de citation ouvert depuis le rail (« Citer », #12234) ; `null` quand il est fermé. */
+    val quoteComposer: QuoteComposerState? = null,
 )
 
 @HiltViewModel
@@ -461,12 +464,49 @@ class ReelsViewModel @Inject constructor(
      */
     fun repost(reelId: String) {
         val before = _state.value.reels.firstOrNull { it.id == reelId } ?: return
+        sendRepost(before, RepostCommand.of(reelId, before.repostOf, quote = false, commentary = null, cardType = PostType.REEL.name))
+    }
+
+    /**
+     * « Citer » depuis le rail (iOS `QuoteComposerCover` monté par le lecteur, #15869) : le compositeur s'ouvre sur la
+     * carte de la RACINE quand ce réel en republie un autre. Rien ne part avant [submitQuote].
+     */
+    fun beginQuote(reelId: String) {
+        val reel = _state.value.reels.firstOrNull { it.id == reelId } ?: return
+        _state.update { it.copy(quoteComposer = QuoteComposerState.quoting(reel.id, reel.authorName, reel.caption, reel.repostOf, sessionRepository.currentUser.value)) }
+    }
+
+    fun onQuoteTextChange(text: String) {
+        _state.update { s -> s.quoteComposer?.let { s.copy(quoteComposer = it.copy(text = text)) } ?: s }
+    }
+
+    fun cancelQuote() {
+        _state.update { it.copy(quoteComposer = null) }
+    }
+
+    /** La citation part EN RÉEL vers la racine, avec son commentaire ; le compteur et la marque bougent comme un repost. */
+    fun submitQuote() {
+        val composer = _state.value.quoteComposer ?: return
+        _state.update { it.copy(quoteComposer = null) }
+        val before = _state.value.reels.firstOrNull { it.id == composer.postId } ?: return
+        sendRepost(
+            before,
+            RepostCommand.of(before.id, before.repostOf, quote = true, commentary = composer.text, cardType = PostType.REEL.name),
+        )
+    }
+
+    private fun sendRepost(before: ReelPresentation, command: RepostCommand) {
+        val reelId = before.id
         if (!repostsInFlight.add(reelId)) return
-        val command = RepostCommand.of(reelId, before.repostOf, quote = false, commentary = null, cardType = PostType.REEL.name)
         updateReel(reelId) { it.copy(repostCount = it.repostCount + 1, isReposted = true) }
         viewModelScope.launch {
             val refused = try {
-                postRepository.repost(command.targetId, targetType = command.targetType) is NetworkResult.Failure
+                postRepository.repost(
+                    command.targetId,
+                    targetType = command.targetType,
+                    content = command.content,
+                    isQuote = command.isQuote,
+                ) is NetworkResult.Failure
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {

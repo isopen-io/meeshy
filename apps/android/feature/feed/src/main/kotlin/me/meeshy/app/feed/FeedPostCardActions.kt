@@ -17,10 +17,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,11 +48,11 @@ import me.meeshy.ui.theme.hexColor
 @Composable
 internal fun PostStatsRow(
     post: FeedPostPresentation,
-    onLike: () -> Unit,
-    onBookmark: () -> Unit,
-    onComments: () -> Unit,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
+    onLike: (() -> Unit)?,
+    onBookmark: (() -> Unit)?,
+    onComments: (() -> Unit)?,
+    onRepost: (() -> Unit)?,
+    onQuote: (() -> Unit)?,
     modifier: Modifier = Modifier,
     overMedia: Boolean = false,
     onSend: (() -> Unit)? = null,
@@ -68,9 +65,10 @@ internal fun PostStatsRow(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         modifier = modifier.fillMaxWidth(),
     ) {
+        // Une action n'est dessinée que si son hôte lui passe son effet : jamais un bouton inerte (#13244).
         val likeLabel = stringResource(if (post.isLiked) R.string.feed_unlike else R.string.feed_like)
         val hasLikes = post.likeCount > 0
-        StatAction(
+        if (onLike != null) StatAction(
             icon = if (post.isLiked || hasLikes) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
             count = post.likeCount,
             contentDescription = likeLabel,
@@ -86,7 +84,7 @@ internal fun PostStatsRow(
             countColor = if (post.isLiked) MeeshyPalette.Error else if (hasLikes && accent != null) accent else neutral,
             onClick = onLike,
         )
-        StatAction(
+        if (onComments != null) StatAction(
             icon = Icons.Outlined.ChatBubbleOutline,
             count = post.commentCount,
             contentDescription = stringResource(R.string.feed_comments),
@@ -106,7 +104,7 @@ internal fun PostStatsRow(
         Spacer(Modifier.weight(1f))
         val bookmarkLabel =
             stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark)
-        StatAction(
+        if (onBookmark != null) StatAction(
             icon = if (post.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
             count = post.bookmarkCount,
             contentDescription = bookmarkLabel,
@@ -182,8 +180,9 @@ private val GLYPH_SIZE = 18.dp
 private val MIN_ACTION_TARGET = 48.dp
 
 /**
- * The repost action of the bar: a tap offers Repost / Quote / Cancel directly on the icon — the same choice as the
- * "…" menu and the post detail (iOS `FeedPostActionsBar` repost confirmation). The reposted state shows on the glyph.
+ * The repost action of the bar: a tap offers [RepostChoiceDialog] — the same choice as the post detail and the reels
+ * player (iOS `FeedPostActionsBar` + `RepostChoiceDialog`). The reposted state shows on the glyph. With neither writer,
+ * the button is not drawn: never an inert control (#12234).
  */
 @Composable
 private fun RepostStatAction(
@@ -191,10 +190,11 @@ private fun RepostStatAction(
     reposted: Boolean,
     tint: Color,
     stateDescription: String,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
+    onRepost: (() -> Unit)?,
+    onQuote: (() -> Unit)?,
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    if (RepostChoice.offeredBy(onRepost, onQuote).isEmpty()) return
+    var choosing by remember { mutableStateOf(false) }
     Box {
         StatAction(
             icon = Icons.Filled.Repeat,
@@ -204,27 +204,8 @@ private fun RepostStatAction(
             tint = if (reposted) MeeshyPalette.Success else tint,
             active = reposted,
             countColor = if (reposted) MeeshyPalette.Success else tint,
-            onClick = { expanded = true },
+            onClick = { choosing = true },
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.feed_action_repost)) },
-                onClick = {
-                    expanded = false
-                    onRepost()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.feed_action_quote)) },
-                onClick = {
-                    expanded = false
-                    onQuote()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.feed_action_cancel)) },
-                onClick = { expanded = false },
-            )
-        }
     }
+    if (choosing) RepostChoiceDialog(onRepost = onRepost, onQuote = onQuote, onDismiss = { choosing = false })
 }

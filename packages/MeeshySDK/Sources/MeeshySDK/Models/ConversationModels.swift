@@ -223,6 +223,9 @@ public struct APIConversation: Decodable, Sendable {
     /// Ce que le LECTEUR ne peut pas écrire ici (#9927) — `minor-global` pour
     /// un 13-17 ans dans Global, `null` sinon. `var` : décodé sans élargir l'init.
     public var viewerWriteRestriction: ConversationWriteRestriction? = nil
+    /// Ce que la passerelle accorde au LECTEUR ici (#14690) — `nil` : non servi,
+    /// la règle locale décide. `var` : décodé sans élargir l'init.
+    public var viewerCapabilities: ConversationViewerCapabilities? = nil
     /// Prisme Linguistique de la ligne de liste — `{ langue: aperçu traduit }`,
     /// déjà restreint par le gateway aux langues du prisme du LECTEUR et tronqué
     /// au même plafond que `lastMessage.content`.
@@ -518,12 +521,7 @@ extension APIConversation {
         conversation.lastReactionTargetsReader = lastReaction?.targets(readerId: currentUserId) ?? false
         conversation.listRankAt = listRankAt
         conversation.activeCall = activeCall
-        conversation.viewerEngagement = viewerEngagement
-        // Global d'un mineur est SERVIE archivée (#9927) ; la règle est rejouée
-        // ici pour qu'une passerelle qui ne servirait que la restriction range
-        // quand même la conversation là où le produit l'attend.
-        conversation.viewerWriteRestriction = viewerWriteRestriction
-        conversation = conversation.imposingServedArchive()
+        conversation = conversation.servingViewerFacets(of: self)
 
         // La frontière de lecture (#7198, #7222) — même idiome que la Prisme
         // ci-dessus : arrivée après l'init memberwise, projetée post-init pour
@@ -533,7 +531,7 @@ extension APIConversation {
         conversation.userState.lastReadMessageId = lastReadMessageId
         conversation.userState.lastReadMessageCreatedAt = lastReadMessageCreatedAt
         conversation.userState.appearance = prefs?.appearance
-        conversation.participantRing = convType == .direct ? otherParticipant?.profileDecor?.avatarRing : nil
+        conversation = conversation.wearingInterlocutor(otherParticipant)
 
         return conversation
     }
@@ -546,5 +544,19 @@ extension APIConversation {
     /// légataire d'un direct (#9205).
     public func listTitle(currentUserId: String) -> String {
         toConversation(currentUserId: currentUserId).displayName
+    }
+}
+
+extension MeeshyConversation {
+    /// Ce que la passerelle a servi pour le LECTEUR (#8906, #9927, #14690). Global
+    /// d'un mineur est SERVIE archivée ; la règle est rejouée ici pour qu'une
+    /// passerelle qui ne servirait que la restriction range quand même la
+    /// conversation là où le produit l'attend.
+    func servingViewerFacets(of served: APIConversation) -> MeeshyConversation {
+        var conversation = self
+        conversation.viewerEngagement = served.viewerEngagement
+        conversation.viewerWriteRestriction = served.viewerWriteRestriction
+        conversation.viewerCapabilities = served.viewerCapabilities
+        return conversation.imposingServedArchive()
     }
 }

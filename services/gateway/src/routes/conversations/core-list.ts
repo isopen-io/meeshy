@@ -54,6 +54,7 @@ import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy
 import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
+import { loadListViewerCapabilities } from '../../services/conversations/obsoleteCapability';
 import { servedMessageRequest, withoutRequestFields, type MessageRequestListMode, type ServedMessageRequest } from '../../services/messaging/messageRequests';
 import { emptyDirectVisibility, withViewerRequests } from './utils/list-viewer-scope';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
@@ -337,7 +338,7 @@ export function registerConversationListRoute(
               isActive: true,
               ...(isAnonymousViewer ? { id: userId } : { userId })
             },
-            select: { id: true, conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
+            select: { id: true, conversationId: true, type: true, leftAt: true, bannedAt: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
           })
         : [];
       const { floors: historyFloors, unreadableConversationIds } = await loadHistoryFloorsOrFail(prisma, readerJoins);
@@ -448,7 +449,7 @@ export function registerConversationListRoute(
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation] = await Promise.all([
+      const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation, viewerCapabilitiesOf] = await Promise.all([
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
@@ -471,6 +472,12 @@ export function registerConversationListRoute(
         // « N (M) 🔥 » du lecteur (#8906) — UNE lecture groupée pour la page.
         // Un invité anonyme n'a pas de compte, donc pas d'état d'engagement.
         loadViewerEngagementsOrEmpty(prisma, isAnonymousViewer ? undefined : userId, conversationIds),
+
+        // #14690 — ce que le lecteur peut faire de chaque ligne, par la décision qui garde la route.
+        loadListViewerCapabilities(prisma, {
+          authContext: authRequest.authContext, conversations, readerJoins,
+          onError: (error) => logger.warn('viewer capabilities read failed', { error }),
+        }),
       ]);
 
       // Par CONVERSATION plutôt que par participant — c'est la clé que la
@@ -911,6 +918,7 @@ export function registerConversationListRoute(
           currentUserRole: currentUserRoleMap.get(conversation.id) || null,
           currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null,
           messageRequest: currentUserRequestMap.get(conversation.id) ?? null,
+          viewerCapabilities: viewerCapabilitiesOf(userId, conversation.id),
           // ABSENT tant que le lecteur n'a rien crédité ici (#8906).
           ...(viewerEngagementByConversation.has(conversation.id)
             ? { viewerEngagement: viewerEngagementByConversation.get(conversation.id) }
