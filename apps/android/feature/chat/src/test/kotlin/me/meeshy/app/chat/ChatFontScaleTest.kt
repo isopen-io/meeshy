@@ -71,7 +71,7 @@ class ChatFontScaleTest {
             }
         }
 
-        assertThat(overflowsWidth(compose.onNodeWithText("Message…"))).isFalse()
+        assertThat(overflowsWidth(compose.onNodeWithText("Message"))).isFalse()
     }
 
     @Test
