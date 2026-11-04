@@ -129,4 +129,13 @@ class AudioQueueAppendTrackerTest {
 
         assertThat(ids(seeded.step(listOf(anonymous)).first)).containsExactly("b")
     }
+
+    @Test
+    fun `l'historique pagine par le haut n'est pas une arrivee`() {
+        val (_, seeded) = AudioQueueAppendTracker().step(listOf(message("m5", at = 50L, audios = arrayOf("recent"))))
+
+        val (arrivals, _) = seeded.step(listOf(message("m1", at = 10L, audios = arrayOf("old")), message("m5", at = 50L, audios = arrayOf("recent"))))
+
+        assertThat(arrivals).isEmpty()
+    }
 }

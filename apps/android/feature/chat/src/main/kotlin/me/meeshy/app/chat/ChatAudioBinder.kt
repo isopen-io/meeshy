@@ -10,6 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.app.chat.audio.ConversationAudioQueueFeed
 import me.meeshy.core.common.IoDispatcher
 import me.meeshy.sdk.media.TypedMediaCache
 import me.meeshy.sdk.media.UploadedAttachmentIds
@@ -102,11 +104,23 @@ internal class ChatAudioViewModel @Inject constructor(
 ) : ViewModel(), ChatVoicePlayback {
 
     private var thread: ChatVoiceThread? = null
+    private val threads = MutableStateFlow<ChatVoiceThread?>(null)
     private val listened = MutableStateFlow<Set<String>>(emptySet())
     private val waveformByPiece = HashMap<String, StateFlow<List<Float>>>()
     private val acknowledgedIdOf: (String) -> String? = { cmid -> uploads.serverIdOf(cmid) }
 
+    private val queueFeed = ConversationAudioQueueFeed(coordinator) { listened.value }
+
     init {
+        viewModelScope.launch {
+            try {
+                queueFeed.follow(threads)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                Timber.e(failure, "Lecteur du fil : arrivées en direct mal suivies")
+            }
+        }
         viewModelScope.launch {
             try {
                 coordinator.attachmentFinished.collect { event ->
@@ -126,6 +140,7 @@ internal class ChatAudioViewModel @Inject constructor(
 
     override fun bind(thread: ChatVoiceThread) {
         this.thread = thread
+        threads.value = thread
         followAcknowledgedIn(thread.messages)
     }
 

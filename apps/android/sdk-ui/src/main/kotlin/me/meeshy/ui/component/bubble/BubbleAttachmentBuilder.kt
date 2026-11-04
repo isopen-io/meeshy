@@ -203,7 +203,6 @@ internal object BubbleAttachmentBuilder {
     ): BubbleAudio {
         val resolved = resolveTranscription(attachment, preferences)
         val translatedAudio = resolveTranslatedAudio(attachment, preferences)
-            ?.takeIf { track -> resolved == null || (resolved.isTranslated && resolved.language.equals(track.language, ignoreCase = true)) }
         val playableUrl = translatedAudio?.url ?: attachment.fileUrl
         val durationSeconds = translatedAudio?.durationMs?.let { it / 1000 }
             ?: attachment.duration?.let { it / 1000 }
@@ -258,15 +257,15 @@ internal object BubbleAttachmentBuilder {
     }
 
     /**
-     * The played voice: [AttachmentTranscriptPrism.track], the SAME single Prisme descent as the
-     * transcription line next to it, so the voice and the text are always in one language. Null
-     * means the original voice note.
+     * The played voice: [AttachmentTranscriptPrism.playedTrack], the SAME single Prisme descent as the
+     * transcription line next to it, so the voice and the text are always in one language — the coupling
+     * lives in `:core:model`, where the voice queue reads it too. Null means the original voice note.
      */
     private fun resolveTranslatedAudio(
         attachment: ApiMessageAttachment,
         preferences: LanguageResolver.ContentLanguagePreferences,
     ): AttachmentTranscriptPrism.Track? =
-        AttachmentTranscriptPrism.track(attachment.transcription, attachment.translations, preferences)
+        AttachmentTranscriptPrism.playedTrack(attachment.transcription, attachment.translations, preferences)
 
     /** The Prisme-served transcription line — [AttachmentTranscriptPrism], the site the transcription fiche reads too. */
     private fun resolveTranscription(
