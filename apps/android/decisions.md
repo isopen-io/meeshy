@@ -590,6 +590,23 @@ fait fuiter une vidéo privée entre comptes. Le coût (re-téléchargement de r
 
 **Consequences.** Premier réel du compte suivant à froid ; plus aucune vidéo du compte quitté sur disque.
 
+**Amendement 2026-11-03 (#15486, chantier #15462).** La fin de session vide aussi : (1) le cache des FORMES D'ONDE, mémoire
+et disque (`com.meeshy.waveforms.v2`, `WaveformModule.waveformsOnLogout` → `WaveformCache.clearAll`), car un relevé dérive
+du contenu du compte quitté ; (2) la mémoire des POSITIONS de lecture (`PlaybackModule.positionsOnLogout`, déjà un
+`PerAccountCache`, désormais prouvée par témoin). Le moteur partagé (`ConversationAudioCoordinator`) lit par le cache AUDIO
+de `MeeshyMediaCache` (clôture d'époque, bail contre l'éviction) via la couture `AudioPlaybackSources` liée par `:app` ; son
+cache séparé `cacheDir/audio-playback` (64 Mo, sans clôture de compte) disparaît et le dossier est purgé une fois au
+démarrage (`LegacyAudioPlaybackCache`). Un vocal protégé (éphémère, vue unique, flouté, chiffré) se lit en direct : ni cache,
+ni bail, aucun octet sur le disque.
+
+**Condition de la garde (audit 2026-11-04, #15486).** « Protégé » n'est vrai que si la FILE le dit : la protection naît
+dans `AudioQueueBuilder`, depuis les champs REQUIS `AudioQueueMessage.isProtected` et `AudioQueueAttachment.isProtected`
+(un vocal est protégé si son message OU sa pièce l'est, leçon 275), que le producteur calcule par la loi unique
+`VoiceQueueProtection` (`ofMessage` : vue unique, flou, éphémère — échéance, durée ou bit, flamme comprise —, chiffré ;
+`ofPiece` : la pièce masquée ou scellée, ou son message). Aucun maillon n'a plus de défaut `false` : `QueuedAudio`,
+`AudioPlaybackEngine.play` et `AudioSource.Remote` exigent la valeur, un oubli ne compile pas. Le producteur du fil
+(#14899) DOIT bâtir sa file par ces deux lois ; tant qu'il n'existe pas, aucun appelant ne joue par le coordinateur.
+
 ---
 
 ## ADR-028 — L'app native reprend la fiche Play `me.meeshy.app` ; la coque devient `me.meeshy.webapp`
@@ -715,3 +732,26 @@ du pied et disparaît dès qu'un drapeau existe ; les drapeaux ne sont plus rend
 `LanguageFlagTapResolver.resolve` (fil, commentaires, stories) garde son modèle à texte unique : la divergence n'y reste
 qu'en dehors de la bulle de chat. Le Prisme (rangs 1 à 4, original si rien ne correspond) n'a pas changé : une seule
 fonction, `PrismTranslationResolver`.
+
+## ADR-032 — La fiche d'un participant se garde en mémoire, par lecteur (#15680, renverse la mention « pas de cache » de `ConversationRepository.participantProfile`)
+
+Jusqu'ici la fiche ne se cachait pas : elle porte des faits que la passerelle gate PAR LECTEUR (`email`, `entryLink`,
+`historyVisibleFrom`, `canGrantHistory`), et une copie aurait servi à un lecteur ce qui a été masqué à un autre. iOS
+peint pourtant sa fiche au geste, et un spinner à chaque ouverture viole le cache-first. Le renversement se fait avec
+quatre garde-fous, tenus par `ParticipantProfileCache` (`:sdk-core`, mémoire seule, jamais Room) : (1) la clé est
+lecteur + conversation + participant, un autre lecteur ne lit jamais la copie ; (2) la copie porte le rôle du lecteur
+et est jetée dès qu'il change ; (3) un 404 l'efface (« Cette personne a quitté la conversation ») ; (4) elle est un
+`PerAccountCache`, vidée à la déconnexion. Le chargement n'apparaît que sur cache vide, un échec de synchro ne retire
+pas la fiche. Le droit d'écrire reste le signal du serveur (la présence de `entryLink`), jamais recalculé, et chaque
+écriture ne porte qu'UN droit. `participant:rights-updated` (clé `historyVisibleFrom` présente = pose ou efface, absente
+= rien) et `user:updated` mettent la fiche ouverte et sa copie à jour sans relecture.
+
+Amendement (audit #15733) : un ViewModel PAR fiche (`hiltViewModel(key = conversation/participant)`), et chaque
+coroutine capture sa fiche — une réponse, un 404 ou une écriture qui revient pour une autre fiche que la courante n'est
+ni peint ni mis en cache (l'écriture tardive efface la copie de SA fiche). Sans rôle du lecteur, la copie n'est ni lue
+ni écrite : les deux points d'entrée (`ConversationMembersSheet`, `rememberProfileTap`) le passent. 401 et 403
+effacent la copie comme le 404 ; seul un échec de transport ou un 5xx garde la fiche peinte.
+Le rôle passé est le rôle CONNU (`ApiConversation.knownUserRole` : celui de la passerelle, sinon du roster), jamais le
+repli `MEMBER` de `currentUserRole` : un lecteur dont le rôle est inconnu n'a pas de copie. Le rôle est une clé de
+l'effet de chargement (un lecteur rétrogradé fiche ouverte relit), et la fiche fermée coupe ses écouteurs de la room
+(`ParticipantProfileViewModel.close`).

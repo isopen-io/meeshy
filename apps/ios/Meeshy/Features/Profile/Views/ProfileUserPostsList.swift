@@ -283,21 +283,8 @@ struct ProfileUserPostsList: View {
             // d'un poste OU d'un réel du profil commente sans quitter le profil.
             CommentsSheetView(post: post, accentColor: post.authorColor)
         }
-        .postEditCover(item: $editingPost) { post in
-            EditPostSheet(
-                originalContent: post.content,
-                originalLanguage: post.originalLanguage,
-                originalType: post.type,
-                media: post.media.map { EditablePostMedia($0) }, originalStoryEffects: post.storyEffects,
-                originalLocation: post.location,
-                originalVisibility: post.visibility,
-                originalVisibilityUserIds: post.visibilityUserIds ?? [],
-                isRepost: post.repost != nil,
-                onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
-                },
-                onDismiss: { editingPost = nil }
-            )
+        .postEditCover(item: $editingPost) { post, draft in
+            await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
         }
     }
 

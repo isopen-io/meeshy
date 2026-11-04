@@ -82,6 +82,13 @@ public enum class OutboxKind {
 
     /** Le coeur d'un commentaire posé ou retiré : l'état voulu voyage dans la charge, deux gestes opposés s'annulent. */
     TOGGLE_LIKE_COMMENT,
+
+    /**
+     * Le bloc de préférences d'UNE catégorie (`PATCH /me/preferences/{categorie}`), cliché complet : la catégorie est la
+     * CIBLE de la ligne, donc deux écritures de la même catégorie ne font qu'une ligne et deux catégories ne se
+     * supplantent jamais. Un seul type pour les sept catégories (iOS `updateSettings`).
+     */
+    UPDATE_PREFERENCE_CATEGORY,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -238,6 +245,7 @@ public object OutboxLaneMap {
         OutboxKind.DELETE_COMMENT,
         OutboxKind.TOGGLE_LIKE_COMMENT,
         -> OutboxLaneAssignment.Shared(OutboxLanes.COMMENT)
+        OutboxKind.UPDATE_PREFERENCE_CATEGORY -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
     }
 
     /**
@@ -569,6 +577,18 @@ internal fun OutboxMutation.toEntity(now: Long, ownerId: String? = null): Outbox
 )
 
 /** Terminal (or near-terminal) signal for a queued mutation, keyed by [cmid]. */
+/** Ce que « Supprimer » a fait d'une ligne ([OutboxRepository.withdrawUnlessInflight]). */
+public sealed interface OutboxWithdrawal {
+    /** Aucune ligne : elle a déjà été livrée (ou retirée). */
+    public data object Absent : OutboxWithdrawal
+
+    /** Un drainer l'a réservée : la marque d'annulation est posée, la ligne reste. */
+    public data object Marked : OutboxWithdrawal
+
+    /** Retirée avant tout envoi ; [row] est la ligne telle qu'elle était, pour nettoyer ce qui en dépendait. */
+    public data class Removed(val row: OutboxEntity) : OutboxWithdrawal
+}
+
 public sealed interface OutboxOutcome {
     public val cmid: String
 

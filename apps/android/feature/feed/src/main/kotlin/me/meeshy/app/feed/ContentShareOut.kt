@@ -19,7 +19,7 @@ import me.meeshy.sdk.post.PostShareLinkService
  * **« Partager » : sortir un contenu de Meeshy** (#14315) — l'entrée du menu « ⋯ » d'une story, d'un réel et d'un
  * post. Le lien suivi de l'utilisateur est frappé (ou retrouvé) d'abord, puis la feuille du SYSTÈME s'ouvre sur la
  * phrase de la carte. Hors ligne ou en échec, l'adresse directe part : seule l'attribution se perd, jamais le partage.
- * « Envoyer » — la feuille Meeshy — frappe le même lien de son côté (`AppShareSheetViewModel`).
+ * « Envoyer » — la feuille Meeshy — frappe le même lien de son côté (`ShareSheetViewModel`).
  */
 @HiltViewModel
 class ContentShareOutViewModel @Inject constructor(

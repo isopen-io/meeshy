@@ -250,7 +250,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
     /// La route ouverte dans le panneau de droite : un écran profond y cache la bannière du joueur (#9494).
     var rightPanelRoute: Route? = nil
     let onStoryReply: (ReplyContext) -> Void
-    let onSyncPillTap: (OutboxUIItem.Source) -> Void
+    let onSyncPillTap: (OutboxUIItem.Source) -> Bool
     let activeConversationIdForBanner: () -> String?
     let onMiniPlayerTap: () -> Void
     /// Rouvre un réel qui n'a pas pu se charger (« Réessayer » de `ReelOpenFailureView`).

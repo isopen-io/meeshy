@@ -3,14 +3,26 @@ package me.meeshy.app
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
-import me.meeshy.app.chat.IncomingShareScreen
-import me.meeshy.app.chat.IncomingShareSelection
+import me.meeshy.app.chat.IncomingShareSheetHost
+import me.meeshy.app.share.ShareIntakeReader
+import me.meeshy.app.share.ShareIntakeUiState
+import me.meeshy.app.share.ShareIntakeViewModel
+import me.meeshy.app.share.ShareSignInSheet
+import me.meeshy.app.share.canEditInStudio
+import me.meeshy.app.share.shortfallMessages
+import me.meeshy.app.share.tooLargeMessages
 import me.meeshy.app.push.MeeshyFcmService
 import me.meeshy.app.composer.inbound.ComposerSeedLaunch
 import me.meeshy.app.composer.inbound.InboundShareIntake
@@ -40,29 +52,68 @@ class ShareTargetActivity : ComponentActivity() {
     @Inject
     lateinit var inboundIntake: InboundShareIntake
 
+    private val intake: ShareIntakeViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val sharedText = intent?.getStringExtra(Intent.EXTRA_TEXT)
         // Le flux d'une autre app est du contenu NON FIABLE (#13527) : seule une URI `content://` d'une autre app est lue,
-        // jamais un `file://` (lu avec NOS droits) ni un de nos propres fournisseurs — pour l'envoi comme pour le studio.
-        // Le filtre accepte tout type (#13585) : seuls les flux d'EXTRA_STREAM sont lus, au plus 100, et ce qui est écarté est dit.
-        val selection = intent?.let { IncomingShareSelection.of(it, inboundIntake::admitsSource) } ?: IncomingShareSelection(emptyList(), 0, 0)
-        val sharedUris: List<Uri> = selection.admitted
-        val sharedMimeType = intent?.type
+        // jamais un `file://` ni un de nos propres fournisseurs. Avec une session, chaque flux admis est copié EN FLUX (64 Kio)
+        // dans le cache, sous plafonds (50 Mo par pièce, 512 Mio pour toutes les copies vivantes) ; ce qui est écarté est dit,
+        // et les copies ne survivent pas au partage (#15729).
+        intake.prepare(intent)
         setContent {
             MeeshyTheme {
                 CompositionLocalProvider(LocalMediaBaseUrl provides config.apiBaseUrl) {
-                    IncomingShareScreen(
-                        sharedText = sharedText,
-                        selection = selection,
-                        sharedMimeType = sharedMimeType,
-                        onFinished = ::finish,
-                        onOpenConversation = ::openConversation,
-                        onEditInStudio = { openInStudio(sharedUris, sharedMimeType) },
-                    )
+                    val state by intake.state.collectAsStateWithLifecycle()
+                    ShareIntakeContent(state)
                 }
             }
         }
+    }
+
+    @Composable
+    private fun ShareIntakeContent(state: ShareIntakeUiState) {
+        when (state) {
+            ShareIntakeUiState.Preparing -> Unit
+            ShareIntakeUiState.Empty -> LaunchedEffect(Unit) { finish() }
+            is ShareIntakeUiState.Ready -> ShareIntakeReady(state)
+        }
+    }
+
+    @Composable
+    private fun ShareIntakeReady(ready: ShareIntakeUiState.Ready) {
+        if (!ready.signedIn) {
+            ShareSignInSheet(onOpenApp = ::openApp, onDismiss = ::closeShare)
+            return
+        }
+        val notices = shortfallMessages(this, ready.shortfalls) + tooLargeMessages(this, ready.tooLarge)
+        if (ready.items.isEmpty() && ready.text.isNullOrBlank()) {
+            LaunchedEffect(Unit) {
+                notices.forEach { Toast.makeText(this@ShareTargetActivity, it, Toast.LENGTH_LONG).show() }
+                closeShare()
+            }
+            return
+        }
+        IncomingShareSheetHost(
+            text = ready.text,
+            items = ready.items,
+            notices = notices,
+            onDismiss = ::closeShare,
+            onOpenConversation = ::openConversation,
+            onEditInStudio = { openInStudio(ShareIntakeReader(inboundIntake::admitsSource).read(intent).admitted, intent?.type) }.takeIf { canEditInStudio(ready.items) },
+            onSendAttempted = intake::onSendAttempted,
+        )
+    }
+
+    /** La feuille se ferme ; les copies partent avec le partage ([ShareIntakeViewModel.onCleared]) ou après l'envoi. */
+    private fun closeShare() {
+        finish()
+    }
+
+    /** Sans session, « Ouvrir Meeshy » mène à la connexion ; rien n'a été copié, l'utilisateur partagera à nouveau. */
+    private fun openApp() {
+        startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+        finish()
     }
 
     /** « Envoyé à X · Ouvrir » : Meeshy s'ouvre sur la conversation servie, la feuille se ferme. */

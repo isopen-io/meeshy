@@ -1,5 +1,7 @@
 package me.meeshy.app.calls
 
+import android.content.ComponentCallbacks2
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
@@ -26,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,6 +46,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
@@ -59,6 +63,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.frames.CallFramePortrait
+import me.meeshy.sdk.call.frames.CallFrameThumbnailCache
 import me.meeshy.sdk.call.frames.CallFrameRenderer
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFrameMood
@@ -357,13 +362,32 @@ internal fun FrameThumbnail(design: CallFrameDesign, people: List<CallFramePerso
     val h = with(density) { THUMB_HEIGHT.roundToPx() }
     val locale = LocalConfiguration.current.locales[0]
     val date = remember(locale) { DateFormat.getDateInstance(DateFormat.MEDIUM, locale).format(Date()) }
+    TrimThumbnailsOnMemoryPressure()
     val bitmap by produceState<ImageBitmap?>(null, design.id, w, h, people, date) {
         val texts = CallFrameTexts(groupName = null, isGroup = false, date = date, accentHex = null)
-        value = withContext(Dispatchers.Default) {
-            CallFrameRenderer.render(design, people.map { CallFramePortrait(it.id, it.name, it.handle, it.isSelf, null) }, texts, w, h)?.asImageBitmap()
+        val cache = CallFrameThumbnailCache.shared
+        value = cache.image(design.id, people.size, w, h)?.asImageBitmap() ?: withContext(Dispatchers.Default) {
+            CallFrameRenderer.render(design, people.map { CallFramePortrait(it.id, it.name, it.handle, it.isSelf, null) }, texts, w, h)
+                ?.also { cache.store(it, design.id, people.size, w, h) }
+                ?.asImageBitmap()
         }
     }
     bitmap?.let { Image(it, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
+}
+
+/** Sous pression mémoire, le cache de vignettes se vide : elles se repeignent à la demande. */
+@Composable
+private fun TrimThumbnailsOnMemoryPressure() {
+    val context = LocalContext.current.applicationContext
+    DisposableEffect(context) {
+        val callbacks = object : ComponentCallbacks2 {
+            override fun onTrimMemory(level: Int) = CallFrameThumbnailCache.shared.trimMemory(level)
+            override fun onConfigurationChanged(newConfig: Configuration) = Unit
+            override fun onLowMemory() = CallFrameThumbnailCache.shared.removeAll()
+        }
+        context.registerComponentCallbacks(callbacks)
+        onDispose { context.unregisterComponentCallbacks(callbacks) }
+    }
 }
 
 private fun choiceName(choice: CallMontageChoice, classicNames: Map<CallMontageStyle, String>, language: String?): String = when (choice) {

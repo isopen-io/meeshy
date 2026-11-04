@@ -66,19 +66,15 @@ extension StoryComposerViewModel {
 
         // Le média de FOND est par convention `story.media.first` (le publish
         // l'uploade en premier), sauf s'il est déjà référencé par un objet du
-        // canvas — auquel cas la story n'a pas de fond distinct.
+        // canvas — auquel cas la story n'a pas de fond distinct, et la slide
+        // ne le peint pas une seconde fois derrière son objet.
         let effects = story.storyEffects ?? StoryEffects()
-        let referencedIds = Set(
-            (effects.mediaObjects ?? []).map(\.postMediaId)
-                + (effects.audioPlayerObjects ?? []).map(\.postMediaId)
-        )
-        if let first = story.media.first, !referencedIds.contains(first.id) {
-            editingOriginalBackgroundMediaId = first.id
-        }
+        let fond = PublicationEditHydration.background(media: story.media, effects: story.storyEffects)
+        editingOriginalBackgroundMediaId = fond?.id
 
         var slide = StorySlide(
             id: UUID().uuidString,
-            mediaURL: story.media.first?.url,
+            mediaURL: fond?.url,
             mediaData: nil,
             content: story.content,
             effects: effects,
@@ -92,6 +88,7 @@ extension StoryComposerViewModel {
         // Même préchargement 3-tier que le repost — fond + objets du canvas
         // retrouvent leurs bitmaps pour que le canvas peigne immédiatement.
         let targets = RepostMediaPreload.targets(for: story, slideId: slide.id)
+            .filter { $0.destination == .canvasObject || fond != nil }
         preloadTask = Task { [weak self] in
             await withTaskGroup(of: (RepostMediaPreload.Target, UIImage?).self) { group in
                 for target in targets {

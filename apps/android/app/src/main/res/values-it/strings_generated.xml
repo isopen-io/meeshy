@@ -57,6 +57,7 @@
     <string name="menu_my_links">I miei link</string>
     <string name="menu_notifications">Notifiche</string>
     <string name="menu_settings">Impostazioni</string>
+    <string name="mini_player_next">Avanti</string>
     <string name="notifications_empty">Nessuna notifica</string>
     <string name="notifications_title">Notifiche</string>
     <string name="profile_back">Indietro</string>
@@ -98,6 +99,8 @@
     <string name="route_title_story">Storia</string>
     <string name="route_title_tracking_links">Link di tracciamento</string>
     <string name="share_sending">Invio in corso…</string>
+    <string name="share_sheet_sign_in_open">Apri Meeshy</string>
+    <string name="share_sheet_sign_in_title">Accedi per inviare</string>
     <string name="share_target_label">Condividi su Meeshy</string>
     <string name="splash_tagline">Abbatti la barriera linguistica</string>
     <string name="splash_version_label">Meeshy %1$s · %2$s</string>

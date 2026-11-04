@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "mini_player.next",
+          "androidName": "mini_player_next",
+          "status": "adopted"
+        },
+        {
+          "androidName": "voice_playback_previous",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

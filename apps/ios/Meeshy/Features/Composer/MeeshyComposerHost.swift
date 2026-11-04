@@ -765,7 +765,7 @@ struct MeeshyComposerHost: View {
         // faisait un jour — et ce verdict-là est le seul qui ne perde rien.
         let composer: StoryComposerViewModel
         switch hydration {
-        case .editingStory(let hydrate):
+        case .editingStory(let hydrate), .editingPublication(let hydrate, _):
             // Le meuble n'en construit PAS un second : il adopte celui que la
             // porte lui remet, déjà hydraté depuis la story publiée. L'invariant
             // « un seul objet, un seul site d'adoption » tient — `adoptDraft`
@@ -787,7 +787,7 @@ struct MeeshyComposerHost: View {
         // republier en post »). La borne — un format hors éventail est ignoré — vit chez l'intention :
         // la refaire ici en ferait une seconde écriture, celle du meuble qu'on oublierait de tenir à jour.
         let ouverture = intent.openingFormat(
-            compositionQualifiesAsReel: ComposerReelGate.compositionQualifiesAsReel(composer.currentEffects)
+            compositionQualifiesAsReel: hydration?.publicationReelGate(slides: composer.slides) ?? ComposerReelGate.compositionQualifiesAsReel(composer.currentEffects)
         )
         _formatState = State(initialValue: .opening(ouverture))
         _doorFormat = State(initialValue: ouverture)
@@ -822,30 +822,22 @@ struct MeeshyComposerHost: View {
         // autres (`selectable`, dans `seed`) et non à côté : la chaîne vient
         // d'un `StoryItem`, donc du réseau, et un rawValue inconnu doit
         // retomber comme n'importe quel autre plutôt que de traverser en l'état.
-        let hydratee = hydration?.initialVisibility
-        _composerVisibility = State(initialValue: ComposerAudienceMemory.seed(
-            // La mémoire est NEUTRALISÉE quand l'hydratation impose une
-            // audience : c'est ce que « gagne sur » veut dire ici. La laisser
-            // en premier rang la ferait gagner, elle.
-            rememberedRaw: hydratee == nil
-                ? ComposerAudienceMemory.key(for: ouverture)
-                    .flatMap { UserDefaults.standard.string(forKey: $0) }
-                : nil,
-            doorRaw: hydratee ?? initialVisibility
-        ))
+        let document = ComposerDocumentOpening.of(hydration: hydration, format: ouverture,
+                                                  doorVisibility: initialVisibility)
+        _composerVisibility = State(initialValue: document.visibility)
+        _composerVisibilityUserIds = State(initialValue: document.visibilityUserIds)
+        _documentText = State(initialValue: document.text)
+        _documentLanguage = State(initialValue: document.language)
+        _documentLocation = State(initialValue: document.location)
     }
 
     var tint: PlateauTint {
         PlateauTint(rawValue: storedTint) ?? .defaultTint
     }
 
-    /// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne.**
-    ///
-    /// Un TOGGLE, et c'est ce qui le rend utilisable : rien de sélectionné et
-    /// un fond média ⇒ on le sélectionne ; sinon ⇒ on efface. L'auteur entre et
-    /// sort de l'inspecteur par le même geste, sur la même cible — sans quoi
-    /// une sélection posée par un tap sur le fond n'aurait aucune sortie, la
-    /// zone contextuelle restant montée pour toujours.
+    /// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne** — un TOGGLE : rien de
+    /// sélectionné et un fond média ⇒ on le sélectionne ; sinon ⇒ on efface. L'auteur entre et
+    /// sort de l'inspecteur par le même geste, sur la même cible.
     func handleSceneBackgroundTap() {
         // **Toucher la scène à vide désélectionne D'ABORD** (#13839, L5) et referme la bande ; la règle
         // se lit AVANT d'effacer, sinon elle verrait toujours « rien ».
@@ -854,7 +846,9 @@ struct MeeshyComposerHost: View {
             effectIsOpen: openSceneEffect != nil,
             quickCaptureOffered: sceneQuickCaptureIsOffered,
             backgroundMediaId: mountedComposerView == .scene ? sceneBackgroundMedia?.id : nil,
-            bandIsOpen: ComposerSceneBand.opened(requestedSceneBand, served: openableSceneBands) != nil)
+            bandIsOpen: ComposerSceneBand.opened(requestedSceneBand, served: openableSceneBands) != nil,
+            writesText: writesText)
+        if issue == .endWriting { return endSceneWriting() }
         if ComposerSceneEmptyTap.closesBand(issue) { requestedSceneBand = nil }
         if issue == .armViewfinder, handleSceneQuickTap() { return }
         // Le document sélectionne son fond par KIND (#4035).
@@ -867,7 +861,7 @@ struct MeeshyComposerHost: View {
         switch issue {
         case .deselect:                   sceneSelectionRelay.deselectSceneItem()
         case .selectBackground(let fond): sceneSelectionRelay.selectSceneItem(fond)
-        case .closeEffect, .closeBand, .armViewfinder, .nothing:
+        case .endWriting, .closeEffect, .closeBand, .armViewfinder, .nothing:
             selectedSceneItemId = nil
             inlineEdit = nil
         }

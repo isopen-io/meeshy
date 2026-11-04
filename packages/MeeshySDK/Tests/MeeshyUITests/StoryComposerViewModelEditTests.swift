@@ -73,6 +73,48 @@ final class StoryComposerViewModelEditTests: XCTestCase {
                      "Un média déjà référencé par un objet du canvas n'est pas un fond")
     }
 
+    func test_init_editing_firstMediaReferencedByCanvas_isNotPaintedAsBackground() {
+        let media = [FeedMedia(id: "fg-1", type: .image, url: "/api/v1/attachments/file/fg.jpg")]
+        var effects = StoryEffects()
+        effects.mediaObjects = [
+            StoryMediaObject(id: "obj-1", postMediaId: "fg-1", kind: .image, aspectRatio: 1)
+        ]
+
+        let vm = StoryComposerViewModel(editing: makeStoryItem(id: "post-12", media: media, storyEffects: effects))
+
+        XCTAssertNil(vm.slides[0].mediaURL,
+                     "Le média d'un objet ne se peint pas une seconde fois en fond de slide")
+    }
+
+    func test_init_editing_freeFirstImage_isTheBackground() {
+        let media = [FeedMedia(id: "bg-1", type: .image, url: "/api/v1/attachments/file/bg.jpg")]
+
+        let vm = StoryComposerViewModel(editing: makeStoryItem(id: "post-13", media: media))
+
+        XCTAssertEqual(vm.slides[0].mediaURL, "/api/v1/attachments/file/bg.jpg")
+        XCTAssertEqual(vm.editingOriginalBackgroundMediaId, "bg-1")
+    }
+
+    func test_publicationEditHydration_shownMediaIds_coversObjectsAndEveryFreeVisual() {
+        let media = [
+            FeedMedia(id: "bg-1", type: .image, url: "/bg.jpg"),
+            FeedMedia(id: "fg-1", type: .image, url: "/fg.jpg"),
+            FeedMedia(id: "orphelin", type: .image, url: "/o.jpg"),
+        ]
+        var effects = StoryEffects()
+        effects.mediaObjects = [StoryMediaObject(id: "obj-1", postMediaId: "fg-1", kind: .image, aspectRatio: 1)]
+
+        XCTAssertEqual(PublicationEditHydration.shownMediaIds(media: media, effects: effects),
+                       ["bg-1", "fg-1", "orphelin"], "Une image libre de plus devient sa propre slide (#15631)")
+    }
+
+    func test_publicationEditHydration_background_isNeverAnAudio_theAudioBecomesAPlayer() {
+        let media = [FeedMedia(id: "son", type: .audio, url: "/son.m4a")]
+
+        XCTAssertNil(PublicationEditHydration.background(media: media, effects: nil))
+        XCTAssertEqual(PublicationEditHydration.shownMediaIds(media: media, effects: nil), ["son"])
+    }
+
     func test_init_editing_seedsVisibilityContext() {
         let story = StoryItem(
             id: "post-11", content: nil, media: [], storyEffects: nil,

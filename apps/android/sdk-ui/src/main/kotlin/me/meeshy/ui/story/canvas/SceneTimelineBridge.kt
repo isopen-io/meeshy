@@ -24,8 +24,9 @@ public class SceneTimelineBridge {
     public var previewSeconds: Double? by mutableStateOf(null)
         private set
 
-    public var playing: Boolean by mutableStateOf(false)
-        private set
+    private var playingState: Boolean by mutableStateOf(false)
+
+    public val playing: Boolean get() = playingState
 
     public val isActive: Boolean get() = previewSeconds != null
 
@@ -39,13 +40,13 @@ public class SceneTimelineBridge {
     /** Suit le transport de la frise ; sans aperçu actif, rien ne change. */
     public fun setPlaying(isPlaying: Boolean) {
         if (!isActive || playing == isPlaying) return
-        playing = isPlaying
+        playingState = isPlaying
     }
 
     /** Quitte l'aperçu : le canvas redevient celui de l'édition (tout visible, son d'édition). */
     public fun end() {
         previewSeconds = null
-        playing = false
+        playingState = false
         commandedPlaying = false
     }
 

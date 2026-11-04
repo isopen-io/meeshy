@@ -33,12 +33,14 @@ precision mediump float;
 #endif
 """
 
-    /** Brightness offset, then the look read from the packed cube strip (see `CallColorLook.lutStrip`). */
+    /** The automatic low-light lift (iOS exposure + saturation, in linear light), the brightness offset, then the look read from the packed cube strip (see `CallColorLook.lutStrip`). */
     private const val COLOR: String = """
 uniform sampler2D lut;
 uniform float lutOn;
 uniform float lutN;
 uniform float brightness;
+uniform float boostEv;
+uniform float boostSat;
 vec3 lutLookup(vec3 c) {
   float n = lutN;
   float b = clamp(c.b, 0.0, 1.0) * (n - 1.0);
@@ -50,8 +52,14 @@ vec3 lutLookup(vec3 c) {
   vec3 s1 = texture2D(lut, vec2(x + b1 / n, y)).rgb;
   return mix(s0, s1, b - b0);
 }
+vec3 lowLight(vec3 c) {
+  if (boostEv <= 0.0) { return c; }
+  vec3 lifted = pow(clamp(pow(c, vec3(2.2)) * exp2(boostEv), 0.0, 1.0), vec3(0.4545));
+  float luma = dot(lifted, vec3(0.2126, 0.7152, 0.0722));
+  return clamp(mix(vec3(luma), lifted, boostSat), 0.0, 1.0);
+}
 vec3 color(vec3 c) {
-  vec3 lit = clamp(c + vec3(brightness), 0.0, 1.0);
+  vec3 lit = clamp(lowLight(c) + vec3(brightness), 0.0, 1.0);
   return lutOn > 0.5 ? lutLookup(lit) : lit;
 }
 """

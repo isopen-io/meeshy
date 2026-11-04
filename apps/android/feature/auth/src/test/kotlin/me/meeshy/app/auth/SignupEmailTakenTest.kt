@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.runtime.remember
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -98,7 +99,16 @@ class SignupEmailTakenTest {
     }
 
     private fun show(rig: Rig) {
-        compose.setContent { MeeshyTheme { SignupScreen(onClose = {}, onRegistered = {}, viewModel = rig.viewModel) } }
+        compose.setContent {
+            MeeshyTheme {
+                SignupScreen(
+                    onClose = {},
+                    onRegistered = {},
+                    viewModel = rig.viewModel,
+                    codeEntry = { remember { EmailVerificationViewModel(mockk(relaxed = true), mockk(relaxed = true)) } },
+                )
+            }
+        }
         compose.waitForIdle()
     }
 

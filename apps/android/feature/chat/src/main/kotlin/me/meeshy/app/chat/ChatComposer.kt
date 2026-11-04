@@ -148,7 +148,7 @@ internal fun ChatComposer(
     )
     val openPhotos: () -> Unit = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
     PasteContentReceiverEffect(onPickFile)
-    val voice = rememberComposerVoice(onStageVoiceFile, onPickFile)
+    val voice = rememberComposerVoice(onStageVoiceFile, onPickFile, conversationTitle = conversationTitle)
     me.meeshy.ui.component.permission.PermissionFlowHost(voice.permissions, accent = accentColor)
     var minimized by rememberSaveable { mutableStateOf(false) }
     var fieldFocused by remember { mutableStateOf(false) }
@@ -343,6 +343,12 @@ internal fun ChatComposer(
         minimized = true
     }
 
+    ComposerDropBand(
+        enabled = canSend && !affordances.isReadOnly,
+        accentColor = accentColor,
+        onPickFile = onPickFile,
+        onText = ::insertEmoji,
+    ) {
     ComposerShellLayout(
         minimized = minimized,
         canMinimize = canMinimize,
@@ -625,6 +631,7 @@ internal fun ChatComposer(
             }
         },
     )
+    }
     if (guestSheetOpen) {
         GuestAttachmentSheet(
             conversationTitle = conversationTitle,

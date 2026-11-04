@@ -57,6 +57,7 @@
     <string name="menu_my_links">روابطي</string>
     <string name="menu_notifications">الإشعارات</string>
     <string name="menu_settings">الإعدادات</string>
+    <string name="mini_player_next">التالي</string>
     <string name="notifications_empty">لا توجد إشعارات</string>
     <string name="notifications_title">الإشعارات</string>
     <string name="profile_back">رجوع</string>
@@ -98,6 +99,8 @@
     <string name="route_title_story">قصة</string>
     <string name="route_title_tracking_links">روابط التتبّع</string>
     <string name="share_sending">جارٍ الإرسال…</string>
+    <string name="share_sheet_sign_in_open">فتح Meeshy</string>
+    <string name="share_sheet_sign_in_title">سجّل الدخول للإرسال</string>
     <string name="share_target_label">المشاركة على Meeshy</string>
     <string name="splash_tagline">اكسر حاجز اللغة</string>
     <string name="splash_version_label">Meeshy %1$s · %2$s</string>

@@ -27,12 +27,27 @@ final class PostEditRouteTests: XCTestCase {
         XCTAssertEqual(PostEditRoute.resolve(for: post(type: "STORY"), hasStoryComposer: true), .meuble)
     }
 
-    func test_unPost_gardeLAncienEditeur() {
-        XCTAssertEqual(PostEditRoute.resolve(for: post(type: "POST"), hasStoryComposer: true), .legacySheet)
+    func test_unPost_ouvreLeCompositeurUnifie() {
+        XCTAssertEqual(PostEditRoute.resolve(for: post(type: "POST"), hasStoryComposer: true), .composer)
     }
 
-    func test_unReel_gardeLAncienEditeur() {
-        XCTAssertEqual(PostEditRoute.resolve(for: post(type: "REEL"), hasStoryComposer: true), .legacySheet)
+    func test_unReel_ouvreLeCompositeurUnifie() {
+        XCTAssertEqual(PostEditRoute.resolve(for: post(type: "REEL"), hasStoryComposer: true), .composer)
+    }
+
+    /// Ce que la scène ne montrerait pas — un document — garde l'éditeur qui
+    /// sait le montrer ; une seconde image devient une diapo (#15631).
+    func test_unPostQueLaSceneNeMontrePasEntier_gardeLAncienEditeur() {
+        var deuxImages = post(type: "POST")
+        deuxImages.media = [FeedMedia(id: "i1", type: .image, url: "/a"), FeedMedia(id: "i2", type: .image, url: "/b")]
+        XCTAssertEqual(PostEditRoute.resolve(for: deuxImages, hasStoryComposer: true), .composer)
+        var avecDocument = deuxImages
+        avecDocument.media.append(FeedMedia(id: "d3", type: .document, url: "/c"))
+        XCTAssertEqual(PostEditRoute.resolve(for: avecDocument, hasStoryComposer: true), .legacySheet)
+    }
+
+    func test_sansCompositeurDansLEnvironnement_unPostRetombeSurLAncienEditeur() {
+        XCTAssertEqual(PostEditRoute.resolve(for: post(type: "POST"), hasStoryComposer: false), .legacySheet)
     }
 
     /// Le type est celui que le SERVEUR sert, en minuscules comprises — la même

@@ -218,4 +218,14 @@ fun MoodReactFailureToast(failures: Flow<Unit>) {
     }
 }
 
+/** « Humeur en attente d'envoi » : tapée sans réseau, elle partira au retour du réseau (iOS `status.queuedOffline`). */
+@Composable
+fun MoodQueuedToast(queued: Flow<Unit>) {
+    val context = LocalContext.current
+    val message = stringResource(R.string.status_queued_offline)
+    LaunchedEffect(queued) {
+        queued.collect { Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
+    }
+}
+
 private val MIN_TARGET = 48.dp

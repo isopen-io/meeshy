@@ -10,7 +10,7 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { CONVERSATION_LIST_PAGINATION, conversationListQuerystringSchema } from './list-querystring';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
+import { participantAccountClosure, resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 import {
@@ -743,6 +743,8 @@ export function registerConversationListRoute(
               ...withoutRequestFields(m),
               // #10713 — le contour équipé du pair, dessiné par la ligne de liste.
               ...(profileDecor === undefined ? {} : { profileDecor }),
+              // #15717 — le compte du pair est fermé : un booléen, clé absente sinon.
+              ...participantAccountClosure(m),
               // Bannière de profil top-level : le schéma participant (minimal) est
               // plat et strippe `user`, donc on lève la bannière au niveau
               // participant pour la remontée en DM. Réservé aux DM — en groupe le
