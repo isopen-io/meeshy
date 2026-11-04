@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
@@ -46,6 +47,7 @@ data class BookmarksUiState(
 @HiltViewModel
 class BookmarksViewModel @Inject constructor(
     private val postRepository: PostRepository,
+    reports: ReportRepository,
     private val sessionRepository: SessionRepository,
     private val config: MeeshyConfig,
 ) : ViewModel() {
@@ -56,13 +58,21 @@ class BookmarksViewModel @Inject constructor(
     private val _state = MutableStateFlow(BookmarksUiState())
     val state: StateFlow<BookmarksUiState> = _state.asStateFlow()
 
-    /** Repartager / Citer depuis les favoris, comme dans le fil (iOS `BookmarksViewModel.toggleRepost`, #15934). */
-    private val reposting = ListedPostReposting(viewModelScope, postRepository, listState) { sessionRepository.currentUser.value }
+    /** Les gestes du fil sur les favoris (#13244 ; Repartager / Citer : iOS `BookmarksViewModel.toggleRepost`, #15934). */
+    private val actions = ListedPostActions(viewModelScope, postRepository, reports, listState) { sessionRepository.currentUser.value }
+
+    /**
+     * Ce que font les cartes des favoris — ceux du fil, sauf « Enregistrer » : une carte des favoris EST enregistrée, la
+     * toucher retire le favori et la carte quitte la liste (iOS `BookmarksView` : `onBookmark` → `removeBookmark`).
+     */
+    val cards: ListedPostCardActions = object : ListedPostCardActions by actions {
+        override fun toggleBookmark(postId: String) = removeBookmark(postId)
+    }
 
     init {
         viewModelScope.launch {
-            combine(listState, sessionRepository.currentUser, status, reposting.quoteComposer, reposting.notice) { list, user, st, quote, notice ->
-                project(list, user, st).copy(quoteComposer = quote, notice = notice)
+            combine(listState, sessionRepository.currentUser, status, actions.state) { list, user, st, gestures ->
+                project(list, user, st, gestures)
             }.collect { projected -> _state.value = projected }
         }
         loadInitial()
@@ -165,25 +175,17 @@ class BookmarksViewModel @Inject constructor(
         }
     }
 
-    fun repost(postId: String) = reposting.repost(postId)
-
-    fun beginQuote(postId: String) = reposting.beginQuote(postId)
-
-    fun onQuoteTextChange(text: String) = reposting.onQuoteTextChange(text)
-
-    fun cancelQuote() = reposting.cancelQuote()
-
-    fun submitQuote() = reposting.submitQuote()
-
-    fun consumeNotice() = reposting.consumeNotice()
-
     private fun project(
         list: BookmarksListState,
         user: MeeshyUser?,
         st: BookmarksStatus,
+        gestures: ListedPostCardsState,
     ): BookmarksUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
-        val projected = list.posts.map { FeedPostBuilder.build(it, prefs, config.apiBaseUrl) }
+        val projected = list.posts.map {
+            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, gestures.languageOverrides[it.id], currentUserId = user?.id)
+                .copy(isBookmarked = true)
+        }
         val showSkeleton = st.isLoading && !list.hasLoaded && projected.isEmpty() && st.error == null
         return BookmarksUiState(
             posts = projected,
@@ -193,6 +195,8 @@ class BookmarksViewModel @Inject constructor(
             showSkeleton = showSkeleton,
             hasMore = list.hasMore,
             errorMessage = st.error,
+            quoteComposer = gestures.quoteComposer,
+            notice = gestures.notice,
         )
     }
 

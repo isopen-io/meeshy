@@ -52,7 +52,7 @@ class HashtagRepostTest {
         every { session.currentUser } returns MutableStateFlow(reader)
         every { hashtags.cachedFirstPage(any()) } returns null
         coEvery { hashtags.posts("paris", null, any()) } returns NetworkResult.Success(PostPage(served.toList(), null, false))
-        return HashtagResultsViewModel(hashtags, posts, session, MeeshyConfig(), SavedStateHandle(mapOf("tag" to "paris")))
+        return HashtagResultsViewModel(hashtags, posts, mockk(relaxed = true), session, MeeshyConfig(), SavedStateHandle(mapOf("tag" to "paris")))
     }
 
     private fun HashtagResultsViewModel.card(id: String) = state.value.posts.single { it.id == id }
@@ -63,7 +63,7 @@ class HashtagRepostTest {
         coEvery { posts.repost(any(), any(), any(), any()) } coAnswers { answer.await() }
         val vm = viewModel(post("r1", type = "REEL"))
 
-        vm.repost("r1")
+        vm.cards.repost("r1")
 
         assertThat(vm.card("r1").isReposted).isTrue()
         assertThat(vm.card("r1").repostCount).isEqualTo(3)
@@ -77,7 +77,7 @@ class HashtagRepostTest {
         coEvery { posts.repost(any(), any(), any(), any()) } returns NetworkResult.Failure(ApiError("x", httpStatus = 500))
         val vm = viewModel(post("p1"))
 
-        vm.repost("p1")
+        vm.cards.repost("p1")
 
         assertThat(vm.card("p1").isReposted).isFalse()
         assertThat(vm.card("p1").repostCount).isEqualTo(2)
@@ -90,8 +90,8 @@ class HashtagRepostTest {
         coEvery { posts.repost(any(), any(), any(), any()) } coAnswers { answer.await() }
         val vm = viewModel(post("p1"))
 
-        vm.repost("p1")
-        vm.repost("p1")
+        vm.cards.repost("p1")
+        vm.cards.repost("p1")
 
         coVerify(exactly = 1) { posts.repost(any(), any(), any(), any()) }
         answer.complete(NetworkResult.Success(post("new")))
@@ -103,13 +103,13 @@ class HashtagRepostTest {
         val share = post("p1", repostOf = ApiRepostOf(id = "root", content = "L'original", author = ApiAuthor(id = "c", username = "chloe")))
         val vm = viewModel(share)
 
-        vm.beginQuote("p1")
+        vm.cards.beginQuote("p1")
         assertThat(vm.state.value.quoteComposer?.sourceAuthorName).isEqualTo("chloe")
         assertThat(vm.state.value.quoteComposer?.sourceContentPreview).isEqualTo("L'original")
         coVerify(exactly = 0) { posts.repost(any(), any(), any(), any()) }
 
-        vm.onQuoteTextChange("à lire")
-        vm.submitQuote()
+        vm.cards.onQuoteTextChange("à lire")
+        vm.cards.submitQuote()
 
         coVerify(exactly = 1) { posts.repost("root", PostType.POST, "à lire", true) }
         assertThat(vm.state.value.quoteComposer).isNull()
@@ -120,8 +120,8 @@ class HashtagRepostTest {
     fun `fermer la citation n'envoie rien`() = runTest {
         val vm = viewModel(post("p1"))
 
-        vm.beginQuote("p1")
-        vm.cancelQuote()
+        vm.cards.beginQuote("p1")
+        vm.cards.cancelQuote()
 
         assertThat(vm.state.value.quoteComposer).isNull()
         coVerify(exactly = 0) { posts.repost(any(), any(), any(), any()) }
@@ -132,8 +132,8 @@ class HashtagRepostTest {
         coEvery { posts.repost(any(), any(), any(), any()) } returns NetworkResult.Success(post("new"))
         val vm = viewModel(post("p1"))
 
-        vm.repost("p1")
-        vm.consumeNotice()
+        vm.cards.repost("p1")
+        vm.cards.consumeNotice()
 
         assertThat(vm.state.value.notice).isNull()
     }
@@ -142,9 +142,9 @@ class HashtagRepostTest {
     fun `Citer depuis un hashtag montre le texte que la carte sert (#16001)`() = runTest {
         val vm = viewModel(QuotePrism.post("p1"), QuotePrism.share("s1"), reader = QuotePrism.reader)
 
-        vm.beginQuote("p1")
+        vm.cards.beginQuote("p1")
         assertThat(vm.state.value.quoteComposer?.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
-        vm.beginQuote("s1")
+        vm.cards.beginQuote("s1")
         assertThat(vm.state.value.quoteComposer?.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
     }
 }
