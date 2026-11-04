@@ -113,6 +113,18 @@ final class QuoteComposerDoorTests: XCTestCase {
 
     // MARK: - 3. L'hydratation : l'audience de la source, aucune reprise de brouillon
 
+    /// Rang 2 (leçon 261) : la racine est en anglais, traduite en français,
+    /// prisme `['fr', 'en']`. Le texte brut citerait « Hello » (#16002).
+    func test_laCarteDUneRepublication_sertLeTexteDuPrisme_auRangDeux() throws {
+        let apiRacine = RepostContent(id: "racine-1", author: "Bruno", authorId: "bruno-id", content: "Hello",
+                                      type: "POST", originalLanguage: "en",
+                                      translations: ["fr": PostTranslation(text: "Bonjour")])
+        let carte = publication(content: "", repost: apiRacine).resolved(preferredLanguages: ["fr", "en"])
+
+        XCTAssertEqual(ComposerQuotedPublication(quoting: carte).text, "Bonjour")
+        XCTAssertEqual(FeedPostCard.repostBodyText(for: try XCTUnwrap(carte.repost)), "Bonjour")
+    }
+
     func test_laCitation_plafonneLAudience_aCelleDeLaSource() {
         let hydratation = ComposerHydration.quotingPublication(
             ComposerQuotedPublication(quoting: publication(visibility: "FRIENDS")))

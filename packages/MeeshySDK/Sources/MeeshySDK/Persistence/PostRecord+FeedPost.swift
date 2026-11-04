@@ -24,7 +24,7 @@ public extension PostRecord {
             type: type, content: content ?? "",
             timestamp: createdAt, likes: likeCount,
             comments: [], commentCount: commentCount,
-            repost: apiRepost?.toRepostContent(),
+            repost: apiRepost?.toRepostContent(preferredLanguages: preferredLanguages),
             repostAuthor: apiRepost != nil ? displayName : nil,
             isQuote: isQuote,
             media: (apiMedia ?? []).map { $0.toFeedMedia() },
