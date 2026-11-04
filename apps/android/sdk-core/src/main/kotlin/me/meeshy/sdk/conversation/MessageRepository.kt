@@ -75,7 +75,10 @@ class MessageRepository internal constructor(
         /** L'index des médias de la conversation suit les messages supprimés. */
         mediaIndex: ConversationMediaHubIndex? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures, TranslationLayer.of(database)),
+        history = MessageHistoryReader(
+            messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures, TranslationLayer.of(database),
+            media = AcknowledgedBubbleMedia(adoption, previews, AcknowledgedBubbleMedia.ORIGIN_PAGE),
+        ),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews = previews, listPreviews = listPreviews),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
