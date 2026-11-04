@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 26,
-    "identityHash": "3b6c1f0e9d7a4c52a8e1f4d2c6b09a77",
+    "identityHash": "c7a3bc15686807d84b1d06edbcabddd8",
     "entities": [
       {
         "tableName": "conversations",
@@ -1346,43 +1346,43 @@
             "fieldPath": "messageId",
             "columnName": "messageId",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "language",
             "columnName": "language",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "content",
             "columnName": "content",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "sourceLanguage",
             "columnName": "sourceLanguage",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "model",
             "columnName": "model",
             "affinity": "TEXT",
-            "notNull": 0
+            "notNull": false
           },
           {
             "fieldPath": "confidence",
             "columnName": "confidence",
             "affinity": "REAL",
-            "notNull": 0
+            "notNull": false
           },
           {
             "fieldPath": "updatedAt",
             "columnName": "updatedAt",
             "affinity": "INTEGER",
-            "notNull": 1
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -1403,43 +1403,43 @@
             "fieldPath": "messageId",
             "columnName": "messageId",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "attachmentId",
             "columnName": "attachmentId",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "text",
             "columnName": "text",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "language",
             "columnName": "language",
             "affinity": "TEXT",
-            "notNull": 0
+            "notNull": false
           },
           {
             "fieldPath": "confidence",
             "columnName": "confidence",
             "affinity": "REAL",
-            "notNull": 0
+            "notNull": false
           },
           {
             "fieldPath": "durationMs",
             "columnName": "durationMs",
             "affinity": "INTEGER",
-            "notNull": 0
+            "notNull": false
           },
           {
             "fieldPath": "updatedAt",
             "columnName": "updatedAt",
             "affinity": "INTEGER",
-            "notNull": 1
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -1460,73 +1460,73 @@
             "fieldPath": "messageId",
             "columnName": "messageId",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "attachmentId",
             "columnName": "attachmentId",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "language",
             "columnName": "language",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "url",
             "columnName": "url",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "transcription",
             "columnName": "transcription",
             "affinity": "TEXT",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "durationMs",
             "columnName": "durationMs",
             "affinity": "INTEGER",
-            "notNull": 0
+            "notNull": false
           },
           {
             "fieldPath": "format",
             "columnName": "format",
             "affinity": "TEXT",
-            "notNull": 0
+            "notNull": false
           },
           {
             "fieldPath": "cloned",
             "columnName": "cloned",
             "affinity": "INTEGER",
-            "notNull": 1
+            "notNull": true
           },
           {
             "fieldPath": "quality",
             "columnName": "quality",
             "affinity": "REAL",
-            "notNull": 0
+            "notNull": false
           },
           {
             "fieldPath": "voiceModelId",
             "columnName": "voiceModelId",
             "affinity": "TEXT",
-            "notNull": 0
+            "notNull": false
           },
           {
             "fieldPath": "ttsModel",
             "columnName": "ttsModel",
             "affinity": "TEXT",
-            "notNull": 0
+            "notNull": false
           },
           {
             "fieldPath": "updatedAt",
             "columnName": "updatedAt",
             "affinity": "INTEGER",
-            "notNull": 1
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -1544,7 +1544,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3b6c1f0e9d7a4c52a8e1f4d2c6b09a77')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c7a3bc15686807d84b1d06edbcabddd8')"
     ]
   }
 }

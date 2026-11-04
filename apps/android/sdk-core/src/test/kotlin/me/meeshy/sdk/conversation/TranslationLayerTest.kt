@@ -286,6 +286,21 @@ class TranslationLayerTest {
     }
 
     @Test
+    fun `la bulle optimiste remplacee par sa jumelle serveur ne perd pas les traductions rangees sous l'id serveur`() = runHarnessTest { harness ->
+        val cid = "cid_" + java.util.UUID.randomUUID().toString().lowercase()
+        val bubble = message(cid).copy(clientMessageId = cid)
+        harness.database.messageDao().upsertAll(listOf(MessageEntityFactory.cached(bubble, harness.clock.now).copy(serverId = "srv1")))
+        harness.database.messageTranslationDao().upsertText(
+            me.meeshy.core.database.entity.MessageTranslationEntity("srv1", "fr", "Bonjour", "en", null, null, 1L),
+        )
+
+        MessageIngestPipeline(harness.database).ingest(listOf(message("srv1").copy(clientMessageId = cid)), harness.clock.now)
+
+        assertThat(harness.database.messageDao().find(cid)).isNull()
+        assertThat(harness.database.messageTranslationDao().textsFor(listOf("srv1")).map { it.content }).containsExactly("Bonjour")
+    }
+
+    @Test
     fun `la fin de session vide le L1 et le compte suivant relit son propre disque`() = runHarnessTest { harness ->
         harness.seedSynced(message())
         writer(harness).applyTranslation("m1", "fr", "Bonjour de A")

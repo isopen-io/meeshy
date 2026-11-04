@@ -25,7 +25,7 @@ public object RetainedTranslationCascade {
             "AND NOT EXISTS (SELECT 1 FROM `messages` WHERE `serverId` = `$table`.`messageId`)"
 
     public val triggerSql: String =
-        "CREATE TRIGGER IF NOT EXISTS `$TRIGGER` AFTER DELETE ON `messages` BEGIN " +
+        "CREATE TRIGGER `$TRIGGER` AFTER DELETE ON `messages` BEGIN " +
             tables.joinToString(" ") { table ->
                 "DELETE FROM `$table` WHERE `messageId` IN (old.`id`, old.`serverId`) AND ${unclaimed(table)};"
             } +
@@ -33,8 +33,12 @@ public object RetainedTranslationCascade {
 
     public val sweepSql: List<String> = tables.map { table -> "DELETE FROM `$table` WHERE ${unclaimed(table)}" }
 
-    /** Installe le déclencheur (idempotent) et efface les orphelins qu'une version antérieure aurait laissés. */
+    /**
+     * Réinstalle le déclencheur — supprimé puis recréé, pour qu'une définition plus récente remplace toujours
+     * l'ancienne — et efface les orphelins qu'une version antérieure aurait laissés.
+     */
     public fun ensure(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TRIGGER IF EXISTS `$TRIGGER`")
         db.execSQL(triggerSql)
         sweepSql.forEach(db::execSQL)
     }

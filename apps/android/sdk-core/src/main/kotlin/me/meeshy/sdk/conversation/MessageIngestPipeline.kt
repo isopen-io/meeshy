@@ -91,8 +91,10 @@ internal class MessageIngestPipeline(
         }
         events?.let { replayPendingEvents(it, latest, rowIdOfMessage, writes, replacedLocalIds, nowMillis) }
         replacedLocalIds -= writes.keys
-        if (replacedLocalIds.isNotEmpty()) messageDao.deleteByIds(replacedLocalIds.toList())
+        // La jumelle serveur s'écrit AVANT le retrait de la bulle optimiste : la cascade des traductions retenues
+        // (RetainedTranslationCascade) épargne alors les lignes rangées sous l'id serveur, que la jumelle porte déjà.
         if (writes.isNotEmpty()) messageDao.upsertAll(writes.values.toList())
+        if (replacedLocalIds.isNotEmpty()) messageDao.deleteByIds(replacedLocalIds.toList())
         DedicatedTranslationRows.drop(database, outlivedKeys(writes.values, baseOfRow) + replacedLocalIds)
         regime?.learnFromServed(latest, conversationId)
         erasures?.recordServedGone(latest)
