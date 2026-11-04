@@ -65,4 +65,11 @@ public interface AudioPlaybackEngine {
 
     /** La langue de la piste ou de la transcription sous les yeux, déclarée par la vue. */
     public fun setConsumedLanguageProvider(provider: (() -> String?)?)
+
+    /**
+     * #15969 — le vocal chargé [fromAttachmentId] a été accusé : il s'appelle désormais [toAttachmentId] et se sert depuis
+     * [servedUrl]. La lecture continue telle quelle sous ce nom ; si la source qu'il lisait disparaît (copie locale rangée
+     * dans le cache à l'accusé), il est reciblé UNE fois, au même point, sur [servedUrl]. Une autre pièce : rien ne change.
+     */
+    public fun follow(fromAttachmentId: String, toAttachmentId: String, servedUrl: String, isProtected: Boolean) {}
 }

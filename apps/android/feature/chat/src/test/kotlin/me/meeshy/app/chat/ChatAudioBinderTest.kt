@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.media.UploadedAttachmentIds
 import me.meeshy.sdk.playback.AudioEngineEvent
 import me.meeshy.sdk.playback.ConversationAudioCoordinator
 import me.meeshy.sdk.waveform.WaveformLevels
@@ -39,7 +40,7 @@ class ChatAudioBinderTest {
         val waveforms: WaveformRepository = mockk(relaxed = true),
     ) {
         val coordinator = ConversationAudioCoordinator(engine, UnconfinedTestDispatcher())
-        val viewModel = ChatAudioViewModel(coordinator, waveforms, UnconfinedTestDispatcher())
+        val viewModel = ChatAudioViewModel(coordinator, waveforms, UploadedAttachmentIds(), UnconfinedTestDispatcher())
     }
 
     private val m1 = voiceMessage("m1", "2026-11-04T08:00:00Z", voice("a"))

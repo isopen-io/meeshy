@@ -130,6 +130,21 @@ public class ConversationAudioCoordinator(
         }
     }
 
+    /**
+     * #15969 — le vocal en cours [fromAttachmentId] a été accusé sous [toAttachmentId], servi depuis [servedUrl] : la file, le
+     * contexte et le moteur prennent ce nom (la fin le marquera écouté sous l'id serveur) sans rien recharger. Une pièce que
+     * le moteur ne tient pas, ou qui n'est pas la courante de la file, ne change rien.
+     */
+    public fun follow(fromAttachmentId: String, toAttachmentId: String, servedUrl: String) {
+        if (fromAttachmentId == toAttachmentId || servedUrl.isBlank()) return
+        if (engine.state.value.attachmentId != fromAttachmentId) return
+        val snapshot = mutableSnapshot.value
+        val current = snapshot.queue.current?.takeIf { it.attachmentId == fromAttachmentId } ?: return
+        engine.follow(fromAttachmentId, toAttachmentId, servedUrl, current.isProtected)
+        val queue = snapshot.queue.followed(fromAttachmentId, toAttachmentId, servedUrl)
+        mutableSnapshot.value = snapshot.copy(queue = queue, context = snapshot.context?.copy(audio = queue.current ?: current))
+    }
+
     /** L'onde de la bulle : se placer à [fraction] (0…1) du vocal en cours. */
     public fun seek(fraction: Double) = engine.seek(fraction)
 

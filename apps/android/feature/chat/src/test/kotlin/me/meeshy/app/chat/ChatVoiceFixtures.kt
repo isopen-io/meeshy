@@ -93,6 +93,12 @@ internal class FakeVoiceEngine : AudioPlaybackEngine {
     override fun setServedConsumption(attachmentId: String, consumption: MeeshyMediaConsumption?) = Unit
     override fun setConsumedLanguageProvider(provider: (() -> String?)?) = Unit
 
+    val follows = mutableListOf<List<Any>>()
+    override fun follow(fromAttachmentId: String, toAttachmentId: String, servedUrl: String, isProtected: Boolean) {
+        follows += listOf(fromAttachmentId, toAttachmentId, servedUrl, isProtected)
+        if (mutable.value.attachmentId == fromAttachmentId) mutable.value = mutable.value.copy(attachmentId = toAttachmentId)
+    }
+
     fun playingAt(id: String, positionMs: Long, durationMs: Long = 12_000) {
         mutable.value = AudioPlaybackState(attachmentId = id, isPlaying = true, currentTimeMs = positionMs, durationMs = durationMs, speed = mutable.value.speed)
     }
