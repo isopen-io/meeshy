@@ -112,6 +112,8 @@ internal class MessageSendCoordinator(
         // drainer grafts the real gateway id in (MessageMediaWriteBack); an empty
         // list keeps a text-only send exactly as before (null attachmentIds).
         val placeholderIds = attachmentUploadCmids.filter { it.isNotBlank() }.distinct()
+        // Fan-out de partage : la cible 2..N dépend de la ligne de son origine (son `cid_`), qui greffe l'id serveur à l'accusé.
+        val fanoutOrigin = copyAttachmentsFromMessageId?.takeIf { OutboxIds.isValidCid(it) && it != cid }
         val chosenPieces = forwardedAttachmentIds?.filter { it.isNotBlank() }?.distinct()?.takeIf { it.isNotEmpty() }
         val optimistic = ApiMessage(
             id = cid,
@@ -172,7 +174,7 @@ internal class MessageSendCoordinator(
                     lane = OutboxLanes.forMessage(conversationId),
                     targetId = conversationId,
                     payload = MeeshyApi.json.encodeToString(request),
-                    dependsOn = placeholderIds.toSet(),
+                    dependsOn = placeholderIds.toSet() + listOfNotNull(fanoutOrigin),
                     cmid = cid,
                 ),
                 ticket,
@@ -205,6 +207,9 @@ internal class MessageSendCoordinator(
         adoption?.adopt(optimisticAttachments, serverMessage.attachments)
         previews?.release(optimisticAttachments)
     }
+
+    /** Le pont `cid_ -> id serveur` écrit à l'accusé ([MessageIdReconciliation.recordAck]) ; `null` tant que non acquitté. */
+    suspend fun serverIdOf(localId: String): String? = database.pendingIdDao().byLocalId(localId)?.serverId
 
     /**
      * Accusé de la SOCKET (repli du REST) : il ne porte que `messageId` et `createdAt`, la bulle optimiste fournit le reste.
