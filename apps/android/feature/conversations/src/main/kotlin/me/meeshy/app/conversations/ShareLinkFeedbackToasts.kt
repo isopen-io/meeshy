@@ -8,7 +8,7 @@ import me.meeshy.sdk.model.feedback.FeedbackToastKind
 
 /** Donne à la fiche d'un lien la pile de toasts de l'application : enregistré, échec, erreur passent par le toast commun. */
 @HiltViewModel
-internal class ShareLinkFeedbackToasts @Inject constructor(
+class ShareLinkFeedbackToasts @Inject constructor(
     private val center: FeedbackToastCenter,
 ) : ViewModel() {
     fun success(message: String) = center.show(message, FeedbackToastKind.SUCCESS)
