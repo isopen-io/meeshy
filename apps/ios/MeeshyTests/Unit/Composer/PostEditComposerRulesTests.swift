@@ -23,23 +23,23 @@ final class PostEditComposerRulesTests: XCTestCase {
         XCTAssertTrue(PostEditComposerEligibility.opensInComposer(post(type: "POST", media: [media("i1", .image)])))
     }
 
-    func test_opensInComposer_mediaTheSceneDoesNotShow_false() {
+    func test_opensInComposer_secondImageWithoutCanvas_trueAsItsOwnSlide() {
         let classique = post(type: "POST", media: [media("i1", .image), media("i2", .image)])
-        XCTAssertFalse(PostEditComposerEligibility.opensInComposer(classique),
-                       "La seconde image n'apparaîtrait nulle part : l'auteur ne pourrait ni la voir ni la retirer")
+        XCTAssertTrue(PostEditComposerEligibility.opensInComposer(classique),
+                      "La seconde image devient une diapo : l'auteur la voit et peut la retirer")
     }
 
-    func test_opensInComposer_storyOrRepost_false() {
+    func test_opensInComposer_story_false_repost_true() {
         XCTAssertFalse(PostEditComposerEligibility.opensInComposer(post(type: "STORY")))
         var repost = post(type: "POST")
         repost.repost = RepostContent(id: "src", author: "a", content: "c")
-        XCTAssertFalse(PostEditComposerEligibility.opensInComposer(repost))
+        XCTAssertTrue(PostEditComposerEligibility.opensInComposer(repost))
     }
 
-    func test_opensInComposer_severalCanvasScenes_false() {
+    func test_opensInComposer_severalCanvasScenes_true() {
         var plusieurs = effects(objects: [])
         plusieurs.canvasV3 = CanvasV3(scenes: [SceneV3(id: "s1", objects: []), SceneV3(id: "s2", objects: [])])
-        XCTAssertFalse(PostEditComposerEligibility.opensInComposer(post(type: "POST", effects: plusieurs)))
+        XCTAssertTrue(PostEditComposerEligibility.opensInComposer(post(type: "POST", effects: plusieurs)))
     }
 
     // MARK: - Ce que l'enregistrement envoie
