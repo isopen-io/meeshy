@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.QueuedAudio
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenChromeTiming
@@ -107,6 +108,7 @@ public fun AudioFullscreenScreen(
     conversationTail: (String) -> List<QueuedAudio> = { emptyList() },
     onDismissToMessage: (String) -> Unit = {},
     onDownload: ((AudioFullscreenSource) -> Unit)? = null,
+    actions: AudioFullscreenActionPort? = null,
 ) {
     val ordered = remember(sources) { AudioFullscreenSequence.ordered(sources) { it.createdAtEpochMs } }
     val ids = remember(ordered) { ordered.map { it.id } }
@@ -118,7 +120,8 @@ public fun AudioFullscreenScreen(
     val memory = remember { AudioFullscreenTurnMemory() }
     val heard = remember { mutableStateMapOf<String, Long>() }
     val scope = rememberCoroutineScope()
-    val playback by player.playback.collectAsState()
+    val isPlaying by remember(player) { player.playback.map { it.isPlaying }.distinctUntilChanged() }
+        .collectAsState(initial = player.playback.value.isPlaying)
     var chrome by remember { mutableStateOf(FullscreenChromeState.Initial) }
     var touches by remember { mutableIntStateOf(0) }
     val screenReader = rememberScreenReaderRunning()
@@ -159,9 +162,16 @@ public fun AudioFullscreenScreen(
     }
 
     LaunchedEffect(player) {
+        var listening: Pair<String, Long>? = null
         player.playback.collect { state ->
-            val id = state.attachmentId ?: return@collect
-            if (state.isPlaying && state.durationMs > 0L && id in latestIds) heard[id] = state.currentTimeMs
+            val left = listening
+            if (left != null && left.first != state.attachmentId) heard[left.first] = left.second
+            val id = state.attachmentId
+            listening = if (id != null && state.isPlaying && state.durationMs > 0L && id in latestIds) {
+                id to state.currentTimeMs
+            } else {
+                left?.takeIf { it.first == id }
+            }
         }
     }
 
@@ -169,12 +179,12 @@ public fun AudioFullscreenScreen(
         snapshotFlow { pagerState.currentPage }.drop(1).distinctUntilChanged().collect { chrome = chrome.turningPage() }
     }
 
-    LaunchedEffect(playback.isPlaying) {
-        if (!playback.isPlaying && !chrome.showsChrome && chrome.overlay == null) chrome = chrome.revealing()
+    LaunchedEffect(isPlaying) {
+        if (!isPlaying && !chrome.showsChrome && chrome.overlay == null) chrome = chrome.revealing()
     }
 
-    LaunchedEffect(chrome, playback.isPlaying, touches, screenReader) {
-        val wait = AudioFullscreenChromeTiming.autoHideDelay(chrome, playback.isPlaying, screenReader) ?: return@LaunchedEffect
+    LaunchedEffect(chrome, isPlaying, touches, screenReader) {
+        val wait = AudioFullscreenChromeTiming.autoHideDelay(chrome, isPlaying, screenReader) ?: return@LaunchedEffect
         delay(wait)
         chrome = chrome.autoHiding()
     }
@@ -192,7 +202,7 @@ public fun AudioFullscreenScreen(
             ?.let(onDismissToMessage)
         onDismiss()
     }
-    BackHandler(onBack = dismiss)
+    BackHandler { if (chrome.overlay != null) chrome = chrome.closingOverlay() else dismiss() }
 
     val density = LocalDensity.current
     val dragOffset = remember { Animatable(0f) }
@@ -229,7 +239,6 @@ public fun AudioFullscreenScreen(
                 source = source,
                 pageIndex = index,
                 pageCount = ordered.size,
-                playback = playback,
                 player = player,
                 heardPositionMs = heard[source.id],
                 upcoming = { upcomingAfter(source.id) },
@@ -240,6 +249,11 @@ public fun AudioFullscreenScreen(
                 onRevealChrome = { chrome = chrome.revealing() },
                 onChromeInteraction = { touches += 1 },
                 onDownload = onDownload,
+                rail = if (actions != null && index == pagerState.currentPage) {
+                    @Composable { AudioFullscreenActionRailSlot(actions, source, chrome, onChrome = { chrome = it }, onClose = dismiss) }
+                } else {
+                    null
+                },
                 onNext = AudioFullscreenSequence.next(source.id, ids)?.let { id ->
                     { scope.launch { pagerState.animateScrollToPage(latestIds.indexOf(id).coerceAtLeast(0)) }; Unit }
                 },
@@ -247,6 +261,10 @@ public fun AudioFullscreenScreen(
                     { scope.launch { pagerState.animateScrollToPage(latestIds.indexOf(id).coerceAtLeast(0)) }; Unit }
                 },
             )
+        }
+        val posed = ordered.getOrNull(pagerState.currentPage)
+        if (actions != null && posed != null) {
+            AudioFullscreenActionOverlays(actions, posed, chrome, accent, onChrome = { chrome = it })
         }
     }
 }

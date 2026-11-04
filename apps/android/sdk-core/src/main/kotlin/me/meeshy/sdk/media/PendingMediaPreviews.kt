@@ -72,6 +72,12 @@ public interface PendingMediaPreviewing {
      */
     public suspend fun keepSharp(cmid: String, item: MediaUploadItem, effects: MessageEffects): Unit = Unit
 
+    /**
+     * Refait la copie nette d'une photo en attente que le processus n'a pas eu le temps d'écrire (#16013), et rend quand
+     * elle est écrite ; rien quand elle existe déjà ou s'écrit en ce moment, et pour une pièce que [keepSharp] refuserait.
+     */
+    public suspend fun restoreSharp(cmid: String, item: MediaUploadItem, effects: MessageEffects): Unit = Unit
+
     /** La copie nette de la pièce en attente [attachmentId], ou `null` tant qu'elle n'est pas prête (l'aperçu sert alors). */
     public fun sharpUrlFor(attachmentId: String): String? = null
 
@@ -138,9 +144,18 @@ public class PendingMediaPreviews internal constructor(
     }
 
     override suspend fun keepSharp(cmid: String, item: MediaUploadItem, effects: MessageEffects) {
-        if (isMasked(effects) || !isSafeName(cmid) || PendingAttachmentType.forMime(item.mimeType) != PendingAttachmentType.IMAGE) return
-        if (item.sizeBytes !in 1L..MAX_SHARP_SOURCE_BYTES) return
-        val octets = withContext(io) { runCatching { item.source.open().use { it.readBytes() } }.getOrNull() } ?: return
+        sharpen(cmid, item, effects)
+    }
+
+    override suspend fun restoreSharp(cmid: String, item: MediaUploadItem, effects: MessageEffects) {
+        if (sharpJobs.containsKey(cmid) || sharpUrlFor(cmid) != null) return
+        sharpen(cmid, item, effects)?.join()
+    }
+
+    private suspend fun sharpen(cmid: String, item: MediaUploadItem, effects: MessageEffects): Job? {
+        if (isMasked(effects) || !isSafeName(cmid) || PendingAttachmentType.forMime(item.mimeType) != PendingAttachmentType.IMAGE) return null
+        if (item.sizeBytes !in 1L..MAX_SHARP_SOURCE_BYTES) return null
+        val octets = withContext(io) { runCatching { item.source.open().use { it.readBytes() } }.getOrNull() } ?: return null
         val job = sharpening.launch(start = CoroutineStart.LAZY) {
             val target = sharpFile(cmid)
             val written = runCatching { sanitizer.encode({ ByteArrayInputStream(octets) }, target) }.getOrDefault(false)
@@ -149,6 +164,7 @@ public class PendingMediaPreviews internal constructor(
         sharpJobs.put(cmid, job)?.cancel()
         job.invokeOnCompletion { sharpJobs.remove(cmid, job) }
         job.start()
+        return job
     }
 
     override fun sharpUrlFor(attachmentId: String): String? {

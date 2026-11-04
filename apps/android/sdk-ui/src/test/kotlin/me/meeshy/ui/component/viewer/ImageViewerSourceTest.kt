@@ -112,4 +112,21 @@ class ImageViewerSourceTest {
 
         assertThat(mount?.backdropUrl).isNull()
     }
+
+    @Test
+    fun `the full screen takes the widest served variant`() {
+        val url = ImageViewerSource.sharpest(
+            original = "orig",
+            variants = listOf(ImageVariant("small", 320), ImageVariant("large", 1920), ImageVariant("mid", 960)),
+        )
+
+        assertThat(url).isEqualTo("large")
+    }
+
+    @Test
+    fun `a measured variant beats an unmeasured one and the original is the last resort`() {
+        assertThat(ImageViewerSource.sharpest("orig", listOf(ImageVariant("blind"), ImageVariant("w", 100)))).isEqualTo("w")
+        assertThat(ImageViewerSource.sharpest("orig", emptyList())).isEqualTo("orig")
+        assertThat(ImageViewerSource.sharpest(null, listOf(ImageVariant("")))).isNull()
+    }
 }

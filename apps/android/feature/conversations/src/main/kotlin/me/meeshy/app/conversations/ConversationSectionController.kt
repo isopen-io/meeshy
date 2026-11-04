@@ -23,4 +23,9 @@ internal class ConversationSectionController(
         if (section.kind != ConversationSectionKind.CATEGORY) return
         scope.launch { runCatching { categoryRepository.setExpanded(categoryId, expanded) } }
     }
+
+    /** Déplie [sectionId] pour la session (cible d'un dépôt) : pas d'écriture serveur, ce n'est pas un choix de pli. */
+    fun reveal(sectionId: String) {
+        store.set(sectionId, true, categories())
+    }
 }

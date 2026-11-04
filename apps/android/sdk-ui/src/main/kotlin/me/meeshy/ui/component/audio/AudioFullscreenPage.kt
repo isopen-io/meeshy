@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,40 +31,36 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import me.meeshy.sdk.model.QueuedAudio
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenArrangement
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenLayout
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenPageProgress
+import me.meeshy.sdk.model.fullscreen.AudioFullscreenPlaybackScope
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeSymbol
-import me.meeshy.sdk.model.media.formatMediaDurationMillis
 import me.meeshy.sdk.model.playback.AudioPlaybackState
 import me.meeshy.ui.R
-import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.bubble.BubbleAudioKaraoke
 import me.meeshy.ui.component.bubble.BubbleAudioPlayback
 import me.meeshy.ui.component.bubble.KaraokeTranscript
 import me.meeshy.ui.component.chrome.FullscreenTopBar
 import me.meeshy.ui.component.fullscreen.FullscreenChromeButton
+import me.meeshy.ui.component.fullscreen.FullscreenChromeDimens
 import me.meeshy.ui.component.fullscreen.FullscreenChromeTone
 import me.meeshy.ui.component.fullscreen.LocalFullscreenChromeInteractive
 import me.meeshy.ui.component.fullscreen.icon
-import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
-import me.meeshy.ui.theme.hexColor
 
 /**
  * **Une page du plein écran audio** (iOS `AudioFullscreenPage`) : en haut la croix, le compteur « i / n » et le
@@ -78,7 +73,6 @@ internal fun AudioFullscreenPage(
     source: AudioFullscreenSource,
     pageIndex: Int,
     pageCount: Int,
-    playback: AudioPlaybackState,
     player: AudioFullscreenPlayer,
     heardPositionMs: Long?,
     upcoming: () -> List<QueuedAudio>,
@@ -91,7 +85,11 @@ internal fun AudioFullscreenPage(
     onDownload: ((AudioFullscreenSource) -> Unit)?,
     onNext: (() -> Unit)?,
     onPrevious: (() -> Unit)?,
+    rail: (@Composable () -> Unit)? = null,
 ) {
+    val playback by remember(player, source.id) {
+        player.playback.map { AudioFullscreenPlaybackScope.of(it, source.id) }.distinctUntilChanged()
+    }.collectAsState(initial = AudioFullscreenPlaybackScope.of(player.playback.value, source.id))
     val isLoaded = playback.attachmentId == source.id
     val stored = remember(source.id) { player.restingPositionMs(source.id) }
     val resting = heardPositionMs ?: stored
@@ -110,6 +108,7 @@ internal fun AudioFullscreenPage(
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
             val layout = AudioFullscreenLayout.resolve(maxWidth.value, maxHeight.value)
+            val railReserve = if (rail != null) FullscreenChromeDimens.tapTarget + MeeshySpacing.sm else 0.dp
             val hero: @Composable () -> Unit = {
                 AudioFullscreenHero(
                     source = source,
@@ -183,7 +182,7 @@ internal fun AudioFullscreenPage(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxl),
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
+                        modifier = Modifier.padding(start = MeeshySpacing.lg, end = MeeshySpacing.lg + railReserve),
                     ) {
                         hero()
                         details()
@@ -192,7 +191,7 @@ internal fun AudioFullscreenPage(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(AudioFullscreenLayout.STACK_SPACING.dp),
-                        modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
+                        modifier = Modifier.padding(start = MeeshySpacing.lg, end = MeeshySpacing.lg + railReserve),
                     ) {
                         hero()
                         details()
@@ -200,67 +199,9 @@ internal fun AudioFullscreenPage(
                 }
                 Spacer(Modifier.weight(1f))
             }
-        }
-    }
-}
-
-/** Le portrait de l'auteur au cœur du cadran ; les durées en haut de l'anneau. */
-@Composable
-private fun AudioFullscreenHero(
-    source: AudioFullscreenSource,
-    diameter: Float,
-    progress: Double,
-    isPlaying: Boolean,
-    totalMs: Long,
-    samples: List<Float>,
-    accent: Color,
-    onSeek: (Double) -> Unit,
-    onNext: (() -> Unit)?,
-    onPrevious: (() -> Unit)?,
-) {
-    val tokens = MeeshyTheme.tokens
-    val opener = LocalProfileSheetOpener.current
-    val haptics = rememberMeeshyHaptics()
-    val nextLabel = stringResource(R.string.feed_carousel_next)
-    val previousLabel = stringResource(R.string.feed_carousel_previous)
-    val authorColor = remember(source.author.accentColor, accent) { hexColor(source.author.accentColor, accent) }
-    val elapsedMs = (progress * totalMs).toLong()
-    Box(contentAlignment = Alignment.Center) {
-        AudioFullscreenDial(
-            samples = samples,
-            progress = progress,
-            isPlaying = isPlaying,
-            portraitDiameter = diameter.dp,
-            accent = accent,
-            trackColor = tokens.textPrimary.copy(alpha = if (MeeshyTheme.isDark) 0.22f else 0.18f),
-            cursorColor = tokens.textPrimary,
-            totalLabel = formatMediaDurationMillis(totalMs).orEmpty(),
-            elapsedLabel = formatMediaDurationMillis(elapsedMs).orEmpty(),
-            onSeek = onSeek,
-        )
-        Box(
-            Modifier
-                .clip(CircleShape)
-                .clickable(role = Role.Button) {
-                    haptics.light()
-                    opener.open(source.author)
-                }
-                .semantics {
-                    contentDescription = source.authorName
-                    customActions = listOfNotNull(
-                        onNext?.let { next -> CustomAccessibilityAction(nextLabel) { next(); true } },
-                        onPrevious?.let { previous -> CustomAccessibilityAction(previousLabel) { previous(); true } },
-                    )
-                },
-        ) {
-            MeeshyAvatar(
-                name = source.authorName,
-                size = diameter.dp,
-                containerColor = authorColor,
-                presence = source.authorPresence,
-                imageUrl = source.author.avatarUrl,
-                decorRing = source.authorRing,
-            )
+            if (rail != null) {
+                Box(Modifier.align(Alignment.BottomEnd).padding(end = MeeshySpacing.lg, bottom = MeeshySpacing.lg)) { rail() }
+            }
         }
     }
 }

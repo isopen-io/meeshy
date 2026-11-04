@@ -43,6 +43,11 @@ import {
   E2EE_IRREVERSIBLE_MESSAGE,
 } from '@meeshy/shared/types/e2ee-directory';
 import { otherEndToEndDirectOf, pairOfMembers, serverReadsMode } from '../services/conversations/directPair';
+import {
+  ENCRYPTION_MODE_UNSUPPORTED_CODE,
+  END_TO_END_DIRECT_ONLY_MESSAGE,
+  endToEndSupportsConversationType,
+} from '@meeshy/shared/utils/conversation-creation-encryption';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationEncryptionChangedEventData } from '@meeshy/shared/types/socketio-events';
 import {
@@ -186,6 +191,14 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
       code: E2EE_ERROR_CODES.DIRECT_ALREADY_END_TO_END,
       details: { existingConversationId },
     });
+
+  /**
+   * #16113 — aucun client ne chiffre un groupe de bout en bout, et le bout en
+   * bout ne se quitte pas (#12949) : le même refus que la création, lisible
+   * par un ancien client (#9223). Un groupe déjà `e2ee` n'arrive pas ici.
+   */
+  const endToEndDirectOnly = (reply: FastifyReply) =>
+    sendError(reply, 400, END_TO_END_DIRECT_ONLY_MESSAGE, { code: ENCRYPTION_MODE_UNSUPPORTED_CODE });
 
   /** #12966 — un tête-à-tête ne se chiffre de bout en bout qu'entre deux membres inscrits actifs : un tiers ne contourne pas la règle de la paire. */
   const notAPair = (reply: FastifyReply) =>
@@ -351,7 +364,11 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           });
         }
 
-        if (mode === 'e2ee' && conversation.type === 'direct') {
+        if (mode === 'e2ee' && !endToEndSupportsConversationType(conversation.type)) {
+          return endToEndDirectOnly(reply);
+        }
+
+        if (mode === 'e2ee') {
           if (!pairOfMembers(conversation.participants.map((participant) => participant.userId))) {
             return notAPair(reply);
           }

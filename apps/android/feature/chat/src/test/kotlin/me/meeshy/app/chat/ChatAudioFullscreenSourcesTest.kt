@@ -1,6 +1,9 @@
 package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.PackOrigin
+import me.meeshy.sdk.model.ServedProfileDecorItem
+import me.meeshy.sdk.model.profile.ProfileSheetUser
 import org.junit.Test
 
 /** Les pages du plein écran audio du fil (iOS `QuotedAudioFullscreen.sources`). */
@@ -55,5 +58,44 @@ class ChatAudioFullscreenSourcesTest {
         assertThat(ChatAudioFullscreenSources.quotedVoiceId(quoting, thread[0])).isEqualTo("a")
         assertThat(ChatAudioFullscreenSources.quotedVoiceId(quoting.copy(replyToAudio = null), thread[3])).isEqualTo("c")
         assertThat(ChatAudioFullscreenSources.quotedVoiceId(null, null)).isNull()
+    }
+
+    private val onde = ServedProfileDecorItem(pack = "contours-animes", item = "onde", origin = PackOrigin.BUILTIN)
+
+    private fun quotingVoiceBy(author: ProfileSheetUser) = voiceMessage("m5", "2026-11-04T08:04:00Z").copy(
+        replyToId = "gone",
+        replyToText = "",
+        replyToSenderName = author.username,
+        replyToAuthor = author,
+        replyToAudio = voice("x"),
+    )
+
+    @Test
+    fun `un vocal cite porte le contour que le fil a deja servi pour son auteur`() {
+        val served = thread.map { if (it.senderId == "nour") it.copy(senderRing = onde) else it }
+        val quoting = quotingVoiceBy(ProfileSheetUser(userId = "nour", username = "nour"))
+
+        val page = ChatAudioFullscreenSources.of("x", served + quoting, "conv", "Famille")!!.single()
+
+        assertThat(page.authorRing).isEqualTo(onde)
+    }
+
+    @Test
+    fun `un vocal cite n emprunte jamais le contour d un autre auteur`() {
+        val served = thread.map { if (it.senderId == "nour") it.copy(senderRing = onde) else it }
+        val quoting = quotingVoiceBy(ProfileSheetUser(userId = "sam", username = "sam"))
+
+        val page = ChatAudioFullscreenSources.of("x", served + quoting, "conv", "Famille")!!.single()
+
+        assertThat(page.authorRing).isNull()
+    }
+
+    @Test
+    fun `les pages du fil gardent le contour servi avec leur bulle`() {
+        val served = thread.map { if (it.messageId == "m4") it.copy(senderRing = onde) else it }
+
+        val pages = ChatAudioFullscreenSources.of("a", served, "conv", "Famille")!!
+
+        assertThat(pages.associate { it.id to it.authorRing }).containsExactly("a", null, "b", null, "c", onde)
     }
 }

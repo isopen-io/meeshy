@@ -59,4 +59,18 @@ public object ImageViewerSource {
             isResident = isFullResident,
         )
     }
+
+    /**
+     * L'URL plein écran est la variante la PLUS NETTE connue : la plus large des variantes servies, à défaut
+     * l'original. Une variante sans largeur ne passe qu'après toutes les mesurées ; une URL vide ne gagne jamais.
+     */
+    public fun sharpest(original: String?, variants: List<ImageVariant>): String? =
+        variants
+            .filter { it.url.isNotEmpty() }
+            .maxWithOrNull(compareBy<ImageVariant> { it.width != null }.thenBy { it.width ?: 0 })
+            ?.url
+            ?: original?.takeIf { it.isNotEmpty() }
 }
+
+/** Une variante servie d'une image (vignette, moyen, grand) avec sa largeur en pixels si la passerelle la donne. */
+public data class ImageVariant(val url: String, val width: Int? = null)

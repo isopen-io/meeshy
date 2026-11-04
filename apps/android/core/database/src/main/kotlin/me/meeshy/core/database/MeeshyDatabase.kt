@@ -5,6 +5,8 @@ import androidx.room.RoomDatabase
 import me.meeshy.core.database.dao.BlockedUserDao
 import me.meeshy.core.database.dao.CacheEntryDao
 import me.meeshy.core.database.dao.CallHistoryDao
+import me.meeshy.core.database.dao.CallNetworkJournalDao
+import me.meeshy.core.database.dao.CallTranscriptDao
 import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.core.database.dao.DirectoryContactDao
 import me.meeshy.core.database.dao.EditRevisionDao
@@ -30,6 +32,8 @@ import me.meeshy.core.database.dao.TusUploadCheckpointDao
 import me.meeshy.core.database.entity.BlockedUserEntity
 import me.meeshy.core.database.entity.CacheEntryEntity
 import me.meeshy.core.database.entity.CallHistoryEntity
+import me.meeshy.core.database.entity.CallNetworkJournalEntity
+import me.meeshy.core.database.entity.CallTranscriptEntity
 import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.core.database.entity.DirectoryContactEntity
 import me.meeshy.core.database.entity.EditRevisionEntity
@@ -91,8 +95,10 @@ import me.meeshy.core.database.entity.TusUploadCheckpointEntity
         MessageTranslationEntity::class,
         MessageTranscriptionEntity::class,
         MessageAudioTranslationEntity::class,
+        CallNetworkJournalEntity::class,
+        CallTranscriptEntity::class,
     ],
-    version = 26,
+    version = 27,
     exportSchema = true,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {
@@ -121,4 +127,6 @@ public abstract class MeeshyDatabase : RoomDatabase() {
     public abstract fun notificationDao(): NotificationDao
     public abstract fun sendAttemptDao(): SendAttemptDao
     public abstract fun messageTranslationDao(): MessageTranslationDao
+    public abstract fun callNetworkJournalDao(): CallNetworkJournalDao
+    public abstract fun callTranscriptDao(): CallTranscriptDao
 }
