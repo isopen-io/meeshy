@@ -67,6 +67,32 @@ internal class CachedMessageUpdater(
     }
 
     /**
+     * Une écriture qui n'enrichit PAS la charge du message mais ses lignes dédiées (traductions, transcriptions) :
+     * [apply] reçoit l'identifiant canonique du message (le serveur dès qu'il est connu) et le message décodé, et rend
+     * `true` quand elle a écrit. La ligne du message n'est alors pas réécrite, seul son `changeVersion` monte : les
+     * observateurs la relisent et la projection superpose les lignes. Sans ligne du message, rien n'est écrit.
+     */
+    suspend fun enrich(
+        ticket: AccountTicket?,
+        messageId: String,
+        apply: suspend (canonicalId: String, message: ApiMessage) -> Boolean,
+    ) {
+        fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = MessageIdReconciliation.locate(database, messageId) ?: return@withTransaction
+                val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
+                if (apply(row.serverId ?: message.id, message)) messageDao.bumpChangeVersion(row.id)
+            }
+        }
+    }
+
+    /** Les identifiants sous lesquels une ligne dédiée de [messageId] peut avoir été rangée : local ET serveur. */
+    suspend fun idsOf(messageId: String): List<String> {
+        val row = MessageIdReconciliation.locate(database, messageId)
+        return listOfNotNull(messageId, row?.id, row?.serverId).distinct()
+    }
+
+    /**
      * Réécrit EN UNE ÉCRITURE toutes les lignes que [select] rend (même transaction, un seul `upsertAll`), sous le
      * compte de [ticket]. [transform] rend le MÊME objet pour une ligne qu'elle ne change pas : elle n'est pas
      * réécrite, donc ne réveille aucun observateur. Une charge illisible est laissée telle quelle. Rend les

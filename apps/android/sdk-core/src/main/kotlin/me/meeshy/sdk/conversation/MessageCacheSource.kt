@@ -52,6 +52,8 @@ internal class MessageCacheSource(
     private val events: MessageEventBuffer? = null,
     /** #14655 — un message chiffré que la page dit parti, ou qu'elle ne sert plus, inscrit son effacement. */
     private val erasures: PlaintextErasureLedger? = null,
+    /** Les traductions déjà reçues, superposées aux messages servis. */
+    private val translations: TranslationLayer? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
@@ -84,7 +86,8 @@ internal class MessageCacheSource(
                 if (rows.isEmpty() && syncedAt == null) {
                     null
                 } else {
-                    rows.asReversed().map { it.toLocalMessage() }
+                    translations?.ensureLoaded(rows.map { it.serverId ?: it.id })
+                    rows.asReversed().map { row -> row.toLocalMessage().let { translations?.project(it) ?: it } }
                 }
             }
         }

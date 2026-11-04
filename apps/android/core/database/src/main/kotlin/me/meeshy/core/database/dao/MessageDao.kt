@@ -248,6 +248,10 @@ public interface MessageDao {
     @Query("SELECT id FROM messages WHERE sendState = :sendState")
     public suspend fun idsInSendState(sendState: String): List<String>
 
+    /** Réveille les observateurs d'un message dont seule une ligne dédiée (traduction, transcription) a changé. */
+    @Query("UPDATE messages SET changeVersion = changeVersion + 1 WHERE id = :id")
+    public suspend fun bumpChangeVersion(id: String)
+
     @Query("UPDATE messages SET sendState = :sendState, changeVersion = changeVersion + 1 WHERE id = :id")
     public suspend fun updateSendState(id: String, sendState: String?)
 

@@ -74,7 +74,7 @@ class MessageRepository internal constructor(
         /** L'index des médias de la conversation suit les messages supprimés. */
         mediaIndex: ConversationMediaHubIndex? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures),
+        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures, TranslationLayer.of(database)),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews = previews, listPreviews = listPreviews),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
@@ -83,8 +83,9 @@ class MessageRepository internal constructor(
             EditRevisionLedger(database.editRevisionDao(), clock, fence),
             events,
             mediaIndex = mediaIndex,
+            translations = TranslationLayer.of(database),
         ),
-        enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi),
+        enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi, TranslationLayer.of(database), clock),
         receipts = MessageReceiptWriter(database, messageDao, fence),
         erasures = erasures,
         searches = MessageSearchReader(messageApi, database, clock, fence, regime, events, erasures),

@@ -87,6 +87,24 @@ internal object CacheTables {
         createSql = "CREATE TABLE IF NOT EXISTS `send_attempts` (`localId` TEXT NOT NULL, `attemptNumber` INTEGER NOT NULL, `transport` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `finishedAt` INTEGER, `outcome` TEXT NOT NULL, `errorMessage` TEXT, PRIMARY KEY(`localId`, `attemptNumber`))",
     )
 
+    /** Version 26 : les traductions de texte déjà reçues, uniques par (message, langue). */
+    val messageTranslations = CacheTableDefinition(
+        name = "message_translations",
+        createSql = "CREATE TABLE IF NOT EXISTS `message_translations` (`messageId` TEXT NOT NULL, `language` TEXT NOT NULL, `content` TEXT NOT NULL, `sourceLanguage` TEXT NOT NULL, `model` TEXT, `confidence` REAL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`messageId`, `language`))",
+    )
+
+    /** Version 26 : les transcriptions déjà reçues, uniques par (message, pièce jointe). */
+    val messageTranscriptions = CacheTableDefinition(
+        name = "message_transcriptions",
+        createSql = "CREATE TABLE IF NOT EXISTS `message_transcriptions` (`messageId` TEXT NOT NULL, `attachmentId` TEXT NOT NULL, `text` TEXT NOT NULL, `language` TEXT, `confidence` REAL, `durationMs` INTEGER, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`messageId`, `attachmentId`))",
+    )
+
+    /** Version 26 : les pistes audio traduites déjà reçues, uniques par (message, pièce jointe, langue). */
+    val messageAudioTranslations = CacheTableDefinition(
+        name = "message_audio_translations",
+        createSql = "CREATE TABLE IF NOT EXISTS `message_audio_translations` (`messageId` TEXT NOT NULL, `attachmentId` TEXT NOT NULL, `language` TEXT NOT NULL, `url` TEXT NOT NULL, `transcription` TEXT NOT NULL, `durationMs` INTEGER, `format` TEXT, `cloned` INTEGER NOT NULL, `quality` REAL, `voiceModelId` TEXT, `ttsModel` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`messageId`, `attachmentId`, `language`))",
+    )
+
     /** The columns version 20 appended to `messages`, exactly as Room declares them. */
     val messageColumnsAddedIn20: List<String> = listOf(
         "`serverId` TEXT",
@@ -156,6 +174,9 @@ internal object CacheTables {
         pendingIds,
         notifications,
         sendAttempts,
+        messageTranslations,
+        messageTranscriptions,
+        messageAudioTranslations,
     )
 
     val names: Set<String> = all.map { it.name }.toSet()
