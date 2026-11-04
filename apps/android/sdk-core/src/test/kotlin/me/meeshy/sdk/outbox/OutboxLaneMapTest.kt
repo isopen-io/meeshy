@@ -22,6 +22,13 @@ class OutboxLaneMapTest {
     }
 
     @Test
+    fun `a content capture declaration has its own drained capture lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.REPORT_CONTENT_CAPTURE))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.CAPTURE))
+        assertThat(OutboxLaneMap.sharedDrainLanes).contains(OutboxLanes.CAPTURE)
+    }
+
+    @Test
     fun `add and remove reaction share the reaction lane`() {
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.ADD_REACTION))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.REACTION))

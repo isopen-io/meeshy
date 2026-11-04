@@ -28,6 +28,7 @@ public object OutboxRowFacts {
         OutboxKind.READ_RECEIPT, OutboxKind.MARK_UNREAD -> other("markAsRead")
         OutboxKind.REPORT_ATTACHMENT_STATUS -> other("reportAttachmentStatus")
         OutboxKind.CONSUME_AFTER_READ, OutboxKind.CONSUME_VIEW_ONCE -> other("consumeAfterRead")
+        OutboxKind.REPORT_CONTENT_CAPTURE -> other("reportContentCapture")
         OutboxKind.UPDATE_CONVERSATION_PREFS, OutboxKind.PIN_MESSAGE, OutboxKind.UNPIN_MESSAGE -> other("updateConversation")
         OutboxKind.UPDATE_PROFILE -> other("updateProfile")
         OutboxKind.UPDATE_SETTINGS,
