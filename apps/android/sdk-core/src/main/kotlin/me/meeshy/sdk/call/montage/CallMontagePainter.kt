@@ -4,7 +4,10 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Path
 import android.graphics.RectF
 import kotlin.math.max
@@ -25,8 +28,11 @@ import me.meeshy.sdk.model.call.montage.CallMontageShape
 import me.meeshy.sdk.model.call.montage.CallMontageSlot
 import me.meeshy.sdk.model.call.montage.CallMontageStyle
 
-/** Une personne d'un montage : son identifiant, son nom, son image (`null` ⇒ dégradé et initiale). */
-class CallMontagePhoto(val id: String, val name: String, val image: Bitmap?)
+/**
+ * Une personne d'un montage : son identifiant, son nom, son image (`null` ⇒ dégradé et initiale).
+ * [hole] non nul : peint, ce portrait est un TROU qui relève sa case (#9348) — `null` pour les appels.
+ */
+class CallMontagePhoto(val id: String, val name: String, val image: Bitmap?, val hole: CallMontageHole? = null)
 
 /** Une case et la personne qu'elle porte. */
 internal typealias CallMontagePlaced = List<Pair<CallMontageSlot, CallMontagePhoto>>
@@ -77,12 +83,21 @@ object CallMontagePainter {
         if (slot.rotation != 0.0 && slot.shape != CallMontageShape.RECTANGLE) {
             canvas.rotate(slot.rotation.toFloat(), slot.frame.midX.toFloat(), slot.frame.midY.toFloat())
         }
-        canvas.clipPath(CallMontageInk.path(slot))
+        val path = CallMontageInk.path(slot)
+        photo.hole?.let { hole ->
+            hole.record(path, slot.frame, Matrix().also { canvas.getMatrix(it) })
+            canvas.drawPath(path, clearPaint)
+            canvas.restore()
+            return
+        }
+        canvas.clipPath(path)
         val image = photo.image?.takeIf { !it.isRecycled && it.width > 0 && it.height > 0 }
         if (image != null) drawImage(canvas, image, slot.frame, if (monochrome) monochromePaint() else null)
         else drawPlaceholder(canvas, photo, slot.frame)
         canvas.restore()
     }
+
+    private val clearPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR) }
 
     private fun monochromePaint() = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply {
         colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })

@@ -54,6 +54,25 @@ class EphemeralApplierTest {
     }
 
     @Test
+    fun `a consumption by the reader seals the stored content and attachments, the others' leaves them`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+
+        deliver(harness, MessageConsumedEvent("m1", "c1", userId = "someone", viewOnceCount = 1))
+        assertThat(harness.cachedMessage("m1").content).isEqualTo("secret")
+        assertThat(harness.cachedMessage("m1").attachments.single().fileUrl).isEqualTo("https://cdn/a.jpg")
+
+        deliver(harness, MessageConsumedEvent("m1", "c1", userId = "me", viewOnceCount = 2))
+        val sealed = harness.cachedMessage("m1")
+        assertThat(sealed.consumedByMe).isTrue()
+        assertThat(sealed.content).isEmpty()
+        assertThat(sealed.translations).isEmpty()
+        assertThat(sealed.attachments.single().fileUrl).isNull()
+
+        deliver(harness, MessageConsumedEvent("m1", "c1", userId = "me", viewOnceCount = 2))
+        assertThat(harness.cachedMessage("m1")).isEqualTo(sealed)
+    }
+
+    @Test
     fun `a purge empties the content and keeps the bubble even with the conversation closed`() = runHarnessTest { harness ->
         harness.seedSynced(message())
 

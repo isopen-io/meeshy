@@ -60,13 +60,24 @@ object ConversationEventDeltas {
 
     /**
      * Une vue unique ouverte par quelqu'un (#7579) : seul le compteur bouge chez les autres ; quand
-     * c'est CE lecteur qui l'a ouverte (autre appareil), la bulle passe à « déjà ouverte ».
+     * c'est CE lecteur qui l'a ouverte (autre appareil), la bulle passe à « déjà ouverte » ET se scelle
+     * comme à la purge ([sealedAsOpened], iso iOS `sealAsOpenedViewOnce`, #15897) : rien du contenu ne
+     * reste lisible en Room une fois la vue consommée par soi. Un `consumed` d'un autre ne vide rien.
      */
     fun consumed(message: ApiMessage, event: MessageConsumedEvent, viewerId: String?): ApiMessage {
         val openedByViewer = viewerId != null && (event.userId == viewerId || event.participantId == viewerId)
-        val nextConsumedByMe = if (openedByViewer) true else message.consumedByMe
-        if (message.viewOnceCount == event.viewOnceCount && message.consumedByMe == nextConsumedByMe) return message
-        return message.copy(viewOnceCount = event.viewOnceCount, consumedByMe = nextConsumedByMe)
+        val base = if (openedByViewer) sealedAsOpened(message) else message
+        if (base.viewOnceCount == event.viewOnceCount) return base
+        return base.copy(viewOnceCount = event.viewOnceCount)
+    }
+
+    /**
+     * Ce lecteur vient d'ouvrir (et de refermer) la vue unique : même scellement que [consumed] par soi, sans attendre
+     * l'écho du serveur. Idempotent.
+     */
+    fun sealedAsOpened(message: ApiMessage): ApiMessage {
+        val purged = viewOncePurged(message)
+        return if (purged.consumedByMe == true) purged else purged.copy(consumedByMe = true)
     }
 
     /**

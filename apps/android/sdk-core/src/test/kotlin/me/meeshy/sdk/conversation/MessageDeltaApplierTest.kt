@@ -153,6 +153,20 @@ class MessageDeltaApplierTest {
     }
 
     @Test
+    fun `closing a view-once locally seals the row like a consumption by the reader`() = runHarnessTest { harness ->
+        harness.seedSynced(message())
+
+        applier(harness).erasePlaintexts(listOf("m1"))
+        applier(harness).erasePlaintexts(listOf("m1"))
+
+        val row = harness.cachedMessage("m1")
+        assertThat(row.consumedByMe).isTrue()
+        assertThat(row.content).isEmpty()
+        assertThat(row.translations).isEmpty()
+        assertThat(row.attachments.all { it.fileUrl == null }).isTrue()
+    }
+
+    @Test
     fun `a view-once purge keeps the bubble but drops its content`() = runHarnessTest { harness ->
         harness.seedSynced(message())
 
