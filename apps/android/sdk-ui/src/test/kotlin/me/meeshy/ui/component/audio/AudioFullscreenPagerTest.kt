@@ -3,6 +3,7 @@ package me.meeshy.ui.component.audio
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
@@ -51,6 +52,15 @@ class AudioFullscreenPagerTest {
         while (compose.mainClock.currentTime < until) compose.mainClock.advanceTimeByFrame()
     }
 
+    /** Image par image, jusqu'à ce que la page de [author] entre à l'écran (le défilement vient de partir). */
+    private fun untilShown(author: String) {
+        var frames = 0
+        while (compose.onAllNodesWithContentDescription(author).fetchSemanticsNodes().isEmpty() && frames < MAX_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            frames += 1
+        }
+    }
+
     private fun next(author: String) {
         val label = context.getString(R.string.feed_carousel_next)
         val action = compose.onNodeWithContentDescription(author).fetchSemanticsNode()
@@ -85,7 +95,7 @@ class AudioFullscreenPagerTest {
         show(player, start = "a")
 
         next("Ada")
-        compose.mainClock.advanceTimeByFrame()
+        untilShown("Bea")
         next("Bea")
         elapse(2_000)
 
@@ -104,5 +114,9 @@ class AudioFullscreenPagerTest {
 
         assertThat(player.replaced.single()).containsExactly("tail-after-a")
         assertThat(player.mutablePlayback.value.isPlaying).isTrue()
+    }
+
+    private companion object {
+        const val MAX_FRAMES = 6
     }
 }
