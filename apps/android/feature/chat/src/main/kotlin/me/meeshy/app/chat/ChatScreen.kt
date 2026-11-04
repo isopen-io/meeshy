@@ -107,7 +107,7 @@ fun ChatScreen(
     val engagement = remember(engagementSnapshot, engagementController) {
         ChatEngagementBinding(engagementSnapshot, engagementController?.sent ?: NO_SENT)
     }
-    val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>() }
+    val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>()?.let(::ThreadReadingModeViewModel) }
     val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
     val summaryController = remember(viewModel) { viewModel.controllers.find<LivingSummaryController>() }
     val summaryBinding = remember(summaryController) {
