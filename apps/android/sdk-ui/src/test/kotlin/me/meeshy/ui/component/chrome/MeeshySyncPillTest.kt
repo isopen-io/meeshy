@@ -7,8 +7,8 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
-import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTouchHeightIsEqualTo
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -90,10 +90,11 @@ class MeeshySyncPillTest {
 
     @Test
     fun `la cible tactile fait 48 dp malgre la capsule de 22 dp`() {
-        // La géométrie AU REPOS : sans mouvement réduit, l'entrée part d'une échelle de 0,85 et l'horloge figée du
-        // témoin mesurerait la capsule en pleine animation (≈ 43 dp), pas la cible que le doigt trouvera.
+        // `minimumInteractiveComponentSize()` réserve la CIBLE TACTILE de 48 dp ; les bornes de mise en page du nœud
+        // restent celles du contenu (comme les témoins de Material 3 : `assertTouchHeightIsEqualTo`, jamais la hauteur).
+        // Mouvement réduit : l'entrée n'a pas d'échelle, la cible se mesure au repos.
         show(row("a", "Envoi de message"), reduceMotion = true)
-        compose.onNodeWithContentDescription("Envoi de message").assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithContentDescription("Envoi de message").assertTouchHeightIsEqualTo(48.dp)
     }
 
     @Test

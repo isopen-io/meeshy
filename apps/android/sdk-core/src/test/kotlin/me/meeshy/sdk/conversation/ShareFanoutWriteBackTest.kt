@@ -13,8 +13,10 @@ class ShareFanoutWriteBackTest {
         SendMessageRequest(
             content = "x",
             originalLanguage = "fr",
-            clientMessageId = "cmid",
-            copyAttachmentsFromMessageId = copyFrom, attachmentIds = attachments),
+            clientMessageId = "cid_target",
+            copyAttachmentsFromMessageId = copyFrom,
+            attachmentIds = attachments,
+        ),
     )
 
     @Test
