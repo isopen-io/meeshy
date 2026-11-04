@@ -595,6 +595,7 @@ internal class ChatComposerController(
                 originalName = name,
                 mimeType = mime,
                 fileSize = upload.sizeBytes.toInt(),
+                fileUrl = pendingPreviews.keepPlayable(cmid, upload, effects),
                 thumbnailUrl = pendingPreviews.keep(cmid, item.thumbnailPath, effects),
                 width = item.width,
                 height = item.height,

@@ -89,6 +89,15 @@ public enum class OutboxKind {
      * supplantent jamais. Un seul type pour les sept catégories (iOS `updateSettings`).
      */
     UPDATE_PREFERENCE_CATEGORY,
+
+    /** Quitter une conversation (#15920) : la ligne tombe à l'instant, la requête part au retour du réseau, jamais fusionnée. */
+    LEAVE_CONVERSATION,
+
+    /** « Supprimer pour moi » une conversation (#15920) : retrait optimiste, rejeu hors ligne, jamais fusionné. */
+    DELETE_CONVERSATION_FOR_ME,
+
+    /** Terminer une conversation pour tous (#15920) : retrait optimiste, rejeu hors ligne, jamais fusionné. */
+    DELETE_CONVERSATION_FOR_ALL,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -135,6 +144,9 @@ public object OutboxLanes {
     public const val COMMENT: String = "comment"
     public const val CONSUMPTION: String = "consumption"
     public const val CONVERSATION: String = "conversation"
+
+    /** Quitter / supprimer une conversation (#15920) : une lane à elle, un retrait coincé ne retient ni une création ni un renommage. */
+    public const val CONVERSATION_STATE: String = "conversationState"
 
     /** Les « vus » de story : une lane à eux, pour qu'un rapport coincé ne retienne jamais une publication. */
     public const val STORY_VIEW: String = "storyView"
@@ -246,6 +258,10 @@ public object OutboxLaneMap {
         OutboxKind.TOGGLE_LIKE_COMMENT,
         -> OutboxLaneAssignment.Shared(OutboxLanes.COMMENT)
         OutboxKind.UPDATE_PREFERENCE_CATEGORY -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.LEAVE_CONVERSATION,
+        OutboxKind.DELETE_CONVERSATION_FOR_ME,
+        OutboxKind.DELETE_CONVERSATION_FOR_ALL,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION_STATE)
     }
 
     /**

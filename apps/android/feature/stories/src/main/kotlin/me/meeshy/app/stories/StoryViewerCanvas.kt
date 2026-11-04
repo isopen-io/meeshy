@@ -3,6 +3,11 @@ package me.meeshy.app.stories
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import me.meeshy.sdk.model.StoryAudioMuteState
 
 /**
  * Propriétaire : lot story-viewer-decomposition-and-nav-graph. Les couches de la scène elle-même : fond, objets
@@ -18,6 +23,7 @@ internal fun StoryViewerCanvas(
     lap: Int,
     viewModel: StoryViewerViewModel,
 ) {
+    var trackMute by remember(slide.id) { mutableStateOf(StoryAudioMuteState()) }
     StorySceneBackground(
         slide = slide,
         playing = playing,
@@ -38,6 +44,18 @@ internal fun StoryViewerCanvas(
         onAudioFocusLost = viewModel.interruption::onFocusLost,
         onAudioFocusGained = viewModel.interruption::onFocusGained,
         onAudioFocusLostForGood = viewModel.interruption::onFocusLostForGood,
+        mutedTracks = trackMute.mutedTrackIds,
+        onToggleTrack = { id -> trackMute = trackMute.toggleTrack(id) },
     )
-    StorySceneAudio(slide = slide, playing = playing, muted = muted, lap = lap)
+    StorySceneAudio(
+        slide = slide,
+        playing = playing,
+        muted = muted,
+        elapsedSeconds = { progress.value * slideDurationMs / 1000.0 },
+        lap = lap,
+        mutedTracks = trackMute.mutedTrackIds,
+        onAudioFocusLost = viewModel.interruption::onFocusLost,
+        onAudioFocusGained = viewModel.interruption::onFocusGained,
+        onAudioFocusLostForGood = viewModel.interruption::onFocusLostForGood,
+    )
 }

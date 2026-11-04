@@ -41,6 +41,9 @@ class PostDetailSceneSectionTest {
         layout = MosaicLayoutMode.CAROUSEL,
         accentHex = "6366F1",
         offersSound = offersSound,
+        // Une scène qui offre du son est cinématique (SceneMotion.isCinematic : un son de fond compte) ; depuis
+        // c0ad210b3f seule une scène qui BOUGE reçoit l'ordre de jouer.
+        moving = listOf(offersSound),
         soundCredit = if (offersSound) SceneSoundCredit.Original else SceneSoundCredit.None,
     )
 

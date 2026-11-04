@@ -26,7 +26,7 @@ class ConversationRealtimeApplier @Inject constructor(
     override fun subscribe(registrar: RelayRegistrar) {
         val lane = OrderedEventLane.Family.MESSAGES
         registrar.relay(socket.conversationUpdated, lane) { events.applyUpdated(it) }
-        registrar.relay(socket.unreadUpdated, lane) { patcher.applyUnread(it.conversationId, it.unreadCount) }
+        registrar.relay(socket.unreadUpdated, lane) { patcher.applyUnread(it.conversationId, it.unreadCount, it.bridge) }
         registrar.relay(socket.conversationRestored, lane) { events.applyRestored(it) }
         registrar.relay(socket.conversationDeleted, lane) { purge(ConversationFold.removedBy(it)) }
         registrar.relay(socket.conversationClosed, lane) { purge(ConversationFold.removedBy(it)) }

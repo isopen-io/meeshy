@@ -492,6 +492,7 @@ internal class ShareSheetViewModel @Inject constructor(
                         originalName = item.fileName,
                         mimeType = item.mimeType,
                         fileSize = item.sizeBytes.toInt(),
+                        fileUrl = previews.keepPlayable(uploadCmid, item, effects),
                         thumbnailUrl = preview?.thumbnailUrl,
                         width = preview?.width,
                         height = preview?.height,

@@ -71,6 +71,8 @@
     <string name="call_detail_type">Type</string>
     <string name="call_detail_type_audio">Appel vocal</string>
     <string name="call_detail_type_video">Appel vidéo</string>
+    <string name="call_effects_companions_more">%1$d autres participants</string>
+    <string name="call_effects_companions_move">Changer de côté</string>
     <string name="call_ended">Appel terminé</string>
     <string name="call_ended_connection_lost">Connexion perdue</string>
     <string name="call_ended_declined">Appel refusé</string>
