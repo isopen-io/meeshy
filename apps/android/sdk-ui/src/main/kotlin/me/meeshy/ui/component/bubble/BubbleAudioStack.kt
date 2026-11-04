@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.AudioPlayerChrome
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.playback.VoiceStackPlan
 import me.meeshy.sdk.model.playback.VoiceTrackLanguages
+import me.meeshy.sdk.model.voice.shouldShowConsentNotice
 import me.meeshy.ui.R
 import me.meeshy.ui.component.audio.AudioConsentNotice
 import me.meeshy.ui.theme.MeeshySpacing
@@ -85,8 +86,9 @@ public fun BubbleAudioStack(
     }
 }
 
-/** Le consentement vocal manquant ne se propose que sous un message qui porte un audio (jamais seul). */
-internal fun BubbleContent.showsVoiceConsentNotice(): Boolean = voiceConsentMissing && audios.isNotEmpty()
+/** Le consentement vocal manquant ne se propose que sous MON message qui porte un audio ([shouldShowConsentNotice]). */
+internal fun BubbleContent.showsVoiceConsentNotice(): Boolean =
+    audios.isNotEmpty() && shouldShowConsentNotice(isOwn = isOutgoing, voiceConsentMissing = voiceConsentMissing)
 
 /**
  * Les drapeaux du pied UNIQUE d'une pile (iOS `AudioStackView.sharedFooterModel`) : l'union ordonnée des langues de
