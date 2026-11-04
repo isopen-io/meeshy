@@ -138,4 +138,32 @@ class AudioQueueAppendTrackerTest {
 
         assertThat(arrivals).isEmpty()
     }
+
+    @Test
+    fun `une arrivee livree apres une plus recente rejoint quand meme la file`() {
+        val (_, seeded) = AudioQueueAppendTracker().step(listOf(message("m1", at = 10L, audios = arrayOf("a"))))
+        val (_, afterRecent) = seeded.step(listOf(message("m1", at = 10L, audios = arrayOf("a")), message("m3", at = 30L, audios = arrayOf("c"))))
+
+        val (arrivals, _) = afterRecent.step(
+            listOf(
+                message("m1", at = 10L, audios = arrayOf("a")),
+                message("m2", at = 20L, audios = arrayOf("b")),
+                message("m3", at = 30L, audios = arrayOf("c")),
+            ),
+        )
+
+        assertThat(ids(arrivals)).containsExactly("b")
+    }
+
+    @Test
+    fun `mon message horodate par une horloge en avance ne cache pas l'arrivee d'un tiers`() {
+        val (_, seeded) = AudioQueueAppendTracker().step(listOf(message("m1", at = 10L, audios = arrayOf("a"))))
+        val (_, afterMine) = seeded.step(listOf(message("m1", at = 10L, audios = arrayOf("a")), message("mine", sender = "me", at = 90L)))
+
+        val (arrivals, _) = afterMine.step(
+            listOf(message("m1", at = 10L, audios = arrayOf("a")), message("mine", sender = "me", at = 90L), message("m2", at = 40L, audios = arrayOf("b"))),
+        )
+
+        assertThat(ids(arrivals)).containsExactly("b")
+    }
 }
