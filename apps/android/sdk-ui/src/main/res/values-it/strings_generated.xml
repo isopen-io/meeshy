@@ -48,6 +48,7 @@
     <string name="audio_editor_undo">Annulla</string>
     <string name="audio_editor_use">Usa l\'audio</string>
     <string name="audio_editor_volume_normal">Normale</string>
+    <string name="audio_fullscreen_airplay">Trasmetti a un dispositivo</string>
     <string name="audio_fullscreen_dial">Posizione nel messaggio vocale</string>
     <string name="audio_recorder_micDenied">Permesso microfono negato</string>
     <string name="audio_recorder_micDeniedSettings">Microfono negato — consentilo in Impostazioni</string>
@@ -193,6 +194,8 @@
     <string name="engagement_pill_a11y_streak_days_other">%1$d giorni</string>
     <string name="engagement_pill_a11y_total_one">%1$s scintilla guadagnata in questa conversazione</string>
     <string name="engagement_pill_a11y_total_other">%1$s scintille guadagnate in questa conversazione</string>
+    <string name="feed_carousel_next">Media successivo</string>
+    <string name="feed_carousel_previous">Media precedente</string>
     <string name="focal_call_audio">Chiamata vocale</string>
     <string name="focal_call_audio_failed">Chiamata audio interrotta</string>
     <string name="focal_call_audio_missed">Chiamata vocale persa</string>
@@ -300,11 +303,13 @@
     <string name="media_crop_a11y_move_up">Sposta in alto</string>
     <string name="media_crop_a11y_position">Orizzontale %1$s, verticale %2$s</string>
     <string name="media_crop_a11y_size">Larghezza %1$s, altezza %2$s</string>
+    <string name="media_download">Scarica</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">File</string>
     <string name="media_label_location">Posizione</string>
     <string name="media_label_photo">Foto</string>
     <string name="media_label_video">Video</string>
+    <string name="media_pauseAudio">Metti in pausa</string>
     <string name="media_permission_camera_denied_message">Fotocamera negata — tocca per aprire Impostazioni</string>
     <string name="media_permission_camera_denied_title">Accesso alla fotocamera negato</string>
     <string name="media_permission_close">Chiudi</string>
@@ -316,6 +321,9 @@
     <string name="media_permission_photos_add_denied_message">Salvataggio in Foto negato — tocca per aprire Impostazioni</string>
     <string name="media_permission_photos_denied_message">Accesso alle foto negato — tocca per aprire Impostazioni</string>
     <string name="media_permission_photos_denied_title">Accesso alle foto negato</string>
+    <string name="media_playAudio">Riproduci l\'audio</string>
+    <string name="media_skipBack10s">Indietro di 10 secondi</string>
+    <string name="media_skipForward10s">Avanti di 10 secondi</string>
     <string name="media_summary_file">📎 File</string>
     <string name="media_summary_location">📍 Posizione</string>
     <string name="media_summary_photo">📷 Foto</string>
