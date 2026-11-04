@@ -9,11 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -51,6 +46,7 @@ import me.meeshy.sdk.model.displayLabel
 import me.meeshy.sdk.model.role
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -97,11 +93,11 @@ internal fun MemberManagementSection(
                 value = query,
                 onValueChange = onQueryChange,
                 singleLine = true,
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                leadingIcon = { Icon(MeeshyIcons.Search, contentDescription = null) },
                 trailingIcon = if (query.isEmpty()) null else {
                     {
                         IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_search_clear))
+                            Icon(MeeshyIcons.Close, contentDescription = stringResource(R.string.chat_search_clear))
                         }
                     }
                 },
@@ -139,7 +135,7 @@ internal fun MemberManagementSection(
                     onClick = { showAdd = true },
                     modifier = Modifier.fillMaxWidth().semantics { contentDescription = addDescription },
                 ) {
-                    Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp), tint = sectionColor)
+                    Icon(MeeshyIcons.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp), tint = sectionColor)
                     Text(
                         text = stringResource(R.string.add_participant_title),
                         color = sectionColor,
@@ -242,7 +238,7 @@ private fun ManagedMemberRow(
             val description = stringResource(R.string.member_management_options_a11y, name)
             Box {
                 IconButton(onClick = { open = true }, modifier = Modifier.semantics { contentDescription = description }) {
-                    Icon(Icons.Filled.MoreHoriz, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary)
+                    Icon(MeeshyIcons.MoreHorizontal, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary)
                 }
                 DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                     actions.forEach { action ->
