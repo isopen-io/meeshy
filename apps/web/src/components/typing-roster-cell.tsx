@@ -64,8 +64,7 @@ import { interfaceTypingFormatter, typingAnnouncement, typingLead } from '@/lib/
  * le même nœud, seule paire qu'un lecteur d'écran restitue réellement.
  */
 /**
- * LA CELLULE DE FRAPPE NE PORTE NI PRÉSENCE NI DÉCOR (#16114, directive porteur
- * du 2026-11-04) : les points qui bougent disent déjà que la personne est là —
+ * LA CELLULE DE FRAPPE NE PORTE NI PRÉSENCE NI DÉCOR (#16114) : les points qui bougent disent déjà que la personne est là —
  * aucune pastille « en ligne » ni « ici » ne s'y ajoute. Et c'est la SEULE
  * surface où le contour équipé se pose sans ses films illustrés (`ringDecor
  * ={false}`) : partout ailleurs, le décor s'affiche entier.

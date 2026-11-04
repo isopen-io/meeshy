@@ -59,7 +59,7 @@ internal fun ChatHeaderSubtitleRow(subtitle: ChatHeaderSubtitle, accentColor: Co
  * "+N" pill for the overflow. Each chip carries a surface-coloured ring so the overlap
  * reads cleanly; avatars degrade to accent-tinted initials.
  *
- * Ni présence ni décor (#16114, directive porteur du 2026-11-04) : celui qui écrit n'y porte aucune pastille
+ * Ni présence ni décor (#16114) : celui qui écrit n'y porte aucune pastille
  * « en ligne », et c'est la SEULE surface où le décor illustré d'un profil ne s'affiche pas en entier.
  */
 @Composable

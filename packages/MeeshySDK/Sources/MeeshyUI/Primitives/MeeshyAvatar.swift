@@ -436,8 +436,7 @@ public struct MeeshyAvatar: View {
         .avatarRingWithin(
             ringDesign,
             footprint: context.size,
-            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize, decorRoom: ringDecorRoom,
-            decor: ringShowsDecor
+            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize, decorRoom: ringDecorRoom, decor: ringShowsDecor
         )
         .overlay(alignment: .bottomTrailing) {
             if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
