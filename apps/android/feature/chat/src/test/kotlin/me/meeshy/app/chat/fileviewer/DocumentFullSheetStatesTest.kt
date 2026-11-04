@@ -1,10 +1,14 @@
 package me.meeshy.app.chat.fileviewer
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -35,7 +39,9 @@ class DocumentFullSheetStatesTest {
     fun `l'apercu indisponible dit le nom et le poids du document`() {
         compose.setContent { MeeshyTheme { DocumentViewerSheet(request(size = 2048), isPdf = false, accent = Color.Blue, onDismiss = {}) } }
 
-        compose.onNodeWithText("rapport.docx").assertIsDisplayed()
+        compose.onAllNodesWithText("rapport.docx").assertCountEquals(2)
+        compose.onAllNodesWithText("rapport.docx").onFirst().assertIsDisplayed()
+        compose.onAllNodesWithText("rapport.docx").onLast().assertIsDisplayed()
         compose.onNodeWithText("Preview unavailable").assertIsDisplayed()
         compose.onNode(hasText("KB", substring = true, ignoreCase = true)).assertIsDisplayed()
     }
