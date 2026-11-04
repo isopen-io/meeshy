@@ -18,7 +18,7 @@ data class ConversationRowNavigation(
     /** L'appel audio du pair d'un direct, composé tout de suite ; `null` = « Appeler » absent. */
     val onCall: ((conversationId: String, peerName: String) -> Unit)? = null,
     /** La fiche de la conversation HORS du fil (#15989), ouverte par son avatar ; `null` = l'avatar reste à la ligne. */
-    val onViewConversationInfo: ((conversation: ApiConversation) -> Unit)? = null,
+    val onViewConversationInfo: ((conversation: ApiConversation, readerId: String?) -> Unit)? = null,
     /** La story du pair d'un direct, ouverte par son anneau ; `null` = l'anneau ne s'ouvre pas. */
     val onViewStory: ((userId: String) -> Unit)? = null,
     /** La bulle d'humeur du pair d'un direct, ouverte par son badge ; `null` = le badge ne réagit pas. */
@@ -32,9 +32,14 @@ data class ConversationRowNavigation(
 }
 
 /** Le toucher d'avatar résolu par le ViewModel, remis à sa destination : jamais le fil (#15989). */
-internal fun ConversationRowNavigation.open(effect: ConversationAvatarEffect, conversationOf: (String) -> ApiConversation?) {
+internal fun ConversationRowNavigation.open(
+    effect: ConversationAvatarEffect,
+    readerId: String?,
+    conversationOf: (String) -> ApiConversation?,
+) {
     when (effect) {
         is ConversationAvatarEffect.OpenProfile -> onViewProfile?.invoke(effect.userId)
-        is ConversationAvatarEffect.OpenInfo -> conversationOf(effect.conversationId)?.let { onViewConversationInfo?.invoke(it) }
+        is ConversationAvatarEffect.OpenInfo ->
+            conversationOf(effect.conversationId)?.let { onViewConversationInfo?.invoke(it, readerId) }
     }
 }
