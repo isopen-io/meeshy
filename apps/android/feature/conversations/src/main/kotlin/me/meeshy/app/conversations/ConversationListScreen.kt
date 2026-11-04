@@ -68,6 +68,10 @@ fun ConversationListScreen(
     LaunchedEffect(viewModel) {
         viewModel.openConversation.collect { onConversationClick(it) }
     }
+    val avatarNavigation by rememberUpdatedState(rowNavigation)
+    LaunchedEffect(viewModel) {
+        viewModel.avatarEffects.collect { effect -> avatarNavigation.open(effect) }
+    }
 
     val density = LocalDensity.current
     val collapseThresholdPx = remember(density) {

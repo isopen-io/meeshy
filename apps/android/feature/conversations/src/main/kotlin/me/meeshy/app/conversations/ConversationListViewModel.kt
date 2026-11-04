@@ -311,6 +311,8 @@ class ConversationListViewModel @Inject constructor(
             ConversationAvatarRoute.Info, ConversationAvatarRoute.UnlockThenInfo -> lock.onAvatarInfo(id)
         }
     }
+    /** « Infos de la conversation » du menu d'avatar : les détails, derrière le code si verrouillée. */
+    fun onAvatarInfo(id: String) = lock.onAvatarInfo(id)
     fun onLockToggle(id: String) = lock.onLockToggle(id)
     fun onUnlockAll() = lock.onUnlockAll()
     fun onChangeMasterPin() = lock.onChangeMasterPin()
