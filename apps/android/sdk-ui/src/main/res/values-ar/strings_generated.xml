@@ -48,6 +48,7 @@
     <string name="audio_editor_undo">تراجع</string>
     <string name="audio_editor_use">استخدام الصوت</string>
     <string name="audio_editor_volume_normal">عادي</string>
+    <string name="audio_fullscreen_airplay">البث إلى جهاز</string>
     <string name="audio_fullscreen_dial">الموضع في الرسالة الصوتية</string>
     <string name="audio_recorder_micDenied">تم رفض إذن الميكروفون</string>
     <string name="audio_recorder_micDeniedSettings">تم رفض الميكروفون — اسمح به في الإعدادات</string>
@@ -199,6 +200,8 @@
     <string name="engagement_pill_a11y_streak_days_other">%1$d أيام</string>
     <string name="engagement_pill_a11y_total_one">%1$s شرارة مكتسبة في هذه المحادثة</string>
     <string name="engagement_pill_a11y_total_other">%1$s شرارات مكتسبة في هذه المحادثة</string>
+    <string name="feed_carousel_next">الوسائط التالية</string>
+    <string name="feed_carousel_previous">الوسائط السابقة</string>
     <string name="focal_call_audio">مكالمة صوتية</string>
     <string name="focal_call_audio_failed">انقطعت المكالمة الصوتية</string>
     <string name="focal_call_audio_missed">مكالمة صوتية فائتة</string>
@@ -286,6 +289,7 @@
     <string name="media_audio_play">تشغيل الصوت</string>
     <string name="media_audio_speed_cycle">سرعة التشغيل %1$s</string>
     <string name="media_audio_transcribe">نسخ نصي</string>
+    <string name="media_audio_transcribing">جارٍ النسخ النصي</string>
     <string name="media_caption_see_less">عرض أقل</string>
     <string name="media_caption_see_less_hint">يطوي الشرح</string>
     <string name="media_caption_see_more">عرض المزيد</string>
@@ -305,11 +309,13 @@
     <string name="media_crop_a11y_move_up">تحريك للأعلى</string>
     <string name="media_crop_a11y_position">الموضع الأفقي %1$s، العمودي %2$s</string>
     <string name="media_crop_a11y_size">العرض %1$s، الارتفاع %2$s</string>
+    <string name="media_download">تنزيل</string>
     <string name="media_label_audio">صوت</string>
     <string name="media_label_file">ملف</string>
     <string name="media_label_location">الموقع</string>
     <string name="media_label_photo">صورة</string>
     <string name="media_label_video">الفيديو</string>
+    <string name="media_pauseAudio">إيقاف مؤقت</string>
     <string name="media_permission_camera_denied_message">تم رفض الكاميرا — اضغط لفتح الإعدادات</string>
     <string name="media_permission_camera_denied_title">تم رفض الوصول إلى الكاميرا</string>
     <string name="media_permission_close">إغلاق</string>
@@ -321,6 +327,9 @@
     <string name="media_permission_photos_add_denied_message">تم رفض الحفظ في الصور — اضغط لفتح الإعدادات</string>
     <string name="media_permission_photos_denied_message">تم رفض الوصول إلى الصور — اضغط لفتح الإعدادات</string>
     <string name="media_permission_photos_denied_title">تم رفض الوصول إلى الصور</string>
+    <string name="media_playAudio">تشغيل الصوت</string>
+    <string name="media_skipBack10s">الرجوع 10 ثوانٍ</string>
+    <string name="media_skipForward10s">التقدّم 10 ثوانٍ</string>
     <string name="media_summary_file">📎 ملف</string>
     <string name="media_summary_location">📍 الموقع</string>
     <string name="media_summary_photo">📷 صورة</string>

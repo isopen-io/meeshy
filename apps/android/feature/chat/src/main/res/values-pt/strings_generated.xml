@@ -361,10 +361,13 @@
     <string name="dashboard_stat_links">Links</string>
     <string name="dashboard_tone">Tom: %1$s</string>
     <string name="encryption_close">Fechar</string>
+    <string name="encryption_confirm_cancel">Cancelar</string>
     <string name="encryption_detail_activate">Ativar a criptografia</string>
     <string name="encryption_detail_activation_footer_final">A criptografia de ponta a ponta nunca é desativada, nem a criptografia em nossos servidores. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas.</string>
     <string name="encryption_detail_active_label">Criptografia ativa</string>
     <string name="encryption_detail_details_header">Detalhes</string>
+    <string name="encryption_detail_direct_already_end_to_end">Você já tem uma conversa criptografada de ponta a ponta com esta pessoa: abra-a para conversar lá. Esta continua criptografada em nossos servidores.</string>
+    <string name="encryption_detail_direct_not_a_pair">Esta conversa individual não tem exatamente dois membros cadastrados: a criptografia de ponta a ponta não é possível aqui.</string>
     <string name="encryption_detail_enabled_on">Ativada em</string>
     <string name="encryption_detail_inactive_label">Conversa não criptografada</string>
     <string name="encryption_detail_inactive_subtitle">Conversa criada antes da criptografia sistemática: suas mensagens não são criptografadas.</string>
@@ -373,6 +376,8 @@
     <string name="encryption_detail_mode_label">Modo</string>
     <string name="encryption_detail_regime_changed">Outro membro acabou de alterar a criptografia: o estado foi atualizado.</string>
     <string name="encryption_detail_served_gap">O servidor apresenta esta conversa sem criptografia de ponta a ponta, mas este dispositivo a viu com criptografia de ponta a ponta: aqui ela continua assim. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas.</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm">Mudar para ponta a ponta</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm_title">Mudar para criptografia de ponta a ponta?</string>
     <string name="encryption_detail_title">Criptografia</string>
     <string name="encryption_detail_translation">Tradução</string>
     <string name="encryption_detail_translation_available">Disponível</string>
@@ -419,6 +424,7 @@
     <string name="encryption_summary_hybrid">Criptografada em nossos servidores, com verificação entre aparelhos compatíveis</string>
     <string name="encryption_summary_none">Conversa criada antes da criptografia sistemática: suas mensagens não são criptografadas</string>
     <string name="encryption_summary_server">Criptografada em nossos servidores</string>
+    <string name="encryption_switch_end_to_end_final">A criptografia de ponta a ponta nunca é desativada. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas.</string>
     <string name="encryption_topic_absent">Indisponível neste modo</string>
     <string name="encryption_topic_available">O que funciona</string>
     <string name="encryption_topic_devices">Seus aparelhos</string>

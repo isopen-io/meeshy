@@ -28,13 +28,14 @@ class TranslationRealtimeApplier @Inject constructor(
             val transcript = event.transcription
             messages.applyTranscription(
                 event.messageId, event.attachmentId, transcript.text, transcript.language, transcript.confidence, transcript.durationMs,
+                transcript.segments, transcript.speakerCount,
             )
         }
         registrar.relay(socket.audioTranslationReady, lane) { event ->
             val audio = event.translatedAudio
             messages.applyAudioTranslation(
                 event.messageId, event.attachmentId, event.language, audio.url, audio.transcription,
-                audio.durationMs, audio.format, audio.cloned, audio.quality, audio.voiceModelId, audio.ttsModel,
+                audio.durationMs, audio.format, audio.cloned, audio.quality, audio.voiceModelId, audio.ttsModel, audio.segments,
             )
         }
     }

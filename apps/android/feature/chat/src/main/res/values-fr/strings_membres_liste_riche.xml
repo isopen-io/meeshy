@@ -11,6 +11,7 @@
     <string name="members_sheet_since">Depuis %1$s</string>
     <plurals name="members_sheet_title_capped">
         <item quantity="one">%1$s+ membre</item>
+        <item quantity="many">%1$s+ de membres</item>
         <item quantity="other">%1$s+ membres</item>
     </plurals>
     <string name="members_sheet_error_title">Erreur</string>

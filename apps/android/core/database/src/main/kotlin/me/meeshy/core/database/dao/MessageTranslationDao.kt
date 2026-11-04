@@ -42,6 +42,14 @@ public interface MessageTranslationDao {
     @Query("DELETE FROM message_audio_translations WHERE messageId IN (:messageIds)")
     public suspend fun deleteAudioFor(messageIds: List<String>)
 
+    /** La transcription retenue de ces pièces ne dit plus ce que le serveur sert : elle cède à la charge. */
+    @Query("DELETE FROM message_transcriptions WHERE messageId IN (:messageIds) AND attachmentId IN (:attachmentIds)")
+    public suspend fun deleteTranscriptionsOf(messageIds: List<String>, attachmentIds: List<String>)
+
+    /** La piste parlée retenue de [language] (minuscules) pour cette pièce cède à celle que le serveur sert. */
+    @Query("DELETE FROM message_audio_translations WHERE messageId IN (:messageIds) AND attachmentId = :attachmentId AND language = :language")
+    public suspend fun deleteAudioTrackOf(messageIds: List<String>, attachmentId: String, language: String)
+
     /**
      * Les messages ENCORE EN CACHE dont une traduction a été reçue le plus récemment : de quoi pré-hydrater le L1 au
      * démarrage. Une ligne dont le message est parti n'est jamais rechargée.

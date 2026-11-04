@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
 import type { ApiFailure } from '@/lib/api/http';
+import { isPermanentFailure } from '@/lib/api/outcome';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
@@ -41,25 +42,41 @@ describe('sendFailureReason', () => {
   });
 
   /**
-   * #5668 — la SEULE cause spécifique aux pièces jointes que ce client peut
-   * VOIR : `UPLOAD_PARTIAL`, qu'il synthétise lui-même
-   * (`perform-send.ts § uploadPhase`). Le `code`
-   * `ATTACHMENT_RIGHT_NOT_PERMITTED` n'a PAS de branche ici — mesuré : la
-   * route le lit pour choisir son statut puis appelle
-   * `sendForbidden(reply, result.error)` sans `options.code`
-   * (`messages-send.ts:364`), et `sendError` pose `code: undefined`
-   * (`response.ts:89`), supprimé à la sérialisation. Un témoin écrit sur ce
-   * code n'aurait mesuré que sa propre fixture.
+   * #5668 — `UPLOAD_PARTIAL`, que ce client synthétise lui-même
+   * (`perform-send.ts § uploadPhase`).
    */
   test('UPLOAD_PARTIAL (statut 200 synthétique) ⇒ cause dédiée, jamais confondue avec un succès', () => {
     expect(sendFailureReason(failure(200, { code: 'UPLOAD_PARTIAL' }))).toBe('une pièce n’a pas pu être téléversée');
   });
 
-  test('un 403 de la passerelle reste le refus générique — aucun code ne voyage avec lui', () => {
+  /**
+   * #16053 — la passerelle SERT désormais `code: ATTACHMENT_RIGHT_NOT_PERMITTED`
+   * sur le 403 de `POST /conversations/:id/messages` (`messages-send.ts`,
+   * `sendForbidden(..., { code: result.code })`) : la cause dit à l'expéditeur
+   * que CE TYPE de pièce jointe ne passe pas encore ici, et l'échec reste
+   * PERMANENT (aucun rejeu).
+   */
+  test('403 ATTACHMENT_RIGHT_NOT_PERMITTED ⇒ ce type de pièce jointe ne passe pas encore ici, sans rejeu', () => {
+    const refused = failure(403, { code: 'ATTACHMENT_RIGHT_NOT_PERMITTED' });
+    expect(sendFailureReason(refused)).toBe('vous ne pouvez pas encore envoyer ce type de pièce jointe dans cette conversation');
+    expect(sendFailureReasonIn(refused, 'en')).toBe('you can’t send this type of attachment in this conversation yet');
+    expect(isPermanentFailure(refused)).toBe(true);
+  });
+
+  test('la cause du droit de pièce jointe se dit dans les sept langues, jamais par sa clé', () => {
+    const refused = failure(403, { code: 'ATTACHMENT_RIGHT_NOT_PERMITTED' });
+    const phrases = SUPPORTED_INTERFACE_LANGUAGES.map((language) => sendFailureReasonIn(refused, language));
+    expect(phrases).toHaveLength(7);
+    for (const phrase of phrases) {
+      expect(phrase).toBeDefined();
+      expect(phrase).not.toContain('send.failure');
+    }
+    expect(new Set(phrases).size).toBe(7);
+  });
+
+  test('un 403 sans code, ou WRITE_NOT_PERMITTED, reste le refus générique', () => {
     expect(sendFailureReason(failure(403))).toBe('envoi refusé pour cette conversation');
-    expect(sendFailureReason(failure(403, { code: 'ATTACHMENT_RIGHT_NOT_PERMITTED' }))).toBe(
-      'envoi refusé pour cette conversation',
-    );
+    expect(sendFailureReason(failure(403, { code: 'WRITE_NOT_PERMITTED' }))).toBe('envoi refusé pour cette conversation');
   });
 
   /* #9928 — un mineur qui écrit dans Global (état périmé) : la cause dit

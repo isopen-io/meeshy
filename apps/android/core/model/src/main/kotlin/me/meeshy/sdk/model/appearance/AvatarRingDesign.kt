@@ -86,22 +86,18 @@ data class AvatarRingDecor(
     /**
      * Miroir de `ringDecorFit` (#15157) : le film ne peint jamais hors de la boîte [box] de l'anneau seul, sauf la
      * place [room] que l'hôte déclare libre de chaque côté ; quand il demande plus, l'avatar, son contour et ses films
-     * se réduisent ENSEMBLE. `null` ⇒ trop petit pour se lire, l'anneau seul.
+     * se réduisent ENSEMBLE. Le cadre se pose ENTIER à toutes les tailles (#16114) : liste, bulle, mini-avatar
+     * comme profil.
      */
-    fun fit(box: Double, room: Double = 0.0): RingDecorFit? {
+    fun fit(box: Double, room: Double = 0.0): RingDecorFit {
         val need = box * reach
         val side = minOf(need, box + 2 * maxOf(0.0, room))
-        val scale = side / need
-        if (box * scale < MIN_BOX) return null
-        return RingDecorFit(scale = scale, side = side, offset = (box - side) / 2)
+        return RingDecorFit(scale = side / need, side = side, offset = (box - side) / 2)
     }
 
     companion object {
         /** Le débordement maximal : un film de côté 1,5 × la boîte du contour (`RING_DECOR_MAX_REACH`). */
         const val MAX_REACH = 1.5
-
-        /** Le plus petit côté de boîte où un cadre illustré se lit encore (`RING_DECOR_MIN_BOX`, #15157). */
-        const val MIN_BOX = 44.0
     }
 }
 

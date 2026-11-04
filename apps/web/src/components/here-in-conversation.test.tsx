@@ -52,10 +52,10 @@ describe('l’avatar d’un auteur de message', () => {
 describe('la cellule de frappe', () => {
   const entry = (userId: string, displayName: string): TypingEntry => ({ userId, displayName, expiresAt: 0 });
 
-  test('le meneur présent porte le point indigo, dans les deux tenues', () => {
+  test('le meneur présent ne porte pas le point « ici » : la cellule de frappe est sans présence (#16114)', () => {
     for (const flat of [true, false]) {
       const html = inThread(['u-kwame'], <TypingRosterCell typists={[entry('u-kwame', 'Kwame Mensah')]} accent="#5B4CFF" flat={flat} />);
-      expect(html).toContain(HERE);
+      expect(html).not.toContain(HERE);
     }
   });
 });

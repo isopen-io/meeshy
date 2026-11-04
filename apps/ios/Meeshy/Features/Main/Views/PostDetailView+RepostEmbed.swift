@@ -298,14 +298,11 @@ extension PostDetailView {
     // MARK: - Repost Language Support
 
     private func repostEffectiveContent(_ repost: RepostContent) -> String {
-        let code = repostActiveDisplayLangCode ?? ReaderPrism.resolve(for: AuthManager.shared.currentUser).first(where: { lang in
-            lang.caseInsensitiveCompare(repost.originalLanguage ?? "") == .orderedSame || repost.translations?.keys.contains(where: { $0.caseInsensitiveCompare(lang) == .orderedSame }) == true
-        })?.lowercased() ?? repost.originalLanguage?.lowercased() ?? "fr"
-        if code == repost.originalLanguage?.lowercased() { return repost.content }
-        if let translation = repost.translations?[code] ?? repost.translations?.first(where: { $0.key.lowercased() == code })?.value {
-            return translation.text
+        guard let code = repostActiveDisplayLangCode else {
+            return repost.resolved(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)).displayContent
         }
-        return repost.content
+        if code == repost.originalLanguage?.lowercased() { return repost.content }
+        return repostSecondaryContent(repost, code: code) ?? repost.content
     }
 
     private func repostSecondaryContent(_ repost: RepostContent, code: String) -> String? {

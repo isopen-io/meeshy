@@ -283,10 +283,6 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             },
             onOpenFile = openHubFile,
             options = options,
-            onLeft = {
-                sheets.info = false
-                host.navigation.onBack()
-            },
         )
         val infoViewModel: ConversationInfoViewModel = hiltViewModel(key = "conversation-info")
         LaunchedEffect(state.conversationId) { if (state.conversationId.isNotBlank()) infoViewModel.start(state.conversationId) }
@@ -315,7 +311,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     if (sheets.encryption) {
         ConversationEncryptionSheet(
             conversationId = state.conversationId,
-            isDirect = !state.isGroup,
+            isDirect = state.isKnownDirect,
             accentColor = accentColor,
             onDismiss = { sheets.encryption = false },
         )
@@ -341,10 +337,6 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             conversationId = state.conversationId,
             accentColor = accentColor,
             onDismiss = { sheets.members = false },
-            onLeft = {
-                sheets.members = false
-                host.navigation.onBack()
-            },
         )
     }
 

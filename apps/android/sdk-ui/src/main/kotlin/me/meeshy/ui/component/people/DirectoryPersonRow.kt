@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.ServedProfileDecorItem
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyBorder
 import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyFontSize
@@ -45,8 +43,8 @@ import me.meeshy.ui.theme.MeeshyTheme
 /** Ce que la ligne propose : écrire à un compte Meeshy, ou inviter un contact du carnet qui n'en a pas. */
 @Immutable
 public enum class DirectoryPersonAction(internal val icon: ImageVector, internal val isFilled: Boolean) {
-    Write(Icons.Filled.ChatBubble, isFilled = true),
-    Invite(Icons.AutoMirrored.Filled.Send, isFilled = false),
+    Write(MeeshyIcons.ChatBubble, isFilled = true),
+    Invite(MeeshyIcons.Send, isFilled = false),
 }
 
 /**

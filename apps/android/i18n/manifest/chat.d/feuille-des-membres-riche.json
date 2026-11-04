@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "androidName": "add_participant_add_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "add_participant_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "add_participant_search_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "add_participant_searching_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_error_ok",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_error_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_leave",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_leave_confirm",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_leave_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_leave_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_role_confirm",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_role_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_role_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_since",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_swipe_remove",
+          "status": "android-only"
+        },
+        {
+          "androidName": "members_sheet_title_capped",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

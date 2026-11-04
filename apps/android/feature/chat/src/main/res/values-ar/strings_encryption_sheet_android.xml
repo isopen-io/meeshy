@@ -4,7 +4,9 @@
     <string name="encryption_irreversible_refused">لا يمكن إيقاف التشفير التام بين الطرفين. للتحدث بدونه، ابدأ محادثة جديدة.</string>
     <string name="encryption_action_failed">تعذّر إجراء التغيير. حاول مرة أخرى.</string>
     <string name="encryption_offline">أنت غير متصل: أعد الاتصال لقراءة التشفير أو تغييره.</string>
-    <string name="encryption_toggle_forbidden">دورك لا يسمح بتفعيل التشفير أو إيقافه هنا. الخادم هو من يقرر.</string>
+    <string name="encryption_toggle_forbidden">لا يحق لك تغيير وضع التشفير لهذه المحادثة: في المجموعة، يجب أن تكون أحد مشرفيها.</string>
+    <string name="encryption_activation_restricted">خلال مرحلة الاختبار، لا يستطيع تغيير وضع التشفير إلا عضو لديه دور في فريق Meeshy (محلل أو أعلى).</string>
+    <string name="encryption_already_enabled">وضع التشفير هذا هو المعمول به في المحادثة بالفعل: تم تحديث الحالة.</string>
     <string name="encryption_read_failed">تعذّرت قراءة حالة التشفير. حاول مرة أخرى.</string>
     <string name="encryption_retry">إعادة المحاولة</string>
     <string name="security_verify_description">الرسائل مع %1$s مشفّرة تشفيرًا تامًا بين الطرفين.</string>

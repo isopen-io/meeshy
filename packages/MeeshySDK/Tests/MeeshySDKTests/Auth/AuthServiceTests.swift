@@ -307,6 +307,32 @@ final class AuthServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - resendVerificationEmail (#16009)
+
+    /// La route `POST /auth/resend-verification` exige `{ email }`
+    /// (`AuthSchemas.resendVerification`) : sans corps, c'est un 400 à coup sûr.
+    func test_resendVerificationEmail_sendsTheEmailTheRouteRequires() async throws {
+        mock.stub("/auth/resend-verification", result: SimpleAPIResponse(success: true, message: "sent", error: nil))
+
+        try await service.resendVerificationEmail(email: "user@test.com")
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/resend-verification")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["email"] as? String, "user@test.com")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?.count, 1)
+    }
+
+    /// La jumelle SANS corps (`resendEmailVerification()`) ne pouvait recevoir
+    /// qu'un 400 et n'avait aucun appelant : elle a quitté le SDK.
+    func test_theBodylessResendTwin_hasLeftTheService() throws {
+        let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Auth/AuthService.swift"), encoding: .utf8)
+        XCTAssertFalse(source.contains("func resendEmailVerification("))
+    }
+
     // MARK: - requestPasswordReset
 
     func testRequestPasswordResetSuccess() async throws {

@@ -14,14 +14,14 @@ import { endToEndRegimeLedger, isEndToEndMode, type EndToEndRegimeState } from '
 import { encryptionRegime } from './conversation-encryption-explanation';
 
 /**
- * **MONTER LE CHIFFREMENT D'UNE CONVERSATION DEPUIS LE WEB** (#14648) — même
+ * **CHANGER LE CHIFFREMENT D'UNE CONVERSATION DEPUIS LE WEB** (#14648) — même
  * route et même droit que `ConversationEncryptionModeSwitch` (iOS,
  * `ConversationEncryptionActivationPolicy.swift`) : au droit que la passerelle
  * SERT (`canToggleEncryption` : rôle de plateforme, appartenance et, dans un
- * groupe, rang de modérateur), une conversation que le serveur lit MONTE par
- * `POST /conversations/:id/encryption`, dans l'ordre clair → serveur → hybride
- * → bout en bout. Elle ne redescend jamais d'ici (iOS propose encore
- * hybride → serveur ; le web non).
+ * groupe, rang de modérateur), une conversation que le serveur lit change de
+ * mode par `POST /conversations/:id/encryption` : clair → serveur ou hybride,
+ * serveur ↔ hybride (le retour hybride → serveur est permis, décision
+ * porteur #14663). Seule la sortie du bout en bout est interdite.
  *
  * FERMÉ PAR DÉFAUT, dans cet ordre :
  * - le bout en bout ne se quitte jamais (#12949) : servi, VU par ce compte
@@ -31,8 +31,9 @@ import { encryptionRegime } from './conversation-encryption-explanation';
  * - le navigateur ne demande jamais le bout en bout tant que #12975 n'est pas
  *   tranchée (`WEB_END_TO_END_SUPPORTED`) : la cible s'affiche, grisée, et le
  *   POST est refusé localement ;
- * - aucune cible n'est au-dessous ni au niveau du mode servi : une descente
- *   ne se propose pas, et le POST d'une descente est refusé localement ;
+ * - le mode servi ne se repropose pas, et le clair n'est jamais une cible
+ *   (`CREATION_ENCRYPTION_MODES` ne le porte pas) ; un POST vers le mode servi
+ *   est refusé localement ;
  * - une passerelle qui ne sert pas le droit ne l'accorde pas.
  */
 
@@ -66,11 +67,7 @@ export function encryptionSwitchLock(
   return state.held[input.conversationId] === true ? 'held' : null;
 }
 
-/** Le rang dans la montée : 0 sans mode, puis l'ordre de `CREATION_ENCRYPTION_MODES` (serveur, hybride, bout en bout). */
-const rankOf = (mode: CreationEncryptionMode | null): number => (mode === null ? 0 : CREATION_ENCRYPTION_MODES.indexOf(mode) + 1);
-
-const isAscent = (servedMode: string | null | undefined, target: CreationEncryptionMode): boolean =>
-  rankOf(target) > rankOf(currentModeOf(servedMode));
+const isMove = (servedMode: string | null | undefined, target: CreationEncryptionMode): boolean => target !== currentModeOf(servedMode);
 
 export function encryptionSwitchTargets(params: {
   readonly servedMode: string | null | undefined;
@@ -78,7 +75,7 @@ export function encryptionSwitchTargets(params: {
   readonly mayToggle: boolean;
 }): readonly EncryptionSwitchTarget[] {
   if (params.sealed || !params.mayToggle || !isLeavable(params.servedMode)) return [];
-  return CREATION_ENCRYPTION_MODES.filter((mode) => isAscent(params.servedMode, mode)).map((mode) =>
+  return CREATION_ENCRYPTION_MODES.filter((mode) => isMove(params.servedMode, mode)).map((mode) =>
     mode === 'e2ee' && !WEB_END_TO_END_SUPPORTED
       ? { mode, available: false, unavailability: 'client-not-yet' as const }
       : { mode, available: true, unavailability: null },
@@ -168,7 +165,7 @@ export async function switchConversationEncryption(
   if (lock === 'sealed') return { kind: 'irreversible' };
   if (lock === 'held') return { kind: 'held' };
   if (params.target === 'e2ee' && !WEB_END_TO_END_SUPPORTED) return { kind: 'refused' };
-  if (!isAscent(params.servedMode, params.target)) return { kind: 'refused' };
+  if (!isMove(params.servedMode, params.target)) return { kind: 'refused' };
   if (!ports.online()) return { kind: 'offline' };
 
   const result = await ports.post(params.target).catch(() => null);

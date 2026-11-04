@@ -2,12 +2,18 @@
 <!-- Android 12+ : rien de l'app ne part dans la sauvegarde cloud ni dans le transfert
      d'appareil (équivalent du « pas de sauvegarde iCloud » de la fiche de confidentialité iOS).
      android:allowBackup="false" reste posé dans le manifeste (≤ 11) ; ce fichier couvre le
-     transfert d'appareil et ferme la porte même si allowBackup était rouvert par erreur. -->
+     transfert d'appareil et ferme la porte même si allowBackup était rouvert par erreur.
+     lot: persist-sqlcipher-base-chiffree (#15880) — la base chiffrée meeshy.db, les DataStores et les fichiers de file
+     d'envoi sont nommés en plus des domaines entiers : une clé de coffre ne se restaure jamais sur un autre appareil,
+     donc une base restaurée serait illisible. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="root" />
         <exclude domain="file" />
         <exclude domain="database" />
+        <exclude domain="database" path="meeshy.db" />
+        <exclude domain="file" path="datastore" />
+        <exclude domain="file" path="outbox" />
         <exclude domain="sharedpref" />
         <exclude domain="external" />
     </cloud-backup>
@@ -15,6 +21,9 @@
         <exclude domain="root" />
         <exclude domain="file" />
         <exclude domain="database" />
+        <exclude domain="database" path="meeshy.db" />
+        <exclude domain="file" path="datastore" />
+        <exclude domain="file" path="outbox" />
         <exclude domain="sharedpref" />
         <exclude domain="external" />
     </device-transfer>

@@ -17,14 +17,14 @@ import {
 /**
  * **« CHANGER DE MODE » DANS LA FICHE CHIFFREMENT** (#14648) — miroir de
  * `modeSwitchSection` (iOS, `ConversationEncryptionDetailSheet`) : chaque mode
- * proposé dit ce qu'il fait ; seuls les modes AU-DESSUS du mode servi se
- * proposent ; le bout en bout se voit, désactivé, avec la raison (le navigateur
+ * proposé dit ce qu'il fait ; tout mode autre que le mode servi se propose,
+ * hybride → serveur compris (#14663), jamais le clair ; le bout en bout se voit, désactivé, avec la raison (le navigateur
  * ne chiffre pas encore, #12975) ; rien ne se propose dans une conversation
  * chiffrée de bout en bout, servie ou vue telle (#12949). Le droit vient de la
  * passerelle (`canToggleEncryption`, rang de groupe compris) : tant qu'elle ne
  * l'a pas servi, rien ne s'affiche.
  *
- * La montée est OPTIMISTE pour l'affichage seulement : pendant l'attente, la
+ * Le changement est OPTIMISTE pour l'affichage seulement : pendant l'attente, la
  * fiche décrit le mode visé (`onShownMode`) et le bouton dit « en cours » ;
  * rien n'annonce le succès avant la réponse. À la réponse, l'optimisme
  * s'efface toujours : le mode confirmé arrive par les caches

@@ -29,7 +29,8 @@ enum class ConversationEncryptionModeChoice(val wire: String, val isOfferedOnThi
 
         /**
          * Les modes vers lesquels un régime AU REPOS passe directement (décision du 2026-11-01) :
-         * tous sauf le sien, dans l'ordre de l'écran. Le bout en bout ne passe à rien (#12949).
+         * tous sauf le sien, dans l'ordre de l'écran, en groupe comme en tête-à-tête — hybride → serveur
+         * compris (#14663). Le bout en bout ne passe à rien (#12949).
          */
         fun switchTargets(regime: ConversationEncryptionRegime): List<ConversationEncryptionModeChoice> = when (regime) {
             ConversationEncryptionRegime.END_TO_END -> emptyList()
@@ -77,6 +78,8 @@ data class ConversationEncryptionView(
          *   bout vu l'emporte sur un régime servi qui ne le dit plus (une passerelle compromise ne
          *   rouvre pas le clair).
          * @param fallbackMayToggle le droit tant que la passerelle n'a pas servi le sien ; fermé par défaut.
+         *   Le droit SERVI (`canToggleEncryption`) décide pour un groupe comme pour un tête-à-tête : la
+         *   passerelle y applique le rôle de plateforme puis, dans un groupe, le rang de modérateur (#16044).
          */
         fun resolve(
             status: ConversationEncryptionStatus?,
@@ -91,12 +94,13 @@ data class ConversationEncryptionView(
                 else -> null
             }
             val regime = ConversationEncryptionRegime.of(displayedMode)
-            val mayToggle = isDirect && !sealed && (status?.canToggleEncryption ?: fallbackMayToggle)
+            val mayToggle = !sealed && (status?.canToggleEncryption ?: fallbackMayToggle)
             val isEncrypted = displayedMode != null
             val content = when {
                 loading -> ConversationEncryptionContent.Loading
                 isEncrypted -> ConversationEncryptionContent.Active(
-                    offersModeChange = mayToggle && regime != ConversationEncryptionRegime.END_TO_END,
+                    offersModeChange = mayToggle && ConversationEncryptionModeChoice.switchTargets(regime)
+                        .any { it.isOfferedFor(isDirect) },
                 )
                 mayToggle -> ConversationEncryptionContent.Activation
                 else -> ConversationEncryptionContent.InactiveReadOnly

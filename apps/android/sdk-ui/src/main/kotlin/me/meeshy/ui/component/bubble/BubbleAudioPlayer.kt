@@ -190,8 +190,9 @@ public fun AudioBubble(
 internal const val TRANSCRIPT_FADE_MILLIS: Int = 180
 
 /**
- * iOS `AudioPlayerView.transcriptionBlock` : la transcription existe mais son affichage automatique
- * est coupé sur les messages reçus. Le tap ne fait que la révéler, aucune requête n'est émise.
+ * iOS `AudioPlayerView.transcriptionBlock` : le bouton « Transcrire ». Deux usages, et l'hôte choisit l'effet du tap :
+ * la transcription existe mais son affichage automatique est coupé (le tap la révèle, aucune requête) ; ou rien ne la
+ * transcrit encore ([me.meeshy.sdk.model.AudioTranscriptionBlock.Kind.REQUEST], le tap la demande au serveur).
  */
 @Composable
 internal fun RevealTranscriptionCta(onColor: Color, onReveal: () -> Unit) {

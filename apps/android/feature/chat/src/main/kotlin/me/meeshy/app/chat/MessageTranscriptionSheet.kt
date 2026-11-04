@@ -23,8 +23,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.flowOf
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.LanguageData
@@ -62,11 +63,11 @@ internal fun MessageTranscriptionSheet(
     modifier: Modifier = Modifier,
     viewModel: MessageTranscriptionViewModel = hiltViewModel(),
 ) {
-    DisposableEffect(messageId) {
-        viewModel.bind(messageId)
-        onDispose { viewModel.unbind() }
+    val transcribable = (MessageTranscriptionFiche.of(attachments, viewModel.preferences, Request.IDLE) as? State.Empty)?.transcribable
+    val requests = remember(viewModel, messageId, transcribable) {
+        transcribable?.let { viewModel.requestState(messageId, it) } ?: flowOf(Request.IDLE)
     }
-    val request by viewModel.request.collectAsStateWithLifecycle()
+    val request by requests.collectAsStateWithLifecycle(initialValue = Request.IDLE)
     val state = MessageTranscriptionFiche.of(attachments, viewModel.preferences, request)
     Column(
         modifier = modifier

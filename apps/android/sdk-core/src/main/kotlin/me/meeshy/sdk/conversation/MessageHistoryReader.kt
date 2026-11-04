@@ -163,17 +163,21 @@ internal class MessageHistoryReader(
      * Targeted completion of ONE message by its id (#13797): the socket payload of a received forward
      * carries `forwardedFromId` without the `forwardedFrom` preview the list route serves, so the
      * thread asks the server for that single message instead of re-reading the page. Best effort —
-     * returns whether the row was merged; a failure or a revoked account changes nothing.
+     * returns whether the row was merged; a failure or a revoked account changes nothing. A [limit] above one
+     * reads the WINDOW around the message (the voice note whose transcription `transcription:ready` never brought,
+     * with its neighbours' translations) and merges all of it through the same ingestion.
      */
-    suspend fun refreshMessage(conversationId: String, messageId: String): Boolean {
+    suspend fun refreshMessage(conversationId: String, messageId: String, limit: Int = 1): Boolean {
         val ticket = fence?.currentTicket()
-        val response = when (val result = rawApiCall { messageApi.listAround(conversationId, messageId) }) {
+        val response = when (val result = rawApiCall { messageApi.listAround(conversationId, messageId, limit) }) {
             is NetworkResult.Success -> result.data
             is NetworkResult.Failure -> return false
         }
-        val served = response.data?.firstOrNull { it.id == messageId }?.takeIf { response.success } ?: return false
+        val page = response.data?.takeIf { response.success } ?: return false
+        val target = page.firstOrNull { it.id == messageId } ?: return false
+        val served = if (limit > 1) page else listOf(target)
         val now = clock.nowMillis()
-        fence.commitOrWrite(ticket) { MessageIngestPipeline(database).ingest(listOf(served), now) } ?: return false
+        fence.commitOrWrite(ticket) { MessageIngestPipeline(database).ingest(served, now) } ?: return false
         return true
     }
 

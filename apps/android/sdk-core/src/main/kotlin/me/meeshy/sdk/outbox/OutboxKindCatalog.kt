@@ -34,6 +34,7 @@ public object OutboxKindCatalog {
         OutboxKind.CONSUME_VIEW_ONCE,
         OutboxKind.MARK_RECEIVED,
         OutboxKind.MARK_STORY_VIEWED,
+        OutboxKind.REPORT_CONTENT_CAPTURE,
         -> false
         OutboxKind.SEND_MESSAGE,
         OutboxKind.EDIT_MESSAGE,
@@ -110,6 +111,7 @@ public object OutboxKindCatalog {
         OutboxKind.LEAVE_CONVERSATION,
         OutboxKind.DELETE_CONVERSATION_FOR_ME,
         OutboxKind.DELETE_CONVERSATION_FOR_ALL,
+        OutboxKind.REPORT_CONTENT_CAPTURE,
         -> true
         OutboxKind.REPOST_STORY,
         OutboxKind.REMOVE_ATTACHMENT,

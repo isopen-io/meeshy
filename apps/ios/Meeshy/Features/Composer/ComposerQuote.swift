@@ -61,10 +61,12 @@ nonisolated struct ComposerQuotedPublication: Equatable {
     }
 
     /// La carte de la source qu'un repost porte déjà — ce que son édition montre.
+    /// Son texte est celui du Prisme du lecteur (#16002), le même que la carte
+    /// du fil et le détail : la descente est faite à la conversion du post.
     init(repost: RepostContent) {
         self.init(author: repost.author, authorId: repost.authorId, authorColor: repost.authorColor,
                   authorAvatarURL: repost.authorAvatarURL, timestamp: repost.timestamp,
-                  moodEmoji: repost.moodEmoji.flatMap { $0.isEmpty ? nil : $0 }, text: repost.content,
+                  moodEmoji: repost.moodEmoji.flatMap { $0.isEmpty ? nil : $0 }, text: repost.displayContent,
                   primaryMedia: repost.media.first, mediaCount: repost.media.count,
                   visibility: repost.visibility)
     }

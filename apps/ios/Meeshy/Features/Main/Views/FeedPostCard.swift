@@ -142,6 +142,8 @@ struct FeedPostCard: View {
     /// (`post.id`). Routed through the enclosing repost Button. Pure; unit-tested.
     static func repostTapTargetId(for repost: RepostContent) -> String { repost.id }
 
+    static func repostBodyText(for repost: RepostContent) -> String { repost.displayContent }
+
     /// VoiceOver label for the tappable media preview. Distinguishes a video
     /// from an image (and falls back to a generic "media" wording for mixed or
     /// other types) and attributes it to the post author.
@@ -841,7 +843,6 @@ struct FeedPostCard: View {
             onTapRepost?(Self.repostTapTargetId(for: repost))
         } label: {
             VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-                // Original author
                 HStack(spacing: MeeshySpacing.sm) {
                     LivePresence { MeeshyAvatar(
                         name: repost.author,
@@ -872,7 +873,7 @@ struct FeedPostCard: View {
                             .font(.body)
                             .accessibilityHidden(true)
                     }
-                    Text(repost.content)
+                    Text(Self.repostBodyText(for: repost))
                         .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(4)
@@ -895,7 +896,6 @@ struct FeedPostCard: View {
                     }
                 }
 
-                // Original stats
                 HStack(spacing: MeeshySpacing.md) {
                     HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "heart.fill")
@@ -926,8 +926,7 @@ struct FeedPostCard: View {
         .accessibilityHint(String(localized: "feed.post.original.hint", defaultValue: "Ouvre la publication originale", bundle: .main))
     }
 
-    // MARK: - Media Preview
-    // See FeedPostCard+Media.swift
+    // MARK: - Media Preview (FeedPostCard+Media.swift)
 
 }
 
@@ -955,6 +954,7 @@ extension FeedPostCard: Equatable {
             && lhs.post.content == rhs.post.content
             && lhs.post.mentions == rhs.post.mentions
             && lhs.post.translatedContent == rhs.post.translatedContent
+            && lhs.post.repost?.translatedContent == rhs.post.repost?.translatedContent
             && Self.translatableSignature(of: lhs.post) == Self.translatableSignature(of: rhs.post)
             && lhs.authorMoodEmoji == rhs.authorMoodEmoji
             && lhs.authorStoryRing == rhs.authorStoryRing
