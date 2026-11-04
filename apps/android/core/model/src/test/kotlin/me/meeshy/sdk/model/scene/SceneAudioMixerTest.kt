@@ -121,4 +121,20 @@ class SceneAudioMixerTest {
         assertThat(frames[0]).isInstanceOf(Sounding::class.java)
         assertThat((frames[1] as Sounding).positionMs).isEqualTo(1000)
     }
+
+    @Test
+    fun `every audio player object of a slide becomes a track - background first - and one without a url is not planned`() {
+        val effects = me.meeshy.sdk.model.StoryEffects(
+            audioPlayerObjects = listOf(
+                me.meeshy.sdk.model.StoryAudioPlayerObject(id = "v1", isBackground = false, startTime = 2f, fadeIn = 1f),
+                me.meeshy.sdk.model.StoryAudioPlayerObject(id = "m", isBackground = true, volume = 0.4f),
+                me.meeshy.sdk.model.StoryAudioPlayerObject(id = "gone", isBackground = false),
+            ),
+        )
+        val tracks = SceneAudioMixerPlan.tracks(effects) { if (it.id == "gone") null else "https://m/${it.id}.m4a" }
+        assertThat(tracks.map { it.id }).containsExactly("m", "v1").inOrder()
+        assertThat(tracks[0].isBackground).isTrue()
+        assertThat(tracks[1].startTime).isEqualTo(2.0)
+        assertThat(tracks[1].fadeIn).isEqualTo(1.0)
+    }
 }

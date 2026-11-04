@@ -39,5 +39,14 @@ internal fun StoryViewerCanvas(
         onAudioFocusGained = viewModel.interruption::onFocusGained,
         onAudioFocusLostForGood = viewModel.interruption::onFocusLostForGood,
     )
-    StorySceneAudio(slide = slide, playing = playing, muted = muted, lap = lap)
+    StorySceneAudio(
+        slide = slide,
+        playing = playing,
+        muted = muted,
+        elapsedSeconds = { progress.value * slideDurationMs / 1000.0 },
+        lap = lap,
+        onAudioFocusLost = viewModel.interruption::onFocusLost,
+        onAudioFocusGained = viewModel.interruption::onFocusGained,
+        onAudioFocusLostForGood = viewModel.interruption::onFocusLostForGood,
+    )
 }
