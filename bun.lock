@@ -1,5 +1,5 @@
 {
-  "lockfileVersion": 3,
+  "lockfileVersion": 1,
   "configVersion": 1,
   "workspaces": {
     "": {
@@ -207,9 +207,7 @@
     "browserslist": "4.28.8",
     "dompurify": "3.4.11",
     "fast-uri": "3.1.2",
-    "form-data@2": {
-      ".": "2.5.6",
-    },
+    "form-data@2": "2.5.6",
     "light-my-request": "6.6.0",
     "lodash": "4.17.21",
     "lodash-es": "4.17.23",
@@ -220,9 +218,7 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "serialize-javascript": "7.0.3",
-    "undici@6": {
-      ".": "6.24.0",
-    },
+    "undici@6": "6.24.0",
     "uuid": "11.1.1",
     "vitest": "^5.0.5",
     "zod": "4.4.3",
