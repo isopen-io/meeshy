@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -23,6 +24,7 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.PagedResult
 import me.meeshy.sdk.net.api.UserSearchResult
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
 import io.mockk.every
@@ -54,7 +56,7 @@ class NewConversationViewModelTest {
         users: UserRepository = mockk(relaxed = true),
         conversations: ConversationRepository = mockk(relaxed = true),
         session: SessionRepository = session(),
-    ) = NewConversationViewModel(users, conversations, session, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+    ) = NewConversationViewModel(users, conversations, session, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), BlockCache())
 
     private fun results(vararg ids: String) =
         ids.map { UserSearchResult(id = it, username = it, displayName = it.uppercase()) }
@@ -329,17 +331,85 @@ class NewConversationViewModelTest {
     }
 
     @Test
-    fun a_failed_search_shows_no_technical_message_only_the_no_result_state() = runTest(dispatcher) {
+    fun a_failed_search_is_told_apart_from_an_empty_one_and_can_be_retried() = runTest(dispatcher) {
         val users = mockk<UserRepository>()
-        coEvery { users.searchUsersPaged(any(), any(), any()) } returns
-            NetworkResult.Failure(ApiError(code = "network", message = "Unable to resolve host"))
+        coEvery { users.searchUsersPaged(any(), any(), any()) } returnsMany listOf(
+            NetworkResult.Failure(ApiError(code = "network", message = "Unable to resolve host")),
+            paged(listOf("u1")),
+        )
         val vm = viewModel(users = users)
 
         vm.onQueryChange("zzz")
         advanceUntilIdle()
 
         assertThat(vm.state.value.error).isNull()
-        assertThat(vm.state.value.showsNoResults).isTrue()
+        assertThat(vm.state.value.searchFailed).isTrue()
+        assertThat(vm.state.value.showsNoResults).isFalse()
+
+        vm.retrySearch()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.searchFailed).isFalse()
+        assertThat(vm.state.value.results.map { it.id }).containsExactly("u1")
+    }
+
+    @Test
+    fun the_search_waits_350_ms_after_the_last_keystroke() = runTest(dispatcher) {
+        val users = mockk<UserRepository>()
+        coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
+        val vm = viewModel(users = users)
+
+        vm.onQueryChange("bo")
+        advanceTimeBy(349)
+        assertThat(vm.state.value.results).isEmpty()
+        advanceTimeBy(2)
+        runCurrent()
+
+        assertThat(vm.state.value.results.map { it.id }).containsExactly("u1")
+    }
+
+    @Test
+    fun blocking_a_user_live_greys_the_row_and_unpicks_it() = runTest(dispatcher) {
+        val users = mockk<UserRepository>()
+        coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
+        val blockCache = BlockCache()
+        val vm = NewConversationViewModel(
+            users, mockk(relaxed = true), session(), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), blockCache,
+        )
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+        assertThat(vm.state.value.selected).hasSize(1)
+
+        blockCache.setBlocked("u1", true)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.results.single().isBlocked).isTrue()
+        assertThat(vm.state.value.selected).isEmpty()
+
+        blockCache.setBlocked("u1", false)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.results.single().isBlocked).isFalse()
+    }
+
+    @Test
+    fun dismissing_the_error_clears_it() = runTest(dispatcher) {
+        val users = mockk<UserRepository>()
+        coEvery { users.searchUsersPaged(any(), any(), any()) } returns paged(listOf("u1"))
+        val conversations = mockk<ConversationRepository>()
+        coEvery { conversations.create(any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError(code = "USER_BLOCKED", message = "Forbidden", httpStatus = 403))
+        val vm = viewModel(users = users, conversations = conversations)
+        vm.onQueryChange("bob")
+        advanceUntilIdle()
+        vm.toggleSelection("u1")
+        vm.create()
+        advanceUntilIdle()
+
+        vm.dismissError()
+
+        assertThat(vm.state.value.error).isNull()
     }
 
     @Test

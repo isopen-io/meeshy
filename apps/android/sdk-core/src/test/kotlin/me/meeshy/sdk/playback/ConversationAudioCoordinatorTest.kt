@@ -35,6 +35,7 @@ class ConversationAudioCoordinatorTest {
 
         override fun play(attachmentId: String, url: String, origin: PlaybackCommandOrigin, isProtected: Boolean): Boolean {
             if (!allow) return false
+            flushedLanguages += languageProvider?.invoke()
             played += attachmentId
             protections += isProtected
             mutable.value = AudioPlaybackState(attachmentId = attachmentId, isPlaying = true, speed = mutable.value.speed)
@@ -63,7 +64,9 @@ class ConversationAudioCoordinatorTest {
         override fun cycleSpeed() = setSpeed(mutable.value.speed.next())
         override fun setLoop(loop: Boolean) = Unit
         override fun setServedConsumption(attachmentId: String, consumption: MeeshyMediaConsumption?) = Unit
-        override fun setConsumedLanguageProvider(provider: (() -> String?)?) = Unit
+        var languageProvider: (() -> String?)? = null
+        val flushedLanguages = mutableListOf<String?>()
+        override fun setConsumedLanguageProvider(provider: (() -> String?)?) { languageProvider = provider }
         val follows = mutableListOf<List<Any>>()
         override fun follow(fromAttachmentId: String, toAttachmentId: String, servedUrl: String, isProtected: Boolean) {
             follows += listOf(fromAttachmentId, toAttachmentId, servedUrl, isProtected)
@@ -203,16 +206,75 @@ class ConversationAudioCoordinatorTest {
         assertThat(engine.mutable.value.speed).isEqualTo(PlaybackSpeed.X1_0)
     }
 
-    @Test fun `supprimer le message joue passe au suivant, sans suivant arrete`() = runTest {
+    // INVERSÉ par #16035 : « supprimer le message joué passe au suivant » devient « le ferme » (iOS
+    // `ConversationAudioCoordinator.wireSocketLifecycleHooks` : `activeContext.messageId == messageId` ⇒ `close()`).
+    @Test fun `supprimer le message joue ferme la lecture, meme avec une file derriere`() = runTest {
         val engine = FakeEngine()
         val coordinator = started(engine, "b")
 
         coordinator.onMessageDeleted("ma")
-        assertThat(engine.played.last()).isEqualTo("b")
+
+        assertThat(engine.stops).isEqualTo(1)
+        assertThat(engine.played).containsExactly("a")
+        assertThat(coordinator.snapshot.value.queue.current).isNull()
+        assertThat(coordinator.snapshot.value.context).isNull()
+    }
+
+    @Test fun `supprimer un message en file retire ses pieces sans toucher la lecture`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b", "c")
 
         coordinator.onMessageDeleted("mb")
+
+        assertThat(engine.stops).isEqualTo(0)
+        assertThat(coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("a")
+        assertThat(coordinator.snapshot.value.queue.upcoming.map { it.attachmentId }).containsExactly("c")
+    }
+
+    @Test fun `supprimer la conversation qui joue ferme la lecture`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b")
+
+        coordinator.onConversationDeleted("c")
+
         assertThat(engine.stops).isEqualTo(1)
-        assertThat(coordinator.snapshot.value.queue.current).isNull()
+        assertThat(coordinator.snapshot.value.context).isNull()
+    }
+
+    @Test fun `supprimer une autre conversation ne touche pas la lecture`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b")
+
+        coordinator.onConversationDeleted("elsewhere")
+
+        assertThat(engine.stops).isEqualTo(0)
+        assertThat(coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("a")
+    }
+
+    @Test fun `la langue entendue est celle de la piste jouee, relachee au changement de piste`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = coordinator(this, engine)
+        runCurrent()
+
+        coordinator.play(item("a").copy(trackLanguage = "en"), listOf(item("b").copy(trackLanguage = "fr")), "Famille", null)
+        assertThat(engine.languageProvider?.invoke()).isEqualTo("en")
+
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("a", completed = true))
+        runCurrent()
+
+        assertThat(engine.flushedLanguages.last()).isEqualTo("en")
+        assertThat(engine.mutable.value.attachmentId).isEqualTo("b")
+        assertThat(engine.languageProvider?.invoke()).isEqualTo("fr")
+    }
+
+    @Test fun `un vocal du moteur qui n'est pas celui de la file ne porte aucune langue`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = coordinator(this, engine)
+        coordinator.play(item("a").copy(trackLanguage = "en"), emptyList(), "Famille", null)
+
+        engine.mutable.value = AudioPlaybackState(attachmentId = "recorder-preview", isPlaying = true)
+
+        assertThat(engine.languageProvider?.invoke()).isNull()
     }
 
     @Test fun `la deconnexion arrete tout`() = runTest {

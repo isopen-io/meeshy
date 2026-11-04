@@ -182,6 +182,13 @@ public data class BubbleAudio(
     /** True when the audio has a playable URL (already downloaded / remote-ready). */
     val isPlayable: Boolean get() = !url.isNullOrBlank()
 
+    /**
+     * La langue qu'on ENTEND en jouant [url] (iOS `publishConsumedLanguage` : « orig » ⇒ la langue de la transcription
+     * d'origine) : celle de la piste traduite, sinon celle de la voix d'origine — jamais [audioLanguage] seul, qui retombe
+     * sur la langue du TEXTE servi quand la voix d'origine joue sous une transcription traduite. `null` : inconnue.
+     */
+    val playedLanguage: String? get() = if (isAudioTranslated) audioLanguage else originalLanguage
+
     /** True when a non-blank transcription line is worth surfacing under the player. */
     val hasTranscription: Boolean get() = !transcriptionText.isNullOrBlank()
 

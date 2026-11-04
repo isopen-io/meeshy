@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Feuille des membres, version riche (#15966) : clés propres à Android. -->
+<resources>
+    <string name="members_sheet_leave">Gruppe verlassen</string>
+    <string name="members_sheet_leave_title">Gruppe verlassen?</string>
+    <string name="members_sheet_leave_message">Du kannst die Nachrichten dieser Gruppe nicht mehr sehen.</string>
+    <string name="members_sheet_leave_confirm">Verlassen</string>
+    <string name="members_sheet_role_title">Rolle ändern?</string>
+    <string name="members_sheet_role_message">Dieses Mitglied zu %1$s machen?</string>
+    <string name="members_sheet_role_confirm">Bestätigen</string>
+    <string name="members_sheet_since">Seit %1$s</string>
+    <plurals name="members_sheet_title_capped">
+        <item quantity="one">%1$s+ Mitglied</item>
+        <item quantity="other">%1$s+ Mitglieder</item>
+    </plurals>
+    <string name="members_sheet_error_title">Fehler</string>
+    <string name="members_sheet_error_ok">OK</string>
+    <string name="members_sheet_swipe_remove">Entfernen</string>
+    <string name="add_participant_failed">Dieses Mitglied konnte nicht hinzugefügt werden.</string>
+    <string name="add_participant_search_failed">Die Suche ist fehlgeschlagen. Versuche es erneut.</string>
+    <string name="add_participant_add_a11y">%1$s hinzufügen</string>
+    <string name="add_participant_searching_a11y">Suche läuft</string>
+</resources>

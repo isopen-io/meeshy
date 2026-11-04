@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Feuille des membres, version riche (#15966) : clés propres à Android. -->
+<resources>
+    <string name="members_sheet_leave">Leave group</string>
+    <string name="members_sheet_leave_title">Leave the group?</string>
+    <string name="members_sheet_leave_message">You will no longer see this group\'s messages.</string>
+    <string name="members_sheet_leave_confirm">Leave</string>
+    <string name="members_sheet_role_title">Change role?</string>
+    <string name="members_sheet_role_message">Make this member %1$s?</string>
+    <string name="members_sheet_role_confirm">Confirm</string>
+    <string name="members_sheet_since">Since %1$s</string>
+    <plurals name="members_sheet_title_capped">
+        <item quantity="one">%1$s+ member</item>
+        <item quantity="other">%1$s+ members</item>
+    </plurals>
+    <string name="members_sheet_error_title">Error</string>
+    <string name="members_sheet_error_ok">OK</string>
+    <string name="members_sheet_swipe_remove">Remove</string>
+    <string name="add_participant_failed">Couldn\'t add this member.</string>
+    <string name="add_participant_search_failed">Search failed. Try again.</string>
+    <string name="add_participant_add_a11y">Add %1$s</string>
+    <string name="add_participant_searching_a11y">Searching</string>
+</resources>

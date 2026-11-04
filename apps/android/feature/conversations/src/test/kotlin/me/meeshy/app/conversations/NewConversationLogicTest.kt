@@ -176,4 +176,20 @@ class NewConversationLogicTest {
         assertThat(rows[1].servedPresence?.state(0L)).isNotEqualTo(me.meeshy.sdk.model.PresenceState.ONLINE)
         assertThat(rows[1].lastActiveAt).isNull()
     }
+
+    @Test
+    fun `a blocked row is not selectable and a normal one is`() {
+        val row = SelectableUser("a", "Ann", "ann", null, isOnline = false)
+        assertThat(NewConversationLogic.isSelectable(row)).isTrue()
+        assertThat(NewConversationLogic.isSelectable(row.copy(isBlocked = true))).isFalse()
+    }
+
+    @Test
+    fun `the accessibility label composes name, handle and the blocked or online status`() {
+        val row = SelectableUser("a", "Ann", "ann", null, isOnline = true)
+        assertThat(NewConversationLogic.rowAccessibilityLabel(row, true, "Blocked", "online")).isEqualTo("Ann, @ann, online")
+        assertThat(NewConversationLogic.rowAccessibilityLabel(row, false, "Blocked", "online")).isEqualTo("Ann, @ann")
+        assertThat(NewConversationLogic.rowAccessibilityLabel(row.copy(isBlocked = true), true, "Blocked", "online"))
+            .isEqualTo("Ann, @ann, Blocked")
+    }
 }

@@ -15,9 +15,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -41,6 +38,7 @@ import me.meeshy.sdk.model.story.StoryNotificationContext
 import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.component.refresh.MeeshyRefreshableBox
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -73,9 +71,9 @@ fun NotificationsScreen(
     onOpenGame: (GameTarget) -> Unit = {},
     onOpenStoryContent: ((NotificationDestination.StoryContent, StoryNotificationContext) -> Unit)? = null,
     revealTap: EngagementRevealTapViewModel = hiltViewModel(),
+    toasts: NotificationFeedbackToasts = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
     val haptics = rememberMeeshyHaptics()
     val context = LocalContext.current
     val openConversation by rememberUpdatedState(onOpenConversation)
@@ -92,7 +90,7 @@ fun NotificationsScreen(
             when (event) {
                 is NotificationsEvent.ActionFailed -> {
                     haptics.error()
-                    snackbar.showSnackbar(context.getString(event.message))
+                    toasts.failure(context.getString(event.message))
                 }
                 is NotificationsEvent.OpenConversation -> openConversation(event.conversationId)
             }
@@ -160,7 +158,6 @@ fun NotificationsScreen(
 
     MeeshyBackground {
         Scaffold(
-            snackbarHost = { SnackbarHost(snackbar) },
             containerColor = Color.Transparent,
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -171,9 +168,8 @@ fun NotificationsScreen(
                     onMarkAllRead = onMarkAllRead,
                 )
                 NotificationCategoryBar(selected = state.selectedCategory, onSelect = onSelectCategory)
-                PullToRefreshBox(
-                    isRefreshing = state.isSyncing && state.notifications.isNotEmpty(),
-                    onRefresh = onRetry,
+                MeeshyRefreshableBox(
+                    onRefresh = viewModel::pullRefresh,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     NotificationPanes(
