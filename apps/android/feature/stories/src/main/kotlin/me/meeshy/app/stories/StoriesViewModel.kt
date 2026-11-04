@@ -75,6 +75,9 @@ class StoriesViewModel @Inject constructor(
     /** Temp ids of the publishes seen last emission — a vanished one delivered. */
     private var lastPendingIds: Set<String> = emptySet()
 
+    /** Déclaré AVANT `init` : un initialiseur placé après lui remettrait le drapeau à `false`. */
+    private var socialSubscribed = false
+
     init {
         viewModelScope.launch {
             combine(
@@ -131,8 +134,6 @@ class StoriesViewModel @Inject constructor(
         }
         subscribeToSocialEvents()
     }
-
-    private var socialSubscribed = false
 
     /**
      * Abonnement unique aux événements sociaux du plateau (iOS `subscribeToSocketEvents`) : un second appel
