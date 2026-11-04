@@ -5,9 +5,14 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,10 +23,14 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import me.meeshy.sdk.media.MediaRequest
 import me.meeshy.sdk.model.AudioPlayerChrome
+import me.meeshy.sdk.model.AudioTranscriptionPending
 import me.meeshy.sdk.model.AudioTranscriptionReveal
 import me.meeshy.sdk.model.MediaKind
 import me.meeshy.sdk.model.media.LocalFileUrl
@@ -29,6 +38,7 @@ import me.meeshy.sdk.model.media.MediaAvailabilityState
 import me.meeshy.sdk.model.media.MediaPlayerContext
 import me.meeshy.sdk.model.media.PlaybackSpeed
 import me.meeshy.sdk.model.playback.BubbleVoiceProjection
+import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.audio.AudioPlayerActions
 import me.meeshy.ui.component.audio.AudioPlayerState
 import me.meeshy.ui.component.audio.AudioPlayerView
@@ -63,7 +73,9 @@ public fun BubbleVoicePlayer(
     modifier: Modifier = Modifier,
     chrome: AudioPlayerChrome = LocalBubbleAudioChrome.current,
     autoRevealTranscription: Boolean = true,
+    receivedAtEpochMs: Long? = null,
 ) {
+    val reservesTranscript = rememberTranscriptReservation(audio, receivedAtEpochMs)
     val availability = rememberVoiceAvailability(audio)
     val samplesFlow = remember(audio.attachmentId, audio.url, audio.isProtected, callbacks.audioSamples) {
         callbacks.audioSamples?.takeUnless { audio.isProtected }?.invoke(audio) ?: NO_SAMPLES
@@ -110,6 +122,8 @@ public fun BubbleVoicePlayer(
                         onSeek = callbacks.onAudioSeek?.let { seek -> { seconds: Double -> seek(audio, seconds) } },
                     )
                 }
+            } else if (reservesTranscript) {
+                { PendingTranscriptSkeleton() }
             } else {
                 null
             },
@@ -218,6 +232,45 @@ private fun BubbleVoiceTranscript(
         }
     }
 }
+
+/**
+ * La place de la transcription attendue ([AudioTranscriptionPending]) : vraie au premier rendu d'un vocal reçu depuis
+ * moins de 90 s, elle tombe d'elle-même à la fin de la fenêtre — jamais un squelette éternel.
+ */
+@Composable
+private fun rememberTranscriptReservation(audio: BubbleAudio, receivedAtEpochMs: Long?): Boolean {
+    val isLocalDraft = audio.url?.let(LocalFileUrl::isLocal) == true
+    val openedAt = remember(audio.attachmentId) { System.currentTimeMillis() }
+    val reserved = AudioTranscriptionPending.shouldReserveHeight(audio.hasTranscription, receivedAtEpochMs, openedAt, isLocalDraft)
+    var expired by remember(audio.attachmentId) { mutableStateOf(false) }
+    if (reserved && receivedAtEpochMs != null) {
+        LaunchedEffect(audio.attachmentId, receivedAtEpochMs) {
+            delay((receivedAtEpochMs + AudioTranscriptionPending.NOMINAL_TIMEOUT_MS - openedAt).coerceAtLeast(0L))
+            expired = true
+        }
+    }
+    return reserved && !expired
+}
+
+/** Trois lignes qui pulsent à la place de la transcription attendue (iOS `transcriptionBlock`, squelette). */
+@Composable
+private fun PendingTranscriptSkeleton() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.smPlus)
+            .padding(bottom = MeeshySpacing.xs)
+            .clearAndSetSemantics {},
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        PENDING_LINE_FRACTIONS.forEach { fraction ->
+            MeeshySkeletonBox(modifier = Modifier.fillMaxWidth(fraction).height(PendingLineHeight))
+        }
+    }
+}
+
+private val PENDING_LINE_FRACTIONS = listOf(1f, 0.85f, 0.6f)
+private val PendingLineHeight = 10.dp
 
 private val NO_SAMPLES: Flow<List<Float>> = flowOf(emptyList())
 

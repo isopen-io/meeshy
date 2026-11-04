@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import java.time.Instant
 import me.meeshy.sdk.model.AudioPlayerChrome
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.playback.VoiceStackPlan
@@ -46,6 +47,9 @@ public fun BubbleAudioStack(
 ) {
     if (content.audios.isEmpty()) return
     val rows = remember(content.audios) { VoiceStackPlan.rows(content.audios.map { it.attachmentId }) }
+    val receivedAtEpochMs = remember(content.createdAtIso) {
+        content.createdAtIso?.let { iso -> runCatching { Instant.parse(iso).toEpochMilli() }.getOrNull() }
+    }
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
         content.audios.forEachIndexed { index, audio ->
             key(audio.attachmentId) {
@@ -64,6 +68,7 @@ public fun BubbleAudioStack(
                         callbacks = callbacks,
                         chrome = chrome,
                         autoRevealTranscription = autoRevealTranscription,
+                        receivedAtEpochMs = receivedAtEpochMs,
                     )
                 }
             }
