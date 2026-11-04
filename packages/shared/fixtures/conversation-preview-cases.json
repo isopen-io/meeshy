@@ -69,6 +69,47 @@
       "text": "Alice : Bonjour"
     },
     {
+      "id": "text-direct-member",
+      "matrix": "Conversation directe — l’auteur est toujours devant",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Bonjour"
+        },
+        "isDirect": true
+      },
+      "expected": {
+        "tone": "default",
+        "icon": null,
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Bonjour",
+            "language": null
+          }
+        ]
+      },
+      "text": "Alice : Bonjour"
+    },
+    {
       "id": "text-self",
       "matrix": "Texte — mes messages",
       "input": {
@@ -88,6 +129,46 @@
           "originalLanguage": "fr",
           "content": "Bonjour"
         }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": null,
+        "author": {
+          "kind": "self",
+          "label": "Vous"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Bonjour",
+            "language": null
+          }
+        ]
+      },
+      "text": "Vous : Bonjour"
+    },
+    {
+      "id": "text-direct-self",
+      "matrix": "Conversation directe — « Vous : » est toujours devant",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Bonjour"
+        },
+        "isDirect": true
       },
       "expected": {
         "tone": "default",
@@ -371,6 +452,59 @@
       "text": "Alice : 🎤 Message vocal · 0:12 · 48 Ko"
     },
     {
+      "id": "voice-with-caption",
+      "matrix": "Vocal — légende (le nom d’un vocal ne se dit jamais)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "audio",
+          "originalLanguage": "fr",
+          "content": "Écoute ça",
+          "attachment": {
+            "mimeType": "audio/webm",
+            "duration": 12000,
+            "fileSize": 49152
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "voice",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Écoute ça",
+            "language": null
+          },
+          {
+            "kind": "label",
+            "text": "0:12"
+          },
+          {
+            "kind": "label",
+            "text": "48 Ko"
+          }
+        ]
+      },
+      "text": "Alice : 🎤 Écoute ça · 0:12 · 48 Ko"
+    },
+    {
       "id": "audio-named",
       "matrix": "Audio",
       "input": {
@@ -423,6 +557,64 @@
       "text": "Alice : 🎵 nom.mp3 · 3:05 · 4,2 Mo"
     },
     {
+      "id": "audio-named-with-caption",
+      "matrix": "Audio nommé — légende (nom, durée et poids restent)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "audio",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "audio/mpeg",
+            "originalName": "nom.mp3",
+            "duration": 185000,
+            "fileSize": 4404019
+          },
+          "content": "Écoute"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "audio",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Écoute",
+            "language": null
+          },
+          {
+            "kind": "label",
+            "text": "nom.mp3"
+          },
+          {
+            "kind": "label",
+            "text": "3:05"
+          },
+          {
+            "kind": "label",
+            "text": "4,2 Mo"
+          }
+        ]
+      },
+      "text": "Alice : 🎵 Écoute · nom.mp3 · 3:05 · 4,2 Mo"
+    },
+    {
       "id": "video",
       "matrix": "Vidéo",
       "input": {
@@ -469,7 +661,7 @@
           },
           {
             "kind": "label",
-            "text": "1920×1080"
+            "text": "1920 × 1080"
           },
           {
             "kind": "label",
@@ -477,7 +669,7 @@
           }
         ]
       },
-      "text": "Alice : 🎬 Vidéo · 0:45 · 1920×1080 · 12 Mo"
+      "text": "Alice : 🎬 Vidéo · 0:45 · 1920 × 1080 · 12 Mo"
     },
     {
       "id": "photo",
@@ -521,7 +713,7 @@
           },
           {
             "kind": "label",
-            "text": "450×456"
+            "text": "450 × 456"
           },
           {
             "kind": "label",
@@ -529,7 +721,7 @@
           }
         ]
       },
-      "text": "Alice : 📷 Photo · 450×456 · 234 Ko"
+      "text": "Alice : 📷 Photo · 450 × 456 · 234 Ko"
     },
     {
       "id": "photo-without-size",
@@ -573,11 +765,11 @@
           },
           {
             "kind": "label",
-            "text": "450×456"
+            "text": "450 × 456"
           }
         ]
       },
-      "text": "Alice : 📷 Photo · 450×456"
+      "text": "Alice : 📷 Photo · 450 × 456"
     },
     {
       "id": "photo-without-any-detail",
@@ -622,7 +814,7 @@
     },
     {
       "id": "photo-with-caption",
-      "matrix": "Photo — légende",
+      "matrix": "Photo — légende (la légende prend la place du libellé, les détails restent)",
       "input": {
         "viewerId": "u-me",
         "language": "fr",
@@ -661,10 +853,18 @@
             "kind": "text",
             "text": "Au bord du lac",
             "language": null
+          },
+          {
+            "kind": "label",
+            "text": "450 × 456"
+          },
+          {
+            "kind": "label",
+            "text": "234 Ko"
           }
         ]
       },
-      "text": "Alice : 📷 Au bord du lac"
+      "text": "Alice : 📷 Au bord du lac · 450 × 456 · 234 Ko"
     },
     {
       "id": "contact-card-legacy-file-name",
@@ -802,6 +1002,55 @@
         ]
       },
       "text": "Alice : 👤 Contact partagé"
+    },
+    {
+      "id": "contact-card-with-caption",
+      "matrix": "Carte de visite — légende (la légende prend la place du libellé, le nom du contact reste)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "text/vcard",
+            "originalName": "contact_80140BD0-3D81-42CA-B339-E67D81528456_Zoé Sanscompte.vcf",
+            "fileSize": 255
+          },
+          "content": "Voici son numéro"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "contact",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Voici son numéro",
+            "language": null
+          },
+          {
+            "kind": "label",
+            "text": "Zoé Sanscompte"
+          }
+        ]
+      },
+      "text": "Alice : 👤 Voici son numéro · Zoé Sanscompte"
     },
     {
       "id": "file",
@@ -947,6 +1196,64 @@
         ]
       },
       "text": "Alice : 📄 reçu.pdf · 1 page"
+    },
+    {
+      "id": "file-with-caption",
+      "matrix": "Fichier — légende (le nom, les pages et le poids restent)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "application/pdf",
+            "originalName": "contrat.pdf",
+            "pageCount": 12,
+            "fileSize": 2097152
+          },
+          "content": "Le contrat"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "file",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "text",
+            "text": "Le contrat",
+            "language": null
+          },
+          {
+            "kind": "label",
+            "text": "contrat.pdf"
+          },
+          {
+            "kind": "label",
+            "text": "12 pages"
+          },
+          {
+            "kind": "label",
+            "text": "2 Mo"
+          }
+        ]
+      },
+      "text": "Alice : 📄 Le contrat · contrat.pdf · 12 pages · 2 Mo"
     },
     {
       "id": "location",
@@ -1561,6 +1868,65 @@
       "text": "Alice : 🎬 2 vidéos · 30 Mo"
     },
     {
+      "id": "videos-with-caption",
+      "matrix": "Plusieurs vidéos — légende",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "video",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "video/mp4"
+          },
+          "attachmentSummary": {
+            "count": 2,
+            "kinds": {
+              "video": 2,
+              "image": 0
+            },
+            "totalSize": 31457280
+          },
+          "content": "Le match"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "video",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "2 vidéos"
+          },
+          {
+            "kind": "text",
+            "text": "Le match",
+            "language": null
+          },
+          {
+            "kind": "label",
+            "text": "30 Mo"
+          }
+        ]
+      },
+      "text": "Alice : 🎬 2 vidéos · Le match · 30 Mo"
+    },
+    {
       "id": "documents-same-kind",
       "matrix": "Plusieurs pièces jointes — documents",
       "input": {
@@ -1658,8 +2024,64 @@
       "text": "Alice : 📎 4 pièces jointes"
     },
     {
+      "id": "attachments-mixed-with-caption",
+      "matrix": "Pièces jointes mixtes — légende",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "image/jpeg"
+          },
+          "attachmentSummary": {
+            "count": 4,
+            "kinds": {
+              "image": 2,
+              "file": 1,
+              "audio": 1
+            },
+            "totalSize": null
+          },
+          "content": "Nos vacances"
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "attachments",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "4 pièces jointes"
+          },
+          {
+            "kind": "text",
+            "text": "Nos vacances",
+            "language": null
+          }
+        ]
+      },
+      "text": "Alice : 📎 4 pièces jointes · Nos vacances"
+    },
+    {
       "id": "attachments-with-caption",
-      "matrix": "Plusieurs pièces jointes — avec légende",
+      "matrix": "Plusieurs pièces jointes — avec légende (le nombre et le poids restent)",
       "input": {
         "viewerId": "u-me",
         "language": "fr",
@@ -1699,13 +2121,21 @@
         "kind": "message",
         "segments": [
           {
+            "kind": "label",
+            "text": "3 photos"
+          },
+          {
             "kind": "text",
             "text": "Nos vacances",
             "language": null
+          },
+          {
+            "kind": "label",
+            "text": "1,4 Mo"
           }
         ]
       },
-      "text": "Alice : 📷 Nos vacances"
+      "text": "Alice : 📷 3 photos · Nos vacances · 1,4 Mo"
     },
     {
       "id": "effect-one",
@@ -2117,7 +2547,7 @@
     },
     {
       "id": "ephemeral-photo",
-      "matrix": "Éphémère — la nature se dit en mots quand la flamme prend l’icône",
+      "matrix": "Éphémère — la nature se dit en mots, aucun détail de la pièce (ni dimensions ni poids)",
       "input": {
         "viewerId": "u-me",
         "language": "fr",
@@ -2139,7 +2569,8 @@
           "attachment": {
             "mimeType": "image/jpeg",
             "width": 450,
-            "height": 456
+            "height": 456,
+            "fileSize": 239616
           }
         }
       },
@@ -2161,21 +2592,17 @@
           {
             "kind": "label",
             "text": "Photo"
-          },
-          {
-            "kind": "label",
-            "text": "450×456"
           }
         ],
         "live": {
           "expiresAt": 1790157840000
         }
       },
-      "text": "Alice : 🔥 4 min · Photo · 450×456"
+      "text": "Alice : 🔥 4 min · Photo"
     },
     {
       "id": "ephemeral-named-audio",
-      "matrix": "Éphémère — audio nommé",
+      "matrix": "Éphémère — audio nommé : ni nom, ni durée",
       "input": {
         "viewerId": "u-me",
         "language": "fr",
@@ -2218,21 +2645,242 @@
           {
             "kind": "label",
             "text": "Audio"
-          },
-          {
-            "kind": "label",
-            "text": "nom.mp3"
-          },
-          {
-            "kind": "label",
-            "text": "3:05"
           }
         ],
         "live": {
           "expiresAt": 1790157840000
         }
       },
-      "text": "Alice : 🔥 4 min · Audio · nom.mp3 · 3:05"
+      "text": "Alice : 🔥 4 min · Audio"
+    },
+    {
+      "id": "ephemeral-file",
+      "matrix": "Éphémère — fichier : ni nom, ni pages, ni poids",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "receivedAt": "2026-09-23T09:59:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "content": "",
+          "ephemeralDuration": 300,
+          "attachment": {
+            "mimeType": "application/pdf",
+            "originalName": "contrat.pdf",
+            "pageCount": 12,
+            "fileSize": 2097152
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "countdown",
+            "text": "4 min",
+            "expiresAt": 1790157840000
+          },
+          {
+            "kind": "label",
+            "text": "Fichier"
+          }
+        ],
+        "live": {
+          "expiresAt": 1790157840000
+        }
+      },
+      "text": "Alice : 🔥 4 min · Fichier"
+    },
+    {
+      "id": "ephemeral-photo-with-caption",
+      "matrix": "Éphémère — photo légendée : nature + texte servi, aucun détail",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "receivedAt": "2026-09-23T09:59:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "content": "Au bord du lac",
+          "ephemeralDuration": 300,
+          "attachment": {
+            "mimeType": "image/jpeg",
+            "width": 450,
+            "height": 456,
+            "fileSize": 239616
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "countdown",
+            "text": "4 min",
+            "expiresAt": 1790157840000
+          },
+          {
+            "kind": "label",
+            "text": "Photo"
+          },
+          {
+            "kind": "text",
+            "text": "Au bord du lac",
+            "language": null
+          }
+        ],
+        "live": {
+          "expiresAt": 1790157840000
+        }
+      },
+      "text": "Alice : 🔥 4 min · Photo · Au bord du lac"
+    },
+    {
+      "id": "ephemeral-photos-many",
+      "matrix": "Éphémère — plusieurs photos : le nombre, jamais le poids",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "receivedAt": "2026-09-23T09:59:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "content": "",
+          "ephemeralDuration": 300,
+          "attachment": {
+            "mimeType": "image/jpeg",
+            "fileSize": 239616
+          },
+          "attachmentSummary": {
+            "count": 3,
+            "kinds": {
+              "image": 3
+            },
+            "totalSize": 1468006
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "countdown",
+            "text": "4 min",
+            "expiresAt": 1790157840000
+          },
+          {
+            "kind": "label",
+            "text": "3 photos"
+          }
+        ],
+        "live": {
+          "expiresAt": 1790157840000
+        }
+      },
+      "text": "Alice : 🔥 4 min · 3 photos"
+    },
+    {
+      "id": "ephemeral-contact-card",
+      "matrix": "Éphémère — carte de visite : ni le nom du contact, ni le fichier",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "receivedAt": "2026-09-23T09:59:00.000Z",
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-alice",
+          "senderName": "Alice",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "file",
+          "originalLanguage": "fr",
+          "content": "",
+          "ephemeralDuration": 300,
+          "attachment": {
+            "mimeType": "text/vcard",
+            "originalName": "contact_80140BD0-3D81-42CA-B339-E67D81528456_Zoé Sanscompte.vcf",
+            "fileSize": 255
+          }
+        }
+      },
+      "expected": {
+        "tone": "default",
+        "icon": "ephemeral",
+        "author": {
+          "kind": "member",
+          "id": "u-alice",
+          "label": "Alice"
+        },
+        "kind": "message",
+        "segments": [
+          {
+            "kind": "countdown",
+            "text": "4 min",
+            "expiresAt": 1790157840000
+          },
+          {
+            "kind": "label",
+            "text": "Contact partagé"
+          }
+        ],
+        "live": {
+          "expiresAt": 1790157840000
+        }
+      },
+      "text": "Alice : 🔥 4 min · Contact partagé"
     },
     {
       "id": "ephemeral-flag-only",

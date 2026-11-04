@@ -154,16 +154,17 @@ nonisolated struct PostEditSceneSignature: Equatable {
             let effets = slide.effects
             let origine = backgroundURL != nil && slide.mediaURL == backgroundURL
             let fond = origine ? (backgroundRemoved ? "" : "fond-origine") : (slide.mediaURL ?? "")
-            let medias = (effets.mediaObjects ?? []).filter { !removed.contains($0.postMediaId) }
+            let medias: [String] = (effets.mediaObjects ?? []).filter { !removed.contains($0.postMediaId) }
                 .map { "media:\($0.id)" }
-            let sons = (effets.audioPlayerObjects ?? []).filter { !removed.contains($0.postMediaId) }
+            let sons: [String] = (effets.audioPlayerObjects ?? []).filter { !removed.contains($0.postMediaId) }
                 .map { "son:\($0.id)" }
-            return ["fond:\(fond)"]
-                + effets.textObjects.map { "texte:\($0.id):\($0.text)" }
-                + medias + sons
-                + (effets.stickerObjects ?? []).map { "sticker:\($0.id)" }
-                + effets.locationObjects.map { "lieu:\($0.id)" }
-                + ["traits:\(effets.drawingStrokes?.count ?? 0)", "dessin:\(effets.drawingData?.count ?? 0)"]
+            let textes: [String] = effets.textObjects.map { "texte:\($0.id):\($0.text)" }
+            let stickers: [String] = (effets.stickerObjects ?? []).map { "sticker:\($0.id)" }
+            let lieux: [String] = effets.locationObjects.map { "lieu:\($0.id)" }
+            let traits = "traits:\(effets.drawingStrokes?.count ?? 0)"
+            let dessin = "dessin:\(effets.drawingData?.count ?? 0)"
+            let objets: [[String]] = [["fond:\(fond)"], textes, medias, sons, stickers, lieux, [traits, dessin]]
+            return objets.flatMap { $0 }
         }
     }
 }

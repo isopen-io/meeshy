@@ -835,13 +835,9 @@ struct MeeshyComposerHost: View {
         PlateauTint(rawValue: storedTint) ?? .defaultTint
     }
 
-    /// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne.**
-    ///
-    /// Un TOGGLE, et c'est ce qui le rend utilisable : rien de sélectionné et
-    /// un fond média ⇒ on le sélectionne ; sinon ⇒ on efface. L'auteur entre et
-    /// sort de l'inspecteur par le même geste, sur la même cible — sans quoi
-    /// une sélection posée par un tap sur le fond n'aurait aucune sortie, la
-    /// zone contextuelle restant montée pour toujours.
+    /// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne** — un TOGGLE : rien de
+    /// sélectionné et un fond média ⇒ on le sélectionne ; sinon ⇒ on efface. L'auteur entre et
+    /// sort de l'inspecteur par le même geste, sur la même cible.
     func handleSceneBackgroundTap() {
         // **Toucher la scène à vide désélectionne D'ABORD** (#13839, L5) et referme la bande ; la règle
         // se lit AVANT d'effacer, sinon elle verrait toujours « rien ».
@@ -850,7 +846,9 @@ struct MeeshyComposerHost: View {
             effectIsOpen: openSceneEffect != nil,
             quickCaptureOffered: sceneQuickCaptureIsOffered,
             backgroundMediaId: mountedComposerView == .scene ? sceneBackgroundMedia?.id : nil,
-            bandIsOpen: ComposerSceneBand.opened(requestedSceneBand, served: openableSceneBands) != nil)
+            bandIsOpen: ComposerSceneBand.opened(requestedSceneBand, served: openableSceneBands) != nil,
+            writesText: writesText)
+        if issue == .endWriting { return endSceneWriting() }
         if ComposerSceneEmptyTap.closesBand(issue) { requestedSceneBand = nil }
         if issue == .armViewfinder, handleSceneQuickTap() { return }
         // Le document sélectionne son fond par KIND (#4035).
@@ -863,7 +861,7 @@ struct MeeshyComposerHost: View {
         switch issue {
         case .deselect:                   sceneSelectionRelay.deselectSceneItem()
         case .selectBackground(let fond): sceneSelectionRelay.selectSceneItem(fond)
-        case .closeEffect, .closeBand, .armViewfinder, .nothing:
+        case .endWriting, .closeEffect, .closeBand, .armViewfinder, .nothing:
             selectedSceneItemId = nil
             inlineEdit = nil
         }
