@@ -231,6 +231,13 @@ class MessageMergePolicyTest {
     }
 
     @Test
+    fun `an ordinary message marked consumed is never emptied by the merge`() {
+        val ordinary = message(content = "salut", consumedByMe = true)
+
+        assertThat(MessageMergePolicy.merge(ordinary, message(content = "salut")).message.content).isEqualTo("salut")
+    }
+
+    @Test
     fun `a view-once not yet opened by the reader keeps the served content`() {
         val merged = MessageMergePolicy.merge(viewOnceWithContent(), viewOnceWithContent(consumedByMe = false)).message
 

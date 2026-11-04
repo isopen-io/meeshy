@@ -123,7 +123,8 @@ internal class MessageIngestPipeline(
             val row = writes[rowId] ?: continue
             val waiting = buffer.take(listOfNotNull(message.id, message.clientMessageId, rowId)) ?: continue
             val current = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull() ?: continue
-            val replayed = PendingRowEventReplay.apply(current, waiting).message
+            // Le rejeu (une modification, surtout) ne remet jamais de clair dans une vue unique scellée (#15897).
+            val replayed = PendingRowEventReplay.apply(current, waiting).message?.let { sealedIfOpened(it, row.viewOnceOpenedAt != null) }
             if (replayed == null) {
                 writes.remove(rowId)
                 removed += rowId
@@ -172,7 +173,7 @@ internal class MessageIngestPipeline(
      * servie porte encore ne revient en Room (iso iOS `APIMessageUpsert+Merge`, #15897).
      */
     private fun sealedIfOpened(message: ApiMessage, openedHere: Boolean): ApiMessage =
-        if (openedHere || message.consumedByMe == true) ConversationEventDeltas.sealedAsOpened(message) else message
+        ConversationEventDeltas.sealedIfOpened(message, openedHere)
 
     /** Ce qu'une page servie change aux traductions retenues : des messages entiers, ou certaines langues seulement. */
     private class RetainedChanges(val outlived: List<String>, val superseded: List<Pair<List<String>, Set<String>>>)

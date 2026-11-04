@@ -213,6 +213,21 @@ class ConversationEventDeltasTest {
     }
 
     @Test
+    fun `only a view-once opened by the reader is sealed on write`() {
+        val ordinary = message(attachments = listOf(photo())).copy(consumedByMe = true)
+        val byFlag = message().copy(isViewOnce = true, consumedByMe = true)
+        val byEffect = message().copy(effectFlags = MessageEffectFlags.VIEW_ONCE.toInt())
+        val byPiece = message(attachments = listOf(photo().copy(effectFlags = MessageEffectFlags.VIEW_ONCE)))
+        val notOpened = message().copy(isViewOnce = true, consumedByMe = false)
+
+        assertThat(ConversationEventDeltas.sealedIfOpened(ordinary, openedHere = true)).isSameInstanceAs(ordinary)
+        assertThat(ConversationEventDeltas.sealedIfOpened(byFlag, openedHere = false).content).isEmpty()
+        assertThat(ConversationEventDeltas.sealedIfOpened(byEffect, openedHere = true).content).isEmpty()
+        assertThat(ConversationEventDeltas.sealedIfOpened(byPiece, openedHere = true).attachments.single().fileUrl).isNull()
+        assertThat(ConversationEventDeltas.sealedIfOpened(notOpened, openedHere = false)).isSameInstanceAs(notOpened)
+    }
+
+    @Test
     fun `the served attachment summary replaces the local one`() {
         val local = message(attachments = listOf(photo(summary = mapOf("❤️" to 1))))
 

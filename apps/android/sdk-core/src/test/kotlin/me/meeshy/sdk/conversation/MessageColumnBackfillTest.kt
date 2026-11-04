@@ -97,4 +97,79 @@ class MessageColumnBackfillTest {
         assertThat(row.lastError).isEqualTo("boom")
         assertThat(row.viewOnceOpenedAt).isEqualTo(5L)
     }
+
+    private fun openedViewOnce(id: String) = message(id).copy(
+        content = "secret",
+        isViewOnce = true,
+        consumedByMe = true,
+        attachments = listOf(me.meeshy.sdk.model.ApiMessageAttachment(id = "a1", fileUrl = "https://cdn/a1.jpg", originalName = "passeport.jpg")),
+        encryptedContent = "ciphertext==",
+    )
+
+    private suspend fun MessageCollaboratorHarness.decoded(id: String): ApiMessage =
+        MeeshyApi.json.decodeFromString(ApiMessage.serializer(), database.messageDao().find(id)!!.payload)
+
+    @Test
+    fun `une vue unique heritee ouverte par soi mais jamais scellee est scellee au demarrage`() = runHarnessTest { harness ->
+        val dao = harness.database.messageDao()
+        dao.upsertAll(listOf(legacyRow(openedViewOnce("m1")).copy(columnsBackfilled = true)))
+
+        val sealed = MessageColumnBackfill(harness.database, dao).sealOpenedViewOnces()
+
+        assertThat(sealed).isEqualTo(1)
+        val row = dao.find("m1")!!
+        assertThat(row.contentText).isNull()
+        assertThat(row.encryptedPayload).isNull()
+        assertThat(row.viewOnceOpenedAt).isNotNull()
+        val message = harness.decoded("m1")
+        assertThat(message.content).isEmpty()
+        assertThat(message.encryptedContent).isNull()
+        assertThat(message.attachments.single().fileUrl).isNull()
+        assertThat(message.attachments.single().originalName).isNull()
+    }
+
+    @Test
+    fun `une vue unique dont seule la colonne d'ouverture est posee est scellee aussi`() = runHarnessTest { harness ->
+        val dao = harness.database.messageDao()
+        dao.upsertAll(listOf(legacyRow(openedViewOnce("m1").copy(consumedByMe = null)).copy(columnsBackfilled = true, viewOnceOpenedAt = 5L)))
+
+        MessageColumnBackfill(harness.database, dao).sealOpenedViewOnces()
+
+        assertThat(harness.decoded("m1").content).isEmpty()
+        assertThat(dao.find("m1")!!.viewOnceOpenedAt).isEqualTo(5L)
+    }
+
+    @Test
+    fun `le scellement au demarrage est idempotent et epargne les messages ordinaires`() = runHarnessTest { harness ->
+        val dao = harness.database.messageDao()
+        dao.upsertAll(
+            listOf(
+                legacyRow(openedViewOnce("m1")).copy(columnsBackfilled = true),
+                legacyRow(message("m2").copy(consumedByMe = true)).copy(columnsBackfilled = true, viewOnceOpenedAt = 5L),
+                legacyRow(message("m3")).copy(columnsBackfilled = true),
+            ),
+        )
+        val backfill = MessageColumnBackfill(harness.database, dao)
+        backfill.sealOpenedViewOnces()
+        val afterFirst = dao.find("m1")
+
+        val second = backfill.sealOpenedViewOnces()
+
+        assertThat(second).isEqualTo(0)
+        assertThat(dao.find("m1")).isEqualTo(afterFirst)
+        assertThat(harness.decoded("m2").content).isEqualTo("salut")
+        assertThat(harness.decoded("m3").content).isEqualTo("salut")
+    }
+
+    @Test
+    fun `le passage de demarrage rattrape les colonnes puis scelle`() = runHarnessTest { harness ->
+        val dao = harness.database.messageDao()
+        dao.upsertAll(listOf(legacyRow(openedViewOnce("m1"))))
+        val backfill = MessageColumnBackfill(harness.database, dao)
+
+        kotlinx.coroutines.coroutineScope { backfill.launchIn(this).join() }
+
+        assertThat(dao.countUnbackfilled()).isEqualTo(0)
+        assertThat(harness.decoded("m1").content).isEmpty()
+    }
 }
