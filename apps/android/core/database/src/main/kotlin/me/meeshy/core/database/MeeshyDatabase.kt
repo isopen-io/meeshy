@@ -20,14 +20,17 @@ import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.MessageTranslationDao
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.dao.NotificationDao
+import me.meeshy.core.database.dao.PendingCountingEventDao
 import me.meeshy.core.database.dao.PendingIdDao
 import me.meeshy.core.database.dao.PlaintextErasureDao
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
 import me.meeshy.core.database.dao.SendAttemptDao
 import me.meeshy.core.database.dao.StatusBarCacheDao
 import me.meeshy.core.database.dao.StoryDao
+import me.meeshy.core.database.dao.SocialEventV2OutboxDao
 import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
+import me.meeshy.core.database.dao.TrackingLinksCacheDao
 import me.meeshy.core.database.dao.TusUploadCheckpointDao
 import me.meeshy.core.database.entity.BlockedUserEntity
 import me.meeshy.core.database.entity.CacheEntryEntity
@@ -49,14 +52,17 @@ import me.meeshy.core.database.entity.MessageTranscriptionEntity
 import me.meeshy.core.database.entity.MessageTranslationEntity
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.core.database.entity.NotificationEntity
+import me.meeshy.core.database.entity.PendingCountingEventEntity
 import me.meeshy.core.database.entity.PendingIdEntity
 import me.meeshy.core.database.entity.PlaintextErasureEntity
 import me.meeshy.core.database.entity.ProfileStatsCacheEntity
 import me.meeshy.core.database.entity.SendAttemptEntity
 import me.meeshy.core.database.entity.StatusBarCacheEntity
 import me.meeshy.core.database.entity.StoryEntity
+import me.meeshy.core.database.entity.SocialEventV2OutboxEntity
 import me.meeshy.core.database.entity.SuggestionEntity
 import me.meeshy.core.database.entity.SyncMetaEntity
+import me.meeshy.core.database.entity.TrackingLinksCacheEntity
 import me.meeshy.core.database.entity.TusUploadCheckpointEntity
 
 /**
@@ -97,8 +103,11 @@ import me.meeshy.core.database.entity.TusUploadCheckpointEntity
         MessageAudioTranslationEntity::class,
         CallNetworkJournalEntity::class,
         CallTranscriptEntity::class,
+        PendingCountingEventEntity::class,
+        SocialEventV2OutboxEntity::class,
+        TrackingLinksCacheEntity::class,
     ],
-    version = 27,
+    version = 28,
     exportSchema = true,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {
@@ -129,4 +138,7 @@ public abstract class MeeshyDatabase : RoomDatabase() {
     public abstract fun messageTranslationDao(): MessageTranslationDao
     public abstract fun callNetworkJournalDao(): CallNetworkJournalDao
     public abstract fun callTranscriptDao(): CallTranscriptDao
+    public abstract fun pendingCountingEventDao(): PendingCountingEventDao
+    public abstract fun socialEventV2OutboxDao(): SocialEventV2OutboxDao
+    public abstract fun trackingLinksCacheDao(): TrackingLinksCacheDao
 }
