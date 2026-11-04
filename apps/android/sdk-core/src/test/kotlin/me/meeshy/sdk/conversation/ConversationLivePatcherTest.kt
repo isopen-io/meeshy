@@ -16,6 +16,7 @@ import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationLastMessage
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ApiTextTranslation
@@ -25,6 +26,7 @@ import me.meeshy.sdk.model.MessageDeletedEvent
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantJoinedEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
+import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
 import me.meeshy.sdk.model.ParticipantUnbannedEvent
 import me.meeshy.sdk.model.preview.PreviewFieldUpdate
 import me.meeshy.sdk.net.MeeshyApi
@@ -310,4 +312,46 @@ class ConversationLivePatcherTest {
         assertThat(stored("c1")!!.lastMessage?.id).isEqualTo("m1")
         coVerify(exactly = 0) { api.getById(any()) }
     }
+
+    @Test
+    fun `another member leaving drops their roster line, my own departure removes the conversation`() = runTest {
+        val roster = listOf(ApiParticipant(id = "p1", userId = "x"), ApiParticipant(id = "p2", userId = "z"))
+        seed(group().copy(participants = roster, serverMemberCount = 2))
+        val p = patcher()
+
+        assertThat(p.applyLeft(ParticipantLeftEvent(conversationId = "c1", userId = "x"))).isFalse()
+        assertThat(stored("c1")!!.participants.map { it.userId }).containsExactly("z")
+        assertThat(stored("c1")!!.memberCount).isEqualTo(1)
+
+        assertThat(p.applyLeft(ParticipantLeftEvent(conversationId = "c1", userId = "me"))).isTrue()
+        assertThat(stored("c1")).isNull()
+    }
+
+    @Test
+    fun `replaying the same departure changes nothing more`() = runTest {
+        val roster = listOf(ApiParticipant(id = "p1", userId = "x"), ApiParticipant(id = "p2", userId = "z"))
+        seed(group().copy(participants = roster, serverMemberCount = 2))
+        val p = patcher()
+
+        p.applyBanned(ParticipantBannedEvent(conversationId = "c1", userId = "x"))
+        p.applyBanned(ParticipantBannedEvent(conversationId = "c1", userId = "x"))
+
+        assertThat(stored("c1")!!.memberCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a role update moves my rank and the roster line, an unknown member leaves the rest alone`() = runTest {
+        val roster = listOf(ApiParticipant(id = "p1", userId = "me", role = "MEMBER"), ApiParticipant(id = "p2", userId = "z", role = "MEMBER"))
+        seed(group().copy(participants = roster))
+        val p = patcher()
+
+        p.applyRoleUpdated(ParticipantRoleUpdatedEvent(conversationId = "c1", userId = "me", role = "ADMIN"))
+        assertThat(stored("c1")!!.currentUserRole).isEqualTo("ADMIN")
+        assertThat(stored("c1")!!.participants.map { it.role }).containsExactly("ADMIN", "MEMBER").inOrder()
+
+        p.applyRoleUpdated(ParticipantRoleUpdatedEvent(conversationId = "c1", userId = "z", role = "MODERATOR"))
+        assertThat(stored("c1")!!.currentUserRole).isEqualTo("ADMIN")
+        assertThat(stored("c1")!!.participants.map { it.role }).containsExactly("ADMIN", "MODERATOR").inOrder()
+    }
 }
+

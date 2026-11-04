@@ -167,7 +167,7 @@ class ComposerIncomingMediaComposeTest {
 
         compose.onNodeWithContentDescription(adding).assertDoesNotExist()
         compose.onNodeWithText(string(me.meeshy.feature.stories.R.string.story_composer_incoming_sending, 50)).assertExists()
-        compose.onNodeWithContentDescription("Text").assertExists()
+        compose.onNodeWithContentDescription("Add text").assertExists()
 
         report(0, 3L, 4L)
         compose.waitForIdle()
@@ -200,12 +200,12 @@ class ComposerIncomingMediaComposeTest {
     fun `while it is prepared the tools and publish are out of reach, even for TalkBack`() {
         val vm = viewModel()
         show(vm)
-        compose.onNodeWithContentDescription("Text").assertExists()
+        compose.onNodeWithContentDescription("Add text").assertExists()
 
         vm.onMediaChosen(count = 1) { CompletableDeferred<List<MediaUploadItem>>().await() }
         compose.waitForIdle()
 
-        compose.onNodeWithContentDescription("Text").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Add text").assertDoesNotExist()
         compose.onNodeWithText("Publish story").assertDoesNotExist()
         assertThat(vm.state.value.canPublish).isFalse()
     }
@@ -220,7 +220,7 @@ class ComposerIncomingMediaComposeTest {
         compose.onNodeWithContentDescription(string(me.meeshy.feature.stories.R.string.story_composer_incoming_cancel)).performClick()
 
         compose.onNodeWithContentDescription(adding).assertDoesNotExist()
-        compose.onNodeWithContentDescription("Text").assertExists()
+        compose.onNodeWithContentDescription("Add text").assertExists()
         assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.deck.selectedSlide.mediaIds).isEmpty()
     }
@@ -306,12 +306,12 @@ class ComposerIncomingMediaComposeTest {
 
         compose.onNodeWithContentDescription(string(me.meeshy.feature.stories.R.string.story_composer_incoming_sticker_a11y))
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate))
-        compose.onNodeWithContentDescription("Text").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Add text").assertDoesNotExist()
 
         compose.onNodeWithContentDescription(string(me.meeshy.feature.stories.R.string.story_composer_incoming_cancel)).performClick()
 
         compose.onNodeWithContentDescription(string(me.meeshy.feature.stories.R.string.story_composer_incoming_sticker_a11y)).assertDoesNotExist()
-        compose.onNodeWithContentDescription("Text").assertExists()
+        compose.onNodeWithContentDescription("Add text").assertExists()
         assertThat(vm.state.value.deck.selectedSlide.stickers).isEmpty()
     }
 

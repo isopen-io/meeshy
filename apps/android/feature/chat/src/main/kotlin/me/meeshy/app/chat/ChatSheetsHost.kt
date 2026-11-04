@@ -506,17 +506,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 
     val replyThread = state.replyThreadOverlay
     if (replyThread != null) {
-        ModalBottomSheet(
-            onDismissRequest = actions.closeReplyThread,
-            containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        ) {
-            ReplyThreadSheet(
-                overlay = replyThread,
-                accentColor = accentColor,
-                onReplyTap = actions.onReplyThreadReplyTap,
-                modifier = Modifier.navigationBarsPadding(),
-            )
-        }
+        ReplyThreadHost(state, replyThread.parentId, accentColor, actions.closeReplyThread)
     }
 
     val forward = state.forward

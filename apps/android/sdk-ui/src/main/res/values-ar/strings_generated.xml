@@ -329,6 +329,12 @@
     <string name="media_voice_recording">رسالة صوتية (%1$s)</string>
     <string name="message_long_collapse">عرض أقل</string>
     <string name="message_long_read_more">اقرأ المزيد</string>
+    <string name="mini_player_a11y_now_playing">تشغيل صوت من %1$s، %2$s</string>
+    <string name="mini_player_a11y_open_hint">فتح المحادثة</string>
+    <string name="mini_player_close">إغلاق المشغّل</string>
+    <string name="mini_player_next">التالي</string>
+    <string name="mini_player_pause">إيقاف مؤقت</string>
+    <string name="mini_player_play">التشغيل</string>
     <string name="notification_date_ago">قبل %1$s</string>
     <string name="notification_date_hours">%1$d س</string>
     <string name="notification_date_minutes">%1$d د</string>

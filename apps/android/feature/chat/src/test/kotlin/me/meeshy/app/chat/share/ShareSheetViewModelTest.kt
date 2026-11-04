@@ -48,6 +48,10 @@ import me.meeshy.sdk.outbox.OutOfThreadSendGate
 import me.meeshy.sdk.model.PostShareTarget
 import me.meeshy.sdk.post.PostShareLinkService
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.model.share.ShareRecipient
+import me.meeshy.sdk.share.ShareDeliveryOutcome
+import me.meeshy.sdk.share.ShareDurableRequest
+import me.meeshy.sdk.share.ShareDurableSending
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
@@ -101,6 +105,7 @@ class ShareSheetViewModelTest {
         outOfThread: OutOfThreadSendGate = OutOfThreadSendGate { OutOfThreadAdmission.SEND },
         trackedLink: String? = null,
         previews: PendingMediaPreviewing = PendingMediaPreviewing.None,
+        durable: ShareDurableSending = ShareDurableSending.None,
     ): Harness {
         val links = mockk<PostShareLinkService>()
         coEvery { links.resolve(any(), any()) } returns
@@ -122,7 +127,7 @@ class ShareSheetViewModelTest {
         val online = MutableStateFlow(true)
         val network = mockk<NetworkMonitor>(relaxed = true)
         every { network.isOnline } returns online
-        val vm = ShareSheetViewModel(conversationRepo, messages, session, mockk<WorkManager>(relaxed = true), mediaQueue, friendRepo, blockedRepo, blocks, network, outOfThread, links, previews)
+        val vm = ShareSheetViewModel(conversationRepo, messages, session, mockk<WorkManager>(relaxed = true), mediaQueue, friendRepo, blockedRepo, blocks, network, outOfThread, links, previews, durable)
         return Harness(vm, messages, conversationRepo, mediaQueue, blocks, online, links)
     }
 
@@ -708,6 +713,34 @@ class ShareSheetViewModelTest {
     private fun intakeCopy(): File {
         val dir = File(kotlin.io.path.createTempDirectory("share").toFile(), "media-intake").apply { mkdirs(); deleteOnExit() }
         return File(dir, "copy").apply { writeText("x"); deleteOnExit() }
+    }
+
+    @Test
+    fun a_text_share_goes_through_the_durable_sender_when_it_is_available_and_never_through_the_direct_path() = runTest(dispatcher) {
+        val requests = mutableListOf<ShareDurableRequest>()
+        val durable = object : ShareDurableSending {
+            override val isAvailable = true
+            override suspend fun send(
+                request: ShareDurableRequest,
+                recipients: List<ShareRecipient>,
+                onOutcome: suspend (ShareRecipient, ShareDeliveryOutcome) -> Unit,
+            ): Map<String, ShareDeliveryOutcome> {
+                requests += request
+                recipients.forEach { onOutcome(it, ShareDeliveryOutcome.Queued("c1")) }
+                return emptyMap()
+            }
+        }
+        val h = harness(durable = durable)
+        h.vm.bind(storyCard)
+        advanceUntilIdle()
+
+        h.vm.toggle(h.model().sections.recents.first())
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(requests.single().content).isEqualTo("Story de Léa : https://meeshy.me/s/1")
+        assertThat(h.model().deliveries["conv:c1"]).isEqualTo(ShareDelivery.Queued)
+        coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     private fun file(name: String, mime: String): MediaUploadItem =

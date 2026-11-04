@@ -125,7 +125,7 @@ class StorySceneSheetLayoutTest {
         show { StoryComposerSheet.AUDIENCE }
 
         compose.onNodeWithContentDescription(CLOSE).assertDoesNotExist()
-        compose.onNodeWithContentDescription("Text").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Add text").assertDoesNotExist()
         compose.onNodeWithText(PUBLISH).assertDoesNotExist()
     }
 

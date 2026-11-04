@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="story_sticker_make">Faire un sticker</string>
     <string name="story_sticker_lift_saved">Sujet détouré et ajouté à Mes stickers</string>
     <string name="story_sticker_lift_no_subject">Aucun sujet trouvé sur cette photo</string>
     <string name="story_sticker_lift_unreadable">Image illisible</string>

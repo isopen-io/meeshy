@@ -191,7 +191,7 @@ struct RootChromeLayer: ViewModifier {
     @ObservedObject var storyViewerCoordinator: StoryViewerCoordinator
     @ObservedObject var router: Router
     let activeConversationId: () -> String?
-    let onSyncPillTap: (OutboxUIItem.Source) -> Void
+    let onSyncPillTap: (OutboxUIItem.Source) -> Bool
     let onMiniPlayerTap: () -> Void
     let showFeed: Bool
     let showMenu: Bool

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "thread.title",
+          "androidName": "chat_thread_discussion_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "thread.reply.placeholder",
+          "androidName": "chat_thread_reply_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "thread.send.error",
+          "androidName": "chat_thread_send_error",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.send.label",
+          "androidName": "chat_thread_send_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.delivery.sending",
+          "androidName": "chat_thread_sending",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

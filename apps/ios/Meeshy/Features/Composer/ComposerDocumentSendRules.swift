@@ -38,7 +38,9 @@ import MeeshySDK
 /// consigné ici pour que personne ne le découvre au moment de recâbler la
 /// porte.
 nonisolated enum ComposerDocumentSendPath: Equatable {
-    /// La citation : `POST /posts/:id/repost`. Pas de file durable.
+    /// La citation : `POST /posts/:id/repost`. Pas de file durable DANS CE
+    /// PLAN — la citation a sa porte (`QuoteComposerDoor`) et son écrivain
+    /// durable (`RepostPublisher`).
     case quotedRepost
     /// Texte (ou lieu) seul : durable des DEUX côtés du réseau — **chez le
     /// publieur qui l'enfile lui-même**.

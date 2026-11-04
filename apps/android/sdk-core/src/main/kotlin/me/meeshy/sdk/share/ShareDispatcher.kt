@@ -46,6 +46,12 @@ fun interface ShareTargetResolver {
     suspend fun resolve(recipient: ShareRecipient, sender: MeeshyUser): ShareTarget
 }
 
+/** Une ligne résolue : prête à recevoir (avec le verdict d'admission) ou refusée, la raison dite à la ligne. */
+sealed interface ShareDestination {
+    data class Open(val conversationId: String, val admission: OutOfThreadAdmission) : ShareDestination
+    data class Refused(val failure: ShareFailure) : ShareDestination
+}
+
 interface ShareDispatching {
     /**
      * Envoie vers chaque ligne de [recipients] ; [onOutcome] reçoit l'issue de chacune dès qu'elle est connue.
@@ -76,6 +82,26 @@ class ShareDispatcher @Inject constructor(
     private val forwards: MessageForwardService,
     private val network: NetworkMonitor,
 ) : ShareDispatching {
+
+    /**
+     * Où chaque ligne se résout AVANT qu'un octet ne parte : la conversation ouverte (avec le verdict du mode de chiffrement
+     * relu) ou le refus à lui dire. L'envoi durable écrit sa fiche entre ce temps et celui de l'envoi.
+     */
+    suspend fun destinationsOf(recipients: List<ShareRecipient>, sender: MeeshyUser): Map<String, ShareDestination> {
+        val resolved = recipients.associate { it.id to resolve(it, sender) }
+        val admissions = admissionsOf(resolved.values.filterIsInstance<ShareTarget.Ready>().map { it.conversationId })
+        return resolved.mapValues { (_, target) -> destinationOf(target, admissions) }
+    }
+
+    private fun destinationOf(target: ShareTarget, admissions: Map<String, OutOfThreadAdmission>): ShareDestination = when (target) {
+        is ShareTarget.Refused -> ShareDestination.Refused(target.failure)
+        is ShareTarget.Ready -> when (val admission = admissions[target.conversationId]) {
+            null -> ShareDestination.Refused(ShareFailure.GENERIC)
+            OutOfThreadAdmission.END_TO_END -> ShareDestination.Refused(ShareFailure.SEALED_DESTINATION)
+            OutOfThreadAdmission.UNREACHABLE -> ShareDestination.Refused(ShareFailure.UNREACHABLE)
+            OutOfThreadAdmission.SEND, OutOfThreadAdmission.QUEUE_UNTIL_MODE_KNOWN -> ShareDestination.Open(target.conversationId, admission)
+        }
+    }
 
     override suspend fun dispatch(
         request: ShareDispatchRequest,

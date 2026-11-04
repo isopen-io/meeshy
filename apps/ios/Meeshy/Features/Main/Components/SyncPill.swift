@@ -154,8 +154,9 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
         case publicationChoices(cmid: String, retryOutboxId: String?)
         case retry(outboxId: String)
         case navigate(OutboxUIItem.Source)
-        /// Ligne de statut pure (hors ligne, reconnexion, synchronisation) :
-        /// le tap fait juste avancer la rotation.
+        /// Ligne de statut pure (hors ligne, reconnexion, synchronisation), ou
+        /// entrée sans destination (`.unknown`) : le tap fait juste avancer la
+        /// rotation, et VoiceOver ne promet aucune ouverture.
         case advance
     }
 
@@ -164,7 +165,7 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
             return .publicationChoices(cmid: pendingPublicationId, retryOutboxId: retryOutboxId)
         }
         if let retryOutboxId { return .retry(outboxId: retryOutboxId) }
-        if let source { return .navigate(source) }
+        if let source, source != .unknown { return .navigate(source) }
         return .advance
     }
 }
@@ -238,9 +239,10 @@ nonisolated enum SyncPillVisibility {
 struct SyncPill: View {
     let entries: [SyncPillEntry]
     /// Invoked when the user taps the pill and the currently visible
-    /// entry has a non-nil `source`. The caller is expected to push onto
-    /// the navigation stack (`Router.push(.conversation/.postDetail/...)`).
-    let onTap: ((OutboxUIItem.Source) -> Void)?
+    /// entry has a navigable `source`. The caller applies
+    /// `SyncPillDestination` and returns `false` when nothing was opened —
+    /// the pill then advances its rotation instead of staying inert.
+    let onTap: ((OutboxUIItem.Source) -> Bool)?
     /// Invoked when the user taps an entry carrying a `retryOutboxId` — a
     /// publication or a send that has definitively failed. Prioritaire sur
     /// `onTap` : sur une ligne épuisée, RELANCER est ce que le doigt veut, pas
@@ -322,7 +324,7 @@ struct SyncPill: View {
 
     init(
         entries: [SyncPillEntry],
-        onTap: ((OutboxUIItem.Source) -> Void)? = nil,
+        onTap: ((OutboxUIItem.Source) -> Bool)? = nil,
         onRetry: ((String) -> Void)? = nil,
         onCancelPublication: ((String) -> Void)? = nil
     ) {
@@ -754,8 +756,7 @@ struct SyncPill: View {
             guard let onRetry else { return rotator.advance() }
             onRetry(outboxId)
         case .navigate(let source):
-            guard let onTap else { return rotator.advance() }
-            onTap(source)
+            guard let onTap, onTap(source) else { return rotator.advance() }
         case .advance:
             // Pure status row (offline/syncing/reconnecting) — single tap
             // just advances the rotation manually.

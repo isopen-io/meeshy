@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "mini_player.play",
+          "androidName": "mini_player_play",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mini_player.pause",
+          "androidName": "mini_player_pause",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mini_player.next",
+          "androidName": "mini_player_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mini_player.close",
+          "androidName": "mini_player_close",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mini_player.a11y.now-playing",
+          "androidName": "mini_player_a11y_now_playing",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "mini_player.a11y.open-hint",
+          "androidName": "mini_player_a11y_open_hint",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
