@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.community.CommunityAppearance
 import me.meeshy.sdk.community.CommunityCacheRepository
+import me.meeshy.sdk.community.CommunityFetchException
 import me.meeshy.sdk.community.CommunityRepository
 import me.meeshy.sdk.community.InMemoryCommunityAppearanceStore
 import me.meeshy.sdk.model.ApiCommunity
@@ -176,5 +177,32 @@ class CommunityDetailViewModelTest {
 
         coVerify(exactly = 0) { repository.join(any()) }
         assertThat(CommunityAppearance("6366F1", "")).isNotNull()
+    }
+
+    @Test
+    fun `a 404 on the community sends the reader back to the list and forgets it`() = runTest {
+        val onError = slot<(Throwable) -> Unit>()
+        every { session.currentUserId } returns "me"
+        every { cache.detail("c1", capture(onError)) } returns detail
+        every { cache.channels("c1", any()) } returns channels
+        val vm = CommunityDetailViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session, InMemoryCommunityAppearanceStore())
+
+        onError.captured(CommunityFetchException("not found", 404))
+
+        assertThat(vm.effects.first()).isEqualTo(CommunityDetailEffect.NotFound)
+        coVerify { cache.forget("c1") }
+    }
+
+    @Test
+    fun `any other failure on a cold fiche shows the retry state`() = runTest {
+        val onError = slot<(Throwable) -> Unit>()
+        every { session.currentUserId } returns "me"
+        every { cache.detail("c1", capture(onError)) } returns detail
+        every { cache.channels("c1", any()) } returns channels
+        val vm = CommunityDetailViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session, InMemoryCommunityAppearanceStore())
+
+        onError.captured(CommunityFetchException("boom", 500))
+
+        assertThat(vm.state.value.showError).isTrue()
     }
 }
