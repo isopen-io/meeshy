@@ -43,12 +43,12 @@ class ReactionMarksApplier(
     private val deltas: MessageDeltaApplier,
     private val hidden: LocallyHiddenMessagesStore,
     private val starred: StarredMessagesStore,
-    private val open: OpenConversationLookup,
+    private val openConversations: OpenConversationLookup,
     private val viewerId: () -> String?,
 ) {
     suspend fun apply(event: ConversationSocketEvent) {
         when (event) {
-            is AttachmentReactionUpdateEvent -> if (!open.isOpen(event.conversationId)) deltas.apply(event, viewerId())
+            is AttachmentReactionUpdateEvent -> if (!openConversations.isOpen(event.conversationId)) deltas.apply(event, viewerId())
             is MessageHiddenForMeEvent -> {
                 val ids = event.messages.map { it.messageId }
                 ids.forEach { starred.unstar(it); hidden.hide(it) }
@@ -67,11 +67,11 @@ class ReactionMarksBinding @Inject constructor(
     deltas: MessageDeltaApplier,
     hidden: LocallyHiddenMessagesStore,
     starred: StarredMessagesStore,
-    open: OpenConversationLookup,
+    openConversations: OpenConversationLookup,
     session: SessionRepository,
     @IoDispatcher io: CoroutineDispatcher,
 ) : RealtimeBinding {
-    private val applier = ReactionMarksApplier(deltas, hidden, starred, open) { session.currentUser.value?.id }
+    private val applier = ReactionMarksApplier(deltas, hidden, starred, openConversations) { session.currentUser.value?.id }
     private val scope = CoroutineScope(SupervisorJob() + io)
     private var job: Job? = null
 

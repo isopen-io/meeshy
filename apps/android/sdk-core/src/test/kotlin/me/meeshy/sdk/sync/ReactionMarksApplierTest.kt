@@ -21,12 +21,12 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class ReactionMarksApplierTest {
 
-    private class Fixture(val harness: MessageCollaboratorHarness, open: OpenConversationLookup) {
+    private class Fixture(val harness: MessageCollaboratorHarness, openConversations: OpenConversationLookup) {
         val hidden = InMemoryLocallyHiddenMessagesStore()
         val starred = InMemoryStarredMessagesStore()
         val applier = ReactionMarksApplier(
             MessageDeltaApplier(harness.database, harness.updater, harness.clock),
-            hidden, starred, open,
+            hidden, starred, openConversations,
         ) { "me" }
     }
 
