@@ -335,8 +335,8 @@ internal fun ComposerSelectionAction.glyph(): ImageVector = when (this) {
 }
 
 internal fun ComposerSelectionAction.labelRes(): Int = when (this) {
-    ComposerSelectionAction.EDIT -> R.string.story_canvas_action_edit
-    ComposerSelectionAction.DUPLICATE -> R.string.story_canvas_action_duplicate
+    ComposerSelectionAction.EDIT -> R.string.composer_selection_modify
+    ComposerSelectionAction.DUPLICATE -> R.string.composer_selection_duplicate
     ComposerSelectionAction.TIME -> R.string.composer_scene_more_timing
     ComposerSelectionAction.REMOVE -> R.string.composer_selection_remove
 }

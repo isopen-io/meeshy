@@ -279,7 +279,7 @@ class ComposerRailBoundsTest {
     private fun assertChromeOnTheDrawnScene() {
         val scene = drawnScene()
         val close = boundsOf(R.string.composer_scene_close)
-        val undo = boundsOf(R.string.story_composer_undo)
+        val undo = boundsOf(R.string.composer_history_undo)
         val outside = (listOf("✕" to close, "↶" to undo) + rail()).filterNot { it.second.isInside(scene) }.map { it.first }
         assertThat(scene.width).isLessThan(359f)
         assertThat(outside).isEmpty()

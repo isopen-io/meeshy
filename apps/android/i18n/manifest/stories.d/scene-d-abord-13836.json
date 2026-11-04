@@ -9,8 +9,10 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.selection.remove",
           "androidName": "composer_selection_remove",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "composer_selection_selected",
