@@ -4,6 +4,7 @@ import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.MockKMatcherScope
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -72,7 +73,7 @@ class AudioFullscreenActionsTest {
         contextName = "Famille",
     )
 
-    private suspend fun MessageRepository.sendAny(): String = sendOptimistic(
+    private suspend fun MockKMatcherScope.sendAny(repo: MessageRepository): String = repo.sendOptimistic(
         any(), any(), any(), any(), any(), any(), any(), any(), any(),
         any(), any(), any(), any(), any(), any(), any(), any(), any(),
     )
@@ -110,7 +111,7 @@ class AudioFullscreenActionsTest {
         signedIn: Boolean = true,
     ): Rig {
         val repo = mockk<MessageRepository>(relaxed = true)
-        coEvery { repo.sendAny() } returns "cid_1"
+        coEvery { sendAny(repo) } returns "cid_1"
         val session = mockk<SessionRepository>()
         every { session.currentUser } returns MutableStateFlow(if (signedIn) me else null)
         val clock = object : CacheClock {
@@ -271,15 +272,15 @@ class AudioFullscreenActionsTest {
         assertThat(plain.replies.send(source(), "   ", null)).isFalse()
         runCurrent()
 
-        coVerify(exactly = 0) { protected.repo.sendAny() }
-        coVerify(exactly = 0) { encrypted.repo.sendAny() }
-        coVerify(exactly = 0) { plain.repo.sendAny() }
+        coVerify(exactly = 0) { sendAny(protected.repo) }
+        coVerify(exactly = 0) { sendAny(encrypted.repo) }
+        coVerify(exactly = 0) { sendAny(plain.repo) }
     }
 
     @Test
     fun `un echec d'enregistrement rend le brouillon et le dit`() = runTest {
         val r = rig()
-        coEvery { r.repo.sendAny() } throws RuntimeException("disque plein")
+        coEvery { sendAny(r.repo) } throws RuntimeException("disque plein")
 
         r.replies.send(source(), "bien reçu", closure = null)
         runCurrent()
