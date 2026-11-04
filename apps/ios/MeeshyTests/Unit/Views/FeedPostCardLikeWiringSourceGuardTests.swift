@@ -155,4 +155,29 @@ final class FeedPostCardLikeWiringSourceGuardTests: XCTestCase {
             `deliberatelyUnwired`.
             """)
     }
+
+    // MARK: - La loi du repartage (#15934)
+
+    /// Montages délibérément sans repartage, chacun justifié par une MESURE.
+    private static let deliberatelyUnreposted: Set<String> = []
+
+    /// **« Repartager » qui ne fait rien.** Les FAVORIS et les RÉSULTATS D'UN
+    /// HASHTAG montaient la carte sans `onRepost` : la rangée présentait quand
+    /// même le choix, dont « Repartager » appelait un rappel absent. Même
+    /// forme que le cœur ci-dessus, et même raison de lire le TEXTE. L'état
+    /// (`isReposted`) voyage avec l'action : sans lui, la bascule optimiste
+    /// n'atteint jamais l'icône.
+    func test_toutMontageDeFeedPostCard_cableSonRepartageEtSonEtat() throws {
+        let silent = try mountings()
+            .filter { !$0.arguments.contains("onRepost:") || !$0.arguments.contains("isReposted:") }
+            .filter { !Self.deliberatelyUnreposted.contains($0.enclosingType) }
+
+        XCTAssertTrue(silent.isEmpty, """
+            \(silent.count) montage(s) de FeedPostCard sans `onRepost` ou sans `isReposted` : \
+            « Repartager » y est offert sans effet, ou son état ne s'affiche jamais.
+            \(silent.map { "  • \($0.enclosingType) — \($0.file):\($0.line)" }.joined(separator: "\n"))
+            Câbler l'écrivain et son état, ou justifier l'exception par une MESURE \
+            dans `deliberatelyUnreposted`.
+            """)
+    }
 }

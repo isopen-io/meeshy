@@ -23,7 +23,10 @@ struct HashtagResultsView: View {
                 ForEach(viewModel.posts) { post in
                     FeedPostCard(
                         post: post,
+                        displayRepostCount: post.repostCount,
+                        isReposted: post.isRepostedByMe,
                         onLike: { id in Task { await viewModel.toggleLike(id) } },
+                        onRepost: { id in Task { await viewModel.toggleRepost(id) } },
                         onQuote: quoteHost == nil ? nil : { _ in quotedPost = post }
                     )
                         .equatable()

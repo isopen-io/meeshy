@@ -44,15 +44,29 @@ final class BookmarkFeedbackLocalizationTests: XCTestCase {
     /// silently falls back to French for the rest.
     private static let shippedLocales = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
 
-    /// The three call sites that drive the bookmark toasts.
+    /// The three call sites that drive the bookmark toasts — each read as its
+    /// whole UNIT (the declaration file and its `+…` extensions, #15894): the
+    /// detail's toast moved to `PostDetailView+Opening.swift` when the view was
+    /// split by responsibility, and a witness pinned to one file turned red
+    /// without any product defect.
     private static let callSites = [
         "Meeshy/Features/Main/Views/FeedView.swift",
         "Meeshy/Features/Main/Views/RootViewComponents.swift",
         "Meeshy/Features/Main/Views/PostDetailView.swift"
     ]
 
+    /// `Foo.swift` plus every `Foo+*.swift` beside it.
     private func source(_ relativePath: String) throws -> String {
-        try String(contentsOf: Self.appRoot.appendingPathComponent(relativePath), encoding: .utf8)
+        let declaration = Self.appRoot.appendingPathComponent(relativePath)
+        let directory = declaration.deletingLastPathComponent()
+        let stem = declaration.deletingPathExtension().lastPathComponent
+        let extensions = try FileManager.default
+            .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix(stem + "+") && $0.pathExtension == "swift" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return try ([declaration] + extensions)
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     private func catalog() throws -> [String: Any] {
@@ -130,7 +144,8 @@ final class BookmarkFeedbackLocalizationTests: XCTestCase {
     }
 
     /// `PostDetailView` raised its failure toast with a bare `String` — not even
-    /// wrapped in `String(localized:)`, so it could never be translated.
+    /// wrapped in `String(localized:)`, so it could never be translated. Read as
+    /// the whole unit, like the call sites above.
     func test_postDetailView_localizesItsFailureToast() throws {
         let source = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
 
