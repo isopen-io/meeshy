@@ -564,7 +564,7 @@ internal fun ChatListHost(
             enter = fadeIn(tween(modeFadeMs)),
             exit = fadeOut(tween(modeFadeMs)),
         ) {
-            RiverScreen(host = host, pane = riverPane, topInset = topInset, bottomInset = bottomInset)
+            RiverScreen(host = host, pane = riverPane, topInset = topInset, bottomInset = bottomInset, rowActions = rowActions, audioPlayer = audioPlayer)
         }
     }
     }
