@@ -314,12 +314,7 @@ struct RootSheetsLayer: ViewModifier {
                             ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
                         }))
                     },
-                    onCall: { request in
-                        router.deepLinkProfileUser = nil
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            CallBackDialer.shared.dialFromProfile(request)
-                        }
-                    }, dependencies: .live
+                    onCall: dialFromProfile, dependencies: .live
                 )
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
@@ -405,5 +400,13 @@ struct RootSheetsLayer: ViewModifier {
             .callLinkConfirmationSheet()
             .environment(\.meeshyQuoteComposerHost, quoteHost)
             .environment(\.presentedSurfaceScope, router.surfaceScope)
+    }
+
+    /// L'appel lancé depuis la feuille de profil part une fois la feuille fermée.
+    private func dialFromProfile(_ request: ProfileCallRequest) {
+        router.deepLinkProfileUser = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            CallBackDialer.shared.dialFromProfile(request)
+        }
     }
 }

@@ -125,6 +125,30 @@ nonisolated struct RepostIntent: Equatable, Sendable {
             visibility: visibility
         )
     }
+
+    /// Le geste « **je repartage en CITANT** » — depuis une surface qui recueille
+    /// vraiment un commentaire.
+    ///
+    /// Un commentaire vide ou blanc n'est PAS une citation : c'est la règle que
+    /// trois des quatre sites de citation appliquaient déjà, chacun de son côté
+    /// et avec sa propre écriture. Elle vit ici désormais, une fois.
+    static func quoted(
+        postId: String,
+        targetType: PostType?,
+        comment: String?,
+        visibility: String?
+    ) -> RepostIntent {
+        let ebarbe = comment?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cite = !(ebarbe?.isEmpty ?? true)
+        return RepostIntent(
+            clientMutationId: ClientMutationId.generate(),
+            postId: postId,
+            targetType: targetType,
+            content: cite ? ebarbe : nil,
+            isQuote: cite,
+            visibility: visibility
+        )
+    }
 }
 
 // MARK: - Les deux échecs TERMINAUX, nommés

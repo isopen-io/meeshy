@@ -208,12 +208,6 @@ struct PostDetailView: View {
 
     var displayPost: FeedPost? { viewModel.post ?? initialPost }
 
-    /// « Citer » sans porte ni publication chargée serait inerte : il est absent.
-    private var detailQuote: (() -> Void)? {
-        guard quoteHost != nil, let post = displayPost else { return nil }
-        return { quotedPost = post }
-    }
-
     /// Non `private` : `PostDetailView+Canvas.swift` en a besoin pour monter la
     /// mosaïque de scènes. Un `private` sur une propriété d'une `View` la rend
     /// inaccessible depuis un fichier d'extension du MÊME module — piège
@@ -883,7 +877,7 @@ EngagementGlyph(
             .modifier(RepostChoiceDialog(
                 isPresented: $showRepostOptions,
                 onRepost: { toggleDetailRepost() },
-                onQuote: detailQuote
+                onQuote: quoteHost == nil || displayPost == nil ? nil : { quotedPost = displayPost }
             ))
 
             Spacer()

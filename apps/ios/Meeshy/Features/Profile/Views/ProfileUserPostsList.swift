@@ -220,11 +220,7 @@ struct ProfileUserPostsList: View {
                 ProfilePostsStatsBand(
                     counts: viewModel.postsCounts,
                     selectedFilter: viewModel.filter,
-                    onSelectFilter: { tapped in
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            viewModel.filter = viewModel.filter.toggled(with: tapped)
-                        }
-                    },
+                    onSelectFilter: selectFilter,
                     onStoriesTap: {
                         openStories()
                     }
@@ -380,6 +376,12 @@ struct ProfileUserPostsList: View {
             onEdit: isOwnPost ? { post in editingPost = post } : nil
         )
         .equatable()
+    }
+
+    private func selectFilter(_ tapped: ProfilePostsFilter) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            viewModel.filter = viewModel.filter.toggled(with: tapped)
+        }
     }
 
     // MARK: - Open

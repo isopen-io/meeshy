@@ -455,17 +455,7 @@ struct DetachedWindowView: View {
                 draggedContent = .conversation(id: id)
             }
         }
-        .task(id: authManager.currentUser?.id) {
-            switch DetachedWindowOwnership.verdict(owner: ownerUserId, current: authManager.currentUser?.id) {
-            case .adopt(let userId):
-                ownerUserId = userId
-            case .close:
-                conversation = nil
-                closeWindow()
-            case .keep, .waitForSignIn:
-                break
-            }
-        }
+        .task(id: authManager.currentUser?.id) { applyOwnershipVerdict() }
         // 6. La fenêtre principale tient sockets et synchronisation : fermée (par l'utilisateur ou par le système),
         // la fenêtre détachée propose de la rouvrir plutôt que de rester muette.
         .overlay(alignment: .top) { reopenMainWindowBanner }
@@ -518,6 +508,18 @@ struct DetachedWindowView: View {
         // racines (#10543) : sans elle ses feuilles s'inscrivaient « de toute
         // fenêtre », et la principale les refermait en ouvrant une conversation.
         .environment(\.presentedSurfaceScope, router.surfaceScope)
+    }
+
+    private func applyOwnershipVerdict() {
+        switch DetachedWindowOwnership.verdict(owner: ownerUserId, current: authManager.currentUser?.id) {
+        case .adopt(let userId):
+            ownerUserId = userId
+        case .close:
+            conversation = nil
+            closeWindow()
+        case .keep, .waitForSignIn:
+            break
+        }
     }
 
     /// La porte de citation de toute surface de publication (#15911).

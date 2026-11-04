@@ -306,11 +306,7 @@ struct RootView: View {
             router: router,
             activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id },
             onSyncPillTap: handleSyncPillTap,
-            onMiniPlayerTap: {
-                guard let target = MiniPlayerTapPolicy.target(
-                    context: ConversationAudioCoordinator.shared.activeContext) else { return }
-                navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
-            },
+            onMiniPlayerTap: returnToPlayingAudio,
             showFeed: showFeed,
             showMenu: showMenu
         ))
@@ -344,11 +340,23 @@ struct RootView: View {
             deepLinkRouter: deepLinkRouter,
             upgradeGate: upgradeGate,
             onDeepLink: handleDeepLink,
-            quoteHost: QuoteComposerHost(storyViewModel: storyViewModel, router: router,
-                                         conversationListViewModel: conversationViewModel,
-                                         statusViewModel: statusViewModel)
+            quoteHost: rootQuoteHost
         ))
         .inAppLinks(router: router)
+    }
+
+    /// La porte de citation de toute surface de publication (#15911).
+    private var rootQuoteHost: QuoteComposerHost {
+        QuoteComposerHost(storyViewModel: storyViewModel, router: router,
+                          conversationListViewModel: conversationViewModel,
+                          statusViewModel: statusViewModel)
+    }
+
+    /// Le mini-lecteur ramène à la conversation et au message qui jouent.
+    private func returnToPlayingAudio() {
+        guard let target = MiniPlayerTapPolicy.target(
+            context: ConversationAudioCoordinator.shared.activeContext) else { return }
+        navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
     }
 
     // MARK: - Démarrage de la racine
