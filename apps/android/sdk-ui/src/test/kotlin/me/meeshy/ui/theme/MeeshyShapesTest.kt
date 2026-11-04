@@ -2,6 +2,7 @@ package me.meeshy.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -31,6 +32,7 @@ class MeeshyShapesTest {
             MeeshyTheme {
                 fieldShape = OutlinedTextFieldDefaults.shape
                 extraSmall = MaterialTheme.shapes.extraSmall
+                OutlinedTextField(value = "", onValueChange = {})
             }
         }
         compose.waitForIdle()

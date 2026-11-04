@@ -51,23 +51,8 @@ extension PostDetailView {
                 // TrackingLink owned by the current user.
                 ShareSheet(activityItems: link.activityItems)
             }
-            .postEditCover(post: displayPost, isPresented: $isEditing) {
-                if let post = displayPost {
-                    EditPostSheet(
-                        originalContent: post.content,
-                        originalLanguage: post.originalLanguage,
-                        originalType: post.type,
-                        media: post.media.map { EditablePostMedia($0) }, originalStoryEffects: post.storyEffects,
-                        originalLocation: post.location,
-                        originalVisibility: post.visibility,
-                        originalVisibilityUserIds: post.visibilityUserIds ?? [],
-                        isRepost: post.repost != nil,
-                        onSave: { draft in
-                            await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
-                        },
-                        onDismiss: { isEditing = false }
-                    )
-                }
+            .postEditCover(post: displayPost, isPresented: $isEditing) { _, draft in
+                await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
             }
             .fullScreenCover(item: $detailFullscreenPlace) { item in
                 // Même surface plein écran que la bulle et la card feed :

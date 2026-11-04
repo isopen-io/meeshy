@@ -590,6 +590,23 @@ fait fuiter une vidéo privée entre comptes. Le coût (re-téléchargement de r
 
 **Consequences.** Premier réel du compte suivant à froid ; plus aucune vidéo du compte quitté sur disque.
 
+**Amendement 2026-11-03 (#15486, chantier #15462).** La fin de session vide aussi : (1) le cache des FORMES D'ONDE, mémoire
+et disque (`com.meeshy.waveforms.v2`, `WaveformModule.waveformsOnLogout` → `WaveformCache.clearAll`), car un relevé dérive
+du contenu du compte quitté ; (2) la mémoire des POSITIONS de lecture (`PlaybackModule.positionsOnLogout`, déjà un
+`PerAccountCache`, désormais prouvée par témoin). Le moteur partagé (`ConversationAudioCoordinator`) lit par le cache AUDIO
+de `MeeshyMediaCache` (clôture d'époque, bail contre l'éviction) via la couture `AudioPlaybackSources` liée par `:app` ; son
+cache séparé `cacheDir/audio-playback` (64 Mo, sans clôture de compte) disparaît et le dossier est purgé une fois au
+démarrage (`LegacyAudioPlaybackCache`). Un vocal protégé (éphémère, vue unique, flouté, chiffré) se lit en direct : ni cache,
+ni bail, aucun octet sur le disque.
+
+**Condition de la garde (audit 2026-11-04, #15486).** « Protégé » n'est vrai que si la FILE le dit : la protection naît
+dans `AudioQueueBuilder`, depuis les champs REQUIS `AudioQueueMessage.isProtected` et `AudioQueueAttachment.isProtected`
+(un vocal est protégé si son message OU sa pièce l'est, leçon 275), que le producteur calcule par la loi unique
+`VoiceQueueProtection` (`ofMessage` : vue unique, flou, éphémère — échéance, durée ou bit, flamme comprise —, chiffré ;
+`ofPiece` : la pièce masquée ou scellée, ou son message). Aucun maillon n'a plus de défaut `false` : `QueuedAudio`,
+`AudioPlaybackEngine.play` et `AudioSource.Remote` exigent la valeur, un oubli ne compile pas. Le producteur du fil
+(#14899) DOIT bâtir sa file par ces deux lois ; tant qu'il n'existe pas, aucun appelant ne joue par le coordinateur.
+
 ---
 
 ## ADR-028 — L'app native reprend la fiche Play `me.meeshy.app` ; la coque devient `me.meeshy.webapp`

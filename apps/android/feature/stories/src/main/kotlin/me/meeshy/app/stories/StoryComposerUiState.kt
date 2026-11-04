@@ -98,7 +98,14 @@ data class StoryComposerUiState(
     val drawSmoothing: me.meeshy.sdk.model.StrokeSmoothing = me.meeshy.sdk.model.StrokeSmoothing.CURVE,
     /** Le panneau d'options déplié sous les bulles du dessin ; `null` ⇒ replié. */
     val drawingExpandedTool: DrawingEditTool? = null,
-    val isUploadingMedia: Boolean = false,
+    /** La sélection se prépare sur l'appareil (copie, lecture) : seule cette étape retient l'écran (#15598). */
+    val isPreparingMedia: Boolean = false,
+    /** Les envois de fond en cours, par média en file (`cmid`) ou par piste de son : leurs octets partis (#15598). */
+    val uploadProgress: Map<String, MediaUploadProgress> = emptyMap(),
+    /** Le sticker image dont les octets entrent dans la scène, ou celui qui a échoué (#15597). */
+    val stickerIntake: StickerIntake? = null,
+    /** Les sons posés dont l'envoi de fond n'a pas abouti : ils retiennent Publier et proposent « Réessayer » (#15598). */
+    val failedSounds: Set<String> = emptySet(),
     /** Une ligne par média de la sélection en cours d'envoi, avec ses propres octets (#13429). */
     val uploadingMedia: List<MediaUploadProgress> = emptyList(),
     /** Où chaque média de la sélection en cours d'envoi se posera (R4 de #13863), décidé au choix, dans l'ordre des lignes. */
@@ -181,8 +188,10 @@ data class StoryComposerUiState(
             publishBlock == null &&
             ComposerAudienceSelection.isPublishable(draft.visibility, draft.visibilityUserIds) &&
             !isPublishing &&
-            !isUploadingMedia &&
-            !deck.awaitsStickerImage
+            !intakeBlocks &&
+            !deck.awaitsStickerImage &&
+            !awaitsSoundUpload &&
+            !(editing && uploadProgress.isNotEmpty())
 
     /** Le plafond qui bloque la publication, ou `null` : l'écran en dit la raison, il ne grise pas le bouton en silence. */
     internal val publishBlock: StoryPublishBlock?

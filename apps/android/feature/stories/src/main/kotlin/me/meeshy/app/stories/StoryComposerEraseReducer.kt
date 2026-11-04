@@ -22,7 +22,7 @@ internal object StoryComposerEraseReducer {
      * premier choisi se peint déjà en fond. Une place doit rester, et aucun envoi n'est en cours.
      */
     fun canPickBackground(state: StoryComposerUiState): Boolean =
-        state.deck.selectedSlide.mediaIds.isNotEmpty() && state.deck.selectedCanAddMedia && !state.isUploadingMedia
+        state.deck.selectedSlide.mediaIds.isNotEmpty() && state.deck.selectedCanAddMedia && !state.isPreparingMedia
 
     /**
      * Tout effacer : une seule diapo vierge, qui garde l'identifiant de la diapo sélectionnée (une story publiée rouverte

@@ -161,7 +161,7 @@ private fun SceneFirstFrame(
             sheetContent = { open -> SceneSheetContent(open, state, viewModel, comparison, sheet, edited.background) },
             typing = typing,
             rails = rails,
-            incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
+            incoming = incomingLayer(state, viewModel),
         )
         EditingAnnouncer(editing = editedWord(state, editing.editing))
         edited.background?.let { BackgroundRemoveConfirmation(it) }
@@ -462,7 +462,7 @@ private fun storySceneRails(
                 onRedo = viewModel::onRedo,
             )
         },
-        socle = { if (chrome) StorySocleNotice(state, viewModel::onRetryMediaPick) },
+        socle = { if (chrome) StorySocleNotice(state, viewModel) },
         below = { if (chrome && editing.publication) StoryPublish(state, viewModel, doors, formatChevron) },
     )
 }
@@ -495,7 +495,7 @@ private fun rememberSceneToolAction(
     val addText = rememberGuardedAddition(state.deck.selectedCanAddTextElement, R.string.composer_scene_cap_text, viewModel::onAddTextElement)
     val openStickers = rememberGuardedAddition(state.deck.selectedCanAddSticker, R.string.composer_scene_cap_sticker, doors.onOpenStickers)
     val pickMedia = rememberGuardedAddition(state.deck.selectedCanAddMedia, R.string.composer_scene_cap_media, doors.onPickMedia)
-    val hasMedia = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() || state.isUploadingMedia
+    val hasMedia = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() || state.isPreparingMedia
     return { tool ->
         more.onMorePanel(null)
         when (tool) {
@@ -601,20 +601,27 @@ private fun StorySocle(
             onMentions = { onOpenSheet(StoryComposerSheet.MENTION) },
         )
     }
-    StorySocleNotice(state, viewModel::onRetryMediaPick)
+    StorySocleNotice(state, viewModel)
     EditingChromeVisibility(publication) {
         StoryPublish(state, viewModel, doors, formatChevron)
     }
 }
 
 @Composable
-private fun StorySocleNotice(state: StoryComposerUiState, onRetryMedia: () -> Unit) {
+private fun StorySocleNotice(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
     val audienceEmpty = !ComposerAudienceSelection.isPublishable(state.draft.visibility, state.draft.visibilityUserIds)
     val block = state.publishBlock?.let { stringResource(it.messageRes()) }
         ?: if (audienceEmpty) stringResource(R.string.composer_socle_blocked_audience) else null
     val notice = block ?: sceneNotice(state) ?: return
-    val retries = block == null && state.canRetryMedia && state.errorMessage == StoryComposerViewModel.MEDIA_FAILED
-    SceneNoticeLine(notice, onRetry = onRetryMedia.takeIf { retries })
+    SceneNoticeLine(notice, onRetry = noticeRetry(state, viewModel).takeIf { block == null })
+}
+
+/** Ce que « Réessayer » relance sous la ligne d'erreur : le média, le sticker (#15597) ou le son (#15598) qui a échoué. */
+private fun noticeRetry(state: StoryComposerUiState, viewModel: StoryComposerViewModel): (() -> Unit)? = when (state.errorMessage) {
+    StoryComposerViewModel.MEDIA_FAILED -> if (state.canRetryMedia) viewModel::onRetryMediaPick else null
+    StoryComposerViewModel.STICKER_IMAGE_FAILED -> if (state.canRetrySticker) viewModel::onRetryStickerIntake else null
+    StoryComposerViewModel.SOUND_FAILED -> if (state.failedSounds.isNotEmpty()) viewModel::onRetrySoundUploads else null
+    else -> null
 }
 
 /**
@@ -661,4 +668,11 @@ private fun StoryPublishBlock.messageRes(): Int = when (this) {
 @Composable
 private fun StaleSheetReleased(stale: Boolean, onRelease: () -> Unit) {
     if (stale) LaunchedEffect(Unit) { onRelease() }
+}
+
+/** Ce qui entre dans la scène et voile le reste (R5 de #13863) : un média qui se prépare, ou un sticker image qui arrive (#15597). */
+private fun incomingLayer(state: StoryComposerUiState, viewModel: StoryComposerViewModel): (@Composable () -> Unit)? {
+    state.incomingPlaceholder()?.let { placeholder -> return { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } }
+    val sticker = state.incomingSticker() ?: return null
+    return { IncomingStickerPlaceholderLayer(sticker, viewModel::onCancelStickerIntake) }
 }

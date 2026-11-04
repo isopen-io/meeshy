@@ -64,12 +64,15 @@ struct ConversationAppearanceTests {
 @Suite("AppearanceCatalog — la copie embarquée (#10631)")
 struct AppearanceCatalogTests {
 
-    @Test("le catalogue embarqué porte 16 couleurs, 5 packs de fonds, 17 modèles et 9 bannières")
+    @Test("le catalogue embarqué porte 16 couleurs, 9 packs de fonds, 33 modèles et 9 bannières")
     func bundledCatalogShape() {
         let catalog = AppearanceCatalog.shared
         #expect(catalog.gamut.entries.count == 16)
-        #expect(catalog.wallpaperPacks.map(\.slug) == ["essentiels", "heritages", "nature-et-ciel", "illustrations", "animes"])
-        #expect(catalog.wallpaperPacks.flatMap(\.designs).count == 17)
+        #expect(catalog.wallpaperPacks.map(\.slug) == [
+            "essentiels", "heritages", "nature-et-ciel", "illustrations", "animes",
+            "fonds-noel", "fonds-noel-vivants", "meeshy-fonds", "meeshy-fonds-vivants",
+        ])
+        #expect(catalog.wallpaperPacks.flatMap(\.designs).count == 33)
         #expect(catalog.bannerPacks.flatMap(\.designs).count == 9)
     }
 

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -315,6 +316,10 @@ internal fun ChatListHost(
                 }
             },
             onOpenJoinProfile = { bubble -> bubble.joinNotice?.toProfileSheetUser()?.let(profileTap) },
+            onCallBack = { bubble ->
+                val isVideo = bubble.callSummary?.callType == me.meeshy.sdk.model.CallSummaryMetadata.MediaType.VIDEO
+                host.navigation.onStartCall(state.conversationTitle.orEmpty(), isVideo)
+            },
             onAddReaction = { messageId ->
                 val quick = state.quickReactions.firstOrNull()
                 if (quick == null) actions.openEmojiPicker(messageId) else actions.toggleReaction(messageId, quick)
@@ -548,6 +553,12 @@ internal fun ChatListHost(
         val riverMode = host.readingMode?.state?.let {
             it.mode == ConversationReadingMode.RIVER && RiverModeGate.isSelectable(it.capabilities)
         } == true
+        // Sous un panneau opaque, la liste s'endort : les flux continuent, l'état est rejoué au réveil.
+        val threadVisible = ChatListQuiescence.rendersThread(host.readingMode?.state?.mode, riverOpen = riverMode)
+        DisposableEffect(threadVisible) {
+            host.chrome.listGate?.setAsleep(!threadVisible)
+            onDispose { host.chrome.listGate?.setAsleep(false) }
+        }
         AnimatedVisibility(
             visible = riverMode,
             enter = fadeIn(tween(modeFadeMs)),

@@ -8,6 +8,7 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.e2ee.PlaintextErasureLedger
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentLiveDeltas
@@ -50,6 +51,8 @@ class MessageDeltaApplier internal constructor(
     private val events: MessageEventBuffer? = null,
     /** Le clair E2EE d'un message parti s'inscrit dans la file durable qui vide le coffre (#14633, #14655). */
     private val erasures: PlaintextErasureLedger? = null,
+    /** L'index des médias de la conversation : un message retiré ou expiré quitte TOUS les genres. */
+    private val mediaIndex: ConversationMediaHubIndex? = null,
 ) {
     @Inject
     constructor(
@@ -59,9 +62,10 @@ class MessageDeltaApplier internal constructor(
         fence: me.meeshy.sdk.session.AccountFence?,
         events: MessageEventBuffer,
         erasures: PlaintextErasureLedger,
-    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, events, erasures)
+        mediaIndex: ConversationMediaHubIndex,
+    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, events, erasures, mediaIndex)
 
-    private val tombstones = MessageTombstoneWriter(updater, null, events)
+    private val tombstones = MessageTombstoneWriter(updater, null, events, mediaIndex)
 
     /**
      * Applique [event] s'il est un delta local et rend `true` ; rend `false` pour un événement qui
@@ -192,11 +196,14 @@ class MessageDeltaApplier internal constructor(
     /** Retire les lignes nommées (par l'une ou l'autre de leurs deux clés), en une transaction. */
     private suspend fun purge(messageIds: List<String>) {
         if (messageIds.isEmpty()) return
+        val ticket = updater.ticket()
+        val known = if (mediaIndex == null) emptyList() else messageIds.mapNotNull { id -> updater.find(id)?.let { it.conversationId to id } }
         database.withTransaction {
             val rowIds = messageIds.mapNotNull { MessageIdReconciliation.locate(database, it)?.id }.distinct()
             if (rowIds.isNotEmpty()) database.messageDao().deleteByIds(rowIds)
             messageIds.forEach { database.editRevisionDao().deleteForMessage(it) }
         }
+        known.forEach { (conversationId, id) -> mediaIndex?.forgetMessage(conversationId, id, ticket) }
     }
 
     private fun ApiMessage.isFrom(userId: String?): Boolean =

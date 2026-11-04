@@ -26,12 +26,13 @@ internal fun FocalAttachmentBlock(
     ink: Color,
     callbacks: BubbleCallbacks,
     audioPlayback: BubbleAudioPlayback?,
+    accentColor: Color = Color.Unspecified,
 ) {
     val visuals = remember(content.images, content.videos, content.files) { focalVisuals(content) }
     Column(Modifier.widthIn(max = FocalMediaGridLayout.GRID_MAX_WIDTH.dp)) {
         FocalMediaGrid(visuals = visuals, callbacks = callbacks)
         Column(Modifier.clip(RoundedCornerShape(FocalMetrics.Media.RADIUS.toFloat().dp))) {
-            FocalNonMediaBlock(content, ink, callbacks, audioPlayback)
+            FocalNonMediaBlock(content, ink, callbacks, audioPlayback, accentColor)
         }
     }
 }

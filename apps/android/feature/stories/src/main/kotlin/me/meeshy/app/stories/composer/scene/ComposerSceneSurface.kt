@@ -40,7 +40,7 @@ internal fun ComposerSceneInvite(shown: Boolean, modifier: Modifier = Modifier) 
 /** L'invite paraît sur une scène nue, au repos : rien d'ouvert, rien de sélectionné, aucun pinceau, viseur désarmé. */
 internal fun sceneInviteShown(state: StoryComposerUiState, viewfinderArmed: Boolean, somethingOpen: Boolean): Boolean =
     SceneInviteLaw.shown(
-        sceneIsEmpty = state.deck.selectedSlide.isBlankScene && !state.isUploadingMedia,
+        sceneIsEmpty = state.deck.selectedSlide.isBlankScene && !state.isPreparingMedia,
         toolIsOpen = somethingOpen || state.isDrawingActive || state.isEditingTextElement || state.band.activeTool != null,
         selecting = state.selectedSceneObject != null,
         viewfinderArmed = viewfinderArmed,

@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.conversation.MessageMediaWriteBack
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.conversation.ShareFanoutWriteBack
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.model.SendOutcome
@@ -22,10 +23,12 @@ import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.notification.FirstMessageAcceptedSignal
+import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
 import me.meeshy.sdk.outbox.OutboxPayloadGraft
+import me.meeshy.sdk.outbox.OutboxPayloadGrafts
 import me.meeshy.sdk.outbox.OutboxPlaintextAdmission
 import me.meeshy.sdk.outbox.ConsumeAfterReadPayload
 import me.meeshy.sdk.outbox.ConsumeViewOncePayload
@@ -36,6 +39,8 @@ import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.outbox.toSendResult
 import me.meeshy.sdk.outbox.withPayload
 import me.meeshy.sdk.socket.MessageSocketOutcome
+import me.meeshy.sdk.share.FanoutResolution
+import me.meeshy.sdk.share.ShareFanoutOriginResolver
 import me.meeshy.sdk.socket.MessageSocketSending
 import javax.inject.Inject
 
@@ -54,10 +59,18 @@ public class SendMessageHandler @Inject constructor(
     private val socketFallback: MessageSocketSending = MessageSocketSending.None,
 ) : OutboxKindHandler {
 
-    override val payloadGraft: OutboxPayloadGraft = MessageMediaWriteBack::graft
+    override val payloadGraft: OutboxPayloadGraft =
+        OutboxPayloadGrafts.firstOf(MessageMediaWriteBack::graft, ShareFanoutWriteBack::graft)
 
     override suspend fun send(row: OutboxEntity): SendResult =
-        json.withPayload<SendMessageRequest>(row) { request ->
+        json.withPayload<SendMessageRequest>(row) { queued ->
+            val request = when (val origin = fanoutOrigin(queued)) {
+                is FanoutResolution.WaitingForOrigin -> return@withPayload SendResult.Deferred(
+                    "Waiting for the share origin ${origin.clientMessageId} to be acknowledged",
+                )
+                is FanoutResolution.Ready -> queued.copy(copyAttachmentsFromMessageId = origin.serverMessageId)
+                FanoutResolution.NotAFanout -> queued
+            }
             val startedAt = System.currentTimeMillis()
             val result = apiCall { messageApi.send(row.targetId, request) }
             attempts.record(
@@ -72,12 +85,23 @@ public class SendMessageHandler @Inject constructor(
                 is NetworkResult.Success -> {
                     messageRepository.reconcileSent(row.cmid, result.data)
                     firstMessageAccepted.notifyAccepted()
-                    SendResult.Success
+                    SendResult.SuccessWithId(result.data.id)
                 }
                 is NetworkResult.Failure -> PlaintextRefusal.of(result, row.targetId, ledger)
                     ?: viaSocket(row, request, SendFailureClassifier.classify(result.error), result.error)
             }
         }
+
+    /**
+     * Une copie de pièces dont l'origine n'est plus un placeholder `cid_` greffé (ligne d'origine déjà acquittée et retirée
+     * avant l'enfilage) se résout par le pont `cid -> id serveur` ; sans lui la ligne attend, jamais un identifiant fantôme.
+     */
+    private suspend fun fanoutOrigin(request: SendMessageRequest): FanoutResolution {
+        val source = request.copyAttachmentsFromMessageId?.takeIf { it.isNotBlank() }
+            ?: return FanoutResolution.NotAFanout
+        if (!OutboxIds.isValidCid(source)) return FanoutResolution.Ready(source)
+        return ShareFanoutOriginResolver.resolve(source, messageRepository.serverIdOf(source))
+    }
 
     /**
      * Repli socket (iOS `sendViaSocketFallback`) : seulement pour un échec réseau / 5xx du REST, jamais un 4xx, avec le MÊME
@@ -101,7 +125,7 @@ public class SendMessageHandler @Inject constructor(
             is MessageSocketOutcome.Acked -> {
                 messageRepository.reconcileAcknowledged(row.cmid, outcome.ack)
                 firstMessageAccepted.notifyAccepted()
-                SendResult.Success
+                SendResult.SuccessWithId(outcome.ack.messageId)
             }
             is MessageSocketOutcome.Refused ->
                 if (outcome.definitive) SendResult.PermanentFailure("Refused: ${outcome.refusal.code.orEmpty()}".trim()) else rest

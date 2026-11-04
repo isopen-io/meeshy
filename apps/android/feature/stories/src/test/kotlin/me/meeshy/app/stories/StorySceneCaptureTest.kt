@@ -48,7 +48,7 @@ class StorySceneCaptureTest {
     fun `while a media enters the scene, the scene offers no camera`() {
         val capture = StorySceneCapture(offer = SceneQuickCapture.Offer(allowsPhoto = true, allowsVideo = true), onCaptured = {})
 
-        assertThat(capture.offeredOn(StoryComposerUiState(isUploadingMedia = true), somethingOpen = false)).isFalse()
+        assertThat(capture.offeredOn(StoryComposerUiState(isPreparingMedia = true), somethingOpen = false)).isFalse()
     }
 
     @Test

@@ -58,8 +58,11 @@ class StoryComposerMoreActionsTest {
             InMemoryStoryComposerDraftStore(),
             mockk<MediaBlobStore>(relaxed = true),
             mockk<StoryDraftConfirmation>(relaxed = true),
+            mediaIds = ComposerMediaIds { nextMediaId },
         )
     }
+
+    private var nextMediaId = "cmid"
 
     private fun item(name: String = "pic.jpg") = MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = "image/jpeg")
 
@@ -113,7 +116,7 @@ class StoryComposerMoreActionsTest {
     fun `clear all buries an offline media instead of cancelling it, so undo shows it again`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "cmid_offline"
+        nextMediaId = "cmid_offline"
         vm.onMediaPicked(listOf(item()))
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("cmid_offline")
 
@@ -195,7 +198,7 @@ class StoryComposerMoreActionsTest {
         val vm = viewModel()
         vm.pick("placed")
         coEvery { media.upload(any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "cmid_bg"
+        nextMediaId = "cmid_bg"
 
         vm.onMediaPicked(listOf(item()), asBackground = true)
 
