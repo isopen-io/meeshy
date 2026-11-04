@@ -25,12 +25,15 @@ import me.meeshy.core.database.dao.MediaIndexDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.dao.NotificationDao
+import me.meeshy.core.database.dao.PendingCountingEventDao
 import me.meeshy.core.database.dao.PendingIdDao
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
 import me.meeshy.core.database.dao.StatusBarCacheDao
 import me.meeshy.core.database.dao.StoryDao
+import me.meeshy.core.database.dao.SocialEventV2OutboxDao
 import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
+import me.meeshy.core.database.dao.TrackingLinksCacheDao
 import me.meeshy.core.database.dao.TusUploadCheckpointDao
 import me.meeshy.core.database.crypto.DatabaseKeyProvider
 import me.meeshy.core.database.crypto.EncryptedDatabaseBootstrap
@@ -247,6 +250,18 @@ internal object DatabaseModule {
     @Provides
     fun providesCallTranscriptDao(database: MeeshyDatabase): CallTranscriptDao =
         database.callTranscriptDao()
+
+    @Provides
+    fun providesPendingCountingEventDao(database: MeeshyDatabase): PendingCountingEventDao =
+        database.pendingCountingEventDao()
+
+    @Provides
+    fun providesSocialEventV2OutboxDao(database: MeeshyDatabase): SocialEventV2OutboxDao =
+        database.socialEventV2OutboxDao()
+
+    @Provides
+    fun providesTrackingLinksCacheDao(database: MeeshyDatabase): TrackingLinksCacheDao =
+        database.trackingLinksCacheDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 
