@@ -271,9 +271,12 @@ final class PendingBubbleMediaRelocationTests: XCTestCase {
         let samples = Data(count: sampleRate * seconds * 2)
         func le32(_ v: Int) -> Data { withUnsafeBytes(of: UInt32(v).littleEndian) { Data($0) } }
         func le16(_ v: Int) -> Data { withUnsafeBytes(of: UInt16(v).littleEndian) { Data($0) } }
-        var wave = Data("RIFF".utf8) + le32(36 + samples.count) + Data("WAVE".utf8)
-        wave += Data("fmt ".utf8) + le32(16) + le16(1) + le16(1) + le32(sampleRate) + le32(sampleRate * 2) + le16(2) + le16(16)
-        wave += Data("data".utf8) + le32(samples.count) + samples
+        let chunks: [Data] = [
+            Data("RIFF".utf8), le32(36 + samples.count), Data("WAVE".utf8),
+            Data("fmt ".utf8), le32(16), le16(1), le16(1), le32(sampleRate), le32(sampleRate * 2), le16(2), le16(16),
+            Data("data".utf8), le32(samples.count), samples,
+        ]
+        let wave = chunks.reduce(Data(), +)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("pending-voice-\(UUID().uuidString).wav")
         try wave.write(to: url)
         return url
