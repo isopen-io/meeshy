@@ -355,10 +355,13 @@
     <string name="dashboard_stat_links">Links</string>
     <string name="dashboard_tone">Ton: %1$s</string>
     <string name="encryption_close">Schließen</string>
+    <string name="encryption_confirm_cancel">Abbrechen</string>
     <string name="encryption_detail_activate">Verschlüsselung aktivieren</string>
     <string name="encryption_detail_activation_footer_final">Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten, die Verschlüsselung auf unseren Servern auch nicht. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen.</string>
     <string name="encryption_detail_active_label">Aktive Verschlüsselung</string>
     <string name="encryption_detail_details_header">Details</string>
+    <string name="encryption_detail_direct_already_end_to_end">Du hast mit dieser Person bereits eine Ende-zu-Ende-verschlüsselte Unterhaltung: Öffne sie, um dort zu schreiben. Diese hier bleibt auf unseren Servern verschlüsselt.</string>
+    <string name="encryption_detail_direct_not_a_pair">Dieser Einzelchat hat nicht genau zwei registrierte Mitglieder: Ende-zu-Ende-Verschlüsselung ist hier nicht möglich.</string>
     <string name="encryption_detail_enabled_on">Aktiviert am</string>
     <string name="encryption_detail_inactive_label">Unverschlüsselte Unterhaltung</string>
     <string name="encryption_detail_inactive_subtitle">Unterhaltung vor der systematischen Verschlüsselung erstellt: Ihre Nachrichten sind nicht verschlüsselt.</string>
@@ -367,6 +370,8 @@
     <string name="encryption_detail_mode_label">Modus</string>
     <string name="encryption_detail_regime_changed">Die Verschlüsselung wurde gerade von einem anderen Mitglied geändert: Der Status wurde aktualisiert.</string>
     <string name="encryption_detail_served_gap">Der Server zeigt diese Unterhaltung ohne Ende-zu-Ende-Verschlüsselung an, aber dieses Gerät hat sie Ende-zu-Ende-verschlüsselt gesehen: Hier bleibt sie es. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen.</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm">Zu Ende-zu-Ende wechseln</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm_title">Zur Ende-zu-Ende-Verschlüsselung wechseln?</string>
     <string name="encryption_detail_title">Verschlüsselung</string>
     <string name="encryption_detail_translation">Übersetzung</string>
     <string name="encryption_detail_translation_available">Verfügbar</string>
@@ -413,6 +418,7 @@
     <string name="encryption_summary_hybrid">Auf unseren Servern verschlüsselt, mit Prüfung zwischen kompatiblen Geräten</string>
     <string name="encryption_summary_none">Unterhaltung vor der systematischen Verschlüsselung erstellt: Ihre Nachrichten sind nicht verschlüsselt</string>
     <string name="encryption_summary_server">Auf unseren Servern verschlüsselt</string>
+    <string name="encryption_switch_end_to_end_final">Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen.</string>
     <string name="encryption_topic_absent">In diesem Modus nicht verfügbar</string>
     <string name="encryption_topic_available">Was funktioniert</string>
     <string name="encryption_topic_devices">Deine Geräte</string>

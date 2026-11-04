@@ -398,6 +398,13 @@ data class ParticipantRoleUpdatedEvent(
     val updatedBy: String? = null,
     @Serializable(with = TolerantRoleParticipantSerializer::class)
     val participant: ParticipantRoleUpdatedParticipantInfo? = null,
+    /**
+     * #15987 — la capacité de la CIBLE recalculée pour son nouveau rang, présente
+     * dans le seul exemplaire remis à sa room personnelle. Absente (serveur
+     * antérieur, autre destinataire) ou illisible : `null`.
+     */
+    @Serializable(with = TolerantViewerCapabilitiesSerializer::class)
+    val viewerCapabilities: ConversationViewerCapabilities? = null,
 )
 
 /**

@@ -1,5 +1,4 @@
 import { useAuthorMood, useAuthorMoodPostId } from '@/lib/view/use-author-moods';
-import { useAuthorActive, useAuthorFocused, useAuthorHere } from '@/lib/view/use-conversation-viewing';
 
 import { Avatar } from './avatar';
 import { useAuthorRing } from '@/lib/profile-decor/author-ring';
@@ -65,12 +64,12 @@ import { interfaceTypingFormatter, typingAnnouncement, typingLead } from '@/lib/
  * le même nœud, seule paire qu'un lecteur d'écran restitue réellement.
  */
 /**
- * CELUI QUI ÉCRIT EST EN LIGNE (#10944) — la règle du dépôt : `typing:start` est
- * une preuve d'activité (`lens-row.tsx`, `presence-live.ts`), et la passerelle
- * le diffuse à la room, pas seulement aux amis. La cellule n'existe que tant
- * qu'il écrit.
+ * LA CELLULE DE FRAPPE NE PORTE NI PRÉSENCE NI DÉCOR (#16114, directive porteur
+ * du 2026-11-04) : les points qui bougent disent déjà que la personne est là —
+ * aucune pastille « en ligne » ni « ici » ne s'y ajoute. Et c'est la SEULE
+ * surface où le contour équipé se pose sans ses films illustrés (`ringDecor
+ * ={false}`) : partout ailleurs, le décor s'affiche entier.
  */
-const WRITING = 'online' as const;
 
 export function TypingRosterCell({
   typists,
@@ -98,9 +97,6 @@ export function TypingRosterCell({
   readonly avatarOf?: (userId: string) => string | undefined;
 }) {
   const lead = typingLead(typists);
-  const leadHere = useAuthorHere(lead?.userId);
-  const leadActive = useAuthorActive(lead?.userId);
-  const leadFocused = useAuthorFocused(lead?.userId);
   const leadMood = useAuthorMood(lead?.userId);
   const leadMoodPostId = useAuthorMoodPostId(lead?.userId);
   /* SON CONTOUR ÉQUIPÉ (#10946) — celui que la conversation sert avec ses participants. */
@@ -128,13 +124,9 @@ export function TypingRosterCell({
           initials={initialsOf(lead.displayName)}
           color={accent}
           size={AVATAR_SIZE}
-          presence={WRITING}
-          here={leadHere}
-          hereActive={leadActive}
-          hereFocused={leadFocused}
           {...(leadMood === undefined ? {} : { mood: leadMood, ...(leadMoodPostId === undefined ? {} : { moodPostId: leadMoodPostId }) })}
           {...(leadPhoto === undefined ? {} : { src: leadPhoto })}
-          {...(leadRing === null ? {} : { ring: leadRing })}
+          {...(leadRing === null ? {} : { ring: leadRing, ringDecor: false })}
         />
         <TypingDots color={accent} />
       </div>
@@ -153,13 +145,9 @@ export function TypingRosterCell({
         initials={initialsOf(lead.displayName)}
         color={accent}
         size={18}
-        presence={WRITING}
-        here={leadHere}
-        hereActive={leadActive}
-        hereFocused={leadFocused}
         {...(leadMood === undefined ? {} : { mood: leadMood, ...(leadMoodPostId === undefined ? {} : { moodPostId: leadMoodPostId }) })}
         {...(leadPhoto === undefined ? {} : { src: leadPhoto })}
-        {...(leadRing === null ? {} : { ring: leadRing })}
+        {...(leadRing === null ? {} : { ring: leadRing, ringDecor: false })}
       />
       <span
         className="flex items-center gap-1.5 rounded-chip px-3 py-2"

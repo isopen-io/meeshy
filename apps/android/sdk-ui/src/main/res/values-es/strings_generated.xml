@@ -48,6 +48,7 @@
     <string name="audio_editor_undo">Deshacer</string>
     <string name="audio_editor_use">Usar el audio</string>
     <string name="audio_editor_volume_normal">Normal</string>
+    <string name="audio_fullscreen_airplay">Transmitir a un dispositivo</string>
     <string name="audio_fullscreen_dial">Posición en el mensaje de voz</string>
     <string name="audio_recorder_micDenied">Permiso de micrófono denegado</string>
     <string name="audio_recorder_micDeniedSettings">Micrófono denegado: permítelo en Ajustes</string>
@@ -193,6 +194,8 @@
     <string name="engagement_pill_a11y_streak_days_other">%1$d días</string>
     <string name="engagement_pill_a11y_total_one">%1$s chispa ganada en esta conversación</string>
     <string name="engagement_pill_a11y_total_other">%1$s chispas ganadas en esta conversación</string>
+    <string name="feed_carousel_next">Medio siguiente</string>
+    <string name="feed_carousel_previous">Medio anterior</string>
     <string name="focal_call_audio">Llamada de voz</string>
     <string name="focal_call_audio_failed">Llamada de audio interrumpida</string>
     <string name="focal_call_audio_missed">Llamada de voz perdida</string>
@@ -302,11 +305,13 @@
     <string name="media_crop_a11y_move_up">Mover hacia arriba</string>
     <string name="media_crop_a11y_position">Horizontal %1$s, vertical %2$s</string>
     <string name="media_crop_a11y_size">Ancho %1$s, alto %2$s</string>
+    <string name="media_download">Descargar</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">Archivo</string>
     <string name="media_label_location">Ubicación</string>
     <string name="media_label_photo">Foto</string>
     <string name="media_label_video">Vídeo</string>
+    <string name="media_pauseAudio">Pausar</string>
     <string name="media_permission_camera_denied_message">Cámara denegada: toca para abrir Ajustes</string>
     <string name="media_permission_camera_denied_title">Acceso a la cámara denegado</string>
     <string name="media_permission_close">Cerrar</string>
@@ -318,6 +323,9 @@
     <string name="media_permission_photos_add_denied_message">Guardado en Fotos denegado: toca para abrir Ajustes</string>
     <string name="media_permission_photos_denied_message">Acceso a las fotos denegado: toca para abrir Ajustes</string>
     <string name="media_permission_photos_denied_title">Acceso a las fotos denegado</string>
+    <string name="media_playAudio">Reproducir audio</string>
+    <string name="media_skipBack10s">Retroceder 10 segundos</string>
+    <string name="media_skipForward10s">Avanzar 10 segundos</string>
     <string name="media_summary_file">📎 Archivo</string>
     <string name="media_summary_location">📍 Ubicación</string>
     <string name="media_summary_photo">📷 Foto</string>

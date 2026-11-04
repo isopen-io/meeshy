@@ -108,6 +108,19 @@ public class ConversationAudioCoordinator(
         mutableSnapshot.value = current.copy(queue = current.queue.appended(item))
     }
 
+    /**
+     * La suite du vocal courant devient [tail] (iOS `replaceUpcoming`) : le plein écran pose l'ordre de réception, la
+     * conversation reprend sa file des non écoutés à sa fermeture. Le courant et l'historique ne bougent pas, rien ne se relance.
+     */
+    public fun replaceUpcoming(tail: List<QueuedAudio>) {
+        val snapshot = mutableSnapshot.value
+        val queue = snapshot.queue.withUpcoming(tail)
+        if (queue != snapshot.queue) mutableSnapshot.value = snapshot.copy(queue = queue)
+    }
+
+    /** Le vocal [attachmentId] est le courant de la file (iOS `isActive(attachmentId:)`). */
+    public fun isActive(attachmentId: String): Boolean = mutableSnapshot.value.queue.current?.attachmentId == attachmentId
+
     public fun togglePlayPause(origin: PlaybackCommandOrigin = PlaybackCommandOrigin.InApp) =
         engine.togglePlayPause(origin)
 
@@ -170,6 +183,9 @@ public class ConversationAudioCoordinator(
     public fun skip(seconds: Double) = engine.skip(seconds)
 
     public fun cycleSpeed() = engine.setSpeed(CoordinatorSpeedCycle.next(engine.state.value.speed))
+
+    /** Un palier choisi ailleurs que dans le cycle du mini-lecteur (la pastille du plein écran). */
+    public fun setSpeed(speed: me.meeshy.sdk.model.media.PlaybackSpeed) = engine.setSpeed(speed)
 
     public fun stop() {
         engine.stop()
@@ -240,13 +256,19 @@ public class ConversationAudioCoordinator(
         mutableSnapshot.value = mutableSnapshot.value.let { it.copy(queue = queue, context = it.context?.copy(audio = target)) }
     }
 
-    /** Un vocal pas encore envoyé se joue depuis son fichier `file://` ; tout autre par le réseau et son cache. */
-    private fun start(target: QueuedAudio, origin: PlaybackCommandOrigin): Boolean =
-        if (LocalFileUrl.isLocal(target.fileUrl)) {
+    /**
+     * Un vocal pas encore envoyé se joue depuis son fichier `file://` ; tout autre par le réseau et son cache. La consommation
+     * SERVIE part d'abord vers le moteur, sous l'identifiant qu'elle qualifie : la reprise s'amorce depuis le statut serveur
+     * quand l'appareil n'a aucune position à lui ([me.meeshy.sdk.model.playback.MediaResumeMerge]).
+     */
+    private fun start(target: QueuedAudio, origin: PlaybackCommandOrigin): Boolean {
+        engine.setServedConsumption(target.attachmentId, target.servedConsumption)
+        return if (LocalFileUrl.isLocal(target.fileUrl)) {
             engine.playLocal(target.attachmentId, target.fileUrl, origin)
         } else {
             engine.play(target.attachmentId, target.fileUrl, origin, target.isProtected)
         }
+    }
 
     private fun onFinished(event: AudioEngineEvent.Finished) {
         val snapshot = mutableSnapshot.value

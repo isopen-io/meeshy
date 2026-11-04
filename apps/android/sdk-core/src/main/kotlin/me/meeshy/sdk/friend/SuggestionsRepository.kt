@@ -140,4 +140,9 @@ class SuggestionsRepository @Inject constructor(
         onSyncError: (Throwable) -> Unit = {},
     ): Flow<CacheResult<List<UserSearchResult>>> =
         cacheFirstFlow(CachePolicy.Suggestions, source, onRevalidateError = onSyncError)
+
+    /** Pull-to-refresh : revalide maintenant, sans attendre la péremption ; le flux observe l'écriture Room. */
+    suspend fun refresh() {
+        source.revalidate()
+    }
 }

@@ -89,4 +89,19 @@ class ChatVoiceQueueTest {
         assertThat(start.current.attachmentId).isEqualTo("y1")
         assertThat(start.tail).isEmpty()
     }
+
+    @Test
+    fun `la position servie de chaque vocal voyage avec sa file, pour que la reprise parte du serveur`() {
+        val first = voice("s1").copy(lastPlayPositionMs = 3_000)
+        val second = voice("s2").copy(lastPlayPositionMs = 7_000)
+        val bubbles = listOf(
+            voiceMessage("n1", "2026-11-04T09:00:00Z", first),
+            voiceMessage("n2", "2026-11-04T09:01:00Z", second),
+        )
+
+        val start = ChatVoiceQueue.start(first, bubbles[0], bubbles, "c1", emptySet())!!
+
+        assertThat(start.current.servedConsumption?.lastPlayPositionMs).isEqualTo(3_000)
+        assertThat(start.tail.single().servedConsumption?.lastPlayPositionMs).isEqualTo(7_000)
+    }
 }

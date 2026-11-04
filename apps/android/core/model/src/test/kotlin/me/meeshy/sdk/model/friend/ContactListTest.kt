@@ -304,10 +304,11 @@ class ContactListTest {
     }
 
     @Test
-    fun `forFilter treats the pass-through filters as the whole roster`() {
-        val counts = ContactList.counts(roster, query = "")
+    fun `forFilter counts the phonebook and affiliates views from the injected numbers, zero by default`() {
+        assertThat(ContactList.counts(roster, query = "").forFilter(ContactFilter.Phonebook)).isEqualTo(0)
+        val counts = ContactList.counts(roster, query = "", phonebook = 3, affiliates = 5)
         assertThat(counts.forFilter(ContactFilter.Phonebook)).isEqualTo(3)
-        assertThat(counts.forFilter(ContactFilter.Affiliates)).isEqualTo(3)
+        assertThat(counts.forFilter(ContactFilter.Affiliates)).isEqualTo(5)
     }
 
     // MARK: - fromAcceptedRequests — one `direction=any` listing
@@ -409,5 +410,28 @@ class ContactListTest {
     @Test
     fun `an empty listing is an empty contact list`() {
         assertThat(ContactList.fromAcceptedRequests(requests = emptyList(), currentUserId = "me")).isEmpty()
+    }
+
+    @Test
+    fun `injected phonebook and affiliates counts show on their chips and hide at zero`() {
+        val counts = ContactList.counts(listOf(user("a", isOnline = true)), query = "", phonebook = 4, affiliates = 0)
+
+        assertThat(counts.forFilter(ContactFilter.Phonebook)).isEqualTo(4)
+        assertThat(counts.badgeFor(ContactFilter.Phonebook)).isEqualTo(4)
+        assertThat(counts.badgeFor(ContactFilter.Affiliates)).isNull()
+        assertThat(counts.badgeFor(ContactFilter.Offline)).isNull()
+        assertThat(counts.badgeFor(ContactFilter.Online)).isEqualTo(1)
+    }
+
+    @Test
+    fun `caption says online for a live online state and last seen for an older activity`() {
+        val now = 1_700_000_000_000L
+        val iso = java.time.Instant.ofEpochMilli(now - 5 * 60_000L).toString()
+
+        assertThat(ContactList.caption(me.meeshy.sdk.model.PresenceState.ONLINE, null, now))
+            .isEqualTo(ContactPresenceCaption.Online)
+        assertThat(ContactList.caption(me.meeshy.sdk.model.PresenceState.OFFLINE, iso, now))
+            .isEqualTo(ContactPresenceCaption.LastSeen(me.meeshy.sdk.model.PresenceLastSeen.MinutesAgo(5)))
+        assertThat(ContactList.caption(null, null, now)).isEqualTo(ContactPresenceCaption.None)
     }
 }

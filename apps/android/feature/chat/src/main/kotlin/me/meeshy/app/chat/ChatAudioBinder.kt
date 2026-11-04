@@ -13,7 +13,10 @@ import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +34,8 @@ import me.meeshy.app.chat.audio.QuotedAudioPlayback
 import me.meeshy.core.common.IoDispatcher
 import me.meeshy.sdk.media.TypedMediaCache
 import me.meeshy.sdk.media.UploadedAttachmentIds
+import me.meeshy.sdk.model.AudioQueueBuilder
+import me.meeshy.sdk.model.QueuedAudio
 import me.meeshy.sdk.model.media.MediaPlayerContext
 import me.meeshy.sdk.model.media.formatMediaDuration
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
@@ -41,6 +46,7 @@ import me.meeshy.sdk.model.playback.VoiceTap
 import me.meeshy.sdk.model.waveform.WaveformBarsLayout
 import me.meeshy.sdk.playback.ConversationAudioCoordinator
 import me.meeshy.sdk.waveform.WaveformRepository
+import me.meeshy.ui.component.audio.AudioFullscreenPlayer
 import me.meeshy.ui.component.bubble.BubbleAudio
 import me.meeshy.ui.component.bubble.BubbleAudioPlayback
 import me.meeshy.ui.component.bubble.BubbleCallbacks
@@ -92,7 +98,21 @@ internal interface ChatVoicePlayback {
 
     /** La vraie forme d'onde (niveaux 0…1), calculée une fois et mise en cache ; jamais pour un vocal protégé. */
     fun samples(audio: BubbleAudio): StateFlow<List<Float>>
+
+    /** Les demandes de plein écran audio (l'identifiant du vocal), que l'hôte du fil présente. */
+    val fullscreenRequests: SharedFlow<String> get() = NO_FULLSCREEN_REQUESTS
+
+    /** La bulle (ou la citation) d'un vocal demande son plein écran ; sans hôte, rien ne s'ouvre. */
+    fun openFullscreen(attachmentId: String) = Unit
+
+    /** Le lecteur que le plein écran pilote ; `null` hors d'un fil. */
+    fun fullscreenPlayer(): AudioFullscreenPlayer? = null
+
+    /** La file de la conversation après [afterAttachmentId] — les non écoutés reçus après lui —, rendue à la fermeture du plein écran. */
+    fun conversationTail(afterAttachmentId: String): List<QueuedAudio> = emptyList()
 }
+
+private val NO_FULLSCREEN_REQUESTS: SharedFlow<String> = MutableSharedFlow<String>().asSharedFlow()
 
 /** Le lecteur partagé du fil, fourni par l'écran de conversation ; `null` hors d'un fil (aperçus, tests de rendu). */
 internal val LocalChatVoicePlayback = staticCompositionLocalOf<ChatVoicePlayback?> { null }
@@ -117,6 +137,19 @@ internal class ChatAudioViewModel @Inject constructor(
     private val acknowledgedIdOf: (String) -> String? = { cmid -> uploads.serverIdOf(cmid) }
 
     private val queueFeed = ConversationAudioQueueFeed(coordinator) { listened.value }
+
+    private val mutableFullscreenRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    override val fullscreenRequests: SharedFlow<String> = mutableFullscreenRequests.asSharedFlow()
+
+    private val audioFullscreenPlayer: AudioFullscreenPlayer by lazy {
+        CoordinatorAudioFullscreenPlayer(
+            coordinator = coordinator,
+            artworkUrl = { thread?.artworkUrl },
+            accentHex = { thread?.accentHex },
+            samplesOf = { source -> samples(BubbleAudio(attachmentId = source.attachmentId, url = source.url)) },
+            scope = viewModelScope,
+        )
+    }
 
     init {
         viewModelScope.launch {
@@ -205,6 +238,22 @@ internal class ChatAudioViewModel @Inject constructor(
     }
 
     override fun cycleSpeed() = coordinator.cycleSpeed()
+
+    override fun openFullscreen(attachmentId: String) {
+        mutableFullscreenRequests.tryEmit(attachmentId)
+    }
+
+    override fun fullscreenPlayer(): AudioFullscreenPlayer = audioFullscreenPlayer
+
+    override fun conversationTail(afterAttachmentId: String): List<QueuedAudio> {
+        val bound = thread ?: return emptyList()
+        return AudioQueueBuilder.build(
+            messages = ChatVoiceQueue.queueMessages(bound.messages, bound.conversationId),
+            startingAfterAttachmentId = afterAttachmentId,
+            currentUserId = ChatVoiceQueue.SELF,
+            listenedAttachmentIds = listened.value,
+        )
+    }
 
     /**
      * La vraie onde, mesurée sur un fichier DÉJÀ sur l'appareil ([BubbleVoiceProjection.waveformLocation]) : jamais sur
@@ -312,6 +361,7 @@ internal fun BubbleCallbacks.withVoice(voice: ChatVoicePlayback?, bubble: Bubble
             onQuotedAudioClick = { quoted -> voice.playQuoted(quoted, bubble) },
             onAudioCycleSpeed = voice::cycleSpeed,
             audioSamples = voice::samples,
+            onAudioFullscreen = { audio -> voice.openFullscreen(audio.attachmentId) },
         )
     }
 

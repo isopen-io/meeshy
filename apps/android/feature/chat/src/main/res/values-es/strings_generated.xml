@@ -362,10 +362,13 @@
     <string name="dashboard_stat_links">Enlaces</string>
     <string name="dashboard_tone">Tono: %1$s</string>
     <string name="encryption_close">Cerrar</string>
+    <string name="encryption_confirm_cancel">Cancelar</string>
     <string name="encryption_detail_activate">Activar el cifrado</string>
     <string name="encryption_detail_activation_footer_final">El cifrado de extremo a extremo nunca se desactiva, ni tampoco el cifrado en nuestros servidores. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas.</string>
     <string name="encryption_detail_active_label">Cifrado activo</string>
     <string name="encryption_detail_details_header">Detalles</string>
+    <string name="encryption_detail_direct_already_end_to_end">Ya tienes una conversación cifrada de extremo a extremo con esta persona: ábrela para chatear allí. Esta sigue cifrada en nuestros servidores.</string>
+    <string name="encryption_detail_direct_not_a_pair">Este chat individual no reúne exactamente a dos miembros registrados: el cifrado de extremo a extremo no es posible aquí.</string>
     <string name="encryption_detail_enabled_on">Activado el</string>
     <string name="encryption_detail_inactive_label">Conversación sin cifrar</string>
     <string name="encryption_detail_inactive_subtitle">Conversación creada antes del cifrado sistemático: sus mensajes no están cifrados.</string>
@@ -374,6 +377,8 @@
     <string name="encryption_detail_mode_label">Modo</string>
     <string name="encryption_detail_regime_changed">Otro miembro acaba de modificar el cifrado: el estado se ha actualizado.</string>
     <string name="encryption_detail_served_gap">El servidor presenta esta conversación sin cifrado de extremo a extremo, pero este dispositivo la ha visto cifrada de extremo a extremo: aquí sigue así. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas.</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm">Pasar a extremo a extremo</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm_title">¿Pasar al cifrado de extremo a extremo?</string>
     <string name="encryption_detail_title">Cifrado</string>
     <string name="encryption_detail_translation">Traducción</string>
     <string name="encryption_detail_translation_available">Disponible</string>
@@ -420,6 +425,7 @@
     <string name="encryption_summary_hybrid">Cifrada en nuestros servidores, con verificación entre dispositivos compatibles</string>
     <string name="encryption_summary_none">Conversación creada antes del cifrado sistemático: sus mensajes no están cifrados</string>
     <string name="encryption_summary_server">Cifrada en nuestros servidores</string>
+    <string name="encryption_switch_end_to_end_final">El cifrado de extremo a extremo nunca se desactiva. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas.</string>
     <string name="encryption_topic_absent">No disponible en este modo</string>
     <string name="encryption_topic_available">Lo que funciona</string>
     <string name="encryption_topic_devices">Tus dispositivos</string>

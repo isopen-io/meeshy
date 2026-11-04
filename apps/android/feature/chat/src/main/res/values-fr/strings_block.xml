@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="participant_block_confirm_title">Bloquer cet utilisateur</string>
+    <string name="participant_block_confirm_message">Vous ne recevrez plus de messages de %1$s. Vous pourrez le débloquer dans les réglages.</string>
+    <string name="participant_block_confirm_action">Bloquer</string>
+    <string name="participant_block_cancel">Annuler</string>
+    <string name="participant_block_fallback_name">cette personne</string>
+    <string name="participant_block_failed">Impossible de bloquer cet utilisateur</string>
+    <string name="participant_unblock_failed">Impossible de débloquer cet utilisateur</string>
+    <string name="participant_block_entry">Bloquer</string>
+    <string name="participant_unblock_entry">Débloquer</string>
+    <string name="participant_block_entry_a11y">Bloquer %1$s</string>
+    <string name="participant_unblock_entry_a11y">Débloquer %1$s</string>
+</resources>

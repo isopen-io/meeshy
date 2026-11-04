@@ -54,7 +54,7 @@ class UserPostsViewModelTest {
     private fun viewModel(userId: String? = "u1"): UserPostsViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         val handle = SavedStateHandle(if (userId == null) emptyMap() else mapOf("userId" to userId))
-        return UserPostsViewModel(repository, mockk(relaxed = true), session, config, handle)
+        return UserPostsViewModel(repository, mockk(relaxed = true), session, config, handle, FakeProfileSocial().socket)
     }
 
     @Test

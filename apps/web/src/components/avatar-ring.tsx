@@ -31,7 +31,7 @@ export const ringBoxSize = (avatarSize: number): number => Math.round(avatarSize
  */
 export const ringDecorSpill = (ring: AvatarRingDesign | null | undefined, box: number): number => {
   const decor = ring?.decor;
-  if (decor === undefined || ringDecorFit({ box, reach: decor.reach, room: Number.POSITIVE_INFINITY }) === null) return 0;
+  if (decor === undefined) return 0;
   return (box * (decor.reach - 1)) / 2;
 };
 
@@ -40,8 +40,9 @@ export const ringDecorSpill = (ring: AvatarRingDesign | null | undefined, box: n
  * (`back`, sous le contenu : `z-index: -1` dans la boîte isolée) et un film
  * AU-DESSUS (`front`), chacun carré, centré, posé par `ringDecorFit` (#15157) :
  * il ne sort de la boîte que de la place `room` que l'hôte déclare libre, et
- * l'avatar se réduit avec lui quand le film demande plus. Sous « Réduire les
- * animations » ou trop petit pour se lire, aucun film : l'anneau fixe reste
+ * l'avatar se réduit avec lui quand le film demande plus — à TOUTES les tailles
+ * (#16114). Sous « Réduire les animations », ou chez l'hôte qui le retire
+ * (`decor={false}` : la cellule de frappe), aucun film : l'anneau fixe reste
  * l'image — et il ne se dessine jamais SOUS un film qui s'affiche.
  */
 function RingDecorLayer({ decor, fit, side }: { readonly decor: AvatarRingDecor; readonly fit: RingDecorFit; readonly side: 'back' | 'front' }) {
@@ -54,14 +55,16 @@ function RingDecorLayer({ decor, fit, side }: { readonly decor: AvatarRingDecor;
   );
 }
 
-function useDecorFit(ring: AvatarRingDesign, box: number, room: number): RingDecorFit | null {
+function useDecorFit(ring: AvatarRingDesign, box: number, room: number, decor: boolean): RingDecorFit | null {
   const reduced = usePrefersReducedMotion();
-  if (ring.decor === undefined || reduced) return null;
+  if (ring.decor === undefined || reduced || !decor) return null;
   return ringDecorFit({ box, reach: ring.decor.reach, room });
 }
 
-function RingBox({ ring, box, room, className, children }: { readonly ring: AvatarRingDesign; readonly box: number; readonly room: number; readonly className: string; readonly children: ReactNode }) {
-  const fit = useDecorFit(ring, box, room);
+type BoxProps = { readonly ring: AvatarRingDesign; readonly box: number; readonly room: number; readonly decor: boolean; readonly className: string; readonly children: ReactNode };
+
+function RingBox({ ring, box, room, decor, className, children }: BoxProps) {
+  const fit = useDecorFit(ring, box, room, decor);
   const style: CSSProperties = { width: box, height: box };
   if (ring.decor === undefined || fit === null) {
     return (
@@ -92,13 +95,16 @@ function RingBox({ ring, box, room, className, children }: { readonly ring: Avat
   );
 }
 
-type RingProps = { readonly size: number; readonly room?: number; readonly children: ReactNode };
+/**
+ * `room` : la place libre (px) que l'hôte garantit autour de la boîte — aucun texte, aucun avatar voisin n'y vit (#15157).
+ * `decor` : `false` retire les films illustrés et garde l'anneau fixe — réservé à la cellule de frappe (#16114).
+ */
+type RingProps = { readonly size: number; readonly room?: number; readonly decor?: boolean; readonly children: ReactNode };
 
-/** `room` : la place libre (px) que l'hôte garantit autour de la boîte — aucun texte, aucun avatar voisin n'y vit (#15157). */
-export function AvatarRing({ ring, size, room = 0, children }: RingProps & { readonly ring: AvatarRingDesign | null }) {
+export function AvatarRing({ ring, size, room = 0, decor = true, children }: RingProps & { readonly ring: AvatarRingDesign | null }) {
   if (ring === null) return <>{children}</>;
   return (
-    <RingBox ring={ring} box={ringBoxSize(size)} room={room} className="relative inline-grid place-items-center">
+    <RingBox ring={ring} box={ringBoxSize(size)} room={room} decor={decor} className="relative inline-grid place-items-center">
       {children}
     </RingBox>
   );
@@ -117,9 +123,9 @@ export const ringedAvatarSize = (footprint: number, hasStoryRing: boolean): numb
   return Math.max(1, hasStoryRing ? hole - railRingBox(0) : hole);
 };
 
-export function AvatarRingFrame({ ring, size, room = 0, children }: RingProps & { readonly ring: AvatarRingDesign }) {
+export function AvatarRingFrame({ ring, size, room = 0, decor = true, children }: RingProps & { readonly ring: AvatarRingDesign }) {
   return (
-    <RingBox ring={ring} box={size} room={room} className="relative inline-grid shrink-0 place-items-center">
+    <RingBox ring={ring} box={size} room={room} decor={decor} className="relative inline-grid shrink-0 place-items-center">
       {children}
     </RingBox>
   );

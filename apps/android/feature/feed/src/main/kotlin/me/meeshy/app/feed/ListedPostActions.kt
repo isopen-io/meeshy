@@ -2,18 +2,23 @@ package me.meeshy.app.feed
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 
 /** Ce que les gestes des cartes ajoutent à l'état d'une liste : la citation ouverte, l'issue à dire, les langues choisies. */
@@ -30,24 +35,42 @@ internal data class ListedPostCardsState(
  * [FeedPostActionsDelegate] pour le fil. Aimer et enregistrer bougent au geste sur [list] et ne rendent que le post touché
  * si le serveur refuse ; un commentaire envoyé fait suivre le compteur ; supprimer retire la carte avant le réseau et la
  * remet À SA PLACE sur un refus ; signaler et épingler disent leur issue ; un drapeau touché change la langue de la carte.
- * Repartager et Citer passent par [ListedPostReposting], la même règle que le fil. Chaque issue se dit UNE fois.
+ * Repartager et Citer passent par [ListedPostReposting], la même règle que le fil. Chaque issue se dit UNE fois. Une
+ * traduction poussée ([translations], #16004) se range dans SA carte ; celle que le lecteur a demandée d'un drapeau devient
+ * aussitôt la langue de la carte, comme dans le fil.
  */
 internal class ListedPostActions(
     private val scope: CoroutineScope,
     private val posts: PostRepository,
     private val reports: ReportRepository,
     private val list: MutableStateFlow<PostPageListState>,
+    translations: Flow<SocketPostTranslationUpdatedData> = emptyFlow(),
     private val reader: () -> LanguageResolver.ContentLanguagePreferences?,
 ) : ListedPostCardActions {
 
     private val notices = MutableStateFlow<FeedNotice?>(null)
     private val overrides = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val requested = MutableStateFlow<Set<RequestedTranslation>>(emptySet())
     private val reposting = ListedPostReposting(scope, posts, list, reader, notices)
 
     val state: StateFlow<ListedPostCardsState> =
         combine(reposting.quoteComposer, notices, overrides) { quote, notice, languages ->
             ListedPostCardsState(quoteComposer = quote, notice = notice, languageOverrides = languages)
         }.stateIn(scope, SharingStarted.Eagerly, ListedPostCardsState())
+
+    init {
+        scope.launch {
+            translations.collect { event ->
+                try {
+                    arrived(event)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Un événement illisible est ignoré : la collecte continue.
+                }
+            }
+        }
+    }
 
     override fun toggleLike(postId: String) {
         val snapshot = list.value
@@ -98,8 +121,7 @@ internal class ListedPostActions(
         when (result) {
             is LanguageFlagTapResolver.Result.Activate -> overrides.update { it + (postId to result.code) }
             LanguageFlagTapResolver.Result.Revert -> overrides.update { it - postId }
-            is LanguageFlagTapResolver.Result.RequestTranslation ->
-                scope.launch { attempt { posts.requestTranslation(postId, result.targetLanguage) } }
+            is LanguageFlagTapResolver.Result.RequestTranslation -> request(RequestedTranslation.of(postId, result.targetLanguage))
             LanguageFlagTapResolver.Result.None -> Unit
         }
     }
@@ -137,6 +159,24 @@ internal class ListedPostActions(
         notices.value = null
     }
 
+    /** La demande part ; un refus la retire, pour qu'un nouveau toucher la relance. */
+    private fun request(pending: RequestedTranslation) {
+        requested.update { it + pending }
+        scope.launch {
+            val sent = attempt { posts.requestTranslation(pending.postId, pending.language) } is NetworkResult.Success
+            if (!sent) requested.update { it - pending }
+        }
+    }
+
+    /** La traduction arrivée se range dans SA carte ; si le lecteur l'avait demandée, la carte passe dans cette langue. */
+    private fun arrived(event: SocketPostTranslationUpdatedData) {
+        list.update { it.translated(event.postId, event.language, event.translation) }
+        val pending = RequestedTranslation.of(event.postId, event.language)
+        if (pending !in requested.value) return
+        requested.update { it - pending }
+        if (list.value.posts.any { it.id == event.postId }) overrides.update { it + (event.postId to event.language.trim()) }
+    }
+
     /** Restaure le seul post touché : une page arrivée entre-temps, un autre geste posé pendant l'aller-retour restent. */
     private fun refuse(postId: String, snapshot: PostPageListState, notice: FeedNotice) {
         val original = snapshot.posts.firstOrNull { it.id == postId } ?: return
@@ -153,3 +193,14 @@ internal class ListedPostActions(
             null
         }
 }
+
+/** Une traduction demandée d'un drapeau, la langue normalisée pour reconnaître son arrivée. */
+private data class RequestedTranslation(val postId: String, val language: String) {
+    companion object {
+        fun of(postId: String, language: String) = RequestedTranslation(postId, language.trim().lowercase())
+    }
+}
+
+/** Les traductions de post poussées par la passerelle, le fil rejoint (idempotent, jamais quitté ici — il appartient au fil). */
+internal fun SocialSocketManager.listedPostTranslations(): Flow<SocketPostTranslationUpdatedData> =
+    postTranslationUpdated.onStart { subscribeFeed() }

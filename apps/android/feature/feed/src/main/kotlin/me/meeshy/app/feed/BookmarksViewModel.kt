@@ -17,6 +17,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import javax.inject.Inject
 
 /**
@@ -50,6 +51,7 @@ class BookmarksViewModel @Inject constructor(
     reports: ReportRepository,
     private val sessionRepository: SessionRepository,
     private val config: MeeshyConfig,
+    socialSocket: SocialSocketManager,
 ) : ViewModel() {
 
     private val listState = MutableStateFlow(BookmarksListState())
@@ -59,7 +61,7 @@ class BookmarksViewModel @Inject constructor(
     val state: StateFlow<BookmarksUiState> = _state.asStateFlow()
 
     /** Les gestes du fil sur les favoris (#13244 ; Repartager / Citer : iOS `BookmarksViewModel.toggleRepost`, #15934). */
-    private val actions = ListedPostActions(viewModelScope, postRepository, reports, listState) { sessionRepository.currentUser.value }
+    private val actions = ListedPostActions(viewModelScope, postRepository, reports, listState, socialSocket.listedPostTranslations()) { sessionRepository.currentUser.value }
 
     /**
      * Ce que font les cartes des favoris — ceux du fil, sauf « Enregistrer » : une carte des favoris EST enregistrée, la
