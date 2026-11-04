@@ -40,31 +40,6 @@ public object NotificationRowText {
     private val WHITESPACE = Regex("\\s+")
 }
 
-/** Un geste de rangée : exécuté par l'hôte, jamais par le modèle. */
-public sealed interface NotificationQuickAction {
-    public data class Connect(val userId: String) : NotificationQuickAction
-    public data class Write(val userId: String) : NotificationQuickAction
-}
-
-/**
- * Les gestes qu'une rangée propose — miroir de `APINotification.quickActions(isFriend:)` : un
- * contact qui vient de rejoindre Meeshy se salue ou se rejoint ; le badge « Invités venus » nomme
- * la personne venue par votre lien (déjà amis ⇒ « Écrire » seul).
- */
-public fun ApiNotification.quickActions(isFriend: Boolean): List<NotificationQuickAction> {
-    val userId = actor?.id?.takeIf { it.isNotBlank() } ?: return emptyList()
-    return when {
-        notificationType == MeeshyNotificationType.CONTACT_JOINED ->
-            listOf(NotificationQuickAction.Connect(userId), NotificationQuickAction.Write(userId))
-        notificationType == MeeshyNotificationType.BADGE_EARNED && metadata?.axisKey == INVITE_JOINED_AXIS ->
-            if (isFriend) listOf(NotificationQuickAction.Write(userId))
-            else listOf(NotificationQuickAction.Write(userId), NotificationQuickAction.Connect(userId))
-        else -> emptyList()
-    }
-}
-
-private const val INVITE_JOINED_AXIS = "inviteJoined"
-
 /** Nature du contenu visé par le pied de rangée — l'icône que la couche UI pose. */
 public enum class RowContentKind { STORY, REEL, MOOD, POST }
 

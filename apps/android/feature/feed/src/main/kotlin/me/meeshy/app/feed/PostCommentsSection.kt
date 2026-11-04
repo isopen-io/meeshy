@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -39,6 +41,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -55,6 +58,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
+import me.meeshy.ui.component.comments.CommentComposerBanner
+import me.meeshy.ui.component.comments.FoldableCommentBar
+import me.meeshy.ui.component.comments.KeepsReplyTargetInView
+import me.meeshy.ui.component.comments.ProvideCommentAnchors
+import me.meeshy.ui.component.comments.commentAnchor
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
@@ -136,6 +144,8 @@ private fun rememberCommentImaging(viewModel: PostCommentsViewModel, support: Po
 
 @Composable
 private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsViewModel, modifier: Modifier, imaging: CommentImaging?, showsTitle: Boolean) {
+    ProvideCommentAnchors { anchors ->
+    KeepsReplyTargetInView(replyingToId = state.replyTarget?.commentId, anchors = anchors)
     Column(modifier = modifier.fillMaxWidth()) {
         if (showsTitle) {
             Text(
@@ -181,6 +191,7 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
             }
         }
     }
+    }
 }
 
 /**
@@ -196,7 +207,14 @@ fun PostCommentsComposerBar(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val editPiece = rememberCommentPieceRetouch(onReplace = viewModel::replaceMedia)
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onComposerStop() }
-    Box(modifier.fillMaxWidth()) {
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    FoldableCommentBar(
+        isReplying = state.replyTarget != null,
+        isComposing = imeVisible,
+        foldLabel = stringResource(R.string.comment_composer_fold),
+        unfoldLabel = stringResource(R.string.comment_composer_unfold),
+        modifier = modifier,
+    ) {
         CommentComposer(
             draft = state.draft,
             mention = state.mention,
@@ -248,6 +266,7 @@ private fun CommentRow(
         modifier = Modifier
             .fillMaxWidth()
             .alpha(if (comment.isPending) 0.5f else 1f)
+            .commentAnchor(comment.id)
             .commentSwipeToReply { if (!comment.isPending) onReply(comment.id) },
     ) {
         MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp, imageUrl = comment.authorAvatarUrl, presence = rememberPresence(comment.authorId), modifier = Modifier.opensAuthorProfile(comment.authorProfile(), minTarget = true))
@@ -590,7 +609,7 @@ private fun CommentComposer(
             languageCode = languageCode,
             onPickLanguage = onPickLanguage,
             onQuickEmoji = onQuickEmoji,
-            foldable = true,
+            foldable = false,
             effects = effects,
             onToggleEffect = onToggleEffect,
             onClearEffects = onClearEffects,
@@ -599,7 +618,7 @@ private fun CommentComposer(
             onRemovePlace = place.onRemove,
             topSlot = {
                 MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected)
-                if (replyTarget != null) ReplyTargetChip(target = replyTarget, onCancelReply = onCancelReply)
+                if (replyTarget != null) ReplyTargetBanner(target = replyTarget, onCancelReply = onCancelReply)
                 CommentAttachmentBar(tray = attachments, onEdit = onEditPiece, onRemove = onRemovePiece)
             },
         ),
@@ -622,41 +641,19 @@ private fun rememberReplyFocusTrigger(replyTarget: ReplyTarget?): Int {
     return trigger
 }
 
-/**
- * The "Replying to @name" chip pinned above the composer while a [ReplyTarget] is active,
- * with a discreet close affordance to drop back to a top-level comment. Accent-coherent Indigo.
- */
+/** Le bandeau « en réponse à » au-dessus du composeur tant qu'une cible est visée : la croix revient au commentaire racine. */
 @Composable
-private fun ReplyTargetChip(target: ReplyTarget, onCancelReply: () -> Unit) {
-    val label = target.authorName
+private fun ReplyTargetBanner(target: ReplyTarget, onCancelReply: () -> Unit) {
+    val title = target.authorName
         ?.let { stringResource(R.string.post_comments_replying_to, it) }
         ?: stringResource(R.string.post_comments_replying_to_generic)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        modifier = Modifier
-            .clip(RoundedCornerShape(MeeshyRadius.pill))
-            .background(MeeshyPalette.Indigo500.copy(alpha = 0.10f))
-            .padding(start = 10.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MeeshyPalette.Indigo500,
-        )
-        val cancelLabel = stringResource(R.string.post_comments_cancel_reply)
-        IconButton(
-            onClick = onCancelReply,
-            modifier = Modifier.size(24.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = cancelLabel,
-                tint = MeeshyPalette.Indigo500,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    }
+    CommentComposerBanner(
+        title = title,
+        cancelLabel = stringResource(R.string.post_comments_cancel_reply),
+        accent = MeeshyPalette.Indigo500,
+        onCancel = onCancelReply,
+        quote = target.excerpt,
+    )
 }
 
 @Composable

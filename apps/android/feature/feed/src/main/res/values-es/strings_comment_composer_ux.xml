@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="comment_composer_fold">Ocultar la zona de comentarios</string>
+    <string name="comment_composer_unfold">Mostrar la zona de comentarios</string>
+    <string name="comment_composer_editing">Editando comentario</string>
+</resources>

@@ -93,6 +93,21 @@ class ContactListTest {
     }
 
     @Test
+    fun `one any-direction listing aggregates sent and received relations without duplicates`() {
+        val me = user("me")
+        val friends = ContactList.fromAcceptedRequests(
+            requests = listOf(
+                request("r1", sender = user("alice"), receiver = me),
+                request("s1", sender = me, receiver = user("bob")),
+                request("r2", sender = user("bob"), receiver = me),
+                request("p1", status = "pending", sender = user("carol"), receiver = me),
+            ),
+            currentUserId = "me",
+        )
+        assertThat(friends.map { it.id }).containsExactly("alice", "bob")
+    }
+
+    @Test
     fun `a friend appearing in both received and sent is deduplicated`() {
         val friends = ContactList.fromAcceptedRequests(
             received = listOf(request("r1", sender = user("alice", isOnline = true))),

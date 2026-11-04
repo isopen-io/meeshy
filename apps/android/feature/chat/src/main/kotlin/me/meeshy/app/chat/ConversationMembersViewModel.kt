@@ -6,7 +6,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
@@ -18,6 +21,7 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.ParticipantCacheRepository
 import me.meeshy.sdk.model.MemberModeration
 import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.MemberRowFormat
 import me.meeshy.sdk.model.MemberRoleAction
 import me.meeshy.sdk.model.MemberRoster
 import me.meeshy.sdk.model.MemberRosterPage
@@ -48,7 +52,15 @@ data class ConversationMembersUiState(
     val actionFailed: Boolean = false,
     /** #15269 — la loi des actions accorde « Inviter » à ce lecteur (Global : administrateurs de la plateforme seuls). */
     val mayInvite: Boolean = false,
+    /** Le changement de rôle choisi au menu, tant que « Changer le rôle ? » n'est pas confirmé. */
+    val pendingRoleChange: PendingRoleChange? = null,
 ) {
+    /** Squelette de lignes au démarrage à froid SEULEMENT : jamais sur un roster déjà à l'écran. */
+    val showSkeleton: Boolean get() = isLoading && roster.members.isEmpty()
+
+    /** Le serveur ne sert plus l'effectif exact : on rend « 199+ ». */
+    val isCapped: Boolean get() = MemberRowFormat.isCapped(memberCount)
+
     val members: List<PaginatedParticipant> get() = roster.members
     val memberCount: Int get() = roster.displayCount
     val canLoadMore: Boolean get() = roster.hasMore && !isLoadingMore
@@ -99,6 +111,9 @@ class ConversationMembersViewModel @Inject constructor(
     val state: StateFlow<ConversationMembersUiState> = _state.asStateFlow()
 
     private val searchQuery = MutableStateFlow("")
+
+    private val effectChannel = Channel<MembersEffect>(Channel.BUFFERED)
+    val effects: Flow<MembersEffect> = effectChannel.receiveAsFlow()
 
     /** Everything bound to the currently-loaded conversation, cancelled when it changes. */
     private var bindings: List<Job> = emptyList()
@@ -205,8 +220,10 @@ class ConversationMembersViewModel @Inject constructor(
             val result = conversationRepository.updateParticipantRole(id, userId, action.target)
             if (result is NetworkResult.Failure) {
                 _state.update { it.copy(roster = previous, actionFailed = true) }
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.ERROR))
             } else {
                 participantCache.updateRole(id, userId, action.target.wireValue)
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.SUCCESS))
             }
         }
     }
@@ -225,8 +242,10 @@ class ConversationMembersViewModel @Inject constructor(
             val result = conversationRepository.removeParticipant(id, userId)
             if (result is NetworkResult.Failure) {
                 _state.update { it.copy(roster = previous, actionFailed = true) }
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.ERROR))
             } else {
                 participantCache.removeParticipant(id, userId)
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.SUCCESS))
             }
         }
     }
@@ -247,8 +266,43 @@ class ConversationMembersViewModel @Inject constructor(
             val result = conversationRepository.banParticipant(id, userId)
             if (result is NetworkResult.Failure) {
                 _state.update { it.copy(roster = previous, actionFailed = true) }
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.ERROR))
             } else {
                 participantCache.removeParticipant(id, userId)
+                effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.SUCCESS))
+            }
+        }
+    }
+
+    /** Le menu contextuel a choisi un rôle : rien ne part avant la confirmation « Changer le rôle ? ». */
+    fun requestRoleChange(member: PaginatedParticipant, action: MemberRoleAction) =
+        _state.update { it.copy(pendingRoleChange = PendingRoleChange(member, action)) }
+
+    fun cancelRoleChange() = _state.update { it.copy(pendingRoleChange = null) }
+
+    fun confirmRoleChange() {
+        val pending = _state.value.pendingRoleChange ?: return
+        _state.update { it.copy(pendingRoleChange = null) }
+        changeRole(pending.member, pending.action)
+    }
+
+    /**
+     * Quitter le groupe (destructif, le dialogue a confirmé). Pas d'optimisme : la sortie n'est montrée qu'une fois le
+     * serveur d'accord ; le cache du roster est effacé, puis l'écran revient à la liste ([MembersEffect.Left]).
+     */
+    fun leaveGroup() {
+        val id = _state.value.conversationId ?: return
+        viewModelScope.launch {
+            when (conversationRepository.leave(id)) {
+                is NetworkResult.Success -> {
+                    participantCache.invalidate(id)
+                    effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.SUCCESS))
+                    effectChannel.trySend(MembersEffect.Left)
+                }
+                is NetworkResult.Failure -> {
+                    _state.update { it.copy(actionFailed = true) }
+                    effectChannel.trySend(MembersEffect.Haptic(FeedbackHaptic.ERROR))
+                }
             }
         }
     }

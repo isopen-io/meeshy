@@ -58,6 +58,8 @@ public data class BubbleCallbacks(
     val onQuotedAuthorTap: (() -> Unit)? = null,
     /** Tap sur la miniature du média cité : la visionneuse (repli hôte : le saut à l'original). */
     val onQuotedMediaTap: (() -> Unit)? = null,
+    /** Tap sur le ▶ d'une citation de vocal : il joue seul, sans file ([BubbleContent.replyToAudio]). */
+    val onQuotedAudioClick: ((BubbleAudio) -> Unit)? = null,
     /** Tap on the citation card of a quoted story (only wired when the story still opens, #13296). */
     val onStoryCitationClick: (() -> Unit)? = null,
     /** Tap on a language flag of the Prisme strip, with its language code. */
