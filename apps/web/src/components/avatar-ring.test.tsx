@@ -77,10 +77,22 @@ describe('le contour autour de l’avatar', () => {
     expect(renderToStaticMarkup(<AvatarRingFrame ring={masque} size={84}><i /></AvatarRingFrame>)).not.toContain(color);
   });
 
-  test('trop petit pour se lire, le cadre illustré bascule sur l’anneau seul, dans sa boîte (#15157)', () => {
-    const html = renderToStaticMarkup(<AvatarRingFrame ring={masque} size={52}><i data-avatar /></AvatarRingFrame>);
+  test('le cadre illustré s’affiche entier à toutes les tailles — liste, bulle, mini-avatar — dans sa boîte (#16114)', () => {
+    for (const size of [52, 32, 22, 18]) {
+      const html = renderToStaticMarkup(<AvatarRingFrame ring={masque} size={size}><i data-avatar /></AvatarRingFrame>);
+      expect(html).toContain('data-ring-decor="front"');
+      expect(html.match(/inset:0px/g)).toHaveLength(2);
+      expect(html).toContain(`transform:scale(${1 / masque.decor!.reach})`);
+    }
+    const bubble = renderToStaticMarkup(<Avatar initials="JC" color="#6366F1" size={28} ring={masque} />);
+    expect(bubble).toContain('data-ring-decor="front"');
+  });
+
+  test('la cellule de frappe retire les films : l’anneau fixe seul, à sa taille (#16114)', () => {
+    const html = renderToStaticMarkup(<Avatar initials="JC" color="#6366F1" size={22} ring={masque} ringDecor={false} />);
     expect(html).not.toContain('data-ring-decor');
     expect(html).not.toContain('transform:scale');
+    expect(html).toContain('data-avatar-ring="masque-felin"');
     expect(html).toContain(masque.stroke.colors[0]!);
   });
 

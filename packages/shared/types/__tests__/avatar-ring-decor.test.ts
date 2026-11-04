@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RING_DECOR_MAX_REACH, RING_DECOR_MIN_BOX, parseAvatarRingDesign, ringDecorFit } from '../avatar-ring-design';
+import { RING_DECOR_MAX_REACH, parseAvatarRingDesign, ringDecorFit } from '../avatar-ring-design';
 
 const ref = (src: string) => ({ src, bytes: 1200, sha256: `${src.slice(0, 16)}${'0'.repeat(48)}` });
 const ring = (decor: unknown) => ({ key: 'masque-felin', stroke: { style: 'solid', width: 0.04, colors: ['#2A1840'] }, decor });
@@ -43,11 +43,10 @@ describe('les calques illustrés d’un contour (#13960)', () => {
   });
 
   it('le film ne sort jamais de la boîte plus la place déclarée, à toutes les tailles (#15157)', () => {
-    [44, 62, 88, 107, 140].forEach((box) =>
+    [18, 22, 28, 44, 62, 88, 107, 140].forEach((box) =>
       [1, 1.2, 1.4, RING_DECOR_MAX_REACH].forEach((reach) =>
         [0, 4, 12].forEach((room) => {
           const fit = ringDecorFit({ box, reach, room });
-          if (fit === null) return;
           expect(fit.side).toBeLessThanOrEqual(box + 2 * room + 1e-9);
           expect(fit.side).toBeCloseTo(box * reach * fit.scale, 9);
           expect(fit.scale).toBeLessThanOrEqual(1);
@@ -56,9 +55,9 @@ describe('les calques illustrés d’un contour (#13960)', () => {
     );
   });
 
-  it('trop petit pour se lire, le cadre bascule sur l’anneau seul (#15157)', () => {
-    expect(ringDecorFit({ box: 52, reach: 1.4 })).toBeNull();
-    expect(ringDecorFit({ box: RING_DECOR_MIN_BOX * 1.4, reach: 1.4 })).not.toBeNull();
-    expect(ringDecorFit({ box: 32, reach: 1 })).toBeNull();
+  it('le cadre se pose entier à toutes les tailles, liste, bulle et mini-avatar compris (#16114)', () => {
+    expect(ringDecorFit({ box: 52, reach: 1.4 })).toEqual({ scale: 1 / 1.4, side: 52, offset: 0 });
+    expect(ringDecorFit({ box: 32, reach: 1 })).toEqual({ scale: 1, side: 32, offset: 0 });
+    expect(ringDecorFit({ box: 22, reach: RING_DECOR_MAX_REACH }).side).toBe(22);
   });
 });

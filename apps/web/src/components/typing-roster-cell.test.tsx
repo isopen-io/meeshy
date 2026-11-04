@@ -252,3 +252,19 @@ describe('TypingRosterCell — le visage du meneur porte sa photo (#6985)', () =
     expect(html).not.toContain('<img');
   });
 });
+
+describe('TypingRosterCell — ni présence, ni décor complet (#16114)', () => {
+  test('le contour équipé du meneur se pose sans ses films illustrés, et sans pastille', async () => {
+    const { BUILTIN_RING_PACKS } = await import('@/lib/profile-decor/catalog');
+    const masque = BUILTIN_RING_PACKS.find((pack) => pack.slug === 'cadres-illustres')!.items.find((item) => item.key === 'masque-felin')!;
+    const { Avatar } = await import('./avatar');
+    const html = renderToStaticMarkup(<Avatar initials="KM" color="#5B4CFF" size={22} ring={masque} ringDecor={false} />);
+    expect(html).toContain('data-avatar-ring="masque-felin"');
+    expect(html).not.toContain('data-ring-decor');
+    for (const flat of [true, false]) {
+      const cell = renderToStaticMarkup(<TypingRosterCell typists={[entry('u-kwame', 'Kwame Mensah')]} accent="#5B4CFF" flat={flat} />);
+      expect(cell).not.toContain('data-presence');
+      expect(cell).not.toContain('data-ring-decor');
+    }
+  });
+});
