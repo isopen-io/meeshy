@@ -35,7 +35,7 @@ class ReactionReadStatusApplierTest {
         val session = mockk<SessionRepository> {
             every { currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me"))
         }
-        ReactionReadStatusApplier(socket, rows, messages, session, open).subscribe(it)
+        ReactionReadStatusApplier(socket, messages, rows, session, open).subscribe(it)
     }
 
     private fun reaction() = ReactionUpdateEvent(messageId = "m1", conversationId = "c1", userId = "bob", emoji = "🔥")

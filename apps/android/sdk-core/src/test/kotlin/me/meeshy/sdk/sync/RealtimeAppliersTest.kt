@@ -107,7 +107,7 @@ class RealtimeAppliersTest {
     }
 
     private fun conversations() = InlineRegistrar().also { ConversationRealtimeApplier(socket, patcher, events, starred).subscribe(it) }
-    private fun participants() = InlineRegistrar().also { ParticipantRealtimeApplier(socket, patcher, starred).subscribe(it) }
+    private fun participants() = InlineRegistrar().also { ParticipantRealtimeApplier(socket, patcher, starred, session).subscribe(it) }
     private fun reactions(open: Set<String> = emptySet()) = InlineRegistrar().also {
         ReactionReadStatusApplier(socket, messages, rows, session, OpenConversationLookup { id -> id in open }).subscribe(it)
     }
@@ -214,7 +214,7 @@ class RealtimeAppliersTest {
         val registrar = translations()
         registrar.deliver(translationFlow, TranslationEvent("m1", "c1", "fr", "Bonjour"))
         registrar.deliver(
-            transcription,
+            transcriptionFlow,
             TranscriptionReadyEvent("m1", "c1", "a1", TranscriptionPayload(text = "hello", language = "en")),
         )
         coVerify { messages.applyTranslation("m1", "fr", "Bonjour") }

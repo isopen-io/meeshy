@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.TranscriptionReadyEvent
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.socket.MessageSocketManager
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class TranslationRealtimeApplierTest {
@@ -45,8 +46,8 @@ class TranslationRealtimeApplierTest {
     @Test
     fun `les enrichissements partent sur la voie d'enrichissement`() {
         val lane = OrderedEventLane.Family.ENRICHMENT
-        kotlin.test.assertEquals(lane, registrar.familyOf(translation))
-        kotlin.test.assertEquals(lane, registrar.familyOf(transcription))
-        kotlin.test.assertEquals(lane, registrar.familyOf(audio))
+        assertEquals(lane, registrar.familyOf(translation))
+        assertEquals(lane, registrar.familyOf(transcription))
+        assertEquals(lane, registrar.familyOf(audio))
     }
 }
