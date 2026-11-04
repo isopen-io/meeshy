@@ -248,14 +248,15 @@ struct FeedView: View {
         Task {
             defer { engagement.bookmarkInFlightIds.remove(postId) }
             let shown = viewModel.posts.first(where: { $0.id == postId })
-            guard await !PostBookmarkWriter().write(bookmarked: !wasBookmarked, postId: postId, post: shown) else { return }
-            if wasBookmarked {
-                engagement.bookmarkedIds.insert(postId)
-                engagement.bookmarkDelta[postId, default: 0] += 1
-            } else {
-                engagement.bookmarkedIds.remove(postId)
-                engagement.bookmarkDelta[postId, default: 0] -= 1
-            }
+            await PostBookmarkWriter().write(bookmarked: !wasBookmarked, postId: postId, post: shown, onRejected: {
+                if wasBookmarked {
+                    engagement.bookmarkedIds.insert(postId)
+                    engagement.bookmarkDelta[postId, default: 0] += 1
+                } else {
+                    engagement.bookmarkedIds.remove(postId)
+                    engagement.bookmarkDelta[postId, default: 0] -= 1
+                }
+            })
         }
     }
 

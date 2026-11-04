@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyImageVariant
+import me.meeshy.sdk.model.MessageEffectFlags
 import org.junit.Test
 
 class ConversationMediaHubRulesTest {
@@ -115,6 +116,29 @@ class ConversationMediaHubRulesTest {
         val enc = ApiMessageAttachment(id = "e", mimeType = "image/jpeg", fileUrl = "https://cdn/e", isEncrypted = true)
         val item = ConversationMediaHubRules.items(message("m", attachments = listOf(enc)), ConversationMediaKind.VISUAL, origin).single()
         assertThat(item.attachment?.isEncrypted).isTrue()
+    }
+
+    private fun hubAudio(carrier: ApiMessage): MediaHubAttachment =
+        ConversationMediaHubRules.items(listOf(carrier), ConversationMediaKind.AUDIO, now, origin).single().attachment!!
+
+    @Test
+    fun `un vocal d'un message ephemere non echu est protege dans le hub`() {
+        val ephemeral = message("m", expiresAt = "2099-01-01T00:00:00.000Z", attachments = listOf(piece("a", "audio/mp4")))
+        assertThat(hubAudio(ephemeral).isProtected).isTrue()
+    }
+
+    @Test
+    fun `un vocal d'un message floute, a effet ephemere ou chiffre est protege dans le hub`() {
+        val voice = listOf(piece("a", "audio/mp4"))
+        assertThat(hubAudio(message("m", attachments = voice).copy(isBlurred = true)).isProtected).isTrue()
+        assertThat(hubAudio(message("m", attachments = voice).copy(effectFlags = MessageEffectFlags.EPHEMERAL.toInt())).isProtected).isTrue()
+        assertThat(hubAudio(message("m", attachments = voice).copy(ephemeralDuration = 30)).isProtected).isTrue()
+        assertThat(hubAudio(message("m", attachments = voice).copy(isEncrypted = true)).isProtected).isTrue()
+    }
+
+    @Test
+    fun `un vocal ordinaire n'est pas protege dans le hub`() {
+        assertThat(hubAudio(message("m", attachments = listOf(piece("a", "audio/mp4")))).isProtected).isFalse()
     }
 
     private fun hubPiece(variants: List<MeeshyImageVariant>, encrypted: Boolean = false, video: Boolean = false, thumb: String? = "https://cdn/thumb") =

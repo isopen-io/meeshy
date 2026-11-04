@@ -105,7 +105,7 @@ extension PostService {
     }
 
     public func pinPost(postId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.request(PostsEndpoint.byPostIdPin(postId: postId), method: "POST")
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(PostsEndpoint.byPostIdPin(postId: postId), method: "POST")
     }
 
     public func unpinPost(postId: String) async throws {

@@ -162,6 +162,8 @@ extension OutboxUIItem {
             return mapCreatePost(record: record)
         case .repostPost:
             return mapRepostPost(record: record)
+        case .toggleBookmarkPost:
+            return mapBookmark(record: record)
         case .markAsRead,
              .markStoryViewed,
              .reportAttachmentStatus,
@@ -462,6 +464,22 @@ extension OutboxUIItem {
             kind: .other("repostPost"),
             titlePreview: preview,
             iconKind: .text,
+            attachmentCount: 0,
+            source: source,
+            status: record.status,
+            createdAt: record.createdAt
+        )
+    }
+
+    /// #15997 — un favori en file mène à SA carte, comme une réaction de post.
+    private static func mapBookmark(record: OutboxRecord) -> OutboxUIItem {
+        let object = (try? JSONSerialization.jsonObject(with: record.payload)) as? [String: Any]
+        let source: Source = (object?["postId"] as? String).map { .post(id: $0) } ?? .unknown
+        return OutboxUIItem(
+            id: record.id,
+            kind: .other(record.kind.rawValue),
+            titlePreview: nil,
+            iconKind: .none,
             attachmentCount: 0,
             source: source,
             status: record.status,

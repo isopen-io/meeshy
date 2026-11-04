@@ -4,8 +4,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 import type { SocketClient } from '@/lib/net/socket';
 
 import { conversationMembersQueryKey, type ConversationMember, type ConversationMembersData } from './conversation-members';
-import { patchConversation, patchConversationDetail } from './conversations';
-import type { Conversation } from './types';
+import { applyViewerRoleUpdate, viewerRoleUpdateOf } from './realtime-viewer-role';
 
 /**
  * **LA FEUILLE OUVERTE SUIT LES MEMBRES EN DIRECT** (#10613) — les événements
@@ -15,9 +14,8 @@ import type { Conversation } from './types';
  *
  * - `participant:role-updated` — le rang servi remplace l'ancien ; quand c'est
  *   le LECTEUR qui change de rang, la conversation (liste et fil) le reçoit
- *   aussi : les gestes que la feuille offre suivent son nouveau rang, et la
- *   capacité servie pour l'ancien rang (`viewerCapabilities`, #14690, #15987)
- *   s'efface — la règle locale reprend jusqu'à la prochaine lecture servie ;
+ *   aussi, avec la capacité que l'événement lui remet (`viewerCapabilities`,
+ *   #14690, #15987) — règle unique : `realtime-viewer-role.ts` ;
  * - `conversation:participant-left` et `conversation:participant-banned` — la
  *   rangée part, le compte baisse ;
  * - `conversation:participant-joined` — la charge ne porte pas la rangée
@@ -53,11 +51,6 @@ function editMembers(queryClient: QueryClient, conversationId: string, edit: (me
   });
 }
 
-function withViewerRole(conversation: Conversation, role: string): Conversation {
-  const { viewerCapabilities: _stale, ...rest } = conversation;
-  return { ...rest, currentUserRole: role };
-}
-
 export function bindConversationMembersLive(params: {
   readonly socket: SocketClient;
   readonly queryClient: QueryClient;
@@ -75,9 +68,8 @@ export function bindConversationMembersLive(params: {
     const ids = { participantId, userId: textOf(payload.userId) };
     const next = role.toLowerCase();
     editMembers(queryClient, conversationId, (members) => members.map((member) => (designates(member, ids) ? { ...member, role: next } : member)));
-    if (ids.userId === null || ids.userId !== viewerId) return;
-    patchConversation(queryClient, conversationId, (c) => withViewerRole(c, next));
-    patchConversationDetail(queryClient, conversationId, (c) => withViewerRole(c, next));
+    const viewerUpdate = viewerRoleUpdateOf(payload, viewerId);
+    if (viewerUpdate !== null) applyViewerRoleUpdate(queryClient, viewerUpdate);
   };
 
   const onDeparture = (value: unknown): void => {

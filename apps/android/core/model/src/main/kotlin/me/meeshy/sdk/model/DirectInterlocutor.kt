@@ -4,8 +4,8 @@ package me.meeshy.sdk.model
 // #11164).
 //
 // Un direct n'a pas de nom propre : il porte celui de l'AUTRE participant, et avec lui son
-// identifiant, son pseudo et son avatar (puis sa bannière et son contour, que
-// [DirectInterlocutor.participant] donnera à lire dès que le fil les décode). Ces champs
+// identifiant, son pseudo, son avatar et son contour équipé (sa bannière reste à lire sur
+// [DirectInterlocutor.participant] dès que le fil la décode). Ces champs
 // dérivent d'UNE élection, faite contre l'identifiant du lecteur — ils sont donc vrais
 // ensemble ou faux ensemble, jamais à moitié.
 
@@ -45,6 +45,10 @@ data class DirectInterlocutor(
 
     val avatarUrl: String?
         get() = participant.avatar?.takeIf { it.isNotBlank() }
+
+    /** Le contour d'avatar que le pair a équipé (`profileDecor.avatarRing`) ; `null` s'il n'en porte pas. */
+    val avatarRing: ServedProfileDecorItem?
+        get() = participant.profileDecor?.avatarRing
 }
 
 /**
@@ -155,3 +159,11 @@ fun ApiConversation.displayedAvatar(readerId: String?): String? {
     val served = if (isDirect) interlocutor(readerId)?.avatarUrl else avatar
     return served?.takeIf { it.isNotBlank() }
 }
+
+/**
+ * Le contour d'une ligne de conversation (#15984, miroir d'iOS `DirectInterlocutor.wearingInterlocutor` et de
+ * `LentilleConversationRow` : `ring: isDirect ? conversation.participantRing : nil`) : celui du PAIR en direct,
+ * jamais celui du lecteur ; un groupe n'en porte aucun, un contour d'avatar étant la parure d'une PERSONNE.
+ */
+fun ApiConversation.displayedAvatarRing(readerId: String?): ServedProfileDecorItem? =
+    if (isDirect) interlocutor(readerId)?.avatarRing else null

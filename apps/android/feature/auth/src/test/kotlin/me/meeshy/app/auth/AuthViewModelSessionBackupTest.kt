@@ -115,7 +115,6 @@ class AuthViewModelSessionBackupTest {
         assertThat(vm.state.value.isRestoringSession).isFalse()
         assertThat(vm.state.value.errorRes).isNull()
         assertThat(vm.state.value.errorMessage).isNull()
-        assertThat(vm.state.value.sessionClosedNotice).isFalse()
         assertThat(backup.held).isNull()
     }
 

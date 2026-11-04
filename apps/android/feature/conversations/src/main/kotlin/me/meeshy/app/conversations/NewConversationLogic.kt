@@ -172,4 +172,18 @@ object NewConversationLogic {
             val blocked = row.id in blockedIds
             row.copy(isBlocked = blocked, isSelected = row.isSelected && !blocked)
         }
+
+    /**
+     * The label a screen reader hears for a row (iOS `userRowAccessibilityLabel`): name, @username, then the status
+     * the colour alone would carry — « Blocked », else « online » — so nothing rides on the dot or the dimming.
+     */
+    fun rowAccessibilityLabel(user: SelectableUser, isOnlineNow: Boolean, blockedLabel: String, onlineLabel: String): String =
+        buildList {
+            add(user.displayName)
+            add("@${user.username}")
+            if (user.isBlocked) add(blockedLabel) else if (isOnlineNow) add(onlineLabel)
+        }.joinToString(", ")
+
+    /** A row can be picked unless I blocked its user. */
+    fun isSelectable(user: SelectableUser): Boolean = !user.isBlocked
 }
