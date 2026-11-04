@@ -65,6 +65,7 @@ import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.avatar.AvatarAccessibilityLabel
 import me.meeshy.sdk.model.ServedProfileDecorItem
 import me.meeshy.sdk.model.appearance.AvatarRingDesign
+import me.meeshy.sdk.model.appearance.AvatarRingChoice
 import me.meeshy.sdk.model.avatar.AvatarContext
 import me.meeshy.sdk.model.avatar.AvatarCornerBadge
 import me.meeshy.sdk.model.avatar.AvatarDotTone
@@ -234,7 +235,8 @@ public fun meeshyDotToneColor(tone: AvatarDotTone): Color = when (tone) {
  * [ring] = le contour choisi par son porteur (miroir d'`avatarRingWithin`) : il se pose DANS l'empreinte, l'anneau de
  * story reste concentrique dedans, la pastille de presence se pose par-dessus. `null` = rendu historique.
  * [decorRing] = la RÉFÉRENCE du contour équipé telle que la passerelle la sert avec la personne (`profileDecor.avatarRing`),
- * résolue par le catalogue ([rememberAvatarRing]) ; [ring] (déjà résolu) prime. Le contour est décoratif : ni toucher, ni TalkBack.
+ * résolue par le catalogue ([rememberAvatarRing]) ; [ring] (déjà résolu) prime, une entité n'en porte jamais ([AvatarRingChoice]).
+ * Le contour est décoratif : ni toucher, ni TalkBack.
  */
 @Composable
 public fun MeeshyAvatar(
@@ -253,14 +255,14 @@ public fun MeeshyAvatar(
     onMoodTap: (() -> Unit)? = null,
     onDotTap: (() -> Unit)? = null,
     ring: AvatarRingDesign? = null,
-    decorRing: ServedProfileDecorItem? = null,
     imageUrl: String? = null,
     thumbHash: String? = null,
     userId: String? = null,
     gestures: AvatarGestures? = null,
+    decorRing: ServedProfileDecorItem? = null,
 ) {
     val social = LocalSocialChrome.current
-    val equippedRing = rememberAvatarRing(decorRing)
+    val posedRing = AvatarRingChoice.effective(ring, rememberAvatarRing(decorRing), isUser)
     val reduceMotion = LocalReduceMotion.current
     val apiBaseUrl = LocalMediaBaseUrl.current
     val face = remember(name, imageUrl, apiBaseUrl) { AvatarFace.resolve(name, imageUrl, apiBaseUrl) }
@@ -309,7 +311,7 @@ public fun MeeshyAvatar(
         modifier = modifier.size(frame),
     ) {
         Box(modifier = Modifier.size(frame), contentAlignment = Alignment.Center) {
-            AvatarRingLayer(ring ?: equippedRing, footprint = size, storyRingSize = if (hasRing) frame else null) {
+            AvatarRingLayer(posedRing, footprint = size, storyRingSize = if (hasRing) frame else null) {
                 AvatarStoryRing(
                     state = effectiveRing,
                     frame = frame,
