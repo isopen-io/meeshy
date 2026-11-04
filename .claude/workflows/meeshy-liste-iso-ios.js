@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Chantier #15537 de bout en bout, sans s'arrêter, sur iOS et Android : la pastille dit qui écrit et mène à la conversation, l'aperçu montre l'auteur et le détail des pièces jointes, l'avatar de ligne ouvre profil ou détails, le rail de stories reste en haut au défilement. Cartographie features × plateformes, registre des lots (plan de parité + compléments iOS, Android, partagés), puis deux voies en parallèle : DÉVELOPPEMENT (issue, cadrage contre dev vivant, TDD, revue-correction, audit des lots sensibles, PR) et GUICHET CI (resynchronisation sur dev, preuve par workflow_dispatch, corrections, fusion au vert, clôture avec preuve) — opus cadre, relit et corrige ; sonnet développe et prouve ; haiku fait le mécanique",
   whenToUse:
-    "Lancer ou reprendre le chantier « liste iso iOS » (#15537, milestone #232). Args, tous optionnels : { run ('/home/user/meeshy-quatre-run'), date, attribution, recartographier (false), devPar (1), maxFix (4), tentatives (2), maxIdle (36), maxResync (3), guichetMax (4), sauter [clés], seulement [clés], base ('dev'), aVerifier [{ key, platform, pr, issue }] — PR déjà fusionnées dont la preuve reste à lire }.",
+    "Lancer ou reprendre le chantier « liste iso iOS » (#15537, milestone #232) depuis n'importe quelle session. Args (objet ou chaîne JSON) : { attribution (OBLIGATOIRE : les lignes Co-Authored-By et Claude-Session de la session qui lance), date, sessionsPrecedentes [« Claude-Session: … » des sessions qui ont déjà poussé des branches du chantier ; défaut : celle du 2026-11-03], run ('/home/user/meeshy-quatre-run'), recartographier (false), devPar (1), maxFix (4), tentatives (2), maxIdle (36), maxResync (3), guichetMax (4), sauter [clés], seulement [clés], base ('dev'), brancheOutillage (branche dont la PR d'outillage est à fusionner ; défaut aucune), aVerifier [{ key, platform, pr, issue }] }.",
   phases: [
     { title: 'Préparer', detail: "répertoire d'exécution, registre, PR de l'outillage, restauration du registre depuis #15537", model: 'sonnet' },
     { title: 'Cartographier', detail: 'une feature à la fois : chaque clause confrontée à iOS et Android sur dev vivant, lots manquants', model: 'opus' },
@@ -24,7 +24,14 @@ export const meta = {
 // ---------------------------------------------------------------------------
 // PARAMÈTRES
 // ---------------------------------------------------------------------------
-const A = args && typeof args === 'object' ? args : {}
+const lireArgs = (brut) => {
+  if (brut && typeof brut === 'object') return brut
+  if (typeof brut === 'string' && brut.trim().startsWith('{')) {
+    try { return JSON.parse(brut) } catch (e) { return {} }
+  }
+  return {}
+}
+const A = lireArgs(args)
 const REPO = '/home/user/meeshy'
 const GH = 'isopen-io/meeshy'
 const RUN = typeof A.run === 'string' && A.run ? A.run.replace(/\/$/, '') : '/home/user/meeshy-quatre-run'
@@ -32,15 +39,18 @@ const LOTS = `${RUN}/lots`
 const NOTES = `${RUN}/notes`
 const BASE = typeof A.base === 'string' && A.base ? A.base : 'dev'
 const DATE = typeof A.date === 'string' && A.date ? A.date : '(lis la date avec date -I)'
-const ATTR = typeof A.attribution === 'string' && A.attribution
-  ? A.attribution
-  : 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01EbRyWdY9YqethRbp6RRuTh'
+const ATTR = typeof A.attribution === 'string' && /Claude-Session: \S+/.test(A.attribution) ? A.attribution.trim() : ''
 const TRAILER = (ATTR.match(/Claude-Session: \S+/) || [''])[0]
+const SESSIONS_PRECEDENTES = Array.isArray(A.sessionsPrecedentes) ? A.sessionsPrecedentes
+  : ['Claude-Session: https://claude.ai/code/session_01EbRyWdY9YqethRbp6RRuTh']
+const SIGNATURES = [TRAILER, ...SESSIONS_PRECEDENTES.filter((t) => typeof t === 'string' && t.startsWith('Claude-Session: ') && t !== TRAILER)].filter(Boolean)
+const SIG_ARG = SIGNATURES.join('|')
 const SESSION_URL = (ATTR.match(/Claude-Session: (\S+)/) || [])[1] || ''
 const CHANTIER = 15537
 const OUTILLAGE = 15538
 const MILESTONE = 232
-const BRANCHE_OUTILLAGE = 'claude/tender-euler-cn12yt'
+const BRANCHE_OUTILLAGE = typeof A.brancheOutillage === 'string' ? A.brancheOutillage : ''
+const INSTANTANE = '.claude/workflows/meeshy-liste-iso-ios.registre.json'
 const EPOPEES = { F0a: 11590, F0b: 11590, A: 11591, B: 11592, C: 11593, D: 11594, E: 11595 }
 const DEV_PAR = Number.isInteger(A.devPar) && A.devPar > 0 ? Math.min(A.devPar, 3) : 1
 const MAX_FIX = Number.isInteger(A.maxFix) && A.maxFix > 0 ? A.maxFix : 4
@@ -289,17 +299,21 @@ const BILAN = { type: 'object', properties: { commentaire: { type: 'string' }, r
 // ---------------------------------------------------------------------------
 const prepPrompt = () => `${socle(null, null)}
 MISSION — PRÉPARER LE CHANTIER (mécanique et vérifications ; aucune ligne de produit).
-1. cd ${REPO} && git fetch -q origin ${BASE} ${BRANCHE_OUTILLAGE}. Répertoire d'exécution : si ${RUN}/ready.py manque,
+1. cd ${REPO} && git fetch -q origin ${BASE}${BRANCHE_OUTILLAGE ? ' ' + BRANCHE_OUTILLAGE : ''}. Répertoire d'exécution : si ${RUN}/ready.py manque,
    apps/android/scripts/parity/setup_run.sh ${RUN} ; sinon recopie l'outillage à jour : cp apps/android/scripts/parity/{ready.py,lot.py,issue_body.py,pr_body.py}
    ${RUN}/, cp apps/android/docs/parite-ios/plan/*.json ${RUN}/plan/ (garde F0a/F0b), cp apps/android/docs/parite-ios/CONVENTIONS.md ${RUN}/.
-   Puis : git show origin/${BRANCHE_OUTILLAGE}:.claude/workflows/meeshy-liste-iso-ios.registre.py > ${RUN}/registre.py (si la branche n'a plus le
-   fichier, prends git show origin/${BASE}:…) ; idem pour meeshy-liste-iso-ios.lots.json → ${RUN}/graine.json. touch ${RUN}/satisfied.txt
-   ${RUN}/blocked.txt ; mkdir -p ${LOTS} ${NOTES}.
+   Puis l'outillage du chantier, lu sur ${BRANCHE_OUTILLAGE ? `origin/${BRANCHE_OUTILLAGE} (à défaut origin/${BASE})` : `origin/${BASE}`} :
+   git show <réf>:.claude/workflows/meeshy-liste-iso-ios.registre.py > ${RUN}/registre.py ; …lots.json → ${RUN}/graine.json ;
+   ${INSTANTANE} → ${RUN}/registre-instantane.json. touch ${RUN}/satisfied.txt ${RUN}/blocked.txt ; mkdir -p ${LOTS} ${NOTES}.
 2. python3 ${RUN}/registre.py self-test doit dire « self-test vert », sinon pret=false avec la sortie.
-3. Restauration : lis les commentaires de #${CHANTIER} (mcp__github__issue_read get_comments, toutes les pages). Le DERNIER qui contient
-   « ${MARQUEUR} » porte un bloc \`\`\`json : écris-le dans ${RUN}/registre-export.json, puis ${REG} init ${RUN} ${RUN}/graine.json &&
-   ${REG} import ${RUN} ${RUN}/registre-export.json ⇒ registre_restaure=true. Aucun ⇒ ${REG} init ${RUN} ${RUN}/graine.json ⇒ false.
-4. PR de l'outillage (#${OUTILLAGE}) : cherche une PR ouverte de la tête isopen-io:${BRANCHE_OUTILLAGE} vers ${BASE} (mcp__github__list_pull_requests
+3. Restauration : ${REG} init ${RUN} ${RUN}/graine.json, puis, si ${RUN}/registre-instantane.json existe, ${REG} import ${RUN} ${RUN}/registre-instantane.json
+   (l'instantané versionné du registre : lots de cartographie, issues, critères, dépendances, exclusions). Ensuite lis les commentaires de #${CHANTIER}
+   (mcp__github__issue_read get_comments, toutes les pages) : le DERNIER qui contient « ${MARQUEUR} » porte un bloc \`\`\`json ; s'il est postérieur au
+   dernier commit de l'instantané (git log -1 --format=%cI origin/${BASE} -- ${INSTANTANE}), écris-le dans ${RUN}/registre-export.json et
+   ${REG} import ${RUN} ${RUN}/registre-export.json (l'import garde les numéros d'issue et de PR déjà posés). registre_restaure=true si l'un des deux a été
+   importé, false sinon.
+4. ${BRANCHE_OUTILLAGE ? '' : `Aucune branche d'outillage n'est donnée : saute ce point (pr_outillage=0, outillage_fusionne=true).
+   `}PR de l'outillage (#${OUTILLAGE}) : cherche une PR ouverte de la tête isopen-io:${BRANCHE_OUTILLAGE} vers ${BASE} (mcp__github__list_pull_requests
    head « isopen-io:${BRANCHE_OUTILLAGE} » state all). Fusionnée ⇒ outillage_fusionne=true. Aucune ⇒ si la branche a des commits absents de
    ${BASE} (git log origin/${BASE}..origin/${BRANCHE_OUTILLAGE}), crée-la : titre « Le chantier « liste iso iOS » a son workflow autonome et un registre
    qui ordonnance des lots Android, iOS et partagés », corps : Closes #${OUTILLAGE}, Refs #${CHANTIER}, les fichiers, la preuve du point 2, puis une
@@ -314,7 +328,7 @@ MISSION — CARTOGRAPHIER LA FEATURE ${fid} (lecture seule, aucun code). Tu déc
 et sur Android, en lisant l'arbre VIVANT de ${BASE}.
 1. cd ${REPO} && git fetch -q origin ${BASE}. Lis la feature : python3 -c "import json;print(json.dumps(json.load(open('${RUN}/graine.json'))['features']['${fid}'],ensure_ascii=False,indent=1))"
    (clauses, références iOS, existant Android, lots cibles du plan). Lis la spécification de chaque lot cible et de ses dépendances :
-   ${REG} spec ${RUN} <clé>, et l'état de tous : ${REG} status ${RUN} --trailer "${TRAILER}".
+   ${REG} spec ${RUN} <clé>, et l'état de tous : ${REG} status ${RUN} --trailer "${SIG_ARG}".
    Lis le code RÉEL sur origin/${BASE} (git show origin/${BASE}:<chemin> ; git grep -n <symbole> origin/${BASE} -- <dossier> ;
    git ls-tree -r --name-only origin/${BASE} | grep <nom>) : iOS (apps/ios, packages/MeeshySDK), Android (apps/android), loi partagée
    (packages/shared) et, pour un détail que la liste ne sert peut-être pas, la passerelle (services/gateway : la sélection du dernier
@@ -354,7 +368,7 @@ ${JSON.stringify(cartos).slice(0, 26000)}
 5. Rends lots_ajoutes, exclus, couverture, manques, dette_web (une entrée par feature concernée), commentaire (URL), rapport.`
 
 const statutPrompt = (enVol) => `MISSION MÉCANIQUE — état du registre. Exécute exactement :
-${REG} status ${RUN} --trailer "${TRAILER}"${enVol.length ? ` --inflight ${enVol.join(',')}` : ''}
+${REG} status ${RUN} --trailer "${SIG_ARG}"${enVol.length ? ` --inflight ${enVol.join(',')}` : ''}
 La sortie est un JSON { dev, pret, attente, chevauchement, tenu_ailleurs, pr_nous, pr_a_reprendre, en_vol, bloque, fusionne, exclus, restants, lots }
 où lots est un objet clé → { branch, platform, issue, pr, age_h, nous, deps_manquantes, etat, reprise? }. Rends-le TEL QUEL, sauf lots, que tu
 rends en LISTE d'objets { key, etat, platform, branch, issue (0 si null), pr (0 si null), reprise (false si absent), nous, sensible, lourd, deps_manquantes }.
@@ -411,8 +425,9 @@ ${reprise ? `REPRISE : la branche existe déjà (${reprise}). Lis ce qui est fai
 spécification, garde ce qui est juste, complète, et git merge origin/${BASE} d'abord (conflit : garde la sémantique des deux côtés).` : ''}
 Clone privé (jamais ${REPO}) :
 ${clone(cle, info.platform, !!reprise)}
-${reprise ? '' : `Avant d'écrire : git ls-remote origin refs/heads/${branche(info.platform, cle)} — la branche existe et n'est pas de toi (dernier commit sans
-« ${TRAILER} ») ⇒ une autre session tient le lot : status skipped-claimed, sans rien pousser.`}
+${reprise ? '' : `Avant d'écrire : git ls-remote origin refs/heads/${branche(info.platform, cle)} — la branche existe et n'est pas du chantier (aucun des cinq
+derniers commits de sa lignée principale, git log --first-parent -5, ne porte l'une de ces signatures : ${SIGNATURES.join(' ; ')}) ⇒ une autre
+session tient le lot : status skipped-claimed, sans rien pousser.`}
 1. Réserve tôt : après le premier témoin rouge, commit puis git push -u origin ${branche(info.platform, cle)} (erreur réseau : 4 essais après 2, 4, 8,
    16 s). Ensuite commit ET push après chaque étape (témoin rouge, loi verte, chaque fichier de câblage) : rien ne vit plus de 10 minutes en local.
 2. TDD : témoins de la loi pure d'abord, ROUGE constaté (copie l'extrait dans red_observed — ${info.platform === 'ios' ? 'pour Swift, que tu ne peux pas exécuter ici, le rouge est le témoin écrit contre l\'API absente ou l\'ancienne valeur, et le guichet le jouera ; dis-le' : 'exécute-le'}),
@@ -575,7 +590,7 @@ fini par une ligne vide, « --- » et « _Generated by [Claude Code](https://cla
 
 const bilanPrompt = (etat) => `${socle(null, null)}
 MISSION — BILAN DU CHANTIER (mécanique). État : ${JSON.stringify(etat).slice(0, 14000)}
-1. ${REG} status ${RUN} --trailer "${TRAILER}" pour l'état final. Poste UN commentaire sur #${CHANTIER} : tableau lot → plateforme → issue → PR → état
+1. ${REG} status ${RUN} --trailer "${SIG_ARG}" pour l'état final. Poste UN commentaire sur #${CHANTIER} : tableau lot → plateforme → issue → PR → état
    (fusionné / bloqué / tenu ailleurs / en attente) → preuve → dimensions mûres ; puis, par feature et par clause, ce qui est visible sur iOS et
    sur Android depuis ${BASE} ; ce qui reste, dans l'ordre ; les blocages avec leur cause et leur issue ; la dette ouverte en chemin.
 2. Recette : cherche une issue ouverte au titre « La liste et le fil se recettent sur un S8, un Pixel et le simulateur iOS : pastille de frappe,
@@ -831,6 +846,12 @@ const ciLane = async () => {
 // ---------------------------------------------------------------------------
 // DÉROULÉ
 // ---------------------------------------------------------------------------
+if (!ATTR) {
+  log("args.attribution manque : passe les lignes « Co-Authored-By: … » et « Claude-Session: https://claude.ai/code/session_… » de la session qui lance le workflow.")
+  return { etat: 'arguments', message: 'attribution obligatoire (lignes Co-Authored-By et Claude-Session de la session qui lance)' }
+}
+log(`signatures du chantier reconnues comme « nous » : ${SIGNATURES.join(' ; ')}`)
+
 phase('Préparer')
 const prep = await appel(prepPrompt(), { label: 'preparer', phase: 'Préparer', schema: PREP, model: 'sonnet', effort: 'medium' })
 if (!prep || !prep.pret) {
