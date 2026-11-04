@@ -98,6 +98,7 @@ class ChatHostsSmokeTest {
         addReactionFromDetails = { _, _ -> },
         dismissReport = { },
         onExplorerRetranslate = { _, _ -> },
+        onExplorerRowTap = { _, _ -> },
         dismissLanguageExplorer = { },
         dismissEmojiPicker = { },
         closeReactionDetails = { },
