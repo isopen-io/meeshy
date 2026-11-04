@@ -23,6 +23,7 @@
 // l'API REST ou par MCP (`pull_request_read` get, get_check_runs page par page, get_status)
 // et on remet la charge à `--rest`, qui applique la MÊME règle. La charge :
 //   { "state": "open", "head_sha": "…", "total_count": 22, "check_runs": [ …REST… ], "statuses": [ …REST… ] }
+// `statuses` est le tableau, ou le statut combiné de get_status tel quel.
 // Une relance se range avec son exécution par l'identifiant de run de son URL
 // (`/actions/runs/<id>`) ; moins de check runs que `total_count` n'est jamais un verdict (sortie 2).
 //
@@ -66,12 +67,14 @@ export const juge = (rollup) => {
 const runDe = (url) => (String(url ?? '').match(/\/actions\/runs\/(\d+)/) ?? [])[1] ?? '';
 const majuscule = (valeur) => String(valeur ?? '').toUpperCase();
 
-export const depuisRest = ({ check_runs = [], statuses = [] }) => [
+const statutsDe = (statuses) => (Array.isArray(statuses) ? statuses : (statuses?.statuses ?? []));
+
+export const depuisRest = ({ check_runs = [], statuses }) => [
   ...check_runs.map((c) => ({
     __typename: 'CheckRun', name: c.name, status: majuscule(c.status), conclusion: majuscule(c.conclusion),
     startedAt: c.started_at ?? '', workflowName: runDe(c.details_url ?? c.html_url),
   })),
-  ...statuses.map((s) => ({ __typename: 'StatusContext', context: s.context, state: majuscule(s.state), startedAt: s.updated_at ?? s.created_at ?? '' })),
+  ...statutsDe(statuses).map((s) => ({ __typename: 'StatusContext', context: s.context, state: majuscule(s.state), startedAt: s.updated_at ?? s.created_at ?? '' })),
 ];
 
 export const jugeRest = (charge) => {
@@ -115,7 +118,10 @@ const autoTest = () => {
   assert.equal(jugeRest(charge([rest(VERDICT, 'success')], { statuses: [{ context: 'ext', state: 'error', created_at: '2026-10-24T10:00:00Z' }] })).etat, 'rouge');
   assert.deepEqual(jugeRest({ ...charge([rest(VERDICT, 'success')]), total_count: 30 }), { etat: 'lecture incomplète', code: 2, detail: ['1/30 check runs lus'] });
   assert.equal(jugeRest(charge([rest(VERDICT, 'success')], { state: 'closed' })).etat, 'rouge');
-  console.log('pr-verte --self-test : 23 cas tenus');
+  const statutCombine = { state: 'failure', statuses: [{ context: 'ext', state: 'failure', created_at: '2026-10-24T10:00:00Z' }] };
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success')], { statuses: statutCombine })).etat, 'rouge');
+  assert.equal(jugeRest(charge([rest(VERDICT, 'success')], { statuses: { state: 'pending', statuses: [] } })).etat, 'vert');
+  console.log('pr-verte --self-test : 25 cas tenus');
 };
 
 const lit = (numero) => {

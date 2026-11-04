@@ -28,6 +28,7 @@ class SendMessageRequestSerializationTest {
     fun `la cle revient intacte a la lecture et une vieille ligne sans cle se lit nulle`() {
         assertThat(json.decodeFromString<SendMessageRequest>(json.encodeToString(request("m9"))).copyAttachmentsFromMessageId)
             .isEqualTo("m9")
-        assertThat(json.decodeFromString<SendMessageRequest>("""{"content":"x"}""").copyAttachmentsFromMessageId).isNull()
+        val oldRow = """{"content":"x","originalLanguage":"fr","clientMessageId":"cid_old"}"""
+        assertThat(json.decodeFromString<SendMessageRequest>(oldRow).copyAttachmentsFromMessageId).isNull()
     }
 }

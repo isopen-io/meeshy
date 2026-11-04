@@ -206,11 +206,14 @@ class OutboxRepository @Inject constructor(
     /**
      * #14697 — [send] runs with [cmid] `INFLIGHT` and held LIVE in this process: a concurrent flush pass's
      * [recoverInflight] leaves it alone, so sending another message during a long upload never restarts that upload.
+     *
+     * #15677 — [send] runs only once [cmid] is CLAIMED ([OutboxDao.claimPending]): two overlapping passes that both read
+     * the row `PENDING` reduce to one send, and the pass that loses the claim gets `null` without sending anything.
      */
-    suspend fun <T> sendingLive(cmid: String, send: suspend () -> T): T {
-        liveSends += cmid
+    suspend fun <T : Any> sendingLive(cmid: String, send: suspend () -> T): T? {
+        if (!liveSends.add(cmid)) return null
         try {
-            markInflight(cmid)
+            if (outboxDao.claimPending(cmid, now()) != 1) return null
             return send()
         } finally {
             liveSends -= cmid
