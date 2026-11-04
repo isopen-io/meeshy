@@ -68,6 +68,7 @@ import me.meeshy.app.chat.mediahub.ConversationMediaHubViewModel
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.mediahub.BackgroundPhotoSource
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
+import me.meeshy.sdk.model.appearance.AppearancePackDomain
 import me.meeshy.sdk.model.appearance.AppearanceScheme
 import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.appearance.ConversationBackground
@@ -77,6 +78,7 @@ import me.meeshy.sdk.model.mediahub.ConversationMediaKind
 import me.meeshy.sdk.model.mediahub.MediaHubItem
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.appearance.AppearanceDesignView
+import me.meeshy.ui.appearance.LocalPackShopOpener
 import me.meeshy.ui.component.lottie.PackLottieLayer
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -111,6 +113,7 @@ internal fun ConversationAppearanceSheet(
         photos.start(conversationId)
     }
     val haptics = rememberMeeshyHaptics()
+    val shopOpener = LocalPackShopOpener.current
     val isDark = MeeshyTheme.isDark
     val scheme = AppearanceScheme.of(isDark)
     val catalog = ui.catalog
@@ -185,6 +188,9 @@ internal fun ConversationAppearanceSheet(
             }
             photoSection(candidates, media, appearance, accent, viewModel, haptics::light)
             accentSection(catalog, scheme, language, appearance, effectiveHex, computedAccentHex, accent, viewModel, haptics::light)
+            shopOpener?.let { opener ->
+                header("shop") { ShopLink(accent) { haptics.light(); opener.open(AppearancePackDomain.WALLPAPER) } }
+            }
             header("reset") {
                 Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
                     if (ui.saveFailed) {
@@ -198,6 +204,22 @@ internal fun ConversationAppearanceSheet(
                 }
             }
         }
+    }
+}
+
+/** « Plus dans la boutique » (iOS `shopLink`) : la vitrine filtrée sur les fonds, 48 dp au moins, un bouton nommé pour TalkBack. */
+@Composable
+private fun ShopLink(accent: Color, onClick: () -> Unit) {
+    androidx.compose.foundation.layout.Row(
+        Modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .clickable(role = Role.Button, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(MeeshyIcons.Shopping, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
+        Text(stringResource(R.string.conversation_appearance_shop), color = accent, fontSize = MeeshyFontSize.subhead, fontWeight = FontWeight.SemiBold)
     }
 }
 
