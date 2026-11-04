@@ -5,6 +5,9 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -191,5 +194,26 @@ class ChatAudioBinderTest {
 
         assertThat(rig.viewModel.samples(voice("a", isProtected = true)).first()).isEmpty()
         coVerify(exactly = 0) { waveforms.bubbleLevels(any(), any(), any()) }
+    }
+
+    @Test
+    fun `quitter le fil laisse jouer le vocal, la file et le contexte du mini-lecteur`() {
+        val rig = Rig()
+        val store = ViewModelStore()
+        val owned = ViewModelProvider(
+            store,
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T = rig.viewModel as T
+            },
+        )[ChatAudioViewModel::class.java]
+        owned.bind(thread)
+        owned.tap(m1.audios[0], m1)
+
+        store.clear()
+
+        assertThat(rig.engine.mutable.value.attachmentId).isEqualTo("a")
+        assertThat(rig.coordinator.snapshot.value.context?.conversationName).isEqualTo("Famille")
+        assertThat(rig.coordinator.snapshot.value.queue.upcoming.map { it.attachmentId }).containsExactly("b", "c").inOrder()
     }
 }
