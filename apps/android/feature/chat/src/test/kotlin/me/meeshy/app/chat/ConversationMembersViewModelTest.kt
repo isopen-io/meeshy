@@ -414,6 +414,48 @@ class ConversationMembersViewModelTest {
     }
 
     @Test
+    fun `banning an accountless visitor addresses the participant id`() = runTest {
+        val visitor = PaginatedParticipant(id = "p9", userId = null, displayName = "Visiteur", conversationRole = "member")
+        val repository = repo(NetworkResult.Success(page(listOf(visitor), totalCount = 1)))
+        coEvery { repository.banParticipant(any(), any()) } returns NetworkResult.Success(Unit)
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.banMember(vm.state.value.members.single())
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.banParticipant("c1", "p9") }
+    }
+
+    @Test
+    fun `removing an accountless visitor addresses the participant id`() = runTest {
+        val visitor = PaginatedParticipant(id = "p9", userId = null, displayName = "Visiteur", conversationRole = "member")
+        val repository = repo(NetworkResult.Success(page(listOf(visitor), totalCount = 1)))
+        coEvery { repository.removeParticipant(any(), any()) } returns NetworkResult.Success(Unit)
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.removeMember(vm.state.value.members.single())
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.removeParticipant("c1", "p9") }
+    }
+
+    @Test
+    fun `an accountless visitor is never offered a role change`() = runTest {
+        val visitor = PaginatedParticipant(id = "p9", userId = null, displayName = "Visiteur", conversationRole = "member")
+        val vm = viewModel(repo(NetworkResult.Success(page(listOf(visitor), totalCount = 1))))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.roleActions(visitor)).isEmpty()
+        assertThat(vm.state.value.canRemove(visitor)).isTrue()
+        assertThat(vm.state.value.canBan(visitor)).isTrue()
+    }
+
+    @Test
     fun `a refused ban puts the member back`() = runTest {
         val repository = repo(NetworkResult.Success(page(listOf(member("p1", userId = "u1")))))
         coEvery { repository.banParticipant(any(), any()) } returns
