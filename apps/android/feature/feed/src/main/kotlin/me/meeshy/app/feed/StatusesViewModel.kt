@@ -98,6 +98,13 @@ class StatusesViewModel @Inject constructor(
         deliver = engagement::deliver,
     )
 
+    /** Les humeurs peintes sur l'avatar d'une ligne de conversation — iOS `SharedImpressionBatchers.moodAvatar` (#15989). */
+    private val avatarImpressionBatcher = ImpressionBatcher(
+        source = ImpressionSource.STATUS,
+        surface = ContentSurface.MOOD_AVATAR,
+        deliver = engagement::deliver,
+    )
+
     /**
      * Dwell bookkeeping for the status-bubble surface. Held outside [_state] because it is an
      * analytics cursor, not something the bar renders (the same placement as
@@ -246,6 +253,10 @@ class StatusesViewModel @Inject constructor(
         impressionBatcher.record(statusId)
     }
 
+    fun trackAvatarImpression(statusId: String) {
+        avatarImpressionBatcher.record(statusId)
+    }
+
     /**
      * A mood status IS a post — opening its popover is a single, per-viewer-deduplicated
      * VIEW, the status-bar counterpart of the post-detail `viewPost` record. Fire-and-forget,
@@ -311,6 +322,7 @@ class StatusesViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         impressionBatcher.flushNowAsync()
+        avatarImpressionBatcher.flushNowAsync()
     }
 
     /**
