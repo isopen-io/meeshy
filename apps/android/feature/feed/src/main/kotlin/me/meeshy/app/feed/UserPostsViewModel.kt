@@ -18,6 +18,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import javax.inject.Inject
 
 /**
@@ -51,6 +52,7 @@ class UserPostsViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val config: MeeshyConfig,
     savedStateHandle: SavedStateHandle,
+    socialSocket: SocialSocketManager,
 ) : ViewModel() {
 
     private val userId: String = savedStateHandle[USER_ID_ARG] ?: ""
@@ -62,7 +64,7 @@ class UserPostsViewModel @Inject constructor(
     val state: StateFlow<UserPostsUiState> = _state.asStateFlow()
 
     /** Les gestes du fil sur les publications de l'auteur (#13244 ; iOS `ProfileUserPostsList` monte `FeedPostCard`). */
-    private val actions = ListedPostActions(viewModelScope, postRepository, reports, listState) { sessionRepository.currentUser.value }
+    private val actions = ListedPostActions(viewModelScope, postRepository, reports, listState, socialSocket.listedPostTranslations()) { sessionRepository.currentUser.value }
 
     /** Ce que font les cartes de la liste : les gestes du fil, chacun câblé ([ListedPostCardActions]). */
     val cards: ListedPostCardActions get() = actions

@@ -19,6 +19,7 @@ import me.meeshy.sdk.post.PostHashtagRepository
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import javax.inject.Inject
 
 data class HashtagResultsUiState(
@@ -50,6 +51,7 @@ class HashtagResultsViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val config: MeeshyConfig,
     savedStateHandle: SavedStateHandle,
+    socialSocket: SocialSocketManager,
 ) : ViewModel() {
 
     private val tag: String = (savedStateHandle[TAG_ARG] ?: "").removePrefix("#").trim().lowercase()
@@ -63,7 +65,7 @@ class HashtagResultsViewModel @Inject constructor(
     val state: StateFlow<HashtagResultsUiState> = _state.asStateFlow()
 
     /** Les gestes du fil sur les résultats (#13244 ; Repartager / Citer : iOS `HashtagResultsViewModel.toggleRepost`, #15934). */
-    private val actions = ListedPostActions(viewModelScope, postRepository, reports, listState) { sessionRepository.currentUser.value }
+    private val actions = ListedPostActions(viewModelScope, postRepository, reports, listState, socialSocket.listedPostTranslations()) { sessionRepository.currentUser.value }
 
     /** Ce que font les cartes des résultats : les gestes du fil, chacun câblé ([ListedPostCardActions]). */
     val cards: ListedPostCardActions get() = actions

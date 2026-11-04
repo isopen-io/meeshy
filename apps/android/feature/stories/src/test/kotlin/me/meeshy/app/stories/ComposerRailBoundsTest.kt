@@ -159,9 +159,10 @@ class ComposerRailBoundsTest {
 
     private val inLane = hasAnyAncestor(hasTestTag(SCENE_RAIL_LANE_TAG))
 
+    /** Une cible qui se montre ; le CONTENEUR nommé de la colonne (« Outils de la scène », #15863) n'en est pas une. */
     private val shown = SemanticsMatcher("shown") { node ->
         node.config.contains(SemanticsProperties.ContentDescription) || node.config.contains(SemanticsProperties.Text)
-    }
+    } and !hasTestTag(SCENE_TOOL_COLUMN_TAG)
 
     private fun visible(nodes: List<SemanticsNode>): List<Pair<String, Rect>> = nodes
         .map { node -> label(node) to node.boundsInRoot }

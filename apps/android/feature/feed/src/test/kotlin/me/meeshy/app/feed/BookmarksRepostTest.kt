@@ -47,7 +47,7 @@ class BookmarksRepostTest {
     private fun viewModel(vararg served: ApiPost, reader: MeeshyUser? = null): BookmarksViewModel {
         every { session.currentUser } returns MutableStateFlow(reader)
         coEvery { repository.getBookmarksPage(null, any()) } returns NetworkResult.Success(BookmarkPage(served.toList(), null, false))
-        return BookmarksViewModel(repository, mockk(relaxed = true), session, MeeshyConfig())
+        return BookmarksViewModel(repository, mockk(relaxed = true), session, MeeshyConfig(), FakeProfileSocial().socket)
     }
 
     private fun BookmarksViewModel.card(id: String) = state.value.posts.single { it.id == id }
