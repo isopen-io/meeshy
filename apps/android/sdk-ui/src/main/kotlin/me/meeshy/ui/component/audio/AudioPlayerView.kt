@@ -34,12 +34,14 @@ import me.meeshy.sdk.model.media.AudioAvailability
 import me.meeshy.sdk.model.media.MediaPlayerContext
 import me.meeshy.sdk.model.media.PlaybackSpeed
 import me.meeshy.sdk.model.media.formatMediaDuration
+import me.meeshy.sdk.model.playback.AudioLanguageStripLaw
 import me.meeshy.sdk.model.waveform.AudioProgressDisplay
 import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.meeshyTapTarget
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.boundedScale
 
@@ -96,6 +98,11 @@ public fun AudioPlayerView(
     chrome: AudioPlayerChrome = AudioPlayerChrome.Card,
     topSlot: (@Composable () -> Unit)? = null,
     bottomSlot: (@Composable () -> Unit)? = null,
+    /**
+     * Le bandeau de langues (Original + pistes traduites). Il ne se montre que si la posture le permet, hors contexte
+     * compact (la bulle, dont le pied porte déjà les drapeaux) et avec au moins une piste traduite ([AudioLanguageStripLaw]).
+     */
+    languageStrip: AudioLanguageStripSpec? = null,
 ) {
     val plan = remember(chrome) { AudioPlayerChromePlan.plan(chrome) }
     val isDark = MeeshyTheme.isDark || context.isImmersive
@@ -144,6 +151,15 @@ public fun AudioPlayerView(
             if (context.isEditable) ComposerActions(actions, isDark)
         }
         bottomSlot?.invoke()
+        if (languageStrip != null && AudioLanguageStripLaw.isShown(chrome, context, translatedCount = languageStrip.pills.size - 1)) {
+            AudioLanguageStrip(
+                pills = languageStrip.pills,
+                accent = accent,
+                isDark = isDark,
+                onSelect = languageStrip.onSelect,
+                modifier = Modifier.padding(top = MeeshySpacing.xsPlus),
+            )
+        }
     }
 }
 

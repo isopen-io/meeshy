@@ -278,7 +278,9 @@
     <string name="location_fullscreen_sharedPosition">Geteilter Standort</string>
     <string name="media_audio_open_fullscreen">Im Vollbild öffnen, Wiedergabe %1$d%%</string>
     <string name="media_audio_open_fullscreen_hint">Zeigt die Vollbildansicht mit den Speicheroptionen</string>
+    <string name="media_audio_original">Original</string>
     <string name="media_audio_play">Audio abspielen</string>
+    <string name="media_audio_retranscribe">Neu transkribieren</string>
     <string name="media_audio_speed_cycle">Wiedergabegeschwindigkeit %1$s</string>
     <string name="media_audio_transcribe">Transkribieren</string>
     <string name="media_audio_transcribing">Transkription läuft</string>

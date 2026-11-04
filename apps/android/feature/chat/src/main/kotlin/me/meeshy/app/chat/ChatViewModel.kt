@@ -757,6 +757,8 @@ class ChatViewModel @Inject constructor(
     /** Tap on a Prisme language-flag chip: switch the bubble's displayed language, or revert. */
     fun onFlagTap(messageId: String, code: String) = translation.onFlagTap(messageId, code)
 
+    fun selectAudioLanguage(messageId: String, code: String) = translation.selectAudioLanguage(messageId, code)
+
     /** Open the per-message language explorer (long-press → "Explore languages"). */
     fun openLanguageExplorer(messageId: String) = translation.openLanguageExplorer(messageId)
 

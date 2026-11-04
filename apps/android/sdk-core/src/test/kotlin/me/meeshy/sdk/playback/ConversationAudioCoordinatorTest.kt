@@ -519,6 +519,38 @@ class ConversationAudioCoordinatorTest {
         assertThat(coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("a")
     }
 
+    @Test fun `changer de langue de piste recharge le vocal courant sous le meme id et garde la suite`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b")
+
+        coordinator.switchVariant(item("a").copy(fileUrl = "u/a-es", trackLanguage = "es", isTranslatedTrack = true))
+
+        assertThat(engine.played).containsExactly("a", "a").inOrder()
+        assertThat(coordinator.snapshot.value.queue.current?.fileUrl).isEqualTo("u/a-es")
+        assertThat(coordinator.snapshot.value.context?.audio?.trackLanguage).isEqualTo("es")
+        assertThat(coordinator.snapshot.value.queue.upcoming.map { it.attachmentId }).containsExactly("b")
+    }
+
+    @Test fun `la meme piste ou un autre vocal que le courant ne recharge rien`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b")
+
+        coordinator.switchVariant(item("a"))
+        coordinator.switchVariant(item("b").copy(fileUrl = "u/b-es"))
+
+        assertThat(engine.played).containsExactly("a")
+    }
+
+    @Test fun `une garde d'appel qui refuse laisse la file sur la piste d'avant`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine)
+        engine.allow = false
+
+        coordinator.switchVariant(item("a").copy(fileUrl = "u/a-es"))
+
+        assertThat(coordinator.snapshot.value.queue.current?.fileUrl).isEqualTo("u/a")
+    }
+
     @Test fun `la consommation servie part vers le moteur avant chaque demarrage, enchainement compris`() = runTest {
         val engine = FakeEngine()
         val coordinator = coordinator(this, engine)

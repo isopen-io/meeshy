@@ -19,6 +19,7 @@
     <string name="attachment_stage_loading">Cargando</string>
     <string name="attachment_stage_thumbnailing">Vista previa</string>
     <string name="attachment_sticker">Sticker</string>
+    <string name="audio_fullscreen_language_choose">Traducir el audio</string>
     <string name="chat_action_copy">Copiar</string>
     <string name="chat_action_copy_link">Copiar el enlace</string>
     <string name="chat_action_delete_for_everyone">Eliminar para todos</string>
@@ -817,6 +818,7 @@
     <string name="transcription_fiche_speakers">%1$d hablantes detectados</string>
     <string name="transcription_fiche_transcribe">Transcribir</string>
     <string name="transcription_fiche_translations">Traducciones de audio</string>
+    <string name="translation_audio_error">La traducción de audio ha fallado. Inténtalo de nuevo.</string>
     <string name="viewer_code_loading">Cargando...</string>
     <string name="viewer_contact_add">Añadir a contactos</string>
     <string name="viewer_contact_close">Cerrar la ficha</string>

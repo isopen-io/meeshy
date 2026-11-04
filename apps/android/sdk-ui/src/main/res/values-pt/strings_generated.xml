@@ -280,7 +280,9 @@
     <string name="location_fullscreen_sharedPosition">Posição compartilhada</string>
     <string name="media_audio_open_fullscreen">Abrir em tela cheia, reprodução %1$d%%</string>
     <string name="media_audio_open_fullscreen_hint">Mostra a visualização em tela cheia com as opções de salvamento</string>
+    <string name="media_audio_original">Original</string>
     <string name="media_audio_play">Reproduzir áudio</string>
+    <string name="media_audio_retranscribe">Transcrever de novo</string>
     <string name="media_audio_speed_cycle">Velocidade de reprodução %1$s</string>
     <string name="media_audio_transcribe">Transcrever</string>
     <string name="media_audio_transcribing">Transcrevendo</string>

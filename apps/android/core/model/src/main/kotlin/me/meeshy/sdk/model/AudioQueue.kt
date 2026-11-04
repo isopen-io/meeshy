@@ -199,6 +199,13 @@ public data class AudioPlayQueue(
     }
 
     /**
+     * Le drapeau d'une langue de piste a basculé pendant que le vocal courant jouait : la MÊME pièce, une autre variante
+     * ([QueuedAudio.fileUrl], langue). La suite et l'historique ne bougent pas ; une autre pièce laisse la file telle quelle.
+     */
+    public fun withVariant(variant: QueuedAudio): AudioPlayQueue =
+        if (current?.attachmentId == variant.attachmentId) copy(current = variant) else this
+
+    /**
      * La suite devient [tail] (iOS `replaceUpcoming`) : le courant et l'historique restent ; le courant et les doublons
      * sortent de la suite. Sans courant, rien ne joue : aucune suite ne s'y accroche.
      */

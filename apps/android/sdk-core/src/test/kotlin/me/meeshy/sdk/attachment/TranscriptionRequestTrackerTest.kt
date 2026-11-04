@@ -153,4 +153,41 @@ class TranscriptionRequestTrackerTest {
 
         assertThat(seen).containsExactly(Request.IDLE)
     }
+
+    @Test
+    fun `retranscribing forces the transcription through its own call and applies the answer`() = runTest {
+        val forced = mutableListOf<String>()
+        val applied = mutableListOf<String>()
+        val tracker = TranscriptionRequestTracker(
+            fetch = { NetworkResult.Success(null) },
+            apply = { _, _, transcription -> applied += transcription.text.orEmpty() },
+            failures = TranslationFailureStore(),
+            nowMillis = { testScheduler.currentTime },
+            refetch = { attachmentId ->
+                forced += attachmentId
+                NetworkResult.Success(ApiAttachmentTranscription(text = "nouvelle version", language = "fr"))
+            },
+        )
+
+        tracker.retranscribe("m1", "a1")
+
+        assertThat(forced).containsExactly("a1")
+        assertThat(applied).containsExactly("nouvelle version")
+    }
+
+    @Test
+    fun `a refused retranscription is a failure the bubble can show`() = runTest {
+        val failures = TranslationFailureStore()
+        val tracker = TranscriptionRequestTracker(
+            fetch = { NetworkResult.Success(null) },
+            apply = { _, _, _ -> },
+            failures = failures,
+            nowMillis = { testScheduler.currentTime },
+            refetch = { failure },
+        )
+
+        tracker.retranscribe("m1", "a1")
+
+        assertThat(failures.ledger.value.forMessage("m1").map { it.kind }).containsExactly(TranslationFailureKind.TRANSCRIPTION)
+    }
 }

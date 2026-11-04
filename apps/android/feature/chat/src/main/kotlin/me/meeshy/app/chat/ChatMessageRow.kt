@@ -29,6 +29,7 @@ import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.FlatRowFocus
 import me.meeshy.ui.format.bubbleClockLabel
 import me.meeshy.sdk.model.BubbleFlagTap
+import me.meeshy.sdk.model.playback.VoiceFlagRoute
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.sdk.model.reading.focal.FocalFocusTimestamp
@@ -60,6 +61,8 @@ internal class ChatMessageRowActions(
     val onLocationClick: (messageId: String, location: me.meeshy.ui.component.bubble.BubbleLocation) -> Unit = { _, _ -> },
     val onReplyPreviewClick: (messageId: String) -> Unit = {},
     val onFlagTap: (messageId: String, code: String) -> Unit = { _, _ -> },
+    /** Le drapeau d'une langue de PISTE d'un vocal (jamais un texte à traduire) : voix, texte et karaoké suivent. */
+    val onAudioLanguage: (messageId: String, code: String) -> Unit = { _, _ -> },
     val onReplyCountTap: (messageId: String) -> Unit = {},
     val onReplyCountLongPress: (messageId: String) -> Unit = {},
     val onRetry: (messageId: String) -> Unit = {},
@@ -162,21 +165,26 @@ internal fun ChatMessageRow(
             onQuotedMediaTap = bubble.replyToId?.let { quotedId -> { actions.onQuotedMediaTap(messageId, quotedId) } },
             onFlagTap = { code ->
                 flagHaptics.light()
-                val strip = bubble.languageStrip
-                val active = strip.firstOrNull { it.isActive }?.code
-                val outcome = BubbleFlagTap.handleTap(
-                    code = code,
-                    current = BubbleFlagTap.Context(activeCode = active, secondaryCode = secondaryCode),
-                    originalLanguage = strip.firstOrNull { it.isOriginal }?.code,
-                    preferredCode = bubble.primaryLanguageCode,
-                    contentCodes = strip.filter { !it.isTranslatable }.mapTo(HashSet()) { it.code },
-                )
-                secondaryCode = outcome.secondaryCode
-                when (outcome.action) {
-                    BubbleFlagTap.Action.SwitchPrimary ->
-                        if (outcome.activeCode != active) actions.onFlagTap(messageId, code)
-                    BubbleFlagTap.Action.RequestTranslation -> actions.onFlagTap(messageId, code)
-                    BubbleFlagTap.Action.OpenSecondary, BubbleFlagTap.Action.CloseSecondary, BubbleFlagTap.Action.None -> Unit
+                val voiceTrack = bubble.voiceFlagTrack(code)
+                if (voiceTrack != null) {
+                    actions.onAudioLanguage(messageId, voiceTrack)
+                } else {
+                    val strip = bubble.languageStrip
+                    val active = strip.firstOrNull { it.isActive }?.code
+                    val outcome = BubbleFlagTap.handleTap(
+                        code = code,
+                        current = BubbleFlagTap.Context(activeCode = active, secondaryCode = secondaryCode),
+                        originalLanguage = strip.firstOrNull { it.isOriginal }?.code,
+                        preferredCode = bubble.primaryLanguageCode,
+                        contentCodes = strip.filter { !it.isTranslatable }.mapTo(HashSet()) { it.code },
+                    )
+                    secondaryCode = outcome.secondaryCode
+                    when (outcome.action) {
+                        BubbleFlagTap.Action.SwitchPrimary ->
+                            if (outcome.activeCode != active) actions.onFlagTap(messageId, code)
+                        BubbleFlagTap.Action.RequestTranslation -> actions.onFlagTap(messageId, code)
+                        BubbleFlagTap.Action.OpenSecondary, BubbleFlagTap.Action.CloseSecondary, BubbleFlagTap.Action.None -> Unit
+                    }
                 }
             },
             onTranslate = { actions.onTranslationDetail(messageId) },
@@ -371,4 +379,20 @@ internal data class OpenedPlace(val messageId: String, val place: me.meeshy.sdk.
             )
         }
     }
+}
+
+/**
+ * La langue de PISTE qu'un drapeau du pied sélectionne sur un vocal ouvert ([VoiceFlagRoute]) : `null` quand le drapeau est
+ * un drapeau de texte (la loi des drapeaux de la bulle s'applique), inerte, ou que le vocal est protégé.
+ */
+private fun BubbleContent.voiceFlagTrack(code: String): String? {
+    if (audios.isEmpty() || audios.any { it.isProtected }) return null
+    val original = audios.firstNotNullOfOrNull { it.originalLanguage }
+    val route = VoiceFlagRoute.route(
+        code = code,
+        textContentCodes = languageStrip.filter { !it.isTranslatable }.mapTo(HashSet()) { it.code },
+        audioOriginal = original,
+        audioTrackCodes = audios.flatMap { it.translatedLanguages },
+    )
+    return (route as? VoiceFlagRoute.Route.Audio)?.let { it.track ?: original }
 }

@@ -271,4 +271,28 @@ class AudioPlayQueueTest {
         assertThat(speeds.map { it.rate }).containsExactly(1.0f, 1.5f, 2.0f, 1.0f).inOrder()
         assertThat(CoordinatorSpeedCycle.next(me.meeshy.sdk.model.media.PlaybackSpeed.X0_8).rate).isEqualTo(1.0f)
     }
+
+    private fun queued(id: String, url: String, language: String? = null) = QueuedAudio(
+        attachmentId = id, messageId = "m$id", conversationId = "c", fileUrl = url, durationMs = 1_000L,
+        senderName = "N", senderAvatarUrl = null, receivedAtEpochMs = 0L, trackLanguage = language,
+        isTranslatedTrack = language != null, isProtected = false,
+    )
+
+    @Test
+    fun `la variante d'une autre langue remplace le vocal courant sans toucher la suite`() {
+        val queue = AudioPlayQueue().started(queued("a", "u/a.mp3"), listOf(queued("b", "u/b.mp3")))
+
+        val switched = queue.withVariant(queued("a", "u/a-es.mp3", language = "es"))
+
+        assertThat(switched.current?.fileUrl).isEqualTo("u/a-es.mp3")
+        assertThat(switched.current?.trackLanguage).isEqualTo("es")
+        assertThat(switched.upcoming.map { it.attachmentId }).containsExactly("b")
+    }
+
+    @Test
+    fun `la variante d'un autre vocal laisse la file telle quelle`() {
+        val queue = AudioPlayQueue().started(queued("a", "u/a.mp3"), emptyList())
+
+        assertThat(queue.withVariant(queued("b", "u/b-es.mp3", language = "es"))).isEqualTo(queue)
+    }
 }

@@ -19,6 +19,7 @@
     <string name="attachment_stage_loading">Carregando</string>
     <string name="attachment_stage_thumbnailing">Prévia</string>
     <string name="attachment_sticker">Figurinha</string>
+    <string name="audio_fullscreen_language_choose">Traduzir o áudio</string>
     <string name="chat_action_copy">Copiar</string>
     <string name="chat_action_copy_link">Copiar o link</string>
     <string name="chat_action_delete_for_everyone">Apagar para todos</string>
@@ -817,6 +818,7 @@
     <string name="transcription_fiche_speakers">%1$d falantes detectados</string>
     <string name="transcription_fiche_transcribe">Transcrever</string>
     <string name="transcription_fiche_translations">Traduções de áudio</string>
+    <string name="translation_audio_error">A tradução do áudio falhou. Tente novamente.</string>
     <string name="viewer_code_loading">Carregando...</string>
     <string name="viewer_contact_add">Adicionar aos contatos</string>
     <string name="viewer_contact_close">Fechar o cartão</string>

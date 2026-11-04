@@ -18,6 +18,9 @@ internal interface ChatTranscriptionRequests {
     fun stateOf(messageId: String, audio: BubbleAudio): Flow<Request>
 
     fun request(messageId: String, audio: BubbleAudio)
+
+    /** « Re-transcrire » : la transcription d'un vocal déjà transcrit est redemandée de force. Inerte tant que l'hôte ne la sert pas. */
+    fun retranscribe(messageId: String, audio: BubbleAudio) {}
 }
 
 /** Les demandes de transcription du fil, fournies par l'écran de conversation ; `null` hors d'un fil (aperçus, rendus de test). */
@@ -37,6 +40,10 @@ internal class ChatTranscriptionRequestsViewModel @Inject constructor(
     override fun request(messageId: String, audio: BubbleAudio) {
         viewModelScope.launch { tracker.request(messageId, audio.attachmentId) }
     }
+
+    override fun retranscribe(messageId: String, audio: BubbleAudio) {
+        viewModelScope.launch { tracker.retranscribe(messageId, audio.attachmentId) }
+    }
 }
 
 /** Les gestes de transcription d'une bulle, routés vers le suivi ; sans suivi la bulle n'offre aucune demande. */
@@ -46,6 +53,7 @@ internal fun BubbleCallbacks.withTranscriptionRequests(requests: ChatTranscripti
     } else {
         copy(
             onRequestTranscription = { audio -> requests.request(bubble.messageId, audio) },
+            onRetranscribe = { audio -> requests.retranscribe(bubble.messageId, audio) },
             transcriptionRequest = { audio -> requests.stateOf(bubble.messageId, audio) },
         )
     }

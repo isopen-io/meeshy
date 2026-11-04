@@ -35,10 +35,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import me.meeshy.sdk.media.MediaRequest
 import me.meeshy.sdk.model.AudioPlayerChrome
+import me.meeshy.sdk.model.AudioPlayerChromePlan
 import me.meeshy.sdk.model.AudioTranscriptionPending
 import me.meeshy.sdk.model.AudioTranscriptionBlock
 import me.meeshy.sdk.model.AudioTranscriptionReveal
 import me.meeshy.sdk.model.MediaKind
+import me.meeshy.sdk.model.ServerTranscriptionWait
 import me.meeshy.sdk.model.MessageTranscriptionFiche
 import me.meeshy.sdk.model.media.LocalFileUrl
 import me.meeshy.sdk.model.media.MediaAvailabilityState
@@ -137,6 +139,9 @@ public fun BubbleVoicePlayer(
                             autoReveal = autoRevealTranscription,
                             onReveal = haptics::light,
                             onSeek = callbacks.onAudioSeek?.let { seek -> { seconds: Double -> seek(audio, seconds) } },
+                            onRetranscribe = callbacks.onRetranscribe
+                                ?.takeIf { AudioPlayerChromePlan.plan(chrome).showsRetranscribe && !audio.isProtected && audio.url?.let(LocalFileUrl::isLocal) != true }
+                                ?.let { retranscribe -> { haptics.light(); retranscribe(audio) } },
                         )
                     }
                 }
@@ -227,6 +232,7 @@ private fun BubbleVoiceTranscript(
     autoReveal: Boolean,
     onReveal: () -> Unit,
     onSeek: ((Double) -> Unit)?,
+    onRetranscribe: (() -> Unit)? = null,
 ) {
     val segments = remember(audio) { audio.karaokeSegments }
     val live = playback?.takeIf { it.attachmentId == audio.attachmentId }
@@ -252,12 +258,25 @@ private fun BubbleVoiceTranscript(
                 },
             )
         } else {
-            KaraokeTranscript(
-                segments = segments,
-                frame = frame,
-                onColor = onColor,
-                onSeek = onSeek?.takeIf { live != null },
-            )
+            Column {
+                KaraokeTranscript(
+                    segments = segments,
+                    frame = frame,
+                    onColor = onColor,
+                    onSeek = onSeek?.takeIf { live != null },
+                )
+                if (onRetranscribe != null) {
+                    // En attente de la nouvelle transcription : le bouton se grise jusqu'à ce que le texte change.
+                    var asked by remember(audio.attachmentId, audio.transcriptionText) { mutableStateOf(false) }
+                    LaunchedEffect(asked) {
+                        if (asked) {
+                            delay(ServerTranscriptionWait.SILENCE_CEILING_MS)
+                            asked = false
+                        }
+                    }
+                    RetranscribeButton(onColor = onColor, enabled = !asked, onClick = { asked = true; onRetranscribe() })
+                }
+            }
         }
     }
 }
