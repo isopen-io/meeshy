@@ -67,8 +67,8 @@ class StoryComposerUploadOutcomesTest {
         state.value.deck.slides.flatMap { it.mediaIds + listOfNotNull(it.backgroundMediaId) + it.placedMedia.map(StoryPlacedMedia::mediaId) }
 
     private fun pickVideoAndPhoto(vm: StoryComposerViewModel) {
-        coEvery { media.uploadEach(listOf(video), any()) } returns listOf(NetworkResult.Success(listOf(received("pm-video", "video/mp4"))))
-        coEvery { media.uploadEach(listOf(photo), any()) } returns listOf(timedOut)
+        coEvery { media.uploadEach(listOf(video, photo), any()) } returns
+            listOf(NetworkResult.Success(listOf(received("pm-video", "video/mp4"))), timedOut)
         vm.onMediaPicked(listOf(video, photo))
         cmid = vm.state.value.pendingUploads.single { it.item === photo }.cmid
     }

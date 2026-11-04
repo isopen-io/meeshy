@@ -227,16 +227,22 @@ internal fun IncomingStickerPlaceholderLayer(placeholder: IncomingStickerPlaceho
         Box(
             Modifier
                 .offset { IntOffset((placeholder.x * widthPx - sidePx / 2).roundToInt(), (placeholder.y * heightPx - sidePx / 2).roundToInt()) }
-                .size(side)
-                .background(PREVIEW_VEIL, RoundedCornerShape(MeeshyRadius.md))
-                .semantics(mergeDescendants = true) {
-                    contentDescription = label
-                    stateDescription = status
-                    liveRegion = LiveRegionMode.Polite
-                    progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
-                },
+                .size(side),
         ) {
-            CircularProgressIndicator(color = Color.White, strokeWidth = RING_STROKE, modifier = Modifier.align(Alignment.Center).size(RING))
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(PREVIEW_VEIL, RoundedCornerShape(MeeshyRadius.md))
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = label
+                        stateDescription = status
+                        liveRegion = LiveRegionMode.Polite
+                        progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(color = Color.White, strokeWidth = RING_STROKE, modifier = Modifier.size(RING))
+            }
             IncomingCancel(onCancel, Modifier.align(Alignment.TopEnd).offset(x = TARGET / 2, y = -TARGET / 2))
         }
     }

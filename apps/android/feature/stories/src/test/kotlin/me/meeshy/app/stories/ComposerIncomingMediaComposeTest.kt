@@ -67,8 +67,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * R5 de #13863, sur le plateau : le média choisi se tient à sa place, sa progression annoncée à TalkBack ; pendant ce
- * temps un voile rend le reste inerte — au doigt comme au lecteur d'écran — et Publier se grise ; ✕ annule, un échec se
+ * R5 de #13863 et #15598, sur le plateau : le média choisi se tient à sa place le temps de sa préparation, annoncée à
+ * TalkBack, puis posé il dit sa part envoyée ; pendant la préparation un voile rend le reste inerte — au doigt comme au lecteur d'écran — et Publier se grise ; ✕ annule, un échec se
  * dit dans une ligne avec « Réessayer », un média hors ligne se pose « en attente », un sticker dont l'image part le dit.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -146,35 +146,37 @@ class ComposerIncomingMediaComposeTest {
     }
 
     @Test
-    fun `the picked media stands on the scene preparing, then its ring follows the bytes, both announced`() {
+    fun `the chosen media stands on the scene preparing, then posed its badge follows the bytes, both announced`() {
         var report: ((Int, Long, Long) -> Unit)? = null
         hanging { report = it }
+        val copied = CompletableDeferred<List<MediaUploadItem>>()
         val vm = viewModel()
         show(vm)
 
-        vm.onMediaPicked(listOf(photo()))
+        vm.onMediaChosen(count = 1) { copied.await() }
         compose.waitForIdle()
 
         compose.onNodeWithContentDescription(adding)
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate))
         compose.onNodeWithText(string(me.meeshy.feature.stories.R.string.story_composer_incoming_preparing)).assertExists()
 
+        copied.complete(listOf(photo()))
+        compose.waitForIdle()
         report!!(0, 2L, 4L)
         compose.waitForIdle()
 
-        compose.onNodeWithContentDescription(adding)
-            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(0.5f, 0f..1f)))
+        compose.onNodeWithContentDescription(adding).assertDoesNotExist()
         compose.onNodeWithText(string(me.meeshy.feature.stories.R.string.story_composer_incoming_sending, 50)).assertExists()
+        compose.onNodeWithContentDescription("Text").assertExists()
     }
 
     @Test
-    fun `while it loads the tools and publish are out of reach, even for TalkBack`() {
-        hanging()
+    fun `while it is prepared the tools and publish are out of reach, even for TalkBack`() {
         val vm = viewModel()
         show(vm)
         compose.onNodeWithContentDescription("Text").assertExists()
 
-        vm.onMediaPicked(listOf(photo()))
+        vm.onMediaChosen(count = 1) { CompletableDeferred<List<MediaUploadItem>>().await() }
         compose.waitForIdle()
 
         compose.onNodeWithContentDescription("Text").assertDoesNotExist()
@@ -183,11 +185,10 @@ class ComposerIncomingMediaComposeTest {
     }
 
     @Test
-    fun `the cross cancels the pick and frees the screen at once`() {
-        hanging()
+    fun `the cross cancels the preparation and frees the screen at once`() {
         val vm = viewModel()
         show(vm)
-        vm.onMediaPicked(listOf(photo()))
+        vm.onMediaChosen(count = 1) { CompletableDeferred<List<MediaUploadItem>>().await() }
         compose.waitForIdle()
 
         compose.onNodeWithContentDescription(string(me.meeshy.feature.stories.R.string.story_composer_incoming_cancel)).performClick()
@@ -266,6 +267,26 @@ class ComposerIncomingMediaComposeTest {
 
         compose.onNodeWithContentDescription(adding)
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate))
+    }
+
+    @Test
+    fun `a sticker image on its way holds its place, veils the tools, and its cross frees the screen`() {
+        hanging()
+        val vm = viewModel()
+        show(vm)
+
+        vm.onAddImageSticker(StickerImagePose("pack", "👋", "https://packs/hi.png") { photo() })
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription(string(me.meeshy.feature.stories.R.string.story_composer_incoming_sticker_a11y))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate))
+        compose.onNodeWithContentDescription("Text").assertDoesNotExist()
+
+        compose.onNodeWithContentDescription(string(me.meeshy.feature.stories.R.string.story_composer_incoming_cancel)).performClick()
+
+        compose.onNodeWithContentDescription(string(me.meeshy.feature.stories.R.string.story_composer_incoming_sticker_a11y)).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Text").assertExists()
+        assertThat(vm.state.value.deck.selectedSlide.stickers).isEmpty()
     }
 
     @Test

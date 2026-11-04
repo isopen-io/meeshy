@@ -95,6 +95,7 @@ class StoryComposerViewModel @Inject constructor(
     private val postDrafts: PostComposerDraftStore? = null,
     private val network: NetworkMonitor? = null,
     private val draftCover: StoryDraftCoverSink? = null,
+    private val mediaIds: ComposerMediaIds = ComposerMediaIds(),
 ) : ViewModel() {
 
     /** Le compte sous lequel ce composeur s'est ouvert (#13621) : toute écriture de brouillon se fait sous lui. */
@@ -583,8 +584,10 @@ class StoryComposerViewModel @Inject constructor(
         send = { pose -> mediaUploader.uploadSticker(pose)?.let { it.copy(url = ComposerMediaAddress.of(it.url, mediaBaseUrl)) } },
         pose = { sticker -> reduce { StoryComposerStickerReducer.posed(it, sticker) } },
     )
-    private val uploads = StoryComposerBackgroundUploads(viewModelScope, _state, mediaUploader, mediaUploadQueue, ::onPendingUploadResolved, ::onUploadDropped)
-    private val mediaPick = StoryComposerMediaPick(viewModelScope, _state, uploads) { record() }
+    private val uploads = StoryComposerBackgroundUploads(
+        viewModelScope, _state, mediaUploader, mediaUploadQueue, { cmid, media -> onPendingUploadResolved(cmid, media, queued = false) }, ::onUploadDropped,
+    )
+    private val mediaPick = StoryComposerMediaPick(viewModelScope, _state, uploads, mediaIds) { record() }
     private val soundUploads = StoryComposerSoundUploads(viewModelScope, _state, mediaUploader, ::onSoundReceived)
 
     /**
@@ -609,14 +612,17 @@ class StoryComposerViewModel @Inject constructor(
         it.watch(network?.isOnline ?: MutableStateFlow(true))
     }
 
-    /** Un média en file REÇU pendant la composition (#13959) : il devient un média envoyé partout, et sa file durable se vide. */
-    private fun onPendingUploadResolved(cmid: String, media: UploadedMedia) {
+    /**
+     * Un média en attente REÇU pendant la composition (#13959) : il devient un média envoyé partout ; s'il attendait dans la
+     * file durable ([queued]), elle se vide — un envoi de fond reçu du premier coup n'y est jamais entré (#15598).
+     */
+    private fun onPendingUploadResolved(cmid: String, media: UploadedMedia, queued: Boolean = true) {
         val pending = _state.value.pendingUploads.firstOrNull { it.cmid == cmid } ?: buried.resolved(cmid)
         _state.update { StoryComposerUploadResolution.resolved(it, cmid, media) }
         if (pending == null) return
         history = history.mapped { StoryComposerUploadResolution.resolvedSnapshot(it, cmid, media) }
         MediaIntake.release(pending.item)
-        cancelDurableUpload(cmid)
+        if (queued) cancelDurableUpload(cmid)
         record()
     }
 

@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.media.MediaIntake
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.composer.ComposerMediaPlacement
-import me.meeshy.sdk.outbox.OutboxIds
 
 /**
  * Le chemin d'un choix de médias jusqu'à la scène (R4 et R5 de #13863, #15598) : chacun prend la place que
@@ -21,6 +20,7 @@ internal class StoryComposerMediaPick(
     private val scope: CoroutineScope,
     private val state: MutableStateFlow<StoryComposerUiState>,
     private val uploads: StoryComposerBackgroundUploads,
+    private val ids: ComposerMediaIds,
     private val record: () -> Unit,
 ) {
     private class Pick(val items: List<MediaUploadItem>, val asBackground: Boolean, val replacing: String? = null)
@@ -29,7 +29,8 @@ internal class StoryComposerMediaPick(
 
     /** Des médias déjà prêts sur l'appareil (capture, porte d'entrée) : ils se posent aussitôt. */
     fun pick(items: List<MediaUploadItem>, asBackground: Boolean, replacing: String? = null) {
-        if (items.isEmpty() || state.value.intakeBlocks) return
+        if (items.isEmpty()) return
+        if (state.value.intakeBlocks) return items.forEach(MediaIntake::release)
         land(Pick(items, asBackground, replacing.takeIf { asBackground }))
     }
 
@@ -75,7 +76,7 @@ internal class StoryComposerMediaPick(
         if (refusesForLimit(current, landings)) return pick.items.forEach(MediaIntake::release)
         val accepted = pick.items.take(landings.size)
         pick.items.drop(landings.size).forEach(MediaIntake::release)
-        val named = accepted.map { OutboxIds.cmid() to it }
+        val named = accepted.map { ids.next() to it }
         state.update { start ->
             val planned = start.copy(
                 mediaLandings = landings,
@@ -88,6 +89,6 @@ internal class StoryComposerMediaPick(
         }
         pick.replacing?.let { old -> state.update { StoryComposerBackgroundSelectionReducer.retired(it, old) } }
         record()
-        named.forEach { (cmid, item) -> uploads.send(cmid, item) }
+        uploads.send(named.map { (cmid, item) -> PendingMediaUpload(cmid, item) })
     }
 }
