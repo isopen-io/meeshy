@@ -3,6 +3,7 @@ package me.meeshy.app.conversations
 import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
