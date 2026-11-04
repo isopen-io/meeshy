@@ -579,6 +579,8 @@ data class SocketCommentAddedData(
     val postId: String,
     val comment: ApiPostComment,
     val commentCount: Int = 0,
+    /** La clé d'idempotence de l'auteur : l'écho remplace sa ligne optimiste (id = cmid) au lieu de la doubler. */
+    val clientMutationId: String? = null,
 )
 
 /**
