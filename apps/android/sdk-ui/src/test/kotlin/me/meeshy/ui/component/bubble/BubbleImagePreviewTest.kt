@@ -274,4 +274,21 @@ class BubbleImagePreviewTest {
         assertThat(build(photo().copy(reactionSummary = reactions, isViewOnce = true)).images.single().reactionLabel).isNull()
         assertThat(build(photo().copy(reactionSummary = reactions), effectFlags = MessageEffectFlags.BLURRED.toInt()).images.single().reactionLabel).isNull()
     }
+
+    @Test
+    fun `a pending voice note plays its local copy before the server answers`() {
+        val audio = build(
+            ApiMessageAttachment(
+                id = "upload-0",
+                mimeType = "audio/mp4",
+                fileUrl = "file:///data/cache/pending-previews/upload-0.voice.m4a",
+                duration = 4_000,
+                effectFlags = 0L,
+            ),
+        ).audios.single()
+
+        assertThat(audio.url).isEqualTo("file:///data/cache/pending-previews/upload-0.voice.m4a")
+        assertThat(audio.isPlayable).isTrue()
+        assertThat(audio.durationSeconds).isEqualTo(4)
+    }
 }

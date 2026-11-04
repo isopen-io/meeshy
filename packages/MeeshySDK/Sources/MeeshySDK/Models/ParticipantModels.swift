@@ -178,6 +178,8 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
     public let user: APIConversationUser?
     /// Le contour d'avatar équipé, servi avec le participant (#10713) — absent sans contour ou sans compte.
     public let profileDecor: ServedProfileDecor?
+    /// Compte supprimé ou désactivé (#15717) — servi à vrai seulement, clé absente sinon.
+    public let accountClosed: Bool?
 
     public init(
         id: String,
@@ -199,7 +201,8 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
         nickname: String? = nil,
         lastActiveAt: Date? = nil,
         user: APIConversationUser? = nil,
-        profileDecor: ServedProfileDecor? = nil
+        profileDecor: ServedProfileDecor? = nil,
+        accountClosed: Bool? = nil
     ) {
         self.id = id
         self.conversationId = conversationId
@@ -221,6 +224,7 @@ public struct APIParticipant: Decodable, Identifiable, Sendable {
         self.lastActiveAt = lastActiveAt
         self.user = user
         self.profileDecor = profileDecor
+        self.accountClosed = accountClosed
     }
 
     public var name: String { nickname ?? displayName ?? "Unknown" }

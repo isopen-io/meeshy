@@ -77,6 +77,8 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             backgroundAudioWindow = backgroundTrack?.window,
             foregroundAudioUrl = foregroundTrack?.url,
             foregroundAudioWindow = foregroundTrack?.window,
+            foregroundAudioId = foregroundTrack?.id,
+            unresolvedAudioIds = unresolvedAudioIds(),
             audioTracks = mixerTracks(),
             autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects, background.videoSeconds),
             opening = storyEffects?.opening,
@@ -282,6 +284,7 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             return AudioTrack(
                 url = fromObject,
                 window = StorySourceWindow.clippingMs(match?.sourceStart, match?.sourceEnd),
+                id = match?.id,
             )
         }
         if (!preferBackground) return null
@@ -310,7 +313,11 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
         return listOf(SceneAudioTrack(id = "legacy-bg-audio", url = legacy, isBackground = true))
     }
 
-    private data class AudioTrack(val url: String, val window: StorySourceWindowMs?)
+    /** Les pistes que l'auteur a posées et dont aucune adresse ne se résout : le lecteur les journalise, il ne les tait pas en silence. */
+    private fun StoryItem.unresolvedAudioIds(): List<String> =
+        storyEffects?.audioPlayerObjects.orEmpty().filter { audioObjectUrl(it) == null }.map { it.id }
+
+    private data class AudioTrack(val url: String, val window: StorySourceWindowMs?, val id: String? = null)
 }
 
 /** Aucune préférence de langue : le lecteur n'est pas connu, la scène se sert dans sa langue d'origine. */

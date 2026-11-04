@@ -24,6 +24,8 @@ internal fun StorySceneOverlays(
     onAudioFocusGained: () -> Unit = {},
     onAudioFocusLostForGood: () -> Unit = {},
     players: Boolean = true,
+    mutedTracks: Set<String> = emptySet(),
+    onToggleTrack: ((String) -> Unit)? = null,
 ) {
     val playheadSeconds = if (slide.needsPlayhead) progress.value * slideDurationMs / 1000f else 0f
     val focusHolder = StorySceneAudioFocus.holder(slide)
@@ -56,7 +58,14 @@ internal fun StorySceneOverlays(
                     StoryPlaceObjectLayer(place = layer.view)
                 }
                 is StorySceneLayer.Audio -> if (layer.view.isVisible(playheadSeconds)) {
-                    StoryAudioChipLayer(chip = layer.view)
+                    StoryAudioChipLayer(
+                        chip = layer.view,
+                        muted = layer.view.id in mutedTracks,
+                        chipModifier = Modifier.storyAudioChipTap(
+                            muted = layer.view.id in mutedTracks,
+                            onToggle = onToggleTrack?.let { toggle -> { toggle(layer.view.id) } },
+                        ),
+                    )
                 }
             }
         }

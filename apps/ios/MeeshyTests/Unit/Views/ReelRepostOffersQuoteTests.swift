@@ -28,6 +28,24 @@ final class ReelRepostOffersQuoteTests: XCTestCase {
         )
     }
 
+    /// #15934 — les favoris et les hashtags offraient « Repartager » sans
+    /// écrivain : le choix appelait un rappel absent et le toucher ne faisait
+    /// rien. Sans action, le choix est ABSENT, jamais inerte.
+    func test_offered_sansEcrivainDeRepartage_neProposePasRepartager() {
+        XCTAssertEqual(RepostChoice.offered(canRepost: false, canQuote: true), [.quote])
+        XCTAssertEqual(RepostChoice.offered(canRepost: false, canQuote: false), [],
+                       "Sans aucune action, le bouton Repost n'a rien à offrir.")
+        XCTAssertEqual(RepostChoice.offered(canRepost: true, canQuote: true), [.repost, .quote])
+    }
+
+    func test_laRangeeDuFil_neFabriquePasDeRepartageInerte() throws {
+        let bar = try sourceWithoutComments("Meeshy/Features/Main/Views/FeedPostActionsBar.swift")
+        XCTAssertFalse(bar.contains("onRepost: { onRepost?(postId) }"),
+                       "Envelopper un rappel optionnel dans une fermeture TOUJOURS présente offre « Repartager » sans effet.")
+        XCTAssertTrue(bar.contains("RepostChoice.offered(canRepost: onRepost != nil, canQuote: onQuote != nil).isEmpty"),
+                      "Le bouton Repost est absent quand la carte n'a ni écrivain ni porte de citation.")
+    }
+
     func test_lesMotsDuChoix_sontCeuxDuFilPourUnPost() {
         XCTAssertEqual(RepostChoice.repost.title,
                        String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
