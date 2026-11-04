@@ -136,8 +136,10 @@ internal fun StorySceneAudio(
     muted: Boolean,
     rewindWhenInactive: Boolean = false,
     lap: Int = 0,
+    mutedTracks: Set<String> = emptySet(),
 ) {
     val gain = LocalStoryAudioGain.current()
+    StoryUnresolvedAudioLog(slide.id, slide.unresolvedAudioIds)
     slide.backgroundAudioUrl?.let { url ->
         key(url, StorySceneLoop.restartKey(loops = slide.backgroundLoop, lap = lap)) {
             AudioTrackSurface(
@@ -157,7 +159,7 @@ internal fun StorySceneAudio(
                 mediaUrl = url,
                 isActive = playing,
                 rewindWhenInactive = rewindWhenInactive,
-                volume = if (muted) 0f else gain,
+                volume = if (muted || slide.foregroundAudioId?.let { it in mutedTracks } == true) 0f else gain,
                 loop = false,
                 // Un vocal rogné compte autant qu'une vidéo rognée (#5129).
                 sourceStartMs = slide.foregroundAudioWindow?.startMs,

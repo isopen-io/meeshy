@@ -186,6 +186,10 @@ data class StorySlideView(
     val textObjects: List<StoryTextObjectView> = emptyList(),
     val backgroundAudioUrl: String? = null,
     val foregroundAudioUrl: String? = null,
+    /** L'id de la piste de premier plan jouée : le tap de sa pastille la coupe. */
+    val foregroundAudioId: String? = null,
+    /** Les pistes audio posées dont aucune adresse ne se résout (journalisées par le lecteur, jamais tues en silence). */
+    val unresolvedAudioIds: List<String> = emptyList(),
     /** Fenêtres de LECTURE des trois pistes de la slide (#5129) — `null` = entière. */
     val backgroundVideoWindow: StorySourceWindowMs? = null,
     val backgroundAudioWindow: StorySourceWindowMs? = null,

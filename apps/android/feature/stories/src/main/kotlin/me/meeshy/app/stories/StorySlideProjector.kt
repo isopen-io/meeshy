@@ -75,6 +75,8 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
             backgroundAudioWindow = backgroundTrack?.window,
             foregroundAudioUrl = foregroundTrack?.url,
             foregroundAudioWindow = foregroundTrack?.window,
+            foregroundAudioId = foregroundTrack?.id,
+            unresolvedAudioIds = unresolvedAudioIds(),
             autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects, background.videoSeconds),
             opening = storyEffects?.opening,
             closing = storyEffects?.closing,
@@ -274,14 +276,12 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
         // Un son EMPRUNTÉ à la bibliothèque n'a aucun média de post (`postMediaId` vide) : il voyage par son
         // `mediaURL` (#13428), comme iOS (`StoryAudioSourceResolver`) et le web le lisent — mais cette adresse est
         // écrite par l'AUTEUR : seule la forme canonique d'un son de la bibliothèque est jouée.
-        val fromObject = match?.postMediaId
-            ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
-            ?.let { resolveMediaUrl(it, apiBaseUrl) }
-            ?: MediaRequestCredential.libraryAudioUrl(match?.mediaURL, apiBaseUrl)
+        val fromObject = match?.let { audioObjectUrl(it) }
         if (fromObject != null) {
             return AudioTrack(
                 url = fromObject,
                 window = StorySourceWindow.clippingMs(match?.sourceStart, match?.sourceEnd),
+                id = match?.id,
             )
         }
         if (!preferBackground) return null
@@ -290,7 +290,17 @@ class StorySlideProjector(private val apiBaseUrl: String?) {
         return legacy?.let { AudioTrack(url = it, window = null) }
     }
 
-    private data class AudioTrack(val url: String, val window: StorySourceWindowMs?)
+    private fun StoryItem.audioObjectUrl(track: me.meeshy.sdk.model.StoryAudioPlayerObject): String? =
+        track.postMediaId
+            .let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
+            ?.let { resolveMediaUrl(it, apiBaseUrl) }
+            ?: MediaRequestCredential.libraryAudioUrl(track.mediaURL, apiBaseUrl)
+
+    /** Les pistes que l'auteur a posées et dont aucune adresse ne se résout : le lecteur les journalise, il ne les tait pas en silence. */
+    private fun StoryItem.unresolvedAudioIds(): List<String> =
+        storyEffects?.audioPlayerObjects.orEmpty().filter { audioObjectUrl(it) == null }.map { it.id }
+
+    private data class AudioTrack(val url: String, val window: StorySourceWindowMs?, val id: String? = null)
 }
 
 /** Aucune préférence de langue : le lecteur n'est pas connu, la scène se sert dans sa langue d'origine. */
