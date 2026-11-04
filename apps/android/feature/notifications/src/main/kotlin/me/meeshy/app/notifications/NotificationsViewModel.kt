@@ -138,6 +138,16 @@ class NotificationsViewModel @Inject constructor(
     }
 
     /**
+     * Tirer pour rafraîchir de marque : suspend jusqu'au retour du réseau, pour que l'indicateur reste armé
+     * pendant la revalidation. Un échec se relance au geste (haptique d'erreur) sans jamais effacer le cache affiché.
+     */
+    suspend fun pullRefresh() {
+        notificationRepository.refresh()
+        val category = _state.value.selectedCategory
+        if (category != NotificationFilterCategory.ALL) fetchCategory(category, append = false)
+    }
+
+    /**
      * Infinite scroll, under EVERY chip (iOS paginates the selected category's own server list):
      * [NotificationFilterCategory.ALL] extends the shared cache, a category extends its own page.
      * Re-entrancy guarded so a fast double-scroll never fires two overlapping fetches; a failed
