@@ -142,8 +142,6 @@ struct FeedPostCard: View {
     /// (`post.id`). Routed through the enclosing repost Button. Pure; unit-tested.
     static func repostTapTargetId(for repost: RepostContent) -> String { repost.id }
 
-    /// Le texte du bloc cité : celui du Prisme du lecteur, jamais l'original
-    /// brut quand une traduction le sert (#16002). Pure ; testée.
     static func repostBodyText(for repost: RepostContent) -> String { repost.displayContent }
 
     /// VoiceOver label for the tappable media preview. Distinguishes a video
@@ -845,7 +843,6 @@ struct FeedPostCard: View {
             onTapRepost?(Self.repostTapTargetId(for: repost))
         } label: {
             VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-                // Original author
                 HStack(spacing: MeeshySpacing.sm) {
                     LivePresence { MeeshyAvatar(
                         name: repost.author,
@@ -899,7 +896,6 @@ struct FeedPostCard: View {
                     }
                 }
 
-                // Original stats
                 HStack(spacing: MeeshySpacing.md) {
                     HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "heart.fill")
@@ -930,8 +926,7 @@ struct FeedPostCard: View {
         .accessibilityHint(String(localized: "feed.post.original.hint", defaultValue: "Ouvre la publication originale", bundle: .main))
     }
 
-    // MARK: - Media Preview
-    // See FeedPostCard+Media.swift
+    // MARK: - Media Preview (FeedPostCard+Media.swift)
 
 }
 

@@ -208,23 +208,9 @@ struct OutboxDispatcher: OutboxDispatching {
                 headers: ["X-Client-Mutation-Id": payload.clientMutationId]
             )
             logger.info("unblockUser dispatched for \(payload.targetUserId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
-        } catch where Self.unblockIsAlreadyApplied(error) {
+        } catch where UnblockReplay.isAlreadyApplied(error) {
             logger.info("unblockUser replay for \(payload.targetUserId, privacy: .public) — already unblocked, accepting as success")
         }
-    }
-
-    /// Le refus que la passerelle rend quand la personne n'est PAS (ou plus)
-    /// dans la liste — `routes/directory/blocks.ts`, `debloquer`.
-    nonisolated static let notInBlockedListMessage = "User is not in your blocked list"
-
-    /// **Rejouer un déblocage déjà appliqué aboutit** (#16008). La réponse du
-    /// premier envoi s'est perdue, le serveur a débloqué, et le rejeu reçoit ce
-    /// 404 : l'état voulu (« pas bloqué ») est celui du serveur, c'est donc une
-    /// réussite et non un retour arrière. Seul CE refus est accepté : un autre
-    /// 404 (adresse retirée, ressource inconnue) reste un refus définitif.
-    nonisolated static func unblockIsAlreadyApplied(_ error: Error) -> Bool {
-        guard case let MeeshyError.server(statusCode, message) = error else { return false }
-        return statusCode == 404 && message == notInBlockedListMessage
     }
 
     /// POST /friend-requests — gateway expects `{ receiverId, message?, targetLevel? }`.
@@ -981,5 +967,22 @@ nonisolated struct CreatePostBody: Encodable {
         case mediaCaption
         case mediaAlt
         case allowSoundExtraction
+    }
+}
+
+/// **Le rejeu d'un déblocage**, hors du dispatcher : une règle pure sur le refus servi.
+nonisolated enum UnblockReplay {
+    /// Le refus que la passerelle rend quand la personne n'est PAS (ou plus)
+    /// dans la liste — `routes/directory/blocks.ts`, `debloquer`.
+    static let notInBlockedListMessage = "User is not in your blocked list"
+
+    /// **Rejouer un déblocage déjà appliqué aboutit** (#16008). La réponse du
+    /// premier envoi s'est perdue, le serveur a débloqué, et le rejeu reçoit ce
+    /// 404 : l'état voulu (« pas bloqué ») est celui du serveur, c'est donc une
+    /// réussite et non un retour arrière. Seul CE refus est accepté : un autre
+    /// 404 (adresse retirée, ressource inconnue) reste un refus définitif.
+    static func isAlreadyApplied(_ error: Error) -> Bool {
+        guard case let MeeshyError.server(statusCode, message) = error else { return false }
+        return statusCode == 404 && message == notInBlockedListMessage
     }
 }

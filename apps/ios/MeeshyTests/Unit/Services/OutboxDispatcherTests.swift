@@ -327,18 +327,18 @@ final class OutboxDispatcherTests: XCTestCase {
 
     func test_unblockReplay_whenServerAlreadyUnblocked_isASuccess() throws {
         let error = MeeshyError.server(statusCode: 404, message: try servedMessage(alreadyUnblockedBody))
-        XCTAssertTrue(OutboxDispatcher.unblockIsAlreadyApplied(error))
+        XCTAssertTrue(UnblockReplay.isAlreadyApplied(error))
     }
 
     func test_unblockReplay_whenAnotherNotFound_staysARefusal() throws {
         let unknownUser = #"{"success":false,"error":"User not found","message":"User not found"}"#
         let error = MeeshyError.server(statusCode: 404, message: try servedMessage(unknownUser))
-        XCTAssertFalse(OutboxDispatcher.unblockIsAlreadyApplied(error))
+        XCTAssertFalse(UnblockReplay.isAlreadyApplied(error))
     }
 
     func test_unblockReplay_whenSameMessageOnAnotherStatus_staysARefusal() {
-        let error = MeeshyError.server(statusCode: 400, message: OutboxDispatcher.notInBlockedListMessage)
-        XCTAssertFalse(OutboxDispatcher.unblockIsAlreadyApplied(error))
+        let error = MeeshyError.server(statusCode: 400, message: UnblockReplay.notInBlockedListMessage)
+        XCTAssertFalse(UnblockReplay.isAlreadyApplied(error))
     }
 
     func test_dispatch_sendFriendRequest_whenCorruptPayload_throwsCode400() async {
