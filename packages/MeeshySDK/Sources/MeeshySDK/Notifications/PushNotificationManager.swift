@@ -221,7 +221,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 
         let body = UnregisterDeviceTokenRequest(token: token)
         do {
-            let _: APIResponse<[String: String]> = try await APIClient.shared.request(
+            let _: APIResponse<DiscardedResponseBody> = try await APIClient.shared.request(
                 UsersEndpoint.registerDeviceToken,
                 method: "DELETE",
                 body: try JSONEncoder().encode(body)

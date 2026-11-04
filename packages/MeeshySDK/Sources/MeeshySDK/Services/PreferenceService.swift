@@ -105,7 +105,7 @@ public final class PreferenceService: PreferenceServiceProviding, Sendable {
         }
         struct Body: Encodable { let updates: [Item] }
         let body = Body(updates: updates.map { Item(conversationId: $0.conversationId, orderInCategory: $0.orderInCategory) })
-        let _: APIResponse<[String: String]> = try await api.post(
+        let _: APIResponse<DiscardedResponseBody> = try await api.post(
             UserPreferencesEndpoint.reorder, body: body
         )
     }

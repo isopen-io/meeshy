@@ -363,7 +363,7 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
 
     public func logout() async {
         do {
-            let _: APIResponse<[String: Bool]> = try await api.request(AuthEndpoint.logout, method: "POST")
+            let _: APIResponse<DiscardedResponseBody> = try await api.request(AuthEndpoint.logout, method: "POST")
         } catch {
             // Best-effort assumé : la déconnexion locale doit aboutir même hors
             // ligne. `logoutThrowing()` est la variante à utiliser quand
@@ -380,7 +380,7 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
     /// silently left the session live on the gateway when the device was
     /// offline at the moment of logout.
     public func logoutThrowing() async throws {
-        let _: APIResponse<[String: Bool]> = try await api.request(AuthEndpoint.logout, method: "POST")
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(AuthEndpoint.logout, method: "POST")
     }
 
     /// D5.hygiene — ferme la session de `token`, jamais celle du jeton courant
@@ -392,7 +392,7 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
     /// qu'on quitte, dont la fermeture recevait un 401 faisait alors fermer
     /// côté serveur la session du compte actif. Un 401 est rendu tel quel.
     public func logoutThrowing(token: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await pinned.requestPinned(
+        let _: APIResponse<DiscardedResponseBody> = try await pinned.requestPinned(
             AuthEndpoint.logout,
             method: "POST",
             body: nil,

@@ -362,7 +362,7 @@ struct OutboxDispatcher: OutboxDispatching {
             language: payload.language
         )
         do {
-            let _: APIResponse<[String: String]> = try await APIClient.shared.post(
+            let _: APIResponse<DiscardedResponseBody> = try await APIClient.shared.post(
                 AttachmentsEndpoint.byAttachmentIdStatus(attachmentId: payload.attachmentId),
                 body: body
             )

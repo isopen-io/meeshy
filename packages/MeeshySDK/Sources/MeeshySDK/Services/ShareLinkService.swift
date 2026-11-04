@@ -135,7 +135,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, 
     /// en-tête `X-Session-Token`, jamais dans le corps : la route l'identifie
     /// ainsi, pas via le `sessionToken` du compte actif.
     public func leaveAnonymousSession(sessionToken: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.requestWithHeaders(
+        let _: APIResponse<DiscardedResponseBody> = try await api.requestWithHeaders(
             GuestSessionsEndpoint.me,
             method: "DELETE",
             body: nil,
@@ -166,7 +166,7 @@ public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, 
 
     public func toggleLink(linkId: String, isActive: Bool) async throws {
         struct ToggleBody: Encodable { let isActive: Bool }
-        let _: APIResponse<MyShareLink> = try await api.patch(
+        let _: APIResponse<DiscardedResponseBody> = try await api.patch(
             LinksEndpoint.byLinkId(linkId: linkId),
             body: ToggleBody(isActive: isActive)
         )

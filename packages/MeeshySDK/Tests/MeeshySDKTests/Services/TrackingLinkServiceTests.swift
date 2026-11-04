@@ -251,8 +251,7 @@ final class TrackingLinkServiceTests: XCTestCase {
     // MARK: - setActive
 
     func test_setActive_success_callsPatchEndpoint() async throws {
-        let link = makeTrackingLink()
-        let response = APIResponse<TrackingLink>(success: true, data: link, error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/tracking-links/abc123", result: response)
 
         try await service.setActive(token: "abc123", isActive: false)
