@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Chantier #15462 « Android lit les vocaux comme iOS », de bout en bout et SANS S'ARRÊTER : lots du programme de parité (branches claude/android-<clé>) ordonnancés par ready.py --scope, cadrés contre l'arbre vivant, développés en TDD, relus et corrigés, audités s'ils sont sensibles, prouvés par workflow_dispatch d'android.yml (CI des PR gelée), fusionnés dans dev et clos avec leur preuve, en boucle jusqu'à ce que tout le périmètre soit fusionné ou bloqué après deux tentatives — opus cadre, relit, prouve et arbitre ; sonnet développe ; haiku fait le mécanique",
   whenToUse:
-    "Lancer, reprendre ou poursuivre le chantier audio Android (#15462) : lecture qui survit à la conversation et à l'app, enchaînement des non-écoutés, karaoké, forme d'onde, mini-lecteur, plein écran décoré avec Réagir, Répondre et Transférer. Args, tous optionnels : { run, scope, date, attribution, batch (2), maxFix (4), maxRounds (160), maxIdle (40), tentatives (2), rapprocher (true), parapluie (15462), outillage (15463), milestone (17), base ('dev'), brancheOutillage ('claude/youthful-mayer-an0qgn'), sensibles, lourds }.",
+    "Reprise : l'état fait foi dans les issues de #15462 et le registre de dev — le workflow le relit seul (lots fusionnés sautés, branches du chantier reprises, PR ouvertes prouvées puis fusionnées) ; passer attribution = les lignes Co-Authored-By/Claude-Session de la session qui reprend, et rapprocher=false. Lancer, reprendre ou poursuivre le chantier audio Android (#15462) : lecture qui survit à la conversation et à l'app, enchaînement des non-écoutés, karaoké, forme d'onde, mini-lecteur, plein écran décoré avec Réagir, Répondre et Transférer. Args, tous optionnels : { run, scope, date, attribution, batch (2), maxFix (4), maxRounds (160), maxIdle (40), tentatives (2), rapprocher (true), pleinEcranSansBulle (false), sessionsPrecedentes ([]), parapluie (15462), outillage (15463), milestone (17), base ('dev'), brancheOutillage ('claude/youthful-mayer-an0qgn'), sensibles, lourds }.",
   phases: [
     { title: 'Préparer', detail: "répertoire d'exécution, PR de l'outillage, rouge préalable de dev, rapprochement des issues des lots déjà fusionnés", model: 'opus' },
     { title: 'Ordonnancer', detail: 'ready.py --scope : lots prêts, branches à reprendre, PR du périmètre restées ouvertes', model: 'haiku' },
@@ -33,6 +33,9 @@ const ATTR = typeof A.attribution === 'string' && A.attribution
   ? A.attribution
   : 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01EbRyWaS7aHE8U5jr55RNSY'
 const SESSION_TRAILER = (ATTR.match(/Claude-Session: (\S+)/) || [])[1] || ''
+const SESSIONS_CHANTIER = [...new Set([SESSION_TRAILER, 'https://claude.ai/code/session_01EbRyWaS7aHE8U5jr55RNSY',
+  ...(Array.isArray(A.sessionsPrecedentes) ? A.sessionsPrecedentes : [])].filter(Boolean))]
+const PLEIN_ECRAN_SANS_BULLE = A.pleinEcranSansBulle === true
 const PARAPLUIE = Number.isInteger(A.parapluie) ? A.parapluie : 15462
 const OUTILLAGE = Number.isInteger(A.outillage) ? A.outillage : 15463
 const MILESTONE = Number.isInteger(A.milestone) ? A.milestone : 17
@@ -226,7 +229,8 @@ MISSION — PRÉPARER LE CHANTIER (mécanique et vérifications, aucune ligne de
 1. Répertoire d'exécution : si ${RUN}/ready.py n'existe pas, cd ${REPO} && apps/android/scripts/parity/setup_run.sh ${RUN} ; sinon
    recopie l'outillage À JOUR depuis ${REPO} (cp apps/android/scripts/parity/{ready.py,lot.py,issue_body.py,pr_body.py} ${RUN}/ ;
    cp apps/android/docs/parite-ios/plan/*.json ${RUN}/plan/ en gardant F0a/F0b ; cp apps/android/docs/parite-ios/CONVENTIONS.md ${RUN}/).
-   Crée ${RUN}/blocked.txt, ${RUN}/satisfied.txt et ${NOTES} s'ils manquent. N'active PAS ${RUN}/rescue-enabled (il reprendrait la
+   Crée ${RUN}/blocked.txt, ${RUN}/satisfied.txt et ${NOTES} s'ils manquent.${PLEIN_ECRAN_SANS_BULLE ? `
+   DÉCISION DE REPRISE : le plein écran audio ne dépend plus de la bulle — python3 -c "import json;p='${RUN}/plan/D.json';L=json.load(open(p));[l.__setitem__('deps',[d for d in l['deps'] if d!='vocal-bulle-branchement-fil']) for l in L if l['key']=='audio-plein-ecran-pager-et-transport'];open(p,'w').write(json.dumps(L,ensure_ascii=False,indent=1))" (l'ouverture depuis la bulle reste câblée par le lot de la bulle).` : ''} N'active PAS ${RUN}/rescue-enabled (il reprendrait la
    branche fraîche d'une autre session) : la reprise passe par --rescue, décidée lot par lot.
 2. Contrôle de l'outillage : cd ${REPO} && node scripts/ci/pr-verte.mjs --self-test ; python3 ${RUN}/ready.py audio --gen 2 --batch 1 --scope ${SCOPE.join(',')}
    doit rendre un JSON avec unknown vide. Un échec ⇒ pret=false et la sortie dans rapport.
@@ -255,14 +259,15 @@ MISSION — ORDONNANCER LE TOUR (mécanique).
 1. python3 ${RUN}/ready.py audio --gen 2 --stale-hours 6 --batch ${BATCH} --scope ${SCOPE.join(',')}${blocked.length ? ` --exclude ${blocked.join(',')}` : ''}${enVol.length ? ` --inflight ${enVol.join(',')}` : ''}
    (sortie JSON : ready, remaining, waiting_on_deps, claimed_unmerged, claimed_without_pr, blocked, scope_closure).
 2. Pour chaque clé de claimed_without_pr (branche poussée, aucune PR) : cd ${REPO} && git fetch -q origin ${branche('<clé>')} &&
-   git log -1 --format='%ct%n%B' FETCH_HEAD. Elle est À REPRENDRE si son dernier commit porte « ${SESSION_TRAILER} » (ce chantier)
+   git log -1 --format='%ct%n%B' FETCH_HEAD. Elle est À REPRENDRE si un de ses 5 derniers commits porte une de ces lignes de session du
+   chantier : ${SESSIONS_CHANTIER.join(' , ')}
    ou date de plus de 6 heures (date -u +%s) ; sinon une autre session la tient : tenus_ailleurs.
    S'il y en a à reprendre, relance la commande du point 1 en ajoutant --rescue <clés,séparées,par,virgules> et rends CETTE sortie, avec rescued.
 3. Les lots ${enVol.length ? enVol.join(', ') : '(aucun)'} sont EN VOL dans ce chantier : ni à reprendre, ni tenus ailleurs.
 4. PR ouvertes du périmètre : mcp__github__list_pull_requests owner isopen-io repo meeshy base ${BASE} state open perPage 100 (pages suivantes
    tant qu'une page est pleine). Garde celles dont head.ref = claude/android-<clé> avec <clé> dans scope_closure${adoptes.length ? `, hors PR déjà suivies : ${adoptes.join(', ')}` : ''}.
    Pour chacune, mcp__github__pull_request_read get_commits (dernier commit) : elle est À REPRENDRE (prs_a_reprendre) si son dernier commit
-   porte « ${SESSION_TRAILER} » ou date de plus de 3 heures ; sinon tenus_ailleurs.
+   porte une des lignes de session du chantier (${SESSIONS_CHANTIER.join(' , ')}) ou date de plus de 3 heures ; sinon tenus_ailleurs.
 Rends les champs du JSON final, plus rescued, prs_a_reprendre, tenus_ailleurs.`
 
 const issuePrompt = (key) => `${socle(key)}
