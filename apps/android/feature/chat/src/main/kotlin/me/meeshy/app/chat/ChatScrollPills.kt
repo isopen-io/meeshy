@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.WifiOff
@@ -31,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import java.io.File
 import me.meeshy.app.chat.audio.UnreadAudioButton
 import me.meeshy.feature.chat.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -171,7 +171,7 @@ internal fun OfflinePill(onClick: () -> Unit) {
 private fun unreadPreviewIcon(kind: UnreadPreviewKind): ImageVector? = when (kind) {
     UnreadPreviewKind.Image -> Icons.Filled.Image
     UnreadPreviewKind.File -> Icons.Filled.AttachFile
-    UnreadPreviewKind.Audio -> Icons.Filled.GraphicEq
+    UnreadPreviewKind.Audio -> MeeshyIcons.Waveform
     UnreadPreviewKind.Text -> null
 }
 

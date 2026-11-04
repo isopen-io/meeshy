@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -146,7 +144,7 @@ private fun ReplyPreview(
         if (onPlayVoice != null) {
             IconButton(onClick = onPlayVoice, modifier = Modifier.size(QUOTED_VOICE_TOUCH_TARGET)) {
                 Icon(
-                    imageVector = Icons.Filled.PlayArrow,
+                    imageVector = MeeshyIcons.Play,
                     contentDescription = stringResource(R.string.media_audio_play),
                     tint = accentColor,
                 )

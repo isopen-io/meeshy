@@ -1,9 +1,6 @@
 package me.meeshy.app.chat.audio
 
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -18,6 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import me.meeshy.app.chat.LocalChatVoicePlayback
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.bubble.BubbleAudioPlayback
+import me.meeshy.ui.icons.MeeshyIcons
 
 /**
  * Le ▶ / ⏸ de la pastille « dernier message non lu » quand ce message est un vocal (iOS `ConversationScrollControlsView`,
@@ -34,7 +32,7 @@ internal fun UnreadAudioButton(attachmentId: String, accentColor: Color, modifie
     val isPlaying = playback?.isPlaying == true
     IconButton(onClick = { voice.tapAttachment(attachmentId) }, modifier = modifier.size(48.dp)) {
         Icon(
-            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+            imageVector = if (isPlaying) MeeshyIcons.Pause else MeeshyIcons.Play,
             contentDescription = stringResource(if (isPlaying) R.string.chat_media_pause else R.string.chat_media_play),
             tint = accentColor,
         )
