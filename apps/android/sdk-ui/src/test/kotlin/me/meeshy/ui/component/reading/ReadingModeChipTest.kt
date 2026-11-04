@@ -1,13 +1,15 @@
 package me.meeshy.ui.component.reading
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
@@ -98,13 +100,18 @@ class ReadingModeChipTest {
     @Test
     fun `the auto prefix shows only when the decision is automatic`() {
         show(isAuto = true, preference = null)
-        compose.onNodeWithText("AUTO").assertIsDisplayed()
+        // La puce efface la sémantique de ses enfants (`clearAndSetSemantics`) : le « AUTO » peint n'est pas un nœud,
+        // le lecteur d'écran l'entend par l'état de la puce.
+        compose.onNodeWithTag(READING_MODE_CHIP_TAG)
+            .assertIsDisplayed()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "AUTO"))
     }
 
     @Test
     fun `no auto prefix for a sticky choice`() {
         show(isAuto = false)
-        compose.onNodeWithText("AUTO").assertDoesNotExist()
+        compose.onNodeWithTag(READING_MODE_CHIP_TAG)
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.StateDescription))
     }
 
     @Test

@@ -43,6 +43,12 @@ public sealed interface SendResult {
      * cleanly beyond it.
      */
     public data class Deferred(val reason: String) : SendResult
+
+    /**
+     * L'auteur a supprimé la ligne pendant son vol, et le sender l'a vu avant d'envoyer (audit #15726 ; iOS
+     * `OutboxCancellationError.cancelledByAuthor`) : la ligne part sans livraison, issue [OutboxOutcome.Cancelled].
+     */
+    public data object Cancelled : SendResult
 }
 
 /** Delivers a single [OutboxEntity] over the network; transient vs permanent is in the [SendResult]. */
@@ -232,6 +238,7 @@ public class OutboxDrainer(
                     outbox.markSucceeded(row.cmid)
                     delivered++
                 }
+                SendResult.Cancelled -> outbox.markCancelledByAuthor(row.cmid)
                 SendResult.TransientFailure -> {
                     val attempts = (outbox.row(row.cmid)?.attempts ?: row.attempts) + 1
                     val backoff = OutboxBackoff.delayMs(attempts)

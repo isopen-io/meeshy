@@ -195,6 +195,14 @@ public interface OutboxDao {
     @Query("UPDATE outbox SET cancelRequestedAt = :at, updatedAt = :at WHERE cmid = :cmid")
     public suspend fun requestCancel(cmid: String, at: Long)
 
+    /** « Supprimer » : retire la ligne SAUF si un drainer l'a réservée — la condition est dans la requête, pas dans une lecture antérieure. */
+    @Query("DELETE FROM outbox WHERE cmid = :cmid AND state != 'INFLIGHT'")
+    public suspend fun deleteUnlessInflight(cmid: String): Int
+
+    /** La marque d'annulation, posée seulement sur une ligne EN VOL. */
+    @Query("UPDATE outbox SET cancelRequestedAt = :at, updatedAt = :at WHERE cmid = :cmid AND state = 'INFLIGHT'")
+    public suspend fun requestCancelIfInflight(cmid: String, at: Long): Int
+
     /** Every row the table holds, whatever its state — what the capacity ceiling bounds. */
     @Query("SELECT COUNT(*) FROM outbox")
     public suspend fun count(): Int

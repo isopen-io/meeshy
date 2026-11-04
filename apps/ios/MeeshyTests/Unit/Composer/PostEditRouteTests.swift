@@ -35,12 +35,15 @@ final class PostEditRouteTests: XCTestCase {
         XCTAssertEqual(PostEditRoute.resolve(for: post(type: "REEL"), hasStoryComposer: true), .composer)
     }
 
-    /// Ce que la scène ne montrerait pas — une seconde image d'un post
-    /// historique, un repost — garde l'éditeur qui sait le montrer.
+    /// Ce que la scène ne montrerait pas — un document — garde l'éditeur qui
+    /// sait le montrer ; une seconde image devient une diapo (#15631).
     func test_unPostQueLaSceneNeMontrePasEntier_gardeLAncienEditeur() {
         var deuxImages = post(type: "POST")
         deuxImages.media = [FeedMedia(id: "i1", type: .image, url: "/a"), FeedMedia(id: "i2", type: .image, url: "/b")]
-        XCTAssertEqual(PostEditRoute.resolve(for: deuxImages, hasStoryComposer: true), .legacySheet)
+        XCTAssertEqual(PostEditRoute.resolve(for: deuxImages, hasStoryComposer: true), .composer)
+        var avecDocument = deuxImages
+        avecDocument.media.append(FeedMedia(id: "d3", type: .document, url: "/c"))
+        XCTAssertEqual(PostEditRoute.resolve(for: avecDocument, hasStoryComposer: true), .legacySheet)
     }
 
     func test_sansCompositeurDansLEnvironnement_unPostRetombeSurLAncienEditeur() {
