@@ -117,4 +117,22 @@ class CallHistoryDaoTest {
 
         assertThat(dao.all().map { it.callId }).containsExactly("b")
     }
+
+    @Test
+    fun `participants et reactionCounts survivent a l'aller-retour`() = runTest {
+        dao.upsertAll(listOf(call("a", 1).copy(participants = "[{\"id\":\"p1\"}]", reactionCounts = "{\"👍\":2}")))
+
+        val row = dao.get("a")
+
+        assertThat(row?.participants).isEqualTo("[{\"id\":\"p1\"}]")
+        assertThat(row?.reactionCounts).isEqualTo("{\"👍\":2}")
+    }
+
+    @Test
+    fun `une ligne sans participants porte les valeurs vides par defaut`() = runTest {
+        dao.upsertAll(listOf(call("a", 1)))
+
+        assertThat(dao.get("a")?.participants).isEqualTo("[]")
+        assertThat(dao.get("a")?.reactionCounts).isEqualTo("{}")
+    }
 }
