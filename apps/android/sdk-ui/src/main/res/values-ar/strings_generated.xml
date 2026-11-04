@@ -286,6 +286,7 @@
     <string name="media_audio_play">تشغيل الصوت</string>
     <string name="media_audio_speed_cycle">سرعة التشغيل %1$s</string>
     <string name="media_audio_transcribe">نسخ نصي</string>
+    <string name="media_audio_transcribing">جارٍ النسخ النصي</string>
     <string name="media_caption_see_less">عرض أقل</string>
     <string name="media_caption_see_less_hint">يطوي الشرح</string>
     <string name="media_caption_see_more">عرض المزيد</string>

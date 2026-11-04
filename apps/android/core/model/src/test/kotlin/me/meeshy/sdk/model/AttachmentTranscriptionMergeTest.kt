@@ -190,4 +190,62 @@ class AttachmentTranscriptionMergeTest {
         assertThat(merged.id).isEqualTo("keep")
         assertThat(merged.conversationId).isEqualTo("c1")
     }
+
+    private val hello = listOf(TranscriptionSegment(text = "Hello", startTime = 0.0, endTime = 1.0, speakerId = "s1"))
+
+    @Test
+    fun `carries the segments and the speaker count onto the stored transcription`() {
+        val merged = AttachmentTranscriptionMerge.mergeTranscription(
+            message(), null, "Hello", language = "en", segments = hello, speakerCount = 2,
+        )!!
+
+        val stored = merged.attachments.single().transcription!!
+        assertThat(stored.segments).isEqualTo(hello)
+        assertThat(stored.speakerCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `an identical transcription with segments the target lacks is not a no-op`() {
+        val bare = message(attachments = listOf(audio(transcription = ApiAttachmentTranscription(text = "Hello", language = "en"))))
+
+        val merged = AttachmentTranscriptionMerge.mergeTranscription(bare, null, "Hello", language = "en", segments = hello)
+
+        assertThat(merged).isNotNull()
+        assertThat(merged!!.attachments.single().transcription?.segments).isEqualTo(hello)
+    }
+
+    @Test
+    fun `an identical transcription with the same segments stays a no-op`() {
+        val rich = message(
+            attachments = listOf(
+                audio(transcription = ApiAttachmentTranscription(text = "Hello", language = "en", segments = hello)),
+            ),
+        )
+
+        assertThat(AttachmentTranscriptionMerge.mergeTranscription(rich, null, "Hello", language = "en", segments = hello)).isNull()
+    }
+
+    @Test
+    fun `a second call without segments never strips the segments already held`() {
+        val rich = message(
+            attachments = listOf(
+                audio(transcription = ApiAttachmentTranscription(text = "Hello", language = "en", segments = hello)),
+            ),
+        )
+
+        assertThat(AttachmentTranscriptionMerge.mergeTranscription(rich, null, "Hello", language = "en")).isNull()
+    }
+
+    @Test
+    fun `a new text without segments keeps no stale segments`() {
+        val rich = message(
+            attachments = listOf(
+                audio(transcription = ApiAttachmentTranscription(text = "Hello", language = "en", segments = hello)),
+            ),
+        )
+
+        val merged = AttachmentTranscriptionMerge.mergeTranscription(rich, null, "Bonjour", language = "fr")!!
+
+        assertThat(merged.attachments.single().transcription?.segments).isNull()
+    }
 }

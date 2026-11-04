@@ -142,7 +142,8 @@ internal fun ChatMessageRow(
     // Le panneau secondaire est un état de vue de la bulle (iOS `@State secondaryLangCode`), pas du fil.
     var secondaryCode by remember(messageId) { mutableStateOf<String?>(null) }
     val flagHaptics = rememberMeeshyHaptics()
-    val callbacks = remember(bubble, actions, audioPlayer, offer, replyLabel, forwardLabel, menuLabel, reacts, canWrite, secondaryCode) {
+    val transcriptionRequests = LocalChatTranscriptionRequests.current
+    val callbacks = remember(bubble, actions, audioPlayer, transcriptionRequests, offer, replyLabel, forwardLabel, menuLabel, reacts, canWrite, secondaryCode) {
         BubbleCallbacks(
             onLongPress = { actions.onLongPress(messageId) },
             onReactionClick = { emoji: String -> actions.onReactionClick(messageId, emoji) }.takeIf { reacts },
@@ -197,7 +198,7 @@ internal fun ChatMessageRow(
                     MessageRowAction.Forward -> BubbleAccessibilityAction(forwardLabel) { actions.onForward(messageId) }
                 }
             } + BubbleAccessibilityAction(menuLabel) { actions.onLongPress(messageId) },
-        ).withVoice(audioPlayer, bubble)
+        ).withVoice(audioPlayer, bubble).withTranscriptionRequests(transcriptionRequests, bubble)
     }
     val translatingCodes = remember(translatingLanguages, messageId) {
         translatingLanguages.filter { it.startsWith("$messageId|") }.mapTo(HashSet()) { it.removePrefix("$messageId|") }

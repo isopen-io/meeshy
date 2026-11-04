@@ -280,6 +280,7 @@
     <string name="media_audio_play">Lire l\'audio</string>
     <string name="media_audio_speed_cycle">Vitesse de lecture %1$s</string>
     <string name="media_audio_transcribe">Transcrire</string>
+    <string name="media_audio_transcribing">Transcription en cours</string>
     <string name="media_caption_see_less">voir moins</string>
     <string name="media_caption_see_less_hint">Replie la légende</string>
     <string name="media_caption_see_more">voir plus</string>

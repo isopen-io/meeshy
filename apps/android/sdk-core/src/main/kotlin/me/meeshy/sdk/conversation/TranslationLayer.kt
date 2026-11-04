@@ -5,6 +5,7 @@ import me.meeshy.core.database.dao.MessageTranslationDao
 import me.meeshy.core.database.entity.MessageAudioTranslationEntity
 import me.meeshy.core.database.entity.MessageTranscriptionEntity
 import me.meeshy.core.database.entity.MessageTranslationEntity
+import me.meeshy.sdk.model.AttachmentAudioMetadata
 import me.meeshy.sdk.model.StoredAudioTranslation
 import me.meeshy.sdk.model.StoredTextTranslation
 import me.meeshy.sdk.model.StoredTranscription
@@ -140,6 +141,22 @@ internal class TranslationLayer(
             )
         }
         return true
+    }
+
+    /**
+     * Recopie la transcription et les pistes parlées rangées sous [localId] vers [serverId] ([AttachmentAudioMetadata]
+     * dit lesquelles : celles que le serveur n'a pas déjà, l'id de pièce suivant [attachmentIds]). Idempotent : un second
+     * appel n'écrit rien. Rend le nombre de lignes écrites.
+     */
+    suspend fun rekey(localId: String, serverId: String, attachmentIds: Map<String, String>, nowMillis: Long): Int {
+        if (localId.isBlank() || serverId.isBlank() || localId == serverId) return 0
+        ensureLoaded(listOf(localId, serverId))
+        val (local, server) = synchronized(l1) { (l1[localId] ?: return 0) to (l1[serverId] ?: EMPTY) }
+        val transcriptions = AttachmentAudioMetadata.rekeyedTranscriptions(local.transcriptions, server.transcriptions, serverId, attachmentIds)
+        val audio = AttachmentAudioMetadata.rekeyedAudio(local.audio, server.audio, serverId, attachmentIds)
+        transcriptions.forEach { saveTranscription(serverId, it, nowMillis) }
+        audio.forEach { saveAudio(serverId, it, nowMillis) }
+        return transcriptions.size + audio.size
     }
 
     /** Le L1 tient pour vides ceux de [ids] qu'il tenait : leurs lignes viennent de quitter le disque. */
