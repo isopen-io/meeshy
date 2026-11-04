@@ -9,10 +9,11 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import me.meeshy.sdk.engagement.ConversationEngagementStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationEngagementSnapshot
-import java.time.LocalDate
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -24,6 +25,7 @@ internal interface ConversationRowEngagementEntryPoint {
  * « 🔥 série · N (M) » de la rangée (iOS `ConversationStreakMarkHost`) : l'instantané servi par la liste
  * (`viewerEngagement`, cache compris) concourt avec ce que le socket a poussé au magasin, le plus récent
  * gagne, ramené au jour du lecteur. `null` : rien à montrer. La rangée ne reçoit qu'un instantané immuable.
+ * Hors Hilt (témoins Robolectric, aperçus), aucun magasin : la rangée se rend sans pastille au lieu de planter.
  */
 @Composable
 internal fun rememberRowEngagement(conversation: ApiConversation): ConversationEngagementSnapshot? {
@@ -33,15 +35,10 @@ internal fun rememberRowEngagement(conversation: ApiConversation): ConversationE
             EntryPointAccessors.fromApplication(context, ConversationRowEngagementEntryPoint::class.java).engagementStore()
         }.getOrNull()
     }
-    if (store == null) return servedOnly(conversation)
-    val held by store.snapshots.collectAsState()
+    val held by (store?.snapshots ?: NoHeldSnapshots).collectAsState()
     return remember(conversation.id, conversation.viewerEngagement, held) {
-        store.displayed(conversation.id, conversation.viewerEngagement, held)
+        store?.displayed(conversation.id, conversation.viewerEngagement, held)
     }
 }
 
-/** Hors Hilt (aperçu, témoin d'écran) : seul l'instantané servi par la liste, ramené au jour du lecteur. */
-private fun servedOnly(conversation: ApiConversation): ConversationEngagementSnapshot? =
-    conversation.viewerEngagement
-        ?.takeIf { it.conversationId == conversation.id && it.totalPoints > 0 }
-        ?.forDay(ConversationEngagementSnapshot.dayString(LocalDate.now()))
+private val NoHeldSnapshots: StateFlow<Map<String, ConversationEngagementSnapshot>> = MutableStateFlow(emptyMap())
