@@ -41,6 +41,8 @@ class TranscriptionRequestTracker internal constructor(
     private val apply: suspend (messageId: String, attachmentId: String, transcription: ApiAttachmentTranscription) -> Unit,
     private val failures: TranslationFailureStore,
     private val nowMillis: () -> Long,
+    /** La même demande, FORCÉE (`force = true`) : « Re-transcrire » redemande un vocal déjà transcrit. */
+    private val refetch: suspend (attachmentId: String) -> NetworkResult<ApiAttachmentTranscription?> = fetch,
 ) : PerAccountCache {
 
     @Inject
@@ -62,6 +64,7 @@ class TranscriptionRequestTracker internal constructor(
         },
         failures = failures,
         nowMillis = clock::nowMillis,
+        refetch = media::requestRetranscription,
     )
 
     private val requested = MutableStateFlow<Map<String, Long>>(emptyMap())
@@ -74,14 +77,23 @@ class TranscriptionRequestTracker internal constructor(
      * réponse. Le résultat d'une transcription lancée arrive par la socket ; celle qui existait déjà revient ici et
      * entre dans le cache.
      */
-    suspend fun request(messageId: String, attachmentId: String) {
+    suspend fun request(messageId: String, attachmentId: String) = run(messageId, attachmentId, fetch)
+
+    /** « Re-transcrire » : la même attente et le même suivi, mais la transcription est redemandée de force. */
+    suspend fun retranscribe(messageId: String, attachmentId: String) = run(messageId, attachmentId, refetch)
+
+    private suspend fun run(
+        messageId: String,
+        attachmentId: String,
+        call: suspend (String) -> NetworkResult<ApiAttachmentTranscription?>,
+    ) {
         val now = nowMillis()
         val held = requested.value[attachmentId]
         if (held != null && ServerTranscriptionWait.isWaiting(held, now, hasArrived = false) && !hasFailed(messageId, attachmentId)) return
         requested.update { it + (attachmentId to now) }
         failures.transcribed(messageId, attachmentId)
         try {
-            when (val result = fetch(attachmentId)) {
+            when (val result = call(attachmentId)) {
                 is NetworkResult.Failure -> fail(messageId, attachmentId)
                 is NetworkResult.Success -> result.data?.let { done ->
                     apply(messageId, attachmentId, done)

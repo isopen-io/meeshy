@@ -104,6 +104,11 @@ class MediaRepository @Inject constructor(
         apiCall { mediaApi.transcribe(attachmentId, TranscribeRequest(force = false)) }
             .map { data -> completedTranscription(data) }
 
+    /** « Re-transcrire » : la même demande avec `force = true` — le serveur refait la transcription d'une pièce déjà transcrite. */
+    suspend fun requestRetranscription(attachmentId: String): NetworkResult<ApiAttachmentTranscription?> =
+        apiCall { mediaApi.transcribe(attachmentId, TranscribeRequest(force = true)) }
+            .map { data -> completedTranscription(data) }
+
     private fun completedTranscription(data: JsonElement): ApiAttachmentTranscription? =
         runCatching { outcomeJson.decodeFromJsonElement(MessageTranscriptionFiche.TranscribeOutcome.serializer(), data) }
             .getOrNull()?.completed
