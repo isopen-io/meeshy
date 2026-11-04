@@ -50,8 +50,8 @@ extension MeeshyComposerHost {
     /// n'offrirait jamais RÉEL tant qu'on n'a pas déjà basculé — l'offre
     /// arriverait trop tard pour servir à basculer.
     var reelGate: Bool {
-        documentComposesReel
-            || ComposerReelGate.compositionQualifiesAsReel(viewModel.currentEffects)
+        hydration?.publicationReelGate(slides: viewModel.slides)
+            ?? (documentComposesReel || ComposerReelGate.compositionQualifiesAsReel(viewModel.currentEffects))
     }
     /// **#4030 — le gate du mood, nourri de la MÊME composition que celui du
     /// réel.** Le mood est une carte SANS scène et SANS média : il ne regarde
