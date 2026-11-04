@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -40,14 +41,17 @@ import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
+import me.meeshy.ui.story.canvas.sceneRootPoseLayer
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.composer.scene.StoryFitMode
+import me.meeshy.sdk.model.scene.InlineEditLayout
 import me.meeshy.sdk.model.scene.SceneLookRecipe
 import me.meeshy.sdk.model.scene.SceneManipulationLayer
 import me.meeshy.sdk.model.scene.SceneManipulationLayerRule
 import me.meeshy.ui.component.imageedit.sceneLook
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.story.canvas.edit.SceneGuidesOverlay
+import me.meeshy.ui.story.canvas.edit.SceneInlineEditScrim
 import me.meeshy.ui.story.canvas.edit.sceneBackgroundGestures
 import me.meeshy.ui.story.canvas.edit.sceneManipulationGestures
 import me.meeshy.ui.story.canvas.edit.sceneThreeFingerPinch
@@ -99,6 +103,7 @@ internal fun StoryCanvasSurface(
     onElementDragEnd: () -> Unit,
     onElementTransform: (String, Float, Float) -> Unit,
     onElementTextChange: (String) -> Unit,
+    onInlineEditYield: () -> Unit = {},
     onStickerTap: (String) -> Unit,
     onStickerLongPress: (String) -> Unit,
     onStickerDrag: (String, Float, Float) -> Unit,
@@ -125,6 +130,7 @@ internal fun StoryCanvasSurface(
     onBackgroundDoubleTap: (() -> Unit)? = null,
     viewportScale: Float = 1f,
     onViewportScale: ((Float) -> Unit)? = null,
+    rootPose: () -> me.meeshy.sdk.model.scene.SceneRootPose = { me.meeshy.sdk.model.scene.SceneRootPose.NEUTRAL },
 ) {
     val canvasLabel = formatLabel(ComposerFormatLabel.CANVAS)
     val backgroundTap by rememberUpdatedState(onBackgroundTap)
@@ -174,6 +180,7 @@ internal fun StoryCanvasSurface(
                     scaleX = shownViewport
                     scaleY = shownViewport
                 }
+                .sceneRootPoseLayer(rootPose)
                 .then(if (canvasFormat == me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT) Modifier.fillMaxHeight() else Modifier.fillMaxWidth())
                 .aspectRatio(canvasFormat.ratio.toFloat())
                 .clip(frameShape)
@@ -249,31 +256,54 @@ internal fun StoryCanvasSurface(
             val textById = textElements.associateBy { it.id }
             val stickerById = stickers.associateBy { it.id }
             val mediaById = placedMedia.associateBy { it.key }
+            val recenteredTextId = selectedElement?.id?.takeIf { id ->
+                inlineEditEnabled && !isDrawingActive && textById.containsKey(id) &&
+                    sceneMenu?.ref != SceneObjectRef(ComposerObjectKind.TEXT, id)
+            }
+            val density = LocalDensity.current
+            val editZone = remember(canvasHeightPx, density) {
+                InlineEditLayout.zone(
+                    topChromeBottom = null, toolsTop = null, imeTop = null,
+                    canvasHeight = canvasHeightPx,
+                    gap = InlineEditLayout.FLOOR_GAP_DP * density.density,
+                    minHeight = InlineEditLayout.MIN_ZONE_HEIGHT_DP * density.density,
+                )
+            }
+            val renderText: @Composable (StoryTextElement) -> Unit = { element ->
+                val ref = SceneObjectRef(ComposerObjectKind.TEXT, element.id)
+                TextElementLayer(
+                    element = element,
+                    selected = element.id == selectedElement?.id,
+                    menu = sceneMenu?.takeIf { it.ref == ref },
+                    recentered = element.id == recenteredTextId,
+                    editZone = editZone,
+                    onInlineEditYield = onInlineEditYield,
+                    inlineEditEnabled = inlineEditEnabled,
+                    canvasWidthPx = canvasWidthPx,
+                    canvasHeightPx = canvasHeightPx,
+                    onTap = { onElementTap(element.id) },
+                    onLongPress = { onElementLongPress(element.id) },
+                    onMenuAction = onSceneMenuAction,
+                    onMenuDismiss = onSceneMenuDismiss,
+                    onDrag = { dxPx, dyPx ->
+                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
+                            objectGesturing = true
+                            onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                        }
+                    },
+                    onDragEnd = { objectGesturing = false; onElementDragEnd() },
+                    onTransform = { zoom, rotationDeg -> objectGesturing = true; onElementTransform(element.id, zoom, rotationDeg) },
+                    onTextChange = onElementTextChange,
+                )
+            
+            }
+            val preview = LocalComposerTimelinePreview.current
             stack.forEach { ref ->
                 key(ref.kind, ref.id) {
+                    Box(Modifier.fillMaxSize().graphicsLayer { alpha = preview?.opacity(ref.id) ?: 1f }) {
                     when (ref.kind) {
                         ComposerObjectKind.TEXT -> textById[ref.id]?.let { element ->
-                            TextElementLayer(
-                                element = element,
-                                selected = element.id == selectedElement?.id,
-                                menu = sceneMenu?.takeIf { it.ref == ref },
-                                inlineEditEnabled = inlineEditEnabled,
-                                canvasWidthPx = canvasWidthPx,
-                                canvasHeightPx = canvasHeightPx,
-                                onTap = { onElementTap(element.id) },
-                                onLongPress = { onElementLongPress(element.id) },
-                                onMenuAction = onSceneMenuAction,
-                                onMenuDismiss = onSceneMenuDismiss,
-                                onDrag = { dxPx, dyPx ->
-                                    if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
-                                        objectGesturing = true
-                                        onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
-                                    }
-                                },
-                                onDragEnd = { objectGesturing = false; onElementDragEnd() },
-                                onTransform = { zoom, rotationDeg -> objectGesturing = true; onElementTransform(element.id, zoom, rotationDeg) },
-                                onTextChange = onElementTextChange,
-                            )
+                            if (element.id != recenteredTextId) renderText(element)
                         }
                         ComposerObjectKind.MEDIA -> mediaById[ref.id]?.let { frame ->
                             PlacedMediaLayer(
@@ -305,8 +335,12 @@ internal fun StoryCanvasSurface(
                         }
                         ComposerObjectKind.PLACE, ComposerObjectKind.AUDIO -> pins(ref, canvasWidthPx, canvasHeightPx)
                     }
+                    }
                 }
             }
+            // Saisie en place : le reste de la scène passe sous un voile, le texte écrit reste au-dessus, dans la bande libre.
+            SceneInlineEditScrim(visible = recenteredTextId != null)
+            recenteredTextId?.let { id -> textById[id]?.let { element -> key("inline-edit", id) { renderText(element) } } }
             // Topmost: paints every committed stroke, and — only while isDrawingActive —
             // also captures the drag that draws the next one, blocking the pan/zoom/tap
             // gestures underneath so a stroke never fights the background transform.

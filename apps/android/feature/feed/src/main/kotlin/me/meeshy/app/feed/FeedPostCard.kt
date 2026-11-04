@@ -33,6 +33,7 @@ internal fun PostCard(
     onReport: () -> Unit = {},
     onDelete: () -> Unit = {},
     onComments: () -> Unit = onClick,
+    onReplyToComment: (String) -> Unit = {},
     onOpenHashtag: (String) -> Unit = {},
     translatingCodes: Set<String> = emptySet(),
     onSelectLanguage: (String) -> Unit = onFlagTap,
@@ -105,7 +106,7 @@ internal fun PostCard(
                 onQuote = onQuote,
                 onSend = onSend,
             )
-            post.commentsPreview?.let { FeedCommentsPreview(preview = it, onOpen = onComments) }
+            post.commentsPreview?.let { FeedCommentsPreview(preview = it, onOpen = onComments, onReplyTo = onReplyToComment, onOpenProfile = onOpenProfile) }
         }
     }
 }

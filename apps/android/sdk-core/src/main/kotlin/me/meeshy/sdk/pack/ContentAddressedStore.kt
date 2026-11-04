@@ -36,13 +36,13 @@ class ContentAddressedStore(
     private val directory: File,
     private val fetcher: PackAssetFetching,
     private val io: CoroutineDispatcher,
-) : PackFilePruning {
+) : PackFilePruning, PackAssetReading {
     private val lock = Mutex()
     private val inFlight = HashMap<String, Deferred<ByteArray>>()
     private val scope = CoroutineScope(SupervisorJob() + io)
 
     /** Les octets de [ref] : du disque s'ils y sont intacts, sinon du réseau (une requête), vérifiés puis gardés. */
-    suspend fun data(ref: PackAssetRef): ByteArray {
+    override suspend fun data(ref: PackAssetRef): ByteArray {
         readVerified(ref)?.let { return it }
         val bytes = download(ref)
         if (!matches(bytes, ref)) throw DigestMismatchException(ref.src)

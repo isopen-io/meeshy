@@ -177,7 +177,7 @@ class StoryComposerStickerPoseTest {
     }
 
     @Test
-    fun `annuler le geste fait pendant l'envoi garde l'image arrivee au lieu de la figer en attente`() = runTest {
+    fun `pendant l'envoi de l'image l'ecran est voile, aucun geste ne s'y pose, et l'image arrivee reste`() = runTest {
         val vm = viewModel()
         val gate = CompletableDeferred<Unit>()
         coEvery { media.upload(any(), any()) } coAnswers {
@@ -187,8 +187,6 @@ class StoryComposerStickerPoseTest {
         vm.onAddImageSticker(pose())
         vm.onAddSticker("🔥")
         gate.complete(Unit)
-
-        vm.onUndo()
 
         val image = vm.sticker()
         assertThat(image.postMediaId).isEqualTo("pm-1")

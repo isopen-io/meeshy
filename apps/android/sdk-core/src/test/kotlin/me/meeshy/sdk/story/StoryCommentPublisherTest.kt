@@ -41,6 +41,15 @@ class StoryCommentPublisherTest {
     }
 
     @Test
+    fun `a comment waits for its upload then leaves with the media ids`() = runTest {
+        val rig = Rig(null, null)
+        coEvery { rig.posts.queueComment("s1", "", null, "fr", listOf("srv-1"), 2, null) } returns "cm2"
+        every { rig.outbox.outcomeFor("cm2") } returns flowOf(OutboxOutcome.Succeeded("cm2"))
+        assertThat(rig.publisher.publish("s1", "", null, "fr", listOf("srv-1"), 2)).isEqualTo(StoryCommentPublication.Delivered)
+        coVerify(exactly = 1) { rig.posts.queueComment("s1", "", null, "fr", listOf("srv-1"), 2, null) }
+    }
+
+    @Test
     fun `a queue that refuses the write hands the text back`() = runTest {
         val rig = Rig(null, null)
         assertThat(rig.publisher.publish("s1", "salut", "root", "fr")).isEqualTo(StoryCommentPublication.Refused("salut"))

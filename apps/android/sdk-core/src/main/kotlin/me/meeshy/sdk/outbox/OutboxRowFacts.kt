@@ -34,6 +34,7 @@ public object OutboxRowFacts {
         OutboxKind.UPDATE_PRIVACY_SETTINGS,
         OutboxKind.UPDATE_AUDIO_SETTINGS,
         OutboxKind.UPDATE_APPLICATION_SETTINGS,
+        OutboxKind.UPDATE_PREFERENCE_CATEGORY,
         -> other("updateSettings")
         OutboxKind.UPLOAD_MEDIA -> other("uploadMedia")
         OutboxKind.BLOCK_USER -> other("blockUser")
@@ -46,6 +47,13 @@ public object OutboxRowFacts {
         OutboxKind.CREATE_CONVERSATION -> other("createConversation")
         OutboxKind.UPDATE_CONVERSATION -> other("updateConversation")
         OutboxKind.SETTINGS_ACTION -> other("updateSettings")
+        OutboxKind.HIDE_FOR_ME, OutboxKind.MODERATION_DELETE -> OutboxPillFacts(OutboxUiKind.DELETE)
+        OutboxKind.RESTORE_FOR_ME, OutboxKind.REMOVE_ATTACHMENT -> other("updateConversation")
+        OutboxKind.MARK_RECEIVED -> other("markAsRead")
+        OutboxKind.REPOST_STORY -> other("repostPost")
+        OutboxKind.MARK_STORY_VIEWED -> other("markStoryViewed")
+        OutboxKind.DELETE_COMMENT -> other("deleteComment")
+        OutboxKind.TOGGLE_LIKE_COMMENT -> OutboxPillFacts(OutboxUiKind.POST_REACTION)
     }
 
     private fun other(key: String) = OutboxPillFacts(OutboxUiKind.OTHER, key)

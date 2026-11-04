@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.CompositionLocalProvider
 import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.sdk.model.call.CallPreflightDecision
@@ -74,7 +75,7 @@ fun CallScreen(
     val state = callState.withCaptions(captionsChip)
     val liveSeconds = remember(viewModel) { viewModel.state.map { it.durationSeconds }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = viewModel.state.value.durationSeconds)
-    val permissionGate = rememberCallPermissionGate(config.isVideo)
+    val permissionGate = rememberCallPermissionGate()
     val declineReply: CallDeclineReplyViewModel = hiltViewModel()
     val pipViewModel: CallPictureInPictureViewModel = hiltViewModel()
     val autoAnswerGate: IncomingAutoAnswerViewModel = hiltViewModel()
@@ -118,6 +119,7 @@ fun CallScreen(
     }
 
     val accent = hexColor(DynamicColorGenerator.colorForName(config.peerId.ifBlank { config.peerName }))
+    permissionGate.flow?.let { PermissionFlowHost(it, accent = accent) }
     val extensions = viewModel.extensions
     val chrome = remember { CallChromeController() }
     val chromeVisibility = rememberCallChromeVisibility(chrome, state)

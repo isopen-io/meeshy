@@ -67,6 +67,8 @@ internal data class PlacedMediaFrame(
     val pendingItem: MediaUploadItem? = null,
     /** Le média attend sa file d'envoi, et la scène dit pourquoi (R5 de #13863, #13959) ; `null` : il est envoyé. */
     val pendingPhase: PendingUploadPhase? = null,
+    /** La part de ses octets déjà envoyée en arrière-plan (#15598) ; `null` hors envoi ou avant le premier octet. */
+    val pendingFraction: Float? = null,
     /** Son filtre, son effet et son cadre de l'appel (#13841), peints AVANT son filtre de story ; `null` : aucun. */
     val mediaLook: StoryMediaLook? = null,
 ) {
@@ -112,6 +114,7 @@ internal fun StoryComposerUiState.placedMediaFrames(mediaBaseUrl: String?, compa
                     isVideo = isVideo,
                     pendingItem = pending.item.takeUnless { isVideo },
                     pendingPhase = pendingPhase(pending.cmid),
+                    pendingFraction = sendingFraction(pending.cmid),
                     mediaLook = look,
                 )
             }
@@ -239,7 +242,7 @@ internal fun PlacedMediaLayer(
         }
         // La vidéo posée joue en continu dans son cadre, sous son look (#13863), sur l'image de son début.
         live?.let { slot -> Box(frameModifier) { slot.Picture(fit = false, modifier = Modifier.matchParentSize().sceneLook(frame.look)) } }
-        frame.pendingPhase?.let { phase -> IncomingWaitingBadge(phase, Modifier.align(Alignment.BottomStart).padding(WAITING_INSET)) }
+        frame.pendingPhase?.let { phase -> IncomingWaitingBadge(phase, Modifier.align(Alignment.BottomStart).padding(WAITING_INSET), frame.pendingFraction) }
     }
 }
 

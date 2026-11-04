@@ -46,6 +46,15 @@ class OutboxKindDiskValuesLockTest {
         "UPDATE_CONVERSATION",
         "SETTINGS_ACTION",
         "REACT_STORY",
+        "HIDE_FOR_ME",
+        "RESTORE_FOR_ME",
+        "REMOVE_ATTACHMENT",
+        "MODERATION_DELETE",
+        "MARK_RECEIVED",
+        "REPOST_STORY",
+        "MARK_STORY_VIEWED",
+        "DELETE_COMMENT",
+        "TOGGLE_LIKE_COMMENT",
     )
 
     @Test

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_brand_gradient_start">#FF6366F1</color>
+    <color name="widget_brand_gradient_end">#FF4338CA</color>
+</resources>

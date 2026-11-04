@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -23,9 +22,6 @@ import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
-import me.meeshy.sdk.notification.observeNotificationSync
-import me.meeshy.sdk.socket.MessageSocketManager
-import me.meeshy.sdk.sync.SyncSeqTracker
 import javax.inject.Inject
 
 data class NotificationsUiState(
@@ -69,15 +65,14 @@ sealed interface NotificationsEvent {
  * Cache-first (ARCHITECTURE.md §4, feature-parity §M): [NotificationRepository.notificationsStream]
  * and [NotificationRepository.unreadCountStream] are the single source of truth — this ViewModel
  * only projects them into [NotificationsUiState], it never holds a second copy of the list.
- * `markAsRead`/`markAllRead`/a live socket arrival ([observeRealtime]) all mutate the SAME
+ * `markAsRead`/`markAllRead` and the app-level `NotificationIngestPipeline` (live arrivals) all mutate the SAME
  * repository-owned cache, so every consumer of the stream (a pull-to-refresh, another screen)
- * stays in sync without a manual merge here.
+ * stays in sync without a manual merge here. Live arrivals and gap/reconnect resyncs are app-level
+ * (`NotificationIngestPipeline`, `NotificationGapResyncCoordinator`): this screen owns none of them.
  */
 @HiltViewModel
 class NotificationsViewModel @Inject constructor(
     private val notificationRepository: NotificationRepository,
-    private val messageSocketManager: MessageSocketManager,
-    private val syncSeqTracker: SyncSeqTracker,
     private val quickActionPerformer: NotificationQuickActionPerformer,
 ) : ViewModel() {
 
@@ -91,40 +86,6 @@ class NotificationsViewModel @Inject constructor(
         observeNotifications()
         observeUnreadCount()
         observeHasMore()
-        observeRealtime()
-        observeSyncGaps()
-        observeArrivalsForRefresh()
-    }
-
-    private var arrivalRefreshJob: Job? = null
-
-    /**
-     * Miroir de `scheduleRefresh` (iOS) : une notification qui arrive relance UN rafraîchissement
-     * ~0,5 s plus tard ; une rafale se replie sur le dernier. L'échec est silencieux — le cache
-     * reste affiché — et le compteur non lu est rechargé après chaque rafraîchissement réussi.
-     */
-    private fun observeArrivalsForRefresh() {
-        viewModelScope.launch {
-            messageSocketManager.notificationReceived.collect {
-                arrivalRefreshJob?.cancel()
-                arrivalRefreshJob = viewModelScope.launch {
-                    delay(ARRIVAL_REFRESH_DELAY_MS)
-                    refreshQuietly()
-                }
-            }
-        }
-    }
-
-    private suspend fun refreshQuietly() {
-        try {
-            notificationRepository.refresh()
-            (notificationRepository.unreadCount() as? NetworkResult.Success)
-                ?.let { notificationRepository.setUnreadCount(it.data) }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Silent: the cached rows stay on screen.
-        }
     }
 
     private fun observeNotifications() {
@@ -156,52 +117,6 @@ class NotificationsViewModel @Inject constructor(
         viewModelScope.launch {
             notificationRepository.hasMoreStream.collect { hasMore ->
                 _state.update { it.copy(hasMore = hasMore) }
-            }
-        }
-    }
-
-    /**
-     * A `notification:new` arriving while this screen is alive/backing the badge, plus the four
-     * lifecycle events a notification emits afterward (`notification:read`,
-     * `notification:read-bulk`, `notification:deleted`, `notification:deleted-bulk`) and the
-     * server-authoritative `notification:counts` resync (issue notif-sync) — all applied to the
-     * SAME repository-owned cache via [observeNotificationSync]. That binding is ALSO run from an
-     * app-scoped ViewModel ([me.meeshy.app.navigation.ChromeViewModel]): this screen's own copy
-     * only covers the SharedFlow events (`replay = 0`) that happen to arrive while it is open —
-     * every apply here is idempotent, so running it from both scopes at once is safe, never a
-     * double count. Mirrors iOS/web's equivalent socket handlers
-     * (`notification-socketio.singleton.ts`).
-     */
-    private fun observeRealtime() {
-        viewModelScope.observeNotificationSync(notificationRepository, messageSocketManager)
-    }
-
-    /**
-     * SyncEngine — décision APP-SIDE sur le hook que le SDK expose
-     * ([SyncSeqTracker.gapDetected], alimenté par `MessageSocketManager`) : un trou
-     * de séquence prouve que des `notification:new` ne sont jamais arrivés (socket
-     * coupée, event perdu), et rien d'autre ne les rattraperait tant que le cache
-     * reste frais. Miroir du coordinateur iOS `NotificationGapResyncCoordinator`.
-     *
-     * [NotificationRepository.refresh] est IDEMPOTENT (il réécrit la vérité serveur,
-     * déduplication par id inhérente), donc sans doublon vis-à-vis de la
-     * persistance temps réel de [observeRealtime].
-     *
-     * Pas de débounce, contrairement à iOS : un trou avance le curseur, donc une
-     * rafale d'events n'en produit qu'UN. L'échec est absorbé — laisser
-     * l'exception remonter tuerait le collecteur, et avec lui toute resync
-     * ultérieure pour la durée de vie du ViewModel.
-     */
-    private fun observeSyncGaps() {
-        viewModelScope.launch {
-            syncSeqTracker.gapDetected.collect {
-                try {
-                    notificationRepository.refresh()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    _state.update { it.failed(e.message) }
-                }
             }
         }
     }
@@ -260,8 +175,8 @@ class NotificationsViewModel @Inject constructor(
         _state.update {
             it.copy(
                 selectedCategory = category,
-                categoryRows = emptyList(),
-                categoryHasMore = false,
+                categoryRows = notificationRepository.cachedItems(category.scope()).orEmpty(),
+                categoryHasMore = categoryPaging[category]?.hasMore ?: false,
                 isCategoryLoading = false,
                 isLoadingMore = false,
                 loadDidFail = false,
@@ -272,39 +187,44 @@ class NotificationsViewModel @Inject constructor(
 
     private var categoryJob: Job? = null
 
+    /** Le curseur et le « reste-t-il » PROPRES à chaque catégorie : revenir à une puce reprend où elle en était. */
+    private val categoryPaging = HashMap<NotificationFilterCategory, CategoryPaging>()
+
+    private data class CategoryPaging(val nextCursor: String?, val hasMore: Boolean)
+
     private fun fetchCategory(category: NotificationFilterCategory, append: Boolean) {
         categoryJob?.cancel()
-        val query = category.serverQuery
-        val offset = if (append) _state.value.categoryRows.size else 0
+        val scope = category.scope()
+        val paging = categoryPaging[category]
+        val held = _state.value.categoryRows
+        val cursor = if (append) paging?.nextCursor else null
         _state.update { it.copy(isCategoryLoading = !append && it.filteredNotifications.isEmpty(), isLoadingMore = append) }
         categoryJob = viewModelScope.launch {
             val result = try {
-                notificationRepository.list(
-                    offset = offset,
-                    limit = CATEGORY_PAGE_SIZE,
-                    unreadOnly = query.unreadOnly,
-                    types = query.types,
-                    hideReadTypes = query.hideReadTypes,
-                )
+                notificationRepository.listScopePage(scope = scope, cursor = cursor, offset = if (append) held.size else 0)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 null
             }
+            if (_state.value.selectedCategory != category) return@launch
+            val page = (result as? NetworkResult.Success)?.data
+            val rows = page?.let {
+                val known = if (append) _state.value.categoryRows else emptyList()
+                val knownIds = known.mapTo(HashSet()) { row -> row.id }
+                known + it.items.filter { row -> row.id !in knownIds }
+            }
+            if (page != null && rows != null) {
+                categoryPaging[category] = CategoryPaging(page.nextCursor, page.hasMore)
+                notificationRepository.replaceAll(scope, rows, page.hasMore, page.nextCursor)
+            }
             _state.update { current ->
-                if (current.selectedCategory != category) return@update current
                 val settled = current.copy(isCategoryLoading = false, isLoadingMore = false)
-                when (result) {
-                    is NetworkResult.Success -> {
-                        val known = if (append) settled.categoryRows else emptyList()
-                        val knownIds = known.mapTo(HashSet()) { it.id }
-                        settled.copy(
-                            categoryRows = known + result.data.filter { it.id !in knownIds },
-                            categoryHasMore = result.data.size >= CATEGORY_PAGE_SIZE,
-                            loadDidFail = false,
-                        )
-                    }
-                    else -> if (append) settled else settled.copy(loadDidFail = settled.filteredNotifications.isEmpty())
+                when {
+                    page != null && rows != null ->
+                        settled.copy(categoryRows = rows, categoryHasMore = page.hasMore, loadDidFail = false)
+                    append -> settled
+                    else -> settled.copy(loadDidFail = settled.filteredNotifications.isEmpty())
                 }
             }
         }
@@ -381,10 +301,6 @@ class NotificationsViewModel @Inject constructor(
         is NotificationQuickAction.Write -> R.string.notifications_quick_write_failed
     }
 
-    private companion object {
-        const val CATEGORY_PAGE_SIZE = 30
-        const val ARRIVAL_REFRESH_DELAY_MS = 500L
-    }
 }
 
 private fun NotificationsUiState.failed(message: String?): NotificationsUiState =

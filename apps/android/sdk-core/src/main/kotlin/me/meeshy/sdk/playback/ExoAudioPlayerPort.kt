@@ -8,34 +8,11 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.cache.Cache
-import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
-import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import java.io.File
-
-/**
- * Le cache disque des vocaux : un second passage (hors ligne compris) ne re-télécharge pas. Un seul
- * [SimpleCache] par dossier et par processus — deux instances sur le même dossier planteraient.
- */
-@UnstableApi
-internal object AudioDiskCache {
-    private const val MAX_BYTES = 64L * 1024 * 1024
-    private var instance: Cache? = null
-
-    @Synchronized
-    fun get(context: Context): Cache = instance ?: SimpleCache(
-        File(context.applicationContext.cacheDir, "audio-playback"),
-        LeastRecentlyUsedCacheEvictor(MAX_BYTES),
-        StandaloneDatabaseProvider(context.applicationContext),
-    ).also { instance = it }
-}
 
 /**
  * [AudioPlayerPort] sur Media3 [ExoPlayer] : la seule classe du moteur qui touche Media3. Le lecteur
@@ -43,7 +20,10 @@ internal object AudioDiskCache {
  * débranché ; le moteur en est informé par [AudioPlayerPort.Listener.onPlayWhenReadyChanged].
  */
 @UnstableApi
-internal class ExoAudioPlayerPort(private val context: Context) : AudioPlayerPort {
+internal class ExoAudioPlayerPort(
+    private val context: Context,
+    private val sources: AudioPlaybackSources = AudioPlaybackSources.uncached(context),
+) : AudioPlayerPort {
 
     private val player: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
         .setAudioAttributes(
@@ -60,12 +40,7 @@ internal class ExoAudioPlayerPort(private val context: Context) : AudioPlayerPor
     private var generation = 0
     private var prepared = false
 
-    private val remoteFactory: DataSource.Factory by lazy {
-        CacheDataSource.Factory()
-            .setCache(AudioDiskCache.get(context))
-            .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context.applicationContext))
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-    }
+    private var releaseLease: () -> Unit = {}
 
     private val localFactory: DataSource.Factory by lazy { DefaultDataSource.Factory(context.applicationContext) }
 
@@ -107,9 +82,19 @@ internal class ExoAudioPlayerPort(private val context: Context) : AudioPlayerPor
         player.prepare()
     }
 
-    private fun mediaSource(source: AudioSource): MediaSource = when (source) {
-        is AudioSource.Remote -> ProgressiveMediaSource.Factory(remoteFactory).createMediaSource(MediaItem.fromUri(source.url))
-        is AudioSource.Local -> ProgressiveMediaSource.Factory(localFactory).createMediaSource(MediaItem.fromUri(source.fileUri))
+    /** Un vocal réseau passe par la couture (cache du compte, bail) ; un fichier local se lit directement. */
+    private fun mediaSource(source: AudioSource): MediaSource {
+        returnLease()
+        return when (source) {
+            is AudioSource.Remote -> sources.open(source.url, source.isProtected).also { releaseLease = it.release }.source
+            is AudioSource.Local -> ProgressiveMediaSource.Factory(localFactory).createMediaSource(MediaItem.fromUri(source.fileUri))
+        }
+    }
+
+    private fun returnLease() {
+        val release = releaseLease
+        releaseLease = {}
+        release()
     }
 
     override fun play() {
@@ -130,10 +115,12 @@ internal class ExoAudioPlayerPort(private val context: Context) : AudioPlayerPor
         prepared = false
         player.stop()
         player.clearMediaItems()
+        returnLease()
     }
 
     override fun release() {
         delegate = null
+        returnLease()
         player.release()
     }
 

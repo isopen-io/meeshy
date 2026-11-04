@@ -202,10 +202,22 @@ public data class BubbleContent(
     val isViewOnceSealed: Boolean = false,
     /** Le résumé d'un appel (message système d'appel), décodé de `metadata` ; nul pour tout autre message. */
     val callSummary: CallSummaryMetadata? = null,
+    /** L'appel a été lancé par CE lecteur (initiateur = utilisateur courant) : la notice dit sortant. */
+    val callIsOutgoing: Boolean = false,
+    /** Le consentement vocal manque : un audio du message propose de l'activer (avis discret sous le lecteur). */
+    val voiceConsentMissing: Boolean = false,
     /** Une édition part au serveur : le pied montre des flèches qui tournent à la place du crayon. */
     val isEditSaving: Boolean = false,
     /** La dernière modification est celle d'un modérateur : le pied le dit en mots. */
     val editedByModerator: Boolean = false,
+    /** La langue primaire du Prisme du lecteur pour ce message (ou l'origine) : le drapeau qui y ramène le texte. */
+    val primaryLanguageCode: String? = null,
+    /** `langue -> texte` des traductions que le pied propose en panneau secondaire ; vide sans drapeau. */
+    val secondaryTexts: Map<String, String> = emptyMap(),
+    /** La langue dont le panneau secondaire est OUVERT sous le texte ; posée par la rangée, nulle par défaut. */
+    val openSecondaryCode: String? = null,
+    /** Les langues dont une traduction est demandée : leur drapeau attend. Posé par la rangée. */
+    val translatingCodes: Set<String> = emptySet(),
 )
 
 /**

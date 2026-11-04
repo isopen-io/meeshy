@@ -1,5 +1,20 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="activation_close">Schließen</string>
+    <string name="activation_complete">Dein Konto ist bestätigt. Danke!</string>
+    <string name="activation_email_done">E-Mail bestätigt ✓</string>
+    <string name="activation_email_label">Bestätige deine E-Mail-Adresse</string>
+    <string name="activation_email_send">Code erhalten</string>
+    <string name="activation_email_sending">Wird gesendet…</string>
+    <string name="activation_email_sent">Code an %1$s gesendet. Gib ihn unten ein.</string>
+    <string name="activation_invite_days_left">Du hast noch %1$d Tage, um dein Konto zu bestätigen. Danach verlangt die Anmeldung einen Code.</string>
+    <string name="activation_invite_days_left_one">Du hast noch 1 Tag, um dein Konto zu bestätigen. Danach verlangt die Anmeldung einen Code.</string>
+    <string name="activation_invite_lead">Bestätige dein Konto, um es ohne Unterbrechung weiter zu nutzen.</string>
+    <string name="activation_invite_title">Bestätige dein Konto</string>
+    <string name="activation_later">Später</string>
+    <string name="activation_phone_add">Meine Nummer hinzufügen</string>
+    <string name="activation_phone_done">Nummer bestätigt ✓</string>
+    <string name="activation_phone_label">Füge eine Telefonnummer hinzu, um dein Konto zu schützen und wiederherzustellen</string>
     <string name="ageGate_body">Dieses Konto kann Meeshy noch nicht nutzen. Du kannst mit 13 dabei sein.</string>
     <string name="arrival_celebration_lead">Deine Unterhaltungen werden vorbereitet…</string>
     <string name="arrival_celebration_skip">Weiter</string>
@@ -327,8 +342,14 @@
     <string name="signup_close">Schließen</string>
     <string name="signup_country_search_hint">Land suchen</string>
     <string name="signup_display_name_label">Wie sollen wir dich nennen?</string>
+    <string name="signup_email_forgot_password">Passwort vergessen?</string>
+    <string name="signup_email_is_it_you">Sind Sie das?</string>
+    <string name="signup_email_its_me">Das bin ich — Konto wiederherstellen</string>
     <string name="signup_email_label">E-Mail</string>
+    <string name="signup_email_not_me">Das bin ich nicht</string>
+    <string name="signup_email_not_me_note">Der an diese Adresse gesendete Code wird verlangt, um sie zu erhalten.</string>
     <string name="signup_email_placeholder">du@beispiel.com</string>
+    <string name="signup_email_send_sign_in_link">Anmeldelink erhalten</string>
     <string name="signup_email_taken">Mit dieser Adresse existiert bereits ein Konto.</string>
     <string name="signup_error_generic">Die Kontoerstellung ist fehlgeschlagen. Versuche es erneut.</string>
     <string name="signup_error_network">Keine Verbindung. Prüfe dein Netzwerk und versuche es erneut.</string>

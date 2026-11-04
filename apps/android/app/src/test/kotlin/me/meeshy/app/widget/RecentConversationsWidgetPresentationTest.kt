@@ -297,4 +297,82 @@ class RecentConversationsWidgetPresentationTest {
 
         assertThat(presentation.rows.single().presence).isNull()
     }
+
+    @Test
+    fun `the small face shows the first row only, medium two, large five`() {
+        val presentation = RecentConversationsWidgetPresentation.from(
+            conversations = (1..8).map { conversation(id = "c$it") },
+            currentUserId = "me",
+            previewLabels = labels,
+        )
+
+        assertThat(presentation.rowsFor(RecentConversationsFace.SMALL)).hasSize(1)
+        assertThat(presentation.rowsFor(RecentConversationsFace.MEDIUM)).hasSize(2)
+        assertThat(presentation.rowsFor(RecentConversationsFace.LARGE)).hasSize(5)
+    }
+
+    @Test
+    fun `the face follows the posed size`() {
+        assertThat(RecentConversationsFace.forSize(110f, 110f)).isEqualTo(RecentConversationsFace.SMALL)
+        assertThat(RecentConversationsFace.forSize(250f, 110f)).isEqualTo(RecentConversationsFace.MEDIUM)
+        assertThat(RecentConversationsFace.forSize(250f, 250f)).isEqualTo(RecentConversationsFace.LARGE)
+        assertThat(RecentConversationsFace.forSize(110f, 300f)).isEqualTo(RecentConversationsFace.SMALL)
+    }
+
+    @Test
+    fun `the unread pill is hidden at zero and shown above`() {
+        val none = RecentConversationsWidgetPresentation.from(listOf(conversation("c1")), "me", labels)
+        val some = RecentConversationsWidgetPresentation.from(listOf(conversation("c1", unreadCount = 4)), "me", labels)
+
+        assertThat(none.showUnreadPill).isFalse()
+        assertThat(some.showUnreadPill).isTrue()
+        assertThat(some.unreadTotal).isEqualTo(4)
+    }
+
+    @Test
+    fun `the served total wins over the sum of cached rows`() {
+        val presentation = RecentConversationsWidgetPresentation.from(
+            listOf(conversation("c1", unreadCount = 4)), "me", labels, totalUnread = 9,
+        )
+
+        assertThat(presentation.unreadTotal).isEqualTo(9)
+    }
+
+    @Test
+    fun `a row links to its conversation, an unsafe identifier falls back to the list`() {
+        val safe = RecentConversationsWidgetPresentation.from(listOf(conversation("c1")), "me", labels)
+        val unsafe = RecentConversationsWidgetPresentation.from(listOf(conversation("a/b?x")), "me", labels)
+
+        assertThat(safe.rows.single().deepLink).isEqualTo("meeshy://conversation/c1")
+        assertThat(unsafe.rows.single().deepLink).isEqualTo(WidgetDeepLink.HOME)
+    }
+
+    @Test
+    fun `a pinned row is flagged and carries its time`() {
+        val presentation = RecentConversationsWidgetPresentation.from(listOf(conversation("c1", isPinned = true)), "me", labels)
+
+        assertThat(presentation.rows.single().isPinned).isTrue()
+        assertThat(presentation.rows.single().epochMillis).isNotNull()
+    }
+
+    @Test
+    fun `every presence tier gets its token and offline or absent gets no dot`() {
+        val tiers = mapOf(
+            "other-a" to me.meeshy.sdk.model.PresenceState.ONLINE,
+            "other-b" to me.meeshy.sdk.model.PresenceState.AWAY,
+            "other-c" to me.meeshy.sdk.model.PresenceState.IDLE,
+        )
+        val presentation = RecentConversationsWidgetPresentation.from(
+            conversations = listOf("a", "b", "c", "d").map { conversation(id = it) },
+            currentUserId = "me",
+            previewLabels = labels,
+            presence = tiers,
+        )
+
+        val byId = presentation.rows.associate { it.id to it.presence }
+        assertThat(byId["a"]).isEqualTo("online")
+        assertThat(byId["b"]).isNotNull()
+        assertThat(byId["c"]).isNotNull()
+        assertThat(byId["d"]).isNull()
+    }
 }

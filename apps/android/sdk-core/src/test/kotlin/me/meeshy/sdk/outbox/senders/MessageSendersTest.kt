@@ -49,8 +49,41 @@ class MessageSendersTest {
 
         val result = sendHandler().send(sendRow())
 
-        assertThat(result).isEqualTo(SendResult.Success)
+        assertThat(result).isInstanceOf(SendResult.SuccessWithId::class.java)
         coVerify(exactly = 1) { messageRepository.reconcileSent("cmid-1", serverMessage) }
+    }
+
+    private val originCid = "cid_11111111-1111-4111-8111-111111111111"
+
+    private fun fanoutRow() = sendRow(
+        encodedPayload(sendRequest.copy(copyAttachmentsFromMessageId = originCid)),
+    )
+
+    @Test
+    fun `une cible de fan-out dont l'origine n'est pas acquittee attend, sans rien envoyer`() = runTest {
+        coEvery { messageRepository.serverIdOf(originCid) } returns null
+
+        val result = sendHandler().send(fanoutRow())
+
+        assertThat(result).isInstanceOf(SendResult.Deferred::class.java)
+        coVerify(exactly = 0) { messageApi.send(any(), any()) }
+    }
+
+    @Test
+    fun `une cible de fan-out dont l'origine est acquittee reclame la copie par l'id serveur`() = runTest {
+        coEvery { messageRepository.serverIdOf(originCid) } returns "srv-origin"
+        val expected = sendRequest.copy(copyAttachmentsFromMessageId = "srv-origin")
+        coEvery { messageApi.send("c1", expected) } returns accepted(serverMessage)
+
+        assertThat(sendHandler().send(fanoutRow())).isEqualTo(SendResult.SuccessWithId("srv-1"))
+    }
+
+    @Test
+    fun `une cible deja greffee d'un id serveur part telle quelle`() = runTest {
+        val grafted = sendRequest.copy(copyAttachmentsFromMessageId = "srv-origin")
+        coEvery { messageApi.send("c1", grafted) } returns accepted(serverMessage)
+
+        assertThat(sendHandler().send(sendRow(encodedPayload(grafted)))).isInstanceOf(SendResult.SuccessWithId::class.java)
     }
 
     @Test
@@ -158,7 +191,7 @@ class MessageSendersTest {
         val row = outboxRow(OutboxKind.EDIT_MESSAGE, targetId = "m1", payload = encodedPayload(body))
         coEvery { messageApi.edit("m1", body) } returns accepted(serverMessage)
 
-        assertThat(handler.send(row)).isEqualTo(SendResult.Success)
+        assertThat(handler.send(row)).isInstanceOf(SendResult.SuccessWithId::class.java)
 
         coEvery { messageApi.edit("m1", body) } returns refused()
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
@@ -179,7 +212,7 @@ class MessageSendersTest {
         val row = outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1")
 
         coEvery { messageApi.delete("m1") } returns accepted(Unit)
-        assertThat(handler.send(row)).isEqualTo(SendResult.Success)
+        assertThat(handler.send(row)).isInstanceOf(SendResult.SuccessWithId::class.java)
 
         coEvery { messageApi.delete("m1") } returns refused()
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
@@ -209,7 +242,7 @@ class MessageSendersTest {
         val row = outboxRow(OutboxKind.PIN_MESSAGE, targetId = "m1", payload = encodedPayload(PinPayload("c1")))
 
         coEvery { messageApi.pin("c1", "m1") } returns accepted(Unit)
-        assertThat(handler.send(row)).isEqualTo(SendResult.Success)
+        assertThat(handler.send(row)).isInstanceOf(SendResult.SuccessWithId::class.java)
 
         coEvery { messageApi.pin("c1", "m1") } returns refused()
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
@@ -221,7 +254,7 @@ class MessageSendersTest {
         val row = outboxRow(OutboxKind.UNPIN_MESSAGE, targetId = "m1", payload = encodedPayload(PinPayload("c1")))
 
         coEvery { messageApi.unpin("c1", "m1") } returns accepted(Unit)
-        assertThat(handler.send(row)).isEqualTo(SendResult.Success)
+        assertThat(handler.send(row)).isInstanceOf(SendResult.SuccessWithId::class.java)
 
         coEvery { messageApi.unpin("c1", "m1") } returns refused()
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)

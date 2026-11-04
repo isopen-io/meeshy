@@ -1,5 +1,6 @@
 package me.meeshy.app.settings
 
+import android.widget.Toast
 import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -82,8 +83,14 @@ fun TwoFactorScreen(
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                is TwoFactorEffect.CopySecret -> clipboard.write("meeshy-2fa-secret", effect.text)
-                is TwoFactorEffect.CopyBackupCodes -> clipboard.write("meeshy-2fa-backup-codes", effect.text)
+                is TwoFactorEffect.CopySecret -> {
+                    clipboard.write("meeshy-2fa-secret", effect.text)
+                    Toast.makeText(context, R.string.twofactor_copied_expires, Toast.LENGTH_SHORT).show()
+                }
+                is TwoFactorEffect.CopyBackupCodes -> {
+                    clipboard.write("meeshy-2fa-backup-codes", effect.text)
+                    Toast.makeText(context, R.string.twofactor_copied_expires, Toast.LENGTH_SHORT).show()
+                }
                 TwoFactorEffect.HapticSuccess -> haptics.success()
                 TwoFactorEffect.HapticError -> haptics.error()
             }

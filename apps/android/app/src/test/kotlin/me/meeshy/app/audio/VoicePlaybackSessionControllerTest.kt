@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import me.meeshy.sdk.model.playback.VoicePlaybackCard
 import me.meeshy.sdk.model.playback.VoicePlaybackCommand
+import me.meeshy.sdk.model.playback.VoicePlaybackQueueControls
 import me.meeshy.sdk.model.playback.VoicePlaybackTransportState
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -325,5 +326,81 @@ class VoicePlaybackSessionControllerTest {
         bridge.publish(card, VoicePlaybackTransportState(positionMs = 7_000, isPlaying = false))
 
         assertThat(foreground.events).containsExactly("park")
+    }
+
+    private val queueControls = VoicePlaybackQueueControls(hasNext = true, hasPrevious = false)
+
+    @Test
+    fun `a queue card offers previous, back, pause, forward and next, a screen card only the three it had`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        started(bridge, foreground)
+
+        bridge.publishShared(card, VoicePlaybackTransportState(positionMs = 0, isPlaying = true), queueControls)
+
+        assertThat(actionTitles(foreground.entered.single())).containsExactly(
+            context.getString(me.meeshy.app.R.string.voice_playback_previous),
+            context.getString(me.meeshy.app.R.string.voice_playback_back),
+            context.getString(me.meeshy.app.R.string.voice_playback_pause),
+            context.getString(me.meeshy.app.R.string.voice_playback_forward),
+            context.getString(me.meeshy.app.R.string.mini_player_next),
+        ).inOrder()
+    }
+
+    @Test
+    fun `the last voice of the queue has no next button but keeps previous`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        started(bridge, foreground)
+
+        bridge.publishShared(card, VoicePlaybackTransportState(positionMs = 0, isPlaying = true), queueControls.copy(hasNext = false))
+
+        val titles = actionTitles(foreground.entered.single())
+        assertThat(titles).contains(context.getString(me.meeshy.app.R.string.voice_playback_previous))
+        assertThat(titles).doesNotContain(context.getString(me.meeshy.app.R.string.mini_player_next))
+    }
+
+    @Test
+    fun `the notification next and previous buttons reach the owner as commands`() = runBlocking {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val controller = started(bridge, RecordingForeground())
+        bridge.publishShared(card, VoicePlaybackTransportState(positionMs = 0, isPlaying = true), queueControls)
+
+        bridge.sharedCommands.test {
+            controller.onAction(VoicePlaybackSessionController.ACTION_NEXT)
+            assertThat(awaitItem()).isEqualTo(VoicePlaybackCommand.Next)
+            controller.onAction(VoicePlaybackSessionController.ACTION_PREVIOUS)
+            assertThat(awaitItem()).isEqualTo(VoicePlaybackCommand.Previous)
+        }
+    }
+
+    @Test
+    fun `the system media transport advertises skip to next and previous only for a queue`() {
+        val none = VoicePlaybackSessionController.queueTransportActions(null)
+        val queue = VoicePlaybackSessionController.queueTransportActions(queueControls)
+        val last = VoicePlaybackSessionController.queueTransportActions(queueControls.copy(hasNext = false))
+        val next = android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT
+        val previous = android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS
+
+        assertThat(none).isEqualTo(0L)
+        assertThat(queue).isEqualTo(next or previous)
+        assertThat(last).isEqualTo(previous)
+    }
+
+    @Test
+    fun `touching the card opens the conversation on the voice that plays, from a queue card too`() {
+        val bridge = VoicePlaybackSessionBridge(clock = { 0L })
+        val foreground = RecordingForeground()
+        started(bridge, foreground)
+
+        bridge.publishShared(
+            card.copy(conversationId = "c1", messageId = "m1"),
+            VoicePlaybackTransportState(positionMs = 0, isPlaying = true),
+            queueControls,
+        )
+
+        val intent = shadowOf(foreground.entered.single().contentIntent).savedIntent
+        assertThat(intent.getStringExtra("conversationId")).isEqualTo("c1")
+        assertThat(intent.getStringExtra("messageId")).isEqualTo("m1")
     }
 }

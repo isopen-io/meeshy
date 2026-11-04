@@ -141,6 +141,17 @@ class NotificationRepository @Inject constructor(
     suspend fun refresh() = revalidateNotifications()
 
     /**
+     * La relecture silencieuse des 30 dernières notifications (resynchro après un trou, une reconnexion ou un retour au
+     * premier plan). Le compteur est lu INDÉPENDAMMENT de la liste et posé même quand la liste échoue ; un échec
+     * laisse le cache intact et se rend à l'appelant, qui le journalise. `null` = tout a abouti.
+     */
+    suspend fun resync(): Throwable? {
+        var failure: Throwable? = null
+        revalidateNotifications { failure = it }
+        return failure
+    }
+
+    /**
      * A real-time `notification:new` arrival (feature-parity §M) prepends into the SAME cache
      * [notificationsStream] serves — a live notification is never silently overwritten by the
      * next observer's re-read or a concurrent revalidate. Dedupes by id (a REST-list race or a
@@ -310,6 +321,39 @@ class NotificationRepository @Inject constructor(
                 types = NotificationTypeSelection.csv(types),
                 hideReadTypes = NotificationTypeSelection.csv(hideReadTypes),
             )
+        }
+
+    /**
+     * Une page de la liste de [scope] avec sa pagination PROPRE (curseur servi, sinon rang [offset]) : chaque catégorie
+     * de la cloche pagine sa liste, indépendamment de la liste « all ». Rien n'est écrit ici — l'appelant range le
+     * résultat par [replaceAll].
+     */
+    suspend fun listScopePage(
+        scope: NotificationScope,
+        cursor: String? = null,
+        offset: Int = 0,
+        limit: Int = PAGE_SIZE,
+    ): NetworkResult<NotificationScopePage> =
+        when (
+            val result = pagedApiCall {
+                notificationApi.list(
+                    offset = if (cursor === null) offset else null,
+                    limit = limit,
+                    unreadOnly = if (scope.unreadOnly) true else null,
+                    cursor = cursor,
+                    types = NotificationTypeSelection.csv(scope.types.sorted()),
+                    hideReadTypes = NotificationTypeSelection.csv(scope.hideReadTypes.sorted()),
+                )
+            }
+        ) {
+            is NetworkResult.Success -> NetworkResult.Success(
+                NotificationScopePage(
+                    items = result.data.data,
+                    hasMore = result.data.pagination?.hasMore ?: (result.data.data.size >= limit),
+                    nextCursor = result.data.pagination?.nextCursor,
+                ),
+            )
+            is NetworkResult.Failure -> result
         }
 
     /** Les totaux de toute la boîte par type brut, tels que le serveur les compte (même prédicat que la liste). */

@@ -64,8 +64,11 @@ fun MyStoriesScreen(
         bulkDeleted = stringResource(R.string.my_stories_delete_selected_success),
         republished = stringResource(R.string.my_stories_repost_success),
         republishFailed = stringResource(R.string.my_stories_repost_error),
+        resumeFailed = stringResource(R.string.my_stories_resume_failed),
+        draftOpenFailed = stringResource(R.string.my_stories_draft_open_failed),
     )
     val context = LocalContext.current
+    val onResumeDraftState = rememberUpdatedState(onResumeDraft)
     val bulkFailedFormat = stringResource(R.string.my_stories_delete_selected_error, 0)
 
     LaunchedEffect(viewModel) {
@@ -78,6 +81,12 @@ fun MyStoriesScreen(
                     bulkFailedFormat.replaceFirst("0", effect.failures.toString()).also { haptics.error() }
                 MyStoriesUiEffect.Republished -> messages.republished.also { haptics.success() }
                 MyStoriesUiEffect.RepublishFailed -> messages.republishFailed.also { haptics.error() }
+                MyStoriesUiEffect.DraftReady -> {
+                    onResumeDraftState.value()
+                    return@collect
+                }
+                MyStoriesUiEffect.ResumeFailed -> messages.resumeFailed.also { haptics.error() }
+                MyStoriesUiEffect.DraftOpenFailed -> messages.draftOpenFailed.also { haptics.error() }
                 is MyStoriesUiEffect.RepublishRefusedAudienceKept ->
                     context.getString(R.string.my_stories_repost_audience_kept, context.getString(effect.visibility.labelRes())).also { haptics.error() }
             }
@@ -96,7 +105,7 @@ fun MyStoriesScreen(
                 val current = latest.value
                 when {
                     current.isSelecting -> viewModel.onEvent(MyStoriesUiEvent.ToggleSelected(id))
-                    id == MyStoryDraftEntry.SLOT_ID -> onResumeDraft()
+                    current.tab == MyStoriesTab.DRAFTS -> viewModel.onEvent(MyStoriesUiEvent.OpenDraft(id))
                     current.tab == MyStoriesTab.PUBLISHED -> current.ownUserId?.let(onOpenStory)
                 }
             },
@@ -108,14 +117,24 @@ fun MyStoriesScreen(
             onToggle = { id -> haptics.light(); viewModel.onEvent(MyStoriesUiEvent.ToggleSelected(id)) },
             onViewers = { id -> viewersStoryId = id },
             onComments = { _ -> latest.value.ownUserId?.let(onOpenStory) },
-            onEdit = { id -> if (id == MyStoryDraftEntry.SLOT_ID) onResumeDraft() else onEditStory(id) },
+            onEdit = { id -> if (latest.value.tab == MyStoriesTab.DRAFTS) viewModel.onEvent(MyStoriesUiEvent.OpenDraft(id)) else onEditStory(id) },
             onRepublish = { id -> viewModel.onEvent(MyStoriesUiEvent.RequestRepublish(id)) },
             onDelete = { id ->
                 viewModel.onEvent(
-                    if (id == MyStoryDraftEntry.SLOT_ID) MyStoriesUiEvent.RequestDeleteDraft(id)
+                    if (latest.value.tab == MyStoriesTab.DRAFTS) MyStoriesUiEvent.RequestDeleteDraft(id)
                     else MyStoriesUiEvent.RequestDelete(id),
                 )
             },
+        )
+    }
+
+    val queueActions = remember(viewModel) {
+        StoryQueueActions(
+            onRetryPending = { viewModel.onEvent(MyStoriesUiEvent.RetryPending(it)) },
+            onCancelPending = { viewModel.onEvent(MyStoriesUiEvent.CancelPending(it)) },
+            onResume = { viewModel.onEvent(MyStoriesUiEvent.ResumeFailed(it)) },
+            onRetryFailed = { viewModel.onEvent(MyStoriesUiEvent.RetryFailed(it)) },
+            onDiscardFailed = { viewModel.onEvent(MyStoriesUiEvent.RequestDiscardFailed(it)) },
         )
     }
 
@@ -146,8 +165,7 @@ fun MyStoriesScreen(
                     selected = tab,
                     onSelect = { haptics.selection(); viewModel.onEvent(MyStoriesUiEvent.SelectTab(it)) },
                 )
-                MyStoriesBody(state = state, tab = tab, actions = actions, onRetry = { viewModel.onEvent(MyStoriesUiEvent.RetryFailed(it)) },
-                    onDiscard = { viewModel.onEvent(MyStoriesUiEvent.RequestDiscardFailed(it)) })
+                MyStoriesBody(state = state, tab = tab, actions = actions, queueActions = queueActions)
             }
         }
     }
@@ -212,6 +230,8 @@ private class EffectMessages(
     val bulkDeleted: String,
     val republished: String,
     val republishFailed: String,
+    val resumeFailed: String,
+    val draftOpenFailed: String,
 )
 
 @Composable
@@ -219,21 +239,20 @@ private fun MyStoriesBody(
     state: MyStoriesUiState,
     tab: MyStoriesTab,
     actions: MyStoryCardActions,
-    onRetry: (String) -> Unit,
-    onDiscard: (String) -> Unit,
+    queueActions: StoryQueueActions,
 ) {
     val locale = LocalConfiguration.current.locales[0]
     val nowMillis = remember(state) { System.currentTimeMillis() }
     when (tab) {
         MyStoriesTab.QUEUE ->
             if (state.pendingUploads.isEmpty() && state.failed.isEmpty()) MyStoriesEmpty(tab)
-            else MyStoriesQueue(state.pendingUploads, state.failed, nowMillis, onRetry, onDiscard, Modifier.fillMaxSize())
+            else MyStoriesQueue(state.pendingUploads, state.failed, nowMillis, state.accentHex, state.resumingCmid, queueActions, Modifier.fillMaxSize())
         MyStoriesTab.DRAFTS -> {
             val cards = remember(state.drafts, state.isSelecting, locale) {
                 state.drafts.map { draft ->
                     MyStoryCardPresentation.of(
                         MyStoryCardRules.draft(
-                            MyStoryCardRules.DraftInput(draft.id, draft.title, null, null, draft.backgroundHex, draft.updatedAtEpochMillis),
+                            MyStoryCardRules.DraftInput(draft.id, draft.title, draft.coverFilePath, null, draft.backgroundHex, draft.updatedAtEpochMillis),
                         ),
                         nowMillis, locale, isSelecting = false, isSelected = false,
                     )

@@ -100,7 +100,7 @@ internal class StorySceneCapture(
      * aucun pinceau, texte ni panneau ouvert.
      */
     fun offeredOn(state: StoryComposerUiState, somethingOpen: Boolean): Boolean = SceneQuickCapture.offers(
-        sceneIsBlank = state.deck.selectedSlide.isBlankScene && !state.isUploadingMedia,
+        sceneIsBlank = state.deck.selectedSlide.isBlankScene && !state.isPreparingMedia,
         armed = armed,
         toolIsOpen = somethingOpen || state.isDrawingActive || state.isEditingTextElement ||
             state.band.activeTool != null || state.selectedSceneObject != null,

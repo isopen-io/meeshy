@@ -203,6 +203,19 @@ jobs:
         working-directory: apps/android
 
     steps:
+      # #15675 — l'image ubuntu-latest n'a qu'environ 14 Go libres, et le build
+      # complet (assemble + tests de tous les modules) l'épuisait : le runner
+      # mourait sur « No space left on device » avant de compiler. On retire ce
+      # que le build Android n'utilise pas ; le SDK Android préinstallé reste.
+      - name: Libérer le disque du runner
+        working-directory: /
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/share/swift /usr/local/share/powershell
+          sudo docker image prune --all --force > /dev/null || true
+          df -h /
+
       - name: Checkout
         uses: actions/checkout@v7
 

@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.AddToPhotos as FiAddToPhotos
 import androidx.compose.material.icons.filled.AdminPanelSettings as FiAdminPanelSettings
 import androidx.compose.material.icons.filled.AllInclusive as FiAllInclusive
 import androidx.compose.material.icons.filled.AlternateEmail as FiAlternateEmail
+import androidx.compose.material.icons.filled.Android as FiAndroid
 import androidx.compose.material.icons.filled.Apps as FiApps
 import androidx.compose.material.icons.filled.ArrowCircleDown as FiArrowCircleDown
 import androidx.compose.material.icons.filled.ArrowCircleUp as FiArrowCircleUp
@@ -65,6 +66,7 @@ import androidx.compose.material.icons.filled.CheckCircle as FiCheckCircle
 import androidx.compose.material.icons.filled.Close as FiClose
 import androidx.compose.material.icons.filled.CloseFullscreen as FiCloseFullscreen
 import androidx.compose.material.icons.filled.Code as FiCode
+import androidx.compose.material.icons.filled.Computer as FiComputer
 import androidx.compose.material.icons.filled.ContentCopy as FiContentCopy
 import androidx.compose.material.icons.filled.ContentCut as FiContentCut
 import androidx.compose.material.icons.filled.Crop as FiCrop
@@ -150,6 +152,7 @@ import androidx.compose.material.icons.filled.Person as FiPerson
 import androidx.compose.material.icons.filled.PersonAdd as FiPersonAdd
 import androidx.compose.material.icons.filled.PersonOff as FiPersonOff
 import androidx.compose.material.icons.filled.PersonRemove as FiPersonRemove
+import androidx.compose.material.icons.filled.PhoneAndroid as FiPhoneAndroid
 import androidx.compose.material.icons.filled.PhotoCamera as FiPhotoCamera
 import androidx.compose.material.icons.filled.PhotoFilter as FiPhotoFilter
 import androidx.compose.material.icons.filled.PhotoLibrary as FiPhotoLibrary
@@ -192,6 +195,7 @@ import androidx.compose.material.icons.filled.SwapHoriz as FiSwapHoriz
 import androidx.compose.material.icons.filled.SwapVert as FiSwapVert
 import androidx.compose.material.icons.filled.Sync as FiSync
 import androidx.compose.material.icons.filled.SyncProblem as FiSyncProblem
+import androidx.compose.material.icons.filled.TabletAndroid as FiTabletAndroid
 import androidx.compose.material.icons.filled.Tag as FiTag
 import androidx.compose.material.icons.filled.TextDecrease as FiTextDecrease
 import androidx.compose.material.icons.filled.TextFields as FiTextFields
@@ -218,6 +222,7 @@ import androidx.compose.material.icons.filled.VisibilityOff as FiVisibilityOff
 import androidx.compose.material.icons.filled.VpnKey as FiVpnKey
 import androidx.compose.material.icons.filled.Wallpaper as FiWallpaper
 import androidx.compose.material.icons.filled.Warning as FiWarning
+import androidx.compose.material.icons.filled.Wifi as FiWifi
 import androidx.compose.material.icons.filled.WifiOff as FiWifiOff
 import androidx.compose.material.icons.filled.WorkspacePremium as FiWorkspacePremium
 import androidx.compose.material.icons.filled.ZoomIn as FiZoomIn
@@ -317,6 +322,7 @@ public object MeeshyIcons {
     // Rôles directionnels : AutoMirrored, miroités en RTL.
     public val AddToList: ImageVector get() = Icons.AutoMirrored.Filled.AfPlaylistAdd
     public val AlignLeft: ImageVector get() = Icons.AutoMirrored.Filled.AfFormatAlignLeft
+    public val Android: ImageVector get() = Icons.Filled.FiAndroid
     public val ArrowUpRight: ImageVector get() = Icons.AutoMirrored.Filled.AfCallMade
     public val Article: ImageVector get() = Icons.AutoMirrored.Filled.AfArticle
     public val Back: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardArrowLeft
@@ -325,6 +331,7 @@ public object MeeshyIcons {
     public val Chat: ImageVector get() = Icons.AutoMirrored.Filled.AfChat
     public val ChevronBackward: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardArrowLeft
     public val ChevronForward: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardArrowRight
+    public val Computer: ImageVector get() = Icons.Filled.FiComputer
     public val Dictionary: ImageVector get() = Icons.AutoMirrored.Filled.AfMenuBook
     public val Forward: ImageVector get() = Icons.AutoMirrored.Filled.AfArrowForward
     public val ForwardMessage: ImageVector get() = Icons.AutoMirrored.Filled.AfForward
@@ -332,6 +339,7 @@ public object MeeshyIcons {
     public val MessageFilled: ImageVector get() = Icons.AutoMirrored.Filled.AfMessage
     public val Notes: ImageVector get() = Icons.AutoMirrored.Filled.AfNotes
     public val OpenExternal: ImageVector get() = Icons.AutoMirrored.Filled.AfOpenInNew
+    public val PhoneAndroid: ImageVector get() = Icons.Filled.FiPhoneAndroid
     public val QueueMusic: ImageVector get() = Icons.AutoMirrored.Filled.AfQueueMusic
     public val Redo: ImageVector get() = Icons.AutoMirrored.Filled.AfRedo
     public val Reply: ImageVector get() = Icons.AutoMirrored.Filled.AfReply
@@ -339,6 +347,7 @@ public object MeeshyIcons {
     public val Send: ImageVector get() = Icons.AutoMirrored.Filled.AfSend
     public val SignIn: ImageVector get() = Icons.AutoMirrored.Filled.AfLogin
     public val SignOut: ImageVector get() = Icons.AutoMirrored.Filled.AfLogout
+    public val TabletAndroid: ImageVector get() = Icons.Filled.FiTabletAndroid
     public val Undo: ImageVector get() = Icons.AutoMirrored.Filled.AfUndo
     public val VolumeOff: ImageVector get() = Icons.AutoMirrored.Filled.AfVolumeOff
     public val VolumeUp: ImageVector get() = Icons.AutoMirrored.Filled.AfVolumeUp
@@ -575,6 +584,7 @@ public object MeeshyIcons {
     public val Warning: ImageVector get() = Icons.Outlined.OuWarning
     public val WarningFilled: ImageVector get() = Icons.Filled.FiWarning
     public val Waveform: ImageVector get() = Icons.Filled.FiGraphicEq
+    public val Wifi: ImageVector get() = Icons.Filled.FiWifi
     public val WifiOff: ImageVector get() = Icons.Filled.FiWifiOff
     public val WifiProblem: ImageVector get() = Icons.Filled.FiSignalWifiConnectedNoInternet4
     public val ZoomIn: ImageVector get() = Icons.Filled.FiZoomIn

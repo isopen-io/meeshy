@@ -100,6 +100,23 @@ class UserSessionsRepositoryTest {
     }
 
     @Test
+    fun `a later successful revalidation clears the failure banner`() = runTest {
+        val rig = rig()
+        rig.store.save(served, rig.clock.now - 10 * 60_000L)
+        coEvery { rig.api.listSessions() } throws IOException("offline")
+        backgroundScope.launch { rig.repository.stream().collect { } }
+        runCurrent()
+        assertThat(rig.repository.syncFailure.value).isNotNull()
+
+        coEvery { rig.api.listSessions() } returns ApiResponse(success = true, data = served)
+        rig.clock.now += 10 * 60_000L
+        rig.store.save(served, rig.clock.now - 10 * 60_000L)
+        runCurrent()
+
+        assertThat(rig.repository.syncFailure.value).isNull()
+    }
+
+    @Test
     fun `the server geolocation attribution is kept and DB-IP is the fallback`() = runTest {
         val rig = rig()
         val attribution = GeolocationAttribution(provider = "ACME", text = "by ACME", url = "https://acme.test", license = "x")

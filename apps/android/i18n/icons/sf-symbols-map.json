@@ -885,7 +885,12 @@
    "symbol": "iphone",
    "status": "mapped",
    "role": "Smartphone",
-   "reason": "Icons.Filled.Smartphone"
+   "reason": "Icons.Filled.Smartphone",
+   "aliases": [
+    "PhoneAndroid",
+    "TabletAndroid",
+    "Android"
+   ]
   },
   {
    "symbol": "key.fill",
@@ -897,7 +902,10 @@
    "symbol": "laptopcomputer.and.iphone",
    "status": "mapped",
    "role": "Devices",
-   "reason": "Icons.Filled.Devices"
+   "reason": "Icons.Filled.Devices",
+   "aliases": [
+    "Computer"
+   ]
   },
   {
    "symbol": "line.3.horizontal",
@@ -2032,6 +2040,12 @@
    "status": "mapped",
    "role": "Waveform",
    "reason": "Icons.Filled.GraphicEq; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "wifi",
+   "status": "mapped",
+   "role": "Wifi",
+   "reason": "Icons.Filled.Wifi ; iOS le pose par iconName (ConnectionBanner, « En ligne »), hors du motif littéral de l'extracteur"
   },
   {
    "symbol": "wifi.exclamationmark",
@@ -3292,6 +3306,26 @@
    "directional": false
   },
   "DragHandle": {
+   "origin": "material",
+   "directional": false
+  },
+  "PhoneAndroid": {
+   "origin": "material",
+   "directional": false
+  },
+  "Android": {
+   "origin": "material",
+   "directional": false
+  },
+  "Computer": {
+   "origin": "material",
+   "directional": false
+  },
+  "TabletAndroid": {
+   "origin": "material",
+   "directional": false
+  },
+  "Wifi": {
    "origin": "material",
    "directional": false
   }

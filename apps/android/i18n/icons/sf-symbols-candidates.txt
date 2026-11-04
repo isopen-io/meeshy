@@ -318,6 +318,7 @@ waveform
 waveform.and.magnifyingglass
 waveform.and.mic
 waveform.circle.fill
+wifi
 wifi.exclamationmark
 wifi.slash
 xmark

@@ -351,6 +351,51 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun registerHoldingSession_claimedAddress_awaitsTheCodeWithoutAnySession() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(
+                success = true,
+                data = RegisterResponse(
+                    status = "verification-required", email = "a@b.co", accountCreated = true, pendingSessionToken = "pend",
+                ),
+            ),
+        )
+        val (repo, _) = repository(api, store)
+
+        val result = repo.registerHoldingSession(RegisterRequest(email = "typed@b.co", password = "secret", claimEmail = true))
+
+        assertThat(result.getOrNull()).isEqualTo(RegisterOutcome.VerificationRequired("a@b.co", "pend"))
+        assertThat(store.jwt).isNull()
+    }
+
+    @Test
+    fun register_verificationRequiredBesideAnIdentity_awaitsTheCodeAndAdoptsNothing() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(
+                success = true,
+                data = RegisterResponse(
+                    user = MeeshyUser(id = "u1", username = "ada"),
+                    token = "jwt-123",
+                    sessionToken = "sess-456",
+                    status = "verification-required",
+                    email = "a@b.co",
+                ),
+            ),
+        )
+        val (repo, session) = repository(api, store)
+
+        val result = repo.register(RegisterRequest(email = "a@b.co", password = "secret", claimEmail = true))
+
+        assertThat(result.getOrNull()).isEqualTo(RegisterOutcome.VerificationRequired("a@b.co", null))
+        assertThat(store.jwt).isNull()
+        assertThat(session.currentUser.value).isNull()
+    }
+
+    @Test
     fun register_phoneOwnershipConflict_isSuccessButAdoptsNothing() = runTest {
         val store = InMemoryTokenStore()
         val api = FakeAuthApi(

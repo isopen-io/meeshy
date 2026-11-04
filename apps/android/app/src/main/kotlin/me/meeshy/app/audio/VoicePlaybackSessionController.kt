@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.playback.BackgroundResumeRoute
 import me.meeshy.sdk.model.playback.VoicePlaybackCard
 import me.meeshy.sdk.model.playback.VoicePlaybackCardRules
 import me.meeshy.sdk.model.playback.VoicePlaybackCommand
+import me.meeshy.sdk.model.playback.VoicePlaybackQueueControls
 import me.meeshy.sdk.model.playback.VoicePlaybackTransportState
 import me.meeshy.sdk.model.rootnav.NowPlayingReturnPolicy
 
@@ -82,6 +83,10 @@ internal class VoicePlaybackSessionController(
 
                 override fun onSeekTo(pos: Long) = dispatch(VoicePlaybackCommand.SeekTo(pos))
 
+                override fun onSkipToNext() = dispatch(VoicePlaybackCommand.Next)
+
+                override fun onSkipToPrevious() = dispatch(VoicePlaybackCommand.Previous)
+
                 override fun onCustomAction(action: String, extras: android.os.Bundle?) {
                     command(action)?.let { dispatch(it) }
                 }
@@ -134,6 +139,8 @@ internal class VoicePlaybackSessionController(
         ACTION_STOP -> VoicePlaybackCommand.Stop
         ACTION_BACK -> VoicePlaybackCommand.Skip(-VoicePlaybackCardRules.SKIP_MS)
         ACTION_FORWARD -> VoicePlaybackCommand.Skip(VoicePlaybackCardRules.SKIP_MS)
+        ACTION_NEXT -> VoicePlaybackCommand.Next
+        ACTION_PREVIOUS -> VoicePlaybackCommand.Previous
         else -> null
     }
 
@@ -169,16 +176,7 @@ internal class VoicePlaybackSessionController(
         }
     }
 
-    /**
-     * Un vocal protégé (éphémère, à vue unique, flouté, chiffré) ne livre AUCUNE métadonnée
-     * identifiante à la session : ni auteur, ni conversation, ni date, ni avatar.
-     */
-    private fun shown(snapshot: VoicePlaybackSnapshot): VoicePlaybackCard =
-        if (snapshot.card.isProtected) {
-            snapshot.card.copy(sender = null, conversation = null, sentAtLabel = null, artworkUrl = null)
-        } else {
-            snapshot.card
-        }
+    private fun shown(snapshot: VoicePlaybackSnapshot): VoicePlaybackCard = VoicePlaybackCardRules.shown(snapshot.card)
 
     private fun labels(snapshot: VoicePlaybackSnapshot) = VoicePlaybackCardRules.labels(
         card = shown(snapshot),
@@ -203,6 +201,7 @@ internal class VoicePlaybackSessionController(
         var actions = PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP or
             if (transport.isActive) PlaybackState.ACTION_PAUSE else PlaybackState.ACTION_PLAY
         if (seekable) actions = actions or PlaybackState.ACTION_SEEK_TO
+        actions = actions or queueTransportActions(snapshot.controls)
         val state = when {
             transport.isBuffering -> PlaybackState.STATE_BUFFERING
             transport.isPlaying -> PlaybackState.STATE_PLAYING
@@ -239,6 +238,7 @@ internal class VoicePlaybackSessionController(
             openIntent(snapshot),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val buttons = buttons(snapshot, playing, seekable)
         val builder = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(labels.title)
@@ -253,19 +253,46 @@ internal class VoicePlaybackSessionController(
             .setStyle(
                 Notification.MediaStyle()
                     .setMediaSession(session.sessionToken)
-                    .setShowActionsInCompactView(*(if (seekable) intArrayOf(0, 1, 2) else intArrayOf(0))),
+                    .setShowActionsInCompactView(*compactIndices(buttons, hasQueue = snapshot.controls != null, seekable = seekable)),
             )
         if (art != null) builder.setLargeIcon(art)
-        if (seekable) builder.addAction(action(ACTION_BACK, android.R.drawable.ic_media_rew, R.string.voice_playback_back, REQUEST_BACK))
-        builder.addAction(
-            if (playing) {
-                action(ACTION_PAUSE, android.R.drawable.ic_media_pause, R.string.voice_playback_pause, REQUEST_PAUSE)
-            } else {
-                action(ACTION_PLAY, android.R.drawable.ic_media_play, R.string.voice_playback_play, REQUEST_PLAY)
-            },
-        )
-        if (seekable) builder.addAction(action(ACTION_FORWARD, android.R.drawable.ic_media_ff, R.string.voice_playback_forward, REQUEST_FORWARD))
+        buttons.forEach { builder.addAction(it.action) }
         return builder.build()
+    }
+
+    private enum class Slot { Previous, Back, PlayPause, Forward, Next }
+
+    private class Button(val slot: Slot, val action: Notification.Action)
+
+    /** Les boutons de la carte, dans l'ordre : précédent, −15 s, lecture/pause, +15 s, suivant (ceux que la file et la durée permettent). */
+    private fun buttons(snapshot: VoicePlaybackSnapshot, playing: Boolean, seekable: Boolean): List<Button> {
+        val queue = VoicePlaybackCardRules.queueActions(snapshot.controls)
+        return buildList {
+            if (queue.previous) add(Button(Slot.Previous, action(ACTION_PREVIOUS, android.R.drawable.ic_media_previous, R.string.voice_playback_previous, REQUEST_PREVIOUS)))
+            if (seekable) add(Button(Slot.Back, action(ACTION_BACK, android.R.drawable.ic_media_rew, R.string.voice_playback_back, REQUEST_BACK)))
+            add(
+                Button(
+                    Slot.PlayPause,
+                    if (playing) {
+                        action(ACTION_PAUSE, android.R.drawable.ic_media_pause, R.string.voice_playback_pause, REQUEST_PAUSE)
+                    } else {
+                        action(ACTION_PLAY, android.R.drawable.ic_media_play, R.string.voice_playback_play, REQUEST_PLAY)
+                    },
+                ),
+            )
+            if (seekable) add(Button(Slot.Forward, action(ACTION_FORWARD, android.R.drawable.ic_media_ff, R.string.voice_playback_forward, REQUEST_FORWARD)))
+            if (queue.next) add(Button(Slot.Next, action(ACTION_NEXT, android.R.drawable.ic_media_next, R.string.mini_player_next, REQUEST_NEXT)))
+        }
+    }
+
+    /** Une carte de file montre précédent, lecture/pause, puis suivant (sinon +15 s) ; sans file, comme avant. */
+    private fun compactIndices(buttons: List<Button>, hasQueue: Boolean, seekable: Boolean): IntArray {
+        val order = when {
+            hasQueue -> listOf(Slot.Previous, Slot.PlayPause, if (buttons.any { it.slot == Slot.Next }) Slot.Next else Slot.Forward)
+            seekable -> listOf(Slot.Back, Slot.PlayPause, Slot.Forward)
+            else -> listOf(Slot.PlayPause)
+        }
+        return order.mapNotNull { slot -> buttons.indexOfFirst { it.slot == slot }.takeIf { it >= 0 } }.toIntArray()
     }
 
     /**
@@ -319,6 +346,13 @@ internal class VoicePlaybackSessionController(
     }
 
     internal companion object {
+        /** « Suivant » / « précédent » que la session annonce au système (casque, voiture) : ceux de la file, jamais ceux d'un écran. */
+        fun queueTransportActions(controls: VoicePlaybackQueueControls?): Long {
+            val queue = VoicePlaybackCardRules.queueActions(controls)
+            return (if (queue.previous) PlaybackState.ACTION_SKIP_TO_PREVIOUS else 0L) or
+                (if (queue.next) PlaybackState.ACTION_SKIP_TO_NEXT else 0L)
+        }
+
         const val NOTIFICATION_ID = 0x4d56
         const val CHANNEL_ID = "meeshy_voice_playback"
         const val TAG = "MeeshyVoicePlayback"
@@ -327,10 +361,14 @@ internal class VoicePlaybackSessionController(
         const val ACTION_STOP = "me.meeshy.app.voice.STOP"
         const val ACTION_BACK = "me.meeshy.app.voice.BACK15"
         const val ACTION_FORWARD = "me.meeshy.app.voice.FORWARD15"
+        const val ACTION_NEXT = "me.meeshy.app.voice.NEXT"
+        const val ACTION_PREVIOUS = "me.meeshy.app.voice.PREVIOUS"
         private const val REQUEST_PLAY = NOTIFICATION_ID + 1
         private const val REQUEST_PAUSE = NOTIFICATION_ID + 2
         private const val REQUEST_STOP = NOTIFICATION_ID + 3
         private const val REQUEST_BACK = NOTIFICATION_ID + 4
         private const val REQUEST_FORWARD = NOTIFICATION_ID + 5
+        private const val REQUEST_NEXT = NOTIFICATION_ID + 6
+        private const val REQUEST_PREVIOUS = NOTIFICATION_ID + 7
     }
 }

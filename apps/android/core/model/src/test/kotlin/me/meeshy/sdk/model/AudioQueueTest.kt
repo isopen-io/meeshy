@@ -10,6 +10,8 @@ class AudioQueueTest {
         at: Long,
         sender: String = "other",
         vararg audios: String,
+        protectedMessage: Boolean = false,
+        protectedPieces: Set<String> = emptySet(),
     ) = AudioQueueMessage(
         messageId = id,
         conversationId = "c",
@@ -17,7 +19,8 @@ class AudioQueueTest {
         senderName = "N",
         senderAvatarUrl = null,
         createdAtEpochMs = at,
-        audios = audios.map { AudioQueueAttachment(it, "u/$it.mp3", 1_000L) },
+        isProtected = protectedMessage,
+        audios = audios.map { AudioQueueAttachment(it, "u/$it.mp3", 1_000L, isProtected = it in protectedPieces) },
     )
 
     private fun ids(queue: List<QueuedAudio>) = queue.map { it.attachmentId }
@@ -95,6 +98,54 @@ class AudioQueueTest {
     }
 
     @Test
+    fun `un vocal protege au milieu de la file arrive protege, ses voisins restent ordinaires`() {
+        val queue = build(
+            listOf(
+                message("m1", 10L, audios = arrayOf("a")),
+                message("m2", 20L, audios = arrayOf("b"), protectedMessage = true),
+                message("m3", 30L, audios = arrayOf("c")),
+            ),
+        )
+
+        assertThat(queue.map { it.attachmentId to it.isProtected })
+            .containsExactly("a" to false, "b" to true, "c" to false).inOrder()
+    }
+
+    @Test
+    fun `apres le curseur la protection du message suit chacun de ses vocaux`() {
+        val queue = build(
+            listOf(
+                message("m1", 10L, audios = arrayOf("a")),
+                message("m2", 20L, audios = arrayOf("b1", "b2"), protectedMessage = true),
+            ),
+            after = "a",
+        )
+
+        assertThat(queue.map { it.attachmentId to it.isProtected })
+            .containsExactly("b1" to true, "b2" to true).inOrder()
+    }
+
+    @Test
+    fun `une piece protegee protege son vocal sans proteger ses soeurs`() {
+        val queue = build(listOf(message("m1", 10L, audios = arrayOf("x", "y", "z"), protectedPieces = setOf("y"))))
+
+        assertThat(queue.map { it.attachmentId to it.isProtected })
+            .containsExactly("x" to false, "y" to true, "z" to false).inOrder()
+    }
+
+    @Test
+    fun `le resolveur de piste ne retire pas la protection`() {
+        val queue = AudioQueueBuilder.build(
+            listOf(message("m1", 10L, audios = arrayOf("a"), protectedMessage = true)),
+            null,
+            "me",
+            emptySet(),
+        ) { _, audio -> "translated/${audio.attachmentId}.mp3" }
+
+        assertThat(queue.single().isProtected).isTrue()
+    }
+
+    @Test
     fun `un curseur inconnu ne filtre rien`() {
         val queue = build(listOf(message("m1", 10L, audios = arrayOf("a"))), after = "ghost")
 
@@ -106,7 +157,7 @@ class AudioPlayQueueTest {
 
     private fun item(id: String, message: String = "m$id") = QueuedAudio(
         attachmentId = id, messageId = message, conversationId = "c", fileUrl = "u/$id", durationMs = 1_000L,
-        senderName = "N", senderAvatarUrl = null, receivedAtEpochMs = 0L,
+        senderName = "N", senderAvatarUrl = null, receivedAtEpochMs = 0L, isProtected = false,
     )
 
     @Test

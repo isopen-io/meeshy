@@ -109,6 +109,9 @@ internal object BubbleAttachmentBuilder {
                         isProtected = attachment.isProtected,
                         isOnDevice = attachment.fileUrl.isLocalUri() || attachment.awaitsUpload,
                         servedConsumption = attachment.currentUserConsumption,
+                        isBlurred = attachment.declaresBlur,
+                        isViewOnce = attachment.declaresViewOnce,
+                        viewOnceCount = attachment.viewOnceCount ?: 0,
                     )
                 },
             contactCards = visibleAttachments
@@ -154,9 +157,19 @@ internal object BubbleAttachmentBuilder {
                     alt = attachment.alt?.trim()?.ifBlank { null },
                     reactionLabel = if (lighterPreviewsAllowed && attachment.showsItsContent()) tileReactionLabel(attachment.reactionSummary) else null,
                     sizeBytes = attachment.fileSize?.toLong(),
+                    isBlurred = attachment.declaresBlur,
+                    isViewOnce = attachment.declaresViewOnce,
+                    viewOnceCount = attachment.viewOnceCount ?: 0,
                 )
             }
     }
+
+    /** Le flou déclaré par la pièce : son drapeau booléen OU le bit du bitfield (les canaux sont un OU). */
+    private val ApiMessageAttachment.declaresBlur: Boolean
+        get() = isBlurred == true || MessageEffectFlags.has(effectFlags ?: 0L, MessageEffectFlags.BLURRED)
+
+    private val ApiMessageAttachment.declaresViewOnce: Boolean
+        get() = isViewOnce == true || MessageEffectFlags.has(effectFlags ?: 0L, MessageEffectFlags.VIEW_ONCE)
 
     /** Une pièce à vue unique, floutée ou à effets ne montre rien d'elle, réactions comprises. */
     private fun ApiMessageAttachment.showsItsContent(): Boolean =

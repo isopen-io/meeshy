@@ -10,7 +10,15 @@ import java.net.URLEncoder
 internal object WidgetDeepLink {
     const val HOME: String = "meeshy://conversations"
 
+    /** La face petite du widget des conversations récentes : la plus récente (miroir iOS `widgetURL`). */
+    const val RECENT: String = "meeshy://conversations/recent"
+
+    /** La liste ouverte sur le filtre « Non lus » : tap des widgets compteur (miroir iOS `widgetURL`). */
+    const val UNREAD: String = "meeshy://conversations/unread"
+
     private val SAFE_ID = Regex("[A-Za-z0-9_-]{1,64}")
+
+    fun isSafeId(id: String): Boolean = SAFE_ID.matches(id)
 
     fun conversation(conversationId: String): String =
         if (SAFE_ID.matches(conversationId)) "meeshy://conversation/$conversationId" else HOME

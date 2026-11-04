@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onStart
 import me.meeshy.app.conversations.ConversationStoryRing
+import me.meeshy.app.feed.rememberProfilePostsItems
 import me.meeshy.app.profile.ProfileLiveSigns
 import me.meeshy.app.profile.ProfileSheetEnvironment
 import me.meeshy.sdk.cache.CacheClock
@@ -108,6 +109,16 @@ class ProfileSheetEnvironmentImpl internal constructor(private val sources: Prof
             onOpenPost = { postId -> after { navController.navigate(Routes.postDetail(postId)) } },
             onViewStory = { id -> after { navController.navigate(Routes.story(id)) } },
             liveSigns = ::signsFor,
+            postsItems = { userId, isSelf ->
+                rememberProfilePostsItems(
+                    userId = userId,
+                    onOpenPost = { postId -> after { navController.navigate(Routes.postDetail(postId)) } },
+                    onOpenMyStories = if (isSelf) ({ after { navController.navigate(Routes.MY_STORIES) } }) else null,
+                    onDismissSheet = host::dismiss,
+                    onOpenReels = { reelId, _ -> navController.navigate(Routes.reels(seed = reelId)) },
+                    hostScope = scope,
+                )
+            },
         )
     }
 }

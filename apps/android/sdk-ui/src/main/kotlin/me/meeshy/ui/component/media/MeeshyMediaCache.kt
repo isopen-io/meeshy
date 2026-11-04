@@ -91,6 +91,15 @@ public class MeeshyMediaCache private constructor(context: Context) : CachedSpan
     internal fun writeSinkFactory(category: MediaCacheCategory): DataSink.Factory =
         AccountFencedSinkFactory(cacheFor(category), gateFor(category))
 
+    /**
+     * Lecture directe par le client des médias, SANS cache ni bail : ce qu'un média protégé (éphémère, vue unique,
+     * flouté, chiffré) emprunte, car aucun de ses octets ne doit toucher le disque.
+     */
+    public fun uncachedDataSourceFactory(): DataSource.Factory = networkSourceFactory()
+
+    /** La fabrique de sources du lecteur sur [uncachedDataSourceFactory]. */
+    public fun uncachedMediaSourceFactory(): MediaSource.Factory = DefaultMediaSourceFactory(uncachedDataSourceFactory())
+
     private fun gateFor(category: MediaCacheCategory): AccountEpochGate = gates.getOrPut(category) { AccountEpochGate() }
 
     private fun networkSourceFactory(): DataSource.Factory {

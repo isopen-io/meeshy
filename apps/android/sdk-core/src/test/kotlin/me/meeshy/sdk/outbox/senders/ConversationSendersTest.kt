@@ -19,7 +19,7 @@ class ConversationSendersTest {
 
     @Test
     fun `read receipt marks the row conversation as read`() = runTest {
-        val handler = ReadReceiptHandler(conversationApi)
+        val handler = ReadReceiptHandler(conversationApi, senderJson)
         val row = outboxRow(OutboxKind.READ_RECEIPT, targetId = "c1")
 
         coEvery { conversationApi.markRead("c1") } returns accepted(Unit)
@@ -30,6 +30,24 @@ class ConversationSendersTest {
 
         coEvery { conversationApi.markRead("c1") } throws IOException("offline")
         assertThat(handler.send(row)).isEqualTo(SendResult.TransportFailure)
+    }
+
+    @Test
+    fun `a read receipt that declares what was read sends the languages with it`() = runTest {
+        val handler = ReadReceiptHandler(conversationApi, senderJson)
+        val payload = """{"messageIds":["a","b"],"language":"fr","messageLanguages":{"b":"en"},"caughtUpToMessageId":"b"}"""
+        val row = outboxRow(OutboxKind.READ_RECEIPT, targetId = "c1", payload = payload)
+        val expected = me.meeshy.sdk.net.api.MarkReadBody(
+            messageIds = listOf("a", "b"),
+            language = "fr",
+            messageLanguages = mapOf("b" to "en"),
+            caughtUpToMessageId = "b",
+        )
+
+        coEvery { conversationApi.markReadDeclaring("c1", expected) } returns accepted(Unit)
+
+        assertThat(handler.send(row)).isEqualTo(SendResult.Success)
+        coVerify(exactly = 0) { conversationApi.markRead(any()) }
     }
 
     @Test

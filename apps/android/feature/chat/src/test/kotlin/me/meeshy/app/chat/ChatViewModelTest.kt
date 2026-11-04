@@ -306,10 +306,10 @@ class ChatViewModelTest {
     @Test
     fun opening_a_conversation_marks_it_read_and_schedules_the_flush() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
-        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        coEvery { h.conversations.markReadOptimistic("c1", any()) } returns true
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.conversations.markReadOptimistic("c1") }
+        coVerify(exactly = 1) { h.conversations.markReadOptimistic("c1", any()) }
         coVerify(atLeast = 1) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
 
@@ -620,13 +620,13 @@ class ChatViewModelTest {
     @Test
     fun an_incoming_message_in_the_open_conversation_is_marked_read() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
-        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        coEvery { h.conversations.markReadOptimistic("c1", any()) } returns true
         advanceUntilIdle()
 
         messageReceived.emit(ApiMessage(id = "m9", conversationId = "c1", content = "yo"))
         advanceUntilIdle()
 
-        coVerify(exactly = 2) { h.conversations.markReadOptimistic("c1") }
+        coVerify(exactly = 2) { h.conversations.markReadOptimistic("c1", any()) }
     }
 
     private fun sealedMessage(id: String) = ApiMessage(
@@ -645,22 +645,22 @@ class ChatViewModelTest {
     @Test
     fun opening_a_conversation_of_unreadable_sealed_messages_does_not_mark_it_read() = runTest(dispatcher) {
         val h = harness(sealedStream(), currentUser = me, conversation = unreadConversation(unread = 2))
-        coEvery { h.conversations.markReadOptimistic(any()) } returns true
-        coEvery { h.conversations.acknowledgeRead(any()) } returns true
+        coEvery { h.conversations.markReadOptimistic(any(), any()) } returns true
+        coEvery { h.conversations.acknowledgeRead(any(), any()) } returns true
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.conversations.markReadOptimistic(any()) }
-        coVerify(exactly = 0) { h.conversations.acknowledgeRead(any()) }
+        coVerify(exactly = 0) { h.conversations.markReadOptimistic(any(), any()) }
+        coVerify(exactly = 0) { h.conversations.acknowledgeRead(any(), any()) }
         coVerify(exactly = 0) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
 
     @Test
     fun opening_a_conversation_of_unread_clear_messages_still_marks_it_read() = runTest(dispatcher) {
         val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 2))
-        coEvery { h.conversations.acknowledgeRead("c1") } returns true
+        coEvery { h.conversations.acknowledgeRead("c1", any()) } returns true
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.conversations.acknowledgeRead("c1") }
+        coVerify(exactly = 1) { h.conversations.acknowledgeRead("c1", any()) }
         coVerify(atLeast = 1) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
     }
 
@@ -680,7 +680,7 @@ class ChatViewModelTest {
     private fun Harness.withRealUnreadRule(unread: Int): ReceiptLedger {
         val ledger = ReceiptLedger(MutableStateFlow(unreadConversation(unread)))
         every { conversations.conversationStream("c1") } returns ledger.conversation
-        coEvery { conversations.markReadOptimistic("c1") } coAnswers {
+        coEvery { conversations.markReadOptimistic("c1", any()) } coAnswers {
             val shown = ledger.conversation.value?.unreadCount ?: 0
             if (shown == 0) {
                 false
@@ -690,7 +690,7 @@ class ChatViewModelTest {
                 true
             }
         }
-        coEvery { conversations.acknowledgeRead("c1") } coAnswers {
+        coEvery { conversations.acknowledgeRead("c1", any()) } coAnswers {
             ledger.listSyncZeroesTheBadge()
             ledger.receipts += 1
             true
@@ -747,7 +747,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(ledger.receipts).isEqualTo(0)
-        coVerify(exactly = 0) { h.conversations.acknowledgeRead(any()) }
+        coVerify(exactly = 0) { h.conversations.acknowledgeRead(any(), any()) }
     }
 
     @Test
@@ -790,31 +790,31 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(ledger.receipts).isEqualTo(0)
-        coVerify(exactly = 0) { h.conversations.acknowledgeRead(any()) }
+        coVerify(exactly = 0) { h.conversations.acknowledgeRead(any(), any()) }
     }
 
     @Test
     fun an_incoming_sealed_message_is_never_marked_read() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
-        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        coEvery { h.conversations.markReadOptimistic("c1", any()) } returns true
         advanceUntilIdle()
 
         messageReceived.emit(sealedMessage("m9"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.conversations.markReadOptimistic("c1") }
+        coVerify(exactly = 1) { h.conversations.markReadOptimistic("c1", any()) }
     }
 
     @Test
     fun an_incoming_clear_message_after_unread_sealed_ones_is_not_marked_read_either() = runTest(dispatcher) {
         val h = harness(sealedStream(), currentUser = me, conversation = unreadConversation(unread = 2))
-        coEvery { h.conversations.markReadOptimistic("c1") } returns true
+        coEvery { h.conversations.markReadOptimistic("c1", any()) } returns true
         advanceUntilIdle()
 
         messageReceived.emit(ApiMessage(id = "m9", conversationId = "c1", senderId = "other", content = "yo"))
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.conversations.markReadOptimistic(any()) }
+        coVerify(exactly = 0) { h.conversations.markReadOptimistic(any(), any()) }
     }
 
     @Test
@@ -856,13 +856,13 @@ class ChatViewModelTest {
     @Test
     fun an_incoming_message_elsewhere_does_not_mark_this_conversation_read() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
-        coEvery { h.conversations.markReadOptimistic(any()) } returns true
+        coEvery { h.conversations.markReadOptimistic(any(), any()) } returns true
         advanceUntilIdle()
 
         messageReceived.emit(ApiMessage(id = "m9", conversationId = "other", content = "yo"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { h.conversations.markReadOptimistic(any()) }
+        coVerify(exactly = 1) { h.conversations.markReadOptimistic(any(), any()) }
     }
 
     @Test

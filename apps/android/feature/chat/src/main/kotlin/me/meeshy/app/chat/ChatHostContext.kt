@@ -61,7 +61,6 @@ internal class ChatSheetVisibility {
     var settings by mutableStateOf(false)
     var members by mutableStateOf(false)
     var stats by mutableStateOf(false)
-    var analysis by mutableStateOf(false)
 
     /** La fiche Conversation, ouverte par l'avatar de l'en-tête (parité iOS `ConversationInfoSheet`). */
     var info by mutableStateOf(false)

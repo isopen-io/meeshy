@@ -100,7 +100,7 @@ public object StoryExportTimeline {
         val placedSounds = mutableListOf<StoryExportSound>()
         slides.forEachIndexed { index, source ->
             val sounds = sceneSounds(source)
-            val slide = StoryExportSlide(index, cursor, slideDurationMillis(source.effects, sounds, mediaDurationsSeconds))
+            val slide = StoryExportSlide(index, cursor, slideDurationMillis(source, sounds, mediaDurationsSeconds))
             placedSlides += slide
             placedSounds += sounds.mapNotNull { placed(it, slide) }
             cursor = slide.endMillis
@@ -218,8 +218,10 @@ public object StoryExportTimeline {
         } ?: 0f
     }
 
-    private fun slideDurationMillis(effects: StoryEffects?, sounds: List<SceneSound>, durations: Map<String, Double>): Long {
-        val reader = StorySlideDuration.computeSeconds(effects)
+    /** La vidéo de fond qu'aucun objet ne nomme (story héritée, diapo nue) donne sa durée, comme au lecteur (#15225). */
+    private fun slideDurationMillis(source: StoryExportSlideSource, sounds: List<SceneSound>, durations: Map<String, Double>): Long {
+        val effects = source.effects
+        val reader = StorySlideDuration.computeSeconds(effects, source.legacyBackgroundVideo?.let(durations::get))
         val pinned = effects?.timelineDuration?.let { it > 0.0 } == true
         if (pinned) return millis(reader)
         val ends = listOf(reader, StoryExportMotion.timedEnd(effects)) + sounds.map { naturalEnd(it, durations) }

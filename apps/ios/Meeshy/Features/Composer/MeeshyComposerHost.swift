@@ -765,7 +765,7 @@ struct MeeshyComposerHost: View {
         // faisait un jour — et ce verdict-là est le seul qui ne perde rien.
         let composer: StoryComposerViewModel
         switch hydration {
-        case .editingStory(let hydrate):
+        case .editingStory(let hydrate), .editingPublication(let hydrate, _):
             // Le meuble n'en construit PAS un second : il adopte celui que la
             // porte lui remet, déjà hydraté depuis la story publiée. L'invariant
             // « un seul objet, un seul site d'adoption » tient — `adoptDraft`
@@ -822,17 +822,13 @@ struct MeeshyComposerHost: View {
         // autres (`selectable`, dans `seed`) et non à côté : la chaîne vient
         // d'un `StoryItem`, donc du réseau, et un rawValue inconnu doit
         // retomber comme n'importe quel autre plutôt que de traverser en l'état.
-        let hydratee = hydration?.initialVisibility
-        _composerVisibility = State(initialValue: ComposerAudienceMemory.seed(
-            // La mémoire est NEUTRALISÉE quand l'hydratation impose une
-            // audience : c'est ce que « gagne sur » veut dire ici. La laisser
-            // en premier rang la ferait gagner, elle.
-            rememberedRaw: hydratee == nil
-                ? ComposerAudienceMemory.key(for: ouverture)
-                    .flatMap { UserDefaults.standard.string(forKey: $0) }
-                : nil,
-            doorRaw: hydratee ?? initialVisibility
-        ))
+        let document = ComposerDocumentOpening.of(hydration: hydration, format: ouverture,
+                                                  doorVisibility: initialVisibility)
+        _composerVisibility = State(initialValue: document.visibility)
+        _composerVisibilityUserIds = State(initialValue: document.visibilityUserIds)
+        _documentText = State(initialValue: document.text)
+        _documentLanguage = State(initialValue: document.language)
+        _documentLocation = State(initialValue: document.location)
     }
 
     var tint: PlateauTint {
