@@ -90,6 +90,13 @@ public interface OutboxDao {
     @Query("UPDATE outbox SET state = :state, attempts = :attempts, updatedAt = :now WHERE cmid = :cmid")
     public suspend fun updateState(cmid: String, state: String, attempts: Int, now: Long)
 
+    /**
+     * Réserve [cmid] pour un envoi : `PENDING` → `INFLIGHT` seulement si la ligne est encore `PENDING`. Room sérialise les
+     * écritures, donc deux passes qui se chevauchent se réduisent à deux réservations successives et une seule rend 1.
+     */
+    @Query("UPDATE outbox SET state = 'INFLIGHT', updatedAt = :now WHERE cmid = :cmid AND state = 'PENDING'")
+    public suspend fun claimPending(cmid: String, now: Long): Int
+
     /** Crash-safe boot recovery: any row left INFLIGHT becomes PENDING again. */
     @Query("UPDATE outbox SET state = 'PENDING', updatedAt = :now WHERE state = 'INFLIGHT'")
     public suspend fun resetInflight(now: Long): Int
@@ -187,6 +194,14 @@ public interface OutboxDao {
 
     @Query("UPDATE outbox SET cancelRequestedAt = :at, updatedAt = :at WHERE cmid = :cmid")
     public suspend fun requestCancel(cmid: String, at: Long)
+
+    /** « Supprimer » : retire la ligne SAUF si un drainer l'a réservée — la condition est dans la requête, pas dans une lecture antérieure. */
+    @Query("DELETE FROM outbox WHERE cmid = :cmid AND state != 'INFLIGHT'")
+    public suspend fun deleteUnlessInflight(cmid: String): Int
+
+    /** La marque d'annulation, posée seulement sur une ligne EN VOL. */
+    @Query("UPDATE outbox SET cancelRequestedAt = :at, updatedAt = :at WHERE cmid = :cmid AND state = 'INFLIGHT'")
+    public suspend fun requestCancelIfInflight(cmid: String, at: Long): Int
 
     /** Every row the table holds, whatever its state — what the capacity ceiling bounds. */
     @Query("SELECT COUNT(*) FROM outbox")

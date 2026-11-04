@@ -46,7 +46,6 @@ import me.meeshy.sdk.model.composer.sound.ComposerAudioRole
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.media.UnclaimedMediaSweep
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
-import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.model.net.MediaRequestCredential
 import me.meeshy.sdk.model.StoryAudioPlayerObject
@@ -279,21 +278,6 @@ class StoryComposerViewModel @Inject constructor(
 
     private var releasedByDraft: Set<String> = emptySet()
 
-    /** Routes the text field to the selected element, else the slide caption. */
-    fun onTextChange(text: String) = reduce("type") { StoryComposerTextReducer.typed(it, text) }
-
-    /** Adds an empty on-canvas text element and selects it (warns at the ≤5-element cap). */
-    fun onAddTextElement() = newTextElementId().let { id ->
-        reduce { StoryComposerSceneReducer.placedAtPlayhead(it) { s -> StoryComposerTextReducer.added(s, id) } }
-    }
-
-    fun onSelectTextElement(id: String) = reduce { StoryComposerTextReducer.selected(it, id) }
-
-    fun onDeselectTextElement() = reduce { StoryComposerTextReducer.deselected(it) }
-
-    /** La saisie en place cède au doigt (geste de manipulation, clavier rangé) : le texte retrouve sa position réelle. */
-    fun onInlineEditSuspended() = reduce { StoryComposerTextReducer.suspendedForManipulation(it) }
-
     fun onOpenElementMenu(id: String) = reduce { StoryComposerTextReducer.menuOpened(it, id) }
 
     fun onDismissElementMenu() = reduce { StoryComposerSceneReducer.menuDismissed(it) }
@@ -346,42 +330,6 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onFriseTrackSelected(id: String) = reduce { StoryComposerSceneReducer.trackSelected(it, id) }
 
-    /** Drags element [id] by normalised deltas with magnetic snapping. */
-    fun onTextElementMoved(id: String, dx: Float, dy: Float) = reduce(transformGesture(id)) { StoryComposerTextReducer.moved(it, id, dx, dy) }
-
-    fun onTextElementDragEnd() = reduce { StoryComposerTextReducer.dragEnded(it) }
-
-    fun onRemoveTextElement(id: String) = reduce { StoryComposerTextReducer.removed(it, id) }
-
-    fun onTextElementStyle(id: String, style: StoryTextStyle) = reduce { StoryComposerTextReducer.styled(it, id, style) }
-
-    fun onTextElementColor(id: String, color: String) = reduce { StoryComposerTextReducer.colored(it, id, color) }
-
-    fun onTextElementAlign(id: String, align: StoryTextAlign) = reduce { StoryComposerTextReducer.aligned(it, id, align) }
-
-    fun onTextElementBackground(id: String, background: StoryTextBackground) =
-        reduce { StoryComposerTextReducer.backed(it, id, background) }
-
-    fun onTextElementCycleSize(id: String) = reduce { StoryComposerTextReducer.sizeCycled(it, id) }
-
-    fun onTextElementCycleOutline(id: String) = reduce { StoryComposerTextReducer.outlineCycled(it, id) }
-
-    fun onTextElementCycleFadeIn(id: String) = reduce { StoryComposerTextReducer.fadeInCycled(it, id) }
-
-    fun onTextElementCycleFadeOut(id: String) = reduce { StoryComposerTextReducer.fadeOutCycled(it, id) }
-
-    fun onTextElementCycleStart(id: String) = reduce { StoryComposerTextReducer.startCycled(it, id) }
-
-    fun onTextElementCycleDuration(id: String) = reduce { StoryComposerTextReducer.durationCycled(it, id) }
-
-    fun onTextElementTransform(id: String, scaleBy: Float, rotateByDeg: Float) =
-        reduce(transformGesture(id)) { StoryComposerTextReducer.transformed(it, id, scaleBy, rotateByDeg) }
-
-    fun onDuplicateTextElement(id: String) {
-        val newId = newTextElementId()
-        reduce { StoryComposerTextReducer.duplicated(it, id, newId) }
-    }
-
     /** Adds an emoji sticker to the selected slide and selects it (blank ignored, warns at the cap) — never during an intake. */
     fun onAddSticker(emoji: String) = newStickerId().let { id ->
         if (_state.value.intakeBlocks) return@let
@@ -431,9 +379,6 @@ class StoryComposerViewModel @Inject constructor(
 
     /** Le doigt quitte le sticker : le geste se referme, le suivant sera son propre cran d'annulation. */
     fun onStickerDragEnd() = reduce { it }
-
-    /** Glisser, pincer et tourner un même objet sont UN geste : une seule entrée d'annulation. */
-    private fun transformGesture(id: String) = "transform:$id"
 
     fun onVisibilityChange(visibility: StoryVisibility) = _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
 

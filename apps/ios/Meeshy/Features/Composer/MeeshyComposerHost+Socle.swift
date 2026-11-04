@@ -606,10 +606,9 @@ extension MeeshyComposerHost {
             offered: profile.offeredFormats,
             carriesMoreThanText: !documentLocalMedia.isEmpty || documentHasScene,
             slideCount: viewModel.slides.count,
-            layoutsTravel: ComposerPublishMenuRule.documentCarriesEveryMedia(
-                slides: viewModel.slides,
-                slideImageIds: fonds,
-                bridgedObjectIds: Set(documentMediaObjectIdBySource.values))
+            layoutsTravel: hydration?.publicationLayoutsTravel(slides: viewModel.slides) ?? ComposerPublishMenuRule
+                .documentCarriesEveryMedia(slides: viewModel.slides, slideImageIds: fonds,
+                                           bridgedObjectIds: Set(documentMediaObjectIdBySource.values))
         )
     }
 

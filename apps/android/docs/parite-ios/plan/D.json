@@ -5515,7 +5515,6 @@
    "apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/audio/MiniAudioPlayerBar.kt",
    "apps/android/sdk-ui/src/main/res/values/strings_mini_player.xml",
    "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MediaOverlayHost.kt",
-   "apps/android/app/src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt",
    "apps/android/gradle/libs.versions.toml",
    "apps/android/app/build.gradle.kts",
    "apps/android/app/src/main/AndroidManifest.xml",
