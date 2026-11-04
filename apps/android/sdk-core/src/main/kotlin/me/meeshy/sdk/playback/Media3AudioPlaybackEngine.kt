@@ -203,6 +203,7 @@ internal class Media3AudioPlaybackEngine(
         dispatch(AudioPlaybackAction.SeekToMs(positionMs))
         val target = mutableState.value.currentTimeMs
         tracker = tracker.seek(from, target)
+        if (retarget != null) retarget = Retarget(target)
         player().seekTo(target)
     }
 
@@ -303,7 +304,8 @@ internal class Media3AudioPlaybackEngine(
 
     private enum class StopReason { Superseded, Stopped }
 
-    private class Retarget(val positionMs: Long, val playing: Boolean)
+    /** Le reciblage en vol : la position où reprendre ; jouer ou non se lit dans l'état, qu'un geste a pu changer entre-temps. */
+    private class Retarget(val positionMs: Long)
 
     /**
      * #15969 — la source lue a disparu, mais le vocal a été accusé : il reprend UNE fois, au même point, sur son adresse
@@ -313,7 +315,7 @@ internal class Media3AudioPlaybackEngine(
         val served = servedFallback ?: return false
         if (!loaded || retarget != null) return false
         servedFallback = null
-        val resume = Retarget(positionMs = runCatching { player().positionMs() }.getOrDefault(mutableState.value.currentTimeMs), playing = mutableState.value.isPlaying)
+        val resume = Retarget(positionMs = runCatching { player().positionMs() }.getOrDefault(mutableState.value.currentTimeMs))
         stopTicker()
         generation += 1
         source = served
@@ -333,7 +335,7 @@ internal class Media3AudioPlaybackEngine(
         val player = player()
         player.seekTo(resume.positionMs)
         player.setSpeed(mutableState.value.speed.rate)
-        if (!resume.playing) return
+        if (!mutableState.value.isPlaying) return
         player.play()
         startTicker()
     }

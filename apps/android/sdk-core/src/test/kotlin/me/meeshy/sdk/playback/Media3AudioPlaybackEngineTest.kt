@@ -363,6 +363,19 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.engine.state.value.attachmentId).isEqualTo("att_server")
     }
 
+    @Test fun `une pause pendant le reciblage est respectee a la reprise`() = engineTest { rig ->
+        rig.listeningToPending()
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = false)
+        rig.port.fail()
+
+        rig.engine.pause()
+        rig.port.prepare(14_000L)
+
+        assertThat(rig.port.seeks.last()).isEqualTo(5_000L)
+        assertThat(rig.port.playing).isFalse()
+        assertThat(rig.engine.state.value.isPlaying).isFalse()
+    }
+
     @Test fun `un vocal protege accuse est recible sans cache disque`() = engineTest { rig ->
         rig.listeningToPending()
         rig.engine.follow("cmid_voice", "att_server", served, isProtected = true)
