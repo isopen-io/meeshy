@@ -83,7 +83,7 @@ public class CallMontageRecorder internal constructor(
         containers = { MediaMuxerContainer(it) },
         directory = directory,
         clock = clock,
-        dispatcher = Executors.newSingleThreadExecutor { Thread(it, "call-montage-recorder") }.asCoroutineDispatcher(),
+        dispatcher = Executors.newSingleThreadExecutor { Thread(it, "call-montage-recorder").apply { isDaemon = true } }.asCoroutineDispatcher(),
     )
 
     /** L'instant de départ du film, publié pour l'anneau de progression ; `null` hors film. */
