@@ -47,7 +47,7 @@ struct TypingIndicatorBubble: View {
     /// ses initiales déterministes sinon. `MeeshyAvatar` porte déjà la cascade
     /// (cache disque → réseau → initiales) : lui passer `avatarURL` suffit.
     ///
-    /// NI PRÉSENCE NI DÉCOR (#16114, directive porteur du 2026-11-04) : les
+    /// NI PRÉSENCE NI DÉCOR (#16114, directive porteur) : les
     /// points qui bougent disent déjà que la personne est là — aucune pastille
     /// « en ligne » ni « ici » ne s'y ajoute. Et c'est la SEULE surface où le
     /// contour équipé se pose sans ses films illustrés (`ringWithoutDecor`) :
