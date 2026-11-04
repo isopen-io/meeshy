@@ -2,9 +2,6 @@ package me.meeshy.app.conversations
 
 import android.content.Context
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -26,6 +23,7 @@ import me.meeshy.sdk.model.reading.mode.LentilleFeatureFlags
 import me.meeshy.sdk.reading.LentilleFeatureFlagsStore
 import me.meeshy.ui.component.CollapsibleSectionHeader
 import me.meeshy.ui.component.StickerSectionHeader
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.hexColor
 
@@ -105,9 +103,9 @@ internal fun ConversationSectionKind.titleRes(): Int = when (this) {
 }
 
 internal fun ConversationSection.glyph() = when (kind) {
-    ConversationSectionKind.PINNED -> Icons.Filled.PushPin
+    ConversationSectionKind.PINNED -> MeeshyIcons.PinFilled
     ConversationSectionKind.CATEGORY -> categoryIconFor(icon)
-    ConversationSectionKind.ALL -> Icons.AutoMirrored.Filled.Chat
+    ConversationSectionKind.ALL -> MeeshyIcons.Chat
 }
 
 /** La couleur de la section : celle de la catégorie quand elle en a une, sinon la teinte du genre. */

@@ -165,6 +165,7 @@ public struct FeedPost: Identifiable, Sendable {
         // Les commentaires embarqués suivent le post : un changement de langue
         // les laissait dans l'ancienne.
         copy.comments = comments.map { $0.resolved(preferredLanguages: preferredLanguages) }
+        copy.repost = repost?.resolved(preferredLanguages: preferredLanguages)
         guard translations?.isEmpty == false else { return copy }
         copy.translatedContent = servedTranslation(preferredLanguages: preferredLanguages)?.text
         return copy

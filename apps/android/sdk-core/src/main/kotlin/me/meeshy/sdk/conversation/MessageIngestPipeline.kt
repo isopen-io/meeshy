@@ -63,6 +63,7 @@ internal class MessageIngestPipeline(
         val messageDao = database.messageDao()
         val writes = LinkedHashMap<String, MessageEntity>()
         val replacedLocalIds = mutableSetOf<String>()
+        val replacements = mutableListOf<Pair<MessageEntity, ApiMessage>>()
         val changed = mutableSetOf<String>()
         val rowIdOfMessage = HashMap<String, String>()
         val baseOfRow = HashMap<String, MessageEntity>()
@@ -81,7 +82,10 @@ internal class MessageIngestPipeline(
             val row = if (base == null) fresh else merged(base, incoming, fresh, pending)
             rowIdOfMessage[incoming.id] = row.id
             if (base != null) baseOfRow[row.id] = base
-            listOfNotNull(direct, optimistic).filter { it.id != row.id }.forEach { replacedLocalIds += it.id }
+            listOfNotNull(direct, optimistic).filter { it.id != row.id }.forEach {
+                replacedLocalIds += it.id
+                replacements += it to incoming
+            }
             val unchanged = base != null && base.id == row.id && row.sameStoredContentAs(base)
             if (!unchanged) {
                 writes[row.id] = row
@@ -96,10 +100,14 @@ internal class MessageIngestPipeline(
         // La jumelle serveur s'écrit AVANT le retrait de la bulle optimiste : la cascade des traductions retenues
         // (RetainedTranslationCascade) épargne alors les lignes rangées sous l'id serveur, que la jumelle porte déjà.
         if (writes.isNotEmpty()) messageDao.upsertAll(writes.values.toList())
-        if (replacedLocalIds.isNotEmpty()) messageDao.deleteByIds(replacedLocalIds.toList())
+        if (replacedLocalIds.isNotEmpty()) {
+            rekeyRetained(replacements.filter { (local, _) -> local.id in replacedLocalIds }, nowMillis)
+            messageDao.deleteByIds(replacedLocalIds.toList())
+        }
         val retained = retainedChanges(writes.values, baseOfRow)
         DedicatedTranslationRows.drop(database, retained.outlived + replacedLocalIds)
         retained.superseded.forEach { (keys, languages) -> DedicatedTranslationRows.supersede(database, keys, languages) }
+        retained.supersededAttachments.forEach { (keys, changes) -> DedicatedTranslationRows.supersedeAttachments(database, keys, changes) }
         regime?.learnFromServed(latest, conversationId)
         erasures?.recordServedGone(latest)
         return changed
@@ -176,7 +184,19 @@ internal class MessageIngestPipeline(
         ConversationEventDeltas.sealedIfOpened(message, openedHere)
 
     /** Ce qu'une page servie change aux traductions retenues : des messages entiers, ou certaines langues seulement. */
-    private class RetainedChanges(val outlived: List<String>, val superseded: List<Pair<List<String>, Set<String>>>)
+    private class RetainedChanges(
+        val outlived: List<String>,
+        val superseded: List<Pair<List<String>, Set<String>>>,
+        val supersededAttachments: List<Pair<List<String>, DedicatedTranslationRows.SupersededAttachments>> = emptyList(),
+    )
+
+    /** Ce que la bulle optimiste avait retenu (transcription, voix) suit le message sous son id serveur, avant qu'elle ne parte. */
+    private suspend fun rekeyRetained(replacements: List<Pair<MessageEntity, ApiMessage>>, nowMillis: Long) {
+        replacements.forEach { (local, served) ->
+            val attachments = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(local.payload).attachments }.getOrDefault(emptyList())
+            DedicatedTranslationRows.rekey(database, local.id, served, attachments, nowMillis)
+        }
+    }
 
     /**
      * Les traductions retenues qu'une page servie rend caduques. Toutes celles d'un message dont le texte a changé
@@ -188,6 +208,7 @@ internal class MessageIngestPipeline(
     private fun retainedChanges(written: Collection<MessageEntity>, baseOfRow: Map<String, MessageEntity>): RetainedChanges {
         val outlived = mutableListOf<String>()
         val superseded = mutableListOf<Pair<List<String>, Set<String>>>()
+        val supersededAttachments = mutableListOf<Pair<List<String>, DedicatedTranslationRows.SupersededAttachments>>()
         written.forEach { row ->
             val base = baseOfRow[row.id] ?: return@forEach
             val before = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(base.payload) }.getOrNull()
@@ -199,8 +220,10 @@ internal class MessageIngestPipeline(
             }
             val languages = DedicatedTranslationRows.supersededLanguages(before, after)
             if (languages.isNotEmpty()) superseded += keys to languages
+            val attachments = DedicatedTranslationRows.supersededAttachments(before, after)
+            if (!attachments.isEmpty) supersededAttachments += keys to attachments
         }
-        return RetainedChanges(outlived, superseded)
+        return RetainedChanges(outlived, superseded, supersededAttachments)
     }
 
     /** Une rafale peut porter deux fois le même message : seul son dernier état compte. */

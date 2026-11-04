@@ -102,6 +102,7 @@ const itComposerAttach = {
   'composer.guest.refused.kind': '«{name}» non è accettato qui: passano solo {kinds}.',
   'composer.guest.refused.size': '«{name}» è troppo grande: al massimo {max}.',
   'send.failure.guestKind': 'questo file non è accettato qui',
+  'send.failure.attachmentRight': 'non puoi ancora inviare questo tipo di allegato in questa conversazione',
   'send.failure.guestTooLarge': 'questo file è troppo grande qui (al massimo {max})',
   'send.failure.formatRefused': 'questo formato di foto (HEIC) non è ancora accettato',
   'profile.image.formatRefused': 'Questo formato di foto (HEIC) non è ancora accettato. Scegli una foto JPEG o PNG.',

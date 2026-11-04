@@ -37,4 +37,84 @@ class TranscriptionRetrySchedulerTest {
     fun `a non audio attachment is never pending`() {
         assertThat(TranscriptionRetryScheduler.isPending(ApiMessageAttachment(id = "i", mimeType = "image/png"))).isFalse()
     }
+
+    private fun message(
+        id: String,
+        attachments: List<ApiMessageAttachment>,
+        deletedAt: String? = null,
+        isEncrypted: Boolean? = null,
+        encryptionMode: String? = null,
+    ) = ApiMessage(
+        id = id,
+        conversationId = "c1",
+        deletedAt = deletedAt,
+        isEncrypted = isEncrypted,
+        encryptionMode = encryptionMode,
+        attachments = attachments,
+    )
+
+    @Test
+    fun `the single refetch waits five seconds over a window of five`() {
+        assertThat(TranscriptionRetryScheduler.SINGLE_RETRY_DELAY_MS).isEqualTo(5_000L)
+        assertThat(TranscriptionRetryScheduler.REFETCH_WINDOW).isEqualTo(5)
+    }
+
+    @Test
+    fun `an audio message without transcription is retained`() {
+        assertThat(TranscriptionRetryScheduler.idsMissingTranscription(listOf(message("m1", listOf(audio())))))
+            .containsExactly("m1")
+    }
+
+    @Test
+    fun `an already transcribed audio message is not retained`() {
+        val transcribed = audio(ApiAttachmentTranscription(text = "salut"))
+        assertThat(TranscriptionRetryScheduler.idsMissingTranscription(listOf(message("m1", listOf(transcribed))))).isEmpty()
+    }
+
+    @Test
+    fun `an image message is not retained`() {
+        val image = ApiMessageAttachment(id = "i1", mimeType = "image/png")
+        assertThat(TranscriptionRetryScheduler.idsMissingTranscription(listOf(message("m1", listOf(image))))).isEmpty()
+    }
+
+    @Test
+    fun `a message mixing a transcribed audio and an untranscribed one is retained`() {
+        val transcribed = audio(ApiAttachmentTranscription(text = "salut")).copy(id = "a1")
+        val pending = audio().copy(id = "a2")
+        assertThat(TranscriptionRetryScheduler.idsMissingTranscription(listOf(message("m1", listOf(transcribed, pending)))))
+            .containsExactly("m1")
+    }
+
+    @Test
+    fun `an empty list gives an empty list`() {
+        assertThat(TranscriptionRetryScheduler.idsMissingTranscription(emptyList())).isEmpty()
+    }
+
+    @Test
+    fun `a blank transcription text is retained`() {
+        val blank = audio(ApiAttachmentTranscription(text = "   "))
+        assertThat(TranscriptionRetryScheduler.idsMissingTranscription(listOf(message("m1", listOf(blank))))).containsExactly("m1")
+    }
+
+    @Test
+    fun `an end to end encrypted message is never retained, the server cannot read it`() {
+        val sealed = message("m1", listOf(audio()), isEncrypted = true, encryptionMode = "e2ee")
+        assertThat(TranscriptionRetryScheduler.idsMissingTranscription(listOf(sealed))).isEmpty()
+    }
+
+    @Test
+    fun `a deleted message is never retained`() {
+        val gone = message("m1", listOf(audio()), deletedAt = "2026-11-04T10:00:00Z")
+        assertThat(TranscriptionRetryScheduler.idsMissingTranscription(listOf(gone))).isEmpty()
+    }
+
+    @Test
+    fun `ids keep their order and appear once`() {
+        val messages = listOf(
+            message("m2", listOf(audio())),
+            message("m1", listOf(audio())),
+            message("m2", listOf(audio())),
+        )
+        assertThat(TranscriptionRetryScheduler.idsMissingTranscription(messages)).containsExactly("m2", "m1").inOrder()
+    }
 }

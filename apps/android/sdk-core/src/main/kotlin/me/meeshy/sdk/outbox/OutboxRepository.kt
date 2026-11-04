@@ -341,6 +341,9 @@ class OutboxRepository @Inject constructor(
         return outboxDao.reclaimStaleInflightExcept(liveSends.toList(), staleBefore = at - staleAfterMs, now = at)
     }
 
+    /** Grave [payload] sur la ligne [cmid] : ce qu'une tentative a déjà acquis (pièces téléversées) survit au rejeu. */
+    suspend fun rewritePayload(cmid: String, payload: String) = outboxDao.updatePayload(cmid, payload, now())
+
     /** Whether a [kind] row anchored on [anchor] is still on its way (exhausted rows do not count). */
     suspend fun hasUnsentRow(kind: OutboxKind, anchor: String): Boolean =
         outboxDao.hasUnsentRow(kind.name, anchor)

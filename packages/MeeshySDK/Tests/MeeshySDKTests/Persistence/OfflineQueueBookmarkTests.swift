@@ -44,6 +44,49 @@ final class OfflineQueueBookmarkTests: XCTestCase {
                      payload: try JSONEncoder().encode(payload), status: status, createdAt: Date(timeIntervalSince1970: 1_760_000_000))
     }
 
+    // MARK: - Une ligne remplacée relâche ceux qui l'attendaient (#16010)
+
+    /// Hors ligne, chaque bascule remplace la ligne précédente de la même
+    /// carte. Celui qui observait l'ancienne ligne attendait une issue qui ne
+    /// viendrait jamais : une tâche suspendue par geste, pour la vie de l'app.
+    func test_uneIntentionPlusRecente_termineLeFluxDeLaLigneRemplacee_sansIssue() async throws {
+        let postId = "post-\(UUID().uuidString)"
+        let ancienne = ClientMutationId.generate()
+        try await enfiler(bookmarked: true, postId: postId, cmid: ancienne)
+        let flux = await OfflineQueue.shared.outcomeStream(for: ancienne)
+        let fini = Task { () -> Bool in
+            for await _ in flux { return false }
+            return true
+        }
+
+        try await enfiler(bookmarked: false, postId: postId)
+
+        let finiSansIssue = await fini.value
+        XCTAssertTrue(finiSansIssue, "le flux remplacé se termine, sans issue inventée qui déclencherait un retour arrière")
+        let observes = await OfflineQueue.shared.observedOutcomeCount
+        XCTAssertEqual(observes, 0)
+    }
+
+    /// La ligne qui remplace garde ses observateurs : seule l'ANCIENNE est relâchée.
+    func test_laLigneQuiRemplace_gardeSesObservateurs() async throws {
+        let postId = "post-\(UUID().uuidString)"
+        try await enfiler(bookmarked: true, postId: postId)
+        let nouvelle = ClientMutationId.generate()
+        let flux = await OfflineQueue.shared.outcomeStream(for: nouvelle)
+        let observe = Task { () -> OutboxOutcome? in
+            for await issue in flux { return issue }
+            return nil
+        }
+
+        try await enfiler(bookmarked: false, postId: postId, cmid: nouvelle)
+        let toujoursObserve = await OfflineQueue.shared.observedOutcomeCount
+        XCTAssertEqual(toujoursObserve, 1)
+
+        await OfflineQueue.shared.publishOutcome(.applied(cmid: nouvelle))
+        let issue = await observe.value
+        XCTAssertEqual(issue, .applied(cmid: nouvelle))
+    }
+
     // MARK: - Le genre de ligne
 
     func test_leGenre_garderSonNomPersiste_etCompterPourLaSynchro() {

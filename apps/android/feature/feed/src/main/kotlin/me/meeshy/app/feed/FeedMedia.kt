@@ -11,7 +11,7 @@ import me.meeshy.sdk.model.SocialAudioTrack
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MAX_POST_MEDIA
 import me.meeshy.sdk.model.MessageTranscription
-import me.meeshy.sdk.model.MessageTranscriptionSegment
+import me.meeshy.sdk.model.AttachmentMetadataMapping
 import me.meeshy.sdk.model.MessageTranslatedAudio
 import me.meeshy.sdk.model.PostMediaFraming
 import me.meeshy.sdk.model.media.AttachmentKind
@@ -142,30 +142,12 @@ internal object FeedMediaMapper {
         language = source.language ?: "und",
         confidence = source.confidence,
         durationMs = source.durationMs,
-        segments = source.segments.orEmpty().map {
-            MessageTranscriptionSegment(text = it.text, startTime = it.startTime, endTime = it.endTime, speakerId = it.speakerId)
-        },
+        segments = source.segments.orEmpty().map(AttachmentMetadataMapping::segment),
         speakerCount = source.speakerCount,
     )
 
     private fun translatedAudios(media: ApiPostMedia, mediaBaseUrl: String?): List<MessageTranslatedAudio> =
         media.translations.orEmpty().mapNotNull { (language, track) ->
-            val url = track.url?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            MessageTranslatedAudio(
-                id = "${media.id}_$language",
-                attachmentId = media.id,
-                targetLanguage = language,
-                url = resolveFeedMediaUrl(url, mediaBaseUrl),
-                transcription = track.transcription.orEmpty(),
-                durationMs = track.durationMs ?: 0,
-                format = track.format ?: "mp3",
-                cloned = track.cloned ?: false,
-                quality = track.quality ?: 0.0,
-                voiceModelId = track.voiceModelId,
-                ttsModel = track.ttsModel ?: "xtts",
-                segments = track.segments.orEmpty().map {
-                    MessageTranscriptionSegment(text = it.text, startTime = it.startTime, endTime = it.endTime, speakerId = it.speakerId)
-                },
-            )
+            AttachmentMetadataMapping.translatedAudio(media.id, language, track) { resolveFeedMediaUrl(it, mediaBaseUrl) }
         }
 }

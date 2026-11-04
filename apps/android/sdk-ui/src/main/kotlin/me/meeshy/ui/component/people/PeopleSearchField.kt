@@ -11,9 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +26,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.R
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyPalette
@@ -59,7 +57,7 @@ public fun PeopleSearchField(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),
     ) {
         Icon(
-            imageVector = Icons.Filled.Search,
+            imageVector = MeeshyIcons.Search,
             contentDescription = null,
             tint = tokens.textMuted,
             modifier = Modifier.size(MeeshyFontSize.label.value.dp),
@@ -91,7 +89,7 @@ public fun PeopleSearchField(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Cancel,
+                    imageVector = MeeshyIcons.CloseCircleFilled,
                     contentDescription = null,
                     tint = tokens.textMuted,
                     modifier = Modifier.size(MeeshyFontSize.label.value.dp),

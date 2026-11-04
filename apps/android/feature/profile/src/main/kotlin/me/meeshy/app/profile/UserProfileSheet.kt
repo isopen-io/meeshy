@@ -51,6 +51,7 @@ import me.meeshy.ui.component.FeedbackKind
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.people.BlockConfirmDialog
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -96,6 +97,7 @@ fun UserProfileSheet(
     }
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 4) }
     var reportChoiceOpen by remember { mutableStateOf(false) }
+    var blockConfirmOpen by remember { mutableStateOf(false) }
     ProfileSheetActionsBinding(state, actionsViewModel, environment, toasts)
     val sharedId = state.profile?.id?.takeIf { it.isNotBlank() && !state.isSelf }
     LaunchedEffect(sharedId) { sharedId?.let(sharedConversationsViewModel::load) }
@@ -120,12 +122,27 @@ fun UserProfileSheet(
                 isExpanded = sheetState.targetValue == SheetValue.Expanded,
                 onClose = close,
                 onRetry = { viewModel.onEvent(UserProfileSheetEvent.Retry) },
-                actions = actionsViewModel.callbacks(state, environment) { reportChoiceOpen = true },
+                actions = actionsViewModel.callbacks(state, environment, onBlockRequest = { blockConfirmOpen = true }) { reportChoiceOpen = true },
                 catalog = catalog,
                 sharedConversations = sharedConversations,
             )
             ConnectionFeedbackHost(feedback = actionsViewModel.connectionFeedback)
             FeedbackToastHost(toasts = toasts)
+            if (blockConfirmOpen) {
+                BlockConfirmDialog(
+                    displayName = state.profile?.let { it.displayName ?: it.username } ?: state.user.resolvedDisplayName,
+                    fallbackName = stringResource(R.string.profile_block_fallback_name),
+                    title = stringResource(R.string.profile_block_confirm_title),
+                    message = { name -> stringResource(R.string.profile_block_confirm_message, name) },
+                    confirmLabel = stringResource(R.string.profile_block_confirm_action),
+                    cancelLabel = stringResource(R.string.profile_block_cancel),
+                    onConfirm = {
+                        blockConfirmOpen = false
+                        actionsViewModel.block()
+                    },
+                    onDismiss = { blockConfirmOpen = false },
+                )
+            }
             if (reportChoiceOpen) {
                 ProfileReportQuickDialog(
                     onReason = { reason ->
@@ -181,6 +198,7 @@ private fun ProfileSheetActionsBinding(
 private fun ProfileActionsViewModel.callbacks(
     state: UserProfileSheetUiState,
     environment: ProfileSheetEnvironment,
+    onBlockRequest: () -> Unit,
     onReportChoice: () -> Unit,
 ): ProfileActionCallbacks = ProfileActionCallbacks(
     onSendMessage = this::sendMessage,
@@ -189,7 +207,7 @@ private fun ProfileActionsViewModel.callbacks(
     onResend = this::resendConnection,
     onAccept = this::acceptConnection,
     onDecline = this::declineConnection,
-    onBlock = this::block,
+    onBlock = onBlockRequest,
     onUnblock = this::unblock,
     onRaise = this::requestRaise,
     onLower = this::lowerCircle,

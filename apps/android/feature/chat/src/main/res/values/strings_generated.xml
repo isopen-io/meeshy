@@ -354,10 +354,13 @@
     <string name="dashboard_stat_links">Links</string>
     <string name="dashboard_tone">Tone: %1$s</string>
     <string name="encryption_close">Close</string>
+    <string name="encryption_confirm_cancel">Cancel</string>
     <string name="encryption_detail_activate">Enable encryption</string>
     <string name="encryption_detail_activation_footer_final">End-to-end encryption can never be turned off, and neither can encryption on our servers. You can always open another conversation, without end-to-end encryption, with the same people.</string>
     <string name="encryption_detail_active_label">Active encryption</string>
     <string name="encryption_detail_details_header">Details</string>
+    <string name="encryption_detail_direct_already_end_to_end">You already have an end-to-end encrypted conversation with this person: open it to chat there. This one stays encrypted on our servers.</string>
+    <string name="encryption_detail_direct_not_a_pair">This one-to-one chat doesn’t have exactly two registered members: end-to-end encryption isn’t possible here.</string>
     <string name="encryption_detail_enabled_on">Activated on</string>
     <string name="encryption_detail_inactive_label">Unencrypted conversation</string>
     <string name="encryption_detail_inactive_subtitle">Conversation created before systematic encryption: its messages are not encrypted.</string>
@@ -366,6 +369,8 @@
     <string name="encryption_detail_mode_label">Mode</string>
     <string name="encryption_detail_regime_changed">Encryption was just changed by another member: the status has been refreshed.</string>
     <string name="encryption_detail_served_gap">The server presents this conversation without end-to-end encryption, but this device has seen it end-to-end encrypted: it stays so here. You can always open another conversation, without end-to-end encryption, with the same people.</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm">Switch to end-to-end</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm_title">Switch to end-to-end encryption?</string>
     <string name="encryption_detail_title">Encryption</string>
     <string name="encryption_detail_translation">Translation</string>
     <string name="encryption_detail_translation_available">Available</string>
@@ -412,6 +417,7 @@
     <string name="encryption_summary_hybrid">Encrypted on our servers, with verification between compatible devices</string>
     <string name="encryption_summary_none">Conversation created before systematic encryption: its messages are not encrypted</string>
     <string name="encryption_summary_server">Encrypted on our servers</string>
+    <string name="encryption_switch_end_to_end_final">End-to-end encryption can never be turned off. You can always open another conversation, without end-to-end encryption, with the same people.</string>
     <string name="encryption_topic_absent">Not available in this mode</string>
     <string name="encryption_topic_available">What works</string>
     <string name="encryption_topic_devices">Your devices</string>

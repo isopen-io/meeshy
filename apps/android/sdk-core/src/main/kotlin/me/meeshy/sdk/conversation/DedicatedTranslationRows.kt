@@ -3,6 +3,8 @@ package me.meeshy.sdk.conversation
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.AttachmentAudioMetadata
 import me.meeshy.sdk.model.TranslationOverlay
 
 /**
@@ -60,6 +62,52 @@ internal object DedicatedTranslationRows {
         val dao = database.messageTranslationDao()
         languages.forEach { language -> all.chunked(CHUNK).forEach { dao.deleteTextFor(it, language) } }
         TranslationLayer.of(database).reload(all)
+    }
+
+    /**
+     * Les transcriptions et pistes parlées dont la charge SERVIE a changé de [before] à [after] : la ligne retenue (une
+     * trame socket) est plus ancienne que ce que le serveur vient de servir (re-transcription, nouvelle voix).
+     */
+    fun supersededAttachments(before: ApiMessage, after: ApiMessage): SupersededAttachments =
+        SupersededAttachments(
+            transcriptions = AttachmentAudioMetadata.supersededTranscriptions(before, after),
+            audio = AttachmentAudioMetadata.supersededAudio(before, after),
+        )
+
+    class SupersededAttachments(val transcriptions: Set<String>, val audio: Set<Pair<String, String>>) {
+        val isEmpty: Boolean get() = transcriptions.isEmpty() && audio.isEmpty()
+    }
+
+    /** Efface les transcriptions et pistes retenues de [superseded] pour [ids], dans la transaction de l'écriture de la charge. */
+    suspend fun supersedeAttachments(database: MeeshyDatabase, ids: Collection<String>, superseded: SupersededAttachments) {
+        val all = ids.filter { it.isNotBlank() }.distinct()
+        if (all.isEmpty() || superseded.isEmpty) return
+        val dao = database.messageTranslationDao()
+        if (superseded.transcriptions.isNotEmpty()) {
+            all.chunked(CHUNK).forEach { dao.deleteTranscriptionsOf(it, superseded.transcriptions.toList()) }
+        }
+        superseded.audio.forEach { (attachmentId, language) ->
+            all.chunked(CHUNK).forEach { dao.deleteAudioTrackOf(it, attachmentId, language) }
+        }
+        TranslationLayer.of(database).reload(all)
+    }
+
+    /**
+     * À l'accusé d'un envoi, ce que l'id LOCAL [localId] a retenu (transcription, pistes parlées) passe sous l'id du
+     * message [served], avant que la bulle optimiste ne parte avec ses lignes. Un message protégé n'en reçoit jamais
+     * ([TranslationOverlay.refuses]) ; une ligne que le serveur a déjà fait arriver n'est jamais écrasée ; un second
+     * accusé n'écrit rien.
+     */
+    suspend fun rekey(
+        database: MeeshyDatabase,
+        localId: String,
+        served: ApiMessage,
+        localAttachments: List<ApiMessageAttachment>,
+        nowMillis: Long,
+    ) {
+        if (localId == served.id || TranslationOverlay.refuses(served)) return
+        val attachmentIds = AttachmentAudioMetadata.attachmentIdMap(localAttachments, served.attachments)
+        TranslationLayer.of(database).rekey(localId, served.id, attachmentIds, nowMillis)
     }
 
     private const val CHUNK = 400

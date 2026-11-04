@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.File
 import kotlin.random.Random
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -84,7 +85,8 @@ private const val TICK_SECONDS = 0.1
  *
  * Un échantillon de moins de [minimumDurationSeconds] est rejeté ; le bouton de création n'est actif qu'à
  * partir de [minimumSamples]. Les échantillons (octets + durée) sont remis à [onSamplesReady]. L'accent est
- * un paramètre de l'appelant. [newRecorder] injecte l'enregistreur (préréglage échantillon, 96 kb/s).
+ * un paramètre de l'appelant. [newRecorder] injecte l'enregistreur (préréglage échantillon, 96 kb/s) ;
+ * [readDispatcher] porte la lecture du fichier d'une prise (E/S par défaut).
  */
 @Composable
 public fun VoiceRecordingView(
@@ -95,6 +97,7 @@ public fun VoiceRecordingView(
     minimumDurationSeconds: Int = VoiceSampleRules.MINIMUM_DURATION_SECONDS,
     initialLanguage: String? = null,
     newRecorder: (() -> AudioRecordingProviding)? = null,
+    readDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -116,7 +119,7 @@ public fun VoiceRecordingView(
             return
         }
         scope.launch {
-            val bytes = withContext(Dispatchers.IO) { result.file.runCatching { readBytes().also { delete() } }.getOrNull() }
+            val bytes = withContext(readDispatcher) { result.file.runCatching { readBytes().also { delete() } }.getOrNull() }
             if (bytes == null || bytes.isEmpty()) return@launch
             val added = samples.add(bytes, result.durationSeconds, minimumDurationSeconds)
             if (added is VoiceSampleSet.Added.Accepted) samples = added.set

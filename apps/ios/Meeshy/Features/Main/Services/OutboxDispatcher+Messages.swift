@@ -124,17 +124,6 @@ extension OutboxDispatcher {
         return true
     }
 
-    /// Nettoyage best-effort des fichiers déjà téléversés : un échec est
-    /// bénin, `OutboxFlusher.cleanupLocalFiles(for:)` les reprend à la fin de
-    /// la ligne (appliquée ou épuisée).
-    func removeReplayedFiles(_ paths: [String], kind: String) {
-        for path in paths {
-            do { try FileManager.default.removeItem(atPath: path) } catch {
-                logger.warning("\(kind, privacy: .public) dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            }
-        }
-    }
-
     func dispatchSendMessage(_ record: OutboxRecord) async throws {
         if record.id.hasPrefix("ofq_") {
             let item: OfflineQueueItem
@@ -183,7 +172,6 @@ extension OutboxDispatcher {
 
                 let uploader = TusUploadManager(baseURL: baseURL)
                 var uploadedIds: [String] = []
-                var uploadedPaths: [String] = []
                 var firstUploadErrorAudio: Error?
 
                 for stored in pendingAudioPaths {
@@ -199,7 +187,6 @@ extension OutboxDispatcher {
                             credential: credential
                         )
                         uploadedIds.append(tusResult.id)
-                        uploadedPaths.append(absolutePath)
                     } catch {
                         logger.error("Audio track TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
                         if firstUploadErrorAudio == nil { firstUploadErrorAudio = error }
@@ -211,8 +198,6 @@ extension OutboxDispatcher {
                     emptyDescription: "No audio track uploaded for offline audio dispatch")
 
                 let serverId = try await replayUploadedAttachments(item, uploadedIds: uploadedIds, kind: "audio")
-
-                removeReplayedFiles(uploadedPaths, kind: "audio")
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
@@ -244,7 +229,6 @@ extension OutboxDispatcher {
 
                 let uploader = TusUploadManager(baseURL: baseURL)
                 var uploadedIds: [String] = []
-                var uploadedPaths: [String] = []
                 var firstUploadErrorMedia: Error?
 
                 for (index, stored) in pendingMediaPaths.enumerated() {
@@ -262,7 +246,6 @@ extension OutboxDispatcher {
                             credential: credential, fileName: item.originalMediaName(at: index)
                         )
                         uploadedIds.append(tusResult.id)
-                        uploadedPaths.append(absolutePath)
                     } catch {
                         logger.error("Media TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
                         if firstUploadErrorMedia == nil { firstUploadErrorMedia = error }
@@ -274,8 +257,6 @@ extension OutboxDispatcher {
                     emptyDescription: "No media uploaded for offline media dispatch")
 
                 let serverId = try await replayUploadedAttachments(item, uploadedIds: uploadedIds, kind: "media")
-
-                removeReplayedFiles(uploadedPaths, kind: "media")
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,

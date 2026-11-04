@@ -314,6 +314,33 @@ final class OutboxDispatcherTests: XCTestCase {
 
     // MARK: - sendFriendRequest: corrupt payload → MeeshyError.server(400, _)
 
+    // MARK: - unblockUser : le rejeu d'un déblocage déjà appliqué aboutit (#16008)
+
+    /// La charge 404 EXACTE de `debloquer` (`routes/directory/blocks.ts` →
+    /// `sendNotFound`), telle que `APIClient` en tire son message (`message ?? error`).
+    private let alreadyUnblockedBody = #"{"success":false,"error":"User is not in your blocked list","message":"User is not in your blocked list"}"#
+
+    private func servedMessage(_ body: String) throws -> String {
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any])
+        return try XCTUnwrap((json["message"] as? String) ?? (json["error"] as? String))
+    }
+
+    func test_unblockReplay_whenServerAlreadyUnblocked_isASuccess() throws {
+        let error = MeeshyError.server(statusCode: 404, message: try servedMessage(alreadyUnblockedBody))
+        XCTAssertTrue(UnblockReplay.isAlreadyApplied(error))
+    }
+
+    func test_unblockReplay_whenAnotherNotFound_staysARefusal() throws {
+        let unknownUser = #"{"success":false,"error":"User not found","message":"User not found"}"#
+        let error = MeeshyError.server(statusCode: 404, message: try servedMessage(unknownUser))
+        XCTAssertFalse(UnblockReplay.isAlreadyApplied(error))
+    }
+
+    func test_unblockReplay_whenSameMessageOnAnotherStatus_staysARefusal() {
+        let error = MeeshyError.server(statusCode: 400, message: UnblockReplay.notInBlockedListMessage)
+        XCTAssertFalse(UnblockReplay.isAlreadyApplied(error))
+    }
+
     func test_dispatch_sendFriendRequest_whenCorruptPayload_throwsCode400() async {
         let record = makeRecord(kind: .sendFriendRequest, payload: corrupt)
         do {

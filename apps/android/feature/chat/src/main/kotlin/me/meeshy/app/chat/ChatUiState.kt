@@ -185,6 +185,14 @@ data class ChatUiState(
     val isEndToEnd: Boolean
         get() = EndToEndRegime.isEndToEnd(encryptionMode) || messages.any { it.isEndToEndSealed || it.holdsEndToEndSend }
 
+    /**
+     * Un tête-à-tête PROUVÉ : le type servi et le pair sont connus. Tant que la conversation n'est pas
+     * chargée, `isGroup` vaut `false` par défaut ; ce qui en dépend pour la sécurité (le bout en bout ne
+     * se propose qu'en tête-à-tête, #16044) lit ce champ, fermé tant que rien n'est su.
+     */
+    val isKnownDirect: Boolean
+        get() = !isGroup && directPeerUserId != null
+
     /** Whether the reader may write here — what the message law reads before offering « Répondre ». */
     val viewerMayWrite: Boolean
         get() = (!isEndToEnd || endToEndTextOpen) && composerPermissions?.canSendMessages != false

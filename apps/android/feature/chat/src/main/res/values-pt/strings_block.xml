@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="participant_block_confirm_title">Bloquear este utilizador</string>
+    <string name="participant_block_confirm_message">Deixará de receber mensagens de %1$s. Pode desbloqueá-lo nas Definições.</string>
+    <string name="participant_block_confirm_action">Bloquear</string>
+    <string name="participant_block_cancel">Cancelar</string>
+    <string name="participant_block_fallback_name">esta pessoa</string>
+    <string name="participant_block_failed">Não foi possível bloquear este utilizador</string>
+    <string name="participant_unblock_failed">Não foi possível desbloquear este utilizador</string>
+    <string name="participant_block_entry">Bloquear</string>
+    <string name="participant_unblock_entry">Desbloquear</string>
+    <string name="participant_block_entry_a11y">Bloquear %1$s</string>
+    <string name="participant_unblock_entry_a11y">Desbloquear %1$s</string>
+</resources>

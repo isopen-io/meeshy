@@ -16,6 +16,7 @@
     <string name="contacts_discover_email_send">إرسال</string>
     <string name="contacts_discover_email_send_a11y">إرسال الدعوة بالبريد الإلكتروني</string>
     <string name="contacts_discover_email_title">دعوة بالبريد الإلكتروني</string>
+    <string name="contacts_discover_invite_sent">تم إرسال الدعوة إلى %1$s</string>
     <string name="contacts_discover_no_results">لم يتم العثور على مستخدم</string>
     <string name="contacts_discover_pending">في الانتظار</string>
     <string name="contacts_discover_search_hint">البحث عن مستخدم في Meeshy</string>
@@ -23,6 +24,8 @@
     <string name="contacts_discover_sms_send">إرسال</string>
     <string name="contacts_discover_sms_send_a11y">إرسال الدعوة برسالة نصية</string>
     <string name="contacts_discover_sms_title">دعوة برسالة نصية</string>
+    <string name="contacts_discover_sms_unavailable">الرسائل النصية غير متاحة</string>
+    <string name="contacts_discover_view_profile">عرض الملف الشخصي</string>
     <string name="contacts_filter_all">الكل</string>
     <string name="contacts_filter_offline">غير متصل</string>
     <string name="contacts_filter_online">متصل</string>
@@ -44,6 +47,20 @@
     <string name="contacts_tab_discover">اكتشاف</string>
     <string name="contacts_tab_requests">الطلبات</string>
     <string name="contacts_title">جهات الاتصال</string>
+    <string name="keypad_call">اتصال</string>
+    <string name="keypad_call_audio">مكالمة صوتية</string>
+    <string name="keypad_call_video">مكالمة فيديو</string>
+    <string name="keypad_clear_a11y">مسح الكل</string>
+    <string name="keypad_delete_a11y">مسح</string>
+    <string name="keypad_delete_a11y_hint">يمسح آخر حرف</string>
+    <string name="keypad_input_a11y">حقل الرقم أو الاسم</string>
+    <string name="keypad_input_placeholder">الرقم أو الاسم</string>
+    <string name="keypad_no_match_subtitle">تحقّق من الرقم أو الاسم المُدخل.</string>
+    <string name="keypad_no_match_title">لم يتم العثور على جهة اتصال</string>
+    <string name="keypad_online_lower">متصل</string>
+    <string name="keypad_prompt_subtitle">ابحث عن شخص برقم الهاتف أو بالاسم.</string>
+    <string name="keypad_prompt_title">اطلب رقمًا أو اسمًا</string>
+    <string name="keypad_result_open_profile_a11y">فتح الملف الشخصي</string>
     <string name="phone_prompt_benefit">يجدك معارفك على Meeshy بفضل رقمك. ويمكنك أيضًا استخدامه لتسجيل الدخول.</string>
     <string name="phone_prompt_code_label">رمز من 6 أرقام</string>
     <string name="phone_prompt_code_sent">تم إرسال الرمز برسالة نصية</string>

@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,7 +72,7 @@ internal fun ConversationEncryptionSheet(
     viewModel: ConversationEncryptionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(conversationId) { viewModel.load(conversationId, isDirect) }
+    LaunchedEffect(conversationId, isDirect) { viewModel.load(conversationId, isDirect) }
     val view = state.view()
 
     ModalBottomSheet(
@@ -105,6 +106,27 @@ internal fun ConversationEncryptionSheet(
             state.notice?.takeIf { !state.readFailed }?.let { NoticeText(it.textRes(), error = true) }
         }
     }
+    if (state.confirmsEndToEnd) EndToEndConfirmation(viewModel::confirmEndToEnd, viewModel::cancelEndToEnd)
+}
+
+/** iOS `ConversationEncryptionDetailSheet.confirmationDialog` : on ne revient jamais du bout en bout (#12949). */
+@Composable
+private fun EndToEndConfirmation(onConfirm: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.encryption_detail_switch_to_end_to_end_confirm_title)) },
+        text = { Text(stringResource(R.string.encryption_switch_end_to_end_final)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.encryption_detail_switch_to_end_to_end_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.encryption_confirm_cancel))
+            }
+        },
+    )
 }
 
 private fun ConversationEncryptionRegime.wireMode(): String? = when (this) {
@@ -205,7 +227,7 @@ private fun ActivationBlock(state: ConversationEncryptionUiState, accent: Color,
     Text(stringResource(R.string.encryption_detail_activation_footer_final), style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
     Button(
         onClick = viewModel::activate,
-        enabled = !state.isSwitching,
+        enabled = state.canActivate,
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) {
         if (state.isSwitching) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = accent)

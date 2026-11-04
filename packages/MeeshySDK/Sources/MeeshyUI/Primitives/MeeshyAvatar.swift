@@ -258,6 +258,9 @@ public struct MeeshyAvatar: View {
     /// La place libre (pt) que l'hôte garantit autour de l'empreinte : le cadre illustré s'y montre
     /// sans réduire l'avatar (#15157). `0` ⇒ le cadre tient dans l'empreinte.
     public private(set) var ringDecorRoom: CGFloat = 0
+    /// `false` : le contour sans ses films illustrés, l'anneau fixe seul — la SEULE surface qui le
+    /// retire est la bulle de frappe (#16114) ; partout ailleurs, le décor s'affiche entier.
+    public private(set) var ringShowsDecor: Bool = true
 
     // Primary init (AvatarContext)
     public init(name: String, context: AvatarContext, kind: AvatarKind = .user, accentColor: String = "",
@@ -433,7 +436,8 @@ public struct MeeshyAvatar: View {
         .avatarRingWithin(
             ringDesign,
             footprint: context.size,
-            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize, decorRoom: ringDecorRoom
+            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize, decorRoom: ringDecorRoom,
+            decor: ringShowsDecor
         )
         .overlay(alignment: .bottomTrailing) {
             if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
@@ -507,6 +511,13 @@ public struct MeeshyAvatar: View {
     public func ringDecorRoom(_ room: CGFloat) -> MeeshyAvatar {
         var copy = self
         copy.ringDecorRoom = room
+        return copy
+    }
+
+    /// Retire les films illustrés du contour : l'anneau fixe seul (#16114, la bulle de frappe).
+    public func ringWithoutDecor() -> MeeshyAvatar {
+        var copy = self
+        copy.ringShowsDecor = false
         return copy
     }
 
