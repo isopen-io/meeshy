@@ -254,6 +254,7 @@ class ConversationAudioCoordinatorTest {
     @Test fun `la langue entendue est celle de la piste jouee, relachee au changement de piste`() = runTest {
         val engine = FakeEngine()
         val coordinator = coordinator(this, engine)
+        runCurrent()
 
         coordinator.play(item("a").copy(trackLanguage = "en"), listOf(item("b").copy(trackLanguage = "fr")), "Famille", null)
         assertThat(engine.languageProvider?.invoke()).isEqualTo("en")

@@ -20,7 +20,8 @@ private fun voiceNote(
     id: String = "v1",
     fileUrl: String? = "https://cdn.example/v1.m4a",
     translations: Map<String, ApiAttachmentTranslation>? = null,
-    isViewOnce: Boolean? = null,
+    isViewOnce: Boolean? = false,
+    isBlurred: Boolean? = false,
 ) = ApiMessageAttachment(
     id = id,
     mimeType = "audio/mp4",
@@ -28,6 +29,7 @@ private fun voiceNote(
     transcription = ApiAttachmentTranscription(transcribedText = "La reunión se mueve", language = "es"),
     translations = translations,
     isViewOnce = isViewOnce,
+    isBlurred = isBlurred,
 )
 
 private fun replyingToVoice(quoted: ApiMessageReplyPreview, prefs: QuotedVoicePrefs = QuotedVoicePrefs("fr")) =
@@ -76,6 +78,14 @@ class BubbleQuotedVoiceTest {
     @Test
     fun `un vocal dont la piece est a vue unique ne porte rien`() {
         val content = replyingToVoice(ApiMessageReplyPreview(id = "q", content = "", attachments = listOf(voiceNote(isViewOnce = true))))
+
+        assertThat(content.replyToAudio).isNull()
+    }
+
+    @Test
+    fun `un vocal cite dont la piece ne declare pas sa protection ne porte rien`() {
+        val silent = voiceNote(isViewOnce = null, isBlurred = null)
+        val content = replyingToVoice(ApiMessageReplyPreview(id = "q", content = "", attachments = listOf(silent)))
 
         assertThat(content.replyToAudio).isNull()
     }
