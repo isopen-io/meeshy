@@ -27,7 +27,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -41,6 +40,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.fullscreen.AudioDialGeometry
+import me.meeshy.sdk.model.fullscreen.AudioFullscreenHeroGeometry
 import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -73,8 +73,8 @@ public fun AudioFullscreenDial(
 ) {
     val reduceMotion = LocalReduceMotion.current
     val haptics = rememberMeeshyHaptics()
-    val density = LocalDensity.current
-    val side = portraitDiameter + AudioDialGeometry.BAND.dp * 2
+    val geometry = remember(portraitDiameter) { AudioFullscreenHeroGeometry.of(portraitDiameter.value, decor = null) }
+    val side = geometry.side.dp
     var scrubbing by remember { mutableStateOf<Double?>(null) }
     val shown = scrubbing ?: progress
     val animated = isPlaying && !reduceMotion
@@ -148,9 +148,9 @@ public fun AudioFullscreenDial(
     ) {
         Canvas(Modifier.size(side)) {
             val center = Offset(size.width / 2f, size.height / 2f)
-            val foot = with(density) { portraitDiameter.toPx() } / 2f + AudioDialGeometry.GAP.dp.toPx()
+            val foot = geometry.ringInnerRadius.dp.toPx()
             val barLength = AudioDialGeometry.BAR_LENGTH.dp.toPx()
-            val width = 3.dp.toPx()
+            val width = AudioDialGeometry.BAR_WIDTH.dp.toPx()
             val count = AudioDialGeometry.BAR_COUNT
             for (bar in 0 until count) {
                 val sample = if (bars.isEmpty()) AudioDialGeometry.fallbackHeight(bar) else bars[bar]
@@ -168,14 +168,14 @@ public fun AudioFullscreenDial(
                     )
                 }
             }
-            val orbit = foot + barLength / 2f
+            val orbit = geometry.cursorOrbit.dp.toPx()
             val angle = shown * TAU
             val cursor = Offset(
                 center.x + (sin(angle) * orbit).toFloat(),
                 center.y - (cos(angle) * orbit).toFloat(),
             )
-            val radius = (if (scrubbing == null) 8 else 11).dp.toPx()
-            drawCircle(accent, radius + 3.dp.toPx(), cursor)
+            val radius = (if (scrubbing == null) AudioDialGeometry.CURSOR_RADIUS else AudioDialGeometry.CURSOR_SCRUB_RADIUS).dp.toPx()
+            drawCircle(accent, radius + AudioDialGeometry.CURSOR_HALO.dp.toPx(), cursor)
             drawCircle(cursorColor, radius, cursor)
         }
         androidx.compose.runtime.CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
