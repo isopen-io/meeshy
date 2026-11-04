@@ -1,7 +1,5 @@
 package me.meeshy.ui.component.people
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Phone
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsNotSelected
@@ -11,6 +9,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -31,7 +30,7 @@ class HubTabButtonTest {
         compose.setContent {
             MeeshyTheme {
                 HubTabButton(
-                    icon = Icons.Filled.Phone,
+                    icon = MeeshyIcons.Call,
                     title = "Calls",
                     isSelected = selected,
                     onClick = { clicks++ },

@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -44,6 +42,7 @@ import me.meeshy.sdk.model.role
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -142,7 +141,7 @@ internal fun MemberRow(
         Box {
             IconButton(onClick = { menuOpen = true }) {
                 Icon(
-                    imageVector = Icons.Filled.MoreVert,
+                    imageVector = MeeshyIcons.MoreVert,
                     contentDescription = stringResource(R.string.conversation_members_actions, name),
                 )
             }
