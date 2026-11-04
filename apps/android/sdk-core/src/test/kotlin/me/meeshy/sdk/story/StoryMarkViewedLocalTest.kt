@@ -48,7 +48,14 @@ class StoryMarkViewedLocalTest {
     private suspend fun seed(post: ApiPost) =
         db.storyDao().upsertAll(listOf(StoryEntity(post.id, MeeshyApi.json.encodeToString(post), 1L, 1L)))
 
-    private val unseen = ApiPost(id = "s1", type = "STORY", createdAt = "2026-10-23T10:00:00Z", isViewedByMe = false)
+    // Une story VIVANTE : depuis bebd40fec1 la revalidation purge d'abord les stories expirées (20 h), et une date
+    // figée finit toujours par expirer — la vue gardée se perdait alors avec la ligne purgée.
+    private val unseen = ApiPost(
+        id = "s1",
+        type = "STORY",
+        createdAt = java.time.Instant.now().minusSeconds(3_600).toString(),
+        isViewedByMe = false,
+    )
 
     @Test
     fun `a viewed story is seen in the tray cache right away`() = runTest {

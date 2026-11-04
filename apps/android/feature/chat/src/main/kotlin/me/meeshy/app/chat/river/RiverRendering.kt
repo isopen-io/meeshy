@@ -1,6 +1,7 @@
 package me.meeshy.app.chat.river
 
 import me.meeshy.sdk.model.ForwardAttribution
+import me.meeshy.sdk.model.ServedProfileDecorItem
 import androidx.compose.runtime.Immutable
 import java.time.ZoneId
 import java.util.Locale
@@ -46,6 +47,8 @@ internal data class RiverBubbleIdentity(
     val storyRing: StoryRingState,
     /** La conversation du message : « ici » (`viewing:*`) ne vaut que pour elle, lu au pied de l'avatar. */
     val conversationId: String? = null,
+    /** Le contour équipé de l'expéditeur, tel que servi : l'avatar le résout par le catalogue. */
+    val avatarRing: ServedProfileDecorItem? = null,
 )
 
 /** Ce qui remplace le texte d'une bulle que rien n'a le droit de montrer. */
@@ -167,6 +170,7 @@ internal object RiverRenderingBuilder {
                 profile = source.senderProfile,
                 storyRing = storyRing(userId),
                 conversationId = source.viewingConversationId,
+                avatarRing = source.senderRing,
             ),
             isForwarded = source.isForwarded,
             forwardAttribution = source.forwardAttribution,

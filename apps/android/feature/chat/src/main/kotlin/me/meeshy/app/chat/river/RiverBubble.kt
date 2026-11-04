@@ -432,6 +432,7 @@ private fun IdentityHeader(content: RiverBubbleContent, laneColor: Color, conten
             presence = rememberPresence(identity?.userId),
             here = rememberConversationHere(identity?.userId, identity?.conversationId),
             imageUrl = identity?.avatarUrl,
+            decorRing = identity?.avatarRing,
         )
         Text(
             text = content.senderDisplayName,

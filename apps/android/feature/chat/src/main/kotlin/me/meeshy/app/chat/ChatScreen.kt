@@ -126,6 +126,8 @@ fun ChatScreen(
     val governance = remember(viewModel) { viewModel.controllers.find<ConversationGovernanceController>() }
     val composerClosure by (governance?.composerClosure ?: NO_CLOSURE).collectAsStateWithLifecycle()
     val capabilities by (governance?.capabilities ?: NO_CAPABILITIES).collectAsStateWithLifecycle()
+    val viewerRole by (governance?.viewerRole ?: NO_VIEWER_ROLE).collectAsStateWithLifecycle()
+    val unreadAtOpening by viewModel.unreadAtOpening.collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -156,6 +158,8 @@ fun ChatScreen(
         composerClosure = composerClosure,
         capabilities = capabilities,
         listGate = viewModel.listGate,
+        viewerRole = viewerRole,
+        unreadAtOpening = unreadAtOpening,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
@@ -267,6 +271,7 @@ private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
 
 private val NO_CLOSURE: kotlinx.coroutines.flow.StateFlow<me.meeshy.sdk.model.ComposerClosure?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 private val NO_CAPABILITIES: kotlinx.coroutines.flow.StateFlow<me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+private val NO_VIEWER_ROLE: kotlinx.coroutines.flow.StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 private val NOT_ENDED: kotlinx.coroutines.flow.StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false)
 
 /** Une action qui ne s'exécute qu'une fois : le retour d'un fil qui se ferme (#14645). */

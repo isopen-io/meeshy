@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.ComposerClosure
 import me.meeshy.sdk.model.ConversationWriteRestriction
 import me.meeshy.sdk.model.composerClosure
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
+import me.meeshy.sdk.model.knownUserRole
 import me.meeshy.sdk.session.SessionRepository
 
 /**
@@ -42,6 +43,14 @@ class ConversationGovernanceController @Inject constructor(
     private val _capabilities = MutableStateFlow<ConversationRowMenuCapabilities?>(null)
     val capabilities: StateFlow<ConversationRowMenuCapabilities?> = _capabilities.asStateFlow()
 
+    private val _viewerRole = MutableStateFlow<String?>(null)
+
+    /**
+     * Le rôle CONNU du lecteur dans ce fil (`MemberRole.name`, [knownUserRole]) — la garde de rôle du cache de la fiche
+     * d'un participant (ADR-032) ; `null` avant le chargement ou quand rien ne le dit, et alors aucune copie n'est peinte.
+     */
+    val viewerRole: StateFlow<String?> = _viewerRole.asStateFlow()
+
     override fun attach(host: ChatControllerHost) {
         host.scope.launch {
             conversationRepository.conversationStream(host.conversationId).collect { conversation ->
@@ -65,6 +74,7 @@ class ConversationGovernanceController @Inject constructor(
         _composerClosure.value = conversation?.composerClosure(learned.value) ?: learned.value?.takeIf { it.closesComposer }?.let { ComposerClosure.MINOR_GLOBAL }
         val user = sessionRepository.currentUser.value
         _capabilities.value = conversation?.let { ConversationRowMenuCapabilities.forViewer(it, user) }
+        _viewerRole.value = conversation?.knownUserRole(user?.id)?.name
     }
 }
 

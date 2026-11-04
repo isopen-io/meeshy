@@ -343,6 +343,20 @@ describe('la galerie (#8308, #14641)', () => {
   });
 });
 
+describe('le téléchargement automatique des médias (#6333)', () => {
+  test('la section Données porte une politique par type, images puis vidéos, aux défauts d’iOS', () => {
+    const host = dom(<DataSection language="fr" />);
+    const row = host.querySelector('[data-settings-media-download]');
+    expect(row?.textContent).toContain('Téléchargement automatique des médias');
+    expect(row?.textContent).toContain('Sous 100 Ko');
+    const images = host.querySelector<HTMLSelectElement>('[data-media-download="image"]');
+    const videos = host.querySelector<HTMLSelectElement>('[data-media-download="video"]');
+    expect([...(images?.options ?? [])].map((o) => o.textContent)).toEqual(['Toujours', 'Wi-Fi + bon cellulaire', 'Wi-Fi uniquement', 'Jamais']);
+    expect(images?.querySelector('option[selected]')?.getAttribute('value')).toBe('wifiAndGoodCellular');
+    expect(videos?.querySelector('option[selected]')?.getAttribute('value')).toBe('wifiOnly');
+  });
+});
+
 describe('la traduction sur l’appareil (#9898)', () => {
   test('sans réglage fourni, aucune bascule n’est offerte', () => {
     expect(dom(<DataSection language="fr" />).querySelector('[data-setting="deviceTranslation"]')).toBeNull();
