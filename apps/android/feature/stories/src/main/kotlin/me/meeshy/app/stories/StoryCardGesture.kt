@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 
 /** Courbe du commit du cube (iOS `StoryGroupCube.commitAnimation`). */
 internal val CubeCommitEasing = CubicBezierEasing(0.25f, 0.8f, 0.35f, 1f)
-internal const val CUBE_COMMIT_MS = 340
+internal const val CUBE_COMMIT_MS = StoryGroupCubeGeometry.COMMIT_MILLIS
 
 /** Amorti critique (iOS `settleAnimation`, réponse 0,3 s) : jamais de dépassement de l'autre côté. */
 internal val CubeSettleSpring = spring<Float>(dampingRatio = 1f, stiffness = 438.6f)
