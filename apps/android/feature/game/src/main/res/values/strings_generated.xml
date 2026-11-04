@@ -679,6 +679,7 @@
     <string name="game_fact_missing_for_level">To level %1$s</string>
     <string name="game_fact_missing_for_promotion">To the climbing zone</string>
     <string name="game_fact_missing_for_rank">To %1$s</string>
+    <string name="game_fact_rebirths">Rebirths</string>
     <string name="game_fact_strides">Strides</string>
     <string name="game_fiche_earn">How to earn more</string>
     <string name="game_fiche_heritage_held_bourse">Your Purse</string>

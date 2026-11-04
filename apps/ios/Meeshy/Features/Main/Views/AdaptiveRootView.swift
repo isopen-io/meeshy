@@ -592,7 +592,10 @@ struct DetachedWindowView: View {
                             id: userId, startAtFirstUnviewed: true, singleGroup: true))
                     },
                     onOpenDetail: { postId in router.push(.postDetail(postId)) },
-                    authorHasStory: { userId in storyViewModel.storyRingState(forUserId: userId) != .none }
+                    authorHasStory: { userId in storyViewModel.storyRingState(forUserId: userId) != .none },
+                    quoteHost: QuoteComposerHost(storyViewModel: storyViewModel, router: router,
+                                                 conversationListViewModel: conversationVMOwner.viewModel,
+                                                 statusViewModel: statusViewModel)
                 )
                 .ignoresSafeArea()
             }

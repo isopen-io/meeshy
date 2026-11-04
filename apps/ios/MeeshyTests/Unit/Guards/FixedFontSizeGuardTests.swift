@@ -255,13 +255,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // inscrire sa DESTINATION dans le MÊME commit ». Inscrire la
         // destination ne suffit pas — la source VIDÉE doit sortir, sinon la
         // liste garde un nom sans site et cesse de dire la vérité (règle 4).
-        // Cohésion de `FeedComposerSheet` : la rangée des pièces en attente a
-        // quitté la feuille avec ses glyphes en CADRE FIXE (tuile de 72, pastille
-        // de 20). RELOCALISATION pure : ni `totalCeiling` ni `textCeiling` ne bougent.
-        "Features/Main/Views/FeedComposerAttachmentsRow.swift",
         // #13132 — RELOCALISATION pure : le « + » du placeholder du fil (18 pt dans son cercle de 40) a quitté `FeedView.swift`.
         "Features/Main/Views/FeedComposerPlaceholder.swift",
-        "Features/Main/Views/FeedComposerSheet.swift",
         "Features/Main/Views/FeedPostCard+Media.swift",
         // #4096 — la vue `3f` remplace la mosaïque par un carrousel. Le fichier
         // porte DEUX sites figés dont les origines sont opposées, et les
@@ -470,7 +465,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // 172 → 171 (#14056) : le glyphe figé du `⋯` quitte
     // `MeeshyComposerHost+Overflow.swift` ; le fichier sort de `bearingFiles`
     // (règle 4).
-    private static let totalCeiling = 171
+    // 171 → 160 (#15628) : les onze glyphes figés de la feuille du fil et de sa
+    // rangée de pièces quittent le dépôt avec elles ; aucun texte.
+    private static let totalCeiling = 160
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
@@ -689,9 +686,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         let sites = try allSites().map { $0.1 }
         // #9125 — 148 : les glyphes figés de l'ancienne `CameraView` sont
         // partis avec elle ; #10947 — 139 : ceux des deux anciens sélecteurs de
-        // partage aussi. La borne garde un classifieur VIVANT, pas un compte.
-        XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 130,
-                             "les glyphes sont la population majoritaire (207 au 264i, 148 au #9125, 139 au #10947)")
+        // partage aussi ; #15628 — 125 : ceux de la feuille du fil. La borne
+        // garde un classifieur VIVANT, pas un compte.
+        XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 110,
+                             "les glyphes sont la population majoritaire (207 au 264i, 139 au #10947, 125 au #15628)")
         XCTAssertGreaterThan(sites.filter { $0.receiver == .text }.count, 15,
                              "le texte figé existe (36 au 264i, 20 au #14620) — un 0 ici signerait un classifieur mort")
     }

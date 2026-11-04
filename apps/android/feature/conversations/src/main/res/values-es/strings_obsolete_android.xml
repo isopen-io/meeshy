@@ -4,4 +4,5 @@
     <string name="conversations_obsolete_confirm_title">¿Marcar esta conversación como obsoleta?</string>
     <string name="conversations_obsolete_confirm_message">«%1$s» desaparece de inmediato para todos sus miembros y su contenido se borra en 48 horas. No se puede deshacer.</string>
     <string name="conversations_obsolete_confirm_button">Marcar como obsoleta</string>
+    <string name="conversations_obsolete_refused_pending_request">Solo el destinatario de una solicitud de mensaje no aceptada puede volver obsoleta esta conversación.</string>
 </resources>

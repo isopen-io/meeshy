@@ -1,7 +1,7 @@
 import type { ConversationFlags } from '@/lib/api/preferences';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
-import { rowMenuItems, type RowActionId, type RowMenuItem } from './row-actions';
+import { rowMenuItems, type RowActionId, type RowConversationActions, type RowMenuItem } from './row-actions';
 import { swipeEngages } from './swipe';
 
 /**
@@ -9,7 +9,9 @@ import { swipeEngages } from './swipe';
  * `SwipeableRow` (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/SwipeableRow.swift`)
  * et des couples que `ConversationListView.swift` lui remet. Aucun DOM ici.
  *
- * - bord de DÉBUT (balayage dans le sens de lecture) : épingler, sourdine ;
+ * - bord de DÉBUT (balayage dans le sens de lecture) : épingler, sourdine,
+ *   et « Rendre obsolète » quand le serveur l'accorde (#14645) — la place
+ *   libre, le bord de fin portant déjà ses trois ;
  * - bord de FIN : archiver, lu / non lu, supprimer ;
  * - `ROW_SWIPE_MAX_ACTIONS` par côté, jamais plus.
  *
@@ -33,7 +35,7 @@ export type RowSwipeEdge = 'leading' | 'trailing';
 
 /** Dans l'ordre depuis le BORD : la première est la première révélée. */
 export const ROW_SWIPE_EDGES: Readonly<Record<RowSwipeEdge, readonly RowActionId[]>> = {
-  leading: ['pin', 'mute'],
+  leading: ['pin', 'mute', 'obsolete'],
   trailing: ['archive', 'read', 'delete'],
 };
 
@@ -44,6 +46,8 @@ export function conversationRowSwipeSides(params: {
   readonly unread: boolean;
   readonly language: InterfaceLanguage;
   readonly canDelete: boolean;
+  /** Les verdicts du rôle : seul « Rendre obsolète » en passe au balayage. */
+  readonly actions?: RowConversationActions;
 }): RowSwipeSides {
   const menu = rowMenuItems(params);
   const side = (edge: RowSwipeEdge): readonly RowMenuItem[] =>

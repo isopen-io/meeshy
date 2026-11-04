@@ -87,7 +87,12 @@ class MessageDeltaApplier internal constructor(
             }
             is MessageCitedPostWithdrawnEvent -> withdrawCitedPost(event)
             is AttachmentReactionUpdateEvent -> transform(event.messageId) {
-                ConversationEventDeltas.attachmentReactions(it, event.attachmentId, event.reactionSummary)
+                val mine = viewerId != null && event.userId == viewerId
+                ConversationEventDeltas.attachmentReactions(
+                    it, event.attachmentId, event.reactionSummary,
+                    ownEmoji = event.emoji.takeIf { mine },
+                    ownAdding = !event.isRemoval,
+                )
             }
             is AttachmentStatusUpdatedEvent -> transform(event.messageId) { AttachmentLiveDeltas.status(it, event, viewerId) }
             is MessageAttachmentUpdatedEvent -> enrich(event.messageId, event.conversationId, event.servedAttachmentId, event.attachment)

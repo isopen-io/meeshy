@@ -23,7 +23,7 @@ class ReactionReadStatusApplierTest {
     private val added = MutableSharedFlow<ReactionUpdateEvent>()
     private val removed = MutableSharedFlow<ReactionUpdateEvent>()
     private val readStatus = MutableSharedFlow<ReadStatusUpdatedEvent>()
-    private val rows = mockk<ReactionRowStore>()
+    private val rows = mockk<ReactionRowStore> { coEvery { rows(any()) } returns emptyList() }
     private val messages = mockk<MessageRepository>(relaxed = true)
 
     private fun registrar(open: OpenConversationLookup = OpenConversationLookup.None) = RecordingRegistrar().also {
@@ -35,7 +35,7 @@ class ReactionReadStatusApplierTest {
         val session = mockk<SessionRepository> {
             every { currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me"))
         }
-        ReactionReadStatusApplier(socket, rows, messages, session, open).subscribe(it)
+        ReactionReadStatusApplier(socket, messages, rows, session, open).subscribe(it)
     }
 
     private fun reaction() = ReactionUpdateEvent(messageId = "m1", conversationId = "c1", userId = "bob", emoji = "🔥")

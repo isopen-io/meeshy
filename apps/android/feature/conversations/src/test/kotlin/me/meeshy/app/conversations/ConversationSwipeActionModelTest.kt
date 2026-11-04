@@ -14,6 +14,7 @@ class ConversationSwipeActionModelTest {
         hasUnread: Boolean = false,
         canToggleArchive: Boolean = true,
         removal: Removal? = Removal.HIDE,
+        obsolete: Boolean = false,
     ) = ConversationSwipeActionModel.of(
         isPinned = isPinned,
         isMuted = isMuted,
@@ -22,6 +23,7 @@ class ConversationSwipeActionModelTest {
         hasUnread = hasUnread,
         canToggleArchive = canToggleArchive,
         removal = removal,
+        obsolete = obsolete,
     )
 
     private fun ConversationSwipeActionModel.leadingState() = leading.associate { it.kind to it.active }
@@ -62,6 +64,14 @@ class ConversationSwipeActionModelTest {
     @Test
     fun `a row the viewer cannot remove has no hide action`() {
         assertThat(model(removal = null).trailing.map { it.kind }).doesNotContain(SwipeKind.REMOVE)
+    }
+
+    @Test
+    fun `a row the viewer may make obsolete reveals the obsolete action last, with no toggled state`() {
+        val last = model(obsolete = true).trailing.last()
+
+        assertThat(last).isEqualTo(ConversationSwipeItem(SwipeKind.OBSOLETE, active = false))
+        assertThat(model(obsolete = true)).isNotEqualTo(model(obsolete = false))
     }
 
     @Test

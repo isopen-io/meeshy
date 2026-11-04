@@ -31,11 +31,15 @@ internal fun ConversationListHeader(
     onRemoveMasterPin: () -> Unit,
     onOpenShareLinkPicker: () -> Unit,
     onNewConversation: () -> Unit,
+    scrollOffsetDp: Float? = null,
+    pinnedBand: (@Composable (reveal: Float) -> Unit)? = null,
 ) {
     CollapsibleHeader(
         title = stringResource(R.string.conversations_title),
         scrollProgress = scrollProgress,
         actionsVisible = actionsVisible,
+        scrollOffsetDp = scrollOffsetDp,
+        titleAccessory = pinnedBand,
     ) {
         conversationHeaderActions(state.canUnlockAll, state.hasMasterPin).forEach { action ->
             when (action) {

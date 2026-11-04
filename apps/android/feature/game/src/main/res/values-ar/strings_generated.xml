@@ -679,6 +679,7 @@
     <string name="game_fact_missing_for_level">حتى المستوى %1$s</string>
     <string name="game_fact_missing_for_promotion">حتى منطقة الصعود</string>
     <string name="game_fact_missing_for_rank">حتى %1$s</string>
+    <string name="game_fact_rebirths">الانبعاثات</string>
     <string name="game_fact_strides">الخطوات</string>
     <string name="game_fiche_earn">كيف تكسب المزيد</string>
     <string name="game_fiche_heritage_held_bourse">كيسك</string>

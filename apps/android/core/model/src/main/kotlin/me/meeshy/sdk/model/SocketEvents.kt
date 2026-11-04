@@ -388,6 +388,9 @@ data class ParticipantRoleUpdatedEvent(
     val conversationId: String,
     val userId: String,
     @SerialName("newRole") val role: String,
+    val updatedBy: String? = null,
+    @Serializable(with = TolerantRoleParticipantSerializer::class)
+    val participant: ParticipantRoleUpdatedParticipantInfo? = null,
 )
 
 /**
@@ -439,6 +442,7 @@ data class ConversationClosedSocketEvent(
     val conversationId: String,
     val closedBy: String,
     val closedAt: String? = null,
+    val reason: String? = null,
 )
 
 /**

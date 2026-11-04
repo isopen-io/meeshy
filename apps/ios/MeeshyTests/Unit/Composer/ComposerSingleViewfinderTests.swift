@@ -50,14 +50,13 @@ final class ComposerSingleViewfinderTests: XCTestCase {
     }
 
     /// Les portes qui montaient l'ancienne vue ouvrent le viseur : le statut
-    /// (surface sans scène), la page blanche du SDK (par l'environnement), la
-    /// citation du fil — et, depuis #9295, la caméra de la barre de
-    /// conversation, qui ne passe plus par la scène.
+    /// (surface sans scène), la page blanche du SDK (par l'environnement) — et,
+    /// depuis #9295, la caméra de la barre de conversation, qui ne passe plus
+    /// par la scène.
     func test_lesPortesDeCapture_ouvrentLeViseurDuComposeur() throws {
         for porte in [
             "Meeshy/Features/Composer/MeeshyComposerHost+DocumentSurface.swift",
             "Meeshy/Features/Composer/ComposerViewfinder+Provider.swift",
-            "Meeshy/Features/Main/Views/FeedComposerSheet.swift",
             "Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift",
         ] {
             XCTAssertGreaterThan(AppSourceGuard.occurrences(ofIdentifier: "ComposerViewfinder", in: try code(porte)), 0,

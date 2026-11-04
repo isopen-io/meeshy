@@ -679,6 +679,7 @@
     <string name="game_fact_missing_for_level">Até o nível %1$s</string>
     <string name="game_fact_missing_for_promotion">Até a zona de subida</string>
     <string name="game_fact_missing_for_rank">Até %1$s</string>
+    <string name="game_fact_rebirths">Renascimentos</string>
     <string name="game_fact_strides">Passos</string>
     <string name="game_fiche_earn">Como ganhar mais</string>
     <string name="game_fiche_heritage_held_bourse">Sua Bolsa</string>

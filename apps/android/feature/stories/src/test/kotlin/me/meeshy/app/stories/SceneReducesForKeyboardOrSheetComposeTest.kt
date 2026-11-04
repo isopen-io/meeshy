@@ -233,7 +233,7 @@ class SceneReducesForKeyboardOrSheetComposeTest {
         val vm = viewModel()
         show(vm)
 
-        compose.onNodeWithContentDescription("Background").performClick()
+        compose.onNodeWithContentDescription("Choose a background").performClick()
         compose.waitForIdle()
 
         assertThat(vm.state.value.band.activeTool).isNotNull()

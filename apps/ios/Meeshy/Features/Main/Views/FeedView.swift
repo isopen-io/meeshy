@@ -859,20 +859,14 @@ struct FeedView: View {
             .postEditCover(item: $editingPost) { post, draft in
                 await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
             }
-            // **La CITATION revient à `FeedComposerSheet`** — même raison, même
-            // jour, que sur iPhone (`RootViewComponents`) : `DocumentComposerDoor`
-            // REFUSE un repost tant que la levée 7.5 (un écrivain durable du
-            // repost) n'existe pas, et l'auteur recevait « publication
-            // impossible » au lieu de sa citation. La migration reste la cible.
             .fullScreenCover(item: $quoteTargetPost) { quoted in
-                FeedComposerSheet(
-                    viewModel: viewModel,
-                    initialText: "",
-                    pendingAttachmentType: nil,
-                    quotePost: quoted,
-                    onDismiss: {
-                        quoteTargetPost = nil
-                    }
+                QuoteComposerDoor(
+                    quoted: quoted,
+                    storyViewModel: storyViewModel,
+                    router: router,
+                    conversationListViewModel: conversationListViewModel,
+                    statusViewModel: statusViewModel,
+                    onFinish: { quoteTargetPost = nil }
                 )
             }
     }

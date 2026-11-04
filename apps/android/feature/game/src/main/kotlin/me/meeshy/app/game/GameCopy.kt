@@ -71,6 +71,7 @@ object GameCopy {
         is GameTextArg.Compact -> GameNumberFormat.tightCount(argument.value, locale)
         is GameTextArg.Verbatim -> argument.value
         is GameTextArg.Day -> day(argument.isoDay, locale)
+        is GameTextArg.Month -> month(argument.isoMonth, locale)
         is GameTextArg.Decimal -> decimal(argument.value, locale)
         is GameTextArg.Nested -> resolve(resources, argument.text, locale)
     }
@@ -79,6 +80,11 @@ object GameCopy {
     fun day(isoDay: String, locale: Locale): String = runCatching {
         DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale).format(LocalDate.parse(isoDay))
     }.getOrDefault(isoDay)
+
+    /** Un mois civil `AAAA-MM`, écrit par la locale ; une clé illisible se dit telle quelle. */
+    fun month(isoMonth: String, locale: Locale): String = runCatching {
+        DateTimeFormatter.ofPattern("LLLL y", locale).format(java.time.YearMonth.parse(isoMonth))
+    }.getOrDefault(isoMonth)
 
     /** Deux décimales au plus, dans la locale (« 1,25 »). */
     fun decimal(value: Double, locale: Locale): String =

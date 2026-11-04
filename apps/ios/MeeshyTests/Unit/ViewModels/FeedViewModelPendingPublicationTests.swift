@@ -77,13 +77,14 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
     func test_offlineMediaPost_pointsItsCardAtTheCopyTheQueueKeeps() async {
         let (sut, queue, _) = makeSUT()
 
-        await sut.createOfflineMediaPost(
-            localMediaURLs: [URL(fileURLWithPath: NSTemporaryDirectory() + "photo-composee.jpg")],
-            content: "Hors ligne",
-            mobileTranscription: nil, storyEffects: nil,
-            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
-            allowSoundExtraction: nil
-        )
+        await sut.publish(PublishIntent.document(
+            localMedia: [ComposerDocumentMedia(url: URL(fileURLWithPath: NSTemporaryDirectory() + "photo-composee.jpg"),
+                                               mimeType: "image/jpeg", durationMs: nil)],
+            declaredType: .post, forcePlainPost: false, content: "Hors ligne", visibility: "PUBLIC",
+            visibilityUserIds: nil, originalLanguage: nil, mentions: nil, location: nil,
+            discoverabilityPrecision: nil, transcription: nil, storyEffects: nil,
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
+        ))
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
         let expected = URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(forStored: "photo-composee.jpg")).absoluteString
