@@ -19,6 +19,7 @@ public data class QueuedAudio(
     val trackLanguage: String? = null,
     val isTranslatedTrack: Boolean = false,
     val isProtected: Boolean,
+    val servedConsumption: MeeshyMediaConsumption? = MeeshyMediaConsumption(),
 )
 
 /**
@@ -189,6 +190,8 @@ public data class AudioPlayQueue(
         val playing = current?.takeIf { it.attachmentId == fromAttachmentId } ?: return this
         return copy(current = playing.copy(attachmentId = toAttachmentId, fileUrl = fileUrl, messageId = messageId ?: playing.messageId))
     }
+
+    public fun withUpcoming(tail: List<QueuedAudio>): AudioPlayQueue = this
 
     public val hasNext: Boolean get() = upcoming.isNotEmpty()
     public val hasPrevious: Boolean get() = played.isNotEmpty()
