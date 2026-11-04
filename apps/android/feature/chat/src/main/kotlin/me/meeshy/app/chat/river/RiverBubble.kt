@@ -59,7 +59,8 @@ import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.model.reading.river.RiverMetrics
-import me.meeshy.app.chat.ChatAudioPlayer
+import me.meeshy.app.chat.ChatVoicePlayback
+import me.meeshy.app.chat.rememberBubbleVoicePlayback
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
@@ -98,7 +99,7 @@ internal class RiverBubbleActions(
     /** Les gestes des pièces d'une bulle : les MÊMES que ceux de la rangée du fil. */
     val attachmentCallbacks: (BubbleContent) -> BubbleCallbacks = { BubbleCallbacks.None },
     /** Le lecteur de vocaux du fil : sans lui, une pièce audio se lit mais ne se joue pas. */
-    val audioPlayer: ChatAudioPlayer? = null,
+    val audioPlayer: ChatVoicePlayback? = null,
 )
 
 private val BubbleTextStyle = TextStyle(fontSize = 15.sp, lineHeight = (15f * FocalMetrics.Text.LINE_HEIGHT_RATIO.toFloat()).sp)
@@ -344,10 +345,7 @@ private fun QuoteRail(laneColor: Color) {
 @Composable
 private fun RiverAttachments(source: BubbleContent, content: RiverBubbleContent, laneColor: Color, actions: RiverBubbleActions) {
     val callbacks = remember(source, actions) { actions.attachmentCallbacks(source) }
-    val player = actions.audioPlayer
-    val playback by remember(source.audios, player) {
-        androidx.compose.runtime.derivedStateOf { player?.let { p -> source.audios.firstNotNullOfOrNull(p::bubbleFor) } }
-    }
+    val playback by rememberBubbleVoicePlayback(actions.audioPlayer, source.audios)
     val block: @Composable () -> Unit = {
         RiverAttachmentBlock(source, MeeshyTheme.tokens.textPrimary, callbacks, playback, laneColor)
     }

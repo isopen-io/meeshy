@@ -84,4 +84,27 @@ class WaveformRepositoryTest {
     fun `la vignette d'un audio illisible est vide`() = runTest {
         assertThat(repository(ScriptedMeasurer(FloatArray(0))).thumbnailPng(voice())).isEmpty()
     }
+
+    @Test
+    fun `une bulle ne mesure jamais une adresse distante, elle garde sa forme de repli sans rien telecharger`() = runTest {
+        val measurer = ScriptedMeasurer(floatArrayOf(0.2f, 0.8f))
+        val subject = repository(measurer)
+
+        val remote = subject.bubbleLevels("https://gate.meeshy.me/api/v1/attachments/file/a.m4a", barCount = 72)
+        val provider = subject.bubbleLevels("content://media/external/audio/1", barCount = 72)
+
+        assertThat(remote).isEqualTo(WaveformLevels.Unavailable)
+        assertThat(provider).isEqualTo(WaveformLevels.Unavailable)
+        assertThat(measurer.requestedCounts).isEmpty()
+    }
+
+    @Test
+    fun `une bulle mesure un fichier deja sur l'appareil`() = runTest {
+        val measurer = ScriptedMeasurer(floatArrayOf(0.2f, 0.8f))
+
+        val levels = repository(measurer).bubbleLevels("file://" + voice(), barCount = 72)
+
+        assertThat(levels.origin).isEqualTo(WaveformLevels.Origin.DECODED)
+        assertThat(measurer.requestedCounts).isNotEmpty()
+    }
 }

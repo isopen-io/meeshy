@@ -85,6 +85,7 @@
     <string name="bubble_a11y_reactions">Réactions : %1$s</string>
     <string name="bubble_a11y_reply_to">Répondre à %1$s</string>
     <string name="bubble_attachment_file_fallback">Fichier</string>
+    <string name="bubble_audio_stack_position">Vocal %1$d sur %2$d</string>
     <string name="bubble_blur_view_once">Voir une fois</string>
     <string name="bubble_contact_card_a11y_on_meeshy">Sur Meeshy : %1$s</string>
     <string name="bubble_contact_card_on_meeshy">Sur Meeshy</string>

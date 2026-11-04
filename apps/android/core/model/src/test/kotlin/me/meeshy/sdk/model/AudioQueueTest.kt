@@ -146,6 +146,39 @@ class AudioQueueTest {
     }
 
     @Test
+    fun `une piece servie ecoutee jusqu'au bout ne rejoint pas la file`() {
+        val heard = message("m1", 10L, audios = arrayOf("heard", "fresh"))
+            .let { it.copy(audios = it.audios.map { piece -> piece.copy(listenedComplete = piece.attachmentId == "heard") }) }
+
+        assertThat(ids(build(listOf(heard)))).containsExactly("fresh")
+    }
+
+    @Test
+    fun `les pistes suivantes de mon propre message touche suivent, mes autres messages non`() {
+        val queue = build(
+            listOf(
+                message("m1", 10L, sender = "me", audios = arrayOf("a1", "a2", "a3")),
+                message("m3", 30L, sender = "me", audios = arrayOf("late")),
+                message("m4", 40L, audios = arrayOf("theirs")),
+            ),
+            after = "a1",
+        )
+
+        assertThat(ids(queue)).containsExactly("a2", "a3", "theirs").inOrder()
+    }
+
+    @Test
+    fun `la file porte la langue et la piste servies`() {
+        val served = message("m1", 10L, audios = arrayOf("a"))
+            .let { it.copy(audios = it.audios.map { piece -> piece.copy(trackLanguage = "en", isTranslatedTrack = true) }) }
+
+        val queued = build(listOf(served)).single()
+
+        assertThat(queued.trackLanguage).isEqualTo("en")
+        assertThat(queued.isTranslatedTrack).isTrue()
+    }
+
+    @Test
     fun `un curseur inconnu ne filtre rien`() {
         val queue = build(listOf(message("m1", 10L, audios = arrayOf("a"))), after = "ghost")
 
@@ -207,6 +240,28 @@ class AudioPlayQueueTest {
 
         assertThat(cleaned.current).isNull()
         assertThat(cleaned.upcoming.map { it.attachmentId }).containsExactly("b")
+    }
+
+    @Test
+    fun `le vocal courant accuse prend son id serveur et son adresse servie, la suite ne bouge pas`() {
+        val queue = AudioPlayQueue().started(item("cmid"), listOf(item("b")))
+
+        val followed = queue.followed(fromAttachmentId = "cmid", toAttachmentId = "att_server", fileUrl = "https://gate/voice.m4a")
+
+        assertThat(followed.current?.attachmentId).isEqualTo("att_server")
+        assertThat(followed.current?.fileUrl).isEqualTo("https://gate/voice.m4a")
+        assertThat(followed.current?.messageId).isEqualTo("mcmid")
+        assertThat(followed.upcoming.map { it.attachmentId }).containsExactly("b")
+        assertThat(queue.followed("cmid", "att_server", "https://gate/voice.m4a", messageId = "m_server").current?.messageId)
+            .isEqualTo("m_server")
+    }
+
+    @Test
+    fun `suivre une piece qui n'est pas la courante ne change rien`() {
+        val queue = AudioPlayQueue().started(item("a"), listOf(item("b")))
+
+        assertThat(queue.followed("b", "att_b", "https://gate/b.m4a")).isEqualTo(queue)
+        assertThat(AudioPlayQueue().followed("a", "att_a", "https://gate/a.m4a")).isEqualTo(AudioPlayQueue())
     }
 
     @Test

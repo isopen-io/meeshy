@@ -337,7 +337,7 @@ struct AddParticipantSheet: View {
         struct AddBody: Encodable { let userId: String }
 
         do {
-            let _: APIResponse<[String: String]> = try await APIClient.shared.post(
+            let _: APIResponse<DiscardedResponseBody> = try await APIClient.shared.post(
                 ConversationsEndpoint.byIdParticipants(id: conversationId),
                 body: AddBody(userId: userId)
             )

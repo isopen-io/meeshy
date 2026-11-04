@@ -136,6 +136,25 @@ public actor FeedPersistenceActor {
         return (likes, comments)
     }
 
+    /// Les favoris encore EN ROUTE ([postId: bookmarked]) — en attente, en vol
+    /// ou à retenter, jamais épuisés (#15997) : le fil relu les repose
+    /// par-dessus un instantané serveur pris avant qu'ils n'arrivent. Une ligne
+    /// épuisée a déjà eu son retour arrière ; la reposer le contredirait.
+    public func pendingBookmarkFlags() -> [String: Bool] {
+        let enRoute = [OutboxStatus.pending, .inflight, .failed].map(\.rawValue)
+        let rows = (try? dbWriter.read { db in
+            try OutboxRecord
+                .filter(Column("kind") == OutboxKind.toggleBookmarkPost.rawValue)
+                .filter(enRoute.contains(Column("status")))
+                .order(Column("createdAt"))
+                .fetchAll(db)
+        }) ?? []
+        let decoder = JSONDecoder()
+        return rows
+            .compactMap { try? decoder.decode(ToggleBookmarkPostPayload.self, from: $0.payload) }
+            .reduce(into: [:]) { flags, payload in flags[payload.postId] = payload.bookmarked }
+    }
+
     /// grdb-03 — flags de like PENDING de l'outbox ([postId: liked]) pour la
     /// réapplication en mémoire après un merge de refresh (volet ViewModel).
     public func pendingLikeFlags() -> [String: Bool] {

@@ -57,6 +57,36 @@ class SocketManagerTokenExpiredTest {
     }
 
     @Test
+    fun `auth session-revoked d'une socket deja remplacee n'est pas expose`() = runTest {
+        val rig = SocketRig()
+        rig.manager.connect()
+        val socket = rig.factory.created.single()
+        val lateHandlers = socket.listeners.filter { it.first == "auth:session-revoked" }.map { it.second }
+        rig.manager.disconnect()
+
+        rig.manager.sessionRevocations.test {
+            lateHandlers.forEach { it(arrayOf<Any>(JSONObject().put("reason", "logout"))) }
+            expectNoEvents()
+        }
+        rig.manager.sessionRevoked.test {
+            lateHandlers.forEach { it(arrayOf<Any>(JSONObject().put("reason", "logout"))) }
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `auth session-revoked de la socket courante porte le jeton de son handshake`() = runTest {
+        val rig = SocketRig()
+        rig.manager.connect()
+        val socket = rig.factory.created.single()
+
+        rig.manager.sessionRevocations.test {
+            socket.fire("auth:session-revoked", JSONObject().put("reason", "logout"))
+            assertThat(awaitItem().accountJwt).isEqualTo(validJwt)
+        }
+    }
+
+    @Test
     fun `l'evenement error est expose et ne deconnecte jamais`() = runTest {
         val rig = SocketRig()
         rig.manager.connect()

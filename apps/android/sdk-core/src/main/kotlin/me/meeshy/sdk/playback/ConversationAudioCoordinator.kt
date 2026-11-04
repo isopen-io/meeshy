@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.AudioPlayQueue
 import me.meeshy.sdk.model.CoordinatorSpeedCycle
 import me.meeshy.sdk.model.QueuedAudio
+import me.meeshy.sdk.model.media.LocalFileUrl
 import me.meeshy.sdk.model.playback.PlaybackCommandOrigin
 import me.meeshy.sdk.model.playback.PreviousStep
 import me.meeshy.sdk.model.playback.QueueStepRule
@@ -71,6 +72,7 @@ public class ConversationAudioCoordinator(
     public val graceContext: StateFlow<ActiveAudioContext?> = mutableGrace.asStateFlow()
 
     init {
+        engine.setConsumedLanguageProvider(::playedTrackLanguage)
         scope.launch {
             engine.events.collect { event ->
                 try {
@@ -90,8 +92,7 @@ public class ConversationAudioCoordinator(
         conversationArtworkUrl: String?,
         accentHex: String? = null,
     ) {
-        val accepted = engine.play(current.attachmentId, current.fileUrl, PlaybackCommandOrigin.InApp, current.isProtected)
-        if (!accepted) return
+        if (!start(current, PlaybackCommandOrigin.InApp)) return
         val queue = mutableSnapshot.value.queue.started(current, tail)
         mutableSnapshot.value = CoordinatorSnapshot(
             queue = queue,
@@ -129,6 +130,24 @@ public class ConversationAudioCoordinator(
             PreviousStep.Rewind -> switchTo(snapshot.queue.rewound(), origin)
         }
     }
+
+    /**
+     * #15969 — le vocal en cours [fromAttachmentId] a été accusé sous [toAttachmentId], servi depuis [servedUrl] : la file, le
+     * contexte et le moteur prennent ce nom (la fin le marquera écouté sous l'id serveur) sans rien recharger. Une pièce que
+     * le moteur ne tient pas, ou qui n'est pas la courante de la file, ne change rien.
+     */
+    public fun follow(fromAttachmentId: String, toAttachmentId: String, servedUrl: String, messageId: String? = null) {
+        if (fromAttachmentId == toAttachmentId || servedUrl.isBlank()) return
+        if (engine.state.value.attachmentId != fromAttachmentId) return
+        val snapshot = mutableSnapshot.value
+        val current = snapshot.queue.current?.takeIf { it.attachmentId == fromAttachmentId } ?: return
+        engine.follow(fromAttachmentId, toAttachmentId, servedUrl, current.isProtected)
+        val queue = snapshot.queue.followed(fromAttachmentId, toAttachmentId, servedUrl, messageId)
+        mutableSnapshot.value = snapshot.copy(queue = queue, context = snapshot.context?.copy(audio = queue.current ?: current))
+    }
+
+    /** L'onde de la bulle : se placer à [fraction] (0…1) du vocal en cours. */
+    public fun seek(fraction: Double) = engine.seek(fraction)
 
     /** La barre de la carte système : se placer à [positionMs] dans le vocal en cours. */
     public fun seekToMs(positionMs: Long) = engine.seekToMs(positionMs)
@@ -168,30 +187,52 @@ public class ConversationAudioCoordinator(
         }
     }
 
-    /** Le message est supprimé : s'il est joué, on passe au suivant ; ses vocaux quittent la file. */
+    /**
+     * Le message est supprimé (ou brûlé) : s'il est celui qui joue, la lecture se ferme — iOS `close()`, jamais un saut
+     * au suivant, qui ferait parler un vocal que personne n'a choisi à l'instant où la conversation le retire. Sinon
+     * ses vocaux quittent la file, et la lecture n'est pas touchée.
+     */
     public fun onMessageDeleted(messageId: String) {
         val snapshot = mutableSnapshot.value
-        val playing = snapshot.queue.current?.messageId == messageId
-        val cleaned = snapshot.queue.withoutMessage(messageId)
-        if (!playing) {
-            mutableSnapshot.value = snapshot.copy(queue = cleaned)
-            return
-        }
-        if (cleaned.upcoming.isEmpty()) {
+        if (snapshot.queue.current?.messageId == messageId) {
             stop()
             return
         }
-        switchTo(cleaned.advanced(), PlaybackCommandOrigin.Automatic)
+        val cleaned = snapshot.queue.withoutMessage(messageId)
+        if (cleaned != snapshot.queue) mutableSnapshot.value = snapshot.copy(queue = cleaned)
+    }
+
+    /** La conversation qui joue est supprimée, fermée ou obsolète : la lecture se ferme. Une autre n'y change rien. */
+    public fun onConversationDeleted(conversationId: String) {
+        if (mutableSnapshot.value.context?.audio?.conversationId == conversationId) stop()
     }
 
     /** Déconnexion : plus rien ne joue, plus rien ne reste. */
     override suspend fun clear() = withContext(dispatcher) { stop() }
 
+    /**
+     * La langue ENTENDUE du vocal que le moteur décharge, lue par lui au moment de clore l'écoute (fin, pause, changement de
+     * piste) : celle de la piste servie, jamais une seconde descente du Prisme. Le moteur est partagé : un id qui n'est pas
+     * celui de la file (aperçu, enregistreur) ne porte aucune langue — mieux vaut rien qu'en inventer une.
+     */
+    private fun playedTrackLanguage(): String? {
+        val current = mutableSnapshot.value.queue.current ?: return null
+        return current.trackLanguage?.takeIf { engine.state.value.attachmentId == current.attachmentId }
+    }
+
     private fun switchTo(queue: AudioPlayQueue, origin: PlaybackCommandOrigin) {
         val target = queue.current ?: return stop()
-        if (!engine.play(target.attachmentId, target.fileUrl, origin, target.isProtected)) return
+        if (!start(target, origin)) return
         mutableSnapshot.value = mutableSnapshot.value.let { it.copy(queue = queue, context = it.context?.copy(audio = target)) }
     }
+
+    /** Un vocal pas encore envoyé se joue depuis son fichier `file://` ; tout autre par le réseau et son cache. */
+    private fun start(target: QueuedAudio, origin: PlaybackCommandOrigin): Boolean =
+        if (LocalFileUrl.isLocal(target.fileUrl)) {
+            engine.playLocal(target.attachmentId, target.fileUrl, origin)
+        } else {
+            engine.play(target.attachmentId, target.fileUrl, origin, target.isProtected)
+        }
 
     private fun onFinished(event: AudioEngineEvent.Finished) {
         val snapshot = mutableSnapshot.value

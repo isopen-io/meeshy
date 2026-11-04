@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -54,17 +52,4 @@ fun LoggingOutVeil(visible: Boolean) {
             )
         }
     }
-}
-
-/** iOS `SessionClosedNoticeView` : on revient à la connexion parce que la session a été fermée, et on le dit. */
-@Composable
-internal fun SessionClosedNotice(onContinue: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onContinue,
-        title = { Text(stringResource(R.string.session_closed_signed_out_title)) },
-        text = { Text(stringResource(R.string.session_closed_signed_out_message)) },
-        confirmButton = {
-            TextButton(onClick = onContinue) { Text(stringResource(R.string.session_closed_continue)) }
-        },
-    )
 }

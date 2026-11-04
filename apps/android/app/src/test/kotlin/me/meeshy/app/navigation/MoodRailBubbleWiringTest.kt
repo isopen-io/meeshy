@@ -10,10 +10,13 @@ import org.junit.Test
  */
 class MoodRailBubbleWiringTest {
 
-    private val host = File("src/main/kotlin/me/meeshy/app/navigation/MeeshyStoryRail.kt").readText()
+    /** Le rail et la bulle qu'il héberge (extraite en hôte commun à la liste des conversations, #15989). */
+    private val host = listOf("MeeshyStoryRail.kt", "MoodBubbleHost.kt")
+        .joinToString("\n") { File("src/main/kotlin/me/meeshy/app/navigation/$it").readText() }
 
     @Test
     fun `toucher l humeur d un ami ouvre sa bulle et ouvre la session de lecture`() {
+        assertThat(host).contains("MoodBubbleHost(")
         assertThat(host).contains("MoodBubble(")
         assertThat(host.substringAfter("onMoodTap = ").substringBefore("onMoodShown")).contains("markStatusViewed")
     }

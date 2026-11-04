@@ -3066,6 +3066,7 @@
 		B5AEE605674AD024B2D8A177 /* MintCeremonyParticles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 364C7DFE0839802A06C986DF /* MintCeremonyParticles.swift */; };
 		B5B0EE6184948B4E4C7C6470 /* ShareItemRepresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D3BA9CE16CD2979D931125D /* ShareItemRepresentation.swift */; };
 		B5B180914E2DD66B4E59411D /* OutboxDispatcher+Publications.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2767566BAE5C7DCEFC795C0 /* OutboxDispatcher+Publications.swift */; };
+		CFDA4ECD24AD30809AE3DA6A /* OutboxDispatcher+PostEngagement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 383D82FC7F8BC495783E78AE /* OutboxDispatcher+PostEngagement.swift */; };
 		B5B32600A188A206068213A2 /* SkeletonLinkRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39C2176ACE0513A8483B1DC7 /* SkeletonLinkRow.swift */; };
 		B5E2CDCC50A542FCA0679FA6 /* ReadingModePreferenceStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 033733ACBA7C77CB9E4C175A /* ReadingModePreferenceStoreTests.swift */; };
 		B5E4D18100207F021C641154 /* NotificationReplyRegimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E09276DB64DD8CC98B492084 /* NotificationReplyRegimeTests.swift */; };
@@ -8405,6 +8406,7 @@
 		F23BAA822905870949129ACA /* StoryPublishToastLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishToastLocalizationTests.swift; sourceTree = "<group>"; };
 		F243D9F4C570E7E14CA43213 /* ColumnWidthLaw.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColumnWidthLaw.swift; sourceTree = "<group>"; };
 		F2767566BAE5C7DCEFC795C0 /* OutboxDispatcher+Publications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OutboxDispatcher+Publications.swift"; sourceTree = "<group>"; };
+		383D82FC7F8BC495783E78AE /* OutboxDispatcher+PostEngagement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OutboxDispatcher+PostEngagement.swift"; sourceTree = "<group>"; };
 		F282E30FE8530879DF9B348A /* ShareLinkAccountReplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkAccountReplayTests.swift; sourceTree = "<group>"; };
 		F2871206B30C4E163C104EEA /* SyncPillMarqueeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillMarqueeTests.swift; sourceTree = "<group>"; };
 		F2946F870B62F9EAB5A6DE2B /* MeeshyComposerHost+Pickers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+Pickers.swift"; sourceTree = "<group>"; };
@@ -12984,6 +12986,7 @@
 				900D75B2400BC2D94A38C856 /* OutboxDispatcher+Comments.swift */,
 				397070688CD8000FB7B89F36 /* OutboxDispatcher+Messages.swift */,
 				F2767566BAE5C7DCEFC795C0 /* OutboxDispatcher+Publications.swift */,
+				383D82FC7F8BC495783E78AE /* OutboxDispatcher+PostEngagement.swift */,
 				83F632BB7879CBAD23D71A80 /* OutboxFlushScheduling.swift */,
 				E1DC57FBB1E2B9054877854F /* PackFilePruner.swift */,
 				424285818C4F63E61A3E259C /* PackStore.swift */,
@@ -16411,6 +16414,7 @@
 				EC93A64BDEFAA0ED5212F9F8 /* OutboxDispatcher+Comments.swift in Sources */,
 				5D59D6C6A8ECA173F32436CF /* OutboxDispatcher+Messages.swift in Sources */,
 				B5B180914E2DD66B4E59411D /* OutboxDispatcher+Publications.swift in Sources */,
+				CFDA4ECD24AD30809AE3DA6A /* OutboxDispatcher+PostEngagement.swift in Sources */,
 				B88197E7A14C4ED8C9820DDF /* OutboxDispatcher.swift in Sources */,
 				25A985C8C374AEEC4951D5F7 /* OutboxFlushScheduling.swift in Sources */,
 				BD498E6EF9495451092C533E /* OutboxLiveActivityCoordinator.swift in Sources */,
