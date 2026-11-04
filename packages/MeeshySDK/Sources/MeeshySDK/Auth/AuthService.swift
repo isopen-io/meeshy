@@ -343,14 +343,10 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
     // adresse. Deux fonctions au nom quasi identique, une seule qui marche :
     // c'est ce qui rend ce défaut invisible à la relecture.
 
-    public func resendEmailVerification() async throws {
-        let response: SimpleAPIResponse = try await api.request(
-            AuthEndpoint.resendVerification, method: "POST"
-        )
-        guard response.success else {
-            throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Resend failed")
-        }
-    }
+    // `resendEmailVerification()` a été RETIRÉE (#16009). Elle postait
+    // `/auth/resend-verification` SANS corps, quand la route exige `{ email }` :
+    // un 400 à coup sûr, et aucun appelant. Le renvoi vit dans
+    // `resendVerificationEmail(email:)`, que l'écran de vérification appelle.
 
     // MARK: - Me
 
