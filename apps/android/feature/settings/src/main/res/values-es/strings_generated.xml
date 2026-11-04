@@ -314,6 +314,9 @@
     <string name="settings_logout_confirm_title">Cerrar sesión</string>
     <string name="settings_logout_hint">Cierra sesión en tu cuenta</string>
     <string name="settings_logout_in_progress">Cerrando sesión...</string>
+    <string name="settings_media_autosave_header">Galería</string>
+    <string name="settings_media_autosave_subtitle">Las imágenes y vídeos recibidos se guardan en el álbum Meeshy, una sola vez. Nunca un contenido efímero, difuminado o de visualización única.</string>
+    <string name="settings_media_autosave_title">Guardar en Fotos</string>
     <string name="settings_media_capture_header">Al capturar</string>
     <string name="settings_media_capture_original_subtitle">La foto o el vídeo sin procesar, sin efectos ni marco, se guarda en Fotos con cada toma.</string>
     <string name="settings_media_capture_original_title">Guardar el original</string>
