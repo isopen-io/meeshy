@@ -28,6 +28,10 @@ class MeeshyShapesTest {
     fun `an outlined text field takes the rounded Meeshy field shape`() {
         var fieldShape: Shape? = null
         var extraSmall: Shape? = null
+        // Les formes se lisent à la PREMIÈRE composition : le témoin n'a besoin d'aucune image. Horloge figée, l'attente
+        // d'inactivité ne compte plus les images en attente — sans quoi un recomposeur resté vivant dans le même
+        // processus de test (ordre d'exécution) le faisait tomber en AppNotIdleException au bout de 60 s.
+        compose.mainClock.autoAdvance = false
         compose.setContent {
             MeeshyTheme {
                 fieldShape = OutlinedTextFieldDefaults.shape
@@ -35,7 +39,6 @@ class MeeshyShapesTest {
                 OutlinedTextField(value = "", onValueChange = {})
             }
         }
-        compose.waitForIdle()
         assertThat(extraSmall).isEqualTo(RoundedCornerShape(MeeshyRadius.md))
         assertThat(fieldShape).isEqualTo(RoundedCornerShape(MeeshyRadius.md))
     }

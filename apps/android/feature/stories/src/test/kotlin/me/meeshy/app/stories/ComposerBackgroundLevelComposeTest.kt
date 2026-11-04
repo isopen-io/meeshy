@@ -153,7 +153,10 @@ class ComposerBackgroundLevelComposeTest {
 
     private fun holdScene() = compose.onNodeWithContentDescription(canvas).performTouchInput { longClick(Offset(width * 0.5f, height * 0.5f)) }
 
-    private fun tapScene() = compose.onNodeWithContentDescription(canvas).performTouchInput { click(Offset(width * 0.5f, height * 0.5f)) }
+    private fun tapScene() {
+        compose.onNodeWithContentDescription(canvas).performTouchInput { click(Offset(width * 0.5f, height * 0.5f)) }
+        compose.passSceneDoubleTapWindow()
+    }
 
     private fun assertLevelShown() {
         val shown = compose.onNodeWithTag(EDITING_RAIL_TAG).onChildren().fetchSemanticsNodes()

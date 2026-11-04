@@ -183,6 +183,8 @@ internal fun ConversationRowContainer(
 
         if (menuExpanded) {
             val peerBlocked = remember { actions.peerBlocked() }
+            val readingModes = rememberConversationReadingModes()
+            val readingModeEntries = remember(conversation.id) { readingModes?.entries(conversation) }
             val menuModel = ConversationMenuModel.make(
                 ConversationMenuInput(
                     capabilities = capabilities,
@@ -195,6 +197,7 @@ internal fun ConversationRowContainer(
                     isArchived = prefs?.isArchived == true,
                     isPeerBlocked = peerBlocked,
                     isCreator = conversation.currentUserRole(model.currentUserId) == MemberRole.CREATOR,
+                    offersReadingModes = readingModeEntries != null,
                     destinations = ConversationMenuDestinations(
                         details = actions.onViewInfo != null,
                         profile = actions.onViewProfile != null,
@@ -215,6 +218,7 @@ internal fun ConversationRowContainer(
                     currentReaction = prefs?.reaction,
                     categories = model.categories,
                     currentCategoryId = prefs?.categoryId,
+                    readingModes = readingModeEntries.orEmpty(),
                 ),
                 accent = accent,
                 previewMessages = model.previewMessages,
@@ -227,6 +231,7 @@ internal fun ConversationRowContainer(
                 currentTags = currentTags,
                 actions = actions,
                 onManageMembers = actions.onManageMembers?.let { open -> { open(accent) } },
+                onSelectReadingMode = { choice -> readingModes?.choose(conversation, choice) },
             )
         }
     }
