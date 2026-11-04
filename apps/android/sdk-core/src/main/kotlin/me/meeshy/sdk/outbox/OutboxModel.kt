@@ -577,6 +577,18 @@ internal fun OutboxMutation.toEntity(now: Long, ownerId: String? = null): Outbox
 )
 
 /** Terminal (or near-terminal) signal for a queued mutation, keyed by [cmid]. */
+/** Ce que « Supprimer » a fait d'une ligne ([OutboxRepository.withdrawUnlessInflight]). */
+public sealed interface OutboxWithdrawal {
+    /** Aucune ligne : elle a déjà été livrée (ou retirée). */
+    public data object Absent : OutboxWithdrawal
+
+    /** Un drainer l'a réservée : la marque d'annulation est posée, la ligne reste. */
+    public data object Marked : OutboxWithdrawal
+
+    /** Retirée avant tout envoi ; [row] est la ligne telle qu'elle était, pour nettoyer ce qui en dépendait. */
+    public data class Removed(val row: OutboxEntity) : OutboxWithdrawal
+}
+
 public sealed interface OutboxOutcome {
     public val cmid: String
 

@@ -1,0 +1,232 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.badge.what",
+          "androidName": "game_detail_badge_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.badge.how",
+          "androidName": "game_detail_badge_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.succes.what",
+          "androidName": "game_detail_succes_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.succes.how",
+          "androidName": "game_detail_succes_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.trophy.what",
+          "androidName": "game_detail_trophy_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.trophy.how",
+          "androidName": "game_detail_trophy_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.stamp.what",
+          "androidName": "game_detail_stamp_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.stamp.how",
+          "androidName": "game_detail_stamp_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.step.what",
+          "androidName": "game_detail_step_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.step.how",
+          "androidName": "game_detail_step_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.seal.what",
+          "androidName": "game_detail_seal_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.seal.how",
+          "androidName": "game_detail_seal_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.gem.what",
+          "androidName": "game_detail_gem_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.gem.how",
+          "androidName": "game_detail_gem_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.star.what",
+          "androidName": "game_detail_star_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.star.how",
+          "androidName": "game_detail_star_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.flame.what",
+          "androidName": "game_detail_flame_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.flame.how",
+          "androidName": "game_detail_flame_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.freeze.what",
+          "androidName": "game_detail_freeze_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.freeze.how",
+          "androidName": "game_detail_freeze_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.mission.what",
+          "androidName": "game_detail_mission_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.mission.how",
+          "androidName": "game_detail_mission_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.chest.what",
+          "androidName": "game_detail_chest_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.chest.how",
+          "androidName": "game_detail_chest_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.coin.what",
+          "androidName": "game_detail_coin_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.coin.how",
+          "androidName": "game_detail_coin_how",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.player.what",
+          "androidName": "game_detail_player_what",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.see_fiche",
+          "androidName": "game_detail_see_fiche",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.detail.rarity",
+          "androidName": "game_detail_rarity",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.bonus",
+          "androidName": "game_concept_fact_bonus",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.freezes",
+          "androidName": "game_concept_fact_freezes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.freeze_price",
+          "androidName": "game_concept_fact_freeze_price",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.chest",
+          "androidName": "game_concept_fact_chest",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.coin",
+          "androidName": "game_concept_fact_coin",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.next_price",
+          "androidName": "game_concept_fact_next_price",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.percent",
+          "androidName": "game_concept_fact_percent",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.concept.fact.rank",
+          "androidName": "game_concept_fact_rank",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
