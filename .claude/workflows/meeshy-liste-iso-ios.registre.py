@@ -295,17 +295,26 @@ def heads_et_prs():
     return heads, prs
 
 
+def lignee(gitdir, ref, n=5):
+    """Âge du commit de tête, et messages des n derniers commits de la lignée PRINCIPALE (premier parent).
+
+    Une branche resynchronisée porte en tête un commit de fusion de dev, dont le message n'a pas la signature de la session ;
+    le second parent amène les commits d'autres sessions. Seule la lignée du premier parent dit qui écrit la branche."""
+    ts = sh(f'git -C {gitdir} log -1 --format=%ct {ref}').strip()
+    corps = sh(f'git -C {gitdir} log --first-parent -n {n} --format=%B%x01 {ref}')
+    return (int(ts or 0), corps) if ts else None
+
+
 def ages(run, branches):
     if not branches:
         return {}
     specs = ' '.join(f'+refs/heads/{b}:refs/remotes/origin/{b}' for b in branches)
-    subprocess.run(f'git -C {run}/ledger.git fetch -q --filter=tree:0 --depth=1 origin {specs}', shell=True)
+    subprocess.run(f'git -C {run}/ledger.git fetch -q --filter=tree:0 --depth=6 origin {specs}', shell=True)
     out = {}
     for b in branches:
-        brut = sh(f'git -C {run}/ledger.git log -1 --format=%ct%x00%B refs/remotes/origin/{b}')
-        if '\x00' in brut:
-            ts, corps = brut.split('\x00', 1)
-            out[b] = (int(ts.strip() or 0), corps)
+        l = lignee(f'{run}/ledger.git', f'refs/remotes/origin/{b}')
+        if l:
+            out[b] = l
     return out
 
 
@@ -470,6 +479,15 @@ def self_test():
     assert res5['c']['etat'] == 'attente' and res5['c']['deps_manquantes'] == ['loi-x'], res5['c']
     reg['lots']['loi-x']['deps_extra'] = ['c']
     assert cycle(reg['lots'], pl) is not None
+    with tempfile.TemporaryDirectory() as g:
+        env = 'GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t'
+        sh(f'cd {g} && git init -q -b dev . && {env} git commit -q --allow-empty -m base && git checkout -q -b lot'
+           f' && {env} git commit -q --allow-empty -m "feat: lot" -m "{T}" && git checkout -q dev'
+           f' && {env} git commit -q --allow-empty -m "autre" -m "Claude-Session: https://claude.ai/code/session_AUTRE"'
+           f' && git checkout -q lot && {env} git merge -q --no-edit dev')
+        ts, corps = lignee(g, 'lot')
+        assert ts > 0 and T in corps and 'session_AUTRE' not in corps, corps
+        assert T not in sh(f'git -C {g} log -1 --format=%B lot'), 'la tête doit être le commit de fusion sans signature'
     print('self-test vert')
 
 

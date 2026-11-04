@@ -360,9 +360,14 @@ où lots est un objet clé → { branch, platform, issue, pr, age_h, nous, deps_
 rends en LISTE d'objets { key, etat, platform, branch, issue (0 si null), pr (0 si null), reprise (false si absent), nous, sensible, lourd, deps_manquantes }.
 Une commande en échec (réseau) : réessaie trois fois à 20 s d'écart, puis rends restants=-1 et des listes vides. N'invente rien.`
 
+const ATTENTE_MODE = `MODE D'ATTENTE (mesuré le 2026-11-04) : le sleep au premier plan est REFUSÉ aux sous-agents, et un seul Monitor long
+se termine sans que tu le voies. Attends par TRANCHES : charge Monitor par ToolSearch (« select:Monitor »), puis appelle-le avec
+command « sleep 290; echo go » et timeout_ms 300000, ATTENDS son événement « go », et recommence autant de fois qu'il le faut.
+Ne termine JAMAIS ton tour pendant qu'une tranche court, et termine-le TOUJOURS par l'appel StructuredOutput.`
+
 const attentePrompt = (minutes, raison) => `Attends ${minutes} minutes, puis rends {"ok": true, "note": "…"}. Raison : ${raison}.
-Attends par tranches : « sleep 240; echo ok » en Bash, répété ; si l'outil refuse un sleep au premier plan, charge Monitor par ToolSearch et
-attends avec une boucle until bornée (until [ $(date +%s) -ge <échéance> ]; do sleep 30; done). Ne fais rien d'autre.`
+${ATTENTE_MODE}
+Nombre de tranches : ${Math.max(1, Math.ceil((minutes * 60) / 290))}. Ne fais rien d'autre.`
 
 // ---------------------------------------------------------------------------
 // PROMPTS — UN LOT : ISSUE, CADRAGE, DÉVELOPPEMENT, REVUE, AUDIT, PR
@@ -496,8 +501,9 @@ POUR CHAQUE LOT :
    sdk-tests.yml (packages/MeeshySDK/** et ses fixtures) avec only_testing ; ci.yml (packages/shared/** hors fixtures, services/**, apps/web/**).
 4. Pour chaque workflow : actions_list list_workflow_runs resource_id <fichier>, branch <branch>, event workflow_dispatch. Aucune exécution non
    annulée au SHA de tête ⇒ actions_run_trigger run_workflow workflow_id <fichier> ref <branch> (inputs) ; sleep 60, relis jusqu'à la voir (5 essais).
-5. ATTENTE : tant qu'AUCUN lot de ce guichet n'a toutes ses exécutions terminées, relis toutes les 4 minutes (« sleep 240; echo ok » en Bash ;
-   refusé ⇒ Monitor par ToolSearch avec une boucle until bornée), au plus 45 minutes. À l'échéance, les lots non terminés sont « en-cours ».
+5. ATTENTE : tant qu'AUCUN lot de ce guichet n'a toutes ses exécutions terminées, relis toutes les 5 minutes, au plus 45 minutes. À l'échéance,
+   les lots non terminés sont « en-cours ».
+   ${ATTENTE_MODE}
 6. Lot terminé : jobs → conclusion (actions_list list_workflow_jobs). Tous success (skipped admis hors jobs de build et de test) ⇒ vert.
    Un job « cancelled » sans autre échec ⇒ en-cours. Rouge ⇒ get_job_logs run_id failed_only true return_content true tail_lines 500 : erreurs
    de compilation (fichier:ligne) et tests rouges (FQN) dans echecs ; puis les deux dernières exécutions TERMINÉES du même workflow sur ${BASE}
@@ -604,13 +610,18 @@ let devActifs = 0
 let devTermine = false
 let dernierDev = ''
 
+const appel = (prompt, opts) => agent(prompt, opts).catch((e) => {
+  log(`${opts && opts.label ? opts.label : 'agent'} : aucun rendu exploitable (${String(e).slice(0, 160)})`)
+  return null
+})
+
 const noter = (cle, resultat, detail) => {
   journal.push({ cle, resultat, detail: String(detail || '').slice(0, 400) })
   log(`${cle} → ${resultat}${detail ? ` — ${String(detail).slice(0, 160)}` : ''}`)
 }
 
 const statut = async (label) => {
-  const st = await agent(statutPrompt([...enVol]), { label, phase: 'Ordonnancer', schema: STATUT, model: MODELE.mecanique, effort: 'low' })
+  const st = await appel(statutPrompt([...enVol]), { label, phase: 'Ordonnancer', schema: STATUT, model: MODELE.mecanique, effort: 'low' })
   if (!st || st.restants < 0) return null
   if (st.dev && st.dev !== dernierDev) {
     log(`dev @ ${st.dev} — ${st.fusionne.length} fusionnés, ${st.pret.length} prêts, ${st.attente.length} en attente, ${st.tenu_ailleurs.length} tenus ailleurs, ${st.chevauchement.length} en chevauchement`)
@@ -632,48 +643,48 @@ const adopter = (st) => {
 }
 
 const bloquer = async (cle, info, issue, cause, final) => {
-  await agent(bloquerPrompt(cle, info, issue, cause, final), { label: `bloquer:${cle}`, phase: 'Livrer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
+  await appel(bloquerPrompt(cle, info, issue, cause, final), { label: `bloquer:${cle}`, phase: 'Livrer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
 }
 
 const chaine = async (cle, info) => {
   tentatives[cle] = (tentatives[cle] || 0) + 1
   const n = tentatives[cle]
-  const iss = await agent(issuePrompt(cle, info), { label: `issue:${cle}`, phase: 'Issue', schema: ISSUE, model: MODELE.mecanique, effort: 'low' })
+  const iss = await appel(issuePrompt(cle, info), { label: `issue:${cle}`, phase: 'Issue', schema: ISSUE, model: MODELE.mecanique, effort: 'low' })
   if (!iss || !iss.issue) return { resultat: 'bloque', cause: 'aucune issue' }
   const issue = iss.issue
 
-  const cadrage = await agent(cadrerPrompt(cle, info, issue, historique[cle]), { label: `cadrer:${cle}#${n}`, phase: 'Cadrer', schema: CADRAGE, model: MODELE.cadrer, effort: 'high' })
+  const cadrage = await appel(cadrerPrompt(cle, info, issue, historique[cle]), { label: `cadrer:${cle}#${n}`, phase: 'Cadrer', schema: CADRAGE, model: MODELE.cadrer, effort: 'high' })
   if (!cadrage) return { resultat: 'bloque', cause: 'cadrage sans rendu', issue }
   if (cadrage.decision === 'deja-tenu') {
-    await agent(satisfaitPrompt(cle, info, issue, cadrage), { label: `tenu:${cle}`, phase: 'Livrer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
+    await appel(satisfaitPrompt(cle, info, issue, cadrage), { label: `tenu:${cle}`, phase: 'Livrer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
     return { resultat: 'deja-tenu', issue, cause: cadrage.preuve }
   }
   if (cadrage.decision === 'tenu-ailleurs') return { resultat: 'tenu-ailleurs', issue, cause: cadrage.preuve }
 
   const lourd = info.platform !== 'partage' && (info.lourd || (cadrage.fichiers || []).length > 14)
-  const impl = await agent(devPrompt(cle, info, issue, cadrage, info.reprise ? `branche existante${historique[cle] ? ' ; ' + historique[cle] : ''}` : (n > 1 ? historique[cle] : '')),
+  const impl = await appel(devPrompt(cle, info, issue, cadrage, info.reprise ? `branche existante${historique[cle] ? ' ; ' + historique[cle] : ''}` : (n > 1 ? historique[cle] : '')),
     { label: `dev:${cle}#${n}`, phase: 'Développer', schema: IMPL, model: lourd ? MODELE.lourd : MODELE.developper, effort: 'high' })
   if (!impl) return { resultat: 'bloque', cause: 'développement sans rendu', issue }
   if (impl.status === 'skipped-claimed') return { resultat: 'tenu-ailleurs', issue, cause: 'branche réservée par une autre session' }
   if (impl.status !== 'pushed') return { resultat: 'bloque', cause: `développement : ${impl.summary}`, issue }
 
-  let revue = await agent(revuePrompt(cle, info, issue, impl), { label: `relire:${cle}#${n}`, phase: 'Relire', schema: REVUE, model: MODELE.relire, effort: 'high' })
+  let revue = await appel(revuePrompt(cle, info, issue, impl), { label: `relire:${cle}#${n}`, phase: 'Relire', schema: REVUE, model: MODELE.relire, effort: 'high' })
   if (!revue) return { resultat: 'bloque', cause: 'revue sans rendu', issue }
   if (revue.verdict === 'bloque') return { resultat: 'bloque', cause: `revue : ${revue.rapport}`, issue }
 
   if (info.sensible) {
-    let audit = await agent(auditPrompt(cle, info, issue), { label: `audit:${cle}#${n}`, phase: 'Auditer', schema: AUDIT, agentType: 'auditeur-adversarial', effort: 'high' })
+    let audit = await appel(auditPrompt(cle, info, issue), { label: `audit:${cle}#${n}`, phase: 'Auditer', schema: AUDIT, agentType: 'auditeur-adversarial', effort: 'high' })
     for (let passe = 0; audit && audit.verdict === 'bloquants' && passe < 2; passe++) {
-      const c = await agent(corrigerAuditPrompt(cle, info, issue, audit), { label: `audit-fix:${cle}#${passe + 1}`, phase: 'Auditer', schema: REVUE, model: MODELE.corriger, effort: 'high' })
+      const c = await appel(corrigerAuditPrompt(cle, info, issue, audit), { label: `audit-fix:${cle}#${passe + 1}`, phase: 'Auditer', schema: REVUE, model: MODELE.corriger, effort: 'high' })
       if (!c || c.verdict === 'bloque') return { resultat: 'bloque', cause: `audit : ${c ? c.rapport : 'aucun rendu'}`, issue }
       revue = { ...revue, ...c, dimensions_mures: c.dimensions_mures, dimensions_non_mures: c.dimensions_non_mures }
-      audit = await agent(auditPrompt(cle, info, issue), { label: `audit:${cle}#${n}.${passe + 2}`, phase: 'Auditer', schema: AUDIT, agentType: 'auditeur-adversarial', effort: 'high' })
+      audit = await appel(auditPrompt(cle, info, issue), { label: `audit:${cle}#${n}.${passe + 2}`, phase: 'Auditer', schema: AUDIT, agentType: 'auditeur-adversarial', effort: 'high' })
     }
     if (!audit) return { resultat: 'bloque', cause: 'audit sans rendu', issue }
     if (audit.verdict === 'bloquants') return { resultat: 'bloque', cause: `audit : ${audit.blocking.map((b) => b.title).join(' ; ')}`, issue }
   }
 
-  const pr = await agent(prPrompt(cle, info, issue, impl.summary), { label: `pr:${cle}`, phase: 'Prouver', schema: PR, model: MODELE.mecanique, effort: 'low' })
+  const pr = await appel(prPrompt(cle, info, issue, impl.summary), { label: `pr:${cle}`, phase: 'Prouver', schema: PR, model: MODELE.mecanique, effort: 'low' })
   if (!pr || !pr.pr) return { resultat: 'bloque', cause: 'PR non ouverte', issue }
   const suites = (revue.suites_ios && revue.suites_ios.length ? revue.suites_ios : impl.suites_ios) || []
   queueCI.push({ key: cle, platform: info.platform, branch: info.branch, pr: pr.pr, issue, essai: 0, attentes: 0, resync: 0, preuveEnCours: false,
@@ -728,7 +739,7 @@ const devWorker = async (id) => {
     idle++
     if (idle > MAX_IDLE) { log(`voie de développement : ${restants.length} lots restants sans progrès après ${MAX_IDLE} attentes`); return }
     const raison = `aucun lot prêt — attente ${st.attente.length}, tenus ailleurs ${st.tenu_ailleurs.join(',') || '0'}, chevauchement ${st.chevauchement.join(',') || '0'}, différés ${[...differes.keys()].join(',') || '0'}`
-    await agent(attentePrompt(20, raison), { label: `attente:dev${id}#${idle}`, phase: 'Ordonnancer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
+    await appel(attentePrompt(20, raison), { label: `attente:dev${id}#${idle}`, phase: 'Ordonnancer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
   }
 }
 
@@ -745,19 +756,20 @@ const traiterVerdict = async (item, v) => {
   if (v.head_sha) item.dernierSha = v.head_sha
   if (v.etat === 'fusionnee-ailleurs') {
     const defauts = (v.echecs || []).filter((e) => !(v.prealables || []).includes(e))
+    let rep = null
     if (defauts.length && !item.reparation) {
-      const rep = await agent(reparerPrompt(item, v), { label: `reparer:${item.key}`, phase: 'Corriger', schema: REPARATION, model: MODELE.corriger, effort: 'high' })
-      finirCI(item, 'fusionne', `PR #${item.pr} fusionnée par un tiers avant sa preuve, preuve ROUGE : ${defauts.slice(0, 3).join(' ; ')}`)
-      if (rep && rep.pushed && rep.pr) {
-        const cle = `${item.key}-reparation`
-        enVol.add(cle)
-        queueCI.push({ key: cle, platform: item.platform, branch: rep.branch, pr: rep.pr, issue: item.issue, essai: 0, attentes: 0, resync: 0, preuveEnCours: false, reparation: true })
-        log(`${item.key} : réparation de dev en PR #${rep.pr} (${String(rep.cause).slice(0, 160)})`)
-      } else log(`${item.key} : réparation non poussée — ${rep ? rep.cause : 'aucun rendu'}`)
-      return
+      rep = await appel(reparerPrompt(item, v), { label: `reparer:${item.key}`, phase: 'Corriger', schema: REPARATION, model: MODELE.corriger, effort: 'high' })
+      log(`${item.key} : ${rep && rep.pushed && rep.pr ? `réparation de dev en PR #${rep.pr}` : 'réparation non poussée'} — ${rep ? String(rep.cause).slice(0, 160) : 'aucun rendu'}`)
     }
-    await agent(livrerPrompt(item, v, true, true), { label: `consigner:${item.key}`, phase: 'Livrer', schema: LIVRAISON, model: MODELE.livrer, effort: 'medium' })
-    return finirCI(item, 'fusionne', `PR #${item.pr} fusionnée par un tiers ; preuve ${defauts.length ? 'ROUGE (réparation déjà tentée)' : (v.echecs || []).length ? 'rouge préalable' : v.detail || 'verte'}`)
+    const vu = rep ? { ...v, detail: `${v.detail} | réparation : ${rep.pushed && rep.pr ? 'PR #' + rep.pr : rep.cause}`.slice(0, 1500) } : v
+    await appel(livrerPrompt(item, vu, true, true), { label: `consigner:${item.key}`, phase: 'Livrer', schema: LIVRAISON, model: MODELE.livrer, effort: 'medium' })
+    finirCI(item, 'fusionne', `PR #${item.pr} fusionnée par un tiers ; preuve ${defauts.length ? 'ROUGE' : (v.echecs || []).length ? 'rouge préalable' : v.detail || 'verte'}`)
+    if (rep && rep.pushed && rep.pr) {
+      const cle = `${item.key}-reparation`
+      enVol.add(cle)
+      queueCI.push({ key: cle, platform: item.platform, branch: rep.branch, pr: rep.pr, issue: item.issue, essai: 0, attentes: 0, resync: 0, preuveEnCours: false, reparation: true })
+    }
+    return
   }
   if (v.etat === 'fermee' || v.etat === 'erreur') {
     await bloquer(item.key, item, item.issue, `PR ${v.etat} : ${v.detail}`, true)
@@ -773,7 +785,7 @@ const traiterVerdict = async (item, v) => {
     return
   }
   if (v.etat === 'vert' || v.etat === 'rouge-prealable') {
-    const liv = await agent(livrerPrompt(item, v, item.resync >= MAX_RESYNC), { label: `livrer:${item.key}#${item.resync}`, phase: 'Livrer', schema: LIVRAISON, model: MODELE.livrer, effort: 'medium' })
+    const liv = await appel(livrerPrompt(item, v, item.resync >= MAX_RESYNC), { label: `livrer:${item.key}#${item.resync}`, phase: 'Livrer', schema: LIVRAISON, model: MODELE.livrer, effort: 'medium' })
     if (liv && liv.etat === 'fusionnee') return finirCI(item, 'fusionne', `PR #${item.pr} → ${liv.merge_sha}${v.etat === 'rouge-prealable' ? ' (rouge préalable de dev)' : ''}${liv.derive.length ? ` ; dérive : ${liv.derive.join(', ')}` : ''}`)
     if (liv && liv.etat === 'resync') {
       item.resync++
@@ -791,7 +803,7 @@ const traiterVerdict = async (item, v) => {
     await bloquer(item.key, item, item.issue, `${v.etat} après ${MAX_FIX} corrections : ${v.echecs.join(' ; ').slice(0, 1500)}`, true)
     return finirCI(item, 'bloque', `${v.etat} après ${MAX_FIX} corrections`)
   }
-  const fix = await agent(corrigerPrompt(item, v, item.essai), { label: `corriger:${item.key}#${item.essai}`, phase: 'Corriger', schema: FIX, model: MODELE.corriger, effort: 'high' })
+  const fix = await appel(corrigerPrompt(item, v, item.essai), { label: `corriger:${item.key}#${item.essai}`, phase: 'Corriger', schema: FIX, model: MODELE.corriger, effort: 'high' })
   log(`${item.key} · correction ${item.essai}/${MAX_FIX} : ${fix ? (fix.pushed ? 'poussée' : 'rien poussé') + ' — ' + String(fix.cause).slice(0, 160) : 'aucun rendu'}`)
 }
 
@@ -804,7 +816,7 @@ const ciLane = async () => {
     }
     ciActif = true
     const lot = queueCI.slice(0, GUICHET_MAX)
-    const g = await agent(guichetPrompt(lot), { label: `guichet#${tour}`, phase: 'Prouver', schema: GUICHET, model: MODELE.prouver, effort: 'medium' })
+    const g = await appel(guichetPrompt(lot), { label: `guichet#${tour}`, phase: 'Prouver', schema: GUICHET, model: MODELE.prouver, effort: 'medium' })
     for (const item of lot) {
       const v = g && g.verdicts.find((x) => x.key === item.key)
       if (!v) { item.attentes++; if (item.attentes > MAX_ATTENTES) finirCI(item, 'bloque', 'guichet sans verdict'); continue }
@@ -820,7 +832,7 @@ const ciLane = async () => {
 // DÉROULÉ
 // ---------------------------------------------------------------------------
 phase('Préparer')
-const prep = await agent(prepPrompt(), { label: 'preparer', phase: 'Préparer', schema: PREP, model: 'sonnet', effort: 'medium' })
+const prep = await appel(prepPrompt(), { label: 'preparer', phase: 'Préparer', schema: PREP, model: 'sonnet', effort: 'medium' })
 if (!prep || !prep.pret) {
   log(`préparation impossible : ${prep ? prep.rapport : 'aucun rendu'}`)
   return { etat: 'non-prepare', prep }
@@ -831,14 +843,14 @@ let conso = null
 if (!prep.registre_restaure || A.recartographier) {
   phase('Cartographier')
   const rendus = await parallel(['F1', 'F2', 'F3', 'F4'].map((fid) => () =>
-    agent(cartoPrompt(fid), { label: `carto:${fid}`, phase: 'Cartographier', schema: CARTO, model: MODELE.carto, effort: 'high' }).then((c) => {
+    appel(cartoPrompt(fid), { label: `carto:${fid}`, phase: 'Cartographier', schema: CARTO, model: MODELE.carto, effort: 'high' }).then((c) => {
       if (c) log(`${fid} : iOS ${c.ios.filter((x) => x.verdict === 'tenu').length}/${c.ios.length} clauses tenues, Android ${c.android.filter((x) => x.verdict === 'tenu').length}/${c.android.length} ; ${c.lots.length} lots proposés ; ${c.criteres_ajoutes.length} critères ajoutés`)
       else log(`${fid} : cartographie sans rendu`)
       return c
     })))
   const cartos = rendus.filter(Boolean)
   phase('Consolider')
-  conso = await agent(consoPrompt(cartos), { label: 'consolider', phase: 'Consolider', schema: CONSO, model: MODELE.carto, effort: 'high' })
+  conso = await appel(consoPrompt(cartos), { label: 'consolider', phase: 'Consolider', schema: CONSO, model: MODELE.carto, effort: 'high' })
   if (!conso) return { etat: 'cartographie-non-consolidee', cartos: cartos.map((c) => c.feature) }
   log(`registre : +${conso.lots_ajoutes.length} lots (${conso.lots_ajoutes.join(', ')}) ; exclus ${conso.exclus.join(', ') || '—'} ; manques ${conso.manques.length}`)
   conso.manques.forEach((m) => log(`MANQUE : ${m}`))
@@ -868,5 +880,5 @@ const etat = {
   dette_web: conso ? conso.dette_web : [],
   journal: journal.slice(-80),
 }
-const bilan = await agent(bilanPrompt(etat), { label: 'bilan', phase: 'Bilan', schema: BILAN, model: MODELE.bilan, effort: 'medium' })
+const bilan = await appel(bilanPrompt(etat), { label: 'bilan', phase: 'Bilan', schema: BILAN, model: MODELE.bilan, effort: 'medium' })
 return { etat, bilan }
