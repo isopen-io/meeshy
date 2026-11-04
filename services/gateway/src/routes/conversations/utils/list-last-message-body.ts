@@ -17,7 +17,7 @@ import type { PreviewProtection } from '@meeshy/shared/types/conversation-previe
  *
  * Extrait de `core-list.ts` (au plafond de taille) quand #7591 / #7594 y ont
  * ajouté le sticker, le texte alternatif et la vue unique ouverte. Tout ici est
- * pur : la protection (`withheld`), l'échéance servie et la consommation du
+ * pur : la protection (`protection`), l'échéance servie et la consommation du
  * lecteur sont résolues par la route.
  */
 

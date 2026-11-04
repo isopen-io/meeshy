@@ -817,9 +817,7 @@ export function registerConversationListRoute(
         const ownExpiresAt = firstId && servedEphemeralExpiry.has(firstId) ? servedEphemeralExpiry.get(firstId) ?? null : undefined;
         const quotedDeathAt = firstId ? quotedDeaths.get(firstId) ?? null : null;
         const servedExpiresAt = quotedDeathAt ? inheritedEphemeralExpiresAt([ownExpiresAt, quotedDeathAt]) : ownExpiresAt;
-        const lastMessageProtection = latestMessage
-          ? resolvePreviewProtection({ ...latestMessage, servedExpiresAt, quotedDeathAt })
-          : null;
+        const lastMessageProtection = latestMessage ? resolvePreviewProtection({ ...latestMessage, servedExpiresAt, quotedDeathAt }) : null;
         const lastMessageProtected = isPreviewWithheld(lastMessageProtection);
 
         // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
