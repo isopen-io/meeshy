@@ -95,7 +95,7 @@ fun DiscoverTab(
     val haptics = rememberMeeshyHaptics()
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) { viewModel.loadSuggestions() }
+    LaunchedEffect(state.isSearchActive) { if (!state.isSearchActive) viewModel.loadSuggestions() }
     LaunchedEffect(viewModel, haptics) {
         viewModel.effects.collect { effect ->
             when (effect) {
