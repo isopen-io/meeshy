@@ -149,7 +149,7 @@ class AudioFullscreenHeroTest {
     fun `sans decoration l avatar seul tient le portrait et aucun film ne joue`() {
         show(ring = null)
         assertThat(filmCount()).isEqualTo(0)
-        compose.onAllNodesWithContentDescription("Ada", useUnmergedTree = true).assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Ada").assertCountEquals(1)
     }
 
     @Test
