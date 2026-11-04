@@ -26,6 +26,8 @@ import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.lock.ConversationUnlockSessionStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.model.conversationlist.ChipDropAction
+import me.meeshy.sdk.model.conversationlist.ChipDropResolver
 import me.meeshy.sdk.model.conversationlist.ConversationAvatarRoute
 import me.meeshy.sdk.model.conversationlist.ConversationAvatarTarget
 import me.meeshy.sdk.model.conversationlist.ConversationFilterComposition
@@ -167,6 +169,25 @@ class ConversationListViewModel @Inject constructor(
     /** Replie ou déplie [section] : mémoire de session à l'instant, serveur en silence pour une catégorie. */
     fun onSectionToggled(section: ConversationSection, expanded: Boolean) =
         sectionController.onToggled(section, expanded)
+
+    /** Déplie [sectionId] en mémoire de session seulement (la cible d'un dépôt), sans écriture serveur. */
+    fun revealSection(sectionId: String) = sectionController.reveal(sectionId)
+
+    /**
+     * Le dépôt d'une conversation sur un en-tête (iOS `ConversationSectionDropHandler`) : « Épinglées » épingle,
+     * une catégorie déplace, « Mes conversations » efface la catégorie. Rend la décision pour l'haptique.
+     */
+    fun onConversationDropped(conversationId: String, sectionId: String, isAutoScrolling: Boolean): ChipDropAction {
+        val prefs = _state.value.conversations.firstOrNull { it.id == conversationId }?.resolvedPreferences
+        val action = ChipDropResolver.action(sectionId, prefs?.isPinned == true, prefs?.categoryId.orEmpty(), isAutoScrolling)
+        when (action) {
+            ChipDropAction.Pin -> actions.togglePin(conversationId)
+            is ChipDropAction.Move ->
+                if (action.sectionId.isEmpty()) actions.removeCategory(conversationId) else actions.reassignCategory(conversationId, action.sectionId)
+            ChipDropAction.None -> Unit
+        }
+        return action
+    }
 
     private val messageSearcher = ConversationListMessageSearcher(
         scope = viewModelScope,

@@ -1,6 +1,7 @@
 package me.meeshy.app.conversations
 
 import android.content.Context
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -9,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -41,6 +43,7 @@ internal fun ConversationSectionHeader(
     stickerSkin: Boolean,
     onToggle: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    isDropTarget: Boolean = false,
 ) {
     val title = section.title ?: stringResource(section.kind.titleRes())
     val description = sectionStateDescription(expanded, foldedUnread)
@@ -66,15 +69,19 @@ internal fun ConversationSectionHeader(
         onToggle = { onToggle(!expanded) },
         modifier = modifier,
         icon = {
+            // Survolé par une conversation glissée : le disque grossit de 15 % et l'icône devient un plus-cercle.
+            val dropScale by animateFloatAsState(if (isDropTarget) DROP_DISC_SCALE else 1f, label = "drop-disc")
             Icon(
-                section.glyph(),
+                if (isDropTarget) MeeshyIcons.AddCircleFilled else section.glyph(),
                 contentDescription = null,
                 tint = section.containerColor(),
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(16.dp).graphicsLayer { scaleX = dropScale; scaleY = dropScale },
             )
         },
     )
 }
+
+private const val DROP_DISC_SCALE = 1.15f
 
 /** La peau Lentille de la liste (iOS `LentilleFeatureFlag.isLentilleListEnabled`) ; allumée hors application Hilt. */
 @Composable
