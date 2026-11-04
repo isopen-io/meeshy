@@ -149,9 +149,6 @@ data class TranscriptionPayload(
     val confidence: Double? = null,
     val durationMs: Long? = null,
     val source: String? = null,
-    /** Les segments servis (`segments[].startMs/endMs` ou secondes) : le karaoké et les locuteurs de la fiche. */
-    val segments: List<TranscriptionSegment>? = null,
-    val speakerCount: Int? = null,
 )
 
 /**
@@ -187,8 +184,6 @@ data class TranslatedAudioPayload(
     val quality: Double? = null,
     val voiceModelId: String? = null,
     val ttsModel: String? = null,
-    val segments: List<TranscriptionSegment>? = null,
-    val speakerCount: Int? = null,
 )
 
 @Serializable
@@ -398,6 +393,13 @@ data class ParticipantRoleUpdatedEvent(
     val updatedBy: String? = null,
     @Serializable(with = TolerantRoleParticipantSerializer::class)
     val participant: ParticipantRoleUpdatedParticipantInfo? = null,
+    /**
+     * #15987 — la capacité de la CIBLE recalculée pour son nouveau rang, présente
+     * dans le seul exemplaire remis à sa room personnelle. Absente (serveur
+     * antérieur, autre destinataire) ou illisible : `null`.
+     */
+    @Serializable(with = TolerantViewerCapabilitiesSerializer::class)
+    val viewerCapabilities: ConversationViewerCapabilities? = null,
 )
 
 /**
