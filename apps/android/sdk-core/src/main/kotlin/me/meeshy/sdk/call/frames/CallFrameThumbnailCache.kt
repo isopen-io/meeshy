@@ -34,12 +34,17 @@ class CallFrameThumbnailCache(
 
     fun removeAll() = cache.evictAll()
 
-    /** Sous pression mémoire, les vignettes sont reconstructibles : on les rend. */
+    /**
+     * Sous pression mémoire, les vignettes sont reconstructibles : on les rend. `TRIM_MEMORY_UI_HIDDEN` (20) n'est qu'un
+     * rappel (l'écran revient dans l'instant) et `RUNNING_MODERATE` (5) un palier léger : ils ne vident rien. Les paliers ne
+     * sont pas ordonnés par gravité (UI_HIDDEN > RUNNING_LOW), d'où l'exclusion explicite.
+     */
     fun trimMemory(level: Int) {
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) removeAll()
+        if (level != ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN && level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) removeAll()
     }
 
-    val size: Int get() = cache.size()
+    /** Le NOMBRE de vignettes gardées — `LruCache.size()` rend la somme des coûts (octets), pas le compte. */
+    val size: Int get() = cache.snapshot().size
 
     companion object {
         const val DEFAULT_COUNT_LIMIT = 48
