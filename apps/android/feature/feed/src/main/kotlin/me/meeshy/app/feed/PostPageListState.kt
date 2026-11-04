@@ -76,6 +76,30 @@ data class PostPageListState(
         )
     }
 
+    /**
+     * Le repartage au geste (iOS `PostRepostMutation`) : la marque posée et un de plus au compte de [postId]. Une
+     * republication ne se défait pas : seul [repostRefused] rend la carte. Inerte (même instance) si le post est absent.
+     */
+    fun reposted(postId: String): PostPageListState {
+        if (posts.none { it.id == postId }) return this
+        return copy(
+            posts = posts.map { if (it.id == postId) it.copy(isRepostedByMe = true, repostCount = (it.repostCount ?: 0) + 1) else it },
+        )
+    }
+
+    /**
+     * Le serveur a refusé : [postId] reprend la marque et le compte qu'il avait dans [before] — et rien d'autre, un cœur
+     * posé pendant l'aller-retour reste posé.
+     */
+    fun repostRefused(postId: String, before: PostPageListState): PostPageListState {
+        val original = before.posts.firstOrNull { it.id == postId } ?: return this
+        return copy(
+            posts = posts.map {
+                if (it.id == postId) it.copy(isRepostedByMe = original.isRepostedByMe, repostCount = original.repostCount) else it
+            },
+        )
+    }
+
     companion object {
         val Empty = PostPageListState()
     }
