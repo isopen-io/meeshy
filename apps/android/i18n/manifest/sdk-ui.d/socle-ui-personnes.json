@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "contacts.phonebook.write", "androidName": "contacts_phonebook_write", "status": "adopted"},
+        {"catalog": "app", "iosKey": "contacts.phonebook.invite", "androidName": "contacts_phonebook_invite", "status": "adopted"},
+        {"catalog": "app", "iosKey": "contacts.skeleton.loading", "androidName": "contacts_skeleton_loading", "status": "adopted"},
+        {"catalog": "app", "iosKey": "contacts.tab.prefix", "androidName": "contacts_tab_prefix", "status": "adopted"},
+        {"catalog": "app", "iosKey": "common.clear-search", "androidName": "common_clear_search", "status": "adopted"}
+      ]
+    }
+  }
+}
