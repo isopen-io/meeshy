@@ -34,7 +34,7 @@ internal fun Modifier.callCameraZoomAdjustable(zoom: CallCameraZoom): Modifier {
     return semantics {
         contentDescription = label
         stateDescription = value
-        progressBarRangeInfo = ProgressBarRangeInfo(current.toFloat(), 0f..profile.stops.lastIndex.toFloat(), profile.stops.size - 2)
+        progressBarRangeInfo = ProgressBarRangeInfo(current.toFloat(), 0f..profile.stops.lastIndex.toFloat(), (profile.stops.size - 2).coerceAtLeast(0))
         setProgress { requested ->
             val step = CameraZoomAdjust.step(CameraZoomAdjust.currentIndex(profile, zoom.state.value.displayFactor), requested)
             if (step != null) zoom.step(step)
