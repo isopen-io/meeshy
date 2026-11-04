@@ -58,6 +58,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
+import me.meeshy.ui.component.focal.ElectedMetrics
+import me.meeshy.ui.component.focal.FocalElectedFrame
+import me.meeshy.ui.component.focal.FocalGlassBlock
+import me.meeshy.ui.component.focal.FocalIdentityChip
 import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.R
@@ -279,13 +283,13 @@ private fun FlatStandardBody(
             ExpandedGlassFrame(visible = glassVisible, modifier = Modifier.weight(1f)) { column() }
         } else {
             FocalElectedFrame(
-                focus = focus,
+                contentScale = focus.contentScale,
                 lift = lift,
                 contentRect = { contentRect },
-                card = { ElectedGlassCard() },
+                card = { FocalGlassBlock() },
                 identityChip = {
                     Box(Modifier.offset(x = -ElectedMetrics.chipInset)) {
-                        ElectedIdentityChip(content, accentColor, callbacks.onSenderTap)
+                        FocalIdentityChip(content, accentColor, callbacks.onSenderTap)
                     }
                 },
                 strip = { ElectedStrip(content, focus, accentColor, callbacks) },

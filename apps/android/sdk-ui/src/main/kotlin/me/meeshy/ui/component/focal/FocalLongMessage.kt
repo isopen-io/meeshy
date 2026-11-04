@@ -42,7 +42,6 @@ import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.model.reading.focal.LongMessageExpansionLaw
 import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
-import me.meeshy.ui.component.bubble.ElectedGlassCard
 import kotlin.math.roundToInt
 
 /**
@@ -142,7 +141,7 @@ internal fun ExpandedGlassFrame(
         label = "expanded-glass",
     )
     val card: @Composable () -> Unit = {
-        if (fade > 0f) Box(Modifier.graphicsLayer { alpha = fade }) { ElectedGlassCard() }
+        if (fade > 0f) Box(Modifier.graphicsLayer { alpha = fade }) { FocalGlassBlock() }
     }
     Layout(contents = listOf(content, card), modifier = modifier) { measurables, constraints ->
         val (contentM, cardM) = measurables

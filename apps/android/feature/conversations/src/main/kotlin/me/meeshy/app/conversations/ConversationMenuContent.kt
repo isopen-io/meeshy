@@ -42,6 +42,8 @@ import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.conversationoptions.ConversationMoveMenu
 import me.meeshy.sdk.model.conversationoptions.MoveMenuTarget
+import me.meeshy.sdk.model.reading.mode.ReadingModeChoice
+import me.meeshy.sdk.model.reading.mode.ReadingModeMenuEntry
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -53,13 +55,15 @@ internal val FAVORITE_REACTION_CHOICES = listOf("⭐️", "❤️", "🔥", "�
 
 internal fun menuEntryTestTag(entry: ConversationMenuEntry): String = "conversation-menu-${entry.name}"
 
-private enum class MenuPanel { ROOT, FAVORITE, MOVE, MORE }
+private enum class MenuPanel { ROOT, FAVORITE, MOVE, MORE, READING_MODE }
 
 /** Ce que le menu écrit : les gestes des sous-panneaux, les entrées passant toutes par [onEntry]. */
 internal data class ConversationMenuPanelState(
     val currentReaction: String?,
     val categories: List<CategoryOption>,
     val currentCategoryId: String?,
+    /** Les six entrées du sous-menu « Mode de lecture » (ordre, coche, raisons) ; vide = sous-menu absent. */
+    val readingModes: List<ReadingModeMenuEntry> = emptyList(),
 )
 
 /**
@@ -77,6 +81,7 @@ internal fun ConversationMenuContent(
     onMove: (MoveMenuTarget) -> Unit,
     onCreateCategory: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onSelectReadingMode: (ReadingModeChoice) -> Unit = {},
 ) {
     var panel by remember { mutableStateOf(MenuPanel.ROOT) }
     val haptics = rememberMeeshyHaptics()
@@ -84,7 +89,7 @@ internal fun ConversationMenuContent(
         when (entry) {
             ConversationMenuEntry.FAVORITE -> panel = MenuPanel.FAVORITE
             ConversationMenuEntry.MOVE -> panel = MenuPanel.MOVE
-            ConversationMenuEntry.READING_MODE -> Unit
+            ConversationMenuEntry.READING_MODE -> panel = MenuPanel.READING_MODE
             else -> {
                 haptics.feel(entry.haptic)
                 onEntry(entry)
@@ -101,6 +106,13 @@ internal fun ConversationMenuContent(
             currentReaction = panelState.currentReaction,
             onBack = { panel = MenuPanel.ROOT },
             onSet = { emoji -> haptics.light(); onSetReaction(emoji) },
+            modifier = modifier,
+        )
+        MenuPanel.READING_MODE -> ReadingModePanel(
+            entries = panelState.readingModes,
+            accent = accent,
+            onBack = { panel = MenuPanel.ROOT },
+            onChoose = { choice -> haptics.light(); onSelectReadingMode(choice) },
             modifier = modifier,
         )
         MenuPanel.MOVE -> MovePanel(
