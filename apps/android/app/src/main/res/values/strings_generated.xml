@@ -99,7 +99,6 @@
     <string name="route_title_story">Story</string>
     <string name="route_title_tracking_links">Tracking links</string>
     <string name="share_sending">Sending…</string>
-    <string name="share_sheet_sign_in_body">Your share is kept. It’s waiting for you in Meeshy, or in the studio if you want to publish it.</string>
     <string name="share_sheet_sign_in_open">Open Meeshy</string>
     <string name="share_sheet_sign_in_title">Sign in to send</string>
     <string name="share_target_label">Share to Meeshy</string>

@@ -24,6 +24,9 @@ sealed interface ShareStagingError {
     data class InsufficientFreeSpace(val needed: Long, val free: Long) : ShareStagingError
     data class CopyFailed(val reason: String) : ShareStagingError
 
+    /** La pièce dépasse [limit] octets ([ShareStagingPolicy.MAX_FILE_BYTES]) : elle ne partirait pas, l'écran la nomme. */
+    data class TooLarge(val fileName: String, val limit: Long) : ShareStagingError
+
     /** La source n'est pas un fichier que le système a remis (chemin seul, espace privé de l'app). */
     data object RefusedSource : ShareStagingError
     data object NotAvailableOffline : ShareStagingError
