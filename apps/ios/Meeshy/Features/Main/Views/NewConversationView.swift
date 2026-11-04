@@ -605,26 +605,7 @@ struct NewConversationView: View {
 
                 Spacer()
 
-                if isBlocked {
-                    Text(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqué", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundStyle(MeeshyColors.error.opacity(0.8))
-                    Image(systemName: "hand.raised.fill")
-                        .font(MeeshyFont.relative(MeeshyIconSize.md))
-                        .foregroundStyle(MeeshyColors.error.opacity(0.7))
-                        .accessibilityHidden(true)
-                } else if isOpening {
-                    ProgressView()
-                        .tint(MeeshyColors.indigo400)
-                        .accessibilityIdentifier("new-conversation-opening")
-                } else if isGroupMode {
-                    // Selection state is conveyed to VoiceOver by the row's
-                    // `.isSelected` trait below; the glyph itself is decorative.
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xl))
-                        .foregroundStyle(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
-                        .accessibilityHidden(true)
-                }
+                userRowAccessory(isBlocked: isBlocked, isOpening: isOpening, isSelected: isSelected)
             }
             .opacity(isBlocked ? 0.5 : 1)
             .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -647,6 +628,30 @@ struct NewConversationView: View {
         .disabled(isBlocked || viewModel.isCreating)
         .accessibilityLabel(userRowAccessibilityLabel(for: user, isBlocked: isBlocked, presence: presence))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func userRowAccessory(isBlocked: Bool, isOpening: Bool, isSelected: Bool) -> some View {
+        if isBlocked {
+            Text(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqué", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundStyle(MeeshyColors.error.opacity(0.8))
+            Image(systemName: "hand.raised.fill")
+                .font(MeeshyFont.relative(MeeshyIconSize.md))
+                .foregroundStyle(MeeshyColors.error.opacity(0.7))
+                .accessibilityHidden(true)
+        } else if isOpening {
+            ProgressView()
+                .tint(MeeshyColors.indigo400)
+                .accessibilityIdentifier("new-conversation-opening")
+        } else if isGroupMode {
+            // Selection state is conveyed to VoiceOver by the row's
+            // `.isSelected` trait below; the glyph itself is decorative.
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(MeeshyFont.relative(MeeshyIconSize.xl))
+                .foregroundStyle(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
+        }
     }
 
     // VoiceOver otherwise hears only "displayName, @username": the online dot
