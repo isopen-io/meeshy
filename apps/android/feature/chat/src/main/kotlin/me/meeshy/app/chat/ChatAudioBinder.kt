@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -79,7 +80,7 @@ internal interface ChatVoicePlayback {
     fun cycleSpeed()
 
     /** La vraie forme d'onde (niveaux 0…1), calculée une fois et mise en cache ; jamais pour un vocal protégé. */
-    fun samples(audio: BubbleAudio): Flow<List<Float>>
+    fun samples(audio: BubbleAudio): StateFlow<List<Float>>
 }
 
 /** Le lecteur partagé du fil, fourni par l'écran de conversation ; `null` hors d'un fil (aperçus, tests de rendu). */
@@ -169,9 +170,9 @@ internal class ChatAudioViewModel @Inject constructor(
 
     override fun cycleSpeed() = coordinator.cycleSpeed()
 
-    override fun samples(audio: BubbleAudio): Flow<List<Float>> {
+    override fun samples(audio: BubbleAudio): StateFlow<List<Float>> {
         val url = audio.url?.takeIf { it.isNotBlank() }
-        if (audio.isProtected || url == null) return flowOf(emptyList())
+        if (audio.isProtected || url == null) return NO_WAVEFORM
         return waveformByPiece.getOrPut("${audio.attachmentId}|$url") {
             flow { emit(waveforms.bubbleLevels(url, BUBBLE_BAR_COUNT).values) }
                 .catch { failure ->
@@ -179,7 +180,7 @@ internal class ChatAudioViewModel @Inject constructor(
                     emit(emptyList())
                 }
                 .flowOn(io)
-                .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(WAVEFORM_STOP_TIMEOUT_MS), emptyList())
         }
     }
 
@@ -210,6 +211,10 @@ internal class ChatAudioViewModel @Inject constructor(
 
     private companion object {
         const val MS_PER_SECOND = 1000.0
+
+        /** La bulle sortie de l'écran laisse sa mesure s'annuler ; le relevé déjà rendu reste servi à son retour. */
+        const val WAVEFORM_STOP_TIMEOUT_MS = 5_000L
+        val NO_WAVEFORM: StateFlow<List<Float>> = MutableStateFlow(emptyList<Float>()).asStateFlow()
         val BUBBLE_BAR_COUNT: Int = WaveformBarsLayout.barCount(MediaPlayerContext.MESSAGE_BUBBLE.isCompact)
     }
 }

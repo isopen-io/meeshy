@@ -1,6 +1,6 @@
 package me.meeshy.ui.component.bubble
 
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.runtime.Immutable
 
 /**
@@ -45,10 +45,11 @@ public data class BubbleCallbacks(
      */
     val onAudioFullscreen: ((BubbleAudio) -> Unit)? = null,
     /**
-     * La vraie forme d'onde d'un vocal (niveaux 0…1), calculée une fois et mise en cache par l'hôte. Jamais demandée pour
-     * un vocal protégé : la bulle garde alors sa forme de repli déterministe.
+     * La vraie forme d'onde d'un vocal (niveaux 0…1), calculée une fois et mise en cache par l'hôte ; sa valeur présente se
+     * dessine dès le premier rendu (pas de forme de repli fugace au retour d'une bulle). Demandée seulement pour un vocal
+     * déjà sur l'appareil et jamais pour un vocal protégé : la bulle garde sinon sa forme de repli déterministe.
      */
-    val audioSamples: ((BubbleAudio) -> Flow<List<Float>>)? = null,
+    val audioSamples: ((BubbleAudio) -> StateFlow<List<Float>>)? = null,
     /** Tap on a file attachment that has a url. */
     val onFileClick: ((BubbleFile) -> Unit)? = null,
     /** Tap on the quoted-reply preview (only wired when the quoted message id is known). */

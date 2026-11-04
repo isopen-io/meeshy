@@ -72,6 +72,14 @@ public object BubbleVoiceProjection {
     public fun isOfflineBlocked(state: MediaAvailabilityState): Boolean =
         state is MediaAvailabilityState.NeedsDownload && state.offline
 
+    /**
+     * La vraie forme d'onde se mesure en lisant le son : seulement une fois le vocal SUR l'appareil, pour que la bulle
+     * ne télécharge pas en douce ce qu'elle affiche « à télécharger » (politique réseau). Un vocal protégé ne se mesure
+     * jamais : son relevé irait sur le disque. Sinon la bulle garde sa forme de repli déterministe.
+     */
+    public fun measuresWaveform(state: MediaAvailabilityState, isProtected: Boolean): Boolean =
+        !isProtected && state == MediaAvailabilityState.Ready
+
     private const val MS_PER_SECOND = 1000.0
 }
 

@@ -26,8 +26,9 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.media.MediaRequest
 import me.meeshy.sdk.model.AudioPlayerChrome
 import me.meeshy.sdk.model.AudioTranscriptionPending
@@ -77,10 +78,11 @@ public fun BubbleVoicePlayer(
 ) {
     val reservesTranscript = rememberTranscriptReservation(audio, receivedAtEpochMs)
     val availability = rememberVoiceAvailability(audio)
-    val samplesFlow = remember(audio.attachmentId, audio.url, audio.isProtected, callbacks.audioSamples) {
-        callbacks.audioSamples?.takeUnless { audio.isProtected }?.invoke(audio) ?: NO_SAMPLES
+    val measures = BubbleVoiceProjection.measuresWaveform(availability.state, audio.isProtected)
+    val samplesFlow = remember(audio.attachmentId, audio.url, measures, callbacks.audioSamples) {
+        callbacks.audioSamples?.takeIf { measures }?.invoke(audio) ?: NO_SAMPLES
     }
-    val samples by samplesFlow.collectAsState(emptyList())
+    val samples by samplesFlow.collectAsState()
     var scrubbing by remember(audio.attachmentId) { mutableStateOf(false) }
     SuppressBubbleSwipeWhile(active = scrubbing, reason = BubbleGestureReason.MediaScrubbing)
     val state = remember(audio, playback, availability.state, samples) {
@@ -272,6 +274,6 @@ private fun PendingTranscriptSkeleton() {
 private val PENDING_LINE_FRACTIONS = listOf(1f, 0.85f, 0.6f)
 private val PendingLineHeight = 10.dp
 
-private val NO_SAMPLES: Flow<List<Float>> = flowOf(emptyList())
+private val NO_SAMPLES: StateFlow<List<Float>> = MutableStateFlow(emptyList<Float>()).asStateFlow()
 
 private const val INK_LUMINANCE_THRESHOLD = 0.5f
