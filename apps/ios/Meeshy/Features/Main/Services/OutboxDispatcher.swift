@@ -103,8 +103,8 @@ struct OutboxDispatcher: OutboxDispatching {
         case .createPost:
             try await dispatchCreatePost(record)
 
-        case .toggleLikePost:
-            try await dispatchToggleLikePost(record)
+        case .toggleLikePost, .toggleBookmarkPost:
+            try await dispatchPostEngagement(record)
 
         case .createComment:
             try await dispatchCreateComment(record)
@@ -550,27 +550,6 @@ struct OutboxDispatcher: OutboxDispatching {
             headers: ["X-Client-Mutation-Id": payload.clientMutationId]
         )
         logger.info("updateSettings dispatched for category \(payload.category, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
-    }
-
-    /// `POST|DELETE /posts/:id/like` — gateway wraps through
-    /// `withMutationLog`. Both directions are naturally idempotent at
-    /// the storage layer, so a 404 ("post gone") is treated as success.
-    private func dispatchToggleLikePost(_ record: OutboxRecord) async throws {
-        let payload = try decodePayload(record, as: ToggleLikePostPayload.self)
-        let method = payload.liked ? "POST" : "DELETE"
-        let body = try ToggleLikePostBody.encoded(for: payload)
-        do {
-            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-                PostsEndpoint.byPostIdLike(postId: payload.postId),
-                method: method,
-                body: body,
-                queryItems: nil,
-                headers: ["X-Client-Mutation-Id": payload.clientMutationId]
-            )
-            logger.info("toggleLikePost \(payload.liked, privacy: .public) dispatched for \(payload.postId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
-        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
-            logger.warning("toggleLikePost 404 for \(payload.postId, privacy: .public) — post gone, accepting as success")
-        }
     }
 
     /// `POST /posts/:id/repost` — gateway wraps through `withMutationLog`
