@@ -22,6 +22,8 @@ import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostRepostedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -338,5 +340,18 @@ class ProfilePostsInteractionsTest {
         assertThat((vm.state.value.dialog as ProfilePostDialog.Quote).composer.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
         vm.onEvent(ProfilePostsEvent.BeginQuote("s1"))
         assertThat((vm.state.value.dialog as ProfilePostDialog.Quote).composer.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
+    }
+
+    @Test
+    fun `une traduction poussee arrive dans SA carte de l onglet Publications et seulement elle (#16004)`() = runTest {
+        val vm = viewModel(post("p1").copy(content = "Hello", originalLanguage = "en"), post("p2"),
+            reader = MeeshyUser(id = "me", username = "moi", systemLanguage = "fr"))
+        val other = vm.card("p2")
+        assertThat(vm.card("p1").content).isEqualTo("Hello")
+
+        social.translatedFlow.tryEmit(SocketPostTranslationUpdatedData("p1", "fr", ApiPostTranslationEntry(text = "Bonjour")))
+
+        assertThat(vm.card("p1").content).isEqualTo("Bonjour")
+        assertThat(vm.card("p2")).isEqualTo(other)
     }
 }
