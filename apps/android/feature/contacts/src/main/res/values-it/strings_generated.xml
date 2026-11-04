@@ -16,6 +16,7 @@
     <string name="contacts_discover_email_send">Invia</string>
     <string name="contacts_discover_email_send_a11y">Invia invito via email</string>
     <string name="contacts_discover_email_title">Invita via email</string>
+    <string name="contacts_discover_invite_sent">Invito inviato a %1$s</string>
     <string name="contacts_discover_no_results">Nessun utente trovato</string>
     <string name="contacts_discover_pending">In attesa</string>
     <string name="contacts_discover_search_hint">Cerca un utente Meeshy</string>
@@ -23,6 +24,8 @@
     <string name="contacts_discover_sms_send">Invia</string>
     <string name="contacts_discover_sms_send_a11y">Invia invito via SMS</string>
     <string name="contacts_discover_sms_title">Invita via SMS</string>
+    <string name="contacts_discover_sms_unavailable">SMS non disponibile</string>
+    <string name="contacts_discover_view_profile">Vedi profilo</string>
     <string name="contacts_filter_all">Tutti</string>
     <string name="contacts_filter_offline">Non in linea</string>
     <string name="contacts_filter_online">Online</string>

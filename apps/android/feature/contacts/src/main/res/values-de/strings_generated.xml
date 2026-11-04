@@ -16,6 +16,7 @@
     <string name="contacts_discover_email_send">Senden</string>
     <string name="contacts_discover_email_send_a11y">Einladung per E-Mail senden</string>
     <string name="contacts_discover_email_title">Per E-Mail einladen</string>
+    <string name="contacts_discover_invite_sent">Einladung an %1$s gesendet</string>
     <string name="contacts_discover_no_results">Kein Benutzer gefunden</string>
     <string name="contacts_discover_pending">Ausstehend</string>
     <string name="contacts_discover_search_hint">Meeshy-Nutzer suchen</string>
@@ -23,6 +24,8 @@
     <string name="contacts_discover_sms_send">Senden</string>
     <string name="contacts_discover_sms_send_a11y">Einladung per SMS senden</string>
     <string name="contacts_discover_sms_title">Per SMS einladen</string>
+    <string name="contacts_discover_sms_unavailable">SMS nicht verfügbar</string>
+    <string name="contacts_discover_view_profile">Profil ansehen</string>
     <string name="contacts_filter_all">Alle</string>
     <string name="contacts_filter_offline">Offline</string>
     <string name="contacts_filter_online">Online</string>
