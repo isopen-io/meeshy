@@ -1,6 +1,8 @@
 package me.meeshy.sdk.model.playback
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.media.AudioAvailability
+import me.meeshy.sdk.model.media.MediaAvailabilityState
 import me.meeshy.sdk.model.media.PlaybackSpeed
 import org.junit.Test
 
@@ -108,5 +110,37 @@ class BubbleVoiceProjectionTest {
     fun `une piece sans adresse est refusee, meme active`() {
         assertThat(VoiceTap.step(activeAttachmentId = null, tappedAttachmentId = "A", url = null)).isEqualTo(VoiceTap.Step.REFUSE)
         assertThat(VoiceTap.step(activeAttachmentId = "A", tappedAttachmentId = "A", url = "  ")).isEqualTo(VoiceTap.Step.REFUSE)
+    }
+}
+
+class BubbleVoiceAvailabilityTest {
+
+    @Test
+    fun `une piece sur l'appareil se joue tout de suite`() {
+        assertThat(BubbleVoiceProjection.availability(MediaAvailabilityState.Ready)).isEqualTo(AudioAvailability.Ready)
+    }
+
+    @Test
+    fun `une piece a telecharger montre sa taille, hors ligne comme en ligne`() {
+        assertThat(BubbleVoiceProjection.availability(MediaAvailabilityState.NeedsDownload(sizeBytes = 850_000, offline = true)))
+            .isEqualTo(AudioAvailability.NeedsDownload)
+    }
+
+    @Test
+    fun `un telechargement en cours devient l'anneau avec ses octets`() {
+        assertThat(BubbleVoiceProjection.availability(MediaAvailabilityState.Downloading(downloadedBytes = 410, totalBytes = 820)))
+            .isEqualTo(AudioAvailability.Downloading(progress = 0.5, downloadedBytes = 410, totalBytes = 820))
+    }
+
+    @Test
+    fun `un echec redevient un telechargement a relancer`() {
+        assertThat(BubbleVoiceProjection.availability(MediaAvailabilityState.Failed())).isEqualTo(AudioAvailability.NeedsDownload)
+    }
+
+    @Test
+    fun `seule une piece a telecharger hors ligne est desactivee`() {
+        assertThat(BubbleVoiceProjection.isOfflineBlocked(MediaAvailabilityState.NeedsDownload(offline = true))).isTrue()
+        assertThat(BubbleVoiceProjection.isOfflineBlocked(MediaAvailabilityState.NeedsDownload(offline = false))).isFalse()
+        assertThat(BubbleVoiceProjection.isOfflineBlocked(MediaAvailabilityState.Ready)).isFalse()
     }
 }
