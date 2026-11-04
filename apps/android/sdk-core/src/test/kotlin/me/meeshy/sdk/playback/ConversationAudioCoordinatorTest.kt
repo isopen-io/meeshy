@@ -40,7 +40,7 @@ class ConversationAudioCoordinatorTest {
         }
 
         override fun playLocal(attachmentId: String, fileUri: String, origin: PlaybackCommandOrigin) =
-            play(attachmentId, fileUri, origin)
+            play(attachmentId, fileUri, origin, false)
 
         override fun togglePlayPause(origin: PlaybackCommandOrigin) = Unit
         override fun pause() = Unit
@@ -59,7 +59,7 @@ class ConversationAudioCoordinatorTest {
 
     private fun item(id: String, message: String = "m$id") = QueuedAudio(
         attachmentId = id, messageId = message, conversationId = "c", fileUrl = "u/$id", durationMs = 5_000L,
-        senderName = "N", senderAvatarUrl = null, receivedAtEpochMs = 0L,
+        senderName = "N", senderAvatarUrl = null, receivedAtEpochMs = 0L, isProtected = false,
     )
 
     private fun coordinator(scope: TestScope, engine: FakeEngine) =

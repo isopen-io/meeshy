@@ -599,6 +599,14 @@ cache séparé `cacheDir/audio-playback` (64 Mo, sans clôture de compte) dispar
 démarrage (`LegacyAudioPlaybackCache`). Un vocal protégé (éphémère, vue unique, flouté, chiffré) se lit en direct : ni cache,
 ni bail, aucun octet sur le disque.
 
+**Condition de la garde (audit 2026-11-04, #15486).** « Protégé » n'est vrai que si la FILE le dit : la protection naît
+dans `AudioQueueBuilder`, depuis les champs REQUIS `AudioQueueMessage.isProtected` et `AudioQueueAttachment.isProtected`
+(un vocal est protégé si son message OU sa pièce l'est, leçon 275), que le producteur calcule par la loi unique
+`VoiceQueueProtection` (`ofMessage` : vue unique, flou, éphémère — échéance, durée ou bit, flamme comprise —, chiffré ;
+`ofPiece` : la pièce masquée ou scellée, ou son message). Aucun maillon n'a plus de défaut `false` : `QueuedAudio`,
+`AudioPlaybackEngine.play` et `AudioSource.Remote` exigent la valeur, un oubli ne compile pas. Le producteur du fil
+(#14899) DOIT bâtir sa file par ces deux lois ; tant qu'il n'existe pas, aucun appelant ne joue par le coordinateur.
+
 ---
 
 ## ADR-028 — L'app native reprend la fiche Play `me.meeshy.app` ; la coque devient `me.meeshy.webapp`

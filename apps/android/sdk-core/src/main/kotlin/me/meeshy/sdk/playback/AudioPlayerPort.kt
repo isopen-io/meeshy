@@ -2,10 +2,11 @@ package me.meeshy.sdk.playback
 
 /**
  * D'où vient le son. Un vocal [Remote.isProtected] (éphémère, vue unique, flouté, chiffré) ne touche
- * jamais le disque : la source qui le lit ne le met pas en cache.
+ * jamais le disque : la source qui le lit ne le met pas en cache. La protection n'a pas de défaut :
+ * chaque source réseau DIT si elle est protégée, un oubli ne compile pas.
  */
 internal sealed interface AudioSource {
-    data class Remote(val url: String, val isProtected: Boolean = false) : AudioSource
+    data class Remote(val url: String, val isProtected: Boolean) : AudioSource
     data class Local(val fileUri: String) : AudioSource
 }
 

@@ -63,7 +63,7 @@ class ExoAudioPlayerPortCacheTest {
         val sources = RecordingSources(context)
         val port = port(sources)
 
-        port.load(AudioSource.Remote("a"), generation = 1, speed = 1f)
+        port.load(AudioSource.Remote("a", isProtected = false), generation = 1, speed = 1f)
         assertThat(sources.leasesHeld).isEqualTo(1)
 
         port.stop()
@@ -76,8 +76,8 @@ class ExoAudioPlayerPortCacheTest {
         val sources = RecordingSources(context)
         val port = port(sources)
 
-        port.load(AudioSource.Remote("a"), generation = 1, speed = 1f)
-        port.load(AudioSource.Remote("b"), generation = 2, speed = 1f)
+        port.load(AudioSource.Remote("a", isProtected = false), generation = 1, speed = 1f)
+        port.load(AudioSource.Remote("b", isProtected = false), generation = 2, speed = 1f)
 
         assertThat(sources.leasesHeld).isEqualTo(1)
         port.release()
