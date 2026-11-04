@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import android.os.Looper
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.mockk.mockk
@@ -20,6 +21,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.nio.file.Files
 
@@ -36,7 +38,11 @@ class ChatAudioFullscreenHostTest {
 
     @Before fun setUp() = Dispatchers.setMain(main)
 
-    @After fun tearDown() = Dispatchers.resetMain()
+    /** ChatMediaHost écrit un état Compose hors composition : la boucle principale se vide avant le témoin suivant (#15815). */
+    @After fun tearDown() {
+        shadowOf(Looper.getMainLooper()).idle()
+        Dispatchers.resetMain()
+    }
 
     private class Rig {
         val engine = FakeVoiceEngine()
