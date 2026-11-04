@@ -50,9 +50,19 @@ public object ParticipantFold {
         val next = conversation.copy(
             participants = roster,
             currentUserRole = if (mine) event.role else conversation.currentUserRole,
+            viewerCapabilities = if (mine) readerCapabilities(conversation, event) else conversation.viewerCapabilities,
         )
         return next.takeUnless { it == conversation }
     }
+
+    /**
+     * #15987 — la capacité servie au lecteur suit son rang : celle que l'événement
+     * remet, sinon (serveur antérieur) celle de l'ancien rang s'efface quand le
+     * rang change, et la règle locale reprend.
+     */
+    private fun readerCapabilities(conversation: ApiConversation, event: ParticipantRoleUpdatedEvent) =
+        event.viewerCapabilities
+            ?: conversation.viewerCapabilities.takeIf { conversation.currentUserRole == event.role }
 
     private fun departing(
         conversation: ApiConversation,

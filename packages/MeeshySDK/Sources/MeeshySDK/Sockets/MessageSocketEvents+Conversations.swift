@@ -349,6 +349,10 @@ public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
     /// Ce qui compte pour appliquer le changement (`userId`, `newRole`) est au
     /// premier niveau : l'événement reste utile sans ce bloc.
     public let participant: ParticipantRoleUpdatedParticipantInfo?
+    /// #15987 — la capacité de la CIBLE recalculée pour son nouveau rang, dans le seul
+    /// exemplaire remis à sa room personnelle. `nil` : serveur antérieur, autre
+    /// destinataire ou charge illisible (le décodage de la capacité ne jette jamais).
+    public var viewerCapabilities: ConversationViewerCapabilities? = nil
 }
 
 public struct SocketEventUser: Decodable, Sendable {

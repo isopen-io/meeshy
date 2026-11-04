@@ -8,9 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -37,6 +34,7 @@ import me.meeshy.sdk.model.PresenceState
 import me.meeshy.ui.component.people.PersonAvatar
 import me.meeshy.ui.component.people.PersonRowLabels
 import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyPalette
@@ -125,7 +123,7 @@ private fun DialButton(
             modifier = Modifier.defaultMinSize(MeeshyControlSize.minTouchTarget, MeeshyControlSize.minTouchTarget),
         ) {
             Icon(
-                imageVector = Icons.Filled.Call,
+                imageVector = MeeshyIcons.Call,
                 contentDescription = stringResource(R.string.keypad_call),
                 tint = MeeshyPalette.Indigo500,
             )
@@ -133,12 +131,12 @@ private fun DialButton(
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.keypad_call_audio)) },
-                leadingIcon = { Icon(Icons.Filled.Call, contentDescription = null) },
+                leadingIcon = { Icon(MeeshyIcons.Call, contentDescription = null) },
                 onClick = { menuOpen = false; onCall(false) },
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.keypad_call_video)) },
-                leadingIcon = { Icon(Icons.Filled.Videocam, contentDescription = null) },
+                leadingIcon = { Icon(MeeshyIcons.Video, contentDescription = null) },
                 onClick = { menuOpen = false; onCall(true) },
             )
         }

@@ -199,6 +199,10 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     // MARK: - Play from remote URL (through cache)
     public func play(urlString: String) {
+        // #15294 — la bulle d'un vocal en attente désigne la copie que l'outbox
+        // garde sur l'appareil. Le cache refuse `file://` : la file de lecture
+        // de la conversation, qui passe par ici, ne jouait rien.
+        if let local = URL(string: urlString), local.isFileURL { return playLocal(url: local) }
         if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
         PlaybackCoordinator.shared.willStartPlaying(audio: self)
         resetState()
