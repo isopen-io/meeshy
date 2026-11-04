@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.core.common.IoDispatcher
+import me.meeshy.sdk.media.UploadedAttachmentIds
 import me.meeshy.sdk.model.media.MediaPlayerContext
 import me.meeshy.sdk.model.media.formatMediaDuration
 import me.meeshy.sdk.model.playback.AudioPlaybackState
@@ -92,12 +93,14 @@ internal val LocalChatVoicePlayback = staticCompositionLocalOf<ChatVoicePlayback
 internal class ChatAudioViewModel @Inject constructor(
     private val coordinator: ConversationAudioCoordinator,
     private val waveforms: WaveformRepository,
+    private val uploads: UploadedAttachmentIds,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ViewModel(), ChatVoicePlayback {
 
     private var thread: ChatVoiceThread? = null
     private val listened = MutableStateFlow<Set<String>>(emptySet())
     private val waveformByPiece = HashMap<String, StateFlow<List<Float>>>()
+    private val acknowledgedIdOf: (String) -> String? = { cmid -> uploads.serverIdOf(cmid) }
 
     init {
         viewModelScope.launch {
@@ -112,17 +115,19 @@ internal class ChatAudioViewModel @Inject constructor(
     }
 
     override fun playbackFor(attachmentIds: List<String>): Flow<BubbleAudioPlayback?> =
-        coordinator.playback.map { projectVoicePlayback(it, attachmentIds) }.distinctUntilChanged()
+        coordinator.playback.map { projectVoicePlayback(it, attachmentIds, acknowledgedIdOf) }.distinctUntilChanged()
 
     override fun currentPlayback(attachmentIds: List<String>): BubbleAudioPlayback? =
-        projectVoicePlayback(coordinator.playback.value, attachmentIds)
+        projectVoicePlayback(coordinator.playback.value, attachmentIds, acknowledgedIdOf)
 
     override fun bind(thread: ChatVoiceThread) {
         this.thread = thread
+        followAcknowledgedIn(thread.messages)
     }
 
     override fun tap(audio: BubbleAudio, bubble: BubbleContent) {
-        when (VoiceTap.step(currentAttachmentId(), audio.attachmentId, audio.url)) {
+        follow(audio, bubble.messageId)
+        when (VoiceTap.step(currentAttachmentId(), audio.attachmentId, audio.url, acknowledgedIdOf)) {
             VoiceTap.Step.REFUSE -> Unit
             VoiceTap.Step.TOGGLE -> coordinator.togglePlayPause()
             VoiceTap.Step.START_QUEUE -> {
@@ -140,7 +145,8 @@ internal class ChatAudioViewModel @Inject constructor(
     }
 
     override fun tapLone(audio: BubbleAudio, messageId: String, senderName: String, sentAtEpochMs: Long) {
-        when (VoiceTap.step(currentAttachmentId(), audio.attachmentId, audio.url)) {
+        follow(audio, messageId)
+        when (VoiceTap.step(currentAttachmentId(), audio.attachmentId, audio.url, acknowledgedIdOf)) {
             VoiceTap.Step.REFUSE -> Unit
             VoiceTap.Step.TOGGLE -> coordinator.togglePlayPause()
             VoiceTap.Step.START_QUEUE -> {
@@ -152,10 +158,12 @@ internal class ChatAudioViewModel @Inject constructor(
     }
 
     override fun seekFraction(audio: BubbleAudio, fraction: Double) {
+        follow(audio, null)
         if (coordinator.playback.value.attachmentId == audio.attachmentId) coordinator.seek(fraction)
     }
 
     override fun seekSeconds(audio: BubbleAudio, seconds: Double) {
+        follow(audio, null)
         if (coordinator.playback.value.attachmentId == audio.attachmentId) coordinator.seekToMs((seconds * MS_PER_SECOND).toLong())
     }
 
@@ -175,6 +183,25 @@ internal class ChatAudioViewModel @Inject constructor(
         }
     }
 
+    /**
+     * #15969 — le vocal chargé sous le `cmid` de son téléversement a été accusé sous l'id de [audio] : la file, le moteur et
+     * l'événement de fin prennent ce nom, et le moteur garde l'adresse servie pour reprendre si la copie locale disparaît.
+     */
+    private fun follow(audio: BubbleAudio, messageId: String?) {
+        val loaded = coordinator.playback.value.attachmentId ?: return
+        if (loaded == audio.attachmentId || acknowledgedIdOf(loaded) != audio.attachmentId) return
+        val served = audio.url?.takeIf { it.isNotBlank() } ?: return
+        coordinator.follow(loaded, audio.attachmentId, served, messageId)
+    }
+
+    /** Le fil sous les yeux montre-t-il la jumelle accusée du vocal chargé ? Retour immédiat dans le cas courant. */
+    private fun followAcknowledgedIn(messages: List<BubbleContent>) {
+        val loaded = coordinator.playback.value.attachmentId ?: return
+        val server = acknowledgedIdOf(loaded) ?: return
+        val message = messages.firstOrNull { bubble -> bubble.audios.any { it.attachmentId == server } } ?: return
+        follow(message.audios.first { it.attachmentId == server }, message.messageId)
+    }
+
     /** Le vocal que le coordinateur tient ET joue : un vocal terminé (file vidée) se rejoue avec sa file. */
     private fun currentAttachmentId(): String? {
         val loaded = coordinator.playback.value.attachmentId ?: return null
@@ -188,8 +215,11 @@ internal class ChatAudioViewModel @Inject constructor(
 }
 
 /** La projection d'un état moteur sur la bulle qui porte [attachmentIds] (loi pure : [BubbleVoiceProjection.live]). */
-internal fun projectVoicePlayback(state: AudioPlaybackState, attachmentIds: List<String>): BubbleAudioPlayback? =
-    BubbleVoiceProjection.live(state, attachmentIds)?.toBubblePlayback()
+internal fun projectVoicePlayback(
+    state: AudioPlaybackState,
+    attachmentIds: List<String>,
+    acknowledgedIdOf: (String) -> String? = { null },
+): BubbleAudioPlayback? = BubbleVoiceProjection.live(state, attachmentIds, acknowledgedIdOf)?.toBubblePlayback()
 
 private fun BubbleVoiceLive.toBubblePlayback(): BubbleAudioPlayback = BubbleAudioPlayback(
     attachmentId = attachmentId,

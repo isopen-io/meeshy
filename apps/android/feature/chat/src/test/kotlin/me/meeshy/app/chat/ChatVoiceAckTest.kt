@@ -96,6 +96,7 @@ class ChatVoiceAckTest {
         assertThat(rig.engine.follows.single()).containsExactly("cmid_voice", "att_server", acked.url, false).inOrder()
         assertThat(rig.coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("att_server")
         assertThat(rig.coordinator.snapshot.value.queue.current?.fileUrl).isEqualTo(acked.url)
+        assertThat(rig.coordinator.snapshot.value.queue.current?.messageId).isEqualTo("m_server")
     }
 
     @Test

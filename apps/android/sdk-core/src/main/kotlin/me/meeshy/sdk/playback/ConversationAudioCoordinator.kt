@@ -135,13 +135,13 @@ public class ConversationAudioCoordinator(
      * contexte et le moteur prennent ce nom (la fin le marquera écouté sous l'id serveur) sans rien recharger. Une pièce que
      * le moteur ne tient pas, ou qui n'est pas la courante de la file, ne change rien.
      */
-    public fun follow(fromAttachmentId: String, toAttachmentId: String, servedUrl: String) {
+    public fun follow(fromAttachmentId: String, toAttachmentId: String, servedUrl: String, messageId: String? = null) {
         if (fromAttachmentId == toAttachmentId || servedUrl.isBlank()) return
         if (engine.state.value.attachmentId != fromAttachmentId) return
         val snapshot = mutableSnapshot.value
         val current = snapshot.queue.current?.takeIf { it.attachmentId == fromAttachmentId } ?: return
         engine.follow(fromAttachmentId, toAttachmentId, servedUrl, current.isProtected)
-        val queue = snapshot.queue.followed(fromAttachmentId, toAttachmentId, servedUrl)
+        val queue = snapshot.queue.followed(fromAttachmentId, toAttachmentId, servedUrl, messageId)
         mutableSnapshot.value = snapshot.copy(queue = queue, context = snapshot.context?.copy(audio = queue.current ?: current))
     }
 

@@ -219,6 +219,8 @@ class AudioPlayQueueTest {
         assertThat(followed.current?.fileUrl).isEqualTo("https://gate/voice.m4a")
         assertThat(followed.current?.messageId).isEqualTo("mcmid")
         assertThat(followed.upcoming.map { it.attachmentId }).containsExactly("b")
+        assertThat(queue.followed("cmid", "att_server", "https://gate/voice.m4a", messageId = "m_server").current?.messageId)
+            .isEqualTo("m_server")
     }
 
     @Test
