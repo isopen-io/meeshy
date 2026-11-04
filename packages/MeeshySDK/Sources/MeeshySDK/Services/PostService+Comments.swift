@@ -118,7 +118,7 @@ extension PostService {
     }
 
     public func likeComment(postId: String, commentId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(
+        let _: APIResponse<DiscardedResponseBody> = try await api.request(
             PostsEndpoint.byPostIdCommentsByCommentIdLike(postId: postId, commentId: commentId), method: "POST"
         )
     }

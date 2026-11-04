@@ -2,7 +2,7 @@ import XCTest
 @testable import Meeshy
 
 /// Tests de la logique pure de labellisation VoiceOver des compteurs
-/// like / comment / repost partagés par `TextPostCell` et `MediaPostCell`.
+/// like / comment / repost / reply du fil (`PostStatAccessibility`).
 ///
 /// Contrat : le titre visible du bouton n'affiche que le nombre nu ("5") ;
 /// l'accessibilityLabel doit exposer le SENS du compteur avec accord

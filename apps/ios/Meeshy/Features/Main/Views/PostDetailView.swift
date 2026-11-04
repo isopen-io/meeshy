@@ -157,7 +157,7 @@ struct PostDetailView: View {
         isBookmarkInFlight = true
         Task {
             defer { Task { @MainActor in isBookmarkInFlight = false } }
-            if !(await PostDetailBookmarkWrite.send(postId: postId, wasBookmarked: wasBookmarked)) {
+            if !(await PostBookmarkWriter().write(bookmarked: !wasBookmarked, postId: postId, post: displayPost)) {
                 isPostBookmarked = wasBookmarked
             }
         }
