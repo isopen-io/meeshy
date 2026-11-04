@@ -107,16 +107,16 @@ class RealtimeAppliersTest {
     }
 
     private fun conversations() = InlineRegistrar().also { ConversationRealtimeApplier(socket, patcher, events, starred).subscribe(it) }
-    private fun participants() = InlineRegistrar().also { ParticipantRealtimeApplier(socket, patcher, starred).subscribe(it) }
+    private fun participants() = InlineRegistrar().also { ParticipantRealtimeApplier(socket, patcher, starred, session).subscribe(it) }
     private fun reactions(open: Set<String> = emptySet()) = InlineRegistrar().also {
         ReactionReadStatusApplier(socket, messages, rows, session, OpenConversationLookup { id -> id in open }).subscribe(it)
     }
     private fun translations() = InlineRegistrar().also { TranslationRealtimeApplier(socket, messages).subscribe(it) }
 
     @Test
-    fun `les evenements de conversation et de participant partagent la voie ordonnee des conversations`() {
-        assertThat(conversations().families.toSet()).containsExactly(OrderedEventLane.Family.CONVERSATIONS)
-        assertThat(participants().families.toSet()).containsExactly(OrderedEventLane.Family.CONVERSATIONS)
+    fun `les evenements de conversation et de participant partagent la voie ordonnee des messages`() {
+        assertThat(conversations().families.toSet()).containsExactly(OrderedEventLane.Family.MESSAGES)
+        assertThat(participants().families.toSet()).containsExactly(OrderedEventLane.Family.MESSAGES)
         assertThat(translations().families.toSet()).containsExactly(OrderedEventLane.Family.ENRICHMENT)
     }
 
@@ -172,7 +172,7 @@ class RealtimeAppliersTest {
         registrar.deliver(joinedFlow, join)
         registrar.deliver(unbannedFlow, unban)
         registrar.deliver(roleFlow, promote)
-        coVerify { patcher.applyJoined(join); patcher.applyUnbanned(unban); patcher.applyRoleUpdated(promote) }
+        coVerify { patcher.applyJoined(join); patcher.applyUnbanned(unban); patcher.applyParticipant("c1", any()) }
     }
 
     @Test
@@ -214,7 +214,7 @@ class RealtimeAppliersTest {
         val registrar = translations()
         registrar.deliver(translationFlow, TranslationEvent("m1", "c1", "fr", "Bonjour"))
         registrar.deliver(
-            transcription,
+            transcriptionFlow,
             TranscriptionReadyEvent("m1", "c1", "a1", TranscriptionPayload(text = "hello", language = "en")),
         )
         coVerify { messages.applyTranslation("m1", "fr", "Bonjour") }

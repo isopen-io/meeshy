@@ -29,7 +29,7 @@ class SharePendingSendWorkerTest {
     @Test
     fun `a share older than seven days is swept with its copies and never resumed`() = runTest {
         var now = 1_000L
-        val store = SharePendingShareStore(File(tmp.root, "root")) { now }
+        val store = SharePendingShareStore(File(tmp.root, "root"), clock = { now })
         store.commit(SharePendingShare.make("old", now, "u1", "hi", emptyList(), listOf("c1")))
         File(store.mediaDirectory("old"), "a.jpg").apply { parentFile!!.mkdirs(); writeText("x") }
         assertThat(store.pending("u1")).hasSize(1)
@@ -42,7 +42,7 @@ class SharePendingSendWorkerTest {
 
     @Test
     fun `a share of another account is never resumed under this one`() = runTest {
-        val store = SharePendingShareStore(File(tmp.root, "root")) { 1_000L }
+        val store = SharePendingShareStore(File(tmp.root, "root"), clock = { 1_000L })
         store.commit(SharePendingShare.make("s1", 1_000L, "u1", "hi", emptyList(), listOf("c1")))
 
         assertThat(store.pending("u2")).isEmpty()
