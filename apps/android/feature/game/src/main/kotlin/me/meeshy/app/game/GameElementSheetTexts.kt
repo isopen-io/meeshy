@@ -25,7 +25,7 @@ internal data class GameElementSheetTexts(
             status = statusLine(res, locale, detail.status),
             what = res.getString(GameElementKindCopy.what(detail)),
             howTitle = res.getString(GameElementKindCopy.howTitle(detail.kind)),
-            how = GameElementKindCopy.how(detail.kind)?.let(res::getString),
+            how = GameElementKindCopy.how(detail.kind)?.let { res.getString(it) },
             facts = detail.facts.map { GameSheetFact(GameCopy.resolve(res, it.label, locale), GameCopy.resolve(res, it.value, locale)) },
             rarity = detail.rarity?.visibleRarity?.let { RevealCopy.rarityName(res, it) },
         )
