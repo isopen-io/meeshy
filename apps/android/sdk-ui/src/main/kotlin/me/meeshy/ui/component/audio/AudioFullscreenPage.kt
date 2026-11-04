@@ -61,6 +61,7 @@ import me.meeshy.ui.component.bubble.BubbleAudioPlayback
 import me.meeshy.ui.component.bubble.KaraokeTranscript
 import me.meeshy.ui.component.chrome.FullscreenTopBar
 import me.meeshy.ui.component.fullscreen.FullscreenChromeButton
+import me.meeshy.ui.component.fullscreen.FullscreenChromeDimens
 import me.meeshy.ui.component.fullscreen.FullscreenChromeTone
 import me.meeshy.ui.component.fullscreen.LocalFullscreenChromeInteractive
 import me.meeshy.ui.component.fullscreen.icon
@@ -93,6 +94,7 @@ internal fun AudioFullscreenPage(
     onDownload: ((AudioFullscreenSource) -> Unit)?,
     onNext: (() -> Unit)?,
     onPrevious: (() -> Unit)?,
+    rail: (@Composable () -> Unit)? = null,
 ) {
     val playback by remember(player, source.id) {
         player.playback.map { AudioFullscreenPlaybackScope.of(it, source.id) }.distinctUntilChanged()
@@ -115,6 +117,7 @@ internal fun AudioFullscreenPage(
                 .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
             val layout = AudioFullscreenLayout.resolve(maxWidth.value, maxHeight.value)
+            val railReserve = if (rail != null) FullscreenChromeDimens.tapTarget + MeeshySpacing.sm else 0.dp
             val hero: @Composable () -> Unit = {
                 AudioFullscreenHero(
                     source = source,
@@ -188,7 +191,7 @@ internal fun AudioFullscreenPage(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxl),
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
+                        modifier = Modifier.padding(start = MeeshySpacing.lg, end = MeeshySpacing.lg + railReserve),
                     ) {
                         hero()
                         details()
@@ -197,13 +200,16 @@ internal fun AudioFullscreenPage(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(AudioFullscreenLayout.STACK_SPACING.dp),
-                        modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
+                        modifier = Modifier.padding(start = MeeshySpacing.lg, end = MeeshySpacing.lg + railReserve),
                     ) {
                         hero()
                         details()
                     }
                 }
                 Spacer(Modifier.weight(1f))
+            }
+            if (rail != null) {
+                Box(Modifier.align(Alignment.BottomEnd).padding(end = MeeshySpacing.lg, bottom = MeeshySpacing.lg)) { rail() }
             }
         }
     }

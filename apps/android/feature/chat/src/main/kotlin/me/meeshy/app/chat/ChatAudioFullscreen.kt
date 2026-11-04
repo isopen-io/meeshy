@@ -137,6 +137,7 @@ internal fun ChatAudioFullscreen(
     accent: Color,
     onDismiss: () -> Unit,
     onDismissToMessage: (String) -> Unit = {},
+    actions: me.meeshy.ui.component.audio.AudioFullscreenActionPort? = null,
 ) {
     val player = voice?.fullscreenPlayer()
     val sources = remember(attachmentId, thread, conversationId, conversationName) {
@@ -155,6 +156,7 @@ internal fun ChatAudioFullscreen(
             onDismiss = onDismiss,
             conversationTail = voice::conversationTail,
             onDismissToMessage = onDismissToMessage,
+            actions = actions,
         )
     }
 }

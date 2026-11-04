@@ -561,6 +561,7 @@
     <string name="media_hub_tile_image">Foto di %1$s, %2$s</string>
     <string name="media_hub_tile_video">Video di %1$s, %2$s</string>
     <string name="media_hub_title">Media, link e documenti</string>
+    <string name="media_reply_placeholder">Rispondi a questo allegato…</string>
     <string name="member_management_action_ban">Banna</string>
     <string name="member_management_action_demote_member">Retrocedi a membro</string>
     <string name="member_management_action_expel">Espelli</string>
