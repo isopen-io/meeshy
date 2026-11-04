@@ -13,7 +13,8 @@ class MiniPlayerVisibilityTest {
         active: MiniPlayerSubject? = null,
         grace: MiniPlayerSubject? = null,
         inConversation: String? = null,
-    ): MiniPlayerVisibilityState = MiniPlayerVisibility.next(state, active, grace, inConversation)
+        covered: Boolean = false,
+    ): MiniPlayerVisibilityState = MiniPlayerVisibility.next(state, active, grace, inConversation, isCovered = covered)
 
     @Test fun `un vocal qui joue hors de toute conversation s'affiche`() {
         val c1 = subject("c1")
@@ -99,6 +100,22 @@ class MiniPlayerVisibilityTest {
         val second = subject("c1", attachmentId = "a2")
         val playing = step(active = first)
         assertThat(step(state = playing, active = second).shown).isEqualTo(second)
+    }
+
+    @Test fun `un ecran qui couvre le chrome, comme l'appel, masque la barre qui revient ensuite`() {
+        val c1 = subject("c1")
+        val covered = step(active = c1, covered = true)
+        assertThat(covered.shown).isNull()
+        assertThat(step(state = covered, active = c1).shown).isEqualTo(c1)
+    }
+
+    @Test fun `la grace armee survit a un ecran qui couvre le chrome`() {
+        val c1 = subject("c1")
+        val exhausted = step(state = step(active = c1), grace = c1)
+        val covered = step(state = exhausted, grace = c1, covered = true)
+        assertThat(covered.shown).isNull()
+        assertThat(covered.graceArmed).isTrue()
+        assertThat(step(state = covered, grace = c1).shown).isEqualTo(c1)
     }
 
     @Test fun `la barre est la derniere barre sans pastille d'appel`() {
