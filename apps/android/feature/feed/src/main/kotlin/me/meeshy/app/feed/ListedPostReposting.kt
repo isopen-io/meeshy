@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 
@@ -21,12 +22,15 @@ internal class ListedPostReposting(
     private val scope: CoroutineScope,
     private val repository: PostRepository,
     private val list: MutableStateFlow<PostPageListState>,
+    /** Le Prisme du lecteur, lu au geste : l'aperçu de citation sert le texte de la carte (#16001). */
+    private val reader: () -> LanguageResolver.ContentLanguagePreferences?,
+    /** Le canal des issues, partagé avec les autres gestes de la liste ([ListedPostActions]) : une seule issue dite à la fois. */
+    private val notices: MutableStateFlow<FeedNotice?> = MutableStateFlow(null),
 ) {
     private val _quoteComposer = MutableStateFlow<QuoteComposerState?>(null)
     val quoteComposer: StateFlow<QuoteComposerState?> = _quoteComposer.asStateFlow()
 
-    private val _notice = MutableStateFlow<FeedNotice?>(null)
-    val notice: StateFlow<FeedNotice?> = _notice.asStateFlow()
+    val notice: StateFlow<FeedNotice?> = notices.asStateFlow()
 
     private val inFlight = mutableSetOf<String>()
 
@@ -37,7 +41,7 @@ internal class ListedPostReposting(
 
     fun beginQuote(postId: String) {
         val card = list.value.posts.firstOrNull { it.id == postId } ?: return
-        _quoteComposer.value = QuoteComposerState.quoting(card)
+        _quoteComposer.value = QuoteComposerState.quoting(card, reader())
     }
 
     fun onQuoteTextChange(text: String) {
@@ -56,7 +60,7 @@ internal class ListedPostReposting(
     }
 
     fun consumeNotice() {
-        _notice.value = null
+        notices.value = null
     }
 
     private fun send(cardId: String, command: RepostCommand) {
@@ -78,7 +82,7 @@ internal class ListedPostReposting(
             }
             inFlight.remove(cardId)
             if (!confirmed) list.update { it.repostRefused(cardId, before) }
-            _notice.value = if (confirmed) FeedNotice.REPOSTED else FeedNotice.REPOST_FAILED
+            notices.value = if (confirmed) FeedNotice.REPOSTED else FeedNotice.REPOST_FAILED
         }
     }
 }

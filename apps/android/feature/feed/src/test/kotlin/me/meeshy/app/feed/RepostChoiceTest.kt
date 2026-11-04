@@ -37,7 +37,7 @@ class RepostChoiceTest {
     fun `quoting an original post shows that post`() {
         val post = ApiPost(id = "p1", content = "  Bonjour  ", author = ApiAuthor(id = "a", username = "ana", displayName = "Ana"))
 
-        val composer = QuoteComposerState.quoting(post)
+        val composer = QuoteComposerState.quoting(post, preferences = null)
 
         assertThat(composer).isEqualTo(QuoteComposerState(postId = "p1", sourceAuthorName = "Ana", sourceContentPreview = "Bonjour"))
     }
@@ -51,7 +51,7 @@ class RepostChoiceTest {
             repostOf = ApiRepostOf(id = "root", content = "L'original", author = ApiAuthor(id = "c", username = "chloe")),
         )
 
-        val composer = QuoteComposerState.quoting(share)
+        val composer = QuoteComposerState.quoting(share, preferences = null)
 
         assertThat(composer.postId).isEqualTo("share")
         assertThat(composer.sourceAuthorName).isEqualTo("chloe")
@@ -62,6 +62,27 @@ class RepostChoiceTest {
     fun `a blank author name is no name`() {
         val post = ApiPost(id = "p1", content = "x", author = ApiAuthor(id = "a", displayName = " ", username = null))
 
-        assertThat(QuoteComposerState.quoting(post).sourceAuthorName).isNull()
+        assertThat(QuoteComposerState.quoting(post, preferences = null).sourceAuthorName).isNull()
+    }
+
+    @Test
+    fun `quoting a translated post shows the text its card serves, not the original`() {
+        val composer = QuoteComposerState.quoting(QuotePrism.post(), QuotePrism.reader)
+
+        assertThat(composer.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
+    }
+
+    @Test
+    fun `quoting a repost shows its root in the reader's language`() {
+        val composer = QuoteComposerState.quoting(QuotePrism.share(), QuotePrism.reader)
+
+        assertThat(composer.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
+    }
+
+    @Test
+    fun `a reader whose prism no translation serves reads the original`() {
+        val reader = QuotePrism.reader.copy(systemLanguage = "de", regionalLanguage = null)
+
+        assertThat(QuoteComposerState.quoting(QuotePrism.post(), reader).sourceContentPreview).isEqualTo(QuotePrism.ORIGINAL)
     }
 }
