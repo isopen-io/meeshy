@@ -27,6 +27,7 @@ import me.meeshy.app.conversations.NewConversationScreen
 import me.meeshy.app.conversations.ShareLinkArrivalsScreen
 import me.meeshy.app.conversations.ShareLinkDetailScreen
 import me.meeshy.app.conversations.ShareLinkDetailViewModel
+import me.meeshy.app.navigation.MeeshyPinnedStoryBand
 import me.meeshy.app.navigation.MeeshyStoryRail
 import me.meeshy.app.navigation.chatDestination
 import me.meeshy.app.navigation.Routes
@@ -79,6 +80,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             header = {
                 MeeshyStoryRail(navController = navController, storiesViewModel = storiesViewModel, statusesViewModel = statusesViewModel)
             },
+            pinnedBand = { reveal -> MeeshyPinnedStoryBand(navController, storiesViewModel, reveal, statusesViewModel = statusesViewModel) },
             onRefresh = {
                 storiesViewModel.refresh()
                 statusesViewModel.refresh()
