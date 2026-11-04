@@ -188,9 +188,7 @@ fun MeeshyApp(
     // fonctionnait, et l'utilisateur n'avait aucun moyen de comprendre qu'il devait
     // se reconnecter. La deconnexion vide la session, donc `startDestination`
     // bascule sur LOGIN.
-    LaunchedEffect(Unit) {
-        sessionExpiry.expirations.collect { authViewModel.logout(closedByServer = true) }
-    }
+    // L'avis et la fermeture de session vivent dans SessionRevocationOverlay (motif décodé, feuille à sept variantes).
 
     LaunchedEffect(Unit) {
         incomingCallViewModel.incomingOffers.collect { offer ->
