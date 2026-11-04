@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import java.io.File
+import java.io.RandomAccessFile
 import kotlinx.coroutines.runBlocking
 import me.meeshy.core.database.crypto.DatabaseFileState
 import me.meeshy.core.database.crypto.DatabaseFileStates
@@ -30,7 +31,8 @@ import org.junit.runner.RunWith
  * production ([DatabaseModule.encryptedOpener]) : `ATTACH … KEY ?` (clé brute liée en texte), `sqlcipher_export`,
  * vérification, échange, puis réouverture par le helper Room (clé en octets) d'une copie que l'`ATTACH` a écrite. Une clé
  * erronée rend `SQLITE_NOTADB`, lu comme une corruption. Une migration différée faute de place rouvre la base en clair
- * par le même helper, phrase vide.
+ * par le même helper, phrase vide. Une base en clair corrompue fait LEVER l'export (aucune instruction n'avale son échec),
+ * et repart chiffrée sans laisser de copie en clair.
  */
 @RunWith(AndroidJUnit4::class)
 class SqlCipherOnDeviceTest {
@@ -117,6 +119,34 @@ class SqlCipherOnDeviceTest {
         assertThat(reopenedHealth.current.value).isEqualTo(StorageState.Normal)
         assertThat(reopened.outboxDao().find(pending.cmid)).isEqualTo(pending)
         reopened.close()
+    }
+
+    /** Abîme la page 1 (le catalogue) après l'en-tête de 100 octets : le fichier reste reconnu « en clair ». */
+    private fun corruptCatalogue() {
+        RandomAccessFile(file, "rw").use { raw ->
+            val end = minOf(raw.length(), 4096L)
+            raw.seek(100L)
+            raw.write(ByteArray((end - 100L).toInt()) { 0xA5.toByte() })
+        }
+        assertThat(DatabaseFileStates.of(file)).isEqualTo(DatabaseFileState.PLAINTEXT)
+    }
+
+    @Test
+    fun une_base_en_clair_corrompue_fait_lever_l_export_et_repart_chiffree_sans_copie_en_clair() {
+        seedPlaintext()
+        corruptCatalogue()
+        val health = StorageHealth()
+
+        val database = open(bootstrap(InMemorySecureStore(), mutableListOf()), health)
+
+        assertThat(health.current.value).isEqualTo(StorageState.Degraded("recreated"))
+        assertThat(DatabaseFileStates.of(file)).isEqualTo(DatabaseFileState.ENCRYPTED)
+        database.close()
+        val directory = file.parentFile ?: error("no database directory")
+        val plaintextLeft = directory.listFiles().orEmpty()
+            .filter { it.name.startsWith(name) && DatabaseFileStates.of(it) == DatabaseFileState.PLAINTEXT }
+            .map { it.name }
+        assertThat(plaintextLeft).isEmpty()
     }
 
     @Test

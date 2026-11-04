@@ -44,6 +44,10 @@ public sealed interface DatabaseLocation {
  * pas chiffrée, et elle ne doit jamais être rouverte plus tard sous un autre compte. Une ligne reprise quitte la base de
  * repli dans le même geste, une ligne non reprise y reste, et une ligne sauvée n'écrase jamais celle que la base de
  * destination porte déjà : rien n'est rejoué, rien n'est perdu.
+ *
+ * Une base en mémoire qui reçoit la copie de l'outbox d'une base sur disque restée intacte tient le registre de ce qu'elle
+ * en règle ([DiskOutboxSettlement]) : la prochaine ouverture sur disque en retire ces lignes, et un envoi annulé pendant
+ * le lancement en mémoire ne repart pas.
  */
 public class DatabaseOpener(
     private val context: Context,
@@ -61,18 +65,20 @@ public class DatabaseOpener(
 ) {
     public fun open(): MeeshyDatabase {
         val primaryFile = context.getDatabasePath(primaryName)
+        val settlement = DiskOutboxSettlement(primaryFile)
         health.markNormal()
-        prepared()?.let { failure -> return afterPrepareFailure(primaryFile, failure) }
+        prepared()?.let { failure -> return afterPrepareFailure(primaryFile, settlement, failure) }
         if (DatabaseRecovery.isMarkedCorrupted(primaryFile)) {
             diagnostics.record(DatabaseInitStage.FIRST_FAILURE, "corruption-marked:${primaryFile.name}")
-            return recreate(primaryFile)
+            return recreate(primaryFile, settlement)
         }
         if (!readable(primaryFile)) {
             diagnostics.record(DatabaseInitStage.FIRST_FAILURE, "unreadable:${primaryFile.name}")
-            return recreate(primaryFile)
+            return recreate(primaryFile, settlement)
         }
         val first = attempt(DatabaseLocation.Named(primaryName))
         first.database?.let {
+            settlement.applyTo(it)
             adoptFallback(it)
             leftovers?.markInUse(primaryFile)
             return it
@@ -80,7 +86,7 @@ public class DatabaseOpener(
         val failure = first.failure ?: IllegalStateException("open failed")
         diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
         return when (DatabaseRecovery.classify(failure)) {
-            OpenFailureKind.CORRUPTION -> recreate(primaryFile)
+            OpenFailureKind.CORRUPTION -> recreate(primaryFile, settlement)
             OpenFailureKind.UNAVAILABLE -> fallBack(DatabaseSalvage())
             OpenFailureKind.DEFECT -> throw failure
         }
@@ -99,14 +105,18 @@ public class DatabaseOpener(
 
     /**
      * Une base encore en clair qu'une corruption empêche d'exporter : sauvée, mise en quarantaine, recréée chiffrée. Toute
-     * autre panne de la préparation ouvre la base en mémoire, sans toucher au fichier ni l'ouvrir en clair.
+     * autre panne de la préparation ouvre la base en mémoire, sans toucher au fichier ni l'ouvrir en clair ; ce que la base
+     * en mémoire règle de l'outbox recopiée est inscrit à [settlement], pour que le disque ne le rejoue pas.
      */
-    private fun afterPrepareFailure(primaryFile: File, failure: Throwable): MeeshyDatabase {
+    private fun afterPrepareFailure(primaryFile: File, settlement: DiskOutboxSettlement, failure: Throwable): MeeshyDatabase {
         diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
         val corruptPlaintext = DatabaseRecovery.classify(failure) == OpenFailureKind.CORRUPTION &&
             DatabaseFileStates.of(primaryFile) == DatabaseFileState.PLAINTEXT
-        if (corruptPlaintext) return recreate(primaryFile)
-        return inMemory(salvageInPlace(primaryFile), encryptionUnavailable(failure))
+        if (corruptPlaintext) return recreate(primaryFile, settlement)
+        val salvaged = settlement.withoutSettled(salvageInPlace(primaryFile))
+        val memory = inMemory(salvaged, encryptionUnavailable(failure))
+        settlement.watch(memory, salvaged.outbox.map { it.cmid }.toSet())
+        return memory
     }
 
     /**
@@ -130,8 +140,8 @@ public class DatabaseOpener(
         return "$ENCRYPTION_UNAVAILABLE$cause"
     }
 
-    private fun recreate(primaryFile: File): MeeshyDatabase {
-        val salvaged = quarantine(primaryFile)
+    private fun recreate(primaryFile: File, settlement: DiskOutboxSettlement): MeeshyDatabase {
+        val salvaged = settlement.withoutSettled(quarantine(primaryFile))
         prepared()?.let { failure ->
             diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
             return inMemory(salvaged, encryptionUnavailable(failure))
@@ -140,6 +150,7 @@ public class DatabaseOpener(
         retry.database?.let {
             diagnostics.record(DatabaseInitStage.RECREATED, primaryName)
             restore(it, salvaged)
+            settlement.applyTo(it)
             health.markDegraded("recreated")
             leftovers?.markInUse(primaryFile)
             return it

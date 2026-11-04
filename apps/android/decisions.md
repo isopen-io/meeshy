@@ -351,6 +351,37 @@ copies) rather than purged as `key-lost` — the outcome (cold start) is the sam
 database in memory until the consented reset (follow-up), and the degraded screen does
 not yet name the cause of an in-memory launch.
 
+**Amendment (2026-11-04, #15880 — third counter-audit, emulator run 41818032184).**
+(1) **The migration now runs on the real engine.** `Engine.export` opened the plaintext
+database `OPEN_READWRITE` only; an attached database inherits the connection's flags, so
+`ATTACH … AS encrypted KEY ?` could not create the copy (`unable to open database`) and
+every migration failed into memory (`encryption-unavailable:defect`). The plaintext
+connection now opens `OPEN_READWRITE | CREATE_IF_NECESSARY`, with an inert error handler
+on every maintenance connection (a corruption met there throws, it never deletes the
+file). (2) **No SQLCipher statement swallows its failure.** `rawExecSQL` ignored
+execution errors, so an aborted `ATTACH` or `sqlcipher_export` passed for a success and a
+corrupt plaintext database never reached its encrypted re-creation. Every statement goes
+through `execSQL` or a compiled statement (`simpleQueryForString` for the export), which
+throw; `SqlCipherExportGuardTest` forbids `rawExecSQL` in the module, and the emulator
+bench proves "corrupt plaintext → export throws → quarantine → encrypted re-creation, no
+plaintext copy left". (3) **What an in-memory launch settles is not replayed by the
+disk.** The in-memory database receives a COPY of the on-disk outbox, which the file
+keeps. `DiskOutboxSettlement` watches the in-memory outbox (Room invalidation): a row
+from the disk that leaves it (delivered, withdrawn, discarded) or whose cancellation is
+requested is written to `meeshy.db.outbox-settled` (client `cmid`s only, no content); the
+next on-disk open deletes those rows, then the register; a further in-memory launch does
+not copy them. Known limit: a row settled in the last instants of a killed process,
+before the register is written, stays replayable. (4) **The plaintext deferral is
+bounded and signalled.** A deferred launch WRITES plaintext (cache, new messages,
+outbox). Each deferral is counted next to the database (`meeshy.db.encryption-deferrals`),
+logged (`encryption-deferred:disk-full,launch=n/3`) and degrades `StorageHealth`
+(`encryption-deferred`). Beyond `MAX_DEFERRALS` (3) consecutive launches — or when the
+counter cannot be written — `MigrationDeferralExhaustedException` (an unavailability)
+opens the launch in memory with the on-disk outbox copied, never in plaintext; a
+successful migration resets the counter. A database re-created during a deferral
+(quarantine) is born ENCRYPTED: the deferral holds only while the file on disk is the
+original plaintext database, and `prepare` replays otherwise.
+
 ---
 
 ## ADR-014 — `kotlinx.serialization` with lenient, forward-compatible decoding

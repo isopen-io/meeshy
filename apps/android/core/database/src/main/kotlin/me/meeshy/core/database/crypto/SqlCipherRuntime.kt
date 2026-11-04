@@ -103,37 +103,49 @@ internal object SqlCipherRuntime {
         }
     }
 
+    /**
+     * Les connexions de maintenance (lecture, export, vérification) : gestionnaire d'erreurs INERTE, pour qu'une corruption
+     * rencontrée ici lève sans que le gestionnaire par défaut ne supprime le fichier — la base en clair abîmée doit rester
+     * en place pour être sauvée puis mise en quarantaine par [DatabaseRecovery].
+     */
     private fun open(file: File, phrase: String, flags: Int): SQLiteDatabase =
-        SQLiteDatabase.openDatabase(file.path, phrase, null, flags, null, null)
+        SQLiteDatabase.openDatabase(file.path, phrase, null, flags, DatabaseErrorHandler { }, null)
 
     /**
      * `sqlcipher_export` : copie intégrale, schéma et `user_version` compris, vers un fichier chiffré neuf. La base en clair
-     * s'ouvre en écriture (une base attachée hérite des drapeaux de la connexion) mais rien n'y est écrit : elle reste la
-     * source de la vérification et de la reprise. L'index des messages est retiré de la COPIE, sur une connexion neuve
-     * qui en relit le schéma : la copie renumérote les `rowid` de `messages`, sur lesquels il est indexé, et
-     * [SearchIndexSchema.ensure] le reconstruit à l'ouverture. L'index des conversations, autonome, est gardé.
+     * s'ouvre en écriture ET en création : une base attachée hérite des drapeaux de la connexion, et sans
+     * `CREATE_IF_NECESSARY` l'`ATTACH` ne peut pas créer la copie (`unable to open database`, run 41818032184). Rien n'est
+     * écrit dans la base en clair, qui existe déjà : elle reste la source de la vérification et de la reprise.
+     * Chaque instruction passe par [SQLiteDatabase.execSQL] ou une requête compilée, qui LÈVENT sur échec : `rawExecSQL`
+     * avale l'erreur d'exécution, et un `ATTACH` ou un export avorté passait pour réussi, ce qui privait une base en clair
+     * corrompue de sa recréation chiffrée. L'index des messages est retiré de la COPIE, sur une connexion neuve qui en relit
+     * le schéma : la copie renumérote les `rowid` de `messages`, sur lesquels il est indexé, et [SearchIndexSchema.ensure]
+     * le reconstruit à l'ouverture. L'index des conversations, autonome, est gardé.
      */
     object Engine : PlaintextExportEngine {
         override fun export(plain: File, target: File, passphrase: ByteArray) {
             ensureLoaded()
             val phrase = String(passphrase, Charsets.US_ASCII)
-            val db = open(plain, "", SQLiteDatabase.OPEN_READWRITE)
+            val db = open(plain, "", PLAINTEXT_EXPORT_FLAGS)
             try {
-                val version = db.compileStatement("PRAGMA user_version").simpleQueryForLong()
-                db.rawExecSQL("ATTACH DATABASE ? AS encrypted KEY ?", target.path, phrase)
-                db.rawExecSQL("SELECT sqlcipher_export('encrypted')")
-                db.rawExecSQL("PRAGMA encrypted.user_version = $version")
-                db.rawExecSQL("DETACH DATABASE encrypted")
+                val version = db.compileStatement("PRAGMA user_version").use { it.simpleQueryForLong() }
+                db.execSQL("ATTACH DATABASE ? AS encrypted KEY ?", arrayOf<Any?>(target.path, phrase))
+                db.compileStatement("SELECT sqlcipher_export('encrypted')").use { it.simpleQueryForString() }
+                db.execSQL("PRAGMA encrypted.user_version = $version")
+                db.execSQL("DETACH DATABASE encrypted")
             } finally {
                 db.close()
             }
             val copy = open(target, phrase, SQLiteDatabase.OPEN_READWRITE)
             try {
-                SearchIndexSchema.messageIndexDropStatements.forEach(copy::rawExecSQL)
+                SearchIndexSchema.messageIndexDropStatements.forEach(copy::execSQL)
             } finally {
                 copy.close()
             }
         }
+
+        /** Les drapeaux de la connexion en clair, hérités par la copie attachée : il faut pouvoir CRÉER celle-ci. */
+        internal const val PLAINTEXT_EXPORT_FLAGS: Int = SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.CREATE_IF_NECESSARY
 
         override fun verify(source: File?, encrypted: File, passphrase: ByteArray): Boolean {
             ensureLoaded()

@@ -70,8 +70,9 @@ internal object DatabaseModule {
      * (`allowsSecondary = false`) : elle serait en clair ; un disque qui refuse mène à la base EN MÉMOIRE, qui ne laisse
      * rien sur l'appareil. Une base de repli laissée par une version antérieure est reprise puis supprimée. Un échec du
      * chiffrement n'est jamais un repli en clair : [DatabaseOpener] ouvre alors la base en mémoire. Seule exception, une
-     * base DÉJÀ en clair que le disque ne peut pas encore exporter s'ouvre telle quelle
-     * ([EncryptedDatabaseBootstrap.plaintextDeferred]).
+     * base DÉJÀ en clair que le disque ne peut pas encore exporter s'ouvre telle quelle, au plus
+     * [EncryptedDatabaseBootstrap.MAX_DEFERRALS] lancements consécutifs, stockage dégradé
+     * ([EncryptedDatabaseBootstrap.plaintextDeferred]) ; au-delà, la base s'ouvre en mémoire.
      */
     fun encryptedOpener(
         context: Context,

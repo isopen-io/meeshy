@@ -12,6 +12,14 @@ public class DatabaseStorageUnavailableException(file: File) :
     IllegalStateException("database file ${file.name} is unreadable on disk", IOException("header read refused"))
 
 /**
+ * La migration a été différée faute de place autant de lancements que [EncryptedDatabaseBootstrap.maxDeferrals] le
+ * permet : la base en clair ne s'ouvre plus telle quelle. La cause est une [IOException], donc [DatabaseRecovery.classify]
+ * y lit une indisponibilité et ce lancement s'ouvre EN MÉMOIRE, l'outbox du disque relue en lecture seule.
+ */
+public class MigrationDeferralExhaustedException(file: File) :
+    IllegalStateException("encryption of ${file.name} deferred too many times", IOException("disk cannot hold the encrypted copy"))
+
+/**
  * Prépare le fichier `meeshy.db` avant la première ouverture : relit (ou crée) la clé, migre une base en clair,
  * purge un fichier que la clé ne déverrouille plus. Exécuté une seule fois par process, par `DatabaseOpener` AVANT
  * toute ouverture, donc sur le thread qui construit le singleton `MeeshyDatabase` (le `@Provides` de Hilt) : la
@@ -26,21 +34,43 @@ public class EncryptedDatabaseBootstrap(
     private val migrator: PlaintextDatabaseMigrator,
     private val onEvent: (String) -> Unit = {},
     private val freeBytes: (File) -> Long = { directory -> directory.usableSpace },
+    public val maxDeferrals: Int = MAX_DEFERRALS,
 ) {
     @Volatile private var key: DatabaseKey? = null
 
     @Volatile private var deferred: Boolean = false
 
+    private val deferrals = MigrationDeferrals(File(databaseFile.path + DEFERRALS_SUFFIX))
+
     public val file: File get() = databaseFile
 
     /**
      * `true` quand le disque ne pouvait pas porter la copie chiffrée : la base, déjà en clair sur le disque, s'ouvre telle
-     * quelle pour ce lancement, et le suivant retente la migration. Rien de nouveau n'est écrit en clair qui ne l'était
-     * déjà, et l'app garde son cache et son outbox au lieu de tourner en mémoire à chaque lancement.
+     * quelle pour ce lancement, et le suivant retente la migration. Ce lancement ÉCRIT EN CLAIR (cache, nouveaux messages,
+     * outbox) : c'est le prix d'une app qui garde son cache et son outbox au lieu de tourner en mémoire. Il est borné et
+     * signalé : chaque report est compté sur le disque et journalisé (`encryption-deferred:disk-full,launch=n/max`, stockage
+     * dégradé), et au-delà de [maxDeferrals] lancements consécutifs la base en clair ne s'ouvre plus ([MigrationDeferralExhaustedException] :
+     * base en mémoire, outbox relue). Une base recréée pendant un report (quarantaine) naît CHIFFRÉE : le report ne vaut que
+     * tant que le fichier sur le disque est la base en clair d'origine ([prepare] le relit).
      */
     public val plaintextDeferred: Boolean get() = deferred
 
-    public fun prepare(): DatabaseKey = key ?: synchronized(this) { key ?: run().also { key = it } }
+    /**
+     * La clé, une fois la préparation faite. Un report en clair n'est gardé que tant que le fichier principal est encore
+     * la base en clair qu'il protège : s'il a disparu (quarantaine avant une recréation) ou changé, la préparation se
+     * rejoue, et la base qui naît est chiffrée.
+     */
+    public fun prepare(): DatabaseKey {
+        key?.takeUnless { staleDeferral() }?.let { return it }
+        return synchronized(this) {
+            key?.takeUnless { staleDeferral() }?.let { return it }
+            key = null
+            run().also { key = it }
+        }
+    }
+
+    private fun staleDeferral(): Boolean =
+        deferred && DatabaseFileStates.of(databaseFile) != DatabaseFileState.PLAINTEXT
 
     /** La phrase remise à SQLCipher ; vide (base en clair, aucun codec) quand la migration est différée. */
     public fun passphrase(): ByteArray {
@@ -76,6 +106,7 @@ public class EncryptedDatabaseBootstrap(
             return current
         }
         val executed = migrator.migrate(databaseFile, current.passphrase())
+        deferrals.clear()
         if (executed.isNotEmpty()) onEvent("$MIGRATION${executed.joinToString(",")}")
         return current
     }
@@ -88,11 +119,20 @@ public class EncryptedDatabaseBootstrap(
         return freeBytes(directory) < requiredFreeBytes(source)
     }
 
-    /** Une sauvegarde en clair seule est remise en place (un renommage) : sinon Room créerait une base vide à côté d'elle. */
+    /**
+     * Une sauvegarde en clair seule est remise en place (un renommage) : sinon Room créerait une base vide à côté d'elle,
+     * et la base en mémoire n'en relirait pas l'outbox. Le report est compté sur le disque ; un compteur qui ne s'écrit pas
+     * vaut un report de trop (jamais d'écriture en clair sans borne).
+     */
     private fun deferMigration(facts: MigrationFacts) {
         if (facts.main == DatabaseFileState.ABSENT) migrator.restoreBackup(databaseFile)
+        val launch = deferrals.record()
+        if (launch == null || launch > maxDeferrals) {
+            onEvent("$DEFERRED$EXHAUSTED,launch=${launch ?: UNRECORDED}/$maxDeferrals")
+            throw MigrationDeferralExhaustedException(databaseFile)
+        }
         deferred = true
-        onEvent("$DEFERRED$DISK_FULL")
+        onEvent("$DEFERRED$DISK_FULL,launch=$launch/$maxDeferrals")
     }
 
     /**
@@ -129,7 +169,15 @@ public class EncryptedDatabaseBootstrap(
         public const val MIGRATION: String = "migration:"
         public const val KEY_REPLACED: String = "key-replaced:"
         public const val DEFERRED: String = "encryption-deferred:"
+        public const val EXHAUSTED: String = "exhausted"
+
+        /** Les lancements consécutifs qui peuvent s'ouvrir en clair faute de place pour la copie chiffrée. */
+        public const val MAX_DEFERRALS: Int = 3
+
+        /** Le compteur des reports, à côté de la base : un entier, aucune donnée. */
+        public const val DEFERRALS_SUFFIX: String = ".encryption-deferrals"
         private const val DISK_FULL = "disk-full"
+        private const val UNRECORDED = "unrecorded"
         private const val MIN_MARGIN_BYTES = 4L * 1024 * 1024
 
         /**
@@ -140,5 +188,21 @@ public class EncryptedDatabaseBootstrap(
             val size = plain.length() + File(plain.path + "-wal").length()
             return size + maxOf(size / 10, MIN_MARGIN_BYTES)
         }
+    }
+}
+
+/** Le nombre de lancements consécutifs dont la migration a été différée, dans un petit fichier à côté de la base. */
+internal class MigrationDeferrals(private val file: File) {
+    /** Compte un report de plus ; `null` si le compteur ne s'écrit pas. */
+    fun record(): Int? = try {
+        val next = (file.takeIf(File::isFile)?.readText()?.trim()?.toIntOrNull() ?: 0) + 1
+        file.writeText(next.toString())
+        next
+    } catch (_: IOException) {
+        null
+    }
+
+    fun clear() {
+        if (file.isFile) file.delete()
     }
 }

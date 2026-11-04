@@ -7,7 +7,8 @@
 # fait tourner le VRAI moteur sur un émulateur x86_64 : migration d'une base en
 # clair dont l'outbox n'est pas vide (ATTACH … KEY ?, sqlcipher_export,
 # vérification, échange), réouverture par Room, clé erronée → SQLITE_NOTADB,
-# migration différée faute de place (phrase vide).
+# migration différée faute de place (phrase vide), base en clair corrompue →
+# export qui lève → recréation chiffrée sans copie en clair.
 #
 # Séparé d'`android.yml` (qui reste le miroir exact de `meeshy.sh check`) : il ne
 # tourne que lorsque la persistance, le coffre de la clé ou les versions bougent.

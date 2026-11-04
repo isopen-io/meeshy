@@ -11,7 +11,8 @@ android {
 
     defaultConfig {
         minSdk = 26
-        // Le seul banc du vrai SQLCipher (bibliothèque native) : `connectedDebugAndroidTest`, job émulateur d'android.yml.
+        // Le seul banc du vrai SQLCipher (bibliothèque native) : `connectedDebugAndroidTest`, lancé sur émulateur par le
+        // workflow « Android SQLCipher sur émulateur » (.github/workflows/android-sqlcipher-device.yml), hors d'android.yml.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
