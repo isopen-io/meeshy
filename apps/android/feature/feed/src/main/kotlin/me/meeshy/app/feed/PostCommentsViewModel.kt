@@ -3,6 +3,7 @@ package me.meeshy.app.feed
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.model.CommentLikeState
+import me.meeshy.sdk.model.CommentSendGate
 import me.meeshy.sdk.model.CommentReactionLaw
 import me.meeshy.sdk.model.mediaRewritten
 import me.meeshy.sdk.model.mergedFirstPage
@@ -131,6 +132,10 @@ data class ReplyThreadUiState(
 data class ReplyTarget(
     val parentId: String,
     val authorName: String?,
+    /** Le commentaire VISÉ (pas sa racine) : l'ancre `comment-<id>` que la liste garde en vue au-dessus du clavier. */
+    val commentId: String? = null,
+    /** Sa première ligne, citée dans la bannière « en réponse à ». */
+    val excerpt: String? = null,
 )
 
 @HiltViewModel
@@ -621,7 +626,9 @@ class PostCommentsViewModel @Inject constructor(
     fun submit() {
         val content = composerDraft.value.text.trim()
         val tray = attachments.value
-        if ((content.isEmpty() && !tray.hasMedia) || tray.isUploading || postId.isBlank() || status.value.isSubmitting) return
+        if (postId.isBlank() || status.value.isSubmitting) return
+        val gate = CommentSendGate.decide(content, tray.pieces.map { CommentSendGate.Piece(it.id, isReady = it.uploaded != null) }, hasPlace = false)
+        if (gate !is CommentSendGate.Decision.Send) return
         val attachmentIds = tray.attachmentIds.takeIf { it.isNotEmpty() }
         val pill = composerDraft.value.language
         val effectFlags = CommentEffects.wire(composerDraft.value.effects)
@@ -743,7 +750,7 @@ class PostCommentsViewModel @Inject constructor(
         val comment = findComment(commentId)
         val parentId = comment?.parentId?.takeIf { it.isNotBlank() } ?: commentId
         val name = comment?.author?.let { it.displayName ?: it.username }?.takeIf { it.isNotBlank() }
-        composer.value = ReplyTarget(parentId, name)
+        composer.value = ReplyTarget(parentId, name, commentId = commentId, excerpt = comment?.content?.takeIf { it.isNotBlank() })
         ensureThreadLoaded(parentId)
 
         val prefill = ReplyMentionPrefill.apply(
@@ -759,6 +766,9 @@ class PostCommentsViewModel @Inject constructor(
     /** Drop the active reply target — the composer returns to posting a top-level comment. */
     fun cancelReply() {
         composer.value = null
+        val prefill = ReplyMentionPrefill.apply(composerDraft.value.text, prefilledMention, replyToParentId = null, authorUsername = null)
+        prefilledMention = null
+        composerDraft.update { it.copy(text = prefill.text) }
     }
 
     /** Reset the composer text + mention tracking after a send. */

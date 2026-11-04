@@ -1,7 +1,22 @@
 package me.meeshy.ui.component.comments
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -70,3 +85,57 @@ public fun CommentsOfflineBand(message: String, modifier: Modifier = Modifier) {
             .semantics { liveRegion = LiveRegionMode.Polite },
     )
 }
+
+/**
+ * Le bandeau commun au-dessus du composeur pendant une ÉDITION ou une RÉPONSE (iOS `CommentEditingBanner` /
+ * `CommentReplyBanner`) : une barre d'accent (réponse) ou une icône (édition), le titre, la première ligne citée, et la
+ * croix qui annule. [accent] vient de l'appelant (couleur de l'auteur visé ou de la conversation), jamais d'un littéral.
+ */
+@Composable
+public fun CommentComposerBanner(
+    title: String,
+    cancelLabel: String,
+    accent: Color,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+    quote: String? = null,
+    icon: ImageVector? = null,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = BANNER_ALPHA))
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xsPlus),
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
+        } else {
+            Box(Modifier.width(3.dp).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(accent))
+        }
+        Column(Modifier.weight(1f).padding(start = MeeshySpacing.sm)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (icon != null) FontWeight.Medium else FontWeight.SemiBold,
+                color = if (icon != null) MeeshyTheme.tokens.textSecondary else accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!quote.isNullOrBlank()) {
+                Text(
+                    text = quote,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
+            Icon(MeeshyIcons.Close, contentDescription = cancelLabel, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+private const val BANNER_ALPHA = 0.6f
