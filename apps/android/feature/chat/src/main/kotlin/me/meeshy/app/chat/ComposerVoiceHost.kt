@@ -51,6 +51,7 @@ internal fun rememberComposerVoice(
     onStageVoiceFile: ((File) -> Unit)?,
     onPickFile: (file: File, fileName: String, mimeType: String?) -> Unit,
     newRecorder: (() -> AudioRecordingProviding)? = null,
+    conversationTitle: String = "",
 ): ComposerVoiceHandle {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -74,6 +75,7 @@ internal fun rememberComposerVoice(
             if (live) {
                 haptics.light()
                 publishedTake.set(true)
+                recordingHost.updateTake(conversationTitle, emptyList())
                 recordingHost.publish(System.currentTimeMillis())
             }
         }
@@ -125,6 +127,7 @@ internal fun rememberComposerVoice(
             delay(100)
             recorder.tick(0.1)
             recording = recorder.session
+            if (publishedTake.get()) recordingHost.updateTake(conversationTitle, recording.levels.takeLast(LEVEL_WINDOW))
         }
     }
     return ComposerVoiceHandle(
@@ -149,3 +152,6 @@ private fun sharedRecorder(context: android.content.Context): AudioRecordingProv
         engineFactory = { MediaRecorderEngine(app, it.profile) },
     )
 }
+
+/** Les mesures récentes dont la notification fait la moyenne (une seconde de micro). */
+private const val LEVEL_WINDOW = 10
