@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -189,8 +190,7 @@ private fun QrSlot(
             Canvas(
                 Modifier
                     .placed(rect, density)
-                    .clearAndSetSemantics { }
-                    .testTag(GAME_REFERRAL_PLACEHOLDER_TAG),
+                    .clearAndSetSemantics { testTag = GAME_REFERRAL_PLACEHOLDER_TAG },
             ) {
                 val stroke = maxOf(2f, size.width * 0.02f)
                 drawRoundRect(
