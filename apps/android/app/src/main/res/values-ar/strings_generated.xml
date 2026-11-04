@@ -71,8 +71,6 @@
     <string name="push_action_comment">تعليق</string>
     <string name="push_action_comment_hint">تعليق…</string>
     <string name="root_pending_changes">تغييرات معلّقة</string>
-    <string name="root_pending_stories">قصص قيد الانتظار</string>
-    <string name="root_publish_on_reconnect">النشر عند عودة الاتصال</string>
     <string name="root_sync_on_reconnect">المزامنة عند عودة الاتصال</string>
     <string name="route_title_affiliate">الإحالة</string>
     <string name="route_title_bookmarks">المحفوظات</string>

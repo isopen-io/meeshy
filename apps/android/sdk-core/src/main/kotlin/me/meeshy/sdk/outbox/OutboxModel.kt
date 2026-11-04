@@ -71,6 +71,18 @@ public enum class OutboxKind {
     /** L'accusé de RÉCEPTION de toute une conversation : informatif, jamais compté dans la pastille de synchronisation. */
     MARK_RECEIVED,
 
+    /** Le repost PRIVÉ d'une story dans une conversation (iOS `repostStory`) : la cible est la story, la charge porte la conversation. */
+    REPOST_STORY,
+
+    /** Le « vu » d'une story : binaire, idempotent, coalescé par story, jamais compté dans la pastille de synchronisation. */
+    MARK_STORY_VIEWED,
+
+    /** Un commentaire supprimé hors ligne : il disparaît à l'instant, la suppression part au retour du réseau. */
+    DELETE_COMMENT,
+
+    /** Le coeur d'un commentaire posé ou retiré : l'état voulu voyage dans la charge, deux gestes opposés s'annulent. */
+    TOGGLE_LIKE_COMMENT,
+
     /**
      * Le bloc de préférences d'UNE catégorie (`PATCH /me/preferences/{categorie}`), cliché complet : la catégorie est la
      * CIBLE de la ligne, donc deux écritures de la même catégorie ne font qu'une ligne et deux catégories ne se
@@ -123,6 +135,9 @@ public object OutboxLanes {
     public const val COMMENT: String = "comment"
     public const val CONSUMPTION: String = "consumption"
     public const val CONVERSATION: String = "conversation"
+
+    /** Les « vus » de story : une lane à eux, pour qu'un rapport coincé ne retienne jamais une publication. */
+    public const val STORY_VIEW: String = "storyView"
 
     /**
      * #13820 — une lane dont les lignes ne s'ordonnent pas entre elles : chaque téléversement est indépendant (l'ordre d'un
@@ -225,6 +240,11 @@ public object OutboxLaneMap {
         OutboxKind.MODERATION_DELETE,
         -> OutboxLaneAssignment.Shared(OutboxChatLanes.CONTENT_REMOVAL)
         OutboxKind.MARK_RECEIVED -> OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT)
+        OutboxKind.REPOST_STORY -> OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL)
+        OutboxKind.MARK_STORY_VIEWED -> OutboxLaneAssignment.Shared(OutboxLanes.STORY_VIEW)
+        OutboxKind.DELETE_COMMENT,
+        OutboxKind.TOGGLE_LIKE_COMMENT,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.COMMENT)
         OutboxKind.UPDATE_PREFERENCE_CATEGORY -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
     }
 
@@ -348,6 +368,31 @@ public data class CommentPayload(
  */
 @kotlinx.serialization.Serializable
 public data class RepostPayload(val targetType: String, val content: String? = null, val isQuote: Boolean = false)
+
+/**
+ * Payload of a `REPOST_STORY` outbox row (iOS `RepostStoryPayload`). The row's `targetId` is the source story;
+ * [targetConversationId] is the conversation the private repost lands in.
+ */
+@kotlinx.serialization.Serializable
+public data class RepostStoryPayload(val targetConversationId: String)
+
+/**
+ * Payload of a `MARK_STORY_VIEWED` outbox row (iOS `MarkStoryViewedPayload`). The row's `targetId` is the story, so ten
+ * views of the same story are one row. [provenance] and [origin] are raw strings: a value a newer build wrote reads back.
+ */
+@kotlinx.serialization.Serializable
+public data class MarkStoryViewedPayload(val provenance: String? = null, val origin: String? = null)
+
+/** Payload of a `DELETE_COMMENT` outbox row. The row's `targetId` is the comment; the route also needs its [postId]. */
+@kotlinx.serialization.Serializable
+public data class DeleteCommentPayload(val postId: String)
+
+/**
+ * Payload of a `TOGGLE_LIKE_COMMENT` outbox row. The row's `targetId` is the comment; [liked] is the state the author
+ * wants, so a like then an unlike of the same comment cancel each other before any request leaves.
+ */
+@kotlinx.serialization.Serializable
+public data class ToggleLikeCommentPayload(val postId: String, val liked: Boolean)
 
 /**
  * Payload of a `REACT_STORY` outbox row. The row's `targetId` is the story (a server id: the route `POST /posts/:id/like`),

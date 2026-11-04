@@ -71,8 +71,6 @@
     <string name="push_action_comment">Comentar</string>
     <string name="push_action_comment_hint">Comentar…</string>
     <string name="root_pending_changes">Cambios pendientes</string>
-    <string name="root_pending_stories">Historias pendientes</string>
-    <string name="root_publish_on_reconnect">Se publica al reconectar</string>
     <string name="root_sync_on_reconnect">Se sincronizará al volver a estar en línea</string>
     <string name="route_title_affiliate">Afiliación</string>
     <string name="route_title_bookmarks">Marcadores</string>

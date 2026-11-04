@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "my_stories_draft_open_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "my_stories_resume_failed",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

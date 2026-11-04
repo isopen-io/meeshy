@@ -33,6 +33,7 @@ public object OutboxKindCatalog {
         OutboxKind.CONSUME_AFTER_READ,
         OutboxKind.CONSUME_VIEW_ONCE,
         OutboxKind.MARK_RECEIVED,
+        OutboxKind.MARK_STORY_VIEWED,
         -> false
         OutboxKind.SEND_MESSAGE,
         OutboxKind.EDIT_MESSAGE,
@@ -71,6 +72,9 @@ public object OutboxKindCatalog {
         OutboxKind.RESTORE_FOR_ME,
         OutboxKind.REMOVE_ATTACHMENT,
         OutboxKind.MODERATION_DELETE,
+        OutboxKind.REPOST_STORY,
+        OutboxKind.DELETE_COMMENT,
+        OutboxKind.TOGGLE_LIKE_COMMENT,
         -> true
     }
 
@@ -97,7 +101,11 @@ public object OutboxKindCatalog {
         OutboxKind.HIDE_FOR_ME,
         OutboxKind.RESTORE_FOR_ME,
         OutboxKind.MARK_RECEIVED,
+        OutboxKind.MARK_STORY_VIEWED,
+        OutboxKind.DELETE_COMMENT,
+        OutboxKind.TOGGLE_LIKE_COMMENT,
         -> true
+        OutboxKind.REPOST_STORY,
         OutboxKind.REMOVE_ATTACHMENT,
         OutboxKind.MODERATION_DELETE,
         OutboxKind.SEND_MESSAGE,
