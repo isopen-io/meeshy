@@ -72,6 +72,7 @@ public class GlobalSearchRepository @Inject constructor(
     private val local: LocalSearchSource,
     private val network: NetworkMonitor,
     private val posts: PostSearchSource = NoPostSearch,
+    private val userSearchCache: UserSearchCacheSource? = null,
 ) {
     public fun search(
         query: String,
@@ -84,17 +85,20 @@ public class GlobalSearchRepository @Inject constructor(
             val remoteConversations = if (offline) null else async {
                 apiCall { conversationApi.search(query) }
             }
+            val usersTicket = userSearchCache?.ticket()
             val remoteUsers = if (offline) null else async {
                 apiCall { userApi.search(query, limit = userLimit, offset = 0) }
             }
             val remotePosts = if (offline) null else async { posts.search(query) }
             val localConversations = async { local.conversations(query) }
             val localUsers = async { local.users(query) }
+            val replayedUsers = userSearchCache?.cached(query).orEmpty()
             val localMessages = async { local.messages(query) }
 
+            val localUserItems = localUsers.await()
             val firstPaint = GlobalSearchSnapshot(
                 conversations = SearchPane(localConversations.await()),
-                users = SearchPane(localUsers.await()),
+                users = SearchPane(SearchResultMerger.users(localUserItems, replayedUsers)),
                 messages = SearchPane(localMessages.await()),
                 remoteSettled = offline,
                 offline = offline,
@@ -104,6 +108,7 @@ public class GlobalSearchRepository @Inject constructor(
 
             val conversationsResult = remoteConversations!!.await()
             val usersResult = remoteUsers!!.await()
+            if (usersResult is NetworkResult.Success) userSearchCache?.remember(query, usersResult.data, usersTicket)
             val conversations = SearchResultMerger.conversations(
                 local = firstPaint.conversations.items,
                 remote = conversationsResult.orEmpty(),
@@ -120,8 +125,11 @@ public class GlobalSearchRepository @Inject constructor(
                 GlobalSearchSnapshot(
                     conversations = SearchPane(conversations, conversationsResult.failureOrNull()),
                     users = SearchPane(
-                        SearchResultMerger.users(firstPaint.users.items, usersResult.orEmpty()),
-                        usersResult.failureOrNull(),
+                        SearchResultMerger.users(
+                            localUserItems,
+                            if (usersResult is NetworkResult.Success) usersResult.data else replayedUsers,
+                        ),
+                        usersResult.failureOrNull().takeIf { replayedUsers.isEmpty() },
                     ),
                     posts = remotePosts!!.await(),
                     messages = SearchPane(

@@ -62,6 +62,10 @@ public data class BubbleCallbacks(
     val onOpenJoinProfile: ((participantId: String) -> Unit)? = null,
     /** Tap sur les coches de livraison d'une rangée plate envoyée : les détails de lecture. */
     val onShowReadStatus: (() -> Unit)? = null,
+    /** Rappeler (ou rejoindre un appel en cours) depuis la notice d'appel de la rangée plate : double tap. */
+    val onCallBack: (() -> Unit)? = null,
+    /** Tap sur l'avis « activer le consentement vocal » sous un audio. */
+    val onTapConsentNotice: (() -> Unit)? = null,
     /**
      * The TalkBack actions of the bubble body, in order. The host passes exactly what the
      * message's law offers (#12760): an empty list exposes none.

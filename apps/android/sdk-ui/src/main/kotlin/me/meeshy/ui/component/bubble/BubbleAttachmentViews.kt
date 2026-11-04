@@ -67,6 +67,7 @@ internal fun BubbleNonVisualSections(
     callbacks: BubbleCallbacks,
     audioPlayback: BubbleAudioPlayback?,
     videoIds: Set<String> = content.videos.mapTo(HashSet()) { it.attachmentId },
+    includeAudios: Boolean = true,
 ) {
     if (content.isDeleted) return
     val autoReveal = AudioTranscriptionReveal.autoReveals(content.isOutgoing, LocalAutoRevealTranscription.current)
@@ -88,7 +89,7 @@ internal fun BubbleNonVisualSections(
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
         )
     }
-    content.audios.forEach { audio ->
+    if (includeAudios) content.audios.forEach { audio ->
         AudioBubble(
             audio = audio,
             playback = audioPlayback?.takeIf { it.attachmentId == audio.attachmentId },

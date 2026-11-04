@@ -187,21 +187,8 @@ struct ReelsPlayerView: View {
         }
         .modifier(ReelShareSheets(outgoing: $shareableLink, sent: $sentReel, onClose: onClose))
         .mediaSaveFlow(mediaSaveCoordinator)
-        .postEditCover(item: $editingReel) { reel in
-            EditPostSheet(
-                originalContent: reel.content,
-                originalLanguage: reel.originalLanguage,
-                originalType: reel.type,
-                media: reel.media.map { EditablePostMedia($0) }, originalStoryEffects: reel.storyEffects,
-                originalLocation: reel.location,
-                originalVisibility: reel.visibility,
-                originalVisibilityUserIds: reel.visibilityUserIds ?? [],
-                isRepost: reel.repost != nil,
-                onSave: { draft in
-                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
-                },
-                onDismiss: { editingReel = nil }
-            )
+        .postEditCover(item: $editingReel) { reel, draft in
+            await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
         }
         // Call-aware : un appel entrant pendant un réel ouvert doit le mettre en
         // pause (vidéo + audio) — la session audio appartient alors à l'appel. Le

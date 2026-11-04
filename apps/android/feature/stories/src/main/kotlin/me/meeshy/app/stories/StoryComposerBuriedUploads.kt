@@ -19,6 +19,9 @@ internal class BuriedUploads {
         held = (held + before).distinctBy(PendingMediaUpload::cmid).filterNot { it.cmid in shown }
     }
 
+    /** Un envoi enterré qui vient d'aboutir (#15598) : il quitte la pile, l'historique le nommera sous son média reçu. */
+    fun resolved(cmid: String): PendingMediaUpload? = held.firstOrNull { it.cmid == cmid }?.also { found -> held = held - found }
+
     /** Les envois qu'aucune étape de l'historique ne montre plus : ils quittent la pile, l'appelant les libère et les annule. */
     fun abandoned(reaches: (String) -> Boolean): List<PendingMediaUpload> {
         val (kept, lost) = held.partition { reaches(it.cmid) }

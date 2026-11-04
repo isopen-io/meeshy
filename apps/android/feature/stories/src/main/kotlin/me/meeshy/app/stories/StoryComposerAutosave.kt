@@ -205,7 +205,7 @@ fun StorySlideDeck.toDraftSnapshot(
             backgroundLoop = it.backgroundLoop,
             elements = it.elements.map { element -> element.toDraftSnapshot() },
             stickers = it.stickers.filterNot { sticker -> sticker.isAwaitingImage }.map { sticker -> sticker.toDraftSnapshot() },
-            audio = it.audio,
+            audio = it.audio.filterNot { track -> track.awaitsUpload },
             fitMode = it.frame.fitMode,
             backdrop = it.frame.backdrop,
             opening = it.frame.opening?.let(SceneFrame::wire),
