@@ -48,6 +48,7 @@
     <string name="audio_editor_undo">Undo</string>
     <string name="audio_editor_use">Use audio</string>
     <string name="audio_editor_volume_normal">Normal</string>
+    <string name="audio_fullscreen_airplay">Stream to a device</string>
     <string name="audio_fullscreen_dial">Position in the voice message</string>
     <string name="audio_recorder_micDenied">Microphone permission denied</string>
     <string name="audio_recorder_micDeniedSettings">Microphone denied — allow it in Settings</string>
@@ -186,6 +187,8 @@
     <string name="engagement_pill_a11y_streak_days_other">%1$d days</string>
     <string name="engagement_pill_a11y_total_one">%1$s spark earned in this conversation</string>
     <string name="engagement_pill_a11y_total_other">%1$s sparks earned in this conversation</string>
+    <string name="feed_carousel_next">Next media</string>
+    <string name="feed_carousel_previous">Previous media</string>
     <string name="focal_call_audio">Voice call</string>
     <string name="focal_call_audio_failed">Audio call interrupted</string>
     <string name="focal_call_audio_missed">Missed voice call</string>
@@ -292,11 +295,13 @@
     <string name="media_crop_a11y_move_up">Move up</string>
     <string name="media_crop_a11y_position">Horizontal %1$s, vertical %2$s</string>
     <string name="media_crop_a11y_size">Width %1$s, height %2$s</string>
+    <string name="media_download">Download</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">File</string>
     <string name="media_label_location">Location</string>
     <string name="media_label_photo">Photo</string>
     <string name="media_label_video">Video</string>
+    <string name="media_pauseAudio">Pause</string>
     <string name="media_permission_camera_denied_message">Camera denied — tap to open Settings</string>
     <string name="media_permission_camera_denied_title">Camera access denied</string>
     <string name="media_permission_close">Close</string>
@@ -308,6 +313,9 @@
     <string name="media_permission_photos_add_denied_message">Saving to Photos denied — tap to open Settings</string>
     <string name="media_permission_photos_denied_message">Photo access denied — tap to open Settings</string>
     <string name="media_permission_photos_denied_title">Photo access denied</string>
+    <string name="media_playAudio">Play audio</string>
+    <string name="media_skipBack10s">Back 10 seconds</string>
+    <string name="media_skipForward10s">Forward 10 seconds</string>
     <string name="media_summary_file">📎 File</string>
     <string name="media_summary_location">📍 Location</string>
     <string name="media_summary_photo">📷 Photo</string>

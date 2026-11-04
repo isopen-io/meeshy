@@ -63,7 +63,10 @@ class ConversationAudioCoordinatorTest {
         override fun setSpeed(speed: PlaybackSpeed) { mutable.value = mutable.value.copy(speed = speed) }
         override fun cycleSpeed() = setSpeed(mutable.value.speed.next())
         override fun setLoop(loop: Boolean) = Unit
-        override fun setServedConsumption(attachmentId: String, consumption: MeeshyMediaConsumption?) = Unit
+        val served = mutableListOf<Pair<String, MeeshyMediaConsumption?>>()
+        override fun setServedConsumption(attachmentId: String, consumption: MeeshyMediaConsumption?) {
+            served += attachmentId to consumption
+        }
         var languageProvider: (() -> String?)? = null
         val flushedLanguages = mutableListOf<String?>()
         override fun setConsumedLanguageProvider(provider: (() -> String?)?) { languageProvider = provider }
@@ -514,5 +517,67 @@ class ConversationAudioCoordinatorTest {
         assertThat(engine.follows).isEmpty()
         assertThat(coordinator.snapshot.value.queue.upcoming.map { it.attachmentId }).containsExactly("b")
         assertThat(coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("a")
+    }
+
+    @Test fun `la consommation servie part vers le moteur avant chaque demarrage, enchainement compris`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = coordinator(this, engine)
+        runCurrent()
+        val heard = MeeshyMediaConsumption(lastPlayPositionMs = 4_000)
+
+        coordinator.play(item("a").copy(servedConsumption = heard), listOf(item("b")), "Famille", null)
+        coordinator.next()
+
+        assertThat(engine.served).containsExactly("a" to heard, "b" to null).inOrder()
+    }
+
+    @Test fun `remplacer la suite garde le vocal courant et ne relance rien`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b")
+
+        coordinator.replaceUpcoming(listOf(item("x"), item("a"), item("y")))
+
+        assertThat(engine.played).containsExactly("a")
+        assertThat(coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("a")
+        assertThat(coordinator.snapshot.value.queue.upcoming.map { it.attachmentId }).containsExactly("x", "y").inOrder()
+    }
+
+    @Test fun `la suite remplacee est celle que la fin enchaine`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b")
+
+        coordinator.replaceUpcoming(listOf(item("x")))
+        engine.mutableEvents.tryEmit(AudioEngineEvent.Finished("a", completed = true))
+        runCurrent()
+
+        assertThat(engine.played).containsExactly("a", "x").inOrder()
+    }
+
+    @Test fun `remplacer la suite sans lecture ne fabrique aucune file`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = coordinator(this, engine)
+        runCurrent()
+
+        coordinator.replaceUpcoming(listOf(item("x")))
+
+        assertThat(coordinator.snapshot.value.queue.current).isNull()
+        assertThat(coordinator.snapshot.value.queue.upcoming).isEmpty()
+    }
+
+    @Test fun `la vitesse posee par le plein ecran va au moteur`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine)
+
+        coordinator.setSpeed(PlaybackSpeed.X1_75)
+
+        assertThat(engine.state.value.speed).isEqualTo(PlaybackSpeed.X1_75)
+    }
+
+    @Test fun `le vocal actif est le courant de la file`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b")
+
+        assertThat(coordinator.isActive("a")).isTrue()
+        assertThat(coordinator.isActive("b")).isFalse()
     }
 }

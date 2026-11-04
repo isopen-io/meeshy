@@ -19,7 +19,11 @@ public data class QueuedAudio(
     val trackLanguage: String? = null,
     val isTranslatedTrack: Boolean = false,
     val isProtected: Boolean,
-    val servedConsumption: MeeshyMediaConsumption? = MeeshyMediaConsumption(),
+    /**
+     * La consommation SERVIE de ce vocal (position et complétion relevées sur tous les appareils du compte), que le
+     * coordinateur remet au moteur avant de le jouer : la reprise s'amorce depuis le serveur quand l'appareil n'a rien.
+     */
+    val servedConsumption: MeeshyMediaConsumption? = null,
 )
 
 /**
@@ -53,6 +57,8 @@ public data class AudioQueueAttachment(
     val listenedComplete: Boolean = false,
     val trackLanguage: String? = null,
     val isTranslatedTrack: Boolean = false,
+    /** La position SERVIE où l'écoute s'était arrêtée ; elle voyage avec l'entrée de file ([QueuedAudio.servedConsumption]). */
+    val lastPlayPositionMs: Int? = null,
 )
 
 /** L'entrée de file d'une pièce de ce message : protection du message OU de la pièce (leçon 275), piste servie recopiée. */
@@ -68,6 +74,7 @@ internal fun AudioQueueMessage.queued(audio: AudioQueueAttachment, fileUrl: Stri
     trackLanguage = audio.trackLanguage,
     isTranslatedTrack = audio.isTranslatedTrack,
     isProtected = isProtected || audio.isProtected,
+    servedConsumption = me.meeshy.sdk.model.playback.MediaConsumptionSeed.of(audio.lastPlayPositionMs, audio.listenedComplete),
 )
 
 /**
@@ -191,7 +198,14 @@ public data class AudioPlayQueue(
         return copy(current = playing.copy(attachmentId = toAttachmentId, fileUrl = fileUrl, messageId = messageId ?: playing.messageId))
     }
 
-    public fun withUpcoming(tail: List<QueuedAudio>): AudioPlayQueue = this
+    /**
+     * La suite devient [tail] (iOS `replaceUpcoming`) : le courant et l'historique restent ; le courant et les doublons
+     * sortent de la suite. Sans courant, rien ne joue : aucune suite ne s'y accroche.
+     */
+    public fun withUpcoming(tail: List<QueuedAudio>): AudioPlayQueue {
+        val playing = current ?: return this
+        return copy(upcoming = tail.distinctBy { it.attachmentId }.filter { it.attachmentId != playing.attachmentId })
+    }
 
     public val hasNext: Boolean get() = upcoming.isNotEmpty()
     public val hasPrevious: Boolean get() = played.isNotEmpty()

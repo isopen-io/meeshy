@@ -46,4 +46,25 @@ class AudioPlayQueueUpcomingTest {
     fun `une file sans courant ne prend aucune suite`() {
         assertThat(AudioPlayQueue().withUpcoming(listOf(item("a")))).isEqualTo(AudioPlayQueue())
     }
+
+    @Test
+    fun `la file porte la consommation servie de chaque vocal jusqu au moteur`() {
+        val message = AudioQueueMessage(
+            messageId = "m1",
+            conversationId = "c",
+            senderId = "other",
+            senderName = "N",
+            senderAvatarUrl = null,
+            createdAtEpochMs = 10L,
+            isProtected = false,
+            audios = listOf(
+                AudioQueueAttachment("a", "u/a.mp3", 10_000L, isProtected = false, lastPlayPositionMs = 4_000),
+                AudioQueueAttachment("b", "u/b.mp3", 10_000L, isProtected = false),
+            ),
+        )
+
+        val queue = AudioQueueBuilder.build(listOf(message), null, currentUserId = "me", listenedAttachmentIds = emptySet())
+
+        assertThat(queue.map { it.servedConsumption }).containsExactly(MeeshyMediaConsumption(lastPlayPositionMs = 4_000), null).inOrder()
+    }
 }
