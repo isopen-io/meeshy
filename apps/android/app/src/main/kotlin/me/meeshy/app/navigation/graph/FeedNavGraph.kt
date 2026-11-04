@@ -19,7 +19,10 @@ import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PendingPostDetailScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
+import me.meeshy.app.navigation.FeedArrivalViewModel
+import me.meeshy.app.navigation.FeedOverlayTransition
 import me.meeshy.app.navigation.MeeshyPinnedStoryBand
+import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.app.navigation.MeeshyStoryRail
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.app.navigation.Routes
@@ -40,7 +43,16 @@ import me.meeshy.app.stories.StoryViewersSheet
 internal fun NavGraphBuilder.feedNavGraph(
     navController: NavHostController,
 ) {
-    composable(Routes.FEED) {
+    composable(
+        route = Routes.FEED,
+        enterTransition = { FeedOverlayTransition.enter(this) },
+        exitTransition = { FeedOverlayTransition.exit(this) },
+        popExitTransition = { FeedOverlayTransition.popExit(this) },
+    ) {
+        val arrival: FeedArrivalViewModel = hiltViewModel()
+        LaunchedEffect(arrival) {
+            if (arrival.consumeComposerRequest()) Routes.composer(ComposerOrigin.FeedComposer)?.let(navController::navigate)
+        }
         // Une instance pour le rail et le geste « tirer » : tirer le fil recharge aussi les stories (iOS `FeedView`).
         val storiesViewModel: StoriesViewModel = hiltViewModel()
         FeedScreen(
