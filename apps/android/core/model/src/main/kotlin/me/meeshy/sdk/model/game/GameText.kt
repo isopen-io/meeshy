@@ -18,6 +18,9 @@ public sealed interface GameTextArg {
     /** Un nombre décimal écrit par la locale, deux décimales au plus (« 1,25 »). */
     public data class Decimal(val value: Double) : GameTextArg
 
+    /** Un mois civil `AAAA-MM`, écrit par la locale (« octobre 2026 ») : tout ce qu'un visiteur sait d'une date. */
+    public data class Month(val isoMonth: String) : GameTextArg
+
     /** Un texte déjà prêt (un nom propre venu du serveur, une heure). */
     public data class Verbatim(val value: String) : GameTextArg
 
@@ -36,6 +39,12 @@ public data class GameText(val key: GameTextKey, val args: List<GameTextArg> = e
 
     public companion object {
         public fun of(key: GameTextKey, vararg args: GameTextArg): GameText = GameText(key, args.toList())
+
+        /** Un nombre seul, écrit en plein par la locale (« 1 221 ») : la valeur d'une ligne de précisions. */
+        public fun counted(value: Int): GameText = GameText(GameTextKey.JoinedBySpace, listOf(GameTextArg.Count(value)))
+
+        /** Un nom déjà résolu par l'hôte (un défi, un trophée, une langue) : il se dit tel quel, sans ressource. */
+        public fun verbatim(value: String): GameText = GameText(GameTextKey.JoinedBySpace, listOf(GameTextArg.Verbatim(value)))
 
         /** Des phrases mises bout à bout, séparées par une espace (« 1 h 5 min »). */
         public fun joined(parts: List<GameText>): GameText =
