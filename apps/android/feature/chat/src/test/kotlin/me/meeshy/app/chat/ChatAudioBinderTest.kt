@@ -124,7 +124,7 @@ class ChatAudioBinderTest {
     )
 
     @Test
-    fun `le drapeau change pendant l'ecoute : la voix recharge la piste de la nouvelle langue sous le meme id`() {
+    fun `le drapeau change pendant l'ecoute, la voix recharge la piste de la nouvelle langue sous le meme id`() {
         val rig = Rig()
         rig.viewModel.bind(thread)
         rig.viewModel.tap(m1.audios[0], m1)
@@ -151,7 +151,7 @@ class ChatAudioBinderTest {
     }
 
     @Test
-    fun `le drapeau change vocal en pause : le toucher suivant joue la bonne piste au lieu de reprendre l'ancienne`() {
+    fun `le drapeau change vocal en pause, le toucher suivant joue la bonne piste au lieu de reprendre l'ancienne`() {
         val rig = Rig()
         rig.viewModel.bind(thread)
         rig.viewModel.tap(m1.audios[0], m1)
