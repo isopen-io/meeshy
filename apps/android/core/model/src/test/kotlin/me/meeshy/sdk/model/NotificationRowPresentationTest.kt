@@ -103,11 +103,13 @@ class NotificationRowPresentationTest {
     }
 
     @Test
-    fun `la citation d'une reponse reste distincte du corps`() {
+    fun `la citation d'une reponse qui redit le corps se tait`() {
         val n = notification("comment_reply", metadata = NotificationMetadata(parentCommentPreview = "Mon avis"))
-        val p = NotificationRowPresentation.of(n, "Ana a répondu", "Mon avis", now)
-        assertThat(p.body).isNull()
-        assertThat(p.quote).isEqualTo("Mon avis")
+        val same = NotificationRowPresentation.of(n, "Ana a répondu", "Mon avis", now)
+        assertThat(same.body).isEqualTo("Mon avis")
+        assertThat(same.quote).isNull()
+        val other = NotificationRowPresentation.of(n, "Ana a répondu", "D'accord", now)
+        assertThat(other.quote).isEqualTo("Mon avis")
     }
 
     @Test
