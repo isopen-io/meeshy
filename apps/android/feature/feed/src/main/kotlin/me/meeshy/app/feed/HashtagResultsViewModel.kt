@@ -61,7 +61,7 @@ class HashtagResultsViewModel @Inject constructor(
     val state: StateFlow<HashtagResultsUiState> = _state.asStateFlow()
 
     /** Repartager / Citer depuis les résultats, comme dans le fil (iOS `HashtagResultsViewModel.toggleRepost`, #15934). */
-    private val reposting = ListedPostReposting(viewModelScope, postRepository, listState)
+    private val reposting = ListedPostReposting(viewModelScope, postRepository, listState) { sessionRepository.currentUser.value }
 
     init {
         viewModelScope.launch {

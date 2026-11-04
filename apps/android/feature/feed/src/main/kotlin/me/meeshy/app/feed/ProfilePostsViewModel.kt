@@ -197,7 +197,7 @@ class ProfilePostsViewModel @Inject constructor(
             is ProfilePostsEvent.ToggleBookmark -> toggleBookmark(event.postId)
             is ProfilePostsEvent.Repost -> repost(event.postId, quote = false, commentary = null)
             is ProfilePostsEvent.BeginQuote -> postOf(event.postId)?.let { post ->
-                model.update { it.copy(dialog = ProfilePostDialog.Quote(QuoteComposerState.quoting(post))) }
+                model.update { it.copy(dialog = ProfilePostDialog.Quote(QuoteComposerState.quoting(post, sessionRepository.currentUser.value))) }
             }
             is ProfilePostsEvent.QuoteTextChanged -> model.update { st ->
                 (st.dialog as? ProfilePostDialog.Quote)?.let { st.copy(dialog = it.copy(composer = it.composer.copy(text = event.text))) } ?: st

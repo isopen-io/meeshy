@@ -57,7 +57,7 @@ class BookmarksViewModel @Inject constructor(
     val state: StateFlow<BookmarksUiState> = _state.asStateFlow()
 
     /** Repartager / Citer depuis les favoris, comme dans le fil (iOS `BookmarksViewModel.toggleRepost`, #15934). */
-    private val reposting = ListedPostReposting(viewModelScope, postRepository, listState)
+    private val reposting = ListedPostReposting(viewModelScope, postRepository, listState) { sessionRepository.currentUser.value }
 
     init {
         viewModelScope.launch {

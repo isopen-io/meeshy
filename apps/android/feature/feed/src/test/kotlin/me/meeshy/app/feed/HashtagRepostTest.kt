@@ -48,8 +48,8 @@ class HashtagRepostTest {
     private fun post(id: String, type: String = "POST", reposts: Int = 2, repostOf: ApiRepostOf? = null) =
         ApiPost(id = id, type = type, content = "Post $id", repostCount = reposts, repostOf = repostOf, author = ApiAuthor(id = "a", displayName = "Ana"))
 
-    private fun viewModel(vararg served: ApiPost): HashtagResultsViewModel {
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+    private fun viewModel(vararg served: ApiPost, reader: MeeshyUser? = null): HashtagResultsViewModel {
+        every { session.currentUser } returns MutableStateFlow(reader)
         every { hashtags.cachedFirstPage(any()) } returns null
         coEvery { hashtags.posts("paris", null, any()) } returns NetworkResult.Success(PostPage(served.toList(), null, false))
         return HashtagResultsViewModel(hashtags, posts, session, MeeshyConfig(), SavedStateHandle(mapOf("tag" to "paris")))
@@ -136,5 +136,15 @@ class HashtagRepostTest {
         vm.consumeNotice()
 
         assertThat(vm.state.value.notice).isNull()
+    }
+
+    @Test
+    fun `Citer depuis un hashtag montre le texte que la carte sert (#16001)`() = runTest {
+        val vm = viewModel(QuotePrism.post("p1"), QuotePrism.share("s1"), reader = QuotePrism.reader)
+
+        vm.beginQuote("p1")
+        assertThat(vm.state.value.quoteComposer?.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
+        vm.beginQuote("s1")
+        assertThat(vm.state.value.quoteComposer?.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
     }
 }

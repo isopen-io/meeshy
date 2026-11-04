@@ -523,7 +523,7 @@ class FeedViewModel @Inject constructor(
      */
     fun beginQuote(postId: String) {
         val source = latestPosts.firstOrNull { it.id == postId } ?: return
-        _state.update { it.copy(quoteComposer = QuoteComposerState.quoting(source)) }
+        _state.update { it.copy(quoteComposer = QuoteComposerState.quoting(source, sessionRepository.currentUser.value)) }
     }
 
     fun onQuoteTextChange(text: String) {
