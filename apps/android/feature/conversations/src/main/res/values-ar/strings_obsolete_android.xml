@@ -4,4 +4,5 @@
     <string name="conversations_obsolete_confirm_title">هل تريد جعل هذه المحادثة متقادمة؟</string>
     <string name="conversations_obsolete_confirm_message">تختفي «%1$s» فورًا لدى جميع أعضائها ويُمحى محتواها خلال 48 ساعة. لا يمكن التراجع عن ذلك.</string>
     <string name="conversations_obsolete_confirm_button">جعلها متقادمة</string>
+    <string name="conversations_obsolete_refused_pending_request">لا يمكن إلا لمستلم طلب رسالة لم يُقبل بعدُ جعل هذه المحادثة متقادمة.</string>
 </resources>

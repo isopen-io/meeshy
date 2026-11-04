@@ -167,13 +167,11 @@ final class ComposerIntentTests: XCTestCase {
     /// que la doctrine de la table autorise en toutes lettres (« le FORMAT qu'une
     /// porte porte fait partie de son identité »).
     ///
-    /// Faire passer `.repost` à `nil` en bloc aurait fait dire à la table que le
-    /// meuble sert aussi les reposts de story, de post et de réel. C'est faux, et
-    /// mesuré : le meuble n'a aucune graine `StoryItem`, son canal de scène ne
-    /// porte pas `repostOfId`, et il ne passe ni `allowedVisibilities` ni
-    /// `initialVisibilityUserIds` à l'atelier — le plafond d'audience du repost
-    /// (`StoryRepostAudience`, loi 10) tomberait EN SILENCE.
-    func test_profile_repost_neQuitteSonComposer_queDansLeFormatQueLeMeubleSaitServir() {
+    /// Chaque format a quitté l'historique quand le meuble a su le servir — sa
+    /// graine, son plafond d'audience (`StoryRepostAudience`, loi 10) et son
+    /// écrivain : le mood d'abord, la story (#5053), puis la citation d'un post
+    /// ou d'un réel (#15628).
+    func test_profile_repost_estServiParLeMeuble_dansChacunDeSesFormats() {
         XCTAssertNil(
             profil(.repost(ofPostId: "s", sourceFormat: .status)).routesToLegacy,
             "Le repost d'un MOOD est servi par le meuble : sa surface existe, son envoi est celui du mood."
@@ -190,15 +188,11 @@ final class ComposerIntentTests: XCTestCase {
             "Le repost d'une STORY est servi par le meuble depuis #5053 : `StoryRepublishComposer` "
             + "l'hydrate par `ComposerHydration.repostingStory`, qui porte AUSSI son plafond d'audience."
         )
-        // `.post` et `.reel` restent déclarés sur l'historique, et c'est une
-        // ABSTENTION, pas un verdict : aucun site du dépôt ne les construit
-        // (mesuré). Les router vers le meuble affirmerait qu'il les sert, ce
-        // que rien ne vérifierait.
         for format: ComposerFormat in [.post, .reel] {
-            XCTAssertEqual(
-                profil(.repost(ofPostId: "s", sourceFormat: format)).routesToLegacy, .repostComposer,
-                "Le repost d'un \(nom(format)) reste DÉCLARÉ sur l'historique : aucune porte du dépôt "
-                + "ne le construit, donc rien ne prouverait que le meuble le sert."
+            XCTAssertNil(
+                profil(.repost(ofPostId: "s", sourceFormat: format)).routesToLegacy,
+                "La citation d'un \(nom(format)) est servie par le meuble depuis #15628 : `QuoteComposerDoor` "
+                + "l'hydrate par `ComposerHydration.quotingPublication`, qui porte sa carte et son plafond d'audience."
             )
         }
     }
@@ -557,10 +551,9 @@ final class ComposerIntentTests: XCTestCase {
         // **#5053 — les deux cas rejoignent `.statusComposer` dans l'orphelinat.**
         //
         // `.repostComposer` : le repost d'une STORY (le seul du corpus) monte
-        // `StoryRepublishComposer`, donc le meuble. Le repost d'un POST ou d'un
-        // RÉEL y route encore dans la TABLE, mais aucune porte du dépôt ne les
-        // construit — une valeur déclarée pour une origine que personne
-        // n'instancie n'est pas une porte, et ce test compte les PORTES.
+        // `StoryRepublishComposer`, donc le meuble ; la citation d'un POST ou
+        // d'un RÉEL monte `QuoteComposerDoor` depuis #15628. Plus aucun format
+        // n'y route.
         //
         // `.storyEdit` : `storyEditComposerCover` existe toujours, aux mêmes
         // quatre montages, mais il présente `StoryEditComposer` — le meuble.
@@ -600,7 +593,7 @@ final class ComposerIntentTests: XCTestCase {
     /// **Attention à ce que le compte mesure.** Il porte sur le CORPUS, dont le
     /// seul repost est un repost de STORY. Le repost d'un mood, servi par le
     /// meuble depuis le lot 4.7, ne fait donc pas baisser ce compte : c'est
-    /// `test_profile_repost_neQuitteSonComposer_queDansLeFormatQueLeMeubleSaitServir`
+    /// `test_profile_repost_estServiParLeMeuble_dansChacunDeSesFormats`
     /// qui tient cette moitié-là, format par format.
     func test_chaqueComposerHistorique_aExactementUnePorte_saufCeuxQueLeMeubleAAbsorbes() {
         for legacy in Self.composersHistoriques {
@@ -1396,41 +1389,10 @@ final class ComposerIntentTests: XCTestCase {
         XCTAssertEqual(ComposerFormat(postType: nil), .post)
     }
 
-    /// **La CITATION passe par le meuble** (directive porteur 2026-09-06 :
-    /// « dans tous les cas iPad et iOS doivent utiliser le nouveau composer »).
-    ///
-    /// Elle était le dernier chemin de l'iPhone à monter `FeedComposerSheet`,
-    /// l'ancien composer, qui publie avec `storyEffects: nil` : citer un post
-    /// produisait une publication SANS scène — donc sans légende par média,
-    /// sans texte alternatif, et hors de la mosaïque — sur une app où toute
-    /// photo devient une scène.
-    ///
-    /// Garde de SOURCE parce que la question porte sur un arbre de vues : quel
-    /// composer ce `fullScreenCover` présente-t-il ? Aucun appel de fonction
-    /// n'y répond.
-    /// **RETOURNÉ le 2026-09-06 : la citation reste sur l'ancien composer.**
-    ///
-    /// Ce témoin exigeait le MEUBLE, et il est né dans le commit `148ef2dbd7`
-    /// — celui-là même qui a fait la migration. Une garde écrite par le lot
-    /// qu'elle garde ne peut pas le contredire : elle atteste d'une intention,
-    /// pas d'un résultat.
-    ///
-    /// Le résultat, mesuré de bout en bout : une citation pose `repostOfId`,
-    /// donc `ComposerDocumentSendRouting.path(isQuote: true)` rend
-    /// `.quotedRepost`, dont `isDurable` vaut `false`, donc
-    /// `ComposerDocumentSendPlan` rend `.refuse(.nonDurablePath)`, donc
-    /// `publishDocument` appelle `refuse()`. **Citer un post ne publiait plus
-    /// rien** — l'auteur recevait « publication impossible ».
-    ///
-    /// `DocumentComposerDoor` l'écrit dans son propre doc-comment : elle ne sert
-    /// PAS la citation avant la levée 7.5, un écrivain durable du repost, qui
-    /// n'existe pas (`PublishIntent.document` ne porte aucun `repostOfId`).
-    ///
-    /// > Trois témoins antérieurs disaient l'inverse de celui-ci, et c'est le
-    /// > PRODUIT qui les départage, jamais leur nombre. La cible reste le
-    /// > meuble ; ce témoin y reviendra le jour où l'envoi y aboutira — et son
-    /// > message dit quoi vérifier ce jour-là.
-    func test_laCitation_resteSurLAncienComposer_jusquALaLevee_7_5() throws {
+    /// **La CITATION passe par le meuble, et par la porte qui la publie**
+    /// (#15628). Garde de SOURCE parce que la question porte sur un arbre de
+    /// vues : quel composer ce `fullScreenCover` présente-t-il ?
+    func test_laCitation_ouvreLeCompositeur_parLaPorteDeLaCitation() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -1440,16 +1402,12 @@ final class ComposerIntentTests: XCTestCase {
         guard let debut = texte.range(of: ".fullScreenCover(item: $quoteOriginalPost)") else {
             return XCTFail("le cover de citation est introuvable — la garde ne mesurerait rien")
         }
-        let bloc = String(texte[debut.lowerBound...].prefix(900))
+        let bloc = String(texte[debut.lowerBound...].prefix(500))
 
-        XCTAssertTrue(bloc.contains("FeedComposerSheet("),
-                      "citer doit ouvrir le composer qui PUBLIE la citation. Le meuble la refuse "
-                          + "(`.nonDurablePath(.quotedRepost)`) tant que le repost n'a pas de file durable.")
-        XCTAssertTrue(bloc.contains("quotePost: quoted"),
+        XCTAssertTrue(bloc.contains("QuoteComposerDoor("), "citer doit ouvrir le compositeur unifié")
+        XCTAssertTrue(bloc.contains("quoted: quoted"),
                       "et lui passer le post cité — sans quoi la citation part sans son original")
         XCTAssertFalse(bloc.contains("DocumentComposerDoor("),
-                       "le MEUBLE ne doit pas être monté ici avant la levée 7.5 : il se refermerait sur un "
-                           + "refus. Le jour où il le sera, vérifier d'abord que `path(isQuote: true)` rend "
-                           + "un chemin DURABLE — sans quoi citer cesse de publier, en silence pour la garde.")
+                       "la porte du document refuse une citation (`.nonDurablePath(.quotedRepost)`)")
     }
 }

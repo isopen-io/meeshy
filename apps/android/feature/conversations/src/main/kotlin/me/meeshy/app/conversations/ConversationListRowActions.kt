@@ -18,6 +18,7 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.conversation.PreferenceWrite
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.conversationlist.ConversationPreviewIntent
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 
@@ -187,16 +188,19 @@ internal class ConversationListRowActions(
     /**
      * Rend [id] obsolète (#14645) : la rangee tombe tout de suite ([ConversationListUiState.pendingRemovals]),
      * l'accord de la passerelle l'efface du cache (et la purge socket chez les autres), un refus la rend
-     * avec son message.
+     * et passe la raison à [onRefused] (#14690).
      */
-    fun makeConversationObsolete(id: String) {
+    fun makeConversationObsolete(id: String, onRefused: (ApiError) -> Unit = {}) {
         state.update { it.copy(pendingRemovals = it.pendingRemovals + id).withVisible(rawConversations()) }
         scope.launch {
             when (val result = obsoleter.makeObsolete(id)) {
                 is NetworkResult.Success -> reportError(null)
-                is NetworkResult.Failure -> state.update {
-                    it.copy(pendingRemovals = it.pendingRemovals - id, errorMessage = result.error.message)
-                        .withVisible(rawConversations())
+                is NetworkResult.Failure -> {
+                    state.update {
+                        it.copy(pendingRemovals = it.pendingRemovals - id, errorMessage = result.error.message)
+                            .withVisible(rawConversations())
+                    }
+                    onRefused(result.error)
                 }
             }
         }

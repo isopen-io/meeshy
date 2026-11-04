@@ -4,4 +4,5 @@
     <string name="conversations_obsolete_confirm_title">Make this conversation obsolete?</string>
     <string name="conversations_obsolete_confirm_message">“%1$s” disappears at once for all its members and its content is erased within 48 hours. This cannot be undone.</string>
     <string name="conversations_obsolete_confirm_button">Make obsolete</string>
+    <string name="conversations_obsolete_refused_pending_request">Only the recipient of a message request that hasn\'t been accepted can make this conversation obsolete.</string>
 </resources>

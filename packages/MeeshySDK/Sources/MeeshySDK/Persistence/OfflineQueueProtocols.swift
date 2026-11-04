@@ -55,7 +55,7 @@ public protocol OfflineQueueing: Sendable {
     @discardableResult
     /// `location` fait partie de l'exigence : une valeur par défaut sur
     /// l'implémentation concrète ne satisfait PAS une exigence de protocole en
-    /// Swift, et les appelants (`FeedViewModel.createOfflineMediaPost`) passent
+    /// Swift, et les appelants (`FeedViewModel.publish(_:)`) passent
     /// la position à travers ce protocole.
     /// `mentions` fait partie de la REQUIREMENT et non d'un défaut concret :
     /// `location` avait été ajoutée à l'implémentation seule, et le protocole

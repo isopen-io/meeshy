@@ -30,7 +30,8 @@ struct PostEditComposerSession: Identifiable {
         seed = ComposerPublicationEditSeed(text: post.content, visibility: baseline.visibility.rawValue,
                                            visibilityUserIds: baseline.visibilityUserIds,
                                            language: baseline.language, location: post.location,
-                                           baseline: baseline)
+                                           baseline: baseline,
+                                           quoted: post.repost.map(ComposerQuotedPublication.init(repost:)))
     }
 
     /// La porte que le meuble lit : un repost l'y déclare, et l'éventail se

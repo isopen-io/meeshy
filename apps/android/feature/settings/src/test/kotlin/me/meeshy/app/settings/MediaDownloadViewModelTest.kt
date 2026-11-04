@@ -11,12 +11,22 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import androidx.work.WorkManager
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
+import io.mockk.verify
 import me.meeshy.sdk.media.InMemoryCaptureSavePolicyStore
 import me.meeshy.sdk.media.InMemoryOutgoingPhotoLocationStore
 import me.meeshy.sdk.media.MediaDownloadPreferencesStore
 import me.meeshy.sdk.model.AutoDownloadPolicy
 import me.meeshy.sdk.model.MediaDownloadPreferences
 import me.meeshy.sdk.model.MediaKind
+import me.meeshy.sdk.model.PrivacyPreferences
+import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
+import me.meeshy.sdk.privacy.NoOpAnalyticsCollectionGate
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
+import me.meeshy.sdk.privacy.PrivacyPreferencesSyncRepository
 import me.meeshy.sdk.model.composer.capture.CaptureRenderedSaveMode
 import me.meeshy.sdk.model.composer.capture.CaptureSavePolicy
 import org.junit.After
@@ -58,10 +68,16 @@ class MediaDownloadViewModelTest {
         }
     }
 
+    private fun gallery(
+        privacy: PrivacyPreferencesStore = InMemoryPrivacyPreferencesStore(),
+        sync: PrivacyPreferencesSyncRepository = mockk(relaxed = true),
+        workManager: WorkManager = mockk(relaxed = true),
+    ) = PrivacyToggleWriter(privacy, sync, workManager, NoOpAnalyticsCollectionGate)
+
     @Test
     fun state_mirrorsThePersistedPreferences() = runTest {
         val store = RecordingStore(MediaDownloadPreferences(video = AutoDownloadPolicy.ALWAYS))
-        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore(), gallery())
         advanceUntilIdle()
         assertThat(vm.state.value.preferences.video).isEqualTo(AutoDownloadPolicy.ALWAYS)
     }
@@ -69,7 +85,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_persistsTheChangeForThatKind_leavingOthersUntouched() = runTest {
         val store = RecordingStore()
-        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore(), gallery())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.VIDEO, AutoDownloadPolicy.ALWAYS)
@@ -86,7 +102,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_routesEachKindToItsOwnField() = runTest {
         val store = RecordingStore()
-        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore(), gallery())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.IMAGE, AutoDownloadPolicy.NEVER)
@@ -103,7 +119,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_reselectingTheCurrentPolicy_isANoOpWrite() = runTest {
         val store = RecordingStore(MediaDownloadPreferences(image = AutoDownloadPolicy.NEVER))
-        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore(), gallery())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.IMAGE, AutoDownloadPolicy.NEVER)
@@ -115,7 +131,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setPolicy_aRealChange_writesExactlyOnce() = runTest {
         val store = RecordingStore()
-        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
+        val vm = MediaDownloadViewModel(store, InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore(), gallery())
         advanceUntilIdle()
 
         vm.setPolicy(MediaKind.VIDEO, AutoDownloadPolicy.ALWAYS)
@@ -126,7 +142,7 @@ class MediaDownloadViewModelTest {
 
     @Test
     fun capturePolicy_defaultsToNoOriginalAndOnDemandRender() = runTest {
-        val vm = MediaDownloadViewModel(RecordingStore(), InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore())
+        val vm = MediaDownloadViewModel(RecordingStore(), InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore(), gallery())
         advanceUntilIdle()
 
         assertThat(vm.state.value.capturePolicy.savesOriginal).isFalse()
@@ -136,7 +152,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setSavesOriginal_persistsWithoutTouchingTheRenderedMode() = runTest {
         val capture = InMemoryCaptureSavePolicyStore(CaptureSavePolicy(renderedMode = CaptureRenderedSaveMode.AUTOMATIC))
-        val vm = MediaDownloadViewModel(RecordingStore(), capture, InMemoryOutgoingPhotoLocationStore())
+        val vm = MediaDownloadViewModel(RecordingStore(), capture, InMemoryOutgoingPhotoLocationStore(), gallery())
         advanceUntilIdle()
 
         vm.setSavesOriginal(true)
@@ -149,7 +165,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun setRenderedAutomatic_switchesTheModeBothWays() = runTest {
         val capture = InMemoryCaptureSavePolicyStore()
-        val vm = MediaDownloadViewModel(RecordingStore(), capture, InMemoryOutgoingPhotoLocationStore())
+        val vm = MediaDownloadViewModel(RecordingStore(), capture, InMemoryOutgoingPhotoLocationStore(), gallery())
         advanceUntilIdle()
 
         vm.setRenderedAutomatic(true)
@@ -164,7 +180,7 @@ class MediaDownloadViewModelTest {
     @Test
     fun `le lieu des photos n est pas conservé par défaut et le réglage se persiste`() = runTest {
         val location = InMemoryOutgoingPhotoLocationStore()
-        val vm = MediaDownloadViewModel(RecordingStore(), InMemoryCaptureSavePolicyStore(), location)
+        val vm = MediaDownloadViewModel(RecordingStore(), InMemoryCaptureSavePolicyStore(), location, gallery())
         assertThat(vm.state.value.keepsPhotoLocation).isFalse()
 
         vm.setKeepsPhotoLocation(true)
@@ -172,5 +188,54 @@ class MediaDownloadViewModelTest {
 
         assertThat(location.keepsLocation.value).isTrue()
         assertThat(vm.state.value.keepsPhotoLocation).isTrue()
+    }
+
+    @Test
+    fun `l enregistrement dans la galerie lit la préférence serveur de la confidentialité, coupée par défaut`() = runTest {
+        val off = MediaDownloadViewModel(RecordingStore(), InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore(), gallery())
+        val on = MediaDownloadViewModel(
+            RecordingStore(), InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore(),
+            gallery(privacy = InMemoryPrivacyPreferencesStore(PrivacyPreferences(saveMediaToGallery = true))),
+        )
+        advanceUntilIdle()
+
+        assertThat(off.state.value.savesMediaToGallery).isFalse()
+        assertThat(on.state.value.savesMediaToGallery).isTrue()
+    }
+
+    @Test
+    fun `activer la galerie depuis Médias écrit la même préférence que la confidentialité et la synchronise`() = runTest {
+        val privacy = InMemoryPrivacyPreferencesStore(PrivacyPreferences(showLastSeen = false))
+        val sync = mockk<PrivacyPreferencesSyncRepository>()
+        coEvery { sync.enqueueSync(any()) } returns "cmid_gallery"
+        val workManager = mockk<WorkManager>(relaxed = true)
+        val vm = MediaDownloadViewModel(
+            RecordingStore(), InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore(),
+            gallery(privacy = privacy, sync = sync, workManager = workManager),
+        )
+        advanceUntilIdle()
+
+        vm.setSaveMediaToGallery(true)
+        advanceUntilIdle()
+
+        assertThat(privacy.preferences.value).isEqualTo(PrivacyPreferences(showLastSeen = false, saveMediaToGallery = true))
+        assertThat(vm.state.value.savesMediaToGallery).isTrue()
+        coVerify(exactly = 1) { sync.enqueueSync(PrivacyPreferences(showLastSeen = false, saveMediaToGallery = true)) }
+        verify(exactly = 1) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun `reposer la galerie sur sa valeur n écrit ni ne synchronise rien`() = runTest {
+        val sync = mockk<PrivacyPreferencesSyncRepository>(relaxed = true)
+        val vm = MediaDownloadViewModel(
+            RecordingStore(), InMemoryCaptureSavePolicyStore(), InMemoryOutgoingPhotoLocationStore(),
+            gallery(sync = sync),
+        )
+        advanceUntilIdle()
+
+        vm.setSaveMediaToGallery(false)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { sync.enqueueSync(any()) }
     }
 }

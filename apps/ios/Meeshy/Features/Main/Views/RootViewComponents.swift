@@ -790,8 +790,8 @@ struct ThemedFeedOverlay: View {
                 .presentationDragIndicator(.visible)
         }
         // T3.1 — le PLEIN composer du fil, la porte la plus utilisée de l'app,
-        // passe par le meuble. La citation juste en-dessous reste sur
-        // `FeedComposerSheet` (T3.2, distincte). `DocumentComposerDoor` se
+        // passe par le meuble, comme la citation juste en-dessous
+        // (`QuoteComposerDoor`). `DocumentComposerDoor` se
         // referme SEULE via `@Environment(\.dismiss)` : pas de binding
         // `onDismiss` à porter ici, le `dismiss()` referme ce `fullScreenCover`
         // et ramène `showFullComposer` à `false` par le binding.
@@ -809,47 +809,17 @@ struct ThemedFeedOverlay: View {
                 statusViewModel: statusViewModel
             )
         }
-        // **La CITATION revient à `FeedComposerSheet` — la migration T3.2 était
-        // PRÉMATURÉE** (2026-09-06).
-        //
-        // La directive porteur du même jour — « dans tous les cas iPad et iOS
-        // doivent utiliser le nouveau composer à présent » — reste la cible, et
-        // ce qu'elle répare est réel : l'ancien composer publie avec
-        // `storyEffects: nil`, donc sans scène, sans légende par média et hors
-        // mosaïque. Mais la condition technique qu'elle suppose n'est pas
-        // remplie, et `DocumentComposerDoor` l'écrit noir sur blanc : elle NE
-        // sert PAS la citation tant que la **levée 7.5** — un écrivain durable
-        // du repost — n'existe pas.
-        //
-        // Mesuré, la chaîne entière : une citation pose `repostOfId`, donc
-        // `ComposerDocumentSendRouting.path(isQuote: true)` rend
-        // `.quotedRepost`, dont `isDurable` vaut `false`, donc
-        // `ComposerDocumentSendPlan` rend `.refuse(.nonDurablePath)`, donc
-        // `publishDocument` appelle `refuse()`. **Citer un post était devenu
-        // impossible** : l'auteur écrivait sa citation et recevait « publication
-        // impossible » à chaque envoi.
-        //
-        // > Une directive de MIGRATION ne demande pas de casser la
-        // > fonctionnalité qu'elle migre. Le chemin cible est le bon ; il
-        // > s'ouvrira quand le repost aura sa file durable (`ComposerIntent`
-        // > l'énonce toujours : « 7.5 n'a pas d'écrivain durable du repost »).
-        // > D'ici là, la citation part par le chemin qui la publie.
-        //
-        // Deux gardes le disaient déjà et redeviennent vertes d'elles-mêmes :
-        // celles qui exigent une citation sur `FeedComposerSheet` dans chaque
-        // racine. La troisième, révisée le matin même, verrouillait l'état
-        // CIBLE (`ancienComposer == 0`) — donc l'état CASSÉ ; elle mesure
-        // désormais ce que le produit fait, et repassera à zéro quand 7.5 sera
-        // livrée.
+        // La CITATION ouvre le même meuble, la source affichée sur sa scène ;
+        // elle part par l'écrivain durable du repost, jamais par la file du
+        // document qui la refuse.
         .fullScreenCover(item: $quoteOriginalPost) { quoted in
-            FeedComposerSheet(
-                viewModel: viewModel,
-                initialText: "",
-                pendingAttachmentType: nil,
-                quotePost: quoted,
-                onDismiss: {
-                    quoteOriginalPost = nil
-                }
+            QuoteComposerDoor(
+                quoted: quoted,
+                storyViewModel: storyViewModel,
+                router: router,
+                conversationListViewModel: conversationListViewModel,
+                statusViewModel: statusViewModel,
+                onFinish: { quoteOriginalPost = nil }
             )
         }
     }

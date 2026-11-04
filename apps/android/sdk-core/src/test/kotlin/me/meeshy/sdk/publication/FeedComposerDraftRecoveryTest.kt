@@ -60,15 +60,16 @@ class FeedComposerDraftRecoveryTest {
     @Test
     fun `a stuck post comes back in a blank composer with its media and without a duplicate`() = runTest {
         val cmid = stuck()
+        val at = later(cmid)
 
-        val recovered = publications.recoverStuckPost(later(cmid))
+        val recovered = publications.recoverStuckPost(at)
 
         assertThat(recovered?.text).isEqualTo("bloqué")
         assertThat(recovered?.media?.map { it.id }).containsExactly("cmid_a")
         assertThat(drafts.loadEditing()).isEqualTo(recovered)
         assertThat(outbox.row(cmid)).isNull()
         assertThat(drafts.parked(cmid)).isNull()
-        assertThat(publications.recoverStuckPost(later(cmid))).isNull()
+        assertThat(publications.recoverStuckPost(at)).isNull()
     }
 
     @Test
