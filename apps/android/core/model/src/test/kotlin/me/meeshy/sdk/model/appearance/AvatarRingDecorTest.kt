@@ -58,7 +58,7 @@ class AvatarRingDecorTest {
 
     @Test
     fun `without declared room the frame holds inside the plain ring box, everything shrinking together (#15157)`() {
-        val fit = checkNotNull(decor().fit(100.0))
+        val fit = decor().fit(100.0)
 
         assertThat(fit.scale).isWithin(1e-9).of(1 / 1.4)
         assertThat(fit.side).isWithin(1e-9).of(100.0)
@@ -67,19 +67,19 @@ class AvatarRingDecorTest {
 
     @Test
     fun `the room the host declares free is taken, never more than the film asks (#15157)`() {
-        val partial = checkNotNull(decor().fit(100.0, room = 10.0))
+        val partial = decor().fit(100.0, room = 10.0)
         assertThat(partial.side).isWithin(1e-9).of(120.0)
         assertThat(partial.scale).isWithin(1e-9).of(120.0 / 140)
         assertThat(partial.offset).isWithin(1e-9).of(-10.0)
-        assertThat(checkNotNull(decor().fit(100.0, room = 40.0)).scale).isWithin(1e-9).of(1.0)
+        assertThat(decor().fit(100.0, room = 40.0).scale).isWithin(1e-9).of(1.0)
     }
 
     @Test
     fun `the film never paints past the box plus the room, at every size (#15157)`() {
-        listOf(44.0, 62.0, 88.0, 107.0, 140.0).forEach { box ->
+        listOf(18.0, 22.0, 28.0, 44.0, 62.0, 88.0, 107.0, 140.0).forEach { box ->
             listOf(1.0, 1.2, 1.4, AvatarRingDecor.MAX_REACH).forEach { reach ->
                 listOf(0.0, 4.0, 12.0).forEach { room ->
-                    decor(reach).fit(box, room)?.let { fit ->
+                    decor(reach).fit(box, room).let { fit ->
                         assertThat(fit.side).isAtMost(box + 2 * room + 1e-9)
                         assertThat(fit.side).isWithin(1e-9).of(box * reach * fit.scale)
                         assertThat(fit.scale).isAtMost(1.0)
@@ -90,10 +90,11 @@ class AvatarRingDecorTest {
     }
 
     @Test
-    fun `too small to read, the frame falls back to the ring alone (#15157)`() {
-        assertThat(decor().fit(52.0)).isNull()
-        assertThat(decor().fit(AvatarRingDecor.MIN_BOX * 1.4)).isNotNull()
-        assertThat(decor(1.0).fit(32.0)).isNull()
+    fun `the frame sits whole at every size, list, bubble and mini avatar included (#16114)`() {
+        assertThat(decor().fit(52.0).side).isWithin(1e-9).of(52.0)
+        assertThat(decor().fit(52.0).scale).isWithin(1e-9).of(1 / 1.4)
+        assertThat(decor(1.0).fit(32.0).scale).isWithin(1e-9).of(1.0)
+        assertThat(decor(AvatarRingDecor.MAX_REACH).fit(22.0).side).isWithin(1e-9).of(22.0)
     }
 
     @Test
