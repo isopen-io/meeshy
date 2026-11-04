@@ -91,6 +91,7 @@
     <string name="bubble_a11y_reactions">التفاعلات: %1$s</string>
     <string name="bubble_a11y_reply_to">الرد على %1$s</string>
     <string name="bubble_attachment_file_fallback">ملف</string>
+    <string name="bubble_audio_stack_position">الرسالة الصوتية %1$d من %2$d</string>
     <string name="bubble_blur_view_once">عرض مرة واحدة</string>
     <string name="bubble_contact_card_a11y_on_meeshy">على Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">على Meeshy</string>

@@ -210,6 +210,28 @@ class AudioPlayQueueTest {
     }
 
     @Test
+    fun `le vocal courant accuse prend son id serveur et son adresse servie, la suite ne bouge pas`() {
+        val queue = AudioPlayQueue().started(item("cmid"), listOf(item("b")))
+
+        val followed = queue.followed(fromAttachmentId = "cmid", toAttachmentId = "att_server", fileUrl = "https://gate/voice.m4a")
+
+        assertThat(followed.current?.attachmentId).isEqualTo("att_server")
+        assertThat(followed.current?.fileUrl).isEqualTo("https://gate/voice.m4a")
+        assertThat(followed.current?.messageId).isEqualTo("mcmid")
+        assertThat(followed.upcoming.map { it.attachmentId }).containsExactly("b")
+        assertThat(queue.followed("cmid", "att_server", "https://gate/voice.m4a", messageId = "m_server").current?.messageId)
+            .isEqualTo("m_server")
+    }
+
+    @Test
+    fun `suivre une piece qui n'est pas la courante ne change rien`() {
+        val queue = AudioPlayQueue().started(item("a"), listOf(item("b")))
+
+        assertThat(queue.followed("b", "att_b", "https://gate/b.m4a")).isEqualTo(queue)
+        assertThat(AudioPlayQueue().followed("a", "att_a", "https://gate/a.m4a")).isEqualTo(AudioPlayQueue())
+    }
+
+    @Test
     fun `le cycle de vitesse du coordinateur fait x1 x1,5 x2 puis reboucle`() {
         val speeds = generateSequence(me.meeshy.sdk.model.media.PlaybackSpeed.X1_0) { CoordinatorSpeedCycle.next(it) }.take(4).toList()
 

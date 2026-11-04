@@ -1,5 +1,8 @@
 package me.meeshy.app.notifications
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiNotification
@@ -42,8 +45,8 @@ class NotificationRowSemanticsTest {
     }
 
     private fun described(prefix: String) = compose.onAllNodes(
-        androidx.compose.ui.test.SemanticsMatcher("description starts with $prefix") {
-            it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription)
+        SemanticsMatcher("description starts with $prefix") {
+            it.config.getOrNull(SemanticsProperties.ContentDescription)
                 ?.any { d -> d.startsWith(prefix) } == true
         },
     ).fetchSemanticsNodes()
