@@ -181,4 +181,42 @@ class BubbleVoiceAvailabilityTest {
     fun `un vocal protege ne se mesure jamais, meme deja sur l'appareil`() {
         assertThat(BubbleVoiceProjection.measuresWaveform(MediaAvailabilityState.Ready, isProtected = true)).isFalse()
     }
+
+    @Test
+    fun `une adresse distante ne se mesure jamais, meme declaree prete, tant qu'aucune copie entiere n'est sur l'appareil`() {
+        val asked = mutableListOf<String>()
+        val located = BubbleVoiceProjection.waveformLocation("https://gate.meeshy.me/api/v1/attachments/file/a.m4a", isProtected = false) {
+            asked += it
+            null
+        }
+        assertThat(located).isNull()
+        assertThat(asked).containsExactly("https://gate.meeshy.me/api/v1/attachments/file/a.m4a")
+    }
+
+    @Test
+    fun `un vocal distant se mesure sur sa copie entiere du cache, jamais sur son adresse`() {
+        val located = BubbleVoiceProjection.waveformLocation("https://cdn/a.m4a", isProtected = false) { "/data/cache/audio/k1" }
+        assertThat(located).isEqualTo("/data/cache/audio/k1")
+    }
+
+    @Test
+    fun `une copie annoncee sous une adresse distante n'est pas une copie locale`() {
+        assertThat(BubbleVoiceProjection.waveformLocation("https://cdn/a.m4a", isProtected = false) { "https://cdn/a.m4a" }).isNull()
+        assertThat(BubbleVoiceProjection.waveformLocation("https://cdn/a.m4a", isProtected = false) { "content://media/1" }).isNull()
+        assertThat(BubbleVoiceProjection.waveformLocation("https://cdn/a.m4a", isProtected = false) { "  " }).isNull()
+    }
+
+    @Test
+    fun `un fichier local se mesure tel quel, sans interroger le cache`() {
+        val located = BubbleVoiceProjection.waveformLocation("file:///data/files/voice.m4a", isProtected = false) { error("cache interrogé") }
+        assertThat(located).isEqualTo("file:///data/files/voice.m4a")
+    }
+
+    @Test
+    fun `un vocal protege ou sans adresse n'a aucune source de mesure`() {
+        assertThat(BubbleVoiceProjection.waveformLocation("file:///data/files/voice.m4a", isProtected = true) { "/x" }).isNull()
+        assertThat(BubbleVoiceProjection.waveformLocation("https://cdn/a.m4a", isProtected = true) { "/x" }).isNull()
+        assertThat(BubbleVoiceProjection.waveformLocation(null, isProtected = false) { "/x" }).isNull()
+        assertThat(BubbleVoiceProjection.waveformLocation(" ", isProtected = false) { "/x" }).isNull()
+    }
 }
