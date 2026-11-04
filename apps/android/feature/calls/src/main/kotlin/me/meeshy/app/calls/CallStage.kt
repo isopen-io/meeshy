@@ -111,7 +111,7 @@ internal fun CallDuoVideoStage(
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .let { if (pinchZoom != null) it.callCameraPinch(enabled = true, zoom = pinchZoom) else it }
+                        .let { if (pinchZoom != null) it.callCameraPinch(enabled = true, zoom = pinchZoom).callCameraZoomAdjustable(pinchZoom) else it }
                         .pointerInput(onSceneTap, pinchZoom) {
                             detectTapGestures(
                                 onDoubleTap = pinchZoom?.let { zoom ->
