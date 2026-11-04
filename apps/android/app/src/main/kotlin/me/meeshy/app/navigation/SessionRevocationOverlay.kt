@@ -18,9 +18,10 @@ import me.meeshy.app.auth.SessionRevocationViewModel
 import me.meeshy.app.startup.AppOverlay
 
 /**
- * La session a été fermée par le serveur (révoquée, expirée, mot de passe changé...) : la racine ferme la session (jetons
- * actifs vidés, compte mémorisé conservé pour la reconnexion) et une feuille dit POURQUOI avant de redemander la connexion
- * (iOS `SessionClosedNoticeView`). Un compte supprimé n'affiche rien ici : [SessionRefusalOverlay] le traite.
+ * La session a été fermée par le serveur (révoquée, expirée, mot de passe changé...) : le SDK l'a DÉJÀ fermée
+ * (`SessionRevocationCenter`), la racine aligne son état sur la fermeture appliquée et une feuille dit POURQUOI avant de
+ * redemander la connexion (iOS `SessionClosedNoticeView`). Un compte supprimé n'affiche rien ici : [SessionRefusalOverlay]
+ * le traite.
  */
 class SessionRevocationOverlay @Inject constructor() : AppOverlay {
     override val order: Int = 8_900
@@ -30,8 +31,9 @@ class SessionRevocationOverlay @Inject constructor() : AppOverlay {
         val revocations: SessionRevocationViewModel = hiltViewModel()
         val auth: AuthViewModel = hiltViewModel()
         val notice by revocations.notice.collectAsStateWithLifecycle()
-        LaunchedEffect(revocations) {
-            revocations.closures.collect { auth.logout() }
+        val closed by revocations.closed.collectAsStateWithLifecycle()
+        LaunchedEffect(closed) {
+            if (closed != null) auth.onSessionClosedBySdk()
         }
         notice?.let { current ->
             SessionClosedNoticeSheet(reason = current.reason, onContinue = { revocations.acknowledge(current.id) })
