@@ -13,7 +13,7 @@ import { ConversationEncryptionSection } from './conversation-encryption-section
  * **LA FICHE CHIFFREMENT MONTE LE MODE D'UNE CONVERSATION DEPUIS LE WEB** (#14648)
  * — miroir de la section « Changer de mode » de la fiche iOS : au droit que la
  * passerelle sert (rang de groupe compris), clair → serveur → hybride d'un
- * geste, jamais dans l'autre sens ; le bout en bout se voit,
+ * geste, et hybride → serveur (#14663), jamais vers le clair ; le bout en bout se voit,
  * grisé, avec la raison (#12975) ; une conversation chiffrée de bout en bout,
  * servie ou vue telle, ne propose rien.
  */
@@ -104,7 +104,7 @@ describe('changer de mode depuis la fiche (#14648)', () => {
     await settle();
     expect(calls.switches).toEqual(['hybrid']);
     expect(feedback()).toBe('Le mode de chiffrement est maintenant : Hybride.');
-    expect(target('server')).toBeNull();
+    expect(target('server')?.disabled).toBe(false);
     expect(target('hybrid')).toBeNull();
     expect(target('e2ee')?.disabled).toBe(true);
   });
@@ -215,10 +215,27 @@ describe('changer de mode depuis la fiche (#14648)', () => {
     expect(document.querySelector('[data-conversation-encryption-switch]')).toBeNull();
   });
 
-  test('hybride : aucune descente vers le serveur ne se propose', async () => {
-    await mount({ id: 'c1', type: 'direct', encryptionMode: 'hybrid' }, { mode: 'hybrid', canToggleEncryption: true });
+  test('hybride : le retour au serveur se propose et part (#14663), tête-à-tête comme groupe', async () => {
+    for (const type of ['direct', 'group'] as const) {
+      const calls = await mount({ id: `${type}-h`, type, encryptionMode: 'hybrid' }, { mode: 'hybrid', canToggleEncryption: true }, { kind: 'switched', mode: 'server' });
+      expect(target('server')?.disabled).toBe(false);
+      expect(target('e2ee')?.disabled).toBe(true);
+      expect(target('hybrid')).toBeNull();
+      await act(async () => {
+        target('server')?.click();
+      });
+      await settle();
+      expect(calls.switches).toEqual(['server']);
+      act(() => root.unmount());
+      container.remove();
+    }
+    container = document.createElement('div');
+    root = createRoot(container);
+  });
+
+  test('hybride sans le droit servi : aucun retour au serveur', async () => {
+    await mount({ id: 'g1', type: 'group', encryptionMode: 'hybrid' }, { mode: 'hybrid', canToggleEncryption: false });
     expect(target('server')).toBeNull();
-    expect(target('e2ee')?.disabled).toBe(true);
   });
 
   test('clair : serveur et hybride se proposent, jamais un retour au clair', async () => {

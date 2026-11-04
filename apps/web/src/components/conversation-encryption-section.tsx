@@ -19,10 +19,11 @@ import { PlaintextDirectAction } from './plaintext-direct-action';
  * la fiche Chiffrement d'iOS (`ConversationEncryptionDetailSheet` +
  * `ConversationEncryptionExplanationSections`) : en mots simples, le mode de la
  * conversation ouverte, qui peut la lire, ce qui fonctionne et ce qui manque,
- * ce qui n'est pas encore livré, les appareils et la bascule. Le web MONTE le
+ * ce qui n'est pas encore livré, les appareils et la bascule. Le web CHANGE le
  * mode d'une conversation que le serveur lit, tête-à-tête ou groupe, au droit
- * servi (#14648, `conversation-encryption-switch.tsx`), sans jamais le faire
- * redescendre, ni activer ni quitter le bout en bout. Le résumé se lit
+ * servi (#14648, `conversation-encryption-switch.tsx`) — hybride → serveur
+ * compris (#14663) —, sans jamais revenir au clair, ni activer ni quitter le
+ * bout en bout. Le résumé se lit
  * d'emblée, et,
  * pour le bout en bout, sa RÈGLE aussi (il ne se désactive jamais ; une autre
  * conversation, sans chiffrement de bout en bout, reste toujours possible) ;
