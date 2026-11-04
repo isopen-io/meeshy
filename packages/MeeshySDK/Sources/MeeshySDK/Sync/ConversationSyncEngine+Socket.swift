@@ -112,7 +112,7 @@ extension ConversationSyncEngine {
             .relay(through: lane) { [weak self] in await self?.cache.participants.invalidate(for: $0.conversationId) }
             .store(in: &socketSubscriptions)
         messageSocket.participantRoleUpdated
-            .relay(through: lane) { [weak self] in await self?.cache.participants.invalidate(for: $0.conversationId) }
+            .relay(through: lane) { [weak self] in await ViewerRoleApplier(engine: self)?.apply($0) }
             .store(in: &socketSubscriptions)
     }
 
