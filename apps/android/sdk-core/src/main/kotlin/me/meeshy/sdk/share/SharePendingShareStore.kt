@@ -31,6 +31,12 @@ public class SharePendingShareStore(
     /** Le dossier des copies de ce partage (créé à la demande par l'appelant). */
     public fun mediaDirectory(shareId: String): File = File(File(root, MEDIA), safe(shareId))
 
+    /** La racine de tous les dossiers de copies (`media/`) : le balayage des orphelins la parcourt. */
+    public fun mediaRoot(): File = File(root, MEDIA)
+
+    /** Une fiche, lisible ou non, décrit-elle encore [shareId] ? Elle protège alors ses copies. */
+    public fun hasRecord(shareId: String): Boolean = fileFor(shareId).exists()
+
     /**
      * Le SEUL point d'écriture. Une fiche entièrement servie est supprimée avec son dossier de copies ;
      * toute autre est réécrite atomiquement.

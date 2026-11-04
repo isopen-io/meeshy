@@ -72,10 +72,12 @@ fun IncomingShareSheetHost(
     onEditInStudio: (() -> Unit)? = null,
     notices: List<String> = emptyList(),
     announce: ((Context, String) -> Unit)? = { context, message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() },
+    /** Un envoi a été tenté depuis la feuille : l'hôte ne doit plus effacer les copies qu'il a préparées (Annuler n'a plus de sens). */
+    onSendAttempted: () -> Unit = {},
 ) {
     val viewModel: ShareSheetViewModel = hiltViewModel()
     LaunchedEffect(text, items, notices) { viewModel.bindIncoming(text, items, notices) }
-    ShareSheetSurface(viewModel, onDismiss, onOpenConversation, accentColor, modifier, onEditInStudio, announce)
+    ShareSheetSurface(viewModel, onDismiss, onOpenConversation, accentColor, modifier, onEditInStudio, announce, onSendAttempted)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,8 +90,11 @@ private fun ShareSheetSurface(
     modifier: Modifier,
     onEditInStudio: (() -> Unit)? = null,
     announce: ((Context, String) -> Unit)?,
+    onSendAttempted: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val sendAttempted = state.sheet.isSending || state.sheet.hasSent
+    LaunchedEffect(sendAttempted) { if (sendAttempted) onSendAttempted() }
     val toasts: ShareToastViewModel = hiltViewModel()
     val context = LocalContext.current
     val haptics = rememberMeeshyHaptics()
