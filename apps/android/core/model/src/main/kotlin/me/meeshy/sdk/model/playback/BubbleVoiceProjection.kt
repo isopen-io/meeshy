@@ -22,12 +22,20 @@ public data class BubbleVoiceLive(
 /** La projection de l'état du moteur sur une bulle vocale, et son repos tiré de la consommation servie. */
 public object BubbleVoiceProjection {
 
-    /** `null` quand le moteur tient une AUTRE pièce (ou aucune) : la bulle inactive ne change pas. */
-    public fun live(engine: AudioPlaybackState, attachmentIds: Collection<String>): BubbleVoiceLive? {
-        val active = engine.attachmentId ?: return null
-        if (active !in attachmentIds) return null
+    /**
+     * `null` quand le moteur tient une AUTRE pièce (ou aucune) : la bulle inactive ne change pas. [acknowledgedIdOf] relie
+     * le `cmid` d'un vocal en attente à l'id serveur de sa pièce (#15969) : la bulle accusée reconnaît le vocal qui joue
+     * encore sous son ancien nom, et elle seule.
+     */
+    public fun live(
+        engine: AudioPlaybackState,
+        attachmentIds: Collection<String>,
+        acknowledgedIdOf: (String) -> String? = { null },
+    ): BubbleVoiceLive? {
+        val loaded = engine.attachmentId ?: return null
+        val shown = VoiceTwin.shownAs(loaded, attachmentIds, acknowledgedIdOf) ?: return null
         return BubbleVoiceLive(
-            attachmentId = active,
+            attachmentId = shown,
             isPlaying = engine.isPlaying,
             isLoading = engine.isLoading,
             fraction = engine.progress,
@@ -72,9 +80,25 @@ public object VoiceTap {
 
     public enum class Step { TOGGLE, START_QUEUE, REFUSE }
 
-    public fun step(activeAttachmentId: String?, tappedAttachmentId: String, url: String?): Step = when {
+    public fun step(
+        activeAttachmentId: String?,
+        tappedAttachmentId: String,
+        url: String?,
+        acknowledgedIdOf: (String) -> String? = { null },
+    ): Step = when {
         url.isNullOrBlank() -> Step.REFUSE
-        activeAttachmentId == tappedAttachmentId -> Step.TOGGLE
+        activeAttachmentId != null && VoiceTwin.shownAs(activeAttachmentId, listOf(tappedAttachmentId), acknowledgedIdOf) != null ->
+            Step.TOGGLE
         else -> Step.START_QUEUE
+    }
+}
+
+/** Le vocal chargé sous [loaded] est-il celui d'une des pièces montrées — lui-même, ou sa jumelle accusée (#15969) ? */
+public object VoiceTwin {
+
+    /** L'identifiant sous lequel la bulle montre le vocal chargé, ou `null` s'il n'est aucune de ses pièces. */
+    public fun shownAs(loaded: String, attachmentIds: Collection<String>, acknowledgedIdOf: (String) -> String?): String? {
+        if (loaded in attachmentIds) return loaded
+        return acknowledgedIdOf(loaded)?.takeIf { it != loaded && it in attachmentIds }
     }
 }

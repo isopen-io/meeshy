@@ -169,6 +169,15 @@ public data class AudioPlayQueue(
         played = played.filterNot { it.messageId == messageId },
     )
 
+    /**
+     * #15969 — le vocal courant [fromAttachmentId] a été accusé : il prend son id serveur et l'adresse servie ; la suite et
+     * l'historique ne bougent pas. Une autre pièce, ou une file vide, laisse la file telle quelle.
+     */
+    public fun followed(fromAttachmentId: String, toAttachmentId: String, fileUrl: String): AudioPlayQueue {
+        val playing = current?.takeIf { it.attachmentId == fromAttachmentId } ?: return this
+        return copy(current = playing.copy(attachmentId = toAttachmentId, fileUrl = fileUrl))
+    }
+
     public val hasNext: Boolean get() = upcoming.isNotEmpty()
     public val hasPrevious: Boolean get() = played.isNotEmpty()
 }
