@@ -7,6 +7,7 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.media.CaptureGallery
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import org.robolectric.RobolectricTestRunner
 
 /**
@@ -15,6 +16,7 @@ import org.robolectric.RobolectricTestRunner
  * refus de la galerie se dit par `false`.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class GalleryCallCaptureSaverTest {
 
     private class Gallery(private val accepts: Boolean = true) : CaptureGallery {
