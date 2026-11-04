@@ -95,18 +95,14 @@ public struct AvatarRingDecor: Codable, Hashable, Sendable {
         try c.encodeIfPresent(front, forKey: .front)
     }
 
-    /// Le plus petit côté de boîte où un cadre illustré se lit encore (`RING_DECOR_MIN_BOX`, #15157).
-    public static let minBox: Double = 44
-
     /// Miroir de `ringDecorFit` (#15157) : le film ne peint jamais hors de la boîte de l'anneau seul,
     /// sauf la place `room` que l'hôte déclare libre de chaque côté ; quand il demande plus, l'avatar,
-    /// son contour et ses films se réduisent ENSEMBLE de `scale`. `nil` ⇒ trop petit, l'anneau seul.
-    public func fit(box: Double, room: Double = 0) -> AvatarRingDecorFit? {
+    /// son contour et ses films se réduisent ENSEMBLE de `scale`. Le cadre se pose ENTIER à toutes
+    /// les tailles (#16114) : liste, bulle, mini-avatar comme profil.
+    public func fit(box: Double, room: Double = 0) -> AvatarRingDecorFit {
         let need = box * reach
         let side = min(need, box + 2 * max(0, room))
-        let scale = side / need
-        guard box * scale >= Self.minBox else { return nil }
-        return AvatarRingDecorFit(scale: scale, side: side, offset: (box - side) / 2)
+        return AvatarRingDecorFit(scale: side / need, side: side, offset: (box - side) / 2)
     }
 }
 

@@ -21,7 +21,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -59,6 +58,9 @@ internal fun ChatHeaderSubtitleRow(subtitle: ChatHeaderSubtitle, accentColor: Co
  * decided by the pure [TypingAvatarStack]; this only overlaps the chips and renders a
  * "+N" pill for the overflow. Each chip carries a surface-coloured ring so the overlap
  * reads cleanly; avatars degrade to accent-tinted initials.
+ *
+ * Ni présence ni décor (#16114, directive porteur du 2026-11-04) : celui qui écrit n'y porte aucune pastille
+ * « en ligne », et c'est la SEULE surface où le décor illustré d'un profil ne s'affiche pas en entier.
  */
 @Composable
 internal fun TypingAvatarCluster(stack: TypingAvatarStack, accentColor: Color) {
@@ -68,7 +70,7 @@ internal fun TypingAvatarCluster(stack: TypingAvatarStack, accentColor: Color) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy((-6).dp),
     ) {
-        stack.visible.forEachIndexed { index, chip ->
+        stack.visible.forEach { chip ->
             Box(
                 modifier = Modifier
                     .background(ringColor, CircleShape)
@@ -79,7 +81,6 @@ internal fun TypingAvatarCluster(stack: TypingAvatarStack, accentColor: Color) {
                     size = 20.dp,
                     containerColor = accentColor,
                     imageUrl = chip.avatarUrl,
-                    presence = if (index == 0) rememberPresence(chip.userId) else null,
                 )
             }
         }

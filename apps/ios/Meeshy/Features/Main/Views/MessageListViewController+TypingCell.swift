@@ -19,14 +19,12 @@ extension MessageListViewController {
             let typingAccent = self.accentColor
             let typingDark = self.isDark
             let typingFlat = self.readingMode != .bubbles
-            let typingHere = self.conversationHere
             cell.contentConfiguration = UIHostingConfiguration {
                 TypingIndicatorBubble(
                     participants: typingRoster,
                     accentHex: typingAccent,
                     isDark: typingDark,
-                    isFlat: typingFlat,
-                    here: typingHere
+                    isFlat: typingFlat
                 )
                 .scaleEffect(x: 1, y: -1)
             }

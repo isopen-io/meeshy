@@ -148,6 +148,7 @@ public fun AvatarRingLayer(
     storyRingSize: Dp? = null,
     animates: Boolean = true,
     decorRoom: Dp = 0.dp,
+    decor: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     if (design == null) {
@@ -155,7 +156,7 @@ public fun AvatarRingLayer(
         return
     }
     val plan = remember(design) { AvatarRingPlan(design) }
-    val layout = AvatarRingLayout.make(design, footprint.value.toDouble(), storyRingSize?.value?.toDouble(), decorRoom.value.toDouble())
+    val layout = AvatarRingLayout.make(design, footprint.value.toDouble(), storyRingSize?.value?.toDouble(), decorRoom.value.toDouble(), decor)
     val factor = layout.contentScale.toFloat()
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Box(
@@ -193,7 +194,8 @@ public fun AvatarRingLayer(
 /**
  * La mise en place d'un contour dans l'empreinte [footprint] (#15157, miroir d'`AvatarRingLayout`) : l'échelle du
  * contenu, le film illustré s'il s'affiche ([AvatarRingDecor.fit] : jamais hors de l'empreinte, sauf la place que
- * l'hôte déclare libre) et si l'anneau fixe se dessine — jamais SOUS un film affiché.
+ * l'hôte déclare libre) et si l'anneau fixe se dessine — jamais SOUS un film affiché. Le film s'affiche à toutes les
+ * tailles (#16114) ; seul l'hôte qui le retire (`decor = false`, l'indicateur de frappe) garde l'anneau seul.
  */
 public data class AvatarRingLayout(public val contentScale: Double, public val decor: RingDecorFit?) {
     public val drawsStill: Boolean get() = decor == null
@@ -201,9 +203,9 @@ public data class AvatarRingLayout(public val contentScale: Double, public val d
     public fun paintedSide(footprint: Double): Double = decor?.side ?: footprint
 
     public companion object {
-        public fun make(design: AvatarRingDesign, footprint: Double, storyRingSize: Double? = null, room: Double = 0.0): AvatarRingLayout {
-            val decor = design.decor?.fit(footprint, room)
-            return AvatarRingLayout(AvatarRingGeometry.footprintScale(footprint, storyRingSize) * (decor?.scale ?: 1.0), decor)
+        public fun make(design: AvatarRingDesign, footprint: Double, storyRingSize: Double? = null, room: Double = 0.0, decor: Boolean = true): AvatarRingLayout {
+            val fit = if (decor) design.decor?.fit(footprint, room) else null
+            return AvatarRingLayout(AvatarRingGeometry.footprintScale(footprint, storyRingSize) * (fit?.scale ?: 1.0), fit)
         }
     }
 }
