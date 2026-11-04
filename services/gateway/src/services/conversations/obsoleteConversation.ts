@@ -26,6 +26,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { isProtectedFromObsolescence } from './obsoleteCapability';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { deactivateShareLinksOnClose } from './shareLinkClosure';
@@ -42,6 +43,8 @@ import {
   type RetractedNotification,
   type RetractedNotificationAnnouncer,
 } from '../notifications/retractedNotifications';
+
+export { isProtectedFromObsolescence };
 
 const logger = enhancedLogger.child({ module: 'ObsoleteConversation' });
 
@@ -72,9 +75,6 @@ export type ObsoleteConversationOutcome =
   | { readonly kind: 'not-found' }
   | { readonly kind: 'protected' };
 
-/** La conversation globale ne s'efface jamais, quel que soit le nom qui la désigne. */
-export const isProtectedFromObsolescence = (conversation: { readonly type?: string | null; readonly identifier?: string | null }): boolean =>
-  conversation.type === 'global' || conversation.identifier === 'meeshy';
 
 type RawId = string | { readonly $oid: string };
 type RawNotificationRow = {

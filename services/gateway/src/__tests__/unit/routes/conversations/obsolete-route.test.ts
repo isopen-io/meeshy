@@ -68,9 +68,11 @@ async function appeler(options: Appel) {
     : null;
   const prisma = {
     participant: {
-      findFirst: jest.fn<any>(async (args: any) =>
-        typeof args?.where?.userId === 'object' ? (options.pendingRequestToOther ? { id: 'recipient-row' } : null) : membership),
-      count: jest.fn<any>().mockResolvedValue(options.activeParticipants ?? 2),
+      findMany: jest.fn<any>(async (args: any) => {
+        if (args?.where?.OR) return options.pendingRequestToOther ? [{ conversationId: CONV, userId: 'recipient' }] : [];
+        return membership ? [{ conversationId: CONV, userId: MOI, ...membership }] : [];
+      }),
+      groupBy: jest.fn<any>().mockResolvedValue([{ conversationId: CONV, _count: { _all: options.activeParticipants ?? 2 } }]),
     },
   };
   let path = '';
@@ -145,8 +147,8 @@ describe('#14643 — DELETE /conversations/:id/obsolete', () => {
 
   it('la membership se lit sur une participation ACTIVE de l\'appelant', async () => {
     const { prisma } = await appeler({ conversationRole: 'admin' });
-    const where = prisma.participant.findFirst.mock.calls[0][0].where;
-    expect(where).toEqual(expect.objectContaining({ conversationId: CONV, userId: MOI, isActive: true }));
+    const where = prisma.participant.findMany.mock.calls[0][0].where;
+    expect(where).toEqual({ conversationId: { in: [CONV] }, userId: { in: [MOI] }, isActive: true });
   });
 });
 
@@ -214,7 +216,7 @@ describe('#14653 — dans un tête-à-tête, l\'un OU l\'autre des deux membres 
     const { reply, prisma } = await appeler({ conversationRole: 'member', conversationType: 'direct', activeParticipants: 3 });
     expect(reply.statusCode).toBe(403);
     expect(obsoleteConversation).not.toHaveBeenCalled();
-    expect(prisma.participant.count.mock.calls[0][0].where).toEqual(expect.objectContaining({ conversationId: CONV, isActive: true }));
+    expect(prisma.participant.groupBy.mock.calls[0][0].where).toEqual({ conversationId: { in: [CONV] }, isActive: true });
   });
 
   it('une directe dont l\'autre membre est parti reste effaçable par celui qui reste', async () => {
@@ -250,10 +252,9 @@ describe('#14676 — une demande de message non acceptée : seul son DESTINATAIR
   it('même si le destinataire est parti, l\'expéditeur reste refusé', async () => {
     const { reply, prisma } = await appeler({ conversationRole: 'creator', conversationType: 'direct', activeParticipants: 1, pendingRequestToOther: true });
     expect(reply.statusCode).toBe(403);
-    const pendingQuery = prisma.participant.findFirst.mock.calls.map((call: any) => call[0]).find((args: any) => typeof args.where.userId === 'object');
+    const pendingQuery = prisma.participant.findMany.mock.calls.map((call: any) => call[0]).find((args: any) => args.where.OR);
     expect(pendingQuery.where).toEqual({
-      conversationId: CONV,
-      userId: { not: MOI },
+      conversationId: { in: [CONV] },
       OR: [{ messageRequestAt: { not: null } }, { messageRequestFromId: { not: null } }],
     });
   });
