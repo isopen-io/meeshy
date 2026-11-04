@@ -147,7 +147,7 @@ class ComposerIncomingMediaComposeTest {
 
     @Test
     fun `the chosen media stands on the scene preparing, then posed its badge follows the bytes, both announced`() {
-        var report: ((Int, Long, Long) -> Unit)? = null
+        var report: (Int, Long, Long) -> Unit = { _, _, _ -> }
         hanging { report = it }
         val copied = CompletableDeferred<List<MediaUploadItem>>()
         val vm = viewModel()
@@ -162,12 +162,38 @@ class ComposerIncomingMediaComposeTest {
 
         copied.complete(listOf(photo()))
         compose.waitForIdle()
-        report!!(0, 2L, 4L)
+        report(0, 2L, 4L)
         compose.waitForIdle()
 
         compose.onNodeWithContentDescription(adding).assertDoesNotExist()
         compose.onNodeWithText(string(me.meeshy.feature.stories.R.string.story_composer_incoming_sending, 50)).assertExists()
         compose.onNodeWithContentDescription("Text").assertExists()
+
+        report(0, 3L, 4L)
+        compose.waitForIdle()
+
+        compose.onNodeWithText(string(me.meeshy.feature.stories.R.string.story_composer_incoming_sending, 75)).assertExists()
+    }
+
+    @Test
+    fun `a media posed over a background says its share sent at every report until received`() {
+        coEvery { uploader.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("bg")))
+        val vm = viewModel()
+        vm.onMediaPicked(listOf(photo()))
+        var report: (Int, Long, Long) -> Unit = { _, _, _ -> }
+        hanging { report = it }
+        show(vm)
+
+        vm.onMediaPicked(listOf(photo()))
+        compose.waitForIdle()
+        report(0, 1L, 4L)
+        compose.waitForIdle()
+        compose.onNodeWithText(string(me.meeshy.feature.stories.R.string.story_composer_incoming_sending, 25)).assertExists()
+
+        report(0, 3L, 4L)
+        compose.waitForIdle()
+
+        compose.onNodeWithText(string(me.meeshy.feature.stories.R.string.story_composer_incoming_sending, 75)).assertExists()
     }
 
     @Test

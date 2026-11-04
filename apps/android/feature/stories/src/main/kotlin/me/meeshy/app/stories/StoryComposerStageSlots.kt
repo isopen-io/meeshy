@@ -103,7 +103,7 @@ internal fun StoryComposerScene(
                 onStickerDrag = viewModel::onStickerMoved,
                 onStickerDragEnd = viewModel::onStickerDragEnd,
                 onStickerTransform = viewModel::onStickerTransform,
-                placedMedia = remember(state.deck, state.attachments, state.pendingUploads, state.isOffline, state.resendingUploads, state.failedUploads, comparison.mediaId) {
+                placedMedia = remember(state.deck, state.attachments, state.pendingUploads, state.isOffline, state.resendingUploads, state.failedUploads, state.uploadProgress, comparison.mediaId) {
                     state.placedMediaFrames(viewModel.mediaBaseUrl, comparison.mediaId)
                 },
                 placedMediaGestures = remember(viewModel) {
