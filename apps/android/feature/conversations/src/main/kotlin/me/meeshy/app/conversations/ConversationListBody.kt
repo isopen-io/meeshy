@@ -1,38 +1,38 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import me.meeshy.feature.conversations.R
+import kotlinx.coroutines.delay
+import me.meeshy.ui.theme.LentilleMetrics
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.conversationlist.SectionFoldedUnread
 import me.meeshy.sdk.model.renderFingerprint
 import me.meeshy.sdk.model.search.ListMessageHit
 import me.meeshy.sdk.model.search.ListMessageSearchState
 import me.meeshy.sdk.theme.otherParticipantUserId
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.component.CollapsibleSection
 import kotlinx.coroutines.flow.first
 import me.meeshy.ui.component.refresh.MeeshyRefreshableBox
@@ -73,6 +73,15 @@ internal fun ConversationListBody(
         val expandedSections = ConversationSectionExpansionStore.effective(remembered, state.categories)
         val nowMillis by rememberMinuteClock()
         val tailHeight = LIST_TAIL_HEIGHT
+        val stickerSkin = rememberLentilleListSkin()
+        val placementSpec = rememberBumpPlacementSpec(state.conversations.map { it.id }, listState)
+        var enteringSection by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(enteringSection) {
+            if (enteringSection != null) {
+                delay(ENTRY_WINDOW_MILLIS)
+                enteringSection = null
+            }
+        }
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag(CONVERSATION_LIST_TAG)) {
             item(key = "list-story-rail", contentType = "story-rail") { header() }
             conversationListStateItems(
@@ -80,7 +89,14 @@ internal fun ConversationListBody(
                 onRetry = viewModel::refresh,
                 onNewConversation = onNewConversation,
             ) {
-                populatedItems(state, sections, expandedSections, viewModel, nowMillis, signals, rowNavigation, tailHeight) {
+                populatedItems(
+                    state, sections, expandedSections, viewModel, nowMillis, signals, rowNavigation, tailHeight,
+                    placementSpec, stickerSkin, enteringSection,
+                    onSectionToggled = { section, expand ->
+                        if (expand) enteringSection = section.sectionId
+                        viewModel.onSectionToggled(section, expand)
+                    },
+                ) {
                     messageSearchItems(messageSearch, state.currentUserId, viewModel::conversationFor, onOpenMessage)
                 }
             }
@@ -88,6 +104,7 @@ internal fun ConversationListBody(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 private fun LazyListScope.populatedItems(
     state: ConversationListUiState,
     sections: List<ConversationSection>,
@@ -97,46 +114,36 @@ private fun LazyListScope.populatedItems(
     signals: ConversationRowSignals,
     rowNavigation: ConversationRowNavigation,
     tailHeight: Dp,
+    placementSpec: FiniteAnimationSpec<IntOffset>?,
+    stickerSkin: Boolean,
+    enteringSection: String?,
+    onSectionToggled: (ConversationSection, Boolean) -> Unit,
     messages: LazyListScope.() -> Unit,
 ) {
-    if (!ConversationSections.showsHeaders(sections)) {
-        sections.forEach { section ->
-            items(section.items, key = { "row-${it.id}" }, contentType = { ROW_CONTENT_TYPE }) { conversation ->
-                Box(Modifier.animateItem()) {
-                    ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
-                }
+    val showsHeaders = ConversationSections.showsHeaders(sections)
+    sections.forEachIndexed { index, section ->
+        val key = section.categoryId?.let { "section-cat-$it" } ?: "section-${section.kind}"
+        val expanded = !showsHeaders || section.sectionId in expandedSections
+        if (showsHeaders) {
+            if (index > 0) item(key = "gap-$key", contentType = "section-gap") { Spacer(Modifier.height(SECTION_SPACING)) }
+            stickyHeader(key = key, contentType = "section-header") {
+                val foldedUnread = SectionFoldedUnread.count(section.items.map { it.unreadCount }, isExpanded = false)
+                ConversationSectionHeader(
+                    section = section,
+                    expanded = expanded,
+                    foldedUnread = foldedUnread,
+                    stickerSkin = stickerSkin,
+                    onToggle = { onSectionToggled(section, it) },
+                )
             }
         }
-        messages()
-        item(key = "list-tail", contentType = "tail") { Spacer(Modifier.height(tailHeight)) }
-        return
-    }
-    sections.forEach { section ->
-        val key = section.categoryId?.let { "section-cat-$it" } ?: "section-${section.kind}"
-        item(key = key, contentType = "section-header") {
-            val expanded = section.sectionId in expandedSections
-            val foldedUnread = SectionFoldedUnread.count(section.items.map { it.unreadCount }, isExpanded = false)
-            CollapsibleSection(
-                title = section.title ?: stringResource(section.kind.titleRes()),
-                count = section.items.size,
-                foldedUnread = foldedUnread,
-                foldedUnreadDescription = foldedUnread.takeIf { it > 0 }?.let {
-                    pluralStringResource(R.plurals.row_a11y_unread_count, it, it)
-                },
-                iconContainerColor = section.containerColor(),
-                expanded = expanded,
-                onExpandedChange = { viewModel.onSectionToggled(section, it) },
-                stateDescription = sectionStateDescription(expanded, foldedUnread),
-                icon = {
-                    Icon(
-                        section.glyph(),
-                        contentDescription = null,
-                        tint = MeeshyPalette.White,
-                        modifier = Modifier.size(16.dp),
-                    )
-                },
-            ) {
-                section.items.forEach { conversation ->
+        if (expanded) {
+            items(section.items, key = { it.id }, contentType = { ROW_CONTENT_TYPE }) { conversation ->
+                Box(
+                    Modifier
+                        .animateItem(placementSpec = placementSpec)
+                        .sectionRowEntry(animate = section.sectionId == enteringSection),
+                ) {
                     ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
                 }
             }
@@ -146,8 +153,13 @@ private fun LazyListScope.populatedItems(
     item(key = "list-tail", contentType = "tail") { Spacer(Modifier.height(tailHeight)) }
 }
 
+/** Espace entre deux sections (iOS `LentilleMetrics` : 8 pt entre sections). */
+private val SECTION_SPACING = LentilleMetrics.Row.marginVertical
+
 /** Marge de fin de liste (iOS `Color.clear.frame(height: 60)`) : les disques flottants ne réservent rien, comme iOS (#13671). */
 private val LIST_TAIL_HEIGHT = 60.dp
+
+private const val ENTRY_WINDOW_MILLIS = 600L
 
 private const val ROW_CONTENT_TYPE = "conversation-row"
 
@@ -188,35 +200,4 @@ private fun ConversationListRow(
         ),
         actions = actions,
     )
-}
-
-private fun ConversationSectionKind.titleRes(): Int = when (this) {
-    ConversationSectionKind.PINNED -> R.string.conversations_section_pinned
-    // CATEGORY headers render the category's own name (section.title); this
-    // resource is only the exhaustive-`when` fallback and is never shown.
-    ConversationSectionKind.CATEGORY -> R.string.conversations_section_all
-    ConversationSectionKind.ALL -> R.string.conversations_section_all
-}
-
-private fun ConversationSection.glyph() = when (kind) {
-    ConversationSectionKind.PINNED -> Icons.Filled.PushPin
-    ConversationSectionKind.CATEGORY -> categoryIconFor(icon)
-    ConversationSectionKind.ALL -> Icons.AutoMirrored.Filled.Chat
-}
-
-/** La couleur de la pastille : celle de la catégorie quand elle en a une, sinon la teinte du genre. */
-@Composable
-private fun ConversationSection.containerColor(): Color = when (kind) {
-    ConversationSectionKind.PINNED -> MeeshyPalette.Error
-    ConversationSectionKind.CATEGORY -> color?.let { hexColor(it, MeeshyPalette.Indigo500) } ?: MeeshyPalette.Indigo500
-    ConversationSectionKind.ALL -> MeeshyPalette.Indigo500
-}
-
-/** La valeur TalkBack de l'en-tête (iOS `SectionFoldedUnread.accessibilityValue`) : « Développée » ou « Réduite, N non lus ». */
-@Composable
-private fun sectionStateDescription(expanded: Boolean, foldedUnread: Int): String {
-    if (expanded) return stringResource(R.string.links_section_expanded)
-    val state = stringResource(R.string.links_section_collapsed)
-    if (foldedUnread <= 0) return state
-    return "$state, ${pluralStringResource(R.plurals.row_a11y_unread_count, foldedUnread, foldedUnread)}"
 }
