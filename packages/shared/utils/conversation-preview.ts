@@ -363,7 +363,7 @@ function messageLine(message: ConversationPreviewMessage, input: ConversationPre
         kind: 'message',
         author,
         icon: 'ephemeral',
-        segments: [...countdown, ...body.labelled],
+        segments: [...countdown, ...body.sealed],
         ...(guard.expiresAt !== null ? { live: { expiresAt: guard.expiresAt } } : {}),
       });
     }
@@ -411,14 +411,25 @@ function protectionOf(message: ConversationPreviewMessage, input: ConversationPr
 
 /**
  * Le corps d'un message lisible : `segments` pour une ligne dont l'icône porte
- * la nature (📷 Photo · …), `labelled` pour une ligne dont l'icône est prise par
- * une protection (🔥 4 min · Photo · …), où la nature doit se dire en mots.
+ * la nature (📷 Photo · 450 × 456 · 234 Ko), `sealed` pour une ligne dont
+ * l'icône est prise par la flamme d'un éphémère (🔥 4 min · Photo) : la nature
+ * s'y dit en mots, le texte servi reste, et la pièce ne livre AUCUN détail —
+ * ni dimensions, ni poids, ni durée, ni pages, ni nom, ni nom de contact.
  */
 type Body = {
   readonly icon: PreviewIcon | null;
   readonly segments: readonly PreviewSegment[];
-  readonly labelled: readonly PreviewSegment[];
+  readonly sealed: readonly PreviewSegment[];
 };
+
+function withText(head: readonly PreviewSegment[], text: PreviewSegment | null): readonly PreviewSegment[] {
+  return text ? [...head, text] : head;
+}
+
+/** « 450 × 456 » : le × entre deux espaces insécables, qui ne se coupe jamais en fin de ligne. */
+function dimensionsLabel(width: number, height: number): string {
+  return `${Math.round(width)}\u00a0×\u00a0${Math.round(height)}`;
+}
 
 function servedText(message: ConversationPreviewMessage, input: ConversationPreviewInput): PreviewSegment | null {
   if (!hasText(message.content)) return null;
@@ -482,18 +493,18 @@ function bodyOf(message: ConversationPreviewMessage, input: ConversationPreviewI
       .slice(0, 1)
       .map((name) => label(name.trim()));
     const segments = [label(str('attachment.location')), ...place];
-    return { icon: 'location', segments, labelled: segments };
+    return { icon: 'location', segments, sealed: segments };
   }
   if (message.messageType === 'sticker' || message.sticker) {
     const alt = attachment?.alt;
     const segments: readonly PreviewSegment[] = hasText(alt)
       ? [{ kind: 'text', text: alt.trim(), language: null }]
       : [label(str('attachment.sticker'))];
-    return { icon: 'sticker', segments, labelled: segments };
+    return { icon: 'sticker', segments, sealed: segments };
   }
   if (count === 0) {
     const segments = text ? [text] : [];
-    return { icon: null, segments, labelled: segments };
+    return { icon: null, segments, sealed: segments };
   }
 
   if (count > 1) {
@@ -505,10 +516,13 @@ function bodyOf(message: ConversationPreviewMessage, input: ConversationPreviewI
     const [only] = kinds;
     const kind = kinds.length === 1 && only ? only : null;
     const icon: PreviewIcon = kind ?? 'attachments';
-    if (text) return { icon, segments: [text], labelled: [text] };
     const size = positive(summary?.totalSize) ? [label(formatPreviewFileSize(input.language, summary.totalSize))] : [];
     const head = label(str(kind ? MANY_KEY[kind] : 'attachment.mixed.many', { count }));
-    return { icon, segments: [head, ...size], labelled: [head, ...size] };
+    return {
+      icon,
+      segments: text ? [head, text, ...size] : [head, ...size],
+      sealed: withText([head], text),
+    };
   }
 
   if (attachment && isContactCardAttachment({ mimeType: attachment.mimeType, fileName: attachment.originalName })) {
@@ -516,24 +530,26 @@ function bodyOf(message: ConversationPreviewMessage, input: ConversationPreviewI
   }
 
   const kind = attachmentKindOf(attachment, message.messageType);
-  if (text) return { icon: kind, segments: [text], labelled: [text] };
   const name = attachment?.originalName?.trim() ?? '';
   const named = (kind === 'audio' || kind === 'file') && name !== '';
-  const head = label(named ? name : str(ONE_KEY[kind]));
+  const nature = label(str(ONE_KEY[kind]));
   const details = detailsOf(kind, attachment, input.language, str);
-  const labelledHead = named ? [label(str(ONE_KEY[kind])), head] : [head];
-  return { icon: kind, segments: [head, ...details], labelled: [...labelledHead, ...details] };
+  const sealed = withText([nature], text);
+  if (text) return { icon: kind, segments: [text, ...(named ? [label(name)] : []), ...details], sealed };
+  return { icon: kind, segments: [named ? label(name) : nature, ...details], sealed };
 }
 
 /**
  * Une carte de visite se dit par son CONTACT, jamais par son fichier (#8122,
- * #8148) : « Contact partagé · Zoé » — ni UUID, ni extension, ni poids.
+ * #8148) : « Contact partagé · Zoé » — ni UUID, ni extension, ni poids. Une
+ * légende prend la place du libellé, le nom du contact reste : « Voici son
+ * numéro · Zoé ».
  */
 function contactCardBody(attachment: ConversationPreviewAttachment, text: PreviewSegment | null, str: Str): Body {
-  if (text) return { icon: 'contact', segments: [text], labelled: [text] };
+  const nature = label(str('attachment.contact'));
   const name = contactCardNameFromFileName(attachment.originalName);
-  const segments = [label(str('attachment.contact')), ...(name ? [label(name)] : [])];
-  return { icon: 'contact', segments, labelled: segments };
+  const contact = name ? [label(name)] : [];
+  return { icon: 'contact', segments: [text ?? nature, ...contact], sealed: withText([nature], text) };
 }
 
 function detailsOf(kind: AttachmentKind, attachment: ConversationPreviewAttachment | null, language: string, str: Str): readonly PreviewSegment[] {
@@ -542,7 +558,7 @@ function detailsOf(kind: AttachmentKind, attachment: ConversationPreviewAttachme
   const sized = kind === 'photo' || kind === 'video';
   const duration = timed && positive(attachment.duration) ? [label(formatClock(Math.round(attachment.duration / 1000)))] : [];
   const dimensions = sized && positive(attachment.width) && positive(attachment.height)
-    ? [label(`${Math.round(attachment.width)}×${Math.round(attachment.height)}`)]
+    ? [label(dimensionsLabel(attachment.width, attachment.height))]
     : [];
   const pages = kind === 'file' && positive(attachment.pageCount)
     ? [label(str(attachment.pageCount === 1 ? 'detail.pages.one' : 'detail.pages.other', { count: Math.floor(attachment.pageCount) }))]
