@@ -43,9 +43,8 @@ extension MeeshyComposerHost {
     /// COULEUR : sous un média de fond, elle n'a plus d'objet — le Cadre du
     /// rail droit prend le relais.
     var sceneDoors: [ComposerRailDoor] {
-        let offertes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
-                                                format: selectedFormat,
-                                                allowsCapture: profile.allowsCapture)
+        let offertes = ComposerQuoteScene.doors(served: ComposerSceneCapabilities.doors, format: selectedFormat,
+                                                allowsCapture: profile.allowsCapture, origin: intent.origin)
         return sceneHasBackgroundMedia ? offertes.filter { $0 != .background } : offertes
     }
 
@@ -71,15 +70,13 @@ extension MeeshyComposerHost {
                                              editsInline: activeInlineEdit != nil)
     }
 
+    /// La scène arme-t-elle un viseur ? Jamais pour une citation (#15628).
+    var sceneServesCapture: Bool { ComposerQuoteScene.servesCapture(origin: intent.origin) }
+
     /// **L'indication grise de la capture rapide** (#8653) — la question du
     /// toucher (`handleSceneQuickTap`), après la relecture de l'ouverture (#13899).
     var sceneQuickCaptureHint: ComposerSceneQuickCapture.Hint? {
-        guard autosave.didBind, ComposerSceneQuickCapture.offers(
-            sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
-            format: selectedFormat,
-            stage: sceneCameraStage,
-            toolIsOpen: sceneToolOwnsScreen,
-            mediaIsEntering: sceneIntake?.isPreparing == true) else { return nil }
+        guard autosave.didBind, sceneQuickCaptureIsOffered else { return nil }
         return ComposerSceneQuickCapture.hint(format: selectedFormat)
     }
 }

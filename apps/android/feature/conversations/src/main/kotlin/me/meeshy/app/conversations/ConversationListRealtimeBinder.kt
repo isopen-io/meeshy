@@ -59,7 +59,7 @@ internal class ConversationListRealtimeBinder(
         scope.launch { messageSocketManager.messageDeleted.collect { enqueue { patcher.applyDeleted(it) } } }
         scope.launch { messageSocketManager.conversationUpdated.collect { enqueue { events.applyUpdated(it) } } }
         scope.launch {
-            messageSocketManager.unreadUpdated.collect { enqueue { patcher.applyUnread(it.conversationId, it.unreadCount) } }
+            messageSocketManager.unreadUpdated.collect { enqueue { patcher.applyUnread(it.conversationId, it.unreadCount, it.bridge) } }
         }
         // La montante du couple (#4389) : conversation restauree ailleurs - on la RAMENE par id.
         scope.launch { messageSocketManager.conversationRestored.collect { enqueue { events.applyRestored(it) } } }

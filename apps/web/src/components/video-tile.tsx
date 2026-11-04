@@ -4,11 +4,10 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { feedVideoPreload } from '@/lib/media/feed-media-preload';
+import { useAutoDownload } from '@/lib/media/use-auto-download';
 import { firstFrameSrc, localAwarePreload } from '@/lib/media/local-media';
 import { useRememberSeenAttachment } from '@/lib/media/recent-media-scope';
 import { useServedVideoSrc } from '@/lib/media/served-video';
-import { useOnline } from '@/lib/net/online';
 import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
 import {
   DURATION_BADGE_OPACITY,
@@ -155,9 +154,10 @@ export function VideoTile({
   /* Vue, une vidéo de message se relit hors ligne — si la bulle la déclare standard (#12052). */
   const servedSrc = useServedVideoSrc(attachment);
   const videoSrc = firstFrameSrc(servedSrc);
-  /* Sous 100 Ko, la vidéo arrive avec la bulle, hors ligne excepté (#14639) ;
-     des octets locaux (un envoi en attente, #15111) chargent toujours leur première image. */
-  const preload = localAwarePreload(videoSrc, feedVideoPreload({ sizeBytes: attachment.fileSize, online: useOnline() }));
+  /* Sous 100 Ko, la vidéo arrive avec la bulle, hors ligne excepté (#14639) ; au-delà, la
+     politique de l'appareil décide (#6333) ; des octets locaux (un envoi en attente, #15111)
+     chargent toujours leur première image. */
+  const preload = localAwarePreload(videoSrc, useAutoDownload('video', attachment.fileSize) ? 'auto' : 'none');
   useRememberSeenAttachment({ element, attachmentId: attachment.id, src: servedSrc, active: true });
   /* La durée d'une vidéo pas encore servie se lit sur l'élément (#15111). */
   const [probedMs, setProbedMs] = useState<number | undefined>(undefined);

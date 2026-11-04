@@ -91,6 +91,7 @@
     <string name="conversations_lock_title_verify_master">Vérifier le master PIN</string>
     <string name="conversations_logout">Se déconnecter</string>
     <string name="conversations_new">Nouvelle conversation</string>
+    <string name="conversations_obsolete_error">Impossible de rendre la conversation obsolète.</string>
     <string name="conversations_open_dashboard">Tableau de bord</string>
     <string name="conversations_preview_draft_label">Brouillon</string>
     <string name="conversations_preview_draft_prefix">Brouillon :</string>

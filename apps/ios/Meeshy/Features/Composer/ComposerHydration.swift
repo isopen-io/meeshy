@@ -83,12 +83,26 @@ enum ComposerHydration {
     /// scène : le texte, l'audience, la langue et le lieu de la publication.
     case editingPublication(StoryComposerViewModel, ComposerPublicationEditSeed)
 
+    /// Un post ou un réel qu'on CITE. Le meuble construit une scène vierge ;
+    /// la carte de la source s'y pose, figée, et plafonne l'audience.
+    case quotingPublication(ComposerQuotedPublication)
+
     /// La story SOURCE d'une republication — `nil` pour une édition, dont le
     /// contenu vit dans le ViewModel et non dans un `StoryItem` à part.
     var repostSource: StoryItem? {
         switch self {
-        case .editingStory, .editingPublication: return nil
+        case .editingStory, .editingPublication, .quotingPublication: return nil
         case .repostingStory(let story, _): return story
+        }
+    }
+
+    /// La carte que la scène montre : la source d'une citation, ou celle qu'un
+    /// repost rouvert porte déjà.
+    var quotedPublication: ComposerQuotedPublication? {
+        switch self {
+        case .quotingPublication(let cite): return cite
+        case .editingPublication(_, let graine): return graine.quoted
+        case .editingStory, .repostingStory: return nil
         }
     }
 
@@ -110,6 +124,8 @@ enum ComposerHydration {
             return nil
         case .repostingStory(let story, _):
             return StoryRepostAudience.allowed(fromRawValue: story.visibility)
+        case .quotingPublication(let cite):
+            return cite.visibility.map { StoryRepostAudience.allowed(fromRawValue: $0) }
         }
     }
 
@@ -136,6 +152,8 @@ enum ComposerHydration {
             return graine.visibility
         case .repostingStory(let story, _):
             return story.visibility ?? PostVisibility.private.rawValue
+        case .quotingPublication(let cite):
+            return cite.visibility
         }
     }
 
@@ -150,7 +168,27 @@ enum ComposerHydration {
             return graine.visibilityUserIds
         case .repostingStory(let story, _):
             return story.visibilityUserIds ?? []
+        case .quotingPublication:
+            return []
         }
+    }
+
+    /// **Le réel d'une publication rouverte** — `nil` hors de cette porte.
+    ///
+    /// La qualification du meuble ne lit que les objets de la slide courante :
+    /// un réel rouvert sur deux fonds d'image n'y qualifierait pas, et
+    /// s'ouvrirait en post. L'édition répond donc par la règle de l'éditeur
+    /// historique, sur ce que les slides montrent encore.
+    func publicationReelGate(slides: [StorySlide]) -> Bool? {
+        publicationSeed?.baseline.reelIsChoosable(slides: slides)
+    }
+
+    /// L'agencement d'une publication rouverte voyage-t-il ? `nil` hors de
+    /// cette porte. Le canal document le refuserait (`documentCarriesEveryMedia` :
+    /// les fonds rouverts vivent dans l'atelier), alors que la modification le
+    /// porte en réécrivant le canevas d'origine.
+    func publicationLayoutsTravel(slides: [StorySlide]) -> Bool? {
+        publicationSeed?.baseline.layoutIsEditable(slides: slides)
     }
 
     /// Ce que le DOCUMENT rouvre — `nil` pour toute hydratation qui n'en a pas.
@@ -167,6 +205,10 @@ nonisolated struct ComposerPublicationEditSeed: Equatable {
     let visibilityUserIds: [String]
     let language: String
     let location: SharedPlace?
+    /// Ce que la publication ÉTAIT : la règle du réel la relit à chaque passe.
+    let baseline: PostEditBaseline
+    /// La source qu'un repost cite — `nil` pour une publication qui ne republie rien.
+    var quoted: ComposerQuotedPublication? = nil
 }
 
 /// **Ce que le document montre à l'ouverture** : l'audience — publication

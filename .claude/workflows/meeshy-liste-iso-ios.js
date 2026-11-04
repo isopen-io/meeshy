@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Chantier #15537 de bout en bout, sans s'arrêter, sur iOS et Android : la pastille dit qui écrit et mène à la conversation, l'aperçu montre l'auteur et le détail des pièces jointes, l'avatar de ligne ouvre profil ou détails, le rail de stories reste en haut au défilement. Cartographie features × plateformes, registre des lots (plan de parité + compléments iOS, Android, partagés), puis deux voies en parallèle : DÉVELOPPEMENT (issue, cadrage contre dev vivant, TDD, revue-correction, audit des lots sensibles, PR) et GUICHET CI (resynchronisation sur dev, preuve par workflow_dispatch, corrections, fusion au vert, clôture avec preuve) — opus cadre, relit et corrige ; sonnet développe et prouve ; haiku fait le mécanique",
   whenToUse:
-    "Lancer ou reprendre le chantier « liste iso iOS » (#15537, milestone #232). Args, tous optionnels : { run ('/home/user/meeshy-quatre-run'), date, attribution, recartographier (false), devPar (1), maxFix (4), tentatives (2), maxIdle (36), maxResync (3), guichetMax (4), sauter [clés], seulement [clés], base ('dev') }.",
+    "Lancer ou reprendre le chantier « liste iso iOS » (#15537, milestone #232) depuis n'importe quelle session. Args (objet ou chaîne JSON) : { attribution (OBLIGATOIRE : les lignes Co-Authored-By et Claude-Session de la session qui lance), date, sessionsPrecedentes [« Claude-Session: … » des sessions qui ont déjà poussé des branches du chantier ; défaut : celle du 2026-11-03], run ('/home/user/meeshy-quatre-run'), recartographier (false), devPar (1), maxFix (4), tentatives (2), maxIdle (36), maxResync (3), guichetMax (4), sauter [clés], seulement [clés], base ('dev'), brancheOutillage (branche dont la PR d'outillage est à fusionner ; défaut aucune), aVerifier [{ key, platform, pr, issue }] }.",
   phases: [
     { title: 'Préparer', detail: "répertoire d'exécution, registre, PR de l'outillage, restauration du registre depuis #15537", model: 'sonnet' },
     { title: 'Cartographier', detail: 'une feature à la fois : chaque clause confrontée à iOS et Android sur dev vivant, lots manquants', model: 'opus' },
@@ -24,7 +24,14 @@ export const meta = {
 // ---------------------------------------------------------------------------
 // PARAMÈTRES
 // ---------------------------------------------------------------------------
-const A = args && typeof args === 'object' ? args : {}
+const lireArgs = (brut) => {
+  if (brut && typeof brut === 'object') return brut
+  if (typeof brut === 'string' && brut.trim().startsWith('{')) {
+    try { return JSON.parse(brut) } catch (e) { return {} }
+  }
+  return {}
+}
+const A = lireArgs(args)
 const REPO = '/home/user/meeshy'
 const GH = 'isopen-io/meeshy'
 const RUN = typeof A.run === 'string' && A.run ? A.run.replace(/\/$/, '') : '/home/user/meeshy-quatre-run'
@@ -32,15 +39,18 @@ const LOTS = `${RUN}/lots`
 const NOTES = `${RUN}/notes`
 const BASE = typeof A.base === 'string' && A.base ? A.base : 'dev'
 const DATE = typeof A.date === 'string' && A.date ? A.date : '(lis la date avec date -I)'
-const ATTR = typeof A.attribution === 'string' && A.attribution
-  ? A.attribution
-  : 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01EbRyWdY9YqethRbp6RRuTh'
+const ATTR = typeof A.attribution === 'string' && /Claude-Session: \S+/.test(A.attribution) ? A.attribution.trim() : ''
 const TRAILER = (ATTR.match(/Claude-Session: \S+/) || [''])[0]
+const SESSIONS_PRECEDENTES = Array.isArray(A.sessionsPrecedentes) ? A.sessionsPrecedentes
+  : ['Claude-Session: https://claude.ai/code/session_01EbRyWdY9YqethRbp6RRuTh']
+const SIGNATURES = [TRAILER, ...SESSIONS_PRECEDENTES.filter((t) => typeof t === 'string' && t.startsWith('Claude-Session: ') && t !== TRAILER)].filter(Boolean)
+const SIG_ARG = SIGNATURES.join('|')
 const SESSION_URL = (ATTR.match(/Claude-Session: (\S+)/) || [])[1] || ''
 const CHANTIER = 15537
 const OUTILLAGE = 15538
 const MILESTONE = 232
-const BRANCHE_OUTILLAGE = 'claude/tender-euler-cn12yt'
+const BRANCHE_OUTILLAGE = typeof A.brancheOutillage === 'string' ? A.brancheOutillage : ''
+const INSTANTANE = '.claude/workflows/meeshy-liste-iso-ios.registre.json'
 const EPOPEES = { F0a: 11590, F0b: 11590, A: 11591, B: 11592, C: 11593, D: 11594, E: 11595 }
 const DEV_PAR = Number.isInteger(A.devPar) && A.devPar > 0 ? Math.min(A.devPar, 3) : 1
 const MAX_FIX = Number.isInteger(A.maxFix) && A.maxFix > 0 ? A.maxFix : 4
@@ -148,6 +158,9 @@ FAITS DE L'ENVIRONNEMENT (mesurés le 2026-11-03) :
 - D'autres sessions Android sont ACTIVES sur le programme de parité (branches claude/android-*). Une branche vivante d'une autre session
   qui écrit tes fichiers ⇒ tu cèdes (CLAUDE.md, #5243) : statut tenu-ailleurs, jamais de doublon ni de fusion en avance.
 - Une PR vers ${BASE} ferme ses issues « Closes #n » (${BASE} est la branche par défaut) ; vérifie et ferme toi-même sinon.
+- Une PR ouverte et prête peut être fusionnée par un tiers AVANT sa preuve (mesuré le 2026-11-04 : #15700 fusionnée pendant que ses
+  CI tournaient). Une PR de ce chantier reste donc en BROUILLON (draft) tant qu'elle n'est pas prouvée ; seul l'agent de livraison
+  la passe prête, juste avant de la fusionner.
 
 INTERDITS : écrire dans ${REPO} (lecture seule ; tes clones vivent sous ${LOTS}) ; pousser sur ${BASE} ou main ; git push --force ; rebase
 d'une branche poussée ; git stash ; git worktree ; désactiver, affaiblir ou supprimer un témoin ; affaiblir une garde (pièce ou message
@@ -263,6 +276,10 @@ const VERDICT = { type: 'object', properties: {
 
 const GUICHET = { type: 'object', properties: { verdicts: { type: 'array', items: VERDICT }, attendu_min: { type: 'integer' } }, required: ['verdicts', 'attendu_min'] }
 
+const REPARATION = { type: 'object', properties: {
+  pushed: { type: 'boolean' }, pr: { type: 'integer' }, branch: { type: 'string' }, head_sha: { type: 'string' }, cause: { type: 'string' }, change: { type: 'string' },
+}, required: ['pushed', 'pr', 'branch', 'head_sha', 'cause', 'change'] }
+
 const FIX = { type: 'object', properties: {
   pushed: { type: 'boolean' }, head_sha: { type: 'string' }, cause: { type: 'string' }, change: { type: 'string' },
 }, required: ['pushed', 'head_sha', 'cause', 'change'] }
@@ -282,17 +299,21 @@ const BILAN = { type: 'object', properties: { commentaire: { type: 'string' }, r
 // ---------------------------------------------------------------------------
 const prepPrompt = () => `${socle(null, null)}
 MISSION — PRÉPARER LE CHANTIER (mécanique et vérifications ; aucune ligne de produit).
-1. cd ${REPO} && git fetch -q origin ${BASE} ${BRANCHE_OUTILLAGE}. Répertoire d'exécution : si ${RUN}/ready.py manque,
+1. cd ${REPO} && git fetch -q origin ${BASE}${BRANCHE_OUTILLAGE ? ' ' + BRANCHE_OUTILLAGE : ''}. Répertoire d'exécution : si ${RUN}/ready.py manque,
    apps/android/scripts/parity/setup_run.sh ${RUN} ; sinon recopie l'outillage à jour : cp apps/android/scripts/parity/{ready.py,lot.py,issue_body.py,pr_body.py}
    ${RUN}/, cp apps/android/docs/parite-ios/plan/*.json ${RUN}/plan/ (garde F0a/F0b), cp apps/android/docs/parite-ios/CONVENTIONS.md ${RUN}/.
-   Puis : git show origin/${BRANCHE_OUTILLAGE}:.claude/workflows/meeshy-liste-iso-ios.registre.py > ${RUN}/registre.py (si la branche n'a plus le
-   fichier, prends git show origin/${BASE}:…) ; idem pour meeshy-liste-iso-ios.lots.json → ${RUN}/graine.json. touch ${RUN}/satisfied.txt
-   ${RUN}/blocked.txt ; mkdir -p ${LOTS} ${NOTES}.
+   Puis l'outillage du chantier, lu sur ${BRANCHE_OUTILLAGE ? `origin/${BRANCHE_OUTILLAGE} (à défaut origin/${BASE})` : `origin/${BASE}`} :
+   git show <réf>:.claude/workflows/meeshy-liste-iso-ios.registre.py > ${RUN}/registre.py ; …lots.json → ${RUN}/graine.json ;
+   ${INSTANTANE} → ${RUN}/registre-instantane.json. touch ${RUN}/satisfied.txt ${RUN}/blocked.txt ; mkdir -p ${LOTS} ${NOTES}.
 2. python3 ${RUN}/registre.py self-test doit dire « self-test vert », sinon pret=false avec la sortie.
-3. Restauration : lis les commentaires de #${CHANTIER} (mcp__github__issue_read get_comments, toutes les pages). Le DERNIER qui contient
-   « ${MARQUEUR} » porte un bloc \`\`\`json : écris-le dans ${RUN}/registre-export.json, puis ${REG} init ${RUN} ${RUN}/graine.json &&
-   ${REG} import ${RUN} ${RUN}/registre-export.json ⇒ registre_restaure=true. Aucun ⇒ ${REG} init ${RUN} ${RUN}/graine.json ⇒ false.
-4. PR de l'outillage (#${OUTILLAGE}) : cherche une PR ouverte de la tête isopen-io:${BRANCHE_OUTILLAGE} vers ${BASE} (mcp__github__list_pull_requests
+3. Restauration : ${REG} init ${RUN} ${RUN}/graine.json, puis, si ${RUN}/registre-instantane.json existe, ${REG} import ${RUN} ${RUN}/registre-instantane.json
+   (l'instantané versionné du registre : lots de cartographie, issues, critères, dépendances, exclusions). Ensuite lis les commentaires de #${CHANTIER}
+   (mcp__github__issue_read get_comments, toutes les pages) : le DERNIER qui contient « ${MARQUEUR} » porte un bloc \`\`\`json ; s'il est postérieur au
+   dernier commit de l'instantané (git log -1 --format=%cI origin/${BASE} -- ${INSTANTANE}), écris-le dans ${RUN}/registre-export.json et
+   ${REG} import ${RUN} ${RUN}/registre-export.json (l'import garde les numéros d'issue et de PR déjà posés). registre_restaure=true si l'un des deux a été
+   importé, false sinon.
+4. ${BRANCHE_OUTILLAGE ? '' : `Aucune branche d'outillage n'est donnée : saute ce point (pr_outillage=0, outillage_fusionne=true).
+   `}PR de l'outillage (#${OUTILLAGE}) : cherche une PR ouverte de la tête isopen-io:${BRANCHE_OUTILLAGE} vers ${BASE} (mcp__github__list_pull_requests
    head « isopen-io:${BRANCHE_OUTILLAGE} » state all). Fusionnée ⇒ outillage_fusionne=true. Aucune ⇒ si la branche a des commits absents de
    ${BASE} (git log origin/${BASE}..origin/${BRANCHE_OUTILLAGE}), crée-la : titre « Le chantier « liste iso iOS » a son workflow autonome et un registre
    qui ordonnance des lots Android, iOS et partagés », corps : Closes #${OUTILLAGE}, Refs #${CHANTIER}, les fichiers, la preuve du point 2, puis une
@@ -307,7 +328,7 @@ MISSION — CARTOGRAPHIER LA FEATURE ${fid} (lecture seule, aucun code). Tu déc
 et sur Android, en lisant l'arbre VIVANT de ${BASE}.
 1. cd ${REPO} && git fetch -q origin ${BASE}. Lis la feature : python3 -c "import json;print(json.dumps(json.load(open('${RUN}/graine.json'))['features']['${fid}'],ensure_ascii=False,indent=1))"
    (clauses, références iOS, existant Android, lots cibles du plan). Lis la spécification de chaque lot cible et de ses dépendances :
-   ${REG} spec ${RUN} <clé>, et l'état de tous : ${REG} status ${RUN} --trailer "${TRAILER}".
+   ${REG} spec ${RUN} <clé>, et l'état de tous : ${REG} status ${RUN} --trailer "${SIG_ARG}".
    Lis le code RÉEL sur origin/${BASE} (git show origin/${BASE}:<chemin> ; git grep -n <symbole> origin/${BASE} -- <dossier> ;
    git ls-tree -r --name-only origin/${BASE} | grep <nom>) : iOS (apps/ios, packages/MeeshySDK), Android (apps/android), loi partagée
    (packages/shared) et, pour un détail que la liste ne sert peut-être pas, la passerelle (services/gateway : la sélection du dernier
@@ -347,15 +368,20 @@ ${JSON.stringify(cartos).slice(0, 26000)}
 5. Rends lots_ajoutes, exclus, couverture, manques, dette_web (une entrée par feature concernée), commentaire (URL), rapport.`
 
 const statutPrompt = (enVol) => `MISSION MÉCANIQUE — état du registre. Exécute exactement :
-${REG} status ${RUN} --trailer "${TRAILER}"${enVol.length ? ` --inflight ${enVol.join(',')}` : ''}
+${REG} status ${RUN} --trailer "${SIG_ARG}"${enVol.length ? ` --inflight ${enVol.join(',')}` : ''}
 La sortie est un JSON { dev, pret, attente, chevauchement, tenu_ailleurs, pr_nous, pr_a_reprendre, en_vol, bloque, fusionne, exclus, restants, lots }
 où lots est un objet clé → { branch, platform, issue, pr, age_h, nous, deps_manquantes, etat, reprise? }. Rends-le TEL QUEL, sauf lots, que tu
 rends en LISTE d'objets { key, etat, platform, branch, issue (0 si null), pr (0 si null), reprise (false si absent), nous, sensible, lourd, deps_manquantes }.
 Une commande en échec (réseau) : réessaie trois fois à 20 s d'écart, puis rends restants=-1 et des listes vides. N'invente rien.`
 
+const ATTENTE_MODE = `MODE D'ATTENTE (mesuré le 2026-11-04) : le sleep au premier plan est REFUSÉ aux sous-agents, et un seul Monitor long
+se termine sans que tu le voies. Attends par TRANCHES : charge Monitor par ToolSearch (« select:Monitor »), puis appelle-le avec
+command « sleep 290; echo go » et timeout_ms 300000, ATTENDS son événement « go », et recommence autant de fois qu'il le faut.
+Ne termine JAMAIS ton tour pendant qu'une tranche court, et termine-le TOUJOURS par l'appel StructuredOutput.`
+
 const attentePrompt = (minutes, raison) => `Attends ${minutes} minutes, puis rends {"ok": true, "note": "…"}. Raison : ${raison}.
-Attends par tranches : « sleep 240; echo ok » en Bash, répété ; si l'outil refuse un sleep au premier plan, charge Monitor par ToolSearch et
-attends avec une boucle until bornée (until [ $(date +%s) -ge <échéance> ]; do sleep 30; done). Ne fais rien d'autre.`
+${ATTENTE_MODE}
+Nombre de tranches : ${Math.max(1, Math.ceil((minutes * 60) / 290))}. Ne fais rien d'autre.`
 
 // ---------------------------------------------------------------------------
 // PROMPTS — UN LOT : ISSUE, CADRAGE, DÉVELOPPEMENT, REVUE, AUDIT, PR
@@ -399,8 +425,9 @@ ${reprise ? `REPRISE : la branche existe déjà (${reprise}). Lis ce qui est fai
 spécification, garde ce qui est juste, complète, et git merge origin/${BASE} d'abord (conflit : garde la sémantique des deux côtés).` : ''}
 Clone privé (jamais ${REPO}) :
 ${clone(cle, info.platform, !!reprise)}
-${reprise ? '' : `Avant d'écrire : git ls-remote origin refs/heads/${branche(info.platform, cle)} — la branche existe et n'est pas de toi (dernier commit sans
-« ${TRAILER} ») ⇒ une autre session tient le lot : status skipped-claimed, sans rien pousser.`}
+${reprise ? '' : `Avant d'écrire : git ls-remote origin refs/heads/${branche(info.platform, cle)} — la branche existe et n'est pas du chantier (aucun des cinq
+derniers commits de sa lignée principale, git log --first-parent -5, ne porte l'une de ces signatures : ${SIGNATURES.join(' ; ')}) ⇒ une autre
+session tient le lot : status skipped-claimed, sans rien pousser.`}
 1. Réserve tôt : après le premier témoin rouge, commit puis git push -u origin ${branche(info.platform, cle)} (erreur réseau : 4 essais après 2, 4, 8,
    16 s). Ensuite commit ET push après chaque étape (témoin rouge, loi verte, chaque fichier de câblage) : rien ne vit plus de 10 minutes en local.
 2. TDD : témoins de la loi pure d'abord, ROUGE constaté (copie l'extrait dans red_observed — ${info.platform === 'ios' ? 'pour Swift, que tu ne peux pas exécuter ici, le rouge est le témoin écrit contre l\'API absente ou l\'ancienne valeur, et le guichet le jouera ; dis-le' : 'exécute-le'}),
@@ -454,8 +481,10 @@ MISSION — OUVRIR LA PR DU LOT (mécanique). Branche ${branche(info.platform, c
    « Closes #${issue} », le résumé, les fichiers, les témoins, les critères tenus.
    Résumé : ${JSON.stringify(String(resume || '').replace(/"/g, "'").slice(0, 1200))}
    Ajoute, avant la ligne « 🤖 Generated… » : « Refs #${CHANTIER} » et « Preuve : workflow_dispatch des CI concernées sur cette branche (la CI des PR est
-   gelée) — liens en commentaire. » La fin du corps est : une ligne vide, « 🤖 Generated with [Claude Code](https://claude.com/claude-code) », une ligne vide, ${SESSION_URL}.
-3. mcp__github__create_pull_request owner isopen-io repo meeshy base ${BASE} head ${branche(info.platform, cle)}. ${REG} set ${RUN} ${cle} pr <numéro>.
+   gelée) — liens en commentaire. Brouillon jusqu'à la preuve verte. » La fin du corps est : une ligne vide, « 🤖 Generated with [Claude Code](https://claude.com/claude-code) », une ligne vide, ${SESSION_URL}.
+3. mcp__github__create_pull_request owner isopen-io repo meeshy base ${BASE} head ${branche(info.platform, cle)} draft true (BROUILLON jusqu'à sa preuve :
+   l'agent de livraison la passera prête juste avant de la fusionner ; une PR existante non brouillon ⇒ mcp__github__update_pull_request draft true).
+   ${REG} set ${RUN} ${cle} pr <numéro>.
 Rends {pr, head_sha}.`
 
 // ---------------------------------------------------------------------------
@@ -467,8 +496,14 @@ ${BASE} est permis) et tu ne fusionnes rien. Lots :
 ${JSON.stringify(items.map((i) => ({ key: i.key, platform: i.platform, branch: i.branch, pr: i.pr || 0, issue: i.issue || 0, suites_ios: i.suites_ios || [], nouvelle_preuve: !i.preuveEnCours, dernier_sha_prouve: i.dernierSha || '' }))).slice(0, 5000)}
 0. ToolSearch « select:mcp__github__pull_request_read,mcp__github__list_pull_requests,mcp__github__actions_list,mcp__github__actions_get,mcp__github__actions_run_trigger,mcp__github__get_job_logs,mcp__github__add_issue_comment ».
 POUR CHAQUE LOT :
-1. PR : pr = 0 ⇒ retrouve-la (list_pull_requests head « isopen-io:<branch> » state all) ; aucune ⇒ etat erreur. pull_request_read get : fusionnée ⇒
-   etat fusionnee-ailleurs ; fermée ⇒ etat fermee ; mergeable_state dirty ⇒ etat conflit.
+1. PR : pr = 0 ⇒ retrouve-la (list_pull_requests head « isopen-io:<branch> » state all) ; aucune ⇒ etat erreur. pull_request_read get :
+   - FUSIONNÉE (par un tiers, avant ou pendant sa preuve) : ne synchronise rien, ne relance rien. La preuve à lire est celle du SHA fusionné : les
+     exécutions workflow_dispatch de la branche au head.sha ; s'il n'y en a aucune, les exécutions « push » de ${BASE} au merge_commit_sha. En cours ⇒
+     attends-les comme au point 5 (non terminées à l'échéance ⇒ etat en-cours) ; terminées ⇒ etat fusionnee-ailleurs avec echecs et prealables jugés comme
+     au point 6 (un échec du lot qui n'est pas préalable est un défaut désormais DANS ${BASE} : dis-le dans detail) ; aucune exécution ⇒ fusionnee-ailleurs,
+     echecs vides, detail « aucune preuve trouvée ». Passe ensuite au lot suivant.
+   - fermée sans fusion ⇒ etat fermee ; mergeable_state dirty ⇒ etat conflit.
+   - ouverte et PAS en brouillon ⇒ mcp__github__update_pull_request draft true (personne ne doit la fusionner avant sa preuve).
 2. SYNCHRONISATION — seulement si nouvelle_preuve=true OU si aucune exécution non annulée n'existe pour le SHA de tête : dans ${LOTS}/<key>
    (sinon clone frais de la branche : git clone -q --filter=blob:none https://github.com/${GH} ${LOTS}/<key> -b <branch>), git fetch -q origin ${BASE}
    <branch> && git checkout -q -B <branch> origin/<branch> && git merge -q origin/${BASE} && git push origin <branch> (conflit ⇒ git merge --abort,
@@ -481,8 +516,9 @@ POUR CHAQUE LOT :
    sdk-tests.yml (packages/MeeshySDK/** et ses fixtures) avec only_testing ; ci.yml (packages/shared/** hors fixtures, services/**, apps/web/**).
 4. Pour chaque workflow : actions_list list_workflow_runs resource_id <fichier>, branch <branch>, event workflow_dispatch. Aucune exécution non
    annulée au SHA de tête ⇒ actions_run_trigger run_workflow workflow_id <fichier> ref <branch> (inputs) ; sleep 60, relis jusqu'à la voir (5 essais).
-5. ATTENTE : tant qu'AUCUN lot de ce guichet n'a toutes ses exécutions terminées, relis toutes les 4 minutes (« sleep 240; echo ok » en Bash ;
-   refusé ⇒ Monitor par ToolSearch avec une boucle until bornée), au plus 45 minutes. À l'échéance, les lots non terminés sont « en-cours ».
+5. ATTENTE : tant qu'AUCUN lot de ce guichet n'a toutes ses exécutions terminées, relis toutes les 5 minutes, au plus 45 minutes. À l'échéance,
+   les lots non terminés sont « en-cours ».
+   ${ATTENTE_MODE}
 6. Lot terminé : jobs → conclusion (actions_list list_workflow_jobs). Tous success (skipped admis hors jobs de build et de test) ⇒ vert.
    Un job « cancelled » sans autre échec ⇒ en-cours. Rouge ⇒ get_job_logs run_id failed_only true return_content true tail_lines 500 : erreurs
    de compilation (fichier:ligne) et tests rouges (FQN) dans echecs ; puis les deux dernières exécutions TERMINÉES du même workflow sur ${BASE}
@@ -506,15 +542,18 @@ ${GATES[item.platform]}
 ${garde(item.platform)}
 Commit « fix(${portee(item.platform)}/liste): … » (Refs #${item.issue || CHANTIER} puis les lignes d'attribution), git push origin ${item.branch} sans force. Rends pushed, head_sha, cause, change.`
 
-const livrerPrompt = (item, verdict, autoriserDerive) => `${socle(item.key, item.platform)}
-MISSION — LIVRER LA PR #${verdict.pr} (lot « ${item.key} », issue #${item.issue || '?'}). Preuve : ${JSON.stringify(verdict).slice(0, 3500)}
+const livrerPrompt = (item, verdict, autoriserDerive, dejaFusionnee) => `${socle(item.key, item.platform)}
+MISSION — ${dejaFusionnee ? `CONSIGNER LA PR #${verdict.pr}, DÉJÀ FUSIONNÉE par un tiers (lot « ${item.key} », issue #${item.issue || '?'}) : ne fusionne rien, saute les points 1 à 3,
+et dis dans la clôture qu'elle a été fusionnée avant la fin de sa preuve, puis ce que la preuve a dit ensuite` : `LIVRER LA PR #${verdict.pr} (lot « ${item.key} », issue #${item.issue || '?'})`}. Preuve : ${JSON.stringify(verdict).slice(0, 3500)}
 Contexte du lot : ${JSON.stringify({ revue: item.revue || null, followups: item.followups || [] }).slice(0, 2500)}
 1. pull_request_read get #${verdict.pr} : head.sha ≠ ${verdict.head_sha} ⇒ etat non-fusionnee (la preuve ne vaut plus). mergeable_state dirty ⇒ non-fusionnee.
 2. DÉRIVE DE ${BASE} (synchronisation) : dans un clone (${LOTS}/${item.key}, sinon frais), git fetch -q origin ${BASE} ; fichiers du lot = git diff --name-only
    ${verdict.dev_base || 'origin/' + BASE}...${verdict.head_sha} ; fichiers touchés par ${BASE} depuis la preuve = git diff --name-only ${verdict.dev_base || 'HEAD'} origin/${BASE}.
    Intersection non vide ⇒ derive = l'intersection${autoriserDerive ? " ; ce lot a déjà été resynchronisé plusieurs fois : continue si mergeable_state n'est pas dirty, et nomme la dérive dans la clôture" : ' et etat resync (le guichet re-synchronisera et re-prouvera) — ne fusionne pas'}.
-3. mcp__github__merge_pull_request owner isopen-io repo meeshy pullNumber ${verdict.pr} merge_method « merge » expectedHeadSha ${verdict.head_sha}, SANS commit_title
-   ni commit_message (le titre par défaut « Merge pull request #… from isopen-io/${item.branch} » est le registre du programme). Refus ⇒ non-fusionnee.
+3. mcp__github__update_pull_request pullNumber ${verdict.pr} draft false (la PR quitte le brouillon maintenant qu'elle est prouvée), puis aussitôt
+   mcp__github__merge_pull_request owner isopen-io repo meeshy pullNumber ${verdict.pr} merge_method « merge » expectedHeadSha ${verdict.head_sha}, SANS commit_title
+   ni commit_message (le titre par défaut « Merge pull request #… from isopen-io/${item.branch} » est le registre du programme). Refus ⇒ remets-la en
+   brouillon (draft true) et etat non-fusionnee.
 4. Issue #${item.issue || '?'} : si elle est encore ouverte, ferme-la (issue_write update state closed state_reason completed). Commentaire de clôture : PR, SHA de
    fusion, preuve (runs${verdict.etat === 'rouge-prealable' ? ', échecs PRÉALABLES de ' + BASE + ' avec leur run' : ''}), critères tenus et non tenus, dimensions mûres et non mûres,
    ce qui reste à rejouer sur appareil réel, et la dérive de ${BASE} s'il y en a.
@@ -522,6 +561,20 @@ Contexte du lot : ${JSON.stringify({ revue: item.revue || null, followups: item.
    ${item.platform === 'android' ? '["android"]' : item.platform === 'ios' ? '["ios"]' : '[]'}, milestone ${MILESTONE}, parent_issue_number ${CHANTIER}.
 6. rm -rf ${LOTS}/${item.key}.
 Tout corps finit par une ligne vide, « --- » et « _Generated by [Claude Code](https://claude.ai/code)_ ». Rends etat, merge_sha, derive, issue_close, issues_ouvertes, rapport.`
+
+const reparerPrompt = (item, verdict) => `${socle(item.key, item.platform)}
+MISSION — RÉPARER ${BASE} : la PR #${verdict.pr} (lot « ${item.key} », issue #${item.issue || '?'}) a été fusionnée par un tiers avant la fin de sa preuve, et
+la preuve du SHA fusionné est ROUGE pour des raisons qui ne sont pas préalables : ${JSON.stringify({ echecs: verdict.echecs, runs: verdict.runs, detail: verdict.detail }).slice(0, 3500)}
+1. Vérifie d'abord que ${BASE} porte encore le défaut : git fetch -q origin ${BASE} ; une autre session l'a peut-être déjà corrigé (git log origin/${BASE} --since=<fusion>
+   -- <fichiers cités>, gh api -X GET search/issues -f q='repo:${GH} is:pr <symbole ou test>'). Déjà corrigé ⇒ pushed=false, cause « déjà corrigé sur ${BASE} : <commit|PR> ».
+2. Sinon, nouvelle branche ${branche(item.platform, item.key + '-reparation')} depuis origin/${BASE} dans ${LOTS}/${item.key}-reparation (clone frais) ; cause racine
+   de chaque échec, témoin qui la reproduit d'abord quand c'est un comportement ; jamais un témoin désactivé ou affaibli.
+${GATES[item.platform]}
+${garde(item.platform)}
+3. Commit « fix(${portee(item.platform)}/liste): … » (Refs #${item.issue || CHANTIER} puis les lignes d'attribution), push, PR vers ${BASE} en BROUILLON (draft true) :
+   titre sémantique (ce que la réparation rend), corps « Refs #${item.issue || CHANTIER} », « Refs #${CHANTIER} », la cause et la preuve rouge citée, puis une ligne vide,
+   « 🤖 Generated with [Claude Code](https://claude.com/claude-code) », une ligne vide, ${SESSION_URL}.
+Rends pushed, pr, branch, head_sha, cause, change.`
 
 const satisfaitPrompt = (cle, info, issue, cadrage) => `${socle(cle, info.platform)}
 MISSION — CONSIGNER UN LOT DÉJÀ TENU (mécanique). Le cadrage prouve que chaque critère est tenu sur origin/${BASE} : ${JSON.stringify({ preuve: cadrage.preuve }).slice(0, 3000)}
@@ -537,7 +590,7 @@ fini par une ligne vide, « --- » et « _Generated by [Claude Code](https://cla
 
 const bilanPrompt = (etat) => `${socle(null, null)}
 MISSION — BILAN DU CHANTIER (mécanique). État : ${JSON.stringify(etat).slice(0, 14000)}
-1. ${REG} status ${RUN} --trailer "${TRAILER}" pour l'état final. Poste UN commentaire sur #${CHANTIER} : tableau lot → plateforme → issue → PR → état
+1. ${REG} status ${RUN} --trailer "${SIG_ARG}" pour l'état final. Poste UN commentaire sur #${CHANTIER} : tableau lot → plateforme → issue → PR → état
    (fusionné / bloqué / tenu ailleurs / en attente) → preuve → dimensions mûres ; puis, par feature et par clause, ce qui est visible sur iOS et
    sur Android depuis ${BASE} ; ce qui reste, dans l'ordre ; les blocages avec leur cause et leur issue ; la dette ouverte en chemin.
 2. Recette : cherche une issue ouverte au titre « La liste et le fil se recettent sur un S8, un Pixel et le simulateur iOS : pastille de frappe,
@@ -572,13 +625,18 @@ let devActifs = 0
 let devTermine = false
 let dernierDev = ''
 
+const appel = (prompt, opts) => agent(prompt, opts).catch((e) => {
+  log(`${opts && opts.label ? opts.label : 'agent'} : aucun rendu exploitable (${String(e).slice(0, 160)})`)
+  return null
+})
+
 const noter = (cle, resultat, detail) => {
   journal.push({ cle, resultat, detail: String(detail || '').slice(0, 400) })
   log(`${cle} → ${resultat}${detail ? ` — ${String(detail).slice(0, 160)}` : ''}`)
 }
 
 const statut = async (label) => {
-  const st = await agent(statutPrompt([...enVol]), { label, phase: 'Ordonnancer', schema: STATUT, model: MODELE.mecanique, effort: 'low' })
+  const st = await appel(statutPrompt([...enVol]), { label, phase: 'Ordonnancer', schema: STATUT, model: MODELE.mecanique, effort: 'low' })
   if (!st || st.restants < 0) return null
   if (st.dev && st.dev !== dernierDev) {
     log(`dev @ ${st.dev} — ${st.fusionne.length} fusionnés, ${st.pret.length} prêts, ${st.attente.length} en attente, ${st.tenu_ailleurs.length} tenus ailleurs, ${st.chevauchement.length} en chevauchement`)
@@ -600,48 +658,48 @@ const adopter = (st) => {
 }
 
 const bloquer = async (cle, info, issue, cause, final) => {
-  await agent(bloquerPrompt(cle, info, issue, cause, final), { label: `bloquer:${cle}`, phase: 'Livrer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
+  await appel(bloquerPrompt(cle, info, issue, cause, final), { label: `bloquer:${cle}`, phase: 'Livrer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
 }
 
 const chaine = async (cle, info) => {
   tentatives[cle] = (tentatives[cle] || 0) + 1
   const n = tentatives[cle]
-  const iss = await agent(issuePrompt(cle, info), { label: `issue:${cle}`, phase: 'Issue', schema: ISSUE, model: MODELE.mecanique, effort: 'low' })
+  const iss = await appel(issuePrompt(cle, info), { label: `issue:${cle}`, phase: 'Issue', schema: ISSUE, model: MODELE.mecanique, effort: 'low' })
   if (!iss || !iss.issue) return { resultat: 'bloque', cause: 'aucune issue' }
   const issue = iss.issue
 
-  const cadrage = await agent(cadrerPrompt(cle, info, issue, historique[cle]), { label: `cadrer:${cle}#${n}`, phase: 'Cadrer', schema: CADRAGE, model: MODELE.cadrer, effort: 'high' })
+  const cadrage = await appel(cadrerPrompt(cle, info, issue, historique[cle]), { label: `cadrer:${cle}#${n}`, phase: 'Cadrer', schema: CADRAGE, model: MODELE.cadrer, effort: 'high' })
   if (!cadrage) return { resultat: 'bloque', cause: 'cadrage sans rendu', issue }
   if (cadrage.decision === 'deja-tenu') {
-    await agent(satisfaitPrompt(cle, info, issue, cadrage), { label: `tenu:${cle}`, phase: 'Livrer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
+    await appel(satisfaitPrompt(cle, info, issue, cadrage), { label: `tenu:${cle}`, phase: 'Livrer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
     return { resultat: 'deja-tenu', issue, cause: cadrage.preuve }
   }
   if (cadrage.decision === 'tenu-ailleurs') return { resultat: 'tenu-ailleurs', issue, cause: cadrage.preuve }
 
   const lourd = info.platform !== 'partage' && (info.lourd || (cadrage.fichiers || []).length > 14)
-  const impl = await agent(devPrompt(cle, info, issue, cadrage, info.reprise ? `branche existante${historique[cle] ? ' ; ' + historique[cle] : ''}` : (n > 1 ? historique[cle] : '')),
+  const impl = await appel(devPrompt(cle, info, issue, cadrage, info.reprise ? `branche existante${historique[cle] ? ' ; ' + historique[cle] : ''}` : (n > 1 ? historique[cle] : '')),
     { label: `dev:${cle}#${n}`, phase: 'Développer', schema: IMPL, model: lourd ? MODELE.lourd : MODELE.developper, effort: 'high' })
   if (!impl) return { resultat: 'bloque', cause: 'développement sans rendu', issue }
   if (impl.status === 'skipped-claimed') return { resultat: 'tenu-ailleurs', issue, cause: 'branche réservée par une autre session' }
   if (impl.status !== 'pushed') return { resultat: 'bloque', cause: `développement : ${impl.summary}`, issue }
 
-  let revue = await agent(revuePrompt(cle, info, issue, impl), { label: `relire:${cle}#${n}`, phase: 'Relire', schema: REVUE, model: MODELE.relire, effort: 'high' })
+  let revue = await appel(revuePrompt(cle, info, issue, impl), { label: `relire:${cle}#${n}`, phase: 'Relire', schema: REVUE, model: MODELE.relire, effort: 'high' })
   if (!revue) return { resultat: 'bloque', cause: 'revue sans rendu', issue }
   if (revue.verdict === 'bloque') return { resultat: 'bloque', cause: `revue : ${revue.rapport}`, issue }
 
   if (info.sensible) {
-    let audit = await agent(auditPrompt(cle, info, issue), { label: `audit:${cle}#${n}`, phase: 'Auditer', schema: AUDIT, agentType: 'auditeur-adversarial', effort: 'high' })
+    let audit = await appel(auditPrompt(cle, info, issue), { label: `audit:${cle}#${n}`, phase: 'Auditer', schema: AUDIT, agentType: 'auditeur-adversarial', effort: 'high' })
     for (let passe = 0; audit && audit.verdict === 'bloquants' && passe < 2; passe++) {
-      const c = await agent(corrigerAuditPrompt(cle, info, issue, audit), { label: `audit-fix:${cle}#${passe + 1}`, phase: 'Auditer', schema: REVUE, model: MODELE.corriger, effort: 'high' })
+      const c = await appel(corrigerAuditPrompt(cle, info, issue, audit), { label: `audit-fix:${cle}#${passe + 1}`, phase: 'Auditer', schema: REVUE, model: MODELE.corriger, effort: 'high' })
       if (!c || c.verdict === 'bloque') return { resultat: 'bloque', cause: `audit : ${c ? c.rapport : 'aucun rendu'}`, issue }
       revue = { ...revue, ...c, dimensions_mures: c.dimensions_mures, dimensions_non_mures: c.dimensions_non_mures }
-      audit = await agent(auditPrompt(cle, info, issue), { label: `audit:${cle}#${n}.${passe + 2}`, phase: 'Auditer', schema: AUDIT, agentType: 'auditeur-adversarial', effort: 'high' })
+      audit = await appel(auditPrompt(cle, info, issue), { label: `audit:${cle}#${n}.${passe + 2}`, phase: 'Auditer', schema: AUDIT, agentType: 'auditeur-adversarial', effort: 'high' })
     }
     if (!audit) return { resultat: 'bloque', cause: 'audit sans rendu', issue }
     if (audit.verdict === 'bloquants') return { resultat: 'bloque', cause: `audit : ${audit.blocking.map((b) => b.title).join(' ; ')}`, issue }
   }
 
-  const pr = await agent(prPrompt(cle, info, issue, impl.summary), { label: `pr:${cle}`, phase: 'Prouver', schema: PR, model: MODELE.mecanique, effort: 'low' })
+  const pr = await appel(prPrompt(cle, info, issue, impl.summary), { label: `pr:${cle}`, phase: 'Prouver', schema: PR, model: MODELE.mecanique, effort: 'low' })
   if (!pr || !pr.pr) return { resultat: 'bloque', cause: 'PR non ouverte', issue }
   const suites = (revue.suites_ios && revue.suites_ios.length ? revue.suites_ios : impl.suites_ios) || []
   queueCI.push({ key: cle, platform: info.platform, branch: info.branch, pr: pr.pr, issue, essai: 0, attentes: 0, resync: 0, preuveEnCours: false,
@@ -696,7 +754,7 @@ const devWorker = async (id) => {
     idle++
     if (idle > MAX_IDLE) { log(`voie de développement : ${restants.length} lots restants sans progrès après ${MAX_IDLE} attentes`); return }
     const raison = `aucun lot prêt — attente ${st.attente.length}, tenus ailleurs ${st.tenu_ailleurs.join(',') || '0'}, chevauchement ${st.chevauchement.join(',') || '0'}, différés ${[...differes.keys()].join(',') || '0'}`
-    await agent(attentePrompt(20, raison), { label: `attente:dev${id}#${idle}`, phase: 'Ordonnancer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
+    await appel(attentePrompt(20, raison), { label: `attente:dev${id}#${idle}`, phase: 'Ordonnancer', schema: SIMPLE, model: MODELE.mecanique, effort: 'low' })
   }
 }
 
@@ -711,7 +769,23 @@ const finirCI = (item, resultat, detail) => {
 const traiterVerdict = async (item, v) => {
   if (v.pr) item.pr = v.pr
   if (v.head_sha) item.dernierSha = v.head_sha
-  if (v.etat === 'fusionnee-ailleurs') return finirCI(item, 'fusionne', `PR #${item.pr} fusionnée hors de ce guichet`)
+  if (v.etat === 'fusionnee-ailleurs') {
+    const defauts = (v.echecs || []).filter((e) => !(v.prealables || []).includes(e))
+    let rep = null
+    if (defauts.length && !item.reparation) {
+      rep = await appel(reparerPrompt(item, v), { label: `reparer:${item.key}`, phase: 'Corriger', schema: REPARATION, model: MODELE.corriger, effort: 'high' })
+      log(`${item.key} : ${rep && rep.pushed && rep.pr ? `réparation de dev en PR #${rep.pr}` : 'réparation non poussée'} — ${rep ? String(rep.cause).slice(0, 160) : 'aucun rendu'}`)
+    }
+    const vu = rep ? { ...v, detail: `${v.detail} | réparation : ${rep.pushed && rep.pr ? 'PR #' + rep.pr : rep.cause}`.slice(0, 1500) } : v
+    await appel(livrerPrompt(item, vu, true, true), { label: `consigner:${item.key}`, phase: 'Livrer', schema: LIVRAISON, model: MODELE.livrer, effort: 'medium' })
+    finirCI(item, 'fusionne', `PR #${item.pr} fusionnée par un tiers ; preuve ${defauts.length ? 'ROUGE' : (v.echecs || []).length ? 'rouge préalable' : v.detail || 'verte'}`)
+    if (rep && rep.pushed && rep.pr) {
+      const cle = `${item.key}-reparation`
+      enVol.add(cle)
+      queueCI.push({ key: cle, platform: item.platform, branch: rep.branch, pr: rep.pr, issue: item.issue, essai: 0, attentes: 0, resync: 0, preuveEnCours: false, reparation: true })
+    }
+    return
+  }
   if (v.etat === 'fermee' || v.etat === 'erreur') {
     await bloquer(item.key, item, item.issue, `PR ${v.etat} : ${v.detail}`, true)
     return finirCI(item, 'bloque', `PR ${v.etat}`)
@@ -726,7 +800,7 @@ const traiterVerdict = async (item, v) => {
     return
   }
   if (v.etat === 'vert' || v.etat === 'rouge-prealable') {
-    const liv = await agent(livrerPrompt(item, v, item.resync >= MAX_RESYNC), { label: `livrer:${item.key}#${item.resync}`, phase: 'Livrer', schema: LIVRAISON, model: MODELE.livrer, effort: 'medium' })
+    const liv = await appel(livrerPrompt(item, v, item.resync >= MAX_RESYNC), { label: `livrer:${item.key}#${item.resync}`, phase: 'Livrer', schema: LIVRAISON, model: MODELE.livrer, effort: 'medium' })
     if (liv && liv.etat === 'fusionnee') return finirCI(item, 'fusionne', `PR #${item.pr} → ${liv.merge_sha}${v.etat === 'rouge-prealable' ? ' (rouge préalable de dev)' : ''}${liv.derive.length ? ` ; dérive : ${liv.derive.join(', ')}` : ''}`)
     if (liv && liv.etat === 'resync') {
       item.resync++
@@ -744,7 +818,7 @@ const traiterVerdict = async (item, v) => {
     await bloquer(item.key, item, item.issue, `${v.etat} après ${MAX_FIX} corrections : ${v.echecs.join(' ; ').slice(0, 1500)}`, true)
     return finirCI(item, 'bloque', `${v.etat} après ${MAX_FIX} corrections`)
   }
-  const fix = await agent(corrigerPrompt(item, v, item.essai), { label: `corriger:${item.key}#${item.essai}`, phase: 'Corriger', schema: FIX, model: MODELE.corriger, effort: 'high' })
+  const fix = await appel(corrigerPrompt(item, v, item.essai), { label: `corriger:${item.key}#${item.essai}`, phase: 'Corriger', schema: FIX, model: MODELE.corriger, effort: 'high' })
   log(`${item.key} · correction ${item.essai}/${MAX_FIX} : ${fix ? (fix.pushed ? 'poussée' : 'rien poussé') + ' — ' + String(fix.cause).slice(0, 160) : 'aucun rendu'}`)
 }
 
@@ -757,7 +831,7 @@ const ciLane = async () => {
     }
     ciActif = true
     const lot = queueCI.slice(0, GUICHET_MAX)
-    const g = await agent(guichetPrompt(lot), { label: `guichet#${tour}`, phase: 'Prouver', schema: GUICHET, model: MODELE.prouver, effort: 'medium' })
+    const g = await appel(guichetPrompt(lot), { label: `guichet#${tour}`, phase: 'Prouver', schema: GUICHET, model: MODELE.prouver, effort: 'medium' })
     for (const item of lot) {
       const v = g && g.verdicts.find((x) => x.key === item.key)
       if (!v) { item.attentes++; if (item.attentes > MAX_ATTENTES) finirCI(item, 'bloque', 'guichet sans verdict'); continue }
@@ -772,8 +846,14 @@ const ciLane = async () => {
 // ---------------------------------------------------------------------------
 // DÉROULÉ
 // ---------------------------------------------------------------------------
+if (!ATTR) {
+  log("args.attribution manque : passe les lignes « Co-Authored-By: … » et « Claude-Session: https://claude.ai/code/session_… » de la session qui lance le workflow.")
+  return { etat: 'arguments', message: 'attribution obligatoire (lignes Co-Authored-By et Claude-Session de la session qui lance)' }
+}
+log(`signatures du chantier reconnues comme « nous » : ${SIGNATURES.join(' ; ')}`)
+
 phase('Préparer')
-const prep = await agent(prepPrompt(), { label: 'preparer', phase: 'Préparer', schema: PREP, model: 'sonnet', effort: 'medium' })
+const prep = await appel(prepPrompt(), { label: 'preparer', phase: 'Préparer', schema: PREP, model: 'sonnet', effort: 'medium' })
 if (!prep || !prep.pret) {
   log(`préparation impossible : ${prep ? prep.rapport : 'aucun rendu'}`)
   return { etat: 'non-prepare', prep }
@@ -784,18 +864,26 @@ let conso = null
 if (!prep.registre_restaure || A.recartographier) {
   phase('Cartographier')
   const rendus = await parallel(['F1', 'F2', 'F3', 'F4'].map((fid) => () =>
-    agent(cartoPrompt(fid), { label: `carto:${fid}`, phase: 'Cartographier', schema: CARTO, model: MODELE.carto, effort: 'high' }).then((c) => {
+    appel(cartoPrompt(fid), { label: `carto:${fid}`, phase: 'Cartographier', schema: CARTO, model: MODELE.carto, effort: 'high' }).then((c) => {
       if (c) log(`${fid} : iOS ${c.ios.filter((x) => x.verdict === 'tenu').length}/${c.ios.length} clauses tenues, Android ${c.android.filter((x) => x.verdict === 'tenu').length}/${c.android.length} ; ${c.lots.length} lots proposés ; ${c.criteres_ajoutes.length} critères ajoutés`)
       else log(`${fid} : cartographie sans rendu`)
       return c
     })))
   const cartos = rendus.filter(Boolean)
   phase('Consolider')
-  conso = await agent(consoPrompt(cartos), { label: 'consolider', phase: 'Consolider', schema: CONSO, model: MODELE.carto, effort: 'high' })
+  conso = await appel(consoPrompt(cartos), { label: 'consolider', phase: 'Consolider', schema: CONSO, model: MODELE.carto, effort: 'high' })
   if (!conso) return { etat: 'cartographie-non-consolidee', cartos: cartos.map((c) => c.feature) }
   log(`registre : +${conso.lots_ajoutes.length} lots (${conso.lots_ajoutes.join(', ')}) ; exclus ${conso.exclus.join(', ') || '—'} ; manques ${conso.manques.length}`)
   conso.manques.forEach((m) => log(`MANQUE : ${m}`))
 }
+
+const A_VERIFIER = Array.isArray(A.aVerifier) ? A.aVerifier.filter((x) => x && x.key && x.pr) : []
+A_VERIFIER.forEach((x) => {
+  const plateforme = x.platform || 'android'
+  enVol.add(x.key)
+  queueCI.push({ key: x.key, platform: plateforme, branch: branche(plateforme, x.key), pr: x.pr, issue: x.issue || 0, essai: 0, attentes: 0, resync: 0, preuveEnCours: true, adopte: true })
+  log(`${x.key} : PR #${x.pr} fusionnée avant sa preuve — le guichet lit la preuve a posteriori`)
+})
 
 phase('Ordonnancer')
 const travailleurs = Array.from({ length: DEV_PAR }, (_, i) => devWorker(i + 1))
@@ -813,5 +901,5 @@ const etat = {
   dette_web: conso ? conso.dette_web : [],
   journal: journal.slice(-80),
 }
-const bilan = await agent(bilanPrompt(etat), { label: 'bilan', phase: 'Bilan', schema: BILAN, model: MODELE.bilan, effort: 'medium' })
+const bilan = await appel(bilanPrompt(etat), { label: 'bilan', phase: 'Bilan', schema: BILAN, model: MODELE.bilan, effort: 'medium' })
 return { etat, bilan }

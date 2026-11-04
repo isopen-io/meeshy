@@ -80,6 +80,21 @@ data class SharePendingShare(
     fun markFailed(conversationId: String): SharePendingShare =
         updateTarget(conversationId) { if (it.state == TargetState.SENT) it else it.copy(state = TargetState.FAILED) }
 
+    /** Une cible refusée pour de bon quitte la fiche ; si c'était l'origine, la première cible gardée porte désormais les octets. */
+    fun withoutTarget(conversationId: String): SharePendingShare {
+        val removed = targets.indexOfFirst { it.conversationId == conversationId }
+        if (removed < 0) return this
+        val kept = targets.filterIndexed { index, _ -> index != removed }
+        val origin = originTargetIndex
+        val nextOrigin = when {
+            origin == null || kept.isEmpty() -> null
+            origin == removed -> 0
+            origin > removed -> origin - 1
+            else -> origin
+        }
+        return copy(targets = kept, originTargetIndex = nextOrigin)
+    }
+
     fun isServedTo(accountId: String?): Boolean = ownerUserId == null || ownerUserId == accountId
 
     fun isExpired(nowEpochMillis: Long): Boolean = nowEpochMillis - createdAt >= EXPIRY_MILLIS

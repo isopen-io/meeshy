@@ -61,7 +61,8 @@ object CollapsibleHeaderDefaults {
 
 /**
  * Entree historique des hotes a progression deja calculee (Feed, Chats) : delegue a la forme complete.
- * [scrollProgress] 0..1 equivaut a un decalage de `-progress * 60` dp.
+ * [scrollProgress] 0..1 equivaut a un decalage de `-progress * 60` dp. Un hote qui monte la bande epinglee
+ * donne le decalage reel [scrollOffsetDp] (la bascule titre -> bande court de 78 a 148 dp) et son [titleAccessory].
  */
 @Composable
 fun CollapsibleHeader(
@@ -70,14 +71,17 @@ fun CollapsibleHeader(
     modifier: Modifier = Modifier,
     windowInsets: WindowInsets = WindowInsets.statusBars,
     actionsVisible: Boolean = true,
+    scrollOffsetDp: Float? = null,
+    titleAccessory: (@Composable (reveal: Float) -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     CollapsibleHeader(
         title = title,
-        scrollOffsetDp = -scrollProgress.coerceIn(0f, 1f) * CollapsibleHeaderMetrics.COLLAPSE_THRESHOLD,
+        scrollOffsetDp = scrollOffsetDp ?: (-scrollProgress.coerceIn(0f, 1f) * CollapsibleHeaderMetrics.COLLAPSE_THRESHOLD),
         modifier = modifier,
         windowInsets = windowInsets,
         actionsVisible = actionsVisible,
+        titleAccessory = titleAccessory,
         actions = actions,
     )
 }

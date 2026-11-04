@@ -126,7 +126,7 @@ class ChatViewModel @Inject constructor(
     private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
     private val openConversations: OpenConversationRegistry,
     reactionRows: me.meeshy.sdk.reaction.ReactionRowStore? = null,
-    pendingPreviews: me.meeshy.sdk.media.PendingMediaPreviewing = me.meeshy.sdk.media.PendingMediaPreviewing.None,
+    private val pendingPreviews: me.meeshy.sdk.media.PendingMediaPreviewing = me.meeshy.sdk.media.PendingMediaPreviewing.None,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -199,12 +199,11 @@ class ChatViewModel @Inject constructor(
     private val windowAnswered = MutableStateFlow(false)
     private var avatarByUserId: Map<String, String?> = emptyMap()
 
-    /**
-     * The conversation's unread count captured from the cache **before** the open
-     * marks it read — the input to the [UnreadMarker] boundary. Null until the
-     * first conversation emission has been read.
-     */
+    /** The unread count captured from the cache **before** the open marks it read — the [UnreadMarker] input. */
     private val initialUnreadCount = MutableStateFlow<Int?>(null)
+
+    /** The SERVER count the unread separator announces (#7525), apart from [state]; `null` until the first emission. */
+    val unreadAtOpening: StateFlow<Int?> = initialUnreadCount.asStateFlow()
     private var openingCursor = UnreadCursor.of(null, null)
 
     private val screenState = ChatStateAccess(_state)
@@ -303,11 +302,11 @@ class ChatViewModel @Inject constructor(
         // count and a non-empty message window are known. A later message arrival
         // never re-derives it (the boundary is stable for the session).
         viewModelScope.launch {
-            val count = initialUnreadCount.filterNotNull().first()
+            initialUnreadCount.filterNotNull().first()
             val bubbles = _state.map { it.messages }.first { it.isNotEmpty() }
             val firstUnread = UnreadMarker.firstUnreadId(bubbles, openingCursor, sessionRepository.currentUser.value?.id)
             _state.update {
-                it.copy(firstUnreadMessageId = firstUnread, unreadAtOpening = count, unreadBoundaryResolved = true)
+                it.copy(firstUnreadMessageId = firstUnread, unreadBoundaryResolved = true)
             }
         }
 
@@ -814,7 +813,7 @@ class ChatViewModel @Inject constructor(
     // --- Media, files ---------------------------------------------------------------------
 
     fun openImageViewer(messageId: String, imageIndex: Int) {
-        val gallery = ConversationMediaGallery.of(_state.value.messages, messageId, imageIndex)
+        val gallery = ConversationMediaGallery.of(_state.value.messages, messageId, imageIndex, pendingPreviews::sharpUrlFor)
         _state.update { it.copy(imageViewer = gallery.takeUnless(ConversationGallery::isEmpty)) }
     }
 

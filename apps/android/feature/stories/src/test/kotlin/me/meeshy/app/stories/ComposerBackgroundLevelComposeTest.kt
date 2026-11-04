@@ -153,7 +153,10 @@ class ComposerBackgroundLevelComposeTest {
 
     private fun holdScene() = compose.onNodeWithContentDescription(canvas).performTouchInput { longClick(Offset(width * 0.5f, height * 0.5f)) }
 
-    private fun tapScene() = compose.onNodeWithContentDescription(canvas).performTouchInput { click(Offset(width * 0.5f, height * 0.5f)) }
+    private fun tapScene() {
+        compose.onNodeWithContentDescription(canvas).performTouchInput { click(Offset(width * 0.5f, height * 0.5f)) }
+        compose.passSceneDoubleTapWindow()
+    }
 
     private fun assertLevelShown() {
         val shown = compose.onNodeWithTag(EDITING_RAIL_TAG).onChildren().fetchSemanticsNodes()
@@ -161,7 +164,7 @@ class ComposerBackgroundLevelComposeTest {
         assertThat(shown.first()).isEqualTo("Framing")
         assertThat(shown.takeLast(actions.size)).containsExactlyElementsIn(actions).inOrder()
         listOf("Edit", "Duplicate", "Timing").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
-        listOf("Audience", "Publish story", "Close", "Text").forEach { compose.onNodeWithContentDescription(it).assertDoesNotExist() }
+        listOf("Audience", "Publish story", "Close", "Add text").forEach { compose.onNodeWithContentDescription(it).assertDoesNotExist() }
     }
 
     /** Une entrée du rail, défilé jusqu'à elle : le rail à plat dépasse la hauteur et défile (#14047). */
@@ -193,7 +196,7 @@ class ComposerBackgroundLevelComposeTest {
         tapScene()
         assertThat(vm.state.value.selectedSceneObject).isNull()
         compose.onNodeWithContentDescription("Publish story").assertExists()
-        compose.onNodeWithContentDescription("Text").assertExists()
+        compose.onNodeWithContentDescription("Add text").assertExists()
     }
 
     @Test
@@ -244,10 +247,10 @@ class ComposerBackgroundLevelComposeTest {
         tapRail("Replace")
 
         compose.onNodeWithTag(BACKGROUND_SOURCES_TAG).assertExists()
-        compose.onNodeWithText("Photo library").assertExists()
-        compose.onNodeWithText("From files").assertExists()
+        compose.onNodeWithText("Photo Library").assertExists()
+        compose.onNodeWithText("From Files").assertExists()
         compose.onNodeWithText("Take a photo").assertDoesNotExist()
-        compose.onNodeWithText("From files").performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("From Files").performSemanticsAction(SemanticsActions.OnClick)
 
         assertThat(replaced).containsExactly(ComposerBackgroundSource.FILES to "bg")
         compose.onNodeWithTag(BACKGROUND_SOURCES_TAG).assertDoesNotExist()

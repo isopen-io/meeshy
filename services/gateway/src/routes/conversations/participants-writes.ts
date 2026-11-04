@@ -31,6 +31,7 @@ import { registerParticipantPatchRoute } from './participant-patch';
 import { repondreAuRefus } from './utils/participant-geste-reponse';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
+import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantWriteRoutes' });
 
 /**
@@ -436,14 +437,19 @@ export function registerParticipantWriteRoutes(
           select: { userId: true },
         }).then(rows => rows.map(r => r.userId).filter((id): id is string => !!id));
         if (conv) {
-          io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_NEW, {
-            conversationId,
-            conversationType: conv.type,
-            title: conv.title ?? null,
-            creatorId: currentUserId ?? userId,
-            participantIds: allParticipantIds,
-            createdAt: conv.createdAt instanceof Date ? conv.createdAt.toISOString() : String(conv.createdAt),
-          });
+          announceConversationNew(prisma, {
+            io,
+            recipientIds: [userId],
+            payload: {
+              conversationId,
+              conversationType: conv.type,
+              title: conv.title ?? null,
+              creatorId: currentUserId ?? userId,
+              participantIds: allParticipantIds,
+              createdAt: conv.createdAt instanceof Date ? conv.createdAt.toISOString() : String(conv.createdAt),
+            },
+            onError: (error) => logger.warn('Failed to emit CONVERSATION_NEW to added user', { userId, conversationId, err: error }),
+          }).catch((error: unknown) => logger.warn('conversation:new emission failed', { error }));
         }
       } catch (err) {
         logger.warn('Failed to emit CONVERSATION_NEW to added user', { userId, conversationId, err });

@@ -43,7 +43,6 @@ import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
@@ -62,6 +61,7 @@ import {
   type CreationRegimeRefusal,
 } from '../../services/conversations/creationRegime';
 import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest';
+import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
 import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
 import {
   composeConversationUpdate,
@@ -266,16 +266,21 @@ export function registerCreateConversationRoute(
                 const socketIOHandler = fastify.socketIOHandler;
                 const io = socketIOHandler?.getManager()?.getIO();
                 if (io && creatorParticipant.userId) {
-                  io.to(ROOMS.user(creatorParticipant.userId)).emit(SERVER_EVENTS.CONVERSATION_NEW, {
-                    conversationId: existingDirect.id,
-                    conversationType: existingDirect.type,
-                    title: existingDirect.title,
-                    creatorId: creatorParticipant.userId,
-                    participantIds: existingDirect.participants.map((p: any) => p.userId).filter(Boolean),
-                    createdAt: existingDirect.createdAt instanceof Date
-                      ? existingDirect.createdAt.toISOString()
-                      : String(existingDirect.createdAt)
-                  });
+                  announceConversationNew(prisma, {
+                    io,
+                    recipientIds: [creatorParticipant.userId],
+                    payload: {
+                      conversationId: existingDirect.id,
+                      conversationType: existingDirect.type,
+                      title: existingDirect.title,
+                      creatorId: creatorParticipant.userId,
+                      participantIds: existingDirect.participants.map((p: any) => p.userId).filter(Boolean),
+                      createdAt: existingDirect.createdAt instanceof Date
+                        ? existingDirect.createdAt.toISOString()
+                        : String(existingDirect.createdAt)
+                    },
+                    onError: (error) => logger.warn('error broadcasting CONVERSATION_NEW on DM reinitiation', { conversationId: existingDirect.id, error })
+                  }).catch((error: unknown) => logger.warn('conversation:new emission failed', { error }));
                 }
               } catch (broadcastError) {
                 logger.error('error broadcasting CONVERSATION_NEW on DM reinitiation', { error: broadcastError });
@@ -469,12 +474,13 @@ export function registerCreateConversationRoute(
           // #14644 — un groupe neuf aussi : ses invités l'apprennent au premier
           // message (`services/conversations/announceStartedGroup.ts`).
           const emitParticipantIds = silentUntilFirstMessage ? [userId] : allParticipantIds;
-          for (const participantId of emitParticipantIds) {
-            io.to(ROOMS.user(participantId)).emit(
-              SERVER_EVENTS.CONVERSATION_NEW,
-              conversationNewPayload
-            );
-          }
+          // #14690 — chacun reçoit SES capacités, sans retarder la réponse.
+          announceConversationNew(prisma, {
+            io,
+            recipientIds: emitParticipantIds,
+            payload: conversationNewPayload,
+            onError: (error) => logger.error('error broadcasting CONVERSATION_NEW', { conversationId: conversation.id, error })
+          }).catch((error: unknown) => logger.warn('conversation:new emission failed', { error }));
         }
       } catch (broadcastError) {
         logger.error('error broadcasting CONVERSATION_NEW', { error: broadcastError });

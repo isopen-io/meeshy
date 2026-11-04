@@ -9,11 +9,11 @@
     "corner-radius-modifier": 0,
     "disable-autocorrection": 0,
     "environment-router": 12,
-    "fixed-font": 751,
-    "foreground-color": 2342,
+    "fixed-font": 740,
+    "foreground-color": 2326,
     "idiom": 0,
     "logger-subsystem": 0,
-    "narrative-comment": 2419,
+    "narrative-comment": 2412,
     "nonisolated-unsafe": 107,
     "nse-full-sdk-import": 2,
     "nslock": 34,
@@ -29,7 +29,7 @@
     "uiscreen-main": 1,
     "unchecked-sendable": 120,
     "unchecked-sendable-total": 207,
-    "viewmodel-shared": 566
+    "viewmodel-shared": 563
   },
   "version": 1
 }

@@ -13,11 +13,10 @@ extension MeeshyComposerHost {
     /// L'étape du viseur, lue par la surface et le meuble.
     var sceneCameraStage: ComposerSceneCameraStage { sceneCapture.stage }
 
-    /// **L'appui long sur une scène VIDE ouvre la caméra ET filme** (#4036, #4851, #8653) : si le
-    /// geste est offert (`ComposerSceneCaptureGesture`), quel viseur (le FORMAT prime la porte), et
-    /// comment il s'ouvre (`armSceneCamera`) vivent ailleurs ; la tenue part dès que la session écrit.
+    /// **L'appui long sur une scène VIDE ouvre la caméra ET filme** (#4036, #4851, #8653), jamais
+    /// pendant qu'on écrit (#15674) ; la tenue part dès que la session écrit.
     func handleSceneCaptureLongPress() {
-        guard ComposerSceneCaptureGesture.offersCapture(
+        guard !writesText, sceneServesCapture, ComposerSceneCaptureGesture.offersCapture(
             backgroundIsEmpty: !viewModel.currentSlide.effects.hasVisualBackgroundMedia,
             format: selectedFormat
         ) else { return }
@@ -26,33 +25,35 @@ extension MeeshyComposerHost {
         sceneCapture.beginHold()
     }
 
-    /// **Un toucher sur une scène VIDE ARME le viseur — il ne prend rien**
-    /// (#8711, qui supplante le « ouvre et prend » de #8653). Le viseur paraît
-    /// avec ses contrôleurs habituels ; c'est le SECOND toucher qui prend la
-    /// photo (la table des gestes du viseur). Rend `true` quand il a pris le
-    /// geste — le tap de sélection du fond n'a alors rien à faire.
+    /// **Un toucher sur une scène VIDE ARME le viseur — il ne prend rien** (#8711) : le SECOND
+    /// toucher prend la photo. Rend `true` quand il a pris le geste.
     func handleSceneQuickTap() -> Bool {
-        guard ComposerSceneQuickCapture.offers(
+        guard sceneServesCapture, ComposerSceneQuickCapture.offers(
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
             format: selectedFormat,
             stage: sceneCameraStage,
             toolIsOpen: sceneToolOwnsScreen,
-            mediaIsEntering: sceneIntake?.isPreparing == true),
+            mediaIsEntering: sceneIntake?.isPreparing == true, writesText: writesText),
               ComposerSceneQuickCapture.tap(format: selectedFormat) != nil else { return false }
         HapticFeedback.light()
         armSceneCamera()
         return true
     }
 
-    /// Le toucher d'une scène vide armerait-il le viseur ? La même question
-    /// que ci-dessus, sans l'armer (#13839, L5).
+    /// **Toucher la scène pendant qu'on écrit termine l'écriture** (#15674), comme la coche.
+    func endSceneWriting() {
+        editsPostContent = false
+        editsSceneDescription = false
+    }
+
+    /// Le toucher d'une scène vide armerait-il le viseur ? Sans l'armer (#13839, L5).
     var sceneQuickCaptureIsOffered: Bool {
-        ComposerSceneQuickCapture.offers(
+        sceneServesCapture && ComposerSceneQuickCapture.offers(
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
             format: selectedFormat,
             stage: sceneCameraStage,
             toolIsOpen: sceneToolOwnsScreen,
-            mediaIsEntering: sceneIntake?.isPreparing == true)
+            mediaIsEntering: sceneIntake?.isPreparing == true, writesText: writesText)
             && ComposerSceneQuickCapture.tap(format: selectedFormat) != nil
     }
 

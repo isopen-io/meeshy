@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        {
+          "androidName": "stories_tray_load_failed",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

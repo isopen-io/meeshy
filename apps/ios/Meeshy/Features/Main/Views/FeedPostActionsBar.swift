@@ -142,51 +142,12 @@ struct FeedPostActionsBar: View, Equatable {
 
             Spacer()
 
-            // Repost
-            Button {
-                showRepostOptions = true
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    // Les flèches nues dans les deux états, comme le réel : la famille `.circle` du repost n'existe pas
-                    // au catalogue SF Symbols et l'état reposté se peignait vide (#8939). Le reposté se lit à sa teinte
-                    // et au contour d'accent qu'EngagementGlyph superpose.
-                    EngagementGlyph(
-                        outline: "arrow.2.squarepath",
-                        filled: "arrow.2.squarepath",
-                        participated: isReposted,
-                        accentHex: accentColor,
-                        activeTint: MeeshyColors.success,
-                        inactiveTint: theme.textSecondary
-                    )
-                    .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
-                    let count = repostCount
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.footnote.weight(.medium))
-                            .contentTransition(.numericText())
-                    }
-                }
-                .foregroundColor(isReposted ? MeeshyColors.success : theme.textSecondary)
-                .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
+            // Repost — absent quand la carte n'a ni écrivain ni porte de
+            // citation : un bouton qui ouvre un choix vide ment (#15934).
+            if !RepostChoice.offered(canRepost: onRepost != nil, canQuote: onQuote != nil).isEmpty {
+                repostButton
+                Spacer()
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .disabled(isRepostInFlight)
-            .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
-            .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), repostCount))
-            .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
-            .accessibilityAddTraits(isReposted ? .isSelected : [])
-            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
-                Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(postId) }
-                Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(postId) }
-                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
-            }
-
-            Spacer()
 
             // Bookmark
             Button {
@@ -274,6 +235,51 @@ struct FeedPostActionsBar: View, Equatable {
         }
         .padding(.top, MeeshySpacing.xs)
         .modifier(MeeshySendSheet(sent: $sent))
+    }
+
+    private var repostButton: some View {
+        Button {
+            showRepostOptions = true
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: MeeshySpacing.xsPlus) {
+                // Les flèches nues dans les deux états, comme le réel : la famille `.circle` du repost n'existe pas
+                // au catalogue SF Symbols et l'état reposté se peignait vide (#8939). Le reposté se lit à sa teinte
+                // et au contour d'accent qu'EngagementGlyph superpose.
+                EngagementGlyph(
+                    outline: "arrow.2.squarepath",
+                    filled: "arrow.2.squarepath",
+                    participated: isReposted,
+                    accentHex: accentColor,
+                    activeTint: MeeshyColors.success,
+                    inactiveTint: theme.textSecondary
+                )
+                .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
+                let count = repostCount
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.footnote.weight(.medium))
+                        .contentTransition(.numericText())
+                }
+            }
+            .foregroundColor(isReposted ? MeeshyColors.success : theme.textSecondary)
+            .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
+        }
+        // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
+        // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .disabled(isRepostInFlight)
+        .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
+        .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), repostCount))
+        .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
+        .accessibilityAddTraits(isReposted ? .isSelected : [])
+        .modifier(RepostChoiceDialog(
+            isPresented: $showRepostOptions,
+            onRepost: onRepost.map { repost in { repost(postId) } },
+            onQuote: onQuote.map { quote in { quote(postId) } }
+        ))
     }
 }
 

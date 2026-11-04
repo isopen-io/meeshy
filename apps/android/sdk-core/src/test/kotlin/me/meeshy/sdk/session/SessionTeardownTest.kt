@@ -547,4 +547,16 @@ class SessionTeardownTest {
         assertThat(fence.isCurrent(before)).isTrue()
         assertThat(outboxRepository.observeAll().first()).isNotEmpty()
     }
+
+    @Test
+    fun `la deconnexion vide la copie en memoire des traductions retenues`() = runTest {
+        val layer = me.meeshy.sdk.conversation.TranslationLayer.of(db)
+        layer.saveText("m1", me.meeshy.sdk.model.StoredTextTranslation("m1", "fr", "Bonjour de A"), 1L)
+        check(layer.heldMessageCount() > 0)
+
+        teardown().wipe()
+
+        assertThat(layer.heldMessageCount()).isEqualTo(0)
+        assertThat(db.messageTranslationDao().textsFor(listOf("m1"))).isEmpty()
+    }
 }

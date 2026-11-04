@@ -137,7 +137,7 @@ final class SyncPillTimerStateTests: XCTestCase {
             .appendingPathComponent(relativePath)
         let text = try String(contentsOf: url, encoding: .utf8)
         guard let start = text.range(of: "func handleSyncPillTap(_ source: OutboxUIItem.Source)"),
-              let end = text.range(of: "case .post(", range: start.upperBound..<text.endIndex) else {
+              let end = text.range(of: "case .openConversationById(", range: start.upperBound..<text.endIndex) else {
             XCTFail("\(relativePath) : la branche conversation de handleSyncPillTap est introuvable — le témoin ne mesure plus rien")
             return ""
         }
@@ -159,7 +159,7 @@ final class SyncPillTimerStateTests: XCTestCase {
                      "Meeshy/Features/Main/Views/iPadRootView+Navigation.swift"] {
             let branche = try syncPillConversationBranch(ofHost: hôte)
             XCTAssertTrue(
-                branche.contains("case .conversation(let id, let messageId)"),
+                branche.contains("case .openConversation(let id, let messageId)"),
                 "\(hôte) : la branche ignore l'ancre servie par OutboxUIItem.Source"
             )
             XCTAssertTrue(

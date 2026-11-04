@@ -64,6 +64,7 @@ fun FeedScreen(
     onOpenComposer: (ComposerOrigin) -> Unit,
     onRefreshRail: () -> Unit = {},
     storyRail: @Composable () -> Unit = {},
+    pinnedBand: (@Composable (reveal: Float) -> Unit)? = null,
     viewModel: FeedViewModel = hiltViewModel(),
     autoplayHost: FeedAutoplayViewModel = hiltViewModel(),
     unsent: UnsentPublicationsViewModel = hiltViewModel(),
@@ -95,6 +96,7 @@ fun FeedScreen(
         }
     }
     val context = LocalContext.current
+    val haptics = me.meeshy.ui.haptics.rememberMeeshyHaptics()
     // Each notice shows once, in the reader's language. Collected (not keyed) so consuming
     // it never cancels the toast that is on screen.
     LaunchedEffect(viewModel) {
@@ -102,22 +104,20 @@ fun FeedScreen(
             viewModel.consumeNotice()
             // The author's own post lands at the head: bring it into view (iOS scrolls to it).
             if (notice == FeedNotice.PUBLISHED) launch { listState.animateScrollToItem(0) }
-            snackbar.showSnackbar(message = context.getString(notice.messageRes()))
+            haptics.forNotice(notice)
+            snackbar.showSnackbar(message = context.getString(notice.messageRes(unsent.offline.value)))
         }
     }
 
     LaunchedEffect(unsent) { unsent.reopened.collect { onOpenComposer(ComposerOrigin.FeedComposer) } }
-    val withdrawn = stringResource(R.string.feed_pending_withdrawn)
+    PendingFeedbackEffect(unsent, snackbar)
     val pendingActions: (PendingFeedCard) -> PendingSendActions = { card ->
         PendingSendActions(
             canRetry = card.canRetry,
             canReopen = card.canReopen,
             onRetry = { unsent.retry(card.post.id) },
             onReopen = { unsent.reopen(card.post.id) },
-            onCancel = {
-                unsent.discard(card.post.id)
-                scope.launch { snackbar.showSnackbar(withdrawn) }
-            },
+            onCancel = { unsent.cancelSend(card.post.id) },
         )
     }
 
@@ -129,6 +129,7 @@ fun FeedScreen(
                 listState = listState,
                 onOpenReels = onOpenReels,
                 onOpenNearby = onOpenNearby,
+                pinnedBand = pinnedBand,
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -146,7 +147,7 @@ fun FeedScreen(
                 FeedComposerHead(
                     userName = state.currentUserName,
                     avatarUrl = state.currentUserAvatarUrl,
-                    onCompose = { onOpenComposer(ComposerOrigin.FeedComposer) },
+                    onCompose = { unsent.openComposerRecovering { onOpenComposer(ComposerOrigin.FeedComposer) } },
                     onResumeStory = onResumeStoryDraft,
                 )
             }

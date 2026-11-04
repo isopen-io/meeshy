@@ -130,7 +130,7 @@ class StorySceneFirstLayoutTest {
         show()
 
         val scene = bounds(SCENE)
-        listOf(CLOSE, "Text", "Media", "Sticker", "Sound", "Drawing", "Background", "Mention", "Place", MORE).forEach { name ->
+        listOf(CLOSE, "Add text", "Add media", "Add a sticker", "Add sound", "Draw", "Choose a background", "Mention someone", "Add a place", MORE).forEach { name ->
             assertThat(boundsOf(name).isInside(scene)).isTrue()
         }
         assertThat(compose.onNodeWithText(PUBLISH).getUnclippedBoundsInRoot().isInside(scene)).isTrue()
@@ -141,7 +141,7 @@ class StorySceneFirstLayoutTest {
     fun `each round tool is a 48 dp target`() {
         show()
 
-        listOf(CLOSE, "Text", "Media", "Sticker", "Sound", "Drawing", "Background", "Mention", "Place", MORE).forEach { name ->
+        listOf(CLOSE, "Add text", "Add media", "Add a sticker", "Add sound", "Draw", "Choose a background", "Mention someone", "Add a place", MORE).forEach { name ->
             compose.onNodeWithContentDescription(name).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         }
     }
@@ -241,7 +241,7 @@ class StorySceneFirstLayoutTest {
     fun `with a panel up the round tools stay whole 48 dp targets instead of being squashed`() {
         show { true }
 
-        listOf("Text", "Media", "Sticker", "Sound", "Drawing", "Background", "Mention", "Place", MORE).forEach { name ->
+        listOf("Add text", "Add media", "Add a sticker", "Add sound", "Draw", "Choose a background", "Mention someone", "Add a place", MORE).forEach { name ->
             compose.onNodeWithContentDescription(name).assertExists().assertHeightIsAtLeast(48.dp)
         }
     }

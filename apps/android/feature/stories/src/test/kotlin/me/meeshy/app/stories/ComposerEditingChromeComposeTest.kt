@@ -94,7 +94,7 @@ class ComposerEditingChromeComposeTest {
     }
 
     private val canvas = "Story canvas — pinch to zoom, drag to pan"
-    private val tools = listOf("Text", "Media", "Sticker", "More options")
+    private val tools = listOf("Add text", "Add media", "Add a sticker", "More options")
 
     private fun viewModel(): StoryComposerViewModel {
         val session: SessionRepository = mockk(relaxed = true)
@@ -144,6 +144,7 @@ class ComposerEditingChromeComposeTest {
 
     private fun tapEmptyScene() {
         compose.onNodeWithContentDescription(canvas).performTouchInput { click(Offset(width * 0.15f, height * 0.35f)) }
+        compose.passSceneDoubleTapWindow()
     }
 
     private fun assertRestingChrome() {
@@ -159,7 +160,7 @@ class ComposerEditingChromeComposeTest {
         val vm = viewModel()
         withPlacedPhoto(vm)
         show(vm)
-        val textTool = compose.onNodeWithContentDescription("Text").getUnclippedBoundsInRoot()
+        val textTool = compose.onNodeWithContentDescription("Add text").getUnclippedBoundsInRoot()
 
         compose.onNodeWithContentDescription("Media on the scene").performClick()
 

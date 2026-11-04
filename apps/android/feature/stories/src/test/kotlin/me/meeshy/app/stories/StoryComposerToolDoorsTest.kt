@@ -155,14 +155,14 @@ class StoryComposerToolDoorsTest {
 
     @Test
     fun `Sticker opens the stickers sheet on a fresh scene`() =
-        assertToolOpens(viewModel().also { it.onEnterComposer() }, "Sticker", StoryComposerSheet.STICKERS)
+        assertToolOpens(viewModel().also { it.onEnterComposer() }, "Add a sticker", StoryComposerSheet.STICKERS)
 
     @Test
     fun `Sticker opens the stickers sheet on a post draft resumed after process death`() {
         val vm = resumedPostDraft()
         assertThat(vm.state.value.deck.selectedSlide.placedMedia.map { it.mediaId }).containsExactly("m1", "m2")
         assertThat(vm.state.value.postText).isEqualTo("le texte du post")
-        assertToolOpens(vm, "Sticker", StoryComposerSheet.STICKERS)
+        assertToolOpens(vm, "Add a sticker", StoryComposerSheet.STICKERS)
     }
 
     @Test
@@ -171,14 +171,15 @@ class StoryComposerToolDoorsTest {
         vm.onAddSticker("😀")
         show(vm)
         compose.onNodeWithContentDescription(canvas).performTouchInput { click(Offset(width * 0.15f, height * 0.35f)) }
-        compose.onNodeWithContentDescription("Sticker").performClick()
+        compose.passSceneDoubleTapWindow()
+        compose.onNodeWithContentDescription("Add a sticker").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("sheet:${StoryComposerSheet.STICKERS}").assertExists()
     }
 
     @Test
     fun `Sound opens the sound shelf on a fresh scene`() =
-        assertToolOpens(viewModel().also { it.onEnterComposer() }, "Sound", StoryComposerSheet.SOUND)
+        assertToolOpens(viewModel().also { it.onEnterComposer() }, "Add sound", StoryComposerSheet.SOUND)
 
     @Test
     fun `the sheets that serve no selection are served with nothing selected`() {

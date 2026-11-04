@@ -1,15 +1,14 @@
 import XCTest
 @testable import Meeshy
 
-/// **T3.2 — la CITATION reste sur la feuille, et c'est GARDÉ.**
+/// **La CITATION ne passe jamais par la file du DOCUMENT, et c'est GARDÉ.**
 ///
-/// Sans cette garde, la session suivante « finirait le travail » en recâblant
-/// les deux sites de citation sur `DocumentComposerDoor` — une porte qui les
-/// REFUSE (`ComposerDocumentSendPlan` rend `.refuse(.nonDurablePath(.quotedRepost))`)
-/// — et le refus serait SILENCIEUX : le composer se refermerait exactement comme
-/// quand tout va bien. La condition de levée est NOMMÉE : **7.5**, un écrivain
-/// durable du repost (fondation livrée, ZÉRO appelant). Tant qu'elle n'a pas
-/// d'appelant, la citation part par `POST /posts/:id/repost`, sans file durable.
+/// La file du document REFUSE une citation (`ComposerDocumentSendPlan` rend
+/// `.refuse(.nonDurablePath(.quotedRepost))`) : elle publierait un post sans
+/// sa source. La citation s'ouvre donc dans le compositeur par sa propre porte,
+/// `QuoteComposerDoor`, qui publie par l'écrivain durable du repost
+/// (`ComposerQuotePublisher` → `RepostPublisher`) — jamais par
+/// `DocumentComposerDoor`, où l'envoi échouerait à chaque fois (#15628).
 final class ComposerDocumentQuoteRefusalTests: XCTestCase {
 
     private func source(_ relativePath: String) throws -> String {
@@ -47,31 +46,28 @@ final class ComposerDocumentQuoteRefusalTests: XCTestCase {
         )
     }
 
-    // 2 — la table route une citation de POST vers un composer HISTORIQUE.
-    func test_laCitationDunPost_routeVersLeComposerHistorique() {
-        XCTAssertNotNil(
+    // 2 — la table sert la citation d'un post par le meuble.
+    func test_laCitationDunPost_estServieParLeMeuble() {
+        XCTAssertNil(
             ComposerProfile.profile(for: .repost(ofPostId: "p", sourceFormat: .post)).routesToLegacy,
-            "La table doit router une citation de POST vers un composer HISTORIQUE (`.repostComposer`) — la "
-                + "passer à `nil` ferait servir par le meuble une citation qu'il refuse ensuite (condition 7.5)."
+            "La citation d'un POST s'ouvre dans le compositeur unifié : la feuille historique a quitté le dépôt."
         )
     }
 
-    // 3 — les DEUX sites de citation montent encore la feuille ; 7.5 les libère.
-    func test_lesDeuxSitesDeCitation_montentEncoreLaFeuille_conditionDeLevee_7_5() throws {
-        let rootView = compact(try source("Meeshy/Features/Main/Views/RootViewComponents.swift"))
-        let feedView = compact(try source("Meeshy/Features/Main/Views/FeedView.swift"))
-
-        XCTAssertEqual(
-            rootView.components(separatedBy: "FeedComposerSheet(").count - 1, 1,
-            "RootViewComponents doit garder EXACTEMENT un `FeedComposerSheet(` — la citation "
-                + "(`.fullScreenCover(item: $quoteOriginalPost)`). Le plein composer du fil est passé au "
-                + "meuble à T3.1 ; la recâbler sur le meuble la ferait refuser en silence. Levée : 7.5."
-        )
-        XCTAssertEqual(
-            feedView.components(separatedBy: "FeedComposerSheet(").count - 1, 1,
-            "FeedView doit garder EXACTEMENT un `FeedComposerSheet(` — la citation iPad. Même refus "
-                + "silencieux si on la recâble sur le meuble. Levée : 7.5."
-        )
+    // 3 — les DEUX sites de citation montent la porte de la citation, jamais celle du document.
+    func test_lesDeuxSitesDeCitation_montentLaPorteDeLaCitation() throws {
+        for chemin in ["Meeshy/Features/Main/Views/RootViewComponents.swift",
+                       "Meeshy/Features/Main/Views/FeedView.swift"] {
+            let code = compact(try source(chemin))
+            XCTAssertEqual(code.components(separatedBy: "QuoteComposerDoor(").count - 1, 1,
+                           "\(chemin) doit monter `QuoteComposerDoor(` pour sa citation.")
+            XCTAssertFalse(code.contains("DocumentComposerDoor(intent:ComposerIntent(origin:.repost"),
+                           "\(chemin) : une citation sur la porte du document serait refusée à chaque envoi.")
+        }
+        let porte = compact(try source("Meeshy/Features/Composer/QuoteComposerDoor.swift"))
+        XCTAssertTrue(porte.contains("ComposerQuotePublisher()"), "La citation publie par l'écrivain du repost.")
+        XCTAssertFalse(porte.contains("ComposerDocumentDurablePublisher"),
+                       "La file du document refuse une citation : la porte ne doit pas y publier.")
     }
 
     // 4 — garde-fou : les sources lues sont les bonnes et non vides (mode

@@ -91,6 +91,7 @@
     <string name="conversations_lock_title_verify_master">التحقق من رمز PIN الرئيسي</string>
     <string name="conversations_logout">تسجيل الخروج</string>
     <string name="conversations_new">محادثة جديدة</string>
+    <string name="conversations_obsolete_error">تعذّر جعل المحادثة متقادمة.</string>
     <string name="conversations_open_dashboard">لوحة التحكم</string>
     <string name="conversations_preview_draft_label">مسودة</string>
     <string name="conversations_preview_draft_prefix">مسودة:</string>

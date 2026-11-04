@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ServedProfileDecorItem
 import me.meeshy.sdk.model.chrome.unreadBadgeLabel
 import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.ui.component.MeeshyAvatar
@@ -47,6 +48,12 @@ internal fun chromeAvatarRingColors(menuExpanded: Boolean): List<Color> = if (me
 /** L'avatar dans le disque : 38 dp comme le `context: .custom(38)` iOS — l'anneau degrade fait 7 dp. */
 internal const val CHROME_AVATAR_SIZE_DP: Float = 38f
 
+/**
+ * Le contour équipé par l'utilisateur, posé DANS l'avatar de 38 dp : le disque dégradé reste, comme iOS
+ * (iOS `RootFloatingChrome` : l'avatar `.custom(38)` reçoit `ring: currentUser.profileDecor.avatarRing` dans l'anneau).
+ */
+internal fun chromeAvatarDecorRing(user: MeeshyUser?): ServedProfileDecorItem? = user?.profileDecor?.avatarRing
+
 /** La pastille de non-lus : seulement echelle FERMEE et compteur positif (iOS `!showMenu && unreadCount > 0`). */
 internal fun chromeBadgeVisible(menuExpanded: Boolean, unreadCount: Int): Boolean = !menuExpanded && unreadCount > 0
 
@@ -69,7 +76,7 @@ internal fun ChromeAvatarButton(user: MeeshyUser?, avatarUrl: String?, unreadCou
                 .background(Brush.linearGradient(chromeAvatarRingColors(menuExpanded)), CircleShape),
         )
         // One face: the photo once loaded, its initials standing in until then — never an empty ring.
-        MeeshyAvatar(name = displayName, size = CHROME_AVATAR_SIZE_DP.dp, imageUrl = avatarUrl)
+        MeeshyAvatar(name = displayName, size = CHROME_AVATAR_SIZE_DP.dp, imageUrl = avatarUrl, decorRing = chromeAvatarDecorRing(user))
         if (chromeBadgeVisible(menuExpanded, unreadCount)) {
             ChromeNotificationBadge(
                 count = unreadCount,

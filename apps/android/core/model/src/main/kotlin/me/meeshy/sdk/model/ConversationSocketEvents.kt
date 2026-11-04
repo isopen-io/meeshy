@@ -141,11 +141,16 @@ data class AttachmentReactionUpdateEvent(
     val messageId: String,
     override val conversationId: String,
     val participantId: String? = null,
+    /** `User.id` de l'auteur quand la passerelle le sert : la clé stable pour reconnaître MA réaction. */
+    val userId: String? = null,
     val emoji: String = "",
     val action: String? = null,
     val reactionSummary: Map<String, Int>? = null,
     val timestamp: String? = null,
-) : SingleConversationSocketEvent
+) : SingleConversationSocketEvent {
+    /** `true` pour un retrait ; l'absence de `action` vaut un ajout (ancienne passerelle). */
+    val isRemoval: Boolean get() = action == "remove"
+}
 
 /** `attachment-status:updated` : une écoute, un visionnage, un téléchargement d'une pièce. */
 @Serializable
@@ -314,6 +319,11 @@ data class ParticipantRightsUpdatedEvent(
     val updatedBy: String? = null,
     val rights: ServedParticipantRights = ServedParticipantRights(),
     val historyVisibleFrom: String? = null,
+    /**
+     * La charge PORTAIT-elle la clé `historyVisibleFrom` ? Posé par [ParticipantRightsUpdatedEventSerializer] :
+     * `historyVisibleFrom` seul ne distingue pas `null` (efface) d'une clé absente (n'affirme rien).
+     */
+    val carriesHistoryGrant: Boolean = false,
 ) : SingleConversationSocketEvent
 
 /**

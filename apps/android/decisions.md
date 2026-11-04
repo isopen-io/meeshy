@@ -732,3 +732,26 @@ du pied et disparaît dès qu'un drapeau existe ; les drapeaux ne sont plus rend
 `LanguageFlagTapResolver.resolve` (fil, commentaires, stories) garde son modèle à texte unique : la divergence n'y reste
 qu'en dehors de la bulle de chat. Le Prisme (rangs 1 à 4, original si rien ne correspond) n'a pas changé : une seule
 fonction, `PrismTranslationResolver`.
+
+## ADR-032 — La fiche d'un participant se garde en mémoire, par lecteur (#15680, renverse la mention « pas de cache » de `ConversationRepository.participantProfile`)
+
+Jusqu'ici la fiche ne se cachait pas : elle porte des faits que la passerelle gate PAR LECTEUR (`email`, `entryLink`,
+`historyVisibleFrom`, `canGrantHistory`), et une copie aurait servi à un lecteur ce qui a été masqué à un autre. iOS
+peint pourtant sa fiche au geste, et un spinner à chaque ouverture viole le cache-first. Le renversement se fait avec
+quatre garde-fous, tenus par `ParticipantProfileCache` (`:sdk-core`, mémoire seule, jamais Room) : (1) la clé est
+lecteur + conversation + participant, un autre lecteur ne lit jamais la copie ; (2) la copie porte le rôle du lecteur
+et est jetée dès qu'il change ; (3) un 404 l'efface (« Cette personne a quitté la conversation ») ; (4) elle est un
+`PerAccountCache`, vidée à la déconnexion. Le chargement n'apparaît que sur cache vide, un échec de synchro ne retire
+pas la fiche. Le droit d'écrire reste le signal du serveur (la présence de `entryLink`), jamais recalculé, et chaque
+écriture ne porte qu'UN droit. `participant:rights-updated` (clé `historyVisibleFrom` présente = pose ou efface, absente
+= rien) et `user:updated` mettent la fiche ouverte et sa copie à jour sans relecture.
+
+Amendement (audit #15733) : un ViewModel PAR fiche (`hiltViewModel(key = conversation/participant)`), et chaque
+coroutine capture sa fiche — une réponse, un 404 ou une écriture qui revient pour une autre fiche que la courante n'est
+ni peint ni mis en cache (l'écriture tardive efface la copie de SA fiche). Sans rôle du lecteur, la copie n'est ni lue
+ni écrite : les deux points d'entrée (`ConversationMembersSheet`, `rememberProfileTap`) le passent. 401 et 403
+effacent la copie comme le 404 ; seul un échec de transport ou un 5xx garde la fiche peinte.
+Le rôle passé est le rôle CONNU (`ApiConversation.knownUserRole` : celui de la passerelle, sinon du roster), jamais le
+repli `MEMBER` de `currentUserRole` : un lecteur dont le rôle est inconnu n'a pas de copie. Le rôle est une clé de
+l'effet de chargement (un lecteur rétrogradé fiche ouverte relit), et la fiche fermée coupe ses écouteurs de la room
+(`ParticipantProfileViewModel.close`).

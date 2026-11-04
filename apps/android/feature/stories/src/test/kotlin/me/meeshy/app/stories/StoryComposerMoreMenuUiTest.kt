@@ -150,7 +150,7 @@ class StoryComposerMoreMenuUiTest {
         compose.waitForIdle()
         assertThat(vm.state.value.selectedSlideStickers).isEmpty()
 
-        compose.onNodeWithContentDescription(string(R.string.story_composer_undo)).performClick()
+        compose.onNodeWithContentDescription(string(R.string.composer_history_undo)).performClick()
         assertThat(vm.state.value.selectedSlideStickers).hasSize(1)
     }
 
@@ -172,7 +172,7 @@ class StoryComposerMoreMenuUiTest {
         var library = 0
         var files = 0
         show(viewModel(), doors(onPickMedia = { library++ }, onPickFiles = { files++ }))
-        val media = compose.onNodeWithContentDescription(string(R.string.story_tool_media))
+        val media = compose.onNodeWithContentDescription(string(R.string.composer_rail_media))
 
         media.performTouchInput { longClick() }
         compose.onNodeWithText(string(R.string.composer_media_from_library)).assertExists()

@@ -136,6 +136,7 @@ class ComposerSelectionActionBarTest {
 
     private fun tapEmptyScene() {
         compose.onNodeWithContentDescription(canvas).performTouchInput { click(Offset(width * 0.15f, height * 0.35f)) }
+        compose.passSceneDoubleTapWindow()
     }
 
     @Test
@@ -150,7 +151,7 @@ class ComposerSelectionActionBarTest {
         compose.onNodeWithContentDescription("😀").assertIsSelected()
         listOf("Edit", "Duplicate", "Timing", "Remove").forEach { compose.onNodeWithText(it).assertExists() }
         compose.onNodeWithText("Order").assertDoesNotExist()
-        listOf("Text", "Media", "Sticker", "More options").forEach { compose.onNodeWithContentDescription(it).assertDoesNotExist() }
+        listOf("Add text", "Add media", "Add a sticker", "More options").forEach { compose.onNodeWithContentDescription(it).assertDoesNotExist() }
         compose.onNodeWithContentDescription("Close").assertDoesNotExist()
         compose.onNodeWithContentDescription("Undo").assertExists()
         compose.onNodeWithContentDescription("Publish story").assertDoesNotExist()
@@ -167,7 +168,7 @@ class ComposerSelectionActionBarTest {
 
         compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
         compose.onNodeWithContentDescription("😀").assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Selected))
-        compose.onNodeWithContentDescription("Text").assertExists()
+        compose.onNodeWithContentDescription("Add text").assertExists()
         assertThat(vm.state.value.selectedSceneObject).isNull()
     }
 
@@ -211,7 +212,7 @@ class ComposerSelectionActionBarTest {
 
         assertThat(vm.state.value.deck.selectedSlide.stickers).isEmpty()
         compose.onNodeWithTag(EDITING_RAIL_TAG).assertDoesNotExist()
-        compose.onNodeWithContentDescription("Text").assertExists()
+        compose.onNodeWithContentDescription("Add text").assertExists()
     }
 
     @Test

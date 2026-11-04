@@ -2,6 +2,7 @@ package me.meeshy.app.chat
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.graphics.Color
@@ -59,10 +60,20 @@ class ChatSearchResultsSheetTest {
     }
 
     @Test
-    fun `a translation match is flagged`() {
+    fun `a translation match is flagged, on screen and to TalkBack`() {
         show(ChatServerSearchState(query = "bonjour", results = listOf(result("m1", "bonjour tout le monde", SearchMatchType.TRANSLATION))))
 
-        compose.onNodeWithText("Translation").assertExists()
+        compose.onNodeWithText("Translation", useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription("Translation, bonjour tout le monde", substring = true).assertExists()
+    }
+
+    @Test
+    fun `a result speaks its author and the matched text, without a translation flag when it is the original`() {
+        show(ChatServerSearchState(query = "hello", results = listOf(result("m1", "hello there"))))
+
+        compose.onNodeWithContentDescription("Go to message from Ada").assertExists()
+        compose.onNodeWithContentDescription("hello there", substring = true).assertExists()
+        compose.onNodeWithContentDescription("Translation", substring = true).assertDoesNotExist()
     }
 
     @Test

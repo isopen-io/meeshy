@@ -178,8 +178,37 @@ export type SerializableParticipantRow = {
     readonly customDestinationLanguage?: string | null;
     readonly createdAt?: Date | null;
     readonly updatedAt?: Date | null;
+    readonly isActive?: boolean | null;
   } | null;
 };
+
+/**
+ * Ce que la loi de fermeture lit d'une ligne de participant : le type, le
+ * compte rattaché et l'état `isActive` du COMPTE (jamais celui du participant,
+ * qui dit l'appartenance à la conversation).
+ */
+export type AccountClosureSource = {
+  readonly type?: string | null;
+  readonly userId?: string | null;
+  readonly user?: { readonly isActive?: boolean | null } | null;
+};
+
+/** La clé n'existe que fermée : absente, un ancien client et le fil ne bougent pas. */
+export type ServedAccountClosure = { readonly accountClosed?: true };
+
+/**
+ * LOI UNIQUE « le compte de cet interlocuteur est fermé » — supprimé ou
+ * désactivé, sans distinction ni horodatage : un booléen, présent seulement à
+ * vrai. Un anonyme (type `anonymous` ou sans `userId`) n'a pas de compte à
+ * fermer ; un `isActive` non lu (absent ou nul) n'est jamais une fermeture.
+ * Indépendante de la présence : elle ne passe par aucune porte de présence.
+ */
+export const participantAccountClosure = (
+  participant: AccountClosureSource,
+): ServedAccountClosure =>
+  participant.type !== 'anonymous' && !!participant.userId && participant.user?.isActive === false
+    ? { accountClosed: true }
+    : {};
 
 /**
  * Visibilité de présence telle que la rend `resolveForTargets(viewer, ids)` :
@@ -276,6 +305,7 @@ export const serializeConversationParticipant = (
     // donne accès à AUCUNE préférence personnelle d'un tiers, et
     // `autoTranslateEnabled` en est une, au même titre que `isOnline`.
     isActive: participant.isActive ?? false,
+    ...participantAccountClosure(participant),
     createdAt: user?.createdAt ?? joinedAt,
     updatedAt: user?.updatedAt ?? joinedAt,
     isAnonymous: participant.type === 'anonymous',

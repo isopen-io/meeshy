@@ -107,7 +107,7 @@ fun ChatScreen(
     val engagement = remember(engagementSnapshot, engagementController) {
         ChatEngagementBinding(engagementSnapshot, engagementController?.sent ?: NO_SENT)
     }
-    val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>() }
+    val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>()?.let(::ThreadReadingModeViewModel) }
     val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
     val summaryController = remember(viewModel) { viewModel.controllers.find<LivingSummaryController>() }
     val summaryBinding = remember(summaryController) {
@@ -126,6 +126,8 @@ fun ChatScreen(
     val governance = remember(viewModel) { viewModel.controllers.find<ConversationGovernanceController>() }
     val composerClosure by (governance?.composerClosure ?: NO_CLOSURE).collectAsStateWithLifecycle()
     val capabilities by (governance?.capabilities ?: NO_CAPABILITIES).collectAsStateWithLifecycle()
+    val viewerRole by (governance?.viewerRole ?: NO_VIEWER_ROLE).collectAsStateWithLifecycle()
+    val unreadAtOpening by viewModel.unreadAtOpening.collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -156,6 +158,8 @@ fun ChatScreen(
         composerClosure = composerClosure,
         capabilities = capabilities,
         listGate = viewModel.listGate,
+        viewerRole = viewerRole,
+        unreadAtOpening = unreadAtOpening,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
@@ -178,7 +182,7 @@ fun ChatScreen(
         LocalChatSignalClearance provides signalClearance,
         LocalBubbleSkin provides remember(appearance.personalAccentHex) { BubbleSkin.of(appearance.personalAccentHex) },
     ) {
-    ChatBackgroundHost(appearance) {
+    ChatBackgroundHost(appearance, state) {
         // L'en-tête est une bande FLOTTANTE posée au-dessus du fil (iOS : ZStack, zIndex 100) :
         // sa hauteur mesurée décale le haut du fil (`bandHeight`), et les bulles passent dessous.
         var headerHeightPx by remember { mutableIntStateOf(0) }
@@ -265,6 +269,7 @@ private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
 
 private val NO_CLOSURE: kotlinx.coroutines.flow.StateFlow<me.meeshy.sdk.model.ComposerClosure?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 private val NO_CAPABILITIES: kotlinx.coroutines.flow.StateFlow<me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+private val NO_VIEWER_ROLE: kotlinx.coroutines.flow.StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 private val NOT_ENDED: kotlinx.coroutines.flow.StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false)
 
 /** Une action qui ne s'exécute qu'une fois : le retour d'un fil qui se ferme (#14645). */

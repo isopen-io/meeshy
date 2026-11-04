@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -24,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -37,6 +37,7 @@ import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.CollapsibleSection
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.hexColor
 
 internal const val CONVERSATION_LIST_TAG = "conversation-list"
 
@@ -71,6 +72,8 @@ internal fun ConversationListBody(
         // pure ConversationSections SSOT, which also omits an empty section. Section bodies
         // compose eagerly (few items on a real account).
         val sections = ConversationSections.of(state.conversations, state.categories)
+        val remembered by viewModel.rememberedSections.collectAsStateWithLifecycle()
+        val expandedSections = ConversationSectionExpansionStore.effective(remembered, state.categories)
         val nowMillis by rememberMinuteClock()
         val tailHeight = LIST_TAIL_HEIGHT
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag(CONVERSATION_LIST_TAG)) {
@@ -80,7 +83,7 @@ internal fun ConversationListBody(
                 onRetry = viewModel::refresh,
                 onNewConversation = onNewConversation,
             ) {
-                populatedItems(state, sections, viewModel, nowMillis, signals, rowNavigation, tailHeight) {
+                populatedItems(state, sections, expandedSections, viewModel, nowMillis, signals, rowNavigation, tailHeight) {
                     messageSearchItems(messageSearch, state.currentUserId, viewModel::conversationFor, onOpenMessage)
                 }
             }
@@ -91,6 +94,7 @@ internal fun ConversationListBody(
 private fun LazyListScope.populatedItems(
     state: ConversationListUiState,
     sections: List<ConversationSection>,
+    expandedSections: Set<String>,
     viewModel: ConversationListViewModel,
     nowMillis: Long,
     signals: ConversationRowSignals,
@@ -113,14 +117,22 @@ private fun LazyListScope.populatedItems(
     sections.forEach { section ->
         val key = section.categoryId?.let { "section-cat-$it" } ?: "section-${section.kind}"
         item(key = key, contentType = "section-header") {
+            val expanded = section.sectionId in expandedSections
+            val foldedUnread = SectionFoldedUnread.count(section.items.map { it.unreadCount }, isExpanded = false)
             CollapsibleSection(
                 title = section.title ?: stringResource(section.kind.titleRes()),
                 count = section.items.size,
-                foldedUnread = SectionFoldedUnread.count(section.items.map { it.unreadCount }, isExpanded = false),
-                iconContainerColor = section.kind.containerColor(),
+                foldedUnread = foldedUnread,
+                foldedUnreadDescription = foldedUnread.takeIf { it > 0 }?.let {
+                    pluralStringResource(R.plurals.row_a11y_unread_count, it, it)
+                },
+                iconContainerColor = section.containerColor(),
+                expanded = expanded,
+                onExpandedChange = { viewModel.onSectionToggled(section, it) },
+                stateDescription = sectionStateDescription(expanded, foldedUnread),
                 icon = {
                     Icon(
-                        section.kind.icon(),
+                        section.glyph(),
                         contentDescription = null,
                         tint = MeeshyPalette.White,
                         modifier = Modifier.size(16.dp),
@@ -189,14 +201,25 @@ private fun ConversationSectionKind.titleRes(): Int = when (this) {
     ConversationSectionKind.ALL -> R.string.conversations_section_all
 }
 
-private fun ConversationSectionKind.icon() = when (this) {
+private fun ConversationSection.glyph() = when (kind) {
     ConversationSectionKind.PINNED -> Icons.Filled.PushPin
-    ConversationSectionKind.CATEGORY -> Icons.Filled.Folder
+    ConversationSectionKind.CATEGORY -> categoryIconFor(icon)
     ConversationSectionKind.ALL -> Icons.AutoMirrored.Filled.Chat
 }
 
-private fun ConversationSectionKind.containerColor(): Color = when (this) {
+/** La couleur de la pastille : celle de la catégorie quand elle en a une, sinon la teinte du genre. */
+@Composable
+private fun ConversationSection.containerColor(): Color = when (kind) {
     ConversationSectionKind.PINNED -> MeeshyPalette.Error
-    ConversationSectionKind.CATEGORY -> MeeshyPalette.Indigo500
+    ConversationSectionKind.CATEGORY -> color?.let { hexColor(it, MeeshyPalette.Indigo500) } ?: MeeshyPalette.Indigo500
     ConversationSectionKind.ALL -> MeeshyPalette.Indigo500
+}
+
+/** La valeur TalkBack de l'en-tête (iOS `SectionFoldedUnread.accessibilityValue`) : « Développée » ou « Réduite, N non lus ». */
+@Composable
+private fun sectionStateDescription(expanded: Boolean, foldedUnread: Int): String {
+    if (expanded) return stringResource(R.string.links_section_expanded)
+    val state = stringResource(R.string.links_section_collapsed)
+    if (foldedUnread <= 0) return state
+    return "$state, ${pluralStringResource(R.plurals.row_a11y_unread_count, foldedUnread, foldedUnread)}"
 }

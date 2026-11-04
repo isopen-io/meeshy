@@ -89,6 +89,15 @@ public enum class OutboxKind {
      * supplantent jamais. Un seul type pour les sept catégories (iOS `updateSettings`).
      */
     UPDATE_PREFERENCE_CATEGORY,
+
+    /** Quitter une conversation (#15920) : la ligne tombe à l'instant, la requête part au retour du réseau, jamais fusionnée. */
+    LEAVE_CONVERSATION,
+
+    /** « Supprimer pour moi » une conversation (#15920) : retrait optimiste, rejeu hors ligne, jamais fusionné. */
+    DELETE_CONVERSATION_FOR_ME,
+
+    /** Terminer une conversation pour tous (#15920) : retrait optimiste, rejeu hors ligne, jamais fusionné. */
+    DELETE_CONVERSATION_FOR_ALL,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -135,6 +144,9 @@ public object OutboxLanes {
     public const val COMMENT: String = "comment"
     public const val CONSUMPTION: String = "consumption"
     public const val CONVERSATION: String = "conversation"
+
+    /** Quitter / supprimer une conversation (#15920) : une lane à elle, un retrait coincé ne retient ni une création ni un renommage. */
+    public const val CONVERSATION_STATE: String = "conversationState"
 
     /** Les « vus » de story : une lane à eux, pour qu'un rapport coincé ne retienne jamais une publication. */
     public const val STORY_VIEW: String = "storyView"
@@ -246,6 +258,10 @@ public object OutboxLaneMap {
         OutboxKind.TOGGLE_LIKE_COMMENT,
         -> OutboxLaneAssignment.Shared(OutboxLanes.COMMENT)
         OutboxKind.UPDATE_PREFERENCE_CATEGORY -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.LEAVE_CONVERSATION,
+        OutboxKind.DELETE_CONVERSATION_FOR_ME,
+        OutboxKind.DELETE_CONVERSATION_FOR_ALL,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION_STATE)
     }
 
     /**
@@ -577,6 +593,18 @@ internal fun OutboxMutation.toEntity(now: Long, ownerId: String? = null): Outbox
 )
 
 /** Terminal (or near-terminal) signal for a queued mutation, keyed by [cmid]. */
+/** Ce que « Supprimer » a fait d'une ligne ([OutboxRepository.withdrawUnlessInflight]). */
+public sealed interface OutboxWithdrawal {
+    /** Aucune ligne : elle a déjà été livrée (ou retirée). */
+    public data object Absent : OutboxWithdrawal
+
+    /** Un drainer l'a réservée : la marque d'annulation est posée, la ligne reste. */
+    public data object Marked : OutboxWithdrawal
+
+    /** Retirée avant tout envoi ; [row] est la ligne telle qu'elle était, pour nettoyer ce qui en dépendait. */
+    public data class Removed(val row: OutboxEntity) : OutboxWithdrawal
+}
+
 public sealed interface OutboxOutcome {
     public val cmid: String
 

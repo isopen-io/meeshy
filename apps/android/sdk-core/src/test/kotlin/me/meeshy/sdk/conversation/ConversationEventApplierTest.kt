@@ -7,6 +7,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
@@ -111,7 +112,7 @@ class ConversationEventApplierTest {
     }
 
     @Test
-    fun `restored ramene la conversation par id`() = runTest {
+    fun `restored ramene la conversation par id`() = runBlocking {
         val api = mockk<ConversationApi>()
         coEvery { api.getById("c9") } returns ApiResponse(success = true, data = ApiConversation(id = "c9", type = "group"))
         applier(api).applyRestored(ConversationRestoredSocketEvent(conversationId = "c9"))

@@ -55,6 +55,7 @@ class ChatTranslationControllerTest {
         val messages: MutableStateFlow<List<LocalMessage>>,
         val repo: MessageRepository,
         val translationReceived: MutableSharedFlow<TranslationEvent>,
+        val edited: MutableSharedFlow<ApiMessage>,
     ) {
         val state: ChatUiState get() = flow.value
         val overrides: Map<String, String> get() = controller.activeLanguageOverride.value
@@ -72,8 +73,10 @@ class ChatTranslationControllerTest {
         val session = mockk<SessionRepository>()
         every { session.currentUser } returns MutableStateFlow(user)
         val translationReceived = MutableSharedFlow<TranslationEvent>()
+        val edited = MutableSharedFlow<ApiMessage>()
         val socket = mockk<MessageSocketManager>()
         every { socket.translationReceived } returns translationReceived
+        every { socket.messageEdited } returns edited
         val controller = ChatTranslationController(
             scope = screenScope(),
             state = ChatStateAccess(flow),
@@ -83,7 +86,7 @@ class ChatTranslationControllerTest {
             messageSocketManager = socket,
             conversationId = "c1",
         )
-        return Rig(controller, flow, messages, repo, translationReceived)
+        return Rig(controller, flow, messages, repo, translationReceived, edited)
     }
 
     // --- flag taps ------------------------------------------------------------------------
@@ -252,6 +255,20 @@ class ChatTranslationControllerTest {
         assertThat(r.controller.showingOriginal.value).containsExactly("m1", "m2")
 
         r.controller.toggleShowOriginal("m1")
+        assertThat(r.controller.showingOriginal.value).containsExactly("m2")
+    }
+
+    @Test
+    fun `an edit received for a message drops its manual original toggle and flag choice`() = runTest {
+        val r = rig()
+        r.controller.start()
+        runCurrent()
+        r.controller.toggleShowOriginal("m1")
+        r.controller.toggleShowOriginal("m2")
+
+        r.edited.emit(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "Hello!"))
+        runCurrent()
+
         assertThat(r.controller.showingOriginal.value).containsExactly("m2")
     }
 

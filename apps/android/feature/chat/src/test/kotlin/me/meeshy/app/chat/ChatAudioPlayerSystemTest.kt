@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.playback.VoicePlaybackCommand
 import me.meeshy.sdk.model.playback.VoicePlaybackTransportState
 import me.meeshy.ui.component.audio.VoicePlaybackHost
 import me.meeshy.ui.component.bubble.BubbleAudio
+import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -25,6 +26,17 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class ChatAudioPlayerSystemTest {
+
+    /**
+     * Le lecteur de vocaux écrit un état Compose hors composition, et `GlobalSnapshotManager` en poste l'application
+     * sur la boucle principale. Elle est vidée ici, avant que Robolectric n'efface le message au démontage : sinon
+     * `AndroidUiDispatcher.Main` reste programmé pour toute la JVM, et chaque témoin Compose suivant tombe en
+     * AppNotIdleException (#15815).
+     */
+    @After
+    fun settleMainLooper() {
+        shadowOf(Looper.getMainLooper()).idle()
+    }
 
     private class RecordingHost : VoicePlaybackHost {
         val published = mutableListOf<Pair<VoicePlaybackCard, VoicePlaybackTransportState>>()

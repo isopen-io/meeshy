@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.call.effects
 
 import me.meeshy.sdk.model.call.CallFaceEffect
+import me.meeshy.sdk.model.call.LowLightBoost
 import me.meeshy.sdk.model.call.VideoFilterConfig
 import me.meeshy.sdk.model.call.VideoFilterPreset
 import me.meeshy.sdk.model.call.activeFaceEffect
@@ -21,6 +22,8 @@ import me.meeshy.sdk.model.call.activePreset
  * @property blurRadius the blur radius in full-resolution pixels.
  * @property stylized the stylized face effect (toad, angel, demon, eruption), `null` without one.
  * @property isFaceDegraded the device struggles: the face effects spend less (iOS `isFaceDegraded`).
+ * @property lowLight the automatic lift of a dark scene (#8695), `null` when the image is bright enough or
+ *   not measured; it is a plan on its own, even with nothing chosen.
  */
 data class CallVideoEffectsPlan(
     val look: VideoFilterPreset?,
@@ -30,6 +33,7 @@ data class CallVideoEffectsPlan(
     val blurRadius: Double,
     val stylized: CallFaceEffect? = null,
     val isFaceDegraded: Boolean = false,
+    val lowLight: LowLightBoost? = null,
 ) {
     val blurActive: Boolean get() = blur != null
 
@@ -41,19 +45,24 @@ data class CallVideoEffectsPlan(
      * out as is and costs nothing more); everything else draws without one.
      */
     fun draws(faceKnown: Boolean): Boolean =
-        look != null || brightness != 0f || blur != null || stylized != null || (retouch != null && faceKnown)
+        look != null || brightness != 0f || blur != null || stylized != null || lowLight != null || (retouch != null && faceKnown)
 
     companion object {
-        fun make(config: VideoFilterConfig, ladder: CallVideoDegradation, isConstrained: Boolean): CallVideoEffectsPlan? {
+        fun make(
+            config: VideoFilterConfig,
+            ladder: CallVideoDegradation,
+            isConstrained: Boolean,
+            lowLight: LowLightBoost? = null,
+        ): CallVideoEffectsPlan? {
             val retouch = CallSkinRetouchPlan.make(config, ladder, isConstrained)
-            if (!config.hasChosenFilters && retouch == null) return null
+            if (!config.hasChosenFilters && retouch == null && lowLight == null) return null
             val look = config.activePreset?.takeIf { CallColorLook.recipe(it) != null }
             val brightness = if (config.isEnabled) config.brightness else 0f
             val blur = if (config.backgroundBlurEnabled) ladder.blurTier(isConstrained).segmentation else null
             val stylized = config.activeFaceEffect.takeIf { it.isStylized }
-            if (look == null && brightness == 0f && retouch == null && blur == null && stylized == null) return null
+            if (look == null && brightness == 0f && retouch == null && blur == null && stylized == null && lowLight == null) return null
             val isFaceDegraded = ladder.tier != CallBlurTier.Balanced || ladder.isSmoothingDegraded || isConstrained
-            return CallVideoEffectsPlan(look, brightness, retouch, blur, config.backgroundBlurRadius, stylized, isFaceDegraded)
+            return CallVideoEffectsPlan(look, brightness, retouch, blur, config.backgroundBlurRadius, stylized, isFaceDegraded, lowLight)
         }
 
         /** A new mask is due once ~one segmentation interval has passed (iOS: 90 % of the interval). */

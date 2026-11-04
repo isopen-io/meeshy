@@ -222,4 +222,105 @@ final class BookmarksViewModelTests: XCTestCase {
                       "le sentinel de pagination doit appeler loadMore(), pas loadBookmarks() (qui re-sert le cache)")
     }
 
+    // MARK: - #15934 — « Repartager » republie depuis les favoris
+
+    private static func repostChainBookmarks(repostCount: Int = 2) -> PaginatedAPIResponse<[APIPost]> {
+        JSONStub.decode(#"""
+        {"success":true,"data":[{"id":"saved","type":"REEL","content":"","createdAt":"2026-01-01T00:00:00.000Z",
+        "repostCount":\#(repostCount),"author":{"id":"a1","username":"alice"},
+        "repostOf":{"id":"mid","createdAt":"2025-12-31T00:00:00.000Z","author":{"id":"a2","username":"bob"},"originalRepostOfId":"root"}}],
+        "pagination":null,"error":null}
+        """#)
+    }
+
+    private func makeRepostSUT(
+        postService: MockPostService,
+        queue: MockOfflineQueue = MockOfflineQueue(),
+        offline: Bool = false
+    ) -> BookmarksViewModel {
+        BookmarksViewModel(
+            postService: postService,
+            languageProvider: MockLanguageProvider(preferredLanguages: []),
+            reposter: ListedPostReposter(
+                publisher: RepostPublisher(postService: postService, offlineQueue: queue, isOffline: { offline }),
+                toasts: MockFeedbackToast()
+            )
+        )
+    }
+
+    func test_toggleRepost_publishesTheRootAtTheCardFormat_andKeepsTheCardReposted() async {
+        let mock = MockPostService()
+        mock.getBookmarksResult = .success(Self.repostChainBookmarks(repostCount: 2))
+        let sut = makeRepostSUT(postService: mock)
+        await sut.loadBookmarks()
+
+        await sut.toggleRepost("saved")
+
+        XCTAssertEqual(mock.repostCallCount, 1)
+        XCTAssertEqual(mock.lastRepostPostId, "root", "la référence remonte à la RACINE de la chaîne")
+        XCTAssertEqual(mock.lastRepostTargetType, .reel, "le format reste celui de la carte enregistrée")
+        XCTAssertFalse(mock.lastRepostIsQuote ?? true)
+        XCTAssertTrue(sut.posts[0].isRepostedByMe, "l'icône du favori passe à l'état repartagé")
+        XCTAssertEqual(sut.posts[0].repostCount, 3)
+        guard case .fresh(let cached, _) = await CacheCoordinator.shared.feed.load(for: "bookmarks") else {
+            return XCTFail("le repartage réécrit le cache « bookmarks »")
+        }
+        XCTAssertEqual(cached.first?.isRepostedByMe, true, "la réouverture des favoris garde l'état repartagé")
+    }
+
+    func test_toggleRepost_whenTheServerRefuses_rollsBackIconAndCounter() async {
+        let mock = MockPostService()
+        mock.getBookmarksResult = .success(Self.repostChainBookmarks(repostCount: 2))
+        mock.repostResult = .failure(URLError(.badServerResponse))
+        let sut = makeRepostSUT(postService: mock)
+        await sut.loadBookmarks()
+
+        await sut.toggleRepost("saved")
+
+        XCTAssertFalse(sut.posts[0].isRepostedByMe)
+        XCTAssertEqual(sut.posts[0].repostCount, 2)
+    }
+
+    func test_toggleRepost_offline_queuesTheRepostInTheOutbox() async throws {
+        let mock = MockPostService()
+        mock.getBookmarksResult = .success(Self.repostChainBookmarks())
+        let queue = MockOfflineQueue()
+        let sut = makeRepostSUT(postService: mock, queue: queue, offline: true)
+        await sut.loadBookmarks()
+
+        await sut.toggleRepost("saved")
+
+        XCTAssertEqual(mock.repostCallCount, 0)
+        let payload = try XCTUnwrap(queue.enqueueCalls.first?.payload as? RepostPostPayload)
+        XCTAssertEqual(payload.postId, "root")
+        XCTAssertEqual(payload.targetType, "REEL")
+        XCTAssertTrue(sut.posts[0].isRepostedByMe)
+    }
+
+    // MARK: - #15994 — « Partager » du menu ⋯ partage depuis les favoris
+
+    func test_shareLink_recordsTheShare_andHandsTheTrackedLink() async {
+        let (sut, mock) = makeSUT()
+        mock.getBookmarksResult = .success(Self.makePaginatedPosts(posts: [Self.makeAPIPost(id: "saved")]))
+        await sut.loadBookmarks()
+
+        let link = await sut.shareLink(for: "saved")
+
+        XCTAssertEqual(mock.lastSharePostId, "saved")
+        XCTAssertEqual(mock.lastShareGenerateLink, true)
+        XCTAssertEqual(link?.url.absoluteString, "https://meeshy.me/l/mock123")
+        XCTAssertEqual(sut.posts[0].shareCount, 1)
+    }
+
+    func test_shareLink_offline_stillHandsThePostLink_withoutBumping() async {
+        let (sut, mock) = makeSUT()
+        mock.getBookmarksResult = .success(Self.makePaginatedPosts(posts: [Self.makeAPIPost(id: "saved")]))
+        mock.shareResult = .failure(URLError(.notConnectedToInternet))
+        await sut.loadBookmarks()
+
+        let link = await sut.shareLink(for: "saved")
+
+        XCTAssertEqual(link?.url.absoluteString, "https://meeshy.me/feeds/post/saved")
+        XCTAssertEqual(sut.posts[0].shareCount, 0)
+    }
 }

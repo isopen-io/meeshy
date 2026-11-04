@@ -242,45 +242,19 @@ struct FeedView: View {
             engagement.bookmarkDelta[postId, default: 0] += 1
         }
         engagement.bookmarkInFlightIds.insert(postId)
+        // L'écrivain unique (#15994) : envoi, cache des favoris, toasts. La
+        // carte se lit DANS le `Task`, sur le MainActor : un `post:updated`
+        // peut l'avoir remplacée entre le toucher et l'écriture du cache.
         Task {
-            defer {
-                Task { @MainActor in
-                    engagement.bookmarkInFlightIds.remove(postId)
-                }
-            }
-            // Capture the post snapshot INSIDE the Task on the MainActor —
-            // outside-capture would freeze a value that a `post:updated`
-            // socket event might invalidate between the tap and the cache
-            // save (race window ~100ms).
-            let postSnapshot = viewModel.posts.first(where: { $0.id == postId })
-            // Pre-populate the bookmarks cache optimistically so the Favoris
-            // tab shows the post the moment the user opens it. Mirror the
-            // pre-fix behaviour from FeedViewModel.bookmarkPost.
-            let snapshotCache = await FeedPostEngagementRequests.prepopulateBookmarkCache(
-                postId: postId, postSnapshot: postSnapshot, wasBookmarked: wasBookmarked
-            )
-
-            let success = await FeedPostEngagementRequests.callBookmarkAPI(postId: postId, bookmark: !wasBookmarked)
-            if success {
-                if wasBookmarked {
-                    await FeedPostEngagementRequests.pruneBookmarkFromCache(postId: postId)
-                    FeedbackToastManager.shared.showSuccess(String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main))
-                } else {
-                    FeedbackToastManager.shared.showSuccess(String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
-                }
+            defer { engagement.bookmarkInFlightIds.remove(postId) }
+            let shown = viewModel.posts.first(where: { $0.id == postId })
+            guard await !PostBookmarkWriter().write(bookmarked: !wasBookmarked, postId: postId, post: shown) else { return }
+            if wasBookmarked {
+                engagement.bookmarkedIds.insert(postId)
+                engagement.bookmarkDelta[postId, default: 0] += 1
             } else {
-                // Rollback both the UI flip and the cache pre-population.
-                if wasBookmarked {
-                    engagement.bookmarkedIds.insert(postId)
-                    engagement.bookmarkDelta[postId, default: 0] += 1
-                } else {
-                    engagement.bookmarkedIds.remove(postId)
-                    engagement.bookmarkDelta[postId, default: 0] -= 1
-                    if let snap = snapshotCache {
-                        await FeedPostEngagementRequests.restoreBookmarkCache(snap)
-                    }
-                }
-                FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
+                engagement.bookmarkedIds.remove(postId)
+                engagement.bookmarkDelta[postId, default: 0] -= 1
             }
         }
     }
@@ -859,20 +833,14 @@ struct FeedView: View {
             .postEditCover(item: $editingPost) { post, draft in
                 await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
             }
-            // **La CITATION revient à `FeedComposerSheet`** — même raison, même
-            // jour, que sur iPhone (`RootViewComponents`) : `DocumentComposerDoor`
-            // REFUSE un repost tant que la levée 7.5 (un écrivain durable du
-            // repost) n'existe pas, et l'auteur recevait « publication
-            // impossible » au lieu de sa citation. La migration reste la cible.
             .fullScreenCover(item: $quoteTargetPost) { quoted in
-                FeedComposerSheet(
-                    viewModel: viewModel,
-                    initialText: "",
-                    pendingAttachmentType: nil,
-                    quotePost: quoted,
-                    onDismiss: {
-                        quoteTargetPost = nil
-                    }
+                QuoteComposerDoor(
+                    quoted: quoted,
+                    storyViewModel: storyViewModel,
+                    router: router,
+                    conversationListViewModel: conversationListViewModel,
+                    statusViewModel: statusViewModel,
+                    onFinish: { quoteTargetPost = nil }
                 )
             }
     }

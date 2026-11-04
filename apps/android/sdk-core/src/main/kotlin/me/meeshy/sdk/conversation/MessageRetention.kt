@@ -42,8 +42,8 @@ public data class RetentionReport(
 
 /**
  * Supprime les messages périmés, éphémères échus et excédentaires AVEC leurs lignes filles (ponts
- * `pending_ids`, révisions d'édition, reçus éphémères ; traductions, transcriptions et pistes audio vivent
- * dans la charge du message et partent avec elle), sans jamais toucher une ligne optimiste non envoyée.
+ * `pending_ids`, révisions d'édition, reçus éphémères, traductions, transcriptions et pistes audio retenues —
+ * comme `MessageChildRows.delete` iOS), sans jamais toucher une ligne optimiste non envoyée.
  */
 @Singleton
 public class MessageRetentionPurger @Inject internal constructor(
@@ -99,6 +99,7 @@ public class MessageRetentionPurger @Inject internal constructor(
             editRevisionDao.deleteForMessages(chunk)
             ephemeralReceiptDao.deleteAll(chunk)
         }
+        DedicatedTranslationRows.drop(database, ids)
         keys.map { it.id }.chunked(CHUNK).forEach { messageDao.deleteByIds(it) }
     }
 

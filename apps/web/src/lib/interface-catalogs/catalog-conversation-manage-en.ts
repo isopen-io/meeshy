@@ -71,6 +71,7 @@ const en = {
   'conversationManage.obsolete.title': 'Make this conversation obsolete?',
   'conversationManage.obsolete.message': 'It will disappear for every participant. Its content becomes unreadable and is erased within 48 hours.',
   'conversationManage.obsolete.error': 'Couldn’t make the conversation obsolete.',
+  'conversationManage.obsolete.requestSender': 'Only the recipient of the request can delete this conversation.',
   'conversationManage.header.created_on': 'Created on {date}',
   'conversationManage.header.muted': 'Notifications turned off',
 } satisfies ConversationManageCatalog;

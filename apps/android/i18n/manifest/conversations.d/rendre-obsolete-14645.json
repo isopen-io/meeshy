@@ -19,6 +19,16 @@
         {
           "androidName": "conversations_obsolete_confirm_button",
           "status": "android-only"
+        },
+        {
+          "androidName": "conversations_obsolete_refused_pending_request",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.obsolete.error",
+          "androidName": "conversations_obsolete_error",
+          "status": "adopted"
         }
       ]
     }

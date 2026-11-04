@@ -54,7 +54,7 @@ struct SocialInteractionEventsTests {
         let seen = SyncBox<[String]>([])
         hub.install { event in seen.mutate { $0.append(event.action) } }
         let api = MockAPIClient()
-        api.stub("/posts/p1/bookmark", result: APIResponse(success: true, data: ["status": "bookmarked"], error: nil))
+        api.stub("/posts/p1/bookmark", result: APIResponse<DiscardedResponseBody>(success: true, data: DiscardedResponseBody(), error: nil))
         let service = PostService(api: api, socialEvents: hub)
 
         try await service.bookmark(postId: "p1")

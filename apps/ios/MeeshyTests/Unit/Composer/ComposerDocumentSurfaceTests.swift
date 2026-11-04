@@ -2287,14 +2287,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             // raison, et « réparer » en retirant `FeedView` de l'assertion
             // aurait cessé de garder l'iPad.
             if n > 0 { racinesQuiMontent.insert(racineDeFichier(url)) }
-            // L'ancien composer : sa DÉCLARATION survit (code mort, lot de
-            // suppression à part), mais plus aucun site ne doit le MONTER.
-            //
-            // Aucune soustraction ici : `struct FeedComposerSheet: View` ne
-            // porte PAS de parenthèse, donc la déclaration n'est jamais
-            // comptée par ce motif. Un premier jet la retranchait quand même
-            // et rendait −1 — une garde qui se trompe de signe accuse un code
-            // sain.
+            // L'ancien composer : plus aucun site ne doit le MONTER.
             let a = occurrences(of: "FeedComposerSheet(", in: source)
             ancienComposer += a
             if a > 0 { racinesQuiMontentLAncien.insert(url.lastPathComponent) }
@@ -2332,49 +2325,13 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                 + "texte alternatif — sur une app où toute photo devient une scène. "
                 + "Racines mesurées : \(racinesQuiMontent.sorted())"
         )
-        // **T3.2 est DIFFÉRÉE — les deux CITATIONS restent sur l'ancien
-        // composer** (2026-09-06, après mesure de la chaîne d'envoi).
-        //
-        // Cette assertion a exigé `ancienComposer == 0` pendant quelques heures,
-        // sur la foi de la directive porteur du jour (« dans tous les cas iPad
-        // et iOS doivent utiliser le nouveau composer »). La directive reste la
-        // cible ; la condition technique qu'elle suppose n'est pas remplie, et
-        // `DocumentComposerDoor` l'écrivait déjà : elle NE sert PAS la citation
-        // avant la **levée 7.5** — un écrivain durable du repost.
-        //
-        // Mesuré, la chaîne entière : une citation pose `repostOfId`, donc
-        // `ComposerDocumentSendRouting.path(isQuote: true)` rend
-        // `.quotedRepost`, dont `isDurable` vaut `false`, donc le plan rend
-        // `.refuse(.nonDurablePath)`, donc `publishDocument` appelle `refuse()`.
-        // **Citer un post était devenu impossible sur les DEUX racines** :
-        // l'auteur recevait « publication impossible » à chaque envoi. Et la
-        // voie durable ne peut pas le rattraper — `PublishIntent.document` ne
-        // porte aucun `repostOfId`.
-        //
-        // > Un témoin qui verrouille l'état CIBLE d'une migration inachevée
-        // > verrouille l'état CASSÉ. Il doit mesurer ce que le produit fait,
-        // > pas ce qu'on voudrait qu'il fasse — sinon il défend la régression
-        // > contre le correctif.
-        //
-        // Ce compte redeviendra `0` quand 7.5 sera livrée, et c'est le sens des
-        // deux assertions ci-dessous : les citations, exactement, et rien de
-        // plus. Un TROISIÈME montage de l'ancien composer serait, lui, une vraie
-        // régression — un chemin qui aurait dû passer au meuble et ne l'a pas.
+        // **L'ancien composer est mort** (#15628) : les deux citations ouvrent
+        // `QuoteComposerDoor`, qui publie par l'écrivain durable du repost.
         XCTAssertEqual(
-            ancienComposer, 2,
-            "Exactement DEUX sites montent encore `FeedComposerSheet` : les deux CITATIONS, que "
-                + "`DocumentComposerDoor` refuse tant que le repost n'a pas de file durable (levée 7.5). "
-                + "Zéro dirait que T3.2 a été prise — vérifier alors que `.quotedRepost` est devenu "
-                + "durable, sans quoi citer un post ne publie plus rien. Trois ou plus dirait qu'un "
-                + "chemin est retombé sur l'ancien composer, qui publie avec `storyEffects: nil`. "
-                + "Montages mesurés : \(ancienComposer)"
-        )
-        XCTAssertEqual(
-            racinesQuiMontentLAncien, ["FeedView.swift", "RootViewComponents.swift"],
-            "Et ce sont les DEUX racines — `RootViewComponents` (iPhone) et `FeedView` (iPad) —, "
-                + "chacune pour sa citation. Une racine qui disparaît de ce SET a migré sa citation vers "
-                + "une porte qui la REFUSE en la faisant échouer à l'envoi. "
-                + "Racines mesurées : \(racinesQuiMontentLAncien.sorted())"
+            ancienComposer, 0,
+            "Plus aucun site ne monte `FeedComposerSheet` : elle a quitté le dépôt. Un montage dirait "
+                + "qu'un chemin est retombé sur l'ancien composer. Racines mesurées : "
+                + "\(racinesQuiMontentLAncien.sorted())"
         )
         // **RETOURNÉE au T3.1.** `.microphone` avait gagné son effet
         // (`.attachesTranscribedAudio`) au T2.6, dernier des six outils — la

@@ -3,6 +3,8 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 import type { Conversation } from '@/lib/api/types';
 import { loadRowMenuCatalog } from '@/lib/i18n-row-menu-catalog';
 
+import { departureStore, markObsoleteRefused } from '@/lib/conversation-departure';
+
 import { rowConversationActions, rowMenuItems, type RowActionId, type RowViewer } from './row-actions';
 
 /**
@@ -146,5 +148,54 @@ describe('rowMenuItems — les actions que le rôle permet', () => {
     expect(rowConversationActions({ conversation: direct({ isActive: false }), viewer: viewerOf() }).obsolete).toBe(false);
     expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'member' }), viewer: viewerOf() }).obsolete).toBe(false);
     expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'admin' }), viewer: viewerOf() }).obsolete).toBe(true);
+  });
+});
+
+describe('#14690 — un refus de la passerelle retire « Rendre obsolète » de cette conversation', () => {
+  test('l’expéditeur d’une demande non acceptée, refusé une fois, ne se le voit plus proposer ; les autres conversations le gardent', () => {
+    departureStore.setState({ obsoleteRefused: [] });
+    const pending = conversationOf({ id: 'c-demande', type: 'direct', currentUserRole: 'member' });
+    const other = conversationOf({ id: 'c-autre', type: 'direct', currentUserRole: 'member' });
+    expect(rowConversationActions({ conversation: pending, viewer: viewerOf() }).obsolete).toBe(true);
+
+    markObsoleteRefused('c-demande');
+
+    expect(rowConversationActions({ conversation: pending, viewer: viewerOf() }).obsolete).toBe(false);
+    expect(rowConversationActions({ conversation: other, viewer: viewerOf() }).obsolete).toBe(true);
+    expect(rowMenuItems({ flags: { isPinned: false, isMuted: false, isArchived: false }, unread: false, language: 'fr', canDelete: true, actions: rowConversationActions({ conversation: pending, viewer: viewerOf() }) }).map((item) => item.id)).not.toContain('obsolete');
+    departureStore.setState({ obsoleteRefused: [] });
+  });
+});
+
+describe('#14690 — la capacité servie au lecteur décide seule ; absente, la règle locale reste', () => {
+  const served = (canMakeObsolete: boolean) => ({ viewerCapabilities: { canMakeObsolete } });
+  const direct = (overrides: Partial<Conversation> = {}) => conversationOf({ type: 'direct', currentUserRole: 'member', ...overrides });
+
+  test('servie fausse, l’expéditeur d’une demande ne se voit jamais proposer l’action, au menu comme à la fiche', () => {
+    departureStore.setState({ obsoleteRefused: [] });
+    expect(rowConversationActions({ conversation: direct(served(false)), viewer: viewerOf() }).obsolete).toBe(false);
+    expect(idsFor(direct(served(false)), viewerOf())).not.toContain('obsolete');
+    expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'admin', ...served(false) }), viewer: viewerOf() }).obsolete).toBe(false);
+  });
+
+  test('servie vraie, elle l’ouvre là où la règle locale le refusait', () => {
+    departureStore.setState({ obsoleteRefused: [] });
+    expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'member', ...served(true) }), viewer: viewerOf() }).obsolete).toBe(true);
+    expect(idsFor(conversationOf({ currentUserRole: 'member', ...served(true) }), viewerOf())).toContain('obsolete');
+  });
+
+  test('absente ou illisible, la règle locale d’avant s’applique, jamais un « faux » implicite', () => {
+    departureStore.setState({ obsoleteRefused: [] });
+    const unreadable = { viewerCapabilities: { canMakeObsolete: 'oui' } } as unknown as Partial<Conversation>;
+    expect(rowConversationActions({ conversation: direct(), viewer: viewerOf() }).obsolete).toBe(true);
+    expect(rowConversationActions({ conversation: direct(unreadable), viewer: viewerOf() }).obsolete).toBe(true);
+    expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'member', ...unreadable }), viewer: viewerOf() }).obsolete).toBe(false);
+  });
+
+  test('un refus mesuré de la route l’emporte sur un instantané vrai', () => {
+    departureStore.setState({ obsoleteRefused: [] });
+    markObsoleteRefused('c-lyon');
+    expect(rowConversationActions({ conversation: conversationOf({ currentUserRole: 'admin', ...served(true) }), viewer: viewerOf() }).obsolete).toBe(false);
+    departureStore.setState({ obsoleteRefused: [] });
   });
 });

@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.core.database.DatabaseRecovery
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.sdk.conversation.TranslationLayer
 import me.meeshy.sdk.category.CategorySnapshotStore
 import me.meeshy.sdk.preferences.PreferenceSnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
@@ -141,6 +142,9 @@ public class DefaultSessionTeardown(
         feedbackToasts?.clear()
         // Room's clearAllTables() is a blocking call — never on the caller's dispatcher.
         withContext(Dispatchers.IO) { clearKeepingPlaintextErasures() }
+        // Le L1 des traductions retenues est la copie en mémoire de tables que l'on vient de vider : le compte suivant
+        // ne lit jamais les traductions du précédent, et réhydrate depuis son propre disque.
+        TranslationLayer.of(database).clear()
         categorySnapshotStore.clearAll()
         conversationDraftStore.clearAll()
         conversationLockStore.resetForLogout()

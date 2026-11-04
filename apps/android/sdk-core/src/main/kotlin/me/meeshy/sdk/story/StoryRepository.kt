@@ -17,6 +17,8 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.PostTranslationMerge
+import me.meeshy.sdk.model.StoryRealtimeFold
 import me.meeshy.sdk.model.StoryTranslationMerge
 import me.meeshy.sdk.model.StoryUpdateMerge
 import me.meeshy.sdk.model.ContentRemovalRequest
@@ -64,6 +66,7 @@ class StoryRepository @Inject constructor(
     private val archiveCache: MyStoriesArchiveCache = InMemoryMyStoriesArchiveCache(),
     private val fence: me.meeshy.sdk.session.AccountFence? = null,
     private val postCache: StoryPostCache = StoryPostCache(),
+    private val session: me.meeshy.sdk.session.SessionRepository? = null,
 ) {
     private val cacheSource = StoryCacheSource(
         database = database,
@@ -72,6 +75,7 @@ class StoryRepository @Inject constructor(
         storyApi = storyApi,
         clock = SystemCacheClock,
         fence = fence,
+        viewerId = { session?.currentUserId },
     )
 
     /**
@@ -166,6 +170,37 @@ class StoryRepository @Inject constructor(
         val isOwnStory = currentUserId != null && updated.author?.id == currentUserId
         val merged = StoryUpdateMerge.merge(previous, updated, engagementReset, isOwnStory) ?: return false
         cacheSource.upsertLocal(merged, ticket)
+        return true
+    }
+
+    /**
+     * Balayage d'expiration (chaque minute, iOS) : retire du cache les stories devenues mortes, sauf celles du
+     * lecteur, et rend leurs ids. Le plateau se repeint sans elles ; aucun réseau.
+     */
+    suspend fun sweepExpired(): List<String> =
+        cacheSource.sweepExpired().also { postCache.invalidate(it.toSet()) }
+
+    /** `story:viewed` : le total de vues autoritatif de l'événement, chez l'auteur qui regarde son compteur bouger. */
+    suspend fun applyStoryViewed(storyId: String, viewCount: Int?): Boolean =
+        foldLocal(storyId) { StoryRealtimeFold.viewed(it, viewCount) }
+
+    /** `story:reacted` (+1) / `story:unreacted` (−1) : compteur par emoji, et mes réactions si l'acteur est le lecteur. */
+    suspend fun applyStoryReaction(storyId: String, emoji: String, actorId: String, myId: String?, delta: Int): Boolean =
+        foldLocal(storyId) { StoryRealtimeFold.reactionDelta(it, emoji, actorId, myId, delta) }
+
+    /** `comment:added` / `comment:deleted` : le total de commentaires est autoritatif (jamais un ±1 qui dérive). */
+    suspend fun applyStoryCommentCount(storyId: String, commentCount: Int): Boolean =
+        foldLocal(storyId) { post -> post.takeIf { it.commentCount != commentCount }?.copy(commentCount = commentCount) }
+
+    /** `post:translation-updated` d'une story tenue : sa légende gagne la langue sans nouvelle requête. */
+    suspend fun applyStoryTranslation(storyId: String, language: String, entry: me.meeshy.sdk.model.ApiPostTranslationEntry): Boolean =
+        foldLocal(storyId) { PostTranslationMerge.mergeTranslation(it, language, entry) }
+
+    private suspend fun foldLocal(storyId: String, fold: (ApiPost) -> ApiPost?): Boolean {
+        val ticket = cacheSource.ticket()
+        val previous = cacheSource.findLocal(storyId) ?: return false
+        val next = fold(previous) ?: return false
+        cacheSource.upsertLocal(next, ticket)
         return true
     }
 

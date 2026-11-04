@@ -63,6 +63,19 @@ describe('la liste des membres suit le temps réel de SA conversation', () => {
     expect(queryClient.getQueryData<Conversation>(conversationQueryKey('c-1'))?.currentUserRole).toBe('admin');
   });
 
+  test('#14690 — le rang du LECTEUR change : la capacité servie, devenue périmée, s’efface et la règle locale reprend', () => {
+    const queryClient = seed([member('a'), member('b')]);
+    queryClient.setQueryData(conversationQueryKey('c-1'), { id: 'c-1', currentUserRole: 'member', viewerCapabilities: { canMakeObsolete: false } } as unknown as Conversation);
+    const { socket, fire } = fakeSocket();
+    bindConversationMembersLive({ socket, queryClient, conversationId: 'c-1', viewerId: 'u-a' });
+    fire('participant:role-updated', { conversationId: 'c-1', userId: 'u-b', newRole: 'ADMIN', updatedBy: 'u-a' });
+    expect(queryClient.getQueryData<Conversation>(conversationQueryKey('c-1'))?.viewerCapabilities).toEqual({ canMakeObsolete: false });
+    fire('participant:role-updated', { conversationId: 'c-1', userId: 'u-a', newRole: 'ADMIN', updatedBy: 'u-z' });
+    const after = queryClient.getQueryData<Conversation>(conversationQueryKey('c-1'));
+    expect(after?.currentUserRole).toBe('admin');
+    expect(after !== undefined && 'viewerCapabilities' in after).toBe(false);
+  });
+
   test('un départ et un bannissement retirent la rangée et décomptent', () => {
     const queryClient = seed([member('a'), member('b'), member('c')]);
     const { socket, fire } = fakeSocket();

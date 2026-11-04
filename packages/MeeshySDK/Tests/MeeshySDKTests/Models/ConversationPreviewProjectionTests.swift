@@ -140,6 +140,39 @@ final class ConversationPreviewProjectionTests: XCTestCase {
         XCTAssertEqual(preview.liveUntil, deadline)
     }
 
+    func test_compose_ephemeralPhoto_hidesDimensionsAndSize() {
+        let row = conversation(preview: "") {
+            $0.lastMessageExpiresAt = self.now.addingTimeInterval(240)
+            $0.lastMessageNature = LastMessageNature(messageType: "image", ephemeralDuration: 300)
+            $0.lastMessageAttachments = [MeeshyMessageAttachment(
+                id: "att-1", originalName: "plage.jpg", mimeType: "image/jpeg", fileSize: 239_616, width: 450, height: 456
+            )]
+            $0.lastMessageAttachmentCount = 1
+        }
+
+        let preview = compose(row)
+
+        XCTAssertEqual(preview.icon, .ephemeral)
+        XCTAssertTrue(preview.segments.contains(.label("attachment.photo")))
+        let said = preview.segments.map(\.text).joined(separator: " ")
+        ["450", "456", "234", "×", "plage"].forEach { XCTAssertFalse(said.contains($0), $0) }
+    }
+
+    func test_compose_photoWithCaption_keepsItsDetailsAfterTheCaption() {
+        let row = conversation(preview: "Au bord du lac") {
+            $0.lastMessageNature = LastMessageNature(messageType: "image")
+            $0.lastMessageAttachments = [MeeshyMessageAttachment(
+                id: "att-1", originalName: "plage.jpg", mimeType: "image/jpeg", fileSize: 239_616, width: 450, height: 456
+            )]
+            $0.lastMessageAttachmentCount = 1
+        }
+
+        let preview = compose(row)
+
+        XCTAssertEqual(preview.icon, .photo)
+        XCTAssertEqual(preview.segments.map(\.text), ["Au bord du lac", "450\u{00A0}×\u{00A0}456", "234 Ko"])
+    }
+
     func test_locationWithoutNature_isNamedAsAPlace() {
         let row = conversation(preview: "") {
             $0.lastMessageLocation = SharedPlace(latitude: 1, longitude: 2, name: "Gare de Lyon")

@@ -11,12 +11,14 @@ import me.meeshy.core.database.dao.SearchIndexDao
 import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.BridgeAnnouncement
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MessageDeletedEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantJoinedEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
+import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
 import me.meeshy.sdk.model.ParticipantUnbannedEvent
 import me.meeshy.sdk.model.conversationlist.ConversationLivePatch
 import me.meeshy.sdk.model.conversationlist.ConversationPreviewOnSend
@@ -24,6 +26,7 @@ import me.meeshy.sdk.model.conversationlist.LastMessageFacet
 import me.meeshy.sdk.model.conversationlist.applyingLastMessage
 import me.meeshy.sdk.model.conversationlist.revertingDeletion
 import me.meeshy.sdk.model.sync.ConversationPatch
+import me.meeshy.sdk.model.sync.ParticipantFold
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.ConversationApi
@@ -153,8 +156,8 @@ class ConversationLivePatcher @Inject constructor(
     }
 
     /** `conversation:unread-updated` : le compteur absolu du serveur. */
-    suspend fun applyUnread(conversationId: String, unreadCount: Int) {
-        mutate(conversationId) { row -> ConversationLivePatch.applyUnread(row, unreadCount) ?: row }
+    suspend fun applyUnread(conversationId: String, unreadCount: Int, bridge: BridgeAnnouncement = BridgeAnnouncement.NotComputed) {
+        mutate(conversationId) { row -> ConversationLivePatch.applyUnread(row, unreadCount, bridge) ?: row }
     }
 
     /** Un membre arrive : +1 (soi ignoré), l'effectif absolu du serveur prime. */
@@ -166,23 +169,32 @@ class ConversationLivePatcher @Inject constructor(
         }
     }
 
-    /** Un membre part : moi ⇒ la conversation disparaît ; un autre ⇒ −1. */
-    suspend fun applyLeft(event: ParticipantLeftEvent) {
-        if (event.names(readerId().orEmpty())) {
-            remove(event.conversationId)
-        } else {
-            mutate(event.conversationId) { row -> ConversationLivePatch.applyMemberCount(row, delta = -1) ?: row }
-        }
+    /** Un membre part : moi ⇒ la conversation disparaît (rend `true`) ; un autre ⇒ roster et effectif −1. */
+    suspend fun applyLeft(event: ParticipantLeftEvent): Boolean {
+        if (event.names(readerId().orEmpty())) return removed(event.conversationId)
+        mutate(event.conversationId) { row -> folded(row, ParticipantFold.left(row, event, readerId())) }
+        return false
     }
 
-    /** Un membre est banni : moi ⇒ la conversation disparaît ; un autre ⇒ −1. */
-    suspend fun applyBanned(event: ParticipantBannedEvent) {
-        if (event.names(readerId().orEmpty())) {
-            remove(event.conversationId)
-        } else {
-            mutate(event.conversationId) { row -> ConversationLivePatch.applyMemberCount(row, delta = -1) ?: row }
-        }
+    /** Un membre est banni : moi ⇒ la conversation disparaît (rend `true`) ; un autre ⇒ roster et effectif −1. */
+    suspend fun applyBanned(event: ParticipantBannedEvent): Boolean {
+        if (event.names(readerId().orEmpty())) return removed(event.conversationId)
+        mutate(event.conversationId) { row -> folded(row, ParticipantFold.banned(row, event, readerId())) }
+        return false
     }
+
+    /** `participant:role-updated` : le rang du lecteur et celui de la ligne du roster. */
+    suspend fun applyRoleUpdated(event: ParticipantRoleUpdatedEvent) {
+        mutate(event.conversationId) { row -> ParticipantFold.roleUpdated(row, event, readerId()) ?: row }
+    }
+
+    private suspend fun removed(conversationId: String): Boolean {
+        remove(conversationId)
+        return conversationId.isNotBlank()
+    }
+
+    private fun folded(row: ApiConversation, outcome: ParticipantFold.Outcome): ApiConversation =
+        (outcome as? ParticipantFold.Outcome.Updated)?.conversation ?: row
 
     /** Un bannissement est levé : +1 seulement si l'appartenance est rendue. */
     suspend fun applyUnbanned(event: ParticipantUnbannedEvent) {
@@ -195,6 +207,23 @@ class ConversationLivePatcher @Inject constructor(
             ConversationLivePatch.applyMemberCount(row, delta = 1, absolute = event.memberCount, capped = event.memberCountCapped)
                 ?: row
         }
+    }
+
+    /**
+     * Un départ, un bannissement ou un changement de rôle d'un participant, plié par [ParticipantFold] :
+     * `Removed` retire la conversation (le lecteur en est sorti), `Updated` écrit la ligne, `Unchanged` ne
+     * touche à rien. Idempotent : rejouer l'événement ne bouge plus la ligne.
+     */
+    suspend fun applyParticipant(conversationId: String, fold: (ApiConversation) -> ParticipantFold.Outcome) {
+        var removed = false
+        mutate(conversationId) { row ->
+            when (val outcome = fold(row)) {
+                ParticipantFold.Outcome.Removed -> row.also { removed = true }
+                is ParticipantFold.Outcome.Updated -> outcome.conversation
+                ParticipantFold.Outcome.Unchanged -> row
+            }
+        }
+        if (removed) remove(conversationId)
     }
 
     /** Retire la ligne ET invalide le cache de ses messages (supprimée, quittée, bannie, fermée). */

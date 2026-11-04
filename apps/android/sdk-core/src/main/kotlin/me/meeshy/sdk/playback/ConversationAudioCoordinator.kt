@@ -92,12 +92,12 @@ public class ConversationAudioCoordinator(
     ) {
         val accepted = engine.play(current.attachmentId, current.fileUrl, PlaybackCommandOrigin.InApp, current.isProtected)
         if (!accepted) return
-        dismissGrace()
         val queue = mutableSnapshot.value.queue.started(current, tail)
         mutableSnapshot.value = CoordinatorSnapshot(
             queue = queue,
             context = ActiveAudioContext(current, conversationName, conversationArtworkUrl, accentHex),
         )
+        dismissGrace()
     }
 
     /** Un vocal arrivé dans la conversation jouée rejoint la fin de la file. */
@@ -112,8 +112,10 @@ public class ConversationAudioCoordinator(
 
     public fun next(origin: PlaybackCommandOrigin = PlaybackCommandOrigin.InApp) {
         val snapshot = mutableSnapshot.value
+        if (snapshot.context == null) return
         if (!snapshot.queue.hasNext) {
-            stop()
+            engine.stop()
+            exhaust(snapshot.context)
             return
         }
         switchTo(snapshot.queue.advanced(), origin)
@@ -149,11 +151,17 @@ public class ConversationAudioCoordinator(
         mutableGrace.value = null
     }
 
+    /** La grâce est posée AVANT de vider le contexte : un observateur des deux flux ne voit jamais « ni contexte ni grâce ». */
     private fun exhaust(last: ActiveAudioContext?) {
-        mutableSnapshot.value = CoordinatorSnapshot()
-        dismissGrace()
-        if (last == null) return
+        graceJob?.cancel()
+        graceJob = null
+        if (last == null) {
+            mutableGrace.value = null
+            mutableSnapshot.value = CoordinatorSnapshot()
+            return
+        }
         mutableGrace.value = last
+        mutableSnapshot.value = CoordinatorSnapshot()
         graceJob = scope.launch {
             delay(GRACE_MS)
             mutableGrace.value = null

@@ -1,6 +1,7 @@
 package me.meeshy.app.chat.river
 
 import me.meeshy.sdk.model.ForwardAttribution
+import me.meeshy.sdk.model.ServedProfileDecorItem
 import androidx.compose.runtime.Immutable
 import java.time.ZoneId
 import java.util.Locale
@@ -17,12 +18,21 @@ import me.meeshy.sdk.model.reading.river.RiverTimeScale
 import me.meeshy.ui.component.StoryRingState
 import me.meeshy.ui.component.bubble.BubbleBlurRevealSpec
 import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.bubble.BubbleStoryReply
+import me.meeshy.ui.component.bubble.EmojiDetector
+import me.meeshy.ui.component.bubble.ReplyMediaKind
+import me.meeshy.ui.component.river.riverRendersAttachments
 import me.meeshy.ui.component.bubble.drawnSticker
 import me.meeshy.ui.format.bubbleClockLabel
 
 /** La citation d'une réponse, sur UNE ligne (iOS `RiverReplyPreview`). */
 @Immutable
-internal data class RiverReplyPreview(val authorDisplayName: String, val text: String)
+internal data class RiverReplyPreview(
+    val authorDisplayName: String,
+    val text: String,
+    /** La vignette servie du média cité : la zone média sous la ligne (iOS `RiverQuotedMedia`), absente pour un texte seul. */
+    val thumbnailUrl: String? = null,
+)
 
 /**
  * L'identité de la voix qui parle : sa photo, sa fiche, l'anneau de sa story. La PRÉSENCE n'y est
@@ -37,6 +47,8 @@ internal data class RiverBubbleIdentity(
     val storyRing: StoryRingState,
     /** La conversation du message : « ici » (`viewing:*`) ne vaut que pour elle, lu au pied de l'avatar. */
     val conversationId: String? = null,
+    /** Le contour équipé de l'expéditeur, tel que servi : l'avatar le résout par le catalogue. */
+    val avatarRing: ServedProfileDecorItem? = null,
 )
 
 /** Ce qui remplace le texte d'une bulle que rien n'a le droit de montrer. */
@@ -67,6 +79,15 @@ internal data class RiverBubbleContent(
     val expiresAtMs: Long? = null,
     /** Le sticker que la bulle DESSINE à la place de son texte de repli (#14534, iOS `FocalRow.stickerBlock`). */
     val sticker: BubbleStickerSpec? = null,
+    /** La story citée, rendue en carte dans la bulle (iOS `storyCitation`) ; jamais pour un contenu protégé. */
+    val storyReply: BubbleStoryReply? = null,
+    /** Un emoji envoyé SEUL grossit à cette taille (iOS `emojiFontSize`) ; `null` : un texte ordinaire. */
+    val emojiFontSizeSp: Int? = null,
+    /**
+     * Le message dont le corps rend des pièces (photos, fichiers, lieux, vocaux), remis aux MÊMES atomes que la
+     * rangée plate ; `null` quand il n'en porte pas ou que sa protection les interdit (aucun média avant révélation).
+     */
+    val attachments: BubbleContent? = null,
 )
 
 /**
@@ -149,6 +170,7 @@ internal object RiverRenderingBuilder {
                 profile = source.senderProfile,
                 storyRing = storyRing(userId),
                 conversationId = source.viewingConversationId,
+                avatarRing = source.senderRing,
             ),
             isForwarded = source.isForwarded,
             forwardAttribution = source.forwardAttribution,
@@ -157,6 +179,9 @@ internal object RiverRenderingBuilder {
             isPending = source.isPending,
             expiresAtMs = isoToEpochMillisOrNull(source.expiresAtIso),
             sticker = source.drawnSticker?.takeIf { protection(source) == RiverProtection.NONE },
+            storyReply = source.storyReply?.takeIf { protection(source) == RiverProtection.NONE },
+            emojiFontSizeSp = emojiFontSize(source),
+            attachments = attachmentsSource(source),
         )
     }
 
@@ -164,9 +189,28 @@ internal object RiverRenderingBuilder {
         if (source.replyToId == null) return null
         val author = source.replyToSenderName?.let(RiverConversationMapping::singleLine).orEmpty()
         val text = source.replyToText?.let(RiverConversationMapping::singleLine).orEmpty()
-        if (author.isEmpty() && text.isEmpty()) return null
-        return RiverReplyPreview(author, text)
+        val thumbnail = quotedThumbnail(source)
+        if (author.isEmpty() && text.isEmpty() && thumbnail == null) return null
+        return RiverReplyPreview(author, text, thumbnail)
     }
+
+    /** La vignette d'une image citée, sauf citation supprimée : un message retiré ne montre plus son média. */
+    fun quotedThumbnail(source: BubbleContent): String? =
+        source.replyToThumbnailUrl?.takeIf {
+            it.isNotBlank() && !source.replyToDeleted && source.replyToMediaKind == ReplyMediaKind.Image
+        }
+
+    /** Un emoji seul grossit, mais jamais dans une réponse (comme la rangée plate) ni sous protection. */
+    fun emojiFontSize(source: BubbleContent): Int? {
+        if (protection(source) != RiverProtection.NONE || source.text.isBlank() || source.replyToText != null) return null
+        return EmojiDetector.fontSizeSp(source.emojiOnlyCount)
+    }
+
+    /** Les pièces ne partent vers l'écran que si rien ne les protège et qu'aucun sticker ne tient lieu de corps. */
+    fun attachmentsSource(source: BubbleContent): BubbleContent? =
+        source.takeIf {
+            protection(it) == RiverProtection.NONE && it.drawnSticker == null && it.riverRendersAttachments
+        }
 
     /** Un éphémère dont l'échéance est atteinte n'a plus rien à montrer (le fil le retire au même instant). */
     fun isExpired(content: RiverBubbleContent, nowMs: Long): Boolean =

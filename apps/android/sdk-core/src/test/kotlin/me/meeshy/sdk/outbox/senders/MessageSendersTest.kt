@@ -191,7 +191,7 @@ class MessageSendersTest {
         val row = outboxRow(OutboxKind.EDIT_MESSAGE, targetId = "m1", payload = encodedPayload(body))
         coEvery { messageApi.edit("m1", body) } returns accepted(serverMessage)
 
-        assertThat(handler.send(row)).isInstanceOf(SendResult.SuccessWithId::class.java)
+        assertThat(handler.send(row)).isEqualTo(SendResult.Success)
 
         coEvery { messageApi.edit("m1", body) } returns refused()
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
@@ -212,7 +212,7 @@ class MessageSendersTest {
         val row = outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1")
 
         coEvery { messageApi.delete("m1") } returns accepted(Unit)
-        assertThat(handler.send(row)).isInstanceOf(SendResult.SuccessWithId::class.java)
+        assertThat(handler.send(row)).isEqualTo(SendResult.Success)
 
         coEvery { messageApi.delete("m1") } returns refused()
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
@@ -242,7 +242,7 @@ class MessageSendersTest {
         val row = outboxRow(OutboxKind.PIN_MESSAGE, targetId = "m1", payload = encodedPayload(PinPayload("c1")))
 
         coEvery { messageApi.pin("c1", "m1") } returns accepted(Unit)
-        assertThat(handler.send(row)).isInstanceOf(SendResult.SuccessWithId::class.java)
+        assertThat(handler.send(row)).isEqualTo(SendResult.Success)
 
         coEvery { messageApi.pin("c1", "m1") } returns refused()
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)
@@ -254,7 +254,7 @@ class MessageSendersTest {
         val row = outboxRow(OutboxKind.UNPIN_MESSAGE, targetId = "m1", payload = encodedPayload(PinPayload("c1")))
 
         coEvery { messageApi.unpin("c1", "m1") } returns accepted(Unit)
-        assertThat(handler.send(row)).isInstanceOf(SendResult.SuccessWithId::class.java)
+        assertThat(handler.send(row)).isEqualTo(SendResult.Success)
 
         coEvery { messageApi.unpin("c1", "m1") } returns refused()
         assertThat(handler.send(row)).isEqualTo(SendResult.TransientFailure)

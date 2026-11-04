@@ -3,6 +3,7 @@ import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes
 
 import type { ConversationFlags } from '@/lib/api/preferences';
 import type { Conversation } from '@/lib/api/types';
+import { isObsoleteRefused } from '@/lib/conversation-departure';
 import { translate } from '@/lib/i18n-catalog';
 import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -162,7 +163,9 @@ export type RowViewer = {
 };
 
 export type RowConversation = Pick<Conversation, 'type'> &
-  Partial<Pick<Conversation, 'encryptionMode' | 'isActive' | 'isAnnouncementChannel' | 'defaultWriteRole' | 'currentUserRole' | 'isMember'>>;
+  Partial<
+    Pick<Conversation, 'id' | 'encryptionMode' | 'isActive' | 'isAnnouncementChannel' | 'defaultWriteRole' | 'currentUserRole' | 'isMember' | 'viewerCapabilities'>
+  >;
 
 /**
  * LES VERDICTS DE LA LIGNE — `conversationActionsFor` (`@meeshy/shared`), la
@@ -173,14 +176,28 @@ export type RowConversation = Pick<Conversation, 'type'> &
 /**
  * RENDRE OBSOLÈTE (#14645, #14653) — la porte de `DELETE /conversations/:id/obsolete` :
  * l'administrateur d'un type à autorité (`deleteForAll`), ou, dans un tête-à-tête
- * ouvert, l'un OU l'autre des deux membres inscrits et actifs (`hide`).
+ * ouvert, l'un OU l'autre des deux membres inscrits et actifs (`hide`) — sauf
+ * là où la passerelle l'a déjà refusé (#14690 : l'expéditeur d'une demande non
+ * acceptée, que rien d'autre ne signale au client).
+ *
+ * LA CAPACITÉ SERVIE (#14690) — `viewerCapabilities.canMakeObsolete`, calculée
+ * pour le lecteur par la décision même qui garde la route, DÉCIDE seule quand
+ * elle est servie. Absente (serveur antérieur, lecture ratée) ou illisible, la
+ * règle locale ci-dessus reste : une absence n'est jamais un « non ». Un refus
+ * mesuré de la route reste plus frais que l'instantané.
  */
 export type RowConversationActions = ConversationActions & { readonly obsolete: boolean };
 
 export function rowConversationActions(input: { readonly conversation: RowConversation; readonly viewer: RowViewer }): RowConversationActions {
   const actions = conversationActionsFor(lawInputOf(input));
   const directMember = input.conversation.type === 'direct' && input.conversation.isActive !== false && actions.hide;
-  return { ...actions, obsolete: actions.deleteForAll || directMember };
+  const allowed = servedObsoleteCapability(input.conversation) ?? (actions.deleteForAll || directMember);
+  return { ...actions, obsolete: allowed && !isObsoleteRefused(input.conversation.id) };
+}
+
+function servedObsoleteCapability(conversation: RowConversation): boolean | null {
+  const served: unknown = conversation.viewerCapabilities?.canMakeObsolete;
+  return typeof served === 'boolean' ? served : null;
 }
 
 function lawInputOf(input: { readonly conversation: RowConversation; readonly viewer: RowViewer }): Parameters<typeof conversationActionsFor>[0] {
