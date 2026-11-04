@@ -216,6 +216,9 @@ data class ApiParticipant(
     val accountClosed: Boolean? = null,
     /** `user` ou `anonymous` (`ParticipantType`) ; absent d'une vieille passerelle. */
     val type: String? = null,
+    /** Le décor équipé du participant (#10713, ne sert que son contour ici) ; absent d'une vieille passerelle ou ligne Room. */
+    @Serializable(with = TolerantServedProfileDecorSerializer::class)
+    val profileDecor: ServedProfileDecor? = null,
 )
 
 /**

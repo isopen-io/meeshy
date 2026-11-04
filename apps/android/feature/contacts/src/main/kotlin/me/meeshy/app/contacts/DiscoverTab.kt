@@ -43,12 +43,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.contacts.R
-import me.meeshy.sdk.model.friend.ConnectionActionRender
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.DynamicColorGenerator
-import me.meeshy.ui.component.ConnectionActionChip
 import me.meeshy.ui.component.ConnectionFeedbackHost
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.people.ConnectControl
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshyTheme
@@ -322,8 +321,8 @@ internal fun ResultRow(
             }
         }
         Spacer(Modifier.width(12.dp))
-        ConnectionActionChip(
-            render = ConnectionActionRender.from(row.connect),
+        ConnectControl(
+            action = row.connect,
             userName = name,
             accent = MeeshyPalette.Indigo500,
             onAdd = onAdd,

@@ -11,14 +11,15 @@ import org.junit.Test
 class MoodRailBubbleWiringTest {
 
     /** Le rail et la bulle qu'il héberge (extraite en hôte commun à la liste des conversations, #15989). */
-    private val host = listOf("MeeshyStoryRail.kt", "MoodBubbleHost.kt")
+    private val host = listOf("MeeshyStoryRail.kt", "MoodBubbleHost.kt", "StatusBubbleRoot.kt")
         .joinToString("\n") { File("src/main/kotlin/me/meeshy/app/navigation/$it").readText() }
 
     @Test
     fun `toucher l humeur d un ami ouvre sa bulle et ouvre la session de lecture`() {
         assertThat(host).contains("MoodBubbleHost(")
         assertThat(host).contains("MoodBubble(")
-        assertThat(host.substringAfter("onMoodTap = ").substringBefore("onMoodShown")).contains("markStatusViewed")
+        assertThat(host.substringAfter("onMoodTap = ").substringBefore("moodIdOf")).contains("bubbleController::show")
+        assertThat(host).contains("statusesViewModel.markStatusViewed(it.id)")
     }
 
     @Test
@@ -44,7 +45,7 @@ class MoodRailBubbleWiringTest {
 
     @Test
     fun `la bulle ouverte survit a la rotation, et un refus d audience se dit`() {
-        assertThat(host).contains("var bubbleUserId by rememberSaveable")
+        assertThat(host).contains("controller.state.collectAsStateWithLifecycle()")
         assertThat(host).contains("MoodRepostRefusedToast(statusesViewModel.repostAudienceRefused)")
     }
 

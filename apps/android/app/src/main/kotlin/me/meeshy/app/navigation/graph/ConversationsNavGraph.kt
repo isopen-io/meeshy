@@ -39,7 +39,7 @@ import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.feed.MoodLookup
 import me.meeshy.app.feed.StatusesViewModel
-import me.meeshy.app.navigation.MoodBubbleFor
+import me.meeshy.app.navigation.rememberStatusBubbleController
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.search.PostSearchDestination
 import me.meeshy.app.stories.StoriesViewModel
@@ -77,9 +77,8 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             ConversationInfoFromList(conversation, readerId, navController) { infoTarget = null }
         }
         // La bulle d'humeur du badge d'avatar : les humeurs se lisent au toucher (`state.value`), jamais ici,
-        // pour qu'une humeur qui change ne recompose pas les lignes.
-        var moodBubbleUserId by rememberSaveable { mutableStateOf<String?>(null) }
-        MoodBubbleFor(moodBubbleUserId, navController, statusesViewModel) { moodBubbleUserId = null }
+        // pour qu'une humeur qui change ne recompose pas les lignes ; la bulle se dessine à la racine.
+        val moodBubble = rememberStatusBubbleController()
         val moodsNow = { MoodLookup.from(statusesViewModel.state.value) }
         val openProfile = rememberProfileOpenerOverSheet(navController)
         ConversationListScreen(
@@ -110,10 +109,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 onViewConversationInfo = { conversation, readerId -> infoTarget = conversation to readerId },
                 onViewStory = { userId -> navController.navigate(Routes.story(userId)) },
                 onMoodBadgeTap = { userId ->
-                    moodsNow().entryOf(userId)?.let { entry ->
-                        moodBubbleUserId = userId
-                        statusesViewModel.markStatusViewed(entry.id)
-                    }
+                    moodsNow().entryOf(userId)?.let(moodBubble::show)
                 },
                 onMoodShown = { userId -> moodsNow().statusIdOf(userId)?.let(statusesViewModel::trackAvatarImpression) },
             ),

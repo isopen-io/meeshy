@@ -5,7 +5,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -880,5 +882,128 @@ class ConversationMembersViewModelTest {
         admin.load("c1")
         advanceUntilIdle()
         assertThat(admin.state.value.mayInvite).isTrue()
+    }
+
+    // MARK: liste riche (#15966)
+
+    private fun collected(vm: ConversationMembersViewModel, into: MutableList<MembersEffect>) =
+        CoroutineScope(dispatcher).launch { vm.effects.collect { into += it } }
+
+    @Test
+    fun `leaving the group calls leave then clears the roster cache and asks to go back`() = runTest {
+        val repository = repo()
+        coEvery { repository.leave("c1") } returns NetworkResult.Success(Unit)
+        val cache = rosterCache(repository)
+        val vm = viewModel(repository, participantCache = cache)
+        val effects = mutableListOf<MembersEffect>()
+        val job = collected(vm, effects)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.leaveGroup()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repository.leave("c1") }
+        coVerify { cache.invalidate("c1") }
+        assertThat(effects).containsExactly(MembersEffect.Haptic(FeedbackHaptic.SUCCESS), MembersEffect.Left).inOrder()
+        job.cancel()
+    }
+
+    @Test
+    fun `a refused departure keeps the sheet, raises the error and a failure haptic`() = runTest {
+        val repository = repo()
+        coEvery { repository.leave("c1") } returns NetworkResult.Failure(ApiError("nope"))
+        val vm = viewModel(repository)
+        val effects = mutableListOf<MembersEffect>()
+        val job = collected(vm, effects)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.leaveGroup()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.actionFailed).isTrue()
+        assertThat(effects).containsExactly(MembersEffect.Haptic(FeedbackHaptic.ERROR))
+        job.cancel()
+    }
+
+    @Test
+    fun `a role change is only confirmed after the viewer accepts and nothing is sent before`() = runTest {
+        val repository = repo(NetworkResult.Success(page(listOf(member("p1")))))
+        coEvery { repository.updateParticipantRole(any(), any(), any()) } returns NetworkResult.Success(Unit)
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+        val target = vm.state.value.members.first()
+
+        vm.requestRoleChange(target, MemberRoleAction.PROMOTE_MODERATOR)
+        advanceUntilIdle()
+        assertThat(vm.state.value.pendingRoleChange?.action).isEqualTo(MemberRoleAction.PROMOTE_MODERATOR)
+        coVerify(exactly = 0) { repository.updateParticipantRole(any(), any(), any()) }
+
+        vm.confirmRoleChange()
+        advanceUntilIdle()
+        assertThat(vm.state.value.pendingRoleChange).isNull()
+        coVerify(exactly = 1) { repository.updateParticipantRole("c1", "p1", MemberRole.MODERATOR) }
+    }
+
+    @Test
+    fun `cancelling a pending role change sends nothing`() = runTest {
+        val repository = repo()
+        val vm = viewModel(repository)
+        vm.load("c1")
+        advanceUntilIdle()
+
+        vm.requestRoleChange(vm.state.value.members.first(), MemberRoleAction.PROMOTE_ADMIN)
+        vm.cancelRoleChange()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.pendingRoleChange).isNull()
+        coVerify(exactly = 0) { repository.updateParticipantRole(any(), any(), any()) }
+    }
+
+    @Test
+    fun `removing a member emits a success haptic and a refused removal an error haptic`() = runTest {
+        val repository = repo()
+        coEvery { repository.removeParticipant("c1", "p1") } returns NetworkResult.Success(Unit)
+        val vm = viewModel(repository)
+        val effects = mutableListOf<MembersEffect>()
+        val job = collected(vm, effects)
+        vm.load("c1")
+        advanceUntilIdle()
+        val target = vm.state.value.members.first()
+
+        vm.removeMember(target)
+        advanceUntilIdle()
+        assertThat(effects).containsExactly(MembersEffect.Haptic(FeedbackHaptic.SUCCESS))
+
+        coEvery { repository.removeParticipant("c1", "p1") } returns NetworkResult.Failure(ApiError("no"))
+        effects.clear()
+        vm.removeMember(target)
+        advanceUntilIdle()
+        assertThat(effects).containsExactly(MembersEffect.Haptic(FeedbackHaptic.ERROR))
+        job.cancel()
+    }
+
+    @Test
+    fun `the skeleton shows on a cold load only and never over a roster already on screen`() = runTest {
+        val vm = viewModel()
+        vm.load("c1")
+        assertThat(vm.state.value.showSkeleton).isTrue()
+        advanceUntilIdle()
+        assertThat(vm.state.value.showSkeleton).isFalse()
+
+        vm.onSearchQueryChange("zz")
+        advanceTimeBy(301)
+        assertThat(vm.state.value.showSkeleton).isFalse()
+    }
+
+    @Test
+    fun `a capped roster reports the plus form`() = runTest {
+        val vm = viewModel(repo(NetworkResult.Success(page(listOf(member("p1")), totalCount = 199))))
+        vm.load("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.isCapped).isTrue()
     }
 }

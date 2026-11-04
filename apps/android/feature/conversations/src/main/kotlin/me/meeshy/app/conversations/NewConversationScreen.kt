@@ -33,7 +33,15 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import me.meeshy.ui.R as UiR
 import androidx.compose.material.icons.filled.Block
-import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.platform.testTag
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import kotlinx.coroutines.delay
+import me.meeshy.sdk.model.PresenceState
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
@@ -56,10 +64,29 @@ fun NewConversationScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    val haptics = rememberMeeshyHaptics()
+
     LaunchedEffect(state.createdConversationId) {
         val id = state.createdConversationId ?: return@LaunchedEffect
+        haptics.success()
+        delay(NAVIGATION_DELAY_MS)
         viewModel.consumeCreated()
         onConversationCreated(id)
+    }
+
+    LaunchedEffect(state.error) {
+        if (state.error != null) haptics.error()
+    }
+
+    state.error?.let { error ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissError,
+            title = { Text(stringResource(R.string.new_conversation_error_title)) },
+            text = { Text(stringResource(error.messageRes())) },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissError) { Text(stringResource(R.string.new_conversation_ok)) }
+            },
+        )
     }
 
     LaunchedEffect(state.queuedOffline) {
@@ -81,9 +108,14 @@ fun NewConversationScreen(
             onToggleUser = viewModel::toggleSelection,
             onTapUser = viewModel::onPersonTapped,
             onRowShown = viewModel::loadMoreIfNeeded,
+            onRetrySearch = viewModel::retrySearch,
+            onDismissError = viewModel::dismissError,
         ),
     )
 }
+
+/** iOS closes the sheet, then pushes the conversation 0.3 s later so the dismissal can start first. */
+private const val NAVIGATION_DELAY_MS = 300L
 
 internal fun NewConversationError.messageRes(): Int = when (this) {
     NewConversationError.BLOCKED -> R.string.new_conversation_error_blocked
@@ -144,6 +176,32 @@ internal fun NoUserFound(modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Medium,
             color = MeeshyTheme.tokens.textMuted,
         )
+    }
+}
+
+/** The search itself broke (iOS `searchFailed`): not « No user found », and a way to try again. */
+@Composable
+internal fun SearchFailed(onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth().padding(top = 60.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+    ) {
+        Icon(
+            Icons.Filled.PersonOff,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textMuted.copy(alpha = 0.5f),
+            modifier = Modifier.size(36.dp),
+        )
+        Text(
+            text = stringResource(R.string.new_conversation_search_failed),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = MeeshyTheme.tokens.textMuted,
+        )
+        TextButton(onClick = onRetry, modifier = Modifier.testTag(NewConversationTags.SEARCH_RETRY)) {
+            Text(stringResource(R.string.new_conversation_search_retry), fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -214,14 +272,23 @@ internal fun UserRow(
     opening: Boolean = false,
 ) {
     val blockedLabel = stringResource(UiR.string.connection_badge_blocked)
+    val presence = rememberPresence(user.id, user.servedPresence)
+    val label = NewConversationLogic.rowAccessibilityLabel(
+        user = user,
+        isOnlineNow = presence == PresenceState.ONLINE,
+        blockedLabel = blockedLabel,
+        onlineLabel = stringResource(R.string.new_conversation_user_online),
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
             .alpha(if (user.isBlocked) 0.5f else 1f)
-            .clickable(enabled = enabled && !user.isBlocked, onClick = onClick)
-            .semantics {
+            .clickable(enabled = enabled && NewConversationLogic.isSelectable(user), onClick = onClick)
+            .semantics(mergeDescendants = true) {
                 role = Role.Button
-                if (user.isBlocked) stateDescription = blockedLabel
+                contentDescription = label
+                selected = user.isSelected
+                if (user.isBlocked) disabled()
             }
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
@@ -231,7 +298,7 @@ internal fun UserRow(
             name = user.displayName,
             size = 44.dp,
             imageUrl = user.avatarUrl,
-            presence = rememberPresence(user.id, user.servedPresence),
+            presence = presence,
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
