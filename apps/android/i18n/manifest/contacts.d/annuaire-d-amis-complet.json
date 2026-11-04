@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:contacts": {
+      "resDir": "feature/contacts/src/main/res",
+      "entries": [
+        {
+          "androidName": "contacts_filter_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_filter_affiliates",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_filter_phonebook",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_list_last_seen_days",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_list_last_seen_hours",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_list_last_seen_minutes",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_list_mood_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_list_offline_lower",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_list_online",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_list_row_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_search_clear",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
