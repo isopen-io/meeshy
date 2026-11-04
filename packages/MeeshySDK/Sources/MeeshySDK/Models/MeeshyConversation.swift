@@ -109,6 +109,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     /// Ce que le lecteur ne peut pas écrire ici (#9929) — servi par la liste et
     /// le détail, gardé en cache pour que le bandeau précède le réseau.
     public var viewerWriteRestriction: ConversationWriteRestriction? = nil
+    /// Ce que la passerelle accorde au lecteur (#14690), gardé en cache : une
+    /// liste rouverte hors ligne ne repropose pas une action refusée.
+    public var viewerCapabilities: ConversationViewerCapabilities? = nil
     public var recentMessages: [RecentMessagePreview] = []
     /// Display-layer tags (separate concept from `userState.tags`, which
     /// is the wire-format `String[]` from `UserConversationPreferences`).
@@ -529,7 +532,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case lastMessageSenderName, lastMessageSenderUserId, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
         case lastMessageLocation
         case lastMessageNature, lastReaction, lastReactionTargetsReader, activeCall, listRankAt
-        case viewerEngagement, viewerWriteRestriction
+        case viewerEngagement, viewerWriteRestriction, viewerCapabilities
         case recentMessages, tags
         case bridge
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
@@ -594,8 +597,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.lastReactionTargetsReader = (try? c.decodeIfPresent(Bool.self, forKey: .lastReactionTargetsReader)) ?? false
         self.listRankAt = (try? c.decodeIfPresent(Date.self, forKey: .listRankAt)) ?? nil
         self.activeCall = (try? c.decodeIfPresent(ConversationActiveCall.self, forKey: .activeCall))
-        self.viewerEngagement = (try? c.decodeIfPresent(ConversationEngagementSnapshot.self, forKey: .viewerEngagement))
-        self.viewerWriteRestriction = (try? c.decodeIfPresent(ConversationWriteRestriction.self, forKey: .viewerWriteRestriction)) ?? nil
+        (self.viewerEngagement, self.viewerWriteRestriction, self.viewerCapabilities) = Self.decodeViewerFacets(c)
         self.recentMessages = try c.decodeIfPresent([RecentMessagePreview].self, forKey: .recentMessages) ?? []
         self.tags = try c.decodeIfPresent([MeeshyConversationTag].self, forKey: .tags) ?? []
         // Tolérance dans les DEUX sens, même patron que `callSummary` /
@@ -697,8 +699,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encode(lastReactionTargetsReader, forKey: .lastReactionTargetsReader)
         try c.encodeIfPresent(listRankAt, forKey: .listRankAt)
         try c.encodeIfPresent(activeCall, forKey: .activeCall)
-        try c.encodeIfPresent(viewerEngagement, forKey: .viewerEngagement)
-        try c.encodeIfPresent(viewerWriteRestriction, forKey: .viewerWriteRestriction)
+        try encodeViewerFacets(into: &c)
         try c.encode(recentMessages, forKey: .recentMessages)
         try c.encode(tags, forKey: .tags)
         try c.encodeIfPresent(bridge, forKey: .bridge)
@@ -778,3 +779,23 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 }
 
 extension MeeshyConversation: CacheIdentifiable {}
+
+/// Ce que la passerelle sert pour le LECTEUR — série, restriction d'écriture, capacités
+/// (#8906, #9929, #14690) : chacun décodé en tolérant, une forme qui a bougé ne jette pas la ligne.
+extension MeeshyConversation {
+    private static func decodeViewerFacets(
+        _ c: KeyedDecodingContainer<CodingKeys>
+    ) -> (ConversationEngagementSnapshot?, ConversationWriteRestriction?, ConversationViewerCapabilities?) {
+        (
+            (try? c.decodeIfPresent(ConversationEngagementSnapshot.self, forKey: .viewerEngagement)) ?? nil,
+            (try? c.decodeIfPresent(ConversationWriteRestriction.self, forKey: .viewerWriteRestriction)) ?? nil,
+            (try? c.decodeIfPresent(ConversationViewerCapabilities.self, forKey: .viewerCapabilities)) ?? nil
+        )
+    }
+
+    private func encodeViewerFacets(into c: inout KeyedEncodingContainer<CodingKeys>) throws {
+        try c.encodeIfPresent(viewerEngagement, forKey: .viewerEngagement)
+        try c.encodeIfPresent(viewerWriteRestriction, forKey: .viewerWriteRestriction)
+        try c.encodeIfPresent(viewerCapabilities, forKey: .viewerCapabilities)
+    }
+}
