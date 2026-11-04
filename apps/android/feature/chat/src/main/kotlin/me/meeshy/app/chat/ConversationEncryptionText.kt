@@ -119,5 +119,9 @@ internal fun ConversationEncryptionNotice.textRes(): Int = when (this) {
     ConversationEncryptionNotice.REGIME_CHANGED -> R.string.encryption_detail_regime_changed
     ConversationEncryptionNotice.IRREVERSIBLE -> R.string.encryption_irreversible_refused
     ConversationEncryptionNotice.FORBIDDEN -> R.string.encryption_toggle_forbidden
+    ConversationEncryptionNotice.RESTRICTED -> R.string.encryption_activation_restricted
+    ConversationEncryptionNotice.ALREADY_ENABLED -> R.string.encryption_already_enabled
+    ConversationEncryptionNotice.DIRECT_ALREADY_END_TO_END -> R.string.encryption_detail_direct_already_end_to_end
+    ConversationEncryptionNotice.DIRECT_NOT_A_PAIR -> R.string.encryption_detail_direct_not_a_pair
     ConversationEncryptionNotice.FAILED -> R.string.encryption_action_failed
 }

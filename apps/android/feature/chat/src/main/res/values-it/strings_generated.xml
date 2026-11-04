@@ -361,10 +361,13 @@
     <string name="dashboard_stat_links">Link</string>
     <string name="dashboard_tone">Tono: %1$s</string>
     <string name="encryption_close">Chiudi</string>
+    <string name="encryption_confirm_cancel">Annulla</string>
     <string name="encryption_detail_activate">Attiva la crittografia</string>
     <string name="encryption_detail_activation_footer_final">La crittografia end-to-end non si disattiva mai, e nemmeno quella sui nostri server. Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone.</string>
     <string name="encryption_detail_active_label">Crittografia attiva</string>
     <string name="encryption_detail_details_header">Dettagli</string>
+    <string name="encryption_detail_direct_already_end_to_end">Hai già una conversazione crittografata end-to-end con questa persona: aprila per scrivere lì. Questa resta crittografata sui nostri server.</string>
+    <string name="encryption_detail_direct_not_a_pair">Questa chat individuale non ha esattamente due membri registrati: qui la crittografia end-to-end non è possibile.</string>
     <string name="encryption_detail_enabled_on">Attivata il</string>
     <string name="encryption_detail_inactive_label">Conversazione non crittografata</string>
     <string name="encryption_detail_inactive_subtitle">Conversazione creata prima della crittografia sistematica: i suoi messaggi non sono crittografati.</string>
@@ -373,6 +376,8 @@
     <string name="encryption_detail_mode_label">Modalità</string>
     <string name="encryption_detail_regime_changed">Un altro membro ha appena modificato la crittografia: lo stato è stato aggiornato.</string>
     <string name="encryption_detail_served_gap">Il server presenta questa conversazione senza crittografia end-to-end, ma questo dispositivo l’ha vista crittografata end-to-end: qui resta tale. Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone.</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm">Passa a end-to-end</string>
+    <string name="encryption_detail_switch_to_end_to_end_confirm_title">Passare alla crittografia end-to-end?</string>
     <string name="encryption_detail_title">Crittografia</string>
     <string name="encryption_detail_translation">Traduzione</string>
     <string name="encryption_detail_translation_available">Disponibile</string>
@@ -419,6 +424,7 @@
     <string name="encryption_summary_hybrid">Crittografata sui nostri server, con verifica tra dispositivi compatibili</string>
     <string name="encryption_summary_none">Conversazione creata prima della crittografia sistematica: i suoi messaggi non sono crittografati</string>
     <string name="encryption_summary_server">Crittografata sui nostri server</string>
+    <string name="encryption_switch_end_to_end_final">La crittografia end-to-end non si disattiva mai. Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone.</string>
     <string name="encryption_topic_absent">Non disponibile in questa modalità</string>
     <string name="encryption_topic_available">Cosa funziona</string>
     <string name="encryption_topic_devices">I tuoi dispositivi</string>

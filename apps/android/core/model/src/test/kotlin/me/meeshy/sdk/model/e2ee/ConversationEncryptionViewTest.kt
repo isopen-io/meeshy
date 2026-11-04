@@ -79,48 +79,50 @@ class ConversationEncryptionViewTest {
     }
 
     @Test
-    fun `a group explains itself without activating`() {
-        val shown = view(status = status(mode = null, canToggle = true), isDirect = false)
-
-        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.InactiveReadOnly)
+    fun `a group offers activation to the moderator the gateway named, and to nobody else (#16044)`() {
+        assertThat(view(status = status(mode = null, canToggle = true), isDirect = false).content)
+            .isEqualTo(ConversationEncryptionContent.Activation)
+        assertThat(view(status = status(mode = null, canToggle = false), isDirect = false).content)
+            .isEqualTo(ConversationEncryptionContent.InactiveReadOnly)
+        assertThat(view(status = status(mode = null, canToggle = null), isDirect = false).content)
+            .isEqualTo(ConversationEncryptionContent.InactiveReadOnly)
     }
 
     @Test
-    fun `without a served status the fallback right decides, closed by default`() {
-        assertThat(view(status = null).content).isEqualTo(ConversationEncryptionContent.InactiveReadOnly)
-        assertThat(view(status = null, fallback = true).content).isEqualTo(ConversationEncryptionContent.Activation)
-    }
-
-    @Test
-    fun `the pair end to end conversation is offered from the readable direct only`() {
-        assertThat(view(status = status(mode = null, pair = "c42")).pairEndToEndConversationId).isEqualTo("c42")
-        assertThat(view(status = status(mode = "e2ee", pair = "c42")).pairEndToEndConversationId).isNull()
-        assertThat(view(status = status(mode = null, pair = "")).pairEndToEndConversationId).isNull()
-    }
-
-    @Test
-    fun `an end to end mode served without its activation date is still end to end, never a clear conversation`() {
-        val anomaly = status(mode = "e2ee", canToggle = false).copy(isEncrypted = false)
-
-        val shown = view(status = anomaly)
-
-        assertThat(shown.regime).isEqualTo(ConversationEncryptionRegime.END_TO_END)
-        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
-    }
-
-    @Test
-    fun `a hybrid regime also offers a mode change to the allowed role, never to the others`() {
-        assertThat(view(status = status(mode = "hybrid")).content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = true))
-        assertThat(view(status = status(mode = "hybrid", canToggle = false)).content)
+    fun `a server group climbs to hybrid for its moderator, never otherwise`() {
+        assertThat(view(status = status(mode = "server"), isDirect = false).content)
+            .isEqualTo(ConversationEncryptionContent.Active(offersModeChange = true))
+        assertThat(view(status = status(mode = "server", canToggle = false), isDirect = false).content)
             .isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
     }
 
     @Test
-    fun `an at-rest regime switches directly to every other mode, end to end to none`() {
-        assertThat(ConversationEncryptionModeChoice.switchTargets(ConversationEncryptionRegime.SERVER))
-            .containsExactly(ConversationEncryptionModeChoice.E2EE, ConversationEncryptionModeChoice.HYBRID).inOrder()
+    fun `a hybrid group returns to server for its moderator (#14663)`() {
+        assertThat(view(status = status(mode = "hybrid"), isDirect = false).content)
+            .isEqualTo(ConversationEncryptionContent.Active(offersModeChange = true))
+        assertThat(view(status = status(mode = "hybrid", canToggle = false), isDirect = false).content)
+            .isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
+    }
+
+    @Test
+    fun `a group sealed end to end on this device is never toggled, whatever the gateway serves`() {
+        val shown = view(status = status(mode = null, canToggle = true), sealed = true, isDirect = false)
+
+        assertThat(shown.mayToggle).isFalse()
+        assertThat(shown.content).isEqualTo(ConversationEncryptionContent.Active(offersModeChange = false))
+    }
+
+    @Test
+    fun `a group switches like a direct conversation, end to end excepted from this phone`() {
         assertThat(ConversationEncryptionModeChoice.switchTargets(ConversationEncryptionRegime.HYBRID))
-            .containsExactly(ConversationEncryptionModeChoice.E2EE, ConversationEncryptionModeChoice.SERVER).inOrder()
-        assertThat(ConversationEncryptionModeChoice.switchTargets(ConversationEncryptionRegime.END_TO_END)).isEmpty()
+            .contains(ConversationEncryptionModeChoice.SERVER)
+        assertThat(
+            ConversationEncryptionModeChoice.switchTargets(ConversationEncryptionRegime.HYBRID)
+                .filter { it.isOfferedFor(isDirect = false) },
+        ).containsExactly(ConversationEncryptionModeChoice.SERVER)
+        assertThat(
+            ConversationEncryptionModeChoice.switchTargets(ConversationEncryptionRegime.SERVER)
+                .filter { it.isOfferedFor(isDirect = false) },
+        ).containsExactly(ConversationEncryptionModeChoice.HYBRID)
     }
 }
