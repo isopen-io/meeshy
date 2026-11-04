@@ -99,6 +99,7 @@
     <string name="composer_publish_as_reel">Reel veröffentlichen</string>
     <string name="composer_publish_as_story">Story veröffentlichen</string>
     <string name="composer_publish_as_storyAndReel">Story und Reel veröffentlichen</string>
+    <string name="composer_publish_format_unsupported">Dieses Format kann von hier noch nicht veröffentlicht werden</string>
     <string name="composer_rail_object_exit">Objekt verlassen</string>
     <string name="composer_slide_rail">Szenen der Veröffentlichung</string>
     <string name="composer_slide_rail_capReached">Höchstens zehn Szenen — lösche eine, um eine neue zu erstellen</string>
@@ -114,6 +115,7 @@
     <string name="composer_text_frame_rectangle">Quadrat</string>
     <string name="composer_text_frame_rounded">Abgerundet</string>
     <string name="composer_text_frame_speech">Sprechblase</string>
+    <string name="feed_post_publish_error">Fehler beim Veröffentlichen</string>
     <string name="my_stories_archive_empty_subtitle">Ihre abgelaufenen Storys landen in diesem Archiv.</string>
     <string name="my_stories_archive_empty_title">Kein Archiv</string>
     <string name="my_stories_back">Zurück</string>

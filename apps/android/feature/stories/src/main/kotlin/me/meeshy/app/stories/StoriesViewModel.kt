@@ -19,12 +19,21 @@ import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.FailedStoryPublish
+import me.meeshy.sdk.story.InMemoryStoryViewedLedger
 import me.meeshy.sdk.story.PendingStoryPublish
 import me.meeshy.sdk.publication.PublicationOutbox
 import me.meeshy.sdk.story.StoryCoverStore
 import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.sdk.story.StoryViewedLedger
 import me.meeshy.sdk.story.toStoryGroups
 import javax.inject.Inject
+
+private data class TrayInputs(
+    val result: me.meeshy.sdk.cache.CacheResult<List<ApiPost>>,
+    val queue: me.meeshy.sdk.story.StoryPublishQueue,
+    val user: me.meeshy.sdk.model.MeeshyUser?,
+    val viewed: Map<String, Long>,
+)
 
 data class StoriesUiState(
     val tray: StoryTrayPresentation = StoryTrayPresentation(self = null, others = emptyList()),
@@ -52,6 +61,7 @@ class StoriesViewModel @Inject constructor(
     private val coverMemo: StoryCoverMemo = StoryCoverMemo(),
     private val coverStore: StoryCoverStore = StoryCoverStore.Empty,
     private val coverSignal: StoryCoverRenderSignal? = null,
+    private val viewedLedger: StoryViewedLedger = InMemoryStoryViewedLedger(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoriesUiState())
@@ -78,9 +88,11 @@ class StoriesViewModel @Inject constructor(
                 sessionRepository.currentUser,
                 // Une couverture rendue après coup rafraîchit les cellules (iOS `StoryCoverRenderSignal`).
                 coverSignal?.generation ?: flowOf(0),
-            ) { result, queue, user, _ -> Triple(result, queue, user) }
+                // Le registre durable des vues est une source DISTINCTE du cache : réinjecté à chaque reconstruction.
+                viewedLedger.observe(),
+            ) { result, queue, user, _, viewed -> TrayInputs(result, queue, user, viewed) }
                 .catch { _state.update { it.copy(showSkeleton = false, isSyncing = false) } }
-                .collectEachSafely { (result, queue, user) ->
+                .collectEachSafely { (result, queue, user, viewed) ->
                     val pending = queue.pending
                     val failed = queue.failed
                     reconcileDeliveredPublishes(pending, failed)
@@ -91,7 +103,7 @@ class StoriesViewModel @Inject constructor(
                         StoryOptimisticTray.SelfIdentity(it.id, it.effectiveDisplayName, it.avatar)
                     }
                     val merged = StoryOptimisticTray.merge(
-                        cached = rawStories,
+                        cached = rawStories.withViewedLedger(viewed, currentUserId),
                         pending = StoryOptimisticTray.pendingStories(pending, self),
                     )
                     val groups = merged.toStoryGroups(currentUserId = currentUserId)
