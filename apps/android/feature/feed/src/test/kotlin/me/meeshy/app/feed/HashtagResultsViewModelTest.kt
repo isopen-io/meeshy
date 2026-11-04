@@ -46,7 +46,7 @@ class HashtagResultsViewModelTest {
     private fun viewModel(tag: String = "#Paris", cached: PostPage? = null): HashtagResultsViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { hashtags.cachedFirstPage(any()) } returns cached
-        return HashtagResultsViewModel(hashtags, posts, session, MeeshyConfig(), SavedStateHandle(mapOf("tag" to tag)))
+        return HashtagResultsViewModel(hashtags, posts, mockk(relaxed = true), session, MeeshyConfig(), SavedStateHandle(mapOf("tag" to tag)))
     }
 
     @Test
@@ -98,12 +98,12 @@ class HashtagResultsViewModelTest {
         coEvery { posts.like("a") } returns NetworkResult.Failure(ApiError("refus"))
         val vm = viewModel()
 
-        vm.toggleLike("a")
+        vm.cards.toggleLike("a")
 
         coVerify { posts.like("a") }
         assertThat(vm.state.value.posts.single().isLiked).isFalse()
         assertThat(vm.state.value.posts.single().likeCount).isEqualTo(0)
-        assertThat(vm.state.value.errorMessage).isEqualTo("refus")
+        assertThat(vm.state.value.notice).isEqualTo(FeedNotice.LIKE_FAILED)
     }
 
     @Test
@@ -112,7 +112,7 @@ class HashtagResultsViewModelTest {
         coEvery { posts.like("a") } returns NetworkResult.Success(Unit)
         val vm = viewModel()
 
-        vm.toggleLike("a")
+        vm.cards.toggleLike("a")
 
         assertThat(vm.state.value.posts.single().isLiked).isTrue()
         assertThat(vm.state.value.posts.single().likeCount).isEqualTo(1)

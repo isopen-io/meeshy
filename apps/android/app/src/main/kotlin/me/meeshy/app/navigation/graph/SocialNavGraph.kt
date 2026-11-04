@@ -91,6 +91,8 @@ internal fun NavGraphBuilder.socialNavGraph(
             onBack = dismiss,
             onPostClick = { postId -> navController.navigateKeepingSheet(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigateKeepingSheet(Routes.postDetail(postId)) },
+            onOpenProfile = { userId -> navController.navigateKeepingSheet(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigateKeepingSheet(Routes.hashtag(tag)) },
         )
     }
     sheetComposable(

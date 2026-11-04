@@ -13,9 +13,9 @@ import me.meeshy.ui.theme.MeeshySpacing
 @Composable
 internal fun FeedPostCardFooter(
     post: FeedPostPresentation,
-    onLike: () -> Unit,
-    onBookmark: () -> Unit,
-    onComments: () -> Unit,
+    onLike: (() -> Unit)?,
+    onBookmark: (() -> Unit)?,
+    onComments: (() -> Unit)?,
     onRepost: (() -> Unit)?,
     onQuote: (() -> Unit)?,
     onSend: (() -> Unit)? = null,

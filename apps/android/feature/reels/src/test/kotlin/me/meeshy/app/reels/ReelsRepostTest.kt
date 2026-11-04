@@ -19,6 +19,7 @@ import me.meeshy.app.feed.QuoteComposerState
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PostType
@@ -70,9 +71,9 @@ class ReelsRepostTest {
         media = listOf(ApiPostMedia(id = "m-$id", mimeType = "video/mp4", fileUrl = "https://cdn.test/$id.mp4")),
     )
 
-    private fun loaded(vararg reels: ApiPost): ReelsViewModel {
+    private fun loaded(vararg reels: ApiPost, reader: MeeshyUser? = null): ReelsViewModel {
         every { session.currentUserId } returns "me"
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+        every { session.currentUser } returns MutableStateFlow(reader)
         every { socialSocket.postLiked } returns MutableSharedFlow()
         every { socialSocket.postUnliked } returns MutableSharedFlow()
         every { socialSocket.postBookmarked } returns MutableSharedFlow()
@@ -202,5 +203,27 @@ class ReelsRepostTest {
 
         assertThat(vm.state.value.quoteComposer).isNull()
         coVerify(exactly = 0) { repository.repost(any(), any(), any(), any()) }
+    }
+
+    /**
+     * #16001 — prisme `['fr', 'en']`, source anglaise traduite en français (langue d'origine au rang 2, leçon 261) : la carte
+     * du réel cité sert le français, le compositeur aussi — y compris quand le réel en republie un autre.
+     */
+    @Test
+    fun `quoting from the reels player shows the quoted text in the reader's language`() = runTest {
+        val reader = MeeshyUser(id = "me", username = "moi", systemLanguage = "fr", regionalLanguage = "en")
+        val french = mapOf("fr" to ApiPostTranslationEntry(text = "Ma légende"))
+        val original = reel("r1").copy(content = "My caption", originalLanguage = "en", translations = french)
+        val share = reel(
+            "r2",
+            repostOf = ApiRepostOf(id = "orig", type = "REEL", content = "My caption", originalLanguage = "en", translations = french),
+        )
+        val vm = loaded(original, share, reader = reader)
+
+        vm.beginQuote("r1")
+        assertThat(vm.state.value.quoteComposer?.sourceContentPreview).isEqualTo("Ma légende")
+        vm.cancelQuote()
+        vm.beginQuote("r2")
+        assertThat(vm.state.value.quoteComposer?.sourceContentPreview).isEqualTo("Ma légende")
     }
 }

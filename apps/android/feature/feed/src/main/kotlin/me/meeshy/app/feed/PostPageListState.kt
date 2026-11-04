@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.comments.CommentsTitleCount
 
 /**
  * Pure, immutable accumulation state for any cursor-paginated post list (the saved-posts
@@ -98,6 +99,28 @@ data class PostPageListState(
                 if (it.id == postId) it.copy(isRepostedByMe = original.isRepostedByMe, repostCount = original.repostCount) else it
             },
         )
+    }
+
+    /** Un commentaire envoyé depuis la feuille : le compteur de [postId] le suit (iOS `CommentsTitleCount.afterSend`). */
+    fun commented(postId: String): PostPageListState {
+        if (posts.none { it.id == postId }) return this
+        return copy(
+            posts = posts.map { if (it.id == postId) it.copy(commentCount = CommentsTitleCount.afterSend(it.commentCount ?: 0)) else it },
+        )
+    }
+
+    /** L'épinglage confirmé de [postId]. Inerte (même instance) si le post est absent ou déjà épinglé. */
+    fun pinned(postId: String): PostPageListState {
+        val target = posts.firstOrNull { it.id == postId } ?: return this
+        if (target.isPinned == true) return this
+        return copy(posts = posts.map { if (it.id == postId) it.copy(isPinned = true) else it })
+    }
+
+    /** Une suppression refusée : [post] reprend sa place [index] (bornée à la liste). Inerte s'il y est déjà. */
+    fun restored(post: ApiPost, index: Int): PostPageListState {
+        if (posts.any { it.id == post.id }) return this
+        val at = index.coerceIn(0, posts.size)
+        return copy(posts = posts.take(at) + post + posts.drop(at))
     }
 
     companion object {

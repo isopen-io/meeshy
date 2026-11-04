@@ -48,9 +48,9 @@ import me.meeshy.ui.theme.hexColor
 @Composable
 internal fun PostStatsRow(
     post: FeedPostPresentation,
-    onLike: () -> Unit,
-    onBookmark: () -> Unit,
-    onComments: () -> Unit,
+    onLike: (() -> Unit)?,
+    onBookmark: (() -> Unit)?,
+    onComments: (() -> Unit)?,
     onRepost: (() -> Unit)?,
     onQuote: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -65,9 +65,10 @@ internal fun PostStatsRow(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         modifier = modifier.fillMaxWidth(),
     ) {
+        // Une action n'est dessinée que si son hôte lui passe son effet : jamais un bouton inerte (#13244).
         val likeLabel = stringResource(if (post.isLiked) R.string.feed_unlike else R.string.feed_like)
         val hasLikes = post.likeCount > 0
-        StatAction(
+        if (onLike != null) StatAction(
             icon = if (post.isLiked || hasLikes) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
             count = post.likeCount,
             contentDescription = likeLabel,
@@ -83,7 +84,7 @@ internal fun PostStatsRow(
             countColor = if (post.isLiked) MeeshyPalette.Error else if (hasLikes && accent != null) accent else neutral,
             onClick = onLike,
         )
-        StatAction(
+        if (onComments != null) StatAction(
             icon = Icons.Outlined.ChatBubbleOutline,
             count = post.commentCount,
             contentDescription = stringResource(R.string.feed_comments),
@@ -103,7 +104,7 @@ internal fun PostStatsRow(
         Spacer(Modifier.weight(1f))
         val bookmarkLabel =
             stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark)
-        StatAction(
+        if (onBookmark != null) StatAction(
             icon = if (post.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
             count = post.bookmarkCount,
             contentDescription = bookmarkLabel,

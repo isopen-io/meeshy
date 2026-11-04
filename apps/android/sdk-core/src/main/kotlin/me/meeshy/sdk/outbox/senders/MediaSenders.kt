@@ -13,6 +13,7 @@ import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadProgressLedger
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.media.TusUploadRepository
+import me.meeshy.sdk.media.UploadedAttachmentIds
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.ConversationModeReader
@@ -42,6 +43,9 @@ import javax.inject.Inject
  * a conversation the GATEWAY does not find (404 [ConversationModeReader.GATEWAY_NOT_FOUND_CODE]) fails at once too. A raw
  * 404 from a proxy (Traefik while the gateway restarts) is retried, its bytes kept. A chat upload exhausted because its
  * conversation's mode could not be read ([OutboxPlaintextAdmission.isModeUnconfirmed]) keeps its bytes for « Réessayer ».
+ *
+ * A piece that lands is bridged from its upload's `cmid` to the server id the gateway gave it ([UploadedAttachmentIds],
+ * #15969): what follows the piece across its acknowledgement — the voice-note player — finds it under its new name.
  */
 public class UploadMediaHandler @Inject constructor(
     private val mediaBlobStore: MediaBlobStore,
@@ -50,6 +54,7 @@ public class UploadMediaHandler @Inject constructor(
     private val json: Json,
     private val progressLedger: MediaUploadProgressLedger,
     private val regimes: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    private val acknowledged: UploadedAttachmentIds = UploadedAttachmentIds(),
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult {
@@ -73,6 +78,7 @@ public class UploadMediaHandler @Inject constructor(
         if (result.dropsBytes(context)) {
             mediaBlobStore.remove(row.cmid)
         }
+        if (result is SendResult.SuccessWithId) acknowledged.record(row.cmid, result.producedId)
         return result
     }
 

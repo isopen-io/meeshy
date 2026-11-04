@@ -473,7 +473,7 @@ class ReelsViewModel @Inject constructor(
      */
     fun beginQuote(reelId: String) {
         val reel = _state.value.reels.firstOrNull { it.id == reelId } ?: return
-        _state.update { it.copy(quoteComposer = QuoteComposerState.quoting(reel.id, reel.authorName, reel.caption, reel.repostOf)) }
+        _state.update { it.copy(quoteComposer = QuoteComposerState.quoting(reel.id, reel.authorName, reel.caption, reel.repostOf, sessionRepository.currentUser.value)) }
     }
 
     fun onQuoteTextChange(text: String) {

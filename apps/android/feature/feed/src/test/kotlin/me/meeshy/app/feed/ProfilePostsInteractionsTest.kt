@@ -61,8 +61,8 @@ class ProfilePostsInteractionsTest {
 
     private fun ok() = NetworkResult.Success(Unit)
 
-    private fun viewModel(vararg served: ApiPost): ProfilePostsViewModel {
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+    private fun viewModel(vararg served: ApiPost, reader: MeeshyUser? = null): ProfilePostsViewModel {
+        every { session.currentUser } returns MutableStateFlow(reader)
         every { session.currentUserId } returns "me"
         coEvery { cache.cached(any()) } returns CacheResult.Empty
         coEvery { cache.ticket() } returns null
@@ -328,5 +328,15 @@ class ProfilePostsInteractionsTest {
         coVerify(exactly = 0) { engagement.deliver(any()) }
         vm.flushImpressions()
         coVerify(exactly = 1, timeout = 3_000) { engagement.deliver(match { it.size == 3 }) }
+    }
+
+    @Test
+    fun `Citer depuis le profil montre le texte que la carte sert (#16001)`() = runTest {
+        val vm = viewModel(QuotePrism.post("p1"), QuotePrism.share("s1"), reader = QuotePrism.reader)
+
+        vm.onEvent(ProfilePostsEvent.BeginQuote("p1"))
+        assertThat((vm.state.value.dialog as ProfilePostDialog.Quote).composer.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
+        vm.onEvent(ProfilePostsEvent.BeginQuote("s1"))
+        assertThat((vm.state.value.dialog as ProfilePostDialog.Quote).composer.sourceContentPreview).isEqualTo(QuotePrism.SERVED)
     }
 }
