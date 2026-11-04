@@ -153,6 +153,24 @@ enum ComposerHydration {
         }
     }
 
+    /// **Le réel d'une publication rouverte** — `nil` hors de cette porte.
+    ///
+    /// La qualification du meuble ne lit que les objets de la slide courante :
+    /// un réel rouvert sur deux fonds d'image n'y qualifierait pas, et
+    /// s'ouvrirait en post. L'édition répond donc par la règle de l'éditeur
+    /// historique, sur ce que les slides montrent encore.
+    func publicationReelGate(slides: [StorySlide]) -> Bool? {
+        publicationSeed?.baseline.reelIsChoosable(slides: slides)
+    }
+
+    /// L'agencement d'une publication rouverte voyage-t-il ? `nil` hors de
+    /// cette porte. Le canal document le refuserait (`documentCarriesEveryMedia` :
+    /// les fonds rouverts vivent dans l'atelier), alors que la modification le
+    /// porte en réécrivant le canevas d'origine.
+    func publicationLayoutsTravel(slides: [StorySlide]) -> Bool? {
+        publicationSeed?.baseline.layoutIsEditable(slides: slides)
+    }
+
     /// Ce que le DOCUMENT rouvre — `nil` pour toute hydratation qui n'en a pas.
     var publicationSeed: ComposerPublicationEditSeed? {
         guard case .editingPublication(_, let graine) = self else { return nil }
@@ -167,6 +185,8 @@ nonisolated struct ComposerPublicationEditSeed: Equatable {
     let visibilityUserIds: [String]
     let language: String
     let location: SharedPlace?
+    /// Ce que la publication ÉTAIT : la règle du réel la relit à chaque passe.
+    let baseline: PostEditBaseline
 }
 
 /// **Ce que le document montre à l'ouverture** : l'audience — publication

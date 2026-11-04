@@ -343,6 +343,12 @@ internal fun ChatComposer(
         minimized = true
     }
 
+    ComposerDropBand(
+        enabled = canSend && !affordances.isReadOnly,
+        accentColor = accentColor,
+        onPickFile = onPickFile,
+        onText = ::insertEmoji,
+    ) {
     ComposerShellLayout(
         minimized = minimized,
         canMinimize = canMinimize,
@@ -625,6 +631,7 @@ internal fun ChatComposer(
             }
         },
     )
+    }
     if (guestSheetOpen) {
         GuestAttachmentSheet(
             conversationTitle = conversationTitle,

@@ -153,10 +153,17 @@ final class EditParityInventoryTests: XCTestCase {
         // porte rien qui permette de le savoir. La table offre donc les deux
         // formats a TOUT reel, repost compris — le serveur miroite le type d'un
         // repost et l'auteur n'a pas a en choisir un.
-        let offreDuReel = ComposerProfile.profile(
-            for: .edit(postId: "document-quelconque", documentFormat: .reel)
+        // #15631 : la porte porte `isRepost`, et l'éventail d'un repost rouvert
+        // se referme sur son seul format — un réel ordinaire garde les deux.
+        let offreDuRepost = ComposerProfile.profile(
+            for: .edit(postId: "document-quelconque", documentFormat: .reel, isRepost: true),
+            compositionQualifiesAsReel: true
         ).offeredFormats
-        let gateDuRepost = offreDuReel != [.reel, .post]
+        let offreDuReel = ComposerProfile.profile(
+            for: .edit(postId: "document-quelconque", documentFormat: .reel),
+            compositionQualifiesAsReel: true
+        ).offeredFormats
+        let gateDuRepost = offreDuRepost == [.reel] && offreDuReel == [.reel, .post]
 
         // 4 — REPLI AUTOMATIQUE DU REEL.
         // La feuille rebascule sur POST des qu'un retrait de media de-qualifie la
@@ -234,9 +241,9 @@ final class EditParityInventoryTests: XCTestCase {
                     "PostEditTypeChoice.reelIsChoosable("
                 ],
                 mesuree: gateDuRepost,
-                attendue: false,
-                mesureDit: "la table offre `[.reel, .post]` a TOUT reel edite : `ComposerOrigin.edit` ne "
-                    + "porte pas de quoi savoir qu'un document est un repost"
+                attendue: true,
+                mesureDit: "#15631 : `ComposerOrigin.edit` porte `isRepost`, et l'eventail d'un repost rouvert "
+                    + "n'offre que son format ; un reel ordinaire garde `[.reel, .post]`"
             ),
             Capacite(
                 nom: "repli automatique du reel",
@@ -245,9 +252,9 @@ final class EditParityInventoryTests: XCTestCase {
                     "selectedType = PostEditTypeChoice.initialType(originalType: originalType)"
                 ],
                 mesuree: repliAutomatique,
-                attendue: false,
-                mesureDit: "le gate de qualification AJOUTE le reel et ne le RETIRE jamais : sans "
-                    + "qualification, l'edition ouvre encore sur `.reel`"
+                attendue: true,
+                mesureDit: "#15631 : sans qualification, l'edition d'un reel n'offre plus que le post — le gate "
+                    + "de cette porte est `PostEditBaseline.reelIsChoosable`, la regle de la feuille"
             ),
             Capacite(
                 nom: "retrait de medias",
@@ -397,31 +404,26 @@ final class EditParityInventoryTests: XCTestCase {
         }
     }
 
-    /// **Le STOP, opposable.** Trois capacites sur sept depuis T2.2 (« langue
-    /// source » a rejoint « champ contenu + validite » et « audience + liste
-    /// nommee »). Le retrait d'`EditPostSheet.swift` retirerait les quatre
-    /// autres a l'utilisateur.
+    /// **Les sept capacites sont tenues par le meuble** (#15631). Ce qui garde
+    /// encore la feuille n'est plus une capacite manquante mais deux routes de
+    /// `PostEditRoute` : la degradation sans compositeur dans l'environnement,
+    /// et la publication qui porte un media qu'aucune scene ne montre (un
+    /// document).
     ///
     /// Le compte ET les noms : un compte seul serait reste vert le jour ou une
-    /// capacite en remplacerait une autre, et c'est precisement ce qui vient
-    /// d'arriver du cote creation.
-    func test_leRetraitDeLaFeuille_resteINTERDIT_tantQueDeuxCapacitesManquent() throws {
+    /// capacite en remplacerait une autre.
+    func test_lesSeptCapacites_sontTenuesParLeMeuble() throws {
         let capacites = try inventaire()
         let tenues = Set(capacites.filter(\.mesuree).map(\.nom))
-        let manquantes = capacites.filter { !$0.mesuree }.map(\.nom)
 
         XCTAssertEqual(
             tenues, ["champ contenu + validite", "audience + liste nommee", "langue source",
-                     "retrait de medias", "position tri-etat"],
-            "Les capacites tenues par le meuble ont change. Le retrait de la feuille reste interdit tant "
-            + "que les sept n'y sont pas ; ce test dit LESQUELLES manquent, pour qu'un lot suivant sache "
-            + "quoi lever plutot que de recompter."
+                     "retrait de medias", "position tri-etat", "eventail POST/REEL gate",
+                     "repli automatique du reel"],
+            "Les capacites tenues par le meuble ont change : ce test dit LESQUELLES, pour qu'un lot "
+            + "suivant sache quoi lever plutot que de recompter."
         )
-        XCTAssertEqual(
-            manquantes.count, 2,
-            "Deux capacites manquent : \(manquantes.joined(separator: ", ")). Retirer la feuille les "
-            + "retirerait a l'utilisateur, sans qu'aucun test d'ecran ne le dise."
-        )
+        XCTAssertTrue(capacites.allSatisfy(\.mesuree))
     }
 
     /// **Les capacites de CHROME tenues le sont cote CREATION — la porte
