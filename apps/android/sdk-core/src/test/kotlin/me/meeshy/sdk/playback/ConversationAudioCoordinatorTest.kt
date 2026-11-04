@@ -369,4 +369,14 @@ class ConversationAudioCoordinatorTest {
 
         assertThat(seen).doesNotContain(false to false)
     }
+
+    @Test fun `suivant pendant la grace ne ferme pas la barre qui la porte`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine)
+        coordinator.next()
+
+        coordinator.next()
+
+        assertThat(coordinator.graceContext.value?.conversationName).isEqualTo("Famille")
+    }
 }

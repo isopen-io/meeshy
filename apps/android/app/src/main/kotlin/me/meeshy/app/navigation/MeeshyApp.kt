@@ -211,6 +211,7 @@ fun MeeshyApp(
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().rootPresentationContent().hiddenBehindOnboarding(onboardingCovers)) {
                 val showsCallPill = CallPillPresenter.shouldShow(callStatus, onCallScreen)
+                val miniPlayerShown by rememberMiniPlayerShown()
                 // The minimised-call pill PUSHES the destination down instead of floating
                 // over it: pinned under the status bar, it would lie under the system status
                 // window (its controls untappable) and cover the destination's top bar. The
@@ -228,6 +229,8 @@ fun MeeshyApp(
                                 .padding(vertical = MeeshySpacing.xs),
                         )
                     }
+                    // Le mini-lecteur audio (iOS `MiniAudioPlayerBar`) se range SOUS la pastille d'appel et pousse la destination.
+                    MediaTopBarSlot(navController, navigator, callPillShown = showsCallPill)
                     // Le bandeau « Validez votre compte » (#13854) se range SOUS la pastille d'appel et AU-DESSUS de
                     // la destination, qu'il comprime au lieu de la recouvrir : le ✕ du compositeur reste entier.
                     PendingLinkBanner(isVisible = rootState.showsPendingLinkNotice && currentRoute == Routes.LOGIN)
@@ -235,7 +238,7 @@ fun MeeshyApp(
                         navController = navController,
                         modifier = Modifier
                             .weight(1f)
-                            .then(if (showsCallPill) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
+                            .then(if (showsCallPill || miniPlayerShown) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
                     ) {
                         ProvideAppLocals(extensions.localsProviders) {
                             // Le retour interactif depuis le bord (#13364) : UN site, armé par le registre des routes.

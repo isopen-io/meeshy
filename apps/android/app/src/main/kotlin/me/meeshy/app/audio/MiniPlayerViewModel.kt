@@ -76,6 +76,9 @@ class MiniPlayerViewModel @Inject constructor(
 
     val uiEffects = effects.receiveAsFlow()
 
+    /** La barre est à l'écran : la racine en déduit si la destination en dessous consomme l'encart de la barre d'état. */
+    val shown: StateFlow<Boolean> = display.shown
+
     private val visible: StateFlow<Visible> = combine(
         coordinator.snapshot,
         coordinator.graceContext,

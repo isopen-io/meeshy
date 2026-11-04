@@ -112,6 +112,7 @@ public class ConversationAudioCoordinator(
 
     public fun next(origin: PlaybackCommandOrigin = PlaybackCommandOrigin.InApp) {
         val snapshot = mutableSnapshot.value
+        if (snapshot.context == null) return
         if (!snapshot.queue.hasNext) {
             engine.stop()
             exhaust(snapshot.context)
