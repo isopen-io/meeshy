@@ -1,6 +1,5 @@
 package me.meeshy.app.feed
 
-import androidx.compose.ui.test.and
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor

@@ -52,6 +52,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
@@ -84,6 +88,22 @@ fun BookmarksScreen(
 
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { snackbar.showSnackbar(it) }
+    }
+    val context = LocalContext.current
+    // L'issue d'un repartage se dit une fois : consommée aussitôt reçue, la barre vit dans la portée de l'effet.
+    LaunchedEffect(viewModel) {
+        viewModel.state.map { it.notice }.filterNotNull().collect { notice ->
+            viewModel.consumeNotice()
+            launch { snackbar.showSnackbar(context.getString(notice.messageRes())) }
+        }
+    }
+    state.quoteComposer?.let { composer ->
+        QuoteComposerSheet(
+            composer = composer,
+            onTextChange = viewModel::onQuoteTextChange,
+            onSubmit = viewModel::submitQuote,
+            onDismiss = viewModel::cancelQuote,
+        )
     }
 
     MeeshyBackground {
@@ -148,6 +168,8 @@ fun BookmarksScreen(
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                                 onOpenPost = onOpenPost,
                                 onOpenReel = onPostClick,
+                                onRepost = { viewModel.repost(post.id) },
+                                onQuote = { viewModel.beginQuote(post.id) },
                             )
                         }
                         if (state.isLoadingMore) {
@@ -182,6 +204,8 @@ internal fun SavedPostCard(
     onClick: () -> Unit,
     onOpenPost: (String) -> Unit,
     onOpenReel: (String) -> Unit,
+    onRepost: (() -> Unit)? = null,
+    onQuote: (() -> Unit)? = null,
 ) {
     post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
         ReelPostCard(
@@ -190,6 +214,8 @@ internal fun SavedPostCard(
             onOpenReel = onOpenReel,
             modifier = modifier,
             onBookmark = onRemove,
+            onRepost = onRepost,
+            onQuote = onQuote,
             onOpenProfile = onOpenProfile,
         )
         return

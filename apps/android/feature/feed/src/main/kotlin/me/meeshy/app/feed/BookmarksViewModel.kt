@@ -37,6 +37,10 @@ data class BookmarksUiState(
     val showSkeleton: Boolean = false,
     val hasMore: Boolean = true,
     val errorMessage: String? = null,
+    /** Le compositeur de citation ouvert par « Citer » (#12234) ; `null` quand il est fermé. */
+    val quoteComposer: QuoteComposerState? = null,
+    /** L'issue d'un repartage, dite une fois puis consommée. */
+    val notice: FeedNotice? = null,
 )
 
 @HiltViewModel
@@ -52,10 +56,13 @@ class BookmarksViewModel @Inject constructor(
     private val _state = MutableStateFlow(BookmarksUiState())
     val state: StateFlow<BookmarksUiState> = _state.asStateFlow()
 
+    /** Repartager / Citer depuis les favoris, comme dans le fil (iOS `BookmarksViewModel.toggleRepost`, #15934). */
+    private val reposting = ListedPostReposting(viewModelScope, postRepository, listState)
+
     init {
         viewModelScope.launch {
-            combine(listState, sessionRepository.currentUser, status) { list, user, st ->
-                project(list, user, st)
+            combine(listState, sessionRepository.currentUser, status, reposting.quoteComposer, reposting.notice) { list, user, st, quote, notice ->
+                project(list, user, st).copy(quoteComposer = quote, notice = notice)
             }.collect { projected -> _state.value = projected }
         }
         loadInitial()
@@ -157,6 +164,18 @@ class BookmarksViewModel @Inject constructor(
             }
         }
     }
+
+    fun repost(postId: String) = reposting.repost(postId)
+
+    fun beginQuote(postId: String) = reposting.beginQuote(postId)
+
+    fun onQuoteTextChange(text: String) = reposting.onQuoteTextChange(text)
+
+    fun cancelQuote() = reposting.cancelQuote()
+
+    fun submitQuote() = reposting.submitQuote()
+
+    fun consumeNotice() = reposting.consumeNotice()
 
     private fun project(
         list: BookmarksListState,
