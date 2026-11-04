@@ -35,8 +35,8 @@ internal class UserPreferencesHarness(
     val session: SessionRepository = mockk { every { currentUserId } returns if (hasSession) "u1" else null }
     val outbox: OutboxRepository = mockk {
         coEvery { tryEnqueue(any(), any()) } answers {
-            enqueued += firstArg<OutboxMutation>()
-            OutboxEnqueueResult.Accepted("c${enqueued.size}")
+            this@UserPreferencesHarness.enqueued += firstArg<OutboxMutation>()
+            OutboxEnqueueResult.Accepted("c${this@UserPreferencesHarness.enqueued.size}")
         }
         coEvery { hasDeliverable(any(), any()) } returns false
     }
