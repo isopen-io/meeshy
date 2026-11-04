@@ -94,7 +94,7 @@ object AttachmentTranscriptPrism {
                 textLanguage = text?.language,
                 isTranslated = text?.isTranslated == true,
                 track = playedTrack(transcription, translations, preferences),
-                segmentsLanguage = text?.language?.takeIf { text.isTranslated },
+                segmentsLanguage = text?.takeIf { it.isTranslated }?.language,
             )
         }
         val playable = translations.orEmpty().mapNotNull { (language, entry) ->
