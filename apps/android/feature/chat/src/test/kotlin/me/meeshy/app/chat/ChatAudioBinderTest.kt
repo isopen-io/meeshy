@@ -118,6 +118,52 @@ class ChatAudioBinderTest {
         assertThat(snapshot.context?.accentHex).isEqualTo("#6366F1")
     }
 
+    private fun spanishThread() = ChatVoiceThread(
+        "conv", "Famille", null, "#6366F1",
+        listOf(voiceMessage("m1", "2026-11-04T08:00:00Z", voice("a", url = "https://cdn.meeshy.me/a-es.m4a", audioLanguage = "es"))),
+    )
+
+    @Test
+    fun `le drapeau change pendant l'ecoute : la voix recharge la piste de la nouvelle langue sous le meme id`() {
+        val rig = Rig()
+        rig.viewModel.bind(thread)
+        rig.viewModel.tap(m1.audios[0], m1)
+        rig.engine.playingAt("a", 3_000)
+
+        rig.viewModel.bind(spanishThread())
+
+        assertThat(rig.engine.played).containsExactly("a", "a").inOrder()
+        val current = rig.coordinator.snapshot.value.queue.current
+        assertThat(current?.fileUrl).isEqualTo("https://cdn.meeshy.me/a-es.m4a")
+        assertThat(current?.trackLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun `un fil relu sans changement de langue ne recharge rien`() {
+        val rig = Rig()
+        rig.viewModel.bind(thread)
+        rig.viewModel.tap(m1.audios[0], m1)
+        rig.engine.playingAt("a", 3_000)
+
+        rig.viewModel.bind(thread)
+
+        assertThat(rig.engine.played).containsExactly("a")
+    }
+
+    @Test
+    fun `le drapeau change vocal en pause : le toucher suivant joue la bonne piste au lieu de reprendre l'ancienne`() {
+        val rig = Rig()
+        rig.viewModel.bind(thread)
+        rig.viewModel.tap(m1.audios[0], m1)
+        val spanish = spanishThread()
+        rig.viewModel.bind(spanish)
+
+        rig.viewModel.tap(spanish.messages[0].audios[0], spanish.messages[0])
+
+        assertThat(rig.engine.toggles).isEqualTo(0)
+        assertThat(rig.engine.played).containsExactly("a", "a").inOrder()
+    }
+
     @Test
     fun `retoucher le vocal en cours le met en pause sans relancer la file`() {
         val rig = Rig()
