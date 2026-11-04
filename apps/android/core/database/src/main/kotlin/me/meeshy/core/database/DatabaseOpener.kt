@@ -45,6 +45,9 @@ public sealed interface DatabaseLocation {
  * repli dans le même geste, une ligne non reprise y reste, et une ligne sauvée n'écrase jamais celle que la base de
  * destination porte déjà : rien n'est rejoué, rien n'est perdu.
  *
+ * Une purge de session restée due sur la base disque (session close pendant un lancement en mémoire, [PendingDiskPurge])
+ * passe avant tout : la base sur disque n'est jamais rendue au compte suivant avec les lignes du précédent.
+ *
  * Une base en mémoire qui reçoit la copie de l'outbox d'une base sur disque restée intacte tient le registre de ce qu'elle
  * en règle ([DiskOutboxSettlement]) : la prochaine ouverture sur disque en retire ces lignes, et un envoi annulé pendant
  * le lancement en mémoire ne repart pas.
@@ -65,8 +68,58 @@ public class DatabaseOpener(
 ) {
     public fun open(): MeeshyDatabase {
         val primaryFile = context.getDatabasePath(primaryName)
-        val settlement = DiskOutboxSettlement(primaryFile)
         health.markNormal()
+        val purge = pendingPurge(primaryFile)
+        if (purge.blocked) return inMemory(purge.kept, PURGE_PENDING)
+        val database = openPurged(primaryFile)
+        restore(database, purge.kept)
+        return database
+    }
+
+    private class PurgeOutcome(val blocked: Boolean, val kept: DatabaseSalvage = DatabaseSalvage())
+
+    /**
+     * La purge de session que la base sur disque doit encore subir ([PendingDiskPurge]), appliquée AVANT toute ouverture :
+     * les clairs E2EE à effacer marqués d'un compte sont relus, tous les fichiers de la base supprimés (base de repli
+     * comprise), et ces inscriptions repartent dans la base qui s'ouvre. Si le fichier ne se relit pas, la préparation du
+     * chiffrement est jouée d'abord (elle rend la clé, ou purge un fichier que la clé perdue ne déverrouille plus), puis la
+     * lecture retentée. Un fichier qui ne se relit toujours pas faute de clé ou de disque, ou qui ne se supprime pas,
+     * bloque l'ouverture sur disque : le marqueur reste, et rien du compte qui est parti n'est recopié. Un fichier corrompu
+     * se supprime sans ses inscriptions, qu'aucune clé ne relirait.
+     */
+    private fun pendingPurge(primaryFile: File): PurgeOutcome {
+        if (!PendingDiskPurge.isDue(primaryFile)) return PurgeOutcome(blocked = false)
+        val owed = owedErasures(primaryFile) ?: run {
+            prepared()?.let { failure ->
+                diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
+                return PurgeOutcome(blocked = true)
+            }
+            owedErasures(primaryFile)
+        } ?: return PurgeOutcome(blocked = true)
+        val kept = DatabaseSalvage(plaintextErasures = owed)
+        if (!PendingDiskPurge.wipe(primaryFile)) {
+            diagnostics.record(DatabaseInitStage.FIRST_FAILURE, "$PURGE_PENDING:${primaryFile.name}")
+            return PurgeOutcome(blocked = true, kept = kept)
+        }
+        DatabaseRecovery.deleteFallback(secondaryFile)
+        PendingDiskPurge.clear(primaryFile)
+        diagnostics.record(DatabaseInitStage.DISK_PURGED, "${primaryFile.name}:erasures=${owed.size}")
+        return PurgeOutcome(blocked = false, kept = kept)
+    }
+
+    /** Les inscriptions dues de [primaryFile] ; vide pour un fichier corrompu, `null` s'il ne se relit pas (clé, disque). */
+    private fun owedErasures(primaryFile: File): List<PlaintextErasureEntity>? = try {
+        PendingDiskPurge.owedErasures(primaryFile, salvageOpener)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Throwable) {
+        if (failure is VirtualMachineError) throw failure
+        diagnostics.record(DatabaseInitStage.FIRST_FAILURE, failure)
+        if (DatabaseRecovery.classify(failure) == OpenFailureKind.CORRUPTION) emptyList() else null
+    }
+
+    private fun openPurged(primaryFile: File): MeeshyDatabase {
+        val settlement = DiskOutboxSettlement(primaryFile)
         prepared()?.let { failure -> return afterPrepareFailure(primaryFile, settlement, failure) }
         if (DatabaseRecovery.isMarkedCorrupted(primaryFile)) {
             diagnostics.record(DatabaseInitStage.FIRST_FAILURE, "corruption-marked:${primaryFile.name}")
@@ -369,6 +422,12 @@ public class DatabaseOpener(
 
         /** La raison de [StorageState.Ephemeral] d'une base en mémoire faute de fichier ouvrable. */
         public const val MEMORY: String = "memory"
+
+        /**
+         * La raison de [StorageState.Ephemeral] quand la base sur disque attend une purge de session qu'on ne peut pas encore
+         * appliquer ([PendingDiskPurge]) : elle n'est pas ouverte, et ce lancement tourne en mémoire.
+         */
+        public const val PURGE_PENDING: String = "purge-pending"
 
         /** La raison de [StorageState.Ephemeral] quand le chiffrement n'a pas pu se mettre en place, suivie de la nature de l'échec. */
         public const val ENCRYPTION_UNAVAILABLE: String = "encryption-unavailable:"

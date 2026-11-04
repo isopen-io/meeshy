@@ -11,7 +11,8 @@ import java.io.IOException
  * ce lancement serait rejoué au lancement suivant, depuis le disque, alors que l'auteur l'avait retiré.
  *
  * Une ligne venue du disque est RÉGLÉE quand elle sort de l'outbox en mémoire (livrée, retirée, illisible, abandonnée) ou
- * que l'auteur en demande l'annulation (`cancelRequestedAt`). Le registre est un petit fichier à côté de la base, qui ne
+ * que l'auteur en demande l'annulation (`cancelRequestedAt`) ; elle cesse de l'être si elle revient dans la file (renvoi
+ * explicite). Le registre est réécrit de façon atomique ([DurableFile]). Le registre est un petit fichier à côté de la base, qui ne
  * porte que les identifiants client (`cmid`) : ni contenu, ni destinataire. Il s'applique à la prochaine ouverture de la
  * base sur disque (les lignes réglées en sont retirées, puis il disparaît) et filtre la copie d'un nouveau lancement en
  * mémoire. Limite assumée : une ligne réglée dans les derniers instants d'un processus tué avant l'écriture du registre
@@ -73,28 +74,26 @@ internal class DiskOutboxSettlement(primary: File) {
         )
     }
 
-    /** Inscrit les lignes de [fromDisk] qui ne sont plus à envoyer depuis [memory]. */
+    /**
+     * Met le registre à l'état courant de [memory] : les lignes de [fromDisk] qui ne sont plus à envoyer y entrent, celles
+     * qui sont revenues dans la file (un renvoi explicite remet `cancelRequestedAt` à `NULL`) en sortent — sinon le
+     * lancement suivant supprimerait du disque un envoi que l'auteur vient de relancer.
+     */
     fun settleFrom(memory: MeeshyDatabase, fromDisk: Set<String>) {
         val stillQueued = try {
             live(memory, cancelled = false)
         } catch (_: Exception) {
             return
         }
-        record(fromDisk - stillQueued)
+        reconcile(settledNow = fromDisk - stillQueued, revived = fromDisk intersect stillQueued)
     }
 
     @Synchronized
-    private fun record(newly: Set<String>) {
-        if (newly.isEmpty()) return
+    private fun reconcile(settledNow: Set<String>, revived: Set<String>) {
         val known = settled()
-        if (known.containsAll(newly)) return
-        try {
-            val staged = File(file.path + STAGED)
-            staged.writeText((known + newly).joinToString("\n"))
-            if (!staged.renameTo(file)) staged.delete()
-        } catch (_: IOException) {
-            Unit
-        }
+        val next = (known - revived) + settledNow
+        if (next == known) return
+        DurableFile.write(file, next.joinToString("\n"))
     }
 
     private fun forget() {
@@ -111,7 +110,6 @@ internal class DiskOutboxSettlement(primary: File) {
 
     companion object {
         const val SUFFIX: String = ".outbox-settled"
-        private const val STAGED = ".staged"
         private const val OUTBOX = "outbox"
         private const val MAX_BOUND_ARGS = 500
     }

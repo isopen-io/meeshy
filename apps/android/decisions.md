@@ -382,6 +382,31 @@ successful migration resets the counter. A database re-created during a deferral
 (quarantine) is born ENCRYPTED: the deferral holds only while the file on disk is the
 original plaintext database, and `prepare` replays otherwise.
 
+**Amendment (2026-11-04, #15880 — fourth counter-audit).** (1) **A session closed during
+an in-memory launch leaves the disk database purge-due.** The session purge empties the
+OPEN database only — the memory — while `meeshy.db` still holds the leaving account's
+history, and it reopened under the next account. `DatabaseLeftovers.purge` now writes a
+durable marker `meeshy.db.purge-due` (temp file, `fsync`, rename, directory `fsync`; no
+data) when the launch is in memory and a disk file exists. The next `DatabaseOpener.open`
+applies it BEFORE anything else: it reads the plaintext erasures stamped with an account
+(the rows `clearKeepingPlaintextErasures` keeps), deletes every `meeshy.db*` file (WAL,
+SHM, journal, migration temp/backup, settlement register, deferral counter, corruption
+marker, quarantines), opens a fresh database and reinjects those erasures. A marker is
+preferred over an immediate deletion because it keeps the erasures owed to the leaving
+account and holds when the key or the native library is missing at logout time. When the
+file cannot be read for lack of key or disk, or cannot be deleted, the marker stays and
+the disk database is NOT opened: the launch runs in memory (`purge-pending`) and copies
+nothing from it. A corrupt file is deleted without its erasures (no key would read them).
+If the disk refuses even the marker, the files are deleted at once — confidentiality
+before the erasures. Residual: a disk that refuses both the marker and the deletion
+leaves the file in place. (2) **The settlement register reflects the current queue.** A
+row settled on `cancelRequestedAt` and then retried (`resetSchedule` sets it back to
+`NULL`) leaves the register, so the next launch no longer deletes an explicit re-send;
+the register is rewritten atomically. (3) **The export check refuses a failed count.**
+`verify` compared two failed row counts as equal; a table now counts as absent, a number,
+or unreadable (`DurableRowCounts`), and an unreadable count on either side rejects the
+copy, while a table absent on both sides (older schema) still passes.
+
 ---
 
 ## ADR-014 — `kotlinx.serialization` with lenient, forward-compatible decoding

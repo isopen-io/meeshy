@@ -123,6 +123,44 @@ class MemoryLaunchSettlementTest {
         assertThat(DiskOutboxSettlement(file).settled()).containsExactly("c-1")
     }
 
+    private fun awaitNotSettled(file: File, cmid: String) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (cmid in DiskOutboxSettlement(file).settled() && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        assertThat(DiskOutboxSettlement(file).settled()).doesNotContain(cmid)
+    }
+
+    @Test
+    fun `un envoi annule puis relance en memoire n'est plus regle et repart depuis le disque`() = runBlocking<Unit> {
+        val name = "settle-cancel-then-retry.db"
+        val file = seeded(name, listOf("c-1", "c-2"))
+
+        val memory = memoryLaunch(name, file)
+        memory.outboxDao().requestCancel("c-1", at = 5L)
+        awaitSettled(file, "c-1")
+        memory.outboxDao().resetSchedule("c-1")
+        awaitNotSettled(file, "c-1")
+        memory.close()
+
+        val disk = opener(name, StorageHealth(), prepare = {}).open()
+        assertThat(disk.outboxDao().find("c-1")).isEqualTo(row("c-1"))
+        assertThat(disk.outboxDao().find("c-2")).isEqualTo(row("c-2"))
+        disk.close()
+    }
+
+    @Test
+    fun `le registre s'ecrit sans laisser de fichier intermediaire`() = runBlocking<Unit> {
+        val name = "settle-atomic.db"
+        val file = seeded(name, listOf("c-1"))
+
+        val memory = memoryLaunch(name, file)
+        memory.outboxDao().deleteAll(listOf("c-1"))
+        awaitSettled(file, "c-1")
+        memory.close()
+
+        val strays = file.parentFile?.listFiles().orEmpty().map { it.name }.filter { it.startsWith("$name${DiskOutboxSettlement.SUFFIX}.") }
+        assertThat(strays).isEmpty()
+    }
+
     @Test
     fun `un second lancement en memoire ne ressuscite pas une ligne deja reglee`() = runBlocking<Unit> {
         val name = "settle-twice.db"

@@ -17,6 +17,7 @@ import me.meeshy.core.database.dao.SearchIndexDao
 import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.core.database.entity.PlaintextErasureEntity
 import me.meeshy.sdk.model.security.InMemorySecureStore
 import net.zetetic.database.sqlcipher.SQLiteDatabase
 import org.junit.After
@@ -185,5 +186,56 @@ class SqlCipherOnDeviceTest {
         assertThat(database.outboxDao().find(pending.cmid)).isEqualTo(pending)
         database.close()
         assertThat(DatabaseFileStates.of(file)).isEqualTo(DatabaseFileState.PLAINTEXT)
+    }
+
+    @Test
+    fun une_base_recreee_pendant_un_report_s_ouvre_avec_la_cle_et_non_la_phrase_vide() = runBlocking {
+        seedPlaintext()
+        DatabaseRecovery.markCorrupted(file)
+        val store = InMemorySecureStore()
+        val health = StorageHealth()
+        val encryption = bootstrap(store, mutableListOf(), free = 0L)
+
+        val database = open(encryption, health)
+
+        assertThat(health.current.value).isEqualTo(StorageState.Degraded("recreated"))
+        assertThat(encryption.plaintextDeferred).isFalse()
+        assertThat(DatabaseFileStates.of(file)).isEqualTo(DatabaseFileState.ENCRYPTED)
+        assertThat(database.outboxDao().find(pending.cmid)).isEqualTo(pending)
+        database.close()
+
+        val reopenedHealth = StorageHealth()
+        val reopened = open(bootstrap(store, mutableListOf()), reopenedHealth)
+        assertThat(reopenedHealth.current.value).isEqualTo(StorageState.Normal)
+        assertThat(reopened.outboxDao().find(pending.cmid)).isEqualTo(pending)
+        reopened.close()
+    }
+
+    @Test
+    fun une_purge_de_session_due_vide_la_base_chiffree_avant_sa_reouverture_et_garde_les_effacements_dus() = runBlocking {
+        seedPlaintext()
+        val store = InMemorySecureStore()
+        val owed = PlaintextErasureEntity("user-1", "message", "m-erased", "cid_e", "user-1", recordedAt = 3L)
+        open(bootstrap(store, mutableListOf()), StorageHealth()).apply {
+            plaintextErasureDao().recordMessages(listOf(owed))
+            close()
+        }
+        assertThat(DatabaseFileStates.of(file)).isEqualTo(DatabaseFileState.ENCRYPTED)
+        assertThat(PendingDiskPurge.schedule(file)).isTrue()
+        val health = StorageHealth()
+
+        val database = open(bootstrap(store, mutableListOf()), health)
+
+        assertThat(health.current.value).isEqualTo(StorageState.Normal)
+        assertThat(PendingDiskPurge.isDue(file)).isFalse()
+        assertThat(DatabaseFileStates.of(file)).isEqualTo(DatabaseFileState.ENCRYPTED)
+        assertThat(database.outboxDao().find(pending.cmid)).isNull()
+        val messages = database.openHelper.readableDatabase.query("SELECT count(*) FROM messages").use {
+            it.moveToFirst()
+            it.getLong(0)
+        }
+        assertThat(messages).isEqualTo(0L)
+        assertThat(database.plaintextErasureDao().all()).containsExactly(owed)
+        database.close()
     }
 }

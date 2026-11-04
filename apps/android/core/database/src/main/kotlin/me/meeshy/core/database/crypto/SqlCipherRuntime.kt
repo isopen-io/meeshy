@@ -158,7 +158,7 @@ internal object SqlCipherRuntime {
                         copy.compileStatement("PRAGMA user_version").simpleQueryForLong() ==
                         plain.compileStatement("PRAGMA user_version").simpleQueryForLong()
                     if (!sameVersion) return false
-                    return plain == null || DURABLE.all { table -> rows(plain, table) == rows(copy, table) }
+                    return plain == null || DurableRowCounts.match({ rows(plain, it) }, { rows(copy, it) })
                 } finally {
                     plain?.close()
                 }
@@ -167,12 +167,18 @@ internal object SqlCipherRuntime {
             }
         }
 
-        private fun rows(db: SQLiteDatabase, table: String): Long? = try {
-            db.compileStatement("SELECT count(*) FROM `$table`").simpleQueryForLong()
+        private fun rows(db: SQLiteDatabase, table: String): TableCount = try {
+            val present = db.compileStatement("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?").use {
+                it.bindString(1, table)
+                it.simpleQueryForLong() > 0
+            }
+            if (!present) {
+                TableCount.Absent
+            } else {
+                TableCount.Rows(db.compileStatement("SELECT count(*) FROM `$table`").use { it.simpleQueryForLong() })
+            }
         } catch (_: Exception) {
-            null
+            TableCount.Unreadable
         }
-
-        private val DURABLE = listOf("outbox", "media_blob", "tus_upload_checkpoint", "sync_meta", "e2ee_plaintext_erasures", "messages", "conversations")
     }
 }
