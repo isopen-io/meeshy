@@ -54,7 +54,7 @@ import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy
 import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
-import { loadViewerCapabilities, obsoleteViewerOf } from '../../services/conversations/obsoleteCapability';
+import { loadListViewerCapabilities } from '../../services/conversations/obsoleteCapability';
 import { servedMessageRequest, withoutRequestFields, type MessageRequestListMode, type ServedMessageRequest } from '../../services/messaging/messageRequests';
 import { emptyDirectVisibility, withViewerRequests } from './utils/list-viewer-scope';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
@@ -449,7 +449,6 @@ export function registerConversationListRoute(
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const conversationShapeById = new Map(conversations.map((c) => [c.id, { type: c.type, identifier: c.identifier }] as const));
       const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation, viewerCapabilitiesOf] = await Promise.all([
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
@@ -475,18 +474,8 @@ export function registerConversationListRoute(
         loadViewerEngagementsOrEmpty(prisma, isAnonymousViewer ? undefined : userId, conversationIds),
 
         // #14690 — ce que le lecteur peut faire de chaque ligne, par la décision qui garde la route.
-        loadViewerCapabilities(prisma, {
-          viewers: [obsoleteViewerOf(authRequest.authContext)],
-          conversationIds,
-          memberships: isAnonymousViewer ? [] : readerJoins.map((join) => ({
-            conversationId: join.conversationId,
-            userId,
-            role: join.role,
-            type: join.type,
-            leftAt: join.leftAt,
-            bannedAt: join.bannedAt,
-            conversation: conversationShapeById.get(join.conversationId) ?? null,
-          })),
+        loadListViewerCapabilities(prisma, {
+          authContext: authRequest.authContext, conversations, readerJoins,
           onError: (error) => logger.warn('viewer capabilities read failed', { error }),
         }),
       ]);

@@ -29,6 +29,9 @@ import type { GuestAttachmentKind } from './guest-attachment-kinds.js';
  */
 import type { MemberRoleType } from './role-types.js';
 import { isMemberAdmin as isMemberAdminRole, isMemberModerator as isMemberModeratorRole } from './role-types.js';
+import type { ConversationViewerCapabilities } from './conversation-viewer-capabilities.js';
+
+export type { ConversationViewerCapabilities } from './conversation-viewer-capabilities.js';
 
 /**
  * Langue parlee avec statistiques
@@ -57,16 +60,6 @@ export interface TranslationStatsData {
   readonly averageTranslationTime: number;
   readonly topLanguagePairs: readonly LanguagePair[];
 }
-
-/**
- * Les capacités du LECTEUR sur une conversation (#14690). `canMakeObsolete` :
- * `DELETE /conversations/:id/obsolete` l'accepterait pour lui (administrateur,
- * membre d'un tête-à-tête, destinataire — jamais expéditeur — d'une demande non
- * acceptée). Source : `obsoleteVerdict` (gateway, `obsoleteCapability.ts`).
- */
-export type ConversationViewerCapabilities = {
-  readonly canMakeObsolete: boolean;
-};
 
 /**
  * Statistiques d'une conversation

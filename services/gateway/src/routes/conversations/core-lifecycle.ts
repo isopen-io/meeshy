@@ -43,7 +43,6 @@ import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
@@ -62,7 +61,7 @@ import {
   type CreationRegimeRefusal,
 } from '../../services/conversations/creationRegime';
 import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest';
-import { emitWithViewerCapabilities } from '../../services/conversations/obsoleteCapability';
+import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
 import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
 import {
   composeConversationUpdate,
@@ -267,8 +266,8 @@ export function registerCreateConversationRoute(
                 const socketIOHandler = fastify.socketIOHandler;
                 const io = socketIOHandler?.getManager()?.getIO();
                 if (io && creatorParticipant.userId) {
-                  void emitWithViewerCapabilities(prisma, {
-                    conversationId: existingDirect.id,
+                  announceConversationNew(prisma, {
+                    io,
                     recipientIds: [creatorParticipant.userId],
                     payload: {
                       conversationId: existingDirect.id,
@@ -280,9 +279,8 @@ export function registerCreateConversationRoute(
                         ? existingDirect.createdAt.toISOString()
                         : String(existingDirect.createdAt)
                     },
-                    emit: (recipientId, payload) => io.to(ROOMS.user(recipientId)).emit(SERVER_EVENTS.CONVERSATION_NEW, payload),
                     onError: (error) => logger.warn('error broadcasting CONVERSATION_NEW on DM reinitiation', { conversationId: existingDirect.id, error })
-                  });
+                  }).catch((error: unknown) => logger.warn('conversation:new emission failed', { error }));
                 }
               } catch (broadcastError) {
                 logger.error('error broadcasting CONVERSATION_NEW on DM reinitiation', { error: broadcastError });
@@ -477,13 +475,12 @@ export function registerCreateConversationRoute(
           // message (`services/conversations/announceStartedGroup.ts`).
           const emitParticipantIds = silentUntilFirstMessage ? [userId] : allParticipantIds;
           // #14690 — chacun reçoit SES capacités, sans retarder la réponse.
-          void emitWithViewerCapabilities(prisma, {
-            conversationId: conversation.id,
+          announceConversationNew(prisma, {
+            io,
             recipientIds: emitParticipantIds,
             payload: conversationNewPayload,
-            emit: (recipientId, payload) => io.to(ROOMS.user(recipientId)).emit(SERVER_EVENTS.CONVERSATION_NEW, payload),
             onError: (error) => logger.error('error broadcasting CONVERSATION_NEW', { conversationId: conversation.id, error })
-          });
+          }).catch((error: unknown) => logger.warn('conversation:new emission failed', { error }));
         }
       } catch (broadcastError) {
         logger.error('error broadcasting CONVERSATION_NEW', { error: broadcastError });

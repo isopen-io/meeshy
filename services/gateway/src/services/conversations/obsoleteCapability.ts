@@ -23,8 +23,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import type { ConversationViewerCapabilities } from '@meeshy/shared/types/conversation';
+import { ROOMS, SERVER_EVENTS, type ConversationNewEventData } from '@meeshy/shared/types/socketio-events';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import { NOT_YET_ACCEPTED } from '../messaging/messageRequests';
+import type { ServerEmitIO } from '../../socketio/serverEmit';
 
 export const DIRECT_CONVERSATION_MAX_ACTIVE_PARTICIPANTS = 2;
 
@@ -202,6 +204,37 @@ export async function loadViewerCapabilities(
   }
 }
 
+/**
+ * Les capacités d'une page de LISTE : les participations du lecteur déjà lues
+ * par la liste (`readerJoins`, même filtre actif) évitent une lecture de plus.
+ */
+export function loadListViewerCapabilities(
+  prisma: ObsoleteReader,
+  params: {
+    readonly authContext: ObsoleteAuthContext;
+    readonly conversations: readonly { readonly id: string; readonly type: string; readonly identifier: string | null }[];
+    readonly readerJoins: readonly Pick<PrefetchedMembership, 'conversationId' | 'role' | 'type' | 'leftAt' | 'bannedAt'>[];
+    readonly onError: (error: unknown) => void;
+  },
+): Promise<ViewerCapabilitiesOf> {
+  const viewer = obsoleteViewerOf(params.authContext);
+  const shapes = new Map(params.conversations.map((c) => [c.id, { type: c.type, identifier: c.identifier }] as const));
+  return loadViewerCapabilities(prisma, {
+    viewers: [viewer],
+    conversationIds: params.conversations.map((c) => c.id),
+    memberships: viewer.isAnonymous ? [] : params.readerJoins.map((join) => ({
+      conversationId: join.conversationId,
+      userId: viewer.userId,
+      role: join.role,
+      type: join.type,
+      leftAt: join.leftAt,
+      bannedAt: join.bannedAt,
+      conversation: shapes.get(join.conversationId) ?? null,
+    })),
+    onError: params.onError,
+  });
+}
+
 /** Les capacités des MEMBRES nommés d'une conversation, pour un événement poussé à chacun. */
 export async function loadMemberCapabilities(
   prisma: Pick<PrismaClient, 'participant' | 'user'>,
@@ -229,27 +262,27 @@ export const withViewerCapabilities = <T extends object>(
   capabilities === undefined ? payload : { ...payload, viewerCapabilities: capabilities };
 
 /**
- * Émet un même événement à chaque destinataire, augmenté de SES capacités.
+ * `conversation:new` vers chaque destinataire, augmenté de SES capacités.
  * Ne rejette jamais : une route l'appelle sans l'attendre, la réponse ne paie
  * pas ces lectures.
  */
-export async function emitWithViewerCapabilities<T extends object>(
+export async function announceConversationNew(
   prisma: Pick<PrismaClient, 'participant' | 'user'>,
   params: {
-    readonly conversationId: string;
+    readonly io: ServerEmitIO;
     readonly recipientIds: readonly string[];
-    readonly payload: T;
-    readonly emit: (recipientId: string, payload: T & { readonly viewerCapabilities?: ConversationViewerCapabilities }) => void;
+    readonly payload: ConversationNewEventData;
     readonly onError: (error: unknown) => void;
   },
 ): Promise<void> {
   try {
     const capabilitiesOf = await loadMemberCapabilities(prisma, {
-      conversationId: params.conversationId,
+      conversationId: params.payload.conversationId,
       userIds: params.recipientIds,
       onError: params.onError,
     });
-    params.recipientIds.forEach((recipientId) => params.emit(recipientId, withViewerCapabilities(params.payload, capabilitiesOf(recipientId))));
+    params.recipientIds.forEach((recipientId) =>
+      params.io.to(ROOMS.user(recipientId)).emit(SERVER_EVENTS.CONVERSATION_NEW, withViewerCapabilities(params.payload, capabilitiesOf(recipientId))));
   } catch (error) {
     params.onError(error);
   }

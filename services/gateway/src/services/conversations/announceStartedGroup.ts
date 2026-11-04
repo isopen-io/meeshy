@@ -14,12 +14,11 @@
  * une seconde fois.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
 import { isMemberCreator } from '@meeshy/shared/types/role-types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
-import { emitWithViewerCapabilities } from './obsoleteCapability';
+import { announceConversationNew } from './obsoleteCapability';
 
 const logger = enhancedLogger.child({ module: 'AnnounceStartedGroup' });
 
@@ -98,13 +97,11 @@ export async function announceStartedGroup(deps: AnnounceStartedGroupDeps, conve
     participantIds: members.map((participant) => participant.userId),
     createdAt: conversation.createdAt.toISOString(),
   };
-  const io = deps.io;
-  if (io) {
-    await emitWithViewerCapabilities(deps.prisma, {
-      conversationId: conversation.id,
+  if (deps.io) {
+    await announceConversationNew(deps.prisma, {
+      io: deps.io,
       recipientIds: invitees.map((invitee) => invitee.userId),
       payload,
-      emit: (recipientId, served) => io.to(ROOMS.user(recipientId)).emit(SERVER_EVENTS.CONVERSATION_NEW, served),
       onError: (error) => logger.warn('conversation:new emission failed', { conversationId: conversation.id, error }),
     });
   }

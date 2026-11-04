@@ -12,7 +12,7 @@ import type { ConversationJoinErrorReason } from '../../utils/conversation-join-
 
 // Le pont ✦ (G-123) — payload optionnel de `conversation:unread-updated`
 import type { ConversationBridge } from '../conversation-bridge.js';
-import type { ConversationViewerCapabilities } from '../conversation.js';
+import type { ConversationViewerCapabilities } from '../conversation-viewer-capabilities.js';
 
 // Le contrat de la ligne d'aperçu (#7545)
 import type {
