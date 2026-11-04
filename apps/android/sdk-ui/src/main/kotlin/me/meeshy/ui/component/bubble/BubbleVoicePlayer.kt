@@ -283,12 +283,14 @@ private fun rememberTranscriptReservation(audio: BubbleAudio, receivedAtEpochMs:
 
 /**
  * L'état de la demande de transcription de [audio] (l'hôte le tient) : au repos tant qu'il n'en dit rien. Aucune
- * souscription pour un vocal protégé : la demande ne lui est jamais offerte.
+ * souscription pour un vocal protégé (la demande ne lui est jamais offerte) ni pour un vocal déjà transcrit (le texte
+ * l'emporte sur tout état de demande) : un fil de vocaux transcrits ne tient aucun collecteur.
  */
 @Composable
 private fun rememberTranscriptionRequest(audio: BubbleAudio, callbacks: BubbleCallbacks): State<MessageTranscriptionFiche.Request> {
-    val flow = remember(audio.attachmentId, audio.isProtected, callbacks.transcriptionRequest) {
-        callbacks.transcriptionRequest?.takeIf { !audio.isProtected }?.invoke(audio) ?: flowOf(MessageTranscriptionFiche.Request.IDLE)
+    val subscribes = !audio.isProtected && !audio.hasTranscription
+    val flow = remember(audio.attachmentId, subscribes, callbacks.transcriptionRequest) {
+        callbacks.transcriptionRequest?.takeIf { subscribes }?.invoke(audio) ?: flowOf(MessageTranscriptionFiche.Request.IDLE)
     }
     return flow.collectAsState(initial = MessageTranscriptionFiche.Request.IDLE)
 }
