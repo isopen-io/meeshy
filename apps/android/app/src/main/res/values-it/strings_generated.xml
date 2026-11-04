@@ -71,8 +71,6 @@
     <string name="push_action_comment">Commenta</string>
     <string name="push_action_comment_hint">Commenta…</string>
     <string name="root_pending_changes">Modifiche in sospeso</string>
-    <string name="root_pending_stories">Storie in attesa</string>
-    <string name="root_publish_on_reconnect">Pubblicazione al ritorno in linea</string>
     <string name="root_sync_on_reconnect">Sincronizzazione al ritorno online</string>
     <string name="route_title_affiliate">Affiliazione</string>
     <string name="route_title_bookmarks">Segnalibri</string>

@@ -22,14 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Mood
-import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -82,6 +74,7 @@ import me.meeshy.sdk.model.syncpill.SyncPillRow
 import me.meeshy.sdk.model.syncpill.SyncPillTapOutcome
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
@@ -404,11 +397,11 @@ private fun SyncPillDotStyle.solid(): Color = when (this) {
 
 private fun SyncPillGlyph.vector(): ImageVector? = when (this) {
     SyncPillGlyph.NONE -> null
-    SyncPillGlyph.WIFI_OFF -> Icons.Filled.WifiOff
-    SyncPillGlyph.WIFI -> Icons.Filled.Wifi
-    SyncPillGlyph.MIC -> Icons.Filled.Mic
-    SyncPillGlyph.PHOTO -> Icons.Filled.Photo
-    SyncPillGlyph.PLAY -> Icons.Filled.PlayCircle
-    SyncPillGlyph.ATTACH -> Icons.Filled.AttachFile
-    SyncPillGlyph.MOOD -> Icons.Filled.Mood
+    SyncPillGlyph.WIFI_OFF -> MeeshyIcons.WifiOff
+    SyncPillGlyph.WIFI -> MeeshyIcons.Wifi
+    SyncPillGlyph.MIC -> MeeshyIcons.Mic
+    SyncPillGlyph.PHOTO -> MeeshyIcons.PhotoFilled
+    SyncPillGlyph.PLAY -> MeeshyIcons.PlayCircleFilled
+    SyncPillGlyph.ATTACH -> MeeshyIcons.AttachFile
+    SyncPillGlyph.MOOD -> MeeshyIcons.EmojiFilled
 }

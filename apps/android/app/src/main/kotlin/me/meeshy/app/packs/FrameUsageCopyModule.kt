@@ -24,7 +24,7 @@ internal class AndroidFrameUsageCopy(private val context: Context) : FrameUsageC
 
     override fun text(usage: FrameUsage): String = FrameUsageText.text(usage, ::name, ::format)
 
-    private fun format(key: String): String = context.getString(formatRes(key) ?: return key)
+    private fun format(key: String): String = formatRes(key)?.let(context::getString) ?: key
 
     private fun name(parameter: String, value: String): String {
         val res = when (parameter) {

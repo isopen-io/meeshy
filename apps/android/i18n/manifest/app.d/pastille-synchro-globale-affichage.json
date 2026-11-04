@@ -48,18 +48,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "root.pending_stories",
-          "androidName": "root_pending_stories",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "root.publish_on_reconnect",
-          "androidName": "root_publish_on_reconnect",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "root.sync_on_reconnect",
           "androidName": "root_sync_on_reconnect",
           "status": "adopted"
