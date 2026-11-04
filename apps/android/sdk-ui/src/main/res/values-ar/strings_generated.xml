@@ -283,7 +283,9 @@
     <string name="location_fullscreen_sharedPosition">موقع مشارَك</string>
     <string name="media_audio_open_fullscreen">فتح بملء الشاشة، التشغيل %1$d%%</string>
     <string name="media_audio_open_fullscreen_hint">يعرض واجهة ملء الشاشة مع خيارات الحفظ</string>
+    <string name="media_audio_original">الأصل</string>
     <string name="media_audio_play">تشغيل الصوت</string>
+    <string name="media_audio_retranscribe">إعادة النسخ النصي</string>
     <string name="media_audio_speed_cycle">سرعة التشغيل %1$s</string>
     <string name="media_audio_transcribe">نسخ نصي</string>
     <string name="media_audio_transcribing">جارٍ النسخ النصي</string>

@@ -19,6 +19,7 @@
     <string name="attachment_stage_loading">Chargement en cours</string>
     <string name="attachment_stage_thumbnailing">Aperçu</string>
     <string name="attachment_sticker">Sticker</string>
+    <string name="audio_fullscreen_language_choose">Traduire l\'audio</string>
     <string name="chat_action_copy">Copier</string>
     <string name="chat_action_copy_link">Copier le lien</string>
     <string name="chat_action_delete_for_everyone">Supprimer pour tout le monde</string>
@@ -555,6 +556,7 @@
     <string name="media_hub_tile_video">Vidéo de %1$s, %2$s</string>
     <string name="media_hub_title">Médias, liens et documents</string>
     <string name="message_action_copyAddress">Copier l\'adresse</string>
+    <string name="message_detail_a11y_retranslate">Retraduire</string>
     <string name="message_detail_edits_current">Actuel</string>
     <string name="message_detail_edits_empty">L\'historique des modifications apparaît ici</string>
     <string name="message_detail_edits_history_title">Historique</string>
@@ -585,6 +587,7 @@
     <string name="message_detail_sentiment_a11y_label">Sentiment</string>
     <string name="message_detail_sentiment_a11y_value">%1$s, score %2$.2f</string>
     <string name="message_detail_sentiment_score">Score : %1$.2f</string>
+    <string name="message_detail_translate">Traduire</string>
     <string name="message_detail_views_delivered">Distribué</string>
     <string name="message_detail_views_delivered_all">Distribué à tous</string>
     <string name="message_detail_views_delivered_empty">Aucune confirmation de distribution</string>
@@ -811,6 +814,7 @@
     <string name="transcription_fiche_speakers">%1$d locuteurs détectés</string>
     <string name="transcription_fiche_transcribe">Transcrire</string>
     <string name="transcription_fiche_translations">Traductions audio</string>
+    <string name="translation_audio_error">La traduction audio a échoué. Réessayez.</string>
     <string name="viewer_code_loading">Chargement...</string>
     <string name="viewer_contact_add">Ajouter aux contacts</string>
     <string name="viewer_contact_close">Fermer la fiche</string>

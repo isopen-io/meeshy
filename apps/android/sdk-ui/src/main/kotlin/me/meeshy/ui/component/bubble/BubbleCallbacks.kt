@@ -62,6 +62,11 @@ public data class BubbleCallbacks(
      * reste affiché tant que la tâche tourne, « Transcrire » revient au plafond de silence ou à l'échec reçu.
      */
     val transcriptionRequest: ((BubbleAudio) -> Flow<MessageTranscriptionFiche.Request>)? = null,
+    /**
+     * Tap sur « Re-transcrire » d'un vocal déjà transcrit (iOS `onRetranscribe`) : l'hôte redemande la transcription au
+     * serveur (`force`). Nul ⇒ aucun bouton ; jamais offert pour un vocal protégé, un brouillon local ni la posture minimale.
+     */
+    val onRetranscribe: ((BubbleAudio) -> Unit)? = null,
     /** Tap on a file attachment that has a url. */
     val onFileClick: ((BubbleFile) -> Unit)? = null,
     /** Tap on the quoted-reply preview (only wired when the quoted message id is known). */

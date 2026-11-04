@@ -19,6 +19,7 @@
     <string name="attachment_stage_loading">Loading</string>
     <string name="attachment_stage_thumbnailing">Preview</string>
     <string name="attachment_sticker">Sticker</string>
+    <string name="audio_fullscreen_language_choose">Translate audio</string>
     <string name="chat_action_copy">Copy</string>
     <string name="chat_action_copy_link">Copy link</string>
     <string name="chat_action_delete_for_everyone">Delete for everyone</string>
@@ -548,6 +549,7 @@
     <string name="media_hub_tile_video">Video from %1$s, %2$s</string>
     <string name="media_hub_title">Media, links and documents</string>
     <string name="message_action_copyAddress">Copy address</string>
+    <string name="message_detail_a11y_retranslate">Translate again</string>
     <string name="message_detail_edits_current">Current</string>
     <string name="message_detail_edits_empty">The edit history appears here</string>
     <string name="message_detail_edits_history_title">History</string>
@@ -577,6 +579,7 @@
     <string name="message_detail_sentiment_a11y_label">Sentiment</string>
     <string name="message_detail_sentiment_a11y_value">%1$s, score %2$.2f</string>
     <string name="message_detail_sentiment_score">Score: %1$.2f</string>
+    <string name="message_detail_translate">Translate</string>
     <string name="message_detail_views_delivered">Delivered</string>
     <string name="message_detail_views_delivered_all">Delivered to everyone</string>
     <string name="message_detail_views_delivered_empty">No delivery confirmation</string>
@@ -803,6 +806,7 @@
     <string name="transcription_fiche_speakers">%1$d speakers detected</string>
     <string name="transcription_fiche_transcribe">Transcribe</string>
     <string name="transcription_fiche_translations">Audio translations</string>
+    <string name="translation_audio_error">The audio translation failed. Please try again.</string>
     <string name="viewer_code_loading">Loading...</string>
     <string name="viewer_contact_add">Add to Contacts</string>
     <string name="viewer_contact_close">Close contact card</string>

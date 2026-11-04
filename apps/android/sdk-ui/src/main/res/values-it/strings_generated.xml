@@ -277,7 +277,9 @@
     <string name="location_fullscreen_sharedPosition">Posizione condivisa</string>
     <string name="media_audio_open_fullscreen">Apri a schermo intero, riproduzione %1$d%%</string>
     <string name="media_audio_open_fullscreen_hint">Mostra la vista a schermo intero con le opzioni di salvataggio</string>
+    <string name="media_audio_original">Originale</string>
     <string name="media_audio_play">Riproduci l\'audio</string>
+    <string name="media_audio_retranscribe">Ritrascrivi</string>
     <string name="media_audio_speed_cycle">Velocità di riproduzione %1$s</string>
     <string name="media_audio_transcribe">Trascrivi</string>
     <string name="media_audio_transcribing">Trascrizione in corso</string>

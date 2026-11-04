@@ -277,7 +277,9 @@
     <string name="location_fullscreen_sharedPosition">Position partagée</string>
     <string name="media_audio_open_fullscreen">Ouvrir en plein écran, lecture %1$d%%</string>
     <string name="media_audio_open_fullscreen_hint">Affiche la vue plein écran avec les options de sauvegarde</string>
+    <string name="media_audio_original">Original</string>
     <string name="media_audio_play">Lire l\'audio</string>
+    <string name="media_audio_retranscribe">Re-transcrire</string>
     <string name="media_audio_speed_cycle">Vitesse de lecture %1$s</string>
     <string name="media_audio_transcribe">Transcrire</string>
     <string name="media_audio_transcribing">Transcription en cours</string>

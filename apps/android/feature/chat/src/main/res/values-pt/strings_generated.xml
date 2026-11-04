@@ -19,6 +19,7 @@
     <string name="attachment_stage_loading">Carregando</string>
     <string name="attachment_stage_thumbnailing">Prévia</string>
     <string name="attachment_sticker">Figurinha</string>
+    <string name="audio_fullscreen_language_choose">Traduzir o áudio</string>
     <string name="chat_action_copy">Copiar</string>
     <string name="chat_action_copy_link">Copiar o link</string>
     <string name="chat_action_delete_for_everyone">Apagar para todos</string>
@@ -555,6 +556,7 @@
     <string name="media_hub_tile_video">Vídeo de %1$s, %2$s</string>
     <string name="media_hub_title">Mídia, links e documentos</string>
     <string name="message_action_copyAddress">Copiar endereço</string>
+    <string name="message_detail_a11y_retranslate">Traduzir novamente</string>
     <string name="message_detail_edits_current">Atual</string>
     <string name="message_detail_edits_empty">O histórico de edições aparece aqui</string>
     <string name="message_detail_edits_history_title">Histórico</string>
@@ -585,6 +587,7 @@
     <string name="message_detail_sentiment_a11y_label">Sentimento</string>
     <string name="message_detail_sentiment_a11y_value">%1$s, pontuação %2$.2f</string>
     <string name="message_detail_sentiment_score">Pontuação: %1$.2f</string>
+    <string name="message_detail_translate">Traduzir</string>
     <string name="message_detail_views_delivered">Entregue</string>
     <string name="message_detail_views_delivered_all">Entregue a todos</string>
     <string name="message_detail_views_delivered_empty">Nenhuma confirmação de entrega</string>
@@ -811,6 +814,7 @@
     <string name="transcription_fiche_speakers">%1$d falantes detectados</string>
     <string name="transcription_fiche_transcribe">Transcrever</string>
     <string name="transcription_fiche_translations">Traduções de áudio</string>
+    <string name="translation_audio_error">A tradução do áudio falhou. Tente novamente.</string>
     <string name="viewer_code_loading">Carregando...</string>
     <string name="viewer_contact_add">Adicionar aos contatos</string>
     <string name="viewer_contact_close">Fechar o cartão</string>
