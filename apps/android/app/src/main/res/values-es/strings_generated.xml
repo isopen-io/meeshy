@@ -99,7 +99,6 @@
     <string name="route_title_story">Historia</string>
     <string name="route_title_tracking_links">Enlaces de seguimiento</string>
     <string name="share_sending">Enviando…</string>
-    <string name="share_sheet_sign_in_body">Tu contenido se guarda. Te espera en Meeshy, o en el estudio si quieres publicarlo.</string>
     <string name="share_sheet_sign_in_open">Abrir Meeshy</string>
     <string name="share_sheet_sign_in_title">Inicia sesión para enviar</string>
     <string name="share_target_label">Compartir en Meeshy</string>

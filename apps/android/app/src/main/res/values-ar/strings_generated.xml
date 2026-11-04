@@ -99,7 +99,6 @@
     <string name="route_title_story">قصة</string>
     <string name="route_title_tracking_links">روابط التتبّع</string>
     <string name="share_sending">جارٍ الإرسال…</string>
-    <string name="share_sheet_sign_in_body">مشاركتك محفوظة. إنها بانتظارك في Meeshy، أو في الاستوديو إن أردت نشرها.</string>
     <string name="share_sheet_sign_in_open">فتح Meeshy</string>
     <string name="share_sheet_sign_in_title">سجّل الدخول للإرسال</string>
     <string name="share_target_label">المشاركة على Meeshy</string>

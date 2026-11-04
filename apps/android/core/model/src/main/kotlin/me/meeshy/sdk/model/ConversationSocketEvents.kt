@@ -314,6 +314,11 @@ data class ParticipantRightsUpdatedEvent(
     val updatedBy: String? = null,
     val rights: ServedParticipantRights = ServedParticipantRights(),
     val historyVisibleFrom: String? = null,
+    /**
+     * La charge PORTAIT-elle la clé `historyVisibleFrom` ? Posé par [ParticipantRightsUpdatedEventSerializer] :
+     * `historyVisibleFrom` seul ne distingue pas `null` (efface) d'une clé absente (n'affirme rien).
+     */
+    val carriesHistoryGrant: Boolean = false,
 ) : SingleConversationSocketEvent
 
 /**

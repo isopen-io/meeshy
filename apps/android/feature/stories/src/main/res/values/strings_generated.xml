@@ -99,6 +99,7 @@
     <string name="composer_publish_as_reel">Publish reel</string>
     <string name="composer_publish_as_story">Publish story</string>
     <string name="composer_publish_as_storyAndReel">Publish story and reel</string>
+    <string name="composer_publish_format_unsupported">This format can’t be published from here yet</string>
     <string name="composer_rail_object_exit">Leave the object</string>
     <string name="composer_slide_rail">Publication scenes</string>
     <string name="composer_slide_rail_capReached">Ten scenes at most — delete one to create another</string>
@@ -114,6 +115,7 @@
     <string name="composer_text_frame_rectangle">Square</string>
     <string name="composer_text_frame_rounded">Rounded</string>
     <string name="composer_text_frame_speech">Speech bubble</string>
+    <string name="feed_post_publish_error">Error while publishing</string>
     <string name="my_stories_archive_empty_subtitle">Your expired stories will join this archive.</string>
     <string name="my_stories_archive_empty_title">No archive</string>
     <string name="my_stories_back">Back</string>
