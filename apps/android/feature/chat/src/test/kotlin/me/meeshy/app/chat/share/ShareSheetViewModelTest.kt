@@ -1,4 +1,4 @@
-package me.meeshy.app.chat
+package me.meeshy.app.chat.share
 
 import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
@@ -51,12 +51,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class AppShareSheetViewModelTest {
+class ShareSheetViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
 
@@ -80,7 +81,7 @@ class AppShareSheetViewModelTest {
     )
 
     private class Harness(
-        val vm: AppShareSheetViewModel,
+        val vm: ShareSheetViewModel,
         val messages: MessageRepository,
         val conversations: ConversationRepository,
         val mediaQueue: MediaUploadQueue,
@@ -120,7 +121,7 @@ class AppShareSheetViewModelTest {
         val online = MutableStateFlow(true)
         val network = mockk<NetworkMonitor>(relaxed = true)
         every { network.isOnline } returns online
-        val vm = AppShareSheetViewModel(conversationRepo, messages, session, mockk<WorkManager>(relaxed = true), mediaQueue, friendRepo, blockedRepo, blocks, network, outOfThread, links, previews)
+        val vm = ShareSheetViewModel(conversationRepo, messages, session, mockk<WorkManager>(relaxed = true), mediaQueue, friendRepo, blockedRepo, blocks, network, outOfThread, links, previews)
         return Harness(vm, messages, conversationRepo, mediaQueue, blocks, online, links)
     }
 
@@ -512,7 +513,7 @@ class AppShareSheetViewModelTest {
         val vm = ViewModelProvider(store, object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T = h.vm as T
-        })[AppShareSheetViewModel::class.java]
+        })[ShareSheetViewModel::class.java]
         val copy = intakeCopy()
         val existedAtEnqueue = mutableListOf<Boolean>()
         coEvery { h.mediaQueue.enqueue(any(), any(), any()) } coAnswers {
@@ -633,6 +634,73 @@ class AppShareSheetViewModelTest {
         assertThat(gated).containsExactly("d-cached")
         coVerify(exactly = 0) { h.messages.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
         assertThat(h.model().deliveries["user:u9"]).isEqualTo(ShareDelivery.Failed(ShareFailure.SEALED_DESTINATION))
+    }
+
+    @Test
+    fun at_most_ten_recipients_can_be_ticked_and_the_eleventh_is_refused_in_silence() = runTest(dispatcher) {
+        val h = harness(list = (1..12).map { group("c$it", "Groupe $it") }, friends = emptyList())
+        h.vm.bind(ShareSubject.Text("salut"))
+        advanceUntilIdle()
+
+        h.model().sections.conversations.forEach { h.vm.toggle(it) }
+
+        assertThat(h.vm.state.value.sheet.selection).hasSize(10)
+        assertThat(h.vm.state.value.selectionIsFull).isTrue()
+        val ticked = h.vm.state.value.sheet.selection.first()
+        h.vm.toggle(ticked)
+        assertThat(h.vm.state.value.sheet.selection).hasSize(9)
+    }
+
+    @Test
+    fun a_clean_send_asks_the_screen_to_close_once_and_a_failure_keeps_it_open() = runTest(dispatcher) {
+        val h = harness(outOfThread = OutOfThreadSendGate { id -> if (id == "c2") OutOfThreadAdmission.END_TO_END else OutOfThreadAdmission.SEND })
+        val received = mutableListOf<ShareSheetEffect>()
+        val collecting = launch { h.vm.effects.collect { received += it } }
+        h.vm.bind(ShareSubject.Text("salut"))
+        advanceUntilIdle()
+
+        h.vm.toggle(h.model().sections.conversations.first { it.conversationId == "c1" })
+        h.vm.send()
+        advanceUntilIdle()
+        assertThat(received).containsExactly(ShareSheetEffect.AutoClose)
+        assertThat(h.vm.state.value.autoCloses).isTrue()
+        collecting.cancel()
+    }
+
+    @Test
+    fun retry_all_resends_only_the_rows_that_failed() = runTest(dispatcher) {
+        var failOnce = true
+        val h = harness(
+            list = listOf(group("c1", "Équipe"), group("c2", "Famille")),
+            friends = emptyList(),
+            outOfThread = OutOfThreadSendGate { id ->
+                if (id == "c2" && failOnce) { failOnce = false; OutOfThreadAdmission.END_TO_END } else OutOfThreadAdmission.SEND
+            },
+        )
+        val received = mutableListOf<ShareSheetEffect>()
+        val collecting = launch { h.vm.effects.collect { received += it } }
+        h.vm.bind(ShareSubject.Text("salut"))
+        advanceUntilIdle()
+        h.model().sections.conversations.forEach { h.vm.toggle(it) }
+
+        h.vm.send()
+        advanceUntilIdle()
+        assertThat(h.vm.state.value.failedIds).containsExactly("conv:c2")
+        assertThat(h.vm.state.value.offersRetryAll).isTrue()
+        assertThat(received).isEmpty()
+
+        h.vm.retryAll()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            h.messages.sendOptimistic(conversationId = "c1", content = "salut", originalLanguage = any(), sender = me, forwardedFromId = null, forwardedFromConversationId = null, effects = any())
+        }
+        coVerify(exactly = 1) {
+            h.messages.sendOptimistic(conversationId = "c2", content = "salut", originalLanguage = any(), sender = me, forwardedFromId = null, forwardedFromConversationId = null, effects = any())
+        }
+        assertThat(h.vm.state.value.failedIds).isEmpty()
+        assertThat(received).containsExactly(ShareSheetEffect.AutoClose)
+        collecting.cancel()
     }
 
     private fun intakeCopy(): File {
