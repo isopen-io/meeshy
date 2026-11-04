@@ -1300,7 +1300,7 @@ final class ComposerIntentTests: XCTestCase {
          declaration: "private func togglePostRepost(postId: String)",
          lecture: "viewModel.posts.first(where: { $0.id == postId })"),
         (fichier: "PostDetailView.swift",
-         declaration: "private func toggleDetailRepost(quote: Bool)",
+         declaration: "private func toggleDetailRepost()",
          lecture: "displayPost")
     ]
 

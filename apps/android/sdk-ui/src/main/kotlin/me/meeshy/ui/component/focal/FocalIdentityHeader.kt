@@ -89,6 +89,7 @@ public fun FocalIdentityHeader(
                     userId = input.senderUserId,
                     presence = rememberPresence(input.senderUserId),
                     here = rememberConversationHere(input.senderUserId, input.viewingConversationId),
+                    decorRing = input.senderRing,
                 )
                 if (agent.showsDashedRing) AgentDashedRing(diameter = diameter, color = MeeshyPalette.Indigo500)
             }

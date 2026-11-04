@@ -164,6 +164,7 @@ internal fun Modifier.storyDragLayer(
             scope.launch {
                 launch { motion.dragY.animateTo(0f, DismissSettleSpring) }
                 motion.offsetX.animateTo(0f, CubeSettleSpring)
+                if (!motion.transitioning) motion.cubeNeighborsMounted = false
             }
         }
 
@@ -171,18 +172,21 @@ internal fun Modifier.storyDragLayer(
             purge()
             motion.dragging = true
             motion.transitioning = true
+            motion.cubeNeighborsMounted = true
             onCommitFeedback()
             scope.launch {
                 try {
                     val remaining = 1f - abs(motion.offsetX.value / exit).coerceIn(0f, 1f)
-                    val exitMs = (CUBE_COMMIT_MS * remaining).toInt().coerceAtLeast(120)
+                    val exitMs = (CUBE_COMMIT_MS * remaining).toInt().coerceAtLeast(MINIMUM_COMMIT_MS)
                     motion.offsetX.animateTo(exit, tween(exitMs, easing = CubeCommitEasing))
+                    delay((StoryGroupCubeGeometry.SWAP_DELAY_MILLIS - exitMs).coerceAtLeast(0).toLong())
+                    motion.entryPlayed = true
                     onCommit(action)
-                    motion.offsetX.snapTo(-exit)
-                    motion.offsetX.animateTo(0f, tween(CUBE_COMMIT_MS, easing = CubeCommitEasing))
+                    motion.offsetX.snapTo(0f)
                 } finally {
                     motion.transitioning = false
                     motion.dragging = false
+                    motion.cubeNeighborsMounted = false
                 }
             }
         }
@@ -243,6 +247,7 @@ internal fun Modifier.storyDragLayer(
                 engaged = false
                 velocityTracker.resetTracking()
                 tracker.releaseAxis()
+                motion.entryPlayed = false
                 ignored = motion.transitioning || composerEngaged.value
                 tracker.owner = if (ignored) {
                     StoryDragOwner.Reader
@@ -272,13 +277,16 @@ internal fun Modifier.storyDragLayer(
                 val width = size.width.toFloat()
                 scope.launch(start = CoroutineStart.UNDISPATCHED) {
                     when {
-                        axis == StoryDragAxis.Horizontal && !surfaceOpen.value -> motion.offsetX.snapTo(
-                            StoryGroupSwipeDecision.displayedTranslation(
-                                rawX,
-                                width,
-                                hasNeighbor = if (rawX < 0f) hasNextGroup.value else hasPreviousGroup.value,
-                            ),
-                        )
+                        axis == StoryDragAxis.Horizontal && !surfaceOpen.value -> {
+                            motion.cubeNeighborsMounted = true
+                            motion.offsetX.snapTo(
+                                StoryGroupSwipeDecision.displayedTranslation(
+                                    rawX,
+                                    width,
+                                    hasNeighbor = if (rawX < 0f) hasNextGroup.value else hasPreviousGroup.value,
+                                ),
+                            )
+                        }
                         axis == StoryDragAxis.Vertical && !tracker.hadActiveFeature -> motion.dragY.snapTo(rawY.coerceAtLeast(0f))
                         else -> Unit
                     }
@@ -300,3 +308,5 @@ internal fun Modifier.storyDragLayer(
             onDragCancel = { if (!ignored) settle(resetTracking = true) },
         )
     }
+
+private const val MINIMUM_COMMIT_MS = 120

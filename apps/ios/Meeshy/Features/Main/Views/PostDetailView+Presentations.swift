@@ -3,28 +3,15 @@ import MeeshySDK
 import MeeshyUI
 
 /// **Ce que le détail d'un post présente par-dessus lui** — traductions,
-/// profil, partage système, édition, lieu, galerie, plein écran audio et
-/// enregistrement local. Extrait du `body` de `PostDetailView.swift` (#10956).
+/// profil, partage système, édition, lieu, galerie, plein écran audio,
+/// enregistrement local et porte de citation. Extrait du `body` de `PostDetailView.swift` (#10956).
 extension PostDetailView {
 
     func detailPresentations(_ content: some View) -> some View {
         content
             .sheet(isPresented: $showTranslationSheet) {
                 if let post = displayPost {
-                    PostTranslationSheet(
-                        post: post,
-                        onSelectLanguage: { language in
-                            let langLower = language.lowercased()
-                            let isOriginal = langLower == post.originalLanguage?.lowercased()
-                            let hasTranslation = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == langLower }) == true
-                            if hasTranslation {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    activeDisplayLangCode = langLower
-                                    secondaryLangCode = nil
-                                }
-                            }
-                        }
-                    )
+                    PostTranslationSheet(post: post, onSelectLanguage: { selectDisplayLanguage($0, of: post) })
                 }
             }
             .sheet(item: $selectedProfileUser) { user in
@@ -89,5 +76,19 @@ extension PostDetailView {
             )
             .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
             .mediaSaveFlow(mediaSaveCoordinator)
+            .modifier(QuoteComposerCover(quoted: $quotedPost, host: quoteHost))
+    }
+
+    /// Une langue choisie dans la feuille de traductions s'affiche si le post
+    /// y est écrit ou traduit.
+    private func selectDisplayLanguage(_ language: String, of post: FeedPost) {
+        let langLower = language.lowercased()
+        let isOriginal = langLower == post.originalLanguage?.lowercased()
+        let hasTranslation = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == langLower }) == true
+        guard hasTranslation else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            activeDisplayLangCode = langLower
+            secondaryLangCode = nil
+        }
     }
 }

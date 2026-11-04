@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -41,6 +42,7 @@ import me.meeshy.ui.theme.hexColor
  * en fond (flou ThumbHash pendant le chargement ; sans bannière, dégradé de la couleur d'avatar vers le noir sur une
  * base opaque), le voile de lisibilité 0,62 / 0,28 / 0,72, et au centre avatar, nom, @pseudo, présence, humeur.
  *
+ * [contentAlpha] est lu en phase de dessin : la face de cube y monte l'identité AU DOIGT, sans recomposer.
  * Paramètres OPAQUES : [presence] est déjà décidée (amis seulement) par l'appelant, la couleur d'avatar suit le nom.
  */
 @Composable
@@ -49,6 +51,7 @@ internal fun StoryAuthorIdentityCard(
     avatarUrl: String?,
     presence: PresenceState?,
     modifier: Modifier = Modifier,
+    contentAlpha: () -> Float = { 1f },
 ) {
     val accent = remember(intro.title) { hexColor(DynamicColorGenerator.colorForName(intro.title)) }
     Box(modifier.fillMaxSize().background(Color.Black)) {
@@ -58,7 +61,7 @@ internal fun StoryAuthorIdentityCard(
                 Brush.verticalGradient(StoryGroupIntro.SCRIM_ALPHAS.map { Color.Black.copy(alpha = it) }),
             ),
         )
-        IdentityContent(intro, avatarUrl, presence, accent, Modifier.align(Alignment.Center))
+        IdentityContent(intro, avatarUrl, presence, accent, Modifier.align(Alignment.Center).graphicsLayer { alpha = contentAlpha() })
     }
 }
 

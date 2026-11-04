@@ -71,6 +71,8 @@
     <string name="call_detail_type">النوع</string>
     <string name="call_detail_type_audio">مكالمة صوتية</string>
     <string name="call_detail_type_video">مكالمة فيديو</string>
+    <string name="call_effects_companions_more">%1$d مشاركين آخرين</string>
+    <string name="call_effects_companions_move">النقل إلى الجهة الأخرى</string>
     <string name="call_ended">انتهت المكالمة</string>
     <string name="call_ended_connection_lost">انقطع الاتصال</string>
     <string name="call_ended_declined">مكالمة مرفوضة</string>

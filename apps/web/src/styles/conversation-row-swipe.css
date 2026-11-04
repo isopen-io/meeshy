@@ -101,7 +101,7 @@
 }
 
 .row-swipe-action[data-row-swipe-action='obsolete'] {
-  background-color: color-mix(in srgb, var(--color-error) 78%, black);
+  background-color: var(--color-error);
 }
 
 .row-swipe-action:focus-visible {

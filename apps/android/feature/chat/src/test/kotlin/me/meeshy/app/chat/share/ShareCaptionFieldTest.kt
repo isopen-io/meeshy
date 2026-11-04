@@ -28,9 +28,16 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
+/**
+ * NATIVE : en mode graphique LEGACY de Robolectric, aucun toucher n'atteint un segment d'une
+ * `SingleChoiceSegmentedButtonRow` à plusieurs segments (un segment seul ou une `Surface` sélectionnable
+ * le reçoivent, et l'action sémantique OnClick fonctionne) — le témoin du choix « Séparément » rendait null.
+ */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ShareCaptionFieldTest {
 
     @get:Rule

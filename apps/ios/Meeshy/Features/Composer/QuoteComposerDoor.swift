@@ -81,6 +81,26 @@ struct QuoteComposerHost {
     let statusViewModel: StatusViewModel
 }
 
+/// **La porte de citation offerte à toute surface de publication** (#15911).
+///
+/// Les posts d'un profil, le détail d'un post, les résultats d'un hashtag et
+/// les favoris vivent dans des FEUILLES ou des pages poussées qui ne lisent
+/// aucun objet de la racine (`SheetEnvironmentObjectGuardTests`). Sans hôte,
+/// « Citer » ouvrait le détail du post au lieu de la porte, ou publiait une
+/// citation sans commentaire. Chaque racine pose l'hôte en valeur
+/// d'ENVIRONNEMENT, au-dessus de ses feuilles : elles en héritent, et `nil`
+/// retire « Citer » (loi 4) au lieu de trapper.
+private struct MeeshyQuoteComposerHostKey: EnvironmentKey {
+    static let defaultValue: QuoteComposerHost? = nil
+}
+
+extension EnvironmentValues {
+    var meeshyQuoteComposerHost: QuoteComposerHost? {
+        get { self[MeeshyQuoteComposerHostKey.self] }
+        set { self[MeeshyQuoteComposerHostKey.self] = newValue }
+    }
+}
+
 /// La porte de citation présentée par ITEM : l'item retombe à `nil` à la
 /// fermeture. Sans hôte, rien ne se monte — et l'appelant n'offre pas « Citer ».
 struct QuoteComposerCover: ViewModifier {
