@@ -149,6 +149,13 @@ internal class TranslationLayer(
         synchronized(projections) { ids.forEach { projections.remove(it) } }
     }
 
+    /** Le L1 relira [ids] depuis le disque : une partie seulement de leurs lignes vient d'en partir. */
+    fun reload(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        synchronized(l1) { ids.forEach { l1.remove(it) } }
+        synchronized(projections) { ids.forEach { projections.remove(it) } }
+    }
+
     /** Fin de session : rien du compte qui part ne reste en mémoire, et le suivant réhydrate depuis son disque. */
     override suspend fun clear() {
         synchronized(l1) {

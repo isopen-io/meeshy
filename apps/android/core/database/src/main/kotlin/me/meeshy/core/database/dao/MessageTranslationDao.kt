@@ -35,6 +35,10 @@ public interface MessageTranslationDao {
     @Query("DELETE FROM message_transcriptions WHERE messageId IN (:messageIds)")
     public suspend fun deleteTranscriptionsFor(messageIds: List<String>)
 
+    /** La traduction retenue de [language] (minuscules) ne dit plus ce que le serveur sert : elle cède à la charge. */
+    @Query("DELETE FROM message_translations WHERE messageId IN (:messageIds) AND language = :language")
+    public suspend fun deleteTextFor(messageIds: List<String>, language: String)
+
     @Query("DELETE FROM message_audio_translations WHERE messageId IN (:messageIds)")
     public suspend fun deleteAudioFor(messageIds: List<String>)
 

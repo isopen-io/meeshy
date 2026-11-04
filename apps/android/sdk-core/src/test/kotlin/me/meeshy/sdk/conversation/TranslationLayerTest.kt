@@ -265,6 +265,18 @@ class TranslationLayerTest {
     }
 
     @Test
+    fun `une traduction socket plus recente que la page REST reste affichee quand la page resert la meme traduction`() = runHarnessTest { harness ->
+        val served = message().copy(translations = listOf(ApiTextTranslation(targetLanguage = "fr", translatedContent = "Salut")))
+        harness.seedSynced(served)
+        writer(harness).applyTranslation("m1", "fr", "Bonjour")
+
+        MessageIngestPipeline(harness.database).ingest(listOf(served.copy(updatedAt = "2026-06-01T10:05:00Z")), harness.clock.now)
+
+        assertThat(harness.retained("m1")).isEqualTo(1)
+        assertThat(harness.shown().translations.single { it.targetLanguage == "fr" }.translatedContent).isEqualTo("Bonjour")
+    }
+
+    @Test
     fun `une retraduction servie au meme texte l'emporte sur la ligne retenue`() = runHarnessTest { harness ->
         harness.seedSynced(message())
         writer(harness).applyTranslation("m1", "fr", "Bonjour")

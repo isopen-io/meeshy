@@ -95,7 +95,9 @@ internal class MessageIngestPipeline(
         // (RetainedTranslationCascade) épargne alors les lignes rangées sous l'id serveur, que la jumelle porte déjà.
         if (writes.isNotEmpty()) messageDao.upsertAll(writes.values.toList())
         if (replacedLocalIds.isNotEmpty()) messageDao.deleteByIds(replacedLocalIds.toList())
-        DedicatedTranslationRows.drop(database, outlivedKeys(writes.values, baseOfRow) + replacedLocalIds)
+        val retained = retainedChanges(writes.values, baseOfRow)
+        DedicatedTranslationRows.drop(database, retained.outlived + replacedLocalIds)
+        retained.superseded.forEach { (keys, languages) -> DedicatedTranslationRows.supersede(database, keys, languages) }
         regime?.learnFromServed(latest, conversationId)
         erasures?.recordServedGone(latest)
         return changed
@@ -158,19 +160,33 @@ internal class MessageIngestPipeline(
         }
     }
 
+    /** Ce qu'une page servie change aux traductions retenues : des messages entiers, ou certaines langues seulement. */
+    private class RetainedChanges(val outlived: List<String>, val superseded: List<Pair<List<String>, Set<String>>>)
+
     /**
-     * Les clés des traductions retenues qu'une page servie rend caduques : un texte édité ailleurs (la ligne disait
-     * « RDV 14h », la page sert « RDV 16h » et SA traduction), un message devenu pierre tombale, protégé ou purgé.
-     * Une charge illisible est tenue pour caduque : fail-closed.
+     * Les traductions retenues qu'une page servie rend caduques. Toutes celles d'un message dont le texte a changé
+     * (la ligne disait « RDV 14h », la page sert « RDV 16h »), devenu pierre tombale, protégé ou purgé ; une charge
+     * illisible est tenue pour caduque (fail-closed). Sinon, celles des langues dont la page sert une traduction
+     * NOUVELLE (retraduction, ou traduction du texte courant après une trame socket en retard) : la page est alors
+     * plus récente que la ligne, qui lui cède.
      */
-    private fun outlivedKeys(written: Collection<MessageEntity>, baseOfRow: Map<String, MessageEntity>): List<String> =
-        written.flatMap { row ->
-            val base = baseOfRow[row.id] ?: return@flatMap emptyList()
+    private fun retainedChanges(written: Collection<MessageEntity>, baseOfRow: Map<String, MessageEntity>): RetainedChanges {
+        val outlived = mutableListOf<String>()
+        val superseded = mutableListOf<Pair<List<String>, Set<String>>>()
+        written.forEach { row ->
+            val base = baseOfRow[row.id] ?: return@forEach
             val before = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(base.payload) }.getOrNull()
             val after = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
-            val stale = before == null || DedicatedTranslationRows.outlived(before, after)
-            if (stale) DedicatedTranslationRows.keysOf(base, before) + DedicatedTranslationRows.keysOf(row, after) else emptyList()
+            val keys = DedicatedTranslationRows.keysOf(base, before) + DedicatedTranslationRows.keysOf(row, after)
+            if (before == null || after == null || DedicatedTranslationRows.outlived(before, after)) {
+                outlived += keys
+                return@forEach
+            }
+            val languages = DedicatedTranslationRows.supersededLanguages(before, after)
+            if (languages.isNotEmpty()) superseded += keys to languages
         }
+        return RetainedChanges(outlived, superseded)
+    }
 
     /** Une rafale peut porter deux fois le même message : seul son dernier état compte. */
     private fun latestPerId(messages: List<ApiMessage>): Collection<ApiMessage> {

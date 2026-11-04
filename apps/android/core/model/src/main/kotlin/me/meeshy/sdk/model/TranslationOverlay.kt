@@ -40,10 +40,10 @@ data class StoredAudioTranslation(
 /**
  * La projection des lignes dédiées vers un [ApiMessage] : les traductions, transcriptions et
  * pistes audio déjà reçues se superposent à la charge du message, sans changer ce que l'écran
- * lit. Une ligne AJOUTE une langue que la charge ne porte pas ; pour une langue que la charge SERVIE porte déjà, la
- * charge l'emporte : elle est la traduction du texte que le serveur sert MAINTENANT (une retraduction, ou la traduction
- * d'un texte édité, alors qu'une trame socket ne dit pas de quel texte elle vient). Une langue hors [prism] n'est pas
- * projetée. Rend l'instance reçue quand rien ne
+ * lit. La ligne est la traduction la plus RÉCENTE de sa langue : elle remplace celle de la charge (une trame socket
+ * plus récente qu'une page REST). Une ligne PÉRIMÉE ne survit pas jusqu'ici : un texte édité ou une traduction que le
+ * serveur sert à nouveau, différente, efface la ligne de cette langue à l'écriture de la charge (ingestion), et la
+ * charge reprend la main. Une langue hors [prism] n'est pas projetée. Rend l'instance reçue quand rien ne
  * change : aucun re-rendu inutile.
  *
  * Un message dont le contenu est PROTÉGÉ ou PURGÉ ([refuses]) ne reçoit jamais de ligne : sa traduction et sa
@@ -86,7 +86,7 @@ object TranslationOverlay {
             val language = row.language.trim()
             if (language.isEmpty() || row.content.isBlank() || !admits(prism, language)) return@forEach
             val index = current.indexOfFirst { it.targetLanguage.equals(language, ignoreCase = true) }
-            if (index >= 0 && current[index].translatedContent.isNotBlank()) return@forEach
+            if (index >= 0 && current[index].translatedContent == row.content) return@forEach
             val entry = ApiTextTranslation(
                 messageId = message.id,
                 sourceLanguage = row.sourceLanguage,

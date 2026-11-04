@@ -39,5 +39,28 @@ internal object DedicatedTranslationRows {
         TranslationLayer.of(database).forget(all)
     }
 
+    /**
+     * Les langues dont la charge SERVIE a changé de [before] à [after] (nouvelle traduction, retraduction) : la ligne
+     * retenue de ces langues est plus ancienne que ce que le serveur vient de servir.
+     */
+    fun supersededLanguages(before: ApiMessage, after: ApiMessage): Set<String> {
+        val held = before.translations.associate { it.targetLanguage.trim().lowercase() to it.translatedContent }
+        return after.translations
+            .filter { it.translatedContent.isNotBlank() }
+            .map { it.targetLanguage.trim().lowercase() to it.translatedContent }
+            .filter { (language, content) -> language.isNotEmpty() && held[language] != content }
+            .map { it.first }
+            .toSet()
+    }
+
+    /** Efface les traductions retenues de [languages] pour [ids], dans la transaction de l'écriture de la charge. */
+    suspend fun supersede(database: MeeshyDatabase, ids: Collection<String>, languages: Set<String>) {
+        val all = ids.filter { it.isNotBlank() }.distinct()
+        if (all.isEmpty() || languages.isEmpty()) return
+        val dao = database.messageTranslationDao()
+        languages.forEach { language -> all.chunked(CHUNK).forEach { dao.deleteTextFor(it, language) } }
+        TranslationLayer.of(database).reload(all)
+    }
+
     private const val CHUNK = 400
 }

@@ -35,13 +35,12 @@ class TranslationOverlayTest {
     }
 
     @Test
-    fun `the served payload wins over a stored row of the same language`() {
+    fun `a stored translation, the most recent of its language, wins over the payload one`() {
         val held = message(translations = listOf(ApiTextTranslation(targetLanguage = "fr", translatedContent = "Salut")))
 
         val projected = apply(held, texts = listOf(text("FR", "Bonjour")))
 
-        assertThat(projected).isSameInstanceAs(held)
-        assertThat(projected.translations.map { it.translatedContent }).containsExactly("Salut")
+        assertThat(projected.translations.map { it.translatedContent }).containsExactly("Bonjour")
     }
 
     @Test
