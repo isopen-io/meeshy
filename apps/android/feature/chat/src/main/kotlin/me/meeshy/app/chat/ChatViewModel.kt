@@ -2,7 +2,7 @@ package me.meeshy.app.chat
 
 import me.meeshy.sdk.model.TypingNames
 import me.meeshy.sdk.e2ee.libsignal.EndToEndThreadAccess
-import me.meeshy.sdk.model.currentUserRole
+import me.meeshy.sdk.model.knownUserRole
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
@@ -379,7 +379,7 @@ class ChatViewModel @Inject constructor(
                         mentionDisplayNames = MentionRoster.displayNames(roster),
                         slowModeSeconds = conversation.slowModeSeconds,
                         slowModeExempt = SlowModePolicy.isExemptRole(viewerRole),
-                        viewerRole = conversation.currentUserRole(currentUserId).name,
+                        viewerRole = conversation.knownUserRole(currentUserId)?.name,
                         encryptionMode = conversation.encryptionMode,
                         directPeerUserId = conversation.otherParticipantUserId(currentUserId),
                         composerLanguageSeed = sessionRepository.currentUser.value

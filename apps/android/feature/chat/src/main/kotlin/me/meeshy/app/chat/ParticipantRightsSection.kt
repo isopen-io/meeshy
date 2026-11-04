@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -17,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -64,10 +62,10 @@ internal fun ParticipantRightsSection(
         return
     }
     if (state.deniedCapabilities.isEmpty()) {
-        ReadOnlyRight(Icons.Filled.CheckCircle, stringResource(R.string.participant_profile_no_restriction))
+        ReadOnlyRight(MeeshyIcons.VerifiedUser, stringResource(R.string.participant_profile_no_restriction))
     } else {
         state.deniedCapabilities.forEach { capability ->
-            ReadOnlyRight(Icons.Filled.RemoveCircleOutline, stringResource(deniedLabel(capability)))
+            ReadOnlyRight(MeeshyIcons.Block, stringResource(deniedLabel(capability)))
         }
     }
 }

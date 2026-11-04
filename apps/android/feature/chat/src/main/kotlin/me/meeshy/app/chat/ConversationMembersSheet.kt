@@ -107,7 +107,7 @@ internal fun ConversationMembersContent(
     // Taper une ligne n'ouvrait RIEN avant #3943 : la fiche d'un participant
     // n'existait pas sur Android, alors que iOS et web la rendent depuis #3877.
     var openProfileFor by remember { mutableStateOf<PaginatedParticipant?>(null) }
-    val profileTap = rememberProfileTap(conversationId, accentColor, state.viewerRole.name)
+    val profileTap = rememberProfileTap(conversationId, accentColor, state.readerRole)
 
     LaunchedEffect(conversationId) { viewModel.load(conversationId) }
     LaunchedEffect(state.actionFailed) {
@@ -132,7 +132,7 @@ internal fun ConversationMembersContent(
             accentColor = accentColor,
             onDismiss = { openProfileFor = null },
             avatarUrl = member.avatar,
-            readerRole = state.viewerRole.name,
+            readerRole = state.readerRole,
         )
     }
 

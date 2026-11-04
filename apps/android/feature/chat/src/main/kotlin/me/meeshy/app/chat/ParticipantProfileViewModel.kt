@@ -169,6 +169,14 @@ class ParticipantProfileViewModel @Inject constructor(
      * 404 : la personne a quitté la conversation. 401/403 : ce lecteur n'a plus le droit de la voir — la copie et
      * ses champs réservés aux hôtes partent. Seule une panne de transport ou un 5xx garde la fiche peinte.
      */
+    /** La fiche se ferme : ses écouteurs de la room et sa requête s'arrêtent ; la réouverture les relance. */
+    fun close() {
+        liveJob?.cancel()
+        liveJob = null
+        loadJob?.cancel()
+        loadJob = null
+    }
+
     private fun onSyncFailure(of: Target, httpStatus: Int?) {
         if (httpStatus == 404 || httpStatus == 401 || httpStatus == 403) {
             cacheKey(of)?.let(cache::evict)

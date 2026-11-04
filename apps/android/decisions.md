@@ -751,3 +751,7 @@ coroutine capture sa fiche — une réponse, un 404 ou une écriture qui revient
 ni peint ni mis en cache (l'écriture tardive efface la copie de SA fiche). Sans rôle du lecteur, la copie n'est ni lue
 ni écrite : les deux points d'entrée (`ConversationMembersSheet`, `rememberProfileTap`) le passent. 401 et 403
 effacent la copie comme le 404 ; seul un échec de transport ou un 5xx garde la fiche peinte.
+Le rôle passé est le rôle CONNU (`ApiConversation.knownUserRole` : celui de la passerelle, sinon du roster), jamais le
+repli `MEMBER` de `currentUserRole` : un lecteur dont le rôle est inconnu n'a pas de copie. Le rôle est une clé de
+l'effet de chargement (un lecteur rétrogradé fiche ouverte relit), et la fiche fermée coupe ses écouteurs de la room
+(`ParticipantProfileViewModel.close`).

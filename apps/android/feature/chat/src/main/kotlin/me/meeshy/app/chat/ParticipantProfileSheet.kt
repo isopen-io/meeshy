@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -87,9 +88,11 @@ internal fun ParticipantProfileSheet(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var datePickerOpen by remember { mutableStateOf(false) }
 
-    LaunchedEffect(conversationId, participantId) {
+    // Le rôle est une clé : un lecteur rétrogradé pendant que la fiche est ouverte la relit sous son nouveau rôle.
+    LaunchedEffect(conversationId, participantId, readerRole) {
         viewModel.load(conversationId, participantId, readerRole)
     }
+    DisposableEffect(viewModel) { onDispose { viewModel.close() } }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

@@ -540,4 +540,42 @@ class ParticipantProfileViewModelTest {
 
         assertThat(vm.state.value.profile?.email).isEqualTo("a@x.io")
     }
+
+    // ── Une fiche fermée n'écoute plus rien (dimension 3) ────────────────────
+
+    @Test
+    fun `a closed profile stops listening to the room`() = runTest {
+        val vm = viewModel(repo(NetworkResult.Success(editableProfile())))
+        vm.load("c1", "p1", "ADMIN")
+        advanceUntilIdle()
+
+        vm.close()
+        advanceUntilIdle()
+        rightsEvents.emit(
+            ParticipantRightsUpdatedEvent("c1", "p1", rights = ServedParticipantRights(canSendLinks = false)),
+        )
+        advanceUntilIdle()
+
+        assertThat(rightsEvents.subscriptionCount.value).isEqualTo(0)
+        assertThat(userEvents.subscriptionCount.value).isEqualTo(0)
+        assertThat(vm.state.value.isGranted(ParticipantCapability.CAN_SEND_LINKS)).isTrue()
+    }
+
+    @Test
+    fun `a reader whose role changed reloads the profile from scratch`() = runTest {
+        val repository = repo()
+        coEvery { repository.participantProfile("c1", "p1") } returnsMany listOf(
+            NetworkResult.Success(hostView("p1", "a@x.io")),
+            NetworkResult.Success(profile()),
+        )
+        val vm = viewModel(repository)
+        vm.load("c1", "p1", "ADMIN")
+        advanceUntilIdle()
+
+        vm.load("c1", "p1", "MEMBER")
+
+        assertThat(vm.state.value.profile).isNull()
+        advanceUntilIdle()
+        assertThat(vm.state.value.profile?.email).isNull()
+    }
 }
