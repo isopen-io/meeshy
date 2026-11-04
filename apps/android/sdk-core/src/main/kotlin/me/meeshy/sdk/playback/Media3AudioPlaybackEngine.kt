@@ -66,6 +66,9 @@ internal class Media3AudioPlaybackEngine(
     private var ticker: Job? = null
     private var held: Pair<String, MeeshyMediaConsumption?>? = null
     private var languageProvider: (() -> String?)? = null
+    private var source: AudioSource? = null
+    private var servedFallback: AudioSource? = null
+    private var retarget: Retarget? = null
 
     private val interruptions = InterruptionResumeAdapter(
         isPlaying = { mutableState.value.isPlaying },
@@ -86,7 +89,7 @@ internal class Media3AudioPlaybackEngine(
         mutableState.value = AudioPlaybackReducer.reduce(mutableState.value, action)
     }
 
-    private fun positionNow(): Long = if (loaded) player().positionMs() else mutableState.value.currentTimeMs
+    private fun positionNow(): Long = retarget?.positionMs ?: if (loaded) player().positionMs() else mutableState.value.currentTimeMs
 
     // ── Chargement ───────────────────────────────────────────────────────────────────────────────
 
@@ -107,6 +110,7 @@ internal class Media3AudioPlaybackEngine(
         generation += 1
         dispatch(AudioPlaybackAction.LoadRequested(attachmentId))
         tracker = ListenSegmentTracker()
+        this.source = source
         try {
             player().load(source, generation, mutableState.value.speed.rate)
         } catch (failure: Exception) {
@@ -117,7 +121,9 @@ internal class Media3AudioPlaybackEngine(
     }
 
     override fun onPrepared(generation: Int, durationMs: Long) {
-        if (generation != this.generation || !mutableState.value.isLoading) return
+        if (generation != this.generation) return
+        retarget?.let { return onRetargeted(it) }
+        if (!mutableState.value.isLoading) return
         val id = mutableState.value.attachmentId ?: return
         loaded = true
         val saved = positions.position(id)?.positionMs
@@ -197,6 +203,7 @@ internal class Media3AudioPlaybackEngine(
         dispatch(AudioPlaybackAction.SeekToMs(positionMs))
         val target = mutableState.value.currentTimeMs
         tracker = tracker.seek(from, target)
+        if (retarget != null) retarget = Retarget(target)
         player().seekTo(target)
     }
 
@@ -220,6 +227,14 @@ internal class Media3AudioPlaybackEngine(
 
     override fun setConsumedLanguageProvider(provider: (() -> String?)?) {
         languageProvider = provider
+    }
+
+    override fun follow(fromAttachmentId: String, toAttachmentId: String, servedUrl: String, isProtected: Boolean) {
+        if (fromAttachmentId == toAttachmentId || servedUrl.isBlank()) return
+        if (mutableState.value.attachmentId != fromAttachmentId) return
+        dispatch(AudioPlaybackAction.Relabeled(toAttachmentId))
+        val served = AudioSource.Remote(servedUrl, isProtected)
+        servedFallback = served.takeIf { it != source && retarget == null }
     }
 
     /** Libère le lecteur et le fil du moteur (fin du process ou déconnexion définitive). */
@@ -257,12 +272,13 @@ internal class Media3AudioPlaybackEngine(
 
     override fun onError(generation: Int, cause: Throwable) {
         if (generation != this.generation) return
+        if (retargetOntoServedAddress()) return
         Timber.e(cause, "Lecture audio : source illisible")
         failLoad()
     }
 
     override fun onPlayWhenReadyChanged(generation: Int, playWhenReady: Boolean) {
-        if (generation != this.generation || !loaded) return
+        if (generation != this.generation || !loaded || retarget != null) return
         val current = mutableState.value
         if (!playWhenReady && current.isPlaying) {
             // Le lecteur s'est arrêté seul (focus perdu, casque débranché) : l'écoute est coupée net.
@@ -288,6 +304,42 @@ internal class Media3AudioPlaybackEngine(
 
     private enum class StopReason { Superseded, Stopped }
 
+    /** Le reciblage en vol : la position où reprendre ; jouer ou non se lit dans l'état, qu'un geste a pu changer entre-temps. */
+    private class Retarget(val positionMs: Long)
+
+    /**
+     * #15969 — la source lue a disparu, mais le vocal a été accusé : il reprend UNE fois, au même point, sur son adresse
+     * servie (que le cache AUDIO tient déjà). `false` quand il n'y a rien à recibler : c'est un vrai échec.
+     */
+    private fun retargetOntoServedAddress(): Boolean {
+        val served = servedFallback ?: return false
+        if (!loaded || retarget != null) return false
+        servedFallback = null
+        val resume = Retarget(positionMs = runCatching { player().positionMs() }.getOrDefault(mutableState.value.currentTimeMs))
+        stopTicker()
+        generation += 1
+        source = served
+        retarget = resume
+        return try {
+            player().load(served, generation, mutableState.value.speed.rate)
+            true
+        } catch (failure: Exception) {
+            Timber.e(failure, "Lecture audio : reciblage sur l'adresse servie refusé")
+            retarget = null
+            false
+        }
+    }
+
+    private fun onRetargeted(resume: Retarget) {
+        retarget = null
+        val player = player()
+        player.seekTo(resume.positionMs)
+        player.setSpeed(mutableState.value.speed.rate)
+        if (!mutableState.value.isPlaying) return
+        player.play()
+        startTicker()
+    }
+
     private fun failLoad() {
         val id = mutableState.value.attachmentId
         stopTicker()
@@ -296,6 +348,8 @@ internal class Media3AudioPlaybackEngine(
             flushReport(complete = false)
         }
         loaded = false
+        retarget = null
+        servedFallback = null
         dispatch(AudioPlaybackAction.Failed)
         runCatching { player().stop() }
         if (id != null) mutableEvents.tryEmit(AudioEngineEvent.Finished(id, completed = false))
@@ -312,6 +366,9 @@ internal class Media3AudioPlaybackEngine(
             flushReport(complete = false, positionMs = position)
         }
         loaded = false
+        retarget = null
+        servedFallback = null
+        source = null
         generation += 1
         port?.let { runCatching { it.stop() } }
     }

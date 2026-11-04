@@ -63,7 +63,6 @@ const de = {
   'conversationEncryption.switch.held': 'Eine Nachricht in diesem Verlauf verwendet eine Verschlüsselung, die dieser Browser nicht erkennt: Der Modus kann hier nicht geändert werden.',
   'conversationEncryption.switch.regimeChanged': 'Ein anderes Mitglied hat die Verschlüsselung gerade geändert: Der Status wurde aktualisiert.',
   'conversationEncryption.switch.restricted': 'Während der Testphase kann nur ein Mitglied mit einer Meeshy-Teamrolle (Analyst oder höher) den Verschlüsselungsmodus ändern.',
-  'conversationEncryption.switch.forbidden': 'Sie dürfen den Verschlüsselungsmodus dieser Unterhaltung nicht ändern: In einer Gruppe muss man zu ihren Moderatoren gehören.',
   'conversationEncryption.switch.unavailable': 'Die Verschlüsselung auf unseren Servern ist vorübergehend nicht verfügbar. Versuche es später erneut.',
   'conversationEncryption.switch.failed': 'Der Modus konnte nicht geändert werden. Versuche es erneut.',
   'conversationEncryption.switch.offline': 'Offline: Verbinde dich erneut, um den Verschlüsselungsmodus zu ändern.',

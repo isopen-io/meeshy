@@ -311,4 +311,100 @@ class Media3AudioPlaybackEngineTest {
             assertThat(rig.engine.play("a", "https://cdn/a.mp3", origin, isProtected = false)).isFalse()
         }
     }
+
+    // ── #15969 : le vocal joué PENDANT son accusé ────────────────────────────────────────────────
+
+    private val served = "https://gate.meeshy.me/api/v1/static/voice.m4a"
+
+    private fun Rig.listeningToPending() {
+        engine.playLocal("cmid_voice", "file:///data/cache/pending-previews/cmid_voice.voice.m4a")
+        port.prepare(14_000L)
+        port.position = 5_000L
+    }
+
+    @Test fun `le vocal accuse continue sous son id serveur, au meme point, sans rechargement`() = engineTest { rig ->
+        rig.listeningToPending()
+
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = false)
+
+        assertThat(rig.engine.state.value.attachmentId).isEqualTo("att_server")
+        assertThat(rig.engine.state.value.isPlaying).isTrue()
+        assertThat(rig.port.loads).hasSize(1)
+        assertThat(rig.port.playing).isTrue()
+    }
+
+    @Test fun `la copie locale disparue, le vocal reprend au meme point sur l'adresse servie`() = engineTest { rig ->
+        rig.listeningToPending()
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = false)
+
+        rig.port.fail()
+        rig.port.prepare(14_000L)
+
+        assertThat(rig.port.loads.map { it.first })
+            .containsExactly(AudioSource.Local("file:///data/cache/pending-previews/cmid_voice.voice.m4a"), AudioSource.Remote(served, isProtected = false))
+            .inOrder()
+        assertThat(rig.port.seeks.last()).isEqualTo(5_000L)
+        assertThat(rig.port.playing).isTrue()
+        assertThat(rig.engine.state.value.isPlaying).isTrue()
+        assertThat(rig.engine.state.value.attachmentId).isEqualTo("att_server")
+    }
+
+    @Test fun `un vocal en pause pendant son accuse reste en pause apres le reciblage`() = engineTest { rig ->
+        rig.listeningToPending()
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = false)
+        rig.engine.pause()
+
+        rig.port.fail()
+        rig.port.prepare(14_000L)
+
+        assertThat(rig.port.seeks.last()).isEqualTo(5_000L)
+        assertThat(rig.port.playing).isFalse()
+        assertThat(rig.engine.state.value.isPlaying).isFalse()
+        assertThat(rig.engine.state.value.attachmentId).isEqualTo("att_server")
+    }
+
+    @Test fun `une pause pendant le reciblage est respectee a la reprise`() = engineTest { rig ->
+        rig.listeningToPending()
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = false)
+        rig.port.fail()
+
+        rig.engine.pause()
+        rig.port.prepare(14_000L)
+
+        assertThat(rig.port.seeks.last()).isEqualTo(5_000L)
+        assertThat(rig.port.playing).isFalse()
+        assertThat(rig.engine.state.value.isPlaying).isFalse()
+    }
+
+    @Test fun `un vocal protege accuse est recible sans cache disque`() = engineTest { rig ->
+        rig.listeningToPending()
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = true)
+
+        rig.port.fail()
+
+        assertThat(rig.port.loads.last().first).isEqualTo(AudioSource.Remote(served, isProtected = true))
+    }
+
+    @Test fun `une adresse servie qui echoue aussi est un vrai echec, jamais une boucle`() = engineTest { rig ->
+        rig.listeningToPending()
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = false)
+
+        rig.port.fail()
+        rig.port.fail()
+
+        assertThat(rig.port.loads).hasSize(2)
+        assertThat(rig.engine.state.value.isPlaying).isFalse()
+        assertThat(rig.engine.state.value.isLoading).isFalse()
+    }
+
+    @Test fun `un autre vocal n'est jamais pris pour le vocal accuse`() = engineTest { rig ->
+        rig.listeningToPending()
+
+        rig.engine.follow("cmid_other", "att_server", served, isProtected = false)
+        rig.port.fail()
+
+        assertThat(rig.engine.state.value.attachmentId).isEqualTo("cmid_voice")
+        assertThat(rig.port.loads).hasSize(1)
+        assertThat(rig.engine.state.value.isPlaying).isFalse()
+    }
 }
