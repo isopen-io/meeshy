@@ -278,7 +278,17 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         )
         // Les onglets d'iOS (#13785) : Membres, Médias, Stats (le tableau de bord unifié, analyse comprise), Options.
         val tabs = ConversationInfoTabSlots(
-            members = { modifier -> ConversationMembersContent(state.conversationId, accentColor, modifier) },
+            members = { modifier ->
+                ConversationMembersContent(
+                    state.conversationId,
+                    accentColor,
+                    modifier,
+                    onLeft = {
+                        sheets.info = false
+                        host.navigation.onBack()
+                    },
+                )
+            },
             media = { modifier ->
                 ConversationMediaHubContent(
                     conversationId = state.conversationId,
@@ -360,6 +370,10 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             conversationId = state.conversationId,
             accentColor = accentColor,
             onDismiss = { sheets.members = false },
+            onLeft = {
+                sheets.members = false
+                host.navigation.onBack()
+            },
         )
     }
 
