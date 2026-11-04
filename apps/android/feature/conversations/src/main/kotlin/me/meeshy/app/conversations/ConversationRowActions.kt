@@ -96,7 +96,7 @@ internal data class ConversationRowActions(
             onLeaveConversation = { viewModel.leaveConversation(conversationId) },
             onDeleteForMe = { viewModel.deleteConversationForMe(conversationId) },
             onDeleteForAll = { viewModel.deleteConversationForAll(conversationId) },
-            onMakeObsolete = { viewModel.makeConversationObsolete(conversationId) },
+            onMakeObsolete = { viewModel.dialogs.makeObsolete(conversationId) },
             onRename = { viewModel.setCustomName(conversationId, it) },
             onSetReaction = { viewModel.setReaction(conversationId, it) },
             onSetTags = { viewModel.setTags(conversationId, it) },

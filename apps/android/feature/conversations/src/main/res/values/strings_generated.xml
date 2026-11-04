@@ -91,6 +91,7 @@
     <string name="conversations_lock_title_verify_master">Verify master PIN</string>
     <string name="conversations_logout">Log out</string>
     <string name="conversations_new">New conversation</string>
+    <string name="conversations_obsolete_error">Couldn\'t make the conversation obsolete.</string>
     <string name="conversations_open_dashboard">Dashboard</string>
     <string name="conversations_preview_draft_label">Draft</string>
     <string name="conversations_preview_draft_prefix">Draft:</string>

@@ -309,6 +309,65 @@ class ConversationListDialogsTest {
         assertThat(h.obsoleter.asked).isEmpty()
     }
 
+    @Test
+    fun `the sender of a request not yet accepted reads why the gateway refused, and the row comes back`() = runTest(StandardTestDispatcher()) {
+        val refused = FakeObsoleter(NetworkResult.Failure(ApiError(message = "Seul le destinataire", httpStatus = 403)))
+        val h = harness(direct(), obsoleter = refused)
+
+        h.controller.requestObsolete("d1")
+        h.controller.confirmObsolete()
+        runCurrent()
+
+        assertThat(h.state.value.pendingRemovals).doesNotContain("d1")
+        assertThat(h.effects).containsAtLeast(
+            ConversationListDialogEffect.Haptic(HapticKind.ERROR),
+            ConversationListDialogEffect.Toast(
+                FeedbackToastRequest(R.string.conversations_obsolete_refused_pending_request, FeedbackKind.Error),
+            ),
+        ).inOrder()
+    }
+
+    @Test
+    fun `any other refusal says the generic failure`() = runTest(StandardTestDispatcher()) {
+        val refused = FakeObsoleter(NetworkResult.Failure(ApiError(message = "down", httpStatus = 403)))
+        val h = harness(group(role = "admin"), obsoleter = refused)
+
+        h.controller.requestObsolete("g1")
+        h.controller.confirmObsolete()
+        runCurrent()
+
+        assertThat(h.effects).contains(
+            ConversationListDialogEffect.Toast(FeedbackToastRequest(R.string.conversations_obsolete_error, FeedbackKind.Error)),
+        )
+    }
+
+    @Test
+    fun `the menu, which confirmed on its own, reads the same refusal`() = runTest(StandardTestDispatcher()) {
+        val refused = FakeObsoleter(NetworkResult.Failure(ApiError(message = "", httpStatus = 403)))
+        val h = harness(direct(), obsoleter = refused)
+
+        h.controller.makeObsolete("d1")
+        runCurrent()
+
+        assertThat(refused.asked).containsExactly("d1")
+        assertThat(h.state.value.pendingRemovals).doesNotContain("d1")
+        assertThat(h.effects).contains(
+            ConversationListDialogEffect.Toast(
+                FeedbackToastRequest(R.string.conversations_obsolete_refused_pending_request, FeedbackKind.Error),
+            ),
+        )
+    }
+
+    @Test
+    fun `an accepted obsolete says nothing more`() = runTest(StandardTestDispatcher()) {
+        val h = harness(direct())
+
+        h.controller.makeObsolete("d1")
+        runCurrent()
+
+        assertThat(h.effects.filterIsInstance<ConversationListDialogEffect.Toast>()).isEmpty()
+    }
+
     // ── Quitter, renommer ──
 
     @Test
