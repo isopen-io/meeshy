@@ -199,14 +199,32 @@ struct OutboxDispatcher: OutboxDispatching {
     /// le défaut, et `OutboxDispatcherUnblockDecodingTests` interdit son retour.
     private func dispatchUnblockUser(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: UnblockUserPayload.self)
-        let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
-            DirectoryEndpoint.blocksByUserId(userId: payload.targetUserId),
-            method: "DELETE",
-            body: nil,
-            queryItems: nil,
-            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
-        )
-        logger.info("unblockUser dispatched for \(payload.targetUserId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+        do {
+            let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
+                DirectoryEndpoint.blocksByUserId(userId: payload.targetUserId),
+                method: "DELETE",
+                body: nil,
+                queryItems: nil,
+                headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+            )
+            logger.info("unblockUser dispatched for \(payload.targetUserId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+        } catch where Self.unblockIsAlreadyApplied(error) {
+            logger.info("unblockUser replay for \(payload.targetUserId, privacy: .public) — already unblocked, accepting as success")
+        }
+    }
+
+    /// Le refus que la passerelle rend quand la personne n'est PAS (ou plus)
+    /// dans la liste — `routes/directory/blocks.ts`, `debloquer`.
+    nonisolated static let notInBlockedListMessage = "User is not in your blocked list"
+
+    /// **Rejouer un déblocage déjà appliqué aboutit** (#16008). La réponse du
+    /// premier envoi s'est perdue, le serveur a débloqué, et le rejeu reçoit ce
+    /// 404 : l'état voulu (« pas bloqué ») est celui du serveur, c'est donc une
+    /// réussite et non un retour arrière. Seul CE refus est accepté : un autre
+    /// 404 (adresse retirée, ressource inconnue) reste un refus définitif.
+    nonisolated static func unblockIsAlreadyApplied(_ error: Error) -> Bool {
+        guard case let MeeshyError.server(statusCode, message) = error else { return false }
+        return statusCode == 404 && message == notInBlockedListMessage
     }
 
     /// POST /friend-requests — gateway expects `{ receiverId, message?, targetLevel? }`.
