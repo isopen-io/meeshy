@@ -265,7 +265,9 @@ describe('emitConversationPreviewUpdate', () => {
       // pièce jointe — `conversation-updated-protection.test.ts`.
       isBlurred: false,
       isViewOnce: false,
-      expiresAt: new Date('2099-07-09T11:00:00Z'),
+      // Ordinaire : une échéance future ferait un éphémère actif, dont la pièce
+      // ne sert plus aucun détail (#15701) — témoin ci-dessous.
+      expiresAt: null,
       sender: { displayName: 'Bob', user: { displayName: 'Bob Legacy' } },
       attachments: [
         {
@@ -288,7 +290,7 @@ describe('emitConversationPreviewUpdate', () => {
     expect(emitted[0].payload.lastMessageSenderName).toBe('Bob');
     expect(emitted[0].payload.lastMessageIsBlurred).toBe(false);
     expect(emitted[0].payload.lastMessageIsViewOnce).toBe(false);
-    expect(emitted[0].payload.lastMessageExpiresAt).toBe('2099-07-09T11:00:00.000Z');
+    expect(emitted[0].payload.lastMessageExpiresAt).toBeNull();
     // `_count` (3) l'emporte sur la longueur de la liste chargée (1) — la
     // requête Prisma réelle la capait déjà à `take: 1`.
     expect(emitted[0].payload.lastMessageAttachmentCount).toBe(3);
@@ -310,6 +312,43 @@ describe('emitConversationPreviewUpdate', () => {
         effectFlags: 0,
       },
     ]);
+  });
+
+  it("un éphémère actif garde son échéance mais sa pièce ne sert aucun détail (#15701)", async () => {
+    const emitted: Emitted[] = [];
+    const ephemeral = {
+      ...latest,
+      isBlurred: false,
+      isViewOnce: false,
+      expiresAt: new Date('2099-07-09T11:00:00Z'),
+      attachments: [
+        { id: 'att-1', mimeType: 'audio/mpeg', thumbnailUrl: null, originalName: 'memo.mp3', fileSize: 4096, duration: 12000, width: null, height: null },
+      ],
+      _count: { attachments: 1 },
+    };
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], ephemeral as any);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(emitted[0].payload.lastMessageExpiresAt).toBe('2099-07-09T11:00:00.000Z');
+    expect(emitted[0].payload.lastMessageAttachments).toEqual([
+      {
+        id: 'att-1',
+        mimeType: 'audio/mpeg',
+        thumbnailUrl: null,
+        originalName: null,
+        fileSize: null,
+        duration: null,
+        width: null,
+        height: null,
+        pageCount: null,
+        alt: null,
+        isViewOnce: false,
+        isBlurred: false,
+        effectFlags: 0,
+      },
+    ]);
+    expect(emitted[0].payload.lastMessageAttachmentSummary).toEqual({ count: 1, kinds: { audio: 1 }, totalSize: null });
   });
 
   it('émet `lastMessageAt` comme une CHAÎNE ISO, comme son jumeau `updatedAt`', async () => {
