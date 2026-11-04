@@ -113,7 +113,7 @@ fun PinnedStoryTrailBand(
                     onAddStory = onAddStory,
                 )
             }
-            items(tray.others, key = { it.userId }, contentType = { CELL_TYPE }) { ring ->
+            items(PinnedBandReveal.visibleOthers(tray.others), key = { it.userId }, contentType = { CELL_TYPE }) { ring ->
                 LaunchedEffect(ring.displayedStoryId) { impressions.onRingAppeared(ring.displayedStoryId) }
                 PinnedRingCell(ring = ring, moodEmoji = moodEmojiOf(ring.userId), onOpen = { onOpenStory(ring.userId) })
             }

@@ -56,3 +56,23 @@ class PinnedBandRevealTest {
         assertThat(PinnedBandReveal.scrollOffsetDp(0, 0f)).isEqualTo(0f)
     }
 }
+
+class PinnedBandEntryLimitTest {
+
+    @Test
+    fun `la bande garde six entrees au plus, la premiere etant l'utilisateur`() {
+        assertThat(PinnedBandReveal.MAX_ENTRIES).isEqualTo(6)
+        assertThat(PinnedBandReveal.MAX_OTHER_ENTRIES).isEqualTo(5)
+    }
+
+    @Test
+    fun `les autres anneaux sont tronques a cinq en gardant l'ordre`() {
+        val others = (1..9).toList()
+        assertThat(PinnedBandReveal.visibleOthers(others)).containsExactly(1, 2, 3, 4, 5).inOrder()
+    }
+
+    @Test
+    fun `moins de cinq anneaux restent entiers`() {
+        assertThat(PinnedBandReveal.visibleOthers(listOf("a", "b"))).containsExactly("a", "b").inOrder()
+    }
+}

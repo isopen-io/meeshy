@@ -17,9 +17,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.ui.component.chrome.CollapsibleHeader
 import me.meeshy.ui.component.chrome.CollapsibleHeaderActionButton
+
+private val ACTION_DIAMETER = ConversationHeaderMetrics.ACTION_DIAMETER_DP.dp
+private val ACTION_ICON = ConversationHeaderMetrics.ACTION_ICON_DP.dp
 
 @Composable
 internal fun ConversationListHeader(
@@ -51,6 +55,9 @@ internal fun ConversationListHeader(
                     contentDescription = stringResource(R.string.conversations_unlock_all),
                     onClick = onUnlockAll,
                     enabled = actionsVisible,
+                    diameter = ACTION_DIAMETER,
+                    iconSize = ACTION_ICON,
+                    hapticOnClick = true,
                 )
                 // Master-PIN management (parity iOS Settings): surfaces once a master PIN
                 // exists; "Remove" additionally hides while any conversation is locked.
@@ -66,12 +73,18 @@ internal fun ConversationListHeader(
                     contentDescription = stringResource(R.string.conversations_create_share_link),
                     onClick = onOpenShareLinkPicker,
                     enabled = actionsVisible,
+                    diameter = ACTION_DIAMETER,
+                    iconSize = ACTION_ICON,
+                    hapticOnClick = true,
                 )
                 ConversationHeaderAction.NEW_CONVERSATION -> CollapsibleHeaderActionButton(
                     icon = Icons.Filled.Add,
                     contentDescription = stringResource(R.string.conversations_new),
                     onClick = onNewConversation,
                     enabled = actionsVisible,
+                    diameter = ACTION_DIAMETER,
+                    iconSize = ACTION_ICON,
+                    hapticOnClick = true,
                 )
             }
         }
@@ -98,6 +111,9 @@ internal fun LockSecurityMenu(
         contentDescription = stringResource(R.string.conversations_lock_security_menu),
         onClick = { expanded = true },
         enabled = enabled,
+        diameter = ACTION_DIAMETER,
+        iconSize = ACTION_ICON,
+        hapticOnClick = true,
     )
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
         if (canChange) {
