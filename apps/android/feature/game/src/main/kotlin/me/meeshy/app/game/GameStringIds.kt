@@ -367,6 +367,20 @@ internal object GameStringIds {
         "game_concept_fact_glory_on_pass" to R.string.game_concept_fact_glory_on_pass,
         "game_concept_fact_prism_hour" to R.string.game_concept_fact_prism_hour,
         "game_rules_concept_tailwind_name" to R.string.game_rules_concept_tailwind_name,
+        "game_concept_fact_bonus" to R.string.game_concept_fact_bonus,
+        "game_concept_fact_freezes" to R.string.game_concept_fact_freezes,
+        "game_concept_fact_freeze_price" to R.string.game_concept_fact_freeze_price,
+        "game_concept_fact_chest" to R.string.game_concept_fact_chest,
+        "game_concept_fact_coin" to R.string.game_concept_fact_coin,
+        "game_concept_fact_next_price" to R.string.game_concept_fact_next_price,
+        "game_concept_fact_percent" to R.string.game_concept_fact_percent,
+        "game_concept_fact_rank" to R.string.game_concept_fact_rank,
+        "game_concept_flame_name" to R.string.game_concept_flame_name,
+        "game_concept_points_name" to R.string.game_concept_points_name,
+        "game_spend_missing_mint" to R.string.game_spend_missing_mint,
+        "game_element_plus_amount" to R.string.game_element_plus_amount,
+        "game_detail_elan_points" to R.string.game_detail_elan_points,
+        "game_concept_fact_window" to R.string.game_concept_fact_window,
     )
 
     private val plurals: Map<String, Int> = mapOf(

@@ -23,6 +23,8 @@ import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.HistoryGrantUpdate
+import me.meeshy.sdk.model.ParticipantCapability
+import me.meeshy.sdk.model.ParticipantRightsUpdate
 import me.meeshy.sdk.model.MemberCountResolution
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.MemberRosterPage
@@ -595,10 +597,9 @@ class ConversationRepository @Inject constructor(
      * `User`. Les méthodes voisines de cette classe prennent l'autre colonne —
      * la ressemblance des deux chemins est un piège, pas une symétrie.
      *
-     * Pas de cache : la fiche porte des faits que le gateway gate PAR LECTEUR
-     * (`email`, `entryLink`, `historyVisibleFrom`, `canGrantHistory`). Une
-     * copie locale les servirait à un lecteur pour qui ils ont été masqués — la
-     * garde vit côté serveur, et rien ici ne doit lui survivre.
+     * Ce dépôt ne garde RIEN : la copie vit dans `ParticipantProfileCache`, clé par lecteur (ADR-032), parce que la
+     * fiche porte des faits que le gateway gate PAR LECTEUR (`email`, `entryLink`, `historyVisibleFrom`,
+     * `canGrantHistory`).
      */
     suspend fun participantProfile(
         id: String,
@@ -627,6 +628,20 @@ class ConversationRepository @Inject constructor(
                 participantId,
                 HistoryGrantUpdate(historyVisibleFrom),
             )
+        }
+
+    /**
+     * Pose UN droit d'un participant (`PATCH …/rights`, une clé par écriture). La réponse est l'état résolu par le
+     * serveur ; l'appelant la pose telle quelle et défait son geste optimiste sur un échec.
+     */
+    suspend fun updateParticipantRight(
+        id: String,
+        participantId: String,
+        capability: ParticipantCapability,
+        value: Boolean,
+    ): NetworkResult<ParticipantRightsUpdateResult> =
+        apiCall {
+            conversationApi.updateParticipantRight(id, participantId, ParticipantRightsUpdate.single(capability, value))
         }
 
     /**

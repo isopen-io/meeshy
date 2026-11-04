@@ -61,7 +61,10 @@ import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.StoryReactionDelivery
 import me.meeshy.sdk.story.StoryReactionPublisher
 import me.meeshy.sdk.story.StoryRepostPublisher
+import me.meeshy.sdk.story.InMemoryStoryViewedLedger
+import me.meeshy.sdk.story.StorySlideImpressions
 import me.meeshy.sdk.story.StoryViewReporting
+import me.meeshy.sdk.story.StoryViewedLedger
 import me.meeshy.sdk.story.purgingDeadStories
 import me.meeshy.sdk.story.toStoryGroups
 import me.meeshy.sdk.story.toStoryItem
@@ -87,6 +90,8 @@ class StoryViewerViewModel @Inject constructor(
     private val repostPublisher: StoryRepostPublisher = storyRepository.asRepostPublisher(),
     private val reactionPublisher: StoryReactionPublisher = storyRepository.asReactionPublisher(),
     private val viewReporter: StoryViewReporting = StoryViewReporting { storyRepository.markViewed(it) },
+    private val slideImpressions: StorySlideImpressions = StorySlideImpressions.None,
+    private val viewedLedger: StoryViewedLedger = InMemoryStoryViewedLedger(),
 ) : ViewModel() {
 
     private val userId: String = savedStateHandle.get<String>(USER_ID_ARG).orEmpty()
@@ -316,9 +321,10 @@ class StoryViewerViewModel @Inject constructor(
     private fun load() {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, loadFailed = false) }
-            if (startFrom(attempt { storyRepository.cachedStories() })) return@launch
+            val selfId = sessionRepository.currentUserId
+            if (startFrom(viewedLedger.reinjected(attempt { storyRepository.cachedStories() }, selfId))) return@launch
             val network = attempt { (storyRepository.list() as? NetworkResult.Success)?.data }
-            if (startFrom(network)) return@launch
+            if (startFrom(viewedLedger.reinjected(network, selfId))) return@launch
             if (startFrom(attempt { fetchRequestedStory() })) return@launch
             _state.update {
                 if (requestedStoryId != null) it.copy(isLoading = false, missingStoryId = requestedStoryId)
@@ -510,6 +516,7 @@ class StoryViewerViewModel @Inject constructor(
 
     fun markCurrentViewed() {
         val slideId = playback.currentSlide?.id ?: return
+        slideImpressions.record(slideId)
         viewModelScope.launch {
             runCatching { viewReporter.report(slideId) }
         }

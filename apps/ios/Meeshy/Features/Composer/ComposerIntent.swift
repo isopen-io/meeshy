@@ -96,7 +96,9 @@ nonisolated enum ComposerOrigin: Equatable {
     /// RENDUE. Ce format n'est pas une graine — il fait partie de l'identité de
     /// la porte, et deux reposts de formats différents ouvrent deux composers.
     case repost(ofPostId: String, sourceFormat: ComposerFormat)
-    case edit(postId: String, documentFormat: ComposerFormat)
+    /// `isRepost` : un repost rouvert miroite le type de sa source — l'éventail
+    /// se referme sur son seul format (#15631).
+    case edit(postId: String, documentFormat: ComposerFormat, isRepost: Bool = false)
     case draft(id: String), share
     /// `attachmentId` est OPTIONNEL : la même origine sert un message TEXTE, qui
     /// n'a aucune pièce jointe. Aucun lecteur
@@ -572,40 +574,9 @@ nonisolated extension ComposerProfile {
                     : .repostComposer
             )
 
-        case .edit(_, let documentFormat):
-            // L'édition ne convertit qu'entre POST et RÉEL : `UpdatePostSchema`
-            // type est un `z.enum(['POST','REEL'])`, le serveur refuse le reste.
-            // Changer le format d'un contenu déjà publié est le rôle du REPOST,
-            // pas de l'édition — éditer une story ou un statut n'offre donc
-            // AUCUN choix.
-            let offerts: [ComposerFormat]
-            switch documentFormat {
-            case .story, .status: offerts = [documentFormat]
-            case .reel: offerts = [.reel, .post]
-            case .post: offerts = plusReel([.post])
-            }
-            // Le routage de cette porte est fonction du FORMAT PORTÉ — la même
-            // doctrine que `.repost`.
-            //
-            // - `.story` monte le meuble sur la SCÈNE, hydraté par
-            //   `ComposerHydration.editingStory` (`StoryEditComposer`) ;
-            // - `.post` et `.reel` montent le meuble sur le DOCUMENT, hydraté par
-            //   `ComposerHydration.editingPublication` (`PostEditComposerDoor`,
-            //   #9333) : la même vue que celle qui les crée, clavier sur le texte.
-            //   `PostEditRoute` ne les y envoie que si la scène montre toute la
-            //   publication ; sinon `EditPostSheet` reste la porte ;
-            // - `.status` reste sur `EditPostSheet` : aucun site du dépôt n'offre
-            //   d'éditer un mood, et la table ne promet pas une affordance qui
-            //   n'existe pas.
-            return ComposerProfile(
-                initialFormat: documentFormat,
-                offeredFormats: offerts,
-                showsSlides: true,
-                showsTimeline: true,
-                opensWith: [.post, .reel].contains(documentFormat) ? .keyboardOnContent : .resume,
-                allowsCapture: false,
-                routesToLegacy: documentFormat == .status ? .editPostSheet : nil
-            )
+        case .edit(_, let documentFormat, let isRepost):
+            return editProfile(documentFormat: documentFormat, isRepost: isRepost,
+                               compositionQualifiesAsReel: compositionQualifiesAsReel)
 
         // Le partage pose déjà son média (`ShareComposeDoor` → `mediaSeed`) : il s'ouvre comme une porte SEMÉE, sur la scène (#13864, R1).
         case .share:
@@ -732,5 +703,57 @@ extension ComposerOrigin {
         case .edit, .repost: return false
         default: return true
         }
+    }
+}
+
+nonisolated extension ComposerProfile {
+
+    /// Le profil de la porte d'ÉDITION, sorti de `profile(for:)` : sa règle a
+    /// grandi avec le repost et le repli du réel (#15631).
+    static func editProfile(documentFormat: ComposerFormat, isRepost: Bool,
+                            compositionQualifiesAsReel: Bool) -> ComposerProfile {
+        func plusReel(_ base: [ComposerFormat]) -> [ComposerFormat] {
+            compositionQualifiesAsReel ? base + [.reel] : base
+        }
+        // L'édition ne convertit qu'entre POST et RÉEL : `UpdatePostSchema`
+        // type est un `z.enum(['POST','REEL'])`, le serveur refuse le reste.
+        // Changer le format d'un contenu déjà publié est le rôle du REPOST,
+        // pas de l'édition — éditer une story ou un statut n'offre donc
+        // AUCUN choix, et un repost non plus : il miroite sa source.
+        //
+        // **Le réel édité est la seule porte dont le gate RETIRE son format**
+        // (#15631) : le gateway refuse (422) un réel que plus rien ne
+        // qualifie, et le gate de cette porte est la règle de l'éditeur
+        // historique (`PostEditBaseline.reelIsChoosable`), vraie tant que
+        // rien n'est retiré.
+        let offerts: [ComposerFormat]
+        switch documentFormat {
+        case .story, .status: offerts = [documentFormat]
+        case _ where isRepost: offerts = [documentFormat]
+        case .reel: offerts = compositionQualifiesAsReel ? [.reel, .post] : [.post]
+        case .post: offerts = plusReel([.post])
+        }
+        // Le routage de cette porte est fonction du FORMAT PORTÉ — la même
+        // doctrine que `.repost`.
+        //
+        // - `.story` monte le meuble sur la SCÈNE, hydraté par
+        //   `ComposerHydration.editingStory` (`StoryEditComposer`) ;
+        // - `.post` et `.reel` montent le meuble sur le DOCUMENT, hydraté par
+        //   `ComposerHydration.editingPublication` (`PostEditComposerDoor`,
+        //   #9333) : la même vue que celle qui les crée, clavier sur le texte.
+        //   `PostEditRoute` ne les y envoie que si la scène montre toute la
+        //   publication ; sinon `EditPostSheet` reste la porte ;
+        // - `.status` reste sur `EditPostSheet` : aucun site du dépôt n'offre
+        //   d'éditer un mood, et la table ne promet pas une affordance qui
+        //   n'existe pas.
+        return ComposerProfile(
+            initialFormat: offerts.contains(documentFormat) ? documentFormat : .post,
+            offeredFormats: offerts,
+            showsSlides: true,
+            showsTimeline: true,
+            opensWith: [.post, .reel].contains(documentFormat) ? .keyboardOnContent : .resume,
+            allowsCapture: false,
+            routesToLegacy: documentFormat == .status ? .editPostSheet : nil
+        )
     }
 }

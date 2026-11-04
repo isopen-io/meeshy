@@ -31,8 +31,8 @@ nonisolated enum PostEditRoute: Equatable {
     /// Le meuble sur le DOCUMENT, hydraté sur le post ou le réel publié
     /// (#9333) — la même vue que celle qui l'a créé.
     case composer
-    /// L'éditeur historique — repost, publication que la scène ne montre pas
-    /// entière, et toute dégradation.
+    /// L'éditeur historique — publication portant un média qu'aucune scène ne
+    /// montre (un document), et toute dégradation (#15631).
     case legacySheet
 
     /// **La décision, PURE.** Elle ne connaît ni vue ni présentation : c'est ce
