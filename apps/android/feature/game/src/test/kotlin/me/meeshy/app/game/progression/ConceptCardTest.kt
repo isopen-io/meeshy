@@ -45,14 +45,21 @@ class ConceptCardTest {
         gauge = null,
     )
 
+    private var spoken = ""
+
     private fun show(card: ProgressionConceptCard, onOpen: () -> Unit = {}) =
-        compose.setContent { MeeshyTheme { ProgressionConceptCardView(card, game = null, onOpen = onOpen) } }
+        compose.setContent {
+            MeeshyTheme {
+                spoken = listOf(gameString(value), gameString(line)).joinToString(", ")
+                ProgressionConceptCardView(card, game = null, onOpen = onOpen)
+            }
+        }
 
     @Test
     fun `la carte est un seul element dont le libelle dit le nom la valeur et la ligne`() {
         show(card(urgent = false))
 
-        val description = listOf(gameString(value), gameString(line)).joinToString(", ")
+        val description = spoken
         compose.onNode(
             SemanticsMatcher("libellé fusionné") {
                 it.config.getOrNull(SemanticsProperties.ContentDescription)?.firstOrNull()?.endsWith(description) == true
@@ -73,12 +80,12 @@ class ConceptCardTest {
     @Test
     fun `le point d attention n apparait que quand la ligne est urgente`() {
         show(card(urgent = true))
-        compose.onNodeWithTag(URGENT_DOT_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(URGENT_DOT_TAG, useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
     fun `sans urgence aucun point d attention`() {
         show(card(urgent = false))
-        compose.onNodeWithTag(URGENT_DOT_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(URGENT_DOT_TAG, useUnmergedTree = true).assertDoesNotExist()
     }
 }
