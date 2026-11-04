@@ -19,10 +19,15 @@ import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.QualifiedView
+import me.meeshy.sdk.model.PostMentionInput
+import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.model.mood.StatusAnchor
+import me.meeshy.sdk.model.mood.StatusReactionDelta
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.model.analytics.ContentSurface
 import me.meeshy.sdk.model.analytics.ImpressionSource
+import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.post.FeedEngagementRepository
 import me.meeshy.sdk.post.ImpressionBatcher
 import me.meeshy.sdk.post.PostRepository
@@ -127,6 +132,11 @@ class StatusesViewModel @Inject constructor(
     /** One event per republication the gateway refused as wider than its source (403 `REPOST_AUDIENCE_WIDENING`, #13667). */
     val repostAudienceRefused: SharedFlow<Unit> = _repostAudienceRefused.asSharedFlow()
 
+    private val _moodQueued = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Une humeur tapée sans réseau est en file : « Humeur en attente d'envoi » (iOS `status.queuedOffline`). */
+    val moodQueued: SharedFlow<Unit> = _moodQueued.asSharedFlow()
+
     private val _state = MutableStateFlow(StatusesUiState())
     val state: StateFlow<StatusesUiState> = _state.asStateFlow()
 
@@ -163,6 +173,7 @@ class StatusesViewModel @Inject constructor(
                 val entry = payload.status.toStatusEntry() ?: return@collect
                 if (listState.value.statuses.none { it.id == entry.id }) {
                     listState.update { it.created(entry) }
+                    persistLiveBar()
                 }
             }
         }
@@ -170,28 +181,52 @@ class StatusesViewModel @Inject constructor(
             socialSocket.statusUpdated.collect { payload ->
                 val entry = payload.status.toStatusEntry() ?: return@collect
                 listState.update { it.updated(entry) }
+                persistLiveBar()
             }
         }
         viewModelScope.launch {
             socialSocket.statusDeleted.collect { payload ->
                 listState.update { it.removed(payload.statusId) }
                 placedReactions = placedReactions.filterNotTo(mutableSetOf()) { it.second == payload.statusId }
+                persistLiveBar()
             }
         }
         viewModelScope.launch {
             socialSocket.statusReacted.collect { payload ->
-                if (payload.userId != currentUserId()) {
+                if (!StatusReactionDelta.isOwn(payload.userId, currentUserId())) {
                     listState.update { it.reacted(payload.statusId, payload.emoji) }
+                    persistLiveBar()
                 }
             }
         }
         viewModelScope.launch {
             socialSocket.statusUnreacted.collect { payload ->
-                if (payload.userId != currentUserId()) {
+                if (!StatusReactionDelta.isOwn(payload.userId, currentUserId())) {
                     listState.update { it.unreacted(payload.statusId, payload.emoji) }
+                    persistLiveBar()
                 } else {
                     placedReactions = placedReactions - Triple(payload.userId, payload.statusId, payload.emoji)
                 }
+            }
+        }
+    }
+
+    /**
+     * Chaque mutation temps réel (créée, supprimée, réagie, modifiée) rejoint les DEUX étages du cache de la barre : un
+     * lancement à froid repeint la barre telle que le temps réel l'a laissée, pas telle que le dernier fetch l'a servie.
+     */
+    private fun persistLiveBar() {
+        val ticket = statusBarCacheRepository.ticket()
+        val activeMode = mode.value
+        val statuses = listState.value.statuses
+        statusBarCache.save(activeMode, statuses)
+        viewModelScope.launch {
+            try {
+                statusBarCacheRepository.persistBar(activeMode, statuses, ticket)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // le cache disque est un confort : l'écran a déjà la barre à jour
             }
         }
     }
@@ -440,6 +475,8 @@ class StatusesViewModel @Inject constructor(
         audioUrl: String? = null,
         repostOfId: String? = null,
         viaUsername: String? = null,
+        visibilityUserIds: List<String>? = null,
+        mentions: List<PostMentionInput>? = null,
     ) {
         status.update { it.copy(error = null) }
         val ticket = statusBarCacheRepository.ticket()
@@ -452,6 +489,8 @@ class StatusesViewModel @Inject constructor(
                     audioUrl = audioUrl,
                     repostOfId = repostOfId,
                     viaUsername = viaUsername,
+                    visibilityUserIds = visibilityUserIds,
+                    mentions = mentions,
                 )
                 when (result) {
                     is NetworkResult.Success -> {
@@ -460,7 +499,9 @@ class StatusesViewModel @Inject constructor(
                         statusBarCache.save(mode.value, listState.value.statuses)
                         statusBarCacheRepository.persistBar(mode.value, listState.value.statuses, ticket)
                     }
-                    is NetworkResult.Failure -> {
+                    is NetworkResult.Failure -> if (result.error.code == StatusRepository.QUEUED_OFFLINE) {
+                        _moodQueued.tryEmit(Unit)
+                    } else {
                         status.update { it.copy(error = result.error.message) }
                         if (result.error.code == REPOST_AUDIENCE_WIDENING) _repostAudienceRefused.tryEmit(Unit)
                     }
@@ -472,6 +513,44 @@ class StatusesViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * L'ANCRAGE (iOS `anchorStatusAsPost`) : republie l'humeur [sourceStatusId] en POST permanent. Un commentaire ajouté
+     * fait une citation, sinon c'est un repost simple. Rend `true` quand la passerelle l'a pris ; hors ligne ou refusé,
+     * rend `false` et laisse la saisie en place. N'écrit ni la barre ni le cache : un post n'est pas une humeur.
+     */
+    suspend fun anchorAsPost(sourceStatusId: String, comment: String?, prefill: String? = null): Boolean {
+        val plan = StatusAnchor.plan(comment, prefill)
+        return try {
+            val result = when (plan) {
+                StatusAnchor.Plan.SimpleRepost ->
+                    postRepository.repost(sourceStatusId, targetType = PostType.POST, clientMutationId = OutboxIds.cmid())
+                is StatusAnchor.Plan.Quote ->
+                    postRepository.repost(
+                        sourceStatusId,
+                        targetType = PostType.POST,
+                        content = plan.comment,
+                        isQuote = true,
+                        clientMutationId = OutboxIds.cmid(),
+                    )
+            }
+            result is NetworkResult.Success
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** Une humeur bloquée plus d'une minute en file revient comme brouillon du composeur (remplacement sans doublon). */
+    suspend fun recoverStuckMood(): StatusComposerDraft? =
+        try {
+            statusRepository.recoverStuckMood(clock.nowMillis())?.toComposerDraft()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
 
     /**
      * Optimistically clear the signed-in user's own status: drop it instantly, persist

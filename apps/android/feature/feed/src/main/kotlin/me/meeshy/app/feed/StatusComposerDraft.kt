@@ -1,7 +1,9 @@
 package me.meeshy.app.feed
 
+import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.StatusComposerDraftSnapshot
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.model.composer.ComposerMoodRules
 
 /**
  * The exact payload a publish/republish carries to [StatusesViewModel.setStatus] —
@@ -16,6 +18,9 @@ data class StatusPublishRequest(
     val audioUrl: String?,
     val repostOfId: String?,
     val viaUsername: String?,
+    /** Les personnes d'une audience `ONLY` / `EXCEPT`. */
+    val visibilityUserIds: List<String>? = null,
+    val mentions: List<PostMentionInput>? = null,
 )
 
 /**
@@ -42,7 +47,14 @@ enum class StatusVisibility(val wire: String) {
     /** Sang seul — jamais repartagé (RG-18). */
     BLOOD("BLOOD"),
     PRIVATE("PRIVATE"),
+
 }
+
+/** Une audience NOMINATIVE (iOS `ONLY` / `EXCEPT`) : seulement ces personnes, ou tout le monde sauf elles. */
+enum class StatusRestriction(val wire: String) { ONLY("ONLY"), EXCEPT("EXCEPT") }
+
+/** L'audience nominative choisie et ses personnes : sans personne elle ne part pas. */
+data class StatusRestrictedAudience(val kind: StatusRestriction, val userIds: List<String>)
 
 /**
  * Pure, immutable model of an in-progress mood status — the Android port of the
@@ -68,8 +80,11 @@ data class StatusComposerDraft(
     val repostAudioUrl: String? = null,
     /** Audiences the author may pick; `null` = every one. A republication is capped by its source (#13667). */
     val allowedVisibilities: List<StatusVisibility>? = null,
+    /** Les personnes choisies pour `ONLY` / `EXCEPT` ; vide pour les autres audiences. */
+    val restriction: StatusRestrictedAudience? = null,
+    val mentions: List<PostMentionInput> = emptyList(),
 ) {
-    /** The audiences the picker offers — the whole set, or the cap of a republication. */
+    /** The audiences the picker offers — the whole set, or the cap of a republication. Les nominatives viennent avec leur sélecteur. */
     val offeredVisibilities: List<StatusVisibility> get() = allowedVisibilities ?: StatusVisibility.entries
     /** The status body actually published — trimmed, `null` when nothing remains. */
     val trimmedContent: String? get() = text.trim().ifBlank { null }
@@ -77,17 +92,21 @@ data class StatusComposerDraft(
     /** Characters left before the [MAX_CHARS] cap (0 at the limit; never negative once [withText] clamps). */
     val charactersRemaining: Int get() = MAX_CHARS - text.length
 
-    /** True once the text passes [NEAR_LIMIT] — the counter turns to a warning colour. */
-    val isNearLimit: Boolean get() = text.length > NEAR_LIMIT
+    /** True once the counter is in alert (101st character, [ComposerMoodRules.ALERT_FROM]). */
+    val isNearLimit: Boolean get() = ComposerMoodRules.counter(text).alert
 
     /** The character counter is shown only once the user has typed something. */
-    val showCounter: Boolean get() = text.isNotEmpty()
+    val showCounter: Boolean get() = ComposerMoodRules.counter(text).visible
 
     /** A status may be published as soon as a mood emoji is picked (the text is optional). */
     val canPublish: Boolean get() = selectedEmoji != null
 
     /** Whether Publish goes straight out or first asks for a word (iOS `ComposerMoodBarePublish.step`). */
     val publishStep: StatusBarePublish.Step get() = StatusBarePublish.step(text, isRepublish)
+
+    /** Le geste Publier : sans emoji il s'annonce, sans mot il demande, sinon il part. */
+    val publishDecision: ComposerMoodRules.PublishDecision
+        get() = ComposerMoodRules.decide(selectedEmoji, text, isRepublish)
 
     /** True when this draft republishes another status — drives the "via @…" line + repost header. */
     val isRepublish: Boolean get() = repostOfId != null
@@ -103,20 +122,30 @@ data class StatusComposerDraft(
         return StatusPublishRequest(
             emoji = emoji,
             content = trimmedContent,
-            visibility = visibility.wire,
+            visibility = activeRestriction?.kind?.wire ?: visibility.wire,
             audioUrl = repostAudioUrl,
             repostOfId = repostOfId,
             viaUsername = viaUsername,
+            visibilityUserIds = activeRestriction?.userIds,
+            mentions = mentions.takeIf { it.isNotEmpty() },
         )
     }
 
+    /** L'audience nominative, seulement si elle a des personnes et que la republication ne la plafonne pas. */
+    private val activeRestriction: StatusRestrictedAudience?
+        get() = restriction?.takeIf { it.userIds.isNotEmpty() && allowedVisibilities == null }
+
+    /** Choisit une audience nominative ; sans personne elle redevient l'audience simple. */
+    fun withRestriction(kind: StatusRestriction, userIds: List<String>): StatusComposerDraft =
+        copy(restriction = StatusRestrictedAudience(kind, userIds.distinct()).takeIf { it.userIds.isNotEmpty() })
+
     /** Set the text, clamping to [MAX_CHARS] so the draft never holds an over-long body. */
     fun withText(value: String): StatusComposerDraft =
-        copy(text = if (value.length <= MAX_CHARS) value else value.take(MAX_CHARS))
+        copy(text = ComposerMoodRules.clampWord(value))
 
     /** Pick [emoji], or clear the selection when the already-selected one is tapped again. */
     fun toggleEmoji(emoji: String): StatusComposerDraft =
-        copy(selectedEmoji = if (selectedEmoji == emoji) null else emoji)
+        copy(selectedEmoji = ComposerMoodRules.toggled(selectedEmoji, emoji))
 
     /** Select the emoji the full picker returned — always selects (never toggles); refused when the gateway would 400. */
     fun withPickedEmoji(emoji: String): StatusComposerDraft =
@@ -124,7 +153,7 @@ data class StatusComposerDraft(
 
     /** Choose the publish audience. */
     fun withVisibility(value: StatusVisibility): StatusComposerDraft =
-        if (value in offeredVisibilities) copy(visibility = value) else this
+        if (value in offeredVisibilities) copy(visibility = value, restriction = null) else this
 
     companion object {
         /**
@@ -151,10 +180,10 @@ data class StatusComposerDraft(
         }
 
         /** Gateway content cap for a mood status (iOS clamps the field to 122). */
-        const val MAX_CHARS = 122
+        const val MAX_CHARS = ComposerMoodRules.MAX_WORD_CHARS
 
         /** Past this the counter warns the user they are close to the cap (iOS `> 100`). */
-        const val NEAR_LIMIT = 100
+        const val NEAR_LIMIT = ComposerMoodRules.ALERT_FROM - 1
 
         /** The mood emoji grid — SSOT mirroring iOS `StatusViewModel.moodOptions`. */
         val MOOD_OPTIONS: List<String> = listOf(

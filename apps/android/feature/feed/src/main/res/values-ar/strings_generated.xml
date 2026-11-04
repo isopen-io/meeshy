@@ -244,11 +244,13 @@
     <string name="status_composer_emoji_more">رموز تعبيرية أخرى</string>
     <string name="status_composer_mood_question">كيف تشعر؟</string>
     <string name="status_composer_publish">نشر</string>
+    <string name="status_composer_publish_disabled_hint">اختر رمزًا تعبيريًا لنشر حالتك</string>
     <string name="status_composer_title">الحالة</string>
     <string name="status_composer_visibility_community">المجتمعات</string>
     <string name="status_composer_visibility_friends">الأصدقاء</string>
     <string name="status_composer_visibility_private">خاص</string>
     <string name="status_composer_visibility_public">عام</string>
+    <string name="status_queued_offline">المزاج بانتظار الإرسال</string>
     <string name="status_react_error">تعذّر التفاعل مع الحالة</string>
     <string name="user_posts_back">رجوع</string>
     <string name="user_posts_empty">لا توجد منشورات</string>
