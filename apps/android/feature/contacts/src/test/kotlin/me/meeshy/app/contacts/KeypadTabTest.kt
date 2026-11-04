@@ -97,7 +97,7 @@ class KeypadTabTest {
     fun `toucher le resultat ouvre le profil`() {
         show(KeypadUiState(input = "al", rows = listOf(row("c9")), load = KeypadLoad.Loaded))
 
-        compose.onNodeWithText("Alice").performClick()
+        compose.onNodeWithContentDescription("Alice, @alice").performClick()
 
         assertThat(profiles).isEqualTo(1)
     }
