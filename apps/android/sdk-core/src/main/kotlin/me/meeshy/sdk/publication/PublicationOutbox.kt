@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.serialization.encodeToString
+import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.media.MediaUploadProgressLedger
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.PostComposerDraftSnapshot
@@ -25,6 +26,7 @@ import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxOwnerSource
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
+import me.meeshy.sdk.outbox.OutboxWithdrawal
 import me.meeshy.sdk.outbox.kindEnum
 import me.meeshy.sdk.outbox.stateEnum
 import me.meeshy.sdk.post.PostComposerDraftStore
@@ -114,32 +116,39 @@ public class PublicationOutbox @Inject constructor(
         val row = outboxRepository.row(cmid)
         if (row != null) {
             outboxRepository.discard(cmid)
-            OutboxDependencyKey.decode(row.dependsOn)
-                .filter { outboxRepository.dependentsOf(it).isEmpty() }
-                .forEach { mediaUploadQueue.cancel(it) }
-            outboxRepository.cancelHeldFor(row.targetId)
+            releaseAround(row)
         }
         postDraftStore.release(cmid)
     }
 
+    /** Ce qui ne servait qu'à la publication [row], une fois sa ligne retirée : ses téléversements (ligne et octets), ses j'aime retenus. */
+    private suspend fun releaseAround(row: OutboxEntity) {
+        OutboxDependencyKey.decode(row.dependsOn)
+            .filter { outboxRepository.dependentsOf(it).isEmpty() }
+            .forEach { mediaUploadQueue.cancel(it) }
+        outboxRepository.cancelHeldFor(row.targetId)
+    }
+
     /**
-     * « Supprimer » : retire la publication en file ou en échec ([PublicationCancelOutcome.REMOVED]), pose la marque
-     * d'annulation d'une publication en vol (le sender la vérifie avant d'envoyer), ou constate qu'elle est déjà partie.
+     * « Supprimer » (iOS `OfflineQueue+PublicationCancel`) : [PublicationCancelOutcome.REMOVED] seulement si la ligne a été
+     * retirée avant qu'un drainer la réserve — décision et suppression dans UNE transaction ; une ligne réservée reçoit la
+     * marque d'annulation ([PublicationCancelOutcome.CANCEL_REQUESTED]) que le sender relit avant le POST ; sans ligne, elle
+     * est déjà partie. Une annulation honorée sort de la file en [me.meeshy.sdk.outbox.OutboxOutcome.Cancelled], jamais en
+     * `Succeeded`.
      */
     public suspend fun cancel(cmid: String): PublicationCancelOutcome = runCatching {
-        val row = outboxRepository.row(cmid)
-        val state = when (row?.stateEnum) {
-            null -> PublicationRowState.Absent
-            OutboxState.PENDING -> PublicationRowState.Pending
-            OutboxState.INFLIGHT -> PublicationRowState.InFlight
-            OutboxState.EXHAUSTED -> PublicationRowState.Exhausted
+        val outcome = when (val withdrawal = outboxRepository.withdrawUnlessInflight(cmid)) {
+            OutboxWithdrawal.Absent -> PublicationCancelRule.decide(PublicationRowState.Absent)
+            OutboxWithdrawal.Marked -> PublicationCancelRule.decide(PublicationRowState.InFlight)
+            is OutboxWithdrawal.Removed -> {
+                releaseAround(withdrawal.row)
+                PublicationCancelRule.decide(
+                    if (withdrawal.row.stateEnum == OutboxState.EXHAUSTED) PublicationRowState.Exhausted
+                    else PublicationRowState.Pending,
+                )
+            }
         }
-        val outcome = PublicationCancelRule.decide(state)
-        when (outcome) {
-            PublicationCancelOutcome.REMOVED -> discard(cmid)
-            PublicationCancelOutcome.CANCEL_REQUESTED -> outboxRepository.requestCancel(cmid)
-            PublicationCancelOutcome.ALREADY_SENT, PublicationCancelOutcome.FAILED -> postDraftStore.release(cmid)
-        }
+        if (outcome != PublicationCancelOutcome.CANCEL_REQUESTED) postDraftStore.release(cmid)
         outcome
     }.getOrElse {
         if (it is CancellationException) throw it

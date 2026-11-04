@@ -54,16 +54,21 @@ public class CreatePostHandler @Inject constructor(
 
     override val payloadGraft: OutboxPayloadGraft = PostPublishMediaWriteBack::graft
 
+    /**
+     * La marque d'annulation est relue EN BASE juste avant le POST : la copie [row] est celle que le drainer a lue avant sa
+     * réservation, et une suppression posée depuis n'y figure pas. Une marque posée APRÈS cette relecture n'arrête plus la
+     * requête déjà partie — `CANCEL_REQUESTED` peut donc aboutir à une publication, comme sur iOS.
+     */
     override suspend fun send(row: OutboxEntity): SendResult {
-        if (row.cancelRequestedAt != null) return cancelled(row)
+        if (row.cancelRequestedAt != null || outboxRepository.isCancelRequested(row.cmid)) return cancelled(row)
         return deliver(row)
     }
 
-    /** L'auteur a supprimé la publication pendant qu'elle partait : la marque est honorée avant tout envoi. */
+    /** L'auteur a supprimé la publication pendant qu'elle partait : rien n'est envoyé, ses traces locales partent. */
     private suspend fun cancelled(row: OutboxEntity): SendResult {
-        runCatching { outboxRepository.discard(row.cmid) }
+        runCatching { outboxRepository.cancelHeldFor(row.targetId) }
         runCatching { draftStore.release(row.cmid) }
-        return SendResult.Success
+        return SendResult.Cancelled
     }
 
     private suspend fun deliver(row: OutboxEntity): SendResult =
