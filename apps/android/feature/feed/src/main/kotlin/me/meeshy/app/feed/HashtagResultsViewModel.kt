@@ -29,6 +29,10 @@ data class HashtagResultsUiState(
     /** L'échec d'un premier chargement sans rien à montrer : l'écran offre « Réessayer ». */
     val loadFailed: Boolean = false,
     val errorMessage: String? = null,
+    /** Le compositeur de citation ouvert par « Citer » (#12234) ; `null` quand il est fermé. */
+    val quoteComposer: QuoteComposerState? = null,
+    /** L'issue d'un repartage, dite une fois puis consommée. */
+    val notice: FeedNotice? = null,
 )
 
 /**
@@ -56,10 +60,13 @@ class HashtagResultsViewModel @Inject constructor(
     private val _state = MutableStateFlow(HashtagResultsUiState(tag = tag))
     val state: StateFlow<HashtagResultsUiState> = _state.asStateFlow()
 
+    /** Repartager / Citer depuis les résultats, comme dans le fil (iOS `HashtagResultsViewModel.toggleRepost`, #15934). */
+    private val reposting = ListedPostReposting(viewModelScope, postRepository, listState)
+
     init {
         viewModelScope.launch {
-            combine(listState, sessionRepository.currentUser, status) { list, user, st ->
-                project(list, user, st)
+            combine(listState, sessionRepository.currentUser, status, reposting.quoteComposer, reposting.notice) { list, user, st, quote, notice ->
+                project(list, user, st).copy(quoteComposer = quote, notice = notice)
             }.collect { projected -> _state.value = projected }
         }
         revalidate(refreshing = false)
@@ -148,6 +155,18 @@ class HashtagResultsViewModel @Inject constructor(
             }
         }
     }
+
+    fun repost(postId: String) = reposting.repost(postId)
+
+    fun beginQuote(postId: String) = reposting.beginQuote(postId)
+
+    fun onQuoteTextChange(text: String) = reposting.onQuoteTextChange(text)
+
+    fun cancelQuote() = reposting.cancelQuote()
+
+    fun submitQuote() = reposting.submitQuote()
+
+    fun consumeNotice() = reposting.consumeNotice()
 
     /** Restaure le seul post touché : une page arrivée entre-temps ne doit pas être écrasée. */
     private fun rollbackPost(postId: String, snapshot: PostPageListState, message: String?) {

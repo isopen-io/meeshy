@@ -25,12 +25,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.icons.MeeshyIcons
@@ -59,6 +63,22 @@ fun HashtagResultsScreen(
 
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { snackbar.showSnackbar(it) }
+    }
+    val context = LocalContext.current
+    // L'issue d'un repartage se dit une fois : consommée aussitôt reçue, la barre vit dans la portée de l'effet.
+    LaunchedEffect(viewModel) {
+        viewModel.state.map { it.notice }.filterNotNull().collect { notice ->
+            viewModel.consumeNotice()
+            launch { snackbar.showSnackbar(context.getString(notice.messageRes())) }
+        }
+    }
+    state.quoteComposer?.let { composer ->
+        QuoteComposerSheet(
+            composer = composer,
+            onTextChange = viewModel::onQuoteTextChange,
+            onSubmit = viewModel::submitQuote,
+            onDismiss = viewModel::cancelQuote,
+        )
     }
 
     MeeshyBackground {
@@ -121,6 +141,8 @@ fun HashtagResultsScreen(
                                 isOwn = post.isAuthor,
                                 onOpenProfile = onOpenProfile,
                                 onOpenHashtag = onOpenHashtag,
+                                onRepost = { viewModel.repost(post.id) },
+                                onQuote = { viewModel.beginQuote(post.id) },
                             )
                         }
                         if (state.isLoadingMore) {

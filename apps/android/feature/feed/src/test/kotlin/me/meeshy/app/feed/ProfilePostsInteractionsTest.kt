@@ -154,6 +154,49 @@ class ProfilePostsInteractionsTest {
     }
 
     @Test
+    fun `Citer ouvre le compositeur de citation, sans rien envoyer`() = runTest {
+        val vm = viewModel(post("p1"))
+        vm.onEvent(ProfilePostsEvent.BeginQuote("p1"))
+        val dialog = vm.state.value.dialog as ProfilePostDialog.Quote
+        assertThat(dialog.composer.postId).isEqualTo("p1")
+        coVerify(exactly = 0) { posts.repost(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `Citer un repost montre sa racine`() = runTest {
+        val share = post("p1").copy(
+            repostOf = me.meeshy.sdk.model.ApiRepostOf(id = "root", content = "L'original", author = ApiAuthor(id = "c", displayName = "Chloé")),
+        )
+        val vm = viewModel(share)
+        vm.onEvent(ProfilePostsEvent.BeginQuote("p1"))
+        val composer = (vm.state.value.dialog as ProfilePostDialog.Quote).composer
+        assertThat(composer.sourceAuthorName).isEqualTo("Chloé")
+        assertThat(composer.sourceContentPreview).isEqualTo("L'original")
+    }
+
+    @Test
+    fun `une citation publiee part vers la racine avec son commentaire et marque la carte`() = runTest {
+        val share = post("p1").copy(repostOf = me.meeshy.sdk.model.ApiRepostOf(id = "root"))
+        val vm = viewModel(share)
+        coEvery { posts.repost(any(), any(), any(), any(), any()) } returns NetworkResult.Success(post("r1"))
+        vm.onEvent(ProfilePostsEvent.BeginQuote("p1"))
+        vm.onEvent(ProfilePostsEvent.QuoteTextChanged("à lire"))
+        vm.onEvent(ProfilePostsEvent.SubmitQuote)
+        coVerify(exactly = 1) { posts.repost("root", any(), "à lire", true, any()) }
+        assertThat(vm.state.value.dialog).isNull()
+        assertThat(vm.card("p1").isReposted).isTrue()
+    }
+
+    @Test
+    fun `fermer la citation n'envoie rien`() = runTest {
+        val vm = viewModel(post("p1"))
+        vm.onEvent(ProfilePostsEvent.BeginQuote("p1"))
+        vm.onEvent(ProfilePostsEvent.DismissDialog)
+        assertThat(vm.state.value.dialog).isNull()
+        coVerify(exactly = 0) { posts.repost(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `un partage ajoute un au compteur`() = runTest {
         val vm = viewModel(post("p1"))
         coEvery { posts.share("p1") } returns ok()

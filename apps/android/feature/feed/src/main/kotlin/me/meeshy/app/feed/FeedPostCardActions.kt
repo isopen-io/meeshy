@@ -17,10 +17,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,8 +51,8 @@ internal fun PostStatsRow(
     onLike: () -> Unit,
     onBookmark: () -> Unit,
     onComments: () -> Unit,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
+    onRepost: (() -> Unit)?,
+    onQuote: (() -> Unit)?,
     modifier: Modifier = Modifier,
     overMedia: Boolean = false,
     onSend: (() -> Unit)? = null,
@@ -182,8 +179,9 @@ private val GLYPH_SIZE = 18.dp
 private val MIN_ACTION_TARGET = 48.dp
 
 /**
- * The repost action of the bar: a tap offers Repost / Quote / Cancel directly on the icon — the same choice as the
- * "…" menu and the post detail (iOS `FeedPostActionsBar` repost confirmation). The reposted state shows on the glyph.
+ * The repost action of the bar: a tap offers [RepostChoiceDialog] — the same choice as the post detail and the reels
+ * player (iOS `FeedPostActionsBar` + `RepostChoiceDialog`). The reposted state shows on the glyph. With neither writer,
+ * the button is not drawn: never an inert control (#12234).
  */
 @Composable
 private fun RepostStatAction(
@@ -191,10 +189,11 @@ private fun RepostStatAction(
     reposted: Boolean,
     tint: Color,
     stateDescription: String,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
+    onRepost: (() -> Unit)?,
+    onQuote: (() -> Unit)?,
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    if (RepostChoice.offeredBy(onRepost, onQuote).isEmpty()) return
+    var choosing by remember { mutableStateOf(false) }
     Box {
         StatAction(
             icon = Icons.Filled.Repeat,
@@ -204,27 +203,8 @@ private fun RepostStatAction(
             tint = if (reposted) MeeshyPalette.Success else tint,
             active = reposted,
             countColor = if (reposted) MeeshyPalette.Success else tint,
-            onClick = { expanded = true },
+            onClick = { choosing = true },
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.feed_action_repost)) },
-                onClick = {
-                    expanded = false
-                    onRepost()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.feed_action_quote)) },
-                onClick = {
-                    expanded = false
-                    onQuote()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.feed_action_cancel)) },
-                onClick = { expanded = false },
-            )
-        }
     }
+    if (choosing) RepostChoiceDialog(onRepost = onRepost, onQuote = onQuote, onDismiss = { choosing = false })
 }
