@@ -146,6 +146,24 @@ internal fun StoryViewerShell(
                 .onGloballyPositioned { rail.boxOriginInRoot = it.positionInRoot() },
         ) {
             if (slide != null) {
+                StorySlideChangeAnnouncement(slide.id, state.index, state.slides.size)
+                val spoken = chrome.transcript.text(currentItem?.storyEffects, viewModel.transcriptLanguageChain())
+                val canvasActions = remember(cardMotion, actions, haptics, viewModel) {
+                    StoryCanvasA11yActions(
+                        onNext = { haptics.light(); viewModel.advance() },
+                        onPrevious = { haptics.light(); viewModel.back() },
+                        onTogglePause = viewModel::onCanvasDoubleTap,
+                        onToggleFullscreen = cardMotion.fullscreen::toggle,
+                        onClose = actions.onClose,
+                    )
+                }
+                Box(
+                    Modifier.fillMaxSize().storyCanvasAccessibility(
+                        slide = slide, index = state.index, count = state.slides.size, authorName = state.authorName,
+                        transcript = spoken, paused = state.isPaused, fullscreen = cardMotion.fullscreen.enabled,
+                        actions = canvasActions,
+                    ),
+                ) {
                 StoryViewerReaderScene(
                     slide = slide,
                     item = currentItem,
@@ -160,6 +178,7 @@ internal fun StoryViewerShell(
                     viewModel = viewModel,
                     captionExpanded = chrome.captionExpanded,
                 )
+                }
                 StoryReadingScrims(chromeVisible = chromeShown)
             }
 

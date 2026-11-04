@@ -41,6 +41,7 @@ import me.meeshy.sdk.model.composer.SceneObjectMenu
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryMediaCrop
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
+import me.meeshy.ui.story.canvas.sceneRootPoseLayer
 import me.meeshy.sdk.model.composer.scene.StoryBackdrop
 import me.meeshy.sdk.model.composer.scene.StoryFitMode
 import me.meeshy.sdk.model.scene.InlineEditLayout
@@ -129,6 +130,7 @@ internal fun StoryCanvasSurface(
     onBackgroundDoubleTap: (() -> Unit)? = null,
     viewportScale: Float = 1f,
     onViewportScale: ((Float) -> Unit)? = null,
+    rootPose: () -> me.meeshy.sdk.model.scene.SceneRootPose = { me.meeshy.sdk.model.scene.SceneRootPose.NEUTRAL },
 ) {
     val canvasLabel = formatLabel(ComposerFormatLabel.CANVAS)
     val backgroundTap by rememberUpdatedState(onBackgroundTap)
@@ -178,6 +180,7 @@ internal fun StoryCanvasSurface(
                     scaleX = shownViewport
                     scaleY = shownViewport
                 }
+                .sceneRootPoseLayer(rootPose)
                 .then(if (canvasFormat == me.meeshy.sdk.model.scene.CanvasFormat.PORTRAIT) Modifier.fillMaxHeight() else Modifier.fillMaxWidth())
                 .aspectRatio(canvasFormat.ratio.toFloat())
                 .clip(frameShape)
@@ -294,8 +297,10 @@ internal fun StoryCanvasSurface(
                 )
             
             }
+            val preview = LocalComposerTimelinePreview.current
             stack.forEach { ref ->
                 key(ref.kind, ref.id) {
+                    Box(Modifier.fillMaxSize().graphicsLayer { alpha = preview?.opacity(ref.id) ?: 1f }) {
                     when (ref.kind) {
                         ComposerObjectKind.TEXT -> textById[ref.id]?.let { element ->
                             if (element.id != recenteredTextId) renderText(element)
@@ -329,6 +334,7 @@ internal fun StoryCanvasSurface(
                             )
                         }
                         ComposerObjectKind.PLACE, ComposerObjectKind.AUDIO -> pins(ref, canvasWidthPx, canvasHeightPx)
+                    }
                     }
                 }
             }

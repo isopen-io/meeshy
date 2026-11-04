@@ -132,7 +132,10 @@ internal fun SceneEffectsDock(state: StoryComposerUiState, viewModel: StoryCompo
         open = state.sceneEffectCarousel,
         frame = frame,
         onClose = { viewModel.onSceneReduce(StoryComposerSelectionReducer::sceneEffectClosed) },
-        onChoose = { choice -> viewModel.onSceneReduce { StoryComposerBackgroundReducer.effectChosen(it, choice) } },
+        onChoose = { choice ->
+            viewModel.onSceneReduce { StoryComposerBackgroundReducer.effectChosen(it, choice) }
+            viewModel.onRehearseTransitions()
+        },
         visual = {
             FilterRow(
                 selected = state.selectedSlideFilter,

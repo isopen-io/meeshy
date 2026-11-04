@@ -36,6 +36,7 @@ import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.text.HashtagLink
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.RichPostText
+import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -53,6 +54,7 @@ internal fun FeedPostCardBody(
     translatingCodes: Set<String> = emptySet(),
     onSelectLanguage: (String) -> Unit = onFlagTap,
 ) {
+    val profileOpener = LocalProfileSheetOpener.current
     var explorerOpen by rememberSaveable(post.id) { mutableStateOf(false) }
     post.languageExplorer?.takeIf { explorerOpen }?.let { explorer ->
         PostTranslationSheet(
@@ -74,9 +76,7 @@ internal fun FeedPostCardBody(
                 validUsernames = post.mentionUserIds.keys,
                 mentionDisplayNames = post.mentionDisplayNames.takeIf { it.isNotEmpty() },
                 onHashtagClick = onOpenHashtag,
-                onMentionClick = { username ->
-                    post.mentionUserIds[username.trim().lowercase()]?.let { id -> onOpenProfile?.invoke(id) }
-                },
+                onMentionClick = { username -> post.mentionProfile(username)?.let(profileOpener::open) },
             )
         }
 

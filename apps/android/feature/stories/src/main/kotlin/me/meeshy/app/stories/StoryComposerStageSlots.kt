@@ -65,9 +65,11 @@ internal fun StoryComposerScene(
     val armsCapture = capture?.takeIf { captureOffered }
     val accentHex = viewModel.observedAuthorAccentHex()
     val haptics = rememberMeeshyHaptics()
+    val rootPose = rememberRehearsalPose(viewModel.rehearsals.runs)
     CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     Box(modifier.followsSceneHold(capture)) {
             StoryCanvasSurface(
+                rootPose = rootPose,
                 transform = state.selectedSlideTransform,
                 backgroundModel = rememberStoryMediaLookModel(rememberComposerPicture(state.selectedSlideBackdropModel(viewModel.mediaBaseUrl)), state.backgroundMediaLook(comparison.mediaId)),
                 sceneBrush = remember(state.selectedSlideBackground, accentHex) {

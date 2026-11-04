@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.composer.StoryRepostAudience
 import me.meeshy.sdk.model.story.StoryReplyRules
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.profile.LocalProfileSheetPresented
 
 /**
  * L'HÔTE du lecteur de stories : il choisit entre chargement, introuvable et lecture, puis assemble les fichiers
@@ -98,6 +99,7 @@ fun StoryViewerScreen(
         composing = composing,
         reading = chrome.captionExpanded || chrome.transcript.requested,
         groupIntro = groupIntro.shown,
+        profile = LocalProfileSheetPresented.current.value,
     )
     val actions = rememberStoryViewerActions(
         state = state,

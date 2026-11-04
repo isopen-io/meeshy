@@ -79,7 +79,7 @@ private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.swallowT
 private fun EditorOverlay(host: AudioEditorHostImpl, request: AudioEditorRequest) {
     val scope = rememberCoroutineScope()
     val controller = remember(request.id) {
-        host.controllers.create(request.source, host.sessionsRoot, scope)
+        host.controllers.create(request.source, host.sessionsRoot, scope, defaultTranscriptionLanguage())
     }
     MeeshyAudioEditorScreen(
         controller = controller,
@@ -89,6 +89,9 @@ private fun EditorOverlay(host: AudioEditorHostImpl, request: AudioEditorRequest
         onCancel = { host.requests.cancel(request) },
     )
 }
+
+private fun defaultTranscriptionLanguage(): String =
+    me.meeshy.sdk.model.audioedit.AudioTranscriptionLanguages.defaultFor(java.util.Locale.getDefault().language)
 
 @Module
 @InstallIn(SingletonComponent::class)

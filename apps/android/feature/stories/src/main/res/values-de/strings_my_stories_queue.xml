@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_resume_failed">Diese Story konnte nicht in einen Entwurf umgewandelt werden. Sie bleibt in deiner Warteschlange.</string>
+    <string name="my_stories_draft_open_failed">Dieser Entwurf konnte nicht geöffnet werden.</string>
+</resources>

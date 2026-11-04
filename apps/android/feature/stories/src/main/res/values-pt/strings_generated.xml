@@ -465,7 +465,9 @@
     <string name="story_tray_a11y_createStory">Criar um story</string>
     <string name="story_tray_menu_profile">Ver o perfil</string>
     <string name="story_tray_menu_viewStories">Ver os stories</string>
+    <string name="story_viewer_a11y_author">de %1$s</string>
     <string name="story_viewer_a11y_percent">%1$d por cento</string>
     <string name="story_viewer_a11y_position">Story %1$d de %2$d</string>
+    <string name="story_viewer_a11y_transcript">Transcrição: %1$s</string>
     <string name="story_viewer_transcript_title">Transcrição</string>
 </resources>

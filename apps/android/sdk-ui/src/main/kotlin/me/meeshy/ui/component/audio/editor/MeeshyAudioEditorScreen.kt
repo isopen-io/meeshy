@@ -263,7 +263,7 @@ private fun EditorDock(controller: AudioEditorController, accent: Color, onConfi
     val state by controller.state.collectAsState()
     val staging = state.staging
     val document = state.document ?: return
-    val tools = staging.availableTools.filter { it != AudioEditorTool.TRANSCRIBE }
+    val tools = staging.availableTools.filter { it != AudioEditorTool.TRANSCRIBE || controller.canTranscribe }
     Column(Modifier.padding(top = MeeshySpacing.lg, bottom = MeeshySpacing.xl), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus)) {
         state.error?.let { AudioEditorErrorBanner(it) { controller.selectTool(staging.tool) } }
         staging.tool?.takeIf { it in tools }?.let { tool ->
@@ -273,6 +273,10 @@ private fun EditorDock(controller: AudioEditorController, accent: Color, onConfi
                 duration = state.duration,
                 accent = accent,
                 onChange = { controller.update(it) },
+                transcription = state.transcription,
+                transcriptionLanguage = state.transcriptionLanguage,
+                onTranscriptionLanguage = controller::setTranscriptionLanguage,
+                onTranscribe = { controller.transcribe() },
             )
         }
         if (document.hasHistory) {

@@ -49,6 +49,10 @@ public object OutboxRowFacts {
         OutboxKind.HIDE_FOR_ME, OutboxKind.MODERATION_DELETE -> OutboxPillFacts(OutboxUiKind.DELETE)
         OutboxKind.RESTORE_FOR_ME, OutboxKind.REMOVE_ATTACHMENT -> other("updateConversation")
         OutboxKind.MARK_RECEIVED -> other("markAsRead")
+        OutboxKind.REPOST_STORY -> other("repostPost")
+        OutboxKind.MARK_STORY_VIEWED -> other("markStoryViewed")
+        OutboxKind.DELETE_COMMENT -> other("deleteComment")
+        OutboxKind.TOGGLE_LIKE_COMMENT -> OutboxPillFacts(OutboxUiKind.POST_REACTION)
     }
 
     private fun other(key: String) = OutboxPillFacts(OutboxUiKind.OTHER, key)
