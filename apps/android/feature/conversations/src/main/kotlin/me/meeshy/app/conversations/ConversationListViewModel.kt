@@ -117,6 +117,7 @@ class ConversationListViewModel @Inject constructor(
         workManager = workManager,
         activeConversationId = { loadingDeps.activeConversation.conversationId.value },
         obsoleter = dialogDeps.obsoleter,
+        remover = dialogDeps.remover,
     )
     /** Les dialogues confirmés de la liste (bloquer, masquer, quitter, renommer, signaler, verrou). */
     internal val dialogs: ConversationListDialogController = ConversationListDialogController(

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import me.meeshy.feature.conversations.R
+import me.meeshy.sdk.conversation.ConversationRemoval
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.feedback.HapticKind
 import me.meeshy.sdk.lock.ConversationLockStore
@@ -50,6 +51,15 @@ internal class ConversationListDialogController(
 
     /** Un « Rechercher » sur une conversation verrouillée, armé seulement une fois le code franchi. */
     private var searchAfterUnlock: Boolean = false
+
+    init {
+        scope.launch {
+            deps.remover.refusals.collect { refusal ->
+                emit(ConversationListDialogEffect.Haptic(HapticKind.ERROR))
+                toast(refusal.removal.messageRes(), FeedbackKind.Error)
+            }
+        }
+    }
 
     // ── Bloquer / débloquer ──
 
@@ -133,11 +143,7 @@ internal class ConversationListDialogController(
     fun confirmLeave() {
         val target = take<ConversationListDialog.Leave>() ?: return
         emit(ConversationListDialogEffect.Haptic(HapticKind.HEAVY))
-        scope.launch {
-            if (repository.leave(target.conversationId) is NetworkResult.Failure) {
-                toast(R.string.dialogs_leave_error, FeedbackKind.Error)
-            }
-        }
+        actions.leaveConversation(target.conversationId) { toast(R.string.dialogs_leave_error, FeedbackKind.Error) }
     }
 
     fun requestRename(conversationId: String) {
@@ -289,6 +295,11 @@ internal class ConversationListDialogController(
     private fun emit(effect: ConversationListDialogEffect) {
         effectChannel.trySend(effect)
     }
+}
+
+private fun ConversationRemoval.messageRes(): Int = when (this) {
+    ConversationRemoval.LEAVE -> R.string.dialogs_leave_error
+    ConversationRemoval.DELETE_FOR_ME, ConversationRemoval.DELETE_FOR_ALL -> R.string.conversation_removal_refused_delete
 }
 
 private fun ObsoleteRefusal.messageRes(): Int = when (this) {
