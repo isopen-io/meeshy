@@ -10,11 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +36,7 @@ import me.meeshy.ui.component.fullscreen.FullscreenChromeButton
 import me.meeshy.ui.component.fullscreen.FullscreenChromeDimens
 import me.meeshy.ui.component.fullscreen.FullscreenChromeTone
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -81,7 +77,7 @@ public fun AudioFullscreenTransport(
             },
         )
         FullscreenChromeButton(
-            icon = Icons.Filled.Replay10,
+            icon = MeeshyIcons.Replay10,
             label = stringResource(R.string.media_skipBack10s),
             onClick = {
                 onInteraction()
@@ -101,7 +97,7 @@ public fun AudioFullscreenTransport(
             },
         )
         FullscreenChromeButton(
-            icon = Icons.Filled.Forward10,
+            icon = MeeshyIcons.Forward10,
             label = stringResource(R.string.media_skipForward10s),
             onClick = {
                 onInteraction()
@@ -188,7 +184,7 @@ internal fun AudioFullscreenPlayButton(
             CircularProgressIndicator(color = ink, strokeWidth = 2.dp, modifier = Modifier.size(PLAY_GLYPH))
         } else {
             Icon(
-                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                imageVector = if (isPlaying) MeeshyIcons.Pause else MeeshyIcons.Play,
                 contentDescription = null,
                 tint = ink,
                 modifier = Modifier.size(PLAY_GLYPH),
