@@ -37,8 +37,8 @@ public data class UploadBarProgress(val files: List<UploadBarFile>) {
     /** L'icône fait un tour complet à 100 %. */
     val isComplete: Boolean get() = percentage >= PERCENT
 
-    /** La barre a quelque chose à dire : au moins un fichier. */
-    val isVisible: Boolean get() = files.isNotEmpty()
+    /** La barre a quelque chose à dire : au moins un fichier attend ou monte (un échec ne la garde pas affichée). */
+    val isVisible: Boolean get() = files.any { it.status == UploadBarStatus.QUEUED || it.status == UploadBarStatus.UPLOADING }
 
     private companion object {
         const val PERCENT = 100

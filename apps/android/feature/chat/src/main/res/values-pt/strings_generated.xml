@@ -819,6 +819,9 @@
     <string name="transcription_fiche_transcribe">Transcrever</string>
     <string name="transcription_fiche_translations">Traduções de áudio</string>
     <string name="translation_audio_error">A tradução do áudio falhou. Tente novamente.</string>
+    <string name="upload_progress_a11y_label">Enviando arquivos</string>
+    <string name="upload_progress_a11y_value">%1$d%%, %2$d de %3$d arquivos enviados</string>
+    <string name="upload_progress_files_count">%1$d/%2$d arquivos</string>
     <string name="viewer_code_loading">Carregando...</string>
     <string name="viewer_contact_add">Adicionar aos contatos</string>
     <string name="viewer_contact_close">Fechar o cartão</string>

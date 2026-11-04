@@ -843,6 +843,9 @@
     <string name="transcription_fiche_transcribe">نسخ نصي</string>
     <string name="transcription_fiche_translations">ترجمات صوتية</string>
     <string name="translation_audio_error">فشلت الترجمة الصوتية. حاول مرة أخرى.</string>
+    <string name="upload_progress_a11y_label">جارٍ رفع الملفات</string>
+    <string name="upload_progress_a11y_value">%1$d%%، تم رفع %2$d من %3$d ملفات</string>
+    <string name="upload_progress_files_count">%1$d/%2$d ملفات</string>
     <string name="viewer_code_loading">جارٍ التحميل...</string>
     <string name="viewer_contact_add">إضافة إلى جهات الاتصال</string>
     <string name="viewer_contact_close">إغلاق البطاقة</string>

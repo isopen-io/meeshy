@@ -34,3 +34,35 @@ class UploadProgressCenterTest {
         assertThat(center.queue.value.pending).isEqualTo(2)
     }
 }
+
+class UploadProgressCenterBarTest {
+    @Test
+    fun `la barre compte les fichiers termines tant qu'un autre monte, puis se vide`() {
+        val center = UploadProgressCenter()
+        center.announce("a", "a.jpg", 100)
+        center.announce("b", "b.mp4", 300)
+        center.uploading("a", 100, 100)
+        center.done("a")
+        center.uploading("b", 150, 300)
+
+        val bar = center.bar.value
+        assertThat(bar.totalFiles).isEqualTo(2)
+        assertThat(bar.completedFiles).isEqualTo(1)
+        assertThat(bar.currentFileName).isEqualTo("b.mp4")
+        assertThat(bar.percentage).isEqualTo(62)
+
+        center.done("b")
+
+        assertThat(center.bar.value.files).isEmpty()
+    }
+
+    @Test
+    fun `un fichier annonce pese dans le total avant meme de monter`() {
+        val center = UploadProgressCenter()
+        center.announce("a", "a.jpg", 100)
+        center.announce("b", "b.mp4", 300)
+        center.uploading("a", 100, 100)
+
+        assertThat(center.bar.value.percentage).isEqualTo(25)
+    }
+}
