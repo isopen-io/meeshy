@@ -96,7 +96,10 @@ internal fun PostCard(
                 onSelectLanguage = onSelectLanguage,
             )
             FeedPostCardMediaSlot(post = post, onImageTap = onImageTap, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
-            if (pendingSend != null) return@Column
+            if (pendingSend != null) {
+                FeedPendingPublicationChip(pendingSend)
+                return@Column
+            }
             FeedPostCardFooter(
                 post = post,
                 onLike = onLike,

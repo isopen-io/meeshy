@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,6 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.PublicationCancelOutcome
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -59,14 +63,50 @@ class UnsentPublicationsViewModel @Inject constructor(
         viewModelScope.launch { runCatching { publications.releaseSettledDrafts() } }
     }
 
+    private val _feedback = Channel<PendingFeedback>(Channel.BUFFERED)
+
+    /** Ce que le fil dit du dernier geste : l'accusé d'une relance, son échec, le sort d'une annulation, un brouillon repris. */
+    internal val feedback: Flow<PendingFeedback> = _feedback.receiveAsFlow()
+
+    /** La relance est dite aussitôt (un contrôle sans effet visible n'existe pas) ; la file rend son verdict ensuite. */
     fun retry(cmid: String) {
         viewModelScope.launch {
-            if (publications.retry(cmid)) workManager.enqueue(OutboxFlushWorker.buildRequest())
+            _feedback.send(PendingFeedback.RETRY_STARTED)
+            val revived = runCatching { publications.retry(cmid) }.getOrDefault(false)
+            if (revived) workManager.enqueue(OutboxFlushWorker.buildRequest()) else _feedback.send(PendingFeedback.RETRY_FAILED)
         }
     }
 
     fun discard(cmid: String) {
         viewModelScope.launch { publications.discard(cmid) }
+    }
+
+    /**
+     * « Annuler l'envoi » : retirée avant son départ ou marquée en vol, l'envoi est annulé ; sans ligne, elle vient de
+     * partir et se supprime une fois en ligne (iOS `withdrawPendingPublication`).
+     */
+    fun cancelSend(cmid: String) {
+        viewModelScope.launch {
+            _feedback.send(
+                when (publications.cancel(cmid)) {
+                    PublicationCancelOutcome.REMOVED, PublicationCancelOutcome.CANCEL_REQUESTED -> PendingFeedback.WITHDRAWN
+                    PublicationCancelOutcome.ALREADY_SENT -> PendingFeedback.ALREADY_SENT
+                    PublicationCancelOutcome.FAILED -> PendingFeedback.WITHDRAW_FAILED
+                },
+            )
+        }
+    }
+
+    /**
+     * Ouvre le composeur après avoir repris, s'il est vierge, l'envoi resté bloqué en file : il y revient en brouillon et
+     * le fil le dit. Rien n'est écrasé de ce que l'auteur a déjà commencé.
+     */
+    fun openComposerRecovering(open: () -> Unit) {
+        viewModelScope.launch {
+            val recovered = runCatching { publications.recoverStuckPost() }.getOrNull()
+            if (recovered != null) _feedback.send(PendingFeedback.DRAFT_RECOVERED)
+            open()
+        }
     }
 
     fun reopen(cmid: String) {

@@ -26,6 +26,7 @@
     <string name="feed_composer_open_label">Compartir algo</string>
     <string name="feed_delete_cancel">Cancelar</string>
     <string name="feed_delete_confirm">Eliminar</string>
+    <string name="feed_draft_recovered">Borrador sin conexión restaurado</string>
     <string name="feed_empty">Ninguna publicación</string>
     <string name="feed_empty_subtitle">Las publicaciones de tus contactos aparecerán aquí</string>
     <string name="feed_header_nearby">Publicaciones cercanas</string>
@@ -45,13 +46,19 @@
     <string name="feed_notice_like_failed">Error al dar me gusta</string>
     <string name="feed_notice_pin_failed">Error al fijar la publicación</string>
     <string name="feed_notice_publish_failed">Error al publicar la publicación</string>
+    <string name="feed_notice_publish_queued_offline">Publicación pendiente de envío</string>
     <string name="feed_notice_published">Publicación publicada</string>
     <string name="feed_notice_report_failed">Error al denunciar la publicación</string>
     <string name="feed_notice_reported">Publicación denunciada</string>
     <string name="feed_notice_repost_failed">Error al republicar</string>
     <string name="feed_notice_translation_failed">Error de traducción</string>
+    <string name="feed_pending_already_sent">Esta publicación acaba de enviarse. Elimínala cuando esté en línea.</string>
     <string name="feed_pending_cancel_send">Cancelar el envío</string>
+    <string name="feed_pending_chip">Pendiente</string>
+    <string name="feed_pending_retry_failed">No se pudo reintentar esta operación.</string>
+    <string name="feed_pending_retry_started">Reintentando…</string>
     <string name="feed_pending_waiting">En espera de envío</string>
+    <string name="feed_pending_withdraw_failed">Error al eliminar la publicación</string>
     <string name="feed_pending_withdrawn">Envío cancelado</string>
     <string name="feed_post_deleted">Publicación eliminada</string>
     <string name="feed_post_detail_document">Documento</string>
