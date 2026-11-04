@@ -52,7 +52,7 @@ internal object ChatVoiceQueue {
             senderName = senderName,
             senderAvatarUrl = null,
             receivedAtEpochMs = sentAtEpochMs,
-            trackLanguage = audio.audioLanguage,
+            trackLanguage = audio.playedLanguage,
             isTranslatedTrack = audio.isAudioTranslated,
             isProtected = audio.isProtected,
         )
@@ -84,7 +84,7 @@ internal object ChatVoiceQueue {
                 durationMs = audio.declaredDurationMs,
                 isProtected = audio.isProtected,
                 listenedComplete = audio.listenedComplete,
-                trackLanguage = audio.audioLanguage,
+                trackLanguage = audio.playedLanguage,
                 isTranslatedTrack = audio.isAudioTranslated,
             )
         },
@@ -100,7 +100,7 @@ internal object ChatVoiceQueue {
         senderName = senderName.orEmpty(),
         senderAvatarUrl = senderAvatarUrl,
         receivedAtEpochMs = epochMs(createdAtIso),
-        trackLanguage = audio.audioLanguage,
+        trackLanguage = audio.playedLanguage,
         isTranslatedTrack = audio.isAudioTranslated,
         isProtected = isProtected(this, audio),
     )
