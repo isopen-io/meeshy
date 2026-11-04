@@ -40,6 +40,17 @@ internal object ChatVoiceQueue {
         return ChatVoiceStart(current = bubble.queued(tapped, url, conversationId), tail = tail)
     }
 
+    /** La variante (piste et langue) que la bulle sert maintenant pour [audio] : ce que le moteur doit jouer si le drapeau a basculé. */
+    fun variant(audio: BubbleAudio, bubble: BubbleContent, conversationId: String): QueuedAudio? {
+        val url = audio.url?.takeIf { it.isNotBlank() } ?: return null
+        return bubble.queued(audio, url, conversationId)
+    }
+
+    /** La piste en lecture n'est pas celle que la bulle sert : un drapeau a basculé pendant l'écoute. */
+    fun isStale(playing: QueuedAudio, served: QueuedAudio): Boolean =
+        playing.attachmentId == served.attachmentId && playing.fileUrl != served.fileUrl &&
+            (playing.isTranslatedTrack != served.isTranslatedTrack || !playing.trackLanguage.equals(served.trackLanguage, ignoreCase = true))
+
     /** Un vocal du hub média, joué seul : aucune file ne le suit. */
     fun lone(audio: BubbleAudio, messageId: String, senderName: String, sentAtEpochMs: Long, conversationId: String): QueuedAudio? {
         val url = audio.url?.takeIf { it.isNotBlank() } ?: return null

@@ -190,6 +190,13 @@ public data class AudioPlayQueue(
         return copy(current = playing.copy(attachmentId = toAttachmentId, fileUrl = fileUrl, messageId = messageId ?: playing.messageId))
     }
 
+    /**
+     * Le drapeau d'une langue de piste a basculé pendant que le vocal courant jouait : la MÊME pièce, une autre variante
+     * ([QueuedAudio.fileUrl], langue). La suite et l'historique ne bougent pas ; une autre pièce laisse la file telle quelle.
+     */
+    public fun withVariant(variant: QueuedAudio): AudioPlayQueue =
+        if (current?.attachmentId == variant.attachmentId) copy(current = variant) else this
+
     public val hasNext: Boolean get() = upcoming.isNotEmpty()
     public val hasPrevious: Boolean get() = played.isNotEmpty()
 }

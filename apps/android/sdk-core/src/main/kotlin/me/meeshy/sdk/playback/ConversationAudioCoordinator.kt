@@ -146,6 +146,20 @@ public class ConversationAudioCoordinator(
         mutableSnapshot.value = snapshot.copy(queue = queue, context = snapshot.context?.copy(audio = queue.current ?: current))
     }
 
+    /**
+     * Le drapeau d'une langue de piste a basculé : le vocal COURANT se recharge sur sa nouvelle variante ([variant], même
+     * pièce) — sans quoi le texte changerait pendant que la voix resterait dans l'ancienne langue. Le moteur reprend la
+     * position qu'il a gardée pour cette pièce, la file et le contexte prennent la variante. Une autre pièce, ou la même
+     * piste, ne change rien ; une garde d'appel qui refuse laisse tout en l'état.
+     */
+    public fun switchVariant(variant: QueuedAudio) {
+        val snapshot = mutableSnapshot.value
+        val current = snapshot.queue.current?.takeIf { it.attachmentId == variant.attachmentId } ?: return
+        if (current.fileUrl == variant.fileUrl) return
+        if (!start(variant, PlaybackCommandOrigin.Automatic)) return
+        mutableSnapshot.value = snapshot.copy(queue = snapshot.queue.withVariant(variant), context = snapshot.context?.copy(audio = variant))
+    }
+
     /** L'onde de la bulle : se placer à [fraction] (0…1) du vocal en cours. */
     public fun seek(fraction: Double) = engine.seek(fraction)
 

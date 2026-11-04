@@ -149,13 +149,14 @@ internal class ChatAudioViewModel @Inject constructor(
         this.thread = thread
         threads.value = thread
         followAcknowledgedIn(thread.messages)
+        syncPlayingVariant(thread)
     }
 
     override fun tap(audio: BubbleAudio, bubble: BubbleContent) {
         follow(audio, bubble.messageId)
         when (VoiceTap.step(currentAttachmentId(), audio.attachmentId, audio.url, acknowledgedIdOf)) {
             VoiceTap.Step.REFUSE -> Unit
-            VoiceTap.Step.TOGGLE -> coordinator.togglePlayPause()
+            VoiceTap.Step.TOGGLE -> if (!switchStaleVariant(audio, bubble)) coordinator.togglePlayPause()
             VoiceTap.Step.START_QUEUE -> {
                 val bound = thread
                 val start = ChatVoiceQueue.start(
@@ -242,6 +243,27 @@ internal class ChatAudioViewModel @Inject constructor(
         val server = acknowledgedIdOf(loaded) ?: return
         val message = messages.firstOrNull { bubble -> bubble.audios.any { it.attachmentId == server } } ?: return
         follow(message.audios.first { it.attachmentId == server }, message.messageId)
+    }
+
+    /**
+     * iOS `syncActiveTrack` : le drapeau a basculé pendant que le vocal JOUAIT — la voix suit le texte, au même point, sans
+     * quoi le texte changerait pendant que l'ancienne langue continuerait de parler. À l'arrêt rien ne change ici : le
+     * prochain toucher ([switchStaleVariant]) joue la bonne variante.
+     */
+    private fun syncPlayingVariant(bound: ChatVoiceThread) {
+        if (!coordinator.playback.value.isPlaying) return
+        val playing = coordinator.snapshot.value.queue.current ?: return
+        val bubble = bound.messages.firstOrNull { message -> message.audios.any { it.attachmentId == playing.attachmentId } } ?: return
+        switchStaleVariant(bubble.audios.first { it.attachmentId == playing.attachmentId }, bubble)
+    }
+
+    /** Recharge la variante servie par la bulle quand le moteur tient encore l'autre ; `true` si une bascule a eu lieu. */
+    private fun switchStaleVariant(audio: BubbleAudio, bubble: BubbleContent): Boolean {
+        val playing = coordinator.snapshot.value.queue.current ?: return false
+        val served = ChatVoiceQueue.variant(audio, bubble, thread?.conversationId.orEmpty()) ?: return false
+        if (!ChatVoiceQueue.isStale(playing, served)) return false
+        coordinator.switchVariant(served)
+        return true
     }
 
     /** Le vocal que le coordinateur tient ET joue : un vocal terminé (file vidée) se rejoue avec sa file. */
