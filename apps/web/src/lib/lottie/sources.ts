@@ -101,7 +101,7 @@ const BUILTIN: Readonly<Record<string, () => Promise<unknown>>> = {
   'fee863b9e5662e22.json': () => import('@meeshy/shared/design/appearance/lottie/fee863b9e5662e22.json'),
   '551f8cfa30bd4cd8.json': () => import('@meeshy/shared/design/appearance/lottie/551f8cfa30bd4cd8.json'),
   'dbfb4ad087c69666.json': () => import('@meeshy/shared/design/appearance/lottie/dbfb4ad087c69666.json'),
-  '1bf6ae32880af9c6.json': () => import('@meeshy/shared/design/appearance/lottie/1bf6ae32880af9c6.json'),
+  '931df865d8461270.json': () => import('@meeshy/shared/design/appearance/lottie/931df865d8461270.json'),
   '8c4d314a163b814a.json': () => import('@meeshy/shared/design/appearance/lottie/8c4d314a163b814a.json'),
   '6797108991f2e383.json': () => import('@meeshy/shared/design/appearance/lottie/6797108991f2e383.json'),
   'ff9ce683d3827bb3.json': () => import('@meeshy/shared/design/appearance/lottie/ff9ce683d3827bb3.json'),

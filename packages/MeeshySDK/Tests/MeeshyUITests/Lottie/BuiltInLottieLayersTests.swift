@@ -80,4 +80,19 @@ final class BuiltInLottieLayersTests: XCTestCase {
             XCTAssertGreaterThan(film.duration, 0)
         }
     }
+
+    /// #15553 — TOUT film que le catalogue référence (contours animés et illustrés, Noël, collections Meeshy, fonds et
+    /// bannières animés) se lit avec le moteur partagé : un seul film illisible s'effacerait sans bruit sur iOS.
+    func test_everyFilmTheCatalogReferences_isReadByTheSharedEngine() throws {
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: shippedFolder.path), "les fichiers servis ne sont pas lisibles depuis cet hôte de test")
+        let rings = AvatarRingCatalog.shared.packs.flatMap { $0.rings.flatMap { [$0.lottie, $0.decor?.back, $0.decor?.front].compactMap { $0 } } }
+        let designs = (AppearanceCatalog.shared.wallpaperPacks + AppearanceCatalog.shared.bannerPacks).flatMap { $0.designs.compactMap(\.lottie) }
+        let films = Dictionary((rings + designs).map { ($0.sha256, $0) }, uniquingKeysWith: { first, _ in first }).values
+        XCTAssertGreaterThanOrEqual(films.count, 106)
+        for ref in films {
+            let data = try Data(contentsOf: shippedFolder.appendingPathComponent(ref.src))
+            XCTAssertEqual(data.count, ref.bytes, ref.src)
+            XCTAssertNotNil(LottieLayerSource.film(data: data), "\(ref.src) doit se lire")
+        }
+    }
 }

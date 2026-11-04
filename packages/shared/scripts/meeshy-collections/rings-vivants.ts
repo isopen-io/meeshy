@@ -138,7 +138,7 @@ const SCINTILLEMENT: VivantRing = {
       seconds,
       GLINTS.map(([degrees, r, size, phase]) => {
         const center = fp(r, degrees);
-        return stack([glow([0, 0], size * 1.4, '#FBBF24', 0.6), art([sparkle([0, 0], size * 1.5)], [fill('#F59E0B')]), art([sparkle([0, 0], size * 0.7)], [fill('#FFFFFF')])], {
+        return stack([glow([0, 0], size * 1.4, '#FBBF24', 0.6), art([path(sparkle([0, 0], size * 1.5))], [fill('#F59E0B')]), art([path(sparkle([0, 0], size * 0.7))], [fill('#FFFFFF')])], {
           p: still(center),
           s: animated(cycle(pop, phase, frames)),
         });
