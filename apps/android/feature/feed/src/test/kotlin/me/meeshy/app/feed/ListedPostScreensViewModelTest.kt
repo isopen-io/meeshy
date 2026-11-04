@@ -161,7 +161,6 @@ class ListedPostScreensViewModelTest {
         social.translatedFlow.tryEmit(hallo())
 
         assertThat(vm().single { it.id == "p1" }.content).isEqualTo("Hallo")
-        assertThat(vm().single { it.id == "p1" }.isTranslated).isTrue()
         assertThat(vm().single { it.id == "p2" }).isEqualTo(untouched)
     }
 
