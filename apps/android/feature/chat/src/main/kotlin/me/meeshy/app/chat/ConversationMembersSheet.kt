@@ -1,10 +1,17 @@
 package me.meeshy.app.chat
 
-import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import me.meeshy.sdk.model.MemberRowFormat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,53 +22,40 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.chat.R
-import me.meeshy.sdk.model.MemberRole
-import me.meeshy.sdk.model.MemberRoleAction
 import me.meeshy.sdk.model.PaginatedParticipant
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.profile.from
 import me.meeshy.sdk.model.displayLabel
-import me.meeshy.sdk.model.role
-import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.sdk.model.UserPresence
-import me.meeshy.ui.component.rememberConversationHere
-import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -81,13 +75,15 @@ internal fun ConversationMembersSheet(
     conversationId: String,
     accentColor: Color,
     onDismiss: () -> Unit,
+    onLeft: () -> Unit = onDismiss,
     viewModel: ConversationMembersViewModel = hiltViewModel(),
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) {
-        ConversationMembersContent(conversationId, accentColor, viewModel = viewModel)
+        ConversationMembersContent(conversationId, accentColor, onLeft = onLeft, viewModel = viewModel)
     }
 }
 
@@ -97,10 +93,12 @@ internal fun ConversationMembersContent(
     conversationId: String,
     accentColor: Color,
     modifier: Modifier = Modifier,
+    onLeft: () -> Unit = {},
     viewModel: ConversationMembersViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    var confirmLeave by remember { mutableStateOf(false) }
     var pendingRemoval by remember { mutableStateOf<PaginatedParticipant?>(null) }
     var pendingBan by remember { mutableStateOf<PaginatedParticipant?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
@@ -110,14 +108,14 @@ internal fun ConversationMembersContent(
     val profileTap = rememberProfileTap(conversationId, accentColor, state.readerRole)
 
     LaunchedEffect(conversationId) { viewModel.load(conversationId) }
-    LaunchedEffect(state.actionFailed) {
-        if (state.actionFailed) {
-            Toast.makeText(
-                context,
-                context.getString(R.string.conversation_members_action_failed),
-                Toast.LENGTH_SHORT,
-            ).show()
-            viewModel.dismissActionError()
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is MembersEffect.Haptic -> haptics.performHapticFeedback(
+                    if (effect.kind == FeedbackHaptic.SUCCESS) HapticFeedbackType.LongPress else HapticFeedbackType.TextHandleMove,
+                )
+                MembersEffect.Left -> onLeft()
+            }
         }
     }
 
@@ -145,16 +143,24 @@ internal fun ConversationMembersContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = pluralStringResource(R.plurals.conversation_members_title, state.memberCount, state.memberCount),
+                    text = if (state.isCapped) {
+                        pluralStringResource(R.plurals.members_sheet_title_capped, state.memberCount, MemberRowFormat.countText(state.memberCount, capped = true))
+                    } else {
+                        pluralStringResource(R.plurals.conversation_members_title, state.memberCount, state.memberCount)
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     color = MeeshyTheme.tokens.textPrimary,
+                    modifier = Modifier.semantics { heading() },
                 )
                 if (state.mayInvite) {
-                    IconButton(onClick = { showAddSheet = true }) {
+                    TextButton(onClick = { showAddSheet = true }) {
                         Icon(
                             imageVector = Icons.Filled.PersonAdd,
-                            contentDescription = stringResource(R.string.conversation_members_add_a11y),
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
                         )
+                        Spacer(Modifier.width(MeeshySpacing.xs))
+                        Text(stringResource(R.string.conversation_members_add))
                     }
                 }
             }
@@ -175,7 +181,7 @@ internal fun ConversationMembersContent(
             )
 
             when {
-                state.isLoading -> CenteredProgress(accentColor)
+                state.showSkeleton -> ConversationMembersSkeleton()
 
                 state.hasError -> MembersMessage(
                     text = stringResource(R.string.conversation_members_error),
@@ -190,7 +196,7 @@ internal fun ConversationMembersContent(
                 )
 
                 else -> LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
-                    itemsIndexed(state.members, key = { _, member -> member.id }) { index, member ->
+                    itemsIndexed(state.members, key = { _, member -> member.id }, contentType = { _, _ -> "member" }) { index, member ->
                         if (index > 0) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(horizontal = MeeshySpacing.lg),
@@ -202,27 +208,45 @@ internal fun ConversationMembersContent(
                         if (index == state.members.lastIndex) {
                             LaunchedEffect(member.id) { viewModel.loadMore() }
                         }
-                        MemberRow(
-                            member = member,
-                            conversationId = conversationId,
-                            isSelf = state.isSelf(member),
-                            accentColor = accentColor,
-                            roleActions = state.roleActions(member),
-                            canRemove = state.canRemove(member),
-                            canBan = state.canBan(member),
-                            onRoleAction = { action -> viewModel.changeRole(member, action) },
+                        SwipeToRemoveRow(
+                            enabled = state.canRemove(member),
                             onRemove = { pendingRemoval = member },
-                            onBan = { pendingBan = member },
-                            onOpenProfile = {
-                                if (state.isSelf(member)) openProfileFor = member else profileTap(ProfileSheetUser.from(member))
-                            },
-                            onOpenParticipation = { openProfileFor = member },
-                        )
+                        ) {
+                            MemberRow(
+                                member = member,
+                                conversationId = conversationId,
+                                isSelf = state.isSelf(member),
+                                accentColor = accentColor,
+                                roleActions = state.roleActions(member),
+                                canRemove = state.canRemove(member),
+                                canBan = state.canBan(member),
+                                onRoleAction = { action -> viewModel.requestRoleChange(member, action) },
+                                onRemove = { pendingRemoval = member },
+                                onBan = { pendingBan = member },
+                                onOpenProfile = {
+                                    when {
+                                        member.userId == null || state.isSelf(member) -> openProfileFor = member
+                                        else -> profileTap(ProfileSheetUser.from(member))
+                                    }
+                                },
+                                onOpenParticipation = { openProfileFor = member },
+                            )
+                        }
                     }
                     if (state.isLoadingMore) {
                         item { CenteredProgress(accentColor) }
                     }
                 }
+            }
+
+            TextButton(
+                onClick = { confirmLeave = true },
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            ) {
+                Text(
+                    text = stringResource(R.string.members_sheet_leave),
+                    color = MeeshyPalette.Error,
+                )
             }
         }
 
@@ -290,6 +314,65 @@ internal fun ConversationMembersContent(
         )
     }
 
+    state.pendingRoleChange?.let { pending ->
+        AlertDialog(
+            onDismissRequest = viewModel::cancelRoleChange,
+            title = { Text(stringResource(R.string.members_sheet_role_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.members_sheet_role_message,
+                        stringResource(pending.action.target.labelRes),
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmRoleChange) {
+                    Text(stringResource(R.string.members_sheet_role_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelRoleChange) {
+                    Text(stringResource(R.string.conversation_members_remove_cancel))
+                }
+            },
+        )
+    }
+
+    if (confirmLeave) {
+        AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = { Text(stringResource(R.string.members_sheet_leave_title)) },
+            text = { Text(stringResource(R.string.members_sheet_leave_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmLeave = false
+                    viewModel.leaveGroup()
+                }) {
+                    Text(stringResource(R.string.members_sheet_leave_confirm), color = MeeshyPalette.Error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmLeave = false }) {
+                    Text(stringResource(R.string.conversation_members_remove_cancel))
+                }
+            },
+        )
+    }
+
+    if (state.actionFailed) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissActionError,
+            title = { Text(stringResource(R.string.members_sheet_error_title)) },
+            text = { Text(stringResource(R.string.conversation_members_action_failed)) },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissActionError) {
+                    Text(stringResource(R.string.members_sheet_error_ok))
+                }
+            },
+        )
+    }
+
     if (showAddSheet) {
         AddParticipantSheet(
             conversationId = conversationId,
@@ -299,144 +382,6 @@ internal fun ConversationMembersContent(
             onAdded = { viewModel.refresh() },
         )
     }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-internal fun MemberRow(
-    member: PaginatedParticipant,
-    conversationId: String,
-    isSelf: Boolean,
-    accentColor: Color,
-    roleActions: List<MemberRoleAction>,
-    canRemove: Boolean,
-    canBan: Boolean,
-    onRoleAction: (MemberRoleAction) -> Unit,
-    onRemove: () -> Unit,
-    onBan: () -> Unit,
-    onOpenProfile: () -> Unit,
-    onOpenParticipation: () -> Unit = onOpenProfile,
-) {
-    var menuOpen by remember { mutableStateOf(false) }
-    val name = member.displayLabel
-
-    val openProfileLabel = stringResource(R.string.participant_profile_open_a11y, name)
-    val participationLabel = stringResource(R.string.conversation_members_open_participation_a11y, name)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClickLabel = openProfileLabel,
-                onLongClickLabel = participationLabel,
-                onLongClick = onOpenParticipation,
-                onClick = onOpenProfile,
-            )
-            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-    ) {
-        MeeshyAvatar(
-            name = name,
-            size = 40.dp,
-            containerColor = accentColor,
-            imageUrl = member.avatar,
-            presence = rememberPresence(
-                member.userId,
-                UserPresence.served(member.isOnline, member.lastActiveAt),
-            ),
-            // Le compte courant n'a jamais de point : le serveur n'annonce que les autres.
-            here = rememberConversationHere(member.userId.takeUnless { isSelf }, conversationId),
-        )
-
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-            ) {
-                Text(
-                    text = if (isSelf) stringResource(R.string.conversation_members_you, name) else name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MeeshyTheme.tokens.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (member.role != MemberRole.MEMBER) {
-                    RoleBadge(member.role)
-                }
-            }
-            member.username?.takeIf { it.isNotBlank() }?.let { username ->
-                Text(
-                    text = "@$username",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MeeshyTheme.tokens.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        if (roleActions.isNotEmpty() || canRemove || canBan) {
-            Box {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = stringResource(R.string.conversation_members_actions, name),
-                    )
-                }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    roleActions.forEach { action ->
-                        DropdownMenuItem(
-                            text = { Text(stringResource(action.labelRes)) },
-                            onClick = {
-                                menuOpen = false
-                                onRoleAction(action)
-                            },
-                        )
-                    }
-                    if (canRemove) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = stringResource(R.string.conversation_members_remove),
-                                    color = MeeshyPalette.Error,
-                                )
-                            },
-                            onClick = {
-                                menuOpen = false
-                                onRemove()
-                            },
-                        )
-                    }
-                    if (canBan) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = stringResource(R.string.conversation_members_ban),
-                                    color = MeeshyPalette.Error,
-                                )
-                            },
-                            onClick = {
-                                menuOpen = false
-                                onBan()
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RoleBadge(role: MemberRole) {
-    Text(
-        text = stringResource(role.labelRes),
-        style = MaterialTheme.typography.labelSmall,
-        color = MeeshyPalette.White,
-        modifier = Modifier
-            .background(MeeshyPalette.Indigo500, RoundedCornerShape(percent = 50))
-            .padding(horizontal = MeeshySpacing.xs, vertical = 1.dp),
-    )
 }
 
 @Composable
@@ -467,18 +412,34 @@ private fun MembersMessage(text: String, action: String?, onAction: () -> Unit) 
     }
 }
 
-private val MemberRoleAction.labelRes: Int
-    get() = when (this) {
-        MemberRoleAction.PROMOTE_MODERATOR -> R.string.conversation_members_promote_moderator
-        MemberRoleAction.PROMOTE_ADMIN -> R.string.conversation_members_promote_admin
-        MemberRoleAction.DEMOTE_MODERATOR -> R.string.conversation_members_demote_moderator
-        MemberRoleAction.DEMOTE_MEMBER -> R.string.conversation_members_demote_member
+/** Balayage à gauche = Retirer : la ligne revient toujours à sa place, le dialogue de confirmation décide. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToRemoveRow(enabled: Boolean, onRemove: () -> Unit, content: @Composable () -> Unit) {
+    if (!enabled) {
+        content()
+        return
     }
-
-private val MemberRole.labelRes: Int
-    get() = when (this) {
-        MemberRole.CREATOR -> R.string.conversation_members_role_creator
-        MemberRole.ADMIN -> R.string.conversation_members_role_admin
-        MemberRole.MODERATOR -> R.string.conversation_members_role_moderator
-        MemberRole.MEMBER -> R.string.conversation_members_role_member
-    }
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) onRemove()
+            false
+        },
+    )
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                modifier = Modifier.fillMaxSize().background(MeeshyPalette.Error).padding(horizontal = MeeshySpacing.lg),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Text(
+                    text = stringResource(R.string.members_sheet_swipe_remove),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MeeshyPalette.White,
+                )
+            }
+        },
+    ) { content() }
+}
