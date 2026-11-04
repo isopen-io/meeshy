@@ -216,6 +216,9 @@ class MessageRepository internal constructor(
     /** Server ACK of the socket fallback: the optimistic bubble becomes the acknowledged message. */
     suspend fun reconcileAcknowledged(cmid: String, ack: SendMessageAck) = sends.reconcileAcknowledged(cmid, ack)
 
+    /** L'id serveur d'un message envoyé sous [localId] (`cid_`), une fois acquitté ; `null` sinon. */
+    suspend fun serverIdOf(localId: String): String? = sends.serverIdOf(localId)
+
     /** The outbox exhausted its retries — surface the bubble as retryable, with the [reason] it says (#13550). */
     suspend fun markSendFailed(cmid: String, reason: String? = null) = sends.markSendFailed(cmid, reason)
 
