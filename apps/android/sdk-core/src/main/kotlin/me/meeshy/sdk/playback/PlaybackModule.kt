@@ -13,6 +13,7 @@ import me.meeshy.core.common.MainDispatcher
 import me.meeshy.sdk.call.CallActivityGate
 import me.meeshy.sdk.model.media.PlaybackReportSink
 import me.meeshy.sdk.session.PerAccountCache
+import java.util.Optional
 import javax.inject.Singleton
 
 /**
@@ -29,6 +30,7 @@ public object PlaybackModule {
     public fun playbackPositionStore(@ApplicationContext context: Context): SharedPreferencesPlaybackPositionStore =
         SharedPreferencesPlaybackPositionStore(context)
 
+    @OptIn(UnstableApi::class)
     @Provides
     @Singleton
     public fun audioPlaybackEngine(
@@ -38,8 +40,9 @@ public object PlaybackModule {
         callGate: CallActivityGate,
         coordinator: PlaybackCoordinator,
         @MainDispatcher dispatcher: CoroutineDispatcher,
+        sources: Optional<@JvmSuppressWildcards AudioPlaybackSources>,
     ): AudioPlaybackEngine = Media3AudioPlaybackEngine(
-        portFactory = exoPortFactory(context),
+        portFactory = exoPortFactory(context, sources.orElse(null)),
         positions = positions,
         reportSink = reportSink,
         callActive = { callGate.isActive },
@@ -63,6 +66,8 @@ public object PlaybackModule {
     public fun coordinatorOnLogout(coordinator: ConversationAudioCoordinator): PerAccountCache = coordinator
 
     @OptIn(UnstableApi::class)
-    private fun exoPortFactory(context: Context): AudioPlayerPortFactory =
-        AudioPlayerPortFactory { ExoAudioPlayerPort(context) }
+    private fun exoPortFactory(context: Context, sources: AudioPlaybackSources?): AudioPlayerPortFactory =
+        AudioPlayerPortFactory {
+            if (sources == null) ExoAudioPlayerPort(context) else ExoAudioPlayerPort(context, sources)
+        }
 }

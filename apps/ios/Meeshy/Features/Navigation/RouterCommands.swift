@@ -71,10 +71,23 @@ private struct RouterCommandsKey: EnvironmentKey {
     static let defaultValue = RouterCommands.inert
 }
 
+/// Le routeur LUI-MÊME, pour les rares surfaces qui le remettent à un lecteur
+/// monté plus bas (l'aperçu d'un composer). Optionnel, donc jamais un piège :
+/// absent, la surface se passe de ce qu'il porte au lieu de trapper comme un
+/// `@EnvironmentObject` manquant.
+private struct MeeshyRouterKey: EnvironmentKey {
+    static let defaultValue: Router? = nil
+}
+
 extension EnvironmentValues {
     var routerCommands: RouterCommands {
         get { self[RouterCommandsKey.self] }
         set { self[RouterCommandsKey.self] = newValue }
+    }
+
+    var meeshyRouter: Router? {
+        get { self[MeeshyRouterKey.self] }
+        set { self[MeeshyRouterKey.self] = newValue }
     }
 }
 
@@ -85,5 +98,6 @@ struct MeeshyRouterInjection: ViewModifier {
         content
             .environmentObject(router)
             .environment(\.routerCommands, router.commands)
+            .environment(\.meeshyRouter, router)
     }
 }

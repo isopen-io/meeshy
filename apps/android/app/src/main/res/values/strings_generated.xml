@@ -57,6 +57,7 @@
     <string name="menu_my_links">My links</string>
     <string name="menu_notifications">Notifications</string>
     <string name="menu_settings">Settings</string>
+    <string name="mini_player_next">Next</string>
     <string name="notifications_empty">No notifications</string>
     <string name="notifications_title">Notifications</string>
     <string name="profile_back">Back</string>

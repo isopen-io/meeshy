@@ -35,9 +35,9 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 
 /**
- * R5 de #13863 : un choix de média se lit sur la scène pendant qu'il se prépare et s'envoie, s'annule d'un ✕ qui libère
- * tout dans la même image, et un échec retire l'espace réservé en offrant « Réessayer » — les octets choisis sont gardés
- * pour ce nouvel essai, et rendus dès qu'il n'a plus lieu. Hors ligne, rien ne bloque : le média attend sa file.
+ * R5 de #13863 et #15598 : un choix de média se lit sur la scène pendant qu'il se prépare, s'annule d'un ✕ qui libère
+ * tout dans la même image ; posé, il s'envoie en arrière-plan, et un échec le laisse attendre sa file en offrant
+ * « Réessayer » — ses octets sont gardés pour ce nouvel essai. Hors ligne, rien ne bloque : le média attend sa file.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class StoryComposerMediaPickViewModelTest {
@@ -75,29 +75,29 @@ class StoryComposerMediaPickViewModelTest {
     private fun uploaded(id: String) = UploadedMedia(id, "https://cdn/$id", "image/jpeg", 1, 1, 1, null, null)
 
     @Test
-    fun `while the pick is under way its placeholder stands on the scene and a second pick is refused`() = runTest {
+    fun `while the chosen files are prepared their placeholder stands on the scene and a second pick is refused`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any(), any()) } coAnswers { CompletableDeferred<Unit>().await(); NetworkResult.Success(emptyList()) }
 
-        vm.onMediaPicked(listOf(onDisk("a.jpg").first))
+        vm.onMediaChosen(count = 1) { CompletableDeferred<List<MediaUploadItem>>().await() }
         vm.onMediaPicked(listOf(onDisk("b.jpg").first))
 
         assertThat(vm.state.value.incomingPlaceholder()).isNotNull()
-        assertThat(vm.state.value.incomingMedia.map { it.fileName }).containsExactly("a.jpg")
+        assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.canPublish).isFalse()
     }
 
     @Test
-    fun `the cross cancels the pick and frees everything in the same frame, the chosen bytes released`() = runTest {
+    fun `the cross cancels the preparation and frees everything in the same frame, the chosen bytes released`() = runTest {
         val vm = viewModel()
-        coEvery { media.upload(any(), any()) } coAnswers { CompletableDeferred<Unit>().await(); NetworkResult.Success(emptyList()) }
-        val (item, file) = onDisk("a.jpg")
-        vm.onMediaPicked(listOf(item))
+        val copied = CompletableDeferred<List<MediaUploadItem>>()
+        vm.onMediaChosen(count = 1) { copied.await() }
 
         vm.onCancelMediaPick()
+        val (item, file) = onDisk("a.jpg")
+        copied.complete(listOf(item))
 
         val state = vm.state.value
-        assertThat(state.isUploadingMedia).isFalse()
+        assertThat(state.isPreparingMedia).isFalse()
         assertThat(state.incomingPlaceholder()).isNull()
         assertThat(state.deck.selectedSlide.mediaIds).isEmpty()
         assertThat(state.errorMessage).isNull()
@@ -106,7 +106,7 @@ class StoryComposerMediaPickViewModelTest {
     }
 
     @Test
-    fun `a failure removes the placeholder, says so, and keeps the bytes for a retry that lands the media`() = runTest {
+    fun `a failure leaves the media waiting on the scene, says so, and keeps the bytes for a retry that lands the media`() = runTest {
         val vm = viewModel()
         var attempts = 0
         coEvery { media.upload(any(), any()) } coAnswers {
@@ -130,7 +130,7 @@ class StoryComposerMediaPickViewModelTest {
     }
 
     @Test
-    fun `a new pick after a failure gives up the retry and releases its bytes`() = runTest {
+    fun `a new pick after a failure keeps the failed media waiting on the scene`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } throws IllegalStateException("boom")
         val (first, file) = onDisk("a.jpg")
@@ -139,9 +139,9 @@ class StoryComposerMediaPickViewModelTest {
         coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
         vm.onMediaPicked(listOf(onDisk("b.jpg").first))
 
-        assertThat(file.exists()).isFalse()
-        assertThat(vm.state.value.canRetryMedia).isFalse()
-        assertThat(vm.state.value.selectedSlideBackdropMediaId).isEqualTo("m2")
+        assertThat(file.exists()).isTrue()
+        assertThat(vm.state.value.pendingUploads.map { it.item }).containsExactly(first)
+        assertThat(vm.state.value.attachments.map { it.id }).containsExactly("m2")
     }
 
     @Test
@@ -158,14 +158,14 @@ class StoryComposerMediaPickViewModelTest {
     fun `offline the media waits on the scene and nothing is blocked`() = runTest {
         val vm = viewModel(network = InMemoryNetworkMonitor(initialOnline = false))
         coEvery { media.upload(any(), any()) } returns NetworkResult.Failure(ApiError(message = "offline"))
-        coEvery { queue.enqueue(any(), any(), any()) } returns "cmid_1"
 
         vm.onMediaPicked(listOf(onDisk("a.jpg").first))
 
         val state = vm.state.value
-        assertThat(state.isUploadingMedia).isFalse()
+        assertThat(state.isPreparingMedia).isFalse()
         assertThat(state.incomingPlaceholder()).isNull()
-        assertThat(state.selectedSlidePending.map { it.cmid }).containsExactly("cmid_1")
+        assertThat(state.selectedSlidePending).hasSize(1)
+        assertThat(state.pendingPhase(state.selectedSlidePending.single().cmid)).isEqualTo(PendingUploadPhase.OFFLINE)
         assertThat(state.canRetryMedia).isFalse()
     }
 }

@@ -585,64 +585,26 @@ nonisolated extension ComposerProfile {
             case .post: offerts = plusReel([.post])
             }
             // Le routage de cette porte est fonction du FORMAT PORTÉ — la même
-            // doctrine que `.repost`. `.storyEdit` désigne
-            // `storyEditComposerCover` : l'atelier d'une STORY, monté sur une
-            // `StoryEditSession` qu'un post n'a pas. Faire passer un post pour une
-            // story serait un mensonge, et éditer un POST ou un RÉEL a sa feuille,
-            // qui compte CINQ montages de production.
+            // doctrine que `.repost`.
             //
-            // Les deux branches nomment des surfaces qui EXISTENT, et c'est la
-            // condition à laquelle une table a le droit de router :
-            //
-            // - `.story` monte le meuble (voir plus bas) ;
-            // - `.post` et `.reel` montent `EditPostSheet` — cinq montages
-            //   (`PostDetailView`, `ProfileUserPostsList`, `ReelsPlayerView`,
-            //   `RootViewComponents`, `FeedView`), et c'est la seule surface du
-            //   dépôt qui sache basculer POST vers RÉEL.
-            //
-            // `.status` REJOINT la seconde branche, et il faut dire pourquoi
-            // plutôt que de le laisser tomber par défaut : aucun site du dépôt
-            // n'offre d'éditer un mood — zéro état d'édition de statut, zéro
-            // montage. La branche nomme la seule feuille du dépôt qui édite une
-            // ligne de post qui n'est pas une story ; c'est un ROUTAGE, jamais la
-            // promesse qu'une affordance existe. Le faire retomber sur
-            // `.storyEdit` reconduirait le mensonge ci-dessus, et sur `nil`
-            // dirait que le meuble sert l'édition d'un mood — ce qu'aucune de ses
-            // trois surfaces ne fait.
-            //
-            // CE QUE CETTE LIGNE NE CHANGE PAS : aucun site de production ne
-            // construit `ComposerIntent(origin: .edit(...))`. Les deux feuilles
-            // sont présentées directement par leurs hôtes, hors du routeur. Le
-            // routage est STRUCTUREL et se juge en fonction pure ; il ne recâble
-            // aucun écran.
-            //
-            // Le RETRAIT d'`EditPostSheet.swift` n'a PAS lieu ici. Ses sept
-            // capacités sont inventoriées, mesurées et gardées par
-            // `EditParityInventoryTests` — deux tenues, cinq manquantes.
+            // - `.story` monte le meuble sur la SCÈNE, hydraté par
+            //   `ComposerHydration.editingStory` (`StoryEditComposer`) ;
+            // - `.post` et `.reel` montent le meuble sur le DOCUMENT, hydraté par
+            //   `ComposerHydration.editingPublication` (`PostEditComposerDoor`,
+            //   #9333) : la même vue que celle qui les crée, clavier sur le texte.
+            //   `PostEditRoute` ne les y envoie que si la scène montre toute la
+            //   publication ; sinon `EditPostSheet` reste la porte ;
+            // - `.status` reste sur `EditPostSheet` : aucun site du dépôt n'offre
+            //   d'éditer un mood, et la table ne promet pas une affordance qui
+            //   n'existe pas.
             return ComposerProfile(
                 initialFormat: documentFormat,
                 offeredFormats: offerts,
                 showsSlides: true,
                 showsTimeline: true,
-                opensWith: .resume,
+                opensWith: [.post, .reel].contains(documentFormat) ? .keyboardOnContent : .resume,
                 allowsCapture: false,
-                // `.story` va au MEUBLE : `storyEditComposerCover` monte
-                // `MeeshyComposerHost` (`StoryEditComposer`), hydraté par
-                // `ComposerHydration.editingStory`. La table n'a donc pas de legacy à
-                // nommer pour ce format : la porte du dépôt qui édite une story EST le
-                // meuble.
-                //
-                // Le nom `LegacyComposer.storyEdit` reste DÉCLARÉ, comme
-                // `.statusComposer` : un cas d'énumération qui perd son dernier
-                // routeur ne se supprime pas dans le même lot que le recâblage —
-                // `EditParityInventoryTests` compte encore par ce vocabulaire, et
-                // retirer le mot ferait rougir un inventaire pour une raison sans
-                // rapport avec ce qu'il mesure.
-                //
-                // `.post` / `.reel` / `.status` restent sur `EditPostSheet` : c'est la
-                // seule surface du dépôt qui sache basculer POST vers RÉEL, et le
-                // meuble ne la remplace pas ici.
-                routesToLegacy: documentFormat == .story ? nil : .editPostSheet
+                routesToLegacy: documentFormat == .status ? .editPostSheet : nil
             )
 
         // Le partage pose déjà son média (`ShareComposeDoor` → `mediaSeed`) : il s'ouvre comme une porte SEMÉE, sur la scène (#13864, R1).

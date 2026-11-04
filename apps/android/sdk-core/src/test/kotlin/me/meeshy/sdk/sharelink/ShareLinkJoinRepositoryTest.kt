@@ -15,6 +15,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddParticipantRequest
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
+import me.meeshy.sdk.net.api.MarkReadBody
 import me.meeshy.sdk.net.api.ParticipantRoleUpdate
 import java.io.IOException
 import org.junit.Test
@@ -53,6 +54,7 @@ private abstract class StubJoinApi : ConversationApi {
     override suspend fun analysis(id: String) = ApiResponse<ConversationAnalysis>(success = false)
     override suspend fun create(body: CreateConversationRequest) = ApiResponse<ApiConversation>(success = false)
     override suspend fun markRead(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun markReadDeclaring(id: String, body: MarkReadBody) = ApiResponse<Unit>(success = false)
     override suspend fun markReceived(id: String) =
         ApiResponse<me.meeshy.sdk.model.MarkedCountResult>(success = false)
     override suspend fun markUnread(id: String) = ApiResponse<Unit>(success = false)

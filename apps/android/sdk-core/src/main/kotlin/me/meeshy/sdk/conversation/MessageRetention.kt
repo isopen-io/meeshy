@@ -11,6 +11,7 @@ import me.meeshy.core.database.dao.EphemeralReceiptDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.MessageKeys
 import me.meeshy.core.database.dao.PendingIdDao
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.outbox.OutboxRepository
 
 /**
@@ -52,6 +53,7 @@ public class MessageRetentionPurger @Inject internal constructor(
     private val editRevisionDao: EditRevisionDao,
     private val ephemeralReceiptDao: EphemeralReceiptDao,
     private val outbox: OutboxRepository,
+    private val mediaIndex: ConversationMediaHubIndex? = null,
 ) {
 
     public suspend fun run(nowMillis: Long = System.currentTimeMillis()): RetentionReport {
@@ -66,6 +68,7 @@ public class MessageRetentionPurger @Inject internal constructor(
     /** Accès révoqué ou conversation supprimée : tout le fil part, sans orphelin. Rend le nombre de messages retirés. */
     public suspend fun purgeConversation(conversationId: String): Int {
         if (conversationId.isBlank()) return 0
+        mediaIndex?.invalidateConversation(conversationId)
         return database.withTransaction {
             val keys = messageDao.retentionKeysForConversation(conversationId)
             deleteWithChildren(keys)
