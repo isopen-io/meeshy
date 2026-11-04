@@ -95,7 +95,7 @@ final class StoryComposerViewModelEditTests: XCTestCase {
         XCTAssertEqual(vm.editingOriginalBackgroundMediaId, "bg-1")
     }
 
-    func test_publicationEditHydration_shownMediaIds_coversObjectsAndFreeBackground() {
+    func test_publicationEditHydration_shownMediaIds_coversObjectsAndEveryFreeVisual() {
         let media = [
             FeedMedia(id: "bg-1", type: .image, url: "/bg.jpg"),
             FeedMedia(id: "fg-1", type: .image, url: "/fg.jpg"),
@@ -104,14 +104,15 @@ final class StoryComposerViewModelEditTests: XCTestCase {
         var effects = StoryEffects()
         effects.mediaObjects = [StoryMediaObject(id: "obj-1", postMediaId: "fg-1", kind: .image, aspectRatio: 1)]
 
-        XCTAssertEqual(PublicationEditHydration.shownMediaIds(media: media, effects: effects), ["bg-1", "fg-1"])
+        XCTAssertEqual(PublicationEditHydration.shownMediaIds(media: media, effects: effects),
+                       ["bg-1", "fg-1", "orphelin"], "Une image libre de plus devient sa propre slide (#15631)")
     }
 
-    func test_publicationEditHydration_background_isNeverAnAudio() {
+    func test_publicationEditHydration_background_isNeverAnAudio_theAudioBecomesAPlayer() {
         let media = [FeedMedia(id: "son", type: .audio, url: "/son.m4a")]
 
         XCTAssertNil(PublicationEditHydration.background(media: media, effects: nil))
-        XCTAssertTrue(PublicationEditHydration.shownMediaIds(media: media, effects: nil).isEmpty)
+        XCTAssertEqual(PublicationEditHydration.shownMediaIds(media: media, effects: nil), ["son"])
     }
 
     func test_init_editing_seedsVisibilityContext() {

@@ -787,7 +787,7 @@ struct MeeshyComposerHost: View {
         // republier en post »). La borne — un format hors éventail est ignoré — vit chez l'intention :
         // la refaire ici en ferait une seconde écriture, celle du meuble qu'on oublierait de tenir à jour.
         let ouverture = intent.openingFormat(
-            compositionQualifiesAsReel: ComposerReelGate.compositionQualifiesAsReel(composer.currentEffects)
+            compositionQualifiesAsReel: hydration?.publicationReelGate(slides: composer.slides) ?? ComposerReelGate.compositionQualifiesAsReel(composer.currentEffects)
         )
         _formatState = State(initialValue: .opening(ouverture))
         _doorFormat = State(initialValue: ouverture)
