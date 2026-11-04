@@ -34,6 +34,7 @@ public object OutboxRowFacts {
         OutboxKind.UPDATE_PRIVACY_SETTINGS,
         OutboxKind.UPDATE_AUDIO_SETTINGS,
         OutboxKind.UPDATE_APPLICATION_SETTINGS,
+        OutboxKind.UPDATE_PREFERENCE_CATEGORY,
         -> other("updateSettings")
         OutboxKind.UPLOAD_MEDIA -> other("uploadMedia")
         OutboxKind.BLOCK_USER -> other("blockUser")

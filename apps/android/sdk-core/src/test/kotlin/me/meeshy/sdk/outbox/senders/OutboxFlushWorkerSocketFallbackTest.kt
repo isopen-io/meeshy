@@ -53,7 +53,7 @@ class OutboxFlushWorkerSocketFallbackTest {
 
         val result = handler(socket).send(row())
 
-        assertThat(result).isEqualTo(SendResult.Success)
+        assertThat(result).isInstanceOf(SendResult.SuccessWithId::class.java)
         assertThat(socket.sent).containsExactly("c1" to request)
         coVerify(exactly = 1) { messageRepository.reconcileAcknowledged("cmid-1", ack) }
     }
@@ -63,7 +63,7 @@ class OutboxFlushWorkerSocketFallbackTest {
         coEvery { messageApi.send(any(), any()) } throws IOException("down")
         val socket = RecordingSocket(MessageSocketOutcome.Acked(ack))
 
-        assertThat(handler(socket).send(row())).isEqualTo(SendResult.Success)
+        assertThat(handler(socket).send(row())).isInstanceOf(SendResult.SuccessWithId::class.java)
         assertThat(socket.sent).hasSize(1)
     }
 
@@ -130,7 +130,7 @@ class OutboxFlushWorkerSocketFallbackTest {
         coEvery { messageApi.send(any(), any()) } returns accepted(ApiMessage(id = "srv-1", conversationId = "c1"))
         val socket = RecordingSocket(MessageSocketOutcome.Acked(ack))
 
-        assertThat(handler(socket).send(row())).isEqualTo(SendResult.Success)
+        assertThat(handler(socket).send(row())).isInstanceOf(SendResult.SuccessWithId::class.java)
         assertThat(socket.sent).isEmpty()
     }
 }

@@ -26,19 +26,21 @@ class ConversationAudioCoordinatorTest {
         override val state: StateFlow<AudioPlaybackState> = mutable
         override val events: SharedFlow<AudioEngineEvent> = mutableEvents
         val played = mutableListOf<String>()
+        val protections = mutableListOf<Boolean>()
         val seeks = mutableListOf<Long>()
         var stops = 0
         var allow = true
 
-        override fun play(attachmentId: String, url: String, origin: PlaybackCommandOrigin): Boolean {
+        override fun play(attachmentId: String, url: String, origin: PlaybackCommandOrigin, isProtected: Boolean): Boolean {
             if (!allow) return false
             played += attachmentId
+            protections += isProtected
             mutable.value = AudioPlaybackState(attachmentId = attachmentId, isPlaying = true, speed = mutable.value.speed)
             return true
         }
 
         override fun playLocal(attachmentId: String, fileUri: String, origin: PlaybackCommandOrigin) =
-            play(attachmentId, fileUri, origin)
+            play(attachmentId, fileUri, origin, false)
 
         override fun togglePlayPause(origin: PlaybackCommandOrigin) = Unit
         override fun pause() = Unit
@@ -46,7 +48,8 @@ class ConversationAudioCoordinatorTest {
         override fun stop() { stops += 1; mutable.value = AudioPlaybackState(speed = mutable.value.speed) }
         override fun seek(fraction: Double) = Unit
         override fun seekToMs(positionMs: Long) { seeks += positionMs }
-        override fun skip(seconds: Double) = Unit
+        val skips = mutableListOf<Double>()
+        override fun skip(seconds: Double) { skips += seconds }
         override fun setSpeed(speed: PlaybackSpeed) { mutable.value = mutable.value.copy(speed = speed) }
         override fun cycleSpeed() = setSpeed(mutable.value.speed.next())
         override fun setLoop(loop: Boolean) = Unit
@@ -56,7 +59,7 @@ class ConversationAudioCoordinatorTest {
 
     private fun item(id: String, message: String = "m$id") = QueuedAudio(
         attachmentId = id, messageId = message, conversationId = "c", fileUrl = "u/$id", durationMs = 5_000L,
-        senderName = "N", senderAvatarUrl = null, receivedAtEpochMs = 0L,
+        senderName = "N", senderAvatarUrl = null, receivedAtEpochMs = 0L, isProtected = false,
     )
 
     private fun coordinator(scope: TestScope, engine: FakeEngine) =
@@ -258,5 +261,44 @@ class ConversationAudioCoordinatorTest {
         coordinator.play(item("z"), emptyList(), "Autre", null)
 
         assertThat(coordinator.graceContext.value).isNull()
+    }
+
+    @Test fun `la protection d'un vocal voyage jusqu'au moteur, au demarrage comme a l'enchainement`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = coordinator(this, engine)
+        runCurrent()
+
+        coordinator.play(item("a").copy(isProtected = true), listOf(item("b"), item("c").copy(isProtected = true)), "Famille", null)
+        coordinator.next()
+        coordinator.next()
+
+        assertThat(engine.played).containsExactly("a", "b", "c").inOrder()
+        assertThat(engine.protections).containsExactly(true, false, true).inOrder()
+    }
+
+    @Test fun `precedent a exactement trois secondes recule, juste au-dela il recommence`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine, "b")
+        coordinator.next()
+
+        engine.mutable.value = engine.mutable.value.copy(currentTimeMs = 3_000L)
+        coordinator.previous()
+        assertThat(engine.played.last()).isEqualTo("a")
+
+        coordinator.next()
+        engine.mutable.value = engine.mutable.value.copy(currentTimeMs = 3_001L)
+        coordinator.previous()
+        assertThat(engine.seeks).containsExactly(0L)
+    }
+
+    @Test fun `la barre et les quinze secondes de la carte systeme passent par le coordinateur`() = runTest {
+        val engine = FakeEngine()
+        val coordinator = started(engine)
+
+        coordinator.seekToMs(9_000L)
+        coordinator.skip(-15.0)
+
+        assertThat(engine.seeks).containsExactly(9_000L)
+        assertThat(engine.skips).containsExactly(-15.0)
     }
 }
