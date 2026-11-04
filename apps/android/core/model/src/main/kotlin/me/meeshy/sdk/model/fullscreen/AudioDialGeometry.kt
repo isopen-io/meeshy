@@ -25,6 +25,16 @@ public object AudioDialGeometry {
 
     public const val BAR_COUNT: Int = 72
 
+    /** Rayon du curseur au repos, et pendant que le doigt le tient. */
+    public const val CURSOR_RADIUS: Float = 8f
+    public const val CURSOR_SCRUB_RADIUS: Float = 11f
+
+    /** Halo d'accent autour du curseur. */
+    public const val CURSOR_HALO: Float = 3f
+
+    /** Largeur d'une barre. */
+    public const val BAR_WIDTH: Float = 3f
+
     /** Pas d'un ajustement TalkBack. */
     public const val ADJUST_STEP: Double = 0.05
 
