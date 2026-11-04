@@ -60,8 +60,31 @@ internal class CachedMessageUpdater(
                 // a duplicate translation) skips the redundant Room write + re-encode.
                 if (updated !== current) {
                     messageDao.upsertAll(listOf(MessageEntityFactory.refreshed(row, updated).bumped()))
+                    if (DedicatedTranslationRows.outlived(current, updated)) {
+                        DedicatedTranslationRows.drop(database, DedicatedTranslationRows.keysOf(row, current, updated))
+                    }
                 }
                 updated
+            }
+        }
+    }
+
+    /**
+     * Une écriture qui n'enrichit PAS la charge du message mais ses lignes dédiées (traductions, transcriptions) :
+     * [apply] reçoit l'identifiant canonique du message (le serveur dès qu'il est connu) et le message décodé, et rend
+     * `true` quand elle a écrit. La ligne du message n'est alors pas réécrite, seul son `changeVersion` monte : les
+     * observateurs la relisent et la projection superpose les lignes. Sans ligne du message, rien n'est écrit.
+     */
+    suspend fun enrich(
+        ticket: AccountTicket?,
+        messageId: String,
+        apply: suspend (canonicalId: String, message: ApiMessage) -> Boolean,
+    ) {
+        fence.commitOrWrite(ticket) {
+            database.withTransaction {
+                val row = MessageIdReconciliation.locate(database, messageId) ?: return@withTransaction
+                val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
+                if (apply(row.serverId ?: message.id, message)) messageDao.bumpChangeVersion(row.id)
             }
         }
     }
@@ -78,13 +101,18 @@ internal class CachedMessageUpdater(
         transform: (ApiMessage) -> ApiMessage,
     ): Set<String> = fence.commitOrWrite(ticket) {
         database.withTransaction {
+            val outlived = mutableListOf<String>()
             val written = select().mapNotNull { row ->
                 val current = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
                     ?: return@mapNotNull null
                 val updated = transform(current)
+                if (updated !== current && DedicatedTranslationRows.outlived(current, updated)) {
+                    outlived += DedicatedTranslationRows.keysOf(row, current, updated)
+                }
                 if (updated === current) null else MessageEntityFactory.refreshed(row, updated).bumped()
             }
             if (written.isNotEmpty()) messageDao.upsertAll(written)
+            DedicatedTranslationRows.drop(database, outlived)
             written.map { it.conversationId }.toSet()
         }
     } ?: emptySet()
@@ -123,10 +151,21 @@ internal class CachedMessageUpdater(
         if (messageIds.isEmpty()) return
         fence.commitOrWrite(ticket) {
             database.withTransaction {
-                val rowIds = messageIds.mapNotNull { MessageIdReconciliation.locate(database, it)?.id }.distinct()
-                if (rowIds.isNotEmpty()) messageDao.deleteByIds(rowIds)
-                messageIds.forEach { database.editRevisionDao().deleteForMessage(it) }
+                purgeInTransaction(database, messageIds)
             }
+        }
+    }
+
+    companion object {
+        /**
+         * Retire les lignes nommées (par l'une ou l'autre de leurs deux clés), leurs révisions et leurs traductions,
+         * transcriptions et pistes audio retenues. À appeler DANS une transaction.
+         */
+        suspend fun purgeInTransaction(database: MeeshyDatabase, messageIds: Collection<String>) {
+            val rows = messageIds.mapNotNull { MessageIdReconciliation.locate(database, it) }.distinctBy { it.id }
+            if (rows.isNotEmpty()) database.messageDao().deleteByIds(rows.map { it.id })
+            messageIds.forEach { database.editRevisionDao().deleteForMessage(it) }
+            DedicatedTranslationRows.drop(database, messageIds + rows.flatMap { DedicatedTranslationRows.keysOf(it) })
         }
     }
 }

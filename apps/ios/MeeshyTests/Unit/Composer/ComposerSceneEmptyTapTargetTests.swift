@@ -51,10 +51,11 @@ final class ComposerSceneEmptyTapTargetTests: XCTestCase {
         let viseur = try Self.compactSource("MeeshyComposerHost+Viewfinder.swift")
         XCTAssertEqual(viseur.components(separatedBy: "writesText:writesText").count - 1, 2,
                        "le toucher et son indication lisent l'écriture en cours")
-        XCTAssertTrue(viseur.contains("guard!writesText,ComposerSceneCaptureGesture.offersCapture("),
+        XCTAssertTrue(viseur.contains("guard!writesText,sceneServesCapture,ComposerSceneCaptureGesture.offersCapture("),
                       "l'appui long n'ouvre pas la caméra pendant l'écriture")
         let etat = try Self.compactSource("MeeshyComposerHost+SceneState.swift")
-        XCTAssertTrue(etat.contains("writesText:writesText"), "l'indication grise se tait pendant l'écriture")
+        XCTAssertTrue(etat.contains("guardautosave.didBind,sceneQuickCaptureIsOffered"),
+                      "l'indication grise lit l'offre du toucher, donc se tait pendant l'écriture")
         let hote = try Self.compactSource("MeeshyComposerHost.swift")
         XCTAssertTrue(hote.contains("writesText:writesText)"), "le toucher du fond sait qu'on écrit")
         XCTAssertTrue(hote.contains("ifissue==.endWriting{returnendSceneWriting()}"),

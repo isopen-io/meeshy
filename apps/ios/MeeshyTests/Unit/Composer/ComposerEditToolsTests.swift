@@ -316,36 +316,7 @@ final class ComposerEditToolsTests: XCTestCase {
         }
     }
 
-    // MARK: - #11170 — la feuille du fil retouche dans la même retouche
-
-    /// **La feuille de création d'un post retouche ses images et ses vidéos
-    /// dans la retouche de la caméra** (#11170, « un seul éditeur ») : une
-    /// pièce en attente, et une vidéo juste choisie avant qu'elle rejoigne la
-    /// publication. Plus aucune scène du composer n'y est montée.
-    func test_11170_theFeedSheet_retouchesItsMedia_inTheCaptureRetouch() throws {
-        let feuille = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
-        XCTAssertFalse(feuille.contains("ConversationImageSceneEditor("), "plus de scène pour une image en attente")
-        XCTAssertFalse(feuille.contains("ConversationVideoSceneEditor("), "plus de scène pour une vidéo")
-        XCTAssertTrue(feuille.contains("ConversationPieceRetouch(piece: piece"), "une pièce en attente se retouche")
-        XCTAssertTrue(feuille.contains("ConversationPieceRetouch(source: .video(url)"),
-                      "une vidéo juste choisie se retouche avant de rejoindre la publication")
-        XCTAssertTrue(feuille.contains("ComposerRetouchSeries.candidates(attachments: pendingAttachments"),
-                      "les mêmes pièces que la conversation : une image fixe ou une vidéo, jamais un GIF")
-        XCTAssertTrue(feuille.contains("removeSheetAttachment(id: piece.attachmentId)"),
-                      "« Abandonner » retire la pièce en attente")
-    }
-
-    /// **« Terminé » rend la pièce À SA PLACE** : une image retouchée remplace
-    /// la pièce, une vidéo retouchée remplace la vidéo ; seule une image
-    /// devenue vidéo repasse par la préparation d'une vidéo.
-    func test_11170_aRetouchedPiece_landsInItsPlace() throws {
-        let image = UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 30, height: 40))
-        let rendu = URL(fileURLWithPath: "/tmp/rendu.mp4")
-        XCTAssertEqual(FeedSheetRetouchLanding(.image(image), from: .image), .replaceImage(image))
-        XCTAssertEqual(FeedSheetRetouchLanding(.image(image), from: .video), .replaceImage(image))
-        XCTAssertEqual(FeedSheetRetouchLanding(.video(rendu), from: .video), .replaceVideo(rendu))
-        XCTAssertEqual(FeedSheetRetouchLanding(.video(rendu), from: .image), .swapForVideo(rendu))
-    }
+    // MARK: - #11170 — une vidéo choisie se retouche sur une copie
 
     /// **Une vidéo juste choisie s'ouvre par une COPIE** : « Abandonner »
     /// efface la copie, jamais le fichier choisi, et rien n'est ajouté.

@@ -5,12 +5,16 @@
       "resDir": "feature/stories/src/main/res",
       "entries": [
         {
+          "catalog": "app",
+          "iosKey": "composer.rail.plus",
           "androidName": "composer_rail_more",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.rail.selection",
           "androidName": "composer_rail_selection",
-          "status": "android-only"
+          "status": "adopted"
         }
       ]
     }

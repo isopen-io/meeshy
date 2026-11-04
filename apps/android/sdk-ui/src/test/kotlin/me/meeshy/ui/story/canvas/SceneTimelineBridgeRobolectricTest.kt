@@ -1,18 +1,32 @@
 package me.meeshy.ui.story.canvas
 
+import android.os.Looper
 import androidx.compose.ui.Modifier
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.scene.PreviewVideoCommand
 import me.meeshy.sdk.model.scene.SceneRenderMode
 import me.meeshy.sdk.model.scene.SceneRootPose
+import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class SceneTimelineBridgeRobolectricTest {
+
+    /**
+     * Le pont de la frise écrit un état Compose hors composition, et `GlobalSnapshotManager` en poste l'application
+     * sur la boucle principale. Elle est vidée ici, avant que Robolectric n'efface le message au démontage : sinon
+     * `AndroidUiDispatcher.Main` reste programmé pour toute la JVM, et chaque témoin Compose suivant tombe en
+     * AppNotIdleException (#15815).
+     */
+    @After
+    fun settleMainLooper() {
+        shadowOf(Looper.getMainLooper()).idle()
+    }
 
     private fun scrubbed(seconds: Double = 2.0) = SceneTimelineBridge().also { it.scrub(seconds) }
 

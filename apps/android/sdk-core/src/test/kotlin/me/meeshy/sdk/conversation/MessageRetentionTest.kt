@@ -7,7 +7,10 @@ import java.time.Instant
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.entity.EditRevisionEntity
+import me.meeshy.core.database.entity.MessageAudioTranslationEntity
 import me.meeshy.core.database.entity.MessageEntity
+import me.meeshy.core.database.entity.MessageTranscriptionEntity
+import me.meeshy.core.database.entity.MessageTranslationEntity
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.core.database.entity.PendingIdEntity
 import me.meeshy.sdk.outbox.OutboxRepository
@@ -82,6 +85,61 @@ class MessageRetentionTest {
         assertThat(db.messageDao().listForConversation("c1")).isEmpty()
         assertThat(db.pendingIdDao().byLocalId("cid_a")).isNull()
         assertThat(db.messageDao().find("b")).isNotNull()
+    }
+
+    private suspend fun retainFor(id: String) {
+        val dao = db.messageTranslationDao()
+        dao.upsertText(MessageTranslationEntity(id, "fr", "texte traduit", "en", null, null, 1L))
+        dao.upsertTranscription(MessageTranscriptionEntity(id, "a1", "texte transcrit", "en", null, null, 1L))
+        dao.upsertAudio(MessageAudioTranslationEntity(id, "a1", "fr", "https://cdn/fr.m4a", "voix", null, null, false, null, null, null, 1L))
+    }
+
+    private suspend fun retainedFor(vararg ids: String): Int {
+        val dao = db.messageTranslationDao()
+        val all = ids.toList()
+        return dao.textsFor(all).size + dao.transcriptionsFor(all).size + dao.audioFor(all).size
+    }
+
+    @Test
+    fun `un ephemere echu part avec ses traductions, sa transcription et sa piste audio retenues`() = runTest {
+        db.messageDao().upsertAll(
+            listOf(
+                row("local1", createdAt = NOW - 5_000, serverId = "srv1").copy(expiresAt = NOW - 1_000),
+                row("vivant", createdAt = NOW - 5_000),
+            ),
+        )
+        retainFor("srv1")
+        retainFor("local1")
+        retainFor("vivant")
+
+        val report = purger.run(NOW)
+
+        assertThat(report.expired).isEqualTo(1)
+        assertThat(retainedFor("srv1", "local1")).isEqualTo(0)
+        assertThat(retainedFor("vivant")).isEqualTo(3)
+    }
+
+    @Test
+    fun `l'anciennete et le plafond emportent aussi les lignes retenues`() = runTest {
+        val old = Instant.parse("2026-04-01T00:00:00Z").toEpochMilli()
+        db.messageDao().upsertAll(listOf(row("vieux", createdAt = old)))
+        retainFor("vieux")
+
+        purger.run(NOW)
+
+        assertThat(retainedFor("vieux")).isEqualTo(0)
+    }
+
+    @Test
+    fun `purger une conversation emporte les lignes retenues de ses messages seulement`() = runTest {
+        db.messageDao().upsertAll(listOf(row("a", createdAt = NOW, serverId = "sa"), row("b", conversationId = "c2", createdAt = NOW)))
+        retainFor("sa")
+        retainFor("b")
+
+        purger.purgeConversation("c1")
+
+        assertThat(retainedFor("sa", "a")).isEqualTo(0)
+        assertThat(retainedFor("b")).isEqualTo(3)
     }
 
     @Test

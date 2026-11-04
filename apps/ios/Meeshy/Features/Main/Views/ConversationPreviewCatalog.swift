@@ -101,4 +101,11 @@ nonisolated enum ConversationPreviewCatalog {
         case .unitDay: return String(localized: "unit.day", bundle: .main)
         }
     }
+
+    /// Comment VoiceOver dit des dimensions (#15760) : « %1$@ sur %2$@ ».
+    /// Hors du catalogue du composeur : il ne sert que la lecture, jamais la
+    /// ligne que l'œil voit, qui garde « 1920 × 1080 ».
+    static var spokenDimensionsTemplate: String {
+        String(localized: "accessibility.preview.dimensions", bundle: .main)
+    }
 }

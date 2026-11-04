@@ -1,5 +1,6 @@
 package me.meeshy.sdk.sync
 
+import com.google.common.truth.Truth.assertThat
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -45,8 +46,8 @@ class TranslationRealtimeApplierTest {
     @Test
     fun `les enrichissements partent sur la voie d'enrichissement`() {
         val lane = OrderedEventLane.Family.ENRICHMENT
-        kotlin.test.assertEquals(lane, registrar.familyOf(translation))
-        kotlin.test.assertEquals(lane, registrar.familyOf(transcription))
-        kotlin.test.assertEquals(lane, registrar.familyOf(audio))
+        assertThat(registrar.familyOf(translation)).isEqualTo(lane)
+        assertThat(registrar.familyOf(transcription)).isEqualTo(lane)
+        assertThat(registrar.familyOf(audio)).isEqualTo(lane)
     }
 }

@@ -91,6 +91,7 @@
     <string name="conversations_lock_title_verify_master">Verifica il PIN principale</string>
     <string name="conversations_logout">Esci</string>
     <string name="conversations_new">Nuova conversazione</string>
+    <string name="conversations_obsolete_error">Impossibile rendere obsoleta la conversazione.</string>
     <string name="conversations_open_dashboard">Dashboard</string>
     <string name="conversations_preview_draft_label">Bozza</string>
     <string name="conversations_preview_draft_prefix">Bozza:</string>

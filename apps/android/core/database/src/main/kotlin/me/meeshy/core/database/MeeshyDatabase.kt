@@ -15,6 +15,7 @@ import me.meeshy.core.database.dao.KeyedJsonCacheDao
 import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MediaIndexDao
 import me.meeshy.core.database.dao.MessageDao
+import me.meeshy.core.database.dao.MessageTranslationDao
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.dao.NotificationDao
 import me.meeshy.core.database.dao.PendingIdDao
@@ -38,7 +39,10 @@ import me.meeshy.core.database.entity.FriendRequestEntity
 import me.meeshy.core.database.entity.KeyedJsonCacheEntity
 import me.meeshy.core.database.entity.MediaBlobEntity
 import me.meeshy.core.database.entity.MediaIndexEntity
+import me.meeshy.core.database.entity.MessageAudioTranslationEntity
 import me.meeshy.core.database.entity.MessageEntity
+import me.meeshy.core.database.entity.MessageTranscriptionEntity
+import me.meeshy.core.database.entity.MessageTranslationEntity
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.core.database.entity.NotificationEntity
 import me.meeshy.core.database.entity.PendingIdEntity
@@ -84,8 +88,11 @@ import me.meeshy.core.database.entity.TusUploadCheckpointEntity
         PlaintextErasureEntity::class,
         NotificationEntity::class,
         SendAttemptEntity::class,
+        MessageTranslationEntity::class,
+        MessageTranscriptionEntity::class,
+        MessageAudioTranslationEntity::class,
     ],
-    version = 25,
+    version = 26,
     exportSchema = true,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {
@@ -113,4 +120,5 @@ public abstract class MeeshyDatabase : RoomDatabase() {
     public abstract fun plaintextErasureDao(): PlaintextErasureDao
     public abstract fun notificationDao(): NotificationDao
     public abstract fun sendAttemptDao(): SendAttemptDao
+    public abstract fun messageTranslationDao(): MessageTranslationDao
 }

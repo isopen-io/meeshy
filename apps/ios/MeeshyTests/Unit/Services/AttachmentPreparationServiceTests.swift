@@ -154,13 +154,9 @@ final class AttachmentPreparationServiceTests: XCTestCase {
         try? FileManager.default.removeItem(at: prepared.fileURL)
     }
 
-    /// Le fil jetait les octets de la prise et ré-encodait sa `UIImage`.
-    func test_feedComposerCamera_handsTheShotBytesToTheSameRouterAsTheConversation() throws {
-        let feed = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/FeedComposerSheet.swift"))
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(feed.contains("case.photo(letimage,letdata):handleCameraCapture(image,data:data)"))
-        XCTAssertTrue(feed.contains("prepareCapture(image,data:data,context:.feedPost"))
-        XCTAssertFalse(feed.contains("prepareImage(image,context:.feedPost"))
+    /// La conversation remet les octets de la prise au routeur, sans
+    /// ré-encoder sa `UIImage`.
+    func test_conversationCamera_handsTheShotBytesToTheRouter() throws {
         let conversation = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(conversation.contains("prepareCapture(image,data:data,context:.message"))

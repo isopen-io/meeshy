@@ -41,6 +41,8 @@ internal class MessageHistoryReader(
     private val events: MessageEventBuffer? = null,
     /** #14655 — la file durable des clairs E2EE à retirer du coffre. */
     private val erasures: PlaintextErasureLedger? = null,
+    /** Les traductions déjà reçues, superposées aux messages servis. */
+    private val translations: TranslationLayer? = null,
 ) {
     /**
      * #5189 — the nominal-flow observe window, per conversation: how many of
@@ -185,9 +187,10 @@ internal class MessageHistoryReader(
      * conversation (mirrors [messagesStream]'s cold-cache [CacheResult.Empty]).
      */
     suspend fun recentMessages(conversationId: String, limit: Int = PREVIEW_LIMIT): List<LocalMessage> =
-        messageDao.recentForConversation(conversationId, limit)
-            .asReversed()
-            .map { it.toLocalMessage() }
+        messageDao.recentForConversation(conversationId, limit).asReversed().let { rows ->
+            translations?.ensureLoaded(rows.map { it.serverId ?: it.id })
+            rows.map { row -> row.toLocalMessage().let { translations?.project(it) ?: it } }
+        }
 
     /** Whether the cached window was synced within the messages policy's freshness window. */
     suspend fun isCacheFresh(conversationId: String): Boolean {
@@ -261,6 +264,7 @@ internal class MessageHistoryReader(
         regime = regime,
         events = events,
         erasures = erasures,
+        translations = translations,
     )
 
     companion object {

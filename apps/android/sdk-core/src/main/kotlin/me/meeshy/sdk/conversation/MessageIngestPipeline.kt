@@ -64,6 +64,7 @@ internal class MessageIngestPipeline(
         val replacedLocalIds = mutableSetOf<String>()
         val changed = mutableSetOf<String>()
         val rowIdOfMessage = HashMap<String, String>()
+        val baseOfRow = HashMap<String, MessageEntity>()
         val latest = latestPerId(messages)
         for (served in latest) {
             val filedUnder = conversationId ?: served.conversationId
@@ -77,6 +78,7 @@ internal class MessageIngestPipeline(
             val fresh = MessageEntityFactory.cached(incoming, cachedAt = nowMillis, conversationId = filedUnder)
             val row = if (base == null) fresh else merged(base, incoming, fresh, pending)
             rowIdOfMessage[incoming.id] = row.id
+            if (base != null) baseOfRow[row.id] = base
             listOfNotNull(direct, optimistic).filter { it.id != row.id }.forEach { replacedLocalIds += it.id }
             val unchanged = base != null && base.id == row.id && row.sameStoredContentAs(base)
             if (!unchanged) {
@@ -89,8 +91,13 @@ internal class MessageIngestPipeline(
         }
         events?.let { replayPendingEvents(it, latest, rowIdOfMessage, writes, replacedLocalIds, nowMillis) }
         replacedLocalIds -= writes.keys
-        if (replacedLocalIds.isNotEmpty()) messageDao.deleteByIds(replacedLocalIds.toList())
+        // La jumelle serveur s'écrit AVANT le retrait de la bulle optimiste : la cascade des traductions retenues
+        // (RetainedTranslationCascade) épargne alors les lignes rangées sous l'id serveur, que la jumelle porte déjà.
         if (writes.isNotEmpty()) messageDao.upsertAll(writes.values.toList())
+        if (replacedLocalIds.isNotEmpty()) messageDao.deleteByIds(replacedLocalIds.toList())
+        val retained = retainedChanges(writes.values, baseOfRow)
+        DedicatedTranslationRows.drop(database, retained.outlived + replacedLocalIds)
+        retained.superseded.forEach { (keys, languages) -> DedicatedTranslationRows.supersede(database, keys, languages) }
         regime?.learnFromServed(latest, conversationId)
         erasures?.recordServedGone(latest)
         return changed
@@ -151,6 +158,34 @@ internal class MessageIngestPipeline(
         } else {
             rebuilt
         }
+    }
+
+    /** Ce qu'une page servie change aux traductions retenues : des messages entiers, ou certaines langues seulement. */
+    private class RetainedChanges(val outlived: List<String>, val superseded: List<Pair<List<String>, Set<String>>>)
+
+    /**
+     * Les traductions retenues qu'une page servie rend caduques. Toutes celles d'un message dont le texte a changé
+     * (la ligne disait « RDV 14h », la page sert « RDV 16h »), devenu pierre tombale, protégé ou purgé ; une charge
+     * illisible est tenue pour caduque (fail-closed). Sinon, celles des langues dont la page sert une traduction
+     * NOUVELLE (retraduction, ou traduction du texte courant après une trame socket en retard) : la page est alors
+     * plus récente que la ligne, qui lui cède.
+     */
+    private fun retainedChanges(written: Collection<MessageEntity>, baseOfRow: Map<String, MessageEntity>): RetainedChanges {
+        val outlived = mutableListOf<String>()
+        val superseded = mutableListOf<Pair<List<String>, Set<String>>>()
+        written.forEach { row ->
+            val base = baseOfRow[row.id] ?: return@forEach
+            val before = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(base.payload) }.getOrNull()
+            val after = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
+            val keys = DedicatedTranslationRows.keysOf(base, before) + DedicatedTranslationRows.keysOf(row, after)
+            if (before == null || after == null || DedicatedTranslationRows.outlived(before, after)) {
+                outlived += keys
+                return@forEach
+            }
+            val languages = DedicatedTranslationRows.supersededLanguages(before, after)
+            if (languages.isNotEmpty()) superseded += keys to languages
+        }
+        return RetainedChanges(outlived, superseded)
     }
 
     /** Une rafale peut porter deux fois le même message : seul son dernier état compte. */

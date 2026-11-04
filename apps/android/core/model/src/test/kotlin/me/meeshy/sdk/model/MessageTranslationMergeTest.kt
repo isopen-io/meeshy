@@ -160,4 +160,32 @@ class MessageTranslationMergeTest {
         assertThat(merged.id).isEqualTo("keep")
         assertThat(merged.content).isEqualTo("Hello")
     }
+
+    @Test
+    fun `a translation outside the reader prism is not retained`() {
+        val merged = MessageTranslationMerge.mergeTranslation(message(), "de", "Hallo", prism = listOf("fr", "en"))
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun `a translation into the second prism rank is retained`() {
+        val merged = MessageTranslationMerge.mergeTranslation(message(), "EN", "Hello", prism = listOf("fr", "en"))
+
+        assertThat(merged?.translations?.single()?.translatedContent).isEqualTo("Hello")
+    }
+
+    @Test
+    fun `a new translation replaces the old one of the same target language and carries its metadata`() {
+        val held = message(translations = listOf(translation("fr", "Salut")))
+
+        val merged = MessageTranslationMerge.mergeTranslation(
+            held, "fr", "Bonjour", translationModel = "nllb-200", confidenceScore = 0.93,
+        )
+
+        val entry = merged?.translations?.single()
+        assertThat(entry?.translatedContent).isEqualTo("Bonjour")
+        assertThat(entry?.translationModel).isEqualTo("nllb-200")
+        assertThat(entry?.confidenceScore).isEqualTo(0.93)
+    }
 }

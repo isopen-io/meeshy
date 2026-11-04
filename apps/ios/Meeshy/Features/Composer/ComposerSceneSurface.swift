@@ -133,6 +133,9 @@ struct ComposerSceneSurface: View {
     /// meuble (`ComposerSceneQuickCapture`). `nil` ⇒ rien à dire.
     var quickCaptureHint: ComposerSceneQuickCapture.Hint?
 
+    /// **La publication citée**, figée sur la scène — `nil` hors d'une citation.
+    var quotedPublication: ComposerQuotedPublication?
+
     // MARK: - Le mode de l'outil, et ce que la colonne du repos relaie
 
     /// **Ce que la scène outille** — déjà résolu par `ComposerRailMode.resolve`.
@@ -796,9 +799,7 @@ struct ComposerSceneSurface: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .modifier(ComposerIntakeLayer(ghost: intakeGhost, blocks: intakeBlocks, aspectRatio: aspectRatio))
-        .overlay {
-            if let quickCaptureHint { ComposerSceneQuickCaptureHint(hint: quickCaptureHint) }
-        }
+        .overlay { ComposerSceneHints(quickCapture: quickCaptureHint, quoted: quotedPublication, aspectRatio: aspectRatio) }
         // **La surface PUBLIE la place du viseur, elle ne le peint pas.**
         // Le meuble le monte une seule
         // fois ; `Color.clear` + `aspectRatio(.fit)` reproduit exactement le

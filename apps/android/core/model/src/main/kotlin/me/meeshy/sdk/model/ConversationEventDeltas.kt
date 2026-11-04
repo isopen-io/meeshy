@@ -81,11 +81,27 @@ object ConversationEventDeltas {
         return message.copy(content = "", translations = emptyList(), attachments = purgedAttachments)
     }
 
-    /** Le résumé AUTORITAIRE des réactions d'une pièce (`attachment:reaction-*`) remplace le local. */
-    fun attachmentReactions(message: ApiMessage, attachmentId: String, summary: Map<String, Int>?): ApiMessage {
+    /**
+     * Le résumé AUTORITAIRE des réactions d'une pièce (`attachment:reaction-*`) remplace le local. [ownEmoji] est posé
+     * quand l'auteur de l'événement EST ce lecteur (son `User.id`, depuis un autre appareil) : « ma réaction » suit.
+     */
+    fun attachmentReactions(
+        message: ApiMessage,
+        attachmentId: String,
+        summary: Map<String, Int>?,
+        ownEmoji: String? = null,
+        ownAdding: Boolean = true,
+    ): ApiMessage {
         val normalized = summary?.filterValues { it > 0 }?.ifEmpty { null }
         return message.updatingAttachment(attachmentId) { attachment ->
-            if (attachment.reactionSummary == normalized) attachment else attachment.copy(reactionSummary = normalized)
+            val mine = attachment.currentUserReactions.orEmpty()
+            val nextMine = when {
+                ownEmoji.isNullOrEmpty() -> attachment.currentUserReactions
+                ownAdding -> if (ownEmoji in mine) attachment.currentUserReactions else mine + ownEmoji
+                else -> (mine - ownEmoji).ifEmpty { null }
+            }
+            if (attachment.reactionSummary == normalized && attachment.currentUserReactions == nextMine) attachment
+            else attachment.copy(reactionSummary = normalized, currentUserReactions = nextMine)
         }
     }
 

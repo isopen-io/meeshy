@@ -61,6 +61,7 @@ class ChatTranslationRequestsTest {
         val received = MutableSharedFlow<TranslationEvent>()
         val socket = mockk<MessageSocketManager>()
         every { socket.translationReceived } returns received
+        every { socket.messageEdited } returns MutableSharedFlow()
         val audioCalls = mutableListOf<Pair<String, String>>()
         val controller = ChatTranslationController(
             scope = screenScope(),
