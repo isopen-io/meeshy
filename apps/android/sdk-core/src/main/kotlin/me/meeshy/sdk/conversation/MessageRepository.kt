@@ -12,6 +12,7 @@ import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.media.MediaAdoption
 import me.meeshy.sdk.media.PendingMediaPreviewing
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.socket.SendMessageAck
 import me.meeshy.sdk.model.ReadStatusSummary
@@ -70,6 +71,8 @@ class MessageRepository internal constructor(
         previews: PendingMediaPreviewing? = null,
         /** L'aperçu de la liste de conversations suit mon envoi optimiste et son retrait. */
         listPreviews: SendPreviewSink? = null,
+        /** L'index des médias de la conversation suit les messages supprimés. */
+        mediaIndex: ConversationMediaHubIndex? = null,
     ) : this(
         history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews = previews, listPreviews = listPreviews),
@@ -79,6 +82,7 @@ class MessageRepository internal constructor(
             clock,
             EditRevisionLedger(database.editRevisionDao(), clock, fence),
             events,
+            mediaIndex = mediaIndex,
         ),
         enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi),
         receipts = MessageReceiptWriter(database, messageDao, fence),
