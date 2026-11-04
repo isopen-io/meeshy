@@ -19,6 +19,8 @@ class BookmarksViewModel: ObservableObject {
     /// « Repartager » d'une carte (#15934) : l'écrivain unique, construit sur
     /// le service injecté, et le retour à l'utilisateur.
     private let reposter: ListedPostReposter
+    /// « Partager » du menu ⋯ (#15994).
+    private let sharer: ListedPostSharer
 
     init(
         postService: PostServiceProviding = PostService.shared,
@@ -28,6 +30,7 @@ class BookmarksViewModel: ObservableObject {
         self.postService = postService
         self.languageProvider = languageProvider
         self.reposter = reposter ?? ListedPostReposter(publisher: RepostPublisher(postService: postService))
+        self.sharer = ListedPostSharer(service: postService)
     }
 
     private var preferredLanguages: [String] {
@@ -103,6 +106,17 @@ class BookmarksViewModel: ObservableObject {
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.loadError", defaultValue: "Impossible de charger les favoris", bundle: .main))
         }
+    }
+
+    /// Le lien à présenter pour « Partager » (#15994) ; le compteur ne bouge
+    /// que si la passerelle a enregistré le partage.
+    func shareLink(for postId: String) async -> ShareableLink? {
+        guard let post = posts.first(where: { $0.id == postId }) else { return nil }
+        let outcome = await sharer.share(post)
+        if outcome.recorded, let index = posts.firstIndex(where: { $0.id == postId }) {
+            posts[index].shareCount += 1
+        }
+        return outcome.link
     }
 
     func removeBookmark(_ postId: String) async {

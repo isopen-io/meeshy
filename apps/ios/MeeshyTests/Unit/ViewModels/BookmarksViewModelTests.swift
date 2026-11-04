@@ -296,4 +296,31 @@ final class BookmarksViewModelTests: XCTestCase {
         XCTAssertEqual(payload.targetType, "REEL")
         XCTAssertTrue(sut.posts[0].isRepostedByMe)
     }
+
+    // MARK: - #15994 — « Partager » du menu ⋯ partage depuis les favoris
+
+    func test_shareLink_recordsTheShare_andHandsTheTrackedLink() async {
+        let (sut, mock) = makeSUT()
+        mock.getBookmarksResult = .success(Self.makePaginatedPosts(posts: [Self.makeAPIPost(id: "saved")]))
+        await sut.loadBookmarks()
+
+        let link = await sut.shareLink(for: "saved")
+
+        XCTAssertEqual(mock.lastSharePostId, "saved")
+        XCTAssertEqual(mock.lastShareGenerateLink, true)
+        XCTAssertEqual(link?.url.absoluteString, "https://meeshy.me/l/mock123")
+        XCTAssertEqual(sut.posts[0].shareCount, 1)
+    }
+
+    func test_shareLink_offline_stillHandsThePostLink_withoutBumping() async {
+        let (sut, mock) = makeSUT()
+        mock.getBookmarksResult = .success(Self.makePaginatedPosts(posts: [Self.makeAPIPost(id: "saved")]))
+        mock.shareResult = .failure(URLError(.notConnectedToInternet))
+        await sut.loadBookmarks()
+
+        let link = await sut.shareLink(for: "saved")
+
+        XCTAssertEqual(link?.url.absoluteString, "https://meeshy.me/feeds/post/saved")
+        XCTAssertEqual(sut.posts[0].shareCount, 0)
+    }
 }
