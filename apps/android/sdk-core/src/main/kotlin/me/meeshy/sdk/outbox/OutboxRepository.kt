@@ -493,6 +493,11 @@ class OutboxRepository @Inject constructor(
         return retry(cmid)
     }
 
+    /** L'auteur annule une ligne EN VOL : une marque durable, vérifiée par le sender avant sa prochaine étape. */
+    suspend fun requestCancel(cmid: String) {
+        outboxDao.requestCancel(cmid, now())
+    }
+
     /** The queued row [cmid], or `null` once it is gone (delivered or discarded). */
     suspend fun row(cmid: String): OutboxEntity? = outboxDao.find(cmid)
 

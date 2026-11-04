@@ -54,7 +54,19 @@ public class CreatePostHandler @Inject constructor(
 
     override val payloadGraft: OutboxPayloadGraft = PostPublishMediaWriteBack::graft
 
-    override suspend fun send(row: OutboxEntity): SendResult =
+    override suspend fun send(row: OutboxEntity): SendResult {
+        if (row.cancelRequestedAt != null) return cancelled(row)
+        return deliver(row)
+    }
+
+    /** L'auteur a supprimé la publication pendant qu'elle partait : la marque est honorée avant tout envoi. */
+    private suspend fun cancelled(row: OutboxEntity): SendResult {
+        runCatching { outboxRepository.discard(row.cmid) }
+        runCatching { draftStore.release(row.cmid) }
+        return SendResult.Success
+    }
+
+    private suspend fun deliver(row: OutboxEntity): SendResult =
         json.withPayload<CreatePostRequest>(row) { request ->
             when (val result = apiCall { postApi.create(request, row.cmid) }) {
                 is NetworkResult.Success -> {

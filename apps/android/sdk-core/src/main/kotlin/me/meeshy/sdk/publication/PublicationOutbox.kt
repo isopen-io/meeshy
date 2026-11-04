@@ -11,6 +11,9 @@ import kotlinx.serialization.encodeToString
 import me.meeshy.sdk.media.MediaUploadProgressLedger
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.PostComposerDraftSnapshot
+import me.meeshy.sdk.model.PublicationCancelOutcome
+import me.meeshy.sdk.model.PublicationCancelRule
+import me.meeshy.sdk.model.PublicationRowState
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.CreatePostRequest
@@ -117,6 +120,30 @@ public class PublicationOutbox @Inject constructor(
             outboxRepository.cancelHeldFor(row.targetId)
         }
         postDraftStore.release(cmid)
+    }
+
+    /**
+     * « Supprimer » : retire la publication en file ou en échec ([PublicationCancelOutcome.REMOVED]), pose la marque
+     * d'annulation d'une publication en vol (le sender la vérifie avant d'envoyer), ou constate qu'elle est déjà partie.
+     */
+    public suspend fun cancel(cmid: String): PublicationCancelOutcome = runCatching {
+        val row = outboxRepository.row(cmid)
+        val state = when (row?.stateEnum) {
+            null -> PublicationRowState.Absent
+            OutboxState.PENDING -> PublicationRowState.Pending
+            OutboxState.INFLIGHT -> PublicationRowState.InFlight
+            OutboxState.EXHAUSTED -> PublicationRowState.Exhausted
+        }
+        val outcome = PublicationCancelRule.decide(state)
+        when (outcome) {
+            PublicationCancelOutcome.REMOVED -> discard(cmid)
+            PublicationCancelOutcome.CANCEL_REQUESTED -> outboxRepository.requestCancel(cmid)
+            PublicationCancelOutcome.ALREADY_SENT, PublicationCancelOutcome.FAILED -> postDraftStore.release(cmid)
+        }
+        outcome
+    }.getOrElse {
+        if (it is CancellationException) throw it
+        PublicationCancelOutcome.FAILED
     }
 
     /**
