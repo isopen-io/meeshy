@@ -240,7 +240,7 @@ struct SyncPill: View {
     /// Invoked when the user taps the pill and the currently visible
     /// entry has a non-nil `source`. The caller is expected to push onto
     /// the navigation stack (`Router.push(.conversation/.postDetail/...)`).
-    let onTap: ((OutboxUIItem.Source) -> Void)?
+    let onTap: ((OutboxUIItem.Source) -> Bool)?
     /// Invoked when the user taps an entry carrying a `retryOutboxId` — a
     /// publication or a send that has definitively failed. Prioritaire sur
     /// `onTap` : sur une ligne épuisée, RELANCER est ce que le doigt veut, pas
@@ -322,7 +322,7 @@ struct SyncPill: View {
 
     init(
         entries: [SyncPillEntry],
-        onTap: ((OutboxUIItem.Source) -> Void)? = nil,
+        onTap: ((OutboxUIItem.Source) -> Bool)? = nil,
         onRetry: ((String) -> Void)? = nil,
         onCancelPublication: ((String) -> Void)? = nil
     ) {
@@ -754,8 +754,7 @@ struct SyncPill: View {
             guard let onRetry else { return rotator.advance() }
             onRetry(outboxId)
         case .navigate(let source):
-            guard let onTap else { return rotator.advance() }
-            onTap(source)
+            guard let onTap, onTap(source) else { return rotator.advance() }
         case .advance:
             // Pure status row (offline/syncing/reconnecting) — single tap
             // just advances the rotation manually.

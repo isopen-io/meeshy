@@ -1279,6 +1279,7 @@
 		4B73EFE53D2A699081580D4C /* StatusBubbleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEEBE5AD1E3E4F21B181696E /* StatusBubbleOverlay.swift */; };
 		4B80D9FABB2DBECF1A8BC95C /* ComposerPreUploadRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D9FB2327424051C03070853 /* ComposerPreUploadRegistry.swift */; };
 		4B84EEDC4D9FBADB5B98EEB3 /* SyncPillRetryWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 080004AE0E97004D1F1F3947 /* SyncPillRetryWiringTests.swift */; };
+		64729115998655B3F5AA3C88 /* SyncPillDestinationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6412593C7782F7FBAB56034 /* SyncPillDestinationTests.swift */; };
 		4B995DB8CCA7C88E907E5B44 /* BareShapeTapTargetGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB37AE9F619BD3DF4F4870B /* BareShapeTapTargetGuardTests.swift */; };
 		4BAA419DAD96706F48BEF0EE /* ComposerSceneCameraFrameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6032A93981686D645B47613F /* ComposerSceneCameraFrameTests.swift */; };
 		4BC1605E07FA076783C2E7B0 /* FeedPostsMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C74A22651C78D485010D62D /* FeedPostsMapView.swift */; };
@@ -1927,6 +1928,7 @@
 		707CDE5E63AC3140E045CE09 /* ComposerCaptureSegments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3F99F9CA8E18957E2999A0 /* ComposerCaptureSegments.swift */; };
 		707E2D674E3084C031020EB5 /* EditParityInventoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 509AB263D8FADABC81C9A29E /* EditParityInventoryTests.swift */; };
 		708A0A27E526D7AFEC203844 /* SyncPillPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 446C17DB44BE795C97E26474 /* SyncPillPlacement.swift */; };
+		71928F770E20594EF0F9B3AB /* SyncPillDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA204FE8C9F84B5687011211 /* SyncPillDestination.swift */; };
 		7096A1D31CE5B1D79FC7ABC9 /* ComposerObjectChipsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F09FC2A2BEE927EC0C74975E /* ComposerObjectChipsTests.swift */; };
 		70B1D97CB81BA2A636650A75 /* ViewThatFitsAsyncRenderGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A49FFECE5A87403440897B /* ViewThatFitsAsyncRenderGuardTests.swift */; };
 		70BDB6753A4663EF47989E78 /* MediaSaveCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A671CEBC348E36F90C894F5 /* MediaSaveCoordinator.swift */; };
@@ -4533,6 +4535,7 @@
 		07E2952F3C89386249DBEDCE /* CirclesLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CirclesLive.swift; sourceTree = "<group>"; };
 		07E51B15B1EFDB4B6C51F5FC /* OnboardingGreeting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingGreeting.swift; sourceTree = "<group>"; };
 		080004AE0E97004D1F1F3947 /* SyncPillRetryWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRetryWiringTests.swift; sourceTree = "<group>"; };
+		A6412593C7782F7FBAB56034 /* SyncPillDestinationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillDestinationTests.swift; sourceTree = "<group>"; };
 		081347AF1E82DF85625BFCAB /* ConversationStickerRendering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStickerRendering.swift; sourceTree = "<group>"; };
 		081683DC5889D0DDA7978F11 /* UnsentPublicationsSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsentPublicationsSource.swift; sourceTree = "<group>"; };
 		081E722AF31F272E1CC3124A /* PendingImageEditReplacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingImageEditReplacementTests.swift; sourceTree = "<group>"; };
@@ -5553,6 +5556,7 @@
 		4453D507313B435A68A3882D /* AchievementRevealView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementRevealView.swift; sourceTree = "<group>"; };
 		445B584000D3C4B8E2CEB953 /* ComposerLookStripPaintingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerLookStripPaintingTests.swift; sourceTree = "<group>"; };
 		446C17DB44BE795C97E26474 /* SyncPillPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillPlacement.swift; sourceTree = "<group>"; };
+		DA204FE8C9F84B5687011211 /* SyncPillDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillDestination.swift; sourceTree = "<group>"; };
 		449881FC857D6EA7A235B6A0 /* EndToEndOwnDeviceLinkingRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEndOwnDeviceLinkingRuntimeTests.swift; sourceTree = "<group>"; };
 		449F5DC51E281B2C3B033326 /* CaptureDeviceZoomTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureDeviceZoomTarget.swift; sourceTree = "<group>"; };
 		449FD9CAF59ACDED93018B2B /* NSELockedConversationMirrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSELockedConversationMirrorTests.swift; sourceTree = "<group>"; };
@@ -9574,6 +9578,7 @@
 				13B6AFBDCA69220393EF2C4D /* SyncPillPauseGestureTests.swift */,
 				90D8E6E0DB022364796CEEBE /* SyncPillPlacementTests.swift */,
 				080004AE0E97004D1F1F3947 /* SyncPillRetryWiringTests.swift */,
+				A6412593C7782F7FBAB56034 /* SyncPillDestinationTests.swift */,
 				4DCC92DB8F1F7DC0FDD98D88 /* SyncPillRotatorTests.swift */,
 				AFCC70097A7ECD4ED83C1CB0 /* SyncPillTimerStateTests.swift */,
 				FD9EC621D8B9CAE54315401F /* SyncPillTypingObservationTests.swift */,
@@ -9789,6 +9794,7 @@
 				E3A304EECE672DE9CF71432C /* SyncPillLabels.swift */,
 				C2AA38E59C9485B99FECB1CC /* SyncPillMarquee.swift */,
 				446C17DB44BE795C97E26474 /* SyncPillPlacement.swift */,
+				DA204FE8C9F84B5687011211 /* SyncPillDestination.swift */,
 				0D557F503A4B6E478F0F69F2 /* SyncPillRotator.swift */,
 				FE6D7E206FBC947636541D2A /* ToggleStateAccessibility.swift */,
 				CCFAC200B3BB3E93CCD192BF /* TopChromeBarMotion.swift */,
@@ -16870,6 +16876,7 @@
 				195C0FE2DB8938BD046D6304 /* SyncPillLabels.swift in Sources */,
 				DBF0B29E269BA036FBCB2F1F /* SyncPillMarquee.swift in Sources */,
 				708A0A27E526D7AFEC203844 /* SyncPillPlacement.swift in Sources */,
+				71928F770E20594EF0F9B3AB /* SyncPillDestination.swift in Sources */,
 				EC81A5BEF3DA6082992609A1 /* SyncPillRotator.swift in Sources */,
 				30A6369B86CB19806D00A77C /* SyncPillViewModel.swift in Sources */,
 				8E877AD2FE6781764A828BE3 /* TaskTimeout.swift in Sources */,
@@ -18796,6 +18803,7 @@
 				2049E269E8D0C5C520A74226 /* SyncPillPauseGestureTests.swift in Sources */,
 				7D857A6BAC09C18F46F774D8 /* SyncPillPlacementTests.swift in Sources */,
 				4B84EEDC4D9FBADB5B98EEB3 /* SyncPillRetryWiringTests.swift in Sources */,
+				64729115998655B3F5AA3C88 /* SyncPillDestinationTests.swift in Sources */,
 				2482D601A3DB9384ACC87483 /* SyncPillRotatorTests.swift in Sources */,
 				7D76B8E1B92DDF76CFC51284 /* SyncPillTimerStateTests.swift in Sources */,
 				6FFD0161FAC73707F262B361 /* SyncPillTypingObservationTests.swift in Sources */,
