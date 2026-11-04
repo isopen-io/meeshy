@@ -27,6 +27,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { AttachmentReactionBadge } from './attachment-reaction-badge';
 import { Glyph } from './glyph';
 import { MaskedAttachment } from './masked-attachment';
+import { MediaDownloadPill, mediaAskLabel, useMediaAsk } from './media-download-ask';
 import { ServedPicture } from './served-picture';
 import { VideoTile } from './video-tile';
 import { useAttachmentMasked } from './view-once-opened';
@@ -72,8 +73,11 @@ export function ImageTile({
   const sizes = sizesFor(MEDIA_GRID_MAX_WIDTH);
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
   const loading = feedImageLoading({ sizeBytes: attachment.fileSize, online: useOnline() });
+  /* AU-DELÀ DE LA POLITIQUE DE L'APPAREIL, LA CASE DEMANDE (#6333) : aucune `<img>`, donc aucun octet, avant le toucher. */
+  const ask = useMediaAsk(attachment);
+  const asking = ask.asking && attachment.fileUrl !== '';
 
-  const img = attachment.fileUrl === '' ? null : (
+  const img = attachment.fileUrl === '' || asking ? null : (
     <ServedPicture avifSrcSet={sources.avif} sizes={sizes}>
       <img
         data-attachment-image={attachment.id}
@@ -109,8 +113,18 @@ export function ImageTile({
       }}
       {...(showsFallbackLabel ? { role: 'img', 'aria-label': described.text } : {})}
     >
-      <Glyph name="image" size={40} className="absolute inset-0 m-auto opacity-40" />
-      {img === null ? null : onOpen !== undefined ? (
+      {asking ? null : <Glyph name="image" size={40} className="absolute inset-0 m-auto opacity-40" />}
+      {asking ? (
+        <button
+          type="button"
+          data-media-download-ask
+          onClick={ask.accept}
+          aria-label={mediaAskLabel(attachment, described.text)}
+          className="absolute inset-0 block size-full cursor-pointer appearance-none border-0 bg-transparent p-0"
+        >
+          <MediaDownloadPill attachment={attachment} />
+        </button>
+      ) : img === null ? null : onOpen !== undefined ? (
         <button
           type="button"
           data-media-tile
@@ -395,22 +409,24 @@ function GridCellImage({
   const srcSet = sources.webp;
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
   const loading = feedImageLoading({ sizeBytes: attachment.fileSize, online: useOnline() });
+  const ask = useMediaAsk(attachment);
+  const asking = ask.asking && attachment.fileUrl !== '';
 
   return (
     <button
       type="button"
-      data-media-tile
+      {...(asking ? { 'data-media-download-ask': '' } : { 'data-media-tile': '' })}
       data-attachment={attachment.id}
-      onClick={onOpen}
-      aria-label={translate(currentInterfaceLanguage(), 'media.tile.open', { name: described.text })}
+      onClick={asking ? ask.accept : onOpen}
+      aria-label={asking ? mediaAskLabel(attachment, described.text) : translate(currentInterfaceLanguage(), 'media.tile.open', { name: described.text })}
       className="relative block size-full cursor-pointer appearance-none border-0 bg-transparent p-0"
       style={{
         backgroundColor: placeholder !== undefined ? undefined : 'color-mix(in srgb, var(--accent) 12%, transparent)',
         ...(placeholder !== undefined ? { backgroundImage: `url("${placeholder}")`, backgroundSize: 'cover' } : {}),
       }}
     >
-      <Glyph name="image" size={28} className="absolute inset-0 m-auto opacity-40" />
-      {attachment.fileUrl === '' ? null : (
+      {asking ? <MediaDownloadPill attachment={attachment} /> : <Glyph name="image" size={28} className="absolute inset-0 m-auto opacity-40" />}
+      {attachment.fileUrl === '' || asking ? null : (
         <ServedPicture avifSrcSet={sources.avif} sizes={sizesFor(widthPx)}>
           <img
             data-attachment-image={attachment.id}

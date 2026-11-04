@@ -27,6 +27,7 @@ import type { ThemePreference } from '@/lib/scheme';
 import { initialsOf } from '@/lib/view/conversation';
 import type { DevicePushRow } from '@/lib/push/use-device-push';
 import { Link } from '@/routes/route-table';
+import { MediaDownloadRows } from '@/routes/settings-media-download';
 import { useMyRing } from '@/lib/profile-decor/my-ring';
 
 /**
@@ -183,11 +184,11 @@ export function AccountSection({ language }: { readonly language: InterfaceLangu
   );
 }
 
-/* La section « Données » (#6335) — MÉDIAS et MESSAGES restent MASQUÉS, chacun
-   derrière sa propre issue de portage (#6723, #6724) : une rangée n'entre ici
-   que le jour où sa destination existe (loi 4). L'EXPORT est la première à
-   revenir (#6725), à une adresse propre à la v2 — `/settings/data-export`,
-   jamais l'ancienne `meeshy.me/settings#privacy`. */
+/* La section « Données » (#6335) — MESSAGES reste MASQUÉ derrière son issue
+   de portage (#6724) : une rangée n'entre ici que le jour où sa destination
+   existe (loi 4). Le téléchargement automatique des MÉDIAS y vit (#6333) : le
+   fil l'entend. L'EXPORT (#6725) a une adresse propre à la v2 —
+   `/settings/data-export`, jamais l'ancienne `meeshy.me/settings#privacy`. */
 export function DataSection({
   language,
   deviceTranslation,
@@ -198,6 +199,7 @@ export function DataSection({
   return (
     <GroupedSection id="settings-data" title={upper(language, 'settings.section.data')} icon={SECTION_ICON({ set: 'ecran', name: 'export' })}>
       {deviceTranslation === undefined ? null : <DeviceTranslationRow language={language} toggle={deviceTranslation} />}
+      <MediaDownloadRows language={language} />
       <Link to="dataExport" data-settings-export className={ROW_CLASS} style={ROW_STYLE}>
         <RowIcon tint="var(--color-warning)">
           <IconOf icon={{ set: 'ecran', name: 'export' }} size={15} />
