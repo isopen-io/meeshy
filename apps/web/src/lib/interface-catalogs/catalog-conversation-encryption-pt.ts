@@ -63,7 +63,6 @@ const pt = {
   'conversationEncryption.switch.held': 'Uma mensagem desta conversa usa uma criptografia que este navegador não reconhece: o modo não pode ser alterado daqui.',
   'conversationEncryption.switch.regimeChanged': 'Outro membro acabou de alterar a criptografia: o estado foi atualizado.',
   'conversationEncryption.switch.restricted': 'Durante a fase de testes, apenas um membro com uma função da equipe Meeshy (analista ou superior) pode alterar o modo de criptografia.',
-  'conversationEncryption.switch.forbidden': 'Você não tem permissão para alterar o modo de criptografia desta conversa: em um grupo, é preciso ser um de seus moderadores.',
   'conversationEncryption.switch.unavailable': 'A criptografia em nossos servidores está temporariamente indisponível. Tente novamente mais tarde.',
   'conversationEncryption.switch.failed': 'Não foi possível alterar o modo. Tente novamente.',
   'conversationEncryption.switch.offline': 'Sem conexão: reconecte-se para alterar o modo de criptografia.',

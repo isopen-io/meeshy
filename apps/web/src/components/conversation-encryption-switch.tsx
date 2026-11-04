@@ -17,18 +17,11 @@ import {
 /**
  * **« CHANGER DE MODE » DANS LA FICHE CHIFFREMENT** (#14648) — miroir de
  * `modeSwitchSection` (iOS, `ConversationEncryptionDetailSheet`) : chaque mode
- * proposé dit ce qu'il fait ; seuls les modes AU-DESSUS du mode servi se
- * proposent ; le bout en bout se voit, désactivé, avec la raison (le navigateur
- * ne chiffre pas encore, #12975) ; rien ne se propose dans une conversation
- * chiffrée de bout en bout, servie ou vue telle (#12949). Le droit vient de la
- * passerelle (`canToggleEncryption`, rang de groupe compris) : tant qu'elle ne
- * l'a pas servi, rien ne s'affiche.
- *
- * La montée est OPTIMISTE pour l'affichage seulement : pendant l'attente, la
- * fiche décrit le mode visé (`onShownMode`) et le bouton dit « en cours » ;
- * rien n'annonce le succès avant la réponse. À la réponse, l'optimisme
- * s'efface toujours : le mode confirmé arrive par les caches
- * (`applyEncryptionAnnounced`), qui seuls gouvernent l'envoi.
+ * proposé dit ce qu'il fait ; le bout en bout se voit, désactivé, avec la
+ * raison (le navigateur ne chiffre pas encore, #12975) ; rien ne se propose
+ * dans une conversation chiffrée de bout en bout, servie ou vue telle
+ * (#12949). Le droit vient de la passerelle (`canToggleEncryption`) : tant
+ * qu'elle ne l'a pas servi, rien ne s'affiche.
  */
 
 type Translate = (key: ConversationEncryptionCatalogKey, params?: Readonly<Record<string, string>>) => string;
@@ -39,19 +32,20 @@ type Feedback = { readonly kind: 'switched'; readonly mode: CreationEncryptionMo
 const MUTED = 'var(--color-ios-ink-2)';
 
 export function ConversationEncryptionSwitch({
+  conversation,
   locked,
   gesture,
   t,
-  onShownMode,
 }: {
+  readonly conversation: { readonly id: string; readonly type: string; readonly encryptionMode?: string | null };
   readonly locked: boolean;
   readonly gesture: EncryptionModeSwitchGesture;
   readonly t: Translate;
-  readonly onShownMode?: ((mode: CreationEncryptionMode | null) => void) | undefined;
 }) {
   const headingId = useId();
+  const isDirect = conversation.type === 'direct';
   const closed = locked;
-  const asks = !closed;
+  const asks = isDirect && !closed;
   const [status, setStatus] = useState<EncryptionStatus | null>(null);
   const [pending, setPending] = useState<CreationEncryptionMode | null>(null);
   const busy = pending !== null;
@@ -80,19 +74,17 @@ export function ConversationEncryptionSwitch({
       : encryptionSwitchTargets({
           servedMode,
           sealed: closed || encryptionRegime(status.mode) === 'end-to-end',
+          isDirect,
           mayToggle: status.canToggleEncryption,
         });
   const staleSwitch = feedback?.kind === 'switched' && closed;
   if (targets.length === 0 && (feedback === null || staleSwitch)) return null;
 
   const switchTo = async (target: CreationEncryptionMode) => {
-    const before = servedMode;
     setPending(target);
     setFeedback(null);
-    onShownMode?.(target);
-    const outcome = await gesture.switchTo({ servedMode: before, target });
+    const outcome = await gesture.switchTo({ servedMode, target });
     if (outcome.kind === 'regime-changed') await reread();
-    onShownMode?.(null);
     setFeedback(outcome);
     setPending(null);
   };
