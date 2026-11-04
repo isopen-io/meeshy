@@ -44,8 +44,10 @@ function makeSocketIO() {
   const mockLeave = jest.fn<any>();
   const mockEmit = jest.fn<any>();
   const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: mockLeave }]);
+  const target: { emit: typeof mockEmit; except: jest.Mock<any> } = { emit: mockEmit, except: jest.fn<any>() };
+  target.except.mockReturnValue(target);
   const mockIo = {
-    to: jest.fn<any>().mockReturnValue({ emit: mockEmit }),
+    to: jest.fn<any>().mockReturnValue(target),
     in: jest.fn<any>().mockReturnValue({ fetchSockets: mockFetchSockets }),
     _emit: mockEmit,
     _leave: mockLeave,

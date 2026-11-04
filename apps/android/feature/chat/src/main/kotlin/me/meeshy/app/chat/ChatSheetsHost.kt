@@ -1,11 +1,7 @@
 package me.meeshy.app.chat
 
 import android.widget.Toast
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
@@ -33,7 +29,6 @@ import me.meeshy.app.chat.export.CardExportSheet
 import me.meeshy.app.chat.export.DiscussionCardExportSheet
 import me.meeshy.app.chat.fileviewer.FileViewerHost
 import me.meeshy.app.chat.fileviewer.FileViewerRequest
-import me.meeshy.app.chat.mediahub.ConversationMediaHubContent
 import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
 import me.meeshy.app.chat.options.ConversationOptionsExit
 import me.meeshy.app.chat.options.rememberConversationOptionsSlots
@@ -57,7 +52,6 @@ import me.meeshy.ui.component.bubble.LocalBubbleFileTransfers
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
-import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.component.bubble.BubbleContent
 
@@ -277,35 +271,18 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             },
         )
         // Les onglets d'iOS (#13785) : Membres, Médias, Stats (le tableau de bord unifié, analyse comprise), Options.
-        val tabs = ConversationInfoTabSlots(
-            members = { modifier -> ConversationMembersContent(state.conversationId, accentColor, modifier) },
-            media = { modifier ->
-                ConversationMediaHubContent(
-                    conversationId = state.conversationId,
-                    accentColor = accentColor,
-                    isEndToEnd = state.isEndToEnd,
-                    conversationTitle = state.conversationTitle,
-                    onGoToMessage = { messageId ->
-                        sheets.info = false
-                        actions.scrollToMessage(messageId)
-                    },
-                    onOpenFile = openHubFile,
-                    modifier = modifier,
-                )
+        val tabs = conversationInfoTabSlots(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            isEndToEnd = state.isEndToEnd,
+            conversationTitle = state.conversationTitle,
+            clientMessages = rememberClientStatMessages(state.messages),
+            onGoToMessage = { messageId ->
+                sheets.info = false
+                actions.scrollToMessage(messageId)
             },
-            stats = { modifier ->
-                ConversationDashboardContent(
-                    conversationId = state.conversationId,
-                    accentColor = accentColor,
-                    clientMessages = rememberClientStatMessages(state.messages),
-                    modifier = modifier,
-                )
-            },
-            options = { modifier ->
-                Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.lg).padding(bottom = MeeshySpacing.xl)) {
-                    options.body()
-                }
-            },
+            onOpenFile = openHubFile,
+            options = options,
         )
         val infoViewModel: ConversationInfoViewModel = hiltViewModel(key = "conversation-info")
         LaunchedEffect(state.conversationId) { if (state.conversationId.isNotBlank()) infoViewModel.start(state.conversationId) }

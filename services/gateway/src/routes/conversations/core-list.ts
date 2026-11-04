@@ -817,9 +817,8 @@ export function registerConversationListRoute(
         const ownExpiresAt = firstId && servedEphemeralExpiry.has(firstId) ? servedEphemeralExpiry.get(firstId) ?? null : undefined;
         const quotedDeathAt = firstId ? quotedDeaths.get(firstId) ?? null : null;
         const servedExpiresAt = quotedDeathAt ? inheritedEphemeralExpiresAt([ownExpiresAt, quotedDeathAt]) : ownExpiresAt;
-        const lastMessageProtected = latestMessage
-          ? isPreviewWithheld(resolvePreviewProtection({ ...latestMessage, servedExpiresAt, quotedDeathAt }))
-          : false;
+        const lastMessageProtection = latestMessage ? resolvePreviewProtection({ ...latestMessage, servedExpiresAt, quotedDeathAt }) : null;
+        const lastMessageProtected = isPreviewWithheld(lastMessageProtection);
 
         // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
         // le schéma wire ne déclare pas, et le champ que les clients lisent est
@@ -876,7 +875,7 @@ export function registerConversationListRoute(
             const senderVis = sender ? presenceFor(presenceViewer, presenceVis, sender.userId) : undefined;
             return {
               ...servePostReplyCitation(projectListLastMessageBody(msg, {
-                withheld: lastMessageProtected,
+                protection: lastMessageProtection,
                 servedExpiresAt,
                 viewOnceConsumed: readerParticipantId !== undefined
                   && consumedViewOnce.has(viewOnceConsumptionKey({ messageId: msg.id, participantId: readerParticipantId })),

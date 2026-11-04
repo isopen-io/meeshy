@@ -3,6 +3,7 @@ package me.meeshy.app.navigation.graph
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,7 +37,10 @@ import me.meeshy.app.navigation.navigateKeepingSheet
 import me.meeshy.app.navigation.SheetStyle
 import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
+import me.meeshy.app.feed.MoodLookup
 import me.meeshy.app.feed.StatusesViewModel
+import me.meeshy.app.navigation.MoodBubbleFor
+import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.search.PostSearchDestination
 import me.meeshy.app.stories.StoriesViewModel
 
@@ -67,6 +71,16 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 onDismiss = { membersTarget = null },
             )
         }
+        // Le toucher de l'avatar d'une ligne (#15989) : la fiche Conversation s'ouvre sur la liste, hors du fil.
+        var infoTarget by remember { mutableStateOf<Pair<ApiConversation, String?>?>(null) }
+        infoTarget?.let { (conversation, readerId) ->
+            ConversationInfoFromList(conversation, readerId, navController) { infoTarget = null }
+        }
+        // La bulle d'humeur du badge d'avatar : les humeurs se lisent au toucher (`state.value`), jamais ici,
+        // pour qu'une humeur qui change ne recompose pas les lignes.
+        var moodBubbleUserId by rememberSaveable { mutableStateOf<String?>(null) }
+        MoodBubbleFor(moodBubbleUserId, navController, statusesViewModel) { moodBubbleUserId = null }
+        val moodsNow = { MoodLookup.from(statusesViewModel.state.value) }
         val openProfile = rememberProfileOpenerOverSheet(navController)
         ConversationListScreen(
             onConversationClick = { conversationId ->
@@ -93,6 +107,15 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 // « Appeler » compose l'appel audio du pair sans passer par le chat.
                 onViewInfo = { id -> navController.navigate(Routes.chat(id)) },
                 onCall = { id, peerName -> navController.navigate(Routes.call(id, peerName, false)) },
+                onViewConversationInfo = { conversation, readerId -> infoTarget = conversation to readerId },
+                onViewStory = { userId -> navController.navigate(Routes.story(userId)) },
+                onMoodBadgeTap = { userId ->
+                    moodsNow().entryOf(userId)?.let { entry ->
+                        moodBubbleUserId = userId
+                        statusesViewModel.markStatusViewed(entry.id)
+                    }
+                },
+                onMoodShown = { userId -> moodsNow().statusIdOf(userId)?.let(statusesViewModel::trackAvatarImpression) },
             ),
             onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             onOpenMessage = { conversationId, messageId ->

@@ -365,7 +365,7 @@ final class MessageServiceTests: XCTestCase {
     // MARK: - pin
 
     func testPinCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "pinned"], error: nil)
+        let response = APIResponse(success: true, data: DiscardedResponseBody(), error: nil)
         mock.stub("/conversations/\(convId)/messages/\(msgId)/pin", result: response)
 
         try await service.pin(conversationId: convId, messageId: msgId)

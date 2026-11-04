@@ -22,11 +22,18 @@
  *   conversations ouvertes en 24 h, absence de communauté commune, renforcé quand
  *   le destinataire est mineur. Au-delà du seuil, la demande est FILTRÉE.
  * - **Médias** : l'expéditeur d'un tête-à-tête en demande n'en envoie aucun,
- *   QUEL QUE SOIT l'âge du destinataire (contre-audit C1), jusqu'à « Accepter ».
+ *   QUEL QUE SOIT l'âge du destinataire (contre-audit C1), jusqu'à ce que le
+ *   destinataire accepte ou réponde.
  * - **Accepter** (le geste explicite) relève au moins en Connaissance, des deux
  *   côtés, le lien avec CELUI qui a fait entrer (`messageRequestFromId`, E1), et
  *   ne rouvre que ses médias fermés — jamais les droits d'un autre membre.
- *   **Répondre** efface seulement la demande (`answerMessageRequest`).
+ * - **Répondre** (`answerMessageRequest`) vaut accord dans un tête-à-tête
+ *   (décision porteur du 2026-11-04, #16053, qui remplace l'audit 3 H1) : la
+ *   demande est consommée et les médias de l'expéditeur se rouvrent, mêmes
+ *   gardes qu'« Accepter », sauf demande encore CONTENUE (RG-21) — mais aucun lien ne monte : une Connaissance
+ *   implicite reste l'affaire de `autoAcquaintance` et de ses gardes (mineur,
+ *   refus, baisse volontaire RG-07). Dans un groupe, répondre sort seulement la
+ *   conversation de la boîte (RG-22 : un groupe ne débloque rien).
  * - **Ignorer** = masquer pour soi (`delete-for-me`), silencieux.
  */
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
@@ -199,7 +206,7 @@ export type ServedMessageRequest = {
   readonly since: string | null;
   readonly filtered: boolean;
   readonly mediaBlurred: true;
-  /** Le destinataire a répondu sans accepter : hors de la boîte, « Accepter » reste à faire (audit 3, H1). */
+  /** Le destinataire a répondu sans accepter (groupe, ou tête-à-tête avant #16053) : hors de la boîte, « Accepter » reste possible. */
   readonly answered: boolean;
 };
 
@@ -259,8 +266,8 @@ const NOT_PENDING: MessageRequestAcceptance = { kind: 'not-pending' };
 
 /**
  * Une demande N'EST PAS ACCEPTÉE tant que sa ligne porte sa date (dans la boîte)
- * ou sa provenance (on y a répondu). Seul « Accepter » efface la provenance :
- * c'est elle qui tient les médias de l'expéditeur fermés (audit 3, H1).
+ * ou sa provenance (on y a répondu dans un groupe, ou dans un tête-à-tête avant
+ * #16053). « Accepter », et une réponse dans un tête-à-tête, effacent la provenance.
  */
 export const NOT_YET_ACCEPTED: Prisma.ParticipantWhereInput = {
   OR: [{ messageRequestAt: { not: null } }, { messageRequestFromId: { not: null } }],
@@ -281,7 +288,32 @@ export async function acceptMessageRequest(
   prisma: MessageRequestDb,
   params: { readonly conversationId: string; readonly userId: string; readonly now?: Date },
 ): Promise<MessageRequestAcceptance> {
-  const now = params.now ?? new Date();
+  const settled = await settleRequest(prisma, { ...params, now: params.now ?? new Date() }, { raiseLink: true });
+  return settled.kind === 'held' ? NOT_PENDING : settled;
+}
+
+/**
+ * La demande serait-elle encore CONTENUE (RG-21) si elle s'ouvrait maintenant ?
+ * Le bouclier exige au moins Connaissance (`dm.request`) — un mineur face à un
+ * inconnu. Une réponse ne relevant aucun lien, elle ne peut pas lever ce
+ * bouclier : seul « Accepter » le fait (#16053, audit C1).
+ */
+async function stillContained(prisma: MessageRequestDb, requesterId: string, recipientId: string, now: Date): Promise<boolean> {
+  const verdicts = await pairAccessAmong(prisma, { subjectId: requesterId, otherIds: [recipientId], subjectIs: 'viewer', now, feature: 'dm.request' });
+  return verdicts.get(recipientId)?.allowed !== true;
+}
+
+/**
+ * Le tronc commun d'« Accepter » et d'une réponse dans un tête-à-tête : mêmes
+ * lectures, mêmes gardes (parti ou bloqué ⇒ aucun média), même ordre d'écriture.
+ * Seul « Accepter » relève le lien (`raiseLink`).
+ */
+async function settleRequest(
+  prisma: MessageRequestDb,
+  params: { readonly conversationId: string; readonly userId: string; readonly now: Date },
+  options: { readonly raiseLink: boolean; readonly holdWhenContained?: boolean },
+): Promise<MessageRequestAcceptance | { readonly kind: 'held' }> {
+  const now = params.now;
   const own = await prisma.participant.findFirst({
     where: { conversationId: params.conversationId, userId: params.userId, isActive: true, ...NOT_YET_ACCEPTED },
     select: { id: true, messageRequestFromId: true },
@@ -289,8 +321,9 @@ export async function acceptMessageRequest(
   if (!own) return NOT_PENDING;
   const found = await requesterOf(prisma, { conversationId: params.conversationId, userId: params.userId, fromId: own.messageRequestFromId ?? null });
   const requester = found && !(await isBlockedBetween(prisma, params.userId, found.userId)) ? found : null;
+  if (requester && options.holdWhenContained && (await stillContained(prisma, requester.userId, params.userId, now))) return { kind: 'held' };
 
-  const outcome = requester
+  const outcome = requester && options.raiseLink
     ? await recordLevel(prisma as unknown as UserRelationDb, { userA: params.userId, userB: requester.userId, level: 'ACQUAINTANCE', origin: 'request', at: now })
     : null;
   // Les médias se rouvrent AVANT l'effacement (audit 4, F-e) : une panne entre les
@@ -341,27 +374,48 @@ async function requesterOf(
   return { id: row.id, userId: row.userId, direct };
 }
 
+export type MessageRequestAnswer = {
+  readonly answered: boolean;
+  /** La ligne de l'expéditeur dont les médias viennent de se rouvrir : son cache de lecture s'invalide. */
+  readonly requesterParticipantId: string | null;
+};
+
+const NOT_ANSWERED: MessageRequestAnswer = { answered: false, requesterParticipantId: null };
+
 /**
- * Le destinataire RÉPOND à une demande sans l'accepter d'un geste (audit #14107,
- * M3, contre-audit M1 et M2) : un ancien client, qui ne connaît pas la boîte,
- * reste fonctionnel — la conversation quitte la boîte et retrouve son son, dans
- * un tête-à-tête comme dans un groupe. Une réponse n'est pas un consentement :
- * elle ne relève AUCUN lien et ne rouvre AUCUN média, pour personne, quel que
- * soit l'âge. Elle ne CONSOMME pas non plus la demande (audit 3, H1) : la
- * provenance reste, « Accepter » reste possible, et lui seul rouvre les médias.
- * Une réponse et un « Accepter » simultanés aboutissent donc à « accepté ».
+ * Le destinataire RÉPOND à une demande (décision porteur du 2026-11-04, #16053,
+ * qui remplace l'audit 3 H1 : aucun client publié ne porte « Accepter »).
+ *
+ * - **Tête-à-tête** : la réponse vaut accord — même tronc qu'« Accepter »
+ *   (`settleRequest`) : la demande est consommée, et les médias de celui qui a
+ *   fait entrer se rouvrent, relus juste avant la réécriture ; parti ou bloqué,
+ *   la demande se lève sans rien rouvrir. Aucun lien ne monte (RG-07, mineurs,
+ *   refus : la Connaissance implicite reste à `autoAcquaintance`). Une réponse
+ *   déjà donnée sous l'ancienne règle (provenance seule) est consommée aussi.
+ *   Une demande que le bouclier CONTIENT encore (RG-21 : un mineur face à un
+ *   inconnu) n'est pas levée par une réponse, qui ne relève aucun lien : elle
+ *   suit la voie du groupe, et seul « Accepter » rouvre (audit C1).
+ * - **Groupe** (RG-22) : la conversation quitte la boîte et retrouve son son,
+ *   rien d'autre — la provenance reste, « Accepter » reste possible.
+ *
  * L'expéditeur qui relance n'efface rien (sa ligne ne porte pas de demande).
  */
 export async function answerMessageRequest(
   prisma: MessageRequestDb,
   params: { readonly conversationId: string; readonly userId: string; readonly now?: Date },
-): Promise<{ readonly answered: boolean }> {
+): Promise<MessageRequestAnswer> {
   const now = params.now ?? new Date();
+  const conversation = await prisma.conversation.findUnique({ where: { id: params.conversationId }, select: { type: true } });
+  if (conversation?.type === 'direct') {
+    const settled = await settleRequest(prisma, { ...params, now }, { raiseLink: false, holdWhenContained: true });
+    if (settled.kind === 'accepted') return { answered: true, requesterParticipantId: settled.requesterParticipantId };
+    if (settled.kind === 'not-pending') return NOT_ANSWERED;
+  }
   const cleared = await prisma.participant.updateMany({
     where: { conversationId: params.conversationId, userId: params.userId, isActive: true, messageRequestAt: { not: null } },
     data: { messageRequestAt: null, messageRequestRisk: null },
   });
-  if (cleared.count === 0) return { answered: false };
+  if (cleared.count === 0) return NOT_ANSWERED;
   await prisma.conversation.updateMany({ where: { id: params.conversationId }, data: { updatedAt: now } });
-  return { answered: true };
+  return { answered: true, requesterParticipantId: null };
 }

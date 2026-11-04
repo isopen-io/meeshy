@@ -193,12 +193,12 @@ function makePrisma(rows: Row[]) {
   };
 }
 
-type Emitted = { rooms: string[]; event: string; payload: any };
+type Emitted = { rooms: string[]; excepts: string[]; event: string; payload: any };
 
 function makeSocket(emitted: Emitted[], joins: string[][]) {
-  const chain = (rooms: string[]): any => ({
-    to: (room: string) => chain([...rooms, room]), except: () => chain(rooms),
-    emit: (event: string, payload: any) => emitted.push({ rooms, event, payload }),
+  const chain = (rooms: string[], excepts: string[] = []): any => ({
+    to: (room: string) => chain([...rooms, room], excepts), except: (room: string) => chain(rooms, [...excepts, room]),
+    emit: (event: string, payload: any) => emitted.push({ rooms, excepts, event, payload }),
   });
   const io = {
     to: (room: string) => chain([room]),
@@ -640,18 +640,25 @@ describe('PATCH …/:participantKey — les effets de bord survivent à la fusio
     expect(salle[0].payload).not.toHaveProperty('historyVisibleFrom');
   });
 
-  it('`role` diffuse en SALLE seule, et sans présence', async () => {
+  it('`role` diffuse en SALLE sans présence, et la CIBLE le reçoit à part, une fois (#15987)', async () => {
     const emitted: Emitted[] = [];
     const prisma = makePrisma([caller('admin'), target('member')]);
     const app = await buildApp(prisma, emitted);
     await app.inject({ method: 'PATCH', url: PATCH(TARGET_ID), payload: { role: 'moderator' } });
     await app.close();
+    await new Promise((resolve) => setImmediate(resolve));
 
-    expect(emitted).toHaveLength(1);
-    expect(emitted[0].rooms).toEqual([`conversation:${CONV_ID}`]);
-    expect(emitted[0].event).toBe('participant:role-updated');
-    expect(emitted[0].payload.participant).not.toHaveProperty('isOnline');
-    expect(emitted[0].payload.participant).not.toHaveProperty('lastActiveAt');
+    expect(emitted.every((e) => e.event === 'participant:role-updated')).toBe(true);
+    const salle = emitted.filter((e) => e.rooms.includes(`conversation:${CONV_ID}`));
+    const perso = emitted.filter((e) => e.rooms.includes(`user:${TARGET_ID}`));
+    expect(salle).toHaveLength(1);
+    expect(salle[0].excepts).toEqual([`user:${TARGET_ID}`]);
+    expect(salle[0].payload).not.toHaveProperty('viewerCapabilities');
+    expect(salle[0].payload.participant).not.toHaveProperty('isOnline');
+    expect(salle[0].payload.participant).not.toHaveProperty('lastActiveAt');
+    expect(perso).toHaveLength(1);
+    expect(perso[0].payload.newRole).toBe('moderator');
+    expect(perso[0].payload.participant).not.toHaveProperty('isOnline');
   });
 
   it('`bannedAt` ferme le LIEN d\'entrée et met fin à l\'appartenance', async () => {

@@ -66,10 +66,6 @@ fun LoginScreen(
     // Ce que l'inscription ou « Changer de compte » a remis à cet écran avant qu'il n'existe (iOS onAppear).
     LaunchedEffect(Unit) { viewModel.adoptPendingHandoffs() }
 
-    if (state.sessionClosedNotice) {
-        SessionClosedNotice(onContinue = viewModel::dismissSessionClosedNotice)
-    }
-
     LaunchedEffect(state.restartToApplyEnvironment) {
         if (state.restartToApplyEnvironment) restartToApplyServer(context)
     }

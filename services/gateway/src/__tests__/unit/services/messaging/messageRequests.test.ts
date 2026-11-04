@@ -20,6 +20,7 @@ import {
   decideOpenings,
 } from '../../../../services/messaging/messageRequests';
 import { noteMessageInteractions } from '../../../../services/relations/messageInteractions';
+import { cacheParticipant, getCachedParticipant } from '../../../../utils/participant-lookup-cache';
 import { ADULT_BIRTH, MINOR_BIRTH, messagingWorld, type CircleLink, type Row } from '../../../helpers/messaging-circle-world';
 
 const NOW = new Date('2026-11-02T12:00:00.000Z');
@@ -164,7 +165,7 @@ describe('servedMessageRequest — ce que le destinataire reçoit', () => {
     expect(servedMessageRequest({ messageRequestAt: null })).toBeNull();
   });
 
-  it('une demande à laquelle on a répondu reste à accepter : hors de la boîte, médias toujours floutés (audit 3, H1)', () => {
+  it('une demande à laquelle on a répondu sans la consommer (groupe, ou tête-à-tête avant #16053) reste à accepter : hors de la boîte, médias toujours floutés', () => {
     expect(servedMessageRequest({ messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: ALICE })).toEqual({
       since: null,
       filtered: false,
@@ -224,19 +225,59 @@ describe('acceptMessageRequest — accepter fait passer l\'expéditeur au moins 
     expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toEqual(FOUNDING_MEMBER_PERMISSIONS);
   });
 
-  it.each([['un majeur', BOB], ['un mineur', MINEUR]])('après une réponse de %s, « Accepter » reste possible et lui seul rouvre les médias (audit 3, H1)', async (_label, recipient) => {
+  it.each([['un majeur', BOB]])('dans un tête-à-tête, la réponse de %s vaut accord : médias rouverts, demande consommée, aucun lien relevé (#16053, remplace audit 3 H1)', async (_label, recipient) => {
     const world = monde({ participants: demandeEnAttente({ userId: recipient }) });
-    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: recipient, now: NOW })).resolves.toEqual({ answered: true });
-    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
-    await expect(acceptMessageRequest(db(world), { conversationId: DM, userId: recipient, now: NOW })).resolves.toMatchObject({ kind: 'accepted', requesterId: ALICE, levelRaised: true });
+    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: recipient, now: NOW })).resolves.toEqual({ answered: true, requesterParticipantId: P_ALICE });
     expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toEqual(FOUNDING_MEMBER_PERMISSIONS);
+    expect(world.participant.rows.find((p) => p.id === P_BOB)).toMatchObject({ messageRequestAt: null, messageRequestRisk: null, messageRequestFromId: null });
+    expect(world.relations.relations().some((r) => [r.userLowId, r.userHighId].includes(recipient))).toBe(false);
+    expect(world.conversation.rows.find((c) => c.id === DM)?.updatedAt).toEqual(NOW);
+    await expect(acceptMessageRequest(db(world), { conversationId: DM, userId: recipient, now: NOW })).resolves.toEqual({ kind: 'not-pending' });
+  });
+
+  it('une demande que le bouclier CONTIENT (mineur face à un inconnu, RG-21) : la réponse la sort de la boîte sans rouvrir aucun média — seul « Accepter » le fait (#16053, audit C1)', async () => {
+    const world = monde({ participants: demandeEnAttente({ userId: MINEUR }) });
+    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: MINEUR, now: NOW })).resolves.toEqual({ answered: true, requesterParticipantId: null });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
+    expect(world.participant.rows.find((p) => p.id === P_BOB)).toMatchObject({ messageRequestAt: null, messageRequestFromId: ALICE });
+    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: MINEUR, now: NOW })).resolves.toEqual({ answered: false, requesterParticipantId: null });
+    await expect(acceptMessageRequest(db(world), { conversationId: DM, userId: MINEUR, now: NOW })).resolves.toMatchObject({ kind: 'accepted', requesterId: ALICE, levelRaised: true });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toEqual(FOUNDING_MEMBER_PERMISSIONS);
+  });
+
+  it('une réponse déjà donnée sous l\'ancienne règle (provenance seule) vaut accord à la suivante (#16053)', async () => {
+    const world = monde({ participants: demandeEnAttente({ messageRequestAt: null, messageRequestRisk: null }) });
+    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW })).resolves.toEqual({ answered: true, requesterParticipantId: P_ALICE });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toEqual(FOUNDING_MEMBER_PERMISSIONS);
+    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestFromId).toBeNull();
+  });
+
+  it('répondre à quelqu\'un qu\'on a bloqué lève la demande sans rouvrir aucun média (#16053, mêmes gardes qu\'Accepter)', async () => {
+    const world = monde({ participants: demandeEnAttente() });
+    world.users.rows.find((u) => u.id === BOB)!.blockedUserIds = [ALICE];
+    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW })).resolves.toEqual({ answered: true, requesterParticipantId: null });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
     expect(world.participant.rows.find((p) => p.id === P_BOB)).toMatchObject({ messageRequestAt: null, messageRequestFromId: null });
+  });
+
+  it('répondre quand l\'expéditeur est parti lève la demande sans toucher sa ligne (#16053)', async () => {
+    const world = monde({ participants: demandeEnAttente() });
+    world.participant.rows.find((p) => p.id === P_ALICE)!.isActive = false;
+    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW })).resolves.toEqual({ answered: true, requesterParticipantId: null });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
+  });
+
+  it('l\'expéditeur qui « répond » à sa propre demande ne rouvre rien', async () => {
+    const world = monde({ participants: demandeEnAttente() });
+    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: ALICE, now: NOW })).resolves.toEqual({ answered: false, requesterParticipantId: null });
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
+    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeInstanceOf(Date);
   });
 
   it('accepter puis répondre : la réponse ne défait rien, la demande reste acceptée', async () => {
     const world = monde({ participants: demandeEnAttente() });
     await acceptMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW });
-    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW })).resolves.toEqual({ answered: false });
+    await expect(answerMessageRequest(db(world), { conversationId: DM, userId: BOB, now: NOW })).resolves.toEqual({ answered: false, requesterParticipantId: null });
     expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toEqual(FOUNDING_MEMBER_PERMISSIONS);
   });
 
@@ -259,14 +300,42 @@ describe('acceptMessageRequest — accepter fait passer l\'expéditeur au moins 
   });
 });
 
+describe('answerMessageRequest — dans un GROUPE, une réponse ne débloque rien (RG-22)', () => {
+  const GROUPE = '6200000000000000000000d2';
+  const groupe = () => {
+    const world = monde({
+      participants: [
+        { id: 'g-alice', conversationId: GROUPE, userId: ALICE, role: 'admin', isActive: true, permissions: { canSendImages: false } },
+        { id: 'g-bob', conversationId: GROUPE, userId: BOB, role: 'member', isActive: true, messageRequestAt: new Date('2026-11-01T08:00:00.000Z'), messageRequestRisk: 10, messageRequestFromId: ALICE },
+      ],
+    });
+    world.conversation.rows.push({ id: GROUPE, type: 'group' });
+    return world;
+  };
+
+  it('la conversation quitte la boîte, la provenance reste, aucun droit ni lien ne bouge', async () => {
+    const world = groupe();
+    await expect(answerMessageRequest(db(world), { conversationId: GROUPE, userId: BOB, now: NOW })).resolves.toEqual({ answered: true, requesterParticipantId: null });
+    expect(world.participant.rows.find((p) => p.id === 'g-bob')).toMatchObject({ messageRequestAt: null, messageRequestFromId: ALICE });
+    expect(world.participant.rows.find((p) => p.id === 'g-alice')?.permissions).toEqual({ canSendImages: false });
+    expect(world.relations.relations().some((r) => [r.userLowId, r.userHighId].includes(BOB))).toBe(false);
+  });
+
+  it('une seconde réponse dans le groupe n\'écrit rien', async () => {
+    const world = groupe();
+    await answerMessageRequest(db(world), { conversationId: GROUPE, userId: BOB, now: NOW });
+    await expect(answerMessageRequest(db(world), { conversationId: GROUPE, userId: BOB, now: NOW })).resolves.toEqual({ answered: false, requesterParticipantId: null });
+  });
+});
+
 describe('noteMessageInteractions — répondre à une demande l\'accepte', () => {
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-  const reply = (world: ReturnType<typeof monde>, sender: string) => {
+  const reply = (world: ReturnType<typeof monde>, sender: string, type: 'direct' | 'group' = 'direct') => {
     const prisma = {
       ...world.prisma,
       conversation: {
         ...world.conversation,
-        findUnique: async () => ({ type: 'direct', participants: world.participant.rows.map((p) => ({ userId: p.userId, messageRequestAt: p.messageRequestAt ?? null })) }),
+        findUnique: async () => ({ type, participants: world.participant.rows.map((p) => ({ userId: p.userId, messageRequestAt: p.messageRequestAt ?? null, messageRequestFromId: p.messageRequestFromId ?? null })) }),
         updateMany: world.conversation.updateMany,
       },
       pairInteractionDay: { update: async () => ({}), create: async () => ({}) },
@@ -277,14 +346,23 @@ describe('noteMessageInteractions — répondre à une demande l\'accepte', () =
     });
   };
 
-  it('le destinataire qui répond efface la demande, sans relever le lien ni rouvrir les médias (contre-audit M2)', async () => {
+  it('le destinataire qui répond vaut accord : la demande est consommée, les médias de l\'expéditeur rouverts, son cache de droits oublié, aucun lien relevé (#16053)', async () => {
     const world = monde({ participants: demandeEnAttente() });
+    cacheParticipant(P_ALICE, DM, { id: P_ALICE, conversationId: DM, isActive: true, permissions: { ...FOUNDING_MEMBER_PERMISSIONS, canSendImages: false } as never, anonymousSession: null });
     reply(world, BOB);
     for (let i = 0; i < 20; i += 1) await flush();
-    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeNull();
+    expect(world.participant.rows.find((p) => p.id === P_BOB)).toMatchObject({ messageRequestAt: null, messageRequestFromId: null });
     expect(world.relations.relations().some((r) => [r.userLowId, r.userHighId].includes(BOB))).toBe(false);
-    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
-    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestFromId).toBe(ALICE);
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toEqual(FOUNDING_MEMBER_PERMISSIONS);
+    expect(getCachedParticipant(P_ALICE, DM)).toBeUndefined();
+  });
+
+  it('une conversation déjà répondue sous l\'ancienne règle se débloque à la réponse suivante (#16053)', async () => {
+    const world = monde({ participants: demandeEnAttente({ messageRequestAt: null, messageRequestRisk: null }) });
+    reply(world, BOB);
+    for (let i = 0; i < 20; i += 1) await flush();
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toEqual(FOUNDING_MEMBER_PERMISSIONS);
+    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestFromId).toBeNull();
   });
 
   it('après une baisse volontaire, répondre efface la demande sans recréer le lien (RG-07)', async () => {
@@ -299,13 +377,25 @@ describe('noteMessageInteractions — répondre à une demande l\'accepte', () =
     expect(world.relations.relations().find((r) => [r.userLowId, r.userHighId].includes(BOB))).toMatchObject({ grantedByLow: 'PUBLIC', grantedByHigh: 'PUBLIC' });
   });
 
-  it('un mineur qui répond efface la demande, sans lien ni média rouvert : seul « Accepter » les ouvre', async () => {
+  it('un mineur que le bouclier protège encore répond : la demande quitte la boîte, aucun média ni lien (RG-21, audit C1)', async () => {
     const world = monde({ participants: demandeEnAttente({ userId: MINEUR }) });
     reply(world, MINEUR);
     for (let i = 0; i < 20; i += 1) await flush();
-    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeNull();
+    expect(world.participant.rows.find((p) => p.id === P_BOB)).toMatchObject({ messageRequestAt: null, messageRequestFromId: ALICE });
     expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
     expect(world.relations.relations().some((r) => [r.userLowId, r.userHighId].includes(MINEUR))).toBe(false);
+  });
+
+  it('dans un groupe, une ligne qui ne porte plus que la provenance ne déclenche rien (RG-22, audit C3)', async () => {
+    const world = monde({ participants: demandeEnAttente({ messageRequestAt: null, messageRequestRisk: null }) });
+    const writes: unknown[] = [];
+    const updateMany = world.participant.updateMany.bind(world.participant);
+    world.participant.updateMany = (async (args: unknown) => { writes.push(args); return updateMany(args as never); }) as never;
+    reply(world, BOB, 'group');
+    for (let i = 0; i < 20; i += 1) await flush();
+    expect(writes).toEqual([]);
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
+    expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestFromId).toBe(ALICE);
   });
 
   it('l\'expéditeur qui relance n\'accepte rien', async () => {
@@ -313,5 +403,6 @@ describe('noteMessageInteractions — répondre à une demande l\'accepte', () =
     reply(world, ALICE);
     for (let i = 0; i < 20; i += 1) await flush();
     expect(world.participant.rows.find((p) => p.id === P_BOB)?.messageRequestAt).toBeInstanceOf(Date);
+    expect(world.participant.rows.find((p) => p.id === P_ALICE)?.permissions).toMatchObject({ canSendImages: false });
   });
 });
