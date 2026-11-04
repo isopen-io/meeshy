@@ -4,7 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -111,7 +111,7 @@ public fun CommentComposerBanner(
         if (icon != null) {
             Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
         } else {
-            Box(Modifier.width(3.dp).fillMaxHeight().clip(RoundedCornerShape(2.dp)).background(accent))
+            Box(Modifier.width(3.dp).height(36.dp).clip(RoundedCornerShape(2.dp)).background(accent))
         }
         Column(Modifier.weight(1f).padding(start = MeeshySpacing.sm)) {
             Text(
