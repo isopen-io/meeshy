@@ -4,17 +4,21 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendNotFound } from '../../utils/response'
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount'
 import { announceConversationClosed } from '../../socketio/announceConversationClosed'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resoudreSuccessionDuCreateur } from '../../services/conversations/creatorSuccession'
+import { announceParticipantRoleWithCapabilities } from '../../services/conversations/obsoleteCapability'
+import { enhancedLogger } from '../../utils/logger-enhanced.js'
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure'
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
+
+const logger = enhancedLogger.child({ module: 'ConversationLeave' })
 
 export function registerLeaveRoutes(
   fastify: FastifyInstance,
@@ -293,17 +297,20 @@ export function registerLeaveRoutes(
         // cette room que son propre appareil apprend qu'il doit couper le GPS.
         // Voir l'unité pour l'ordre des trois et pourquoi il compte.
         // Le transfert d'ownership, annoncé ICI — après la DERNIÈRE écriture,
-        // comme les deux faits ci-dessus. La room de conversation seule est
-        // conservée : contrairement à la clôture, un rang ne se rend sur aucun
-        // écran de liste — le cycle 67 l'a VÉRIFIÉ plutôt que déduit, sur ce
-        // même événement et depuis la porte jumelle.
-        if (promotedSuccessor) {
-          io.to(ROOMS.conversation(id)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
-            conversationId: id,
-            userId: promotedSuccessor.userId,
-            newRole: 'creator',
-            updatedBy: userId,
-          })
+        // comme les deux faits ci-dessus. La salle l'apprend telle quelle ; le
+        // successeur, dans sa room personnelle, avec sa capacité recalculée
+        // pour son rang de créateur (#15987).
+        if (promotedSuccessor?.userId) {
+          announceParticipantRoleWithCapabilities(prisma, {
+            io,
+            payload: {
+              conversationId: id,
+              userId: promotedSuccessor.userId,
+              newRole: 'creator',
+              updatedBy: userId,
+            },
+            onError: (error) => logger.warn('viewerCapabilities unreadable for the promoted successor', { conversationId: id, error }),
+          }).catch((error: unknown) => logger.warn('participant:role-updated emission failed', { error }))
         }
 
         await endConversationMembership({ io, manager, conversationId: id, userId })
