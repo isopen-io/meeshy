@@ -424,6 +424,20 @@ final class OutboxDispatcherTests: XCTestCase {
         }
     }
 
+    // MARK: - toggleBookmarkPost: corrupt payload → MeeshyError.server(400, _) (#15997)
+
+    func test_dispatch_toggleBookmarkPost_whenCorruptPayload_throwsCode400() async {
+        let record = makeRecord(kind: .toggleBookmarkPost, payload: corrupt)
+        do {
+            try await makeSUT().dispatch(record)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt toggleBookmarkPost payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
     // MARK: - repostPost: corrupt payload → MeeshyError.server(400, _)
     // (fil rouge du repost, lot 7 tâche 7.5)
 

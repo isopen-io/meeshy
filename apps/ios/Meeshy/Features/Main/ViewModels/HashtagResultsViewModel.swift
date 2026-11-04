@@ -45,7 +45,7 @@ final class HashtagResultsViewModel: ObservableObject {
         self.service = service
         self.languageProvider = languageProvider
         self.reposter = reposter ?? ListedPostReposter(publisher: RepostPublisher(postService: service))
-        self.bookmarker = bookmarker ?? PostBookmarkWriter(service: service)
+        self.bookmarker = bookmarker ?? PostBookmarkWriter()
         self.sharer = ListedPostSharer(service: service)
         if let impressions {
             self.impressions = impressions
@@ -150,9 +150,10 @@ final class HashtagResultsViewModel: ObservableObject {
         posts[index] = PostBookmarkMutation.setting(posts[index], bookmarked: wanted)
         bookmarkInFlightIds.insert(postId)
         defer { bookmarkInFlightIds.remove(postId) }
-        guard await !bookmarker.write(bookmarked: wanted, postId: postId, post: posts[index]),
-              let current = posts.firstIndex(where: { $0.id == postId }) else { return }
-        posts[current] = PostBookmarkMutation.setting(posts[current], bookmarked: !wanted)
+        await bookmarker.write(bookmarked: wanted, postId: postId, post: posts[index], onRejected: { [weak self] in
+            guard let self, let current = posts.firstIndex(where: { $0.id == postId }) else { return }
+            posts[current] = PostBookmarkMutation.setting(posts[current], bookmarked: !wanted)
+        })
     }
 
     func isBookmarkInFlight(_ postId: String) -> Bool {
