@@ -773,7 +773,7 @@ struct MeeshyComposerHost: View {
             composer = hydrate
         case .repostingStory(let story, _):
             composer = StoryComposerViewModel(reposting: story)
-        case nil:
+        case .quotingPublication, nil:
             if let mediaSeed {
                 composer = StoryComposerViewModel(seeding: mediaSeed)
             } else {

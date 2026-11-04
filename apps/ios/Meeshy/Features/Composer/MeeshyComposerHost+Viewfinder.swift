@@ -16,7 +16,7 @@ extension MeeshyComposerHost {
     /// **L'appui long sur une scène VIDE ouvre la caméra ET filme** (#4036, #4851, #8653), jamais
     /// pendant qu'on écrit (#15674) ; la tenue part dès que la session écrit.
     func handleSceneCaptureLongPress() {
-        guard !writesText, ComposerSceneCaptureGesture.offersCapture(
+        guard !writesText, sceneServesCapture, ComposerSceneCaptureGesture.offersCapture(
             backgroundIsEmpty: !viewModel.currentSlide.effects.hasVisualBackgroundMedia,
             format: selectedFormat
         ) else { return }
@@ -28,7 +28,7 @@ extension MeeshyComposerHost {
     /// **Un toucher sur une scène VIDE ARME le viseur — il ne prend rien** (#8711) : le SECOND
     /// toucher prend la photo. Rend `true` quand il a pris le geste.
     func handleSceneQuickTap() -> Bool {
-        guard ComposerSceneQuickCapture.offers(
+        guard sceneServesCapture, ComposerSceneQuickCapture.offers(
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
             format: selectedFormat,
             stage: sceneCameraStage,
@@ -48,7 +48,7 @@ extension MeeshyComposerHost {
 
     /// Le toucher d'une scène vide armerait-il le viseur ? Sans l'armer (#13839, L5).
     var sceneQuickCaptureIsOffered: Bool {
-        ComposerSceneQuickCapture.offers(
+        sceneServesCapture && ComposerSceneQuickCapture.offers(
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
             format: selectedFormat,
             stage: sceneCameraStage,
