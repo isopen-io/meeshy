@@ -294,6 +294,8 @@
     <string name="media_audio_speed_cycle">Vitesse de lecture %1$s</string>
     <string name="media_audio_transcribe">Transcrire</string>
     <string name="media_audio_transcribing">Transcription en cours</string>
+    <string name="media_audio_transcription_see_more">Voir plus</string>
+    <string name="media_audio_transcription_see_more_a11y">Lire la transcription entière en plein écran</string>
     <string name="media_caption_see_less">voir moins</string>
     <string name="media_caption_see_less_hint">Replie la légende</string>
     <string name="media_caption_see_more">voir plus</string>
