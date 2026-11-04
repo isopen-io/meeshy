@@ -167,3 +167,54 @@ class TranscriptionKaraokeResolverTest {
         ).isEqualTo(0)
     }
 }
+
+class TranscriptionKaraokeCutTest {
+
+    private fun seg(text: String, start: Double? = 0.0, end: Double? = 1.0) =
+        MessageTranscriptionSegment(text = text, startTime = start, endTime = end)
+
+    private fun words(count: Int) = List(count) { seg("m$it", it.toDouble(), it + 1.0) }
+
+    @Test
+    fun `une transcription de 30 mots ou moins n'est pas coupee`() {
+        val segments = words(30)
+        assertThat(TranscriptionKaraokeResolver.exceedsWordLimit(segments, 30)).isFalse()
+        assertThat(TranscriptionKaraokeResolver.limitedSegments(segments, 30)).isEqualTo(segments)
+    }
+
+    @Test
+    fun `au dela de 30 mots on garde les 30 premiers et l'ellipse sur le dernier`() {
+        val cut = TranscriptionKaraokeResolver.limitedSegments(words(45), 30)
+        assertThat(cut).hasSize(30)
+        assertThat(cut.last().text).isEqualTo("m29…")
+        assertThat(cut.last().startTime).isEqualTo(29.0)
+    }
+
+    @Test
+    fun `un segment multi-mots est coupe au mot en conservant ses horodatages`() {
+        val cut = TranscriptionKaraokeResolver.limitedSegments(
+            listOf(seg("un deux trois quatre", 5.0, 9.0)),
+            wordLimit = 2,
+        )
+        assertThat(cut.single().text).isEqualTo("un deux…")
+        assertThat(cut.single().startTime).isEqualTo(5.0)
+        assertThat(cut.single().endTime).isEqualTo(9.0)
+    }
+
+    @Test
+    fun `une limite nulle ou negative ne coupe rien`() {
+        val segments = words(5)
+        assertThat(TranscriptionKaraokeResolver.exceedsWordLimit(segments, 0)).isFalse()
+        assertThat(TranscriptionKaraokeResolver.limitedSegments(segments, 0)).isEqualTo(segments)
+    }
+
+    @Test
+    fun `la coupe de la carte tronque a 255 caracteres avec trois points`() {
+        val segments = listOf(seg("a".repeat(200)), seg("b".repeat(100)))
+        val cut = TranscriptionKaraokeResolver.cardSegments(segments)
+        assertThat(cut.sumOf { it.text.length }).isEqualTo(258)
+        assertThat(cut.last().text).endsWith("...")
+        assertThat(TranscriptionKaraokeResolver.exceedsCardLimit(segments)).isTrue()
+        assertThat(TranscriptionKaraokeResolver.exceedsCardLimit(listOf(seg("court")))).isFalse()
+    }
+}
