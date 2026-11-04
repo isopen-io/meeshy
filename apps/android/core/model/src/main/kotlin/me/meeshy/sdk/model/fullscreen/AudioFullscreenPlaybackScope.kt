@@ -10,5 +10,6 @@ import me.meeshy.sdk.model.playback.AudioPlaybackState
  */
 public object AudioFullscreenPlaybackScope {
 
-    public fun of(engine: AudioPlaybackState, pageAttachmentId: String): AudioPlaybackState = engine
+    public fun of(engine: AudioPlaybackState, pageAttachmentId: String): AudioPlaybackState =
+        if (engine.attachmentId == pageAttachmentId) engine else AudioPlaybackState(speed = engine.speed)
 }
