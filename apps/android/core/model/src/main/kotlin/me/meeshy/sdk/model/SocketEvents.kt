@@ -658,6 +658,8 @@ data class SocketStoryViewedData(
     val storyId: String,
     val viewerId: String,
     val viewedAt: String? = null,
+    /** Total autoritatif de vues porté par l'événement (iOS `SocketStoryViewedData.viewCount`) ; `null` d'une ancienne passerelle. */
+    val viewCount: Int? = null,
 )
 
 @Serializable
