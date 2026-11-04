@@ -25,11 +25,13 @@ import me.meeshy.sdk.model.PostEditPayload
 import me.meeshy.sdk.model.StoryVisibility
 import me.meeshy.sdk.model.composer.StoryRepublishAudience
 import me.meeshy.sdk.model.StoryItem
-import me.meeshy.sdk.model.StoryComposerDraftSnapshot
-import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.story.FailedStoryPublish
 import me.meeshy.sdk.story.PendingStoryPublish
-import me.meeshy.sdk.story.StoryComposerDraftStore
+import me.meeshy.sdk.model.StoryDraftIndex
+import me.meeshy.sdk.model.StoryDraftSummary
+import me.meeshy.sdk.story.StoryDraftLibrary
+import me.meeshy.sdk.story.StoryFailureResume
+import me.meeshy.sdk.story.StoryResumeOutcome
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.net.NetworkResult
@@ -47,28 +49,27 @@ data class MyStoryEntry(val item: StoryItem, val viewCount: Int) {
     val id: String get() = item.id
 }
 
-/** Le brouillon du composeur vu comme une carte de l'onglet Brouillons (un seul emplacement, comme le composeur). */
+/** Un brouillon de la bibliothèque vu comme une carte de l'onglet Brouillons. */
 @Immutable
 data class MyStoryDraftEntry(
     val id: String,
     val title: String?,
     val backgroundHex: String?,
     val updatedAtEpochMillis: Long,
+    val coverFilePath: String? = null,
 ) {
     companion object {
-        const val SLOT_ID = "composer-draft"
+        /** L'emplacement unique du composeur, rangé comme le premier des brouillons. */
+        const val SLOT_ID = StoryDraftIndex.SLOT_ID
         private val HEX = Regex("^#?[0-9A-Fa-f]{6,8}$")
 
-        fun of(snapshot: StoryComposerDraftSnapshot?, nowMillis: Long): MyStoryDraftEntry? {
-            if (snapshot == null || !snapshot.isWorthRestoring) return null
-            val first = snapshot.slides.firstOrNull { it.id == snapshot.selectedId } ?: snapshot.slides.first()
-            return MyStoryDraftEntry(
-                id = SLOT_ID,
-                title = first.text.trim().takeIf { it.isNotEmpty() } ?: snapshot.postText.trim().takeIf { it.isNotEmpty() },
-                backgroundHex = first.background?.takeIf { HEX.matches(it) },
-                updatedAtEpochMillis = isoToEpochMillisOrNull(snapshot.updatedAt)?.takeIf { it > 0L } ?: nowMillis,
-            )
-        }
+        fun of(summary: StoryDraftSummary): MyStoryDraftEntry = MyStoryDraftEntry(
+            id = summary.id,
+            title = summary.title,
+            backgroundHex = summary.backgroundHex?.takeIf { HEX.matches(it) },
+            updatedAtEpochMillis = summary.updatedAtMillis,
+            coverFilePath = summary.coverFilePath,
+        )
     }
 }
 
@@ -111,6 +112,8 @@ data class MyStoriesUiState(
     val failed: List<FailedStoryPublish> = emptyList(),
     /** Brouillon local jamais envoyé (onglet Brouillons). */
     val drafts: List<MyStoryDraftEntry> = emptyList(),
+    /** Le « Reprendre » en cours (un seul à la fois) : sa rangée est désactivée. */
+    val resumingCmid: String? = null,
     /** Accent de l'auteur (hex sans #), dérivé de son nom d'utilisateur comme sur iOS. */
     val accentHex: String = "6366F1",
 )
@@ -134,6 +137,12 @@ sealed interface MyStoriesUiEvent {
     /** La dernière copie d'une publication échouée ne se jette pas sans confirmation. */
     data class RequestDiscardFailed(val cmid: String) : MyStoriesUiEvent
     data class RetryFailed(val cmid: String) : MyStoriesUiEvent
+    /** « Reprendre » : l'échec devient un brouillon, puis le composeur s'ouvre dessus. */
+    data class ResumeFailed(val cmid: String) : MyStoriesUiEvent
+    data class RetryPending(val cmid: String) : MyStoriesUiEvent
+    data class CancelPending(val cmid: String) : MyStoriesUiEvent
+    /** Rouvre le brouillon dans le composeur (Modifier, ou le glyphe Publier). */
+    data class OpenDraft(val draftId: String) : MyStoriesUiEvent
 }
 
 sealed interface MyStoriesUiEffect {
@@ -143,6 +152,11 @@ sealed interface MyStoriesUiEffect {
     data class BulkDeleteFailed(val failures: Int) : MyStoriesUiEffect
     data object Republished : MyStoriesUiEffect
     data object RepublishFailed : MyStoriesUiEffect
+
+    /** Le brouillon est prêt dans le composeur : l'écran l'ouvre par le chemin différé. */
+    data object DraftReady : MyStoriesUiEffect
+    data object ResumeFailed : MyStoriesUiEffect
+    data object DraftOpenFailed : MyStoriesUiEffect
 
     /** La republication est refusée ET l'audience d'avant n'a pas pu être rendue : la story garde [visibility]. */
     data class RepublishRefusedAudienceKept(val visibility: StoryVisibility) : MyStoriesUiEffect
@@ -161,7 +175,8 @@ class MyStoriesViewModel internal constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val blocks: BlockCache,
-    private val draftStore: StoryComposerDraftStore,
+    private val draftLibrary: StoryDraftLibrary,
+    private val failureResume: StoryFailureResume,
     private val now: () -> Long,
 ) : ViewModel() {
 
@@ -172,8 +187,9 @@ class MyStoriesViewModel internal constructor(
         sessionRepository: SessionRepository,
         socialSocket: SocialSocketManager,
         blocks: BlockCache,
-        draftStore: StoryComposerDraftStore,
-    ) : this(storyRepository, postRepository, sessionRepository, socialSocket, blocks, draftStore, System::currentTimeMillis)
+        draftLibrary: StoryDraftLibrary,
+        failureResume: StoryFailureResume,
+    ) : this(storyRepository, postRepository, sessionRepository, socialSocket, blocks, draftLibrary, failureResume, System::currentTimeMillis)
 
     private val _state = MutableStateFlow(
         MyStoriesUiState(
@@ -234,6 +250,25 @@ class MyStoriesViewModel internal constructor(
             is MyStoriesUiEvent.RequestDiscardFailed -> _state.update {
                 it.copy(pendingDelete = PendingMyStoryDelete(MyStoryDeleteConfirmation.Target.FAILED_ITEM, event.cmid))
             }
+            is MyStoriesUiEvent.ResumeFailed -> resumeFailed(event.cmid)
+            is MyStoriesUiEvent.OpenDraft -> openDraft(event.draftId)
+            is MyStoriesUiEvent.RetryPending -> viewModelScope.launch {
+                try {
+                    storyRepository.retryPublish(event.cmid)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                }
+            }
+            is MyStoriesUiEvent.CancelPending -> viewModelScope.launch {
+                try {
+                    storyRepository.discardPublish(event.cmid)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    _effects.send(MyStoriesUiEffect.DeleteFailed)
+                }
+            }
             is MyStoriesUiEvent.RetryFailed -> viewModelScope.launch {
                 try {
                     storyRepository.retryPublish(event.cmid)
@@ -270,8 +305,8 @@ class MyStoriesViewModel internal constructor(
 
     private suspend fun observeDraft() {
         try {
-            draftStore.observe().collect { snapshot ->
-                drafts = listOfNotNull(MyStoryDraftEntry.of(snapshot, now()))
+            draftLibrary.observe().collect { summaries ->
+                drafts = summaries.map(MyStoryDraftEntry::of)
                 draftsReady = true
                 rebuild(coldDone = loaded)
             }
@@ -280,6 +315,40 @@ class MyStoriesViewModel internal constructor(
         } catch (_: Exception) {
             draftsReady = true
             rebuild(coldDone = loaded)
+        }
+    }
+
+    /** Un seul « Reprendre » à la fois ; la ligne d'outbox n'est retirée que par [StoryFailureResume], une fois le brouillon relu. */
+    private fun resumeFailed(cmid: String) {
+        if (_state.value.resumingCmid != null) return
+        _state.update { it.copy(resumingCmid = cmid) }
+        viewModelScope.launch {
+            try {
+                when (val outcome = failureResume.resume(cmid)) {
+                    is StoryResumeOutcome.Resumed ->
+                        _effects.send(if (draftLibrary.activate(outcome.draftId)) MyStoriesUiEffect.DraftReady else MyStoriesUiEffect.DraftOpenFailed)
+                    StoryResumeOutcome.CopyFailed -> _effects.send(MyStoriesUiEffect.ResumeFailed)
+                    StoryResumeOutcome.NothingToResume, StoryResumeOutcome.Busy -> Unit
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _effects.send(MyStoriesUiEffect.ResumeFailed)
+            } finally {
+                _state.update { it.copy(resumingCmid = null) }
+            }
+        }
+    }
+
+    private fun openDraft(draftId: String) {
+        viewModelScope.launch {
+            try {
+                _effects.send(if (draftLibrary.activate(draftId)) MyStoriesUiEffect.DraftReady else MyStoriesUiEffect.DraftOpenFailed)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _effects.send(MyStoriesUiEffect.DraftOpenFailed)
+            }
         }
     }
 
@@ -360,8 +429,8 @@ class MyStoriesViewModel internal constructor(
             MyStoryDeleteConfirmation.Target.BULK_SELECTION -> deleteSelected()
             MyStoryDeleteConfirmation.Target.DRAFT -> viewModelScope.launch {
                 try {
-                    draftStore.clear()
-                    _effects.send(MyStoriesUiEffect.StoryDeleted)
+                    val removed = pending.storyId?.let { draftLibrary.delete(it) } ?: false
+                    _effects.send(if (removed) MyStoriesUiEffect.StoryDeleted else MyStoriesUiEffect.DeleteFailed)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
