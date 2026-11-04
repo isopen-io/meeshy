@@ -148,6 +148,35 @@ class ConversationEventDeltasTest {
     }
 
     @Test
+    fun `my own reaction posted from another device is recognised and a replay is inert`() {
+        val local = message(attachments = listOf(photo(summary = mapOf("🔥" to 3))))
+
+        val added = ConversationEventDeltas.attachmentReactions(
+            local, "a1", mapOf("🔥" to 3, "❤️" to 1), ownEmoji = "❤️", ownAdding = true,
+        )
+        assertThat(added.attachments.single().currentUserReactions).containsExactly("❤️")
+
+        val replay = ConversationEventDeltas.attachmentReactions(
+            added, "a1", mapOf("🔥" to 3, "❤️" to 1), ownEmoji = "❤️", ownAdding = true,
+        )
+        assertThat(replay).isSameInstanceAs(added)
+
+        val removed = ConversationEventDeltas.attachmentReactions(
+            added, "a1", mapOf("🔥" to 3), ownEmoji = "❤️", ownAdding = false,
+        )
+        assertThat(removed.attachments.single().currentUserReactions).isNull()
+    }
+
+    @Test
+    fun `someone else's reaction never touches my own marks`() {
+        val local = message(attachments = listOf(photo(summary = mapOf("❤️" to 1), mine = listOf("❤️"))))
+
+        val next = ConversationEventDeltas.attachmentReactions(local, "a1", mapOf("❤️" to 2))
+
+        assertThat(next.attachments.single().currentUserReactions).containsExactly("❤️")
+    }
+
+    @Test
     fun `an optimistic attachment reaction and its inverse cancel out`() {
         val local = message(attachments = listOf(photo(summary = mapOf("🔥" to 3))))
 
