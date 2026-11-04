@@ -98,4 +98,25 @@ class ParticipantRoleUpdatedDecodeTest {
 
         assertThat(event.role).isEqualTo("moderator")
     }
+
+    /** #15987 — l'exemplaire remis à la CIBLE porte sa capacité recalculée. */
+    @Test
+    fun `carries the target's recomputed viewer capabilities`() {
+        val event = json.decodeFromString<ParticipantRoleUpdatedEvent>(
+            """{"conversationId":"c1","userId":"u1","newRole":"admin","updatedBy":"u2","viewerCapabilities":{"canMakeObsolete":true}}"""
+        )
+
+        assertThat(event.viewerCapabilities).isEqualTo(ConversationViewerCapabilities(canMakeObsolete = true))
+    }
+
+    /** Une capacité illisible ne fait pas tomber l'événement : elle est absente. */
+    @Test
+    fun `an unreadable capability decodes as absent`() {
+        val event = json.decodeFromString<ParticipantRoleUpdatedEvent>(
+            """{"conversationId":"c1","userId":"u1","newRole":"admin","viewerCapabilities":{"canMakeObsolete":"oui"}}"""
+        )
+
+        assertThat(event.role).isEqualTo("admin")
+        assertThat(event.viewerCapabilities).isNull()
+    }
 }

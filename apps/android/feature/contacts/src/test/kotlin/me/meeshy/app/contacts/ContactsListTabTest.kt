@@ -2,8 +2,6 @@ package me.meeshy.app.contacts
 
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat

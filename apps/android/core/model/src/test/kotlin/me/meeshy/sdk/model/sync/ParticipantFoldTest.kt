@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.sync
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiParticipant
+import me.meeshy.sdk.model.ConversationViewerCapabilities
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantLeftEvent
 import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
@@ -83,5 +84,36 @@ class ParticipantFoldTest {
     fun `the same role again or a blank role changes nothing`() {
         assertThat(ParticipantFold.roleUpdated(group(), ParticipantRoleUpdatedEvent("c1", "me", "member"), "me")).isNull()
         assertThat(ParticipantFold.roleUpdated(group(), ParticipantRoleUpdatedEvent("c1", "me", ""), "me")).isNull()
+    }
+
+    /** #15987 — promu, le lecteur prend la capacité que l'événement lui remet. */
+    @Test
+    fun `my promotion carries my recomputed capability`() {
+        val stale = group().copy(viewerCapabilities = ConversationViewerCapabilities(canMakeObsolete = false))
+        val event = ParticipantRoleUpdatedEvent("c1", "me", "admin", viewerCapabilities = ConversationViewerCapabilities(canMakeObsolete = true))
+
+        val row = ParticipantFold.roleUpdated(stale, event, "me")!!
+
+        assertThat(row.viewerCapabilities).isEqualTo(ConversationViewerCapabilities(canMakeObsolete = true))
+    }
+
+    /** Serveur antérieur : la capacité de l'ancien rang s'efface, la règle locale reprend. */
+    @Test
+    fun `my role change without a capability clears the stale one`() {
+        val stale = group().copy(viewerCapabilities = ConversationViewerCapabilities(canMakeObsolete = false))
+
+        val row = ParticipantFold.roleUpdated(stale, ParticipantRoleUpdatedEvent("c1", "me", "admin"), "me")!!
+
+        assertThat(row.viewerCapabilities).isNull()
+    }
+
+    @Test
+    fun `another member's capability never lands on my row`() {
+        val mine = group().copy(viewerCapabilities = ConversationViewerCapabilities(canMakeObsolete = false))
+        val event = ParticipantRoleUpdatedEvent("c1", "alice", "admin", viewerCapabilities = ConversationViewerCapabilities(canMakeObsolete = true))
+
+        val row = ParticipantFold.roleUpdated(mine, event, "me")!!
+
+        assertThat(row.viewerCapabilities).isEqualTo(ConversationViewerCapabilities(canMakeObsolete = false))
     }
 }

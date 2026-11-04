@@ -98,6 +98,14 @@ struct SendFailureRecovery: SendFailureRecoveryProviding {
             hooks.adoptEndToEnd()
             return await refuseEndToEnd(.plaintextRefusedByServer, tempId: tempId, coordinator: coordinator)
         }
+        // #16053 — le droit de CE type de pièce jointe manque : le même envoi
+        // rencontrerait le même droit, par le socket comme par l'outbox.
+        if AttachmentRightRefusal.matches(error) {
+            Logger.messages.warning("perf:ios.send.fail.attachmentRight clientMessageId=\(tempId, privacy: .public)")
+            await coordinator.markFailed(localId: tempId, reason: AttachmentRightRefusal.userMessage)
+            toast.showError(AttachmentRightRefusal.userMessage)
+            return .attachmentRightRefused
+        }
         if let slowMode = NewcomerSlowMode.from(error) {
             await hooks.holdSlowMode(tempId, slowMode, error)
             return .slowMode(slowMode)
@@ -131,5 +139,16 @@ struct SendFailureRecovery: SendFailureRecoveryProviding {
         _ = await coordinator.acknowledge(localId: tempId, serverId: serverId.rawValue, at: at)
         Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId.rawValue, privacy: .public) transport=socket-fallback durationMs=\(failedAfterMs, privacy: .public)")
         return receipt
+    }
+}
+
+nonisolated extension AttachmentRightRefusal {
+    /// Ce que la bulle en échec et le message d'erreur disent, dans la langue de l'app.
+    static var userMessage: String {
+        String(
+            localized: "conversation.send.attachmentRightNotPermitted",
+            defaultValue: "Vous ne pouvez pas encore envoyer ce type de pièce jointe dans cette conversation.",
+            bundle: .main
+        )
     }
 }

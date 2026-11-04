@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {
+          "androidName": "profile_block_cancel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_block_confirm_action",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_block_confirm_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_block_confirm_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_block_entry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_block_entry_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_block_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_block_fallback_name",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_unblock_entry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_unblock_entry_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "profile_unblock_failed",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
