@@ -2,6 +2,7 @@ package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -11,7 +12,18 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.flow.MutableSharedFlow
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.ParticipantProfileCache
+import me.meeshy.sdk.conversation.ParticipantProfileKey
+import me.meeshy.sdk.model.ConversationSocketEvent
+import me.meeshy.sdk.model.ParticipantEntryLink
+import me.meeshy.sdk.model.ParticipantRightsUpdatedEvent
+import me.meeshy.sdk.model.ServedParticipantRights
+import me.meeshy.sdk.model.UserUpdatedEvent
+import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.ConversationSocketEventsManager
+import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.model.ApiParticipantProfile
 import me.meeshy.sdk.model.ParticipantCapability
 import me.meeshy.sdk.model.ParticipantEntryCapabilities
@@ -70,8 +82,19 @@ class ParticipantProfileViewModelTest {
         coEvery { it.updateHistoryGrant(any(), any(), any()) } returns write
     }
 
-    private fun viewModel(repository: ConversationRepository = repo()) =
-        ParticipantProfileViewModel(repository)
+    private val rightsEvents = MutableSharedFlow<ConversationSocketEvent>()
+    private val userEvents = MutableSharedFlow<UserUpdatedEvent>()
+    private val cache = ParticipantProfileCache()
+
+    private fun viewModel(repository: ConversationRepository = repo()): ParticipantProfileViewModel {
+        val conversationSocket = mockk<ConversationSocketEventsManager>()
+        every { conversationSocket.events } returns rightsEvents
+        val messageSocket = mockk<MessageSocketManager>()
+        every { messageSocket.userUpdated } returns userEvents
+        val session = mockk<SessionRepository>()
+        every { session.currentUserId } returns "reader"
+        return ParticipantProfileViewModel(repository, cache, conversationSocket, messageSocket, session)
+    }
 
     // ── Chargement ──────────────────────────────────────────────────────────
 
@@ -254,5 +277,106 @@ class ParticipantProfileViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.deniedCapabilities).isEmpty()
+    }
+
+    // ── Fiche instantanée, droits, direct ──────────────────────────────────
+
+    private fun allowAll() = ParticipantEntryCapabilities(
+        canSendMessages = true, canSendFiles = true, canSendImages = true, canSendVideos = true,
+        canSendAudios = true, canSendLocations = true, canSendLinks = true, canViewHistory = true,
+    )
+
+    private fun editableProfile() = profile(capabilities = allowAll()).copy(entryLink = ParticipantEntryLink(name = "L"))
+
+    @Test
+    fun `a cached profile is painted at once and a failed sync keeps it`() = runTest {
+        cache.put(ParticipantProfileKey("reader", "c1", "p1"), null, profile(canGrantHistory = true))
+        val vm = viewModel(repo(NetworkResult.Failure(ApiError("boom", code = "NETWORK"))))
+        vm.load("c1", "p1")
+        assertThat(vm.state.value.status).isEqualTo(ProfileLoadStatus.Loaded)
+        advanceUntilIdle()
+        assertThat(vm.state.value.status).isEqualTo(ProfileLoadStatus.Loaded)
+        assertThat(vm.state.value.profile).isNotNull()
+    }
+
+    @Test
+    fun `a 404 says the person left and wipes the copy`() = runTest {
+        val key = ParticipantProfileKey("reader", "c1", "p1")
+        cache.put(key, null, profile())
+        val vm = viewModel(repo(NetworkResult.Failure(ApiError("gone", httpStatus = 404))))
+        vm.load("c1", "p1")
+        advanceUntilIdle()
+        assertThat(vm.state.value.status).isEqualTo(ProfileLoadStatus.Left)
+        assertThat(cache.get(key, null)).isNull()
+    }
+
+    @Test
+    fun `toggling a right sends that single right and keeps the resolved answer`() = runTest {
+        val resolved = allowAll().copy(canSendLinks = false)
+        val repository = repo(NetworkResult.Success(editableProfile()), NetworkResult.Success(ParticipantRightsUpdateResult(rights = resolved)))
+        coEvery { repository.updateParticipantRight(any(), any(), any(), any()) } returns
+            NetworkResult.Success(ParticipantRightsUpdateResult(rights = resolved))
+        val vm = viewModel(repository)
+        vm.load("c1", "p1")
+        advanceUntilIdle()
+        vm.toggleRight(ParticipantCapability.CAN_SEND_LINKS)
+        assertThat(vm.state.value.isGranted(ParticipantCapability.CAN_SEND_LINKS)).isFalse()
+        advanceUntilIdle()
+        coVerify(exactly = 1) { repository.updateParticipantRight("c1", "p1", ParticipantCapability.CAN_SEND_LINKS, false) }
+        assertThat(vm.state.value.profile?.entryCapabilities).isEqualTo(resolved)
+        assertThat(vm.state.value.rightsWriteInFlight).isFalse()
+    }
+
+    @Test
+    fun `a refused right rolls back and announces the failure`() = runTest {
+        val repository = repo(NetworkResult.Success(editableProfile()))
+        coEvery { repository.updateParticipantRight(any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError("no", httpStatus = 403))
+        val vm = viewModel(repository)
+        vm.load("c1", "p1")
+        advanceUntilIdle()
+        vm.toggleRight(ParticipantCapability.CAN_SEND_FILES)
+        advanceUntilIdle()
+        assertThat(vm.state.value.isGranted(ParticipantCapability.CAN_SEND_FILES)).isTrue()
+        assertThat(vm.state.value.rightsFailed).isTrue()
+    }
+
+    @Test
+    fun `only one right is written at a time`() = runTest {
+        val repository = repo(NetworkResult.Success(editableProfile()))
+        coEvery { repository.updateParticipantRight(any(), any(), any(), any()) } returns
+            NetworkResult.Success(ParticipantRightsUpdateResult())
+        val vm = viewModel(repository)
+        vm.load("c1", "p1")
+        advanceUntilIdle()
+        vm.toggleRight(ParticipantCapability.CAN_SEND_FILES)
+        vm.toggleRight(ParticipantCapability.CAN_SEND_LINKS)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { repository.updateParticipantRight(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `without entryLink the rights are read only`() = runTest {
+        val repository = repo(NetworkResult.Success(profile(capabilities = allowAll())))
+        val vm = viewModel(repository)
+        vm.load("c1", "p1")
+        advanceUntilIdle()
+        vm.toggleRight(ParticipantCapability.CAN_SEND_FILES)
+        advanceUntilIdle()
+        coVerify(exactly = 0) { repository.updateParticipantRight(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `rights-updated applies live to the open profile without a reload`() = runTest {
+        val repository = repo(NetworkResult.Success(editableProfile()))
+        val vm = viewModel(repository)
+        vm.load("c1", "p1")
+        advanceUntilIdle()
+        rightsEvents.emit(
+            ParticipantRightsUpdatedEvent("c1", "p1", rights = ServedParticipantRights(canSendLinks = false)),
+        )
+        advanceUntilIdle()
+        assertThat(vm.state.value.isGranted(ParticipantCapability.CAN_SEND_LINKS)).isFalse()
+        coVerify(exactly = 1) { repository.participantProfile(any(), any()) }
     }
 }

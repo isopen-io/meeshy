@@ -132,6 +132,7 @@ internal fun ConversationMembersContent(
             accentColor = accentColor,
             onDismiss = { openProfileFor = null },
             avatarUrl = member.avatar,
+            readerRole = state.viewerRole.name,
         )
     }
 

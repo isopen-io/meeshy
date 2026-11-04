@@ -732,3 +732,16 @@ du pied et disparaît dès qu'un drapeau existe ; les drapeaux ne sont plus rend
 `LanguageFlagTapResolver.resolve` (fil, commentaires, stories) garde son modèle à texte unique : la divergence n'y reste
 qu'en dehors de la bulle de chat. Le Prisme (rangs 1 à 4, original si rien ne correspond) n'a pas changé : une seule
 fonction, `PrismTranslationResolver`.
+
+## ADR-032 — La fiche d'un participant se garde en mémoire, par lecteur (#15680, renverse la mention « pas de cache » de `ConversationRepository.participantProfile`)
+
+Jusqu'ici la fiche ne se cachait pas : elle porte des faits que la passerelle gate PAR LECTEUR (`email`, `entryLink`,
+`historyVisibleFrom`, `canGrantHistory`), et une copie aurait servi à un lecteur ce qui a été masqué à un autre. iOS
+peint pourtant sa fiche au geste, et un spinner à chaque ouverture viole le cache-first. Le renversement se fait avec
+quatre garde-fous, tenus par `ParticipantProfileCache` (`:sdk-core`, mémoire seule, jamais Room) : (1) la clé est
+lecteur + conversation + participant, un autre lecteur ne lit jamais la copie ; (2) la copie porte le rôle du lecteur
+et est jetée dès qu'il change ; (3) un 404 l'efface (« Cette personne a quitté la conversation ») ; (4) elle est un
+`PerAccountCache`, vidée à la déconnexion. Le chargement n'apparaît que sur cache vide, un échec de synchro ne retire
+pas la fiche. Le droit d'écrire reste le signal du serveur (la présence de `entryLink`), jamais recalculé, et chaque
+écriture ne porte qu'UN droit. `participant:rights-updated` (clé `historyVisibleFrom` présente = pose ou efface, absente
+= rien) et `user:updated` mettent la fiche ouverte et sa copie à jour sans relecture.

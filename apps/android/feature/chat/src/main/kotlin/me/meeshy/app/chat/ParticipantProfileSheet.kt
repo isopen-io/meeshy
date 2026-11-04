@@ -1,16 +1,22 @@
 package me.meeshy.app.chat
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.SelectableDates
+import me.meeshy.sdk.model.ParticipantCardPresenter
+import me.meeshy.sdk.model.ParticipantInfoKind
+import me.meeshy.sdk.model.ParticipantInfoRow
+import me.meeshy.ui.theme.MeeshyPalette
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -43,10 +49,8 @@ import me.meeshy.feature.chat.R
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
-import me.meeshy.sdk.model.ParticipantCapability
 import java.text.DateFormat
 import java.time.Instant
-import java.time.ZoneOffset
 import java.util.Date
 
 /**
@@ -77,12 +81,13 @@ internal fun ParticipantProfileSheet(
     onDismiss: () -> Unit,
     viewModel: ParticipantProfileViewModel = hiltViewModel(),
     avatarUrl: String? = null,
+    readerRole: String? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var datePickerOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(conversationId, participantId) {
-        viewModel.load(conversationId, participantId)
+        viewModel.load(conversationId, participantId, readerRole)
     }
 
     ModalBottomSheet(
@@ -95,19 +100,22 @@ internal fun ParticipantProfileSheet(
                 .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         ) {
+            val visitor = state.profile?.isAnonymous == true
+            val tint = if (visitor) MeeshyPalette.Purple500 else accentColor
+            val shownName = state.profile?.let(ParticipantCardPresenter::fullName)?.takeIf { it.isNotBlank() } ?: displayName
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
                 MeeshyAvatar(
-                    name = state.profile?.displayName ?: displayName,
+                    name = shownName,
                     size = 56.dp,
-                    containerColor = accentColor,
+                    containerColor = tint,
                     imageUrl = state.profile?.avatar ?: avatarUrl,
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = state.profile?.displayName ?: displayName,
+                        text = shownName,
                         style = MaterialTheme.typography.titleMedium,
                         color = MeeshyTheme.tokens.textPrimary,
                         maxLines = 1,
@@ -120,11 +128,14 @@ internal fun ParticipantProfileSheet(
                             color = MeeshyTheme.tokens.textSecondary,
                         )
                     }
-                    state.profile?.joinedAt?.let { joined ->
+                    if (visitor) {
                         Text(
-                            text = stringResource(R.string.participant_profile_joined, formatDay(joined)),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MeeshyTheme.tokens.textSecondary,
+                            text = stringResource(R.string.participant_profile_no_account),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = tint,
+                            modifier = Modifier
+                                .background(tint.copy(alpha = 0.15f), RoundedCornerShape(50))
+                                .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xxs),
                         )
                     }
                 }
@@ -132,14 +143,17 @@ internal fun ParticipantProfileSheet(
 
             when (state.status) {
                 ProfileLoadStatus.Loading, ProfileLoadStatus.Idle ->
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = accentColor,
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = accentColor)
+
+                ProfileLoadStatus.Left -> Text(
+                    text = stringResource(R.string.participant_profile_has_left),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MeeshyTheme.tokens.textSecondary,
+                )
 
                 ProfileLoadStatus.Error -> {
                     Text(
-                        text = stringResource(R.string.participant_profile_error),
+                        text = stringResource(R.string.participant_profile_unavailable),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MeeshyTheme.tokens.textSecondary,
                     )
@@ -149,37 +163,19 @@ internal fun ParticipantProfileSheet(
                 }
 
                 ProfileLoadStatus.Loaded -> {
-                    state.profile?.shareLinkName?.takeIf { it.isNotBlank() }?.let { link ->
-                        LabelledRow(
-                            icon = Icons.Filled.Link,
-                            text = stringResource(R.string.participant_profile_via_link, link),
-                        )
-                    }
+                    state.infoRows.forEach { row -> InfoRow(row) }
 
-                    // Les capacités d'entrée ne concernent QUE les visiteurs sans
-                    // compte : pour un inscrit, le gateway sert `null` et la
-                    // section disparaît plutôt que d'annoncer « aucune restriction »
-                    // à propos d'un régime qui ne s'applique pas à lui.
+                    // Les droits ne concernent que les visiteurs sans compte : pour un inscrit, le gateway sert
+                    // `null` et la section disparaît.
                     if (state.profile?.entryCapabilities != null) {
-                        SectionTitle(stringResource(R.string.participant_profile_capabilities))
-                        if (state.deniedCapabilities.isEmpty()) {
-                            LabelledRow(
-                                icon = Icons.Filled.CheckCircle,
-                                text = stringResource(R.string.participant_profile_no_restriction),
-                            )
-                        } else {
-                            state.deniedCapabilities.forEach { capability ->
-                                LabelledRow(
-                                    icon = Icons.Filled.RemoveCircleOutline,
-                                    text = stringResource(deniedLabel(capability)),
-                                )
-                            }
-                        }
+                        ParticipantRightsSection(state = state, onToggle = viewModel::toggleRight)
                     }
 
-                    // Muette pour un membre ordinaire : `historyVisibleFrom` et
-                    // `canGrantHistory` sont alors tous deux nuls/faux, et rien
-                    // n'est à dire sur un fait de modération qui ne le regarde pas.
+                    state.linkSettings?.let { settings ->
+                        ParticipantEntryLinkSection(settings, accentColor, ::formatDay)
+                    }
+
+                    // Muette pour un membre ordinaire : rien à dire sur un fait de modération qui ne le regarde pas.
                     if (state.canGrantHistory || state.historyVisibleFrom != null) {
                         SectionTitle(stringResource(R.string.participant_profile_history))
                         LabelledRow(
@@ -189,10 +185,14 @@ internal fun ParticipantProfileSheet(
                                 ?: stringResource(R.string.participant_profile_history_none),
                         )
                         if (state.canGrantHistory) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+                            ) {
                                 TextButton(
                                     onClick = { datePickerOpen = true },
                                     enabled = !state.grantWriteInFlight,
+                                    modifier = Modifier.heightIn(min = 48.dp),
                                 ) {
                                     Text(stringResource(R.string.participant_profile_history_set))
                                 }
@@ -200,6 +200,7 @@ internal fun ParticipantProfileSheet(
                                     TextButton(
                                         onClick = viewModel::clearHistoryGrant,
                                         enabled = !state.grantWriteInFlight,
+                                        modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp),
                                     ) {
                                         Text(stringResource(R.string.participant_profile_history_clear))
                                     }
@@ -208,16 +209,11 @@ internal fun ParticipantProfileSheet(
                         }
                         if (state.grantFailed) {
                             Text(
-                                text = stringResource(R.string.participant_profile_history_failed),
+                                text = stringResource(R.string.participant_profile_history_error),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
-                                // L'échec d'une écriture doit être ANNONCÉ, pas
-                                // seulement dessiné : qui ne voit pas l'écran ne
-                                // saurait sinon jamais que sa date n'a pas été
-                                // posée (#4393).
-                                modifier = Modifier.semantics {
-                                    liveRegion = LiveRegionMode.Polite
-                                },
+                                // L'échec doit être ANNONCÉ, pas seulement dessiné (#4393).
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                             )
                         }
                     }
@@ -227,7 +223,12 @@ internal fun ParticipantProfileSheet(
     }
 
     if (datePickerOpen) {
-        val pickerState = rememberDatePickerState()
+        val pickerState = rememberDatePickerState(
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis <= System.currentTimeMillis()
+                override fun isSelectableYear(year: Int): Boolean = year <= java.time.Year.now().value
+            },
+        )
         DatePickerDialog(
             onDismissRequest = { datePickerOpen = false },
             confirmButton = {
@@ -279,21 +280,39 @@ private fun LabelledRow(icon: androidx.compose.ui.graphics.vector.ImageVector, t
     }
 }
 
-/**
- * Le vocabulaire est ALIGNÉ sur celui des deux autres clients — même phrase,
- * même ordre. Deux formulations concurrentes pour une seule règle se liraient
- * comme deux règles.
- */
-private fun deniedLabel(capability: ParticipantCapability): Int = when (capability) {
-    ParticipantCapability.CAN_VIEW_HISTORY -> R.string.participant_profile_denied_can_view_history
-    ParticipantCapability.CAN_SEND_MESSAGES -> R.string.participant_profile_denied_can_send_messages
-    ParticipantCapability.CAN_SEND_IMAGES -> R.string.participant_profile_denied_can_send_images
-    ParticipantCapability.CAN_SEND_FILES -> R.string.participant_profile_denied_can_send_files
-    ParticipantCapability.CAN_SEND_VIDEOS -> R.string.participant_profile_denied_can_send_videos
-    ParticipantCapability.CAN_SEND_AUDIOS -> R.string.participant_profile_denied_can_send_audios
-    ParticipantCapability.CAN_SEND_LINKS -> R.string.participant_profile_denied_can_send_links
-    ParticipantCapability.CAN_SEND_LOCATIONS -> R.string.participant_profile_denied_can_send_locations
+@Composable
+private fun InfoRow(row: ParticipantInfoRow) {
+    val label = stringResource(
+        when (row.kind) {
+            ParticipantInfoKind.LANGUAGE -> R.string.participant_profile_info_language
+            ParticipantInfoKind.COUNTRY -> R.string.participant_profile_info_country
+            ParticipantInfoKind.JOINED -> R.string.participant_profile_info_joined
+            ParticipantInfoKind.VIA_LINK -> R.string.participant_profile_info_via_link
+            ParticipantInfoKind.EMAIL -> R.string.participant_profile_info_email
+            ParticipantInfoKind.BIRTHDAY -> R.string.participant_profile_info_birthday
+        },
+    )
+    val value = when {
+        row.withheld -> stringResource(R.string.participant_profile_withheld)
+        row.kind == ParticipantInfoKind.JOINED -> row.value?.let(::formatDayTime).orEmpty()
+        else -> row.value.orEmpty()
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MeeshyTheme.tokens.textSecondary)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (row.withheld) MeeshyTheme.tokens.textMuted else MeeshyTheme.tokens.textPrimary,
+        )
+    }
 }
+
+private fun formatDayTime(iso: String): String = runCatching {
+    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date.from(Instant.parse(iso)))
+}.getOrDefault(iso)
 
 /**
  * Une date ISO 8601 rendue dans la locale de l'appareil. Une chaîne du fil qui
