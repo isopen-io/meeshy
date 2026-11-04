@@ -16,6 +16,8 @@ import java.io.File
 import java.io.FileOutputStream
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.core.database.entity.PendingIdEntity
+import me.meeshy.core.database.crypto.DatabaseFileState
+import me.meeshy.core.database.crypto.DatabaseFileStates
 import me.meeshy.core.database.entity.PlaintextErasureEntity
 
 /**
@@ -35,6 +37,19 @@ public data class DatabaseSalvage(
     val pendingIds: List<PendingIdEntity> = emptyList(),
 ) {
     val isEmpty: Boolean get() = outbox.isEmpty() && plaintextErasures.isEmpty() && pendingIds.isEmpty()
+}
+
+/** Une base ouverte en lecture seule pour le sauvetage : il n'y lit que des `SELECT`. */
+public interface SalvageConnection : java.io.Closeable {
+    public fun query(sql: String): Cursor
+}
+
+/**
+ * Ouvre en lecture seule la base dont on sauve les lignes. La base principale est chiffrée par SQLCipher : seul un ouvreur
+ * qui détient sa clé la relit ([DatabaseRecovery.byFileState]) ; le framework n'y verrait qu'un fichier illisible.
+ */
+public fun interface SalvageOpener {
+    public fun open(database: File): SalvageConnection
 }
 
 /** Les gestes de reprise sur une base illisible : mise en quarantaine des fichiers, sauvetage de ce qui ne se refait pas. */
@@ -114,6 +129,23 @@ public object DatabaseRecovery {
         return healthy && clearCorruptionMarker(file)
     }
 
+    /** L'ouvreur du framework : bases en clair (base de repli d'un lancement antérieur, base d'avant le chiffrement). */
+    public val frameworkSalvage: SalvageOpener = SalvageOpener { file ->
+        val db = openReadOnly(file)
+        object : SalvageConnection {
+            override fun query(sql: String): Cursor = db.rawQuery(sql, null)
+            override fun close() = db.close()
+        }
+    }
+
+    /**
+     * Choisit l'ouvreur d'après l'en-tête du fichier : une base encore en clair (migration qui a échoué sur une page
+     * abîmée) se relit par le framework, toute autre par [encrypted], qui détient la clé SQLCipher.
+     */
+    public fun byFileState(encrypted: SalvageOpener): SalvageOpener = SalvageOpener { file ->
+        if (DatabaseFileStates.of(file) == DatabaseFileState.PLAINTEXT) frameworkSalvage.open(file) else encrypted.open(file)
+    }
+
     /** [database] en lecture-écriture, avec un gestionnaire d'erreurs inerte ; `null` si elle ne s'ouvre pas. */
     public fun openWritable(database: File): SQLiteDatabase? =
         try {
@@ -140,19 +172,25 @@ public object DatabaseRecovery {
         }
     }
 
-    /** Tout ce qui se sauve de [database], chaque table lue indépendamment : une table illisible n'emporte pas les autres. */
-    public fun salvage(database: File): DatabaseSalvage = DatabaseSalvage(
-        outbox = salvageOutbox(database),
-        plaintextErasures = salvagePlaintextErasures(database),
-        pendingIds = salvagePendingIds(database),
+    /**
+     * Tout ce qui se sauve de [database], chaque table lue indépendamment : une table illisible n'emporte pas les autres.
+     * [opener] ouvre le fichier : le framework par défaut, l'ouvreur SQLCipher pour la base principale chiffrée.
+     */
+    public fun salvage(database: File, opener: SalvageOpener = frameworkSalvage): DatabaseSalvage = DatabaseSalvage(
+        outbox = salvageOutbox(database, opener),
+        plaintextErasures = salvagePlaintextErasures(database, opener),
+        pendingIds = salvagePendingIds(database, opener),
     )
 
     /**
      * Les clairs E2EE que le coffre doit encore retirer (#14655), acquittés compris : le coffre survit à la base, et une
      * inscription perdue laisserait le clair d'un message effacé dans le coffre pour toujours.
      */
-    public fun salvagePlaintextErasures(database: File): List<PlaintextErasureEntity> =
-        readRows(database, "e2ee_plaintext_erasures") { row ->
+    public fun salvagePlaintextErasures(
+        database: File,
+        opener: SalvageOpener = frameworkSalvage,
+    ): List<PlaintextErasureEntity> =
+        readRows(database, "e2ee_plaintext_erasures", opener) { row ->
             PlaintextErasureEntity(
                 account = row.text("account") ?: return@readRows null,
                 kind = row.text("kind") ?: return@readRows null,
@@ -165,8 +203,8 @@ public object DatabaseRecovery {
         }
 
     /** Les ponts `cid_` → identifiant serveur : sans eux, l'écho socket d'un envoi récupéré crée une bulle en double. */
-    public fun salvagePendingIds(database: File): List<PendingIdEntity> =
-        readRows(database, "pending_ids") { row ->
+    public fun salvagePendingIds(database: File, opener: SalvageOpener = frameworkSalvage): List<PendingIdEntity> =
+        readRows(database, "pending_ids", opener) { row ->
             PendingIdEntity(
                 localId = row.text("localId") ?: return@readRows null,
                 serverId = row.text("serverId") ?: return@readRows null,
@@ -177,8 +215,8 @@ public object DatabaseRecovery {
 
     /**
      * Les copies laissées par une reprise : `<base>.corrupted.<ts>*`, la base de repli, et les marqueurs de corruption.
-     * Les copies ne sont pas chiffrées et portent l'historique du compte qui les a écrites : elles quittent l'appareil
-     * avec la session.
+     * Les copies portent l'historique du compte qui les a écrites (en clair pour celles d'avant le chiffrement ou d'une
+     * base de repli antérieure) : elles quittent l'appareil avec la session.
      */
     public fun leftovers(primary: File, secondary: File): List<File> =
         quarantined(primary) + listOf(corruptionMarker(primary)).filter { it.exists() } + fallbackFiles(secondary)
@@ -257,16 +295,17 @@ public object DatabaseRecovery {
             cursor.getColumnIndex(name).takeIf { it >= 0 && !cursor.isNull(it) }?.let(cursor::getLong)
     }
 
-    private fun <T : Any> readRows(database: File, table: String, map: (Row) -> T?): List<T> {
+    /** SQLCipher lève ses propres exceptions et une clé absente lève avant SQLite : tout échec rend une liste vide. */
+    private fun <T : Any> readRows(database: File, table: String, opener: SalvageOpener, map: (Row) -> T?): List<T> {
         if (!database.exists()) return emptyList()
         return try {
-            openReadOnly(database).use { db ->
-                db.rawQuery("SELECT * FROM $table", null).use { cursor ->
+            opener.open(database).use { db ->
+                db.query("SELECT * FROM $table").use { cursor ->
                     val row = Row(cursor)
                     buildList { while (cursor.moveToNext()) map(row)?.let { add(it) } }
                 }
             }
-        } catch (_: SQLiteException) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
@@ -275,43 +314,26 @@ public object DatabaseRecovery {
      * Relit les envois en attente d'une base qu'on s'apprête à mettre de côté. Lecture seule, tolérante : une table
      * absente ou illisible rend une liste vide, jamais une exception.
      */
-    public fun salvageOutbox(database: File): List<OutboxEntity> {
-        if (!database.exists()) return emptyList()
-        return try {
-            openReadOnly(database).use { db ->
-                db.rawQuery("SELECT * FROM outbox", null).use { cursor ->
-                    val rows = ArrayList<OutboxEntity>()
-                    while (cursor.moveToNext()) {
-                        fun text(name: String): String? =
-                            cursor.getColumnIndex(name).takeIf { it >= 0 && !cursor.isNull(it) }?.let(cursor::getString)
-                        fun number(name: String): Long? =
-                            cursor.getColumnIndex(name).takeIf { it >= 0 && !cursor.isNull(it) }?.let(cursor::getLong)
-                        val cmid = text("cmid") ?: continue
-                        rows += OutboxEntity(
-                            cmid = cmid,
-                            lane = text("lane") ?: continue,
-                            kind = text("kind") ?: continue,
-                            targetId = text("targetId").orEmpty(),
-                            payload = text("payload").orEmpty(),
-                            dependsOn = text("dependsOn"),
-                            attempts = number("attempts")?.toInt() ?: 0,
-                            state = text("state") ?: "PENDING",
-                            createdAt = number("createdAt") ?: 0L,
-                            updatedAt = number("updatedAt") ?: 0L,
-                            nextAttemptAt = number("nextAttemptAt"),
-                            lastError = text("lastError"),
-                            waitingSince = number("waitingSince"),
-                            cancelRequestedAt = number("cancelRequestedAt"),
-                            ownerId = text("ownerId"),
-                        )
-                    }
-                    rows
-                }
-            }
-        } catch (_: SQLiteException) {
-            emptyList()
+    public fun salvageOutbox(database: File, opener: SalvageOpener = frameworkSalvage): List<OutboxEntity> =
+        readRows(database, "outbox", opener) { row ->
+            OutboxEntity(
+                cmid = row.text("cmid") ?: return@readRows null,
+                lane = row.text("lane") ?: return@readRows null,
+                kind = row.text("kind") ?: return@readRows null,
+                targetId = row.text("targetId").orEmpty(),
+                payload = row.text("payload").orEmpty(),
+                dependsOn = row.text("dependsOn"),
+                attempts = row.number("attempts")?.toInt() ?: 0,
+                state = row.text("state") ?: "PENDING",
+                createdAt = row.number("createdAt") ?: 0L,
+                updatedAt = row.number("updatedAt") ?: 0L,
+                nextAttemptAt = row.number("nextAttemptAt"),
+                lastError = row.text("lastError"),
+                waitingSince = row.number("waitingSince"),
+                cancelRequestedAt = row.number("cancelRequestedAt"),
+                ownerId = row.text("ownerId"),
+            )
         }
-    }
 
     /** Une exception d'ouverture qui relève d'un fichier abîmé ou d'un disque qui refuse, plutôt que d'un bug de code. */
     public fun isStorageFailure(failure: Throwable): Boolean = classify(failure) != OpenFailureKind.DEFECT

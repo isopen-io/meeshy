@@ -2,6 +2,10 @@ package me.meeshy.core.database.crypto
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.security.InMemorySecureStore
+import me.meeshy.sdk.model.security.SecureKeyNamespace
+import me.meeshy.sdk.model.security.SecureRead
+import me.meeshy.sdk.model.security.SecureStore
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class DatabaseKeyProviderTest {
@@ -29,7 +33,7 @@ class DatabaseKeyProviderTest {
     }
 
     @Test
-    fun `un coffre qui ne sait plus relire la cle en regenere une et le signale`() {
+    fun `un coffre recree de facon certaine regenere la cle et le signale`() {
         val (_, store) = provider()
         val original = DatabaseKeyProvider(store).obtain()
         val unreadable = InMemorySecureStore(allUnreadable = true)
@@ -42,11 +46,50 @@ class DatabaseKeyProviderTest {
     }
 
     @Test
-    fun `une cle illisible du coffre est regeneree`() {
+    fun `une cle illisible du coffre n'est jamais ecrasee et l'ouverture se replie en memoire`() {
         val store = InMemorySecureStore()
         store.put(DatabaseKeyProvider.KEY, "pas-une-cle", DatabaseKeyProvider.ACCOUNT)
 
-        assertThat(DatabaseKeyProvider(store).obtain().origin).isEqualTo(KeyOrigin.REGENERATED)
+        assertThrows(DatabaseKeyUnavailableException::class.java) { DatabaseKeyProvider(store).obtain() }
+
+        assertThat(store.get(DatabaseKeyProvider.KEY, DatabaseKeyProvider.ACCOUNT)).isEqualTo("pas-une-cle")
+    }
+
+    @Test
+    fun `une entree du coffre momentanement illisible n'est pas ecrasee et reste pour le lancement suivant`() {
+        val original = DatabaseKeyProvider(InMemorySecureStore()).obtain()
+        val composed = SecureKeyNamespace.compose(DatabaseKeyProvider.ACCOUNT, DatabaseKeyProvider.KEY)
+        val flaky = InMemorySecureStore(unreadableKeys = setOf(composed)).also {
+            it.put(DatabaseKeyProvider.KEY, original.hex(), DatabaseKeyProvider.ACCOUNT)
+        }
+
+        assertThrows(DatabaseKeyUnavailableException::class.java) { DatabaseKeyProvider(flaky).obtain() }
+
+        assertThat(flaky.get(DatabaseKeyProvider.KEY, DatabaseKeyProvider.ACCOUNT)).isEqualTo(original.hex())
+    }
+
+    @Test
+    fun `un coffre qui a abandonne n'ecrit rien et la cle se retente au lancement suivant`() {
+        val vault = GaveUpVault()
+
+        assertThrows(DatabaseKeyUnavailableException::class.java) { DatabaseKeyProvider(vault).obtain() }
+
+        assertThat(vault.writes).isEqualTo(0)
+    }
+
+    /** Le coffre Keystore qui a renonce (`gaveUp`) : toute lecture est illisible, toute ecriture refusee. */
+    private class GaveUpVault : SecureStore {
+        var writes = 0
+        override fun get(key: String, account: String?): String? = null
+        override fun read(key: String, account: String?): SecureRead = SecureRead.Unreadable
+        override fun put(key: String, value: String, account: String?): Boolean {
+            writes++
+            return false
+        }
+        override fun remove(key: String, account: String?) = Unit
+        override fun keys(account: String?): Set<String> = emptySet()
+        override fun clearAccount(account: String) = Unit
+        override fun clearAll() = Unit
     }
 
     @Test(expected = DatabaseEncryptionException::class)

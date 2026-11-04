@@ -35,4 +35,11 @@ class DatabaseFileStateTest {
     fun `un fichier plus court qu'une page sans en-tete est tronque`() {
         assertThat(DatabaseFileStates.of(file(ByteArray(100) { 9 }))).isEqualTo(DatabaseFileState.TRUNCATED)
     }
+
+    @Test
+    fun `un en-tete que le disque refuse de lire est indisponible, jamais tronque`() {
+        val unreadable = File(folder.root, "meeshy.db").also { it.mkdirs() }
+
+        assertThat(DatabaseFileStates.of(unreadable)).isEqualTo(DatabaseFileState.UNAVAILABLE)
+    }
 }

@@ -2,6 +2,8 @@ package me.meeshy.core.database.crypto
 
 import com.google.common.truth.Truth.assertThat
 import java.io.File
+import me.meeshy.core.database.DatabaseRecovery
+import me.meeshy.core.database.OpenFailureKind
 import me.meeshy.sdk.model.security.InMemorySecureStore
 import org.junit.Assert.assertThrows
 import org.junit.Rule
@@ -99,6 +101,53 @@ class EncryptedDatabaseBootstrapTest {
         bootstrap.prepare()
         bootstrap.prepare()
 
+        assertThat(engine.exports).isEqualTo(1)
+    }
+
+    @Test
+    fun `un fichier que le disque refuse de lire leve une indisponibilite sans rien purger`() {
+        val unreadable = main().also { it.mkdirs() }
+        val events = mutableListOf<String>()
+
+        val failure = assertThrows(DatabaseStorageUnavailableException::class.java) {
+            bootstrap(FakeEngine(), InMemorySecureStore(), events).prepare()
+        }
+
+        assertThat(DatabaseRecovery.classify(failure)).isEqualTo(OpenFailureKind.UNAVAILABLE)
+        assertThat(unreadable.exists()).isTrue()
+        assertThat(events).isEmpty()
+    }
+
+    @Test
+    fun `un export refuse par un disque plein est une indisponibilite, pas une corruption`() {
+        writePlain()
+        val engine = object : PlaintextExportEngine {
+            override fun export(plain: File, target: File, passphrase: ByteArray) =
+                throw java.io.IOException("write failed: ENOSPC (No space left on device)")
+
+            override fun verify(source: File?, encrypted: File, passphrase: ByteArray) = true
+        }
+        val keys = DatabaseKeyProvider(InMemorySecureStore())
+
+        val failure = assertThrows(PlaintextMigrationException::class.java) {
+            EncryptedDatabaseBootstrap(main(), keys, PlaintextDatabaseMigrator(engine)).prepare()
+        }
+
+        assertThat(DatabaseRecovery.classify(failure)).isEqualTo(OpenFailureKind.UNAVAILABLE)
+        assertThat(DatabaseFileStates.of(main())).isEqualTo(DatabaseFileState.PLAINTEXT)
+    }
+
+    @Test
+    fun `la cle de sauvetage se lit sans rejouer la migration qui a echoue`() {
+        writePlain()
+        val store = InMemorySecureStore()
+        val engine = FakeEngine(failExport = true)
+        val bootstrap = bootstrap(engine, store)
+        assertThrows(PlaintextMigrationException::class.java) { bootstrap.prepare() }
+
+        val key = bootstrap.salvageKey()
+
+        assertThat(key?.hex()).isEqualTo(DatabaseKeyProvider(store).obtain().hex())
         assertThat(engine.exports).isEqualTo(1)
     }
 }

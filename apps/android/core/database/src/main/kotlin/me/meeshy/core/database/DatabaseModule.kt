@@ -32,6 +32,7 @@ import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.dao.TusUploadCheckpointDao
 import me.meeshy.core.database.crypto.DatabaseKeyProvider
 import me.meeshy.core.database.crypto.EncryptedDatabaseBootstrap
+import me.meeshy.core.database.crypto.EncryptionEventSink
 import me.meeshy.core.database.crypto.PlaintextDatabaseMigrator
 import me.meeshy.core.database.crypto.SqlCipherRuntime
 import me.meeshy.core.datastore.SecretVault
@@ -62,13 +63,20 @@ internal object DatabaseModule {
             secondaryFile = secondaryFile(context),
             leftovers = leftovers,
             readable = { file -> SqlCipherRuntime.isReadable(file, encryption) },
+            prepare = {
+                SqlCipherRuntime.ensureLoaded()
+                encryption.prepare()
+            },
+            salvageOpener = SqlCipherRuntime.salvageOpener(encryption),
+            allowsSecondary = false,
             build = { ctx, location -> encrypted(meeshyDatabaseBuilder(ctx, location), location, encryption).build() },
         ).open()
 
     /**
-     * Seule la base principale est chiffrée (SQLCipher, ADR-013) ; la base de repli d'un disque qui refuse et la base en
-     * mémoire d'un lancement dégradé restent celles du framework, que la reprise sait relire. Un échec de chiffrement
-     * lève : il n'y a jamais de repli en clair de la base principale.
+     * Seule la base principale est sur disque, et elle est chiffrée (SQLCipher, ADR-013). Aucune base de repli n'est
+     * écrite (`allowsSecondary = false`) : elle serait en clair ; un disque qui refuse mène à la base EN MÉMOIRE, qui ne
+     * laisse rien sur l'appareil. Une base de repli laissée par une version antérieure est reprise puis supprimée. Un échec
+     * du chiffrement n'est jamais un repli en clair : [DatabaseOpener] ouvre alors la base en mémoire.
      */
     private fun encrypted(
         builder: RoomDatabase.Builder<MeeshyDatabase>,
@@ -86,10 +94,13 @@ internal object DatabaseModule {
     fun providesEncryptedDatabaseBootstrap(
         @ApplicationContext context: Context,
         @SecretVault vault: SecureStore,
+        diagnostics: DatabaseInitDiagnostics,
+        health: StorageHealth,
     ): EncryptedDatabaseBootstrap = EncryptedDatabaseBootstrap(
         databaseFile = context.getDatabasePath(DATABASE_NAME),
         keys = DatabaseKeyProvider(vault),
         migrator = PlaintextDatabaseMigrator(SqlCipherRuntime.Engine),
+        onEvent = EncryptionEventSink(diagnostics, health),
     )
 
     @Provides

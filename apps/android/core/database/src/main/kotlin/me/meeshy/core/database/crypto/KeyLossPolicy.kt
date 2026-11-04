@@ -10,6 +10,9 @@ public enum class StartupAction {
 
     /** Fichier irrécupérable (clé perdue, tronqué) : le supprimer et repartir à froid (cache vide, squelette). */
     PURGE_THEN_OPEN,
+
+    /** Le disque refuse de lire le fichier : n'y rien toucher ; ce lancement s'ouvre en mémoire, le suivant réessaie. */
+    DEFER,
 }
 
 /** L'arbre de décision pur du démarrage, croisant l'origine de la clé et l'état du fichier. */
@@ -18,6 +21,7 @@ public object KeyLossPolicy {
         DatabaseFileState.ABSENT -> StartupAction.OPEN
         DatabaseFileState.PLAINTEXT -> StartupAction.MIGRATE_PLAINTEXT
         DatabaseFileState.TRUNCATED -> StartupAction.PURGE_THEN_OPEN
+        DatabaseFileState.UNAVAILABLE -> StartupAction.DEFER
         DatabaseFileState.ENCRYPTED -> when (origin) {
             KeyOrigin.EXISTING -> StartupAction.OPEN
             KeyOrigin.CREATED, KeyOrigin.REGENERATED -> StartupAction.PURGE_THEN_OPEN

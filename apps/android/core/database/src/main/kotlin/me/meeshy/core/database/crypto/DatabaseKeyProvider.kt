@@ -42,13 +42,22 @@ public class DatabaseKey internal constructor(private val material: ByteArray, p
 }
 
 /** Le chiffrement n'a pas pu se mettre en place : l'échec remonte, il n'y a JAMAIS de repli en clair. */
-public class DatabaseEncryptionException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
+public open class DatabaseEncryptionException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
+
+/**
+ * Le coffre n'a pas rendu la clé, sans prouver qu'elle est perdue (Keystore qui a renoncé, entrée illisible, valeur
+ * malformée). Rien n'est écrasé : ce lancement s'ouvre en mémoire, le suivant relit le coffre.
+ */
+public class DatabaseKeyUnavailableException(message: String) : DatabaseEncryptionException(message)
 
 /**
  * La clé aléatoire de la base, gardée dans le coffre Keystore (`SecureStore`, AES-GCM adossé à l'Android Keystore).
- * Créée une seule fois, relue à l'identique ensuite. Si le coffre ne sait plus la relire (Keystore invalidé,
- * réinstallation, changement biométrique), une nouvelle clé est créée et marquée [KeyOrigin.REGENERATED] : la base
- * chiffrée par l'ancienne est alors irrécupérable et [KeyLossPolicy] la purge.
+ * Créée une seule fois, relue à l'identique ensuite. Une clé n'est créée que dans deux cas, qui prouvent que l'ancienne
+ * n'existe plus : le coffre la dit ABSENTE ([KeyOrigin.CREATED]), ou il a été RECRÉÉ (Keystore invalidé, réinstallation,
+ * changement biométrique) et, la reprise acquittée, il la dit absente ([KeyOrigin.REGENERATED]) — la base chiffrée par
+ * l'ancienne est alors irrécupérable et [KeyLossPolicy] la purge. Toute autre lecture qui échoue (coffre qui a renoncé,
+ * entrée illisible, valeur malformée) lève [DatabaseKeyUnavailableException] SANS rien écrire : écraser la clé sur une
+ * panne passagère détruirait la base, outbox comprise.
  */
 public class DatabaseKeyProvider(
     private val store: SecureStore,
@@ -67,13 +76,27 @@ public class DatabaseKeyProvider(
     }
 
     private fun load(): DatabaseKey = when (val read = store.read(KEY, ACCOUNT)) {
-        is SecureRead.Present -> DatabaseKey.fromHex(read.value, KeyOrigin.EXISTING) ?: create(KeyOrigin.REGENERATED)
+        is SecureRead.Present -> existing(read.value)
         SecureRead.Absent -> create(KeyOrigin.CREATED)
-        SecureRead.Unreadable -> {
-            store.acknowledgeRecovery(ACCOUNT)
-            create(KeyOrigin.REGENERATED)
+        SecureRead.Unreadable -> afterRecovery()
+    }
+
+    /**
+     * Une lecture illisible ne dit pas encore si la clé est perdue. On acquitte la reprise du coffre puis on relit : seule
+     * une ABSENCE, lue dans un coffre qui s'ouvre, prouve qu'il a été recréé sans elle.
+     */
+    private fun afterRecovery(): DatabaseKey {
+        store.acknowledgeRecovery(ACCOUNT)
+        return when (val reread = store.read(KEY, ACCOUNT)) {
+            SecureRead.Absent -> create(KeyOrigin.REGENERATED)
+            is SecureRead.Present -> existing(reread.value)
+            SecureRead.Unreadable -> throw DatabaseKeyUnavailableException("database key is unreadable in the secure vault")
         }
     }
+
+    private fun existing(value: String): DatabaseKey =
+        DatabaseKey.fromHex(value, KeyOrigin.EXISTING)
+            ?: throw DatabaseKeyUnavailableException("database key in the secure vault is malformed")
 
     private fun create(origin: KeyOrigin): DatabaseKey {
         val key = DatabaseKey(random(), origin)

@@ -76,8 +76,9 @@ tracing = "1.2.0"
 # lot: about-and-support-pages-iso (#14771)
 playReview = "2.0.1"
 
-# lot: persist-sqlcipher-base-chiffree (#15880) — SQLCipher (ADR-013) : base Room chiffrée au repos.
-sqlcipher = "4.5.6"
+# lot: persist-sqlcipher-base-chiffree (#15880) — SQLCipher (ADR-013) : base Room chiffrée au repos. 4.6.1 au moins : ses
+# bibliothèques natives sont alignées sur 16 Ko (LOAD 0x4000), exigé par Google Play avec targetSdk 36 (4.5.6 : 0x1000).
+sqlcipher = "4.6.1"
 
 [libraries]
 play-services-auth-blockstore = { module = "com.google.android.gms:play-services-auth-blockstore", version.ref = "playServicesAuthBlockstore" }

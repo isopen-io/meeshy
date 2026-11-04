@@ -31,4 +31,11 @@ class KeyLossPolicyTest {
             assertThat(KeyLossPolicy.decide(origin, DatabaseFileState.ABSENT)).isEqualTo(StartupAction.OPEN)
         }
     }
+
+    @Test
+    fun `un fichier que le disque refuse de lire n'est jamais purge`() {
+        KeyOrigin.values().forEach { origin ->
+            assertThat(KeyLossPolicy.decide(origin, DatabaseFileState.UNAVAILABLE)).isEqualTo(StartupAction.DEFER)
+        }
+    }
 }

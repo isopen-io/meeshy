@@ -2,8 +2,11 @@ package me.meeshy.core.database.crypto
 
 import java.io.File
 
-/** Ce que l'en-tête du fichier `meeshy.db` dit de son contenu. */
-public enum class DatabaseFileState { ABSENT, PLAINTEXT, ENCRYPTED, TRUNCATED }
+/**
+ * Ce que l'en-tête du fichier `meeshy.db` dit de son contenu. [UNAVAILABLE] : le disque a refusé de le lire (E/S, droits) ;
+ * il ne dit RIEN du fichier, qui n'est donc jamais purgé pour autant.
+ */
+public enum class DatabaseFileState { ABSENT, PLAINTEXT, ENCRYPTED, TRUNCATED, UNAVAILABLE }
 
 public object DatabaseFileStates {
     private val PLAINTEXT_HEADER: ByteArray = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
@@ -24,7 +27,7 @@ public object DatabaseFileStates {
         val header = try {
             file.inputStream().use { input -> ByteArray(PLAINTEXT_HEADER.size).also { buffer -> input.read(buffer) } }
         } catch (_: java.io.IOException) {
-            return DatabaseFileState.TRUNCATED
+            return DatabaseFileState.UNAVAILABLE
         }
         return classify(header, file.length())
     }

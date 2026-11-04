@@ -41,6 +41,7 @@ public object PlaintextMigrationPlan {
             facts.tempExists -> listOf(MigrationStep.DISCARD_TEMP)
             else -> emptyList()
         }
+        DatabaseFileState.UNAVAILABLE -> emptyList()
         DatabaseFileState.ENCRYPTED, DatabaseFileState.TRUNCATED -> buildList {
             if (facts.tempExists) add(MigrationStep.DISCARD_TEMP)
             if (facts.backupExists) add(MigrationStep.DELETE_BACKUP)

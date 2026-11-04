@@ -56,4 +56,9 @@ class PlaintextMigrationPlanTest {
         assertThat(steps(DatabaseFileState.ENCRYPTED, temp = true, backup = true))
             .containsExactly(MigrationStep.DISCARD_TEMP, MigrationStep.DELETE_BACKUP).inOrder()
     }
+
+    @Test
+    fun `un fichier que le disque refuse de lire ne declenche aucun geste`() {
+        assertThat(steps(DatabaseFileState.UNAVAILABLE, temp = true, backup = true)).isEmpty()
+    }
 }

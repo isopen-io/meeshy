@@ -256,12 +256,34 @@ singleton is built. An existing plaintext install is migrated at that first open
 the durable tables: outbox, media_blob, tus_upload_checkpoint, ...), then swapped in;
 the plaintext copy (`.plain.bak`) is deleted last, and an interrupted run resumes from
 what the disk shows (`PlaintextMigrationPlan`). The FTS projection is dropped before
-the export and rebuilt by `SearchIndexSchema.ensure` on open. Any encryption failure
-throws: there is no plaintext fallback of the primary database. Key loss (Keystore
+the export and rebuilt by `SearchIndexSchema.ensure` on open. Key loss (Keystore
 invalidated, reinstall, biometric change, data cleared) is detected (`KeyLossPolicy`:
 encrypted file + new key, or a file SQLCipher reports as "not a database") and the
-file is purged: a cold start, never a crash. The disk-full fallback database and the
-in-memory database stay on the framework (the salvage of `DatabaseOpener` reads them).
+file is purged: a cold start, never a crash.
+
+**Amendment (2026-11, #15880 — adversarial audit of PR #15908).** SQLCipher is pinned
+at **4.6.1 or later**: its native libraries are 16 KB-aligned (`LOAD` 0x4000; 4.5.6 was
+0x1000, refused by Google Play with `targetSdk 36` and an `UnsatisfiedLinkError` on
+16 KB-page devices). A failing encrypted start never crash-loops and never falls back
+to plaintext: `DatabaseOpener` runs the bootstrap first and catches its failure — a
+still-plaintext file that a corruption prevents from exporting is salvaged,
+quarantined and recreated encrypted; any other failure (disk, vault that does not
+return the key, missing native library) opens the database **in memory** for this
+launch, leaves the file untouched, and the next launch retries. A key is created only
+when the vault says it is ABSENT, or after it was recreated with certainty
+(`acknowledgeRecovery` then an absent read); an unreadable or malformed entry is never
+overwritten (`DatabaseKeyUnavailableException`). An unreadable file header is
+`UNAVAILABLE`, never `TRUNCATED`, and is never purged. The salvage reads the encrypted
+primary through SQLCipher with the key (outbox, `pending_ids`,
+`e2ee_plaintext_erasures`). No fallback database is written any more (it would be
+plaintext): a refusing disk leads to the in-memory database; a fallback left by an
+older build is adopted then deleted. `onCorruption` is relayed to Room's callback by
+our own helper (SQLCipher's `SupportHelper` drops it), so the corruption marker is set
+again. The `ATTACH … KEY` of the export binds the path and the key as parameters: the
+key never appears in SQL text. Bootstrap events reach `DatabaseInitDiagnostics`, and a
+purge degrades `StorageHealth` (`key-lost`). Limits: no JVM build of SQLCipher exists
+(the AAR ships bionic `.so` only), so the unit tests use a stand-in engine; the real
+format is proved only by a manual or instrumented run.
 
 ---
 
