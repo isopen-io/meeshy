@@ -105,8 +105,8 @@ FAITS DE CET ENVIRONNEMENT (mesurés le 2026-11-03) :
 - Conteneur sans SDK Android (dl.google.com refusé). Le SEUL compilateur Android est la CI : .github/workflows/android.yml.
 - La CI des PR est GELÉE (vars.PR_CI_GEL) : sur une PR, les jobs d'android.yml sont « skipped » — un skipped ne prouve RIEN.
   La preuve d'un lot est un workflow_dispatch d'android.yml sur SA branche, au SHA de tête, jobs verts.
-- dev est rouge par moments sur « Android (assemble + unit tests) » : une autre session répare dev (branches claude/android-fix-dev-tests*).
-  N'y touche pas ; un rouge identique sur dev est PRÉEXISTANT.
+- dev est rouge par moments sur « Android (assemble + unit tests) » : d'autres sessions le réparent (branches claude/android-fix-dev-tests*).
+  N'y touche pas ; un TEST rouge identique sur dev est PRÉEXISTANT, une erreur de COMPILATION ne l'est jamais (rien n'est alors prouvé).
 - :core:model se prouve en local, sans crypto ni e2ee (libsignal est refusé par le proxy) :
   ${JVM_CHECK}
   (5 à 15 min ; jamais deux en même temps sur cette machine : si un autre jvm-check tourne — pgrep -f jvm-check — attends qu'il finisse).
@@ -249,7 +249,7 @@ Rends dev_head (SHA court de origin/${BASE}), pr_outillage (0 si aucune), outill
 
 const schedPrompt = (blocked, enVol, adoptes) => `${socle(null)}
 MISSION — ORDONNANCER LE TOUR (mécanique).
-1. python3 ${RUN}/ready.py audio --gen 2 --batch ${BATCH} --scope ${SCOPE.join(',')}${blocked.length ? ` --exclude ${blocked.join(',')}` : ''}${enVol.length ? ` --inflight ${enVol.join(',')}` : ''}
+1. python3 ${RUN}/ready.py audio --gen 2 --stale-hours 6 --batch ${BATCH} --scope ${SCOPE.join(',')}${blocked.length ? ` --exclude ${blocked.join(',')}` : ''}${enVol.length ? ` --inflight ${enVol.join(',')}` : ''}
    (sortie JSON : ready, remaining, waiting_on_deps, claimed_unmerged, claimed_without_pr, blocked, scope_closure).
 2. Pour chaque clé de claimed_without_pr (branche poussée, aucune PR) : cd ${REPO} && git fetch -q origin ${branche('<clé>')} &&
    git log -1 --format='%ct%n%B' FETCH_HEAD. Elle est À REPRENDRE si son dernier commit porte « ${SESSION_TRAILER} » (ce chantier)
@@ -364,8 +364,12 @@ de production (seul un merge de ${BASE} est permis), tu ne fusionnes pas.
 5. Rouge : get_job_logs run_id <id> failed_only true return_content true tail_lines 500. Relève les erreurs de compilation (« e: file:///…/X.kt:L:C … »)
    et les tests rouges (étape « Summarise failing tests ») dans echecs. Puis le rouge de ${BASE} À CETTE HEURE : dernière exécution terminée
    d'android.yml sur ${BASE} (event push), et la précédente ; leurs tests rouges (get_job_logs failed_only). Un échec du lot est PRÉALABLE s'il
-   est identique (même tâche, même FQN de test, même message) dans l'une de ces deux exécutions de ${BASE} ; une erreur de COMPILATION ne
-   l'est jamais si ${BASE} compile. Tous les échecs préalables ⇒ etat rouge-prealable (prealables : « FQN — run <id> de ${BASE} ») ; sinon rouge.
+   est identique (même tâche, même FQN de test, même message) dans l'une de ces deux exécutions de ${BASE}.
+   Une erreur de COMPILATION n'est JAMAIS préalable : quand assembleDebug échoue, les modules du lot n'ont pas tous été compilés ni testés,
+   donc RIEN n'est prouvé. Si l'erreur est hors des fichiers du lot et identique sur ${BASE} (${BASE} ne compile pas), rends etat en-cours avec
+   detail « ${BASE} ne compile pas : <erreur> » — le script repassera, et tu merges alors ${BASE} dans la branche (point 1) pour relancer quand
+   ${BASE} compile. Sinon c'est etat rouge. Les tests rouges ne peuvent être préalables que si assembleDebug est VERT.
+   Tous les échecs préalables ⇒ etat rouge-prealable (prealables : « FQN — run <id> de ${BASE} ») ; sinon rouge.
 6. Checks de la PR : écris le fichier de charge (voir FAITS) et node ${REPO}/scripts/ci/pr-verte.mjs --rest <fichier> → checks_pr (sortie tronquée).
    Un check rouge de la PR hors android.yml (skipped ne compte pas) ⇒ dis-le dans detail ; s'il vient du lot, etat rouge.
 7. Poste sur la PR UN commentaire (mcp__github__add_issue_comment issue_number ${pr}) : SHA, lien du run, jobs, échecs et préalables,
