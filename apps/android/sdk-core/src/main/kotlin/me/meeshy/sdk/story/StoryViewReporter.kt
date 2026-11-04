@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Inject
 import javax.inject.Singleton
 import me.meeshy.sdk.friend.OutboxFlushScheduler
+import me.meeshy.sdk.model.ObjectIdGuard
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.MarkStoryViewedPayload
@@ -32,9 +33,18 @@ class StoryViewReporter @Inject constructor(
     private val stories: StoryRepository,
     private val outbox: OutboxRepository,
     private val flush: OutboxFlushScheduler,
+    private val ledger: StoryViewedLedger = InMemoryStoryViewedLedger(),
+    private val nowMillis: () -> Long = System::currentTimeMillis,
 ) : StoryViewReporting {
 
+    /**
+     * Le registre durable passe EN PREMIER (iOS #9804) : la vue est sur disque avant que l'app puisse être tuée, et
+     * aucun réécrivain du cache du plateau ne peut l'effacer. Un identifiant local (`pending_…`) ne part jamais : le
+     * serveur ne sait pas l'adresser, la ligne pourrirait en 500 — sa vue reste locale.
+     */
     override suspend fun report(storyId: String) {
+        ledger.record(storyId, nowMillis())
+        if (!ObjectIdGuard.isValid(storyId)) return
         val failure = (stories.markViewed(storyId) as? NetworkResult.Failure) ?: return
         if (SendFailureClassifier.classify(failure.error) is SendResult.PermanentFailure) return
         outbox.enqueue(
