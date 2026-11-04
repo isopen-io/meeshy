@@ -26,8 +26,9 @@ internal fun conversationInfoTabSlots(
     onGoToMessage: ((String) -> Unit)?,
     onOpenFile: (carrier: ApiMessage, attachment: ApiMessageAttachment) -> Unit,
     options: ConversationOptionsSlots,
+    onLeft: () -> Unit = {},
 ): ConversationInfoTabSlots = ConversationInfoTabSlots(
-    members = { modifier -> ConversationMembersContent(conversationId, accentColor, modifier) },
+    members = { modifier -> ConversationMembersContent(conversationId, accentColor, modifier, onLeft = onLeft) },
     media = { modifier ->
         ConversationMediaHubContent(
             conversationId = conversationId,

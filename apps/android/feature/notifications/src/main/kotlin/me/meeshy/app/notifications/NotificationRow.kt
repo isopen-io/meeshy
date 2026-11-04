@@ -1,6 +1,5 @@
 package me.meeshy.app.notifications
 
-import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -9,15 +8,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,11 +39,8 @@ import me.meeshy.sdk.model.accessibilityDescription
 import me.meeshy.sdk.model.notificationTypeAccentHex
 import me.meeshy.sdk.model.quickActions
 import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.component.swipe.SwipeAction
 import me.meeshy.ui.component.swipe.SwipeableRow
 import me.meeshy.ui.format.rememberRelativeTimeStrings
-import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
@@ -105,20 +97,9 @@ internal fun NotificationRow(
         label = "notification-unread-wash",
     )
 
-    val markReadLabel = stringResource(R.string.notifications_action_mark_read)
-    val deleteLabel = stringResource(R.string.notifications_action_delete)
-    val leading = remember(isUnread, markReadLabel, onMarkRead, notification) {
-        if (isUnread) {
-            listOf(SwipeAction(MeeshyIcons.MailOpen, markReadLabel, MeeshyPalette.Indigo500) { onMarkRead(notification) })
-        } else {
-            emptyList()
-        }
-    }
-    val trailing = remember(deleteLabel, onDelete, notification) {
-        listOf(SwipeAction(MeeshyIcons.DeleteFilled, deleteLabel, MeeshyPalette.Error) { onDelete(notification) })
-    }
+    val trailing = rememberNotificationSwipeActions(notification, isUnread, onMarkRead, onDelete)
 
-    SwipeableRow(modifier = modifier, leadingActions = leading, trailingActions = trailing) {
+    SwipeableRow(modifier = modifier, trailingActions = trailing) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -206,63 +187,4 @@ private fun rememberRowTimeLabel(notification: ApiNotification): String? {
 @Composable
 private fun RowTimestamp(label: String) {
     Text(label, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted, fontWeight = FontWeight.Medium)
-}
-
-@Composable
-private fun QuickActionsRow(
-    notification: ApiNotification,
-    actions: List<NotificationQuickAction>,
-    isConnectRequested: Boolean,
-    onQuickAction: (ApiNotification, NotificationQuickAction) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = MeeshySpacing.lg + 44.dp + MeeshySpacing.md, end = MeeshySpacing.lg, bottom = MeeshySpacing.md),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-    ) {
-        actions.forEach { action ->
-            val sent = action is NotificationQuickAction.Connect && isConnectRequested
-            QuickActionChip(
-                label = stringResource(action.labelRes(sent)),
-                icon = action.icon(sent),
-                isPrimary = action is NotificationQuickAction.Connect && !sent,
-                onClick = { if (!sent) onQuickAction(notification, action) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun QuickActionChip(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, isPrimary: Boolean, onClick: () -> Unit) {
-    val container by animateColorAsState(
-        if (isPrimary) MeeshyPalette.Indigo600 else MeeshyPalette.Indigo500.copy(alpha = 0.12f),
-        tween(200),
-        label = "quick-action-container",
-    )
-    val content = if (isPrimary) Color.White else if (MeeshyTheme.isDark) MeeshyPalette.Indigo300 else MeeshyPalette.Indigo600
-    Row(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(container)
-            .clickable(onClick = onClick)
-            .defaultMinSize(minHeight = 44.dp)
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(MeeshySpacing.xs))
-        Text(label, style = MaterialTheme.typography.labelLarge, color = content, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@StringRes
-private fun NotificationQuickAction.labelRes(sent: Boolean): Int = when (this) {
-    is NotificationQuickAction.Connect -> if (sent) R.string.notifications_quick_connect_sent else R.string.notifications_quick_connect
-    is NotificationQuickAction.Write -> R.string.notifications_quick_write
-}
-
-private fun NotificationQuickAction.icon(sent: Boolean) = when (this) {
-    is NotificationQuickAction.Connect -> if (sent) MeeshyIcons.Check else MeeshyIcons.PersonAdd
-    is NotificationQuickAction.Write -> MeeshyIcons.Chat
 }

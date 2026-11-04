@@ -72,6 +72,7 @@ public class ConversationAudioCoordinator(
     public val graceContext: StateFlow<ActiveAudioContext?> = mutableGrace.asStateFlow()
 
     init {
+        engine.setConsumedLanguageProvider(::playedTrackLanguage)
         scope.launch {
             engine.events.collect { event ->
                 try {
@@ -186,24 +187,38 @@ public class ConversationAudioCoordinator(
         }
     }
 
-    /** Le message est supprimé : s'il est joué, on passe au suivant ; ses vocaux quittent la file. */
+    /**
+     * Le message est supprimé (ou brûlé) : s'il est celui qui joue, la lecture se ferme — iOS `close()`, jamais un saut
+     * au suivant, qui ferait parler un vocal que personne n'a choisi à l'instant où la conversation le retire. Sinon
+     * ses vocaux quittent la file, et la lecture n'est pas touchée.
+     */
     public fun onMessageDeleted(messageId: String) {
         val snapshot = mutableSnapshot.value
-        val playing = snapshot.queue.current?.messageId == messageId
-        val cleaned = snapshot.queue.withoutMessage(messageId)
-        if (!playing) {
-            mutableSnapshot.value = snapshot.copy(queue = cleaned)
-            return
-        }
-        if (cleaned.upcoming.isEmpty()) {
+        if (snapshot.queue.current?.messageId == messageId) {
             stop()
             return
         }
-        switchTo(cleaned.advanced(), PlaybackCommandOrigin.Automatic)
+        val cleaned = snapshot.queue.withoutMessage(messageId)
+        if (cleaned != snapshot.queue) mutableSnapshot.value = snapshot.copy(queue = cleaned)
+    }
+
+    /** La conversation qui joue est supprimée, fermée ou obsolète : la lecture se ferme. Une autre n'y change rien. */
+    public fun onConversationDeleted(conversationId: String) {
+        if (mutableSnapshot.value.context?.audio?.conversationId == conversationId) stop()
     }
 
     /** Déconnexion : plus rien ne joue, plus rien ne reste. */
     override suspend fun clear() = withContext(dispatcher) { stop() }
+
+    /**
+     * La langue ENTENDUE du vocal que le moteur décharge, lue par lui au moment de clore l'écoute (fin, pause, changement de
+     * piste) : celle de la piste servie, jamais une seconde descente du Prisme. Le moteur est partagé : un id qui n'est pas
+     * celui de la file (aperçu, enregistreur) ne porte aucune langue — mieux vaut rien qu'en inventer une.
+     */
+    private fun playedTrackLanguage(): String? {
+        val current = mutableSnapshot.value.queue.current ?: return null
+        return current.trackLanguage?.takeIf { engine.state.value.attachmentId == current.attachmentId }
+    }
 
     private fun switchTo(queue: AudioPlayQueue, origin: PlaybackCommandOrigin) {
         val target = queue.current ?: return stop()

@@ -62,6 +62,9 @@ data class ApiPostMedia(
     val language: String? = null,
     /** Identifiant du média dont celui-ci est une variante (`PostMedia.variantOf`). */
     val variantOf: String? = null,
+    /** D4 — variantes WebP réduites (miroir iOS) ; la passerelle ne les sert pas encore pour un post : absent = `null`, l'URL actuelle reste. */
+    @Serializable(with = LossyMeeshyImageVariantsSerializer::class)
+    val imageVariants: List<MeeshyImageVariant>? = null,
 )
 
 /**
