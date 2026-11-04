@@ -64,6 +64,7 @@ fun FeedScreen(
     onOpenComposer: (ComposerOrigin) -> Unit,
     onRefreshRail: () -> Unit = {},
     storyRail: @Composable () -> Unit = {},
+    pinnedBand: (@Composable (reveal: Float) -> Unit)? = null,
     viewModel: FeedViewModel = hiltViewModel(),
     autoplayHost: FeedAutoplayViewModel = hiltViewModel(),
     unsent: UnsentPublicationsViewModel = hiltViewModel(),
@@ -128,6 +129,7 @@ fun FeedScreen(
                 listState = listState,
                 onOpenReels = onOpenReels,
                 onOpenNearby = onOpenNearby,
+                pinnedBand = pinnedBand,
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },

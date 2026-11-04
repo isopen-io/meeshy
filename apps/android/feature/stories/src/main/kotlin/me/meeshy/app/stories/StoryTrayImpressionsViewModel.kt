@@ -27,6 +27,11 @@ class StoryTrayImpressionsViewModel @Inject constructor(
         if (storyId != null) batcher.record(storyId)
     }
 
+    /** La bande épinglée quitte l'écran : ses impressions partent sans attendre le lot (iOS `flushRail`). */
+    fun flush() {
+        batcher.flushNowAsync()
+    }
+
     override fun onCleared() {
         batcher.flushNowAsync()
     }
