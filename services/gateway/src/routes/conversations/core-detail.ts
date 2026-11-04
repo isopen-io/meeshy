@@ -18,6 +18,7 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
+import { participantAccountClosure } from '@meeshy/shared/utils/participant-helpers';
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import type { ConversationParams } from './types';
 import { conversationDetailWithEngagementResponseSchema, loadViewerEngagementsOrEmpty } from './engagement';
@@ -534,6 +535,7 @@ export function registerConversationDetailRoute(
               return {
                 ...m,
                 ...(profileDecor === undefined ? {} : { profileDecor }),
+                ...participantAccountClosure(m),
                 isOnline: vis.showOnline ? (liveOnline === undefined ? m.isOnline : liveOnline) : false,
                 lastActiveAt: vis.showLastSeenTimestamp ? m.lastActiveAt : null
               };

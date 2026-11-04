@@ -99,6 +99,7 @@
     <string name="composer_publish_as_reel">Pubblica reel</string>
     <string name="composer_publish_as_story">Pubblica storia</string>
     <string name="composer_publish_as_storyAndReel">Pubblica storia e reel</string>
+    <string name="composer_publish_format_unsupported">Questo formato non può ancora essere pubblicato da qui</string>
     <string name="composer_rail_object_exit">Esci dall\'oggetto</string>
     <string name="composer_slide_rail">Scene della pubblicazione</string>
     <string name="composer_slide_rail_capReached">Al massimo dieci scene — eliminane una per crearne un\'altra</string>
@@ -114,6 +115,7 @@
     <string name="composer_text_frame_rectangle">Quadrato</string>
     <string name="composer_text_frame_rounded">Arrotondato</string>
     <string name="composer_text_frame_speech">Fumetto</string>
+    <string name="feed_post_publish_error">Errore durante la pubblicazione</string>
     <string name="my_stories_archive_empty_subtitle">Le tue storie scadute confluiranno in questo archivio.</string>
     <string name="my_stories_archive_empty_title">Nessun archivio</string>
     <string name="my_stories_back">Indietro</string>

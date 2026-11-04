@@ -218,6 +218,27 @@ class ConversationMembersViewModelTest {
     }
 
     @Test
+    fun `the reader role handed to the profile sheet is the known one`() = runTest {
+        val vm = viewModel(repo(viewerRole = "moderator"))
+
+        vm.load("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.readerRole).isEqualTo(MemberRole.MODERATOR.name)
+    }
+
+    @Test
+    fun `a reader absent from the roster hands no role, never MEMBER by default`() = runTest {
+        val vm = viewModel(repo(), sessionRepository = session(userId = "stranger"))
+
+        vm.load("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.viewerRole).isEqualTo(MemberRole.MEMBER)
+        assertThat(vm.state.value.readerRole).isNull()
+    }
+
+    @Test
     fun `the viewer is never offered moderation on their own row`() = runTest {
         val vm = viewModel(repo(NetworkResult.Success(page(listOf(member(id = "pMe", userId = "me"))))))
 

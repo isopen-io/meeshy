@@ -18,8 +18,13 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/**
+ * À la densité d'un téléphone (xxhdpi) : le carré QR exige deux pixels par module (`GameReferralQrSquare.make`), et à
+ * la densité mdpi par défaut de Robolectric sa place d'une soixantaine de pixels ne tient qu'un QR de version 1 — trop
+ * petit pour le lien de parrainage, donc aucun carré monté. Un vrai téléphone en a trois fois plus.
+ */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "xxhdpi")
 class GameReferralBannerViewTest {
 
     @get:Rule
