@@ -177,6 +177,7 @@ private fun PinnedSelfCell(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PinnedRingCell(ring: StoryRing, moodEmoji: String?, onOpen: () -> Unit) {
     val haptics = rememberMeeshyHaptics()

@@ -32,6 +32,6 @@ data class PinnedBandReveal(val fraction: Float) {
          */
         fun scrollOffsetDp(firstVisibleItemIndex: Int, firstVisibleItemOffsetDp: Float): Float =
             if (firstVisibleItemIndex > 0) -CollapsibleHeaderMetrics.INLINE_ACCESSORY_REVEAL_END
-            else -firstVisibleItemOffsetDp
+            else 0f - firstVisibleItemOffsetDp
     }
 }
