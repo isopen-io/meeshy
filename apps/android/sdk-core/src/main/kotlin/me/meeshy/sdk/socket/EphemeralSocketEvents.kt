@@ -42,10 +42,12 @@ class EphemeralSocketEvents internal constructor(
             payloadAt = SocketAckPayloadSource.DATA,
         )
         return when (ack) {
-            is SocketAck.Accepted -> ack.payload?.let(::noticedIds)
-                ?.let { Result.success(it) } ?: Result.failure(ContentCaptureRefusal(ContentCaptureRefusal.MALFORMED_ACK))
-            is SocketAck.Refused -> Result.failure(ContentCaptureRefusal(ack.refusal.code ?: ContentCaptureRefusal.MALFORMED_ACK))
-            SocketAck.Timeout -> Result.failure(ContentCaptureRefusal(ContentCaptureRefusal.TIMEOUT))
+            is SocketAck.Accepted -> {
+                val noticed = ack.payload?.let { noticedIds(it) }
+                if (noticed == null) Result.failure<List<String>>(ContentCaptureRefusal(ContentCaptureRefusal.MALFORMED_ACK)) else Result.success(noticed)
+            }
+            is SocketAck.Refused -> Result.failure<List<String>>(ContentCaptureRefusal(ack.refusal.code ?: ContentCaptureRefusal.MALFORMED_ACK))
+            SocketAck.Timeout -> Result.failure<List<String>>(ContentCaptureRefusal(ContentCaptureRefusal.TIMEOUT))
         }
     }
 
