@@ -136,7 +136,15 @@ data class CreateCommentRequest(
     val attachmentIds: List<String>? = null,
     /** Le lieu joint au commentaire (#14387, iOS `location: place`) ; la passerelle le hisse en `location`. */
     val location: SharedPlace? = null,
+    /** L'ancre du média du post que ce commentaire CITE (#6578) : le serveur attend un objet `{ postMediaId }`. */
+    val quotedPostMedia: QuotedPostMediaAnchor? = null,
+    /** La transcription faite sur l'appareil d'un vocal joint, utile seulement avec [attachmentIds]. */
+    val mobileTranscription: MobileTranscriptionPayload? = null,
 )
+
+/** L'ancre figée d'un média cité, telle que la passerelle la valide (`quotedPostMedia: { postMediaId }`). */
+@Serializable
+data class QuotedPostMediaAnchor(val postMediaId: String)
 
 /** Repost a post — port of RepostRequest (StoryModels.swift). */
 @Serializable
@@ -392,6 +400,8 @@ interface PostApi {
         @Path("id") postId: String,
         @Body body: CreateCommentRequest,
         @Header(CLIENT_MUTATION_ID_HEADER) clientMutationId: String? = null,
+        /** `Bearer <jwt>` : épingle la requête à CE jeton (jamais celui du compte courant), sans rafraîchissement. */
+        @Header("Authorization") authorization: String? = null,
     ): ApiResponse<ApiPostComment>
 
     @GET("posts/{id}/comments/{commentId}/replies")

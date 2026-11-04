@@ -375,6 +375,10 @@ public data class CommentPayload(
     val attachmentIds: List<String>? = null,
     val effectFlags: Int? = null,
     val location: me.meeshy.sdk.model.SharedPlace? = null,
+    /** L'ancre du média cité du post commenté (#6578) ; absente sur une ancienne ligne. */
+    val quotedPostMediaId: String? = null,
+    /** Les pièces encore sur le disque et ce qui en est déjà téléversé (#9743) ; absent sans pièce et sur une ancienne ligne. */
+    val media: me.meeshy.sdk.post.CommentMediaPayload? = null,
 )
 
 /**
