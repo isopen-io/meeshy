@@ -60,21 +60,34 @@ const MOI = '507f1f77bcf86cd799439022';
 const AUTRE = '507f1f77bcf86cd799439033';
 
 function prismaDouble() {
+  const created: { type?: string; rows: Array<{ userId: string; role: string }> } = { rows: [] };
   return {
     community: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     conversation: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
-      create: jest.fn<any>(async (args: any) => ({
+      create: jest.fn<any>(async (args: any) => {
+        created.type = args.data.type;
+        created.rows = args.data.participants.create;
+        return {
         id: CONV_ID,
         type: args.data.type,
         title: args.data.title,
         createdAt: new Date('2026-11-02T09:00:00.000Z'),
         participants: args.data.participants.create.map((p: any, i: number) => ({ id: `p${i}`, ...p, user: { id: p.userId, displayName: p.displayName } })),
-      })),
+        };
+      }),
       update: jest.fn<any>().mockResolvedValue({ id: CONV_ID }),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
-    participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    participant: {
+      findMany: jest.fn<any>(async (args: any) =>
+        Array.isArray(args?.where?.userId?.in) && args?.select?.conversation
+          ? created.rows
+              .filter((row) => args.where.userId.in.includes(row.userId))
+              .map((row) => ({ conversationId: CONV_ID, userId: row.userId, role: row.role, type: 'user', leftAt: null, bannedAt: null, conversation: { type: created.type, identifier: 'mshy_groupe' } }))
+          : []),
+      groupBy: jest.fn<any>().mockResolvedValue([]),
+    },
     user: {
       findMany: jest.fn<any>().mockResolvedValue([
         { id: MOI, displayName: 'Moi', username: 'moi', avatar: null },
@@ -86,7 +99,7 @@ function prismaDouble() {
 
 async function creer(body: Record<string, unknown>) {
   const prisma = prismaDouble();
-  const emitted: Array<{ room: string; event: string }> = [];
+  const emitted: Array<{ room: string; event: string; payload?: any }> = [];
   const notificationService = { createConversationInviteNotification: jest.fn<any>().mockResolvedValue(null) };
   let handler: any;
   const fastify: any = {
@@ -94,7 +107,7 @@ async function creer(body: Record<string, unknown>) {
     notificationService,
     socketIOHandler: {
       getManager: jest.fn<any>().mockReturnValue({
-        getIO: jest.fn<any>().mockReturnValue({ to: (room: string) => ({ emit: (event: string) => emitted.push({ room, event }) }) }),
+        getIO: jest.fn<any>().mockReturnValue({ to: (room: string) => ({ emit: (event: string, payload?: any) => emitted.push({ room, event, payload }) }) }),
         joinUserToConversationRoom: jest.fn<any>().mockResolvedValue(undefined),
       }),
     },
@@ -131,6 +144,12 @@ describe('#14644 (B) — un groupe neuf est silencieux jusqu\'à son premier mes
   it('seul le créateur reçoit conversation:new à la création', async () => {
     const { emitted } = await creer({ type: 'group', title: 'Équipe', participantIds: [AUTRE] });
     expect(emitted.filter((e) => e.event === 'conversation:new').map((e) => e.room)).toEqual([`user:${MOI}`]);
+  });
+
+  it('#14690 — le créateur reçoit conversation:new avec sa capacité de rendre le groupe obsolète', async () => {
+    const { emitted } = await creer({ type: 'group', title: 'Équipe', participantIds: [AUTRE] });
+    const announced = emitted.find((e) => e.event === 'conversation:new');
+    expect(announced?.payload.viewerCapabilities).toEqual({ canMakeObsolete: true });
   });
 
   it('aucune invitation ne part à la création', async () => {

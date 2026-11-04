@@ -478,6 +478,7 @@ internal class ShareSheetViewModel @Inject constructor(
             val uploadCmid = mediaUploadQueue.enqueue(item, conversationId = conversationId)
             val effects = MessageEffects()
             val preview = previews.render(uploadCmid, item, effects)
+            previews.keepSharp(uploadCmid, item, effects)
             messageRepository.sendOptimistic(
                 conversationId = conversationId,
                 content = if (index == 0) text else "",

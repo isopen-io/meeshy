@@ -85,13 +85,14 @@ struct ConversationListModalPresentations: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(item: $sheetTargets.lockSheet) { conversation in
+            .sheet(item: $sheetTargets.lockSheet, onDismiss: presentUnlockedInfo) { conversation in
                 ConversationLockSheet(
                     mode: lockSheetMode,
                     conversationId: conversation.id,
                     conversationName: conversation.name,
                     onSuccess: {
                         guard case .openConversation = lockSheetMode else { return }
+                        if sheetTargets.infoAfterUnlock { return admitInfo(of: conversation) }
                         if sheetTargets.searchAfterUnlock { router.pendingOpenSearch = true }
                         sheetTargets.searchAfterUnlock = false
                         onSelect(conversation)
@@ -160,6 +161,23 @@ struct ConversationListModalPresentations: ViewModifier {
                     .presentationDragIndicator(.visible)
             }
             .modifier(GlobalSearchCoverHost(isPresented: $showGlobalSearch, conversationViewModel: conversationViewModel, router: router))
+    }
+
+    /// Le PIN accordé vaut UNE ouverture (#11386) : les détails la consomment,
+    /// pour qu'aucun laissez-passer ne survive à côté d'eux et n'ouvre le fil.
+    private func admitInfo(of conversation: Conversation) {
+        sheetTargets.infoAfterUnlock = false
+        guard ConversationLockManager.shared.admitsOpening(conversation.id) else { return }
+        sheetTargets.unlockedInfo = conversation
+    }
+
+    /// La feuille de verrou est fermée : les détails admis s'ouvrent. Un PIN
+    /// abandonné n'a rien admis, et ne laisse rien armé derrière lui.
+    private func presentUnlockedInfo() {
+        sheetTargets.infoAfterUnlock = false
+        guard let conversation = sheetTargets.unlockedInfo else { return }
+        sheetTargets.unlockedInfo = nil
+        sheetTargets.info = conversation
     }
 
     private func leave(_ conversation: Conversation) {
