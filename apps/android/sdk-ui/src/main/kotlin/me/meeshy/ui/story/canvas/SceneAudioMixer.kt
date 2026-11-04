@@ -71,6 +71,7 @@ internal class SceneAudioMixer(
     private val slots = LinkedHashMap<String, Slot>()
     private var lastElapsed = 0.0
     private var lastLap = 0
+    private var wasPlaying = false
     private val focus = SceneAudioFocus(
         system = AndroidAudioFocusSystem(context.getSystemService(Context.AUDIO_SERVICE) as AudioManager),
         noisy = AndroidNoisyRouteSource(context),
@@ -107,8 +108,11 @@ internal class SceneAudioMixer(
         }
         val audible = input.playing && !input.muted && frames.values.any { it is SceneAudioTrackFrame.Sounding }
         if (holdsFocus) {
-            if (audible) focus.request() else if (!input.playing) focus.release()
+            if (input.playing && !wasPlaying) focus.userResumed()
+            // Une pause causée par une perte de focus garde le focus : c'est lui qui annonce son retour.
+            if (audible && !focus.isHeld) focus.request() else if (!input.playing && !focus.isHeld) focus.release()
         }
+        wasPlaying = input.playing
         val transport = input.playing && !(holdsFocus && focus.isHeld)
         val duck = if (holdsFocus && focus.isDucked) StoryVolume.DUCKING_FACTOR else 1f
 

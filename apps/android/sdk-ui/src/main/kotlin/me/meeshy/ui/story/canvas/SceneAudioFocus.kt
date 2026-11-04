@@ -36,12 +36,22 @@ internal class SceneAudioFocus(
         requested = true
         law.onUserResume()
         isDucked = false
-        unregisterNoisy = noisy.register { if (law.onBecomingNoisy()) onLostForGood() }
+        unregisterNoisy = noisy.register {
+            if (law.onBecomingNoisy()) {
+                drop()
+                onLostForGood()
+            }
+        }
         if (!system.request(FocusKind.Playback, ::onChange) && law.onFocusLost()) onLost()
     }
 
+    /** L'utilisateur relance après une pause définitive : la mise en attente est levée, le prochain tick redemande le focus. */
+    fun userResumed() = law.onUserResume()
+
     /** Rend le focus (pause de l'utilisateur, scène quittée) ; la prochaine lecture le redemande. */
-    fun release() {
+    fun release() = drop()
+
+    private fun drop() {
         if (!requested) return
         requested = false
         unregisterNoisy?.invoke()
@@ -58,7 +68,10 @@ internal class SceneAudioFocus(
             }
             FocusChange.LossTransientCanDuck -> isDucked = true
             FocusChange.LossTransient -> if (law.onFocusLost()) onLost()
-            FocusChange.Loss -> if (law.onFocusLostForGood()) onLostForGood()
+            FocusChange.Loss -> if (law.onFocusLostForGood()) {
+                drop()
+                onLostForGood()
+            }
         }
     }
 }
