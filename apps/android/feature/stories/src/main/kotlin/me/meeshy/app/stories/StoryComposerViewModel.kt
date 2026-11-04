@@ -337,6 +337,11 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onSceneGesture(gesture: String, next: (StoryComposerUiState) -> StoryComposerUiState) = reduce(gesture, next)
 
+    /** Les répétitions des transitions d'ouverture et de fermeture, rejouées à chaque choix d'effet (#8792). */
+    val rehearsals = ComposerRehearsals()
+
+    fun onRehearseTransitions() = _state.value.deck.selectedSlide.frame.let { rehearsals.rehearse(it.opening, it.closing) }
+
     fun onPlayheadMoved(seconds: Float) = _state.update { StoryComposerSceneReducer.playheadMoved(it, seconds) }
 
     fun onFriseTrackSelected(id: String) = reduce { StoryComposerSceneReducer.trackSelected(it, id) }

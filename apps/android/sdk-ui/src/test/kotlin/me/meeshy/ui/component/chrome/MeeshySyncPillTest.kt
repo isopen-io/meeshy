@@ -90,7 +90,9 @@ class MeeshySyncPillTest {
 
     @Test
     fun `la cible tactile fait 48 dp malgre la capsule de 22 dp`() {
-        show(row("a", "Envoi de message"))
+        // La géométrie AU REPOS : sans mouvement réduit, l'entrée part d'une échelle de 0,85 et l'horloge figée du
+        // témoin mesurerait la capsule en pleine animation (≈ 43 dp), pas la cible que le doigt trouvera.
+        show(row("a", "Envoi de message"), reduceMotion = true)
         compose.onNodeWithContentDescription("Envoi de message").assertHeightIsAtLeast(48.dp)
     }
 

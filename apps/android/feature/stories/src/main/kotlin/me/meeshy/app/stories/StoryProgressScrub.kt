@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.scene.SceneScrubPlan
+import me.meeshy.sdk.model.story.StoryProgressSteps
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
@@ -153,9 +154,9 @@ internal fun StoryScrubTouchArea(
             .semantics {
                 contentDescription = label
                 stateDescription = percentLabel((shown * 100f).toInt())
-                progressBarRangeInfo = ProgressBarRangeInfo(current = shown, range = 0f..1f, steps = ADJUST_STEPS)
+                progressBarRangeInfo = ProgressBarRangeInfo(current = shown, range = 0f..1f, steps = StoryProgressSteps.INTERIOR_STEPS)
                 setProgress { target ->
-                    currentScrubber.adjust(target.coerceIn(0f, 1f))
+                    currentScrubber.adjust(StoryProgressSteps.snap(target))
                     true
                 }
             },
@@ -209,5 +210,3 @@ private fun ScrubTrack(fraction: Float, modifier: Modifier = Modifier) {
 
 private val TOUCH_HEIGHT = 24.dp
 
-/** Dix pas intérieurs : TalkBack règle par 10 %. */
-private const val ADJUST_STEPS = 9

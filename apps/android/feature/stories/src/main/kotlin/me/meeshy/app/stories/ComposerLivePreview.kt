@@ -179,7 +179,7 @@ internal fun rememberComposerLive(
 }
 
 /** La fenêtre de SCÈNE de chaque objet (entrée, sortie ; `null` : jusqu'à la fin) — le fond n'en a pas, il couvre tout. */
-private fun StoryComposerUiState.sceneWindows(): Map<String, Pair<Float, Float?>> =
+internal fun StoryComposerUiState.sceneWindows(): Map<String, Pair<Float, Float?>> =
     sceneTracks.associate { track ->
         track.id to when (val bar = track.bar) {
             is TrackBar.Timed -> bar.start.toFloat() to bar.end.toFloat()

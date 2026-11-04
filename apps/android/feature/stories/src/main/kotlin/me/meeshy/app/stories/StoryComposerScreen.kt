@@ -141,7 +141,13 @@ fun StoryComposerScreen(
         }.takeIf { !capture.armed },
         onCloseSheet = if (sheet?.let(state::serves) == true && !capture.armed) ({ sheet = null }) else null,
     )
-    CompositionLocalProvider(LocalComposerLive provides live, LocalFriseTransport provides transport) {
+    val timelineBridge = rememberComposerTimelineBridge(transport, state.playheadSeconds)
+    val timelinePreview = remember(timelineBridge, state.sceneTracks) { ComposerTimelinePreview(timelineBridge, state.sceneWindows()) }
+    CompositionLocalProvider(
+        LocalComposerLive provides live,
+        LocalFriseTransport provides transport,
+        LocalComposerTimelinePreview provides timelinePreview,
+    ) {
     Box(Modifier.closesGestureOnLift(viewModel::onGestureLifted)) {
     StoryComposerSceneFirst(
         state = state,

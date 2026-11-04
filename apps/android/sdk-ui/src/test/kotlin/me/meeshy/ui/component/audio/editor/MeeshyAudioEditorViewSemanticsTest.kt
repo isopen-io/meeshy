@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.audio.editor
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsSelected
@@ -31,7 +32,9 @@ class MeeshyAudioEditorViewSemanticsTest {
     ) {
         compose.setContent {
             MeeshyTheme(darkTheme = false) {
-                AudioEditorTranscribePanel(state, language, Color.Blue, onLanguage, onTranscribe)
+                // Comme son hôte `AudioEditorToolPanel` : le panneau émet ses rangées dans une Column. Posées à nu,
+                // elles se superposeraient et le bouton « Transcrire » prendrait le toucher destiné à une langue.
+                Column { AudioEditorTranscribePanel(state, language, Color.Blue, onLanguage, onTranscribe) }
             }
         }
     }
