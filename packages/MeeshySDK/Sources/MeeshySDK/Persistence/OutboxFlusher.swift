@@ -102,19 +102,38 @@ public actor OutboxFlusher {
     /// ConditionMonitor.shared.isOnline` getter from MainActor without the
     /// SDK Persistence layer importing UIKit/SwiftUI.
     private let isNetworkReachable: @Sendable @concurrent () async -> Bool
+    private let scheduleAppliedFileSweep: AppliedFileSweepScheduler
+
+    /// #15294 — un envoi ACCEPTÉ ne libère pas tout de suite ses copies
+    /// `Documents/pending-*/` : l'accusé précède l'écho serveur, et c'est à
+    /// l'écho que `MessagePersistenceActor.adoptSDKLevel` DÉPLACE la copie dans
+    /// le cache typé, sous l'URL serveur. L'effacer à l'accusé vidait la bulle
+    /// (son `file://` ne désignait plus rien) et privait l'écho de l'adoption.
+    /// Le balayage ne rattrape donc, après ce délai, que ce que l'écho n'a pas
+    /// adopté.
+    public typealias AppliedFileSweepScheduler = @Sendable (@escaping @Sendable () -> Void) -> Void
+    public static let appliedFileSweepGrace: Duration = .seconds(600)
+    public static let afterAppliedFileSweepGrace: AppliedFileSweepScheduler = { sweep in
+        Task.detached(priority: .utility) {
+            do { try await Task.sleep(for: OutboxFlusher.appliedFileSweepGrace) } catch { return }
+            sweep()
+        }
+    }
 
     public init(
         pool: any DatabaseWriter,
         dispatcher: any OutboxDispatching,
         retryPolicy: RetryPolicy = .messageOutbox,
         onOutcome: (@Sendable (OutboxOutcome) -> Void)? = nil,
-        isNetworkReachable: @escaping @Sendable () async -> Bool = { true }
+        isNetworkReachable: @escaping @Sendable () async -> Bool = { true },
+        scheduleAppliedFileSweep: @escaping AppliedFileSweepScheduler = OutboxFlusher.afterAppliedFileSweepGrace
     ) {
         self.pool = pool
         self.dispatcher = dispatcher
         self.retryPolicy = retryPolicy
         self.onOutcome = onOutcome
         self.isNetworkReachable = isNetworkReachable
+        self.scheduleAppliedFileSweep = scheduleAppliedFileSweep
     }
 
     /// Draine les records `.pending` dont le `nextAttemptAt` est échu.
@@ -499,12 +518,11 @@ public actor OutboxFlusher {
             } catch {
                 outboxFlusherLog.error("Post-dispatch outbox delete failed for \(idToDelete, privacy: .public): \(error.localizedDescription, privacy: .public) — record may re-dispatch")
             }
-            // A7+A8 — drop any local file the payload referenced. On the
-            // happy path, MessagePersistenceActor.adoptSDKLevel already
-            // moved the file into the typed media cache (cf. DiskCacheStore
-            // .adopt's moveItem), so this is a defensive no-op for the
-            // applied path. Real value is on `.exhausted` below.
-            cleanupLocalFiles(for: current)
+            // A7+A8 — drop any local file the payload referenced, once the
+            // echo has had time to adopt it (#15294, voir
+            // `appliedFileSweepGrace`).
+            let applied = current
+            scheduleAppliedFileSweep { cleanupLocalFiles(for: applied) }
             onOutcome?(.applied(cmid: current.clientMessageId))
         } catch {
             await logSendAttempt(for: current, startedAt: attemptStartedAt, outcome: .failure, error: error)

@@ -148,7 +148,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public let mimeType: String
     public let fileSize: Int
     public let filePath: String
-    public private(set) var fileUrl: String
+    @ContainerRebasedFileURL public private(set) var fileUrl: String
     public var title: String?
     public var alt: String?
     /// Langue source de `alt` (#12333).
@@ -192,7 +192,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     /// BUG2 A' — emojis posés par l'utilisateur courant sur cette pièce jointe.
     public var currentUserReactions: [String]?
     public var thumbnailPath: String?
-    public var thumbnailUrl: String?
+    @ContainerRebasedOptionalFileURL public var thumbnailUrl: String?
     public var thumbHash: String?
     public var duration: Int?
     public var bitrate: Int?
