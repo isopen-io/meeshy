@@ -28,6 +28,9 @@ struct BookmarksView: View {
     /// Avatar d'auteur tappé → story de cet auteur (singleGroup, 1re non-vue).
     @State private var storyAuthorUserId: String?
     @State private var filter: BookmarkFilter = .all
+    /// Publication citée depuis son bouton Repost (#15911).
+    @State private var quotedPost: FeedPost?
+    @Environment(\.meeshyQuoteComposerHost) private var quoteHost
 
     @StateObject private var impressions = ImpressionBatcher(source: "profile", surface: .bookmarks)
 
@@ -81,6 +84,7 @@ struct BookmarksView: View {
                 router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
             }
         ))
+        .modifier(QuoteComposerCover(quoted: $quotedPost, host: quoteHost))
     }
 
     /// En-tête partagé, FIXE (`scrollOffset: 0`) — même raison que la liste des
@@ -118,6 +122,7 @@ struct BookmarksView: View {
                             onLike: { postId in
                                 Task { await viewModel.toggleLike(postId) }
                             },
+                            onQuote: quoteHost == nil ? nil : { _ in quotedPost = post },
                             onBookmark: { postId in
                                 Task { await viewModel.removeBookmark(postId) }
                             },
