@@ -230,7 +230,7 @@ fun MeeshyApp(
                         )
                     }
                     // Le mini-lecteur audio (iOS `MiniAudioPlayerBar`) se range SOUS la pastille d'appel et pousse la destination.
-                    MediaTopBarSlot(navController, navigator, callPillShown = showsCallPill)
+                    MediaTopBarSlot(navController, navigator, callPillShown = showsCallPill, screenCoversChrome = onCallScreen)
                     // Le bandeau « Validez votre compte » (#13854) se range SOUS la pastille d'appel et AU-DESSUS de
                     // la destination, qu'il comprime au lieu de la recouvrir : le ✕ du compositeur reste entier.
                     PendingLinkBanner(isVisible = rootState.showsPendingLinkNotice && currentRoute == Routes.LOGIN)

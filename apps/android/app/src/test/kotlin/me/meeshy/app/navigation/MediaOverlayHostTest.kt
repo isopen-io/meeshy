@@ -95,12 +95,12 @@ class MediaOverlayHostTest {
     private fun str(id: Int, vararg args: Any) =
         ApplicationProvider.getApplicationContext<android.content.Context>().getString(id, *args)
 
-    private fun show(callPillShown: Boolean = false) {
+    private fun show(callPillShown: Boolean = false, screenCoversChrome: Boolean = false) {
         compose.setContent {
             controller = rememberNavController()
             val navigator = remember(controller) { AppNavigator(controller, RouteTracker(), PresentedSurfaceRegistry(), NavigationRequests()) }
             Column {
-                MediaTopBarSlot(controller, navigator, callPillShown, viewModel)
+                MediaTopBarSlot(controller, navigator, callPillShown, screenCoversChrome, viewModel)
                 NavHost(controller, startDestination = "home") {
                     composable("home") {}
                     composable(
@@ -163,6 +163,14 @@ class MediaOverlayHostTest {
 
         compose.runOnUiThread { controller.navigate(Routes.chat("c1")) }
         compose.waitForIdle()
+
+        compose.onAllNodesWithContentDescription(barLabel()).assertCountEquals(0)
+    }
+
+    @Test
+    fun `sur l'ecran d'appel la barre ne se monte pas`() {
+        show(screenCoversChrome = true)
+        play()
 
         compose.onAllNodesWithContentDescription(barLabel()).assertCountEquals(0)
     }

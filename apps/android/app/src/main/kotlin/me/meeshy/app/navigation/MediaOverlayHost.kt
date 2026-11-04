@@ -29,13 +29,16 @@ internal fun MediaOverlayHost(navController: NavHostController) = Unit
 
 /**
  * Le mini-lecteur (iOS `MiniAudioPlayerBar`), dans la colonne de la racine juste SOUS la pastille d'appel. Il suit le
- * coordinateur unique de lecture, se masque dans la conversation qui joue et ouvre, au toucher, la conversation du vocal.
+ * coordinateur unique de lecture, se masque dans la conversation qui joue et sous un ecran qui couvre le chrome
+ * ([screenCoversChrome] : l'appel, qu'iOS presente en plein ecran par-dessus la racine), et ouvre, au toucher, la
+ * conversation du vocal.
  */
 @Composable
 internal fun MediaTopBarSlot(
     navController: NavHostController,
     navigator: AppNavigator,
     callPillShown: Boolean,
+    screenCoversChrome: Boolean = false,
     viewModel: MiniPlayerViewModel = hiltViewModel(),
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -43,6 +46,7 @@ internal fun MediaTopBarSlot(
         ?.takeIf { it.destination.route == Routes.CHAT }
         ?.arguments?.getString(ChatViewModel.CONVERSATION_ID_ARG)
     LaunchedEffect(openConversationId) { viewModel.onEvent(MiniPlayerUiEvent.CurrentConversation(openConversationId)) }
+    LaunchedEffect(screenCoversChrome) { viewModel.onEvent(MiniPlayerUiEvent.ScreenCovered(screenCoversChrome)) }
     LaunchedEffect(viewModel, navigator) {
         viewModel.uiEffects.collect { effect ->
             when (effect) {

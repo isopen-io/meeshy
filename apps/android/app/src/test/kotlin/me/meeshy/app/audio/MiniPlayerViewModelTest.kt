@@ -146,6 +146,23 @@ class MiniPlayerViewModelTest {
     }
 
     @Test
+    fun `l'ecran d'appel efface la barre et la bande, qui reviennent en le quittant`() = runTest {
+        val rig = rig()
+        rig.play()
+        runCurrent()
+
+        rig.viewModel.onEvent(MiniPlayerUiEvent.ScreenCovered(true))
+        runCurrent()
+        assertThat(rig.viewModel.uiState.value.bar).isNull()
+        assertThat(rig.display.shown.value).isFalse()
+
+        rig.viewModel.onEvent(MiniPlayerUiEvent.ScreenCovered(false))
+        runCurrent()
+        assertThat(rig.viewModel.uiState.value.bar?.senderName).isEqualTo("Nour")
+        assertThat(rig.display.shown.value).isTrue()
+    }
+
+    @Test
     fun `la barre reste dans une autre conversation que celle qui joue`() = runTest {
         val rig = rig()
         rig.play()

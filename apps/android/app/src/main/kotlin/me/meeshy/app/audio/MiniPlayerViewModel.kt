@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.playback.MiniPlayerSubject
 import me.meeshy.sdk.model.playback.MiniPlayerVisibility
@@ -47,6 +48,8 @@ sealed interface MiniPlayerUiEvent {
     data object Close : MiniPlayerUiEvent
     data object Open : MiniPlayerUiEvent
     data class CurrentConversation(val conversationId: String?) : MiniPlayerUiEvent
+    /** L'écran courant couvre le chrome du haut (l'appel) : la barre s'y efface sans perdre sa grâce. */
+    data class ScreenCovered(val covered: Boolean) : MiniPlayerUiEvent
 }
 
 sealed interface MiniPlayerUiEffect {
@@ -71,7 +74,9 @@ class MiniPlayerViewModel @Inject constructor(
         val shown: Shown? = null,
     )
 
-    private val currentConversation = MutableStateFlow<String?>(null)
+    private data class Screen(val conversationId: String? = null, val covered: Boolean = false)
+
+    private val screen = MutableStateFlow(Screen())
     private val effects = Channel<MiniPlayerUiEffect>(Channel.BUFFERED)
 
     val uiEffects = effects.receiveAsFlow()
@@ -82,10 +87,12 @@ class MiniPlayerViewModel @Inject constructor(
     private val visible: StateFlow<Visible> = combine(
         coordinator.snapshot,
         coordinator.graceContext,
-        currentConversation,
-    ) { snapshot, grace, conversationId -> Triple(snapshot.context, grace, conversationId) }
-        .runningFold(Visible()) { previous, (active, grace, conversationId) ->
-            val next = MiniPlayerVisibility.next(previous.state, active?.subject(), grace?.subject(), conversationId)
+        screen,
+    ) { snapshot, grace, current -> Triple(snapshot.context, grace, current) }
+        .runningFold(Visible()) { previous, (active, grace, current) ->
+            val next = MiniPlayerVisibility.next(
+                previous.state, active?.subject(), grace?.subject(), current.conversationId, isCovered = current.covered,
+            )
             Visible(next, next.shown?.let { subject -> contextOf(subject, active, grace)?.let { Shown(subject, it) } })
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, Visible())
@@ -115,7 +122,8 @@ class MiniPlayerViewModel @Inject constructor(
             MiniPlayerUiEvent.Next -> coordinator.next()
             MiniPlayerUiEvent.Close -> coordinator.stop()
             MiniPlayerUiEvent.Open -> open()
-            is MiniPlayerUiEvent.CurrentConversation -> currentConversation.value = event.conversationId
+            is MiniPlayerUiEvent.CurrentConversation -> screen.update { it.copy(conversationId = event.conversationId) }
+            is MiniPlayerUiEvent.ScreenCovered -> screen.update { it.copy(covered = event.covered) }
         }
     }
 

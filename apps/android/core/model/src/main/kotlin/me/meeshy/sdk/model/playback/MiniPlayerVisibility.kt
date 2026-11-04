@@ -32,7 +32,9 @@ public data class MiniPlayerTransport(val isPlaying: Boolean, val progress: Floa
  * 2. quand la file vient de finir, la grâce de 5 s garde la barre SI elle était à l'écran — jamais si on était dans la
  *    conversation qui jouait, où il n'y avait rien à garder ;
  * 3. la grâce armée survit à une entrée dans la conversation (la barre se masque, puis revient en sortant) ;
- * 4. la croix ([grace] nul alors qu'aucun vocal n'est actif) ferme sur le champ, grâce comprise.
+ * 4. la croix ([grace] nul alors qu'aucun vocal n'est actif) ferme sur le champ, grâce comprise ;
+ * 5. un écran qui COUVRE le chrome ([isCovered] : l'appel, qu'iOS présente en plein écran par-dessus la racine) la
+ *    masque comme sa propre conversation, sans désarmer la grâce : elle revient en sortant.
  *
  * Fonction pure : le présentateur lui remet les trois flux du coordinateur et la conversation ouverte.
  */
@@ -43,17 +45,19 @@ public object MiniPlayerVisibility {
         active: MiniPlayerSubject?,
         grace: MiniPlayerSubject?,
         currentConversationId: String?,
+        isCovered: Boolean = false,
     ): MiniPlayerVisibilityState {
         val graceArmed = when {
             active != null -> false
             state.hadActive -> state.shown != null && grace != null
             else -> state.graceArmed && grace != null
         }
-        val shown = when {
-            active != null -> active.takeUnless { it.conversationId == currentConversationId }
-            graceArmed -> grace?.takeUnless { it.conversationId == currentConversationId }
+        val candidate = when {
+            active != null -> active
+            graceArmed -> grace
             else -> null
         }
+        val shown = candidate?.takeUnless { isCovered || it.conversationId == currentConversationId }
         return MiniPlayerVisibilityState(shown = shown, hadActive = active != null, graceArmed = graceArmed)
     }
 
