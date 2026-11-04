@@ -31,4 +31,9 @@ describe('conversationListParticipantSelect (T17 over-fetch trim)', () => {
     expect(conversationListParticipantSelect.user.select.firstName).toBe(true);
     expect(conversationListParticipantSelect.user.select.lastName).toBe(true);
   });
+
+  it('#15717 — loads the ACCOUNT state (user.isActive) that composes accountClosed, beside the membership isActive', () => {
+    expect(conversationListParticipantSelect.user.select.isActive).toBe(true);
+    expect(conversationListParticipantSelect.isActive).toBe(true);
+  });
 });
