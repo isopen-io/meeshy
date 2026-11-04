@@ -97,7 +97,7 @@ fun CommunityDetailScreen(
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                CommunityDetailEffect.Left -> navigation.onBack()
+                CommunityDetailEffect.Left, CommunityDetailEffect.NotFound -> navigation.onBack()
                 CommunityDetailEffect.Joined -> haptics.success()
                 CommunityDetailEffect.ActionFailed -> {
                     haptics.error()

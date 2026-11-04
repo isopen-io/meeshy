@@ -172,4 +172,34 @@ class CommunityListViewModelTest {
         coVerify(exactly = 1) { cache.refreshList() }
         assertThat(vm.state.value.isRefreshing).isFalse()
     }
+
+    @Test
+    fun `a failed revalidation behind cached communities raises the discreet offline banner and a fresh page clears it`() = runTest {
+        val onError = slot<(Throwable) -> Unit>()
+        every { cache.list(capture(onError)) } returns stream
+        val vm = CommunityListViewModel(cache, repository)
+        stream.emit(CacheResult.Stale(listOf(api("a")), 1))
+        assertThat(vm.state.value.showOfflineBanner).isFalse()
+
+        onError.captured(RuntimeException("offline"))
+
+        assertThat(vm.state.value.showOfflineBanner).isTrue()
+        assertThat(vm.state.value.showError).isFalse()
+        assertThat(vm.state.value.showSkeleton).isFalse()
+
+        stream.emit(CacheResult.Fresh(listOf(api("a")), 0))
+        assertThat(vm.state.value.showOfflineBanner).isFalse()
+    }
+
+    @Test
+    fun `a failed pull to refresh keeps the cached list and shows the banner`() = runTest {
+        val vm = viewModel()
+        stream.emit(CacheResult.Fresh(listOf(api("a")), 0))
+        coEvery { cache.refreshList() } returns false
+
+        vm.refresh()
+
+        assertThat(vm.state.value.showOfflineBanner).isTrue()
+        assertThat(vm.state.value.communities).hasSize(1)
+    }
 }

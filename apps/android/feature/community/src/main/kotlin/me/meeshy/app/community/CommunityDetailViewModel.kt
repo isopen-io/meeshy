@@ -18,6 +18,7 @@ import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.community.CommunityAppearance
 import me.meeshy.sdk.community.CommunityAppearanceStore
 import me.meeshy.sdk.community.CommunityCacheRepository
+import me.meeshy.sdk.community.CommunityFetchException
 import me.meeshy.sdk.community.CommunityRepository
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiConversation
@@ -62,6 +63,8 @@ sealed interface CommunityDetailEffect {
     /** La communauté n'est plus la mienne (sortie) : l'écran se referme. */
     data object Left : CommunityDetailEffect
     data object Joined : CommunityDetailEffect
+    /** La passerelle répond 404 : la communauté n'existe plus, retour à la liste. */
+    data object NotFound : CommunityDetailEffect
     data object ActionFailed : CommunityDetailEffect
 }
 
@@ -167,7 +170,15 @@ class CommunityDetailViewModel @Inject constructor(
         }
     }
 
-    private fun onDetailFailure(@Suppress("UNUSED_PARAMETER") error: Throwable) {
+    private fun onDetailFailure(error: Throwable) {
+        if ((error as? CommunityFetchException)?.isNotFound == true) {
+            viewModelScope.launch {
+                cache.forget(communityId)
+                cache.refreshList()
+                _effects.send(CommunityDetailEffect.NotFound)
+            }
+            return
+        }
         if (_state.value.community == null) _state.update { it.copy(isLoading = false, failed = true) }
     }
 

@@ -109,10 +109,9 @@ class CommunityCacheRepository(
 
     private fun <T> NetworkResult<T>.orThrow(): T = when (this) {
         is NetworkResult.Success -> data
-        is NetworkResult.Failure -> throw CommunityFetchException(error.message)
+        is NetworkResult.Failure -> throw CommunityFetchException(error.message, error.httpStatus)
     }
 
-    private class CommunityFetchException(message: String) : RuntimeException(message)
 
     private companion object {
         const val LIST_NAMESPACE = "community:list"
@@ -123,4 +122,9 @@ class CommunityCacheRepository(
         const val PAGE_SIZE = 20
         const val MEMBERS_PAGE_SIZE = 30
     }
+}
+
+/** Un refus de la passerelle sur une lecture de communauté ; [httpStatus] dit si elle n'existe plus (404). */
+class CommunityFetchException(message: String, val httpStatus: Int? = null) : RuntimeException(message) {
+    val isNotFound: Boolean get() = httpStatus == 404
 }

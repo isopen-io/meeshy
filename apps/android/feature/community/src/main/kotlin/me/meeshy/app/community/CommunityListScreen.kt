@@ -4,6 +4,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -103,6 +105,7 @@ fun CommunityListScreen(
     ) {
         ListHeader(onBack = onBack, onCreate = onCreateCommunity)
         SearchField(query = state.query, onQueryChange = viewModel::onQueryChange)
+        if (state.showOfflineBanner) OfflineBanner()
         PullToRefreshBox(isRefreshing = state.isRefreshing, onRefresh = viewModel::refresh, modifier = Modifier.fillMaxSize()) {
             when {
                 state.showSkeleton -> SkeletonGrid()
@@ -240,6 +243,23 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
 }
 
 @Composable
+private fun OfflineBanner() {
+    val tokens = MeeshyTheme.tokens
+    Text(
+        text = stringResource(R.string.community_list_offline_banner),
+        color = tokens.textSecondary,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(tokens.backgroundSecondary.copy(alpha = 0.6f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
 private fun SkeletonGrid() {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -258,6 +278,7 @@ private fun SkeletonGrid() {
 private val CARD_HEIGHT = 180.dp
 private val AVATAR_SIZE = 44.dp
 private const val SKELETON_COUNT = 6
+private const val AVATAR_PRESS_TILT_DEGREES = -8f
 private const val ENTRANCE_STAGGER_CAP = 10
 
 @Composable
@@ -279,6 +300,13 @@ private fun CommunityCard(
     }
     val entrance by animateFloatAsState(if (appeared) 1f else 0f, MeeshyMotion.springDefault(), label = "cardEntrance")
     val countLocale = remember { Locale.getDefault() }
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val avatarTilt by animateFloatAsState(
+        targetValue = if (pressed && !reduceMotion) AVATAR_PRESS_TILT_DEGREES else 0f,
+        animationSpec = MeeshyMotion.springFast(),
+        label = "avatarTilt",
+    )
 
     Box(
         modifier = modifier
@@ -292,7 +320,7 @@ private fun CommunityCard(
             }
             .shadow(8.dp, RoundedCornerShape(20.dp), ambientColor = accentColor.copy(alpha = 0.3f), spotColor = accentColor.copy(alpha = 0.3f))
             .clip(RoundedCornerShape(20.dp))
-            .pressableScale(onClick = onClick)
+            .pressableScale(onClick = onClick, interaction = interaction)
             .semantics(mergeDescendants = true) { contentDescription = community.name },
     ) {
         CommunityBanner(community.banner, accent, Modifier.fillMaxSize())
@@ -313,7 +341,9 @@ private fun CommunityCard(
                     size = AVATAR_SIZE,
                     containerColor = accentColor,
                     imageUrl = community.avatar,
-                    modifier = Modifier.border(BorderStroke(2.dp, Color.White.copy(alpha = 0.85f)), CircleShape),
+                    modifier = Modifier
+                        .graphicsLayer { rotationZ = avatarTilt }
+                        .border(BorderStroke(2.dp, Color.White.copy(alpha = 0.85f)), CircleShape),
                 )
             }
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.BottomStart) {
@@ -327,7 +357,7 @@ private fun CommunityCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     community.description?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(it, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         CountBadge(MeeshyIcons.GroupFilled, CompactCountFormat.text(community.memberCount, countLocale))

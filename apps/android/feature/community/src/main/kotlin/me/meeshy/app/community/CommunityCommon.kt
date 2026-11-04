@@ -73,8 +73,8 @@ internal fun Modifier.pressableScale(
     pressedScale: Float = 0.95f,
     role: Role? = Role.Button,
     enabled: Boolean = true,
+    interaction: MutableInteractionSource = remember { MutableInteractionSource() },
 ): Modifier {
-    val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed) pressedScale else 1f,
