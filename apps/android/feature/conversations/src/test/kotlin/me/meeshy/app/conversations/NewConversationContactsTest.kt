@@ -14,6 +14,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.friend.AcceptedContactsSource
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.model.FriendRequest
@@ -52,7 +54,7 @@ class NewConversationContactsTest {
     }
 
     private fun viewModel(cache: FriendListRepository, network: FriendRepository) =
-        NewConversationViewModel(mockk(relaxed = true), mockk(relaxed = true), session(), cache, network, mockk(relaxed = true), mockk(relaxed = true))
+        NewConversationViewModel(mockk(relaxed = true), mockk(relaxed = true), session(), AcceptedContactsSource(network, cache, session()), mockk(relaxed = true), mockk(relaxed = true), BlockCache())
 
     @Test
     fun `the cached roster paints at once, then the network refreshes it`() = runTest(dispatcher) {

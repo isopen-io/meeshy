@@ -14,6 +14,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.friend.BlockRepository
 import me.meeshy.sdk.friend.BlockedListRepository
+import me.meeshy.sdk.friend.AcceptedContactsSource
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.model.FriendRequestUser
@@ -52,7 +54,7 @@ class NewConversationBlockedTest {
             every { currentUserId } returns "me"
             every { currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         }
-        return NewConversationViewModel(mockk(relaxed = true), mockk(relaxed = true), session, friends, network, blockedCache, blocks)
+        return NewConversationViewModel(mockk(relaxed = true), mockk(relaxed = true), session, AcceptedContactsSource(network, friends, session), blockedCache, blocks, BlockCache())
     }
 
     @Test

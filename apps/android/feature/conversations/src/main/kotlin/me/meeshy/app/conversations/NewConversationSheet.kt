@@ -60,6 +60,7 @@ internal object NewConversationTags {
     const val CLOSE = "new-conversation-close"
     const val CREATE = "new-conversation-create"
     const val SEARCH = "new-conversation-search"
+    const val SEARCH_RETRY = "new-conversation-search-retry"
     const val GROUP_TOGGLE = "new-conversation-group-toggle"
     const val SOLO_HINT = "new-conversation-group-solo-hint"
     const val GROUP_TITLE = "new-conversation-group-title"
@@ -78,6 +79,8 @@ internal data class NewConversationActions(
     val onSelectEncryption: (CreationEncryptionMode) -> Unit,
     val onToggleUser: (String) -> Unit,
     val onRowShown: (String) -> Unit,
+    val onRetrySearch: () -> Unit = {},
+    val onDismissError: () -> Unit = {},
 )
 
 /**
@@ -166,7 +169,7 @@ private fun SearchField(state: NewConversationUiState, onQueryChange: (String) -
         onValueChange = onQueryChange,
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
-        placeholder = { Text(stringResource(R.string.new_conversation_search_hint)) },
+        placeholder = { Text(stringResource(R.string.new_conversation_search_placeholder)) },
         leadingIcon = { Icon(MeeshyIcons.Search, contentDescription = null, tint = MeeshyTheme.tokens.textMuted) },
         trailingIcon = {
             when {
@@ -350,6 +353,9 @@ private fun LazyListScope.resultItems(state: NewConversationUiState, actions: Ne
     }
     if (state.isLoadingMore) {
         item(key = "results-more") { ListSpinner(labelRes = null) }
+    }
+    if (state.searchFailed) {
+        item(key = "results-failed") { SearchFailed(onRetry = actions.onRetrySearch) }
     }
     if (state.showsNoResults) {
         item(key = "results-empty") { NoUserFound() }
