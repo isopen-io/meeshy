@@ -391,9 +391,10 @@ function LensRowImpl({
   };
 
   /* LE BALAYAGE DE LA LIGNE (#10580) — les actions du menu, rangées par bord.
-     Elles ne se calculent qu'au toucher et tant qu'un bord est montré. */
+     Elles ne se calculent qu'au toucher et tant qu'un bord est montré ;
+     « Rendre obsolète » y vient sur le verdict du rôle (#14645). */
   const swipeSides = () =>
-    conversationRowSwipeSides({ flags, unread, language: currentInterfaceLanguage(), canDelete: account });
+    conversationRowSwipeSides({ flags, unread, language: currentInterfaceLanguage(), canDelete: account, actions: actionsOf() });
   const swipe = useConversationRowSwipe(swipeSides);
   /* ARCHIVÉE OU SUPPRIMÉE, LA LIGNE SE REPLIE AVANT DE PARTIR (#11574) — quand
      l'`ExitPresence` de la liste la déclare sortante. */

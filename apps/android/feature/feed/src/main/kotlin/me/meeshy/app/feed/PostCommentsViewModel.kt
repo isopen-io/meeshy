@@ -52,6 +52,11 @@ import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.SendFailureClassifier
 import me.meeshy.sdk.outbox.SendResult
+import me.meeshy.sdk.model.comment.echoReconciled
+import me.meeshy.sdk.model.comment.echoReconciledReply
+import me.meeshy.sdk.model.comment.isOwnQueuedEcho
+import me.meeshy.sdk.post.CommentDraftStore
+import me.meeshy.sdk.post.UnsentComments
 import me.meeshy.sdk.post.CommentGestureQueue
 import me.meeshy.sdk.post.CommentGestureRollback
 import me.meeshy.sdk.post.CommentHeartTransport
@@ -144,6 +149,8 @@ class PostCommentsViewModel @Inject constructor(
     private val heartTransport: CommentHeartTransport? = null,
     private val network: NetworkMonitor = InMemoryNetworkMonitor(),
     private val gestureQueue: CommentGestureQueue? = null,
+    unsentQueue: UnsentComments? = null,
+    private val commentDrafts: CommentDraftStore? = null,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
@@ -196,6 +203,15 @@ class PostCommentsViewModel @Inject constructor(
     )
     private var pendingSeq = 0
 
+    /** Le fil et la file durable d'un même post : les commentaires écrits hors ligne, leur marque, leur relance. */
+    internal val outbox: CommentOutboxMirror? = unsentQueue?.takeIf { postId.isNotBlank() }?.let { queue ->
+        CommentOutboxMirror(
+            postId, queue, thread, replies, sessionRepository,
+            onGaveUp = { item -> status.update { it.copy(notice = if (item.payload.parentId == null) CommentNotice.SEND_FAILED else CommentNotice.REPLY_FAILED) } },
+            onSettled = { resyncHead() },
+        )
+    }
+
     /** The `@username ` prefix [beginReply] last injected, tracked so retargeting the composer to
      *  a different reply strips exactly that prefix rather than any leading text. */
     private var prefilledMention: String? = null
@@ -233,6 +249,8 @@ class PostCommentsViewModel @Inject constructor(
                 .collect { projected -> _state.value = projected }
         }
         restoreUnsentComment()
+        restoreDraft()
+        outbox?.let { mirror -> viewModelScope.launch { mirror.run() } }
         persistThread()
         observeRealtime()
         loadInitial()
@@ -262,6 +280,17 @@ class PostCommentsViewModel @Inject constructor(
         }
     }
 
+    /** Le brouillon du post revient tel quel (iOS `CommentDraftStore`), sans écraser ce que le refus d'une bannière a rendu. */
+    private fun restoreDraft() {
+        val saved = commentDrafts?.load(postId) ?: return
+        composerDraft.update { draft -> if (draft.text.isBlank()) draft.copy(text = saved) else draft }
+    }
+
+    /** Le composer s'arrête (ON_STOP) : le brouillon en vol s'écrit sans attendre. */
+    fun onComposerStop() {
+        commentDrafts?.flush()
+    }
+
     /** #13693 — a comment typed in a banner and refused for good comes back in this post's field (it leaves the store). */
     private fun restoreUnsentComment() {
         if (postId.isBlank()) return
@@ -285,7 +314,7 @@ class PostCommentsViewModel @Inject constructor(
         viewModelScope.launch {
             socialSocket.commentAdded.collect { event ->
                 if (event.postId != postId) return@collect
-                onCommentAdded(event.comment)
+                onCommentAdded(event.comment, event.clientMutationId)
             }
         }
         viewModelScope.launch {
@@ -402,13 +431,14 @@ class PostCommentsViewModel @Inject constructor(
         replies.update { it.replacedReply(comment) }
     }
 
-    private fun onCommentAdded(comment: ApiPostComment) {
+    private fun onCommentAdded(comment: ApiPostComment, clientMutationId: String? = null) {
         val parentId = comment.parentId?.takeIf { it.isNotBlank() }
+        val queued = isOwnQueuedEcho(thread.value, replies.value, clientMutationId)
         if (parentId == null) {
-            thread.update { it.received(comment) }
+            thread.update { it.echoReconciled(clientMutationId, comment) }
         } else {
-            replies.update { it.receivedReply(parentId, comment) }
-            thread.update { it.bumpReplyCount(parentId, 1) }
+            replies.update { it.echoReconciledReply(parentId, clientMutationId, comment) }
+            if (!queued) thread.update { it.bumpReplyCount(parentId, 1) }
         }
         likes.update { it.seeded(listOf(comment), HEART_EMOJI) }
     }
@@ -537,6 +567,7 @@ class PostCommentsViewModel @Inject constructor(
      */
     fun onDraftChange(value: String) {
         composerDraft.update { it.copy(text = value, language = it.language.onDraftChanged(value)) }
+        commentDrafts?.save(postId, value)
         mentions.onTextChange(value)
     }
 
@@ -597,6 +628,10 @@ class PostCommentsViewModel @Inject constructor(
         val place = composerDraft.value.place
         attachments.value = CommentAttachmentTray()
         tray.pieces.flatMap { it.owned }.forEach(MediaIntake::release)
+        if (offline.value && outbox != null) {
+            queueOffline(content, attachmentIds, pill, CommentExtras(effectFlags, place))
+            return
+        }
         composer.value?.let { target ->
             clearDraft()
             sendReply(target.parentId, content, attachmentIds, pill, CommentExtras(effectFlags, place))
@@ -625,6 +660,24 @@ class PostCommentsViewModel @Inject constructor(
             } catch (e: Exception) {
                 thread.update { it.failed(tempId) }
                 sendFailed(e.message, content, CommentNotice.SEND_FAILED, place)
+            }
+        }
+    }
+
+    /** Hors ligne : le commentaire entre dans la file durable et part au retour du réseau ; le miroir montre sa ligne. */
+    private fun queueOffline(content: String, attachmentIds: List<String>?, pill: ComposerLanguageState, extras: CommentExtras) {
+        val parentId = composer.value?.parentId
+        composer.value = null
+        clearDraft()
+        viewModelScope.launch {
+            try {
+                val language = languageAtSend(pill, content)
+                val cmid = postRepository.queueComment(postId, content, parentId, language, attachmentIds, extras.effectFlags, extras.place)
+                if (cmid == null) sendFailed(null, content, CommentNotice.SEND_FAILED, extras.place)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                sendFailed(e.message, content, CommentNotice.SEND_FAILED, extras.place)
             }
         }
     }
@@ -710,6 +763,7 @@ class PostCommentsViewModel @Inject constructor(
 
     /** Reset the composer text + mention tracking after a send. */
     private fun clearDraft() {
+        commentDrafts?.clear(postId)
         mentions.reset()
         composerDraft.value = ComposerDraft()
     }
@@ -1123,50 +1177,3 @@ class PostCommentsViewModel @Inject constructor(
         private const val PREVIEW_PRELOAD_LIMIT = 5
     }
 }
-
-private data class Status(
-    val isLoading: Boolean = false,
-    val isLoadingMore: Boolean = false,
-    val isSubmitting: Boolean = false,
-    val error: String? = null,
-    val notice: CommentNotice? = null,
-) {
-    /** A first page that failed is drawn as the error state; a next page that failed is a toast. */
-    fun fetchFailed(message: String?, loadingMore: Boolean): Status =
-        copy(
-            isLoading = false,
-            isLoadingMore = false,
-            error = message,
-            notice = if (loadingMore) CommentNotice.LOAD_FAILED else notice,
-        )
-}
-
-/** The composer's live text and its @-mention autocomplete panel, folded into the projection. */
-private data class ComposerDraft(
-    val text: String = "",
-    val mention: MentionAutocompleteState = MentionAutocompleteState(),
-    val language: ComposerLanguageState = ComposerLanguageState(),
-    val effects: MessageEffects = MessageEffects(),
-    val place: SharedPlace? = null,
-)
-
-/** Ce qui part avec un commentaire en plus de son texte et de ses pièces (#14385, #14387). */
-private data class CommentExtras(val effectFlags: Int?, val place: SharedPlace?)
-
-/** The projection inputs accumulated before the final [translatingLanguages] fold, threaded
- *  through as one value so the chained `combine` stays within its 5-arg cap. */
-private data class ProjectionBundle(
-    val inputs: ProjectionInputs,
-    val replyTarget: ReplyTarget?,
-    val activeLanguages: Map<String, String>,
-    val draft: ComposerDraft,
-)
-
-/** The five reactive inputs folded into the projection, threaded past the 5-arg `combine` cap. */
-private data class ProjectionInputs(
-    val thread: CommentThreadState,
-    val user: MeeshyUser?,
-    val status: Status,
-    val likes: CommentLikeState,
-    val replies: CommentRepliesState,
-)

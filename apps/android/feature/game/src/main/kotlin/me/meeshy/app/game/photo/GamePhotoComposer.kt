@@ -22,6 +22,7 @@ import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.sdk.model.game.photo.GamePhotoMoment
+import me.meeshy.sdk.model.game.photo.PhotoAuthor
 import me.meeshy.sdk.model.game.photo.PhotoFormat
 import me.meeshy.sdk.model.game.photo.PhotoMode
 
@@ -40,6 +41,12 @@ data class PhotoComposeRequest(
     val text: PhotoCanvasText,
     val source: Bitmap?,
     val mode: PhotoMode,
+    /** Le bandeau de parrainage ; `null` ⇒ la carte part sans lien. */
+    val referral: PhotoReferral? = null,
+    /** Le pseudo gravé sur la plaque d'un rang ; `null` ⇒ pas de plaque. */
+    val author: PhotoAuthor? = null,
+    /** Le bandeau se retourne en arabe ; le reste de la carte ne bouge pas. */
+    val rightToLeft: Boolean = false,
 ) {
     val background: PhotoBackground
         get() = source?.let { PhotoBackground.Photo(it, mirrored = mode == PhotoMode.Selfie) } ?: PhotoBackground.Card
@@ -129,6 +136,9 @@ private fun CaptureLayer(
         text = request.text,
         format = format,
         background = request.background,
+        referral = request.referral,
+        author = request.author,
+        rightToLeft = request.rightToLeft,
         modifier = Modifier
             .wrapContentSize(Alignment.TopStart, unbounded = true)
             .drawWithContent {

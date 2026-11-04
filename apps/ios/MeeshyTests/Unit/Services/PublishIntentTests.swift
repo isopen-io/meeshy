@@ -365,7 +365,7 @@ final class PublishIntentTests: XCTestCase {
     /// La question « qui l'appelle » est une quantification UNIVERSELLE : elle
     /// se prouve sur toute l'arborescence de production, jamais sur le fichier
     /// qu'on a sous les yeux.
-    func test_lIntentionDePublication_nEstComposeeQueParLesDeuxJumeauxAudio() throws {
+    func test_lIntentionDePublication_nEstComposeeQueParLePublieurAudioDuFil() throws {
         guard let enumerateur = FileManager.default.enumerator(
             at: racineApp, includingPropertiesForKeys: nil
         ) else {
@@ -388,24 +388,11 @@ final class PublishIntentTests: XCTestCase {
             "L'intention doit exister, et une seule fois — sinon cette garde ne mesurerait rien."
         )
         XCTAssertEqual(
-            appels, 2,
-            "La fabrique doit avoir DEUX appelants — les deux points d'entrée d'un enregistrement vocal. "
-                + "Zéro : les jumeaux ont cessé de composer, et la fabrique est redevenue du code mort ; "
-                + "retourner cette garde dans l'autre sens. Trois : un geste de plus s'écrit tout seul, et "
-                + "il divergera. Appelants trouvés — \(fichiersAppelants)."
-        )
-        // **Trié** : `fichiersAppelants` se remplit dans l'ordre où l'énumérateur
-        // du système de fichiers rend les URL, qui n'est garanti par rien. Tant
-        // que les deux appelants vivaient dans UN fichier, la liste ne pouvait
-        // pas se réordonner ; depuis #6040 elle en porte deux, et une assertion
-        // sur une liste non triée deviendrait un flake d'ordre de lecture.
-        XCTAssertEqual(
-            fichiersAppelants.sorted(), ["FeedComposerSheet.swift", "FeedView+Attachments.swift"],
-            "Les deux appelants doivent vivre dans les deux fichiers des jumeaux — `publishAudioPost` "
-                + "dans l'extension `FeedView+Attachments`, `publishAudioFromSheet` dans la feuille "
-                + "`FeedComposerSheet` sortie en #6040. Un modèle, une porte ou une autre vue qui "
-                + "composerait sa propre intention de vocal serait le troisième site que ce lot existe "
-                + "pour empêcher."
+            fichiersAppelants, ["FeedView+Attachments.swift"],
+            "La fabrique n'a plus qu'UN appelant depuis que la feuille du fil a quitté le dépôt (#15628) : "
+                + "`publishAudioPost`, dans l'extension `FeedView+Attachments`. Zéro : le vocal a cessé de "
+                + "composer son intention ; un autre fichier : un geste de plus s'écrit tout seul, et il "
+                + "divergera. Appels trouvés — \(appels)."
         )
     }
 

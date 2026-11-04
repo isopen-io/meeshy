@@ -28,7 +28,7 @@ class CategorySocketPayloadsTest {
 
         val event = payload.toEvent()
 
-        assertThat(event).isEqualTo(CategoryEvent.Upserted(CategoryOption(id = "work", name = "Work", order = 2)))
+        assertThat(event).isEqualTo(CategoryEvent.Upserted(CategoryOption(id = "work", name = "Work", order = 2, color = "#FF0000", icon = "briefcase")))
     }
 
     @Test
@@ -94,7 +94,7 @@ class CategorySocketPayloadsTest {
         val payload = json.decodeFromString<CategoryUpsertedSocketData>(wire)
 
         assertThat(payload.toEvent())
-            .isEqualTo(CategoryEvent.Upserted(CategoryOption(id = "work", name = "Work", order = 3)))
+            .isEqualTo(CategoryEvent.Upserted(CategoryOption(id = "work", name = "Work", order = 3, color = "#FF0000", icon = "briefcase", isExpanded = true)))
     }
 
     @Test

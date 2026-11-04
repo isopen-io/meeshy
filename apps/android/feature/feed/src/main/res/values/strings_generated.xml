@@ -62,6 +62,7 @@
     <string name="feed_post_deleted">Post deleted</string>
     <string name="feed_post_detail_document">Document</string>
     <string name="feed_post_detail_pages">pages</string>
+    <string name="feed_post_detail_story_unavailable">Story unavailable</string>
     <string name="feed_post_open">Open</string>
     <string name="feed_post_pinned">Post pinned</string>
     <string name="feed_post_reposted_from">reposted from @%1$s</string>

@@ -388,6 +388,9 @@ data class ParticipantRoleUpdatedEvent(
     val conversationId: String,
     val userId: String,
     @SerialName("newRole") val role: String,
+    val updatedBy: String? = null,
+    @Serializable(with = TolerantRoleParticipantSerializer::class)
+    val participant: ParticipantRoleUpdatedParticipantInfo? = null,
 )
 
 /**
@@ -439,6 +442,7 @@ data class ConversationClosedSocketEvent(
     val conversationId: String,
     val closedBy: String,
     val closedAt: String? = null,
+    val reason: String? = null,
 )
 
 /**
@@ -575,6 +579,8 @@ data class SocketCommentAddedData(
     val postId: String,
     val comment: ApiPostComment,
     val commentCount: Int = 0,
+    /** La clé d'idempotence de l'auteur : l'écho remplace sa ligne optimiste (id = cmid) au lieu de la doubler. */
+    val clientMutationId: String? = null,
 )
 
 /**
@@ -654,6 +660,8 @@ data class SocketStoryViewedData(
     val storyId: String,
     val viewerId: String,
     val viewedAt: String? = null,
+    /** Total autoritatif de vues porté par l'événement (iOS `SocketStoryViewedData.viewCount`) ; `null` d'une ancienne passerelle. */
+    val viewCount: Int? = null,
 )
 
 @Serializable

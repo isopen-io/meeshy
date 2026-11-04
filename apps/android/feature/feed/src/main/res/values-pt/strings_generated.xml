@@ -63,6 +63,7 @@
     <string name="feed_post_deleted">Publicação excluída</string>
     <string name="feed_post_detail_document">Documento</string>
     <string name="feed_post_detail_pages">páginas</string>
+    <string name="feed_post_detail_story_unavailable">Story indisponível</string>
     <string name="feed_post_open">Abrir</string>
     <string name="feed_post_pinned">Publicação fixada</string>
     <string name="feed_post_reposted_from">repostou de @%1$s</string>

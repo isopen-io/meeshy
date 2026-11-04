@@ -679,6 +679,7 @@
     <string name="game_fact_missing_for_level">Jusqu’au niveau %1$s</string>
     <string name="game_fact_missing_for_promotion">Jusqu’à la zone de montée</string>
     <string name="game_fact_missing_for_rank">Jusqu’à %1$s</string>
+    <string name="game_fact_rebirths">Renaissances</string>
     <string name="game_fact_strides">Pas</string>
     <string name="game_fiche_earn">Comment en gagner</string>
     <string name="game_fiche_heritage_held_bourse">Ta Bourse</string>

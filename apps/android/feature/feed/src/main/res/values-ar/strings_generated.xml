@@ -66,6 +66,7 @@
     <string name="feed_post_deleted">تم حذف المنشور</string>
     <string name="feed_post_detail_document">مستند</string>
     <string name="feed_post_detail_pages">صفحات</string>
+    <string name="feed_post_detail_story_unavailable">القصة غير متاحة</string>
     <string name="feed_post_open">فتح</string>
     <string name="feed_post_pinned">تم تثبيت المنشور</string>
     <string name="feed_post_reposted_from">أعاد النشر من @%1$s</string>

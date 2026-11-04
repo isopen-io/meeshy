@@ -19,6 +19,7 @@ import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PendingPostDetailScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
+import me.meeshy.app.navigation.MeeshyPinnedStoryBand
 import me.meeshy.app.navigation.MeeshyStoryRail
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.app.navigation.Routes
@@ -53,6 +54,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenComposer = { origin -> Routes.composer(origin)?.let(navController::navigate) },
             onRefreshRail = storiesViewModel::refresh,
             storyRail = { MeeshyStoryRail(navController = navController, storiesViewModel = storiesViewModel) },
+            pinnedBand = { reveal -> MeeshyPinnedStoryBand(navController, storiesViewModel, reveal) },
         )
     }
     composable(

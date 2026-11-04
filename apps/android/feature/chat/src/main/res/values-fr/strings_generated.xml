@@ -247,6 +247,7 @@
     <string name="conversation_appearance_section_photo">Photo de la conversation</string>
     <string name="conversation_appearance_section_solid">Couleur unie</string>
     <string name="conversation_appearance_sheet_title">Fond et accent</string>
+    <string name="conversation_appearance_shop">Plus dans la boutique</string>
     <string name="conversation_appearance_signature">Signature</string>
     <string name="conversation_encryption_switched_enabled">Chiffrement de bout en bout activé : les nouveaux messages sont chiffrés sur vos appareils.</string>
     <string name="conversation_info_created_on">Créé le %1$s</string>

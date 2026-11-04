@@ -24,6 +24,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
+import me.meeshy.sdk.model.story.PinnedBandReveal
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -46,6 +47,7 @@ fun ConversationListScreen(
     onGlobalSearch: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
     header: @Composable () -> Unit = {},
+    pinnedBand: (@Composable (reveal: Float) -> Unit)? = null,
     searchSyncPill: @Composable () -> Unit = {},
     searchCommunitiesBand: @Composable () -> Unit = {},
     searchCommunityCount: Int = 0,
@@ -131,6 +133,8 @@ fun ConversationListScreen(
                 onRemoveMasterPin = viewModel::onRemoveMasterPin,
                 onOpenShareLinkPicker = onOpenShareLinkPicker,
                 onNewConversation = onNewConversation,
+                scrollOffsetDp = pinnedBand?.let { PinnedBandReveal.scrollOffsetDp(listState.firstVisibleItemIndex, with(density) { listState.firstVisibleItemScrollOffset.toDp().value }) },
+                pinnedBand = pinnedBand,
             )
         },
         bottomBar = {

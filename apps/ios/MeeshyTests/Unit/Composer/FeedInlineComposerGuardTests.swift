@@ -133,11 +133,8 @@ final class FeedInlineComposerGuardTests: XCTestCase {
     /// > photo devient une scène : l'iPad fabriquait des publications d'une
     /// > autre nature que l'iPhone, sans que rien ne le dise à l'auteur.
     ///
-    /// Ce qui reste de l'ancien composer n'est PAS du code mort :
-    /// `FeedComposerSheet` porte encore les deux citations (le meuble refuse un
-    /// repost — levée 7.5) et quatre capacités que le meuble n'a pas — progression,
-    /// dépôt, éditeur d'image, son emprunté. Les retirer les
-    /// retirerait à l'utilisateur : voir `FeedComposerSheetRetirementInventoryTests`.
+    /// La feuille historique a suivi quand la citation a rejoint le meuble
+    /// (`QuoteComposerDoor`, #15628) : plus rien ne la montait.
     func test_lOverlayInlineIPad_estRetireDeFeedView() throws {
         let feedView = try source("Meeshy/Features/Main/Views/FeedView.swift")
         XCTAssertGreaterThan(feedView.count, 400, "FeedView introuvable ou vide")

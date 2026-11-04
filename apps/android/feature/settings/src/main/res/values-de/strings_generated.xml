@@ -314,6 +314,9 @@
     <string name="settings_logout_confirm_title">Abmelden</string>
     <string name="settings_logout_hint">Von deinem Konto abmelden</string>
     <string name="settings_logout_in_progress">Abmeldung läuft...</string>
+    <string name="settings_media_autosave_header">Galerie</string>
+    <string name="settings_media_autosave_subtitle">Empfangene Bilder und Videos landen einmalig im Meeshy-Album. Nie ein flüchtiges, verschwommenes oder Einmal-Medium.</string>
+    <string name="settings_media_autosave_title">In Fotos sichern</string>
     <string name="settings_media_capture_header">Bei der Aufnahme</string>
     <string name="settings_media_capture_original_subtitle">Das unbearbeitete Foto oder Video, ohne Effekt oder Rahmen, wird bei jeder Aufnahme in Fotos gesichert.</string>
     <string name="settings_media_capture_original_title">Original sichern</string>

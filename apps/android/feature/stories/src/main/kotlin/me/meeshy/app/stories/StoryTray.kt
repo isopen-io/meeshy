@@ -57,6 +57,9 @@ import me.meeshy.sdk.model.story.MyStoryAvatarAction
 import me.meeshy.sdk.model.story.StoryTrayActionResolver
 
 
+/** Le balayage d'expiration du plateau : chaque minute, comme iOS. */
+internal const val TRAY_SWEEP_INTERVAL_MILLIS: Long = 60_000L
+
 /**
  * Horizontal story-ring carousel rendered atop the conversation list — the
  * Android port of `StoryTrayView`. UN SEUL rail, monté en tête du fil ET de la liste des
@@ -85,12 +88,19 @@ fun StoryTray(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val tray = state.tray
     val failures = state.failedPublishes
+    LaunchedEffect(viewModel) {
+        while (true) {
+            kotlinx.coroutines.delay(TRAY_SWEEP_INTERVAL_MILLIS)
+            viewModel.sweepExpired()
+        }
+    }
     if (tray.isEmpty && failures.isEmpty() && state.showSkeleton) {
         StoryTraySkeleton(modifier)
         return
     }
 
     Column(modifier = modifier) {
+        if (state.loadFailed && tray.isEmpty) StoryTrayLoadFailure(onRetry = viewModel::refresh)
         if (failures.isNotEmpty()) {
             StoryFailedStrip(
                 failures = failures,

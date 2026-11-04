@@ -314,6 +314,9 @@
     <string name="settings_logout_confirm_title">Log out</string>
     <string name="settings_logout_hint">Log out of your account</string>
     <string name="settings_logout_in_progress">Logging out...</string>
+    <string name="settings_media_autosave_header">Gallery</string>
+    <string name="settings_media_autosave_subtitle">Received images and videos join the Meeshy album, once. Never an ephemeral, blurred or view-once media.</string>
+    <string name="settings_media_autosave_title">Save to Photos</string>
     <string name="settings_media_capture_header">When capturing</string>
     <string name="settings_media_capture_original_subtitle">The raw photo or video, with no effect or frame, is saved to Photos with every shot.</string>
     <string name="settings_media_capture_original_title">Save the original</string>

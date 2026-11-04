@@ -180,11 +180,11 @@ struct FeedPostActionsBar: View, Equatable {
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), repostCount))
             .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
             .accessibilityAddTraits(isReposted ? .isSelected : [])
-            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
-                Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(postId) }
-                Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(postId) }
-                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
-            }
+            .modifier(RepostChoiceDialog(
+                isPresented: $showRepostOptions,
+                onRepost: { onRepost?(postId) },
+                onQuote: onQuote.map { quote in { quote(postId) } }
+            ))
 
             Spacer()
 

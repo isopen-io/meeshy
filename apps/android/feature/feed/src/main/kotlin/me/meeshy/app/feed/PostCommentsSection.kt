@@ -51,6 +51,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -109,7 +111,7 @@ internal fun PostCommentsSection(
     }
 
     val imaging = rememberCommentImaging(viewModel, support)
-    CommentMediaFullscreen { CommentsColumn(state, viewModel, modifier, imaging, showsTitle) }
+    ProvideCommentUnsent(viewModel) { CommentMediaFullscreen { CommentsColumn(state, viewModel, modifier, imaging, showsTitle) } }
 }
 
 /**
@@ -193,6 +195,7 @@ fun PostCommentsComposerBar(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val editPiece = rememberCommentPieceRetouch(onReplace = viewModel::replaceMedia)
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onComposerStop() }
     Box(modifier.fillMaxWidth()) {
         CommentComposer(
             draft = state.draft,
@@ -315,6 +318,7 @@ private fun CommentRow(
                 CommentReplyButton(comment = comment, onReply = onReply)
                 CommentMoreMenu(comment = comment, onDelete = onDelete, imaging = imaging)
             }
+            CommentUnsentSlot(comment.id)
         }
     }
 }
