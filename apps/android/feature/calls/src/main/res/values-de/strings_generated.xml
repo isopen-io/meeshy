@@ -71,6 +71,8 @@
     <string name="call_detail_type">Typ</string>
     <string name="call_detail_type_audio">Sprachanruf</string>
     <string name="call_detail_type_video">Videoanruf</string>
+    <string name="call_effects_companions_more">%1$d weitere Teilnehmende</string>
+    <string name="call_effects_companions_move">Seite wechseln</string>
     <string name="call_ended">Anruf beendet</string>
     <string name="call_ended_connection_lost">Verbindung verloren</string>
     <string name="call_ended_declined">Anruf abgelehnt</string>
