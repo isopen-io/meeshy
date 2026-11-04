@@ -32,10 +32,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
@@ -147,6 +149,11 @@ internal fun SceneHistoryButtons(history: SceneHistory, onUndo: () -> Unit, onRe
     if (history.canRedo) SceneRoundButton(MeeshyIcons.Redo, stringResource(SceneChromeName.REDO.label), onRedo)
 }
 
+internal const val SCENE_TOOL_COLUMN_TAG = "composer-scene-tool-column"
+
+/** Le nom du conteneur, celui qu'iOS lui donne (`ComposerRestChromeCopy.column`, #15863) : « Outils de la scène ». */
+internal val SCENE_TOOL_COLUMN_LABEL: Int get() = R.string.composer_rest_column
+
 /**
  * La colonne des outils, posée à droite de la scène : chaque outil un bouton rond, le « ⋯ » rendu par [more], et l'appui
  * long de Média qui propose ses sources ([onMediaSource], #13845), la caméra de la scène en tête quand elle est servie ([cameraServed], #13849). Quand un panneau monte et lui laisse moins de place, elle
@@ -176,7 +183,9 @@ internal fun SceneToolColumn(
         }
     }
     val gap = LocalComposerRailSize.current.gap
+    val name = stringResource(SCENE_TOOL_COLUMN_LABEL)
     Column(
+        modifier = Modifier.testTag(SCENE_TOOL_COLUMN_TAG).semantics { contentDescription = name; isTraversalGroup = true },
         verticalArrangement = Arrangement.spacedBy(gap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
