@@ -16,12 +16,14 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
+import me.meeshy.sdk.conversation.ConversationObsoleting
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.feedback.HapticKind
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiParticipant
+import me.meeshy.sdk.model.ConversationObsoleted
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities.Removal
 import me.meeshy.sdk.model.report.ReportReason
@@ -56,8 +58,20 @@ class ConversationListDialogsTest {
         }
     }
 
+    private class FakeObsoleter(
+        var result: NetworkResult<ConversationObsoleted> = NetworkResult.Success(ConversationObsoleted(conversationId = "any")),
+    ) : ConversationObsoleting {
+        val asked = mutableListOf<String>()
+        override suspend fun makeObsolete(conversationId: String): NetworkResult<ConversationObsoleted> {
+            asked += conversationId
+            return result
+        }
+    }
+
     private class Harness(
         val controller: ConversationListDialogController,
+        val state: MutableStateFlow<ConversationListUiState>,
+        val obsoleter: FakeObsoleter,
         val repo: ConversationRepository,
         val blocker: FakeBlocker,
         val reporter: FakeReporter,
@@ -82,6 +96,7 @@ class ConversationListDialogsTest {
         blocker: FakeBlocker = FakeBlocker(),
         reporter: FakeReporter = FakeReporter(),
         webOrigin: String = "",
+        obsoleter: FakeObsoleter = FakeObsoleter(),
     ): Harness {
         val repo = mockk<ConversationRepository>(relaxed = true)
         val state = MutableStateFlow(ConversationListUiState(currentUserId = user?.id, currentUser = user))
@@ -95,6 +110,7 @@ class ConversationListDialogsTest {
             categoryRepository = mockk<CategoryRepository>(relaxed = true),
             draftStore = InMemoryConversationDraftStore(),
             workManager = mockk<WorkManager>(relaxed = true),
+            obsoleter = obsoleter,
         )
         val lock = ConversationListLockCoordinator(state, lockStore) {}
         val controller = ConversationListDialogController(
@@ -103,13 +119,13 @@ class ConversationListDialogsTest {
             conversationOf = { id -> conversations.firstOrNull { it.id == id } },
             actions = actions,
             repository = repo,
-            deps = ConversationListDialogDeps(blocker, reporter, webOrigin = webOrigin),
+            deps = ConversationListDialogDeps(blocker, reporter, obsoleter = obsoleter, webOrigin = webOrigin),
             lock = lock,
             lockStore = lockStore,
         )
         val effects = mutableListOf<ConversationListDialogEffect>()
         backgroundScope.launch { controller.effects.collect { effects += it } }
-        return Harness(controller, repo, blocker, reporter, effects)
+        return Harness(controller, state, obsoleter, repo, blocker, reporter, effects)
     }
 
     // ── État scellé ──
@@ -232,6 +248,65 @@ class ConversationListDialogsTest {
         h.controller.requestRemoval("g1")
 
         assertThat(h.controller.dialog.value).isNull()
+    }
+
+    // ── Rendre obsolète (#14645) ──
+
+    @Test
+    fun `the obsolete swipe of a group admin asks to confirm, naming the conversation`() = runTest(StandardTestDispatcher()) {
+        val h = harness(group(role = "admin"))
+
+        h.controller.requestObsolete("g1")
+
+        assertThat(h.controller.dialog.value).isEqualTo(ConversationListDialog.Obsolete("g1", "Équipe"))
+    }
+
+    @Test
+    fun `either member of an open direct is asked to confirm`() = runTest(StandardTestDispatcher()) {
+        val h = harness(direct())
+
+        h.controller.requestObsolete("d1")
+
+        assertThat(h.controller.dialog.value).isInstanceOf(ConversationListDialog.Obsolete::class.java)
+    }
+
+    @Test
+    fun `a viewer the gateway would refuse is never asked to make it obsolete`() = runTest(StandardTestDispatcher()) {
+        val h = harness(group(role = "moderator"), ApiConversation(id = "meeshy", type = "global", currentUserRole = "creator"))
+
+        h.controller.requestObsolete("g1")
+        val moderator = h.controller.dialog.value
+        h.controller.requestObsolete("meeshy")
+
+        assertThat(moderator).isNull()
+        assertThat(h.controller.dialog.value).isNull()
+    }
+
+    @Test
+    fun `confirming obsolete plays the heavy haptic, drops the row at once and asks the gateway`() = runTest(StandardTestDispatcher()) {
+        val h = harness(group(role = "admin"))
+
+        h.controller.requestObsolete("g1")
+        h.controller.confirmObsolete()
+        val pendingBeforeAnswer = h.state.value.pendingRemovals
+        runCurrent()
+
+        assertThat(h.controller.dialog.value).isNull()
+        assertThat(pendingBeforeAnswer).contains("g1")
+        assertThat(h.obsoleter.asked).containsExactly("g1")
+        assertThat(h.effects).containsExactly(ConversationListDialogEffect.Haptic(HapticKind.HEAVY))
+    }
+
+    @Test
+    fun `dismissing the obsolete confirmation asks nothing`() = runTest(StandardTestDispatcher()) {
+        val h = harness(group(role = "admin"))
+
+        h.controller.requestObsolete("g1")
+        h.controller.dismiss()
+        h.controller.confirmObsolete()
+        runCurrent()
+
+        assertThat(h.obsoleter.asked).isEmpty()
     }
 
     // ── Quitter, renommer ──

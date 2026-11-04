@@ -97,6 +97,18 @@ internal class ConversationListDialogController(
         actions.deleteConversationForMe(target.conversationId)
     }
 
+    fun requestObsolete(conversationId: String) {
+        val conversation = conversationOf(conversationId) ?: return
+        if (!capabilities(conversation).obsolete) return
+        show(ConversationListDialog.Obsolete(conversationId, conversation.displayTitle(state.value.currentUserId)))
+    }
+
+    fun confirmObsolete() {
+        val target = take<ConversationListDialog.Obsolete>() ?: return
+        emit(ConversationListDialogEffect.Haptic(HapticKind.HEAVY))
+        actions.makeConversationObsolete(target.conversationId)
+    }
+
     fun requestLeave(conversationId: String) {
         val conversation = conversationOf(conversationId) ?: return
         if (!capabilities(conversation).leave) return

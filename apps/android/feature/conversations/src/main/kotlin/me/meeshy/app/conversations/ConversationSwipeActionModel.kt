@@ -31,11 +31,13 @@ internal data class ConversationSwipeActionModel(
             hasUnread: Boolean,
             canToggleArchive: Boolean,
             removal: Removal?,
+            obsolete: Boolean = false,
         ): ConversationSwipeActionModel {
             val plan = ConversationSwipePlan.of(
                 hasUnread = hasUnread,
                 canToggleArchive = canToggleArchive,
                 removal = removal,
+                obsolete = obsolete,
             )
             fun item(kind: SwipeKind) = ConversationSwipeItem(
                 kind = kind,
@@ -44,7 +46,7 @@ internal data class ConversationSwipeActionModel(
                     SwipeKind.MUTE -> isMuted
                     SwipeKind.LOCK -> isLocked
                     SwipeKind.ARCHIVE -> isArchived
-                    SwipeKind.MARK_READ, SwipeKind.MARK_UNREAD, SwipeKind.REMOVE -> false
+                    SwipeKind.MARK_READ, SwipeKind.MARK_UNREAD, SwipeKind.REMOVE, SwipeKind.OBSOLETE -> false
                 },
             )
             return ConversationSwipeActionModel(plan.leading.map(::item), plan.trailing.map(::item))
