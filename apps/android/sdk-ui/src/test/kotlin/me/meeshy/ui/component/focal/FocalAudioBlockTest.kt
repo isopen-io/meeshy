@@ -6,6 +6,7 @@ import me.meeshy.ui.component.bubble.BubbleAudio
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.BubbleFile
 import me.meeshy.ui.component.bubble.BubbleImage
+import me.meeshy.ui.component.bubble.showsVoiceConsentNotice
 import org.junit.Test
 
 class FocalAudioBlockTest {

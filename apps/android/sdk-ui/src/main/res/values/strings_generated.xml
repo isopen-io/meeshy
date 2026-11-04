@@ -83,6 +83,7 @@
     <string name="bubble_a11y_reactions">Reactions: %1$s</string>
     <string name="bubble_a11y_reply_to">Reply to %1$s</string>
     <string name="bubble_attachment_file_fallback">File</string>
+    <string name="bubble_audio_stack_position">Voice message %1$d of %2$d</string>
     <string name="bubble_blur_view_once">View once</string>
     <string name="bubble_contact_card_a11y_on_meeshy">On Meeshy: %1$s</string>
     <string name="bubble_contact_card_on_meeshy">On Meeshy</string>

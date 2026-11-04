@@ -219,6 +219,12 @@ internal object BubbleAttachmentBuilder {
             isAudioTranslated = translatedAudio != null,
             audioLanguage = translatedAudio?.language ?: resolved?.language,
             transcriptionSegments = servedSegments(attachment, resolved, playedLanguage = translatedAudio?.language),
+            lastPlayPositionMs = attachment.currentUserConsumption?.lastPlayPositionMs,
+            listenedComplete = attachment.currentUserConsumption?.listenedComplete == true,
+            originalLanguage = attachment.transcription?.language?.trim()?.ifBlank { null },
+            translatedLanguages = attachment.translations.orEmpty()
+                .filter { (_, track) -> !track.url.isNullOrBlank() }
+                .keys.map { it.trim() }.filter { it.isNotEmpty() },
         )
     }
 

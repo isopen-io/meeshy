@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "bubble.audio.stack.position", "androidName": "bubble_audio_stack_position", "status": "adopted" }
+      ]
+    }
+  }
+}

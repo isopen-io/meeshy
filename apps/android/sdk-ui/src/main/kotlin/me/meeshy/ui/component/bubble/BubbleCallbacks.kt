@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.bubble
 
+import kotlinx.coroutines.flow.Flow
 import androidx.compose.runtime.Immutable
 
 /**
@@ -34,6 +35,20 @@ public data class BubbleCallbacks(
     val onAudioClick: ((BubbleAudio) -> Unit)? = null,
     /** Tap on a word of the transcript of the voice note being played: seek it to that word's start, in seconds. */
     val onAudioSeek: ((BubbleAudio, Double) -> Unit)? = null,
+    /** Glissé (ou toucher) sur l'onde du vocal en cours : se placer à cette fraction (0…1). */
+    val onAudioSeekFraction: ((BubbleAudio, Double) -> Unit)? = null,
+    /** Toucher de la puce de vitesse : ×1 → ×1,5 → ×2 du moteur partagé. */
+    val onAudioCycleSpeed: (() -> Unit)? = null,
+    /**
+     * Le plein écran d'un vocal, avec SA piste (iOS `AudioStackView.fullscreenOpener`). Exposé ici, câblé par le lot du
+     * plein écran audio ; jamais offert pour un vocal protégé.
+     */
+    val onAudioFullscreen: ((BubbleAudio) -> Unit)? = null,
+    /**
+     * La vraie forme d'onde d'un vocal (niveaux 0…1), calculée une fois et mise en cache par l'hôte. Jamais demandée pour
+     * un vocal protégé : la bulle garde alors sa forme de repli déterministe.
+     */
+    val audioSamples: ((BubbleAudio) -> Flow<List<Float>>)? = null,
     /** Tap on a file attachment that has a url. */
     val onFileClick: ((BubbleFile) -> Unit)? = null,
     /** Tap on the quoted-reply preview (only wired when the quoted message id is known). */

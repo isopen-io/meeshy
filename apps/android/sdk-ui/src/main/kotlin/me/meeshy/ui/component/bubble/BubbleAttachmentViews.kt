@@ -53,7 +53,7 @@ internal fun BubbleAttachmentSections(
             )
         }
     }
-    BubbleNonVisualSections(content, onColor, callbacks, audioPlayback, videoIds)
+    BubbleNonVisualSections(content, onColor, callbacks, audioPlayback, videoIds, accent = accent)
 }
 
 /**
@@ -68,6 +68,7 @@ internal fun BubbleNonVisualSections(
     audioPlayback: BubbleAudioPlayback?,
     videoIds: Set<String> = content.videos.mapTo(HashSet()) { it.attachmentId },
     includeAudios: Boolean = true,
+    accent: Color = MeeshyPalette.Indigo500,
 ) {
     if (content.isDeleted) return
     val autoReveal = AudioTranscriptionReveal.autoReveals(content.isOutgoing, LocalAutoRevealTranscription.current)
@@ -89,15 +90,14 @@ internal fun BubbleNonVisualSections(
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
         )
     }
-    if (includeAudios) content.audios.forEach { audio ->
-        AudioBubble(
-            audio = audio,
-            playback = audioPlayback?.takeIf { it.attachmentId == audio.attachmentId },
+    if (includeAudios) {
+        BubbleAudioStack(
+            content = content,
+            playback = audioPlayback,
             onColor = onColor,
+            accent = accent,
+            callbacks = callbacks,
             autoRevealTranscription = autoReveal,
-            onClick = callbacks.onAudioClick?.takeIf { audio.isPlayable }
-                ?.let { { it(audio) } },
-            onSeek = callbacks.onAudioSeek?.let { seek -> { seconds: Double -> seek(audio, seconds) } },
             modifier = Modifier.padding(bottom = MeeshySpacing.xs),
         )
     }
