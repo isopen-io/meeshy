@@ -103,6 +103,9 @@ data class ChatUiState(
     /** Whether the viewer's conversation role (moderator+) bypasses slow mode.
      * Computed once per conversation load via [SlowModePolicy.isExemptRole]. */
     val slowModeExempt: Boolean = false,
+    /** Le rôle du lecteur dans CETTE conversation (`MemberRole.name`) — la garde de rôle du cache de la fiche
+     * d'un participant (ADR-032) ; `null` avant le chargement, et alors aucune copie n'est peinte. */
+    val viewerRole: String? = null,
     /** When the viewer last sent a message in this conversation (epoch millis),
      * or `null` if not this session. Advances the slow-mode cooldown. */
     val lastSelfSentAtMillis: Long? = null,

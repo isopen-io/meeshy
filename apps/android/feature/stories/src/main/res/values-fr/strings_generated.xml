@@ -99,6 +99,7 @@
     <string name="composer_publish_as_reel">Publier le réel</string>
     <string name="composer_publish_as_story">Publier la story</string>
     <string name="composer_publish_as_storyAndReel">Publier la story et le réel</string>
+    <string name="composer_publish_format_unsupported">Ce format ne peut pas encore être publié d\'ici</string>
     <string name="composer_rail_object_exit">Quitter l\'objet</string>
     <string name="composer_slide_rail">Scènes de la publication</string>
     <string name="composer_slide_rail_capReached">Dix scènes au maximum — supprimez-en une pour en créer une autre</string>
@@ -114,6 +115,7 @@
     <string name="composer_text_frame_rectangle">Carré</string>
     <string name="composer_text_frame_rounded">Arrondi</string>
     <string name="composer_text_frame_speech">Bulle BD</string>
+    <string name="feed_post_publish_error">Erreur lors de la publication</string>
     <string name="my_stories_archive_empty_subtitle">Vos stories expirées rejoindront cette archive.</string>
     <string name="my_stories_archive_empty_title">Aucune archive</string>
     <string name="my_stories_back">Retour</string>

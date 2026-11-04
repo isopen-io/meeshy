@@ -64,6 +64,7 @@ export const conversationParticipantSchema = {
     // directive de présence du 2026-08-25 ne fait aucune exception pour une
     // préférence personnelle sur la seule foi d'une conversation partagée.
     isActive: { type: 'boolean', description: 'Participant is active' },
+    accountClosed: { type: 'boolean', description: 'Present (true) only when the participant account was deleted or deactivated; absent otherwise' },
     createdAt: { type: 'string', format: 'date-time', description: 'User creation timestamp' },
     updatedAt: { type: 'string', format: 'date-time', description: 'User last update timestamp' },
     joinedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Join timestamp' },
@@ -453,6 +454,7 @@ export const conversationParticipantMinimalSchema = {
     },
     joinedAt: { type: 'string', format: 'date-time', description: 'Join timestamp' },
     isActive: { type: 'boolean', description: 'Is active member' },
+    accountClosed: { type: 'boolean', description: 'Present (true) only when the member account was deleted or deactivated; absent otherwise' },
     user: {
       type: 'object',
       nullable: true,
