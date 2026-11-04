@@ -32,7 +32,7 @@ internal data class GameElementSheetTexts(
 
         /** « Obtenu le … », « Pas encore obtenu · … », ou la valeur. */
         fun statusLine(res: Resources, locale: Locale, status: GameElementStatus): String = when (status) {
-            is GameElementStatus.Obtained -> status.reachedAt?.let { RevealCopy.longDate(locale, it) }
+            is GameElementStatus.Obtained -> status.phrase?.let { GameCopy.resolve(res, it, locale) } ?: status.reachedAt?.let { RevealCopy.longDate(locale, it) }
                 ?.let { res.getString(R.string.game_detail_earned_on, it) }
                 ?: res.getString(R.string.game_detail_earned)
             is GameElementStatus.Locked -> {

@@ -23,6 +23,29 @@ public object GameCopyLaws {
 
     public fun days(count: Int): GameText = GameText.of(GameTextKey.Days, GameTextArg.Count(count))
 
+    /** Le nom d'une ligue (iOS `GameText.leagueName`). */
+    public fun leagueName(league: LeagueKey): GameText = GameText(
+        when (league) {
+            LeagueKey.Quartz -> GameTextKey.LeagueNameQuartz
+            LeagueKey.Ambre -> GameTextKey.LeagueNameAmbre
+            LeagueKey.Jade -> GameTextKey.LeagueNameJade
+            LeagueKey.Saphir -> GameTextKey.LeagueNameSaphir
+            LeagueKey.Rubis -> GameTextKey.LeagueNameRubis
+            LeagueKey.Amethyste -> GameTextKey.LeagueNameAmethyste
+            LeagueKey.Diamant -> GameTextKey.LeagueNameDiamant
+            LeagueKey.Prisme -> GameTextKey.LeagueNamePrisme
+        },
+    )
+
+    /** Le nom d'une zone de la ligue (iOS `GameText.zoneLabel`). */
+    public fun leagueZoneName(zone: LeagueZone): GameText = GameText(
+        when (zone) {
+            LeagueZone.Promotion -> GameTextKey.LeagueZonePromotion
+            LeagueZone.Safe -> GameTextKey.LeagueZoneSafe
+            LeagueZone.Relegation -> GameTextKey.LeagueZoneRelegation
+        },
+    )
+
     public fun actions(count: Int): GameText = GameText.of(GameTextKey.Actions, GameTextArg.Count(count))
 
     public fun levels(count: Int): GameText = GameText.of(GameTextKey.Levels, GameTextArg.Count(count))

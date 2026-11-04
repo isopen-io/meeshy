@@ -10,10 +10,24 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import me.meeshy.app.game.progression.AtlasStampGeometry
 import me.meeshy.app.game.progression.ProgressionConceptEmblem
+import me.meeshy.app.game.progression.toUi
 import me.meeshy.sdk.model.game.FlameFormKey
 import me.meeshy.sdk.model.game.element.GameElementEmblem
+import me.meeshy.sdk.model.game.element.GameElementMedalShape
 import me.meeshy.sdk.model.game.element.GameElementSymbol
+import me.meeshy.ui.component.game.AtlasStampState
+import me.meeshy.ui.component.game.AtlasStampView
+import me.meeshy.ui.component.game.GameBadgeShape
+import me.meeshy.ui.component.game.GameBadgeState
+import me.meeshy.ui.component.game.GameBadgeView
+import me.meeshy.ui.component.game.GameMedalFamily
+import me.meeshy.ui.component.game.GameMedalGlyph
+import me.meeshy.ui.component.game.GameMedalState
+import me.meeshy.ui.component.game.GameMedalView
+import me.meeshy.ui.component.game.LeagueGemView
+import me.meeshy.ui.component.game.TrophyView
 import me.meeshy.ui.component.game.ChestView
 import me.meeshy.ui.component.game.FlameView
 import me.meeshy.ui.component.game.LevelRing
@@ -49,6 +63,36 @@ internal fun GameElementEmblemView(emblem: GameElementEmblem, modifier: Modifier
                 flickers = false,
             )
             is GameElementEmblem.Chest -> ChestView(openProgress = if (emblem.open) 1f else 0f, modifier = fill)
+            is GameElementEmblem.Badge -> GameMedalView(
+                family = GameMedalFamily.of(emblem.axis.family),
+                glyph = GameMedalGlyph.of(emblem.axis),
+                material = emblem.material.toUi(),
+                state = if (emblem.lit) GameMedalState.Lit else GameMedalState.Imprint,
+                progress = emblem.progress,
+                surface = tokens.backgroundPrimary,
+                muted = tokens.textMuted,
+                modifier = fill,
+            )
+            is GameElementEmblem.Medal -> GameBadgeView(
+                material = emblem.material.toUi(),
+                shape = when (val shape = emblem.shape) {
+                    is GameElementMedalShape.Collection -> GameBadgeShape.Collection(shape.filled, shape.total)
+                    GameElementMedalShape.Record -> GameBadgeShape.Record
+                },
+                state = if (emblem.lit) GameBadgeState.Lit else GameBadgeState.Imprint,
+                surface = tokens.backgroundPrimary,
+                muted = tokens.textMuted,
+                modifier = fill,
+            )
+            is GameElementEmblem.Trophy -> TrophyView(material = emblem.material.toUi(), label = "", modifier = fill)
+            is GameElementEmblem.Stamp -> AtlasStampView(
+                code = AtlasStampGeometry.label(emblem.code),
+                tint = MeeshyPalette.Indigo500,
+                muted = tokens.textMuted,
+                state = if (emblem.stamped) AtlasStampState.Stamped else AtlasStampState.Pending,
+                modifier = fill,
+            )
+            is GameElementEmblem.League -> LeagueGemView(league = emblem.league, modifier = fill)
             is GameElementEmblem.Symbol -> Icon(
                 imageVector = when (emblem.symbol) {
                     GameElementSymbol.Target -> MeeshyIcons.CheckCircle

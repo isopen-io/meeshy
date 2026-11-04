@@ -679,6 +679,7 @@
     <string name="game_fact_missing_for_level">Bis Level %1$s</string>
     <string name="game_fact_missing_for_promotion">Bis zur Aufstiegszone</string>
     <string name="game_fact_missing_for_rank">Bis %1$s</string>
+    <string name="game_fact_rebirths">Wiedergeburten</string>
     <string name="game_fact_strides">Schritte</string>
     <string name="game_fiche_earn">So bekommst du mehr</string>
     <string name="game_fiche_heritage_held_bourse">Deine Börse</string>
