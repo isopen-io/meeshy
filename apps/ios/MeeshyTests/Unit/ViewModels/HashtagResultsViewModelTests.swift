@@ -376,15 +376,40 @@ final class HashtagResultsViewModelTests: XCTestCase {
     func test_toggleBookmark_aSecondTapWhileTheFirstIsInFlight_sendsNothing() async {
         let service = MockPostService()
         service.getPostsByHashtagResult = .success(Self.bookmarkPage())
-        let sut = makeBookmarkSUT(service: service)
+        let gate = GatedFavoritesCache()
+        let sut = HashtagResultsViewModel(
+            tag: "paris", service: service,
+            bookmarker: PostBookmarkWriter(service: service, favorites: gate, toasts: MockFeedbackToast())
+        )
         await sut.load()
 
-        async let first: Void = sut.toggleBookmark("card")
-        async let second: Void = sut.toggleBookmark("card")
-        _ = await (first, second)
+        let first = Task { await sut.toggleBookmark("card") }
+        while !gate.isHolding { await Task.yield() }
+        XCTAssertTrue(sut.isBookmarkInFlight("card"))
+        await sut.toggleBookmark("card")
+        gate.release()
+        await first.value
 
         XCTAssertEqual(service.bookmarkCallCount + service.removeBookmarkCallCount, 1,
                        "un double toucher n'envoie pas deux écritures contradictoires")
+        XCTAssertTrue(sut.posts[0].isBookmarkedByMe)
+        XCTAssertFalse(sut.isBookmarkInFlight("card"))
+    }
+
+    /// Tient la première écriture ouverte : le second toucher arrive PENDANT
+    /// qu'elle est en vol, quel que soit l'ordonnancement des tâches.
+    private final class GatedFavoritesCache: FavoritesCacheMirroring {
+        private(set) var isHolding = false
+        private var continuation: CheckedContinuation<Void, Never>?
+
+        func insert(_ post: FeedPost) async -> [FeedPost] {
+            await withCheckedContinuation { continuation = $0; isHolding = true }
+            return []
+        }
+
+        func release() { continuation?.resume(); continuation = nil }
+        func remove(postId: String) async {}
+        func restore(_ previous: [FeedPost]) async {}
     }
 
     // MARK: - #15994 — « Partager » du menu ⋯ partage depuis un hashtag
