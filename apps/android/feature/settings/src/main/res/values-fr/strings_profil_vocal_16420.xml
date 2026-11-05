@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_voice_manage">Gérer le profil vocal</string>
+    <string name="voice_profile_title">Profil vocal</string>
+    <string name="voice_profile_status_ready_label">Actif</string>
+    <string name="voice_profile_status_ready_description">Votre profil vocal est prêt à l\'emploi</string>
+    <string name="voice_profile_status_expired_label">Expiré</string>
+    <string name="voice_profile_status_expired_description">Veuillez enregistrer de nouveaux échantillons</string>
+    <string name="voice_profile_quality">Qualité</string>
+    <string name="voice_profile_samples">Échantillons</string>
+    <string name="voice_profile_total_duration">Durée totale</string>
+    <string name="voice_profile_cloning_enabled">Clonage vocal actif</string>
+    <string name="voice_profile_cloning_description">Les traductions audio utiliseront votre voix</string>
+    <string name="voice_profile_delete_profile">Supprimer le profil vocal</string>
+    <string name="voice_profile_delete_alert_title">Supprimer le profil vocal</string>
+    <string name="voice_profile_delete_alert_message">Cette action est irréversible. Toutes vos données vocales seront supprimées conformément au RGPD.</string>
+    <string name="voice_profile_error_load">Impossible de charger le profil vocal.</string>
+    <string name="voice_profile_error_cloning">Erreur lors du changement de statut du clonage.</string>
+    <string name="voice_profile_error_delete_profile">Erreur lors de la suppression du profil.</string>
+    <string name="voice_profile_empty_title">Aucun profil vocal</string>
+    <string name="voice_profile_empty_description">Créez un profil vocal pour que vos messages traduits conservent votre voix naturelle.</string>
+    <string name="voice_profile_create">Créer un profil vocal</string>
+    <string name="voice_profile_retry">Réessayer</string>
+</resources>

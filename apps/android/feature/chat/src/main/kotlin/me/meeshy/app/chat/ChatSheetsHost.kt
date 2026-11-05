@@ -456,7 +456,11 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                         input = audioInput,
                         accentColor = accentColor,
                         onPlayTrack = actions.onAudioLanguage,
-                        onOpenConsent = null,
+                        onOpenConsent = {
+                            audioSheetOpen = false
+                            actions.dismissLanguageExplorer()
+                            host.voiceConsent.openSettings()
+                        },
                         onDismiss = { audioSheetOpen = false },
                     )
                 }

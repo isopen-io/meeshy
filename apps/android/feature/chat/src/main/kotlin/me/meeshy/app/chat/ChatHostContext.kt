@@ -144,6 +144,8 @@ internal class ChatHostContext(
     val viewerRole: String? = null,
     /** [ChatViewModel.unreadAtOpening] : le compte serveur que le séparateur des non-lus annonce (#7525). */
     val unreadAtOpening: Int? = null,
+    /** #16420 — le consentement vocal : la note sous MES vocaux, le popup d'envoi et la porte vers la configuration de la voix. */
+    val voiceConsent: ChatVoiceConsentBinding = ChatVoiceConsentBinding.NONE,
 )
 
 /** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
@@ -197,13 +199,14 @@ internal fun rememberChatHostContext(
     listGate: ChatListUpdateGate? = null,
     viewerRole: String? = null,
     unreadAtOpening: Int? = null,
+    voiceConsent: ChatVoiceConsentBinding = ChatVoiceConsentBinding.NONE,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember(listGate) { ChatChromeState(listGate) }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities, viewerRole, unreadAtOpening)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities, viewerRole, unreadAtOpening, voiceConsent)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */

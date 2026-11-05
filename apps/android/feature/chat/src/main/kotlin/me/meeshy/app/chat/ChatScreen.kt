@@ -65,6 +65,11 @@ fun ChatScreen(
     /** Ouvre le post (story) cité par un message : le toucher de la carte de citation (#13296). */
     onOpenCitedPost: (postId: String) -> Unit = {},
     onOpenConversation: (conversationId: String) -> Unit = {},
+    /**
+     * #16420 — la configuration de la voix (gestion du profil existant, sinon l'assistant), ouverte par la note de
+     * consentement d'un vocal, la feuille des langues d'un vocal et « Configurer » du popup d'envoi.
+     */
+    onOpenVoiceSettings: () -> Unit = {},
     /** La feuille de réglages du partage de position, fournie par l'application (voir [ChatNavigationActions]). */
     locationSettingsSheet: @Composable (accent: Color, onDismiss: () -> Unit) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel(),
@@ -129,6 +134,7 @@ fun ChatScreen(
     val capabilities by (governance?.capabilities ?: NO_CAPABILITIES).collectAsStateWithLifecycle()
     val viewerRole by (governance?.viewerRole ?: NO_VIEWER_ROLE).collectAsStateWithLifecycle()
     val unreadAtOpening by viewModel.unreadAtOpening.collectAsStateWithLifecycle()
+    val voiceConsent = rememberChatVoiceConsent(onOpenVoiceSettings)
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -161,6 +167,7 @@ fun ChatScreen(
         listGate = viewModel.listGate,
         viewerRole = viewerRole,
         unreadAtOpening = unreadAtOpening,
+        voiceConsent = voiceConsent,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
@@ -287,6 +294,36 @@ internal class OnceAction(private val action: () -> Unit) : () -> Unit {
         if (done) return
         done = true
         action()
+    }
+}
+
+/**
+ * #16420 — le consentement vocal du fil, lu à l'ouverture et RELU à chaque retour au premier plan (la configuration de la
+ * voix vient peut-être de l'accorder) ; un octroi refusé depuis le popup d'envoi se dit (iOS `conversation.voiceConsent.failed`).
+ */
+@Composable
+private fun rememberChatVoiceConsent(
+    onOpenVoiceSettings: () -> Unit,
+    viewModel: ChatVoiceConsentViewModel = hiltViewModel(),
+): ChatVoiceConsentBinding {
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refresh()
+        onPauseOrDispose { }
+    }
+    val context = LocalContext.current
+    val failed = stringResource(R.string.chat_voice_consent_failed)
+    LaunchedEffect(viewModel, failed) {
+        viewModel.grantFailures.collect { Toast.makeText(context, failed, Toast.LENGTH_LONG).show() }
+    }
+    val missing by viewModel.missing.collectAsStateWithLifecycle()
+    val open by androidx.compose.runtime.rememberUpdatedState(onOpenVoiceSettings)
+    return remember(viewModel, missing) {
+        ChatVoiceConsentBinding(
+            missing = missing,
+            openSettings = { open() },
+            claimSendPrompt = viewModel::claimSendPrompt,
+            grant = viewModel::grant,
+        )
     }
 }
 

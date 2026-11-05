@@ -38,6 +38,7 @@ import me.meeshy.app.settings.SecurityScreen
 import me.meeshy.app.settings.SettingsScreen
 import me.meeshy.app.settings.SupportScreen
 import me.meeshy.app.settings.TwoFactorScreen
+import me.meeshy.app.settings.VoiceProfileManageScreen
 import me.meeshy.sdk.model.legal.LegalDocumentKind
 import me.meeshy.sdk.model.settings.SettingsHubSectionId
 import me.meeshy.sdk.model.settings.SettingsInvite
@@ -133,6 +134,24 @@ internal fun NavGraphBuilder.settingsNavGraph(
     sheetComposable(Routes.ENCRYPTED_DEVICES, navController) { _, dismiss ->
         EncryptedDevicesScreen(onBack = dismiss)
     }
+    sheetComposable(
+        Routes.VOICE_PROFILE,
+        navController,
+        arguments = listOf(
+            navArgument(Routes.VOICE_PROFILE_WIZARD_ARG) { type = NavType.BoolType; defaultValue = false },
+        ),
+    ) { entry, dismiss ->
+        val openWizardWhenEmpty = entry.arguments?.getBoolean(Routes.VOICE_PROFILE_WIZARD_ARG) ?: false
+        VoiceProfileManageScreen(
+            onClose = dismiss,
+            onCreate = {
+                navController.navigate(VoiceProfileWizardDestinations.ROUTE) {
+                    if (openWizardWhenEmpty) popUpTo(entry.destination.id) { inclusive = true }
+                }
+            },
+            openWizardWhenEmpty = openWizardWhenEmpty,
+        )
+    }
 }
 
 /** Page Sécurité ; l'ancienne route `settings/account-contact` y mène aussi. */
@@ -199,6 +218,7 @@ private fun SettingsHub(navController: NavHostController, authViewModel: AuthVie
         },
         onOpenDeleteAccount = { navController.navigate(Routes.DELETE_ACCOUNT) },
         onOpenVoiceProfile = { navController.navigate(VoiceProfileWizardDestinations.ROUTE) },
+        onManageVoiceProfile = { navController.navigate(Routes.voiceProfile()) },
         focus = focus,
     )
 }

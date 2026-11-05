@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_voice_consent_title">Traduction automatique des vocaux</string>
+    <string name="chat_voice_consent_message">Autorisez la définition de votre profil vocal pour que vos messages vocaux soient transcrits et traduits automatiquement dans la langue de chaque destinataire — y compris avec votre voix.</string>
+    <string name="chat_voice_consent_accept">Activer</string>
+    <string name="chat_voice_consent_later">Plus tard</string>
+    <string name="chat_voice_consent_failed">Impossible d\'activer la traduction automatique des vocaux. Réessayez plus tard.</string>
+    <string name="chat_voice_consent_configure">Configurer</string>
+</resources>

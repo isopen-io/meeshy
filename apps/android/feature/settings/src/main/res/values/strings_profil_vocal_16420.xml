@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_voice_manage">Manage voice profile</string>
+    <string name="voice_profile_title">Voice profile</string>
+    <string name="voice_profile_status_ready_label">Active</string>
+    <string name="voice_profile_status_ready_description">Your voice profile is ready to use</string>
+    <string name="voice_profile_status_expired_label">Expired</string>
+    <string name="voice_profile_status_expired_description">Please record new samples</string>
+    <string name="voice_profile_quality">Quality</string>
+    <string name="voice_profile_samples">Samples</string>
+    <string name="voice_profile_total_duration">Total duration</string>
+    <string name="voice_profile_cloning_enabled">Voice cloning active</string>
+    <string name="voice_profile_cloning_description">Audio translations will use your voice</string>
+    <string name="voice_profile_delete_profile">Delete voice profile</string>
+    <string name="voice_profile_delete_alert_title">Delete voice profile</string>
+    <string name="voice_profile_delete_alert_message">This action is irreversible. All your voice data will be deleted in accordance with the GDPR.</string>
+    <string name="voice_profile_error_load">Couldn\'t load your voice profile.</string>
+    <string name="voice_profile_error_cloning">Couldn\'t change the voice cloning setting.</string>
+    <string name="voice_profile_error_delete_profile">Couldn\'t delete the profile.</string>
+    <string name="voice_profile_empty_title">No voice profile</string>
+    <string name="voice_profile_empty_description">Create a voice profile so your translated messages keep your natural voice.</string>
+    <string name="voice_profile_create">Create a voice profile</string>
+    <string name="voice_profile_retry">Try again</string>
+</resources>

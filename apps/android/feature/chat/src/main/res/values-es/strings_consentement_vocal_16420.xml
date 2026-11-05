@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_voice_consent_title">Traducción automática de los mensajes de voz</string>
+    <string name="chat_voice_consent_message">Permite crear tu perfil de voz para que tus mensajes de voz se transcriban y traduzcan automáticamente al idioma de cada destinatario, incluso con tu voz.</string>
+    <string name="chat_voice_consent_accept">Activar</string>
+    <string name="chat_voice_consent_later">Más tarde</string>
+    <string name="chat_voice_consent_failed">No se pudo activar la traducción automática de los mensajes de voz. Inténtalo de nuevo más tarde.</string>
+    <string name="chat_voice_consent_configure">Configurar</string>
+</resources>

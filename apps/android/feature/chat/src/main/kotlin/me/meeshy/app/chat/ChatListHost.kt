@@ -273,8 +273,10 @@ internal fun ChatListHost(
     val openMessageMenu: (String) -> Unit = { id ->
         MessageMenuKeyboard.open(id, { focusManager.clearFocus(force = true); keyboardController?.hide() }, actions.onMessageLongPress)
     }
-    val rowActions = remember(actions, bubbleFrames, profileTap, haptics, capReachedMessage, host.navigation, media, state.quickReactions) {
+    val openVoiceConsent = host.voiceConsent.openSettings
+    val rowActions = remember(actions, bubbleFrames, profileTap, haptics, capReachedMessage, host.navigation, media, state.quickReactions, openVoiceConsent) {
         ChatMessageRowActions(
+            onOpenVoiceConsent = openVoiceConsent,
             onReply = { messageId -> actions.startReply(messageId) },
             onForward = { messageId -> actions.openForward(messageId) },
             onLongPress = { messageId -> openMessageMenu(messageId) },
@@ -458,6 +460,10 @@ internal fun ChatListHost(
             languages = remember(actions.onAudioLanguage, actions.attachmentsOf, state.encryptionMode) {
                 ChatAudioFullscreenLanguages(actions.onAudioLanguage, actions.attachmentsOf, state.encryptionMode)
             },
+            onOpenConsent = {
+                media.close()
+                host.voiceConsent.openSettings()
+            },
             actions = me.meeshy.app.chat.audio.rememberChatAudioFullscreenActions(
                 replies = actions.audioFullscreenReplies,
                 actions = actions,
@@ -553,6 +559,7 @@ internal fun ChatListHost(
                         selectedIds = host.selection.ids,
                         translatingLanguages = state.translatingLanguages,
                         overlayMessageId = state.actionMessageId,
+                        voiceConsentMissing = host.voiceConsent.missing,
                     ) }
                     val framed: @Composable (Boolean, Float) -> Unit = { elected, scale ->
                         if (item is ChatListItem.Message) {

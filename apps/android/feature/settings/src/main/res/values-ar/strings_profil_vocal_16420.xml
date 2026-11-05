@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_voice_manage">إدارة الملف الصوتي</string>
+    <string name="voice_profile_title">الملف الصوتي</string>
+    <string name="voice_profile_status_ready_label">نشط</string>
+    <string name="voice_profile_status_ready_description">ملفك الصوتي جاهز للاستخدام</string>
+    <string name="voice_profile_status_expired_label">منتهٍ</string>
+    <string name="voice_profile_status_expired_description">يرجى تسجيل عيّنات جديدة</string>
+    <string name="voice_profile_quality">الجودة</string>
+    <string name="voice_profile_samples">العيّنات</string>
+    <string name="voice_profile_total_duration">المدة الإجمالية</string>
+    <string name="voice_profile_cloning_enabled">استنساخ الصوت مفعّل</string>
+    <string name="voice_profile_cloning_description">ستستخدم الترجمات الصوتية صوتك</string>
+    <string name="voice_profile_delete_profile">حذف الملف الصوتي</string>
+    <string name="voice_profile_delete_alert_title">حذف الملف الصوتي</string>
+    <string name="voice_profile_delete_alert_message">هذا الإجراء لا رجعة فيه. ستُحذف جميع بياناتك الصوتية وفقًا للائحة حماية البيانات.</string>
+    <string name="voice_profile_error_load">تعذّر تحميل الملف الصوتي.</string>
+    <string name="voice_profile_error_cloning">تعذّر تغيير حالة استنساخ الصوت.</string>
+    <string name="voice_profile_error_delete_profile">تعذّر حذف الملف.</string>
+    <string name="voice_profile_empty_title">لا يوجد ملف صوتي</string>
+    <string name="voice_profile_empty_description">أنشئ ملفًا صوتيًا لتحتفظ رسائلك المترجمة بصوتك الطبيعي.</string>
+    <string name="voice_profile_create">إنشاء ملف صوتي</string>
+    <string name="voice_profile_retry">إعادة المحاولة</string>
+</resources>

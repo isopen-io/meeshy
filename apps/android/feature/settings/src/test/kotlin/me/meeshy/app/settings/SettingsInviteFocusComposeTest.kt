@@ -53,4 +53,15 @@ class SettingsInviteFocusComposeTest {
         compose.onNodeWithText("Create a voice profile").performClick()
         assertThat(opened).isEqualTo(1)
     }
+
+    @Test
+    fun `le profil vocal ouvre aussi la gestion du profil existant`() {
+        var managed = 0
+        var created = 0
+        val rows = SettingsHubCatalog.sections().first { it.id == SettingsHubSectionId.VOICE }.rows
+        compose.setContent { MeeshyTheme { SettingsVoiceSection(rows, onManageVoiceProfile = { managed++ }) { created++ } } }
+        compose.onNodeWithText("Manage voice profile").performClick()
+        assertThat(managed).isEqualTo(1)
+        assertThat(created).isEqualTo(0)
+    }
 }

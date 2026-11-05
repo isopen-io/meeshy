@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "conversation.voiceConsent.title",
+          "androidName": "chat_voice_consent_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.voiceConsent.message",
+          "androidName": "chat_voice_consent_message",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.voiceConsent.accept",
+          "androidName": "chat_voice_consent_accept",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.voiceConsent.later",
+          "androidName": "chat_voice_consent_later",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.voiceConsent.failed",
+          "androidName": "chat_voice_consent_failed",
+          "status": "candidate"
+        },
+        {
+          "androidName": "chat_voice_consent_configure",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

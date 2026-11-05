@@ -81,6 +81,7 @@ fun SettingsScreen(
     onOpenPrivacyPolicy: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
     onOpenVoiceProfile: () -> Unit = {},
+    onManageVoiceProfile: () -> Unit = {},
     /** #16339 — la section qu'une invite de réglage désigne : le hub y défile et la met en évidence. */
     focus: SettingsHubSectionId? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
@@ -153,6 +154,7 @@ fun SettingsScreen(
                         onOpenPrivacyPolicy = onOpenPrivacyPolicy,
                         onOpenDeleteAccount = onOpenDeleteAccount,
                         onOpenVoiceProfile = onOpenVoiceProfile,
+                        onManageVoiceProfile = onManageVoiceProfile,
                         signOutEnabled = !logoutPhase.blocksInteraction,
                         onSignOut = {
                             haptics.heavy()
@@ -222,6 +224,7 @@ private fun SettingsHubSectionHost(
     onOpenPrivacyPolicy: () -> Unit,
     onOpenDeleteAccount: () -> Unit,
     onOpenVoiceProfile: () -> Unit,
+    onManageVoiceProfile: () -> Unit,
     signOutEnabled: Boolean,
     onSignOut: () -> Unit,
 ) {
@@ -231,7 +234,7 @@ private fun SettingsHubSectionHost(
             rows, onOpenPrivacy, onOpenSecurity, onOpenBlockedUsers, onOpenDeleteAccount,
         )
         SettingsHubSectionId.APPEARANCE -> SettingsAppearanceSection(rows, state, viewModel)
-        SettingsHubSectionId.VOICE -> SettingsVoiceSection(rows, onOpenVoiceProfile)
+        SettingsHubSectionId.VOICE -> SettingsVoiceSection(rows, onManageVoiceProfile, onOpenVoiceProfile)
         SettingsHubSectionId.TRANSCRIPTION -> TranscriptionSection()
         SettingsHubSectionId.NOTIFICATIONS -> SettingsNotificationsQuickSection(rows, onOpenNotificationSettings)
         SettingsHubSectionId.DATA -> SettingsDataSection(

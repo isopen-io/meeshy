@@ -93,6 +93,8 @@ internal class ChatMessageRowActions(
     val onToggleSelection: (messageId: String) -> Unit = {},
     /** « Ouvrir » ou une jonction confirmée depuis la carte d'un lien de conversation (#13672). */
     val onOpenConversation: (conversationId: String) -> Unit = {},
+    /** #16420 — la note de consentement sous mon vocal : la configuration de la voix s'ouvre. */
+    val onOpenVoiceConsent: () -> Unit = {},
 )
 
 /**
@@ -197,6 +199,7 @@ internal fun ChatMessageRow(
             onSayHi = { actions.onGreetArrivals(messageId) }.takeIf { canWrite && bubble.greetsArrivals },
             onOpenJoinProfile = { _: String -> actions.onOpenJoinProfile(bubble) }.takeIf { bubble.joinNotice?.opensProfile == true },
             onAddReaction = { actions.onAddReaction(messageId) }.takeIf { reacts },
+            onTapConsentNotice = actions.onOpenVoiceConsent.takeIf { bubble.voiceConsentMissing },
             onOpenReactPicker = { actions.onOpenReactPicker(messageId) }.takeIf { reacts },
             onSenderTap = if (bubble.senderProfile != null) {
                 { actions.onSenderTap(bubble) }

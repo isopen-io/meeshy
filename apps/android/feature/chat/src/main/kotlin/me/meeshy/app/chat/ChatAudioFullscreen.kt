@@ -173,6 +173,8 @@ internal fun ChatAudioFullscreen(
     onRetryDownload: () -> Unit = {},
     actions: me.meeshy.ui.component.audio.AudioFullscreenActionPort? = null,
     languages: ChatAudioFullscreenLanguages? = null,
+    /** #16420 — la note de consentement de la feuille des langues : la configuration de la voix s'ouvre. */
+    onOpenConsent: () -> Unit = {},
     transcription: AudioFullscreenViewModel = hiltViewModel(),
 ) {
     val player = voice?.fullscreenPlayer()
@@ -218,7 +220,10 @@ internal fun ChatAudioFullscreen(
                         input = input,
                         accentColor = accent,
                         onPlayTrack = languages.onAudioLanguage,
-                        onOpenConsent = null,
+                        onOpenConsent = {
+                            languagesOf = null
+                            onOpenConsent()
+                        },
                         onDismiss = { languagesOf = null },
                     )
                 }

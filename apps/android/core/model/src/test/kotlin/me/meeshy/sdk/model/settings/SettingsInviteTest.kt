@@ -34,8 +34,10 @@ class SettingsInviteTest {
     }
 
     @Test
-    fun `le profil vocal propose de creer son profil`() {
+    fun `le profil vocal propose de gerer son profil puis de le creer, comme iOS`() {
         val voice = SettingsHubCatalog.sections().first { it.id == SettingsHubSectionId.VOICE }
-        assertThat(voice.rows.map { it.id }).containsExactly(SettingsHubRowId.VOICE_PROFILE_CREATE)
+        assertThat(voice.rows.map { it.id })
+            .containsExactly(SettingsHubRowId.VOICE_PROFILE_MANAGE, SettingsHubRowId.VOICE_PROFILE_CREATE)
+            .inOrder()
     }
 }

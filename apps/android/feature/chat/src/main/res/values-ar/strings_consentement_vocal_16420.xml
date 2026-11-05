@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_voice_consent_title">الترجمة التلقائية للرسائل الصوتية</string>
+    <string name="chat_voice_consent_message">اسمح بإنشاء بصمتك الصوتية ليتم تفريغ رسائلك الصوتية وترجمتها تلقائيًا إلى لغة كل مستلم — بصوتك أيضًا.</string>
+    <string name="chat_voice_consent_accept">تفعيل</string>
+    <string name="chat_voice_consent_later">لاحقًا</string>
+    <string name="chat_voice_consent_failed">تعذّر تفعيل الترجمة التلقائية للرسائل الصوتية. حاول مرة أخرى لاحقًا.</string>
+    <string name="chat_voice_consent_configure">إعداد</string>
+</resources>

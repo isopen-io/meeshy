@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "settings.voice.manage",
+          "androidName": "settings_voice_manage",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.title",
+          "androidName": "voice_profile_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.ready.label",
+          "androidName": "voice_profile_status_ready_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.ready.description",
+          "androidName": "voice_profile_status_ready_description",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.expired.label",
+          "androidName": "voice_profile_status_expired_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.expired.description",
+          "androidName": "voice_profile_status_expired_description",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.quality",
+          "androidName": "voice_profile_quality",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.samples",
+          "androidName": "voice_profile_samples",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.totalDuration",
+          "androidName": "voice_profile_total_duration",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.cloningEnabled",
+          "androidName": "voice_profile_cloning_enabled",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.cloningDescription",
+          "androidName": "voice_profile_cloning_description",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.deleteProfile",
+          "androidName": "voice_profile_delete_profile",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.deleteAlert.title",
+          "androidName": "voice_profile_delete_alert_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.deleteAlert.message",
+          "androidName": "voice_profile_delete_alert_message",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.error.load",
+          "androidName": "voice_profile_error_load",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.error.cloning",
+          "androidName": "voice_profile_error_cloning",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.error.deleteProfile",
+          "androidName": "voice_profile_error_delete_profile",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.empty.title",
+          "androidName": "voice_profile_empty_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.empty.description",
+          "androidName": "voice_profile_empty_description",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.create",
+          "androidName": "voice_profile_create",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.retry",
+          "androidName": "voice_profile_retry",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_voice_manage">Sprachprofil verwalten</string>
+    <string name="voice_profile_title">Sprachprofil</string>
+    <string name="voice_profile_status_ready_label">Aktiv</string>
+    <string name="voice_profile_status_ready_description">Ihr Sprachprofil ist einsatzbereit</string>
+    <string name="voice_profile_status_expired_label">Abgelaufen</string>
+    <string name="voice_profile_status_expired_description">Bitte nehmen Sie neue Proben auf</string>
+    <string name="voice_profile_quality">Qualität</string>
+    <string name="voice_profile_samples">Proben</string>
+    <string name="voice_profile_total_duration">Gesamtdauer</string>
+    <string name="voice_profile_cloning_enabled">Stimmklonen aktiv</string>
+    <string name="voice_profile_cloning_description">Audioübersetzungen verwenden Ihre Stimme</string>
+    <string name="voice_profile_delete_profile">Sprachprofil löschen</string>
+    <string name="voice_profile_delete_alert_title">Sprachprofil löschen</string>
+    <string name="voice_profile_delete_alert_message">Diese Aktion ist unwiderruflich. Alle Ihre Sprachdaten werden gemäß DSGVO gelöscht.</string>
+    <string name="voice_profile_error_load">Das Sprachprofil konnte nicht geladen werden.</string>
+    <string name="voice_profile_error_cloning">Der Status des Stimmklonens konnte nicht geändert werden.</string>
+    <string name="voice_profile_error_delete_profile">Das Profil konnte nicht gelöscht werden.</string>
+    <string name="voice_profile_empty_title">Kein Sprachprofil</string>
+    <string name="voice_profile_empty_description">Erstellen Sie ein Sprachprofil, damit Ihre übersetzten Nachrichten Ihre natürliche Stimme behalten.</string>
+    <string name="voice_profile_create">Sprachprofil erstellen</string>
+    <string name="voice_profile_retry">Erneut versuchen</string>
+</resources>

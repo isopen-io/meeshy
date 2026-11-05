@@ -132,6 +132,31 @@ private fun ChatComposerDock(host: ChatHostContext) {
         actions.trayNotices.collect { notice -> Toast.makeText(context, notice, Toast.LENGTH_LONG).show() }
     }
     val editPending = rememberPendingRetouch(actions)
+    // #16420 — un vocal qui part sans consentement propose d'abord la traduction automatique (iOS `promptsVoiceConsent`) :
+    // l'interruption précède toute mutation du composeur, la décision du popup relance ce même envoi sur un plateau intact.
+    val voiceConsent = host.voiceConsent
+    var voiceConsentPromptOpen by remember { mutableStateOf(false) }
+    val send: () -> Unit = {
+        if (voiceConsent.claimSendPrompt(pending.hasAudio)) voiceConsentPromptOpen = true else actions.send()
+    }
+    if (voiceConsentPromptOpen) {
+        ChatVoiceConsentDialog(
+            onAccept = {
+                voiceConsentPromptOpen = false
+                voiceConsent.grant()
+                actions.send()
+            },
+            onLater = {
+                voiceConsentPromptOpen = false
+                actions.send()
+            },
+            onConfigure = {
+                voiceConsentPromptOpen = false
+                voiceConsent.openSettings()
+            },
+            onDismiss = { voiceConsentPromptOpen = false },
+        )
+    }
     Column {
         MentionSuggestionStrip(
             mention = state.mention,
@@ -166,7 +191,7 @@ private fun ChatComposerDock(host: ChatHostContext) {
             quickEmojis = ComposerToolbarLaw.quickEmojis(state.quickReactions),
             onQuickEmoji = { emoji ->
                 actions.onDraftChange(emoji)
-                actions.send()
+                send()
             },
             pendingSlot = if (pending.items.isEmpty() && host.pendingPlace == null) null else {
                 {
@@ -190,7 +215,7 @@ private fun ChatComposerDock(host: ChatHostContext) {
             accentColor = accentColor,
             onDraftChange = actions.onDraftChange,
             onPickLanguage = actions.onComposerLanguagePicked,
-            onSend = actions.send,
+            onSend = send,
             onClearEffects = actions.clearPanelEffects,
             onCancelEdit = actions.cancelEdit,
             onCancelReply = actions.cancelReply,

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_voice_consent_title">Automatische Übersetzung von Sprachnachrichten</string>
+    <string name="chat_voice_consent_message">Erlaube die Erstellung deines Sprachprofils, damit deine Sprachnachrichten automatisch transkribiert und in die Sprache jedes Empfängers übersetzt werden — auch mit deiner Stimme.</string>
+    <string name="chat_voice_consent_accept">Aktivieren</string>
+    <string name="chat_voice_consent_later">Später</string>
+    <string name="chat_voice_consent_failed">Die automatische Übersetzung von Sprachnachrichten konnte nicht aktiviert werden. Bitte versuche es später erneut.</string>
+    <string name="chat_voice_consent_configure">Einrichten</string>
+</resources>

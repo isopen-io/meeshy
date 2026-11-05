@@ -139,6 +139,12 @@ object Routes {
     /** #16339 — le hub Réglages ouvert par une invite de réglage, défilé jusqu'à la section désignée et mise en évidence. */
     const val SETTINGS_FOCUS_ARG = "invite"
     const val SETTINGS_FOCUS = "settings/focus/{$SETTINGS_FOCUS_ARG}"
+    /**
+     * #16420 — la gestion du profil vocal (iOS `VoiceProfileManageView`). Ouverte par un indicateur de consentement vocal
+     * (`wizard=true`), elle cède la place à l'assistant quand aucun profil n'existe encore.
+     */
+    const val VOICE_PROFILE_WIZARD_ARG = "wizard"
+    const val VOICE_PROFILE = "settings/voice-profile?$VOICE_PROFILE_WIZARD_ARG={$VOICE_PROFILE_WIZARD_ARG}"
     const val CHANGE_PASSWORD = "settings/change-password"
     const val TWO_FACTOR = "settings/two-factor"
     const val ACCOUNT_CONTACT = "settings/account-contact"
@@ -235,6 +241,16 @@ object Routes {
         if (storyId.isNullOrBlank()) "story/$userId" else "story/$userId?${StoryViewerViewModel.STORY_ID_ARG}=${java.net.URLEncoder.encode(storyId, "UTF-8").replace("+", "%20")}"
     fun legal(kind: LegalDocumentKind): String = "settings/legal/${kind.arg}"
     fun settingsFocus(invite: SettingsInvite): String = "settings/focus/${invite.wire}"
+    fun voiceProfile(openWizardWhenEmpty: Boolean = false): String = "settings/voice-profile?$VOICE_PROFILE_WIZARD_ARG=$openWizardWhenEmpty"
+
+    /**
+     * Où mène une invite de réglage : le consentement vocal ouvre DIRECTEMENT la configuration de la voix (gestion du profil,
+     * ou l'assistant s'il n'existe pas — #16420) ; toute autre invite, le hub Réglages sur sa section (#16339).
+     */
+    fun forInvite(invite: SettingsInvite): String = when (invite) {
+        SettingsInvite.VOICE_CONSENT -> voiceProfile(openWizardWhenEmpty = true)
+        else -> settingsFocus(invite)
+    }
     fun packShop(domain: String? = null, pack: String? = null): String =
         listOfNotNull(domain?.let { "domain=${Uri.encode(it)}" }, pack?.let { "pack=${Uri.encode(it)}" })
             .joinToString("&").let { query -> if (query.isEmpty()) PACK_SHOP else "$PACK_SHOP?$query" }

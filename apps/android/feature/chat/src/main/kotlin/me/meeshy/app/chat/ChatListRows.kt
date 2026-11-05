@@ -66,6 +66,8 @@ internal fun ChatListRow(
     translatingLanguages: Set<String> = emptySet(),
     /** Le message que l'overlay d'appui long présente : sa cellule s'efface pendant ce temps. */
     overlayMessageId: String? = null,
+    /** #16420 — le consentement vocal manque : la note se pose sous MES vocaux ([withVoiceConsent]). */
+    voiceConsentMissing: Boolean = false,
 ) {
     when (item) {
         is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
@@ -73,7 +75,7 @@ internal fun ChatListRow(
         is ChatListItem.EncryptionNotice -> EncryptionNoticeRow(accentColor)
         is ChatListItem.ConversationStart -> ConversationStartListRow(item)
         is ChatListItem.Message -> ChatMessageRow(
-            bubble = item.bubble.inConversation(isGroup),
+            bubble = item.bubble.inConversation(isGroup).withVoiceConsent(voiceConsentMissing),
             accentColor = accentColor,
             mentionDisplayNames = mentionDisplayNames,
             highlightTerm = highlightTerm,

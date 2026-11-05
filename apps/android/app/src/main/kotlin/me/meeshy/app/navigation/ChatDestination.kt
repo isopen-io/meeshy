@@ -10,6 +10,7 @@ import me.meeshy.ui.appearance.LocalPackShopOpener
 import me.meeshy.ui.appearance.PackShopOpener
 import me.meeshy.ui.settings.LocalSettingsInviteOpener
 import me.meeshy.ui.settings.SettingsInviteOpener
+import me.meeshy.sdk.model.settings.SettingsInvite
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModelStoreOwner
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -71,7 +72,7 @@ internal fun NavGraphBuilder.chatDestination(
                         PackShopOpener { domain -> navController.navigate(Routes.packShop(domain = domain.wire)) }
                     }
                     val settingsInviteOpener = remember(navController) {
-                        SettingsInviteOpener { invite -> navController.navigate(Routes.settingsFocus(invite)) }
+                        SettingsInviteOpener { invite -> navController.navigate(Routes.forInvite(invite)) }
                     }
                     CompositionLocalProvider(
                         LocalPackShopOpener provides packShopOpener,
@@ -107,6 +108,7 @@ internal fun NavGraphBuilder.chatDestination(
                         locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
                         onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                         onOpenConversation = { id -> navController.navigate(Routes.chat(id)) },
+                        onOpenVoiceSettings = { navController.navigate(Routes.forInvite(SettingsInvite.VOICE_CONSENT)) },
                     )
                     }
                 }

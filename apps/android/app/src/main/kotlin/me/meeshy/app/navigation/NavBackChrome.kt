@@ -139,6 +139,7 @@ internal object NavBackChrome {
         sheet("Routes.ENCRYPTED_DEVICES", Routes.ENCRYPTED_DEVICES, IosPresentation.SHEET, settings("EncryptedDevicesScreen.kt")),
         arrow("BirthDateDestinations.ROUTE", BirthDateDestinations.ROUTE, settings("BirthDateDeclarationScreen.kt"), IosPresentation.NONE),
         sheet("VoiceProfileWizardDestinations.ROUTE", VoiceProfileWizardDestinations.ROUTE, IosPresentation.SHEET, settings("VoiceProfileWizardScreen.kt")),
+        sheet("Routes.VOICE_PROFILE", Routes.VOICE_PROFILE, IosPresentation.SHEET, settings("VoiceProfileManageScreen.kt")),
         // Contacts, notifications, profils.
         arrow("Routes.CONTACTS", Routes.CONTACTS, contacts),
         arrow("Routes.CONTACTS_DISCOVER", Routes.CONTACTS_DISCOVER, contacts),
