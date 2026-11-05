@@ -497,6 +497,15 @@ describe('le nom d’un partenaire passe par la loi des éditeurs (#16274, revue
     expect(h.prisma.partnerProfile.rows.find((row) => row.userId === ALICE)).toMatchObject({ displayName: 'Aurore Studio' });
   });
 
+  it('renommer son profil vers le nom d’un ancien profil sans clé est refusé, même si cet ancien profil est plus RÉCENT', async () => {
+    const h = await harness();
+    await saveProfile(h, { displayName: 'Aurore Studio' });
+    h.prisma.partnerProfile.rows.push({ id: 'p-legacy', userId: BOB, displayName: 'Studio Lumière', website: null, logoSrc: null, logoSha256: null, verifiedAt: null, updatedAt: new Date(START + 10_000), createdAt: new Date(START + 10_000) });
+    const res = await saveProfile(h, { displayName: 'studio lumiere' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('PUBLISHER_NAME_TAKEN');
+  });
+
   it('renommer son profil en « Meeshy » est refusé', async () => {
     const h = await harness();
     await saveProfile(h, { displayName: 'Aurore Studio' });

@@ -416,3 +416,22 @@ describe('un ancien profil sans clé de nom détient son nom dès avant le rattr
     expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ displayName: 'Éditeur', nameKey: null });
   });
 });
+
+describe('le balayage des anciens profils ne se contourne pas, et ne neutralise jamais sur un doute (revue de sécurité #16274)', () => {
+  const legacyRows = (count: number, name: (index: number) => string) =>
+    Array.from({ length: count }, (_, index) => ({ id: `68f0${String(index).padStart(20, '0')}`, userId: `68f1${String(index).padStart(20, '0')}`, displayName: name(index), verifiedAt: null, createdAt: new Date('2026-09-01T00:00:00Z') }));
+
+  it('des milliers de profils neutres ou officiels sans clé ne bloquent aucun nom', async () => {
+    const { db, publishers } = setup();
+    db.profiles.push(...legacyRows(2_000, () => 'Éditeur'), { id: 'p-off', userId: OFFICIAL, displayName: 'Meeshy', verifiedAt: new Date(), createdAt: new Date() });
+    expect(await publishers.authorizePublication(AWA, { author: 'Studio Lumière', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Studio Lumière' } });
+  });
+
+  it('un balayage inconcluant laisse l’ancien profil tel quel au rattrapage : ni nom neutre, ni vérification perdue', async () => {
+    const { db, publishers } = setup();
+    db.profiles.push(...legacyRows(2_000, (index) => `Studio ${index}`));
+    db.profiles.push({ id: '68e0000000000000000000ff', userId: AWA, displayName: 'Lens Lab', verifiedAt: new Date('2026-10-01T00:00:00Z'), createdAt: new Date('2026-10-01T00:00:00Z') });
+    await publishers.backfillNameKeys();
+    expect(db.profiles.find((row) => row.userId === AWA)).toMatchObject({ displayName: 'Lens Lab', verifiedAt: new Date('2026-10-01T00:00:00Z') });
+  });
+});

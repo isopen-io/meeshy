@@ -28,6 +28,7 @@ const fieldMatches = (row: Record<string, unknown>, key: string, condition: unkn
   if (condition !== null && typeof condition === 'object' && !(condition instanceof Date)) {
     const spec = condition as Record<string, unknown>;
     if ('in' in spec) return (spec.in as readonly unknown[]).includes(value);
+    if ('notIn' in spec) return !(spec.notIn as readonly unknown[]).includes(value);
     if ('isSet' in spec) return spec.isSet === (key in row && value !== undefined);
     if ('not' in spec) return value !== spec.not;
   }

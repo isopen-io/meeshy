@@ -33,8 +33,15 @@ const fakeDatabase = (docs: readonly Doc[], seed: readonly Index[] = [{ name: '_
     getIndexes: () => [...indexes],
     dropIndex: (name: string) => indexes.splice(indexes.findIndex((index) => index.name === name), 1),
     createIndex: (key: Record<string, number>, options: Omit<Index, 'key'>) => indexes.push({ key, ...options }),
-    countDocuments: (filter: { nameKey: null; displayName: { $ne: string } }) =>
-      docs.filter((doc) => (doc.nameKey ?? null) === filter.nameKey && doc.displayName !== filter.displayName.$ne).length,
+    countDocuments: (filter: { $or: readonly Record<string, unknown>[]; displayName: { $nin: readonly string[] } }) =>
+      docs.filter((doc) => {
+        const unkeyed = filter.$or.some((branch) => {
+          const condition = branch.nameKey;
+          if (condition === null) return 'nameKey' in doc && doc.nameKey === null;
+          return typeof condition === 'object' && condition !== null && (condition as { $exists?: boolean }).$exists === false && !('nameKey' in doc);
+        });
+        return unkeyed && !filter.displayName.$nin.includes(String(doc.displayName));
+      }).length,
     aggregate: (pipeline: readonly Stage[]) => {
       const groupAt = pipeline.findIndex((stage) => stage.$group);
       const match = pipeline.slice(0, groupAt).find((stage) => stage.$match)?.$match;
@@ -121,6 +128,15 @@ describe('2026-11-05-partner-profile-publisher-indexes.mongodb.js', () => {
     expect(shapeOf(database).map((index) => index.key)).toEqual([{ userId: 1 }, { slug: 1 }]);
     expect(printed.some((line) => line.includes('PartnerProfile_nameKey_key') && line.includes('backfill-pack-publishers'))).toBe(true);
     expect(printed).toContain('quit 2');
+  });
+
+  it('la précondition ignore le profil officiel « Meeshy » et compte un champ nameKey ABSENT comme un champ nul', () => {
+    const official = fakeDatabase([...LEGACY, { userId: 'off', slug: 'meeshy', displayName: 'Meeshy' }]);
+    run(official);
+    expect(shapeOf(official).map((index) => index.key)).toContainEqual({ nameKey: 1 });
+    const absent = fakeDatabase([...LEGACY, { userId: 'u5', displayName: 'Lens Lab', nameKey: null }]);
+    run(absent);
+    expect(shapeOf(absent).map((index) => index.key)).not.toContainEqual({ nameKey: 1 });
   });
 
   it('remplace un index unique NON partiel de slug (posé par un ancien `db push`) par le partiel', () => {
