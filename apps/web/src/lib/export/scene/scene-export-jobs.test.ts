@@ -9,7 +9,7 @@ afterEach(() => {
 describe('les exports en cours — suivis et annulables de partout', () => {
   test('un export se montre, avance, et quitte la liste quand il finit', () => {
     const handle = jobs.start('post:a');
-    expect(jobs.getSnapshot().jobs).toEqual([{ key: 'post:a', progress: null, cancellable: true, choosing: null, ready: false }]);
+    expect(jobs.getSnapshot().jobs).toEqual([{ key: 'post:a', progress: null, cancellable: true, ready: false }]);
     handle?.report(0.42);
     expect(jobs.getSnapshot().jobs[0]?.progress).toBe(0.42);
     handle?.finish();
@@ -35,23 +35,6 @@ describe('les exports en cours — suivis et annulables de partout', () => {
     expect(handle?.signal.aborted).toBe(false);
     expect(jobs.getSnapshot().jobs[0]).toMatchObject({ progress: 1, cancellable: false });
     handle?.finish();
-  });
-
-  test('« Imager » attend la part choisie dans le bandeau', async () => {
-    const handle = jobs.start('post:a');
-    const choices = [1, 2, 3, 4].map((quarter) => ({ quarter: quarter as 1 | 2 | 3 | 4, durationMs: quarter * 60_000 }));
-    const answer = handle?.chooseLength(choices);
-    expect(jobs.getSnapshot().jobs[0]?.choosing).toEqual(choices);
-    jobs.choose('post:a', 2);
-    expect(await answer).toBe(2);
-    expect(jobs.getSnapshot().jobs[0]?.choosing).toBeNull();
-  });
-
-  test('annuler pendant le choix répond « renoncer »', async () => {
-    const handle = jobs.start('post:a');
-    const answer = handle?.chooseLength([{ quarter: 1, durationMs: 60_000 }]);
-    jobs.cancel('post:a');
-    expect(await answer).toBeNull();
   });
 
   test('« Partager » attend le toucher du bandeau, et le partage part DANS ce toucher', async () => {

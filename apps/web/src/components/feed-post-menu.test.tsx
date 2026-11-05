@@ -96,7 +96,7 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     expect(bouton?.getAttribute('aria-label')).toBe('Plus d’options');
     act(() => bouton?.click());
     await act(async () => {
-      await import('./publication-menu-panel');
+      await Promise.all([import('./publication-menu-panel'), import('@/lib/export/publication-image'), loadSceneExportCatalog('fr')]);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     return [...document.querySelectorAll<HTMLButtonElement>('[data-feed-post-action]')];
@@ -126,7 +126,7 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     const { menu, journal } = host('u-me');
     monte(post(), { ...menu, viewerModerates: true, onRemove: (id, reason) => journal.push(`remove:${id}:${reason}`) });
     const entrees = await ouvre();
-    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'save', 'remove', 'report']);
+    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'remove', 'report']);
     act(() => entrees.find((e) => e.dataset.feedPostAction === 'remove')?.click());
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     const champ = document.querySelector<HTMLTextAreaElement>('[data-content-removal-reason]');
@@ -158,7 +158,7 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     monte(post(), menu);
 
     const entrees = await ouvre();
-    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'save', 'report']);
+    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'report']);
 
     act(() => entrees.find((e) => e.dataset.feedPostAction === 'copyText')?.click());
     expect(journal).toEqual(['copy:Bonjour le fil']);
@@ -224,7 +224,7 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
       const entrees = await ouvre();
       // #9727, décision porteur 2026-10-09 — l'auteur d'un post n'en voit que le
       // NOMBRE de vues : « Vues » n'est pas dans SON menu.
-      expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'save', 'pin', 'edit', 'delete']);
+      expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'imager', 'save', 'pin', 'edit', 'delete']);
 
       const modifier = entrees.find((e) => e.dataset.feedPostAction === 'edit')!;
       expect(modifier.textContent).toContain('Modifier');
@@ -547,7 +547,7 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     act(() => entrees.find((e) => e.dataset.feedPostAction === 'imager')?.click());
     const request = publicationImageRequest();
     expect(request?.key).toBe('post:p1');
-    expect(request?.scene?.document).toEqual(SCENE);
+    expect(request?.scene?.fileStem).toBe('post-p1');
     expect(request?.scene?.watermark).toBeNull();
     expect(request?.subject.reply).toEqual({ author: 'Nour', text: 'Bonjour le fil', handle: 'nour' });
     expect(exportJobs.getSnapshot().jobs).toEqual([]);

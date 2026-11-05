@@ -76,6 +76,7 @@ const fr = {
   'export.card.typeface.pairs': 'La police habille la citation et la réponse',
   'export.card.tab.frame': 'Frame',
   'export.card.tab.media': 'Médias',
+  'export.card.tab.content': 'Contenu',
   'export.card.part.media': 'Médias',
   'export.card.part.replies': 'Réponses',
   'export.card.aspect': 'Format de l’image',

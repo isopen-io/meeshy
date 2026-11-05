@@ -1,25 +1,21 @@
 import type { FeedCardModel } from '@/lib/feed/card-model';
-import { gestureAudioContext, postExportSubject, type SceneExportSubject } from '@/lib/export/scene/scene-export-subject';
+import { openPublicationImage, type PublicationImageRequest } from '@/lib/export/publication-image-store';
 
 /**
- * « IMAGER » UN RÉEL (#16333) — la baguette du rail compose la scène du réel
- * en carte image, par le MÊME départ que l'entrée « Imager » du menu « … »
- * (`publication-menu-panel.tsx`) : le bandeau global des exports, le choix de
- * longueur au-delà d'une minute. Le contexte audio naît DANS le geste (Safari),
- * le moteur ne se charge qu'après.
+ * « IMAGER » UN RÉEL (#16333, #16393) — la baguette du rail ouvre l'ATELIER DE
+ * CARTE, le même que l'entrée « Imager » du menu « … » : un réel simple y
+ * arrive avec sa vidéo et son texte servi, un réel composé avec sa scène à
+ * rendre en média. La demande se compose au geste ; la loi (`postImagingOf`)
+ * ne se charge qu'alors.
  */
-export type ReelImagerLauncher = (input: { readonly subject: SceneExportSubject; readonly audioContext: AudioContext | null }) => Promise<unknown>;
+export type ReelImageOpener = (request: PublicationImageRequest) => void;
 
-const browserLauncher: ReelImagerLauncher = (input) =>
-  import('@/lib/export/scene/scene-export-launch').then(({ launchSceneExport }) => launchSceneExport({ ...input, mode: 'imager' }));
-
-export function reelImager(launcher: ReelImagerLauncher = browserLauncher): (model: FeedCardModel) => void {
-  return (model) => {
-    const subject = postExportSubject(model);
-    if (subject === null) return;
-    const audioContext = gestureAudioContext();
-    void launcher({ subject, audioContext }).catch(() => void audioContext?.close().catch(() => undefined));
-  };
+export function reelImager(open: ReelImageOpener = openPublicationImage): (model: FeedCardModel) => Promise<void> {
+  return (model) =>
+    import('@/lib/export/publication-image').then(({ postImageRequestOf }) => {
+      const request = postImageRequestOf(model);
+      if (request !== null) open(request);
+    });
 }
 
 /** Le départ du navigateur — une référence STABLE, que la page mémoïsée du réel reçoit. */

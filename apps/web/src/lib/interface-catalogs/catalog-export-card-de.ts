@@ -70,6 +70,7 @@ const de = {
   'export.card.typeface.pairs': 'Die Schrift gilt für Zitat und Antwort',
   'export.card.tab.frame': 'Rahmen',
   'export.card.tab.media': 'Medien',
+  'export.card.tab.content': 'Inhalt',
   'export.card.part.media': 'Medien',
   'export.card.part.replies': 'Antworten',
   'export.card.aspect': 'Bildformat',

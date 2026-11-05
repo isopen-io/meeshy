@@ -200,6 +200,21 @@ export type FeedCardRepostEmbed = {
   readonly likeCount: number;
 };
 
+/**
+ * LA PROTECTION DÉCLARÉE D'UNE PUBLICATION (#16166) — ce que la loi de sortie
+ * lit pour décider si « Imager » s'offre. Aucun champ du fil ne la porte
+ * aujourd'hui (un post n'a ni flamme, ni vue unique, ni flou) : absente, rien
+ * n'est déclaré ; présente, elle ferme l'export comme pour un message.
+ */
+export type FeedCardProtection = {
+  readonly isViewOnce?: boolean | null;
+  readonly isBlurred?: boolean | null;
+  readonly isEncrypted?: boolean | null;
+  readonly effectFlags?: number | null;
+  readonly ephemeralDuration?: number | null;
+  readonly expiresAt?: Date | string | null;
+};
+
 export type FeedCardModel = {
   readonly id: string;
   readonly viewer: FeedCardViewer;
@@ -239,6 +254,8 @@ export type FeedCardModel = {
    * original.
    */
   readonly viewerPoints?: number;
+  /** Voir `FeedCardProtection` — absente : rien n'est déclaré. */
+  readonly protection?: FeedCardProtection;
 };
 
 const FALLBACK_AUTHOR_NAME = 'Quelqu’un';

@@ -223,10 +223,10 @@ describe('useStoryOwnerRail — « Vues » ouvre la feuille de CETTE story ; « 
     probe = mountProbe(undefined, null, undefined, spy.launcher);
     probe.render({ ...storyOf('st-a'), storyEffects: SCENE });
     act(() => probe?.rail().imager?.());
-    await settle(0);
+    await settle(200);
     const request = publicationImageRequest();
     expect(request?.key).toBe('story:st-a');
-    expect(request?.scene?.document).toEqual(SCENE);
+    expect(request?.scene?.fileStem).toBe('story-st-a');
     expect(request?.scene?.branding).toBeUndefined();
     expect(request?.scene?.watermark).toBeNull();
     expect(spy.launched).toEqual([]);
@@ -238,7 +238,7 @@ describe('useStoryOwnerRail — « Vues » ouvre la feuille de CETTE story ; « 
     probe = mountProbe(undefined, null, undefined, spy.launcher);
     probe.render({ ...storyOf('st-a'), storyEffects: SCENE });
     act(() => probe?.rail().handlers.imager?.());
-    await settle(0);
+    await settle(200);
     expect(publicationImageRequest()?.key).toBe('story:st-a');
     expect(spy.launched).toEqual([]);
     closePublicationImage();
@@ -248,7 +248,7 @@ describe('useStoryOwnerRail — « Vues » ouvre la feuille de CETTE story ; « 
     probe = mountProbe();
     probe.render({ ...storyOf('st-a'), storyEffects: SCENE, content: 'Good evening', originalLanguage: 'en', translations: { fr: { text: 'Bonsoir' } } });
     act(() => probe?.rail().imager?.());
-    await settle(0);
+    await settle(200);
     expect(publicationImageRequest()?.subject.reply.text).toBe('Bonsoir');
     closePublicationImage();
   });

@@ -142,3 +142,30 @@ describe('une réponse', () => {
     expect(document.querySelector('[data-export-compose] [role="group"]')?.getAttribute('aria-label')).toBe('Composition');
   });
 });
+
+describe('les choix de contenu vivent dans le rail d’options (#16393)', () => {
+  test('« Contenu » est le PREMIER onglet, ouvert d’emblée, et porte les choix : rien ne reste au-dessus de l’aperçu', async () => {
+    await mountSheet(request(r2, [root, r1, r2, r3]));
+    const tabs = [...document.querySelectorAll('[data-export-tab]')].map((element) => element.getAttribute('data-export-tab'));
+    expect(tabs[0]).toBe('content');
+    expect(document.querySelector('[data-export-tab="content"]')?.textContent).toContain('Contenu');
+    expect(document.querySelector('[data-export-tab="content"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelector('[role="tabpanel"] [data-export-content] [data-export-compose]')).not.toBeNull();
+    expect([...document.querySelectorAll('[data-export-compose]')].every((element) => element.closest('[role="tabpanel"]') !== null)).toBe(true);
+  });
+
+  test('un autre onglet range les choix ; « Contenu » les rend, intacts', async () => {
+    await mountSheet(request(r2, [root, r1, r2, r3]));
+    await mounter.click(document.querySelector('[data-export-tab="styles"]'));
+    expect(document.querySelector('[data-export-compose]')).toBeNull();
+    await mounter.click(document.querySelector('[data-export-tab="content"]'));
+    expect(chip('[data-export-compose-mode="threadToHere"]')?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  test('une carte sans choix de contenu n’a pas d’onglet « Contenu »', async () => {
+    await mounter.mount(<CommentImageSheet request={{ comment: root, servedText: root.content, parent: null }} handle="moi" onClose={() => undefined} paint={async () => ({ blob: new Blob(['c'], { type: 'image/png' }), truncated: false, width: 1080, height: 1080, regions: [] })} />);
+    await mounter.settle();
+    expect(document.querySelector('[data-export-tab="content"]')).toBeNull();
+    expect(document.querySelector('[data-export-tab]')?.getAttribute('data-export-tab')).toBe('styles');
+  });
+});
