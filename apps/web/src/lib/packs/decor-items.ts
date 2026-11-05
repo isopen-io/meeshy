@@ -1,12 +1,13 @@
 import { parseAppearancePackContract, type AppearanceDesign } from '@meeshy/shared/types/appearance-design';
 import { parseAvatarRingPackContract, type AvatarRingDesign } from '@meeshy/shared/types/avatar-ring-design';
 import { parseBannerFramePackContract, type BannerFrameDesign } from '@meeshy/shared/types/banner-frame-design';
-import type { PackDomain } from '@meeshy/shared/types/content-pack';
 import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
 
 import { WALLPAPER_PACKS } from '@/lib/appearance/wallpaper-catalog';
 import { BUILTIN_BANNER_FRAME_PACKS, BUILTIN_BANNER_PACKS, BUILTIN_RING_PACKS } from '@/lib/profile-decor/catalog';
 import type { DecorSide } from '@/lib/profile-decor/equip';
+
+import type { DecorDomain } from './decor-domains';
 
 /**
  * **LES ÉLÉMENTS D'UN PACK DE DÉCOR** (#16267) — ce que la fiche d'un pack et
@@ -17,11 +18,7 @@ import type { DecorSide } from '@/lib/profile-decor/equip';
  * erreur. Module pur : le chargement vit dans `use-pack-items.ts`.
  */
 
-export const DECOR_DOMAINS = ['avatar-ring', 'banner', 'banner-frame', 'wallpaper'] as const satisfies readonly PackDomain[];
-
-export type DecorDomain = (typeof DECOR_DOMAINS)[number];
-
-export const isDecorDomain = (value: string): value is DecorDomain => (DECOR_DOMAINS as readonly string[]).includes(value);
+export { DECOR_DOMAINS, isDecorDomain, type DecorDomain } from './decor-domains';
 
 type DesignOf = {
   readonly 'avatar-ring': AvatarRingDesign;

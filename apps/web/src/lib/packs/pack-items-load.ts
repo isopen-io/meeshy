@@ -3,7 +3,10 @@ import { loadDetailOf, type PackPort } from '@/lib/api/packs';
 import { shopPackPort, type ShopPack } from '@/lib/api/packs-shop';
 import { decodeDesignPackSummary, type DesignPackSummary } from '@/lib/profile-decor/pack-summary';
 
-import { contractDecorItems, embeddedDecorItems, type DecorDomain, type DecorItem } from './decor-items';
+import type { DecorDomain } from './decor-domains';
+import { contractDecorItems, embeddedDecorItems, type DecorItem } from './decor-items';
+
+export { packItemsQueryKey } from './decor-domains';
 
 /**
  * **CHARGER LES ÉLÉMENTS D'UN PACK DE DÉCOR** (#16267) — embarqué : lu dans le
@@ -22,8 +25,6 @@ export type PackItems = {
   /** L'adresse `<sha16>.json` du contrat d'un pack servi ; `null` pour un embarqué. */
   readonly contract: string | null;
 };
-
-export const packItemsQueryKey = (domain: DecorDomain, slug: string): readonly unknown[] => ['pack', domain, slug, 'items'];
 
 const detailPort = (domain: DecorDomain): PackPort<ShopPack, ShopPack, DesignPackSummary> => ({ ...shopPackPort(domain), decodeDetail: decodeDesignPackSummary(domain) });
 
