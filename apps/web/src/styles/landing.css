@@ -203,7 +203,7 @@ body {
  * du titre, pas au milieu d'une colonne plus haute. Sur téléphone, la colonne
  * passe sous le titre, badges en tête. */
 .ld-hero-side {
-  flex: 1 1 340px;
+  flex: 1 1 380px;
   min-width: 0;
   display: flex;
   flex-direction: column;
