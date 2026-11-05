@@ -1671,17 +1671,20 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
     /// La CHAÎNE complète, du point d'entrée à la surface, sans monter la
     /// moindre vue : la porte du fil atteint le meuble (`routesToLegacy == nil`),
-    /// le meuble lui monte un DOCUMENT, et le clavier s'y lève d'emblée.
+    /// le meuble lui monte un DOCUMENT, et la scène s'y ouvre AU REPOS, sans
+    /// clavier, comme celle de la story (#16207).
     ///
     /// Les trois maillons sont éprouvés ENSEMBLE parce qu'ils se protègent l'un
     /// l'autre. Le premier seul autoriserait un recâblage vers l'atelier de
     /// scène — un canvas de story là où l'auteur attend un champ de texte. Le
     /// deuxième seul est déjà vrai aujourd'hui et le restera quoi qu'il arrive,
     /// puisque `ComposerSurfaceRouting` est une fonction pure que personne
-    /// n'appelle sur cette porte tant qu'elle route. Le troisième est la
-    /// première des trois capacités que la spec v2 exige de cette surface
-    /// (§E lot 2 : « clavier sur `content` ») — la seule que le meuble tienne de
-    /// bout en bout.
+    /// n'appelle sur cette porte tant qu'elle route. Le troisième a été
+    /// retourné par #16207 : la spec v2 promettait un « clavier sur `content` »,
+    /// et ce clavier réduisait la scène et retirait ses outils et Publier dès
+    /// l'arrivée. Le post du fil s'ouvre désormais sur la même géographie que
+    /// la story ; son texte s'écrit depuis l'option « Texte du post » de la
+    /// colonne (`ComposerRestTool.postText`).
     ///
     /// Ce qu'il ne dit PAS, et qui reste une dette CONSIGNÉE plutôt qu'un
     /// acquis : la surface ainsi montée ne sert qu'UN outil sur six, et ne porte
@@ -1710,10 +1713,10 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "Le fil ouvre un texte et des pièces jointes, pas un canvas : le meuble doit lui monter la "
                 + "surface DOCUMENT que le lot 2 a écrite."
         )
-        XCTAssertTrue(
-            ComposerSurfaceRouting.focusesContentOnAppear(opening: profil.opensWith),
-            "Et le clavier s'y lève d'emblée — c'est la promesse que `keyboardOnContent` porte, et la "
-                + "première des trois capacités que la spec v2 exige de cette surface."
+        XCTAssertFalse(
+            ComposerPostTextPill.opensOnAppear(opening: profil.opensWith, format: profil.initialFormat),
+            "Et la scène s'y ouvre au repos, sans clavier : un « Texte du post » levé au montage réduit "
+                + "la scène et retire ses outils et Publier — ce n'est plus l'interface de la story (#16207)."
         )
     }
 
