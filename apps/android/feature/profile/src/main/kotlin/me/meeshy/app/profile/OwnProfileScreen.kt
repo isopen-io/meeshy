@@ -108,6 +108,8 @@ fun OwnProfileScreen(
 ) {
     val decorCatalog by decorViewModel.catalog.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val ownDecor = state.user?.servedDecor
+    LaunchedEffect(ownDecor, decorCatalog) { ownDecor?.let(decorViewModel::request) }
     val uploadState by uploadViewModel.state.collectAsStateWithLifecycle()
     val onEvent = viewModel::onEvent
     var isSharing by rememberSaveable { mutableStateOf(false) }

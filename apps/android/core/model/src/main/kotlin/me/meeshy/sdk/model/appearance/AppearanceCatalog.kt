@@ -35,12 +35,63 @@ class AppearanceCatalog private constructor(
     /** La version du format, 1 aujourd'hui ; une version plus récente se lit au mieux. */
     val version: Int,
     val gamut: AppearanceGamut,
-    val wallpaperPacks: List<AppearanceDesignPack>,
-    val bannerPacks: List<AppearanceDesignPack>,
-    val ringPacks: List<AvatarRingPack>,
-    val bannerFramePacks: List<BannerFramePack>,
+    private val embeddedWallpaperPacks: List<AppearanceDesignPack>,
+    private val embeddedBannerPacks: List<AppearanceDesignPack>,
+    private val embeddedRingPacks: List<AvatarRingPack>,
+    private val embeddedBannerFramePacks: List<BannerFramePack>,
     private val strings: Map<String, AppearanceCatalogStrings>,
+    /** Les contrats servis des packs non embarqués (#16265) ; vide pour le catalogue de l'APK seul. */
+    private val served: ServedAppearanceContracts = ServedAppearanceContracts.EMPTY,
 ) {
+
+    /** Les packs de fonds : ceux de l'APK, puis les packs servis installés par le lecteur. */
+    val wallpaperPacks: List<AppearanceDesignPack> = embeddedWallpaperPacks + servedDesignPacks(AppearancePackDomain.WALLPAPER, embeddedWallpaperPacks)
+    val bannerPacks: List<AppearanceDesignPack> = embeddedBannerPacks + servedDesignPacks(AppearancePackDomain.BANNER, embeddedBannerPacks)
+    val ringPacks: List<AvatarRingPack> = embeddedRingPacks + servedPacks(AppearancePackDomain.AVATAR_RING, embeddedRingPacks) { pack, order, contract ->
+        (contract as? ServedAppearanceContract.Rings)?.let { AvatarRingPack(slug = pack.slug, order = order, rings = it.rings) }
+    }
+    val bannerFramePacks: List<BannerFramePack> = embeddedBannerFramePacks + servedPacks(AppearancePackDomain.BANNER_FRAME, embeddedBannerFramePacks) { pack, order, contract ->
+        (contract as? ServedAppearanceContract.Frames)?.let { BannerFramePack(slug = pack.slug, order = order, frames = it.frames) }
+    }
+
+    /**
+     * Ce catalogue complété par [contracts] (#16265) : les packs servis installés se rangent APRÈS ceux de l'APK, jamais
+     * installés d'office, et un slug déjà embarqué n'est jamais doublé. Les contrats chargés par adresse résolvent le décor
+     * d'autrui. Sans contrat, le catalogue reste le même.
+     */
+    fun withServed(contracts: ServedAppearanceContracts): AppearanceCatalog {
+        if (contracts.isEmpty) return this
+        return AppearanceCatalog(
+            version, gamut, embeddedWallpaperPacks, embeddedBannerPacks, embeddedRingPacks, embeddedBannerFramePacks, strings,
+            served.plus(contracts),
+        )
+    }
+
+    internal fun servedBannerDesign(src: String?, key: String): AppearanceDesign? =
+        (served.contract(src, AppearancePackDomain.BANNER) as? ServedAppearanceContract.Designs)?.designs?.firstOrNull { it.key == key }
+
+    internal fun servedRing(src: String?, key: String): AvatarRingDesign? =
+        (served.contract(src, AppearancePackDomain.AVATAR_RING) as? ServedAppearanceContract.Rings)?.rings?.firstOrNull { it.key == key }
+
+    internal fun servedBannerFrame(src: String?, key: String): BannerFrameDesign? =
+        (served.contract(src, AppearancePackDomain.BANNER_FRAME) as? ServedAppearanceContract.Frames)?.frames?.firstOrNull { it.key == key }
+
+    private fun servedDesignPacks(domain: AppearancePackDomain, embedded: List<AppearancePack>): List<AppearanceDesignPack> =
+        servedPacks(domain, embedded) { pack, order, contract ->
+            (contract as? ServedAppearanceContract.Designs)?.let { AppearanceDesignPack(slug = pack.slug, order = order, designs = it.designs) }
+        }
+
+    private fun <P : AppearancePack> servedPacks(
+        domain: AppearancePackDomain,
+        embedded: List<AppearancePack>,
+        build: (ServedAppearancePack, Int, ServedAppearanceContract) -> P?,
+    ): List<P> {
+        val taken = embedded.mapTo(HashSet()) { it.slug }
+        return served.packs[domain].orEmpty()
+            .filter { it.slug !in taken }
+            .distinctBy { it.slug }
+            .mapIndexedNotNull { index, pack -> served.contract(pack.src, domain)?.let { build(pack, SERVED_ORDER_BASE + index, it) } }
+    }
 
     val isEmpty: Boolean
         get() = gamut.entries.isEmpty() && wallpaperPacks.isEmpty() && bannerPacks.isEmpty() &&
@@ -113,7 +164,7 @@ class AppearanceCatalog private constructor(
 
     fun gamutName(key: String, language: String): String? = localized(language) { it.gamut[key] }
 
-    fun packName(slug: String, language: String): String? = localized(language) { it.packNames[slug] }
+    fun packName(slug: String, language: String): String? = localized(language) { it.packNames[slug] } ?: servedPackName(slug, language)
 
     fun packDescription(slug: String, language: String): String? =
         localized(language) { it.packDescriptions[slug] }
@@ -128,10 +179,17 @@ class AppearanceCatalog private constructor(
      * Le catalogue embarqué est complet dans ses sept langues : le repli ne joue que pour une langue
      * hors des sept, ou pour une copie d'un catalogue plus récent.
      */
-    private fun localized(language: String, pick: (AppearanceCatalogStrings) -> String?): String? {
-        val code = language.take(LANGUAGE_CODE_LENGTH).lowercase()
-        return sequenceOf(code, FALLBACK_LANGUAGE, SOURCE_LANGUAGE).firstNotNullOfOrNull { strings[it]?.let(pick) }
+    private fun localized(language: String, pick: (AppearanceCatalogStrings) -> String?): String? =
+        languageChain(language).firstNotNullOfOrNull { strings[it]?.let(pick) }
+
+    /** Le nom d'un pack servi, tiré de son résumé (`names`), dans le même ordre de repli que le catalogue. */
+    private fun servedPackName(slug: String, language: String): String? {
+        val names = served.packs.values.asSequence().flatten().firstOrNull { it.slug == slug }?.names ?: return null
+        return languageChain(language).firstNotNullOfOrNull { names[it] }
     }
+
+    private fun languageChain(language: String): Sequence<String> =
+        sequenceOf(language.take(LANGUAGE_CODE_LENGTH).lowercase(), FALLBACK_LANGUAGE, SOURCE_LANGUAGE)
 
     // endregion
 
@@ -144,13 +202,16 @@ class AppearanceCatalog private constructor(
         private const val LANGUAGE_CODE_LENGTH = 2
         private const val DEFAULT_VERSION = 1
 
+        /** Les packs servis se rangent après ceux de l'APK (miroir de `SERVED_ORDER_BASE`, web). */
+        private const val SERVED_ORDER_BASE = 1000
+
         val EMPTY = AppearanceCatalog(
             version = DEFAULT_VERSION,
             gamut = AppearanceGamut.EMPTY,
-            wallpaperPacks = emptyList(),
-            bannerPacks = emptyList(),
-            ringPacks = emptyList(),
-            bannerFramePacks = emptyList(),
+            embeddedWallpaperPacks = emptyList(),
+            embeddedBannerPacks = emptyList(),
+            embeddedRingPacks = emptyList(),
+            embeddedBannerFramePacks = emptyList(),
             strings = emptyMap(),
         )
 
@@ -168,10 +229,10 @@ class AppearanceCatalog private constructor(
                 gamut = AppearanceGamut(
                     JSON.decodeLossyList(root["gamut"], AppearanceGamutEntry.serializer()).filter { it.isReadable },
                 ),
-                wallpaperPacks = JSON.decodeLossyList(root["wallpapers"], AppearanceDesignPack.serializer()).byOrder(),
-                bannerPacks = JSON.decodeLossyList(root["banners"], AppearanceDesignPack.serializer()).byOrder(),
-                ringPacks = JSON.decodeLossyList(root["rings"], AvatarRingPack.serializer()).byOrder(),
-                bannerFramePacks = JSON.decodeLossyList(root["bannerFrames"], BannerFramePack.serializer()).byOrder(),
+                embeddedWallpaperPacks = JSON.decodeLossyList(root["wallpapers"], AppearanceDesignPack.serializer()).byOrder(),
+                embeddedBannerPacks = JSON.decodeLossyList(root["banners"], AppearanceDesignPack.serializer()).byOrder(),
+                embeddedRingPacks = JSON.decodeLossyList(root["rings"], AvatarRingPack.serializer()).byOrder(),
+                embeddedBannerFramePacks = JSON.decodeLossyList(root["bannerFrames"], BannerFramePack.serializer()).byOrder(),
                 strings = AppearanceCatalogStrings.byLanguage(root["strings"]),
             )
         }
