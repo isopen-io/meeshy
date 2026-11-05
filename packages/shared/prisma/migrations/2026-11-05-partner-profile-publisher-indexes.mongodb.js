@@ -15,6 +15,11 @@
  * `PackPublishers` vérifie ces unicités lui-même sans supposer les index ; les
  * index ferment la course que le code ne peut pas fermer seul.
  *
+ * ORDRE : jouer d'abord le rattrapage
+ * `services/gateway/scripts/2026-11-05-backfill-pack-publishers.ts`, qui pose
+ * `nameKey` sur les profils existants et départage les noms en double (le plus
+ * ancien garde le nom) par la fonction même du code, puis ce script.
+ *
  * Idempotente : un index se reconnaît à sa CLÉ et à ses options ; présent tel
  * quel, rien ne se passe ; présent avec d'autres options (l'unique NON partiel
  * d'un ancien `db push`), il est remplacé. Les DOUBLONS sont relevés AVANT
