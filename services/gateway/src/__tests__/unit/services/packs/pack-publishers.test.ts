@@ -345,3 +345,55 @@ describe('backfill — le rattrapage qui crée les éditeurs des propositions d�
     expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ displayName: 'Éditeur' });
   });
 });
+
+describe('le nom d’un éditeur : un seul site d’écriture, unique même sous la course (revue de sécurité #16274)', () => {
+  it('deux créations simultanées du même nom par deux comptes laissent un seul gagnant', async () => {
+    const { db, publishers } = setup();
+    const outcomes = await Promise.all([
+      publishers.authorizePublication(AWA, { author: 'Studio Lumière', claimed: null }),
+      publishers.authorizePublication(BINTA, { author: 'Studio Lumière', claimed: null }),
+    ]);
+    expect(outcomes.filter((outcome) => outcome.kind === 'allowed')).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.kind === 'refused' && outcome.reason === 'name-taken')).toHaveLength(1);
+    expect(db.profiles.filter((row) => row.nameKey === 'studioiumiere')).toHaveLength(1);
+  });
+
+  it('une violation de l’index unique de nameKey (P2002) se lit name-taken', async () => {
+    const { db, publishers } = setup();
+    db.partnerProfile.upsert = async () => {
+      throw Object.assign(new Error('Unique constraint failed on the constraint: `PartnerProfile_nameKey_key`'), { code: 'P2002', meta: { target: 'PartnerProfile_nameKey_key' } });
+    };
+    expect(await publishers.authorizePublication(AWA, { author: 'Studio Lumière', claimed: null })).toEqual({ kind: 'refused', reason: 'name-taken' });
+  });
+
+  it('un ancien profil sans clé de nom, dont le nom est déjà porté, n’est rendu servable que sous le nom neutre', async () => {
+    const { db, publishers } = setup();
+    await publishers.authorizePublication(AWA, { author: 'Lens Lab', claimed: null });
+    db.profiles.push({ id: 'p-legacy', userId: BINTA, displayName: 'Lens Lab', verifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() });
+    expect(await publishers.authorizePublication(BINTA, { author: 'x', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Éditeur', verified: false } });
+    expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ displayName: 'Éditeur', nameKey: null, verifiedAt: null });
+  });
+
+  it('un ancien profil au nom libre reçoit sa clé de nom en devenant servable', async () => {
+    const { db, publishers } = setup();
+    db.profiles.push({ id: 'p-legacy', userId: BINTA, displayName: 'Lens Lab', verifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() });
+    await publishers.authorizePublication(BINTA, { author: 'x', claimed: null });
+    expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ slug: 'lens-lab', nameKey: 'iensiab' });
+  });
+
+  it('backfillNameKeys pose la clé des profils existants, le plus ancien garde un nom en double, et se rejoue sans rien changer', async () => {
+    const { db, publishers } = setup();
+    db.profiles.push(
+      { id: '68e000000000000000000001', userId: AWA, displayName: 'Lens Lab', verifiedAt: new Date(), createdAt: new Date('2026-10-01T00:00:00Z') },
+      { id: '68e000000000000000000002', userId: BINTA, displayName: 'lens-lab', verifiedAt: new Date(), createdAt: new Date('2026-10-02T00:00:00Z') },
+      { id: '68e000000000000000000003', userId: PURGED, displayName: 'Meeshy Partner', verifiedAt: new Date(), createdAt: new Date('2026-10-03T00:00:00Z') },
+    );
+    expect(await publishers.backfillNameKeys()).toEqual({ keyed: 1, neutralized: 2 });
+    expect(db.profiles.map((row) => [row.displayName, row.nameKey ?? null, row.verifiedAt])).toEqual([
+      ['Lens Lab', 'iensiab', expect.any(Date)],
+      ['Éditeur', null, null],
+      ['Éditeur', null, null],
+    ]);
+    expect(await publishers.backfillNameKeys()).toEqual({ keyed: 0, neutralized: 0 });
+  });
+});

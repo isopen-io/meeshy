@@ -59,7 +59,11 @@ function fieldMatches(row: Row, key: string, expected: unknown): boolean {
 
 export function matches(row: Row, where: Where = {}): boolean {
   return Object.entries(where).every(([key, expected]) =>
-    key === 'OR' ? (expected as Where[]).some((branch) => matches(row, branch)) : fieldMatches(row, key, expected),
+    key === 'OR'
+      ? (expected as Where[]).some((branch) => matches(row, branch))
+      : key === 'NOT'
+        ? !matches(row, expected as Where)
+        : fieldMatches(row, key, expected),
   );
 }
 
@@ -170,7 +174,7 @@ export function memoryPrisma(accounts: Readonly<Record<string, PublisherUserSeed
   };
 
   return {
-    prisma: { stickerPack, stickerPackItem, userStickerPack, partnerProfile: publishers.partnerProfile, user: publishers.user } as unknown as PrismaClient,
+    prisma: { stickerPack, stickerPackItem, userStickerPack, partnerProfile: publishers.partnerProfile, user: publishers.user, adminAuditLog: publishers.adminAuditLog } as unknown as PrismaClient,
     packs,
     items,
     choices,

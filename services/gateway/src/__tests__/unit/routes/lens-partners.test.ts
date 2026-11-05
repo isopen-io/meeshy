@@ -80,6 +80,8 @@ type Options = {
   renameDuringVerify?: boolean;
   /** Un autre appareil du partenaire écrit son profil ENTRE la relecture de `saveOwnProfile` et son écriture. */
   concurrentSave?: boolean;
+  /** Le compte officiel Meeshy (#16274). */
+  official?: string;
 };
 
 const START = new Date('2026-11-01T12:00:00Z').getTime();
@@ -89,7 +91,7 @@ async function harness(options: Options = {}) {
   const profiles = table();
   const rawUpdateMany = profiles.updateMany;
   profiles.updateMany = async (args) => {
-    const [row] = profiles.rows;
+    const row = profiles.rows.find((candidate) => candidate.userId === ALICE);
     if (options.renameDuringVerify && args.data.verifiedBy && row) row.displayName = 'Nike';
     if (options.concurrentSave && 'displayName' in args.data && row) row.updatedAt = new Date(START - 60_000);
     return rawUpdateMany(args);
@@ -139,6 +141,7 @@ async function harness(options: Options = {}) {
     prisma: prisma as never,
     dedup,
     now,
+    officialAccountId: options.official ?? null,
     normalizeLogo: async (bytes) =>
       bytes.subarray(0, 8).equals(PNG.subarray(0, 8))
         ? { ok: true as const, image: { bytes, mimeType: 'image/png' as const, width: 128, height: 128, animated: false } }
@@ -477,5 +480,48 @@ describe('l’usage d’une lens se compte sans identifier personne', () => {
     const h = await harness();
     expect((await call(h, 'GET', '/usage/aurore', BOB)).statusCode).toBe(404);
     expect((await call(h, 'GET', '/usage/aurore', MODO)).statusCode).toBe(200);
+  });
+});
+
+describe('le nom d’un partenaire passe par la loi des éditeurs (#16274, revue de sécurité)', () => {
+  it('créer ou renommer son profil vers un nom qu’un autre éditeur porte est refusé : 409 PUBLISHER_NAME_TAKEN', async () => {
+    const h = await harness();
+    expect((await call(h, 'PUT', '/partners/me', BOB, { displayName: 'Studio Lumière' })).statusCode).toBe(200);
+    const created = await saveProfile(h, { displayName: 'studio lumiere' });
+    expect(created.statusCode).toBe(409);
+    expect(created.json().code).toBe('PUBLISHER_NAME_TAKEN');
+    expect((await saveProfile(h, { displayName: 'Aurore Studio' })).statusCode).toBe(200);
+    const renamed = await saveProfile(h, { displayName: 'STUDIO-LUMIÈRE' });
+    expect(renamed.statusCode).toBe(409);
+    expect(renamed.json().code).toBe('PUBLISHER_NAME_TAKEN');
+    expect(h.prisma.partnerProfile.rows.find((row) => row.userId === ALICE)).toMatchObject({ displayName: 'Aurore Studio' });
+  });
+
+  it('renommer son profil en « Meeshy » est refusé', async () => {
+    const h = await harness();
+    await saveProfile(h, { displayName: 'Aurore Studio' });
+    expect((await saveProfile(h, { displayName: 'Meeshy' })).statusCode).toBe(400);
+    expect((await saveProfile(h, { displayName: 'rneeshy' })).statusCode).toBe(400);
+    expect(h.prisma.partnerProfile.rows.find((row) => row.userId === ALICE)).toMatchObject({ displayName: 'Aurore Studio' });
+  });
+
+  it('le nom écrit porte sa clé de lecture', async () => {
+    const h = await harness();
+    await saveProfile(h, { displayName: 'Studio Lumière' });
+    expect(h.prisma.partnerProfile.rows.find((row) => row.userId === ALICE)).toMatchObject({ nameKey: 'studioiumiere' });
+  });
+
+  it('le compte officiel garde le nom Meeshy et sa vérification en changeant son logo', async () => {
+    const h = await harness({ official: ALICE });
+    h.prisma.partnerProfile.rows.push({ id: 'p-off', userId: ALICE, slug: 'meeshy', displayName: 'Meeshy', nameKey: null, website: null, logoSrc: null, logoSha256: null, verifiedAt: new Date(START), verifiedBy: null, updatedAt: new Date(START), createdAt: new Date(START) });
+    const res = await saveProfile(h, { displayName: 'Meeshy', logo: PNG.toString('base64') });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({ displayName: 'Meeshy', verified: true });
+  });
+
+  it('un ancien partenaire tiers vérifié au nom réservé ne crédite plus personne', async () => {
+    const h = await harness();
+    h.prisma.partnerProfile.rows.push({ id: 'p-squat', userId: ALICE, displayName: 'Meeshy Partner', website: null, logoSrc: null, logoSha256: null, verifiedAt: new Date(START), verifiedBy: ADMIN, updatedAt: new Date(START), createdAt: new Date(START) });
+    expect((await credits(h))[0].partner).toBeNull();
   });
 });
