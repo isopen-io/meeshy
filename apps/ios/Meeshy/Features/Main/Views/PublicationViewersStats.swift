@@ -70,14 +70,14 @@ struct PublicationViewersStats: View {
                     HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: stat.systemImage)
                             .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                            .foregroundColor(accentColor)
+                            .foregroundStyle(accentColor)
                         Text("\(stat.count)")
                             .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
                     }
                     Text(stat.label)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
