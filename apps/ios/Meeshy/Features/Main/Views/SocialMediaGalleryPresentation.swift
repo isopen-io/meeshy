@@ -53,9 +53,6 @@ extension View {
     ///     aux textes posés dans la scène. Vide ⇒ le Prisme du lecteur.
     ///   - zoomSourceID: la carte d'où la galerie GRANDIT (#8598,
     ///     `SceneZoomTransition.destinationID`). `nil` ⇒ la montée habituelle.
-    ///   - thread: le fil de commentaires que l'hôte a chargé, dans l'ordre où
-    ///     il le montre (#16322) — la pellicule en porte les médias dès
-    ///     l'ouverture, après ceux du post.
     func socialMediaGallery(
         post: FeedPost?,
         isPresented: Binding<Bool>,
@@ -63,12 +60,10 @@ extension View {
         startSceneIndex: Int = 0,
         accentColor: String,
         preferredContentLanguages: [String] = [],
-        zoomSourceID: String? = nil,
-        thread: [FeedComment] = []
+        zoomSourceID: String? = nil
     ) -> some View {
         modifier(SocialMediaGalleryLayer(
             post: post,
-            thread: thread,
             isPresented: isPresented,
             startMediaId: startMediaId,
             startSceneIndex: startSceneIndex,
@@ -89,13 +84,22 @@ extension View {
 private struct SocialMediaGalleryLayer: ViewModifier {
 
     let post: FeedPost?
-    let thread: [FeedComment]
     @Binding var isPresented: Bool
     let startMediaId: String?
     let startSceneIndex: Int
     let accentColor: String
     let preferredContentLanguages: [String]
     let zoomSourceID: String?
+
+    /// **Le fil que l'hôte a chargé** (#16322), quand il a déclaré
+    /// `.commentMediaGallery(…, post:)` pour CE post : la pellicule porte alors
+    /// les médias des commentaires dès l'ouverture, après ceux du post.
+    @Environment(\.commentMediaGallery) private var commentThread
+
+    private var thread: [FeedComment] {
+        guard let commentThread, let post, commentThread.post?.id == post.id else { return [] }
+        return commentThread.thread()
+    }
 
     /// Le namespace de la transition zoom, posé par la racine (#8598).
     @Environment(\.zoomTransitionNamespace) private var zoomNamespace

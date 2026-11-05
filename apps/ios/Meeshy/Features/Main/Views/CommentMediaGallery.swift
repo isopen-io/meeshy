@@ -406,9 +406,6 @@ extension View {
     /// se feuillettent ensemble en plein écran. À poser par l'hôte qui DÉTIENT la
     /// liste (feuille de commentaires, carte de post, visionneuse de story) —
     /// `CommentMediaView` la lit au moment du TAP, jamais pendant le rendu.
-    ///
-    /// `post` (#16322) : le post commenté, quand l'hôte le tient — le plein
-    /// écran d'un média de commentaire devient alors la suite du post.
     func commentMediaGallery(
         topLevel: [FeedComment], replies: [String: [FeedComment]] = [:], post: FeedPost? = nil
     ) -> some View {
