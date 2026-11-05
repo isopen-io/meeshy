@@ -96,6 +96,28 @@ describe('isReservedPublisherIdentity — personne ne se fait passer pour Meeshy
   });
 });
 
+describe('impersonatesMeeshy est FERMÉE PAR DÉFAUT — un caractère inconnu vaut n’importe quelle lettre (revue de sécurité #16274)', () => {
+  it('réserve Meeshy écrit avec un symbole, une lettre de style, une barre ou une lettre latine hors table à la place d’une lettre', () => {
+    ['\u24DCeeshy', '\u2133eeshy', 'M\u0435\u0435shy', 'M\u2758eeshy', 'Meesh\u01B4', 'Mee\u00DFhy', 'M|eeshy'].forEach((name) => {
+      expect(impersonatesMeeshy(name)).toBe(true);
+      expect(isReservedPublisherIdentity(name)).toBe(true);
+    });
+  });
+
+  it('ne réserve pas pour autant un nom d’un autre alphabet, ni un nom latin légitime', () => {
+    ['Søren Studio', '日本 Stickers', 'Café ☕', '東京スタジオ', '\u0627\u0633\u062A\u0648\u062F\u064A\u0648 \u0627\u0644\u0646\u0648\u0631', 'コーヒー Studio'].forEach((name) => {
+      expect(impersonatesMeeshy(name)).toBe(false);
+      expect(isReservedPublisherIdentity(name)).toBe(false);
+    });
+  });
+});
+
+describe('une lettre latine n’est valide que si elle se replie en ASCII ou figure dans la liste des lettres étendues légitimes', () => {
+  it('refuse une lettre latine étendue hors de cette liste', () => {
+    ['Studio \u01B4', 'Stud\u0269o', 'Studio \u1E9C'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
+  });
+});
+
 describe('impersonatesMeeshy — la seule réserve qui refuse une proposition', () => {
   it('vise Meeshy et ses sosies, jamais un nom seulement mal formé', () => {
     ['Meeshy Fan', '\u041Ceeshy', 'rneeshy', '\u1D0Deeshy'].forEach((name) => expect(impersonatesMeeshy(name)).toBe(true));
