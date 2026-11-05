@@ -47,6 +47,7 @@ type Who = { readonly userId: string; readonly anonymous?: boolean };
 async function buildApp() {
   const db = memoryPrisma();
   const at = new Date('2026-10-01T08:00:00.000Z');
+  db.profiles.push({ id: '68e0000000000000000000a1', userId: ALICE, slug: 'studio-minou', displayName: 'Studio Minou', nameKey: 'studiominou', verifiedAt: null, verifiedBy: null, createdAt: at });
   db.packs.push({
     id: '68b0000000000000000000f1',
     slug: 'chats-de-paris',
