@@ -111,6 +111,23 @@ final class QuoteComposerDoorTests: XCTestCase {
         XCTAssertEqual(carte.visibility, "FRIENDS")
     }
 
+    func test_laCarteDUnPost_porteLeContourServiDeSonAuteur() {
+        let contour = ServedProfileDecorItem(pack: "rings", item: "gold", origin: .builtin)
+        var source = publication(content: "bonjour")
+        source.authorRing = contour
+
+        XCTAssertEqual(ComposerQuotedPublication(quoting: source).authorRing, contour)
+    }
+
+    func test_laCarteDUneRepublication_porteLeContourDeLaRacine_pasCeluiDeLIntermediaire() {
+        var racineAvecContour = racine()
+        racineAvecContour.authorRing = ServedProfileDecorItem(pack: "rings", item: "gold", origin: .builtin)
+        var intermediaire = publication(content: "mon commentaire", repost: racineAvecContour)
+        intermediaire.authorRing = ServedProfileDecorItem(pack: "rings", item: "silver", origin: .builtin)
+
+        XCTAssertEqual(ComposerQuotedPublication(quoting: intermediaire).authorRing?.item, "gold")
+    }
+
     // MARK: - 3. L'hydratation : l'audience de la source, aucune reprise de brouillon
 
     /// Rang 2 (leçon 261) : la racine est en anglais, traduite en français,

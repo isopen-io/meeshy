@@ -62,7 +62,7 @@ extension PostDetailView {
 /// « Copier le lien » et « Partager » du menu « … » — tous deux frappent le
 /// même lien suivi, seule la suite diffère.
 struct PostDetailLinkMenuItems: View {
-    let mint: (PostDetailView.ShareLinkAction) async -> Void
+    let mint: @MainActor (PostDetailView.ShareLinkAction) async -> Void
 
     var body: some View {
         Button {

@@ -76,7 +76,10 @@ final class PickedMediaIngestionGuardTests: XCTestCase {
                 }
             }
         }
-        XCTAssertGreaterThanOrEqual(videoPickers, 10, "le balayage ne voit presque aucun sélecteur vidéo : la garde est aveugle")
+        // 10 -> 5 (#15629) : l'atelier du SDK a quitté le dépôt avec ses trois fichiers de sélecteurs
+        // (ComposerToolPanelHost, StoryComposerView+Media, StoryComposerBlankCanvasStarters). Le meuble,
+        // les commentaires, le fil de conversation et la barre du lecteur de story portent les cinq restants.
+        XCTAssertGreaterThanOrEqual(videoPickers, 5, "le balayage ne voit presque aucun sélecteur vidéo : la garde est aveugle")
         XCTAssertTrue(missing.isEmpty,
                       ".automatic laisse le système transcoder HEVC -> H.264 avant de livrer : \(missing.sorted())")
     }

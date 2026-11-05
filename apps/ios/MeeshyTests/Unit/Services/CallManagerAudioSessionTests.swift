@@ -4128,12 +4128,18 @@ final class CallManagerSurvivalControllerReconnectGuardTests: XCTestCase {
         guard let fnRange = source.range(of: "private func applySurvivalVideoSend(enabled: Bool) async -> Bool {") else {
             XCTFail("applySurvivalVideoSend not found"); return
         }
-        let fnBody = String(source[fnRange.upperBound...].prefix(800))
+        guard let preflightEnd = source.range(
+            of: "let inFlight = call.videoTransitionsInFlight()",
+            range: fnRange.upperBound..<source.endIndex
+        ) else {
+            XCTFail("Could not bound applySurvivalVideoSend's pre-flight guards"); return
+        }
+        let fnBody = String(source[fnRange.upperBound..<preflightEnd.lowerBound])
 
         // The guard must pattern-match on .reconnecting to detect that an ICE
         // restart is in progress.
         XCTAssertTrue(
-            fnBody.contains("case .reconnecting = callState"),
+            fnBody.contains("if case .reconnecting = call.callState { return false }"),
             "applySurvivalVideoSend must guard 'if case .reconnecting = call.callState { return false }' " +
             "to prevent SDP glare when the survival controller fires during ICE restart"
         )

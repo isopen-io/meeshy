@@ -33,6 +33,8 @@ import XCTest
 @MainActor
 final class CallManagerSurvivalHoldSuspendGuardSourceTests: XCTestCase {
 
+    /// `applySurvivalVideoSend(enabled:)` lives in `CallVideoSuspension`
+    /// (`CallCollaborators/`, #11522), which the CallManager unit sweeps.
     private func callManagerSource() throws -> String {
         return try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
     }
@@ -50,7 +52,7 @@ final class CallManagerSurvivalHoldSuspendGuardSourceTests: XCTestCase {
             XCTFail("Expected the .reconnecting pre-flight guard in applySurvivalVideoSend — file structure changed"); return
         }
         guard let endRange = source.range(
-            of: "let inFlight = videoTransitionsInFlight()",
+            of: "let inFlight = call.videoTransitionsInFlight()",
             range: reconnectingRange.upperBound..<source.endIndex
         ) else {
             XCTFail("Could not bound the pre-flight guard block"); return
