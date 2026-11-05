@@ -8,6 +8,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { MY_PROFILE_QUERY_KEY, type MyProfile } from '@/lib/api/profile';
 import { appQueryClient } from '@/lib/api/query-client';
+import { loadPackPreviewCatalog } from '@/lib/i18n-pack-preview-catalog';
 import { loadStickerPacksCatalog } from '@/lib/i18n-sticker-packs-catalog';
 import type { DecorItem } from '@/lib/packs/decor-items';
 import type { PackRef } from '@/lib/packs/use-pack-items';
@@ -29,6 +30,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadStickerPacksCatalog('fr');
+  await loadPackPreviewCatalog('fr');
 });
 
 afterAll(async () => {
