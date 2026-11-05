@@ -115,7 +115,7 @@ class AudioFullscreenLanguagesTest {
     }
 
     @Test
-    fun `ni piste ni offre : la ligne n existe pas`() {
+    fun `sans piste ni offre la ligne n existe pas`() {
         showStrip(voice(translated = emptyList()), FakeTranscriptPort(translatable = false))
 
         compose.onNodeWithTag(AUDIO_LANGUAGE_STRIP_TAG).assertDoesNotExist()
