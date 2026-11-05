@@ -79,6 +79,7 @@ internal fun PostScenesView(
     modifier: Modifier = Modifier,
     host: PostScenesHost = PostScenesHost.FEED,
     muted: Boolean = false,
+    imager: (() -> Unit)? = null,
 ) {
     val sound = host.locksMute || muted
     var readerAt by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -93,7 +94,7 @@ internal fun PostScenesView(
     }
     val start = readerAt
     if (start != null && reader != null) {
-        PostSceneReader(scenes = scenes, start = start, renderer = reader, onDismiss = { readerAt = null })
+        PostSceneReader(scenes = scenes, start = start, renderer = reader, imager = imager, onDismiss = { readerAt = null })
     }
 }
 
@@ -290,7 +291,7 @@ private const val READER_CAPTION_LINES = 4
  * laisser voir de l'écran du dessous ([FullScreenDialogWindow]) ; ses contrôles se posent sous la barre d'état.
  */
 @Composable
-private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSceneReaderRenderer, onDismiss: () -> Unit) {
+private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSceneReaderRenderer, imager: (() -> Unit)?, onDismiss: () -> Unit) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
@@ -315,7 +316,7 @@ private fun PostSceneReader(scenes: FeedPostScenes, start: Int, renderer: PostSc
                 modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(MeeshySpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                LocalPostSceneExportRenderer.current?.invoke(scenes.items, scenes.accentHex, Modifier)
+                LocalPostSceneExportRenderer.current?.invoke(scenes.items, scenes.accentHex, Modifier, imager?.let { open -> { onDismiss(); open() } })
                 IconButton(onClick = onDismiss) {
                     Box(
                         modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f)),

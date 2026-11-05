@@ -22,6 +22,16 @@ public object PostCardImaging {
         )
     }
 
+    public fun sceneCardOf(author: PostCommentCardAuthor, text: String, createdAtMillis: Long): PostCommentCardSubject =
+        PostCommentCardSubject(
+            quoted = null,
+            reply = PostCommentCardPart(nameOf(author), text.trim(), handleOf(author)),
+            thread = emptyList(),
+            sentAtMillis = createdAtMillis,
+            quotedAtMillis = null,
+            media = emptyList(),
+        )
+
     private val PostCommentCardPost.disappears: Boolean
         get() = type?.uppercase().let { it == "STORY" || it == "STATUS" }
 

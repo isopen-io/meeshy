@@ -13,6 +13,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.card.PostCommentCardPart
+import me.meeshy.sdk.model.card.PostCommentCardSubject
+import androidx.compose.ui.test.onNodeWithContentDescription
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -20,10 +23,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-/**
- * #14329 — les trois menus ⋯ d'une oeuvre composée offrent « Imager », qui remet ses scènes à la vue Imager : la carte de post
- * du fil, la carte de réel du fil, le détail d'un post. Une oeuvre sans scène n'offre aucune entrée.
- */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class PostImagerMenuComposeTest {
@@ -31,13 +30,19 @@ class PostImagerMenuComposeTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private val imaged = mutableListOf<PostImagerScenes>()
-    private val scenes = PostImagerScenes(listOf(StoryItem(id = "p1#scene-0"), StoryItem(id = "p1#scene-1")), accentHex = "6366F1")
+    private val imaged = mutableListOf<PostImagerRequest>()
+    private val card = PostCommentCardSubject(null, PostCommentCardPart("Awa", "Bonjour", "awa"), emptyList(), 0L, null, emptyList())
+    private val scenes = PostImagerRequest(
+        key = "post:p1",
+        card = card,
+        scenes = PostImagerScenes(listOf(StoryItem(id = "p1#scene-0"), StoryItem(id = "p1#scene-1")), accentHex = "6366F1"),
+    )
+    private val simple = PostImagerRequest(key = "post:p1", card = card)
 
     private fun show(content: @Composable () -> Unit) {
         compose.setContent {
             MeeshyTheme {
-                CompositionLocalProvider(LocalPostSceneImager provides { imaged += it }) {
+                CompositionLocalProvider(LocalPostCardImager provides { imaged += it }) {
                     Box(Modifier.width(360.dp)) { content() }
                 }
             }
@@ -57,7 +62,7 @@ class PostImagerMenuComposeTest {
 
     @Test
     fun `the feed card of a post at scene offers imager, which hands its scenes over`() {
-        card(feedPostPresentation().copy(imagerScenes = scenes))
+        card(feedPostPresentation().copy(imager = scenes))
 
         openMenuAndImager()
 
@@ -66,8 +71,8 @@ class PostImagerMenuComposeTest {
 
     @Test
     fun `the feed card of a composed reel offers imager`() {
-        val reelScenes = PostImagerScenes(listOf(StoryItem(id = "reel1")), accentHex = "FF0000")
-        card(feedPostPresentation(id = "reel1").copy(isReel = true, reelCover = ReelCover.Backdrop(isVideo = false), imagerScenes = reelScenes))
+        val reelScenes = PostImagerRequest("post:reel1", card, PostImagerScenes(listOf(StoryItem(id = "reel1")), accentHex = "FF0000"))
+        card(feedPostPresentation(id = "reel1").copy(isReel = true, reelCover = ReelCover.Backdrop(isVideo = false), imager = reelScenes))
 
         openMenuAndImager()
 
@@ -75,7 +80,7 @@ class PostImagerMenuComposeTest {
     }
 
     @Test
-    fun `a post without a composed work offers no imager entry`() {
+    fun `a post with nothing to image offers no imager entry`() {
         card(feedPostPresentation())
 
         compose.onAllNodesWithContentDescription("Post options")[0].performClick()
@@ -85,7 +90,7 @@ class PostImagerMenuComposeTest {
 
     @Test
     fun `the detail of a post at scene offers imager from its menu`() {
-        show { PostDetailImagerMenu(feedPostPresentation().copy(imagerScenes = scenes)) }
+        show { PostDetailImagerMenu(feedPostPresentation().copy(imager = scenes)) }
 
         openMenuAndImager()
 
@@ -93,12 +98,60 @@ class PostImagerMenuComposeTest {
     }
 
     @Test
-    fun `the detail of a post without scene and of a reel shows no menu of its own`() {
+    fun `the detail of a post with nothing to image and of a reel shows no menu of its own`() {
         show {
             PostDetailImagerMenu(feedPostPresentation())
-            PostDetailImagerMenu(feedPostPresentation().copy(isReel = true, reelCover = ReelCover.Backdrop(isVideo = false), imagerScenes = scenes))
+            PostDetailImagerMenu(feedPostPresentation().copy(isReel = true, reelCover = ReelCover.Backdrop(isVideo = false), imager = scenes))
         }
 
         compose.onAllNodesWithContentDescription("Post options").assertCountEquals(0)
+    }
+
+    @Test
+    fun `the menu of a simple post offers imager, which hands its card over`() {
+        card(feedPostPresentation().copy(imager = simple))
+
+        openMenuAndImager()
+
+        assertThat(imaged).containsExactly(simple)
+    }
+
+    @Test
+    fun `the action row of an imageable post carries the wand, a tap opens the card workshop`() {
+        card(feedPostPresentation().copy(imager = simple))
+
+        compose.onNodeWithContentDescription("Picture it").performClick()
+        compose.waitForIdle()
+
+        assertThat(imaged).containsExactly(simple)
+    }
+
+    @Test
+    fun `the action row of a post with nothing to image has no wand`() {
+        card(feedPostPresentation())
+
+        compose.onNodeWithContentDescription("Picture it").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the detail action row carries the wand after the bookmark`() {
+        show {
+            DetailStatsRow(
+                post = feedPostPresentation(),
+                isReposted = false,
+                onRepost = {},
+                onQuote = {},
+                onLike = {},
+                quickEmojis = emptyList(),
+                onReact = {},
+                onBookmark = {},
+                onImager = { imaged += simple },
+            )
+        }
+
+        compose.onNodeWithContentDescription("Picture it").performClick()
+        compose.waitForIdle()
+
+        assertThat(imaged).containsExactly(simple)
     }
 }
