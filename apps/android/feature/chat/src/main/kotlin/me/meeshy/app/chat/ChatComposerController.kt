@@ -29,7 +29,10 @@ import me.meeshy.sdk.mention.MentionContacts
 import me.meeshy.sdk.mention.MentionLookupDriver
 import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.mention.reset
+import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.ApiParticipant
+import me.meeshy.sdk.model.ArrivalGreeting
 import me.meeshy.sdk.model.composer.SendPlaceTileLaw
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.ComposerLanguageState
@@ -109,14 +112,39 @@ internal class ChatComposerController(
     /** The edited message's text, so an unchanged edit is dropped instead of sent (iOS `editingOriginalContent`). */
     private var editingOriginal: String? = null
 
+    /** Le pseudo de chaque participation du fil, pour saluer des arrivées groupées (#16338). */
+    private var usernameByParticipant: Map<String, String> = emptyMap()
+
     /**
      * Replaces the people of the conversation the `@mention` panel serves locally (its
      * participants) and the [context] the network is asked about from the third character
      * (#14053). A direct or group conversation only offers its members.
      */
-    fun updateMentionRoster(roster: List<MentionCandidate>, context: MentionContext? = null) {
+    fun updateMentionRoster(
+        roster: List<MentionCandidate>,
+        context: MentionContext? = null,
+        participants: List<ApiParticipant> = emptyList(),
+    ) {
         mentions.updateRoster(roster)
         mentions.bind(context ?: MentionContext.conversation(conversationId, conversationType = null, isMember = false))
+        usernameByParticipant = participants.mapNotNull { p -> p.username?.trim()?.takeIf { it.isNotEmpty() }?.let { p.id to it } }.toMap()
+    }
+
+    /**
+     * « Dis-lui salut » (#16338) : les `@mentions` des arrivants que [message] annonce s'écrivent à la suite du brouillon
+     * ([ArrivalGreeting]), puis le composeur prend le focus — même quand personne n'a de pseudo à écrire.
+     */
+    fun greetArrivals(message: ApiMessage?) {
+        val handles = message?.joinNotice?.let { listOfNotNull(ArrivalGreeting.handleOf(it, isOwn = false)) }
+            ?: message?.arrivalsNotice?.let { ArrivalGreeting.handlesOf(it, usernameByParticipant) }
+            .orEmpty()
+        val written = ArrivalGreeting.mentions(handles)?.let { ArrivalGreeting.inserted(composerText.text, it) }
+        if (written != null && written != composerText.text) {
+            composerText.replace(written)
+            mentions.onTextChange(written)
+            persistDraft(written, state.value.replyingToMessageId)
+        }
+        composerText.requestFocus()
     }
 
     /**

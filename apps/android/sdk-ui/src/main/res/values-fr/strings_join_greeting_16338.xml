@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- #16338 : l'invite de l'avis d'arrivée, qui écrit la @mention de l'arrivant dans le composeur. -->
+    <string name="bubble_joinNotice_sayHi">Dis-lui salut</string>
+</resources>

@@ -243,6 +243,8 @@ internal class ChatHostActions(
     val onPinnedBannerTap: () -> Unit,
     val openPinnedSheet: () -> Unit,
     val onMentionSelected: (MentionCandidate) -> Unit,
+    /** « Dis-lui salut » d'un message d'arrivée (#16338) : les @mentions des arrivants dans le composeur, et le focus. */
+    val greetArrivals: (messageId: String) -> Unit = {},
     val onDraftChange: (String) -> Unit,
     val onComposerLanguagePicked: (String) -> Unit,
     val send: () -> Unit,
@@ -375,6 +377,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     onPinnedBannerTap = this::onPinnedBannerTap,
     openPinnedSheet = this::openPinnedSheet,
     onMentionSelected = this::onMentionSelected,
+    greetArrivals = this::greetArrivals,
     onDraftChange = this::onDraftChange,
     onComposerLanguagePicked = this::onComposerLanguagePicked,
     send = this::send,
