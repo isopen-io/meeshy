@@ -33,6 +33,8 @@ const fakeDatabase = (docs: readonly Doc[], seed: readonly Index[] = [{ name: '_
     getIndexes: () => [...indexes],
     dropIndex: (name: string) => indexes.splice(indexes.findIndex((index) => index.name === name), 1),
     createIndex: (key: Record<string, number>, options: Omit<Index, 'key'>) => indexes.push({ key, ...options }),
+    countDocuments: (filter: { nameKey: null; displayName: { $ne: string } }) =>
+      docs.filter((doc) => (doc.nameKey ?? null) === filter.nameKey && doc.displayName !== filter.displayName.$ne).length,
     aggregate: (pipeline: readonly Stage[]) => {
       const groupAt = pipeline.findIndex((stage) => stage.$group);
       const match = pipeline.slice(0, groupAt).find((stage) => stage.$match)?.$match;
@@ -67,8 +69,8 @@ const shapeOf = (database: ReturnType<typeof fakeDatabase>) =>
     .map((index) => ({ key: index.key, unique: index.unique === true, partial: index.partialFilterExpression ?? null }));
 
 const LEGACY: readonly Doc[] = [
-  { userId: 'u1', displayName: 'Lens Lab' },
-  { userId: 'u2', displayName: 'Autre' },
+  { userId: 'u1', displayName: 'Éditeur' },
+  { userId: 'u2', displayName: 'Éditeur' },
   { userId: 'u3', slug: 'studio', nameKey: 'studio', displayName: 'Studio' },
 ];
 
@@ -110,6 +112,14 @@ describe('2026-11-05-partner-profile-publisher-indexes.mongodb.js', () => {
     expect(shapeOf(database)).toEqual([{ key: { nameKey: 1 }, unique: true, partial: { nameKey: { $type: 'string' } } }]);
     expect(printed.some((line) => line.includes('PartnerProfile_userId_key') && line.includes('doublon'))).toBe(true);
     expect(printed.some((line) => line.includes('PartnerProfile_slug_key') && line.includes('doublon'))).toBe(true);
+    expect(printed).toContain('quit 2');
+  });
+
+  it('refuse de poser l’index de nameKey tant qu’un profil nommé n’a pas de clé : le rattrapage des clés passe AVANT', () => {
+    const database = fakeDatabase([...LEGACY, { userId: 'u4', displayName: 'Lens Lab' }]);
+    const printed = run(database);
+    expect(shapeOf(database).map((index) => index.key)).toEqual([{ userId: 1 }, { slug: 1 }]);
+    expect(printed.some((line) => line.includes('PartnerProfile_nameKey_key') && line.includes('backfill-pack-publishers'))).toBe(true);
     expect(printed).toContain('quit 2');
   });
 

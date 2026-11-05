@@ -397,3 +397,22 @@ describe('le nom d’un éditeur : un seul site d’écriture, unique même sous
     expect(await publishers.backfillNameKeys()).toEqual({ keyed: 0, neutralized: 0 });
   });
 });
+
+describe('un ancien profil sans clé de nom détient son nom dès avant le rattrapage (revue de sécurité #16274)', () => {
+  it('une nouvelle revendication du nom d’un ancien profil « Studio Lumière » sans clé est refusée', async () => {
+    const { db, publishers } = setup();
+    db.profiles.push({ id: 'p-legacy', userId: BINTA, displayName: 'Studio Lumière', verifiedAt: new Date(), createdAt: new Date('2026-10-01T00:00:00Z'), updatedAt: new Date() });
+    expect(await publishers.authorizePublication(AWA, { author: 'studio lumiere', claimed: null })).toEqual({ kind: 'refused', reason: 'name-taken' });
+    expect(db.profiles.filter((row) => row.userId === AWA)).toEqual([]);
+  });
+
+  it('entre deux anciens profils au même nom, le plus ancien le garde au rattrapage', async () => {
+    const { db, publishers } = setup();
+    db.profiles.push(
+      { id: '68e000000000000000000009', userId: BINTA, displayName: 'lens-lab', verifiedAt: new Date(), createdAt: new Date('2026-10-02T00:00:00Z') },
+      { id: '68e000000000000000000008', userId: AWA, displayName: 'Lens Lab', verifiedAt: new Date(), createdAt: new Date('2026-10-01T00:00:00Z') },
+    );
+    await publishers.authorizePublication(BINTA, { author: 'x', claimed: null });
+    expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ displayName: 'Éditeur', nameKey: null });
+  });
+});
