@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.socket
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.send.AttachmentRightRefusal
 
 /**
  * L'accusé de `message:send` / `message:send-with-attachments` (miroir de `SendMessageAck`, iOS) : l'identifiant
@@ -35,7 +36,7 @@ fun ApiMessage.acknowledgedBy(ack: SendMessageAck): ApiMessage =
 
 /**
  * Quand l'échec du REST autorise le repli socket : un échec de transport (`NETWORK`, aucun statut) ou un 5xx — jamais un 4xx,
- * que la socket rejouerait à l'identique. Un refus DÉFINITIF de la socket (conversation fermée, non-participant) abandonne la ligne.
+ * que la socket rejouerait à l'identique. Un refus DÉFINITIF de la socket (conversation fermée, non-participant, droit de pièce jointe #16053) abandonne la ligne.
  */
 object SocketSendFallbackPolicy {
     private const val NETWORK_CODE = "NETWORK"
@@ -44,5 +45,6 @@ object SocketSendFallbackPolicy {
         if (httpStatus == null) code == NETWORK_CODE else httpStatus in 500..599
 
     fun isDefinitive(refusal: SocketAckRefusal): Boolean =
-        refusal.code == SocketAckCodes.CONVERSATION_CLOSED || refusal.code == SocketAckCodes.NOT_A_PARTICIPANT
+        refusal.code == SocketAckCodes.CONVERSATION_CLOSED || refusal.code == SocketAckCodes.NOT_A_PARTICIPANT ||
+            AttachmentRightRefusal.isCode(refusal.code)
 }

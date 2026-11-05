@@ -14,20 +14,26 @@ import me.meeshy.ui.icons.MeeshyIcons
  * **Pourquoi un envoi échoué ne se renvoie pas** : le lieu d'un fichier ne peut pas être retiré (#13550), ou son média s'est
  * perdu sur l'appareil (#13554). Dans les deux cas la bulle le DIT, et son geste n'est plus « renvoyer » — le même échec
  * reviendrait à chaque essai — mais « retirer », pour que l'auteur choisisse de nouveau le fichier. Partagé par la bulle
- * standard et la rangée plate.
+ * standard et la rangée plate. Le droit de joindre ce type de pièce manque (#16053) : la bulle le DIT aussi, mais son geste reste
+ * « renvoyer », car le droit peut venir.
  */
 internal enum class BubbleFailure {
     RETRY,
     LOCATION_REFUSED,
     MEDIA_LOST,
+    ATTACHMENT_RIGHT,
     ;
 
-    val removes: Boolean get() = this != RETRY
+    val removes: Boolean get() = this == LOCATION_REFUSED || this == MEDIA_LOST
+
+    /** La bulle dit pourquoi elle n'est pas partie : tout échec sauf celui qu'un essai répare. */
+    val explains: Boolean get() = this != RETRY
 
     companion object {
         fun of(content: BubbleContent): BubbleFailure = when {
             content.isLocationRefused -> LOCATION_REFUSED
             content.isMediaLost -> MEDIA_LOST
+            content.isAttachmentRightRefused -> ATTACHMENT_RIGHT
             else -> RETRY
         }
     }
@@ -48,6 +54,7 @@ internal fun BubbleFailureCaption(failure: BubbleFailure, color: Color, modifier
         BubbleFailure.RETRY -> return
         BubbleFailure.LOCATION_REFUSED -> R.string.bubble_failed_location_refused
         BubbleFailure.MEDIA_LOST -> R.string.bubble_failed_media_lost
+        BubbleFailure.ATTACHMENT_RIGHT -> R.string.bubble_failed_attachment_right
     }
     Text(
         text = stringResource(text),

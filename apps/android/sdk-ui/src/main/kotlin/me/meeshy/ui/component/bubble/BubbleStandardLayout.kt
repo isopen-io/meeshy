@@ -308,7 +308,7 @@ private fun BubbleFailedRetryEdge(
     Box {
         Column(modifier = Modifier.padding(end = RetryBandWidth)) {
             content()
-            if (failure.removes) {
+            if (failure.explains) {
                 BubbleFailureCaption(
                     failure = failure,
                     color = onColor,
