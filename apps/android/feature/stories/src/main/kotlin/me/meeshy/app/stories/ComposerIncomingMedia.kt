@@ -66,20 +66,37 @@ internal data class IncomingMediaPlaceholder(
     val isVideo: Boolean = false,
 )
 
+/**
+ * Ce que le choix dit d'un média AVANT que sa copie existe (#16205, iOS `ComposerSceneIntake.thumbnail`) : s'il est une
+ * vidéo, et pour une photo l'adresse choisie, que Coil décode à la taille de l'espace réservé. Une vidéo n'a pas de vignette
+ * tant qu'elle n'est pas copiée : une forme neutre, mais qui dit « Chargement de la vidéo… ».
+ */
+@Immutable
+data class IncomingMediaHint(val preview: Any?, val isVideo: Boolean) {
+    companion object {
+        fun of(picked: Any, mimeType: String?): IncomingMediaHint {
+            val isVideo = mimeType?.startsWith("video", ignoreCase = true) == true
+            return IncomingMediaHint(preview = picked.takeUnless { isVideo }, isVideo = isVideo)
+        }
+    }
+}
+
 /** L'espace réservé de la sélection en cours d'envoi, ou `null` quand rien n'entre : il part dans l'image où l'envoi s'achève. */
 internal fun StoryComposerUiState.incomingPlaceholder(): IncomingMediaPlaceholder? {
     if (!isPreparingMedia) return null
     val first = mediaLandings.firstOrNull() ?: return null
     val at = deck.nextObjectPosition().takeIf { first.role == ComposerMediaRole.FOREGROUND }
     val item = incomingMedia.firstOrNull()
+    val hint = incomingHints.firstOrNull()
+    val itemIsVideo = item?.mimeType?.startsWith("video", ignoreCase = true)
     return IncomingMediaPlaceholder(
         fillsScene = first.role == ComposerMediaRole.BACKGROUND && !first.newSlide,
         x = at?.x ?: CENTER,
         y = at?.y ?: CENTER,
-        preview = item?.takeUnless { it.mimeType.startsWith("video", ignoreCase = true) }?.previewModel,
+        preview = if (item != null) item.takeUnless { itemIsVideo == true }?.previewModel else hint?.preview,
         fraction = incomingFraction(uploadingMedia, incomingMedia),
         more = mediaLandings.size - 1,
-        isVideo = item?.mimeType?.startsWith("video", ignoreCase = true) == true,
+        isVideo = itemIsVideo ?: hint?.isVideo ?: false,
     )
 }
 

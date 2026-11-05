@@ -257,7 +257,8 @@ private fun rememberStoryMediaPickers(mode: StoryMediaPickMode, viewModel: Story
         replacing = null
         if (uris.isEmpty()) return
         val app = context.applicationContext
-        viewModel.onMediaChosen(uris.size, asBackground = asBackground, replacing = replaced) {
+        val hints = uris.map { uri -> IncomingMediaHint.of(uri, app.contentResolver.getType(uri)) }
+        viewModel.onMediaChosen(uris.size, asBackground = asBackground, replacing = replaced, hints = hints) {
             withContext(Dispatchers.IO) { uris.mapNotNull { app.readMediaUploadItem(it) } }
         }
     }
