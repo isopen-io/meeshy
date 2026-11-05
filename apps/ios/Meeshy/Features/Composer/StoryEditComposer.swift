@@ -57,8 +57,8 @@ struct StoryEditSession: Identifiable {
 extension View {
     /// Cover du composer en mode ÉDITION — partagé par le tray, la mini trail
     /// épinglée et les deux racines. Le publish route vers
-    /// `StoryViewModel.updateStoryInBackground` (PUT + reset d'engagement
-    /// serveur) au lieu de `publishStoryInBackground`.
+    /// `StoryViewModel.updateStoryInBackground` (PUT qui met l'existant à
+    /// jour et garde ses vues, #16386) au lieu de `publishStoryInBackground`.
     func storyEditComposerCover(
         session: Binding<StoryEditSession?>,
         viewModel: StoryViewModel

@@ -330,6 +330,20 @@ final class PublicationViewersHeaderTests: XCTestCase {
         )
         XCTAssertEqual(counts.views, 3, "trois personnes listées ont au moins fait trois vues")
     }
+
+    /// #16386 — l'en-tête liste vues (œil), réactions, commentaires et
+    /// impressions, dans cet ordre ; un compteur inconnu ne se dessine pas, un
+    /// zéro connu se dit.
+    func test_stats_listViewsReactionsCommentsImpressions_inOrder() {
+        let stats = PublicationViewersHeader.stats(views: 4, impressions: 9, reactions: 2, comments: 1)
+        XCTAssertEqual(stats.map(\.kind), [.views, .reactions, .comments, .impressions])
+        XCTAssertEqual(stats.map(\.count), [4, 2, 1, 9])
+    }
+
+    func test_stats_unknownCountsAreOmitted_knownZeroIsKept() {
+        let stats = PublicationViewersHeader.stats(views: 0, impressions: 0, reactions: nil, comments: 0)
+        XCTAssertEqual(stats.map(\.kind), [.views, .comments, .impressions])
+    }
 }
 
 /// QUI peut ouvrir « Vues » (#9727, décision porteur 2026-10-09) — miroir de
