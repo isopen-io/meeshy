@@ -99,6 +99,16 @@ object MessageTranscriptionFiche {
         }
     }
 
+    /**
+     * La piste parlée d'une traduction se joue-t-elle PROTÉGÉE (jamais écrite sur le disque) ? Message introuvable,
+     * conversation de bout en bout, message protégé ([VoiceQueueProtection.ofMessage]) ou l'une de ses pièces
+     * ([VoiceQueueProtection.ofPiece]) : oui. Fermée par défaut.
+     */
+    fun playbackIsProtected(message: ApiMessage?, conversationIsEndToEnd: Boolean): Boolean =
+        message == null || conversationIsEndToEnd ||
+            VoiceQueueProtection.ofMessage(message) ||
+            message.attachments.orEmpty().any { VoiceQueueProtection.ofPiece(it, message) }
+
     private fun translationsOf(
         attachment: ApiMessageAttachment,
         preferences: LanguageResolver.ContentLanguagePreferences,

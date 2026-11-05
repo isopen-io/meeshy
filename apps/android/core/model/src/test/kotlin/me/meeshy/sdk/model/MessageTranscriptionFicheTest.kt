@@ -188,4 +188,52 @@ class MessageTranscriptionFicheTest {
         assertThat(state.translations.associate { it.language to it.audioUrl })
             .containsExactly("fr", "https://cdn/fr.mp3", "es", null, "it", null)
     }
+    private fun carrier(piece: ApiMessageAttachment = voice(), vararg flags: Pair<String, Any>): ApiMessage {
+        val base = ApiMessage(id = "m", conversationId = "c", attachments = listOf(piece))
+        return flags.fold(base) { message, (flag, value) ->
+            when (flag) {
+                "viewOnce" -> message.copy(isViewOnce = value as Boolean)
+                "blurred" -> message.copy(isBlurred = value as Boolean)
+                "expiresAt" -> message.copy(expiresAt = value as String)
+                "encrypted" -> message.copy(isEncrypted = value as Boolean)
+                "mode" -> message.copy(encryptionMode = value as String)
+                else -> error(flag)
+            }
+        }
+    }
+
+    @Test
+    fun `an ordinary message lets its spoken translation play through the disk cache`() {
+        assertThat(MessageTranscriptionFiche.playbackIsProtected(carrier(), conversationIsEndToEnd = false)).isFalse()
+    }
+
+    @Test
+    fun `an unknown message plays its spoken translation protected`() {
+        assertThat(MessageTranscriptionFiche.playbackIsProtected(null, conversationIsEndToEnd = false)).isTrue()
+    }
+
+    @Test
+    fun `a view once, blurred, ephemeral or encrypted message plays its spoken translation protected`() {
+        listOf(
+            carrier(flags = arrayOf("viewOnce" to true)),
+            carrier(flags = arrayOf("blurred" to true)),
+            carrier(flags = arrayOf("expiresAt" to "2026-11-06T00:00:00Z")),
+            carrier(flags = arrayOf("encrypted" to true)),
+            carrier(flags = arrayOf("mode" to "e2ee")),
+        ).forEach { message ->
+            assertThat(MessageTranscriptionFiche.playbackIsProtected(message, conversationIsEndToEnd = false)).isTrue()
+        }
+    }
+
+    @Test
+    fun `a protected piece in an ordinary message plays its spoken translation protected`() {
+        listOf(voice().copy(isViewOnce = true), voice().copy(isBlurred = true)).forEach { piece ->
+            assertThat(MessageTranscriptionFiche.playbackIsProtected(carrier(piece), conversationIsEndToEnd = false)).isTrue()
+        }
+    }
+
+    @Test
+    fun `an end to end conversation plays every spoken translation protected`() {
+        assertThat(MessageTranscriptionFiche.playbackIsProtected(carrier(), conversationIsEndToEnd = true)).isTrue()
+    }
 }

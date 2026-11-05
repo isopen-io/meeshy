@@ -867,9 +867,9 @@ class ChatViewModel @Inject constructor(
     /** « Réessayer » le transfert en échec, dans le mode demandé (ouvrir, partager, enregistrer). */
     fun retryFileDownload() = fileDownload.retry()
 
-    /** Les pièces d'un message chargé ; vide s'il a quitté la fenêtre du fil. */
-    internal fun attachmentsOf(messageId: String): List<ApiMessageAttachment> =
-        latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.attachments.orEmpty()
+    /** Un message chargé tel que le serveur le sert ; `null` s'il a quitté la fenêtre du fil. */
+    internal fun messageOf(messageId: String): ApiMessage? =
+        latestMessages.value.firstOrNull { it.message.id == messageId }?.message
 
     /** L'aperçu d'UNE pièce pour l'appui long sur une tuile ; `null` ⇒ le message est protégé, le geste vise le message entier. */
     internal fun pieceOverlayFor(messageId: String, attachmentId: String): PieceOverlayModel? =

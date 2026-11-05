@@ -397,7 +397,13 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     is MessageDetailRoute.Sentiment -> MessageSentimentSheet(target, accentColor, sheetModifier)
                     is MessageDetailRoute.Map -> MessageMapSheet(target, state.accentColorHex, sheetModifier)
                     is MessageDetailRoute.Transcription ->
-                        MessageTranscriptionSheet(route.messageId, actions.attachmentsOf(route.messageId), accentColor, sheetModifier)
+                        MessageTranscriptionSheet(
+                            messageId = route.messageId,
+                            attachments = actions.attachmentsOf(route.messageId),
+                            isProtected = actions.transcriptionPlaybackProtected(route.messageId),
+                            accentColor = accentColor,
+                            modifier = sheetModifier,
+                        )
                     else -> Unit
                 }
             }

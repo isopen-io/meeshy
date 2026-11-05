@@ -67,6 +67,7 @@ import me.meeshy.ui.theme.hexColor
 internal fun MessageTranscriptionSheet(
     messageId: String,
     attachments: List<ApiMessageAttachment>,
+    isProtected: Boolean,
     accentColor: Color,
     modifier: Modifier = Modifier,
     viewModel: MessageTranscriptionViewModel = hiltViewModel(),
@@ -109,7 +110,7 @@ internal fun MessageTranscriptionSheet(
             }
             is State.Ready -> TranscriptionReady(state, accentColor) { translation, url ->
                 haptics.light()
-                viewModel.playTranslation(messageId, translation.language, url)
+                viewModel.playTranslation(messageId, translation.language, url, isProtected)
             }
         }
     }

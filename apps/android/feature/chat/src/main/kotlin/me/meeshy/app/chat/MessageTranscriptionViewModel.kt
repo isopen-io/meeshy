@@ -37,9 +37,13 @@ class MessageTranscriptionViewModel @Inject constructor(
         viewModelScope.launch { tracker.request(messageId, attachmentId) }
     }
 
-    /** Joue la piste parlée d'une traduction au toucher ; une autre piste en cours s'arrête (le moteur est unique). */
-    fun playTranslation(messageId: String, language: String, url: String) {
-        startedPlayback = playback.play(attachmentId = "$messageId:tts:$language", url = url, isProtected = false) || startedPlayback
+    /**
+     * Joue la piste parlée d'une traduction au toucher ; une autre piste en cours s'arrête (le moteur est unique).
+     * [isProtected] est la protection RÉELLE du message ([me.meeshy.sdk.model.MessageTranscriptionFiche.playbackIsProtected]) :
+     * protégée, la piste ne s'écrit jamais sur le disque.
+     */
+    fun playTranslation(messageId: String, language: String, url: String, isProtected: Boolean) {
+        startedPlayback = playback.play(attachmentId = "$messageId:tts:$language", url = url, isProtected = isProtected) || startedPlayback
     }
 
     private var startedPlayback = false
