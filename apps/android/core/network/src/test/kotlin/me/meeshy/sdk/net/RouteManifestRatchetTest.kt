@@ -119,8 +119,10 @@ class RouteManifestRatchetTest {
          * nouveau lien, invitation, débannissement, vider l'historique) : le lot les a portées sans les retirer d'ici.
          * 126 : moins `GET /messages/:messageId/translations` (l'explorateur de langues d'un message lit toutes ses traductions),
          * que porte `MessageChatRestApi.translations`.
+         * 128 : plus `GET /publishers/:slug` et `GET /publishers/me` (#16378 : un éditeur de packs est un compte Meeshy
+         * vérifié), servies par la passerelle ; la boutique d'Android les portera. `GET /publishers/admin` est console.
          */
-        const val TO_PORT_CEILING = 126
+        const val TO_PORT_CEILING = 128
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
