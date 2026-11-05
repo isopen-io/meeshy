@@ -9,21 +9,39 @@ import MeeshyUI
 /// jusqu'à lui et le met en évidence.
 enum SettingsFocus: String, Equatable, CaseIterable {
     /// Consentement vocal (transcription et traduction des vocaux) : le
-    /// profil vocal, dont l'assistant recueille le consentement.
+    /// profil vocal, dont la GESTION s'ouvre directement (#16418).
     case voiceProfile
+    /// Aucun consentement vocal, donc aucun profil : l'ASSISTANT, qui recueille
+    /// le consentement, s'ouvre directement (#16418).
+    case voiceProfileCreation
+    /// La transcription des vocaux, quand c'est elle qui manque (#16418).
+    case transcription
     /// Master PIN des conversations verrouillées : Réglages ▸ Sécurité.
     case masterPin
+
+    /// La feuille que les Réglages ouvrent d'eux-mêmes pour ce réglage.
+    enum Sheet: Equatable { case voiceProfileManage, voiceProfileWizard }
 
     /// L'ancre de la section de l'écran Réglages où vit le réglage.
     var settingsAnchor: String {
         switch self {
-        case .voiceProfile: return "settings.section.voice"
+        case .voiceProfile, .voiceProfileCreation: return "settings.section.voice"
+        case .transcription: return "settings.section.transcription"
         case .masterPin: return "settings.section.account"
         }
     }
 
     /// Le réglage vit dans l'écran Sécurité, ouvert par-dessus les Réglages.
     var opensSecurity: Bool { self == .masterPin }
+
+    /// La configuration de la voix s'ouvre DIRECTEMENT, sans second toucher.
+    var opensSheet: Sheet? {
+        switch self {
+        case .voiceProfile: return .voiceProfileManage
+        case .voiceProfileCreation: return .voiceProfileWizard
+        case .transcription, .masterPin: return nil
+        }
+    }
 }
 
 /// La demande en attente, posée par l'invite et CONSOMMÉE une fois par l'écran

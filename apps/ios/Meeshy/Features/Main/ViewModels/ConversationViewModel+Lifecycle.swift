@@ -89,16 +89,16 @@ extension ConversationViewModel {
 
     // MARK: - Consentement vocal
 
-    private func loadVoiceConsentStatus() {
-        let gate = collaborators.voiceConsent
-        if gate.isKnownGranted {
-            voiceConsentMissing = false
-            return
-        }
-        Task { [weak self] in
-            let missing = await gate.fetchMissing()
-            self?.voiceConsentMissing = missing
-        }
+    /// Chaque `.task` de la vue (réapparition) relit ; le retour au premier
+    /// plan aussi (#16418).
+    private func watchVoiceConsent() {
+        collaborators.voiceConsentRefresher.observeForeground { [weak self] in self?.refreshVoiceConsentStatus() }
+        refreshVoiceConsentStatus()
+    }
+
+    @discardableResult
+    func refreshVoiceConsentStatus() -> Task<Void, Never>? {
+        collaborators.voiceConsentRefresher.refresh { [weak self] in self?.voiceConsentMissing = $0 }
     }
 
     /// Validation du popup de traduction automatique à l'envoi d'un audio
@@ -121,6 +121,7 @@ extension ConversationViewModel {
         let grant: @MainActor () async throws -> Void = grant ?? { try await gate.grant() }
         let toast: FeedbackToastSurfacing = toast ?? FeedbackToastManager.shared
         let consentMissingBeforeGrant = voiceConsentMissing
+        collaborators.voiceConsentRefresher.supersede()
         voiceConsentMissing = false
         return Task { [weak self] in
             do {
@@ -163,6 +164,7 @@ extension ConversationViewModel {
     func start() {
         // #10830 — le `.task` qui ramène l'écran réarme son rattrapage.
         ConversationCatchUpGate.shared.arrive(self)
+        watchVoiceConsent()
         guard !hasStarted else { return }
         hasStarted = true
         ExplicitUnreadMarks.clear(conversationId) // rouvrir, c'est relire : la marque d'un « non lu » ne vaut plus
@@ -223,7 +225,6 @@ extension ConversationViewModel {
         subscribeToAudioCoordinatorFinishedEvents()
         mirrorMessagesIntoStateStore()
         hydrateCurrentConversationFromCache()
-        loadVoiceConsentStatus()
         // Cross-conversation unread aggregator powers the back-button pill.
         // `setCurrentlyOpenConversation(conversationId)` (called above) makes the
         // sync engine EXCLUDE this conversation from `totalConversationsUnread`,

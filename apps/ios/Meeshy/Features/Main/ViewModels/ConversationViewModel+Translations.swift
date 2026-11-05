@@ -218,10 +218,7 @@ extension ConversationViewModel {
             )
             setActiveAudioLanguage(for: messageId, language: targetLanguage)
         } catch {
-            let message = (error as? AttachmentConsentError)?.message ?? error.localizedDescription
-            translationRequestFailed.send(.init(
-                messageId: messageId, language: targetLanguage, kind: .audio, message: message
-            ))
+            translationRequestFailed.send(.audio(messageId: messageId, language: targetLanguage, error: error))
         }
     }
 

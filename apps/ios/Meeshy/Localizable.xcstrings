@@ -30751,6 +30751,53 @@
         }
       }
     },
+    "conversation.voiceConsent.configure": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعداد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einrichten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configure"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configurar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configurer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configurar"
+          }
+        }
+      }
+    },
     "e2ee.deviceLimit.confirm": {
       "extractionState": "manual",
       "localizations": {
@@ -57050,43 +57097,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التفعيل في الإعدادات"
+            "value": "إعداد صوتي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "In Einstellungen aktivieren"
+            "value": "Meine Stimme einrichten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enable in Settings"
+            "value": "Set up my voice"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activar en Ajustes"
+            "value": "Configurar mi voz"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activer dans les Réglages"
+            "value": "Configurer ma voix"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Attiva nelle Impostazioni"
+            "value": "Configura la mia voce"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ativar nas Configurações"
+            "value": "Configurar minha voz"
           }
         }
       }
@@ -158817,6 +158864,100 @@
         }
       }
     },
+    "settings.transcription.mine": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخ رسائلي الصوتية نصًّا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Sprachnachrichten transkribieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcribe my voice messages"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcribir mis mensajes de voz"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcrire mes messages vocaux"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trascrivi i miei messaggi vocali"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcrever minhas mensagens de voz"
+          }
+        }
+      }
+    },
+    "settings.transcription.mine.footer": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تُنسَخ رسائلك الصوتية نصًّا لتُترجَم إلى لغة كل مستلم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Sprachnachrichten werden transkribiert, um sie in die Sprache jedes Empfängers zu übersetzen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your voice messages are transcribed so they can be translated into each recipient's language."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus mensajes de voz se transcriben para traducirlos al idioma de cada destinatario."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos messages vocaux sont transcrits pour être traduits dans la langue de chaque destinataire."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi messaggi vocali vengono trascritti per essere tradotti nella lingua di ogni destinatario."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suas mensagens de voz são transcritas para serem traduzidas no idioma de cada destinatário."
+          }
+        }
+      }
+    },
     "share.post.shareText": {
       "localizations": {
         "ar": {
@@ -213666,6 +213807,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enviando %1$lld/%2$lld amostras"
+          }
+        }
+      }
+    },
+    "voice.setup.configure": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعداد صوتي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Stimme einrichten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up my voice"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configurar mi voz"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configurer ma voix"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configura la mia voce"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configurar minha voz"
+          }
+        }
+      }
+    },
+    "voice.setup.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح إعدادات صوتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet die Einstellungen deiner Stimme"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens your voice settings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre la configuración de tu voz"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvre la configuration de votre voix"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apre la configurazione della tua voce"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre a configuração da sua voz"
           }
         }
       }
