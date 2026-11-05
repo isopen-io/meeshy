@@ -39,9 +39,12 @@ class AvatarRingResolverProviderTest {
     }
 
     @Test
-    fun `un contour adresse par contrat hors embarque ne se peint pas, jamais en erreur`() {
-        val resolver = avatarRingResolver(catalogWithRing())
+    fun `un contour adresse par contrat hors embarque ne se peint pas tant que son contrat manque, et il le demande`() {
+        val requested = mutableListOf<String>()
+        val resolver = avatarRingResolver(catalogWithRing(), requested::add)
+        val served = ServedProfileDecorItem("contours-noel", "filet", PackOrigin.OFFICIAL, contract = "abcdef0123456789.json")
 
-        assertThat(resolver.resolve(equipped.copy(origin = PackOrigin.OFFICIAL, contract = "abcdef0123456789.json"))).isNull()
+        assertThat(resolver.resolve(served)).isNull()
+        assertThat(requested).containsExactly("abcdef0123456789.json")
     }
 }

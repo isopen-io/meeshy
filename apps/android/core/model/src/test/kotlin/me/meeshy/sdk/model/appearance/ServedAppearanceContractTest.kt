@@ -238,12 +238,45 @@ class ServedAppearanceContractTest {
     }
 
     @Test
-    fun `un decor officiel embarque qui porte aussi son contrat se peint depuis l apk`() {
+    fun `un modele adresse par contrat ne se peint jamais depuis un pack du meme slug, dont la version peut differer`() {
         val pack = catalog.ringPacks.first()
         val item = ServedProfileDecorItem(pack.slug, pack.rings.first().key, PackOrigin.OFFICIAL, contract = "0123456789abcdef.json")
 
-        assertThat(ProfileDecorResolver.ring(item, catalog)?.key).isEqualTo(pack.rings.first().key)
-        assertThat(ProfileDecorResolver.missingContracts(ServedProfileDecor(avatarRing = item), catalog)).isEmpty()
+        assertThat(ProfileDecorResolver.ring(item, catalog)).isNull()
+        assertThat(ProfileDecorResolver.missingContracts(ServedProfileDecor(avatarRing = item), catalog)).containsExactly("0123456789abcdef.json")
+    }
+
+    // endregion
+
+    // region Résumé servi par /packs/<domaine>/installed
+
+    @Test
+    fun `le resume d un pack installe porte son origine, son contrat et ses noms`() {
+        val sha = sha256(ringText)
+        val text = """[{"slug":"contours-noel","installed":true,"origin":"official","name":"Noël",""" +
+            """"names":{"en":{"name":"Christmas","description":""}},""" +
+            """"contract":{"src":"${sha.take(16)}.json","bytes":${ringText.length},"sha256":"$sha"}},""" +
+            """{"slug":"contours-essentiels","installed":true,"origin":"builtin","contract":{"src":"pas-adresse","bytes":1,"sha256":"x"}}]"""
+
+        val packs = AppearanceFixtures.json.decodeFromString(InstalledPackList.serializer(), text).packs
+
+        assertThat(packs.map { it.slug }).containsExactly("contours-noel", "contours-essentiels").inOrder()
+        assertThat(packs[0].contract?.src).isEqualTo(address(ringText))
+        assertThat(packs[0].isServed).isTrue()
+        assertThat(packs[0].localizedNames).containsExactly("fr", "Noël", "en", "Christmas")
+        assertThat(packs[1].contract).isNull()
+        assertThat(packs[1].isServed).isFalse()
+    }
+
+    @Test
+    fun `un pack servi non possede, retire ou d un ancien serveur sans origine ne se peint pas depuis un contrat`() {
+        val ref = checkNotNull(me.meeshy.sdk.model.pack.PackAssetRef.of(address(ringText), ringText.length.toLong(), sha256(ringText)))
+        val base = InstalledPackSummary(slug = "contours-noel", installed = true, origin = "official", contract = ref)
+
+        assertThat(base.isServed).isTrue()
+        assertThat(base.copy(owned = false, price = 50).isServed).isFalse()
+        assertThat(base.copy(installed = false).isServed).isFalse()
+        assertThat(base.copy(origin = null).isServed).isFalse()
     }
 
     // endregion
