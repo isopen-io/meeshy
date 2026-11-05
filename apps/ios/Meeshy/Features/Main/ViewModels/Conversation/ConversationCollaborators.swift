@@ -7,6 +7,7 @@ import MeeshySDK
 struct ConversationCollaborators {
     let readReceipts: any ConversationReadReceiptSenderProviding
     let voiceConsent: any VoiceConsentGateProviding
+    let voiceConsentRefresher: VoiceConsentRefresher
     let cacheReader: any ConversationCacheReaderProviding
     let windowFetcher: any ConversationWindowFetcherProviding
     let stager: any OptimisticMessageStagerProviding
@@ -34,6 +35,7 @@ struct ConversationCollaborators {
     ) {
         self.readReceipts = readReceipts ?? ConversationReadReceiptSender(syncEngine: syncEngine)
         self.voiceConsent = voiceConsent ?? VoiceConsentGate()
+        self.voiceConsentRefresher = VoiceConsentRefresher(gate: self.voiceConsent)
         self.cacheReader = cacheReader ?? ConversationCacheReader()
         self.windowFetcher = windowFetcher ?? ConversationWindowFetcher(messageService: messageService, persistence: persistence)
         self.stager = stager ?? OptimisticMessageStager(persistence: persistence)

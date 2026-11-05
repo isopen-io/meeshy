@@ -37,7 +37,7 @@ final class SettingsFocusTests: XCTestCase {
     /// fermeture passée à un bouton.
     func test_settingsInvites_requestTheirFocus() throws {
         let consent = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/MessageListViewController+MessageCellHandlers.swift")
-        XCTAssertTrue(consent.contains("SettingsFocusRequest.shared.request(.voiceProfile)"))
+        XCTAssertTrue(consent.contains("VoiceSetupLauncher.open(.voice)"), "#16418 — la note passe par la loi de destination")
         let pin = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ConversationListView+Presentations.swift")
         XCTAssertTrue(pin.contains("SettingsFocusRequest.shared.request(.masterPin)"))
     }
