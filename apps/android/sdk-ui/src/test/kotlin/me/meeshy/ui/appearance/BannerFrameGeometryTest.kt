@@ -8,8 +8,8 @@ import me.meeshy.sdk.model.appearance.BannerFrameRenderer
 import org.junit.Test
 
 /**
- * Les 22 packs embarqués — les 7 packs de cadres (2 chacun), les bannières illustrées, culturelles et de Noël, et les
- * bordures « par Meeshy » — se mettent en place au gabarit 300 x 100 du catalogue.
+ * Les 25 packs embarqués — les 7 packs de cadres (2 chacun), les bannières illustrées, culturelles et de Noël, les
+ * bordures « par Meeshy » et les offres de Noël et du Nouvel An — se mettent en place au gabarit 300 x 100 du catalogue.
  */
 class BannerFrameGeometryTest {
 
