@@ -404,10 +404,10 @@ enum GameLawVectorEvaluator {
 
     private static func chest(_ input: GameJSON) -> GameJSON {
         let chest = GameChest.daily(userId: string(input, "userId"), dayKey: string(input, "dayKey"), effort: int(input, "effort"),
-                                    nextMeeshPrice: int(input, "nextMeeshPrice"))
+                                    nextMeeshPrice: int(input, "nextMeeshPrice"), elapsedHours: int(input, "elapsedHours"))
         return object([
             "points": .int(chest.points), "fragment": .bool(chest.fragment), "freeze": .bool(chest.freeze),
-            "glory": .int(chest.glory), "bonus": .string((chest.bonus ?? .noBonus).rawValue), "bonusPoints": .int(chest.bonusPoints),
+            "glory": .int(chest.glory), "earlyGlory": .int(chest.earlyGlory ?? 0), "bonus": .string((chest.bonus ?? .noBonus).rawValue), "bonusPoints": .int(chest.bonusPoints),
         ])
     }
 

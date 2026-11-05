@@ -73,9 +73,8 @@ struct SettingsFocusHighlight: ViewModifier {
 
     private func light() {
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35).repeatCount(3, autoreverses: true)) { lit = true }
-        Task { @MainActor in
-            do { try await Task.sleep(for: .milliseconds(2200)) } catch { return }
+        Task { await DelayedUI.perform(after: .milliseconds(2200)) {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) { lit = false }
-        }
+        } }
     }
 }

@@ -123,9 +123,6 @@ class GameGloryTest {
         assertThat(MissionDifficulty.entries.map(GloryLaws::gloryForMission)).containsExactly(40, 100, 250, 500).inOrder()
         assertThat(GloryLaws.AchievementRarity.entries.map(GloryLaws::gloryForAchievement))
             .containsExactly(100, 250, 600, 1500, 4000).inOrder()
-        assertThat(GloryLaws.gloryForChest(100)).isEqualTo(10)
-        assertThat(GloryLaws.gloryForChest(10_000)).isEqualTo(1000)
-        assertThat(GloryLaws.gloryForChest(-3)).isEqualTo(0)
     }
 
     @Test

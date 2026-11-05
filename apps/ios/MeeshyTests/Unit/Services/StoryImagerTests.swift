@@ -84,7 +84,6 @@ final class StoryImagerTests: XCTestCase {
         let request = try XCTUnwrap(ImagerCardRequest.post(composedPost(), viewer: Self.viewer, preferredLanguages: ["fr"], service: sut))
 
         let rendered = await request.lead?.render()
-
         let file = try XCTUnwrap(rendered)
         defer { try? FileManager.default.removeItem(at: file) }
 

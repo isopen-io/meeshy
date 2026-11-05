@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   CHEST_ODDS,
+  CHEST_EARLY_GLORY_MAX,
+  CHEST_GLORY_BASE_MAX,
+  CHEST_GLORY_MAX,
+  CHEST_GLORY_MIN,
+  chestBaseGloryForEffort,
   chestBonusAmounts,
+  chestDayStart,
+  chestEarlyGlory,
+  chestElapsedHours,
   chestPriceCutoff,
   chestContentForEffort,
   chestPointsForEffort,
@@ -11,7 +19,6 @@ import {
 } from '../../utils/game/chest.js';
 import { meeshPrice } from '../../utils/game/mint.js';
 import { seededRng } from '../../utils/game/day-prng.js';
-import { gloryForChest } from '../../utils/game/glory.js';
 import { MISSION_TEMPLATES } from '../../utils/game/mission-catalog.js';
 import { drawDailyMissions } from '../../utils/game/missions.js';
 
@@ -24,15 +31,15 @@ describe('le coffre du jour', () => {
       maxPoints: 10_000,
       fragment: 1 / 6,
       freeze: 1 / 20,
-      minGlory: 50,
-      maxGlory: 1000,
+      minGlory: 1250,
+      maxGlory: 5800,
       bonusWhole: 1 / 20,
       bonusFifth: 1 / 6,
     });
   });
 
   it('est déterministe pour un utilisateur, un jour et un effort', () => {
-    expect(dailyChest({ userId: 'u1', dayKey: '2026-10-05', effort: 900, nextMeeshPrice: 1221 })).toEqual(dailyChest({ userId: 'u1', dayKey: '2026-10-05', effort: 900, nextMeeshPrice: 1221 }));
+    expect(dailyChest({ userId: 'u1', dayKey: '2026-10-05', effort: 900, nextMeeshPrice: 1221, elapsedHours: 23 })).toEqual(dailyChest({ userId: 'u1', dayKey: '2026-10-05', effort: 900, nextMeeshPrice: 1221, elapsedHours: 23 }));
   });
 
   it('garde le fragment en prime et le gel d\'avant : la première valeur du générateur reste consommée', () => {
@@ -41,20 +48,20 @@ describe('le coffre du jour', () => {
       rng();
       const fragment = rng() < 1 / 6;
       const freeze = rng() < 1 / 20;
-      expect(dailyChest({ userId: `u${u}`, dayKey: '2026-10-05', effort: 1200, nextMeeshPrice: 1221 })).toMatchObject({ fragment, freeze });
+      expect(dailyChest({ userId: `u${u}`, dayKey: '2026-10-05', effort: 1200, nextMeeshPrice: 1221, elapsedHours: 23 })).toMatchObject({ fragment, freeze });
     }
   });
 
   it('ne fait dépendre que les points et la Gloire de l\'effort, jamais les tirages', () => {
-    const light = dailyChest({ userId: 'u7', dayKey: '2026-10-08', effort: 300, nextMeeshPrice: 1221 });
-    const heavy = dailyChest({ userId: 'u7', dayKey: '2026-10-08', effort: 4500, nextMeeshPrice: 1221 });
+    const light = dailyChest({ userId: 'u7', dayKey: '2026-10-08', effort: 300, nextMeeshPrice: 1221, elapsedHours: 23 });
+    const heavy = dailyChest({ userId: 'u7', dayKey: '2026-10-08', effort: 4500, nextMeeshPrice: 1221, elapsedHours: 23 });
     expect({ fragment: light.fragment, freeze: light.freeze, bonus: light.bonus }).toEqual({ fragment: heavy.fragment, freeze: heavy.freeze, bonus: heavy.bonus });
     expect(heavy.points).toBeGreaterThan(light.points);
   });
 
   it('tient ses probabilités sur un grand nombre de coffres', () => {
     const N = 6000;
-    const chests = Array.from({ length: N }, (_, u) => dailyChest({ userId: `user-${u}`, dayKey: '2026-10-05', effort: 600, nextMeeshPrice: 1221 }));
+    const chests = Array.from({ length: N }, (_, u) => dailyChest({ userId: `user-${u}`, dayKey: '2026-10-05', effort: 600, nextMeeshPrice: 1221, elapsedHours: 23 }));
     const fragments = chests.filter((c) => c.fragment).length / N;
     const freezes = chests.filter((c) => c.freeze).length / N;
     expect(fragments).toBeGreaterThan(1 / 6 - 0.03);
@@ -65,7 +72,7 @@ describe('le coffre du jour', () => {
 
   it('ne donne jamais plus d\'UN fragment d\'étoile : `fragment` est un booléen', () => {
     for (let u = 0; u < 300; u++) {
-      expect(typeof dailyChest({ userId: `p${u}`, dayKey: '2026-10-05', effort: 4500, nextMeeshPrice: 16_556 }).fragment).toBe('boolean');
+      expect(typeof dailyChest({ userId: `p${u}`, dayKey: '2026-10-05', effort: 4500, nextMeeshPrice: 16_556, elapsedHours: 23 }).fragment).toBe('boolean');
     }
   });
 });
@@ -87,24 +94,24 @@ describe('la prime, en points au cours de la Meesh du compte', () => {
       rng();
       const whole = rng() < 1 / 20;
       const fifth = rng() < 1 / 6;
-      const chest = dailyChest({ userId: `b${u}`, dayKey: '2026-10-09', effort: 300, nextMeeshPrice: 1587 });
+      const chest = dailyChest({ userId: `b${u}`, dayKey: '2026-10-09', effort: 300, nextMeeshPrice: 1587, elapsedHours: 23 });
       const bonus = whole ? 'whole' : fifth ? 'fifth' : 'none';
       const bonusPoints = whole ? 1587 : fifth ? 317 : 0;
-      expect(chest).toMatchObject({ bonus, bonusPoints, points: 500 + bonusPoints, glory: 50 });
+      expect(chest).toMatchObject({ bonus, bonusPoints, points: 500 + bonusPoints, glory: 1250 });
     }
   });
 
   it('se crédite dans `points` (ce que lit un ancien client), sans Gloire de plus', () => {
-    const all = Array.from({ length: 2000 }, (_, u) => dailyChest({ userId: `c${u}`, dayKey: '2026-10-09', effort: 1000, nextMeeshPrice: 1221 }));
+    const all = Array.from({ length: 2000 }, (_, u) => dailyChest({ userId: `c${u}`, dayKey: '2026-10-09', effort: 1000, nextMeeshPrice: 1221, elapsedHours: 23 }));
     const whole = all.find((c) => c.bonus === 'whole')!;
     const fifth = all.find((c) => c.bonus === 'fifth')!;
-    expect(whole).toMatchObject({ points: 2083 + 1221, bonusPoints: 1221, glory: 208 });
-    expect(fifth).toMatchObject({ points: 2083 + 244, bonusPoints: 244, glory: 208 });
+    expect(whole).toMatchObject({ points: 2083 + 1221, bonusPoints: 1221, glory: 1542 });
+    expect(fifth).toMatchObject({ points: 2083 + 244, bonusPoints: 244, glory: 1542 });
   });
 
   it('tient ses probabilités : 1/20 entière, puis 19/20 × 1/6 d\'un cinquième', () => {
     const N = 12_000;
-    const all = Array.from({ length: N }, (_, u) => dailyChest({ userId: `d${u}`, dayKey: '2026-10-09', effort: 600, nextMeeshPrice: 1221 }));
+    const all = Array.from({ length: N }, (_, u) => dailyChest({ userId: `d${u}`, dayKey: '2026-10-09', effort: 600, nextMeeshPrice: 1221, elapsedHours: 23 }));
     const whole = all.filter((c) => c.bonus === 'whole').length / N;
     const fifth = all.filter((c) => c.bonus === 'fifth').length / N;
     expect(Math.abs(whole - 1 / 20)).toBeLessThan(0.012);
@@ -112,8 +119,8 @@ describe('la prime, en points au cours de la Meesh du compte', () => {
   });
 
   it('suit le cours du compte : plus de Meeshes frappées, une prime plus grosse', () => {
-    expect(chestContentForEffort(300, meeshPrice(1)).bonusWhole).toBe(1221);
-    expect(chestContentForEffort(300, meeshPrice(101)).bonusWhole).toBe(16_556);
+    expect(chestContentForEffort(300, meeshPrice(1), 23).bonusWhole).toBe(1221);
+    expect(chestContentForEffort(300, meeshPrice(101), 23).bonusWhole).toBe(16_556);
   });
 });
 
@@ -189,28 +196,76 @@ describe('les points du coffre selon l\'effort', () => {
   });
 });
 
-describe('la Gloire', () => {
-  it('donne un point de Gloire pour dix points', () => {
-    expect(gloryForChest(500)).toBe(50);
-    expect(gloryForChest(1759)).toBe(175);
-    expect(gloryForChest(10_000)).toBe(1000);
-    expect(gloryForChest(-5)).toBe(0);
+describe('la Gloire du coffre (porteur, 2026-11-05, #16414)', () => {
+  it('une base de 1 250 à 3 000 sur la même droite d\'effort que les points', () => {
+    expect(chestBaseGloryForEffort(0)).toBe(1250);
+    expect(chestBaseGloryForEffort(300)).toBe(1250);
+    expect(chestBaseGloryForEffort(1000)).toBe(1542);
+    expect(chestBaseGloryForEffort(2400)).toBe(2125);
+    expect(chestBaseGloryForEffort(4500)).toBe(3000);
+    expect(chestBaseGloryForEffort(9000)).toBe(3000);
+    expect(chestBaseGloryForEffort(Number.NaN)).toBe(1250);
   });
 
-  it('se lit avec les points et les primes possibles sur l\'effort et le cours', () => {
-    expect(chestContentForEffort(300, 1221)).toEqual({ points: 500, glory: 50, bonusWhole: 1221, bonusFifth: 244 });
-    expect(chestContentForEffort(4500, 16_556)).toEqual({ points: 10_000, glory: 1000, bonusWhole: 16_556, bonusFifth: 3311 });
+  it('monte avec l\'effort, jamais ne descend', () => {
+    const glories = Array.from({ length: 4600 }, (_, effort) => chestBaseGloryForEffort(effort));
+    glories.slice(1).forEach((glory, i) => expect(glory).toBeGreaterThanOrEqual(glories[i]!));
+  });
+
+  it('une prime de précocité de 2 800 dans la première heure, 0 à la dernière, linéaire par heure entière', () => {
+    expect(chestEarlyGlory(0)).toBe(2800);
+    expect(chestEarlyGlory(0.99)).toBe(2800);
+    expect(chestEarlyGlory(1)).toBe(2678);
+    expect(chestEarlyGlory(11)).toBe(1461);
+    expect(chestEarlyGlory(22)).toBe(122);
+    expect(chestEarlyGlory(23)).toBe(0);
+  });
+
+  it('un jour de jeu prolongé ne paie aucune précocité, une heure illisible non plus', () => {
+    expect(chestEarlyGlory(24)).toBe(0);
+    expect(chestEarlyGlory(40)).toBe(0);
+    expect(chestEarlyGlory(Number.NaN)).toBe(0);
+    expect(chestEarlyGlory(Number.POSITIVE_INFINITY)).toBe(0);
+    expect(chestEarlyGlory(-3)).toBe(2800);
+  });
+
+  it('se lit avec les points et les primes possibles sur l\'effort, le cours et l\'heure', () => {
+    expect(chestContentForEffort(300, 1221, 23)).toEqual({ points: 500, glory: 1250, earlyGlory: 0, bonusWhole: 1221, bonusFifth: 244 });
+    expect(chestContentForEffort(4500, 16_556, 0)).toEqual({ points: 10_000, glory: 5800, earlyGlory: 2800, bonusWhole: 16_556, bonusFifth: 3311 });
+    expect(chestContentForEffort(2400, 1221, 11)).toMatchObject({ glory: 2125 + 1461, earlyGlory: 1461 });
+  });
+
+  it('le coffre crédite la base et la précocité, et dit la précocité à part', () => {
+    const early = dailyChest({ userId: 'u7', dayKey: '2026-10-08', effort: 4500, nextMeeshPrice: 1221, elapsedHours: 0 });
+    const late = dailyChest({ userId: 'u7', dayKey: '2026-10-08', effort: 4500, nextMeeshPrice: 1221, elapsedHours: 23 });
+    expect(early).toMatchObject({ glory: 5800, earlyGlory: 2800 });
+    expect(late).toMatchObject({ glory: 3000, earlyGlory: 0 });
+    expect({ ...early, glory: 0, earlyGlory: 0 }).toEqual({ ...late, glory: 0, earlyGlory: 0 });
+  });
+
+  it('tient ses bornes : 1 250 à 5 800', () => {
+    expect([CHEST_GLORY_MIN, CHEST_GLORY_BASE_MAX, CHEST_EARLY_GLORY_MAX, CHEST_GLORY_MAX]).toEqual([1250, 3000, 2800, 5800]);
+    expect(CHEST_ODDS.minGlory).toBe(CHEST_GLORY_MIN);
+    expect(CHEST_ODDS.maxGlory).toBe(CHEST_GLORY_MAX);
   });
 });
 
-describe('le coffre donne au moins 500 points (porteur, 2026-10-10, 3e précision)', () => {
-  it('500 points au jour le plus léger, 10 000 au plus lourd, la Gloire de 50 à 1 000', () => {
-    expect(chestPointsForEffort(0)).toBe(500);
-    expect(chestPointsForEffort(300)).toBe(500);
-    expect(chestPointsForEffort(4500)).toBe(10_000);
-    expect(CHEST_ODDS.minPoints).toBe(500);
-    expect(CHEST_ODDS.minGlory).toBe(50);
-    expect(CHEST_ODDS.maxGlory).toBe(1000);
+describe('l\'heure du jour de jeu (#16414)', () => {
+  const midnight = new Date('2026-10-05T22:00:00Z');
+
+  it('les heures entières écoulées depuis le début du jour', () => {
+    expect(chestElapsedHours({ dayStartedAt: midnight, now: new Date('2026-10-05T22:59:59Z') })).toBe(0);
+    expect(chestElapsedHours({ dayStartedAt: midnight, now: new Date('2026-10-05T23:00:00Z') })).toBe(1);
+    expect(chestElapsedHours({ dayStartedAt: midnight, now: new Date('2026-10-06T21:30:00Z') })).toBe(23);
+    expect(chestElapsedHours({ dayStartedAt: midnight, now: new Date('2026-10-07T03:00:00Z') })).toBe(29);
+  });
+
+  it('le début du jour est minuit du fuseau, ou l\'ouverture des missions si elle le précède', () => {
+    const opened = [new Date('2026-10-05T22:10:00Z'), new Date('2026-10-05T22:05:00Z')];
+    expect(chestDayStart({ localMidnight: midnight, missionsOpenedAt: opened })).toEqual(midnight);
+    const shiftedWest = new Date('2026-10-06T09:00:00Z');
+    expect(chestDayStart({ localMidnight: shiftedWest, missionsOpenedAt: opened })).toEqual(new Date('2026-10-05T22:05:00Z'));
+    expect(chestDayStart({ localMidnight: midnight, missionsOpenedAt: [null, undefined] })).toEqual(midnight);
   });
 });
 

@@ -174,10 +174,9 @@ struct SecurityView: View {
     private func focusMasterPinIfRequested(_ proxy: ScrollViewProxy) {
         guard SettingsFocusRequest.shared.consume(.masterPin) else { return }
         pinFocused = true
-        Task { @MainActor in
-            do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
+        Task { await DelayedUI.perform(after: .milliseconds(350)) {
             withAnimation(.easeInOut(duration: 0.4)) { proxy.scrollTo(SettingsFocus.masterPin.rawValue, anchor: .center) }
-        }
+        } }
     }
 
     // MARK: - Password Section

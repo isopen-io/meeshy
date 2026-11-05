@@ -130,7 +130,6 @@ final class StoryStillExportTests: XCTestCase {
         let sut = makeSUT()
 
         let rendered = await sut.service.renderSceneFile(of: stillScene())
-
         let file = try XCTUnwrap(rendered)
         defer { try? FileManager.default.removeItem(at: file) }
 
@@ -145,7 +144,6 @@ final class StoryStillExportTests: XCTestCase {
         post.storyEffects = StoryEffects(textObjects: [StoryTextObject(text: "Fixe")])
 
         let rendered = await sut.service.renderSceneFile(of: post)
-
         let file = try XCTUnwrap(rendered)
         defer { try? FileManager.default.removeItem(at: file) }
 

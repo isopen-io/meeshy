@@ -6104,6 +6104,9 @@ model GameDay {
   chestFreeze      Boolean?
   /// La Gloire du coffre (#10011) — absente d'un coffre ouvert avant elle (champ optionnel, aucun backfill).
   chestGlory       Int?
+  /// La part de précocité de `chestGlory` (#16414) : l'heure du jour de jeu où le coffre s'est ouvert. Absente d'un
+  /// coffre ouvert avant elle (champ optionnel, aucun backfill).
+  chestEarlyGlory  Int?
   /// La prime tirée (#10011) : "none" | "fifth" | "whole", et son montant en points au cours de la Meesh du
   /// compte, déjà compris dans `chestPoints`. Absents d'un coffre ouvert avant elle.
   chestBonus       String?

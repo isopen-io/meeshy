@@ -53,5 +53,4 @@ class StoryVideoExportStagesTest {
         assertThat(StoryExportMode.SHARE.destination).isEqualTo(SceneExportDestination.SHARE)
         assertThat(StoryExportMode.CARD.destination).isEqualTo(SceneExportDestination.SHARE)
     }
-
 }

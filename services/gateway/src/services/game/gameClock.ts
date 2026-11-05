@@ -6,6 +6,7 @@
  * dans le dépôt. Ce module n'y ajoute que la clé, son marqueur et la minute.
  */
 
+import { chestDayStart, chestElapsedHours } from '@meeshy/shared/utils/game/chest';
 import { civilDayInTimezone, civilDayKey } from '../engagement/civilDay';
 
 /** La clé de jour de `date` dans `timezone` (repli UTC si absent ou invalide). */
@@ -79,3 +80,22 @@ export function instantOfLocal(params: { readonly dayKey: string; readonly minut
   const second = wallAsUtc - (zoneOffsetMinutes(new Date(first), zone) ?? 0) * 60_000;
   return new Date(second);
 }
+
+/**
+ * Les heures ENTIÈRES écoulées du jour de jeu `dayKey` à `now` (#16414) — la précocité de la Gloire du coffre.
+ * Le jour commence à minuit de sa clé dans le fuseau du compte, ou à l'ouverture de ses missions si elle le
+ * précède (`chestDayStart` : un fuseau changé vers l'ouest ne rajeunit pas la journée).
+ */
+export const chestHoursIntoDay = (params: {
+  readonly dayKey: string;
+  readonly timezone: string | null | undefined;
+  readonly missionsOpenedAt: readonly (Date | null | undefined)[];
+  readonly now: Date;
+}): number =>
+  chestElapsedHours({
+    dayStartedAt: chestDayStart({
+      localMidnight: instantOfLocal({ dayKey: params.dayKey, minuteOfDay: 0, timezone: params.timezone }),
+      missionsOpenedAt: params.missionsOpenedAt,
+    }),
+    now: params.now,
+  });

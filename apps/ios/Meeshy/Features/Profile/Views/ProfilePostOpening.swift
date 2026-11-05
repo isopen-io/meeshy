@@ -31,8 +31,6 @@ enum ProfilePostsOpener {
         )
     }
 
-    /// Le contenu « Publications » d'une feuille de profil hôte : la liste du
-    /// profil, dont chaque ouverture referme d'abord la feuille.
     static func postsContent(dismiss: @escaping () -> Void) -> (String) -> AnyView {
         { uid in
             AnyView(ProfileUserPostsList(

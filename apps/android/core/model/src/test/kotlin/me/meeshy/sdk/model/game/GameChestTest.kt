@@ -20,10 +20,26 @@ class GameChestTest {
     }
 
     @Test
-    fun `la Gloire du coffre est un point pour dix`() {
-        assertThat(GameChestLaw.gloryForChest(500)).isEqualTo(50)
-        assertThat(GameChestLaw.gloryForChest(10_000)).isEqualTo(1000)
-        assertThat(GameChestLaw.contentForEffort(300, 1221).glory).isEqualTo(50)
+    fun `la Gloire du coffre a une base de 1250 a 3000 sur l'effort`() {
+        assertThat(GameChestLaw.baseGloryForEffort(0)).isEqualTo(1250)
+        assertThat(GameChestLaw.baseGloryForEffort(1000)).isEqualTo(1542)
+        assertThat(GameChestLaw.baseGloryForEffort(2400)).isEqualTo(2125)
+        assertThat(GameChestLaw.baseGloryForEffort(99_999)).isEqualTo(3000)
+    }
+
+    @Test
+    fun `la precocite vaut 2800 dans la premiere heure et 0 dans la derniere`() {
+        assertThat(GameChestLaw.earlyGlory(0)).isEqualTo(2800)
+        assertThat(GameChestLaw.earlyGlory(1)).isEqualTo(2678)
+        assertThat(GameChestLaw.earlyGlory(11)).isEqualTo(1461)
+        assertThat(GameChestLaw.earlyGlory(22)).isEqualTo(122)
+        assertThat(GameChestLaw.earlyGlory(23)).isEqualTo(0)
+        assertThat(GameChestLaw.earlyGlory(40)).isEqualTo(0)
+        assertThat(GameChestLaw.earlyGlory(-3)).isEqualTo(2800)
+        assertThat(GameChestLaw.contentForEffort(300, 1221, 23).glory).isEqualTo(1250)
+        assertThat(GameChestLaw.contentForEffort(4500, 1221, 0)).isEqualTo(
+            ChestContent(points = 10_000, glory = 5800, bonusWhole = 1221, bonusFifth = 244, earlyGlory = 2800),
+        )
     }
 
     @Test
@@ -43,9 +59,9 @@ class GameChestTest {
 
     @Test
     fun `le coffre est deterministe, la prime n'est jamais en plus du prix et rien n'est une Meesh`() {
-        val a = GameChestLaw.daily("u1", "2026-10-05", 1200, 1221)
-        assertThat(a).isEqualTo(GameChestLaw.daily("u1", "2026-10-05", 1200, 1221))
-        val seen = (1..400).map { GameChestLaw.daily("user-$it", "2026-10-05", 1200, 1000) }
+        val a = GameChestLaw.daily("u1", "2026-10-05", 1200, 1221, 23)
+        assertThat(a).isEqualTo(GameChestLaw.daily("u1", "2026-10-05", 1200, 1221, 23))
+        val seen = (1..400).map { GameChestLaw.daily("user-$it", "2026-10-05", 1200, 1000, 23) }
         assertThat(seen.map { it.bonus }.toSet()).containsExactly(ChestBonus.NoBonus, ChestBonus.Fifth, ChestBonus.Whole)
         seen.forEach { assertThat(it.points).isEqualTo(GameChestLaw.pointsForEffort(1200) + it.bonusPoints) }
         assertThat(seen.any { it.fragment }).isTrue()
@@ -72,11 +88,12 @@ class GameChestTest {
     @Test
     fun `les vecteurs partages du coffre et des fragments sont rejoues`() {
         GameLawVectors.cases("chest").forEach {
-            val c = GameChestLaw.daily(it.str("userId"), it.str("dayKey"), it.int("effort"), it.int("nextMeeshPrice"))
+            val c = GameChestLaw.daily(it.str("userId"), it.str("dayKey"), it.int("effort"), it.int("nextMeeshPrice"), it.int("elapsedHours"))
             assertWithMessage(it.label).that(c.points).isEqualTo(it.expected["points"].intValue())
             assertWithMessage(it.label).that(c.fragment).isEqualTo(it.expected["fragment"].boolValue())
             assertWithMessage(it.label).that(c.freeze).isEqualTo(it.expected["freeze"].boolValue())
             assertWithMessage(it.label).that(c.glory).isEqualTo(it.expected["glory"].intValue())
+            assertWithMessage(it.label).that(c.earlyGlory).isEqualTo(it.expected["earlyGlory"].intValue())
             assertWithMessage(it.label).that(c.bonus?.name?.lowercase()).isEqualTo(it.expected["bonus"].text().replace("none", "nobonus"))
             assertWithMessage(it.label).that(c.bonusPoints).isEqualTo(it.expected["bonusPoints"].intValue())
         }
