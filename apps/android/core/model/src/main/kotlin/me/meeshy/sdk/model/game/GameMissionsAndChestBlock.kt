@@ -91,18 +91,24 @@ public data class DailyChest(
     val points: Int,
     val fragment: Boolean,
     val freeze: Boolean,
+    /** La Gloire TOTALE : la base de l'effort et la précocité. */
     @EncodeDefault val glory: Int = 0,
     @EncodeDefault val bonus: ChestBonus? = null,
     @EncodeDefault val bonusPoints: Int = 0,
+    /** La part de précocité de [glory] (#16414) — `null` devant un coffre ou un serveur d'avant elle. */
+    @EncodeDefault val earlyGlory: Int? = null,
 )
 
 /** Le contenu CERTAIN du coffre du jour et ses deux primes possibles, dits avant l'ouverture. */
 @Serializable
 public data class ChestContent(
     val points: Int,
+    /** La Gloire TOTALE si le coffre s'ouvre maintenant : la base de l'effort et la précocité de l'heure. */
     val glory: Int,
     @EncodeDefault val bonusWhole: Int? = null,
     @EncodeDefault val bonusFifth: Int? = null,
+    /** La part de précocité de [glory] (#16414). `null` devant un serveur antérieur. */
+    @EncodeDefault val earlyGlory: Int? = null,
 )
 
 /** Les fragments d'étoile collectés à vie — le serveur seul les compte. */
@@ -179,6 +185,7 @@ internal fun parseDailyChest(obj: JsonObject): DailyChest = DailyChest(
     glory = obj.optCount("glory") ?: 0,
     bonus = enumFromWire<ChestBonus>(obj.optString("bonus")),
     bonusPoints = obj.optCount("bonusPoints") ?: 0,
+    earlyGlory = obj.optCount("earlyGlory"),
 )
 
 internal fun parseChestContent(obj: JsonObject): ChestContent = ChestContent(
@@ -186,6 +193,7 @@ internal fun parseChestContent(obj: JsonObject): ChestContent = ChestContent(
     glory = obj.reqInt("glory"),
     bonusWhole = obj.optCount("bonusWhole"),
     bonusFifth = obj.optCount("bonusFifth"),
+    earlyGlory = obj.optCount("earlyGlory"),
 )
 
 internal fun parseStarFragments(obj: JsonObject): StarFragmentsTotal = StarFragmentsTotal(obj.reqInt("collected"))
