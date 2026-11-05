@@ -543,8 +543,10 @@ struct ConversationMediaGalleryView: View {
                 // `activeURL` set → `hasPlayingInlineVideo` stayed true.
                 videoManager.release(urlString: oldAtt.fileUrl)
             }
-            HapticFeedback.light()
         }
+        // **Feuilleter ne vibre pas** (#16324) : la page se pose APRÈS la
+        // course du doigt, et un choc à cet instant arrive en retard sur le
+        // geste — en doublant celui de la vignette touchée dans la pellicule.
 
         if oldID != newID { trackImageOpen(leaving: oldID, entering: newID) }
 
