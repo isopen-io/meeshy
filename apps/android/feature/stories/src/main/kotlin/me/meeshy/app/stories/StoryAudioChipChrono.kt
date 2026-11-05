@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
@@ -49,7 +50,7 @@ internal fun AudioChipChrono(timing: SceneAudioChipTiming, clock: AudioChipClock
         color = Color.White.copy(alpha = 0.92f),
         fontSize = fontSize,
         fontWeight = FontWeight.SemiBold,
-        fontFeatureSettings = "tnum",
+        style = TextStyle(fontFeatureSettings = "tnum"),
         textAlign = TextAlign.End,
         maxLines = 1,
         softWrap = false,
