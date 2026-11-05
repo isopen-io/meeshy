@@ -10,6 +10,7 @@ import MeeshyUI
 /// La composition prend l'icône du POST, `square.and.pencil`, celle que l'app
 /// donne déjà au type post (`PostType.post.symbol`). Dans les menus, « Imager »
 /// garde son icône d'image.
+@MainActor
 final class WandImagerVocabularyTests: XCTestCase {
 
     // MARK: - Les symboles

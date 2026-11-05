@@ -67,12 +67,20 @@ nonisolated enum MediaStageActionColumn {
 /// d'une flamme ou d'une vue unique n'a donc pas ce bouton. « Transférer » suit
 /// le verdict de l'hôte, qui connaît la loi de transfert du message porteur.
 /// « Imager » au rail du plein écran (#16332) : la baguette fait du message
-/// porteur une carte image. Une pièce protégée (vue unique, flou, flamme) n'a
-/// pas de baguette — la carte ferait sortir ce que la protection retient.
+/// porteur une carte image. Même garde que Transférer : la loi de sortie du
+/// PORTEUR (`offers(.imagine)`) et la protection de la pièce ou de son message
+/// (vue unique, flou, flamme, chiffré). Un porteur inconnu n'a pas de baguette.
 enum GalleryImagerOffer {
+    static func offers(_ attachment: MessageAttachment, carrier: Message?) -> Bool {
+        guard let carrier else { return false }
+        return carrier.exitOffer.offers(.imagine) && !MessagePieceTarget.isProtected(attachment, in: carrier)
+    }
+
     static func action(for attachment: MessageAttachment?,
-                       _ handler: ((MessageAttachment) -> Void)?) -> (() -> Void)? {
-        guard let handler, let attachment, !ComposableAttachment.isProtected(attachment) else { return nil }
+                       _ handler: ((MessageAttachment) -> Void)?,
+                       offered: ((MessageAttachment) -> Bool)?) -> (() -> Void)? {
+        guard let handler, let offered, let attachment, offered(attachment),
+              !ComposableAttachment.isProtected(attachment) else { return nil }
         return { HapticFeedback.light(); handler(attachment) }
     }
 }
