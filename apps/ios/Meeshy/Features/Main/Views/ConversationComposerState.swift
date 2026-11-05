@@ -101,7 +101,6 @@ struct ConversationComposerState {
     /// Les lots de pièces jointes en vol — plusieurs à la fois (#14696).
     var uploads = ComposerUploadLedger()
     var isUploading: Bool { uploads.isUploading }
-    var uploadProgress: UploadQueueProgress? { uploads.displayedProgress }
     var showLocationPicker = false
     /// Lieu choisi via le picker, en attente d'envoi. `SharedPlace` porte le
     /// nom et l'adresse — `MessageAttachment.location` ne les portait pas et

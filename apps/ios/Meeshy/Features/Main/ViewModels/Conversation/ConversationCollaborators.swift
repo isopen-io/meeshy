@@ -16,6 +16,8 @@ struct ConversationCollaborators {
     /// Le régime relu à la passerelle quand elle dit qu'il a changé (#12522).
     let encryptionService: any ConversationEncryptionServiceProviding
     let regimeRefresher: EndToEndRegimeRefresher
+    /// La progression de téléversement de chaque bulle optimiste, par tempId (#14702).
+    let uploadProgress = MessageUploadProgressStore()
 
     init(
         persistence: MessagePersistenceActor,
