@@ -175,8 +175,8 @@ class AudioFullscreenLanguagesTest {
         showPage(source, FakeAudioFullscreenPlayer(), FakeTranscriptPort())
         compose.waitForIdle()
 
-        compose.onNodeWithTag(AUDIO_LANGUAGE_STRIP_TAG).assertExists()
-        compose.onNodeWithTag(AUDIO_FULLSCREEN_TRANSLATE_TAG).assertExists()
-        compose.onNodeWithTag(AUDIO_FULLSCREEN_TRANSCRIPT_EMPTY_TAG).assertExists()
+        compose.onNodeWithTag(AUDIO_LANGUAGE_STRIP_TAG, useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag(AUDIO_FULLSCREEN_TRANSLATE_TAG, useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag(AUDIO_FULLSCREEN_TRANSCRIPT_EMPTY_TAG, useUnmergedTree = true).assertExists()
     }
 }
