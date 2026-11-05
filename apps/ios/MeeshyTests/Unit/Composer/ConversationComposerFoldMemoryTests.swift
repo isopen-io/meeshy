@@ -3,6 +3,7 @@ import XCTest
 
 /// #16341 — le repli de la barre se retient PAR conversation, et survit au
 /// redémarrage (une nouvelle instance relit le même stockage).
+@MainActor
 final class ConversationComposerFoldMemoryTests: XCTestCase {
 
     private func makeDefaults() -> UserDefaults {
@@ -48,5 +49,13 @@ final class ConversationComposerFoldMemoryTests: XCTestCase {
         let defaults = makeDefaults()
         ConversationComposerFoldMemory(defaults: defaults).remember(folded: true, conversationId: "")
         XCTAssertNil(defaults.stringArray(forKey: ConversationComposerFoldMemory.storageKey))
+    }
+
+    /// La conversation remet SON id au repli : sans lui, rien ne se retient.
+    func test_conversationComposer_foldIsKeyedByConversationId() throws {
+        let host = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ConversationView+Composer.swift")
+        let core = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
+        XCTAssertTrue(host.contains("foldMemoryKey: viewModel.conversationId"))
+        XCTAssertTrue(core.contains("memoryKey: foldMemoryKey"))
     }
 }
