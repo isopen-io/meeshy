@@ -49,6 +49,38 @@ class UploadTransferTimeoutsTest {
     }
 
     @Test
+    fun `#16168 a multipart attachment upload waits for its answer longer than the default read timeout`() {
+        val server = slowServer()
+        try {
+            val body = okhttp3.MultipartBody.Builder().setType(okhttp3.MultipartBody.FORM)
+                .addFormDataPart("files", "p.jpg", ByteArray(CHUNK_BYTES).toRequestBody("image/jpeg".toMediaType())).build()
+            val request = Request.Builder().url(server.url("/api/v1/attachments/upload")).post(body).build()
+
+            val code = runBlocking { client().newCall(request).execute().use { it.code } }
+
+            assertThat(code).isEqualTo(204)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun `#16168 a multipart post to any other path keeps the default read timeout`() {
+        val server = slowServer()
+        try {
+            val body = okhttp3.MultipartBody.Builder().setType(okhttp3.MultipartBody.FORM)
+                .addFormDataPart("files", "p.jpg", ByteArray(CHUNK_BYTES).toRequestBody("image/jpeg".toMediaType())).build()
+            val request = Request.Builder().url(server.url("/api/v1/users/avatar")).post(body).build()
+
+            val failure = runCatching { client().newCall(request).execute().close() }.exceptionOrNull()
+
+            assertThat(failure).isInstanceOf(SocketTimeoutException::class.java)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun `an ordinary request keeps the default read timeout`() {
         val server = slowServer()
         try {

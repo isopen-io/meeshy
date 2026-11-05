@@ -447,6 +447,58 @@ class MessageSendCoordinatorTest {
 
         assertThat(previews.released).containsExactly(listOf(previewed))
     }
+
+    @Test
+    fun `#16168 retrying a photo bubble whose message row is gone never posts it without its piece`() = runHarnessTest { harness ->
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", attachmentUploadCmids = listOf("cmid_up"), attachments = listOf(previewed))
+        harness.outbox.markSucceeded(cid)
+        coordinator.markSendFailed(cid)
+
+        coordinator.retrySend(cid)
+
+        val posted = harness.outbox.deliverable("message:c1").filter { it.cmid == cid }
+        assertThat(posted.map { MeeshyApi.json.decodeFromString<SendMessageRequest>(it.payload).attachmentIds }.filter { it == null }).isEmpty()
+    }
+
+    @Test
+    fun `#16168 retrying a photo bubble whose upload survived re-arms the upload first and sends the message behind it`() = runHarnessTest { harness ->
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", attachmentUploadCmids = listOf("cmid_up"), attachments = listOf(previewed))
+        harness.outbox.markSucceeded(cid)
+        harness.outbox.enqueue(
+            me.meeshy.sdk.outbox.OutboxMutation(
+                kind = OutboxKind.UPLOAD_MEDIA,
+                lane = OutboxLanes.MEDIA,
+                targetId = "up_1",
+                payload = """{"conversationId":"c1","messageCid":"$cid"}""",
+                cmid = "up_1",
+            ),
+        )
+        harness.outbox.markExhausted("up_1", "timeout")
+        coordinator.markSendFailed(cid)
+
+        coordinator.retrySend(cid)
+
+        val message = harness.outbox.deliverable("message:c1").single { it.cmid == cid }
+        assertThat(OutboxDependencyKey.decode(message.dependsOn)).containsExactly("up_1")
+        assertThat(MeeshyApi.json.decodeFromString<SendMessageRequest>(message.payload).attachmentIds).containsExactly("up_1")
+        assertThat(harness.outbox.row("up_1")!!.stateEnum).isEqualTo(OutboxState.PENDING)
+        assertThat(harness.cachedSendState(cid)).isEqualTo(LocalSendState.SENDING.name)
+    }
+
+    @Test
+    fun `#16168 a photo bubble whose piece is nowhere is removed on retry like a lost media, never posted empty`() = runHarnessTest { harness ->
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "", "fr", sender, messageType = "image", attachmentUploadCmids = listOf("cmid_up"), attachments = listOf(previewed))
+        harness.outbox.markSucceeded(cid)
+        coordinator.markSendFailed(cid)
+
+        coordinator.retrySend(cid)
+
+        assertThat(harness.database.messageDao().find(cid)).isNull()
+        assertThat(harness.outbox.row(cid)).isNull()
+    }
 }
 
 private const val ATTACHMENT_RIGHT_REASON = "Refused: HTTP 403 ATTACHMENT_RIGHT_NOT_PERMITTED"
