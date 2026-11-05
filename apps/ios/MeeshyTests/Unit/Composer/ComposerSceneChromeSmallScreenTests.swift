@@ -113,7 +113,8 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
     func test_auRepos_lePostADeuxDiapos_neCroiseAucuneZoneDeControle() throws {
         let tools = ComposerRestTool.allCases.map { "composer.rest.\($0.rawValue)" }
         for size in Self.smallScreens {
-            let screen = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(), size: size), size: size)
+            let screen = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(), size: size),
+                                        size: size, hostSafeArea: false)
             defer { screen.dismount() }
 
             for control in Self.controls {
@@ -124,7 +125,8 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
     }
 
     func test_auRepos_lesBoutonsDeLaColonne_gardentLeurCibleDe44Points() throws {
-        let screen = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(), size: Self.iPhoneSE), size: Self.iPhoneSE)
+        let screen = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(), size: Self.iPhoneSE),
+                                    size: Self.iPhoneSE, hostSafeArea: false)
         defer { screen.dismount() }
 
         for tool in ComposerRestTool.allCases {
@@ -144,7 +146,7 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
         XCTAssertGreaterThan(items.count, 10, "Le cas doit être celui qui déborde la hauteur du SE.")
         for size in Self.smallScreens {
             let chrome = Self.postAtTwoSlides(state: Self.selected(), selection: column)
-            let screen = RenderedScreen(Harness(chrome: chrome, size: size), size: size)
+            let screen = RenderedScreen(Harness(chrome: chrome, size: size), size: size, hostSafeArea: false)
             defer { screen.dismount() }
 
             try assertClearOfControls(["composer.selection.column"], on: screen, size: size)
@@ -158,7 +160,7 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
         let entries = items.map { "composer.selection.\($0.identifier)" }
         for size in Self.smallScreens {
             let chrome = Self.postAtTwoSlides(state: Self.selected(), selection: column)
-            let screen = RenderedScreen(Harness(chrome: chrome, size: size), size: size)
+            let screen = RenderedScreen(Harness(chrome: chrome, size: size), size: size, hostSafeArea: false)
             defer { screen.dismount() }
 
             try assertClearOfControls(["composer.selection.column"] + entries, on: screen, size: size)
@@ -183,7 +185,8 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
         let scene = Self.sceneOfSE()
         XCTAssertGreaterThan(scene.minX, 8, "Le cas doit être celui d'une scène plus étroite que l'écran : \(scene).")
         let chrome = Self.postAtTwoSlides(sceneSideInset: scene.minX)
-        let screen = RenderedScreen(Harness(chrome: chrome, size: Self.iPhoneSE), size: Self.iPhoneSE)
+        let screen = RenderedScreen(Harness(chrome: chrome, size: Self.iPhoneSE),
+                                    size: Self.iPhoneSE, hostSafeArea: false)
         defer { screen.dismount() }
 
         let ids = ["composer.close", "composer.history.undo", "composer.history.redo", "composer.rest.column.body",
@@ -203,7 +206,8 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
         let scene = Self.sceneOfSE()
         XCTAssertGreaterThan(scene.minY, 8, "Le cas doit être celui d'une scène qui commence sous le chrome : \(scene).")
         let chrome = Self.postAtTwoSlides(sceneSideInset: scene.minX, sceneTopInset: scene.minY)
-        let screen = RenderedScreen(Harness(chrome: chrome, size: Self.iPhoneSE), size: Self.iPhoneSE)
+        let screen = RenderedScreen(Harness(chrome: chrome, size: Self.iPhoneSE),
+                                    size: Self.iPhoneSE, hostSafeArea: false)
         defer { screen.dismount() }
 
         for id in ["composer.close", "composer.history.undo", "composer.history.redo"] {
@@ -244,7 +248,8 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
     func test_quandLaColonneDeborde_plusEtTexteDuPost_restentVisiblesAuPied() throws {
         let foot = ["composer.rest.postText", "composer.rest.more", "composer.rest.paste"]
         for size in Self.smallScreens {
-            let screen = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(paste: true), size: size), size: size)
+            let screen = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(paste: true), size: size),
+                                        size: size, hostSafeArea: false)
             defer { screen.dismount() }
 
             try assertClearOfControls(foot + ["composer.rest.column.body"], on: screen, size: size)
@@ -259,7 +264,7 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
 
     func test_laColonneDuPostAvecColler_debordeBienLaFenetreDIPadDe360Points() throws {
         let screen = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(paste: true), size: Self.iPad360),
-                                    size: Self.iPad360)
+                                    size: Self.iPad360, hostSafeArea: false)
         defer { screen.dismount() }
 
         let body = try XCTUnwrap(screen.frame(of: "composer.rest.column.body"))

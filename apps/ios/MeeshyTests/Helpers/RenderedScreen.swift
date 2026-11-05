@@ -71,6 +71,9 @@ final class RenderedScreen {
     ///
     /// - Parameter borne: temps maximal accordé à SwiftUI pour parler. Dépassée,
     ///   le montage échoue explicitement plutôt que de rendre un arbre muet.
+    /// - Parameter hostSafeArea: `false` pour un écran émulé (un SE de
+    ///   375 × 667) qui ne doit pas hériter de la bande haute du simulateur
+    ///   hôte — 62 pt de Dynamic Island sur la CI (#16246).
     /// **L'arbre d'accessibilité n'existe que si un CLIENT le réclame.**
     ///
     /// UIKit ne le construit pas tant qu'aucun client d'accessibilité n'est
@@ -110,6 +113,7 @@ final class RenderedScreen {
         _ vue: some View,
         size: CGSize = CGSize(width: 402, height: 874),
         borne: TimeInterval = 10,
+        hostSafeArea: Bool = true,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
@@ -120,6 +124,7 @@ final class RenderedScreen {
         window.frame = CGRect(origin: .zero, size: size)
 
         let host = UIHostingController(rootView: vue)
+        if !hostSafeArea, #available(iOS 16.4, *) { host.safeAreaRegions = [] }
         window.rootViewController = host
         window.isHidden = false
         window.makeKeyAndVisible()
@@ -240,10 +245,15 @@ final class RenderedScreen {
         // `UIAccessibilityIdentification` : le cast échouait en silence et rendait
         // `nil` pour tout l'arbre, alors que les objets répondent bien au
         // sélecteur. On interroge donc la réponse, pas le type.
-        let identifier: String? = objet.responds(to: Selector(("accessibilityIdentifier")))
-            ? objet.value(forKey: "accessibilityIdentifier") as? String
-            : nil
-        var trouves = [Node(identifier: identifier, label: objet.accessibilityLabel, frame: objet.accessibilityFrame)]
+        // Une `UIView` qui porte l'identifiant sans être un élément (la
+        // `UIScrollView` d'un `ScrollView` SwiftUI, #16246) le DÉCLARE par le
+        // protocole, et son cadre d'accessibilité est nul : on lit alors son
+        // cadre dans la fenêtre.
+        let identifier: String? = (objet as? UIAccessibilityIdentification)?.accessibilityIdentifier
+            ?? (objet.responds(to: Selector(("accessibilityIdentifier")))
+                ? objet.value(forKey: "accessibilityIdentifier") as? String
+                : nil)
+        var trouves = [Node(identifier: identifier, label: objet.accessibilityLabel, frame: cadre(de: objet))]
         for element in elements(de: objet) {
             trouves.append(contentsOf: noeuds(element, profondeur: profondeur + 1))
         }
@@ -253,6 +263,12 @@ final class RenderedScreen {
             }
         }
         return trouves
+    }
+
+    private static func cadre(de objet: NSObject) -> CGRect {
+        let annonce = objet.accessibilityFrame
+        guard annonce.isEmpty, let vue = objet as? UIView, vue.window != nil else { return annonce }
+        return vue.convert(vue.bounds, to: nil)
     }
 
     /// Attend une CONDITION plutôt qu'une durée — voir le doc-comment du type.
