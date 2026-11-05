@@ -232,7 +232,7 @@ final class ProfileDecorTests: XCTestCase {
         XCTAssertEqual(ProfileDecorResolver.bannerFrame(item("cadres-celte", "celte-anime"))?.key, "celte-anime")
         XCTAssertNil(ProfileDecorResolver.bannerFrame(item("cadres-celte", "inconnu")))
         let official = ServedProfileDecorItem(pack: "cadres-celte", item: "celte", origin: .official, contract: "0123456789abcdef.json")
-        XCTAssertNil(ProfileDecorResolver.bannerFrame(official), "un contrat adressé n'est pas encore chargé : aucun cadre, jamais une erreur")
+        XCTAssertEqual(ProfileDecorResolver.bannerFrame(official)?.key, "celte", "contrat pas encore sur l'appareil : la copie embarquée peint, jamais une erreur (#16264)")
     }
 
     func test_options_frames_listOnlyInstalledAndOwnedPacks_twoByDefault() {
