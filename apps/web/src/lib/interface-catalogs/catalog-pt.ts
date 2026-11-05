@@ -997,6 +997,8 @@ const pt = {
   'composer.viewOnce.activate': 'Ativar o modo de visualização única',
   'composer.viewOnce.active': 'Modo de visualização única ativo',
   'composer.viewOnce.label': 'Visualização única',
+  'conversation.composer.fold': 'Recolher a barra de mensagem',
+  'conversation.composer.unfold': 'Mostrar a barra de mensagem',
   'composer.protection.ephemeral.state': 'Modo efêmero ativo',
   'composer.protection.blur.state': 'Modo desfoque ativo',
   'message.location.shared': 'Localização compartilhada',
