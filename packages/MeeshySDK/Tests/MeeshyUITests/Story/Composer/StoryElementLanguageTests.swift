@@ -74,23 +74,4 @@ final class StoryElementLanguageTests: XCTestCase {
                        "Le texte garde sa pastille d'éditeur — la barre d'élément ne double pas.")
     }
 
-    // GARDE SOURCE : la barre est montée dans le canvas, et écrit par le point
-    // d'entrée UNIQUE `updateElementLanguage`, avec les MÊMES choix que le texte.
-    func test_gardeSource_laBarreEstCablee_etReutiliseLesChoix() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent()   // MeeshySDK
-        func src(_ rel: String) throws -> String {
-            try String(contentsOf: root.appendingPathComponent(rel), encoding: .utf8)
-        }
-        let canvas = try src("Sources/MeeshyUI/Story/StoryComposerView+Canvas.swift")
-        XCTAssertTrue(canvas.contains("StoryElementLanguageBar(viewModel: viewModel)"),
-                      "La barre doit être montée dans le canvas, comme le toolbar texte.")
-        let bar = try src("Sources/MeeshyUI/Story/StoryElementLanguageBar.swift")
-        XCTAssertTrue(bar.contains("viewModel.updateElementLanguage(elementId: elementId, language: code)"),
-                      "La barre écrit par le point d'entrée UNIQUE `updateElementLanguage`.")
-        XCTAssertTrue(bar.contains("TextEditToolOptions.languageChoices(current: current)"),
-                      "…et réutilise les MÊMES choix de langue que le texte, jamais une liste recopiée.")
-    }
 }

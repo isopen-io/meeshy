@@ -70,40 +70,4 @@ final class StoryComposerView_ResetStateTests: XCTestCase {
 
     // MARK: - View-level resetLocalState() — not unit-testable
 
-    /// SwiftUI does not expose `@State` storage to XCTest, so we cannot
-    /// directly assert that `resetLocalState()` cleared the canvas-local fields
-    /// inside the View struct. The behavioural guarantee is enforced at the
-    /// call site (line 573): `viewModel.reset()` is ALWAYS followed by
-    /// `resetLocalState()`. If a future refactor introduces a second call
-    /// site to `viewModel.reset()` without the companion call, the bug will
-    /// regress silently — the lint guard below is the cheapest place to catch
-    /// that, by failing loudly the moment a stray call appears.
-    func test_resetCallSite_isPairedWithLocalStateReset() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // Composer
-            .deletingLastPathComponent() // Story
-            .deletingLastPathComponent() // MeeshyUITests
-            .deletingLastPathComponent() // Tests
-            .appendingPathComponent("Sources/MeeshyUI/Story/StoryComposerView.swift")
-
-        guard let source = try? String(contentsOf: url, encoding: .utf8) else {
-            throw XCTSkip("StoryComposerView.swift not reachable from test bundle (\(url.path))")
-        }
-
-        let resetCalls = source.components(separatedBy: "viewModel.reset()").count - 1
-        let localResets = source.components(separatedBy: "resetLocalState()").count - 1
-
-        XCTAssertGreaterThanOrEqual(
-            resetCalls, 1,
-            "Expected at least one viewModel.reset() call site in StoryComposerView.swift"
-        )
-        // Every `viewModel.reset()` must be accompanied by a `resetLocalState()`
-        // call (definition + call sites). We expect localResets >= resetCalls + 1
-        // (one definition + one call per reset()). The +1 covers the function
-        // declaration itself.
-        XCTAssertGreaterThanOrEqual(
-            localResets, resetCalls + 1,
-            "Every viewModel.reset() call site MUST be followed by resetLocalState() — see P0 bug fix. resetCalls=\(resetCalls), localResets=\(localResets)"
-        )
-    }
 }

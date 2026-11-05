@@ -755,10 +755,6 @@ final class ComposerIntentTests: XCTestCase {
         let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat)
         XCTAssertEqual(surface, .mood, "2e maillon — le meuble monte la surface du mood, pas le document.")
 
-        XCTAssertEqual(
-            ComposerChromeOwnership.owner(for: surface), .host,
-            "3e maillon — le chrome revient au meuble : il n'y a pas d'atelier sous cette surface pour peindre la flèche."
-        )
         // 4e maillon, RÉÉCRIT au 2026-08-28 : le socle du mood ne peint plus la
         // flèche (`socleZones` est vide) — elle vit désormais dans l'en-tête de
         // la surface (`ComposerMoodSurface.header`), et `headerPaintsPublish`
@@ -790,7 +786,6 @@ final class ComposerIntentTests: XCTestCase {
 
         let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat)
         XCTAssertEqual(surface, .mood, "2e maillon — republier un mood ouvre la surface du mood.")
-        XCTAssertEqual(ComposerChromeOwnership.owner(for: surface), .host, "3e maillon — le chrome revient au meuble.")
         // 4e maillon, RÉÉCRIT au 2026-08-28 : voir la même note sur la chaîne de
         // création ci-dessus — la flèche vit dans l'en-tête de la surface, pas
         // dans le socle, pour les DEUX portes du mood.

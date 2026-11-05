@@ -103,16 +103,19 @@ final class ComposerHydrationTests: XCTestCase {
                      "On ne restreint pas un auteur sur son propre contenu.")
     }
 
-    /// **Et elle n'impose aucune audience de départ non plus.** Le ViewModel
-    /// hydraté porte `editingInitialVisibility`, que `StoryComposerView.init`
-    /// réassigne en PRIORITÉ ABSOLUE, après le paramètre injecté. En poser une
-    /// ici ferait deux sources pour une même valeur, dont la seconde gagne
-    /// toujours — la première serait morte tout en ayant l'air de décider.
-    func test_editer_nImposeAucuneAudienceDeDepart_leViewModelLaPorte() {
+    /// **Elle s'ouvre sur l'audience ACTUELLE de la story, liste comprise**
+    /// (#15629). L'atelier la réassignait depuis le ViewModel ; la scène du
+    /// meuble, seule à composer l'édition, la lit sur l'hydratation. Sans la
+    /// liste, une story « Seulement… » repartirait vers personne.
+    func test_editer_ouvreSurLAudienceDeLaStory_listeComprise() {
         let hydratation = ComposerHydration.editingStory(
             StoryComposerViewModel(editing: story(visibility: "ONLY", userIds: ["u1"])))
-        XCTAssertNil(hydratation.initialVisibility)
-        XCTAssertTrue(hydratation.initialVisibilityUserIds.isEmpty)
+        XCTAssertEqual(hydratation.initialVisibility, "ONLY")
+        XCTAssertEqual(hydratation.initialVisibilityUserIds, ["u1"])
+        let ouverture = ComposerDocumentOpening.of(hydration: hydratation, format: .story,
+                                                   doorVisibility: "PUBLIC")
+        XCTAssertEqual(ouverture.visibility, .only)
+        XCTAssertEqual(ouverture.visibilityUserIds, ["u1"])
     }
 
     // MARK: - La story reste atteignable

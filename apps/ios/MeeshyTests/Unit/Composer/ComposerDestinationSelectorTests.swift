@@ -111,23 +111,13 @@ final class ComposerDestinationSelectorTests: XCTestCase {
         )
     }
 
-    // 4 — le report du contenu vers la scène a UN seul site (l'`onChange` sur
-    // `mountedSurface`), plus une closure par bouton : quel que soit le contrôle
-    // qui bascule, le texte et le média suivent (loi 9, B1).
-    func test_leReportDuContenu_aUnSeulSite_surMountedSurface() throws {
+    // 4 — le report du contenu vers l'ATELIER a quitté le dépôt avec lui
+    // (#15629) : la scène du meuble EST la surface du document, rien n'a plus à
+    // y être porté. Un report revenu recréerait deux copies du même contenu.
+    func test_leReportDuContenuVersLAtelier_aQuitteLeDepot() throws {
         let src = compact(try AppSourceGuard.composerHostSource())
-        XCTAssertTrue(
-            src.contains("funccarryContentIntoSceneIfNeeded()"),
-            "Le report vit dans UNE fonction nommée, testable et unique."
-        )
-        XCTAssertTrue(
-            src.contains(".adaptiveOnChange(of:mountedSurface,initial:true)"),
-            "Le report se branche sur `mountedSurface` : il se déclenche quand la scène naît, quel que soit le contrôle."
-        )
-        XCTAssertTrue(
-            src.contains("carryContentIntoSceneIfNeeded()"),
-            "…et le body appelle bien ce report."
-        )
+        XCTAssertFalse(src.contains("carryContentIntoSceneIfNeeded"),
+                       "Le report vers l'atelier est revenu, alors qu'aucun atelier n'est plus monté.")
     }
 
     // 5 — un POST publié depuis le document reste un POST simple : jamais un

@@ -127,40 +127,8 @@ final class ComposerAtelierHeaderTests: XCTestCase {
             compacte.contains(".blur(radius:"),
             "Un `.blur` re-rendrait le canvas à chaque image — et il n'a plus rien à flouter."
         )
-        XCTAssertTrue(
-            compacte.contains(".storyComposerCanvasBottomReservation("),
-            "La scène remonte parce que le meuble DÉCLARE ce qu'il occupe en bas. Sans cette "
-                + "déclaration, la saisie recouvrirait la scène — le geste que #4361 retire."
-        )
-        // **La condition s'est ÉLARGIE, la règle n'a pas bougé** (2026-09-05).
-        // Le ternaire ne testait que `editsSceneDescription` ; il teste désormais
-        // `editsSceneDescription || editsPostContent` — la zone d'écriture du
-        // CORPS du post réserve la même hauteur, et l'oublier laissait la scène
-        // recouverte dans ce mode-là. Le témoin épinglait la condition ; ce qu'il
-        // garde est la HAUTEUR.
-        //
-        // > Une garde qui cite une condition entière rougit à chaque cas ajouté,
-        // > y compris quand le cas ajouté est le correctif. Les deux fragments
-        // > ci-dessous survivent à un troisième état, et tombent sur ce qui
-        // > compte : une constante à la place de la mesure, ou une réserve qui
-        // > ne retombe pas à zéro.
-        // **Ce que la réserve garde a rétréci au #6126.** Le ternaire
-        // `? sceneDescriptionEditorHeight : 0` servait les deux zones ; la
-        // légende n'en a plus, et la réserve qu'on lui avait câblée (la hauteur
-        // du clavier) ne déplaçait rien au simulateur. Ce qui reste est la
-        // réserve du CORPS du post, et c'est elle que ce témoin protège : une
-        // CONSTANTE à sa place ferait remonter la scène du mauvais nombre de
-        // points dès la deuxième ligne.
-        XCTAssertTrue(
-            compacte.contains("ifeditsPostContent{returnsceneDescriptionEditorHeight}"),
-            "… et la réserve du CORPS du post est la hauteur MESURÉE de sa zone, jamais une "
-                + "constante — c'est ce que la directive du 2026-09-05 demande."
-        )
-        XCTAssertTrue(
-            compacte.contains("editsSceneDescription"),
-            "… et c'est bien l'ouverture d'une zone d'écriture qui la déclenche, quel que soit le "
-                + "nombre de zones qui la partagent."
-        )
+        // **La réserve basse de l'atelier est partie avec lui** (#15629) : la
+        // scène du meuble se rétracte par sa propre géométrie (`ComposerSceneFit`).
     }
 
     /// **RETOURNÉ le 2026-08-30, sur directive porteur** :
@@ -254,7 +222,6 @@ final class ComposerAtelierHeaderTests: XCTestCase {
         let compacte = compact(AppSourceGuard.stripComments(try host()))
         XCTAssertFalse(compacte.contains(".storyComposerHeaderLeadingAccessory{"),
                        "Le chip de type est revenu dans la rangée haute de l'atelier.")
-        XCTAssertTrue(compacte.contains("atelierDescriptionButton"))
     }
 
     private func declarationBody(startingAt anchor: String, in code: String) -> String? {

@@ -20,7 +20,7 @@ import MeeshySDK
 final class ComposerDocumentSurfaceTests: XCTestCase {
 
     private static let tousLesFormats: [ComposerFormat] = [.story, .post, .reel, .status]
-    private static let toutesLesSurfaces: [ComposerSurfaceKind] = [.scene, .document, .mood]
+    private static let toutesLesSurfaces: [ComposerSurfaceKind] = [.document, .mood]
     private static let toutesLesOuvertures: [ComposerOpening] = [
         .cameraReady, .keyboardOnContent, .videoCameraReady, .moodGrid, .resume, .mediaSeeded
     ]
@@ -143,16 +143,16 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         }
     }
 
-    /// **`.cameraReady` a quitté ce corpus le 2026-09-01** (#4751) : la caméra
-    /// du tray ouvre désormais le MEUBLE, qui arme lui-même le viseur
-    /// (`armsCameraOnAppear`). Reste `.videoCameraReady`, dont l'enregistrement
-    /// vidéo vit encore dans l'atelier.
-    func test_surface_desOuverturesDeCapture_estToujoursLaScene() {
+    /// **`.cameraReady` a quitté ce corpus le 2026-09-01** (#4751), et
+    /// `.videoCameraReady` le 2026-11-04 (#15629) : le viseur s'ouvre par un
+    /// geste de la scène du meuble, et ces ouvertures suivent le format.
+    func test_surface_desOuverturesDeCapture_suiventLeFormat() {
         for opening in [ComposerOpening.videoCameraReady] {
             for format in Self.tousLesFormats {
                 XCTAssertEqual(
-                    ComposerSurfaceRouting.surface(opening: opening, format: format), .scene,
-                    "\(nom(opening)) a ouvert une capture : il y a une scène, quel que soit \(nom(format))."
+                    ComposerSurfaceRouting.surface(opening: opening, format: format),
+                    format == .status ? .mood : .document,
+                    "\(nom(opening)) suit le format \(nom(format)) : la scène du meuble, ou le mood."
                 )
             }
         }
@@ -177,14 +177,14 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         // MATIÈRE arrive, comme la story.
         for opening in [ComposerOpening.videoCameraReady, .resume] {
             XCTAssertEqual(
-                ComposerSurfaceRouting.surface(opening: opening, format: .reel), .scene,
-                "réel sous \(nom(opening)) arrive avec du contenu : la scène le tient déjà."
+                ComposerSurfaceRouting.surface(opening: opening, format: .reel), .document,
+                "réel sous \(nom(opening)) : la scène du meuble le reprend (#15629)."
             )
         }
         for opening in [ComposerOpening.videoCameraReady, .resume] {
             XCTAssertEqual(
-                ComposerSurfaceRouting.surface(opening: opening, format: .story), .scene,
-                "story sous \(nom(opening)) arrive avec du contenu : la scène le tient déjà."
+                ComposerSurfaceRouting.surface(opening: opening, format: .story), .document,
+                "story sous \(nom(opening)) : la scène du meuble la reprend (#15629)."
             )
         }
         for opening in [ComposerOpening.keyboardOnContent, .moodGrid, .cameraReady] {
@@ -273,33 +273,23 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         }
     }
 
-    /// **La mine posée pour V3, désamorcée** (revue adversariale du 2026-08-23).
-    ///
-    /// `.draft` et `.share` sont les deux SEULES portes `routesToLegacy: nil`
-    /// qui ouvrent en `.resume`, et leur `initialFormat` est le `.post`
-    /// TRANSITOIRE de la rév. 3. Tant que la reprise laissait le format
-    /// décider, le jour où le host serait monté, rouvrir un brouillon aurait
-    /// affiché un éditeur de texte VIDE — pendant que le brouillon adopté par
-    /// `adoptDraft` attendait dans l'atelier, juste derrière.
-    ///
-    /// La règle est donc : une reprise monte la surface où la composition
-    /// reprise vit RÉELLEMENT, et le seul mécanisme de reprise du meuble
-    /// repeuple l'atelier. **Condition de levée nommée** : le jour où le meuble
-    /// sait adopter un brouillon de DOCUMENT, ce test se retourne.
-    func test_surface_uneReprise_monteLAtelier_ouLeBrouillonAdopteVitVraiment() {
+    /// **Une reprise suit le format** (#15629). Elle gardait l'atelier tant que
+    /// le meuble ne savait reprendre un brouillon que là ; la condition de levée
+    /// nommée par ce témoin est remplie — `ComposerStoredDraftKeeper` repose le
+    /// brouillon adopté sur la scène du meuble, et la surface document monte
+    /// toujours la scène. Le test se retourne, comme il l'annonçait.
+    func test_surface_uneReprise_suitLeFormat_laSceneDuMeubleReprendLeBrouillon() {
         for format in Self.tousLesFormats {
             XCTAssertEqual(
-                ComposerSurfaceRouting.surface(opening: .resume, format: format), .scene,
-                "Une reprise en \(nom(format)) doit montrer le brouillon qu'`adoptDraft` a repeuplé, pas un éditeur vide."
+                ComposerSurfaceRouting.surface(opening: .resume, format: format),
+                format == .status ? .mood : .document,
+                "Une reprise en \(nom(format)) se compose dans le meuble, comme une création."
             )
         }
     }
 
-    /// Le test précédent dit la règle ; celui-ci dit POURQUOI elle mord, en
-    /// partant des deux portes réelles plutôt que de l'ouverture abstraite.
-    /// Sans lui, remettre `.resume` sous la règle du format resterait vert ici
-    /// tant que personne ne relie l'ouverture aux portes qui la produisent.
-    func test_surface_laPorteQuiReprendSansLegacy_estLAtelier() {
+    /// Le test précédent dit la règle ; celui-ci la relie à la porte réelle.
+    func test_surface_laPorteQuiReprendSansLegacy_monteLaSceneDuMeuble() {
         for origin in [ComposerOrigin.draft(id: "brouillon-42")] {
             let profil = ComposerProfile.profile(for: origin)
 
@@ -309,10 +299,10 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             )
             XCTAssertEqual(profil.opensWith, .resume)
             XCTAssertEqual(
-                ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat),
+                ComposerMountedView.mounted(surface: ComposerSurfaceRouting.surface(opening: profil.opensWith,
+                                                                                   format: profil.initialFormat)),
                 .scene,
-                "Reprendre un brouillon doit ouvrir l'atelier qui l'a adopté — le `.post` d'ouverture est TRANSITOIRE, "
-                    + "et l'écrivain qui devait rebasculer au format du document n'existe pas."
+                "Reprendre un brouillon ouvre la scène du meuble, jamais l'atelier du SDK."
             )
         }
     }
@@ -382,7 +372,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             (nom: "repost(status)",
              origine: .repost(ofPostId: "mood-source", sourceFormat: .status),
              surface: .mood),
-            (nom: "draft", origine: .draft(id: "brouillon-42"), surface: .scene),
+            // **`.scene` → `.document` le 2026-11-04** (#15629) : la reprise suit
+            // le format, et le meuble repose le brouillon sur sa propre scène.
+            (nom: "draft", origine: .draft(id: "brouillon-42"), surface: .document),
             // **`.scene` → `.document` le 2026-10-31** (#13864) : le partage
             // entrant sème sa pièce (`.mediaSeeded`, ce que `ShareComposeDoor`
             // déclarait déjà) et se compose sur la scène, comme le post.
@@ -744,26 +736,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
     }
 
-    /// **AUCUNE des trois surfaces n'a de canvas que le SOCLE puisse lire.**
-    ///
-    /// La garde jumelle de celle du dessus, et la seule qui rougirait si l'œil
-    /// revenait par une autre porte : `.scene` ne peint pas le socle du tout
-    /// (l'atelier peint le sien), `.mood` n'a pas de canvas (loi 6),
-    /// `.document` n'a pas de chemin d'ingestion.
-    ///
-    /// Tant que cette phrase tient, `MeeshyScenePlayer` n'a plus rien à faire
-    /// dans le meuble — c'est ce que vérifie, côté source,
-    /// `MeeshyComposerHostGuardTests.test_lOeilEtSonLecteur_vivent_etMeurent_ensemble`.
-    func test_aucuneSurfaceDuMeuble_nePeintDOeil_fauteDeCanvasALire() {
-        for surface in Self.toutesLesSurfaces {
-            XCTAssertFalse(
-                ComposerChromeOwnership.socleZones(for: surface).contains(.preview),
-                "\(surface) : le socle y peint un œil, et aucune des trois surfaces ne lui donne de canvas à "
-                    + "lire. Un aperçu vide ment sur ce qui sera publié (loi 6)."
-            )
-        }
-    }
-
     // MARK: - Lot 4.9 — la mémoire d'audience, une par FORMAT
 
     /// **Loi 10 — une mémoire par FORMAT, jamais une seule pour tous.**
@@ -1116,7 +1088,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         ) else {
             return XCTFail("Le brouillon doit être une propriété nommée `documentDraft` — la garde s'ancre dessus.")
         }
-        let branches = bloc.components(separatedBy: "case .scene, .document:")
+        let branches = bloc.components(separatedBy: "case .document:")
         guard branches.count == 2 else {
             return XCTFail("La branche `.document` du brouillon est introuvable — la garde ne mesurerait RIEN.")
         }

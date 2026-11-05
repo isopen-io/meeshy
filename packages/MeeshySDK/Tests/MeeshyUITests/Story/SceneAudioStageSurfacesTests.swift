@@ -217,22 +217,6 @@ final class SceneAudioStageSurfacesTests: XCTestCase {
             .joined(separator: "\n")
     }
 
-    /// Les sites du SDK qui posent un son sur une scène : le lecteur, la couche
-    /// de pastilles, le player, l'export, les deux vignettes, l'atelier.
-    func test_everySceneSurface_readsTheStageRule() throws {
-        for site in ["Controls/AudioForegroundChip.swift",
-                     "Controls/SceneSoundChipLayer.swift",
-                     "ScenePlayer/MeeshyScenePlayer.swift",
-                     "Canvas/StoryAudioChipPainter.swift",
-                     "SceneThumbnail.swift",
-                     "SlideMiniPreview.swift",
-                     "StoryCanvasMediaMuteOverlays.swift"] {
-            XCTAssertTrue(try source(site).contains("SceneAudioStageRule."),
-                          "\(site) pose un son sur une scène sans lire SceneAudioStageRule : " +
-                          "un son de fond pourrait y être peint.")
-        }
-    }
-
     /// La vignette de slide peignait une note pour CHAQUE objet audio, fond
     /// compris : le son de fond paraissait sur la scène de la bande.
     func test_theSlideThumbnail_doesNotPaintEveryAudioObject() throws {

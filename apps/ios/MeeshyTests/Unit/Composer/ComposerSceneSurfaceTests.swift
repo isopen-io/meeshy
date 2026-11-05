@@ -22,11 +22,6 @@ final class ComposerSceneSurfaceTests: XCTestCase {
         XCTAssertEqual(ComposerMountedView.mounted(surface: .document), .scene)
     }
 
-    /// **L'atelier EST une scène : la question ne se pose pas.**
-    func test_lAtelier_resteLAtelier() {
-        XCTAssertEqual(ComposerMountedView.mounted(surface: .scene), .atelier)
-    }
-
     /// **Un mood n'a pas de scène**, et la tâche 4.3 lui a justement retiré les
     /// exceptions qu'il ne porte pas. Ce témoin garde qu'on ne lui en rend
     /// aucune.
@@ -34,9 +29,10 @@ final class ComposerSceneSurfaceTests: XCTestCase {
         XCTAssertEqual(ComposerMountedView.mounted(surface: .mood), .mood)
     }
 
-    /// Les trois vues sont atteignables — aucune n'est du code mort.
-    func test_lesTroisVues_sontToutesAtteignables() {
-        let atteintes = Set([ComposerSurfaceKind.scene, .document, .mood].map { ComposerMountedView.mounted(surface: $0) })
+    /// Les deux vues sont atteignables — aucune n'est du code mort (#15629 :
+    /// l'atelier du SDK, troisième vue, a quitté le dépôt).
+    func test_lesDeuxVues_sontToutesAtteignables() {
+        let atteintes = Set([ComposerSurfaceKind.document, .mood].map { ComposerMountedView.mounted(surface: $0) })
         XCTAssertEqual(atteintes, Set(ComposerMountedView.allCases))
     }
 

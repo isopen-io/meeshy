@@ -1,12 +1,5 @@
 import SwiftUI
-import UIKit
-import os
-import PhotosUI
-import UniformTypeIdentifiers
-import AVFoundation
 import MeeshySDK
-
-// MARK: - Media Pill Label (extracted for Sendable conformance)
 
 struct MediaPillLabel: View {
     let icon: String

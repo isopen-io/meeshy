@@ -32,20 +32,20 @@ final class StoryComposerPasteStarterTests: XCTestCase {
     // MARK: - Règle pure
 
     func test_pasteStarter_isOffered_whenTheAppInjectedAResolverAndMediaFits() {
-        XCTAssertTrue(StoryComposerView.offersPasteStarter(hasResolver: true, canAddMedia: true))
+        XCTAssertTrue(StoryPasteStarter.offers(hasResolver: true, canAddMedia: true))
     }
 
     /// Sans injection, personne ne sait lire le presse-papier : la capsule
     /// ouvrirait le vide. Même doctrine que le chip « Lieu » et que l'amorce
     /// « Caméra ».
     func test_pasteStarter_isWithheld_withoutAnInjectedResolver() {
-        XCTAssertFalse(StoryComposerView.offersPasteStarter(hasResolver: false, canAddMedia: true))
+        XCTAssertFalse(StoryPasteStarter.offers(hasResolver: false, canAddMedia: true))
     }
 
     /// Le plafond média est le droit de poser un objet de plus. L'offrir malgré
     /// lui donnerait un collage qui n'insère rien, sans le dire.
     func test_pasteStarter_isWithheld_onceTheMediaCeilingIsReached() {
-        XCTAssertFalse(StoryComposerView.offersPasteStarter(hasResolver: true, canAddMedia: false))
+        XCTAssertFalse(StoryPasteStarter.offers(hasResolver: true, canAddMedia: false))
     }
 
     // MARK: - Les types acceptés SONT la directive produit
@@ -71,7 +71,7 @@ final class StoryComposerPasteStarterTests: XCTestCase {
     /// chemin — l'exigence de 2026-08-23 n'est pas violée, elle est sans objet.
     ///
     func test_pasteStarterContentTypes_goFarBeyondImages() {
-        let types = StoryComposerView.pasteStarterContentTypes
+        let types = StoryPasteStarter.contentTypes
 
         for expected in [UTType.image, .movie, .audio, .plainText] {
             XCTAssertTrue(
@@ -142,21 +142,6 @@ final class StoryComposerPasteStarterTests: XCTestCase {
     }
 
     // MARK: - Gardes de source
-
-    /// **La garde qui compte.** Ce dépôt répète un motif : du code juste,
-    /// compilé, testé — et que rien ne monte. Une capsule écrite mais absente de
-    /// la rangée passerait toutes les assertions ci-dessus.
-    func test_thePasteStarter_isActuallyMountedInTheStarterRow() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerBlankCanvasStarters.swift")
-        let row = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "private var blankCanvasStarterRow:", in: code),
-            "La rangée d'amorces a disparu."
-        )
-        XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "BlankCanvasPasteStarter(", in: row), 1,
-            "La capsule « Coller » n'est pas dans la rangée : elle serait écrite et jamais rendue."
-        )
-    }
 
     /// Garde NÉGATIVE. Le composer ne doit JAMAIS relire le presse-papier
     /// lui-même : `ComposerDropResolver` / `ComposerIngestRouter` le font déjà
@@ -235,20 +220,4 @@ final class StoryComposerPasteStarterTests: XCTestCase {
         )
     }
 
-    /// Le collage ne fabrique aucun chemin d'insertion : il emprunte ceux de la
-    /// caméra et de l'enregistrement, qui existent et sont éprouvés. Un
-    /// `addMediaObject(` posé ici serait un troisième jumeau du même code.
-    func test_pastedItems_reuseTheExistingInsertionPaths() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "func posePastedItems(", in: code),
-            "`posePastedItems` a disparu : le collage ne poserait plus rien."
-        )
-        XCTAssertEqual(ComposerSourceGuard.occurrences(of: "addCapturedMedia(", in: body), 2,
-                       "L'image et la vidéo empruntent le chemin caméra, tel quel.")
-        XCTAssertEqual(ComposerSourceGuard.occurrences(of: "addRecordingToBackground(", in: body), 1,
-                       "Le son emprunte le chemin de l'enregistrement.")
-        XCTAssertEqual(ComposerSourceGuard.occurrences(of: "addMediaObject(", in: body), 0,
-                       "Un quatrième chemin d'insertion recommencerait ce que deux extractions ont réuni.")
-    }
 }

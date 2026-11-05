@@ -59,7 +59,7 @@ struct ComposerPasteEntry: View {
 
     @StateObject private var gate = ComposerPasteEntryGate(
         probe: ComposerSystemPasteboardProbe(),
-        types: StoryComposerView.pasteStarterContentTypes)
+        types: StoryPasteStarter.contentTypes)
 
     var body: some View {
         if gate.isShown {

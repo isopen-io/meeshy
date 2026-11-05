@@ -81,38 +81,6 @@ final class SoundExtractionCollectionTests: XCTestCase {
                       "Une légende doit expliquer la conséquence de l'activation.")
     }
 
-    /// `test_mediaPanel_offersSoundExtractionOnlyWhenVideoPresent` rougit si
-    /// `ComposerToolPanelHost.mediaPanel` cesse de gater
-    /// `SoundExtractionToggle` derrière `hasVideoMedia` : une slide sans
-    /// vidéo n'a pas de bande-son à extraire, offrir l'interrupteur
-    /// collecterait un choix qui ne correspond à rien de publiable.
-    func test_mediaPanel_offersSoundExtractionOnlyWhenVideoPresent() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerToolPanelHost.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "private var mediaPanel: some View {", in: code)
-        )
-        XCTAssertTrue(body.contains("if hasVideoMedia {"),
-                      "SoundExtractionToggle doit être gaté à la présence d'une vidéo.")
-        guard let ifRange = body.range(of: "if hasVideoMedia {") else {
-            return XCTFail("garde hasVideoMedia introuvable")
-        }
-        let afterIf = body[ifRange.upperBound...]
-        XCTAssertTrue(afterIf.contains("SoundExtractionToggle("),
-                      "Le toggle doit être À L'INTÉRIEUR de la garde, pas seulement présent ailleurs.")
-    }
-
-    /// `test_mediaPanel_wiresSoundExtractionCommit` rougit si
-    /// `ComposerToolPanelHost.mediaPanel` cesse de relayer le changement du
-    /// toggle jusqu'au store de collecte.
-    func test_mediaPanel_wiresSoundExtractionCommit() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerToolPanelHost.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "private var mediaPanel: some View {", in: code)
-        )
-        XCTAssertTrue(body.contains("accessibilityStore.setAllowsSoundExtraction("),
-                      "Le commit du toggle doit atteindre le store de collecte.")
-    }
-
     /// Espaces normalisés — cf. `MediaAltCollectionTests.collapsed` : une garde
     /// ancrée sur un littéral multi-lignes tombe au premier retour à la ligne.
     private func collapsed(_ code: String) -> String {
@@ -136,88 +104,9 @@ final class SoundExtractionCollectionTests: XCTestCase {
                        "Un repli au refus afficherait un état que la publication ne suit pas.")
     }
 
-    /// `test_mediaPanel_readsToggleStateFromTheStore` rougit si `isOn:` du
-    /// `SoundExtractionToggle` devient un littéral (`true` / `false`) au lieu de
-    /// lire le store : l'interrupteur afficherait un état qui n'est pas celui
-    /// qui sera publié.
-    func test_mediaPanel_readsToggleStateFromTheStore() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerToolPanelHost.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "private var mediaPanel: some View {", in: code)
-        )
-        let flat = collapsed(body)
-        XCTAssertTrue(flat.contains("isOn: accessibilityStore.allowsSoundExtraction()"),
-                      "L'état affiché doit venir du store, seul détenteur du défaut conservateur.")
-        XCTAssertFalse(flat.contains("isOn: true"),
-                       "Un état codé en dur trahirait le choix de l'auteur.")
-    }
-
     // MARK: - La chaîne ATTEINT le point de publication (C-bis, correctif 3)
 
-    /// `test_bottomBand_passesSoundExtractionCallbackDownToToolPanelHost`
-    /// rougit si `ComposerBottomBand` cesse de passer
-    /// `onAllowSoundExtractionChanged` au host : le host EXPOSE ce rappel
-    /// depuis la vague 2, mais personne ne le lui passait — l'opt-in de
-    /// l'auteur n'atteignait jamais le réseau.
-    func test_bottomBand_passesSoundExtractionCallbackDownToToolPanelHost() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerBottomBand.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "var body: some View", in: code)
-        )
-        XCTAssertTrue(
-            collapsed(body).contains("onAllowSoundExtractionChanged: onAllowSoundExtractionChanged"),
-            "Le band doit relayer l'opt-in jusqu'au host de panneau.")
-    }
-
-    /// `test_controlsLayer_relaysSoundExtractionCallbackToBottomBand` rougit si
-    /// la couche de contrôles cesse de relayer l'opt-in au band.
-    func test_controlsLayer_relaysSoundExtractionCallbackToBottomBand() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerControlsLayer.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "public var body: some View", in: code)
-        )
-        XCTAssertTrue(
-            collapsed(body).contains("onAllowSoundExtractionChanged: onAllowSoundExtractionChanged"),
-            "La couche de contrôles doit relayer l'opt-in au band.")
-    }
-
-    /// `test_controlsLayer_exposesSoundExtractionCallbackToItsParent` rougit si
-    /// le point de sortie publique disparaît : le parent qui tient la
-    /// publication n'aurait plus de canal pour apprendre le choix de l'auteur.
-    func test_controlsLayer_exposesSoundExtractionCallbackToItsParent() throws {
-        let code = try ComposerSourceGuard.source("Controls/ComposerControlsLayer.swift")
-        XCTAssertTrue(
-            collapsed(code).contains("onAllowSoundExtractionChanged: ((Bool) -> Void)? = nil"),
-            "L'opt-in doit être un paramètre d'init, sinon le parent n'a aucun canal.")
-        let initBody = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "public init(", in: code)
-        )
-        XCTAssertTrue(
-            collapsed(initBody).contains("self.onAllowSoundExtractionChanged = onAllowSoundExtractionChanged"),
-            "L'init doit CONSERVER le rappel reçu — le déclarer sans l'assigner le laisse nil.")
-    }
-
     // MARK: - V3-4 — l'opt-in PART (transport, pas seulement collecte)
-
-    /// `test_accessibilityHandoff_carriesTheExplicitChoice` rougit si la charge
-    /// remise à la publication cesse de porter le choix de l'auteur. Première
-    /// assertion comportementale du transport : `allowSoundExtractionPayload()`
-    /// n'avait, avant ce lot, aucun appelant de production.
-    func test_accessibilityHandoff_carriesTheExplicitChoice() {
-        let store = MediaAccessibilityStore()
-        store.setAllowsSoundExtraction(true)
-
-        XCTAssertEqual(StoryComposerView.accessibilityHandoff(from: store).allowSoundExtraction, true)
-    }
-
-    /// `test_accessibilityHandoff_staysSilentOnAnUntouchedSwitch` rougit si un
-    /// interrupteur jamais touché se met à envoyer `false` : le défaut serveur
-    /// s'appliquerait alors par écrasement au lieu de s'appliquer par silence.
-    func test_accessibilityHandoff_staysSilentOnAnUntouchedSwitch() {
-        XCTAssertNil(
-            StoryComposerView.accessibilityHandoff(from: MediaAccessibilityStore()).allowSoundExtraction
-        )
-    }
 
     /// `test_createStoryRequest_encodesAllowSoundExtraction` rougit si le champ
     /// disparaît du corps de `POST /posts` : le gateway l'accepte depuis
