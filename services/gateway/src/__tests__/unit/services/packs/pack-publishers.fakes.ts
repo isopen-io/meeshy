@@ -44,9 +44,19 @@ const project = (row: Record<string, unknown> | undefined, select: Record<string
   return Object.fromEntries(Object.keys(select).map((key) => [key, row[key] ?? null]));
 };
 
-export function publisherModels(seedUsers: Readonly<Record<string, PublisherUserSeed>>, profiles: ProfileRow[] = []) {
+const accountOf = (id: string, seed: PublisherUserSeed) => ({ id, isActive: true, deactivatedAt: null, deletedAt: null, emailVerifiedAt: null, phoneVerifiedAt: null, ...seed });
+
+/** Un compte inscrit, actif et à l'adresse vérifiée : le compte ordinaire d'une suite qui ne teste pas la vérification. */
+export const verifiedAccount = (id: string): PublisherUserSeed => ({ username: `user_${id.slice(-4)}`, emailVerifiedAt: new Date('2026-01-01T00:00:00Z') });
+
+/**
+ * `fallback` : le compte rendu pour un identifiant que la suite n'a pas semé
+ * (`verifiedAccount` pour les suites des boutiques) ; absent, le compte est inconnu.
+ */
+export function publisherModels(seedUsers: Readonly<Record<string, PublisherUserSeed>>, profiles: ProfileRow[] = [], fallback?: (id: string) => PublisherUserSeed) {
   let seq = 0;
-  const users = new Map(Object.entries(seedUsers).map(([id, seed]) => [id, { id, isActive: true, deactivatedAt: null, deletedAt: null, emailVerifiedAt: null, phoneVerifiedAt: null, ...seed }]));
+  const users = new Map(Object.entries(seedUsers).map(([id, seed]) => [id, accountOf(id, seed)]));
+  const accountFor = (id: string) => users.get(id) ?? (fallback === undefined ? undefined : accountOf(id, fallback(id)));
   const uniqueTaken = (data: Record<string, unknown>, except?: ProfileRow) =>
     profiles.some((row) => row !== except && (row.userId === data.userId || (typeof data.slug === 'string' && row.slug === data.slug)));
 
@@ -81,8 +91,12 @@ export function publisherModels(seedUsers: Readonly<Record<string, PublisherUser
   };
 
   const user = {
-    findUnique: async ({ where, select }: { where: { id: string }; select?: Record<string, unknown> }) => project(users.get(where.id), select),
-    findMany: async ({ where, select }: { where: Where; select?: Record<string, unknown> }) => [...users.values()].filter((row) => whereMatches(row, where)).map((row) => project(row, select)),
+    findUnique: async ({ where, select }: { where: { id: string }; select?: Record<string, unknown> }) => project(accountFor(where.id), select),
+    findMany: async ({ where, select }: { where: { id: { in: readonly string[] } }; select?: Record<string, unknown> }) =>
+      where.id.in.flatMap((id) => {
+        const account = accountFor(id);
+        return account === undefined ? [] : [project(account, select)];
+      }),
   };
 
   return { partnerProfile, user, profiles, users };

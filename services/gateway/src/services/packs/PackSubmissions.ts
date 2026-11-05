@@ -27,7 +27,9 @@ import {
 import type { StickerMimeType } from '@meeshy/shared/types/sticker-definition';
 import type { NormalizedStickerImage, StickerImageOutcome } from '../stickers/stickerImage';
 import type { StickerFileStore } from '../stickers/StickerLibrary';
+import { claimedPublisherSlug } from '@meeshy/shared/types/pack-publisher';
 import { isUniqueViolation } from './PackCatalog';
+import { defaultPackPublishers, withPublishers, type PackPublishers, type PublicationRefusal } from './PackPublishers';
 import { STICKER_PACK_INCLUDE, stickerPackDetail, type StickerPackRow } from './stickerPackSpec';
 
 export type StickerAssetRefusal = 'missing' | 'not-an-image' | 'too-large' | 'kind-mismatch';
@@ -37,7 +39,8 @@ export type SubmitStickerPackOutcome =
   | { readonly kind: 'invalid'; readonly problems: readonly StickerPackProblem[] }
   | { readonly kind: 'asset-refused'; readonly key: string; readonly reason: StickerAssetRefusal }
   | { readonly kind: 'slug-taken' }
-  | { readonly kind: 'too-many-pending' };
+  | { readonly kind: 'too-many-pending' }
+  | { readonly kind: 'refused'; readonly reason: PublicationRefusal };
 
 export type ReviewDecision = 'approve' | 'reject';
 
@@ -51,6 +54,8 @@ export type SubmissionSpec = {
 export type PackSubmissionsDeps = {
   readonly prisma: PrismaClient;
   readonly spec: SubmissionSpec;
+  /** Qui peut publier, et sous quel éditeur (#16274) ; par défaut, la base et le compte officiel de l'environnement. */
+  readonly publishers?: PackPublishers;
   readonly now?: () => Date;
   readonly newFileId?: () => string;
 };
@@ -64,12 +69,14 @@ const kindMatches = (kind: StickerKind, animated: boolean): boolean =>
 export class PackSubmissions {
   private readonly prisma: PrismaClient;
   private readonly spec: SubmissionSpec;
+  private readonly publishers: PackPublishers;
   private readonly now: () => Date;
   private readonly newFileId: () => string;
 
   constructor(deps: PackSubmissionsDeps) {
     this.prisma = deps.prisma;
     this.spec = deps.spec;
+    this.publishers = deps.publishers ?? defaultPackPublishers(deps.prisma);
     this.now = deps.now ?? (() => new Date());
     this.newFileId = deps.newFileId ?? randomUUID;
   }
@@ -78,6 +85,8 @@ export class PackSubmissions {
     const validation = this.spec.validateManifest(input);
     if ('problems' in validation) return { kind: 'invalid', problems: validation.problems };
     const { manifest } = validation;
+    const authorization = await this.publishers.authorizePublication(userId, { author: manifest.author, claimed: claimedPublisherSlug(input) });
+    if (authorization.kind === 'refused') return authorization;
 
     const existing = await this.prisma.stickerPack.findUnique({ where: { slug: manifest.slug }, include: STICKER_PACK_INCLUDE });
     const replacing = existing !== null && existing.submitterId === userId && existing.status === 'rejected';
@@ -124,7 +133,7 @@ export class PackSubmissions {
         },
         include: STICKER_PACK_INCLUDE,
       });
-      return { kind: 'submitted', pack: stickerPackDetail(row, false, { userId, canModerate: false }) };
+      return { kind: 'submitted', pack: stickerPackDetail(row, false, { userId, canModerate: false }, authorization.publisher) };
     } catch (error) {
       await Promise.all(stored.map(({ filePath }) => this.spec.files.remove(filePath).catch(() => undefined)));
       if (isUniqueViolation(error)) return { kind: 'slug-taken' };
@@ -135,13 +144,13 @@ export class PackSubmissions {
   /** Les propositions d'un auteur, les plus récentes d'abord — avec le mot du modérateur. */
   async submissions(userId: string): Promise<readonly StickerPackDetail[]> {
     const rows = await this.prisma.stickerPack.findMany({ where: { submitterId: userId }, include: STICKER_PACK_INCLUDE, orderBy: { createdAt: 'desc' } });
-    return rows.map((row) => stickerPackDetail(row, false, { userId, canModerate: false }));
+    return withPublishers(this.publishers, rows, (row) => stickerPackDetail(row, false, { userId, canModerate: false }));
   }
 
   /** La file de modération, la plus ancienne proposition d'abord. */
   async pending(moderatorId: string): Promise<readonly StickerPackDetail[]> {
     const rows = await this.prisma.stickerPack.findMany({ where: { status: 'pending' }, include: STICKER_PACK_INCLUDE, orderBy: { createdAt: 'asc' } });
-    return rows.map((row) => stickerPackDetail(row, false, { userId: moderatorId, canModerate: true }));
+    return withPublishers(this.publishers, rows, (row) => stickerPackDetail(row, false, { userId: moderatorId, canModerate: true }));
   }
 
   /** Publie ou refuse un pack EN ATTENTE — `null` s'il n'y en a pas sous ce slug. */

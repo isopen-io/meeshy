@@ -19,7 +19,9 @@ import {
 } from '@meeshy/shared/types/sticker-pack';
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 import { stickerPackAssetRef } from '@meeshy/shared/types/sticker-pack-asset';
+import { MEESHY_PUBLISHER, type PackPublisherRef } from '@meeshy/shared/types/pack-publisher';
 import type { CommunityPackStore, PackDomainSpec, PackViewer, RegistryPack } from './PackCatalog';
+import { defaultPackPublishers, withPublishers, type PackPublishers } from './PackPublishers';
 
 export type StickerItemRow = {
   readonly key: string;
@@ -87,7 +89,7 @@ function toItem(row: StickerItemRow, status: string): StickerPackItem {
 }
 
 /** Un pack proposé par un tiers. Le mot du modérateur n'est servi qu'à son auteur et aux modérateurs. */
-export function stickerPackDetail(row: StickerPackRow, installed: boolean, viewer?: PackViewer): StickerPackDetail {
+export function stickerPackDetail(row: StickerPackRow, installed: boolean, viewer?: PackViewer, publisher?: PackPublisherRef): StickerPackDetail {
   const cover = row.items[0] === undefined ? null : assetOf(row.items[0], row.status);
   const ownView = viewer !== undefined && (viewer.userId === row.submitterId || viewer.canModerate);
   return {
@@ -95,6 +97,7 @@ export function stickerPackDetail(row: StickerPackRow, installed: boolean, viewe
     name: row.name,
     description: row.description,
     author: row.author,
+    ...(publisher === undefined ? {} : { publisher }),
     builtin: false,
     status: row.status as StickerPackStatus,
     itemCount: row.items.length,
@@ -123,6 +126,7 @@ const STICKER_REGISTRY: readonly RegistryPack<StickerPackDetail>[] = BUILTIN_STI
     name: pack.name,
     description: pack.description,
     author: STICKER_PACK_AUTHOR_MEESHY,
+    publisher: MEESHY_PUBLISHER,
     builtin: true,
     status: 'approved',
     itemCount: 0,
@@ -134,27 +138,30 @@ const STICKER_REGISTRY: readonly RegistryPack<StickerPackDetail>[] = BUILTIN_STI
   }),
 }));
 
-/** Le magasin communautaire des stickers : la table `StickerPack`, ses packs publiés du plus installé au moins installé. */
-export function prismaStickerPackStore(prisma: PrismaClient): CommunityPackStore<StickerPackDetail> {
+/** Le magasin communautaire des stickers : la table `StickerPack`, ses packs publiés du plus installé au moins installé, chacun avec son éditeur (#16274). */
+export function prismaStickerPackStore(prisma: PrismaClient, publishers: PackPublishers = defaultPackPublishers(prisma)): CommunityPackStore<StickerPackDetail> {
+  const publisherOf = async (row: StickerPackRow): Promise<PackPublisherRef | undefined> => (await publishers.servedFor([row])).get(row.submitterId);
   return {
     async catalogue(installedOf) {
       const rows = await prisma.stickerPack.findMany({ where: { status: 'approved' }, include: STICKER_PACK_INCLUDE, orderBy: { installCount: 'desc' } });
-      return rows.map((row) => stickerPackDetail(row, installedOf(row.slug)));
+      return withPublishers(publishers, rows, (row) => stickerPackDetail(row, installedOf(row.slug)));
     },
     async installed(slugs) {
       const rows = await prisma.stickerPack.findMany({ where: { slug: { in: [...slugs] }, status: 'approved' }, include: STICKER_PACK_INCLUDE });
       const order = new Map(slugs.map((slug, index) => [slug, index]));
-      return [...rows].sort((a, b) => (order.get(a.slug) ?? 0) - (order.get(b.slug) ?? 0)).map((row) => stickerPackDetail(row, true));
+      const sorted = [...rows].sort((a, b) => (order.get(a.slug) ?? 0) - (order.get(b.slug) ?? 0));
+      return withPublishers(publishers, sorted, (row) => stickerPackDetail(row, true));
     },
     async detail(slug, viewer, installedOf) {
       const row = await prisma.stickerPack.findUnique({ where: { slug }, include: STICKER_PACK_INCLUDE });
       if (row === null || !isStickerPackVisible(row, viewer)) return null;
-      return stickerPackDetail(row, installedOf(slug), viewer);
+      return stickerPackDetail(row, installedOf(slug), viewer, await publisherOf(row));
     },
     async installable(slug) {
       const row = await prisma.stickerPack.findUnique({ where: { slug }, include: STICKER_PACK_INCLUDE });
       if (row === null || row.status !== 'approved') return null;
-      return { id: row.id, installCount: row.installCount, project: (installed, installCount) => stickerPackDetail({ ...row, installCount }, installed) };
+      const publisher = await publisherOf(row);
+      return { id: row.id, installCount: row.installCount, project: (installed, installCount) => stickerPackDetail({ ...row, installCount }, installed, undefined, publisher) };
     },
     async addInstalls(id, delta) {
       const row = await prisma.stickerPack.update({ where: { id }, data: { installCount: { increment: delta } } });
@@ -164,11 +171,11 @@ export function prismaStickerPackStore(prisma: PrismaClient): CommunityPackStore
 }
 
 /** Le domaine `sticker` : intégrés INCLUS (non retirables, #10738), magasin communautaire, aucune garde de retrait. */
-export function stickerPackSpec(prisma: PrismaClient): PackDomainSpec<StickerPackSummary, StickerPackDetail> {
+export function stickerPackSpec(prisma: PrismaClient, publishers?: PackPublishers): PackDomainSpec<StickerPackSummary, StickerPackDetail> {
   return {
     domain: 'sticker',
     registry: STICKER_REGISTRY,
-    community: prismaStickerPackStore(prisma),
+    community: prismaStickerPackStore(prisma, publishers),
     removalGuard: null,
     toSummary: stickerPackSummary,
   };

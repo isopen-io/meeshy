@@ -31,8 +31,8 @@ const fakeNormalize = async (bytes: Buffer): Promise<StickerImageOutcome> => {
   return { ok: true, image: { bytes, mimeType: tag === 'A' ? 'image/webp' : 'image/png', width: 512, height: 512, animated: tag === 'A' } };
 };
 
-async function buildApp(o: { userId?: string; role?: string; anonymous?: boolean; realNormalize?: boolean } = {}) {
-  const db = memoryPrisma();
+async function buildApp(o: { userId?: string; role?: string; anonymous?: boolean; realNormalize?: boolean; accounts?: Parameters<typeof memoryPrisma>[0] } = {}) {
+  const db = memoryPrisma(o.accounts);
   const stored = new Map<string, Buffer>();
   const files: StickerFileStore = {
     write: async (p, b) => void stored.set(p, b),
@@ -245,5 +245,66 @@ describe('moderation and installation', () => {
     as(MODO, 'MODERATOR');
     expect((await app.inject({ method: 'POST', url: '/inconnu/review', payload: { decision: 'approve' } })).statusCode).toBe(404);
     await app.close();
+  });
+});
+
+describe('the publisher of a pack (#16274)', () => {
+  it('attaches the submission to the publisher of the signed-in account, named by its store name — never its username', async () => {
+    const { app, profiles } = await buildApp({ accounts: { [ALICE]: { username: 'alice_secret', emailVerifiedAt: new Date('2026-01-01T00:00:00Z') } } });
+    const res = await submit(app);
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.publisher).toEqual({ slug: 'studio-minou', name: 'Studio Minou', verified: false, official: false });
+    expect(res.body).not.toContain('alice_secret');
+    expect(profiles).toEqual([expect.objectContaining({ userId: ALICE, slug: 'studio-minou' })]);
+  });
+
+  it('refuses an account that verified neither its email nor its phone: 403 PUBLISHER_ACCOUNT_UNVERIFIED, nothing stored', async () => {
+    const { app, packs, stored } = await buildApp({ accounts: { [ALICE]: { username: 'alice' } } });
+    const res = await submit(app);
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PUBLISHER_ACCOUNT_UNVERIFIED');
+    expect(packs).toEqual([]);
+    expect(stored.size).toBe(0);
+  });
+
+  it('refuses a submission naming a publisher owned by another account: 403 PUBLISHER_NOT_OWNER', async () => {
+    const { app, as, packs } = await buildApp({ userId: BOB });
+    expect((await submit(app, manifest({ slug: 'oiseaux', author: 'Bob Studio' }))).json().data.publisher.slug).toBe('bob-studio');
+    as(ALICE);
+    const res = await submit(app, manifest({ slug: 'usurpe', publisher: 'bob-studio' }));
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PUBLISHER_NOT_OWNER');
+    expect(packs.some((pack) => pack.slug === 'usurpe')).toBe(false);
+  });
+
+  it('refuses the Meeshy identity to a third party: 403 PUBLISHER_RESERVED or PUBLISHER_NOT_OWNER', async () => {
+    const { app } = await buildApp();
+    const byAuthor = await submit(app, manifest({ author: 'Meeshy Officiel' }));
+    expect(byAuthor.statusCode).toBe(403);
+    expect(byAuthor.json().code).toBe('PUBLISHER_RESERVED');
+    const byClaim = await submit(app, manifest({ publisher: 'meeshy' }));
+    expect(byClaim.statusCode).toBe(403);
+    expect(byClaim.json().code).toBe('PUBLISHER_NOT_OWNER');
+  });
+
+  it('refuses a guest of a link: 403 REGISTERED_USER_REQUIRED', async () => {
+    const { app } = await buildApp({ anonymous: true });
+    const res = await submit(app);
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('REGISTERED_USER_REQUIRED');
+  });
+
+  it('serves the publisher in the shop for built-in and published packs, without the owner account', async () => {
+    const { app, as } = await buildApp({ accounts: { [ALICE]: { username: 'alice_secret', emailVerifiedAt: new Date('2026-01-01T00:00:00Z') } } });
+    await submit(app);
+    as(MODO, 'MODERATOR');
+    await app.inject({ method: 'POST', url: '/chats-de-paris/review', payload: { decision: 'approve' } });
+    as(BOB);
+    const shop = await app.inject({ method: 'GET', url: '/' });
+    const bySlug = new Map(shop.json().data.map((pack: { slug: string; publisher: unknown }) => [pack.slug, pack.publisher]));
+    expect(bySlug.get('mee')).toEqual({ slug: 'meeshy', name: 'Meeshy', verified: true, official: true });
+    expect(bySlug.get('chats-de-paris')).toEqual({ slug: 'studio-minou', name: 'Studio Minou', verified: false, official: false });
+    expect(shop.body).not.toContain(ALICE);
+    expect(shop.body).not.toContain('alice_secret');
   });
 });

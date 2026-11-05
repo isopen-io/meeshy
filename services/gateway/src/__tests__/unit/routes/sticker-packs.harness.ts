@@ -18,6 +18,7 @@
  * demandée (`select`) : un `select` qui oublie une colonne la perd ici aussi.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { publisherModels, verifiedAccount, type PublisherUserSeed } from '../services/packs/pack-publishers.fakes';
 
 export type Row = Record<string, unknown> & { id: string };
 
@@ -64,7 +65,9 @@ export function matches(row: Row, where: Where = {}): boolean {
 
 const uniqueViolation = () => Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
 
-export function memoryPrisma() {
+/** `accounts` : les comptes que la suite sème (#16274) ; tout autre compte est inscrit, actif et vérifié. */
+export function memoryPrisma(accounts: Readonly<Record<string, PublisherUserSeed>> = {}) {
+  const publishers = publisherModels(accounts, [], verifiedAccount);
   const packs: Row[] = [];
   const items: Row[] = [];
   const choices: Row[] = [];
@@ -166,5 +169,11 @@ export function memoryPrisma() {
     },
   };
 
-  return { prisma: { stickerPack, stickerPackItem, userStickerPack } as unknown as PrismaClient, packs, items, choices };
+  return {
+    prisma: { stickerPack, stickerPackItem, userStickerPack, partnerProfile: publishers.partnerProfile, user: publishers.user } as unknown as PrismaClient,
+    packs,
+    items,
+    choices,
+    profiles: publishers.profiles,
+  };
 }

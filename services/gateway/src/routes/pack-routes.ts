@@ -22,10 +22,12 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { PACK_LIMITS, PACK_SLUG_PATTERN } from '@meeshy/shared/types/content-pack';
 import type { UserRoleEnum } from '@meeshy/shared/types';
+import { PACK_PUBLISHER_ERROR_CODES } from '@meeshy/shared/types/pack-publisher';
 
 import { isRegisteredUser, type UnifiedAuthRequest } from '../middleware/auth';
 import { permissionsService } from '../services/admin/permissions.service';
 import type { PackCatalog, PackInstallationBroadcast, PackViewer } from '../services/packs/PackCatalog';
+import type { PublicationRefusal } from '../services/packs/PackPublishers';
 import { logError } from '../utils/logger';
 import { sendConflict, sendError, sendForbidden, sendInternalError, sendNotFound, sendSuccess } from '../utils/response.js';
 import { gameRateLimitConfig, refusalResponse } from './me/game-shared';
@@ -35,6 +37,27 @@ import { broadcastToUser } from '../utils/socket-broadcast';
 export const PACK_NOT_OWNED_CODE = 'PACK_NOT_OWNED';
 
 export const packEnvelope = (data: object) => ({ type: 'object', properties: { success: { type: 'boolean' }, data } }) as const;
+
+/** L'éditeur d'un pack servi (#16274) : son adresse et son nom de boutique — jamais le compte qui le possède. */
+export const packPublisherJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['slug', 'name', 'verified', 'official'],
+  properties: { slug: { type: 'string' }, name: { type: 'string' }, verified: { type: 'boolean' }, official: { type: 'boolean' } },
+  description: 'L’éditeur du pack (#16274) — Meeshy pour un pack du dépôt',
+} as const;
+
+const PUBLICATION_REFUSALS: Readonly<Record<PublicationRefusal, { readonly message: string; readonly code: string }>> = {
+  'account-unverified': { message: 'Publishing requires an active account with a verified email or phone', code: PACK_PUBLISHER_ERROR_CODES.ACCOUNT_UNVERIFIED },
+  'not-owner': { message: 'This publisher does not belong to your account', code: PACK_PUBLISHER_ERROR_CODES.NOT_OWNER },
+  reserved: { message: 'This publisher identity is reserved', code: PACK_PUBLISHER_ERROR_CODES.RESERVED },
+};
+
+/** Une publication refusée par la loi des éditeurs (#16274) : toujours un 403. */
+export const sendPublicationRefused = (reply: FastifyReply, reason: PublicationRefusal) => {
+  const refusal = PUBLICATION_REFUSALS[reason];
+  return sendForbidden(reply, refusal.message, { code: refusal.code });
+};
 
 export const PACK_ERRORS = { 400: errorResponseSchema, 401: errorResponseSchema, 403: errorResponseSchema, 404: errorResponseSchema, 500: errorResponseSchema } as const;
 
