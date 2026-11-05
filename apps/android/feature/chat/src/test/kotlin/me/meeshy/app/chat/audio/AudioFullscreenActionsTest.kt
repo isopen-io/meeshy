@@ -94,6 +94,7 @@ class AudioFullscreenActionsTest {
     private class Gestures {
         val reactions = mutableListOf<Pair<String, String>>()
         val forwards = mutableListOf<Pair<String, String>>()
+        val cards = mutableListOf<String>()
     }
 
     private class Rig(
@@ -109,6 +110,7 @@ class AudioFullscreenActionsTest {
         state: ChatUiState = ChatUiState(conversationId = "c1"),
         clearance: ConversationClearance = ConversationClearance.CLEAR,
         signedIn: Boolean = true,
+        imaging: Boolean = false,
     ): Rig {
         val repo = mockk<MessageRepository>(relaxed = true)
         coEvery { sendAny(repo) } returns "cid_1"
@@ -128,6 +130,7 @@ class AudioFullscreenActionsTest {
             state = state,
             clearance = clearance,
             closure = null,
+            openCard = if (imaging) { id: String -> gestures.cards += id } else null,
         )
         return Rig(replies, port, repo, host, gestures)
     }
@@ -316,5 +319,33 @@ class AudioFullscreenActionsTest {
         r.port.forward(source())
 
         assertThat(r.gestures.forwards).isEmpty()
+    }
+
+    // --- imager (#16334) ----------------------------------------------------------------------
+
+    @Test
+    fun `sans atelier branche, la baguette n'est pas offerte`() = runTest {
+        assertThat(rig().port.offer(source()).imager).isFalse()
+    }
+
+    @Test
+    fun `la baguette image le MESSAGE porteur avec sa piece`() = runTest {
+        val r = rig(imaging = true)
+
+        assertThat(r.port.offer(source()).actions)
+            .containsExactly(AudioFullscreenAction.REACT, AudioFullscreenAction.REPLY, AudioFullscreenAction.FORWARD, AudioFullscreenAction.IMAGER)
+            .inOrder()
+        r.port.imager(source())
+
+        assertThat(r.gestures.cards).containsExactly("m1")
+    }
+
+    @Test
+    fun `un vocal protege ne s'image jamais depuis le plein ecran`() = runTest {
+        val r = rig(listOf(carrier(isBlurred = true)), imaging = true)
+
+        r.port.imager(source())
+
+        assertThat(r.gestures.cards).isEmpty()
     }
 }
