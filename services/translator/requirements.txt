@@ -274,4 +274,4 @@ httpcore==0.17.3
 # 4.14.2 => OK. dependabot ignore désormais 4.15.0 exactement.
 # Le jour où Prisma permet httpx 0.28+, httpcore 1.x importe `anyio.abc` en
 # propre et cette paire cesse d'être fragile.
-anyio==4.15.1
+anyio==4.16.0
