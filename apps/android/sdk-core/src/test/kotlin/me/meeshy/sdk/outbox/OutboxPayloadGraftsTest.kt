@@ -1,36 +1,51 @@
 package me.meeshy.sdk.outbox
 
 import com.google.common.truth.Truth.assertThat
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import me.meeshy.sdk.conversation.MessageMediaWriteBack
-import me.meeshy.sdk.model.SendMessageRequest
-import me.meeshy.sdk.net.MeeshyApi
 import org.junit.Test
 
 class OutboxPayloadGraftsTest {
 
-    private fun payload(ids: List<String>): String =
-        MeeshyApi.json.encodeToString(
-            SendMessageRequest(content = "légende", originalLanguage = "fr", clientMessageId = "cid_1", attachmentIds = ids, messageType = "file"),
-        )
-
     @Test
-    fun `une charge a plusieurs pieces recoit une greffe par piece sans toucher aux autres`() {
-        val graft = OutboxPayloadGrafts.firstOf(MessageMediaWriteBack::graft)
-        val start = payload(listOf("up-1", "up-2", "up-3"))
+    fun `returns the first non-null result and stops`() {
+        val calls = mutableListOf<String>()
+        val a: OutboxPayloadGraft = { _, _, _ -> calls += "a"; null }
+        val b: OutboxPayloadGraft = { _, _, _ -> calls += "b"; "from-b" }
+        val c: OutboxPayloadGraft = { _, _, _ -> calls += "c"; "from-c" }
 
-        val afterFirst = graft(start, "up-2", "real-2")!!
-        val afterAll = graft(afterFirst, "up-1", "real-1")!!.let { graft(it, "up-3", "real-3")!! }
+        val combined = OutboxPayloadGrafts.firstOf(a, b, c)
+        val result = combined("payload", "placeholder", "real")
 
-        val ids = MeeshyApi.json.decodeFromString<SendMessageRequest>(afterAll).attachmentIds
-        assertThat(ids).containsExactly("real-1", "real-2", "real-3").inOrder()
+        assertThat(result).isEqualTo("from-b")
+        assertThat(calls).containsExactly("a", "b").inOrder()
     }
 
     @Test
-    fun `rejouer une greffe deja appliquee ne reecrit rien`() {
-        val graft = OutboxPayloadGrafts.firstOf(MessageMediaWriteBack::graft)
-        val done = graft(payload(listOf("up-1")), "up-1", "real-1")!!
-        assertThat(graft(done, "up-1", "real-1")).isNull()
+    fun `returns null when every graft declines`() {
+        val a: OutboxPayloadGraft = { _, _, _ -> null }
+        val b: OutboxPayloadGraft = { _, _, _ -> null }
+
+        val result = OutboxPayloadGrafts.firstOf(a, b)("payload", "placeholder", "real")
+
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `with no grafts declines everything`() {
+        val result = OutboxPayloadGrafts.firstOf()("payload", "placeholder", "real")
+
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `threads the same arguments to each graft`() {
+        val seen = mutableListOf<Triple<String, String, String>>()
+        val record: OutboxPayloadGraft = { payload, placeholder, realId ->
+            seen += Triple(payload, placeholder, realId)
+            null
+        }
+
+        OutboxPayloadGrafts.firstOf(record, record)("p", "ph", "r")
+
+        assertThat(seen).containsExactly(Triple("p", "ph", "r"), Triple("p", "ph", "r"))
     }
 }
