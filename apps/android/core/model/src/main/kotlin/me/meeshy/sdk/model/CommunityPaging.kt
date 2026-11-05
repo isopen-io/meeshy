@@ -12,6 +12,14 @@ object CommunityPaging {
     fun searchQuery(raw: String): String? = raw.trim().takeIf { it.length >= MIN_SEARCH_LENGTH }
 
     const val MIN_SEARCH_LENGTH = 2
+
+    /** La taille d'une page de la feuille « Ajouter un channel » (iOS `pageSize`). */
+    const val CHANNEL_PAGE_SIZE = 20
+
+    /** Le nombre de lignes montrées après `pages` pages, jamais au-delà de ce qui existe. */
+    fun shownCount(total: Int, pages: Int): Int = minOf(total, pages.coerceAtLeast(1) * CHANNEL_PAGE_SIZE)
+
+    fun hasMore(total: Int, pages: Int): Boolean = shownCount(total, pages) < total
 }
 
 /** Le choix des conversations qu'on peut rattacher à une communauté. */
