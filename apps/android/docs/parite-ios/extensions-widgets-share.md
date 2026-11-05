@@ -514,6 +514,8 @@ L'action « Imager » (nom unique depuis la directive 2026-09-29, l'atelier s'ap
 
 Rendu : Entrée « Imager » avec icône d'image/sparkle, libellé identique partout, même place dans chaque menu.
 
+État au 2026-11-05 (#16165, #16393) : un seul atelier, `CardExportSheet`, pour un message, un commentaire, un post, un réel et une story. Un post ou un réel simple y arrive avec son texte servi et ses médias ; une œuvre composée (post à scène, réel, story) y arrive avec le rendu de sa scène en média de tête, l'atelier ouvert tout de suite en « Préparation de l'image… ». La vue Imager de scène (`ImagerSheet`, `StoryExportMode.IMAGER`) a quitté le dépôt. La baguette « Imager » se pose sur la rangée d'actions d'un post (après Envoyer), du détail (après le favori) et d'un commentaire (juste avant le ⋯). La bulle de message n'en porte aucune : son appui long ouvre la bande de réactions et la liste d'actions, sans rangée d'icônes. L'appui long « Export rapide » sur la baguette reste à faire.
+
 Transposition Android : Menus contextuels iOS -> entrée de MessageActionMenu / bottom sheet ; présentation du contrôleur le plus haut -> navigation vers l'écran Compose plein écran.
 
 <details><summary>Sources iOS (2)</summary>
