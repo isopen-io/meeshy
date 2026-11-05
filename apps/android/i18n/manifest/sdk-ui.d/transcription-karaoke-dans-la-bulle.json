@@ -15,6 +15,14 @@
           "iosKey": "media.audio.transcription.see_more.a11y",
           "androidName": "media_audio_transcription_see_more_a11y",
           "status": "adopted"
+        },
+        {
+          "androidName": "audio_transcription_collapse_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "audio_transcription_expand_a11y",
+          "status": "android-only"
         }
       ]
     }
