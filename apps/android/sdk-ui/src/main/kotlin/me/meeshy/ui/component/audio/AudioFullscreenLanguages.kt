@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,8 +42,9 @@ internal fun AudioFullscreenLanguages(
     modifier: Modifier = Modifier,
     onLanguageChosen: () -> Unit = {},
 ) {
-    if (transcripts == null || !audioFullscreenShowsLanguages(source, transcripts)) return
-    val canTranslate = transcripts.offersLanguages(source)
+    if (transcripts == null) return
+    val canTranslate = remember(source, transcripts) { transcripts.offersLanguages(source) }
+    if (source.translatedLanguages.isEmpty() && !canTranslate) return
     val selected = if (source.isTranslatedTrack) source.trackLanguage else null
     val playing = selected ?: AudioLanguageStripLaw.ORIGINAL
     val pills = rememberAudioLanguagePills(source.translatedLanguages, selected)
