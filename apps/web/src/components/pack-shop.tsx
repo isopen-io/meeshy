@@ -304,11 +304,8 @@ export function PackShop<P extends ShopPack>({
           {packs.map((pack) => {
             const title = adapter.title(pack);
             const price = adapter.price?.(pack) ?? null;
-            const toBuy = needsPurchase(pack);
-            const swap = pack.installed && !toBuy ? (adapter.swap?.(pack) ?? null) : null;
-            const action = toBuy
-              ? translateStickerPacks(language, 'packs.buy', { price: String(price) })
-              : translateStickerPacks(language, pack.installed ? 'stickerPacks.uninstall' : 'stickerPacks.install');
+            const action = actionOf(pack);
+            const toBuy = action.kind === 'buy';
             return (
               <li
                 key={pack.slug}
@@ -362,24 +359,24 @@ export function PackShop<P extends ShopPack>({
                       {[...adapter.meta(pack), ...(price === null ? [] : [adapter.owned?.(pack) === false ? translateStickerPacks(language, 'packs.price', { price: String(price) }) : translateStickerPacks(language, 'packs.owned')])].join(' · ')}
                     </p>
                   </div>
-                  {adapter.locked?.(pack) === true && !pack.installed ? (
+                  {action.kind === 'locked' ? (
                     <span data-shop-locked={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-                      {unlockText(language, 'locked')}
+                      {action.label}
                     </span>
-                  ) : swap !== null ? (
+                  ) : action.kind === 'swap' ? (
                     <button
                       type="button"
                       data-shop-swap={pack.slug}
-                      aria-label={`${swap.label} — ${title}`}
-                      onClick={swap.run}
+                      aria-label={`${action.label} — ${title}`}
+                      onClick={action.run}
                       className="relative z-[1] min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
                       style={{ backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }}
                     >
-                      {swap.label}
+                      {action.label}
                     </button>
-                  ) : pack.installed && !toBuy && adapter.removable?.(pack) === false ? (
+                  ) : action.kind === 'included' ? (
                     <span data-shop-included={pack.slug} className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-                      {translateStickerPacks(language, 'packs.included')}
+                      {action.label}
                     </span>
                   ) : (
                     <button
@@ -388,7 +385,7 @@ export function PackShop<P extends ShopPack>({
                       {...(toBuy ? {} : { 'aria-pressed': pack.installed })}
                       data-shop-buy={toBuy ? pack.slug : undefined}
                       aria-busy={flying.has(pack.slug)}
-                      aria-label={`${action} ${title}`}
+                      aria-label={`${action.label} ${title}`}
                       onClick={() => void toggle(pack)}
                       className="relative z-[1] min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
                       style={
@@ -397,7 +394,7 @@ export function PackShop<P extends ShopPack>({
                           : { backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)' }
                       }
                     >
-                      {action}
+                      {action.label}
                     </button>
                   )}
                 </div>
