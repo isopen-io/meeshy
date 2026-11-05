@@ -117,3 +117,14 @@ class CommunityDraftsTest {
         assertThat(CommunityChannelPicker.filter(items, titles, " ")).hasSize(2)
     }
 }
+
+class CommunityChannelPagingTest {
+    @org.junit.Test
+    fun `pages of twenty reveal the list progressively and stop at its end`() {
+        com.google.common.truth.Truth.assertThat(CommunityPaging.shownCount(45, 1)).isEqualTo(20)
+        com.google.common.truth.Truth.assertThat(CommunityPaging.shownCount(45, 3)).isEqualTo(45)
+        com.google.common.truth.Truth.assertThat(CommunityPaging.hasMore(45, 2)).isTrue()
+        com.google.common.truth.Truth.assertThat(CommunityPaging.hasMore(45, 3)).isFalse()
+        com.google.common.truth.Truth.assertThat(CommunityPaging.shownCount(5, 1)).isEqualTo(5)
+    }
+}

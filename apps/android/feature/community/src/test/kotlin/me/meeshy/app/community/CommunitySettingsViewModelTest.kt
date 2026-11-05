@@ -170,4 +170,27 @@ class CommunitySettingsViewModelTest {
         assertThat(vm.state.value.errorMessage).isEqualTo("Forbidden")
         coVerify(exactly = 0) { cache.forget(any()) }
     }
+
+    @Test
+    fun `leaving forgets the community and closes`() = runTest {
+        coEvery { repository.leave("c1") } returns NetworkResult.Success(Unit)
+        val vm = viewModel()
+
+        vm.leave()
+
+        assertThat(vm.effects.first()).isEqualTo(CommunitySettingsEffect.Left)
+        coVerify { cache.forget("c1") }
+    }
+
+    @Test
+    fun `a refused leave shows the message and keeps the community`() = runTest {
+        coEvery { repository.leave("c1") } returns NetworkResult.Failure(ApiError("Creator cannot leave"))
+        val vm = viewModel()
+
+        vm.leave()
+
+        assertThat(vm.state.value.errorMessage).isEqualTo("Creator cannot leave")
+        assertThat(vm.state.value.isLeaving).isFalse()
+        coVerify(exactly = 0) { cache.forget(any()) }
+    }
 }
