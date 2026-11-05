@@ -164,7 +164,7 @@ class ChatAudioFullscreenHostTest {
         player.start(pages[0], pages.drop(1).map { it.queuedAudio() })
 
         val english = pages[0].copy(url = "https://cdn.meeshy.me/a-en.m4a", trackLanguage = "en", isTranslatedTrack = true)
-        player.switchTrack(english)
+        assertThat(player.switchTrack(english)).isTrue()
 
         assertThat(rig.engine.played).containsExactly("a", "a").inOrder()
         assertThat(rig.coordinator.snapshot.value.queue.current?.fileUrl).isEqualTo("https://cdn.meeshy.me/a-en.m4a")
@@ -180,7 +180,7 @@ class ChatAudioFullscreenHostTest {
         val player = rig.viewModel.fullscreenPlayer()
         player.start(pages[0], emptyList())
 
-        player.switchTrack(pages[0])
+        assertThat(player.switchTrack(pages[0])).isFalse()
 
         assertThat(rig.engine.played).containsExactly("a")
     }
@@ -193,7 +193,7 @@ class ChatAudioFullscreenHostTest {
         val player = rig.viewModel.fullscreenPlayer()
         player.start(pages[0], emptyList())
 
-        player.switchTrack(pages[1].copy(url = "https://cdn.meeshy.me/b-en.m4a", trackLanguage = "en", isTranslatedTrack = true))
+        assertThat(player.switchTrack(pages[1].copy(url = "https://cdn.meeshy.me/b-en.m4a", trackLanguage = "en", isTranslatedTrack = true))).isFalse()
 
         assertThat(rig.engine.played).containsExactly("a")
         assertThat(rig.coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("a")

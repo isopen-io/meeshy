@@ -20,6 +20,7 @@ internal class FakeAudioFullscreenPlayer : AudioFullscreenPlayer {
     val skips = mutableListOf<Double>()
     val speeds = mutableListOf<PlaybackSpeed>()
     val switched = mutableListOf<String>()
+    var switchReloads = false
     var toggles = 0
     var stops = 0
 
@@ -45,7 +46,10 @@ internal class FakeAudioFullscreenPlayer : AudioFullscreenPlayer {
 
     override fun samples(source: AudioFullscreenSource): StateFlow<List<Float>> = MutableStateFlow(emptyList())
 
-    override fun switchTrack(source: AudioFullscreenSource) { switched += source.url }
+    override fun switchTrack(source: AudioFullscreenSource): Boolean {
+        switched += source.url
+        return switchReloads
+    }
 }
 
 /** L'hôte de la transcription et des langues vu du plein écran : il note ce qu'on lui demande et sert l'état qu'on lui pose. */

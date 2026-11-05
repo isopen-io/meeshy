@@ -1,14 +1,19 @@
 package me.meeshy.ui.component.audio
 
+import android.content.Context
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.playback.AudioPlaybackState
 import me.meeshy.sdk.model.playback.AudioLanguageStripLaw
+import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -155,8 +160,9 @@ class AudioFullscreenLanguagesTest {
     }
 
     @Test
-    fun `une langue choisie recharge la piste de la page sans relancer ni remplacer la file`() {
+    fun `une langue choisie pendant l ecoute recharge la piste de la page sans relancer ni remplacer la file`() {
         val player = FakeAudioFullscreenPlayer()
+        player.mutablePlayback.value = AudioPlaybackState(attachmentId = "a", isPlaying = true, durationMs = 4_000L)
         val source = mutableStateOf(voice())
         showPage(source, player, FakeTranscriptPort())
         compose.waitForIdle()
@@ -168,6 +174,52 @@ class AudioFullscreenLanguagesTest {
         assertThat(player.starts).isEmpty()
         assertThat(player.replaced).isEmpty()
     }
+
+    @Test
+    fun `une langue choisie a l arret ne relance pas la lecture`() {
+        val player = FakeAudioFullscreenPlayer()
+        player.mutablePlayback.value = AudioPlaybackState(attachmentId = "a", isPlaying = false, durationMs = 4_000L)
+        val source = mutableStateOf(voice())
+        showPage(source, player, FakeTranscriptPort())
+        compose.waitForIdle()
+
+        compose.runOnIdle { source.value = source.value.copy(url = "https://cdn.meeshy.me/a-en.m4a", trackLanguage = "en", isTranslatedTrack = true) }
+        compose.waitForIdle()
+
+        assertThat(player.switched).isEmpty()
+        assertThat(player.toggles).isEqualTo(0)
+    }
+
+    @Test
+    fun `apres une langue choisie a l arret, lire joue la nouvelle piste et non l ancienne`() {
+        val player = FakeAudioFullscreenPlayer().apply { switchReloads = true }
+        player.mutablePlayback.value = AudioPlaybackState(attachmentId = "a", isPlaying = false, durationMs = 4_000L)
+        val source = mutableStateOf(voice().copy(url = "https://cdn.meeshy.me/a-en.m4a", trackLanguage = "en", isTranslatedTrack = true))
+        showPage(source, player, FakeTranscriptPort())
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription(playLabel()).performClick()
+        compose.waitForIdle()
+
+        assertThat(player.switched).containsExactly("https://cdn.meeshy.me/a-en.m4a")
+        assertThat(player.toggles).isEqualTo(0)
+    }
+
+    @Test
+    fun `a l arret sur la piste deja servie, lire reprend la lecture`() {
+        val player = FakeAudioFullscreenPlayer()
+        player.mutablePlayback.value = AudioPlaybackState(attachmentId = "a", isPlaying = false, durationMs = 4_000L)
+        showPage(mutableStateOf(voice()), player, FakeTranscriptPort())
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription(playLabel()).performClick()
+        compose.waitForIdle()
+
+        assertThat(player.toggles).isEqualTo(1)
+    }
+
+    private fun playLabel(): String =
+        ApplicationProvider.getApplicationContext<Context>().getString(R.string.media_playAudio)
 
     @Test
     fun `la page porte le bandeau, le disque et l etat vide de la transcription`() {
