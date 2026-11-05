@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import Meeshy
 import MeeshySDK
@@ -19,6 +20,37 @@ final class ProfileDecorModelTests: XCTestCase {
 
     private struct Refused: Error {}
 
+    /// Les contrats servis (#16264), sans réseau ni disque : rien ne part vers un serveur.
+    private final class MockServedAppearance: ServedAppearanceProviding, @unchecked Sendable {
+        var contracts: [String: ServedAppearanceContract] = [:]
+        var sources: [String: String] = [:]
+        private(set) var prepared: [String] = []
+        private(set) var loaded: [String] = []
+        private let subject = PassthroughSubject<Void, Never>()
+
+        var changes: AnyPublisher<Void, Never> { subject.eraseToAnyPublisher() }
+        func contract(src: String) -> ServedAppearanceContract? { contracts[src] }
+        func contractSource(domain: PackDomain, slug: String) -> String? { sources["\(domain.rawValue)/\(slug)"] }
+        func load(src: String) async -> ServedAppearanceContract? {
+            loaded.append(src)
+            return contracts[src]
+        }
+        func prepare(domain: PackDomain, installed: [ShopPack]) async {
+            prepared += installed.map { "\(domain.rawValue)/\($0.slug)" }
+        }
+        func prepare(domain: PackDomain, slug: String) async -> ServedAppearanceContract? { nil }
+    }
+
+    private static let servedRingSource = "0123456789abcdef.json"
+
+    private func servedRings() -> MockServedAppearance {
+        let served = MockServedAppearance()
+        let rings = ["grec", "grec-anime"].compactMap { AvatarRingCatalog.shared.ring(pack: "contours-grec", item: $0) }
+        served.contracts[Self.servedRingSource] = .avatarRing(rings)
+        served.sources["avatar-ring/contours-servis"] = Self.servedRingSource
+        return served
+    }
+
     private func item(_ pack: String, _ key: String) -> ServedProfileDecorItem {
         ServedProfileDecorItem(pack: pack, item: key, origin: .builtin)
     }
@@ -27,9 +59,49 @@ final class ProfileDecorModelTests: XCTestCase {
         decor: ServedProfileDecor? = .empty,
         service: StubService = StubService(),
         installed: @escaping @Sendable @concurrent (PackDomain) async -> [ShopPack]? = { _ in nil },
-        published: @escaping @MainActor (ServedProfileDecor) -> Void = { _ in }
+        published: @escaping @MainActor (ServedProfileDecor) -> Void = { _ in },
+        served: MockServedAppearance = MockServedAppearance()
     ) -> ProfileDecorModel {
-        ProfileDecorModel(decor: decor, service: service, installedPacks: installed, userId: { "moi" }, publish: published, center: NotificationCenter())
+        ProfileDecorModel(decor: decor, service: service, installedPacks: installed, userId: { "moi" }, publish: published,
+                          center: NotificationCenter(), served: served)
+    }
+
+    // MARK: - Les packs servis, non embarqués (#16264)
+
+    func test_load_offersAnInstalledServedPack_afterPreparingItsContract() async {
+        let served = servedRings()
+        let model = model(installed: { domain in
+            domain == .avatarRing ? [ShopPack(slug: "contours-servis", name: "x", installed: true)] : nil
+        }, served: served)
+
+        await model.load()
+
+        XCTAssertEqual(served.prepared, ["avatar-ring/contours-servis"])
+        XCTAssertEqual(ProfileDecorOptions.flattened(model.rings).map(\.id), ["contours-servis/grec", "contours-servis/grec-anime"])
+    }
+
+    func test_load_fetchesTheMissingContractOfMyOwnDecor() async {
+        let served = MockServedAppearance()
+        let worn = ServedProfileDecorItem(pack: "contours-servis", item: "grec", origin: .official, contract: Self.servedRingSource)
+        let model = model(decor: ServedProfileDecor(avatarRing: worn), served: served)
+
+        await model.load()
+
+        XCTAssertEqual(served.loaded, [Self.servedRingSource])
+    }
+
+    func test_equip_aServedRing_carriesItsContractAtOnce_soItPaintsBeforeTheServerAnswers() async {
+        let served = servedRings()
+        let service = StubService()
+        let worn = ServedProfileDecorItem(pack: "contours-servis", item: "grec-anime", origin: .official, contract: Self.servedRingSource)
+        service.result = .success(ServedProfileDecor(avatarRing: worn))
+        var seen: [ServedProfileDecor] = []
+        let model = model(service: service, published: { seen.append($0) }, served: served)
+
+        await model.equip(ProfileDecorRef(pack: "contours-servis", item: "grec-anime"), side: .avatarRing)
+
+        XCTAssertEqual(seen.first?.avatarRing, worn, "le choix optimiste porte l'adresse du contrat")
+        XCTAssertEqual(ProfileDecorResolver.ring(seen.first?.avatarRing, served: served)?.key, "grec-anime")
     }
 
     func test_equip_writesTheChoiceAtOnceThenTheServerAnswerIsTheTruth() async {
@@ -155,7 +227,7 @@ final class ProfileDecorModelTests: XCTestCase {
 
     func test_equip_twoQuickChoices_theOlderAnswerArrivingLastDoesNotWin() async {
         let service = GatedService()
-        let model = ProfileDecorModel(decor: .empty, service: service, installedPacks: { _ in nil }, userId: { "moi" }, publish: { _ in }, center: NotificationCenter())
+        let model = ProfileDecorModel(decor: .empty, service: service, installedPacks: { _ in nil }, userId: { "moi" }, publish: { _ in }, center: NotificationCenter(), served: MockServedAppearance())
         let filet = ProfileDecorRef(pack: "contours-essentiels", item: "filet")
         let perle = ProfileDecorRef(pack: "contours-essentiels", item: "perle")
 
@@ -175,7 +247,7 @@ final class ProfileDecorModelTests: XCTestCase {
 
     func test_equip_anOlderChoiceRefusedLast_doesNotRollBackTheNewerOne() async {
         let service = GatedService()
-        let model = ProfileDecorModel(decor: .empty, service: service, installedPacks: { _ in nil }, userId: { "moi" }, publish: { _ in }, center: NotificationCenter())
+        let model = ProfileDecorModel(decor: .empty, service: service, installedPacks: { _ in nil }, userId: { "moi" }, publish: { _ in }, center: NotificationCenter(), served: MockServedAppearance())
         let filet = ProfileDecorRef(pack: "contours-essentiels", item: "filet")
         let perle = ProfileDecorRef(pack: "contours-essentiels", item: "perle")
 
@@ -195,7 +267,7 @@ final class ProfileDecorModelTests: XCTestCase {
 
     func test_equip_theNewerChoiceRefused_returnsToWhatTheServerAcceptedLast() async {
         let service = GatedService()
-        let model = ProfileDecorModel(decor: .empty, service: service, installedPacks: { _ in nil }, userId: { "moi" }, publish: { _ in }, center: NotificationCenter())
+        let model = ProfileDecorModel(decor: .empty, service: service, installedPacks: { _ in nil }, userId: { "moi" }, publish: { _ in }, center: NotificationCenter(), served: MockServedAppearance())
         let filet = ProfileDecorRef(pack: "contours-essentiels", item: "filet")
         let perle = ProfileDecorRef(pack: "contours-essentiels", item: "perle")
 

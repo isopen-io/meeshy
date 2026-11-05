@@ -314,6 +314,8 @@ public struct MeeshyAvatar: View {
     /// Le dessin du contour, résolu UNE fois à l'init (le catalogue embarqué
     /// est en mémoire) : le défilement d'une liste ne relit rien.
     let ringDesign: AvatarRingDesign?
+    /// Le contour d'un pack NON embarqué dont le contrat est arrivé après l'init (#16264).
+    @State private var servedRing: AvatarRingDesign?
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var effectiveStoryState: StoryRingState {
@@ -434,7 +436,7 @@ public struct MeeshyAvatar: View {
             avatarBody
         }
         .avatarRingWithin(
-            ringDesign,
+            ringDesign ?? servedRing,
             footprint: context.size,
             storyRingSize: effectiveStoryState == .none ? nil : context.ringSize, decorRoom: ringDecorRoom,
             decor: ringShowsDecor
@@ -455,8 +457,14 @@ public struct MeeshyAvatar: View {
             } else { visual }
         }
 
+        let loaded = Group {
+            if let src = pendingRingContract {
+                tappable.task(id: src) { await loadServedRing(src) }
+            } else { tappable }
+        }
+
         if showContextMenu {
-            tappable
+            loaded
                 .contextMenu {
                     ForEach(resolvedMenuItems) { item in
                         Button(role: item.role) {
@@ -468,9 +476,21 @@ public struct MeeshyAvatar: View {
                 }
                 .accessibilityLabel(accessibilityName)
         } else {
-            tappable
+            loaded
                 .accessibilityLabel(accessibilityName)
         }
+    }
+
+    /// Le contrat du contour équipé que l'appareil n'a pas encore : seul l'avatar qui en a besoin
+    /// se charge, une fois ; tous les autres ne portent aucune tâche.
+    private var pendingRingContract: String? {
+        guard kind == .user, ringDesign == nil, servedRing == nil, let ring, ring.origin != .builtin else { return nil }
+        return ring.contract
+    }
+
+    private func loadServedRing(_ src: String) async {
+        guard await ServedAppearanceStore.shared.load(src: src) != nil else { return }
+        servedRing = ProfileDecorResolver.ring(ring)
     }
 
     @ViewBuilder
