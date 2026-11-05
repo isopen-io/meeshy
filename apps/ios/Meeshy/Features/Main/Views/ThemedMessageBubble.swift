@@ -231,6 +231,8 @@ struct ThemedMessageBubble: View {
     /// l'avis mène toujours à la fiche de participation, quelle que soit la
     /// porte empruntée.
     var onOpenParticipantProfile: ((String) -> Void)? = nil
+    /// « dis-lui salut » (#16338) — l'id de l'avis d'arrivée touché.
+    var onGreetArrivals: ((String) -> Void)? = nil
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
     /// Rendu « standalone » (aperçu du `.contextMenu` natif) : supprime les
@@ -305,15 +307,7 @@ struct ThemedMessageBubble: View {
         //   - otherwise (`.standard`) → `BubbleStandardLayout`
         switch content.kind {
         case .system:
-            if let callNotice = content.callNotice {
-                BubbleCallNoticeView(notice: callNotice, accentHex: contactColor, isDark: isDark, onCallBack: onCallBack, onLongPress: onLongPressCallDetail)
-            } else if let joinNotice = content.joinNotice {
-                // Une arrivée a sa propre notice : la notice générique a pour
-                // icône un TÉLÉPHONE, héritée des résumés d'appel.
-                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, onOpenProfile: onOpenParticipantProfile, timeString: content.meta.timeString)
-            } else {
-                BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark, timeString: content.meta.timeString)
-            }
+            systemNotice(content)
         case .deleted where content.protection.isExpired:
             EmptyView()
         case .deleted:

@@ -1,8 +1,10 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// #16338 — le salut d'un arrivant se TOUCHE : l'invite « dis-lui salut » de
 /// l'avis d'arrivée écrit `@pseudo ` de chaque arrivant dans le composeur.
+@MainActor
 final class ArrivalGreetingTests: XCTestCase {
 
     // MARK: - L'invite se détache de la phrase du catalogue
@@ -53,5 +55,36 @@ final class ArrivalGreetingTests: XCTestCase {
     func test_inserting_alreadyMentioned_isNotRepeated() {
         XCTAssertEqual(ArrivalGreeting.inserting(["a", "b"], into: "@a salut "), "@a salut @b ")
         XCTAssertEqual(ArrivalGreeting.inserting(["a"], into: "@a "), "@a ")
+    }
+
+    // MARK: - De l'avis touché au brouillon
+
+    private func arrivalsLine(_ arrivals: [ArrivalsNoticeMetadata.Arrival]) -> Message {
+        Message(id: "notice", conversationId: "c1", senderId: arrivals.first?.participantId ?? "", content: "",
+                arrivalsNotice: ArrivalsNoticeMetadata(arrivals: arrivals, count: arrivals.count,
+                                                       windowStartedAt: "2026-11-05T10:00:00Z"))
+    }
+
+    func test_draft_severalArrivals_mentionsEachKnownArrival() {
+        let line = arrivalsLine([
+            .init(participantId: "p1", displayName: "Aïcha", username: "aicha"),
+            .init(participantId: "p2", displayName: "Tom"),
+            .init(participantId: "p3", displayName: "Zoé"),
+        ])
+        let tomSpoke = Message(id: "m1", conversationId: "c1", senderId: "p2", content: "yo", senderUsername: "tom")
+        XCTAssertEqual(ArrivalGreeting.draft(greeting: "notice", in: [line, tomSpoke], ownHandle: "me", draft: ""),
+                       "@aicha @tom ")
+    }
+
+    func test_draft_singleJoin_mentionsTheArrival() {
+        let join = Message(id: "notice", conversationId: "c1", senderId: "p1", content: "",
+                           joinNotice: JoinNoticeMetadata(participantId: "p1", displayName: "Aïcha",
+                                                          isAnonymous: false, viaShareLink: false, username: "aicha"))
+        XCTAssertEqual(ArrivalGreeting.draft(greeting: "notice", in: [join], ownHandle: nil, draft: "Salut"),
+                       "Salut @aicha ")
+    }
+
+    func test_draft_noticeGone_returnsNil() {
+        XCTAssertNil(ArrivalGreeting.draft(greeting: "absent", in: [], ownHandle: nil, draft: "x"))
     }
 }

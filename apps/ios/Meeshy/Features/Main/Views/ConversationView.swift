@@ -623,7 +623,8 @@ struct ConversationView: View {
                 presentMenu: { presentLongPressMenu(for: $0, cellFrame: $1, pieceId: $2) },
                 openMedia: openMediaFullscreen,
                 openViewOnce: { openViewOnce(messageId: $0) },
-                focalPlace: { makeFocalFullscreenPlace($0, messageId: $1) }
+                focalPlace: { makeFocalFullscreenPlace($0, messageId: $1) },
+                greetArrivals: { greetArrivals(messageId: $0) }
             )
         )
     }
