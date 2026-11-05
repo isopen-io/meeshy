@@ -77,9 +77,9 @@ export function publisherSlugOf(name: string): string {
 
 /**
  * Les CONFUSABLES vers le latin (UTS #39, `confusables.txt`, extrait minuscule) :
- * les lettres cyrilliques et grecques qui se LISENT comme une lettre latine, et
- * les chiffres qui se lisent comme une lettre. La pleine largeur est déjà
- * repliée par NFKC. Appliquée après la mise en minuscules.
+ * les lettres cyrilliques et grecques qui se LISENT comme une lettre latine, les
+ * petites capitales latines, et les chiffres qui se lisent comme une lettre. La
+ * pleine largeur est déjà repliée par NFKC. Appliquée après la mise en minuscules.
  */
 const CONFUSABLE_TO_LATIN: Readonly<Record<string, string>> = {
   // cyrillique
@@ -88,6 +88,9 @@ const CONFUSABLE_TO_LATIN: Readonly<Record<string, string>> = {
   // grec
   α: 'a', β: 'b', ϲ: 'c', δ: 'd', ε: 'e', η: 'n', ι: 'i', ϳ: 'j', κ: 'k', μ: 'u', ν: 'v', ο: 'o', ρ: 'p', σ: 'o', τ: 't', υ: 'u',
   ω: 'w', χ: 'x', γ: 'y', ζ: 'z', ϱ: 'p', ς: 'c',
+  // petites capitales latines
+  ᴀ: 'a', ʙ: 'b', ᴄ: 'c', ᴅ: 'd', ᴇ: 'e', ꜰ: 'f', ɢ: 'g', ʜ: 'h', ɪ: 'i', ᴊ: 'j', ᴋ: 'k', ʟ: 'l', ᴍ: 'm', ɴ: 'n', ᴏ: 'o', ᴘ: 'p',
+  ʀ: 'r', ꜱ: 's', ᴛ: 't', ᴜ: 'u', ᴠ: 'v', ᴡ: 'w', ʏ: 'y', ᴢ: 'z',
   // chiffres
   '0': 'o', '1': 'l',
 };
@@ -98,11 +101,53 @@ const CAPITAL_CONFUSABLE_TO_LATIN: Readonly<Record<string, string>> = {
   Α: 'a', Β: 'b', Ε: 'e', Ζ: 'z', Η: 'h', Ι: 'i', Κ: 'k', Μ: 'm', Ν: 'n', Ο: 'o', Ρ: 'p', Τ: 't', Υ: 'y', Χ: 'x',
 };
 
+/**
+ * Les confusables de PLUSIEURS caractères (UTS #39, séquences de
+ * `confusables.txt`) : « rn » se lit « m », « vv » se lit « w », « cl » se lit
+ * « d ». Puis « l » et « i », indiscernables sans empattement, se confondent.
+ * Appliqués dans cet ordre, après les confusables d'un caractère.
+ */
+const SEQUENCE_CONFUSABLES: readonly (readonly [RegExp, string])[] = [
+  [/rn/g, 'm'],
+  [/vv/g, 'w'],
+  [/cl/g, 'd'],
+  [/l/g, 'i'],
+];
+
 const mapped = (text: string, table: Readonly<Record<string, string>>): string => [...text].map((char) => table[char] ?? char).join('');
 
-/** Le squelette d'un nom : capitales confusables d'abord, puis replié, puis chaque minuscule confusable remplacée par la lettre latine qu'elle imite. */
+/** Le squelette d'un nom : capitales confusables, replié, confusables d'un caractère, puis séquences confusables. */
 const skeleton = (name: string): string =>
-  mapped(folded(mapped(name.normalize('NFKC'), CAPITAL_CONFUSABLE_TO_LATIN)), CONFUSABLE_TO_LATIN);
+  SEQUENCE_CONFUSABLES.reduce(
+    (text, [pattern, replacement]) => text.replace(pattern, replacement),
+    mapped(folded(mapped(name.normalize('NFKC'), CAPITAL_CONFUSABLE_TO_LATIN)), CONFUSABLE_TO_LATIN),
+  );
+
+/** Le squelette réduit à ses lettres latines et à ses chiffres : ce qui se compare à « meeshy ». */
+const latinSkeleton = (name: string): string => skeleton(name).replace(/[^a-z0-9]/g, '');
+
+const MEESHY_SKELETON = latinSkeleton(MEESHY_PUBLISHER_SLUG);
+
+/**
+ * Vrai pour un nom qui se LIT comme Meeshy (« Meeshy Officiel », « Мееѕһу »,
+ * « ᴍeeshy », « rneeshy »…) : la seule réserve qui fait REFUSER une
+ * proposition. Un nom seulement mal formé n'est pas une usurpation.
+ */
+export function impersonatesMeeshy(name: string): boolean {
+  return latinSkeleton(name).includes(MEESHY_SKELETON);
+}
+
+/**
+ * La CLÉ d'un nom d'éditeur : deux noms de même clé se lisent pareil (casse,
+ * accents, ponctuation, confusables). Un nom de boutique est unique par sa clé.
+ * Les lettres des autres alphabets sont gardées ; un nom sans lettre ni chiffre
+ * garde son squelette entier.
+ */
+export function publisherNameKey(name: string): string {
+  const full = skeleton(name).replace(/[\p{Cc}\p{Cf}\p{Z}]/gu, '');
+  const compact = full.replace(/[^\p{L}\p{N}]/gu, '');
+  return compact.length > 0 ? compact : full;
+}
 
 /**
  * Les alphabets qu'un nom d'éditeur peut employer (UTS #39, profil « Highly
@@ -132,57 +177,69 @@ const SCRIPTS = [
 
 type Script = (typeof SCRIPTS)[number][0];
 
-/** Les seuls mélanges qu'admet le profil : le japonais, le chinois à bopomofo et le coréen, chacun avec les sinogrammes. */
-const MIXES: readonly ReadonlySet<Script>[] = [new Set<Script>(['Han', 'Hiragana', 'Katakana']), new Set<Script>(['Han', 'Bopomofo']), new Set<Script>(['Han', 'Hangul'])];
+/** Les mélanges qu'admet le profil Highly Restrictive : le latin avec le japonais, le chinois à bopomofo ou le coréen. */
+const MIXES: readonly ReadonlySet<Script>[] = [
+  new Set<Script>(['Latin', 'Han', 'Hiragana', 'Katakana']),
+  new Set<Script>(['Latin', 'Han', 'Bopomofo']),
+  new Set<Script>(['Latin', 'Han', 'Hangul']),
+];
 
-/** Hors des lettres : les chiffres, l'espace et la ponctuation courante, rien d'autre. */
-const ALLOWED_NON_LETTER = /^[\p{Nd} \-_.,'’&+!?()#@:·—–]$/u;
-const ASCII_LETTER = /^[A-Za-z]$/;
 const LETTER = /\p{L}/u;
 const MARK = /\p{M}/u;
+const PICTOGRAPH = /\p{Extended_Pictographic}/u;
+const ZERO_WIDTH_JOINER = '\u200D';
+/** Hors des lettres, tout ce qui SE VOIT : chiffres, ponctuation, symboles, emoji, et l'espace ordinaire. */
+const VISIBLE_NON_LETTER = /^[\p{N}\p{P}\p{S} ]$/u;
 
-/** Une lettre latine admise : une lettre ASCII, accentuée ou non (NFD) — jamais une petite capitale, une lettre IPA ou modificative. */
-const isPlainLatin = (char: string): boolean => ASCII_LETTER.test(char.normalize('NFD').replace(/\p{M}/gu, ''));
+/**
+ * Les SOSIES latins : petites capitales, lettres IPA et modificatives, que les
+ * polices dessinent comme une lettre ordinaire. Toute autre lettre latine
+ * (Latin-1, Latin étendu A et B, Latin étendu additionnel) est admise.
+ */
+const LOOKALIKE_LATIN = /[\u0250-\u02FF\u1D00-\u1DBF\uA720-\uA7FF\uAB30-\uAB6F\uFF00-\uFFEF]/u;
+const MODIFIER_LETTER = /\p{Lm}/u;
 
 /** L'alphabet d'une lettre, ou `null` pour un alphabet que le profil n'admet pas. */
 const scriptOf = (char: string): Script | null => SCRIPTS.find(([, pattern]) => pattern.test(char))?.[0] ?? null;
 
+/** Une jointure n'est admise qu'au sein d'une séquence d'emoji (famille, métier…). */
+const isEmojiJoiner = (chars: readonly string[], index: number): boolean =>
+  index > 0 && PICTOGRAPH.test(chars[index - 1] ?? '') && PICTOGRAPH.test(chars[index + 1] ?? '');
+
 /**
- * Vrai pour un nom écrit selon la liste blanche : chaque caractère est une
- * lettre d'un alphabet admis (latine ASCII éventuellement accentuée), une
- * marque combinante, un chiffre, l'espace ou une ponctuation courante ; et
- * toutes les lettres appartiennent à UN SEUL alphabet (ou à un mélange admis).
- * Lu en NFC, jamais en NFKC : une forme de compatibilité (pleine largeur,
- * exposant, ligature, ™) est elle-même refusée, au lieu d'être repliée.
+ * Vrai pour un nom bien formé : chaque caractère est une lettre d'un alphabet
+ * admis (jamais un sosie latin), une marque combinante, un caractère visible
+ * (chiffre, ponctuation, symbole, emoji) ou l'espace ; et ses lettres tiennent
+ * dans UN alphabet ou dans un mélange admis. Lu en NFC : une forme de
+ * compatibilité (pleine largeur, exposant) reste ce qu'elle est.
  */
 const isWhitelistedName = (name: string): boolean => {
   const chars = [...name.normalize('NFC')];
   const scripts = new Set<Script>();
-  for (const char of chars) {
+  for (const [index, char] of chars.entries()) {
     if (MARK.test(char)) continue;
+    if (char === ZERO_WIDTH_JOINER && isEmojiJoiner(chars, index)) continue;
     if (!LETTER.test(char)) {
-      if (!ALLOWED_NON_LETTER.test(char)) return false;
+      if (!VISIBLE_NON_LETTER.test(char)) return false;
       continue;
     }
+    if (MODIFIER_LETTER.test(char)) return false;
     const script = scriptOf(char);
     if (script === null) return false;
-    if (script === 'Latin' && !isPlainLatin(char)) return false;
+    if (script === 'Latin' && LOOKALIKE_LATIN.test(char)) return false;
     scripts.add(script);
   }
   return scripts.size <= 1 || MIXES.some((mix) => [...scripts].every((script) => mix.has(script)));
 };
 
 /**
- * Vrai pour un nom ou un slug qu'aucun tiers ne peut porter : tout nom hors de
- * la liste blanche (`isWhitelistedName` : un seul alphabet, lettres latines
- * ASCII accentuées seulement, chiffres et ponctuation courante), tout nom dont
- * le SQUELETTE de confusables CONTIENT « meeshy » (« Meeshy Officiel »,
- * « Team-Meeshy », « Мееѕһу » entièrement cyrillique…), et les segments de route.
+ * Vrai pour un nom ou un slug qu'aucun tiers ne peut porter : tout nom mal
+ * formé (`isWhitelistedName`), tout nom qui se lit comme Meeshy
+ * (`impersonatesMeeshy`), et les segments de route.
  */
 export function isReservedPublisherIdentity(name: string): boolean {
   if (!isWhitelistedName(name)) return true;
-  const compact = skeleton(name).replace(/[^a-z0-9]/g, '');
-  return compact.includes(MEESHY_PUBLISHER_SLUG) || ROUTE_SLUGS.has(publisherSlugOf(name));
+  return impersonatesMeeshy(name) || ROUTE_SLUGS.has(publisherSlugOf(name));
 }
 
 /**

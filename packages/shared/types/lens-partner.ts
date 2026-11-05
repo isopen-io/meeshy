@@ -20,7 +20,7 @@
  *      `MessageAttachment.lensSlug`, `PostMedia.lensSlug`
  */
 import { LENS_LIMITS, LENS_PATTERNS } from './lens-format.js';
-import { isReservedPublisherIdentity } from './pack-publisher.js';
+import { MEESHY_PUBLISHER_NAME, isReservedPublisherIdentity } from './pack-publisher.js';
 
 export const PARTNER_PROFILE_LIMITS = {
   maxDisplayNameLength: 60,
@@ -60,10 +60,14 @@ export type PartnerProfileParse = { readonly ok: true; readonly profile: Partner
  */
 const INVISIBLE_OR_CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
-const cleanDisplayName = (raw: unknown): string | null => {
+/** Qui écrit le profil : le compte officiel Meeshy, seul, garde le nom « Meeshy » (#16274). */
+export type PartnerProfileAuthor = { readonly official: boolean };
+
+const cleanDisplayName = (raw: unknown, author: PartnerProfileAuthor): string | null => {
   if (typeof raw !== 'string') return null;
   const name = raw.normalize('NFKC').trim();
   if (name.length === 0 || name.length > PARTNER_PROFILE_LIMITS.maxDisplayNameLength) return null;
+  if (author.official && name === MEESHY_PUBLISHER_NAME) return name;
   if (isReservedPublisherIdentity(name)) return null;
   return INVISIBLE_OR_CONTROL.test(name) ? null : name;
 };
@@ -80,9 +84,9 @@ const cleanWebsite = (raw: unknown): string | null | undefined => {
 };
 
 /** Ce qu'un partenaire déclare de lui : un nom affichable et, au choix, un site https. */
-export function parsePartnerProfileInput(raw: unknown): PartnerProfileParse {
+export function parsePartnerProfileInput(raw: unknown, author: PartnerProfileAuthor = { official: false }): PartnerProfileParse {
   const input = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const displayName = cleanDisplayName(input.displayName);
+  const displayName = cleanDisplayName(input.displayName, author);
   if (displayName === null) return { ok: false, reason: 'display-name' };
   const website = cleanWebsite(input.website);
   if (website === undefined) return { ok: false, reason: 'website' };
@@ -103,12 +107,25 @@ export type LensCredit = {
 };
 
 export type LensCreditLens = { readonly slug: string; readonly name: string; readonly status: string };
-export type LensCreditPartner = { readonly id: string; readonly displayName: string; readonly verifiedAt: Date | null; readonly logoSrc: string | null };
+export type LensCreditPartner = {
+  readonly id: string;
+  readonly displayName: string;
+  readonly verifiedAt: Date | null;
+  readonly logoSrc: string | null;
+  /** Le profil du compte officiel Meeshy (#16274) : lui seul est crédité sous un nom réservé. */
+  readonly official?: boolean;
+};
+
+/** Un partenaire qui crédite : vérifié, et jamais sous un nom réservé à Meeshy s'il n'est pas le compte officiel. */
+const creditingPartner = (partner: LensCreditPartner | null): LensCreditPartner | null => {
+  if (partner === null || partner.verifiedAt === null) return null;
+  return partner.official === true || !isReservedPublisherIdentity(partner.displayName) ? partner : null;
+};
 
 /** Le crédit d'une lens PUBLIÉE ; `null` pour toute autre (en attente, refusée, retirée). */
 export function lensCreditOf(lens: LensCreditLens, partner: LensCreditPartner | null): LensCredit | null {
   if (lens.status !== 'approved') return null;
-  const verified = partner !== null && partner.verifiedAt !== null ? partner : null;
+  const verified = creditingPartner(partner);
   return {
     slug: lens.slug,
     name: lens.name,
