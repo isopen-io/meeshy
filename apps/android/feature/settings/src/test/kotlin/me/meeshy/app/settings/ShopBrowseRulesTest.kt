@@ -164,6 +164,15 @@ class ShopBrowseRulesTest {
             .isEqualTo(ShopEquipOffer.PerConversation)
     }
 
+    @Test fun `a pack reads installed, else embedded in the app, else to download`() {
+        val embedded = EmbeddedShopContents.of(catalog, AppearancePackDomain.WALLPAPER, "heritages", "fr")
+
+        assertThat(ShopBrowseRules.packState(ShopPack(slug = "heritages", installed = true), embedded)).isEqualTo(ShopPackState.INSTALLED)
+        assertThat(ShopBrowseRules.packState(ShopPack(slug = "heritages"), embedded)).isEqualTo(ShopPackState.EMBEDDED)
+        assertThat(ShopBrowseRules.packState(ShopPack(slug = "x"), ShopPackContents.DownloadRequired)).isEqualTo(ShopPackState.TO_DOWNLOAD)
+        assertThat(ShopBrowseRules.packState(ShopPack(slug = "x"), null)).isEqualTo(ShopPackState.TO_DOWNLOAD)
+    }
+
     // endregion
 
     private fun repositoryFile(relative: String): File {
