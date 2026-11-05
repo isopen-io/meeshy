@@ -123,18 +123,56 @@ const skeleton = (name: string): string =>
     mapped(folded(mapped(name.normalize('NFKC'), CAPITAL_CONFUSABLE_TO_LATIN)), CONFUSABLE_TO_LATIN),
   );
 
-/** Le squelette réduit à ses lettres latines et à ses chiffres : ce qui se compare à « meeshy ». */
-const latinSkeleton = (name: string): string => skeleton(name).replace(/[^a-z0-9]/g, '');
-
-const MEESHY_SKELETON = latinSkeleton(MEESHY_PUBLISHER_SLUG);
+const SEPARATOR = /[\p{P}\p{Z}\p{Cc}\p{Cf}]/u;
+const ASCII_ALNUM = /^[a-z0-9]+$/;
+const VISIBLE_UNKNOWN = /[\p{L}\p{N}\p{S}]/u;
+/** Un caractère que le squelette ne sait pas lire : il peut valoir N'IMPORTE quelle lettre. */
+const JOKER = '*';
+/** Au plus deux jokers dans la fenêtre « meeshy » : sans cette borne, tout nom de six lettres d'un autre alphabet serait réservé. */
+const MAX_JOKERS = 2;
 
 /**
- * Vrai pour un nom qui se LIT comme Meeshy (« Meeshy Officiel », « Мееѕһу »,
- * « ᴍeeshy », « rneeshy »…) : la seule réserve qui fait REFUSER une
- * proposition. Un nom seulement mal formé n'est pas une usurpation.
+ * Ce que l'œil lit d'un caractère, FERMÉ PAR DÉFAUT : une lettre latine
+ * (diacritiques retirés) ou un chiffre se garde, un confusable connu se
+ * remplace par la lettre qu'il imite, et tout autre caractère visible —
+ * lettre, chiffre ou symbole inconnu (❘, ƴ, ß… ; ⓜ et ℳ sont déjà repliés par NFKC) —
+ * devient un JOKER. La ponctuation, les espaces et les invisibles tombent.
+ */
+const readAs = (char: string): string => {
+  if (SEPARATOR.test(char) || MARK.test(char)) return '';
+  const lower = char.toLowerCase();
+  const base = lower.normalize('NFD').replace(/\p{M}/gu, '');
+  if (ASCII_ALNUM.test(base)) return mapped(base, CONFUSABLE_TO_LATIN);
+  const confusable = CONFUSABLE_TO_LATIN[lower];
+  if (confusable !== undefined) return confusable;
+  return VISIBLE_UNKNOWN.test(char) ? JOKER : '';
+};
+
+/** Le squelette de LECTURE d'un nom : chaque caractère lu (`readAs`), puis les séquences confusables. */
+const readingSkeleton = (name: string): string =>
+  SEQUENCE_CONFUSABLES.reduce(
+    (text, [pattern, replacement]) => text.replace(pattern, replacement),
+    [...mapped(name.normalize('NFKC'), CAPITAL_CONFUSABLE_TO_LATIN)].map(readAs).join(''),
+  );
+
+/** Vrai si `window` peut se lire `target`, chaque joker valant n'importe quelle lettre, dans la limite de `MAX_JOKERS`. */
+const canRead = (window: string, target: string): boolean => {
+  const chars = [...window];
+  const fits = chars.every((char, index) => char === JOKER || char === target[index]);
+  return fits && chars.filter((char) => char === JOKER).length <= MAX_JOKERS;
+};
+
+/**
+ * Vrai pour un nom qui PEUT se lire comme Meeshy (« Meeshy Officiel »,
+ * « Мееѕһу », « ᴍeeshy », « rneeshy », « ⓜeeshy », « M❘eeshy »…) : la seule
+ * réserve qui fait REFUSER une proposition. Fermée par défaut : un caractère
+ * inconnu peut valoir la lettre qui manque. Un nom seulement mal formé n'est
+ * pas une usurpation.
  */
 export function impersonatesMeeshy(name: string): boolean {
-  return latinSkeleton(name).includes(MEESHY_SKELETON);
+  const read = [...readingSkeleton(name)];
+  const target = MEESHY_PUBLISHER_SLUG;
+  return read.some((_, start) => start + target.length <= read.length && canRead(read.slice(start, start + target.length).join(''), target));
 }
 
 /**
@@ -192,15 +230,25 @@ const ZERO_WIDTH_JOINER = '\u200D';
 const VISIBLE_NON_LETTER = /^[\p{N}\p{P}\p{S} ]$/u;
 
 /**
- * Les SOSIES latins : petites capitales, lettres IPA et modificatives, que les
- * polices dessinent comme une lettre ordinaire. Toute autre lettre latine
- * (Latin-1, Latin étendu A et B, Latin étendu additionnel) est admise.
+ * Les lettres latines étendues LÉGITIMES qui ne se replient pas en ASCII par
+ * NFD : celles des langues écrites (danois, allemand, polonais, français,
+ * vietnamien, islandais, turc, croate…). Toute autre lettre latine — petites
+ * capitales, IPA, modificatives, pleine largeur, lettres à crochet ou à barre —
+ * est refusée.
  */
-const LOOKALIKE_LATIN = /[\u0250-\u02FF\u1D00-\u1DBF\uA720-\uA7FF\uAB30-\uAB6F\uFF00-\uFFEF]/u;
-const MODIFIER_LETTER = /\p{Lm}/u;
+const LEGITIMATE_EXTENDED_LATIN: ReadonlySet<string> = new Set([...'øØßẞłŁœŒæÆđĐþÞðÐıŋŊħĦŧŦƒǆǅǄĳĲ']);
+const ASCII_LETTER = /^[A-Za-z]$/;
+
+/** Une lettre latine valide : ASCII une fois ses diacritiques retirés (NFD), ou listée parmi les lettres étendues légitimes. */
+const isValidLatin = (char: string): boolean =>
+  ASCII_LETTER.test(char.normalize('NFD').replace(/\p{M}/gu, '')) || LEGITIMATE_EXTENDED_LATIN.has(char);
+
+/** La marque de prolongation des kana (ー), commune à l'écriture japonaise : comptée comme katakana. */
+const PROLONGED_SOUND_MARK = '\u30FC';
 
 /** L'alphabet d'une lettre, ou `null` pour un alphabet que le profil n'admet pas. */
-const scriptOf = (char: string): Script | null => SCRIPTS.find(([, pattern]) => pattern.test(char))?.[0] ?? null;
+const scriptOf = (char: string): Script | null =>
+  char === PROLONGED_SOUND_MARK ? 'Katakana' : (SCRIPTS.find(([, pattern]) => pattern.test(char))?.[0] ?? null);
 
 /** Une jointure n'est admise qu'au sein d'une séquence d'emoji (famille, métier…). */
 const isEmojiJoiner = (chars: readonly string[], index: number): boolean =>
@@ -223,10 +271,9 @@ const isWhitelistedName = (name: string): boolean => {
       if (!VISIBLE_NON_LETTER.test(char)) return false;
       continue;
     }
-    if (MODIFIER_LETTER.test(char)) return false;
     const script = scriptOf(char);
     if (script === null) return false;
-    if (script === 'Latin' && LOOKALIKE_LATIN.test(char)) return false;
+    if (script === 'Latin' && !isValidLatin(char)) return false;
     scripts.add(script);
   }
   return scripts.size <= 1 || MIXES.some((mix) => [...scripts].every((script) => mix.has(script)));
