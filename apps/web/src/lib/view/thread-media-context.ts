@@ -3,6 +3,7 @@ import { createContext, useMemo } from 'react';
 import type { Conversation } from '@/lib/api/types';
 import { avatarOf, titleOf } from './conversation';
 import type { ActionScope } from './message-action-scope';
+import { useMessageImager, type MessageImagerOf } from './use-message-imager';
 
 /**
  * CE QUE LE FIL PRÊTE À SES PIÈCES JOINTES (#6303) — une tuile touchée DANS
@@ -30,6 +31,8 @@ export type ThreadMediaContextValue = {
    * Réagir, Répondre et Partager. Absent ⇒ aucun des trois ne s'offre.
    */
   readonly actionScope?: ActionScope | undefined;
+  /** « Imager » d'un message (#16333) — la baguette du rail ; absent, ou `null` pour ce message ⇒ pas de baguette. */
+  readonly imagerOf?: MessageImagerOf | undefined;
 };
 
 export const ThreadMediaContext = createContext<ThreadMediaContextValue | null>(null);
@@ -41,13 +44,16 @@ export function useThreadMediaValue(params: {
   readonly conversation: Conversation | undefined;
   /** STABLE (`useMessageMenu().scope`, mémoïsé par ses valeurs). */
   readonly actionScope: ActionScope;
+  /** Ce que la baguette lit pour imager un message (#16333) : les messages du fil, la loi du menu, la feuille d'export. */
+  readonly imaging: Parameters<typeof useMessageImager>[0];
 }): ThreadMediaContextValue {
   const { viewerId, onReplyToMedia, conversation, actionScope } = params;
+  const imagerOf = useMessageImager(params.imaging);
   const conversationTitle = conversation !== undefined ? titleOf(conversation, viewerId) : undefined;
   const conversationAvatarUrl = conversation !== undefined ? avatarOf(conversation, viewerId) : undefined;
   const conversationEncryptionMode = conversation?.encryptionMode ?? null;
   return useMemo(
-    () => ({ viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl, conversationEncryptionMode, actionScope }),
-    [viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl, conversationEncryptionMode, actionScope],
+    () => ({ viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl, conversationEncryptionMode, actionScope, imagerOf }),
+    [viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl, conversationEncryptionMode, actionScope, imagerOf],
   );
 }
