@@ -30,7 +30,7 @@ describe('arrivalGreetingOf — à qui le salut s’adresse', () => {
 
   test('un visiteur sans compte n’a pas de pseudo à mentionner : aucune invite', () => {
     expect(arrivalGreetingOf(join({ isAnonymous: true, username: 'ano_x' }), null)).toBeNull();
-    expect(arrivalGreetingOf(join({ username: undefined }), null)).toBeNull();
+    expect(arrivalGreetingOf({ kind: 'join', displayName: 'Tom', handle: null, isAnonymous: false }, null)).toBeNull();
   });
 
   test('plusieurs arrivées : TOUTES les mentions connues, au pluriel ; un arrivant sans pseudo est sauté', () => {

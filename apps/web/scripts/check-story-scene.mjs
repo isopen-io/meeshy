@@ -855,8 +855,8 @@ async function runAuthorRail(colorScheme) {
      ASSERTAIT l'absence d'un bouton que le produit sert désormais se met à
      jour, jamais l'inverse. */
   check(
-    JSON.stringify(rail) === JSON.stringify(['forward', 'views', 'share', 'save', 'comments', 'translations']),
-    `${tag} : le rail de MA story doit porter EXACTEMENT Envoyer, Vues, Partager, Enregistrer, Commentaires, Traductions — reçu ${JSON.stringify(rail)}`,
+    JSON.stringify(rail) === JSON.stringify(['forward', 'views', 'imager', 'share', 'save', 'comments', 'translations']),
+    `${tag} : le rail de MA story doit porter EXACTEMENT Envoyer, Vues, Imager, Partager, Enregistrer, Commentaires, Traductions — reçu ${JSON.stringify(rail)}`,
   );
   const vuesCompte = await page.$eval('[data-story-action="views"] [data-viewer-count]', (el) => el.textContent?.trim() ?? '').catch(() => '');
   check(vuesCompte === '8', `${tag} : « Vues » doit porter le compte SERVI (8) — reçu « ${vuesCompte} »`);
