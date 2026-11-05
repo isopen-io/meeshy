@@ -48,6 +48,7 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { logger } from './messages-shared';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { withNoticeUsernames } from '../../services/messaging/noticeUsernames';
 import { hidingServedTo } from '../../services/messaging/captureNoticeVisibility';
 import {
   backfillCitedAttachments,
@@ -772,6 +773,10 @@ export function registerMessagesListRoute(
         const sticker = stickerFromMetadata(m.metadata);
         if (sticker) m.sticker = sticker;
       }
+
+      // #16421 — une ligne d'arrivées écrite avant que le pseudo y voyage
+      // reçoit celui du compte de chaque arrivant (une requête pour la page).
+      mappedMessages.splice(0, mappedMessages.length, ...(await withNoticeUsernames(prisma, mappedMessages)));
 
       // #7578 — une vue unique se sert PAR LECTEUR : qui l'a déjà ouverte ne
       // reçoit plus que l'état (`consumedByMe`), ni texte, ni traduction, ni
