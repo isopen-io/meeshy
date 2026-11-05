@@ -23,6 +23,7 @@ import me.meeshy.sdk.model.composer.live.ComposerLiveWindow
 import me.meeshy.sdk.model.composer.look.StoryMediaLookMapping
 import me.meeshy.sdk.model.composer.timeline.TrackBar
 import me.meeshy.sdk.model.composer.sound.SoundTrimLaw
+import me.meeshy.sdk.model.scene.SceneAudioChipClock
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.ui.component.media.ComposerLivePlayerState
 import me.meeshy.ui.component.media.ComposerLiveVideo
@@ -51,14 +52,31 @@ internal class ComposerLiveSlot(val subject: ComposerLiveSubject, private val pl
     fun Picture(fit: Boolean, modifier: Modifier = Modifier.fillMaxSize()) = ComposerLiveVideo(player, fit, modifier)
 }
 
-/** Les vidéos vivantes de la diapo, par identifiant d'objet (le fond par le sien) : la scène y cherche chacune. */
-internal data class ComposerLiveStage(private val videos: Map<String, ComposerLiveSlot>) {
+/**
+ * La tête d'un son vivant de la scène, lue par le chrono de sa puce (#16293) : la position du lecteur, tenu sur la source
+ * entière, ramenée au début de la fenêtre que joue le son.
+ */
+internal class ComposerLiveSoundClock(val id: String, private val player: ComposerLivePlayerState, private val windowStartMs: Long) {
+    val chip: AudioChipClock = AudioChipClock.Live { SceneAudioChipClock.livePositionSeconds(player.player.currentPosition, windowStartMs) }
+}
+
+/**
+ * Les vidéos vivantes de la diapo, par identifiant d'objet (le fond par le sien) : la scène y cherche chacune. [sounds] : la
+ * tête de chaque son vivant, par identifiant de piste.
+ */
+internal data class ComposerLiveStage(
+    private val videos: Map<String, ComposerLiveSlot>,
+    private val sounds: Map<String, ComposerLiveSoundClock> = emptyMap(),
+) {
     val background: ComposerLiveSlot? get() = videos.values.firstOrNull { it.subject.background }
 
     fun placed(id: String): ComposerLiveSlot? = videos[id]?.takeUnless { it.subject.background }
 
+    /** Le chrono de la puce du son [id] ; `null` : ce son ne joue pas. */
+    fun soundClock(id: String): AudioChipClock? = sounds[id]?.chip
+
     /** Pendant « Comparer » sur [id], la vidéo cède la place à son affiche, qui montre l'original. */
-    fun comparing(id: String?): ComposerLiveStage = if (id == null || id !in videos) this else ComposerLiveStage(videos - id)
+    fun comparing(id: String?): ComposerLiveStage = if (id == null || id !in videos) this else copy(videos = videos - id)
 }
 
 /** La scène vivante tendue par l'hôte du compositeur à sa scène ; `null` : rien ne joue. */
@@ -172,10 +190,17 @@ internal fun rememberComposerLive(
                 },
                 effects = effects,
             )
-            remember(cue.subject, player) { ComposerLiveSlot(cue.subject, player) }.takeIf { video }
+            if (video) {
+                remember(cue.subject, player) { ComposerLiveSlot(cue.subject, player) }
+            } else {
+                remember(cue.subject, player, cue.window.startMs) { ComposerLiveSoundClock(cue.subject.id, player, cue.window.startMs) }
+            }
         }
     }
-    return ComposerLiveStage(slots.filterNotNull().associateBy { it.subject.id })
+    return ComposerLiveStage(
+        videos = slots.filterIsInstance<ComposerLiveSlot>().associateBy { it.subject.id },
+        sounds = slots.filterIsInstance<ComposerLiveSoundClock>().associateBy { it.id },
+    )
 }
 
 /** La fenêtre de SCÈNE de chaque objet (entrée, sortie ; `null` : jusqu'à la fin) — le fond n'en a pas, il couvre tout. */
