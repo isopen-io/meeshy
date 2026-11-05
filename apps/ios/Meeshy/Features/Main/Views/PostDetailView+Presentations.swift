@@ -72,7 +72,10 @@ extension PostDetailView {
                 startMediaId: fullscreenMediaId,
                 startSceneIndex: detailSceneIndex,
                 accentColor: accentColor,
-                preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+                preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
+                // #16322 — la pellicule porte les médias des commentaires chargés.
+                thread: CommentMediaGallery.flatten(topLevel: viewModel.topLevelComments,
+                                                    replies: viewModel.repliesMap)
             )
             .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
             .mediaSaveFlow(mediaSaveCoordinator)

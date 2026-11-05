@@ -396,6 +396,9 @@ struct PostDetailView: View {
                                 LazyVStack(spacing: 0) {
                                     postDetailContent(post, scrollProxy: scrollProxy)
                                 }
+                                // #16322 — le média d'un commentaire ouvre la suite du post.
+                                .commentMediaGallery(topLevel: viewModel.topLevelComments,
+                                                     replies: viewModel.repliesMap, post: post)
                                 .padding(.bottom, 80)
                             }
                             // iOS 16–17 scroll-offset reader: the content's top `minY`

@@ -53,6 +53,9 @@ extension View {
     ///     aux textes posés dans la scène. Vide ⇒ le Prisme du lecteur.
     ///   - zoomSourceID: la carte d'où la galerie GRANDIT (#8598,
     ///     `SceneZoomTransition.destinationID`). `nil` ⇒ la montée habituelle.
+    ///   - thread: le fil de commentaires que l'hôte a chargé, dans l'ordre où
+    ///     il le montre (#16322) — la pellicule en porte les médias dès
+    ///     l'ouverture, après ceux du post.
     func socialMediaGallery(
         post: FeedPost?,
         isPresented: Binding<Bool>,
@@ -60,10 +63,12 @@ extension View {
         startSceneIndex: Int = 0,
         accentColor: String,
         preferredContentLanguages: [String] = [],
-        zoomSourceID: String? = nil
+        zoomSourceID: String? = nil,
+        thread: [FeedComment] = []
     ) -> some View {
         modifier(SocialMediaGalleryLayer(
             post: post,
+            thread: thread,
             isPresented: isPresented,
             startMediaId: startMediaId,
             startSceneIndex: startSceneIndex,
@@ -84,6 +89,7 @@ extension View {
 private struct SocialMediaGalleryLayer: ViewModifier {
 
     let post: FeedPost?
+    let thread: [FeedComment]
     @Binding var isPresented: Bool
     let startMediaId: String?
     let startSceneIndex: Int
@@ -174,6 +180,7 @@ private struct SocialMediaGalleryLayer: ViewModifier {
                     startSceneIndex: startSceneIndex,
                     accentColor: accentColor,
                     playerLanguages: preferredContentLanguages,
+                    thread: thread,
                     // **Le même item, dans le menu de la PIÈCE** (arbitrage
                     // porteur 2026-09-11). C'est la rangée d'actions du plein
                     // écran — celle qui porte déjà « Créer avec ce média » en
@@ -271,6 +278,7 @@ struct SocialMediaGalleryContent: View {
          startSceneIndex: Int = 0,
          accentColor: String,
          playerLanguages: [String] = [],
+         thread: [FeedComment] = [],
          onCompose: ((ComposerSeedTarget) -> Void)? = nil,
          onQuote: ((CommentQuotedMedia) -> Void)? = nil) {
         self.post = post
@@ -280,9 +288,18 @@ struct SocialMediaGalleryContent: View {
         self.playerLanguages = playerLanguages
         self.onCompose = onCompose
         self.onQuote = onQuote
-        // La carte embarque quelques commentaires : ils sont là tout de suite,
-        // avant même que le cache réponde.
-        _comments = State(initialValue: post.comments)
+        // Le fil que l'hôte a chargé, puis ce que la carte embarque : tous
+        // sont là tout de suite, avant même que le cache réponde.
+        _comments = State(initialValue: Self.initialComments(post: post, thread: thread))
+    }
+
+    /// **Les commentaires servis à l'ouverture** (#16322) : le fil de l'hôte
+    /// dans SON ordre — c'est l'ordre que l'écran montrait —, puis les
+    /// commentaires embarqués par la carte qu'il ne porte pas. Sans fil, ceux
+    /// de la carte seuls.
+    nonisolated static func initialComments(post: FeedPost, thread: [FeedComment]) -> [FeedComment] {
+        let portes = Set(thread.map(\.id))
+        return thread + post.comments.filter { !portes.contains($0.id) }
     }
 
     /// Le Prisme du LECTEUR — la descente stricte qui gouverne ce qui s'AFFICHE
