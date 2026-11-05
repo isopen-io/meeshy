@@ -66,7 +66,7 @@ import me.meeshy.ui.profile.LocalProfileSheetPresented
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.ui.unit.LayoutDirection
 import me.meeshy.app.stories.rememberSceneVideoExport
-import me.meeshy.sdk.model.scene.export.StoryExportMode
+import me.meeshy.app.feed.LocalPostCardImager
 
 /** How many reels from the end of the thread trigger the next cursor page. */
 private const val LOAD_MORE_THRESHOLD = 3
@@ -133,10 +133,10 @@ fun ReelsScreen(
     val shareOutNow by rememberUpdatedState(shareOut)
     val launcherNow by rememberUpdatedState(shareLauncher)
     val reelsNow by rememberUpdatedState(state.reels)
-    // « Imager » du rail (#16334) : le réel ENTIER, scène ou vidéo, par la même vue Imager que le menu « ⋯ ».
-    val railImager = rememberSceneVideoExport(key = REEL_RAIL_IMAGER_KEY) { emptyList() }
-    val railImagerNow by rememberUpdatedState(railImager)
-    val railActions = remember(viewModel) {
+    val railRender = rememberSceneVideoExport(key = REEL_RAIL_IMAGER_KEY) { emptyList() }
+    val railRenderNow by rememberUpdatedState(railRender)
+    val cardImager = LocalPostCardImager.current
+    val railActions = remember(viewModel, cardImager) {
         ReelRailActions(
             onLike = viewModel::toggleLike,
             onReact = viewModel::react,
@@ -152,8 +152,8 @@ fun ReelsScreen(
                     launcherNow?.open(ShareSubject.Card(card)) ?: shareOutNow(card)
                 }
             },
-            onImager = { id ->
-                reelsNow.firstOrNull { it.id == id }?.export?.let { scene -> railImagerNow.start(StoryExportMode.IMAGER, listOf(scene)) }
+            onImager = cardImager?.let { imager ->
+                { id -> reelsNow.firstOrNull { it.id == id }?.imagerRequest(railRenderNow)?.let(imager) }
             },
         )
     }

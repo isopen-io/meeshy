@@ -60,6 +60,7 @@ internal fun rememberStoryViewerActions(
     onOpenProfile: (String) -> Unit,
     onEditStory: ((String) -> Unit)?,
     onComposeStory: ((String) -> Unit)?,
+    imager: (() -> Unit)? = null,
 ): StoryViewerActions {
     val shareLauncher = LocalShareLauncher.current
     val context = LocalContext.current
@@ -101,9 +102,20 @@ internal fun rememberStoryViewerActions(
         entryHandlers = buildMap {
             put(StoryOptionsMenuEntry.Fullscreen, fullscreenMenuEntry(fullscreen, haptics))
             if (StoryTranscriptState.isAvailable(currentItem?.storyEffects)) put(StoryOptionsMenuEntry.Transcript, transcriptMenuEntry(chrome, haptics))
+            imager?.let { put(StoryOptionsMenuEntry.Imager, imagerMenuEntry(it, haptics)) }
         },
     )
 }
+
+private fun imagerMenuEntry(imager: () -> Unit, haptics: MeeshyHaptics): StoryMenuEntryAction =
+    StoryMenuEntryAction(
+        labelRes = R.string.stories_viewer_export_imager,
+        icon = MeeshyIcons.PhotoFilled,
+        onClick = {
+            haptics.light()
+            imager()
+        },
+    )
 
 /** « Transcription » du menu ⋮ : éteinte par défaut, elle remplace la légende tant qu'elle est demandée. */
 private fun transcriptMenuEntry(chrome: StoryViewerChromeState, haptics: MeeshyHaptics): StoryMenuEntryAction =

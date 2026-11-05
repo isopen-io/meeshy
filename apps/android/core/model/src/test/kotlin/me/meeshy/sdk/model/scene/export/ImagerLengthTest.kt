@@ -1,7 +1,6 @@
 package me.meeshy.sdk.model.scene.export
 
 import com.google.common.truth.Truth.assertThat
-import me.meeshy.sdk.model.composer.scene.SceneExportDestination
 import org.junit.Test
 
 class ImagerLengthTest {
@@ -31,31 +30,18 @@ class ImagerLengthTest {
         assertThat(ImagerLength.renderedMillis(45_000, ImagerQuarter.ONE)).isEqualTo(45_000)
     }
 
-    @Test fun `enregistrer et partager ne proposent jamais de choix, imager seul le fait`() {
-        assertThat(StoryExportMode.SAVE.lengthChoices(240_000)).isEmpty()
-        assertThat(StoryExportMode.SHARE.lengthChoices(240_000)).isEmpty()
-        assertThat(StoryExportMode.IMAGER.lengthChoices(240_000)).hasSize(4)
-        assertThat(StoryExportMode.IMAGER.lengthChoices(30_000)).isEmpty()
+    @Test fun `enregistrer et partager rendent la composition entiere`() {
+        assertThat(StoryExportMode.SAVE.renderedMillis(240_000)).isEqualTo(240_000)
+        assertThat(StoryExportMode.SHARE.renderedMillis(240_000)).isEqualTo(240_000)
     }
 
-    @Test fun `imager seul ouvre la vue imager, enregistrer et partager rendent sans elle`() {
-        assertThat(StoryExportMode.IMAGER.opensImagerView).isTrue()
-        assertThat(StoryExportMode.SAVE.opensImagerView).isFalse()
-        assertThat(StoryExportMode.SHARE.opensImagerView).isFalse()
+    @Test fun `la carte de l atelier ne rend que le debut de la composition, son image`() {
+        assertThat(StoryExportMode.CARD.renderedMillis(240_000)).isEqualTo(StoryExportMode.CARD_RENDER_MILLIS)
+        assertThat(StoryExportMode.CARD.renderedMillis(1_200)).isEqualTo(1_200)
+        assertThat(StoryExportMode.CARD.renderedMillis(-5)).isEqualTo(0)
     }
 
-    @Test fun `la vue imager d une composition courte ne propose aucun quart et rend tout`() {
-        val offer = ImagerOffer.of(30_000)
-        assertThat(offer.totalMillis).isEqualTo(30_000)
-        assertThat(offer.choices).isEmpty()
-        assertThat(offer.preselected).isNull()
-        assertThat(offer.renderedMillis(ImagerDecision(SceneExportDestination.GALLERY))).isEqualTo(30_000)
-    }
-
-    @Test fun `au dela d une minute la vue imager propose les quatre quarts, le tout preselectionne`() {
-        val offer = ImagerOffer.of(240_000)
-        assertThat(offer.choices.map { it.quarter }).containsExactlyElementsIn(ImagerQuarter.entries).inOrder()
-        assertThat(offer.preselected).isEqualTo(ImagerQuarter.FOUR)
-        assertThat(offer.renderedMillis(ImagerDecision(SceneExportDestination.SHARE, ImagerQuarter.ONE))).isEqualTo(60_000)
+    @Test fun `aucune sortie ne garde la vue imager de scene`() {
+        assertThat(StoryExportMode.entries.map { it.name }).containsExactly("SAVE", "SHARE", "CARD").inOrder()
     }
 }

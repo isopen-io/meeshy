@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -46,7 +47,7 @@ class CommentMoreMenuTest {
     )
 
     private fun show(isOwn: Boolean, imaging: CommentImaging? = null) {
-        compose.setContent { MeeshyTheme { CommentMoreMenu(comment(isOwn), onDelete = { deleted += it }, imaging = imaging) } }
+        compose.setContent { MeeshyTheme { Row { CommentMoreMenu(comment(isOwn), onDelete = { deleted += it }, imaging = imaging) } } }
         compose.waitForIdle()
     }
 
@@ -120,5 +121,26 @@ class CommentMoreMenuTest {
         compose.onNodeWithContentDescription("More options").performClick()
 
         compose.onAllNodesWithText("Picture it").assertCountEquals(0)
+    }
+
+    @Test
+    fun `a comment that composes a card carries the wand beside the more button, which opens its card`() {
+        val opened = mutableListOf<Pair<String, PostCommentCardSubject>>()
+        show(isOwn = false, imaging = CommentImaging(cardOf = { card }, open = { id, composed -> opened += id to composed }))
+
+        val wand = compose.onNodeWithContentDescription("Picture it").getBoundsInRoot()
+        val more = compose.onNodeWithContentDescription("More options").getBoundsInRoot()
+        compose.onNodeWithContentDescription("Picture it").performClick()
+
+        assertThat(wand.right).isAtMost(more.left)
+        assertThat(wand.bottom - wand.top).isAtLeast(44.dp)
+        assertThat(opened).containsExactly("c1" to card)
+    }
+
+    @Test
+    fun `a comment that composes nothing carries no wand`() {
+        show(isOwn = false, imaging = CommentImaging(cardOf = { null }, open = { _, _ -> }))
+
+        compose.onNodeWithContentDescription("Picture it").assertDoesNotExist()
     }
 }

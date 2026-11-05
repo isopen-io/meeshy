@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.CommentMenuAction
 import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
@@ -43,6 +44,9 @@ internal fun CommentMoreMenu(comment: CommentPresentation, onDelete: (String) ->
     val haptics = rememberMeeshyHaptics()
     val entries = rememberCommentMenuEntries(comment, onDelete, imaging)
     if (entries.isEmpty()) return
+    entries.firstOrNull { it.action == CommentMenuAction.IMAGINE }?.let { imagine ->
+        ImagerWand(onClick = imagine.run, tint = MeeshyTheme.tokens.textSecondary)
+    }
     Box {
         IconButton(
             onClick = { haptics.light(); expanded = true },

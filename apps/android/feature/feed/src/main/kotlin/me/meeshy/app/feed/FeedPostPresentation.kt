@@ -134,8 +134,8 @@ data class FeedPostPresentation(
     val reelAspect: Float = ReelCoverResolver.cardAspect(null, null),
     /** Les scènes d'un post composé sur la scène, peintes à la place de [images] ; `null` pour tout autre post. */
     val scenes: FeedPostScenes? = null,
-    /** Ce qu'« Imager » rend (#14329) : les scènes d'un post à scène, la scène d'un réel composé ; `null` : aucune entrée. */
-    val imagerScenes: PostImagerScenes? = null,
+    /** Ce qu'« Imager » ouvre dans l'atelier de carte (#16393) : la carte du post, et le rendu de ses scènes s'il est composé ; `null` : rien ne s'image. */
+    val imager: PostImagerRequest? = null,
     /** Le post tel qu'« Imager » un de ses commentaires le met en tête (#13922) : son texte servi, son audience, ses médias. */
     val commentCardSupport: PostCommentCardPost? = null,
     /** Les premiers commentaires que la carte montre sous ses actions (#14314) ; `null` : aucun à montrer. */
@@ -232,6 +232,7 @@ object FeedPostBuilder {
         val mentioned = post.mentionedUsers.orEmpty().filter { it.username.isNotBlank() }.map { Triple(it.username, it.userId, it.displayName) } +
             post.mentions.orEmpty().filter { it.display.isPubliclyVisible && it.username.isNotBlank() }.map { Triple(it.username, it.userId, it.displayName) }
         val composedReel = if (isReel) post.toStoryItem().takeIf { it.storyEffects.composesScene() } else null
+        val support = CommentCardReading.support(post, content)
         return FeedPostPresentation(
             id = post.id,
             authorId = post.author?.id,
@@ -279,8 +280,8 @@ object FeedPostBuilder {
             reelCover = if (isReel) ReelCoverResolver.resolve(reelMedia, post.authorAccentHex()) { post.toStoryItem() } else null,
             reelAspect = reelMedia.reelVisual().let { ReelCoverResolver.cardAspect(it?.width, it?.height) },
             scenes = scenes,
-            imagerScenes = PostImaging.of(scenes, composedReel, post.authorAccentHex()),
-            commentCardSupport = CommentCardReading.support(post, content),
+            imager = PostImaging.of(post.id, support, PostImaging.scenesOf(scenes, composedReel, post.authorAccentHex()), ephemeral = post.expiresAt != null),
+            commentCardSupport = support,
             commentsPreview = FeedCommentsPreviewBuilder.build(post.comments, post.commentCount ?: 0, preferences, mediaBaseUrl),
             mentionUserIds = mentioned.associate { it.first.lowercase() to it.second },
             mentionDisplayNames = mentioned.mapNotNull { (u, _, n) -> n?.takeIf(String::isNotBlank)?.let { u to it } }.toMap(),
