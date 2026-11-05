@@ -27,6 +27,31 @@ import { unlockText } from '@/lib/packs/unlock-texts';
 
 export type ShopPack = { readonly slug: string; readonly installed: boolean };
 
+/** Le geste qu'offre un pack, le même dans sa rangée, sa fiche et son plein écran. */
+export type PackAction =
+  | { readonly kind: 'toggle' | 'buy'; readonly label: string }
+  | { readonly kind: 'locked' | 'included'; readonly label: string }
+  | { readonly kind: 'swap'; readonly label: string; readonly run: () => void };
+
+/**
+ * Ce que la boutique remet à la fiche et au plein écran d'un pack (#16267) :
+ * le pack ouvert (lu dans la liste VIVANTE, donc à jour du geste optimiste),
+ * l'élément montré en plein écran, et les gestes de la boutique.
+ */
+export type PackInspection<P extends ShopPack> = {
+  readonly sheet: P | null;
+  readonly preview: { readonly pack: P; readonly index: number } | null;
+  readonly packs: readonly P[];
+  readonly openPreview: (pack: P, index: number) => void;
+  readonly closePreview: () => void;
+  readonly closeSheet: () => void;
+  /** Installer / Retirer / Acheter, optimiste ; rend `true` une fois confirmé, `false` sur un refus (état d'avant rétabli). */
+  readonly toggle: (pack: P) => Promise<boolean>;
+  readonly busy: (pack: P) => boolean;
+  readonly actionOf: (pack: P) => PackAction;
+  readonly notice: string;
+};
+
 /** Méthodes en notation courte : un adaptateur d'un domaine précis se passe là où la boutique attend `ShopPack`. */
 export type PackShopAdapter<P extends ShopPack> = {
   readonly domain: string;
@@ -68,7 +93,15 @@ export type PackShopAdapter<P extends ShopPack> = {
   swap?(pack: P): { readonly label: string; readonly run: () => void } | null;
   /** Ce que dit un retrait refusé (409) de ce pack ; absent : « ce pack reste installé ». */
   keptText?(pack: P): string;
+  /** `true` = la rangée s'ouvre sur la fiche du pack et sa couverture sur le plein écran (#16267). Absent : jamais. */
+  inspectable?(pack: P): boolean;
+  /** La fiche et le plein écran, rendus une fois pour la boutique tant que l'un d'eux est ouvert. */
+  inspector?(inspection: PackInspection<P>): ReactNode;
 };
+
+type Inspected = { readonly sheet: string | null; readonly preview: { readonly slug: string; readonly index: number } | null };
+
+const NOTHING_INSPECTED: Inspected = { sheet: null, preview: null };
 
 type Notice = 'install' | 'insufficient' | 'purchase' | { readonly kept: string } | null;
 
@@ -119,9 +152,9 @@ export function PackShop<P extends ShopPack>({
   const needsPurchase = (pack: P): boolean =>
     adapter.purchase !== undefined && (adapter.price?.(pack) ?? null) !== null && adapter.owned?.(pack) === false;
 
-  const buy = async (pack: P) => {
+  const buy = async (pack: P): Promise<boolean> => {
     const purchase = adapter.purchase;
-    if (purchase === undefined || !guard.current.tryBegin(pack.slug)) return;
+    if (purchase === undefined || !guard.current.tryBegin(pack.slug)) return false;
     setFlying((current) => new Set([...current, pack.slug]));
     const requestId = requestIds.current.get(pack.slug) ?? newPurchaseRequestId();
     requestIds.current.set(pack.slug, requestId);
@@ -135,22 +168,23 @@ export function PackShop<P extends ShopPack>({
     if (!result.ok && result.code === 'PACK_ALREADY_OWNED') {
       requestIds.current.delete(pack.slug);
       adapter.applyPurchased?.(queryClient, pack, { balance: null });
-      return;
+      return true;
     }
     if (!result.ok) {
       if (!isRetryable(result)) requestIds.current.delete(pack.slug);
       queryClient.setQueryData(adapter.catalogueKey, beforeCatalogue);
       queryClient.setQueryData(adapter.installedKey, beforeInstalled);
       setFailure(result.code === 'INSUFFICIENT_MEESHES' ? 'insufficient' : 'purchase');
-      return;
+      return false;
     }
     requestIds.current.delete(pack.slug);
     adapter.applyPurchased?.(queryClient, pack, { balance: result.data.balance });
+    return true;
   };
 
-  const toggle = async (pack: P) => {
+  const toggle = async (pack: P): Promise<boolean> => {
     if (needsPurchase(pack)) return buy(pack);
-    if (!guard.current.tryBegin(pack.slug)) return;
+    if (!guard.current.tryBegin(pack.slug)) return false;
     setFlying((current) => new Set([...current, pack.slug]));
     const next = !pack.installed;
     const beforeCatalogue = queryClient.getQueryData(adapter.catalogueKey);
@@ -170,10 +204,23 @@ export function PackShop<P extends ShopPack>({
       queryClient.setQueryData(adapter.catalogueKey, beforeCatalogue);
       queryClient.setQueryData(adapter.installedKey, beforeInstalled);
       setFailure(isKept(result, next) ? { kept: adapter.keptText?.(pack) ?? translateStickerPacks(language, 'packs.error.notRemovable') } : 'install');
-      return;
+      return false;
     }
     complete?.(queryClient);
+    return true;
   };
+
+  const actionOf = (pack: P): PackAction => {
+    const toBuy = needsPurchase(pack);
+    if (adapter.locked?.(pack) === true && !pack.installed) return { kind: 'locked', label: unlockText(language, 'locked') };
+    const swap = pack.installed && !toBuy ? (adapter.swap?.(pack) ?? null) : null;
+    if (swap !== null) return { kind: 'swap', label: swap.label, run: swap.run };
+    if (pack.installed && !toBuy && adapter.removable?.(pack) === false) return { kind: 'included', label: translateStickerPacks(language, 'packs.included') };
+    if (toBuy) return { kind: 'buy', label: translateStickerPacks(language, 'packs.buy', { price: String(adapter.price?.(pack) ?? '') }) };
+    return { kind: 'toggle', label: translateStickerPacks(language, pack.installed ? 'stickerPacks.uninstall' : 'stickerPacks.install') };
+  };
+
+  const [inspected, setInspected] = useState<Inspected>(NOTHING_INSPECTED);
 
   const packs = (catalogue.data ?? []) as readonly P[];
   const focusedRow = useRef<HTMLLIElement | null>(null);
@@ -194,6 +241,26 @@ export function PackShop<P extends ShopPack>({
           : catalogue.isError
       ? translateStickerPacks(language, 'stickerPacks.error.load')
       : '';
+
+  const bySlug = (slug: string | null): P | null => (slug === null ? null : (packs.find((pack) => pack.slug === slug) ?? null));
+  const sheetPack = bySlug(inspected.sheet);
+  const previewPack = bySlug(inspected.preview?.slug ?? null);
+  const inspection: PackInspection<P> | null =
+    adapter.inspector === undefined || (sheetPack === null && previewPack === null)
+      ? null
+      : {
+          sheet: sheetPack,
+          preview: previewPack === null || inspected.preview === null ? null : { pack: previewPack, index: inspected.preview.index },
+          packs,
+          openPreview: (pack, index) => setInspected((current) => ({ ...current, preview: { slug: pack.slug, index } })),
+          closePreview: () => setInspected((current) => ({ ...current, preview: null })),
+          closeSheet: () => setInspected((current) => ({ ...current, sheet: null })),
+          toggle,
+          busy: (pack) => flying.has(pack.slug),
+          actionOf,
+          notice,
+        };
+  const openable = (pack: P): boolean => adapter.inspector !== undefined && adapter.inspectable?.(pack) === true;
 
   return (
     <div data-pack-shop={adapter.domain} className="flex flex-col gap-4">
@@ -247,14 +314,41 @@ export function PackShop<P extends ShopPack>({
                 key={pack.slug}
                 data-shop-pack={pack.slug}
                 {...(pack.slug === focusSlug ? { 'data-shop-pack-focused': '', 'aria-current': 'true' as const, ref: focusedRow } : {})}
-                className="flex flex-col gap-2 rounded-2xl p-3"
+                className="relative flex flex-col gap-2 rounded-2xl p-3"
                 style={{ backgroundColor: 'var(--color-ios-card)', ...(pack.slug === focusSlug ? { outline: '2px solid var(--accent, var(--color-ios-brand))' } : {}) }}
               >
                 <div className="flex items-center gap-3">
-                  {adapter.cover(pack)}
+                  {openable(pack) ? (
+                    <button
+                      type="button"
+                      data-shop-preview={pack.slug}
+                      aria-label={translateStickerPacks(language, 'packs.preview.open', { name: title })}
+                      onClick={() => setInspected({ sheet: null, preview: { slug: pack.slug, index: 0 } })}
+                      className="relative z-[1] shrink-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2"
+                      style={{ outlineColor: 'var(--color-ios-brand)' }}
+                    >
+                      {adapter.cover(pack)}
+                    </button>
+                  ) : (
+                    adapter.cover(pack)
+                  )}
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <h3 className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                      {title}
+                      {openable(pack) ? (
+                        /* La rangée entière s'ouvre : le bouton du titre s'étend sur elle (`after:inset-0`), sous la couverture et le geste. */
+                        <button
+                          type="button"
+                          data-shop-open={pack.slug}
+                          aria-label={translateStickerPacks(language, 'packs.sheet.open', { name: title })}
+                          onClick={() => setInspected({ sheet: pack.slug, preview: null })}
+                          className="text-start after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2"
+                          style={{ outlineColor: 'var(--color-ios-brand)' }}
+                        >
+                          {title}
+                        </button>
+                      ) : (
+                        title
+                      )}
                     </h3>
                     <p className="line-clamp-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
                       {adapter.description(pack)}
@@ -278,7 +372,7 @@ export function PackShop<P extends ShopPack>({
                       data-shop-swap={pack.slug}
                       aria-label={`${swap.label} — ${title}`}
                       onClick={swap.run}
-                      className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
+                      className="relative z-[1] min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
                       style={{ backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }}
                     >
                       {swap.label}
@@ -296,7 +390,7 @@ export function PackShop<P extends ShopPack>({
                       aria-busy={flying.has(pack.slug)}
                       aria-label={`${action} ${title}`}
                       onClick={() => void toggle(pack)}
-                      className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
+                      className="relative z-[1] min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
                       style={
                         pack.installed && !toBuy
                           ? { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }
@@ -314,6 +408,7 @@ export function PackShop<P extends ShopPack>({
         </ul>
       )}
       {footer}
+      {inspection === null ? null : adapter.inspector?.(inspection)}
     </div>
   );
 }
