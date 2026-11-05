@@ -39,7 +39,7 @@ class ComposerFoldController @Inject constructor(
 
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class ComposerFoldModule {
+abstract class ComposerFoldControllerModule {
 
     @Binds
     @IntoSet
