@@ -284,7 +284,7 @@ struct ProfileUserPostsList: View {
             CommentsSheetView(post: post, accentColor: post.authorColor)
         }
         .postEditCover(item: $editingPost) { post, draft in
-            await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
+            await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects, additions: draft.additions)
         }
         .modifier(QuoteComposerCover(quoted: $quotedPost, host: quoteHost))
     }

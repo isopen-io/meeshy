@@ -39,7 +39,7 @@ extension PostDetailView {
                 ShareSheet(activityItems: link.activityItems)
             }
             .postEditCover(post: displayPost, isPresented: $isEditing) { _, draft in
-                await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
+                await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects, additions: draft.additions)
             }
             .fullScreenCover(item: $detailFullscreenPlace) { item in
                 // Même surface plein écran que la bulle et la card feed :

@@ -457,7 +457,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil, additions: PostEditAdditions = PostEditAdditions()
     ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
@@ -479,11 +479,11 @@ final class ProfileUserPostsViewModel: ObservableObject {
             // Le corps ne se construit plus ici : `known` dit ce que la
             // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
             // champ non déclaré est OMIS, et le serveur préserve le sien.
-            let updated = try await postService.update(postId: postId, known: known, draft: PostEditDraft(
+            let updated = try await postService.update(postId: postId, known: known, draft: additions.completing(PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
                 originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
-            ))
+            )))
             if let newIdx = posts.firstIndex(where: { $0.id == postId }) {
                 let edited = updated.toFeedPost(preferredLanguages: languageProvider.preferredLanguages)
                 posts[newIdx] = edited

@@ -109,20 +109,14 @@ final class PostEditComposerRulesTests: XCTestCase {
         XCTAssertEqual(try saved(draft(text: "x"), publication, opened: ouverte, now: apres).removeMediaIds, ["i1"])
     }
 
-    func test_outcome_newLocalMedia_refusesAddsMedia() {
+    func test_outcome_newLocalMedia_isUploadedRatherThanRefused() {
         let piece = ComposerDocumentMedia(url: URL(fileURLWithPath: "/tmp/a.jpg"), mimeType: "image/jpeg", durationMs: nil)
-        XCTAssertEqual(refusal(draft(text: "x", localMedia: [piece]), post(type: "POST", content: "x")), .addsMedia)
-    }
-
-    func test_outcome_textObjectAddedOnScene_refusesReshape() {
-        let publication = post(type: "POST", content: "x", media: [media("i1", .image)], effects: effects(objects: ["i1"]))
-        let ouverte = slides(of: publication)
-        var apres = ouverte
-        apres[0].effects.textObjects.append(StoryTextObject(id: "t-neuf", text: "Salut", x: 0.5, y: 0.5, scale: 1,
-                                                            rotation: 0, fontSize: 20, textStyle: "bold",
-                                                            textColor: "FFFFFF", textAlign: "center", textBg: nil))
-
-        XCTAssertEqual(refusal(draft(text: "x"), publication, opened: ouverte, now: apres), .reshapesScene)
+        let outcome = PostEditComposerSave.outcome(draft: draft(text: "x", localMedia: [piece]),
+                                                   baseline: PostEditBaseline(post: post(type: "POST", content: "x"),
+                                                                              defaultLanguage: "fr"),
+                                                   openedSlides: [], slides: [])
+        guard case .upload(_, let medias) = outcome else { return XCTFail("attendu : téléversement, obtenu \(outcome)") }
+        XCTAssertEqual(medias.urls, [piece.url])
     }
 
     func test_outcome_emptyTextWithoutMedia_refusesEmpty() {

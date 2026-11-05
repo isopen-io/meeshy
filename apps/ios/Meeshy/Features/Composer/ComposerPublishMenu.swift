@@ -301,6 +301,14 @@ nonisolated enum ComposerPublishMenuCopy {
     /// son en-tête dit « Publier », il n'a aucun autre format à nommer.
     /// Ce que la capsule nomme pour un CHOIX : chacun des formats cochés
     /// (#13920), la story et son réel compris (#9476).
+    /// **Modifier une publication l'ENREGISTRE** (#15630) : le bouton d'une
+    /// porte d'édition — story, post ou réel — dit « Enregistrer », jamais
+    /// « Publier », qui annoncerait une publication neuve.
+    static func publishTitle(for choice: ComposerPublishChoice, origin: ComposerOrigin) -> String? {
+        guard case .edit = origin else { return publishTitle(for: choice) }
+        return String(localized: "composer.edit.save", defaultValue: "Enregistrer", bundle: .main)
+    }
+
     static func publishTitle(for choice: ComposerPublishChoice) -> String? {
         switch Set(choice.formats) {
         case [.story, .reel]:

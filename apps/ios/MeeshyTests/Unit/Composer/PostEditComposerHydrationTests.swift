@@ -104,7 +104,9 @@ final class PostEditComposerHydrationTests: XCTestCase {
         XCTAssertEqual(try saved(draft(), session, now: apres).removeMediaIds, ["i2"])
     }
 
-    func test_outcome_textAddedOnSecondScene_refusesReshape() {
+    /// Un texte ajouté sur la seconde scène s'ENREGISTRE (#15630) : le canevas du
+    /// brouillon repart, entier.
+    func test_outcome_textAddedOnSecondScene_sendsTheDraftCanvas() throws {
         let publication = post(media: [media("i1", .image), media("i2", .image)], effects: twoScenes())
         let session = PostEditComposerSession(post: publication, defaultLanguage: "fr")
         var apres = session.openedSlides
@@ -112,7 +114,10 @@ final class PostEditComposerHydrationTests: XCTestCase {
                                                             rotation: 0, fontSize: 20, textStyle: "bold",
                                                             textColor: "FFFFFF", textAlign: "center", textBg: nil))
 
-        XCTAssertEqual(refusal(draft(), session, now: apres), .reshapesScene)
+        let edit = try saved(draft(effects: twoScenes()), session, now: apres)
+
+        XCTAssertTrue(edit.known.contains(.storyEffects))
+        XCTAssertNotNil(edit.storyEffects?.canvasV3)
     }
 
     // MARK: - Le repost : son texte s'édite, son type et sa citation non
@@ -180,14 +185,6 @@ final class PostEditComposerHydrationTests: XCTestCase {
         return edit
     }
 
-    private func refusal(_ draft: ComposerDocumentDraft, _ session: PostEditComposerSession,
-                         now: [StorySlide]) -> PostEditComposerRefusal? {
-        let outcome = PostEditComposerSave.outcome(draft: draft, baseline: session.baseline,
-                                                   openedSlides: session.openedSlides, slides: now)
-        guard case .refuse(let raison) = outcome else { return nil }
-        return raison
-    }
-
     private func served(_ json: String) throws -> FeedPost {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -221,11 +218,11 @@ final class PostEditComposerHydrationTests: XCTestCase {
         return effets
     }
 
-    private func draft(text: String = "x") -> ComposerDocumentDraft {
+    private func draft(text: String = "x", effects: StoryEffects? = nil) -> ComposerDocumentDraft {
         ComposerDocumentDraft.document(
             format: .post, forcePlainPost: true, text: text, visibility: .public, visibilityUserIds: [],
             repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: "fr",
-            mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:],
+            mobileTranscription: nil, references: [], storyEffects: effects, mediaCaptions: [:], mediaAlts: [:],
             mediaObjectIds: [:], allowSoundExtraction: nil
         )
     }

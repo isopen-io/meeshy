@@ -45,10 +45,10 @@ struct PostEditComposerSession: Identifiable {
 /// rouvert sur lui (#9333).
 ///
 /// Elle ne publie rien : la flèche lui remet un brouillon de DOCUMENT, que
-/// `PostEditComposerSave` traduit en la requête de modification que
-/// `EditPostSheet` envoyait, et que l'HÔTE exécute (`onSave`). Ce que la
-/// requête ne sait pas porter — un média neuf, une scène remaniée — est refusé
-/// et dit, le compositeur restant ouvert.
+/// `PostEditComposerSave` traduit en requête de modification, et que l'HÔTE
+/// exécute (`onSave`). Une scène remaniée part avec son canevas ; des médias
+/// NEUFS se téléversent d'abord, en arrière-plan comme ceux d'une story
+/// modifiée (`updateStoryInBackground`), puis la requête part avec leurs ids.
 struct PostEditComposerDoor: View {
 
     let session: PostEditComposerSession
@@ -68,9 +68,17 @@ struct PostEditComposerDoor: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     var body: some View {
-        composerHost.modifier(PostEditPreviewCover(assets: $previewAssets, storyViewModel: storyViewModel,
-                                                   statusViewModel: statusViewModel, router: router,
-                                                   conversationList: conversationListViewModel))
+        composerHost
+            .task {
+                // Les références DÉCLARÉES ne partent que si l'ensemble servi a
+                // été relu — même contrat que `StoryEditComposer` : renvoyer la
+                // liste amputée du fil révoquerait les mentions silencieuses.
+                guard let served = await storyViewModel.fetchDeclaredReferences(postId: session.post.id) else { return }
+                session.composer.adoptDeclaredReferences(served)
+            }
+            .modifier(PostEditPreviewCover(assets: $previewAssets, storyViewModel: storyViewModel,
+                                           statusViewModel: statusViewModel, router: router,
+                                           conversationList: conversationListViewModel))
     }
 
     private var composerHost: some View {
@@ -98,13 +106,30 @@ struct PostEditComposerDoor: View {
     private func save(_ draft: ComposerDocumentDraft) async -> Bool {
         guard !saved else { return refuse(.notADocumentFormat) }
         switch PostEditComposerSave.outcome(draft: draft, baseline: session.baseline,
-                                            openedSlides: session.openedSlides, slides: session.composer.slides) {
+                                            openedSlides: session.openedSlides, slides: session.composer.slides,
+                                            knowsDeclaredReferences: session.composer.editingKnowsDeclaredReferences) {
         case .refuse(let raison):
             return refuse(raison)
         case .save(let modification):
             saved = true
             HapticFeedback.success()
             await onSave(modification)
+            return true
+        case .upload(let modification, let medias):
+            guard !NetworkMonitor.shared.isOffline, let televerser = PostEditMediaUpload.tusSend() else {
+                return refuse(.offline)
+            }
+            saved = true
+            HapticFeedback.success()
+            let enregistrer = onSave
+            Task {
+                do {
+                    let rattachee = try await PostEditMediaUpload.resolve(modification, pending: medias, send: televerser)
+                    await enregistrer(rattachee)
+                } catch {
+                    FeedbackToastManager.shared.showError(PostEditComposerCopy.uploadFailed)
+                }
+            }
             return true
         }
     }
@@ -138,16 +163,15 @@ private struct PostEditPreviewCover: ViewModifier {
 }
 
 nonisolated enum PostEditComposerCopy {
+    static let uploadFailed = String(localized: "composer.edit.uploadFailed",
+                                     defaultValue: "Les nouveaux médias n'ont pas pu être envoyés : la publication n'a pas changé",
+                                     bundle: .main)
+
     static func refusal(_ raison: PostEditComposerRefusal) -> String {
         switch raison {
-        case .addsMedia:
-            return String(localized: "composer.edit.refusal.addsMedia",
-                          defaultValue: "Un nouveau média ne s'ajoute pas encore à une publication déjà en ligne",
-                          bundle: .main)
-        case .reshapesScene:
-            return String(localized: "composer.edit.refusal.reshapesScene",
-                          defaultValue: "Les objets de la scène ne se modifient pas encore : texte, audience, format, langue, lieu et retrait d'un média s'enregistrent",
-                          bundle: .main)
+        case .offline:
+            return String(localized: "composer.edit.refusal.offline",
+                          defaultValue: "Connexion requise pour ajouter un média à la publication", bundle: .main)
         case .notADocumentFormat, .incompleteAudience, .tooLong, .empty:
             return String(localized: "composer.edit.refusal.generic",
                           defaultValue: "Cette modification ne peut pas être enregistrée", bundle: .main)

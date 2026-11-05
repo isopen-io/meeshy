@@ -48,6 +48,10 @@ nonisolated struct PostEditBaseline: Equatable {
     let media: [PostEditMediaKind]
     /// Le canevas publié : c'est lui que réécrit un changement d'agencement.
     let originalCanvas: CanvasV3?
+    /// La publication portait-elle une SCÈNE (des effets) ? Seule une scène
+    /// publiée peut avoir été DÉPLACÉE ; une publication de médias seuls ne
+    /// reçoit pas de canevas parce qu'un fond s'est renormalisé.
+    let hadScene: Bool
 
     init(post: FeedPost, defaultLanguage: String) {
         postId = post.id
@@ -66,6 +70,7 @@ nonisolated struct PostEditBaseline: Equatable {
             .compactMap { fond in fond.url.map { ($0, fond.id) } }
         backgroundIdsByURL = Dictionary(fonds, uniquingKeysWith: { premier, _ in premier })
         originalCanvas = post.storyEffects?.canvasV3
+        hadScene = post.storyEffects != nil
         media = post.media.map { PostEditMediaKind(id: $0.id, kind: $0.type, durationMs: $0.duration.map { $0 * 1000 }) }
     }
 
@@ -115,10 +120,9 @@ nonisolated struct PostEditMediaKind: Equatable {
 /// Pourquoi l'enregistrement refuse — chaque refus se DIT, et le compositeur
 /// reste ouvert avec tout ce que l'auteur a fait.
 nonisolated enum PostEditComposerRefusal: Equatable {
-    /// Un média neuf exige un téléversement que la modification ne porte pas.
-    case addsMedia
-    /// Un objet ajouté, retiré (hors média) ou réécrit sur la scène.
-    case reshapesScene
+    /// Des médias neufs se téléversent avant la modification : hors ligne, ils
+    /// ne partiraient pas.
+    case offline
     case notADocumentFormat
     case incompleteAudience
     case tooLong
@@ -127,6 +131,9 @@ nonisolated enum PostEditComposerRefusal: Equatable {
 
 nonisolated enum PostEditComposerOutcome {
     case save(EditPostDraft)
+    /// La modification porte des médias NEUFS : ils se téléversent d'abord, puis
+    /// la requête part avec leurs ids (`PostEditMediaUpload`).
+    case upload(EditPostDraft, PostEditPendingMedia)
     case refuse(PostEditComposerRefusal)
 }
 
@@ -134,23 +141,24 @@ nonisolated enum PostEditComposerOutcome {
 ///
 /// Elle rend exactement ce que `EditPostSheet` rendait — contenu, langue, type,
 /// médias retirés, lieu, audience — sous la même déclaration de champs connus
-/// (`EditPostDraft.documentFields`), si bien que le `PUT /posts/:id` qui part
-/// est celui d'aujourd'hui. Le canevas ne part PAS : la scène sert à montrer la
-/// publication et à en retirer un média, et ce qu'elle ne sait pas encore
-/// enregistrer, elle le refuse plutôt que de le perdre en silence.
+/// (`EditPostDraft.documentFields`). Ce que la SCÈNE change s'y ajoute (#15630) :
+/// une scène remaniée — objet ajouté, retiré, déplacé, média neuf — renvoie le
+/// canevas ENTIER du brouillon, les médias neufs se téléversent avant le PUT,
+/// et les références déclarées partent dès que le compositeur a relu
+/// l'ensemble servi. Une scène intacte ne renvoie que son agencement, s'il a
+/// changé.
 enum PostEditComposerSave {
 
     static let maxLength = ReelPublishedContent.maxLength
 
     static func outcome(draft: ComposerDocumentDraft, baseline: PostEditBaseline,
-                        openedSlides: [StorySlide], slides: [StorySlide]) -> PostEditComposerOutcome {
+                        openedSlides: [StorySlide], slides: [StorySlide],
+                        knowsDeclaredReferences: Bool = false) -> PostEditComposerOutcome {
         guard draft.format == .post || draft.format == .reel else { return .refuse(.notADocumentFormat) }
-        guard draft.localMedia.isEmpty else { return .refuse(.addsMedia) }
         let retires = removedMediaIds(baseline: baseline, slides: slides)
-        let signature = { (scene: [StorySlide]) in
-            PostEditSceneSignature(slides: scene, removed: Set(retires), backgrounds: baseline.backgroundIdsByURL)
-        }
-        guard signature(openedSlides) == signature(slides) else { return .refuse(.reshapesScene) }
+        let neufs = PostEditPendingMedia(draft: draft)
+        let remaniee = neufs != nil || sceneReshaped(baseline: baseline, removed: retires,
+                                                     opened: openedSlides, now: slides)
 
         let contenu = (draft.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard contenu.count <= maxLength else { return .refuse(.tooLong) }
@@ -162,14 +170,17 @@ enum PostEditComposerSave {
             || EditPostAudienceRule.isComplete(visibility: draft.visibility, audienceCount: audience.count)
         else { return .refuse(.incompleteAudience) }
 
-        let agencement = layoutUpdate(draft: draft, baseline: baseline, removed: retires)
+        let canevas = remaniee && !baseline.isRepost
+            ? draft.storyEffects.map { neufs == nil ? $0.sanitizedForServerPublish() : $0 }
+            : layoutUpdate(draft: draft, baseline: baseline, removed: retires)
         let langue = draft.originalLanguage.flatMap { $0 == baseline.language ? nil : $0 }
         let type = draft.format == baseline.format || baseline.isRepost ? nil : (draft.format == .reel ? "REEL" : "POST")
         var connus = EditPostDraft.documentFields
         if baseline.mediaIds.isEmpty { connus.remove(.removeMediaIds) }
         if baseline.isRepost { connus.remove(.type) }
-        if agencement != nil { connus.insert(.storyEffects) }
-        return .save(EditPostDraft(
+        if canevas != nil { connus.insert(.storyEffects) }
+        if knowsDeclaredReferences { connus.insert(.mentions) }
+        let modification = EditPostDraft(
             content: contenu,
             language: langue,
             type: type,
@@ -178,8 +189,25 @@ enum PostEditComposerSave {
             visibility: audienceChangee ? draft.visibility.rawValue : nil,
             visibilityUserIds: audienceChangee ? audience : nil,
             known: connus,
-            storyEffects: agencement
-        ))
+            storyEffects: canevas,
+            additions: PostEditAdditions(mentions: knowsDeclaredReferences ? (draft.mentions ?? []) : nil)
+        )
+        return neufs.map { .upload(modification, $0) } ?? .save(modification)
+    }
+
+    /// **La scène a-t-elle été remaniée ?** Un objet ajouté, retiré ou réécrit
+    /// (la signature), ou DÉPLACÉ (l'empreinte, positions arrondies : la scène
+    /// normalise ses objets à l'affichage, et un arrondi ne doit pas passer pour
+    /// un geste). L'empreinte ne vaut que pour un post qui avait un canevas : une
+    /// publication de médias seuls n'en reçoit pas un parce qu'un fond s'est
+    /// renormalisé.
+    static func sceneReshaped(baseline: PostEditBaseline, removed: [String],
+                              opened: [StorySlide], now: [StorySlide]) -> Bool {
+        let signature = { (scene: [StorySlide]) in
+            PostEditSceneSignature(slides: scene, removed: Set(removed), backgrounds: baseline.backgroundIdsByURL)
+        }
+        guard signature(opened) == signature(now) else { return true }
+        return baseline.hadScene && PostEditSceneFingerprint(opened) != PostEditSceneFingerprint(now)
     }
 
     /// Les médias d'origine que la scène MONTRAIT et ne montre plus.
@@ -237,5 +265,40 @@ nonisolated struct PostEditSceneSignature: Equatable {
         let dessin: [String] = (effets.drawingData ?? Data()).isEmpty ? [] : ["dessin:\(effets.drawingData?.count ?? 0)"]
         let objets: [[String]] = [fond, textes, medias, sons, stickers, lieux, traits, dessin]
         return objets.flatMap { $0 }
+    }
+}
+
+/// **Où sont les objets de la scène** — l'empreinte de chaque slide, nombres
+/// arrondis au centième : un objet DÉPLACÉ la change, la renormalisation que
+/// la scène fait à l'affichage non. Elle complète `PostEditSceneSignature`, qui
+/// compte les objets sans jamais regarder leur place.
+nonisolated struct PostEditSceneFingerprint: Equatable {
+    let slides: [String]
+
+    init(_ slides: [StorySlide]) {
+        self.slides = slides.map(Self.fingerprint)
+    }
+
+    private static func fingerprint(_ slide: StorySlide) -> String {
+        let encodeur = JSONEncoder()
+        encodeur.outputFormatting = [.sortedKeys]
+        guard let octets = try? encodeur.encode(slide.effects),
+              let arbre = try? JSONSerialization.jsonObject(with: octets),
+              let arrondi = try? JSONSerialization.data(withJSONObject: rounded(arbre), options: [.sortedKeys])
+        else { return slide.mediaURL ?? "" }
+        return (slide.mediaURL ?? "") + String(decoding: arrondi, as: UTF8.self)
+    }
+
+    private static func rounded(_ valeur: Any) -> Any {
+        switch valeur {
+        case let nombre as NSNumber where CFGetTypeID(nombre) != CFBooleanGetTypeID():
+            return (nombre.doubleValue * 100).rounded() / 100
+        case let objet as [String: Any]:
+            return objet.mapValues(rounded)
+        case let liste as [Any]:
+            return liste.map(rounded)
+        default:
+            return valeur
+        }
     }
 }

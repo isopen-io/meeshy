@@ -718,7 +718,7 @@ struct ThemedFeedOverlay: View {
         }
         // #6700 — une story ouvre le meuble, un post l'ancien éditeur.
         .postEditCover(item: $editingPost) { post, draft in
-            await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
+            await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects, additions: draft.additions)
         }
         // Story viewer : présentation unifiée via StoryViewerCoordinator au root
         // (`.fullScreenCover(item:)`). L'ancien cover local `(isPresented:)` +
