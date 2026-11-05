@@ -17,6 +17,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -87,9 +89,11 @@ internal fun AudioFullscreenPage(
     val totalMs = if (isLoaded && playback.durationMs > 0L) playback.durationMs else source.durationMs
     val samples by remember(source.id) { player.samples(source) }.collectAsState()
 
+    var languageChosen by remember(source.id) { mutableStateOf(false) }
     LaunchedEffect(source.url) {
         val now = player.playback.value
-        if (now.isPlaying && now.attachmentId == source.id) player.switchTrack(source)
+        if (languageChosen || (now.isPlaying && now.attachmentId == source.id)) player.switchTrack(source)
+        languageChosen = false
     }
     val seekToSeconds: (Double) -> Unit = { seconds ->
         onChromeInteraction()
@@ -153,7 +157,7 @@ internal fun AudioFullscreenPage(
                 AudioFullscreenLyrics(source, playback, transcripts, accent, placement, lyricsModifier, seekToSeconds)
             }
             val languages: @Composable (Modifier) -> Unit = { languagesModifier ->
-                AudioFullscreenLanguages(source, transcripts, accent, onChromeInteraction, languagesModifier)
+                AudioFullscreenLanguages(source, transcripts, accent, onChromeInteraction, languagesModifier, onLanguageChosen = { languageChosen = true })
             }
             val identity: @Composable () -> Unit = { AudioFullscreenIdentity(source) }
             if (layout.arrangement == AudioFullscreenArrangement.SIDE_BY_SIDE) {
