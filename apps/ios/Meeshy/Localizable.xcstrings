@@ -64893,6 +64893,53 @@
         }
       }
     },
+    "bubble.arrivals.greet.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يكتب إشارة إلى كل وافد جديد في رسالتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreibt eine Erwähnung jedes Neuankömmlings in deine Nachricht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writes a mention of each newcomer in your message."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribe una mención de cada recién llegado en tu mensaje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrit la mention de chaque arrivant dans le message."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrive una menzione di ogni nuovo arrivato nel tuo messaggio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escreve uma menção a cada recém-chegado na sua mensagem."
+          }
+        }
+      }
+    },
     "bubble.joinNotice.joined": {
       "extractionState": "manual",
       "localizations": {

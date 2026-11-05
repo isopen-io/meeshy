@@ -91,10 +91,10 @@ final class SystemNoticeEngravedTimeTests: XCTestCase {
     /// Le dispatch Bulles nourrit le repli avec l'heure du fil — sans ce
     /// paramètre, la vue est correcte mais reste muette.
     func test_bubbleDispatch_passesThreadTime_toGenericNotice() throws {
-        let code = try strippedSource("Features/Main/Views/ThemedMessageBubble.swift")
+        let code = try strippedSource("Features/Main/Views/ThemedMessageBubble+SystemNotice.swift")
         let call = try XCTUnwrap(
             code.range(of: "BubbleSystemNoticeView(").map { String(code[$0.lowerBound...].prefix(while: { $0 != ")" })) },
-            "L'appel `BubbleSystemNoticeView(` a disparu de ThemedMessageBubble — re-pointer cette garde."
+            "L'appel `BubbleSystemNoticeView(` a disparu de ThemedMessageBubble+SystemNotice — re-pointer cette garde."
         )
         XCTAssertTrue(
             call.contains("timeString: content.meta.timeString"),
