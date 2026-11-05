@@ -88,7 +88,6 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Attachments.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar.swift`
-- [ ] `apps/ios/Meeshy/Features/Main/Components/UploadProgressBar.swift`
 - [ ] `apps/ios/Meeshy/Features/Main/Components/VideoPreviewView.swift`
 
 ## Features/Main/Models  (2/12 have a test)

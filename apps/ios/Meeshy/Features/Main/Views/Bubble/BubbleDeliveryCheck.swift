@@ -229,9 +229,12 @@ struct UploadProgressGlyph: View {
                         .animation(.linear(duration: 0.2), value: percent)
                 }
                 .frame(width: MeeshyIconSize.xxs, height: MeeshyIconSize.xxs)
-                Text(MessageUploadProgress.accessibilityValue(percent: percent))
-                    .font(.caption2.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(tint)
+                ZStack(alignment: .trailing) {
+                    Text(MessageUploadProgress.reservedLabel()).hidden()
+                    Text(MessageUploadProgress.accessibilityValue(percent: percent))
+                }
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(tint)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(BubbleDeliveryCheck.label(.sending))

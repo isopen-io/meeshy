@@ -514,6 +514,41 @@ extension AttachmentSendRunnerTests {
         XCTAssertEqual(store.progress(for: "t_photo")?.percent, 100)
     }
 
+    /// Une session qui ne se crée pas (plus d'identifiant de requête) ne prête PAS la
+    /// progression de la précédente : la 2e bulle garde son horloge, pas le 100 % de la 1re.
+    func test_run_secondSessionMissing_secondBubbleKeepsItsClock() async {
+        let store = MessageUploadProgressStore()
+        store.begin(["t_video", "t_photo"])
+        let journal = Journal()
+        var opened = 0
+        let runner = AttachmentSendRunner(
+            host: MockAttachmentSendHost(journal: journal),
+            callbacks: AttachmentSendCallbacks(
+                restorePlace: { _, _ in },
+                setProgress: { tempId, fraction in store.report(fraction, for: tempId) },
+                abortUpload: {}
+            ),
+            network: FakeNetworkMonitor(isOnline: true),
+            uploadSession: { _ in
+                opened += 1
+                guard opened == 1 else { return nil }
+                let subject = PassthroughSubject<UploadQueueProgress, Never>()
+                return AttachmentUploadSession(
+                    uploader: ProgressEmittingUploader(subject: subject, percents: [60, 100]),
+                    progress: subject.eraseToAnyPublisher()
+                )
+            },
+            outbox: { _, _ in MockAttachmentGroupQueue(journal: journal) },
+            transcriber: FakeVoiceTranscriber(),
+            feedback: SpyFeedback(journal: journal)
+        )
+
+        await runner.run(makeBatch(sends: [send("t_video", attachmentIds: ["v"]), send("t_photo", attachmentIds: ["p"])]))
+
+        XCTAssertEqual(store.progress(for: "t_video")?.percent, 100)
+        XCTAssertNil(store.progress(for: "t_photo")?.percent)
+    }
+
     /// Hors ligne, rien ne monte : aucune bulle ne prétend avancer.
     func test_run_offline_reportsNoProgress() async {
         let store = MessageUploadProgressStore()

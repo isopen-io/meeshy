@@ -105,10 +105,10 @@ final class AttachmentSendRunner: AttachmentSendRunning {
         let outbox = outboxFor(batch, host.conversationId)
         var anySuccess = false
         for (index, send) in batch.mediaGroupSends.enumerated() {
-            let session = index == 0 ? firstSession : uploadSession(batch) ?? firstSession
-            let progress = observeProgress(of: session, for: send.tempId)
-            if await sendGroup(send, in: batch, session: session, outbox: outbox) { anySuccess = true }
-            progress.cancel()
+            let ownSession = index == 0 ? firstSession : uploadSession(batch)
+            let progress = ownSession.map { observeProgress(of: $0, for: send.tempId) }
+            if await sendGroup(send, in: batch, session: ownSession ?? firstSession, outbox: outbox) { anySuccess = true }
+            progress?.cancel()
         }
         if await sendTrailing(batch) { anySuccess = true }
         finish(batch, anySuccess: anySuccess)

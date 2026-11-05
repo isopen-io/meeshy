@@ -1474,7 +1474,6 @@
 		553450B8445D2B4EA772C313 /* ConversationViewModel+ViewOnce.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2A7C4E6550FEC7BEFDE20F8 /* ConversationViewModel+ViewOnce.swift */; };
 		553A0027B7AAF8FD38E966A8 /* CallColorLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E16CF63E14C63854B79ECB90 /* CallColorLook.swift */; };
 		55432B240822179D5F3AFF15 /* StoryExportShareSheetPaletteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF6F1273AC291B2F8A87F307 /* StoryExportShareSheetPaletteTests.swift */; };
-		55508A06F31AB12EB9A85098 /* UploadProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D595658C0C8CF0F6477F7C0D /* UploadProgressBar.swift */; };
 		5558832D1A7D31F83EC91CD0 /* FocalScrollTimePillMountGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06347FF3A460157A65838BF7 /* FocalScrollTimePillMountGuardTests.swift */; };
 		556E597273FED1CA50E3C1CF /* CallFeedbackViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCB9383087F49CB064BE443B /* CallFeedbackViewModelTests.swift */; };
 		556FB19906A127593365E8E9 /* DraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF1C23A33BD92621176BF3D /* DraftStore.swift */; };
@@ -7939,7 +7938,6 @@
 		D569B7368F8354652FDE130B /* CallRetryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRetryPolicy.swift; sourceTree = "<group>"; };
 		D58C29B016BF98F98719B83E /* ActivationInvitePresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivationInvitePresenter.swift; sourceTree = "<group>"; };
 		D590F961E3FF89634F1809A9 /* ComposerRetouchTextBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRetouchTextBoard.swift; sourceTree = "<group>"; };
-		D595658C0C8CF0F6477F7C0D /* UploadProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadProgressBar.swift; sourceTree = "<group>"; };
 		D5A4DC97E3BEEA0188CB6F1E /* CallFrameMotionRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallFrameMotionRenderer.swift; sourceTree = "<group>"; };
 		D5A80E7F7F018F969CED4F1F /* LentilleOpenMyStoriesLiteralGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleOpenMyStoriesLiteralGuardTests.swift; sourceTree = "<group>"; };
 		D5AE019203B6813A59986E48 /* ComposerPhotoEncoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerPhotoEncoding.swift; sourceTree = "<group>"; };
@@ -9872,7 +9870,6 @@
 				EDB72A8CA0FA9421AC0E911B /* UniversalComposerBar+Send.swift */,
 				38ED3BB43D28A06D8DB07E67 /* UniversalComposerBar+Toolbar.swift */,
 				217B9269EA5F489684CE7A52 /* UnreadCountLabel.swift */,
-				D595658C0C8CF0F6477F7C0D /* UploadProgressBar.swift */,
 				310B4A82D297D70ED0C24457 /* ContactCard */,
 				EAE6CF8EDA2ADDB4D98E735D /* ConversationCard */,
 				8BDA0D5FF7897294464A08DC /* MediaHub */,
@@ -17029,7 +17026,6 @@
 				1D6CC5D7064858B34ED937AC /* UnsentPublicationsViewModel.swift in Sources */,
 				2CDDC1F1BFE751E45F31A67A /* UpgradeGateController.swift in Sources */,
 				AAB463A36FFC324FA46CAE26 /* UpgradeGateView.swift in Sources */,
-				55508A06F31AB12EB9A85098 /* UploadProgressBar.swift in Sources */,
 				D3B95E2383651980BEF1499E /* UserProfileDependencies+Live.swift in Sources */,
 				4DA5DC26570998E892F7E35C /* UserProfileViewModel.swift in Sources */,
 				28EA3E62C533E1C503D75DF6 /* UserStatsView.swift in Sources */,
