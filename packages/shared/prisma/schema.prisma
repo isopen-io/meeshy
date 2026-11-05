@@ -6667,6 +6667,11 @@ model PartnerProfile {
   /// détient déjà (homonyme vérifié ou plus ancien) ou qui se lit comme Meeshy :
   /// le profil GARDE son nom (droit acquis), sans clé, et un admin tranche.
   nameDisputedAt DateTime?
+  /// Posée par le rattrapage quand ce profil HÉRITÉ porte un nom hors de la liste
+  /// blanche : lui seul garde la lecture à jokers bornés (`impersonatesMeeshy(name,
+  /// { grandfathered: true })`), donc son service et son crédit. Lue sur la ligne,
+  /// jamais déduite du nom ; aucune écriture directe ne la pose.
+  nameOffListAt DateTime?
   /// https seulement (`parsePartnerProfileInput`).
   website     String?
   /// `<sha16>.webp|png` — le logo ré-encodé, composé dans le filigrane À CÔTÉ de celui de Meeshy.

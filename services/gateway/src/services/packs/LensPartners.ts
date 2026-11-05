@@ -108,7 +108,7 @@ export type LensPartnersDeps = {
 };
 
 const PROFILE_SELECT = {
-  id: true, userId: true, displayName: true, nameKey: true, website: true, logoSrc: true, logoSha256: true, verifiedAt: true, createdAt: true, updatedAt: true,
+  id: true, userId: true, displayName: true, nameKey: true, nameOffListAt: true, website: true, logoSrc: true, logoSha256: true, verifiedAt: true, createdAt: true, updatedAt: true,
 } as const;
 
 type ProfileRow = {
@@ -116,6 +116,7 @@ type ProfileRow = {
   readonly userId: string;
   readonly displayName: string;
   readonly nameKey: string | null;
+  readonly nameOffListAt?: Date | null;
   readonly website: string | null;
   readonly logoSrc: string | null;
   readonly logoSha256: string | null;
@@ -322,7 +323,10 @@ export class LensPartners {
     const bySubmitter = new Map(partners.map((partner) => [partner.userId, partner]));
     return lenses.flatMap((lens) => {
       const partner = bySubmitter.get(lens.submitterId);
-      const credit = lensCreditOf(lens, partner === undefined ? null : { ...partner, official: this.isOfficial(partner.userId) });
+      const credit = lensCreditOf(
+        lens,
+        partner === undefined ? null : { ...partner, official: this.isOfficial(partner.userId), grandfathered: partner.nameOffListAt instanceof Date },
+      );
       return credit === null ? [] : [credit];
     });
   }

@@ -500,6 +500,21 @@ describe('le nom d’un partenaire passe par la loi des éditeurs (#16274, revue
     expect((await saveProfile(h, { displayName: 'Autre Студия' })).statusCode).toBe(400);
   });
 
+  it('un ancien partenaire vérifié hors liste n’est crédité que s’il porte la marque du rattrapage — lue sur la ligne, jamais à partir du nom', async () => {
+    const h = await harness();
+    const legacy = { id: 'p-legacy', userId: ALICE, displayName: 'Studio Студия', website: null, logoSrc: null, logoSha256: null, verifiedAt: new Date(START), verifiedBy: null, updatedAt: new Date(START), createdAt: new Date(START) };
+    h.prisma.partnerProfile.rows.push(legacy);
+    expect((await credits(h))[0].partner).toBeNull();
+    h.prisma.partnerProfile.rows.splice(0, h.prisma.partnerProfile.rows.length, { ...legacy, nameOffListAt: new Date(START) });
+    expect((await credits(h))[0].partner).toMatchObject({ name: 'Studio Студия' });
+  });
+
+  it('un nom hors liste qui se lit comme Meeshy par trois jokers est refusé à l’écriture directe', async () => {
+    const h = await harness();
+    expect((await saveProfile(h, { displayName: 'Mꯃꯃꯇhy' })).statusCode).not.toBe(200);
+    expect(h.prisma.partnerProfile.rows.map((row) => row.displayName)).not.toContain('Mꯃꯃꯇhy');
+  });
+
   it('un balayage inconcluant répond 503 avec Retry-After, jamais 409 (re-audit N6)', async () => {
     const h = await harness();
     h.prisma.partnerProfile.rows.push(...Array.from({ length: 2_000 }, (_, index) => ({ id: `68f0${String(index).padStart(20, '0')}`, userId: `68f1${String(index).padStart(20, '0')}`, displayName: `Studio ${index}`, website: null, logoSrc: null, logoSha256: null, verifiedAt: null, updatedAt: new Date(START), createdAt: new Date(START) })));

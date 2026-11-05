@@ -159,7 +159,7 @@ const MAX_SLUG_ATTEMPTS = 6;
 const INVISIBLE_OR_CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 const OFFICIAL_LINK_ACTION = 'PACK_PUBLISHER_OFFICIAL_LINK';
 
-const ROW_SELECT = { id: true, userId: true, slug: true, displayName: true, nameKey: true, nameDisputedAt: true, verifiedAt: true, createdAt: true } as const;
+const ROW_SELECT = { id: true, userId: true, slug: true, displayName: true, nameKey: true, nameDisputedAt: true, nameOffListAt: true, verifiedAt: true, createdAt: true } as const;
 
 type PublisherRow = {
   readonly id: string;
@@ -168,9 +168,19 @@ type PublisherRow = {
   readonly displayName: string;
   readonly nameKey: string | null;
   readonly nameDisputedAt?: Date | null;
+  /** La marque « nom hors liste » du rattrapage : seule elle borne les jokers de la lecture de ce nom. */
+  readonly nameOffListAt?: Date | null;
   readonly verifiedAt: Date | null;
   readonly createdAt?: Date | null;
 };
+
+/** Le rattrapage seul pose la marque « nom hors liste » ; une marque déjà posée ne bouge pas. */
+type LegacyMark = { readonly offList?: boolean };
+
+const isGrandfathered = (row: PublisherRow): boolean => row.nameOffListAt instanceof Date;
+
+const offListMark = (row: PublisherRow, offList: boolean, now: Date): { readonly nameOffListAt?: Date } =>
+  offList && !isGrandfathered(row) ? { nameOffListAt: now } : {};
 
 const ACCOUNT_SELECT = { isActive: true, deactivatedAt: true, deletedAt: true, emailVerifiedAt: true, phoneVerifiedAt: true } as const;
 
@@ -243,7 +253,7 @@ export class PackPublishers {
     if (row === null || row === undefined) return null;
     if (this.isOfficial(row.userId)) return MEESHY_PUBLISHER;
     if (!isThirdPartySlug(row.slug)) return null;
-    if (impersonatesMeeshy(row.displayName)) return { slug: row.slug, name: NEUTRAL_PUBLISHER_NAME, verified: false, official: false };
+    if (impersonatesMeeshy(row.displayName, { grandfathered: isGrandfathered(row) })) return { slug: row.slug, name: NEUTRAL_PUBLISHER_NAME, verified: false, official: false };
     return { slug: row.slug, name: row.displayName, verified: row.verifiedAt !== null, official: false };
   }
 
@@ -508,23 +518,24 @@ export class PackPublishers {
   }
 
   /** Pose la clé d'un ancien profil ; un index qui refuse, ou un homonyme qui le précède, le marque à arbitrer. */
-  private async keyLegacy(row: PublisherRow, nameKey: string): Promise<PublisherRow> {
+  private async keyLegacy(row: PublisherRow, nameKey: string, { offList = false }: LegacyMark = {}): Promise<PublisherRow> {
+    const now = this.now();
     try {
-      await this.prisma.partnerProfile.updateMany({ where: { id: row.id, OR: WITHOUT_NAME_KEY }, data: { nameKey, updatedAt: this.now() } });
+      await this.prisma.partnerProfile.updateMany({ where: { id: row.id, OR: WITHOUT_NAME_KEY }, data: { nameKey, updatedAt: now, ...offListMark(row, offList, now) } });
     } catch (error) {
       if (!isNameKeyViolation(error)) throw error;
-      return this.markDisputed(row);
+      return this.markDisputed(row, { offList });
     }
     const settled = await this.single(row.userId);
     if (settled === null) throw new Error('publisher vanished while naming it');
-    if (settled.nameKey === nameKey && (await lostNameRace(this.prisma, nameKey, settled))) return this.markDisputed(settled);
+    if (settled.nameKey === nameKey && (await lostNameRace(this.prisma, nameKey, settled))) return this.markDisputed(settled, { offList });
     return settled;
   }
 
   /** « À arbitrer » : le profil garde son nom et sa vérification, sans clé ; seul un admin le renommera. */
-  private async markDisputed(row: PublisherRow): Promise<PublisherRow> {
+  private async markDisputed(row: PublisherRow, { offList = false }: LegacyMark = {}): Promise<PublisherRow> {
     const now = this.now();
-    await this.prisma.partnerProfile.updateMany({ where: { id: row.id }, data: { nameKey: null, nameDisputedAt: now, updatedAt: now } });
+    await this.prisma.partnerProfile.updateMany({ where: { id: row.id }, data: { nameKey: null, nameDisputedAt: now, updatedAt: now, ...offListMark(row, offList, now) } });
     return (await this.single(row.userId)) ?? row;
   }
 
@@ -534,7 +545,8 @@ export class PackPublishers {
    * de balayage) : par nom, la clé va au détenteur qui en a déjà une, sinon au
    * profil vérifié, puis au plus ancien ; les autres, et tout nom qui se lit
    * comme Meeshy, gardent leur nom sans clé, à arbitrer. Un ancien nom hors de
-   * la liste blanche reçoit sa clé et reste servi tel quel, signalé `offList`. Aucun nom réécrit,
+   * la liste blanche reçoit sa clé ET la marque persistée `nameOffListAt` (signalé `offList`) : lui seul
+   * garde la lecture à jokers bornés, donc son service tel quel. Aucun nom réécrit,
    * aucune vérification retirée. Rejouable ; `dryRun` rend le plan sans écrire.
    */
   async backfillNameKeys(options: BackfillOptions = {}): Promise<NameKeyBackfillSummary> {
@@ -545,7 +557,7 @@ export class PackPublishers {
     for (const row of [...unkeyed].sort(byPrecedence)) {
       if (this.isOfficial(row.userId) || !lacksNameKey(row)) continue;
       const base = { id: row.id, userId: row.userId, displayName: row.displayName, verified: row.verifiedAt !== null };
-      if (impersonatesMeeshy(row.displayName)) {
+      if (impersonatesMeeshy(row.displayName, { grandfathered: true })) {
         planned.push({ ...base, outcome: 'disputed', reason: 'reserved' });
         continue;
       }
@@ -567,12 +579,13 @@ export class PackPublishers {
     const applied: NameKeyEntry[] = [];
     for (const entry of planned) {
       const row = byId.get(entry.id) as PublisherRow;
+      const offList = !isWellFormedPublisherName(row.displayName);
       if (entry.outcome === 'disputed') {
-        await this.markDisputed(row);
+        await this.markDisputed(row, { offList });
         applied.push(entry);
         continue;
       }
-      const settled = await this.keyLegacy(row, publisherNameKey(row.displayName));
+      const settled = await this.keyLegacy(row, publisherNameKey(row.displayName), { offList });
       applied.push(typeof settled.nameKey === 'string' ? entry : { ...entry, outcome: 'disputed', reason: 'name-taken' });
     }
     return applied;

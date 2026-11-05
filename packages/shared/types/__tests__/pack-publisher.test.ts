@@ -251,14 +251,33 @@ describe('re-audit 3 #16274 — un alphabet absent n’est pas une imitation, le
     );
   });
 
-  it('N7 — un nom hors liste n’a plus de jokers illimités : il n’est pas lu comme Meeshy', () => {
-    ['Café Москва', 'ગુજરાત સ્ટુડિયો', 'ꯃꯩꯇꯩ ꯃꯌꯦꯛ'].forEach((name) => expect([name, impersonatesMeeshy(name)]).toEqual([name, false]));
+  it('N7 — un nom de la liste blanche, ou un nom hérité MARQUÉ, n’a que deux jokers : il n’est pas lu comme Meeshy', () => {
+    expect(impersonatesMeeshy('ગુજરાત સ્ટુડિયો')).toBe(false);
+    ['Café Москва', 'ꯃꯩꯇꯩ ꯃꯌꯦꯛ', 'Mꯃꯃꯇhy'].forEach((name) =>
+      expect([name, impersonatesMeeshy(name, { grandfathered: true })]).toEqual([name, false]),
+    );
     expect(isWellFormedPublisherName('Café Москва')).toBe(false);
   });
 
-  it('C4 — un ancien partenaire vérifié « Café Москва » (latin + cyrillique) garde son crédit de lens', () => {
-    const credit = lensCreditOf({ slug: 'l', name: 'L', status: 'approved' }, { id: 'p', displayName: 'Café Москва', verifiedAt: new Date(), logoSrc: null });
+  it('un nom hors liste écrit DIRECTEMENT, sans marque, garde des jokers illimités : « Mꯃꯃꯇhy » (trois jokers) se lit comme Meeshy', () => {
+    ['Mꯃꯃꯇhy', 'ꯃꯃꯃꯃꯃꯃ'].forEach((name) => expect([name, impersonatesMeeshy(name)]).toEqual([name, true]));
+    expect(isReservedPublisherIdentity('Mꯃꯃꯇhy')).toBe(true);
+  });
+
+  it('C4 — un ancien partenaire vérifié « Café Москва » MARQUÉ hors liste garde son crédit de lens', () => {
+    const credit = lensCreditOf(
+      { slug: 'l', name: 'L', status: 'approved' },
+      { id: 'p', displayName: 'Café Москва', verifiedAt: new Date(), logoSrc: null, grandfathered: true },
+    );
     expect(credit?.partner?.name).toBe('Café Москва');
+  });
+
+  it('sans la marque, un partenaire vérifié hors liste n’est pas crédité — la marque se lit sur la ligne, jamais à partir du nom', () => {
+    const lens = { slug: 'l', name: 'L', status: 'approved' as const };
+    const verifiedAt = new Date();
+    expect(lensCreditOf(lens, { id: 'p', displayName: 'Café Москва', verifiedAt, logoSrc: null })?.partner).toBeNull();
+    expect(lensCreditOf(lens, { id: 'p', displayName: 'Mꯃꯃꯇhy', verifiedAt, logoSrc: null, grandfathered: true })?.partner).toMatchObject({ name: 'Mꯃꯃꯇhy' });
+    expect(lensCreditOf(lens, { id: 'p', displayName: 'Mɇɇʂhy', verifiedAt, logoSrc: null, grandfathered: true })?.partner).toBeNull();
   });
 
   it('le cherokee qui imite des capitales latines se lit par la table de lecture : « ᎷᎬᎬSHY » reste une imitation', () => {

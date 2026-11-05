@@ -42,7 +42,7 @@ export type PublisherNameClaim =
   /** Le balayage des anciens profils n'a pas conclu : ni accordé ni refusé. */
   | { readonly kind: 'inconclusive' };
 
-type AgedRow = { readonly id: string; readonly userId: string; readonly createdAt?: Date | null; readonly verifiedAt?: Date | null };
+type AgedRow = { readonly id: string; readonly userId: string; readonly createdAt?: Date | null; readonly verifiedAt?: Date | null; readonly nameOffListAt?: Date | null };
 
 /**
  * `legacyClaimant` : AU RATTRAPAGE SEULEMENT, l'ancien profil qu'on nomme —
@@ -62,14 +62,15 @@ const WITHOUT_NAME_KEY = [{ nameKey: null }, { nameKey: { isSet: false } }];
 export async function claimPublisherName(prisma: PublisherNamesDb, request: PublisherNameRequest): Promise<PublisherNameClaim> {
   if (request.official) return { kind: 'ok', displayName: MEESHY_PUBLISHER_NAME, nameKey: null };
   if (request.name === NEUTRAL_PUBLISHER_NAME) return { kind: 'ok', displayName: NEUTRAL_PUBLISHER_NAME, nameKey: null };
-  const reserved = request.legacyClaimant === undefined ? isReservedPublisherIdentity(request.name) : impersonatesMeeshy(request.name);
+  const legacy = request.legacyClaimant;
+  const reserved = legacy === undefined ? isReservedPublisherIdentity(request.name) : impersonatesMeeshy(request.name, { grandfathered: legacy.nameOffListAt instanceof Date });
   if (reserved) return { kind: 'reserved' };
   const nameKey = publisherNameKey(request.name);
   const holder = await prisma.partnerProfile.findFirst({ where: { nameKey, NOT: { userId: request.userId } }, select: { id: true } });
   if (holder !== null) return { kind: 'name-taken' };
-  const legacy = await legacyHolder(prisma, nameKey, request);
-  if (legacy === 'inconclusive') return { kind: 'inconclusive' };
-  return legacy === 'held' ? { kind: 'name-taken' } : { kind: 'ok', displayName: request.name, nameKey };
+  const held = await legacyHolder(prisma, nameKey, request);
+  if (held === 'inconclusive') return { kind: 'inconclusive' };
+  return held === 'held' ? { kind: 'name-taken' } : { kind: 'ok', displayName: request.name, nameKey };
 }
 
 /**

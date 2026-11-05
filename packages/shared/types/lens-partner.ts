@@ -120,16 +120,24 @@ export type LensCreditPartner = {
   readonly logoSrc: string | null;
   /** Le profil du compte officiel Meeshy (#16274) : lui seul est crédité sous un nom réservé. */
   readonly official?: boolean;
+  /** La marque « nom hors liste » posée par le rattrapage sur un profil HÉRITÉ — lue sur la ligne, jamais déduite du nom. */
+  readonly grandfathered?: boolean;
 };
 
 /**
- * Un partenaire qui crédite : vérifié, et jamais sous un nom qui se lit comme
- * Meeshy s'il n'est pas le compte officiel. Un ancien nom hors de la liste
- * blanche (« Café Москва ») garde son crédit : droit acquis.
+ * Un partenaire qui crédite : vérifié, et jamais sous un nom réservé s'il n'est
+ * pas le compte officiel. Seul un profil hérité MARQUÉ (« Café Москва » d'avant
+ * la liste blanche) garde son crédit hors liste, tant qu'il ne se lit pas comme
+ * Meeshy à jokers bornés : droit acquis.
  */
 const creditingPartner = (partner: LensCreditPartner | null): LensCreditPartner | null => {
   if (partner === null || partner.verifiedAt === null) return null;
-  return partner.official === true || !impersonatesMeeshy(partner.displayName) ? partner : null;
+  const name = partner.displayName;
+  const credited =
+    partner.official === true ||
+    !isReservedPublisherIdentity(name) ||
+    (partner.grandfathered === true && !impersonatesMeeshy(name, { grandfathered: true }));
+  return credited ? partner : null;
 };
 
 /** Le crédit d'une lens PUBLIÉE ; `null` pour toute autre (en attente, refusée, retirée). */

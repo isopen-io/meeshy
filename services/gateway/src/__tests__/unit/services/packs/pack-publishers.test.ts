@@ -592,8 +592,41 @@ describe('re-audit 3 #16274 — un alphabet absent n’est pas une imitation', (
     const verifiedAt = new Date('2025-06-01T00:00:00Z');
     db.profiles.push({ id: '68e000000000000000000012', userId: AWA, displayName: 'Café Москва', slug: 'cafe', verifiedAt, createdAt: new Date('2025-01-01T00:00:00Z') });
     expect(await publishers.backfillNameKeys()).toMatchObject({ keyed: 1, disputed: 0, entries: [{ id: '68e000000000000000000012', outcome: 'keyed', offList: true }] });
-    expect(db.profiles[0]).toMatchObject({ displayName: 'Café Москва', verifiedAt, nameKey: expect.any(String) });
+    expect(db.profiles[0]).toMatchObject({ displayName: 'Café Москва', verifiedAt, nameKey: expect.any(String), nameOffListAt: new Date('2026-11-05T10:00:00.000Z') });
     expect((await publishers.servedFor([{ submitterId: AWA, author: 'x' }])).get(AWA)).toMatchObject({ name: 'Café Москва', verified: true });
+  });
+
+  it('C3 avec la marque — un ancien nom gujarati marqué au rattrapage reste servi sous son nom, vérifié', async () => {
+    const { db, publishers } = setup({ [AWA]: V });
+    db.profiles.push({ id: '68e000000000000000000013', userId: AWA, displayName: 'ગુજરાત સ્ટુડિયો', slug: 'gujarat', nameKey: 'k', nameOffListAt: new Date('2026-11-05T10:00:00Z'), verifiedAt: new Date('2025-06-01T00:00:00Z'), createdAt: new Date('2025-01-01T00:00:00Z') });
+    expect((await publishers.servedFor([{ submitterId: AWA, author: 'x' }])).get(AWA)).toMatchObject({ name: 'ગુજરાત સ્ટુડિયો', verified: true });
+  });
+
+  it('un nom hors liste SANS marque qui se lit comme Meeshy par trois jokers est servi sous le nom neutre, non vérifié — la marque se lit sur la ligne', async () => {
+    const { db, publishers } = setup({ [AWA]: V });
+    db.profiles.push({ id: '68e000000000000000000014', userId: AWA, displayName: 'Mꯃꯃꯇhy', slug: 'mhy', nameKey: 'mhy', verifiedAt: new Date('2025-06-01T00:00:00Z'), createdAt: new Date('2025-01-01T00:00:00Z') });
+    expect((await publishers.servedFor([{ submitterId: AWA, author: 'x' }])).get(AWA)).toMatchObject({ name: NEUTRAL_PUBLISHER.name, verified: false });
+  });
+
+  it('le même nom sur un profil hérité MARQUÉ est servi tel quel, vérifié', async () => {
+    const { db, publishers } = setup({ [AWA]: V });
+    db.profiles.push({ id: '68e000000000000000000015', userId: AWA, displayName: 'Mꯃꯃꯇhy', slug: 'mhy', nameKey: 'mhy', nameOffListAt: new Date('2026-11-05T10:00:00Z'), verifiedAt: new Date('2025-06-01T00:00:00Z'), createdAt: new Date('2025-01-01T00:00:00Z') });
+    expect((await publishers.servedFor([{ submitterId: AWA, author: 'x' }])).get(AWA)).toMatchObject({ name: 'Mꯃꯃꯇhy', verified: true });
+  });
+
+  it('une proposition qui nomme « Mꯃꯃꯇhy » (hors liste, trois jokers) est REFUSÉE et ne crée aucun éditeur', async () => {
+    const { db, publishers } = setup({ [AWA]: V });
+    const outcome = await publishers.authorizePublication(AWA, { author: 'Mꯃꯃꯇhy', claimed: null });
+    expect(outcome).toMatchObject({ kind: 'refused' });
+    expect(db.profiles.map((row) => row.displayName)).not.toContain('Mꯃꯃꯇhy');
+  });
+
+  it('un ancien profil SANS clé et sans marque qui se lit comme Meeshy par trois jokers est marqué à arbitrer à la publication, servi neutre', async () => {
+    const { db, publishers } = setup({ [AWA]: V });
+    db.profiles.push({ id: '68e000000000000000000016', userId: AWA, displayName: 'Mꯃꯃꯇhy', slug: 'mhy', verifiedAt: new Date('2025-06-01T00:00:00Z'), createdAt: new Date('2025-01-01T00:00:00Z') });
+    const outcome = await publishers.authorizePublication(AWA, { author: 'x', claimed: null });
+    expect(outcome).toMatchObject({ kind: 'allowed', publisher: { name: NEUTRAL_PUBLISHER.name } });
+    expect(db.profiles[0]).toMatchObject({ displayName: 'Mꯃꯃꯇhy', nameDisputedAt: expect.any(Date) });
   });
 
   it('N10 — l’administration voit les profils à arbitrer', async () => {

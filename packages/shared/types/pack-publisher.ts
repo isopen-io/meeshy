@@ -161,10 +161,12 @@ const VISIBLE_UNKNOWN = /[\p{L}\p{N}\p{S}]/u;
 /** Un caractère que le squelette ne sait pas lire : il peut valoir N'IMPORTE quelle lettre. */
 const JOKER = '*';
 /**
- * Au plus deux jokers dans la fenêtre « meeshy », pour TOUT nom : sans cette
- * borne, tout nom de six lettres d'un alphabet absent des tables — gujarati,
- * khmer… — se lirait comme Meeshy. Les sosies connus (cherokee, latin à
- * crochet) sont lus par la table de lecture, pas par les jokers.
+ * Au plus deux jokers dans la fenêtre « meeshy » pour un nom de la liste
+ * blanche, ou pour le nom HÉRITÉ d'un profil que le rattrapage a MARQUÉ « hors
+ * liste » (`grandfathered`) : sans cette borne, son nom de six lettres
+ * gujarati ou khmer se lirait comme Meeshy. Tout AUTRE nom hors liste garde
+ * des jokers illimités — fermé par défaut. La marque se lit sur la ligne,
+ * jamais à partir du nom.
  */
 const MAX_JOKERS = 2;
 
@@ -227,14 +229,16 @@ const canRead = (read: readonly string[], target: string, maxJokers: number): bo
  * la seule réserve qui fait REFUSER une proposition. Deux contrôles, et l'un
  * suffit : le SOCLE (tout ce qui n'est pas `[a-z0-9]` retiré, puis la
  * sous-chaîne « meeshy »), et la lecture FERMÉE PAR DÉFAUT, où un caractère
- * inconnu vaut une lettre ou rien. Un nom seulement mal formé n'est pas une
- * usurpation.
+ * inconnu vaut une lettre ou rien. Les jokers sont bornés (`MAX_JOKERS`) pour
+ * un nom de la liste blanche ou un nom hérité marqué (`grandfathered`, lu sur
+ * la ligne du profil) ; illimités pour tout autre nom hors liste.
  */
-export function impersonatesMeeshy(name: string): boolean {
+export function impersonatesMeeshy(name: string, options: { readonly grandfathered?: boolean } = {}): boolean {
+  const bounded = options.grandfathered === true || isWhitelistedName(name);
   return [true, false].some((leetPunctuation) => {
     const read = readingSkeleton(name, leetPunctuation);
     if (read.replace(/[^a-z0-9]/g, '').includes(MEESHY_PUBLISHER_SLUG)) return true;
-    return canRead([...read], MEESHY_PUBLISHER_SLUG, MAX_JOKERS);
+    return canRead([...read], MEESHY_PUBLISHER_SLUG, bounded ? MAX_JOKERS : read.length);
   });
 }
 
