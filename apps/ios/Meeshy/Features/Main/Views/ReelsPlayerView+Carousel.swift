@@ -207,12 +207,12 @@ struct ReelImageBackdrop: View, Equatable {
 /// **Ce qui dit qu'un réel porte PLUSIEURS médias — une seule fois** (#16321).
 ///
 /// Le carrousel d'images dessine ses points ; la pastille « 2 / 3 » posée au
-/// coin haut redisait le même fait (recette porteur du 2026-11-05). Un réel
+/// coin haut redisait le même fait (recette du porteur). Un réel
 /// élit donc UN indicateur : les points du carrousel quand le carrousel les
 /// dessine, des points TAPABLES menant à la galerie quand le média affiché
 /// n'en a pas (réel mixte dont la vidéo gagne, réel composé), rien pour un
 /// seul média — loi 4 : un contrôle sans effet est absent.
-enum ReelMediaIndicator: Equatable {
+nonisolated enum ReelMediaIndicator: Equatable {
     case none
     case carouselDots
     case galleryDots(total: Int, currentIndex: Int)
