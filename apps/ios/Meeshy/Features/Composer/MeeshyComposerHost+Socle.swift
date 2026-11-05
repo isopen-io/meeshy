@@ -520,7 +520,7 @@ extension MeeshyComposerHost {
     /// « Publier la story / le post / le réel », ou chacun des formats cochés
     /// (#13920) : la capsule nomme ce qui part.
     var armedPublishTitle: String? {
-        ComposerPublishMenuCopy.publishTitle(for: armedChoice)
+        ComposerPublishMenuCopy.publishTitle(for: armedChoice, origin: intent.origin)
     }
 
     /// **La story peut-elle partir AUSSI en réel ?** — la lecture de
