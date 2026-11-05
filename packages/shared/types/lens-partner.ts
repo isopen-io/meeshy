@@ -20,6 +20,7 @@
  *      `MessageAttachment.lensSlug`, `PostMedia.lensSlug`
  */
 import { LENS_LIMITS, LENS_PATTERNS } from './lens-format.js';
+import { isReservedPublisherIdentity } from './pack-publisher.js';
 
 export const PARTNER_PROFILE_LIMITS = {
   maxDisplayNameLength: 60,
@@ -63,6 +64,7 @@ const cleanDisplayName = (raw: unknown): string | null => {
   if (typeof raw !== 'string') return null;
   const name = raw.normalize('NFKC').trim();
   if (name.length === 0 || name.length > PARTNER_PROFILE_LIMITS.maxDisplayNameLength) return null;
+  if (isReservedPublisherIdentity(name)) return null;
   return INVISIBLE_OR_CONTROL.test(name) ? null : name;
 };
 

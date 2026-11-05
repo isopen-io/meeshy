@@ -502,6 +502,8 @@ model User {
   pushTokens               PushToken[]
   stickers                 UserSticker[]
   stickerPacks             UserStickerPack[]
+  /// L'ÉDITEUR de packs que ce compte possède (#16274) — au plus un.
+  packPublisher            PartnerProfile?
   packOwnerships           UserPackOwnership[]
 
   // Signal Protocol E2EE Relations
@@ -6631,16 +6633,26 @@ model LensPack {
   @@index([documentSrc])
 }
 
-/// L'IDENTITÉ d'un partenaire qui propose des lens (#11327, S26) : un nom
-/// affichable, un site et un logo, VÉRIFIÉS par BIGBOSS ou ADMIN (décision
-/// #11251). Optionnel : une lens sans profil vérifié se publie, mais ne crédite
-/// personne. Changer son nom ou son logo RETIRE la vérification — une identité
-/// vérifiée ne se remplace pas après coup. Gratuit des deux côtés : aucun
-/// champ de prix ni de paiement.
+/// L'ÉDITEUR d'un pack (#16274), généralisation à TOUS les domaines de
+/// l'identité partenaire des lens (#11327, S26) : stickers, fonds, contours,
+/// bannières, lens — Meeshy compris. Un éditeur appartient à UN compte Meeshy
+/// (`userId`, relation obligatoire `owner`), et un compte possède au plus un
+/// éditeur (`userId @unique`) : le pack se rattache à l'éditeur du compte qui
+/// le PROPOSE (`*.submitterId`), sans seconde référence qui pourrait diverger.
+/// `displayName` est le nom de BOUTIQUE, distinct du nom d'utilisateur, qui
+/// n'est jamais servi aux clients de la boutique (l'admin seule le voit).
+/// L'éditeur « Meeshy » (`slug = meeshy`) appartient au compte officiel désigné
+/// par `MEESHY_OFFICIAL_ACCOUNT_ID`, jamais à un compte écrit en dur.
+/// VÉRIFIÉ par BIGBOSS ou ADMIN (décision #11251). Changer son nom ou son logo
+/// RETIRE la vérification. Gratuit des deux côtés : aucun champ de prix.
 model PartnerProfile {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  /// Le compte qui propose les lens (`LensPack.submitterId`).
+  /// Le compte PROPRIÉTAIRE (`ownerUserId` de #16274) : celui qui propose les packs (`submitterId`).
   userId      String    @unique @db.ObjectId
+  /// L'adresse de l'éditeur en boutique (`publisherSlugOf`), stable une fois posée.
+  /// Absente sur un profil de partenaire d'avant #16274 jusqu'à sa première lecture
+  /// par `PackPublishers`, qui la pose. Index unique PARTIEL (`{ slug: { $type: 'string' } }`) en base.
+  slug        String?   @unique
   displayName String
   /// https seulement (`parsePartnerProfileInput`).
   website     String?
@@ -6655,6 +6667,8 @@ model PartnerProfile {
   verifiedBy  String?   @db.ObjectId
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  owner User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([verifiedAt])
 }
