@@ -9,6 +9,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import kotlinx.coroutines.flow.MutableStateFlow
+import me.meeshy.sdk.model.BubbleSendProgress
 import me.meeshy.sdk.model.media.MediaUploadProgress
 import org.junit.Rule
 import org.junit.Test
@@ -27,8 +28,8 @@ class SendProgressPillRobolectricTest {
 
     private fun show(ids: List<String>) = compose.setContent {
         SendProgressPill(
-            attachmentIds = ids,
-            source = ledger,
+            pieces = ids.map { BubbleSendProgress.Piece(it, 100) },
+            source = BubbleUploadProgress(ledger) { false },
             color = Color.Gray,
             modifier = Modifier.testTag("pill"),
             fallback = { Text("clock", Modifier.testTag("clock")) },
