@@ -1,7 +1,9 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
-import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
+import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
+import type { ApiResult } from '@/lib/api/http';
+import type { TusCheckpointStore } from '@/lib/api/tus-checkpoint';
 import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
 import { newClientMessageId } from '@/lib/api/client-message-id';
@@ -18,6 +20,9 @@ import { confirmedMessageOf, localMessageOf, type LocalMessage } from './local-m
 import type { SharedPlace } from './shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { entriesOf, type OutboxState } from './outbox-store';
+import type { SendProgressState } from './send-progress';
+import { uploadPending } from './upload-pending';
+import type { UploadBatchLimits } from './upload-batches';
 
 /**
  * LE SITE UNIQUE DE LA RÈGLE (#5813, étape 5) — comment une écriture PART,
@@ -33,6 +38,23 @@ export type SendDeps = ConversationsDeps & {
   readonly now?: () => number;
   /** La préparation des photos avant téléversement (#11310) — le worker d'image par défaut. */
   readonly prepare?: ImagePreparer;
+  /** Le téléversement par reprise (TUS) des gros fichiers et la progression
+   * de chaque envoi (#16134) — absent ⇒ tout part en multipart, sans progression. */
+  readonly transfer?: SendTransfer;
+};
+
+export type ResumableUploader = (params: {
+  readonly file: File;
+  readonly onProgress?: (fraction: number) => void;
+}) => Promise<ApiResult<{ readonly attachmentId: string }>>;
+
+export type SendTransfer = {
+  readonly progress: StoreApi<SendProgressState>;
+  readonly media: PostMediaUploadDeps;
+  readonly limits?: UploadBatchLimits;
+  readonly checkpoints?: TusCheckpointStore | null;
+  /** Injectable par les témoins ; `uploadMessageAttachment` en production. */
+  readonly resumable?: ResumableUploader;
 };
 
 export type Draft = {
@@ -243,16 +265,14 @@ async function uploadPhase(params: {
   if (upload.files.length === 0) return [];
 
   const pending = await (deps.prepare ?? browserImagePreparer).prepareUploads(upload.files);
-  const result = await uploadAttachments({ source: deps.source, transport: deps.transport, pending });
-
-  const failure = uploadShortfall(pending.map((piece) => piece.file), result);
-  if (failure !== null) {
-    deps.outbox.getState().markFailed(conversationId, message.clientMessageId, failure);
+  const uploaded = await uploadPending({ deps, pending, clientMessageId: message.clientMessageId });
+  deps.transfer?.progress.getState().clear(message.clientMessageId);
+  if (!uploaded.ok) {
+    deps.outbox.getState().markFailed(conversationId, message.clientMessageId, uploaded.failure);
     return null;
   }
-  if (!result.ok) return null;
 
-  const attachmentIds = result.data.attachments.map((a) => a.id);
+  const attachmentIds = uploaded.ids;
   deps.outbox.getState().markUploaded(conversationId, message.clientMessageId, attachmentIds);
   return attachmentIds;
 }
