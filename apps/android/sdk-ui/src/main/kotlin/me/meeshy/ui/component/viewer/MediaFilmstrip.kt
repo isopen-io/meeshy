@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.layout.onSizeChanged
@@ -67,6 +68,8 @@ public fun MediaFilmstrip(
     val haptics = rememberMeeshyHaptics()
     var widthDp by remember { mutableFloatStateOf(0f) }
     val leading = FilmstripLayout.leadingInset(widthDp).dp
+    val latestCurrent by rememberUpdatedState(current)
+    val latestOnSelect by rememberUpdatedState(onSelect)
     LaunchedEffect(current) { listState.animateScrollToItem(current.coerceIn(0, pages.lastIndex)) }
     LaunchedEffect(listState, pages.size) {
         snapshotFlow { listState.isScrollInProgress }.drop(1).collect { scrolling ->
@@ -77,9 +80,9 @@ public fun MediaFilmstrip(
                 count = pages.size,
             )
             listState.animateScrollToItem(target)
-            if (target != current) {
+            if (target != latestCurrent) {
                 haptics.selection()
-                onSelect(target)
+                latestOnSelect(target)
             }
         }
     }
