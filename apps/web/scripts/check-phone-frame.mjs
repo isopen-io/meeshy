@@ -59,9 +59,10 @@
  *
  * et, dans les SEPT langues, à 320, 375 et 390 px (#10124) :
  *
- *   6. sur chaque landing, la porte de l'en-tête (« Mes conversations »,
+ *   6. sur chaque landing, les portes de l'en-tête (« Mes conversations »,
  *      seule depuis #12500 — « Entrer sans compte » a quitté la page, #10784,
- *      « Se connecter » aussi) tient sur UNE ligne, sans rien rogner. (La carte World Wide de `/login`, qu'on mesurait aussi, est
+ *      « Se connecter » aussi — et « Télécharger » vers /download, #16407)
+ *      tiennent chacune sur UNE ligne, sans rien rogner. (La carte World Wide de `/login`, qu'on mesurait aussi, est
  *      retirée — #10784.)
  *
  * La démonstration ordinaire est confortable : la mesure de 1. et 2. était verte
@@ -162,7 +163,7 @@ const releveTextes = (selecteurs) =>
     return { selecteur, absent: false, lignes, rogne: el.scrollWidth > el.clientWidth + 1, texte: (el.textContent ?? '').trim() };
   });
 
-const PORTES_LANDING = ['.ld-bar > a[href="/chats"]'];
+const PORTES_LANDING = ['.ld-bar > a[href="/download"]', '.ld-bar > a[href="/chats"]'];
 
 /** Le relevé, dans la page — voir le doc-comment de tête. */
 const releve = () => {

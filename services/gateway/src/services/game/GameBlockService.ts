@@ -27,6 +27,7 @@ import { countMissionsDone } from './LevelStepFacts';
 import { starFragmentsOf } from './StarFragments';
 import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
 import { stampGameRevisionAfterWrite } from './GameRevision';
+import { chestHoursIntoDay } from './gameClock';
 
 const log = enhancedLogger.child({ module: 'GameBlockService' });
 
@@ -171,6 +172,13 @@ export class GameBlockService {
       mythicSeat,
       mintedLifetime: totals.mintedLifetime,
       chestMintBase: chestMintBase ?? null,
+      // L'heure du jour de jeu, pour la Gloire du coffre « si on l'ouvre maintenant » (#16414).
+      chestElapsedHours: chestHoursIntoDay({
+        dayKey: day.dayKey,
+        timezone: user?.timezone,
+        missionsOpenedAt: day.rows.map((row) => row.createdAt),
+        now,
+      }),
       missionsDone,
       flameRecord: facts.longest,
       debitablePoints: sparks.pocket,

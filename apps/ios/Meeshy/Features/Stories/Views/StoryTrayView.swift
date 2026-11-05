@@ -110,11 +110,7 @@ struct StoryTrayView: View {
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                postsContent: { uid in AnyView(ProfileUserPostsList(
-                    userId: uid,
-                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
-                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }, dependencies: .live
+                postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -684,11 +680,7 @@ struct PinnedStoryTrailBand: View {
                         moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
                         onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
                         presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                        postsContent: { uid in AnyView(ProfileUserPostsList(
-                    userId: uid,
-                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
-                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }, dependencies: .live
+                        postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
                     )
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)

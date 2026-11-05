@@ -30,6 +30,16 @@ enum ProfilePostsOpener {
             object: "postDetail:\(post.id)"
         )
     }
+
+    static func postsContent(dismiss: @escaping () -> Void) -> (String) -> AnyView {
+        { uid in
+            AnyView(ProfileUserPostsList(
+                userId: uid,
+                onOpenPost: { post in openPost(post, dismiss: dismiss) },
+                onOpenReel: { reel, reels in openReel(reel, in: reels, dismiss: dismiss) }
+            ))
+        }
+    }
 }
 
 /// Ce que fait un tap d'ouverture dans la liste d'un profil (#10483) : envoyer

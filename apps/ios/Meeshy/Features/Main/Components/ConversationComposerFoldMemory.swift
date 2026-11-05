@@ -23,6 +23,8 @@ final class ConversationComposerFoldMemory: ConversationComposerFoldMemoryProvid
         self.defaults = defaults
     }
 
+    nonisolated deinit {}
+
     private var folded: [String] {
         defaults.stringArray(forKey: Self.storageKey) ?? []
     }

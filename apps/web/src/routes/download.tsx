@@ -1,15 +1,15 @@
 import type { ReactNode } from 'react';
 
 import '@/styles/site-chrome.css';
+import '@/styles/store-badge.css';
 
 import { AuthAmbient } from '@/components/auth-chrome';
 import { LANDING_COPY } from '@/landing/landing-copy';
-import { AppleLogo, GooglePlayLogo } from '@/landing/store-logos';
+import { StoreBadge } from '@/landing/store-logos';
 import { LanguageSelect, SiteFooter, SiteHeader, type SitePage } from '@/landing/site-chrome';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { appInstitutionalHref, appSiteHref } from '@/lib/institutional-href';
 import { currentInterfaceLanguage, setInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { APP_STORE_URL, GOOGLE_PLAY_URL } from '@/lib/store-links';
 
 import { ActionLink } from './link-page-parts';
 
@@ -31,7 +31,9 @@ import { ActionLink } from './link-page-parts';
  * ## Ce que chaque badge promet
  *
  * Les deux mènent à leur fiche RÉELLE, dont les adresses vivent dans
- * `lib/store-links.ts`, que la landing lit aussi (#15120).
+ * `lib/store-links.ts`, que la landing lit aussi (#15120). Le badge lui-même
+ * est `StoreBadge` (`landing/store-logos.tsx`), le même que celui de la
+ * landing, et sa feuille `styles/store-badge.css` (#16407).
  *
  * - **App Store** : `id6760208591` (lookup iTunes `bundleId=me.meeshy.app`).
  *   L'adresse d'avant, `apps.apple.com/app/meeshy`, rendait 404 — le seul
@@ -126,21 +128,6 @@ function ShotImage({ src, alt, eager }: { readonly src: string; readonly alt: st
   );
 }
 
-const BADGE_CLASS =
-  // harmony-exempt: badge de magasin, noir et blanc imposés par Apple et Google
-  'inline-flex h-[52px] items-center gap-2.5 rounded-xl px-4 text-start text-white outline-offset-2 focus-visible:outline-2';
-// harmony-exempt: badge de magasin, noir et gris imposés par Apple et Google
-const BADGE_STYLE = { background: '#000', border: '1px solid #a6a6a6', outlineColor: 'var(--color-ios-brand)' };
-
-function BadgeText({ caption, name }: { readonly caption: string; readonly name: string }) {
-  return (
-    <span className="grid leading-none">
-      <span className="text-[0.6875rem] tracking-wide">{caption}</span>
-      <span className="text-[1.3125rem] font-semibold tracking-tight">{name}</span>
-    </span>
-  );
-}
-
 function PlatformCard({
   heading,
   badge,
@@ -208,18 +195,7 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
             heading={t('download.ios.heading')}
             note={t('download.ios.note')}
             badge={
-              <a
-                href={APP_STORE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-store="app-store"
-                aria-label={t('download.appStore')}
-                className={BADGE_CLASS}
-                style={BADGE_STYLE}
-              >
-                <AppleLogo />
-                <BadgeText caption={t('download.badge.appStore.caption')} name="App Store" />
-              </a>
+              <StoreBadge store="app-store" label={t('download.appStore')} caption={t('download.badge.appStore.caption')} />
             }
           >
             <ShotStrip label={t('download.shots.ios')}>
@@ -235,18 +211,7 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
             heading={t('download.android.heading')}
             note={t('download.android.note')}
             badge={
-              <a
-                href={GOOGLE_PLAY_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-store="google-play"
-                aria-label={t('download.googlePlay')}
-                className={BADGE_CLASS}
-                style={BADGE_STYLE}
-              >
-                <GooglePlayLogo />
-                <BadgeText caption={t('download.badge.googlePlay.caption')} name="Google Play" />
-              </a>
+              <StoreBadge store="google-play" label={t('download.googlePlay')} caption={t('download.badge.googlePlay.caption')} />
             }
           >
             <ShotStrip label={t('download.shots.android')}>

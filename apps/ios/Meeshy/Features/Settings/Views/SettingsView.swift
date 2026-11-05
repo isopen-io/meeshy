@@ -211,7 +211,7 @@ struct SettingsView: View {
         if !focus.opensSecurity { _ = SettingsFocusRequest.shared.consume() }
         focusedSetting = focus
         guard focus.opensSecurity else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { showSecurity = true }
+        Task { await DelayedUI.perform(after: .milliseconds(900)) { showSecurity = true } }
     }
 
     private var scrollContent: some View {
@@ -257,9 +257,9 @@ struct SettingsView: View {
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
         .adaptiveOnChange(of: focusedSetting, initial: true) { _, focus in
             guard let focus else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            Task { await DelayedUI.perform(after: .milliseconds(350)) {
                 withAnimation(.easeInOut(duration: 0.4)) { proxy.scrollTo(focus.settingsAnchor, anchor: .center) }
-            }
+            } }
         }
         }
     }

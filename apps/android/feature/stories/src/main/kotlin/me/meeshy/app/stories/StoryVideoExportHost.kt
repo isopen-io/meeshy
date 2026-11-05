@@ -83,6 +83,10 @@ fun rememberSceneVideoExport(
         scope.launch {
             // Android 8–9 : la photothèque s'écrit sous WRITE_EXTERNAL_STORAGE, demandé par la porte unique ; dès l'API 29, rien.
             if (mode == StoryExportMode.SAVE && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
+            if (viewModel.state.value.isExporting) {
+                onCard?.invoke(null)
+                return@launch
+            }
             lastRun = SceneExportRun(mode, shown, storyAuthor, onCard)
             viewModel.export(mode, shown, storyAuthor)
         }

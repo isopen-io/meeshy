@@ -153,7 +153,7 @@ fun ReelsScreen(
                 }
             },
             onImager = cardImager?.let { imager ->
-                { id -> reelsNow.firstOrNull { it.id == id }?.imagerRequest(railRenderNow)?.let(imager) }
+                { id: String -> reelsNow.firstOrNull { it.id == id }?.imagerRequest(railRenderNow)?.let(imager) }
             },
         )
     }

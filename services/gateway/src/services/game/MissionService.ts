@@ -47,7 +47,7 @@ import { GameRefusal } from './GameRefusal';
 import { FLAME_USER_SELECT, STREAK_WRITE_ATTEMPTS, flameFactsOf, flameFreezesUnchanged } from './FlameService';
 import { GloryService } from './GloryService';
 import { MeeshSpend } from './MeeshSpend';
-import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
+import { chestHoursIntoDay, dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 import { MISSION_PROFILE_USER_SELECT, missionProfileOf } from './MissionHabits';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { starFragmentsOf } from './StarFragments';
@@ -84,7 +84,13 @@ export type MissionServiceDeps = {
   /** Crédite des points de jeu au score et à un axe — `EngagementService.creditGamePoints`. */
   readonly creditPoints: (userId: string, points: number, axisKey: EngagementAxisKey) => Promise<void>;
   /** Le coffre du jour — la loi partagée par défaut ; `effort` est celui des trois missions du jour (#10011). */
-  readonly chest?: (params: { readonly userId: string; readonly dayKey: string; readonly effort: number; readonly nextMeeshPrice: number }) => DailyChest;
+  readonly chest?: (params: {
+    readonly userId: string;
+    readonly dayKey: string;
+    readonly effort: number;
+    readonly nextMeeshPrice: number;
+    readonly elapsedHours: number;
+  }) => DailyChest;
   readonly glory?: GloryService;
   /**
    * Une mission vient d'être ACHEVÉE ET PAYÉE (#9386) : la saison en tire ses
@@ -124,6 +130,7 @@ export type ChestDayColumns = {
   chestFragment: boolean | null;
   chestFreeze: boolean | null;
   chestGlory?: number | null;
+  chestEarlyGlory?: number | null;
   chestBonus?: string | null;
   chestBonusPoints?: number | null;
 };
@@ -142,6 +149,7 @@ export function chestRewardOf(day: ChestDayColumns | null): GameChestReward {
     fragment: day?.chestFragment ?? false,
     freeze: day?.chestFreeze ?? false,
     glory: day?.chestGlory ?? 0,
+    ...(typeof day?.chestEarlyGlory === 'number' ? { earlyGlory: day.chestEarlyGlory } : {}),
     ...(isChestBonus(day?.chestBonus) ? { bonus: day.chestBonus, bonusPoints: day?.chestBonusPoints ?? 0 } : {}),
   };
 }
@@ -152,6 +160,7 @@ const CHEST_CLEARED = {
   chestFragment: null,
   chestFreeze: null,
   chestGlory: null,
+  chestEarlyGlory: null,
   chestBonus: null,
   chestBonusPoints: null,
 } as const;
@@ -587,7 +596,8 @@ export class MissionService {
   /**
    * Ouvre le coffre du jour — réclamable une fois les trois missions faites.
    *
-   * Son contenu suit l'EFFORT des trois missions du jour (#10011) : des points (500 à 10 000), de la Gloire, une
+   * Son contenu suit l'EFFORT des trois missions du jour (#10011) : des points (500 à 10 000), de la Gloire (1 250 à
+   * 3 000 sur l'effort, plus jusqu'à 2 800 de précocité à l'heure SERVEUR de la réclamation, gravée, #16414), une
    * prime en points au cours de la Meesh du compte FIGÉ au début du jour de jeu (`chestPriceBase`, #10219 : une
    * frappe du jour ne la fait pas monter), UN fragment d'étoile une fois sur six et un gel une fois sur vingt. Comme une mission
    * (`complete`), la réclamation est un `updateMany` conditionnel, puis la Gloire (idempotente, `chest:<jour>`) et
@@ -609,7 +619,9 @@ export class MissionService {
 
     await this.ensureGameDay(userId, dayKey);
     const mintBase = await this.chestPriceBase({ userId, now, dayKey });
-    const chest = this.chestOf({ userId, dayKey, effort: dayEffort(rows), nextMeeshPrice: meeshPrice(mintBase + 1) });
+    // La précocité de la Gloire se lit à l'heure SERVEUR de la réclamation, puis se grave avec elle (#16414).
+    const elapsedHours = chestHoursIntoDay({ dayKey, timezone: user?.timezone, missionsOpenedAt: rows.map((row) => row.createdAt), now });
+    const chest = this.chestOf({ userId, dayKey, effort: dayEffort(rows), nextMeeshPrice: meeshPrice(mintBase + 1), elapsedHours });
     const claimed = await this.prisma.gameDay.updateMany({
       where: { userId, dayKey, ...CHEST_UNCLAIMED },
       data: {
@@ -618,6 +630,7 @@ export class MissionService {
         chestFragment: chest.fragment,
         chestFreeze: chest.freeze,
         chestGlory: chest.glory,
+        chestEarlyGlory: chest.earlyGlory,
         chestBonus: chest.bonus,
         chestBonusPoints: chest.bonusPoints,
       },
@@ -631,7 +644,7 @@ export class MissionService {
           delta: chest.glory,
           reason: 'chest',
           requestId: `chest:${dayKey}`,
-          meta: { dayKey, points: chest.points },
+          meta: { dayKey, points: chest.points, earlyGlory: chest.earlyGlory },
         });
       }
       await this.deps.creditPoints(userId, chest.points, GAME_BONUS_AXIS);
@@ -653,6 +666,7 @@ export class MissionService {
         fragment: chest.fragment,
         freeze: chest.freeze,
         glory: chest.glory,
+        earlyGlory: chest.earlyGlory,
         bonus: chest.bonus,
         bonusPoints: chest.bonusPoints,
       },
