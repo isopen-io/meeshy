@@ -50,10 +50,10 @@ class UploadTransferTimeoutInterceptor : Interceptor {
 
     private fun isTransfer(request: Request, mediaType: String): Boolean =
         mediaType == UploadTransferTimeouts.MEDIA_TYPE ||
-            (request.method == "POST" && mediaType == MULTIPART && request.url.encodedPath.endsWith(ATTACHMENT_UPLOAD_PATH))
+            (request.method == "POST" && mediaType == MULTIPART && request.url.pathSegments.takeLast(2) == ATTACHMENT_UPLOAD_SEGMENTS)
 
     private companion object {
         const val MULTIPART = "multipart/form-data"
-        const val ATTACHMENT_UPLOAD_PATH = "/attachments/upload"
+        val ATTACHMENT_UPLOAD_SEGMENTS = listOf("attachments", "upload")
     }
 }

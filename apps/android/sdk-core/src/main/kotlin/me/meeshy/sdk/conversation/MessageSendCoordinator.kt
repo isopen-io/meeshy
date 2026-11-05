@@ -322,7 +322,8 @@ internal class MessageSendCoordinator(
     }
 
     private fun ApiMessage.expectsUploadedPiece(trace: SendTrace): Boolean =
-        trace.forwardedAttachmentIds.isNullOrEmpty() && trace.copyAttachmentsFromMessageId.isNullOrEmpty() &&
+        sticker == null && location == null &&
+            trace.forwardedAttachmentIds.isNullOrEmpty() && trace.copyAttachmentsFromMessageId.isNullOrEmpty() &&
             (attachments.isNotEmpty() || messageType in PIECE_TYPES)
 
     /**
