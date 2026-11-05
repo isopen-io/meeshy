@@ -31,6 +31,7 @@ import { renderFilm, ringsOf } from './compose-illustrated-ring-lotties.js';
 import { LANGUAGES } from './illustrated-rings/packs.js';
 import { MEESHY_COLLECTION_SLUGS } from './compose-meeshy-collections.js';
 import { upsertPacks } from './meeshy-collections/source-packs.js';
+import { availabilityOf, CHRISTMAS_WINDOW, SEASONAL_ADDED_SLUGS } from './seasonal/slugs.js';
 
 type SourcePack = { readonly slug: string; readonly order: number };
 type Write = (src: string, bytes: Buffer) => void;
@@ -39,9 +40,15 @@ export const ASSORTED_SLUGS: readonly string[] = ASSORTED_BANNER_PACKS.map((pack
 export const CHRISTMAS_SLUGS: readonly string[] = CHRISTMAS_RING_PACKS.map((pack) => pack.slug);
 export const CHRISTMAS_WALLPAPER_SLUGS: readonly string[] = CHRISTMAS_WALLPAPER_PACKS.map((pack) => pack.slug);
 
-/** Le rang après tous les packs qui ne sont ni des collections Meeshy, ni ceux que ce compositeur pose. */
+/** Le rang après tous les packs qui ne sont ni des collections Meeshy, ni les offres saisonnières (#16270), ni ceux que ce compositeur pose. */
 const after = (existing: readonly SourcePack[], own: readonly string[]): number =>
-  Math.max(...existing.filter((pack) => !MEESHY_COLLECTION_SLUGS.includes(pack.slug) && !own.includes(pack.slug)).map((pack) => pack.order));
+  Math.max(...existing.filter((pack) => !MEESHY_COLLECTION_SLUGS.includes(pack.slug) && !SEASONAL_ADDED_SLUGS.includes(pack.slug) && !own.includes(pack.slug)).map((pack) => pack.order));
+
+/** La fenêtre de l'offre saisonnière (#16270), posée sur les seuls packs qui en sont. */
+const windowOf = (slug: string) => {
+  const availability = availabilityOf(slug);
+  return availability === undefined ? {} : { availability };
+};
 
 export function assortedBannerPacks(existing: readonly SourcePack[]) {
   const first = after(existing, ASSORTED_SLUGS) + 1;
@@ -51,6 +58,7 @@ export function assortedBannerPacks(existing: readonly SourcePack[]) {
     installedByDefault: false,
     removable: true,
     usage: { kind: 'free', surfaces: ['banner'] },
+    ...windowOf(pack.slug),
     frames: pack.frames.map((frame) => {
       if (parseBannerFrameDesign(frame) === null) throw new Error(`${pack.slug}/${frame.key} : le cadre ne passe pas le schéma partagé`);
       return frame;
@@ -66,6 +74,7 @@ export function christmasRingPacks(existing: readonly SourcePack[], write: Write
     installedByDefault: false,
     removable: true,
     usage: { kind: 'free', surfaces: ['avatar'] },
+    availability: CHRISTMAS_WINDOW,
     rings: ringsOf(pack, write),
   }));
 }
@@ -77,6 +86,7 @@ export function christmasWallpaperPacks(existing: readonly SourcePack[], write: 
     order: first + index,
     installedByDefault: false,
     removable: true,
+    availability: CHRISTMAS_WINDOW,
     designs: pack.items.map(({ design, film }) => {
       const served = film === undefined ? design : { ...design, lottie: filmRef(film, design.key, write) };
       if (parseAppearanceDesign(served, 'wallpaper') === null) throw new Error(`${pack.slug}/${design.key} : le fond ne passe pas le contrat de fond`);

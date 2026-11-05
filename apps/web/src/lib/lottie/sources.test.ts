@@ -8,11 +8,13 @@ import { decodeLottie } from './decode';
 import { BUILTIN_LOTTIE_SRCS, lottieBytesLoader } from './sources';
 
 type Ref = { readonly src: string; readonly bytes: number; readonly sha256: string };
-const declared = (): readonly Ref[] =>
+/** #16270, #16271 — les offres de Noël et du Nouvel An se TÉLÉCHARGENT : leurs films ne voyagent pas avec l'application. */
+const SEASONAL: readonly string[] = ['noel-bannieres', 'noel-contours-fixes', 'noel-cadres-fixes', 'nouvel-an-contours', 'nouvel-an-contours-vifs', 'nouvel-an-images', 'nouvel-an-images-vives', 'nouvel-an-cadres', 'nouvel-an-cadres-vifs', 'nouvel-an-fonds', 'nouvel-an-fonds-vifs'];
+const declared = (seasonal = false): readonly Ref[] =>
   [
-    ...wallpapers.packs.flatMap((pack) => pack.designs as readonly unknown[]),
-    ...banners.packs.flatMap((pack) => pack.designs as readonly unknown[]),
-    ...rings.packs.flatMap((pack) => pack.rings as readonly unknown[]),
+    ...wallpapers.packs.filter((pack) => SEASONAL.includes(pack.slug) === seasonal).flatMap((pack) => pack.designs as readonly unknown[]),
+    ...banners.packs.filter((pack) => SEASONAL.includes(pack.slug) === seasonal).flatMap((pack) => pack.designs as readonly unknown[]),
+    ...rings.packs.filter((pack) => SEASONAL.includes(pack.slug) === seasonal).flatMap((pack) => pack.rings as readonly unknown[]),
   ].flatMap((item) => {
     const { lottie, decor } = item as { lottie?: Ref; decor?: { back?: Ref; front?: Ref } };
     return [lottie, decor?.back, decor?.front].flatMap((ref) => (ref === undefined ? [] : [ref]));
@@ -28,6 +30,12 @@ describe('les couches Lottie des packs intégrés (#10638)', () => {
       expect(bytes).not.toBeNull();
       expect((await decodeLottie(bytes!)).ok).toBe(true);
     }
+  });
+
+  test('les films des offres saisonnières ne sont pas embarqués : ils se téléchargent et se vérifient à leur empreinte (#16270, #16271)', () => {
+    const refs = declared(true);
+    expect(refs.length).toBeGreaterThanOrEqual(15);
+    refs.forEach((ref) => expect(BUILTIN_LOTTIE_SRCS).not.toContain(ref.src));
   });
 
   test('une couche servie est vérifiée à son empreinte complète : un octet changé est refusé', async () => {

@@ -1779,6 +1779,10 @@
       "surfaces": [
         "banner"
       ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
     }
   },
   {
@@ -1878,6 +1882,10 @@
       "surfaces": [
         "banner"
       ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
     }
   },
   {
@@ -1977,6 +1985,10 @@
       "surfaces": [
         "banner"
       ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
     }
   },
   {
@@ -2175,6 +2187,315 @@
       "surfaces": [
         "banner"
       ]
+    }
+  },
+  {
+    "slug": "noel-cadres-fixes",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 22,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "78e89808f4b8255c.webp",
+      "bytes": 4026,
+      "sha256": "78e89808f4b8255c92d8f4d71c346f98de7992f3357af42be23484ba25510c82"
+    },
+    "preview": null,
+    "contract": {
+      "src": "80eb1c98e9986633.json",
+      "bytes": 40002,
+      "sha256": "80eb1c98e9986633bdbc72fad0e59353488237b977b07bc7961f9b98fd5757af"
+    },
+    "strings": {
+      "fr": {
+        "src": "7f23b1f630c3769e.json",
+        "bytes": 337,
+        "sha256": "7f23b1f630c3769e264c649399b2fcf483a284ac3b727bee9880f7bdb5657e5c"
+      },
+      "en": {
+        "src": "b9f7ff1505dbec07.json",
+        "bytes": 313,
+        "sha256": "b9f7ff1505dbec075548b5a38588fa13a6ecc79f9db92eeb725ee6102a106ea8"
+      },
+      "es": {
+        "src": "cea106485607cfb2.json",
+        "bytes": 336,
+        "sha256": "cea106485607cfb2a25c4c8a99261ac5197556d100c600d67ded1c5c4be4f417"
+      },
+      "pt": {
+        "src": "655e73157ebd8a66.json",
+        "bytes": 330,
+        "sha256": "655e73157ebd8a66616f67133246846e28a9ff9727c7384eb64e17dbbfc5214c"
+      },
+      "de": {
+        "src": "d9688ca8d7797410.json",
+        "bytes": 321,
+        "sha256": "d9688ca8d77974104e59bb4e56fa850f6c83a39e06818cfb259ae6123aacf32e"
+      },
+      "it": {
+        "src": "e1c7f069ff9fa383.json",
+        "bytes": 360,
+        "sha256": "e1c7f069ff9fa38354b1b393a09984884557731958d0e379c7bbe8791fe27f7b"
+      },
+      "ar": {
+        "src": "68cadfc2c7a1042b.json",
+        "bytes": 389,
+        "sha256": "68cadfc2c7a1042bfd70f7b161c8a96891804f3e671d3fc3f76d825dd4874ce5"
+      }
+    },
+    "downloadBytes": {
+      "story": 40002,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Noël · cadres fixes",
+        "description": "Les six cadres de bannière de Noël sans animation, assortis aux contours fixes : flocons, houx, guirlande, étoile, bonnet et sucre d’orge."
+      },
+      "en": {
+        "name": "Christmas · still frames",
+        "description": "The six Christmas banner frames without animation, to match the still rings: snowflakes, holly, string lights, star, Santa hat and candy cane."
+      },
+      "es": {
+        "name": "Navidad · marcos fijos",
+        "description": "Los seis marcos de banner de Navidad sin animación, a juego con los contornos fijos: copos, acebo, guirnalda, estrella, gorro y bastón de caramelo."
+      },
+      "pt": {
+        "name": "Natal · molduras fixas",
+        "description": "As seis molduras de banner de Natal sem animação, a condizer com os contornos fixos: flocos, azevinho, grinalda, estrela, gorro e bastão de doce."
+      },
+      "de": {
+        "name": "Weihnachten · ruhige Bannerrahmen",
+        "description": "Die sechs Weihnachts-Bannerrahmen ohne Animation, passend zu den ruhigen Rahmen: Flocken, Stechpalme, Lichterkette, Stern, Mütze und Zuckerstange."
+      },
+      "it": {
+        "name": "Natale · cornici fisse",
+        "description": "Le sei cornici di banner di Natale senza animazione, abbinate ai contorni fissi: fiocchi, agrifoglio, ghirlanda, stella, berretto e bastoncino di zucchero."
+      },
+      "ar": {
+        "name": "الميلاد · إطارات لافتة ثابتة",
+        "description": "إطارات لافتة الميلاد الستة بلا حركة، تُناسب الأطر الثابتة: ندف الثلج، والبهشية، وسلسلة الأضواء، والنجمة، والقبعة، وعصا الحلوى."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "nouvel-an-cadres",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 23,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "10db428e22393050.webp",
+      "bytes": 4420,
+      "sha256": "10db428e2239305029b8be21d598f53b67f912a9b1b6ac4cd659f5473f90a99b"
+    },
+    "preview": null,
+    "contract": {
+      "src": "309e89173757e909.json",
+      "bytes": 21610,
+      "sha256": "309e89173757e909c9d117818e8ab6278c3d6bb1b547b457d364e37aad3db922"
+    },
+    "strings": {
+      "fr": {
+        "src": "8dda20166282e6fd.json",
+        "bytes": 175,
+        "sha256": "8dda20166282e6fd9ead094a651505a18a15239dbb7add8dcee2551e389617c5"
+      },
+      "en": {
+        "src": "3024a1d8ee3936fa.json",
+        "bytes": 158,
+        "sha256": "3024a1d8ee3936fade46b0b5a33a2b700708f4bb68b3a2f7554fdea50bb1d141"
+      },
+      "es": {
+        "src": "cc386db421840c17.json",
+        "bytes": 178,
+        "sha256": "cc386db421840c17370f90f37887eaa5ba1b1acab8970bcd4fc2ad988a38ec01"
+      },
+      "pt": {
+        "src": "520b0d5ce3bed271.json",
+        "bytes": 182,
+        "sha256": "520b0d5ce3bed27116f6b2f56af98b2608c8fb75a6308cc03ca57f2e39b3c234"
+      },
+      "de": {
+        "src": "fcdabb736012d7a2.json",
+        "bytes": 161,
+        "sha256": "fcdabb736012d7a29c5f7770f608a78d4cfe18c2eb79e8e5f80d32b701b40724"
+      },
+      "it": {
+        "src": "c0cec2bc2fa583e8.json",
+        "bytes": 188,
+        "sha256": "c0cec2bc2fa583e8807a88911965d6d21372744ebd2ac71fef79b2b903a89a3b"
+      },
+      "ar": {
+        "src": "8f6d42e5fed0b355.json",
+        "bytes": 207,
+        "sha256": "8f6d42e5fed0b355664fe6ed887fa90d4dfb3efa0f011298d7208466c57d0620"
+      }
+    },
+    "downloadBytes": {
+      "story": 21610,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres du Nouvel An",
+        "description": "Quatre cadres de bannière assortis aux contours du Nouvel An : feux d’artifice, confettis, cadran de minuit et coupes de champagne."
+      },
+      "en": {
+        "name": "New Year frames",
+        "description": "Four banner frames to match the New Year rings: fireworks, confetti, a midnight dial and champagne coupes."
+      },
+      "es": {
+        "name": "Marcos de Año Nuevo",
+        "description": "Cuatro marcos de banner a juego con los contornos de Año Nuevo: fuegos artificiales, confeti, esfera de medianoche y copas de champán."
+      },
+      "pt": {
+        "name": "Molduras de Ano Novo",
+        "description": "Quatro molduras de banner a condizer com os contornos de Ano Novo: fogo de artifício, confetes, mostrador da meia-noite e taças de champanhe."
+      },
+      "de": {
+        "name": "Neujahrsrahmen",
+        "description": "Vier Bannerrahmen passend zu den Neujahrsrahmen fürs Avatar: Feuerwerk, Konfetti, Mitternachtszifferblatt und Sektschalen."
+      },
+      "it": {
+        "name": "Cornici di Capodanno",
+        "description": "Quattro cornici di banner abbinate ai contorni di Capodanno: fuochi d’artificio, coriandoli, quadrante di mezzanotte e coppe di champagne."
+      },
+      "ar": {
+        "name": "إطارات رأس السنة",
+        "description": "أربعة إطارات لافتة تُناسب أطر رأس السنة: ألعاب نارية، وقصاصات، وميناء منتصف الليل، وكؤوس الشمبانيا."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
+    }
+  },
+  {
+    "slug": "nouvel-an-cadres-vifs",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 24,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "10db428e22393050.webp",
+      "bytes": 4420,
+      "sha256": "10db428e2239305029b8be21d598f53b67f912a9b1b6ac4cd659f5473f90a99b"
+    },
+    "preview": null,
+    "contract": {
+      "src": "0049c0d2f1861d40.json",
+      "bytes": 23619,
+      "sha256": "0049c0d2f1861d406f0c9f66eb875114b85d4d361d3b9e0d2d10601424ff81be"
+    },
+    "strings": {
+      "fr": {
+        "src": "3d777b771dfccd94.json",
+        "bytes": 164,
+        "sha256": "3d777b771dfccd94736ac1a94c91dadee1bfa624b3c8aaf043b37098ab119cd9"
+      },
+      "en": {
+        "src": "2deaba9b854fe776.json",
+        "bytes": 163,
+        "sha256": "2deaba9b854fe776e23fcea891aab81c06d74de1d491a71085ff94d9586ae5b2"
+      },
+      "es": {
+        "src": "05b846d5927284eb.json",
+        "bytes": 162,
+        "sha256": "05b846d5927284eb716d401212df98945c3e0c5e150aae1530a60b89c96075c2"
+      },
+      "pt": {
+        "src": "5af9db88c62d2a2a.json",
+        "bytes": 163,
+        "sha256": "5af9db88c62d2a2a622a81f292272e45cb50630235bd2cc8451be47adf72c014"
+      },
+      "de": {
+        "src": "4aeaa844bbacfebb.json",
+        "bytes": 165,
+        "sha256": "4aeaa844bbacfebbdc046a7df194a22838dfaf58d6906ea8e8932a86090e68df"
+      },
+      "it": {
+        "src": "2128bd9e6c4da21f.json",
+        "bytes": 169,
+        "sha256": "2128bd9e6c4da21fbb0f540cd220dd16193503602864b147824f90508b3041e2"
+      },
+      "ar": {
+        "src": "88aa72fd7aba415d.json",
+        "bytes": 210,
+        "sha256": "88aa72fd7aba415dcdf10796c80f7f6c60db8bb87f85751d356042149d6bae9c"
+      }
+    },
+    "downloadBytes": {
+      "story": 23619,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres du Nouvel An animés",
+        "description": "Quatre cadres de bannière animés, assortis aux contours vivants : un bouquet qui éclate, des confettis qui volent, l’aiguille de minuit qui tourne et des coupes qui trinquent."
+      },
+      "en": {
+        "name": "Animated New Year frames",
+        "description": "Four animated banner frames to match the living rings: a bursting bouquet, flying confetti, the midnight hand turning and coupes clinking."
+      },
+      "es": {
+        "name": "Marcos animados de Año Nuevo",
+        "description": "Cuatro marcos de banner animados, a juego con los contornos vivos: un ramillete que estalla, confeti que vuela, la aguja de medianoche que gira y copas que brindan."
+      },
+      "pt": {
+        "name": "Molduras animadas de Ano Novo",
+        "description": "Quatro molduras de banner animadas, a condizer com os contornos vivos: um ramo que rebenta, confetes a voar, o ponteiro da meia-noite a girar e taças a brindar."
+      },
+      "de": {
+        "name": "Animierte Neujahrsrahmen",
+        "description": "Vier animierte Bannerrahmen passend zu den lebendigen Rahmen: ein aufblühendes Feuerwerk, fliegendes Konfetti, der kreisende Mitternachtszeiger und anstoßende Schalen."
+      },
+      "it": {
+        "name": "Cornici animate di Capodanno",
+        "description": "Quattro cornici di banner animate, abbinate ai contorni vivi: un bouquet che esplode, coriandoli che volano, la lancetta di mezzanotte che gira e coppe che brindano."
+      },
+      "ar": {
+        "name": "إطارات رأس السنة المتحركة",
+        "description": "أربعة إطارات لافتة متحركة تُناسب الأطر الحية: باقة تتفجر، وقصاصات تتطاير، وعقرب منتصف الليل يدور، وكؤوس تتلاقى."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
     }
   }
 ]
