@@ -54191,7 +54191,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Story, %1$@: %2$@"
+            "value": "Historia, %1$@: %2$@"
           }
         },
         "fr": {
@@ -54203,7 +54203,7 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Story, %1$@: %2$@"
+            "value": "Storia, %1$@: %2$@"
           }
         },
         "pt-BR": {
@@ -54238,7 +54238,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Post, %1$@: %2$@"
+            "value": "Publicación, %1$@: %2$@"
           }
         },
         "fr": {
@@ -54256,7 +54256,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Post, %1$@: %2$@"
+            "value": "Publicação, %1$@: %2$@"
           }
         }
       }

@@ -199,13 +199,13 @@ private fun StoryComposerSheetBody(
     onDone: () -> Unit,
 ) {
     when (open) {
-        StoryComposerSheet.STICKERS -> ComposerAnchoredSheet(fill = true) {
+        StoryComposerSheet.STICKERS -> ComposerAnchoredSheet(fill = open.fillsHeight) {
             StoryStickerSheetPanel(viewModel = viewModel, onDismiss = onDone)
         }
-        StoryComposerSheet.SOUND -> ComposerAnchoredSheet(fill = true) {
+        StoryComposerSheet.SOUND -> ComposerAnchoredSheet(fill = open.fillsHeight) {
             StorySoundSheet(state = state, composer = viewModel, onDone = onDone)
         }
-        StoryComposerSheet.AUDIENCE -> ComposerAnchoredSheet(fill = false) {
+        StoryComposerSheet.AUDIENCE -> ComposerAnchoredSheet(fill = open.fillsHeight) {
             StoryAudiencePanel(
                 visibility = state.draft.visibility,
                 userIds = state.draft.visibilityUserIds,

@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.model.scene.MeeshySceneObject
 import me.meeshy.sdk.model.scene.SceneAccessibilityPlan
 import me.meeshy.sdk.model.scene.SceneAccessibilityPlan.Label
@@ -36,7 +37,7 @@ internal val StoryComposerUiState.accessibleSceneLists: SceneLists
     }
 
 /**
- * Le résumé de la composition, puis chaque objet avec ses actions personnalisées (TalkBack). Les actions sont celles
+ * Le résumé de la composition, qui nomme le format composé (story, post, réel — #16222), puis chaque objet avec ses actions personnalisées (TalkBack). Les actions sont celles
  * du plan du menu d'appui long, restreintes à ce que l'écran sait exécuter : jamais un geste annoncé sans effet.
  */
 @Composable
@@ -71,7 +72,7 @@ internal fun ComposerSceneAccessibility(
             stringResource(R.string.story_composer_a11y_compositionCount_many, s.count)
         }
         val spoken = s.labels.map { entryLabel(it) }
-        stringResource(R.string.story_composer_a11y_composition, count, spoken.joinToString(", "))
+        stringResource(ComposerFormatLabel.COMPOSITION_SUMMARY.res(state.variant.noun), count, spoken.joinToString(", "))
     }
     SceneAccessibilityLayer(summary = summary, nodes = nodes, modifier = modifier)
 }
