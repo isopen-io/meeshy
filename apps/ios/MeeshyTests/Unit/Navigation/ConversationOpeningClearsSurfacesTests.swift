@@ -365,10 +365,12 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         }
     }
 
-    func test_composerClosing_goesThroughTheAtelierExit() throws {
+    func test_composerClosing_writesTheDraftBeforeClosing() throws {
         let host = try appSource("Features/Composer/MeeshyComposerHost+Autosave.swift")
-        XCTAssertTrue(host.contains("ComposerConversationYield.close(atelierWritesItsDraft: atelierWritesItsDraft"))
-        XCTAssertTrue(host.contains("exitIsArmed: publishTrigger.offersExit"))
+        let compacte = host.components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(compacte.contains("close:{flushAutosave()onDismiss()}"),
+                      "Le meuble écrit son brouillon — repris compris — avant de refermer.")
+        XCTAssertTrue(host.contains("keepsStoredDraft: storedDraft.keepsDraft"))
     }
 
     func test_pushOfAConversation_goesThroughTheRouterSite() throws {

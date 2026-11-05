@@ -85,7 +85,7 @@ extension StickerPickerView {
                         .frame(minHeight: 32)
                         .accessibilityLabel(liftA11y)
                     }
-                    PasteButton(supportedContentTypes: StoryComposerView.pasteStarterContentTypes) { providers in
+                    PasteButton(supportedContentTypes: StoryPasteStarter.contentTypes) { providers in
                         Task { libraryItems = await stickerLibrary.paste(providers) }
                     }
                     .labelStyle(.iconOnly)

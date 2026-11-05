@@ -51,7 +51,7 @@ class ChatAudioBinderTest {
     ) {
         val dirs = MediaCacheDirs(cacheRoot, cacheRoot)
         val coordinator = ConversationAudioCoordinator(engine, UnconfinedTestDispatcher())
-        val viewModel = ChatAudioViewModel(coordinator, waveforms, UploadedAttachmentIds(), TypedMediaCache(dirs), UnconfinedTestDispatcher())
+        val viewModel = ChatAudioViewModel(coordinator, waveforms, UploadedAttachmentIds(), TypedMediaCache(dirs), UnconfinedTestDispatcher(), ChatRestingPositions { null })
 
         /** Le vocal de [url] téléchargé EN ENTIER dans le cache typé : la copie que la bulle a le droit de mesurer. */
         fun wholeCopyOf(url: String): File =
@@ -124,7 +124,7 @@ class ChatAudioBinderTest {
     )
 
     @Test
-    fun `le drapeau change pendant l'ecoute : la voix recharge la piste de la nouvelle langue sous le meme id`() {
+    fun `le drapeau change pendant l'ecoute, la voix recharge la piste de la nouvelle langue sous le meme id`() {
         val rig = Rig()
         rig.viewModel.bind(thread)
         rig.viewModel.tap(m1.audios[0], m1)
@@ -151,7 +151,7 @@ class ChatAudioBinderTest {
     }
 
     @Test
-    fun `le drapeau change vocal en pause : le toucher suivant joue la bonne piste au lieu de reprendre l'ancienne`() {
+    fun `le drapeau change vocal en pause, le toucher suivant joue la bonne piste au lieu de reprendre l'ancienne`() {
         val rig = Rig()
         rig.viewModel.bind(thread)
         rig.viewModel.tap(m1.audios[0], m1)

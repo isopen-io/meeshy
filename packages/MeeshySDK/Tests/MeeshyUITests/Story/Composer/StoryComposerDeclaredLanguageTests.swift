@@ -57,14 +57,4 @@ final class StoryComposerDeclaredLanguageTests: XCTestCase {
                       "Chaque objet naît avec la langue déclarée AU MOMENT de sa pose.")
     }
 
-    // 4 — le contenu du réel/story part dans la langue déclarée : `storyLanguage`
-    // est SEMÉ depuis `declaredContentLanguage` à la construction de la vue.
-    func test_leContenuDeStory_estSemeDepuisLaLangueDeclaree() throws {
-        let src = try sdkSource("Sources/MeeshyUI/Story/StoryComposerView.swift")
-        XCTAssertTrue(
-            src.contains("State(initialValue: viewModel.declaredContentLanguage)"),
-            "Le contenu du réel/story (`storyLanguage`) est semé depuis `declaredContentLanguage` — "
-                + "la langue DÉCLARÉE, jamais « fr » codé en dur."
-        )
-    }
 }

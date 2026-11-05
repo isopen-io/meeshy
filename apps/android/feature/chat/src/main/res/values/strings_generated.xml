@@ -120,8 +120,11 @@
     <string name="chat_exit_blocked_title">This message stays in Meeshy</string>
     <string name="chat_exit_blocked_understood">Got it</string>
     <string name="chat_exit_blocked_view_once">It’s view-once: it can’t be forwarded, saved or shared. It stays in the conversation until it’s seen.</string>
+    <string name="chat_explorer_close_translation">Close translation</string>
     <string name="chat_explorer_original">Original</string>
+    <string name="chat_explorer_original_banner">Original • %1$s</string>
     <string name="chat_explorer_retranslate">Retranslate</string>
+    <string name="chat_explorer_retranslate_a11y">Translate again</string>
     <string name="chat_explorer_title">Languages</string>
     <string name="chat_explorer_translate">Translate</string>
     <plurals name="chat_forward_members">
@@ -825,6 +828,9 @@
     <string name="transcription_fiche_transcribe">Transcribe</string>
     <string name="transcription_fiche_translations">Audio translations</string>
     <string name="translation_audio_error">The audio translation failed. Please try again.</string>
+    <string name="upload_progress_a11y_label">Uploading files</string>
+    <string name="upload_progress_a11y_value">%1$d%%, %2$d of %3$d files uploaded</string>
+    <string name="upload_progress_files_count">%1$d/%2$d files</string>
     <string name="viewer_code_loading">Loading...</string>
     <string name="viewer_contact_add">Add to Contacts</string>
     <string name="viewer_contact_close">Close contact card</string>

@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MeeshyMediaConsumption
+import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.sdk.model.MessageTranscription
 import me.meeshy.sdk.model.ServedProfileDecorItem
 import me.meeshy.sdk.model.profile.ProfileSheetUser
@@ -41,6 +42,22 @@ class AudioFullscreenSourceTest {
         isAudioTranslated = true,
         lastPlayPositionMs = 4_000,
     )
+
+    @Test
+    fun `une page de la conversation emporte la loi de sortie de son porteur, une page de post n en a aucune`() {
+        val blurred = MessageExitOffer.Unrestricted.copy(holdsBlur = true)
+        val page = AudioFullscreenSource.fromBubble(bubble(voice()).copy(exitOffer = blurred), voice(), "c1", "Famille")!!
+        val post = AudioFullscreenSource.fromFeed(
+            media = FeedMedia(id = "p1", type = FeedMediaType.AUDIO, url = "https://cdn.meeshy.me/p1.m4a"),
+            author = ProfileSheetUser(username = "ana"),
+            createdAtIso = "2026-11-04T08:00:00Z",
+            carrierId = "post1",
+            contextName = "Fil",
+        )
+
+        assertThat(page.exitOffer).isEqualTo(blurred)
+        assertThat(post?.exitOffer).isNull()
+    }
 
     @Test
     fun `une bulle ordinaire devient une page avec sa piste servie, son auteur et sa consommation`() {

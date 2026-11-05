@@ -43,15 +43,4 @@ final class StoryKeyboardOverlapTests: XCTestCase {
         XCTAssertEqual(StoryKeyboardOverlap.height(keyboardEndFrame: kb, windowFrame: nil, current: 0, screenBounds: fullScreen), 398)
     }
 
-    /// Le composeur ne lit plus la hauteur brute de la trame.
-    func test_theComposer_liftsByTheOverlap_notTheRawHeight() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshyUI/Story/StoryComposerView+Canvas.swift")
-        let code = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertFalse(code.contains("keyboardHeight = frame.height"))
-        XCTAssertTrue(code.contains("StoryKeyboardOverlap.height("))
-        XCTAssertTrue(code.contains("UIResponder.keyboardWillChangeFrameNotification"),
-                      "détacher ou recoller le clavier d'iPad ne passe que par un changement de trame")
-    }
 }

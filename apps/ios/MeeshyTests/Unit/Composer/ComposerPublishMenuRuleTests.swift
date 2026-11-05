@@ -72,7 +72,7 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
                        "Le sous-menu est celui du POST, et de lui seul.")
     }
 
-    /// Le canal document ne téléverse que les fichiers du meuble. Sous l'atelier,
+    /// Le canal document ne téléverse que les fichiers du meuble. Sous la scène,
     /// les médias vivent dans des objets qu'il ne voit pas : offrir « Post +
     /// agencement » y publierait un canevas SANS ses fichiers.
     func test_leSousMenuPost_seRetire_quandLeDocumentNePortePasLesFichiers() throws {
@@ -227,61 +227,20 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
 
     // MARK: - OÙ part la publication choisie
 
+    /// Le canal suit le FORMAT, quelle que soit la surface (#15629) : l'atelier
+    /// du SDK, qui publiait la story et le post sans agencement, a quitté le dépôt.
     func test_leCanalSuitLeChoix() {
         typealias R = ComposerPublishMenuRule.Route
-        let cas: [(ComposerSurfaceKind, ComposerPublishChoice, R)] = [
-            (.scene, .init(format: .story, layout: nil), .atelier),
-            (.scene, .init(format: .post, layout: nil), .atelier),
-            (.scene, .init(format: .post, layout: .wave), .document),
-            (.document, .init(format: .story, layout: nil), .storyScene),
-            (.document, .init(format: .post, layout: nil), .document),
-            (.document, .init(format: .post, layout: .hero), .document),
-            (.document, .init(format: .reel, layout: nil), .document),
-            (.mood, .init(format: .status, layout: nil), .document)
+        let cas: [(ComposerPublishChoice, R)] = [
+            (.init(format: .story, layout: nil), .storyScene),
+            (.init(format: .post, layout: nil), .document),
+            (.init(format: .post, layout: .hero), .document),
+            (.init(format: .reel, layout: nil), .document),
+            (.init(format: .status, layout: nil), .document)
         ]
-        for (surface, choix, attendu) in cas {
-            XCTAssertEqual(ComposerPublishMenuRule.route(surface: surface, choice: choix), attendu,
-                           "\(surface) · \(choix)")
+        for (choix, attendu) in cas {
+            XCTAssertEqual(ComposerPublishMenuRule.route(choice: choix), attendu, "\(choix)")
         }
-    }
-
-    // MARK: - Le texte du post armé depuis une scène part avec elle (#8473)
-
-    /// Une scène ouverte en story et armée « Post » au chevron publie par
-    /// l'ATELIER, qui lit le contenu de la slide — jamais `documentText`, où la
-    /// plaque de verre du socle écrit le texte du post. Sans report, le texte
-    /// tapé ne partait nulle part.
-    func test_unPostArmeSousLAtelier_emporteLeTexteDuPost() {
-        let texte = ComposerPublishMenuRule.atelierCarriedPostText(
-            route: .atelier, choice: .init(format: .post, layout: nil), documentText: "Bonjour à tous")
-        XCTAssertEqual(texte, "Bonjour à tous")
-    }
-
-    func test_uneStorySousLAtelier_nEmporteAucunTexteDePost() {
-        XCTAssertNil(ComposerPublishMenuRule.atelierCarriedPostText(
-            route: .atelier, choice: .init(format: .story, layout: nil), documentText: "Bonjour"))
-    }
-
-    func test_unTexteBlanc_neRemplacePasLeContenuDeLaSlide() {
-        XCTAssertNil(ComposerPublishMenuRule.atelierCarriedPostText(
-            route: .atelier, choice: .init(format: .post, layout: nil), documentText: "  \n "))
-    }
-
-    func test_leCanalDocument_porteDejaLeTexte_rienAReporter() {
-        XCTAssertNil(ComposerPublishMenuRule.atelierCarriedPostText(
-            route: .document, choice: .init(format: .post, layout: .wave), documentText: "Bonjour"))
-    }
-
-    func test_laFlecheDuSocle_reporteLeTexteDuPost_avantDePresserLAtelier() throws {
-        let code = try hostCode()
-        let envoi = try XCTUnwrap(bloc("func performSoclePublish(", dans: code),
-                                  "L'envoi du socle est introuvable — la garde ne mesurerait RIEN.")
-        let compacte = compact(envoi)
-        let report = try XCTUnwrap(compacte.range(of: "ComposerPublishMenuRule.atelierCarriedPostText("),
-                                   "Le texte du post armé depuis une scène doit partir avec elle (#8473).")
-        let presse = try XCTUnwrap(compacte.range(of: "publishTrigger.requestPublish("))
-        XCTAssertLessThan(report.lowerBound, presse.lowerBound,
-                          "Le report précède la pression de l'atelier, sinon la slide part sans le texte.")
     }
 
     func test_leDocument_portetousLesFichiers_seulementQuandChaqueObjetEstPasseParLeMeuble() {
@@ -292,7 +251,7 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
             slides: slides, slideImageIds: [], bridgedObjectIds: ["o1"]))
         XCTAssertFalse(ComposerPublishMenuRule.documentCarriesEveryMedia(
             slides: slides, slideImageIds: ["s1"], bridgedObjectIds: ["o1", "o2"]),
-                       "Une image de fond de l'atelier n'est pas un fichier du meuble.")
+                       "Une image de fond de la scène n'est pas un fichier du meuble.")
     }
 
     // MARK: - L'agencement choisi ARRIVE dans le brouillon
@@ -512,43 +471,19 @@ final class ComposerPublishAlsoAsReelTests: XCTestCase {
 
     // MARK: - Le chemin menu → requestPublish → type publié
 
-    func test_dispatch_reelArme_sousLAtelier_presseLeReel() {
-        XCTAssertEqual(ComposerPublishMenuRule.dispatch(surface: .scene, choice: reel),
-                       .atelier(.reel, alsoAsReel: false))
-    }
-
-    func test_dispatch_storyEtReel_sousLAtelier_presseLaStory_avecLeReel() {
-        XCTAssertEqual(ComposerPublishMenuRule.dispatch(surface: .scene, choice: storyEtReel),
-                       .atelier(.story, alsoAsReel: true))
-    }
-
     func test_dispatch_storyEtReel_sousLeDocument_publieLaScene_avecLeReel() {
-        XCTAssertEqual(ComposerPublishMenuRule.dispatch(surface: .document, choice: storyEtReel),
+        XCTAssertEqual(ComposerPublishMenuRule.dispatch(choice: storyEtReel),
                        .storyScene(.story, alsoAsReel: true))
     }
 
     func test_dispatch_reelArme_sousLeDocument_partParLeDocument() {
-        XCTAssertEqual(ComposerPublishMenuRule.dispatch(surface: .document, choice: reel), .document(reel))
-    }
-
-    func test_laTelecommande_retientLeTypeEtLeReel_duGeste() {
-        let telecommande = ComposerPublishTrigger()
-        telecommande.requestPublish(as: .reel)
-        XCTAssertEqual(telecommande.requestedTargetType, .reel, "Le réel armé part en REEL.")
-        XCTAssertFalse(telecommande.requestedAlsoAsReel)
-
-        telecommande.requestPublish(as: .story, alsoAsReel: true)
-        XCTAssertEqual(telecommande.requestedTargetType, .story)
-        XCTAssertTrue(telecommande.requestedAlsoAsReel)
-
-        telecommande.disarm()
-        XCTAssertFalse(telecommande.requestedAlsoAsReel, "Une télécommande désarmée ne garde rien du geste.")
+        XCTAssertEqual(ComposerPublishMenuRule.dispatch(choice: reel), .document(reel))
     }
 
     func test_leReel_nAccompagneQuUneStory() {
-        XCTAssertTrue(ComposerPublishTrigger.publishedAlsoAsReel(requested: true, served: .story))
-        XCTAssertFalse(ComposerPublishTrigger.publishedAlsoAsReel(requested: true, served: .post))
-        XCTAssertFalse(ComposerPublishTrigger.publishedAlsoAsReel(requested: false, served: .story))
+        XCTAssertTrue(ComposerPublishMenuRule.publishedAlsoAsReel(requested: true, served: .story))
+        XCTAssertFalse(ComposerPublishMenuRule.publishedAlsoAsReel(requested: true, served: .post))
+        XCTAssertFalse(ComposerPublishMenuRule.publishedAlsoAsReel(requested: false, served: .story))
     }
 
     func test_laChargeDeHandOff_porteLeReel_sansPerdreLeReste() {
@@ -656,51 +591,23 @@ final class ComposerSeveralFormatsTests: XCTestCase {
 
     func test_chaquePublication_empruntesLeCanalDeSonFormat() {
         let choisi = ComposerPublishMenuRule.choosingLayout(.hero, armed: story)
-        XCTAssertEqual(ComposerPublishMenuRule.dispatches(surface: .scene, choice: choisi),
+        XCTAssertEqual(ComposerPublishMenuRule.dispatches(choice: choisi),
                        [.document(ComposerPublishChoice(format: .post, layout: .hero)),
-                        .atelier(.story, alsoAsReel: false)])
+                        .storyScene(.story, alsoAsReel: false)])
     }
 
     func test_leCasStoryEtReel_resteUneSeulePublication() {
         let storyEtReel = ComposerPublishChoice(format: .story, layout: nil, alsoAsReel: true)
         XCTAssertEqual(storyEtReel.legs, [storyEtReel])
-        XCTAssertEqual(ComposerPublishMenuRule.dispatches(surface: .scene, choice: storyEtReel),
-                       [.atelier(.story, alsoAsReel: true)])
+        XCTAssertEqual(ComposerPublishMenuRule.dispatches(choice: storyEtReel),
+                       [.storyScene(.story, alsoAsReel: true)])
     }
 
     func test_lePlan_nommeLeFormatRefuseParSaGarde_etPublieLesAutres() {
-        let plan = ComposerSeveralFormats.plan(storyEtPost, surface: .scene, accepts: { $0 != .post })
-        XCTAssertEqual(plan.atelier, [story])
+        let plan = ComposerSeveralFormats.plan(storyEtPost, accepts: { $0 != .post })
+        XCTAssertEqual(plan.scene, [story])
         XCTAssertEqual(plan.refused, [.post])
         XCTAssertTrue(plan.document.isEmpty)
-    }
-
-    func test_laRemiseDeLAtelier_publieChaqueFormatDuGeste() {
-        let file = ComposerPublishChoice(formats: [.post, .reel], layout: nil)!.legs
-        XCTAssertEqual(ComposerSeveralFormats.handOffs(pending: file, served: .post, alsoAsReel: false), file)
-        XCTAssertEqual(ComposerSeveralFormats.handOffs(pending: [], served: .story, alsoAsReel: true),
-                       [ComposerPublishChoice(format: .story, layout: nil, alsoAsReel: true)],
-                       "Hors d'un geste composite, la remise publie son seul type, comme avant.")
-        XCTAssertEqual(ComposerSeveralFormats.handOffs(pending: file, served: .story, alsoAsReel: false),
-                       [story], "Une file qui ne commence pas par le type remis ne s'applique pas.")
-    }
-
-    func test_laFileDeLAtelier_seVideALaLecture() {
-        let file = ComposerAtelierFanOut()
-        file.hold(storyEtPost.legs)
-        XCTAssertEqual(file.take(served: .post, alsoAsReel: false).count, 2)
-        XCTAssertEqual(file.take(served: .post, alsoAsReel: false), [ComposerPublishChoice(format: .post, layout: nil)])
-    }
-
-    func test_leTexteDuPost_partAvecLePost_jamaisAvecLaStory() {
-        let slides = [StorySlide(id: "a", effects: StoryEffects()), StorySlide(id: "b", effects: StoryEffects())]
-        let legs = storyEtPost.legs
-        let duPost = ComposerSeveralFormats.slides(slides, for: legs[0], among: legs, postText: "Bonjour",
-                                                   currentSlideId: "b")
-        XCTAssertEqual(duPost.map(\.content), [nil, "Bonjour"])
-        let deLaStory = ComposerSeveralFormats.slides(slides, for: legs[1], among: legs, postText: "Bonjour",
-                                                      currentSlideId: "b")
-        XCTAssertEqual(deLaStory.map(\.content), [nil, nil])
     }
 
     // MARK: - La capsule nomme les formats cochés ; l'échec partiel dit lequel
@@ -772,7 +679,7 @@ final class ComposerSeveralFormatsTests: XCTestCase {
 
     func test_run_lesDocumentsPartentDAbord_unAUn_puisLeReste_avecCeQuiEstRefuse() async {
         let journal = FanOutJournal()
-        let plan = ComposerSeveralFormats(atelier: [], scene: [story],
+        let plan = ComposerSeveralFormats(scene: [story],
                                           document: ComposerPublishChoice(formats: [.post, .reel], layout: nil)!.legs,
                                           refused: [])
         let refuses = await ComposerSeveralFormats.run(plan, sendDocument: { leg in
@@ -790,7 +697,7 @@ final class ComposerSeveralFormatsTests: XCTestCase {
     }
 
     func test_run_reunitLesRefusDuPlan_desDocuments_etDeCeQuiPartSurLeChamp() async {
-        let plan = ComposerSeveralFormats(atelier: [], scene: [story],
+        let plan = ComposerSeveralFormats(scene: [story],
                                           document: [ComposerPublishChoice(format: .post, layout: nil)],
                                           refused: [.reel])
         let refuses = await ComposerSeveralFormats.run(plan, sendDocument: { _ in false }, sendNow: { _ in [.story] })
@@ -805,9 +712,6 @@ final class ComposerSeveralFormatsTests: XCTestCase {
         let compacte = code.components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(compacte.contains("guardchoice.legs.count==1else{returnpublishEachFormat(choice)}"),
                       "Plusieurs formats cochés partent tous au même geste.")
-        XCTAssertTrue(compacte.contains("letremises=atelierFanOut.take(served:targetType,")
-                          && compacte.contains("returnComposerSeveralFormats.relay(remises,"),
-                      "Le relais de l'atelier publie chaque format du geste.")
     }
 }
 

@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.BulkHideForMeRequest
+import me.meeshy.sdk.model.MessageTranslationsPayload
 import me.meeshy.sdk.model.MessagesApiResponse
 import me.meeshy.sdk.model.ThreadData
 import me.meeshy.sdk.net.routes.ApiRoutesConversations
@@ -44,6 +45,10 @@ interface MessageChatRestApi {
         @Query("include_translations") includeTranslations: Boolean? = null,
         @Query("languages") languages: String? = null,
     ): MessagesApiResponse
+
+    /** Toutes les traductions texte d'UN message (l'explorateur de langues) ; `data` range la liste sous `translations`. */
+    @GET(ApiRoutesMessages.BY_MESSAGE_ID_TRANSLATIONS)
+    suspend fun translations(@Path("messageId") messageId: String): ApiResponse<MessageTranslationsPayload>
 
     /** Masque UN message chez moi seul (« supprimer pour moi ») ; aucun autre membre n'en est averti. */
     @DELETE(ApiRoutesMessages.BY_MESSAGE_ID_DELETE_FOR_ME)

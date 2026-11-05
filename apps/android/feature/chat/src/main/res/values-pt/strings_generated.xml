@@ -123,8 +123,11 @@
     <string name="chat_exit_blocked_title">Esta mensagem fica no Meeshy</string>
     <string name="chat_exit_blocked_understood">Entendi</string>
     <string name="chat_exit_blocked_view_once">É de visualização única: não pode ser encaminhada, salva nem compartilhada. Fica na conversa até ser vista.</string>
+    <string name="chat_explorer_close_translation">Fechar a tradução</string>
     <string name="chat_explorer_original">Original</string>
+    <string name="chat_explorer_original_banner">Original • %1$s</string>
     <string name="chat_explorer_retranslate">Traduzir novamente</string>
+    <string name="chat_explorer_retranslate_a11y">Traduzir novamente</string>
     <string name="chat_explorer_title">Idiomas</string>
     <string name="chat_explorer_translate">Traduzir</string>
     <plurals name="chat_forward_members">
@@ -833,6 +836,9 @@
     <string name="transcription_fiche_transcribe">Transcrever</string>
     <string name="transcription_fiche_translations">Traduções de áudio</string>
     <string name="translation_audio_error">A tradução do áudio falhou. Tente novamente.</string>
+    <string name="upload_progress_a11y_label">Enviando arquivos</string>
+    <string name="upload_progress_a11y_value">%1$d%%, %2$d de %3$d arquivos enviados</string>
+    <string name="upload_progress_files_count">%1$d/%2$d arquivos</string>
     <string name="viewer_code_loading">Carregando...</string>
     <string name="viewer_contact_add">Adicionar aos contatos</string>
     <string name="viewer_contact_close">Fechar o cartão</string>

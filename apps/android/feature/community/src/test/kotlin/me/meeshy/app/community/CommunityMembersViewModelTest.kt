@@ -163,4 +163,30 @@ class CommunityMembersViewModelTest {
         assertThat(vm.state.value.sections.flatMap { it.rows }.map { it.member.userId }).contains("p31")
         assertThat(vm.state.value.hasMore).isFalse()
     }
+
+    @Test
+    fun `a page that repeats a known member does not duplicate the row`() = runTest {
+        val page = (1..30).map { member("p$it", "member") } + member("me", "admin")
+        val vm = viewModel(members = page)
+        coEvery { repository.getMembersPaged("c1", 31, 30) } returns
+            NetworkResult.Success(PagedResult(listOf(member("p1", "member"), member("p31", "member")), Pagination(hasMore = false)))
+
+        vm.loadMore()
+
+        assertThat(vm.state.value.sections.flatMap { it.rows }.map { it.member.userId }.count { it == "p1" }).isEqualTo(1)
+    }
+
+    @Test
+    fun `removing sends the user id while a role change sends the member id`() = runTest {
+        coEvery { repository.removeMember("c1", "u1") } returns NetworkResult.Success(Unit)
+        coEvery { repository.updateMemberRole("c1", "m-u2", "admin") } returns NetworkResult.Success(member("u2", "admin"))
+        val vm = viewModel()
+        val rows = vm.state.value.sections.flatMap { it.rows }.map { it.member }
+
+        vm.remove(rows.first { it.userId == "u1" })
+        vm.changeRole(rows.first { it.userId == "u2" }, MemberRole.ADMIN)
+
+        coVerify { repository.removeMember("c1", "u1") }
+        coVerify { repository.updateMemberRole("c1", "m-u2", "admin") }
+    }
 }

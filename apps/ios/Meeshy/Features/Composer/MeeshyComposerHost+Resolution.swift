@@ -128,53 +128,13 @@ extension MeeshyComposerHost {
         // supprimée) faisait naître la scène 9:16 PLEIN ÉCRAN dès qu'un fond
         // était choisi — remplacement de route surprenant, pas demandé :
         // l'auteur reste sur l'écran document qu'il a ouvert. `documentBackground`
-        // continue d'être posé (utile à l'atelier une fois qu'il s'incrustera),
-        // mais ne route plus vers `.scene` seul. Voir #3939 pour l'incrustation
+        // continue d'être posé, mais ne décide plus de la surface. Voir #3939 pour l'incrustation
         // du canvas DANS l'écran document, restant à livrer.
         return ComposerSurfaceRouting.surface(opening: profile.opensWith, format: selectedFormat)
     }
 
 
-    // MARK: - Qui peint le chrome, ce qui est offert
-    /// QUI peint la publication — audience, aperçu, flèche. UNE source, lue deux
-    /// fois : passée à l'atelier pour qu'il assemble ou non sa rangée haute, et
-    /// lue ici pour que le socle peigne ou non les mêmes zones.
-    ///
-    /// **Ce fut une CONSTANTE `.atelier`, et le lot 4 l'a rendue calculée** —
-    /// pas par confort : les deux blocages qui l'imposaient sont des blocages de
-    /// la SCÈNE, et une constante qui les faisait valoir pour les trois surfaces
-    /// était une constante mal placée.
-    ///
-    /// (1) **L'audience de l'atelier n'est pas atteignable d'ici.**
-    /// `StoryComposerView.visibility` est un `@State` PRIVÉ, semé à la
-    /// construction par `initialVisibility`, dont `visibilityMenu` est l'unique
-    /// écrivain. Le socle a beau savoir choisir une audience depuis le lot 4.9,
-    /// il écrit `composerVisibility`, que l'atelier ne lit jamais : céder le
-    /// chrome sous la scène retirerait `visibilityMenu` et laisserait l'auteur
-    /// devant un sélecteur qui ne gouverne rien. **Condition de levée, côté
-    /// SDK** : que l'atelier accepte une audience en `@Binding` plutôt qu'en
-    /// graine.
-    ///
-    /// (2) **L'aperçu de l'atelier porte des médias que le meuble ne voit pas.**
-    /// `preloadedImages/VideoURLs/AudioURLs` sont `internal` à `MeeshyUI` ; un
-    /// œil peint ici rendrait une scène amputée des médias LOCAUX, ce
-    /// qu'interdit la loi 6. Le socle n'en peint plus aucun depuis le lot 4.9 —
-    /// pour une raison voisine mais DISTINCTE, qu'il ne faut pas confondre :
-    /// sous ses deux surfaces il n'y a pas de canvas du tout, pas même amputé.
-    ///
-    /// Sous le document et sous le mood, **il n'y a pas d'atelier** : aucune de
-    /// ces deux raisons n'a d'objet. La règle qui tranche est
-    /// `ComposerChromeOwnership`, éprouvable sans monter une vue ; ce qui suit
-    /// n'en est que la lecture.
-    ///
-    /// **Ce que la bascule NE lève PAS, et qu'il ne faut pas lire comme acquis** :
-    /// la scène reste sur `.atelier`, et ses deux conditions de levée sont
-    /// intactes — une audience de l'atelier PILOTABLE depuis le meuble, et un
-    /// aperçu qui porte les médias préchargés. Elles se remplissent côté SDK,
-    /// jamais depuis ce fichier.
-    var chromeOwner: ComposerChromeOwner {
-        ComposerChromeOwnership.owner(for: mountedSurface)
-    }
+    // MARK: - Ce que le socle peint
 
     /// Les zones que le socle peint sous la surface montée. Une RÈGLE, jamais un
     /// `if` écrit dans le corps : une condition posée dans un `body` est
@@ -188,8 +148,6 @@ extension MeeshyComposerHost {
             // 2026-08-24 comme prix de son retour, et elle se vérifie ICI,
             // jamais dans le corps du socle.
             documentHasScene: documentHasScene,
-            // Sous la SCÈNE, l'œil n'existe que si l'atelier l'a armé (#4135).
-            atelierOffersPreview: publishTrigger.offersPreview,
             // **Écrire n'est pas publier** (#6132). Les deux zones d'écriture
             // passent par le même terme : ce qui compte n'est pas LAQUELLE on
             // remplit, c'est qu'on est en train de remplir quelque chose.

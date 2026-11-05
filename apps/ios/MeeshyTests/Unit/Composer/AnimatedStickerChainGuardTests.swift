@@ -64,17 +64,12 @@ final class AnimatedStickerChainGuardTests: XCTestCase {
 
     // MARK: - Maillon 3 — la pose EMPORTE les octets
 
-    /// **UN site de pose depuis #9189.** Le composer SDK et le meuble étaient
-    /// deux JUMEAUX : un seul câblé aurait animé le sticker par une porte et
-    /// figé par l'autre. L'atelier ne monte plus de feuille — sa porte la
-    /// demande au meuble —, et les poses vivent dans `SceneStickerPose`, qui
-    /// emporte les octets de « Mes stickers », d'un Mee et d'un pack cinématique.
+    /// **UN site de pose depuis #9189** : `SceneStickerPose`, qui emporte les
+    /// octets de « Mes stickers », d'un Mee et d'un pack cinématique. L'atelier
+    /// du SDK, qui en était la jumelle, a quitté le dépôt (#15629).
     func test_leSiteUniqueDePose_emporteLesOctets() throws {
-        let sdkAtelier = try sdkSource("MeeshyUI/Story/StoryComposerView+Media.swift")
         let pose = try appSource("Meeshy/Features/Composer/SceneStickerPose.swift")
 
-        XCTAssertFalse(sdkAtelier.contains("StickerPickerView("),
-                       "l'atelier ne pose plus : une seconde pose redeviendrait une jumelle à tenir d'accord.")
         XCTAssertTrue(pose.contains("animatedData: item.animatedData"),
                       "poser depuis « Mes stickers » doit emporter les octets du sticker.")
         XCTAssertTrue(pose.contains("animatedData: film"),
@@ -84,15 +79,6 @@ final class AnimatedStickerChainGuardTests: XCTestCase {
     }
 
     // MARK: - Maillon 4 — la scène REÇOIT les octets
-
-    /// Le composer passe son dictionnaire au canvas. Sans ce fil, la couche a
-    /// beau savoir jouer : elle n'a rien à jouer, et peint l'image fixe.
-    func test_leComposer_passeSesOctetsAuCanvas() throws {
-        let canvas = try sdkSource("MeeshyUI/Story/StoryComposerView+Canvas.swift")
-
-        XCTAssertTrue(canvas.contains("loadedStickerAnimations: viewModel.loadedStickerAnimations"),
-                      "le canvas du composer doit recevoir les octets animés du modèle de vue.")
-    }
 
     /// Les surfaces du meuble montent la MÊME scène embarquée. Une seule non
     /// câblée ferait animer le sticker dans une surface et le figerait dans la

@@ -7,6 +7,10 @@
         {
           "androidName": "community_list_offline_banner",
           "status": "android-only"
+        },
+        {
+          "androidName": "community_create_identifier_unavailable",
+          "status": "android-only"
         }
       ]
     }

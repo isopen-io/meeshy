@@ -138,16 +138,14 @@ enum ComposerHydration {
     /// source n'en déclare pas, par la même prudence que
     /// `StoryRepostAudience.allowed(fromRawValue:)`.
     ///
-    /// **L'ÉDITION rend `nil`, et ce n'est pas un oubli** : le ViewModel hydraté
-    /// porte `editingInitialVisibility`, que `StoryComposerView.init` réassigne
-    /// en PRIORITÉ ABSOLUE — après le paramètre injecté, explicitement. En
-    /// poser un ici ferait deux sources pour une même valeur, dont la seconde
-    /// gagne toujours : celle qu'on aurait écrite serait morte, et l'écrire
-    /// donnerait à croire qu'elle décide.
+    /// **L'ÉDITION part de l'audience ACTUELLE de la story** (#15629) : le
+    /// ViewModel hydraté la porte (`editingInitialVisibility`), et la scène du
+    /// meuble, seule à composer l'édition désormais, la lit ICI — jamais un
+    /// dernier choix mémorisé.
     var initialVisibility: String? {
         switch self {
-        case .editingStory:
-            return nil
+        case .editingStory(let hydrate):
+            return hydrate.editingInitialVisibility
         case .editingPublication(_, let graine):
             return graine.visibility
         case .repostingStory(let story, _):
@@ -162,8 +160,8 @@ enum ComposerHydration {
     /// vide veulent dire la même chose ici, et l'atelier attend un tableau.
     var initialVisibilityUserIds: [String] {
         switch self {
-        case .editingStory:
-            return []
+        case .editingStory(let hydrate):
+            return hydrate.editingInitialVisibilityUserIds
         case .editingPublication(_, let graine):
             return graine.visibilityUserIds
         case .repostingStory(let story, _):
@@ -225,22 +223,23 @@ struct ComposerDocumentOpening {
     /// **Une hydratation PLAFONNÉE gagne sur la mémoire** : republier une
     /// story privée en la voyant ouverte sur « Amis » offrirait une faute que
     /// le serveur refuserait ensuite (403 `REPOST_AUDIENCE_WIDENING`). Une
-    /// publication rouverte s'ouvre sur SON audience. L'édition d'une story
-    /// rend `nil` : son ViewModel porte `editingInitialVisibility`, que
-    /// l'atelier réassigne en priorité absolue. La mémoire est donc lue
+    /// publication rouverte s'ouvre sur SON audience, une story qu'on modifie
+    /// aussi (`editingInitialVisibility`, liste comprise). La mémoire est donc lue
     /// seulement quand aucune hydratation n'impose d'audience, et l'audience
     /// passe toujours par le validateur commun (`selectable`, dans `seed`).
     static func of(hydration: ComposerHydration?, format: ComposerFormat, doorVisibility: String,
                    defaults: UserDefaults = .standard) -> ComposerDocumentOpening {
         let imposee = hydration?.initialVisibility
         let graine = hydration?.publicationSeed
+        let liste = graine?.visibilityUserIds ?? hydration?.initialVisibilityUserIds ?? []
         return ComposerDocumentOpening(
-            visibility: ComposerAudienceMemory.seed(
-                rememberedRaw: imposee == nil
-                    ? ComposerAudienceMemory.key(for: format).flatMap { defaults.string(forKey: $0) }
-                    : nil,
-                doorRaw: imposee ?? doorVisibility),
-            visibilityUserIds: graine?.visibilityUserIds ?? [],
+            visibility: ComposerAudienceMemory.imposed(imposee, userIds: liste)
+                ?? ComposerAudienceMemory.seed(
+                    rememberedRaw: imposee == nil
+                        ? ComposerAudienceMemory.key(for: format).flatMap { defaults.string(forKey: $0) }
+                        : nil,
+                    doorRaw: imposee ?? doorVisibility),
+            visibilityUserIds: liste,
             text: graine?.text ?? "",
             language: graine?.language ?? DefaultComposerLanguage.resolve(),
             location: graine?.location

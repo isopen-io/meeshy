@@ -48,44 +48,4 @@ final class ComposerControlHitTargetTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(ComposerControlMetrics.columnSpacing, 0)
     }
 
-    func test_topBarControls_allRouteThroughTheHitTargetModifier() throws {
-        let topBar = try ComposerSourceGuard.source("StoryComposerView+TopBar.swift")
-        XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: ".frame(width: 36, height: 36)", in: topBar), 0,
-            "Les diamètres visuels passent par ComposerControlMetrics.visualDiameter."
-        )
-        XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: ".composerHitTarget()", in: topBar), 6,
-            "5 pastilles circulaires + la capsule d'audience."
-        )
-        XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: ".contentShape(Circle())", in: topBar), 0,
-            "`composerHitTarget` pose lui-même la contentShape."
-        )
-        XCTAssertTrue(topBar.contains("HStack(spacing: ComposerControlMetrics.groupSpacing)"))
-        XCTAssertTrue(topBar.contains("VStack(spacing: ComposerControlMetrics.columnSpacing)"))
-        XCTAssertTrue(
-            topBar.contains("AdaptiveGlassContainer(spacing: ComposerControlMetrics.glassBlendSpacing)"))
-    }
-
-    /// Les quatre contrôles hors header portés au minimum HIG — dont la poignée
-    /// de restauration, unique recours de l'écran quand le chrome est masqué, et
-    /// le grabber du band (21 pt de rendu avant fix). Compte EXACT et non `>= 1` :
-    /// un `>=` reste vert si une régression future EN RETIRE un sans en enlever
-    /// la trace du fichier (ex. un contrôle dupliqué puis un seul corrigé).
-    func test_offHeaderControls_routeThroughTheHitTargetModifier() throws {
-        let expectedOccurrences: [(path: String, count: Int)] = [
-            ("Controls/ComposerControlsLayer.swift", 1),  // fabRestoreHandle
-            ("Controls/CanvasLayerIndicator.swift", 1),   // chip(_:icon:label:), partagée par les 2 chips
-            ("StoryComposerView+Canvas.swift", 1),        // canvasZoomResetButton
-            ("Controls/ComposerBottomBand.swift", 1),     // grabber, partagé par les 2 branches (resize/décoratif)
-        ]
-        for (path, expected) in expectedOccurrences {
-            let code = try ComposerSourceGuard.source(path)
-            XCTAssertEqual(
-                ComposerSourceGuard.occurrences(of: ".composerHitTarget()", in: code), expected,
-                "\(path) : compte exact attendu (\(expected)) — un contrôle sous le minimum HIG ou une régression silencieuse."
-            )
-        }
-    }
 }

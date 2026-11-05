@@ -357,25 +357,22 @@ final class ComposerAutosaveTests: XCTestCase {
     // MARK: - Ouverture
 
     func test_decide_blankDoor_restores() {
-        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: false, isHydrated: false,
+        XCTAssertEqual(ComposerAutosaveOpening.decide(isHydrated: false,
                                                       resumesDraft: false, isSeeded: false,
                                                       opensOnMood: false), .restores)
     }
 
     func test_decide_seededDoor_preservesTheStoredDraft() {
-        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: false, isHydrated: false,
+        XCTAssertEqual(ComposerAutosaveOpening.decide(isHydrated: false,
                                                       resumesDraft: false, isSeeded: true,
                                                       opensOnMood: false), .preservesStoredDraft)
     }
 
-    func test_decide_atelierOrEditOrResume_isDisabled() {
-        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: true, isHydrated: false,
+    func test_decide_editOrResume_isDisabled() {
+        XCTAssertEqual(ComposerAutosaveOpening.decide(isHydrated: true,
                                                       resumesDraft: false, isSeeded: false,
                                                       opensOnMood: false), .disabled)
-        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: false, isHydrated: true,
-                                                      resumesDraft: false, isSeeded: false,
-                                                      opensOnMood: false), .disabled)
-        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: false, isHydrated: false,
+        XCTAssertEqual(ComposerAutosaveOpening.decide(isHydrated: false,
                                                       resumesDraft: true, isSeeded: false,
                                                       opensOnMood: false), .disabled)
     }

@@ -47,7 +47,7 @@ class FeedRailContractTest {
         val list = screen.substringAfter("FeedBody.POSTS -> LazyColumn(").substringBefore(") {")
         assertThat(list).doesNotContain("PaddingValues(MeeshySpacing.lg)")
         assertThat(list).doesNotContain("PaddingValues(horizontal")
-        assertThat(list).contains("contentPadding = PaddingValues(bottom = MeeshySpacing.lg)")
+        assertThat(list).contains("contentPadding = PaddingValues(bottom = FeedOverlayAppearance.BOTTOM_CLEARANCE_DP.dp)")
     }
 
     @Test

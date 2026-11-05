@@ -85,7 +85,6 @@ nonisolated enum ComposerPublishMenuRule {
     /// l'atelier ; `.storyScene` publie les unités d'histoire ; `.document`
     /// remet un brouillon ; `.unsupported` refuse en le disant.
     enum Route: Equatable {
-        case atelier
         case storyScene
         case document
         case unsupported
@@ -233,32 +232,23 @@ nonisolated enum ComposerPublishMenuRule {
         return armed.layout ?? ComposerMosaicChoice.fallback
     }
 
-    /// **La surface est celle d'OUVERTURE ; le canal suit le GESTE.**
-    ///
-    /// Sous l'atelier, un choix sans agencement presse la télécommande — c'est
-    /// l'atelier qui publie. « Post + agencement » part par le document, le
-    /// seul canal qui transporte `canvasV3.layout` ; `entries` ne l'offre que
-    /// si ce canal porte les fichiers.
-    static func route(surface: ComposerSurfaceKind, choice: ComposerPublishChoice) -> Route {
-        switch surface {
-        case .scene:
-            return choice.layout == nil ? .atelier : .document
-        case .document, .mood:
-            switch ComposerPublishChannel.channel(for: choice.format) {
-            case .scene: return .storyScene
-            case .document: return .document
-            case .unsupported: return .unsupported
-            }
+    /// **Le canal suit le FORMAT du geste**, quelle que soit la surface
+    /// (#15629) : la story part par ses unités d'histoire, le post et le réel
+    /// par le document — le seul canal qui transporte `canvasV3.layout`.
+    static func route(choice: ComposerPublishChoice) -> Route {
+        switch ComposerPublishChannel.channel(for: choice.format) {
+        case .scene: return .storyScene
+        case .document: return .document
+        case .unsupported: return .unsupported
         }
     }
 
     /// **Ce que la flèche PRESSE, format et réel compris** (#9476) — la route
     /// et ce qu'elle emporte, lus d'une règle pure plutôt qu'écrits dans le
     /// corps du meuble : c'est le témoin du chemin menu → `requestPublish` →
-    /// type publié. Un réel armé part en `.reel` par l'atelier ; une story
-    /// accompagnée de son réel part en `.story` avec `alsoAsReel`.
+    /// type publié. Une story accompagnée de son réel part en `.story` avec
+    /// `alsoAsReel`.
     enum Dispatch: Equatable {
-        case atelier(PostType, alsoAsReel: Bool)
         case storyScene(ComposerFormat, alsoAsReel: Bool)
         case document(ComposerPublishChoice)
         case unsupported
@@ -266,33 +256,22 @@ nonisolated enum ComposerPublishMenuRule {
 
     /// **Une requête par format** (#13920) : chaque publication du choix
     /// composite emprunte le canal de son format.
-    static func dispatches(surface: ComposerSurfaceKind, choice: ComposerPublishChoice) -> [Dispatch] {
-        choice.legs.map { dispatch(surface: surface, choice: $0) }
+    static func dispatches(choice: ComposerPublishChoice) -> [Dispatch] {
+        choice.legs.map { dispatch(choice: $0) }
     }
 
-    static func dispatch(surface: ComposerSurfaceKind, choice: ComposerPublishChoice) -> Dispatch {
-        switch route(surface: surface, choice: choice) {
-        case .atelier: return .atelier(choice.format.postType, alsoAsReel: choice.alsoAsReel)
+    /// **Le réel n'accompagne qu'une story** (#9476) : armé sur un autre
+    /// format, il ne part pas avec lui.
+    static func publishedAlsoAsReel(requested: Bool, served: PostType) -> Bool {
+        requested && served == .story
+    }
+
+    static func dispatch(choice: ComposerPublishChoice) -> Dispatch {
+        switch route(choice: choice) {
         case .storyScene: return .storyScene(choice.format, alsoAsReel: choice.alsoAsReel)
         case .document: return .document(choice)
         case .unsupported: return .unsupported
         }
-    }
-
-    /// **Le texte du post que l'ATELIER doit emporter** (#8473, retour porteur
-    /// 2026-09-28).
-    ///
-    /// L'option « Texte du post » écrit dans `documentText` dès que
-    /// « Post » est ARMÉ, même sur une scène ouverte en story. L'atelier, lui,
-    /// publie le contenu de la SLIDE : sans ce report, le texte tapé dans la
-    /// plaque de verre ne partait nulle part. Le canal document le porte déjà ;
-    /// un texte blanc ne remplace rien.
-    static func atelierCarriedPostText(route: Route,
-                                       choice: ComposerPublishChoice,
-                                       documentText: String) -> String? {
-        guard route == .atelier, choice.format == .post,
-              !documentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        return documentText
     }
 }
 
@@ -507,43 +486,22 @@ struct ComposerPublishRefusalTapZone: View {
     }
 }
 
-/// **Les publications d'atelier d'un même geste** (#13920). Une référence, et
-/// non un `@State` : le relais la lit dans la pile d'appel du geste qui l'a
-/// remplie, avant tout nouveau rendu.
-final class ComposerAtelierFanOut {
-    private var pending: [ComposerPublishChoice] = []
-
-    /// `nonisolated` : un deinit isolé au MainActor plante xctest au démontage
-    /// sur iOS 18.4+/26 (Swift #85663) — gate `check-ios-isolated-deinits.sh`, #13971.
-    nonisolated deinit {}
-
-    func hold(_ legs: [ComposerPublishChoice]) { pending = legs }
-
-    /// Ce que la remise de l'atelier publie — vidé à chaque lecture.
-    func take(served: PostType, alsoAsReel: Bool) -> [ComposerPublishChoice] {
-        defer { pending = [] }
-        return ComposerSeveralFormats.handOffs(pending: pending, served: served, alsoAsReel: alsoAsReel)
-    }
-}
-
 /// **Le plan d'un choix composite** (#13920) : chaque format, par le canal de
 /// son format (`ComposerPublishMenuRule.dispatch`), sous sa propre garde.
 nonisolated struct ComposerSeveralFormats: Equatable {
-    let atelier: [ComposerPublishChoice]
     let scene: [ComposerPublishChoice]
     let document: [ComposerPublishChoice]
     /// Les formats qui ne partiront pas — refusés par leur garde, ou sans canal.
     let refused: [ComposerFormat]
 
-    static func plan(_ choice: ComposerPublishChoice, surface: ComposerSurfaceKind,
+    static func plan(_ choice: ComposerPublishChoice,
                      accepts: (ComposerFormat) -> Bool) -> ComposerSeveralFormats {
         let routes = choice.legs.map { leg in
-            (leg: leg, dispatch: accepts(leg.format) ? ComposerPublishMenuRule.dispatch(surface: surface, choice: leg)
+            (leg: leg, dispatch: accepts(leg.format) ? ComposerPublishMenuRule.dispatch(choice: leg)
                                                      : .unsupported)
         }
         let canal = { (garde: (ComposerPublishMenuRule.Dispatch) -> Bool) in routes.filter { garde($0.dispatch) }.map(\.leg) }
         return ComposerSeveralFormats(
-            atelier: canal { if case .atelier = $0 { return true } else { return false } },
             scene: canal { if case .storyScene = $0 { return true } else { return false } },
             document: canal { if case .document = $0 { return true } else { return false } },
             refused: canal { $0 == .unsupported }.flatMap(\.formats)
@@ -564,8 +522,8 @@ nonisolated struct ComposerSeveralFormats: Equatable {
 
     /// **L'ordre d'un geste** : les publications DOCUMENT d'abord, une à une et
     /// attendues, pendant que le compositeur est encore là pour garder ce
-    /// qu'elles refusent ; puis celles qui partent sur-le-champ (la scène,
-    /// l'atelier), dont la porte peut refermer le compositeur. `sendNow` reçoit
+    /// qu'elles refusent ; puis celles qui partent sur-le-champ (la scène),
+    /// dont la porte peut refermer le compositeur. `sendNow` reçoit
     /// ce qui est déjà refusé, et rend ce qu'il refuse à son tour.
     @MainActor
     static func run(_ plan: ComposerSeveralFormats,
@@ -577,47 +535,6 @@ nonisolated struct ComposerSeveralFormats: Equatable {
             if !parti { refuses += leg.formats }
         }
         return refuses + sendNow(refuses)
-    }
-
-    /// **Ce que publie UNE remise de l'atelier** : la file du geste quand elle
-    /// commence par le type remis, sinon la remise seule, comme avant (#9476).
-    static func handOffs(pending: [ComposerPublishChoice], served: PostType,
-                         alsoAsReel: Bool) -> [ComposerPublishChoice] {
-        guard let premiere = pending.first, premiere.format.postType == served else {
-            return [ComposerPublishChoice(format: ComposerFormat(served), layout: nil, alsoAsReel: alsoAsReel)]
-        }
-        return pending
-    }
-
-    /// **Le texte du post part avec le post et le réel, jamais avec la story**
-    /// (R2) : seule la slide courante le porte, comme au chemin d'un seul format.
-    static func slides(_ slides: [StorySlide], for leg: ComposerPublishChoice,
-                       among legs: [ComposerPublishChoice], postText: String,
-                       currentSlideId: String) -> [StorySlide] {
-        guard legs.count > 1, ComposerFormatVariant.of(leg.format).writesPostText,
-              !postText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return slides }
-        return slides.map { slide in
-            guard slide.id == currentSlideId else { return slide }
-            var porteuse = slide
-            porteuse.content = postText
-            return porteuse
-        }
-    }
-
-    /// **La remise de l'atelier, distribuée** : chaque format reste sur
-    /// l'atelier ou est repris par le meuble (`staysOnAtelier`) ; ceux que la
-    /// publication refuse sont nommés quand le geste en portait plusieurs.
-    /// `true` dès qu'une publication est acceptée.
-    @MainActor
-    static func relay(_ remises: [ComposerPublishChoice], staysOnAtelier: (PostType) -> Bool,
-                      publish: (ComposerPublishChoice) -> Bool) -> Bool {
-        let issues = remises.map { remise -> Bool? in
-            staysOnAtelier(remise.format.postType) ? publish(remise) : nil
-        }
-        if remises.count > 1 {
-            sayRefused(zip(remises, issues).filter { $0.1 == false }.flatMap(\.0.formats))
-        }
-        return issues.contains(true)
     }
 
     @MainActor

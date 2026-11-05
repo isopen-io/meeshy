@@ -76,12 +76,12 @@ final class MeeshyComposerHostTypeDepthTests: XCTestCase {
         )
     }
 
-    /// **L'atelier n'est déplié que dans l'aiguillage.** C'est sous
-    /// `StoryComposerView` que la copie de valeur bouclait : tant qu'il reste
-    /// derrière `ComposerHostSurface`, la scène, la pile et la racine ne le
-    /// copient plus.
-    func test_lAtelier_nEstDepliéQueDansLAiguillage() throws {
-        for (nom, type) in Self.layers where nom != "ComposerHostSurface.Body" {
+    /// **Aucune couche ne déplie l'atelier** : c'est sous `StoryComposerView`
+    /// que la copie de valeur bouclait (#8387), et il a quitté le dépôt
+    /// (#15629). La garde reste pour qu'il n'y revienne pas, l'aiguillage
+    /// compris.
+    func test_lAtelier_nEstDepliéNullePart() throws {
+        for (nom, type) in Self.layers {
             let mesure = try Self.measure(type)
             XCTAssertFalse(
                 Self.mentionsAtelier(mesure.name),
@@ -99,8 +99,6 @@ final class MeeshyComposerHostTypeDepthTests: XCTestCase {
                       "Les feuilles des portails doivent rester un NŒUD sous la pile.")
         XCTAssertTrue(try Self.measure(ComposerHostSocleSlot.Body.self).name.contains("ComposerHostSocleRow"),
                       "L'encart doit monter la rangée du socle comme un NŒUD.")
-        XCTAssertTrue(Self.mentionsAtelier(try Self.measure(ComposerHostSurface.Body.self).name),
-                      "Le fusible : l'aiguillage lu est bien celui qui monte l'atelier.")
     }
 
     /// Le TYPE `StoryComposerView`, pas un préfixe : `StoryComposerViewModel`

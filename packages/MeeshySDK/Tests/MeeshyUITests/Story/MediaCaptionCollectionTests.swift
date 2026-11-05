@@ -70,7 +70,7 @@ final class MediaCaptionCollectionTests: XCTestCase {
 
         XCTAssertEqual(store.alt(for: "media-1"), "Une foule dense sous des parasols")
         XCTAssertEqual(store.caption(for: "media-1"), "Le marché de Yaoundé, 6 h")
-        XCTAssertEqual(store.mediaAltPayload(), ["media-1": "Une foule dense sous des parasols"])
+        XCTAssertEqual(store.payload(.alt), ["media-1": "Une foule dense sous des parasols"])
         XCTAssertEqual(store.mediaCaptionPayload(), ["media-1": "Le marché de Yaoundé, 6 h"])
     }
 
@@ -82,7 +82,7 @@ final class MediaCaptionCollectionTests: XCTestCase {
         store.setAlt("alt", for: "media-1")
         store.setCaption("légende", for: "media-1")
         store.remove(mediaId: "media-1")
-        XCTAssertNil(store.mediaAltPayload())
+        XCTAssertNil(store.payload(.alt))
         XCTAssertNil(store.mediaCaptionPayload())
     }
 
@@ -115,13 +115,6 @@ final class MediaCaptionCollectionTests: XCTestCase {
     }
 
     // MARK: - Hand-off de publication
-
-    func test_accessibilityHandoff_carriesCaption() {
-        let store = MediaAccessibilityStore()
-        store.setCaption("légende", for: "el-1")
-        let handoff = StoryComposerView.accessibilityHandoff(from: store)
-        XCTAssertEqual(handoff.mediaCaption, ["el-1": "légende"])
-    }
 
     /// `isEmpty` gouverne l'écriture du brouillon : une légende SEULE doit
     /// suffire à le rendre non vide, sans quoi elle serait perdue à la

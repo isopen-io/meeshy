@@ -276,8 +276,8 @@ nonisolated enum ComposerSocleCopy {
     /// | surface | ce que le gate exige | ce que la phrase dit |
     /// |---|---|---|
     /// | `.mood` | un emoji | « choisissez un emoji » |
-    /// | `.document` | du texte, un média, un lieu ou un ancrage | « ajoutez du texte, une photo ou un lieu » |
-    /// | `.scene` | de la matière posée sur la scène | « posez au moins un élément » |
+    /// | `.document`, story ou réel | de la matière posée sur la scène | « posez au moins un élément » |
+    /// | `.document`, post | du texte, un média, un lieu ou un ancrage | « ajoutez du texte, une photo ou un lieu » |
     ///
     /// > La phrase du document ÉNUMÈRE les trois voies parce que le gate est une
     /// > DISJONCTION : nommer le seul texte ferait croire qu'une photo ne suffit
@@ -289,8 +289,6 @@ nonisolated enum ComposerSocleCopy {
         case .mood:
             return String(localized: "a11y.status.publish.disabled.hint",
                           defaultValue: "Choisissez un emoji pour publier votre status", bundle: .main)
-        case .scene:
-            return sceneHint
         case .document:
             // **Le FORMAT tranche ici, pas la seule surface.** Une STORY et un RÉEL
             // montent `.document` par le routage (ils se composent dans le meuble) alors
@@ -723,8 +721,7 @@ nonisolated enum ComposerHistoryCopy {
 /// Un prédicat qui prendrait un `ComposerSurfaceKind` compilerait, serait
 /// testé, et ne pourrait JAMAIS rendre `true` là où il compte : la scène
 /// incrustée est un `ComposerSurfaceKind.document` **qui a une scène** — c'est
-/// `ComposerMountedView.scene` qui la nomme, et seul lui. Le `.scene` du KIND
-/// désigne l'ATELIER, une surface que ce meuble ne monte pas sur ce chemin.
+/// `ComposerMountedView.scene` qui la nomme, et seul lui.
 ///
 /// > **Deux énumérations dont un cas porte le même nom décrivent deux niveaux
 /// > différents, et le compilateur ne peut pas dire laquelle on voulait.** Le
@@ -737,7 +734,7 @@ nonisolated enum ComposerHistoryService {
     ///   kind de surface. C'est la présence de la scène qui décide, et elle
     ///   seule ; `ComposerMountedView` est le seul type qui la porte.
     static func servesHistory(on view: ComposerMountedView) -> Bool {
-        view == .scene || view == .atelier
+        view == .scene
     }
 }
 

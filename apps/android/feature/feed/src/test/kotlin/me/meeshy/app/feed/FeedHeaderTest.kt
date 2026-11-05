@@ -45,7 +45,7 @@ class FeedHeaderTest {
     }
 
     @Test
-    fun `la bande de stories epinglee est montee en accessoire du titre`() {
+    fun `au repos le titre tient la place et la bande de stories epinglee n'est pas montee`() {
         compose.setContent {
             MeeshyTheme {
                 FeedHeader(
@@ -57,6 +57,7 @@ class FeedHeaderTest {
             }
         }
 
-        compose.onNodeWithText("bande-stories").assertExists()
+        compose.onNodeWithText("bande-stories").assertDoesNotExist()
+        compose.onNodeWithText(string(R.string.feed_title)).assertIsDisplayed()
     }
 }

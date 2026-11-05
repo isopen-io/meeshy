@@ -161,17 +161,18 @@ final class ComposerMediaAltDoorTests: XCTestCase {
     /// > visités ?** ». La question précédente rendait UN site — celui qui
     /// > contenait déjà la greffe —, ce qui ressemblait à une réponse complète.
     ///
-    /// Le témoin compte plutôt qu'il ne nomme : une TROISIÈME bouche, ajoutée
-    /// demain sans greffe, le fera tomber sans qu'on ait à l'inscrire ici.
+    /// Le témoin compte plutôt qu'il ne nomme : une bouche ajoutée demain sans
+    /// greffe le fera tomber sans qu'on ait à l'inscrire ici. Depuis le #15629,
+    /// la remise à l'atelier a quitté le dépôt avec lui : il n'en reste qu'UNE.
     func test_chaqueRemiseDeLaCharge_passeParLaGreffe() throws {
         let unite = MyStoriesSourceCorpus.strippingComments(try AppSourceGuard.composerHostSource())
         let remises = occurrences(of: "onPublishAllInBackground(", in: unite)
         let greffes = occurrences(of: "accessibilityCarryingComposerCaptions(", in: unite)
             - occurrences(of: "func accessibilityCarryingComposerCaptions(", in: unite)
 
-        XCTAssertGreaterThan(remises, 1,
-                             "Le meuble remet la charge par plusieurs bouches — si ce compte "
-                             + "tombe à 1, relire quelle bouche a disparu avant de croire le vert.")
+        XCTAssertGreaterThanOrEqual(remises, 1,
+                                    "Le meuble remet la charge par au moins une bouche — si ce compte "
+                                    + "tombe à 0, relire quelle bouche a disparu avant de croire le vert.")
         XCTAssertEqual(greffes, remises,
                        """
                        \(remises) site(s) appellent `onPublishAllInBackground(` et \(greffes) \

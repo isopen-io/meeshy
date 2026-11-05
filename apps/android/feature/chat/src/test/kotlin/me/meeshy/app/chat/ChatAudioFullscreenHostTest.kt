@@ -14,6 +14,7 @@ import me.meeshy.sdk.media.MediaCacheDirs
 import me.meeshy.sdk.media.TypedMediaCache
 import me.meeshy.sdk.media.UploadedAttachmentIds
 import me.meeshy.sdk.model.media.MediaPresentation
+import me.meeshy.sdk.model.playback.MediaResumeMerge.StampedPosition
 import me.meeshy.sdk.playback.ConversationAudioCoordinator
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import org.junit.After
@@ -44,7 +45,7 @@ class ChatAudioFullscreenHostTest {
         Dispatchers.resetMain()
     }
 
-    private class Rig {
+    private class Rig(resting: Map<String, StampedPosition> = emptyMap()) {
         val engine = FakeVoiceEngine()
         val coordinator = ConversationAudioCoordinator(engine, UnconfinedTestDispatcher())
         private val root = Files.createTempDirectory("chat-audio-fullscreen").toFile()
@@ -54,6 +55,7 @@ class ChatAudioFullscreenHostTest {
             UploadedAttachmentIds(),
             TypedMediaCache(MediaCacheDirs(root, root)),
             UnconfinedTestDispatcher(),
+            ChatRestingPositions { id -> resting[id] },
         )
     }
 
@@ -121,6 +123,27 @@ class ChatAudioFullscreenHostTest {
         player.start(pages[1], emptyList())
         assertThat(rig.engine.played).containsExactly("a", "b").inOrder()
         assertThat(rig.coordinator.snapshot.value.context?.conversationName).isEqualTo("Famille")
+    }
+
+    @Test
+    fun `une page revisitee repart de la position memorisee par l appareil, jamais d une position hors de sa piste`() {
+        val quoting = voiceMessage("m3", "2026-11-04T08:02:00Z").copy(replyToId = "q1", replyToAudio = voice("q", seconds = 20))
+        val rig = Rig(
+            resting = mapOf(
+                "a" to StampedPosition(4_000L, 1L),
+                "b" to StampedPosition(12_000L, 1L),
+                "q" to StampedPosition(15_000L, 1L),
+                "z" to StampedPosition(3_000L, 1L),
+            ),
+        )
+        rig.viewModel.bind(thread.copy(messages = thread.messages + quoting))
+        val player = rig.viewModel.fullscreenPlayer()
+
+        assertThat(player.restingPositionMs("a")).isEqualTo(4_000L)
+        assertThat(player.restingPositionMs("b")).isNull()
+        assertThat(player.restingPositionMs("c")).isNull()
+        assertThat(player.restingPositionMs("q")).isEqualTo(15_000L)
+        assertThat(player.restingPositionMs("z")).isNull()
     }
 
     @Test
