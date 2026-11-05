@@ -117,6 +117,38 @@ struct StoryAudioChipTemplate {
 
     /// Le crédit en une bande à sa largeur NATURELLE : la vue le fait défiler
     /// quand il déborde, l'export aussi — il ne se tronque donc jamais.
+    /// Le chrono « M:SS » d'une puce, rasterisé une fois par libellé (#16294) :
+    /// il change une fois par seconde, l'export en peint trente.
+    struct ChronoKey: Hashable {
+        let label: String
+        let muted: Bool
+        let unitMilli: Int
+        let scaleCenti: Int
+    }
+
+    struct Chrono {
+        let image: CGImage?
+        let size: CGSize
+    }
+
+    @MainActor
+    static func chrono(_ label: String, unit: CGFloat, muted: Bool, deviceScale: CGFloat) -> Chrono {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = deviceScale
+        format.opaque = false
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.monospacedDigitSystemFont(ofSize: 12 * unit, weight: .semibold),
+            .foregroundColor: muted ? mutedIcon : creditColor
+        ]
+        let measured = (label as NSString).size(withAttributes: attributes)
+        let size = CGSize(width: ceil(measured.width), height: ceil(measured.height))
+        guard size.width > 0, size.height > 0 else { return Chrono(image: nil, size: .zero) }
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            (label as NSString).draw(at: .zero, withAttributes: attributes)
+        }
+        return Chrono(image: image.cgImage, size: size)
+    }
+
     @MainActor
     private static func credit(_ text: String, unit: CGFloat,
                                format: UIGraphicsImageRendererFormat) -> (image: CGImage?, width: CGFloat) {
