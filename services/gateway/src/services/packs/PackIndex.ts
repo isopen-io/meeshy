@@ -40,6 +40,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parsePackIndex, type PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
 import type { PackAssetRef, PackDomain } from '@meeshy/shared/types/content-pack';
+import { MEESHY_PUBLISHER, type PackPublisherRef } from '@meeshy/shared/types/pack-publisher';
 import { parseAppearancePackContract } from '@meeshy/shared/types/appearance-design';
 import { parseAvatarRingPackContract } from '@meeshy/shared/types/avatar-ring-design';
 import { parseBannerFramePackContract } from '@meeshy/shared/types/banner-frame-design';
@@ -59,9 +60,18 @@ export type PackIndex = {
   readonly itemCount: (entry: PackIndexEntry) => number;
   /** Les clés des modèles que le contrat lu et vérifié d'un pack de fonds, de bannières ou de contours déclare (vide sinon). */
   readonly itemKeys: (entry: PackIndexEntry) => readonly string[];
+  /**
+   * L'éditeur d'une entrée (#16274). Tout pack du dépôt est publié par commit et
+   * déploiement, donc par Meeshy : l'index le lui ATTRIBUE, sans qu'aucun
+   * `packs.json` ne porte le champ — les registres restent intacts.
+   */
+  readonly publisherOf: (entry: PackIndexEntry) => PackPublisherRef;
   /** Ce qui n'a pas été lu : entrées refusées et fichiers illisibles — à journaliser au démarrage. */
   readonly rejected: number;
 };
+
+/** Les packs du dépôt appartiennent à l'éditeur Meeshy, celui du compte officiel (#16274). */
+const repositoryPublisher = (): PackPublisherRef => MEESHY_PUBLISHER;
 
 export type PackIndexSources = {
   /** Le contenu brut de chaque registre (déjà `JSON.parse`), un par fichier. */
@@ -147,6 +157,7 @@ export function buildPackIndex(sources: PackIndexSources): PackIndex {
     isServedAsset: (src) => ASSET_SRC.test(src) && served.has(src),
     itemCount: (entry) => counts.get(`${entry.domain}.${entry.slug}`) ?? 0,
     itemKeys: (entry) => keys.get(`${entry.domain}.${entry.slug}`) ?? [],
+    publisherOf: repositoryPublisher,
     rejected: parsed.reduce((sum, { rejected }) => sum + rejected, 0) + (all.length - entries.length),
   };
 }

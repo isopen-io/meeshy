@@ -22,6 +22,8 @@ struct ConversationBackgroundView: View {
     /// Suivi en direct par la politique média (#9880) : l'économie d'énergie ou une chaleur sérieuse fige la couche Lottie sur-le-champ.
     @State private var decorationSuspended = !MediaPolicyMonitor.shared.policy.animatesDecoration
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    /// #16264 — le fond d'un pack non embarqué se repeint dès son contrat arrivé.
+    @StateObject private var servedAppearance = ServedAppearanceRefresh()
 
     init(
         conversationId: String,
@@ -55,6 +57,13 @@ struct ConversationBackgroundView: View {
             .onReceive(MediaPolicyMonitor.shared.$policy.dropFirst().receive(on: DispatchQueue.main)) { policy in
                 decorationSuspended = !policy.animatesDecoration
             }
+            .task(id: appearance?.background) { await loadServedWallpaper() }
+    }
+
+    private func loadServedWallpaper() async {
+        guard ConversationBackgroundResolution.needsServedWallpaper(appearance),
+              case .design(let pack, _)? = appearance?.background else { return }
+        await ServedAppearanceStore.shared.prepare(domain: .wallpaper, slug: pack)
     }
 
     @ViewBuilder private var content: some View {

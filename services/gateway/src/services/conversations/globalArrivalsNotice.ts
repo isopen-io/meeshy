@@ -36,7 +36,16 @@ export type GlobalArrivalInput = {
   /** `Participant.id` de l'arrivant — il signe la ligne quand il l'ouvre. */
   readonly participantId: string;
   readonly displayName: string;
+  /** Le pseudo du compte (#16338) — la mention que « dis-leur salut » écrit. */
+  readonly username?: string;
 };
+
+/** L'arrivant tel que la ligne le garde : le pseudo voyage s'il est connu. */
+const arrivalOf = (input: GlobalArrivalInput) => ({
+  participantId: input.participantId,
+  displayName: input.displayName,
+  ...(input.username === undefined || input.username === '' ? {} : { username: input.username }),
+});
 
 type OpenLine = { readonly id: string; readonly notice: ArrivalsNoticeMetadata };
 
@@ -76,10 +85,7 @@ async function findOpenLine(deps: GlobalArrivalsDeps, conversationId: string, no
 }
 
 async function openNewLine(deps: GlobalArrivalsDeps, input: GlobalArrivalInput, now: Date): Promise<unknown | null> {
-  const notice = startArrivalsNotice(
-    { participantId: input.participantId, displayName: input.displayName },
-    now.toISOString(),
-  );
+  const notice = startArrivalsNotice(arrivalOf(input), now.toISOString());
   return postSystemNotice(
     { prisma: deps.prisma, broadcast: deps.broadcast },
     {
@@ -97,7 +103,7 @@ async function extendLine(
   line: OpenLine,
   now: Date,
 ): Promise<unknown | null> {
-  const notice = withArrival(line.notice, { participantId: input.participantId, displayName: input.displayName });
+  const notice = withArrival(line.notice, arrivalOf(input));
   if (notice === line.notice) return null;
 
   let updated: unknown;

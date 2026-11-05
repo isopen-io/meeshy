@@ -1203,6 +1203,19 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       expect(fsMock.promises.writeFile).toHaveBeenCalled();
     });
 
+    it('#16340 — a text-only translation keeps its text and announces no track', async () => {
+      const events: Array<{ translatedAudio: { url: string; translatedText: string } }> = [];
+      svc.on('audioTranslationReady', (e) => events.push(e as (typeof events)[number]));
+      mockZmqClient.emit('audioProcessCompleted', makeAudioProcessCompletedData({
+        translatedAudios: [makeTranslatedAudio({ targetLanguage: 'en', translatedText: 'Hello there', textOnly: true })]
+      }));
+      await flushAsync(5);
+      const saved = (prisma.messageAttachment.update.mock.calls.at(-1)?.[0] as { data: { translations: Record<string, { url?: string; transcription: string }> } }).data.translations.en;
+      expect(saved).toMatchObject({ transcription: 'Hello there' });
+      expect(saved.url).toBeUndefined();
+      expect(events.map((e) => e.translatedAudio.url)).toEqual(['']);
+    });
+
     it('saves base64 audio file when audioDataBase64 is present (legacy)', async () => {
       const fsMock = require('fs');
       fsMock.promises.writeFile.mockResolvedValue(undefined);

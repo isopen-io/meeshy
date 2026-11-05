@@ -130,6 +130,27 @@ describe('Arrivées regroupées dans Meeshy Global (#7740)', () => {
       expect(parseArrivalsNotice(raw)).toBeNull();
     });
 
+    it('garde le pseudo d’un arrivant (#16338) — le salut l’écrit en mention', () => {
+      const notice = withArrival(
+        startArrivalsNotice({ participantId: 'p-a', displayName: 'Aïcha', username: 'aicha' }, at),
+        { participantId: 'p-t', displayName: 'Tom', username: 'tom_b' },
+      );
+      expect(parseArrivalsNotice(JSON.parse(JSON.stringify(notice)))?.arrivals).toEqual([
+        { participantId: 'p-t', displayName: 'Tom', username: 'tom_b' },
+        { participantId: 'p-a', displayName: 'Aïcha', username: 'aicha' },
+      ]);
+    });
+
+    it('une ligne écrite avant le pseudo se relit sans lui, et un pseudo vide est écarté', () => {
+      const parsed = parseArrivalsNotice({
+        kind: ARRIVALS_NOTICE_KIND,
+        arrivals: [arrival(1), { ...arrival(2), username: '' }],
+        count: 2,
+        windowStartedAt: at,
+      });
+      expect(parsed?.arrivals).toEqual([arrival(1), arrival(2)]);
+    });
+
     it('écarte un arrivant malformé sans perdre les autres', () => {
       const parsed = parseArrivalsNotice({
         kind: ARRIVALS_NOTICE_KIND,

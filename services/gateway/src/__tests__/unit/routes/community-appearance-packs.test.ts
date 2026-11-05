@@ -62,8 +62,8 @@ const wallpaperPack = (slug = 'dunes-pack', extra: Record<string, unknown> = {})
   ...extra,
 });
 
-async function app() {
-  const db = appearancePrisma();
+async function app(accounts: Parameters<typeof appearancePrisma>[0] = {}) {
+  const db = appearancePrisma(accounts);
   const server: FastifyInstance = Fastify({ logger: false });
   server.decorate('prisma', db.prisma as never);
   server.decorate('socketIOHandler', { io: { to: () => ({ emit: () => undefined }) } } as never);
@@ -311,5 +311,36 @@ describe('relecture du lot (#10709) : ce que la boutique et la modération voien
     const etag = (await server.inject({ method: 'GET', url })).headers.etag as string;
     const again = await server.inject({ method: 'GET', url, headers: { 'if-none-match': etag } });
     expect(again.statusCode).toBe(304);
+  });
+});
+
+describe('l’éditeur d’un pack d’apparence (#16274)', () => {
+  it('rattache la proposition à l’éditeur du compte connecté et le sert dans la boutique une fois publié', async () => {
+    const { server } = await app({ [AUTHOR]: { username: 'awa_secret', emailVerifiedAt: new Date('2026-01-01T00:00:00Z') } });
+    const created = await submit(server, wallpaperPack());
+    expect(created.json().data.publisher).toEqual({ slug: 'awa', name: 'Awa', verified: false, official: false });
+    await review(server, 'dunes-pack', { decision: 'approve' });
+    const shop = (await get(server, '/packs/wallpaper')).json().data as { slug: string; publisher: unknown }[];
+    expect(shop.find((pack) => pack.slug === 'dunes-pack')?.publisher).toEqual({ slug: 'awa', name: 'Awa', verified: false, official: false });
+    expect(shop.find((pack) => pack.slug === 'essentiels')?.publisher).toEqual({ slug: 'meeshy', name: 'Meeshy', verified: true, official: true });
+    const body = JSON.stringify(shop);
+    expect(body).not.toContain(AUTHOR);
+    expect(body).not.toContain('awa_secret');
+  });
+
+  it('refuse un compte non vérifié : 403 PUBLISHER_ACCOUNT_UNVERIFIED, rien n’est créé', async () => {
+    const { server, db } = await app({ [AUTHOR]: { username: 'awa' } });
+    const res = await submit(server, wallpaperPack());
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PUBLISHER_ACCOUNT_UNVERIFIED');
+    expect(db.communityRows).toEqual([]);
+  });
+
+  it('refuse l’éditeur d’un autre compte : 403 PUBLISHER_NOT_OWNER', async () => {
+    const { server } = await app();
+    await submit(server, wallpaperPack('autre-pack', { author: 'Binta Studio' }), 'wallpaper', BUYER);
+    const res = await submit(server, wallpaperPack('vole', { publisher: 'binta-studio' }));
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PUBLISHER_NOT_OWNER');
   });
 });

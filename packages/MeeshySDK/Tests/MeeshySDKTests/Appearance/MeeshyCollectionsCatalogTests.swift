@@ -7,8 +7,15 @@ final class MeeshyCollectionsCatalogTests: XCTestCase {
 
     private static let languages = ["fr", "en", "es", "pt", "de", "it", "ar"]
 
+    /// #16270, #16271 — les offres de Noël et du Nouvel An se posent APRÈS les collections Meeshy.
+    private static let seasonal: Set<String> = [
+        "noel-bannieres", "noel-contours-fixes", "noel-cadres-fixes",
+        "nouvel-an-contours", "nouvel-an-contours-vifs", "nouvel-an-images", "nouvel-an-images-vives",
+        "nouvel-an-cadres", "nouvel-an-cadres-vifs", "nouvel-an-fonds", "nouvel-an-fonds-vifs",
+    ]
+
     func test_ringCatalog_endsWithTheTwoMeeshyCollections_fixedThenAnimated_withinAModestReach() throws {
-        let packs = AvatarRingCatalog.shared.packs
+        let packs = AvatarRingCatalog.shared.packs.filter { !Self.seasonal.contains($0.slug) }
         XCTAssertEqual(packs.suffix(2).map(\.slug), ["meeshy-signature", "meeshy-vivants"])
         let signature = try XCTUnwrap(packs.first { $0.slug == "meeshy-signature" })
         let vivants = try XCTUnwrap(packs.first { $0.slug == "meeshy-vivants" })
@@ -35,7 +42,7 @@ final class MeeshyCollectionsCatalogTests: XCTestCase {
     }
 
     func test_wallpaperCatalog_endsWithTheTwoMeeshyCollections_andEachAnimatedOneCarriesItsFilm() throws {
-        let packs = AppearanceCatalog.shared.wallpaperPacks
+        let packs = AppearanceCatalog.shared.wallpaperPacks.filter { !Self.seasonal.contains($0.slug) }
         XCTAssertEqual(packs.suffix(2).map(\.slug), ["meeshy-fonds", "meeshy-fonds-vivants"])
         let fixed = try XCTUnwrap(packs.first { $0.slug == "meeshy-fonds" })
         let animated = try XCTUnwrap(packs.first { $0.slug == "meeshy-fonds-vivants" })
@@ -53,7 +60,7 @@ final class MeeshyCollectionsCatalogTests: XCTestCase {
     }
 
     func test_frameCatalog_endsWithTheTwoMeeshyCollections_andOnlyTheAnimatedOneDeclaresMotion() throws {
-        let packs = BannerFrameCatalog.shared.framePacks
+        let packs = BannerFrameCatalog.shared.framePacks.filter { !Self.seasonal.contains($0.slug) }
         XCTAssertEqual(packs.suffix(2).map(\.slug), ["meeshy-bordures", "meeshy-bordures-vivantes"])
         let fixed = try XCTUnwrap(packs.first { $0.slug == "meeshy-bordures" })
         let animated = try XCTUnwrap(packs.first { $0.slug == "meeshy-bordures-vivantes" })

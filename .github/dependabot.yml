@@ -184,6 +184,12 @@ updates:
       # Docker translator (cf. #1539 → CI Docker #2074). Rester sur 202412.
       - dependency-name: "espnet"
       - dependency-name: "espnet-model-zoo"
+      # speechbrain 1.1.2 exige torch>=2.7.1 : il fait monter l'image à torch 2.12 /
+      # torchaudio 2.11, malgré le pin torch==2.6.0 du Dockerfile (et chatterbox-tts
+      # qui l'exige). La synthèse TTS échouait à chaque vocal, aucune traduction
+      # audio ne partait (#16340). Rester sous 1.1.2 tant que torch reste à 2.6.0.
+      - dependency-name: "speechbrain"
+        versions: [">=1.1.2"]
       # grpcio-tools/grpcio-reflection 1.76.0 (pin documenté dans requirements.txt)
       # plafonnent protobuf <7.0.0 ; un bump 7.x casse l'install du translator
       - dependency-name: "protobuf"

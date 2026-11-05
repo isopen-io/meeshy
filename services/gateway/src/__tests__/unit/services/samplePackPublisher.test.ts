@@ -19,6 +19,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { stickerPacksRoutes } from '../../../routes/sticker-packs';
 import { StickerPacks } from '../../../services/stickers/StickerPacks';
+import { PackPublishers } from '../../../services/packs/PackPublishers';
 import {
   SAMPLE_STICKER_PACK_SLUG,
   assertSamplePublishTarget,
@@ -32,6 +33,7 @@ const ACCOUNTS: Record<string, { id: string; role: string }> = {
   recette: { id: '68b0000000000000000000a1', role: 'USER' },
   modo: { id: '68b0000000000000000000c3', role: 'MODERATOR' },
 };
+const OFFICIAL_SUBMITTER = ACCOUNTS.recette.id;
 
 async function liveGateway() {
   const db = memoryPrisma();
@@ -50,7 +52,7 @@ async function liveGateway() {
     return { success: true, data: { token: username } };
   });
   const files = { write: async () => undefined, remove: async () => undefined };
-  await app.register(stickerPacksRoutes, { prefix: '/api/v1/sticker-packs', packs: new StickerPacks({ prisma: db.prisma, files }) });
+  await app.register(stickerPacksRoutes, { prefix: '/api/v1/sticker-packs', packs: new StickerPacks({ prisma: db.prisma, files, publishers: new PackPublishers({ prisma: db.prisma, officialAccountId: OFFICIAL_SUBMITTER }) }) });
   await app.listen({ port: 0, host: '127.0.0.1' });
   const address = app.server.address();
   const port = typeof address === 'object' && address !== null ? address.port : 0;

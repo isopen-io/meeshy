@@ -383,8 +383,33 @@ struct CommentMediaView: View {
         return shared
     }
 
+    /// **Sous un post connu, la suite du POST** (#16322) : ses médias d'abord,
+    /// puis ceux des commentaires dans l'ordre du fil, avec la pellicule, posée
+    /// sur le média touché — la même galerie que celle du post lui-même.
+    /// « Répondre » y désigne la citation comme sur le post, puis referme.
     @ViewBuilder
     private var fullscreenViewer: some View {
+        switch CommentMediaFullscreenRoute.resolve(post: gallery?.post) {
+        case .postSeries:
+            if let gallery, let post = gallery.post {
+                SocialMediaGalleryContent(
+                    post: post,
+                    startMediaId: media.id,
+                    accentColor: accentColor,
+                    thread: gallery.thread(),
+                    onQuote: { citation in
+                        CommentQuotationStore.shared.designate(citation, for: post.id)
+                        showFullscreen = false
+                    }
+                )
+            }
+        case .commentsOnly:
+            commentsOnlyViewer
+        }
+    }
+
+    @ViewBuilder
+    private var commentsOnlyViewer: some View {
         let snapshot = fullscreenSnapshot
         ConversationMediaGalleryView(
             allAttachments: snapshot.attachments,

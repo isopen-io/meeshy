@@ -28,6 +28,8 @@ struct ProfileView: View {
     @State private var showRegionalLanguagePicker = false
     @State private var showCustomLanguagePicker = false
     @State private var pendingRequestCount: Int = 0
+    /// #16264 — mon décor d'un pack non embarqué se repeint dès son contrat arrivé.
+    @StateObject private var servedAppearance = ServedAppearanceRefresh()
 
     // Avatar
     @State private var avatarItem: PhotosPickerItem?
@@ -335,6 +337,7 @@ struct ProfileView: View {
 
     private var bannerImage: some View {
         ProfileOwnBanner(user: user, accentColor: user?.profileAccentHex ?? accentColor, isDark: theme.mode.isDark)
+            .task(id: user?.profileDecor) { await servedAppearance.load(decor: user?.profileDecor) }
     }
 
     // MARK: - Identity Section

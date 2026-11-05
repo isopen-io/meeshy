@@ -93,7 +93,7 @@ private fun StoryOptionsMenuItem(
             }
         }
         StoryOptionsMenuEntry.ExportVideo -> StoryVideoExportMenuEntries(onPick = { mode -> act { videoExport.start(mode) } })
-        StoryOptionsMenuEntry.Compose -> StoryMenuRow(R.string.story_viewer_compose, MeeshyIcons.MagicWand) {
+        StoryOptionsMenuEntry.Compose -> StoryMenuRow(R.string.story_viewer_compose, MeeshyIcons.ComposeNew) {
             act { storyId?.let { id -> actions.onComposeStory?.invoke(id) } }
         }
         StoryOptionsMenuEntry.Report -> StoryMenuRow(R.string.stories_action_report, MeeshyIcons.Warning) { act { chrome.showReportDialog = true } }

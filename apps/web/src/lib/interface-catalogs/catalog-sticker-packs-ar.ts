@@ -91,6 +91,8 @@ const arStickerPacks = {
   'packs.frames.yourAtmosphere': "أجواؤك",
   'packs.frames.atmosphereKept': "تحمل هذه الحزمة أجواءك، لذا تبقى مثبّتة. غيّر الأجواء لإزالتها.",
   'packs.frames.atmosphereQueued': "غير متصل: سيُرسل اختيارك عند عودة الاتصال.",
+  'packs.sheet.open': "عرض بطاقة الحزمة {name}",
+  'packs.preview.open': "عرض {name} بملء الشاشة",
 } satisfies StickerPacksCatalog;
 
 export default arStickerPacks;

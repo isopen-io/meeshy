@@ -6,13 +6,19 @@
  *
  * FAÇADE MINCE : la logique vit dans `src/services/packs/samplePackPublisher.ts`.
  *
- * Les identifiants viennent de l'environnement et ne sont jamais affichés :
- *   SUBMITTER_USER / SUBMITTER_PASSWORD   le compte qui propose (défaut : DEMO_USER / DEMO_PASSWORD)
- *   ADMIN_USER / ADMIN_PASSWORD           un compte qui a `canModerateContent` (MODERATOR, ADMIN, BIGBOSS)
+ * Le pack est signé « Meeshy », identité RÉSERVÉE au compte officiel (#16274) :
+ * il se propose donc depuis le compte désigné par `MEESHY_OFFICIAL_ACCOUNT_ID`
+ * de la passerelle — « Meeshy Sama » (`meeshy`, BIGBOSS). Tout autre compte
+ * reçoit 403 PUBLISHER_RESERVED.
+ *
+ * Les identifiants viennent de l'environnement, ne sont jamais affichés et ne
+ * vivent jamais dans le dépôt :
+ *   OFFICIAL_USER / OFFICIAL_PASSWORD     le compte officiel, qui propose
+ *   ADMIN_USER / ADMIN_PASSWORD           un compte qui a `canModerateContent` (défaut : le compte officiel, BIGBOSS)
  *
  * Usage :
  *   cd services/gateway
- *   BASE_URL=https://gate.staging.meeshy.me ADMIN_USER=… ADMIN_PASSWORD=… bunx tsx scripts/publish-sample-sticker-pack.ts
+ *   BASE_URL=https://gate.staging.meeshy.me OFFICIAL_USER=… OFFICIAL_PASSWORD=… bunx tsx scripts/publish-sample-sticker-pack.ts
  */
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -36,8 +42,8 @@ async function main(): Promise<void> {
     baseUrl,
     fetch,
     readAsset: (file) => readFile(join(MEE_STICKERS, file)),
-    submitter: credentials('SUBMITTER_USER', 'SUBMITTER_PASSWORD', ['DEMO_USER', 'DEMO_PASSWORD']),
-    reviewer: credentials('ADMIN_USER', 'ADMIN_PASSWORD'),
+    submitter: credentials('OFFICIAL_USER', 'OFFICIAL_PASSWORD'),
+    reviewer: credentials('ADMIN_USER', 'ADMIN_PASSWORD', ['OFFICIAL_USER', 'OFFICIAL_PASSWORD']),
   });
   console.log(outcome === 'published' ? '✓ Pack « exemple-meeshy » proposé et publié.' : '✓ Pack « exemple-meeshy » déjà publié : rien à faire.');
 }

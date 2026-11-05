@@ -15,6 +15,7 @@ import { ASSORTED_BANNER_PACKS } from '../scripts/assorted-banners/packs';
 import { CHRISTMAS_RING_PACKS } from '../scripts/christmas/packs';
 import { MEESHY_COLLECTION_SLUGS } from '../scripts/compose-meeshy-collections';
 import { upsertPacks } from '../scripts/meeshy-collections/source-packs';
+import { SEASONAL_ADDED_SLUGS } from '../scripts/seasonal/slugs';
 
 /**
  * #15553 — chaque décoration d'avatar illustrée a sa BANNIÈRE ASSORTIE (même motif, même palette, même nom
@@ -101,7 +102,7 @@ describe('chaque décoration d’avatar illustrée a sa bannière assortie (#155
     const expected = JSON.parse(JSON.stringify(assortedBannerPacks(framePacks))) as readonly Pack<Frame>[];
     const served = framePacks.filter((pack) => ASSORTED_SLUGS.includes(pack.slug));
     expect(served).toEqual(expected);
-    expect(framePacks.slice(-2).map((pack) => pack.slug)).toEqual(['meeshy-bordures', 'meeshy-bordures-vivantes']);
+    expect(framePacks.filter((pack) => !SEASONAL_ADDED_SLUGS.includes(pack.slug)).slice(-2).map((pack) => pack.slug)).toEqual(['meeshy-bordures', 'meeshy-bordures-vivantes']);
     expect(upsertPacks(text('banner-frames/frames.json'), expected)).toBe(text('banner-frames/frames.json'));
   });
 

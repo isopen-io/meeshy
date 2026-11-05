@@ -104,7 +104,7 @@ extension ShareSheetView {
             close()
             actions.onCompose?()
         } label: {
-            Label(ShareSheetCopy.studio, systemImage: "wand.and.stars")
+            Label(ShareSheetCopy.studio, systemImage: FullscreenChromeSymbol.compose)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(accent)
                 .padding(.horizontal, MeeshySpacing.mdPlus)

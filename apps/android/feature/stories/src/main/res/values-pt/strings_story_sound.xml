@@ -2,4 +2,5 @@
 <resources>
     <string name="story_audio_chip_playing">Tocando</string>
     <string name="story_audio_chip_muted">Silenciado</string>
+    <string name="story_audio_chip_a11y">%1$s, dura %2$s</string>
 </resources>

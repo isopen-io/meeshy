@@ -230,7 +230,12 @@ ffmpeg-python==0.2.0
 pyannote.audio==3.4.0  # ✅ ACTIVÉ - Compatible torch 2.6.0 (4.0+ exige torch>=2.8.0)
 
 # Priorité 2: SpeechBrain - Alternative à pyannote (SANS token HuggingFace requis)
-speechbrain==1.1.2  # ✅ ACTIVÉ - Fallback si pyannote indisponible
+# NE PAS BUMPER vers 1.1.2+ : speechbrain 1.1.2 exige torch>=2.7.1, ce qui fait
+# monter l'image à torch 2.12 / torchaudio 2.11 malgré le pin torch==2.6.0 du
+# Dockerfile (chatterbox-tts 0.1.6 exige torch==2.6.0). Mesuré sur staging le
+# 2026-11-05 : toutes les synthèses TTS échouaient, aucun vocal ne recevait de
+# traduction, quel que soit le client émetteur (#16340). 1.1.1 exige torch>=2.1.0.
+speechbrain==1.1.1  # ✅ ACTIVÉ - Fallback si pyannote indisponible
 scikit-learn==1.7.2  # Requis pour clustering et nettoyage (DiarizationCleaner)
 # librosa déjà inclus dans requirements.txt via chatterbox-tts
 

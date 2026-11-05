@@ -80,7 +80,7 @@ export type StoryOwnerRail = {
   readonly viewers: CommentsSheetHost;
   /** Ce que le lecteur SAIT faire pour le plan auteur ; la loi figée
    * (`showsViews`/`showsExport`) décide, elle, de l'appartenance. */
-  readonly handlers: Pick<StoryActionRailHandlers, 'views' | 'share' | 'save'>;
+  readonly handlers: Pick<StoryActionRailHandlers, 'views' | 'imager' | 'share' | 'save'>;
   /** « Imager » (#13881) — le menu « … » du lecteur l'offre ; absent ⇒ rien à composer, ou aucune porte de fichier. */
   readonly imager?: () => void;
   /** L'export en cours de LA story affichée — l'instantané du store. */
@@ -225,9 +225,11 @@ export function useStoryOwnerRail(params: {
       }).then((key) => announce(translate(language, key)));
     };
     if (composedSubject === null) return { handlers: { views, save } };
+    /* La baguette du rail (#16333) et l'entrée « Imager » du menu « … » : UN geste. */
+    const imager = launch(composedSubject, 'imager');
     return {
-      handlers: { views, share: launch(composedSubject, 'share'), save },
-      imager: launch(composedSubject, 'imager'),
+      handlers: { views, imager, share: launch(composedSubject, 'share'), save },
+      imager,
     };
   }, [story, exportMedia, sceneSubject, composedSubject, sceneExporter, launch, preferredLanguages, host, gallerySaver, online, language, announce, viewers.open]);
 

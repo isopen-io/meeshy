@@ -18,20 +18,25 @@ public struct ArrivalsNoticeMetadata: Codable, Sendable, Equatable {
     public struct Arrival: Codable, Sendable, Equatable {
         public let participantId: String
         public let displayName: String
+        /// Le pseudo à mentionner pour le saluer (#16338) — optionnel : les
+        /// lignes écrites avant lui ne le portent pas.
+        public let username: String?
 
-        public init(participantId: String, displayName: String) {
+        public init(participantId: String, displayName: String, username: String? = nil) {
             self.participantId = participantId
             self.displayName = displayName
+            self.username = username
         }
 
         private enum CodingKeys: String, CodingKey {
-            case participantId, displayName
+            case participantId, displayName, username
         }
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             participantId = try c.decode(String.self, forKey: .participantId)
             displayName = try c.decode(String.self, forKey: .displayName)
+            username = try? c.decodeIfPresent(String.self, forKey: .username)
             guard !participantId.isEmpty, !displayName.isEmpty else {
                 throw DecodingError.dataCorruptedError(forKey: .displayName, in: c, debugDescription: "arrivant incomplet")
             }
@@ -41,6 +46,7 @@ public struct ArrivalsNoticeMetadata: Codable, Sendable, Equatable {
             var c = encoder.container(keyedBy: CodingKeys.self)
             try c.encode(participantId, forKey: .participantId)
             try c.encode(displayName, forKey: .displayName)
+            try c.encodeIfPresent(username, forKey: .username)
         }
     }
 

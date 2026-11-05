@@ -25,7 +25,7 @@ struct ConversationBodyCovers: ViewModifier {
             .modifier(ConversationMediaGalleryLayer(
                 viewModel: viewModel, scrollState: $scrollState,
                 composerState: $composerState, accentColor: accentColor,
-                authority: authority, onReply: onReply))
+                authority: authority, onReply: onReply, onImager: { actions.export($0, false) }))
             .mediaSaveFlow(mediaSaveCoordinator)
             .modifier(ConversationMessageSheets(
                 viewModel: viewModel, overlayState: $overlayState, conversation: conversation,

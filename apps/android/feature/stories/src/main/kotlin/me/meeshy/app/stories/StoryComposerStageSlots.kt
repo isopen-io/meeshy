@@ -314,7 +314,9 @@ private fun ScenePin(state: StoryComposerUiState, viewModel: StoryComposerViewMo
                 canvasHeightPx = height,
                 onTap = { viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.soundSelected(s, track.id) } },
                 onDrag = { dx, dy -> viewModel.onSoundMoved(track.id, dx, dy) },
+                onTransform = { zoom, rotationDeg -> viewModel.onSoundTransformed(track.id, zoom, rotationDeg) },
                 onDragEnd = viewModel::onStickerDragEnd,
+                clock = LocalComposerLive.current?.soundClock(track.id) ?: AudioChipClock.Still,
             )
         }
         else -> Unit

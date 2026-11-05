@@ -43,6 +43,8 @@ class ChatComposerParityTest {
         onSend: () -> Unit = {},
         canMinimize: Boolean = true,
         foldable: Boolean = false,
+        startsMinimized: Boolean = false,
+        onMinimizedChange: (Boolean) -> Unit = {},
     ) {
         MeeshyTheme(darkTheme = false) {
             ChatComposer(
@@ -51,7 +53,7 @@ class ChatComposerParityTest {
                 clipboardContent = null, languageCode = "fr", accentColor = Color.Blue,
                 onDraftChange = {}, onPickLanguage = {}, onSend = onSend, onCancelEdit = {},
                 onCancelReply = {}, onRemoveClipboard = {}, onPickFile = { _, _, _ -> }, canMinimize = canMinimize,
-                foldable = foldable,
+                foldable = foldable, startsMinimized = startsMinimized, onMinimizedChange = onMinimizedChange,
             )
         }
     }
@@ -105,5 +107,24 @@ class ChatComposerParityTest {
     fun `without the fold the toolbar offers no chevron`() {
         compose.setContent { Composer(foldable = false) }
         compose.onNodeWithContentDescription(string(R.string.composer_fold)).assertDoesNotExist()
+    }
+
+    @Test
+    fun `a bar left folded in this conversation opens folded`() {
+        compose.setContent { Composer(foldable = true, startsMinimized = true) }
+        compose.onNodeWithContentDescription(string(R.string.composer_unfold)).assertIsDisplayed()
+        compose.onNode(hasSetTextAction()).assertDoesNotExist()
+    }
+
+    @Test
+    fun `folding then unfolding reports each state to remember it`() {
+        val reported = mutableListOf<Boolean>()
+        compose.setContent { Composer(foldable = true, onMinimizedChange = { reported += it }) }
+        compose.onNodeWithContentDescription(string(R.string.composer_fold)).performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription(string(R.string.composer_unfold)).performClick()
+        compose.waitForIdle()
+        assertThat(reported.last()).isFalse()
+        assertThat(reported).contains(true)
     }
 }

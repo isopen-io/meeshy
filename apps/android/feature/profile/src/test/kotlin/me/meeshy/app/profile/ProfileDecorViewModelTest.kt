@@ -18,6 +18,8 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.appearance.AppearanceCatalogLoader
+import me.meeshy.sdk.appearance.ServedAppearanceContractStore
+import me.meeshy.sdk.appearance.ServedContractFetching
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PackOrigin
 import me.meeshy.sdk.model.ProfileDecorRef
@@ -74,6 +76,7 @@ class ProfileDecorViewModelTest {
         banner: String? = null,
         installed: (String) -> InstalledPackList? = { null },
         equip: (ServedProfileDecorItem?, ProfileDecorSide) -> ProfileDecorOutcome = { _, _ -> ProfileDecorOutcome.Superseded },
+        contracts: Map<String, ByteArray> = emptyMap(),
     ): Scenario {
         val session = mockk<SessionRepository>()
         val user = MutableStateFlow<MeeshyUser?>(MeeshyUser(id = "me", username = "me", banner = banner, profileDecor = decor))
@@ -81,8 +84,15 @@ class ProfileDecorViewModelTest {
         val repository = mockk<ProfileDecorRepository>()
         coEvery { repository.equip(any(), any()) } coAnswers { equip(firstArg(), secondArg()) }
         val loader = mockk<AppearanceCatalogLoader>()
-        every { loader.state } returns MutableStateFlow(catalog)
+        val served = MutableStateFlow<AppearanceCatalog?>(catalog)
+        every { loader.state } returns served
         coEvery { loader.catalog() } returns catalog
+        val store = ServedAppearanceContractStore(
+            directory = java.nio.file.Files.createTempDirectory("decor-contracts").toFile(),
+            fetcher = ServedContractFetching { src -> contracts[src] ?: throw java.io.IOException("absent") },
+            io = dispatcher,
+            sink = { served.value = catalog.withServed(it) },
+        )
         val packs = mockk<PackApi>()
         coEvery { packs.installed(any<String>()) } coAnswers {
             val list = installed(firstArg()) ?: throw java.io.IOException("offline")
@@ -91,7 +101,7 @@ class ProfileDecorViewModelTest {
         val installations = kotlinx.coroutines.flow.MutableSharedFlow<PackInstallationUpdatedEvent>(extraBufferCapacity = 8)
         val shop = mockk<PackShopRepository>()
         every { shop.installations } returns installations
-        return Scenario(ProfileDecorViewModel(repository, session, loader, packs, shop), repository, session, installations, packs)
+        return Scenario(ProfileDecorViewModel(repository, session, loader, packs, shop, store), repository, session, installations, packs)
     }
 
     @Test
@@ -260,4 +270,77 @@ class ProfileDecorViewModelTest {
         coVerify(exactly = 1) { s.packs.installed("avatar-ring") }
         coVerify(exactly = 0) { s.packs.installed("wallpaper") }
     }
+
+    // region Packs servis non embarqués (#16265)
+
+    private val ringContract: String by lazy {
+        val root = kotlinx.serialization.json.Json.parseToJsonElement(
+            generateSequence(File(".").absoluteFile) { it.parentFile }.take(8)
+                .flatMap { sequenceOf(File(it, "sdk-core/src/main/assets/appearance-catalog.json"), File(it, "apps/android/sdk-core/src/main/assets/appearance-catalog.json")) }
+                .first { it.isFile }.readText(),
+        ) as kotlinx.serialization.json.JsonObject
+        val rings = ((root["rings"] as kotlinx.serialization.json.JsonArray).first() as kotlinx.serialization.json.JsonObject)["rings"]!!
+        kotlinx.serialization.json.buildJsonObject {
+            put("domain", kotlinx.serialization.json.JsonPrimitive("avatar-ring"))
+            put("rings", rings)
+        }.toString()
+    }
+
+    private fun sha(text: String) = java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
+        .joinToString("") { "%02x".format(it) }
+
+    private fun servedRingSummary(slug: String) = InstalledPackSummary(
+        slug = slug,
+        installed = true,
+        origin = "official",
+        contract = me.meeshy.sdk.model.pack.PackAssetRef.of(sha(ringContract).take(16) + ".json", ringContract.length.toLong(), sha(ringContract)),
+    )
+
+    @Test
+    fun `an installed pack that the app does not embed is offered once its served contract is verified`() = runTest(dispatcher) {
+        val s = scenario(
+            installed = { domain -> InstalledPackList(if (domain == "avatar-ring") listOf(servedRingSummary("contours-noel")) else emptyList()) },
+            contracts = mapOf(sha(ringContract).take(16) + ".json" to ringContract.toByteArray()),
+        )
+        s.viewModel.state.onEach { }.launchIn(backgroundScope)
+        advanceUntilIdle()
+
+        val group = s.viewModel.state.value.rings.single()
+        assertThat(group.pack).isEqualTo("contours-noel")
+        assertThat(group.items.map { it.design.key }).isEqualTo(catalog.ringPacks.first().rings.map { it.key })
+    }
+
+    @Test
+    fun `a served pack whose contract is altered is not offered`() = runTest(dispatcher) {
+        val s = scenario(
+            installed = { domain -> InstalledPackList(if (domain == "avatar-ring") listOf(servedRingSummary("contours-noel")) else emptyList()) },
+            contracts = mapOf(sha(ringContract).take(16) + ".json" to (ringContract + " ").toByteArray()),
+        )
+        s.viewModel.state.onEach { }.launchIn(backgroundScope)
+        advanceUntilIdle()
+
+        assertThat(s.viewModel.state.value.rings).isEmpty()
+    }
+
+    @Test
+    fun `a pack bought elsewhere that the app cannot paint yet rereads its domain to learn its contract`() = runTest(dispatcher) {
+        var bought = false
+        val s = scenario(
+            installed = { domain ->
+                InstalledPackList(if (domain == "avatar-ring" && bought) listOf(servedRingSummary("contours-noel")) else emptyList())
+            },
+            contracts = mapOf(sha(ringContract).take(16) + ".json" to ringContract.toByteArray()),
+        )
+        s.viewModel.state.onEach { }.launchIn(backgroundScope)
+        advanceUntilIdle()
+        bought = true
+
+        s.installations.emit(ringEvent("contours-noel"))
+        advanceUntilIdle()
+
+        assertThat(s.viewModel.state.value.rings.map { it.pack }).containsExactly("contours-noel")
+        coVerify(exactly = 2) { s.packs.installed("avatar-ring") }
+    }
+
+    // endregion
 }

@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ConversationClearance
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenAction.COMPOSE
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenAction.FORWARD
+import me.meeshy.sdk.model.fullscreen.AudioFullscreenAction.IMAGER
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenAction.REACT
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenAction.REPLY
 import org.junit.Test
@@ -38,9 +39,11 @@ class AudioFullscreenOfferTest {
         encryptionMode: String? = null,
         effectFlags: Int? = null,
         deletedAt: String? = null,
+        content: String = "",
     ) = ApiMessage(
         id = "m1",
         conversationId = "c1",
+        content = content,
         messageType = "audio",
         attachments = attachments,
         isViewOnce = isViewOnce,
@@ -62,10 +65,10 @@ class AudioFullscreenOfferTest {
     ) = AudioFullscreenOffer.of(carrier, pieceId, inWindow, conversationIsEncrypted, clearance)
 
     @Test
-    fun `un vocal ordinaire d'une conversation claire offre reagir, repondre, transferer et creer, dans cet ordre`() {
+    fun `un vocal ordinaire d'une conversation claire offre reagir, repondre, transferer, imager et creer, dans cet ordre`() {
         val offer = offerOf()
 
-        assertThat(offer.actions).containsExactly(REACT, REPLY, FORWARD, COMPOSE).inOrder()
+        assertThat(offer.actions).containsExactly(REACT, REPLY, FORWARD, IMAGER, COMPOSE).inOrder()
         assertThat(offer.isEmpty).isFalse()
     }
 
@@ -127,7 +130,7 @@ class AudioFullscreenOfferTest {
         val offer = offerOf(inWindow = false)
 
         assertThat(offer.react).isFalse()
-        assertThat(offer.actions).containsExactly(REPLY, FORWARD, COMPOSE).inOrder()
+        assertThat(offer.actions).containsExactly(REPLY, FORWARD, IMAGER, COMPOSE).inOrder()
     }
 
     @Test
@@ -148,5 +151,39 @@ class AudioFullscreenOfferTest {
         assertThat(resolve(conversationClear = false).actions).isEmpty()
         assertThat(resolve(forwardable = false).actions).containsExactly(REACT, REPLY, COMPOSE).inOrder()
         assertThat(resolve(composable = false).actions).containsExactly(REACT, REPLY, FORWARD).inOrder()
+    }
+
+    @Test
+    fun `la carte d'Imager represente le son - un vocal seul l'offre (#16334)`() {
+        assertThat(offerOf().imager).isTrue()
+        assertThat(offerOf(carrier = carrier(content = "Écoute ça")).imager).isTrue()
+    }
+
+    @Test
+    fun `une piece sans fichier ne se peint pas - pas d'Imager (#16334)`() {
+        val unpainted = carrier(attachments = listOf(piece().copy(fileUrl = null)))
+
+        assertThat(offerOf(carrier = unpainted).imager).isFalse()
+    }
+
+    @Test
+    fun `un vocal protege n'offre jamais Imager (#16334)`() {
+        assertThat(offerOf(carrier = carrier(isViewOnce = true)).imager).isFalse()
+        assertThat(offerOf(conversationIsEncrypted = true).imager).isFalse()
+    }
+
+    @Test
+    fun `resolve - Imager suit le verdict de la carte et tombe avec les autres sous un verrou (#16334)`() {
+        val imageable = AudioFullscreenOffer.resolve(
+            isProtected = false, hasCarrier = true, carrierInWindow = true, conversationClear = true,
+            forwardable = false, composable = false, imageable = true,
+        )
+        assertThat(imageable.actions).containsExactly(REACT, REPLY, IMAGER).inOrder()
+        assertThat(
+            AudioFullscreenOffer.resolve(
+                isProtected = true, hasCarrier = true, carrierInWindow = true, conversationClear = true,
+                forwardable = true, composable = true, imageable = true,
+            ),
+        ).isEqualTo(AudioFullscreenOffer.None)
     }
 }

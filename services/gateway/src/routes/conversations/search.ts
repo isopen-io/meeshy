@@ -27,6 +27,7 @@ import {
   truncateMessagePreview
 } from './utils/last-message-preview';
 import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
+import { servedListPreviewAttachment } from './utils/list-last-message-body';
 import { withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
 
 const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
@@ -334,16 +335,17 @@ export function registerSearchRoutes(
         // partir — ce sont eux qui qualifient le placeholder client.
         // #7545 — même prédicat que la liste et le socket : `ephemeralDuration`
         // et le chiffrement compris.
-        const isMsgProtected = msg
-          ? isPreviewWithheld(resolvePreviewProtection(msg as {
+        const msgProtection = msg
+          ? resolvePreviewProtection(msg as {
               isBlurred?: boolean | null;
               isViewOnce?: boolean | null;
               isEncrypted?: boolean | null;
               expiresAt?: Date | null;
               ephemeralDuration?: number | null;
               effectFlags?: number | null;
-            }))
-          : false;
+            })
+          : null;
+        const isMsgProtected = isPreviewWithheld(msgProtection);
         const place = isMsgProtected
           ? null
           : sharedPlaceFromMetadata((msg as { metadata?: unknown } | undefined)?.metadata);
@@ -375,7 +377,11 @@ export function registerSearchRoutes(
               ? (sender.user?.isOnline ?? false)
               : false,
           } : null,
-          attachments: isMsgProtected ? [] : (msg.attachments || []),
+          // #16021 — la MÊME pièce que la liste : une pièce masquée, ou celle
+          // d'un éphémère actif, ne part qu'avec sa nature et ses drapeaux.
+          attachments: isMsgProtected
+            ? []
+            : (msg.attachments || []).map((attachment) => servedListPreviewAttachment(attachment, msgProtection)),
           _count: isMsgProtected ? { attachments: 0 } : (msg as any)._count,
           ...(place ? { location: place } : {}),
         } : null;

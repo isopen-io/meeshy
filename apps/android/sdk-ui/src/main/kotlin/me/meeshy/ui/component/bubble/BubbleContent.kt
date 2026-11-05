@@ -227,6 +227,9 @@ public data class BubbleContent(
     val translatingCodes: Set<String> = emptySet(),
 )
 
+/** Ce message système d'arrivée porte l'invite « dis-lui salut » (#16338) : arrivées groupées, ou un compte arrivé seul. */
+public val BubbleContent.greetsArrivals: Boolean get() = isArrivalsNotice || joinNotice?.greetHandle != null
+
 /**
  * Conceal spec for a blurred / view-once ("tap to reveal") message — port of the
  * inputs iOS `BubbleBlurRevealController` receives. A non-null value means the bubble

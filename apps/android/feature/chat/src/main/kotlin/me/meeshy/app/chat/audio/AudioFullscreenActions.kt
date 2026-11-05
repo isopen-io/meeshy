@@ -146,7 +146,8 @@ abstract class AudioFullscreenReplyModule {
  * **Les actions du plein écran audio, branchées sur la conversation** : l'offre est jugée sur le porteur de la fenêtre,
  * réagir bascule la réaction du MESSAGE (optimiste, défaite par `OwnReactionWithdrawals` sur un refus), transférer ouvre la
  * feuille de la PIÈCE ([ChatHostActions.openForwardPiece], qui garde sa carte de refus fail-closed), répondre monte la barre
- * [MediaReplyComposerBar]. « Créer avec ce média » n'a pas de route Android : sans [composeLauncher], aucun bouton.
+ * [MediaReplyComposerBar]. « Créer avec ce média » n'a pas de route Android : sans [composeLauncher], aucun bouton. La
+ * baguette « Imager » (#16334) ouvre l'atelier de la conversation sur le message porteur ([openCard]) ; sans lui, aucun bouton.
  */
 internal class ChatAudioFullscreenActions(
     private val replies: AudioFullscreenReplyController,
@@ -156,6 +157,7 @@ internal class ChatAudioFullscreenActions(
     private val clearance: ConversationClearance,
     private val closure: ComposerClosure?,
     private val composeLauncher: ((AudioFullscreenSource) -> Unit)? = null,
+    private val openCard: ((messageId: String) -> Unit)? = null,
 ) : AudioFullscreenActionPort {
 
     override fun offer(source: AudioFullscreenSource): AudioFullscreenOffer {
@@ -170,6 +172,7 @@ internal class ChatAudioFullscreenActions(
         return law.copy(
             reply = law.reply && state.viewerMayWrite && closure == null,
             compose = law.compose && composeLauncher != null,
+            imager = law.imager && openCard != null,
         )
     }
 
@@ -187,6 +190,10 @@ internal class ChatAudioFullscreenActions(
 
     override fun compose(source: AudioFullscreenSource) {
         if (offer(source).compose) composeLauncher?.invoke(source)
+    }
+
+    override fun imager(source: AudioFullscreenSource) {
+        if (offer(source).imager) openCard?.invoke(source.carrierId)
     }
 
     @Composable
@@ -213,9 +220,10 @@ internal fun rememberChatAudioFullscreenActions(
     state: ChatUiState,
     clearance: ConversationClearance,
     closure: ComposerClosure?,
+    openCard: ((messageId: String) -> Unit)? = null,
 ): AudioFullscreenActionPort? {
     if (replies == null) return null
-    return remember(replies, state.messages, state.ownReactions, state.quickReactions, state.isEndToEnd, state.viewerMayWrite, clearance, closure) {
+    return remember(replies, state.messages, state.ownReactions, state.quickReactions, state.isEndToEnd, state.viewerMayWrite, clearance, closure, openCard) {
         ChatAudioFullscreenActions(
             replies = replies,
             toggleReaction = actions.toggleReaction,
@@ -223,6 +231,7 @@ internal fun rememberChatAudioFullscreenActions(
             state = state,
             clearance = clearance,
             closure = closure,
+            openCard = openCard,
         )
     }
 }

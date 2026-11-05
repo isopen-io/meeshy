@@ -21,10 +21,25 @@ public enum WallpaperPackOptions {
         }
     }
 
-    /// `installed == nil` (pas encore lue, ou panne) : les packs installés d'office.
-    public static func packs(installed: [ShopPack]?, catalog: AppearanceCatalog = .shared) -> [AppearanceDesignPack] {
+    /// L'ordre des packs servis : après tous les embarqués.
+    static let servedOrderBase = 1000
+
+    /// `installed == nil` (pas encore lue, ou panne) : les packs installés d'office. Un pack installé NON
+    /// embarqué se propose depuis son contrat servi (#16264), après les embarqués, s'il est sur l'appareil.
+    public static func packs(installed: [ShopPack]?, catalog: AppearanceCatalog = .shared,
+                             served: any ServedAppearanceProviding = ServedAppearanceStore.shared) -> [AppearanceDesignPack] {
         guard let installed else { return catalog.wallpaperPacks.filter(\.installedByDefault) }
-        let usable = Set(installed.filter { $0.installed && $0.isOwned }.map(\.slug))
-        return catalog.wallpaperPacks.filter { usable.contains($0.slug) }
+        let owned = installed.filter { $0.installed && $0.isOwned }
+        let usable = Set(owned.map(\.slug))
+        let embedded = catalog.wallpaperPacks.filter { usable.contains($0.slug) }
+        let embeddedSlugs = Set(catalog.wallpaperPacks.map(\.slug))
+        let servedPacks = owned.filter { !embeddedSlugs.contains($0.slug) }.compactMap { pack -> (ShopPack, [AppearanceDesign])? in
+            guard let designs = served.contract(domain: .wallpaper, slug: pack.slug)?.appearanceDesigns, !designs.isEmpty else { return nil }
+            return (pack, designs)
+        }
+        return embedded + servedPacks.enumerated().map { index, entry in
+            AppearanceDesignPack(slug: entry.0.slug, order: servedOrderBase + index, installedByDefault: false,
+                                 removable: entry.0.removable, designs: entry.1)
+        }
     }
 }

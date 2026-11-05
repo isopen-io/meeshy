@@ -25,6 +25,8 @@ data class StoryRailPlan(
     val showsExport: Boolean = false,
     /** « Son » : seulement quand la slide est audible — une vidéo muette ne montre rien (iOS `showsSound`). */
     val showsSound: Boolean = false,
+    /** « Imager » : la baguette fait de la story une carte image, pour l'auteur comme pour le lecteur (#16334). */
+    val showsImager: Boolean = true,
 ) {
     /** Le composeur de commentaire épinglé sous la story (iOS `composerLayer`) : chez autrui seulement. */
     val pinsCommentComposer: Boolean get() = showsReact

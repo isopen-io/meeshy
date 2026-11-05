@@ -1977,6 +1977,10 @@
       "surfaces": [
         "avatar"
       ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
     }
   },
   {
@@ -2076,6 +2080,10 @@
       "surfaces": [
         "avatar"
       ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
     }
   },
   {
@@ -2175,6 +2183,10 @@
       "surfaces": [
         "avatar"
       ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
     }
   },
   {
@@ -2373,6 +2385,315 @@
       "surfaces": [
         "avatar"
       ]
+    }
+  },
+  {
+    "slug": "noel-contours-fixes",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 24,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "7dc24ca1a7c3227d.webp",
+      "bytes": 10504,
+      "sha256": "7dc24ca1a7c3227d422540d8d44907ef36819bb3615e29d9618947c633f97531"
+    },
+    "preview": null,
+    "contract": {
+      "src": "833f51582e4b3615.json",
+      "bytes": 7870,
+      "sha256": "833f51582e4b3615af677d0c6e2f4f8602058d9b4e53e73e5deb6fb247a92a10"
+    },
+    "strings": {
+      "fr": {
+        "src": "7f23b1f630c3769e.json",
+        "bytes": 337,
+        "sha256": "7f23b1f630c3769e264c649399b2fcf483a284ac3b727bee9880f7bdb5657e5c"
+      },
+      "en": {
+        "src": "b9f7ff1505dbec07.json",
+        "bytes": 313,
+        "sha256": "b9f7ff1505dbec075548b5a38588fa13a6ecc79f9db92eeb725ee6102a106ea8"
+      },
+      "es": {
+        "src": "cea106485607cfb2.json",
+        "bytes": 336,
+        "sha256": "cea106485607cfb2a25c4c8a99261ac5197556d100c600d67ded1c5c4be4f417"
+      },
+      "pt": {
+        "src": "655e73157ebd8a66.json",
+        "bytes": 330,
+        "sha256": "655e73157ebd8a66616f67133246846e28a9ff9727c7384eb64e17dbbfc5214c"
+      },
+      "de": {
+        "src": "d9688ca8d7797410.json",
+        "bytes": 321,
+        "sha256": "d9688ca8d77974104e59bb4e56fa850f6c83a39e06818cfb259ae6123aacf32e"
+      },
+      "it": {
+        "src": "e1c7f069ff9fa383.json",
+        "bytes": 360,
+        "sha256": "e1c7f069ff9fa38354b1b393a09984884557731958d0e379c7bbe8791fe27f7b"
+      },
+      "ar": {
+        "src": "68cadfc2c7a1042b.json",
+        "bytes": 389,
+        "sha256": "68cadfc2c7a1042bfd70f7b161c8a96891804f3e671d3fc3f76d825dd4874ce5"
+      }
+    },
+    "downloadBytes": {
+      "story": 7870,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Noël · contours fixes",
+        "description": "Les six contours de Noël sans animation : flocons, houx, guirlande, étoile, bonnet et sucre d’orge, pour qui préfère un avatar immobile."
+      },
+      "en": {
+        "name": "Christmas · still rings",
+        "description": "The six Christmas rings without animation: snowflakes, holly, string lights, star, Santa hat and candy cane, for a calm avatar."
+      },
+      "es": {
+        "name": "Navidad · contornos fijos",
+        "description": "Los seis contornos de Navidad sin animación: copos, acebo, guirnalda, estrella, gorro y bastón de caramelo, para un avatar tranquilo."
+      },
+      "pt": {
+        "name": "Natal · contornos fixos",
+        "description": "Os seis contornos de Natal sem animação: flocos, azevinho, grinalda, estrela, gorro e bastão de doce, para um avatar tranquilo."
+      },
+      "de": {
+        "name": "Weihnachten · ruhige Rahmen",
+        "description": "Die sechs Weihnachtsrahmen ohne Animation: Flocken, Stechpalme, Lichterkette, Stern, Mütze und Zuckerstange, für einen ruhigen Avatar."
+      },
+      "it": {
+        "name": "Natale · contorni fissi",
+        "description": "I sei contorni di Natale senza animazione: fiocchi, agrifoglio, ghirlanda, stella, berretto e bastoncino di zucchero, per un avatar tranquillo."
+      },
+      "ar": {
+        "name": "الميلاد · أطر ثابتة",
+        "description": "أطر الميلاد الستة بلا حركة: ندف الثلج، والبهشية، وسلسلة الأضواء، والنجمة، والقبعة، وعصا الحلوى، لصورة رمزية هادئة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "nouvel-an-contours",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 25,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "45968b703f150e3f.webp",
+      "bytes": 10794,
+      "sha256": "45968b703f150e3f836e27d9f3ccfe2831fe4db9cdba258d8dab5bfb4339ed8c"
+    },
+    "preview": null,
+    "contract": {
+      "src": "df88a6d60fb7f6ac.json",
+      "bytes": 8882,
+      "sha256": "df88a6d60fb7f6ac58f25bd306f93289a4b3ca4ebe6d6519e53cf5d8a911e91c"
+    },
+    "strings": {
+      "fr": {
+        "src": "8dda20166282e6fd.json",
+        "bytes": 175,
+        "sha256": "8dda20166282e6fd9ead094a651505a18a15239dbb7add8dcee2551e389617c5"
+      },
+      "en": {
+        "src": "3024a1d8ee3936fa.json",
+        "bytes": 158,
+        "sha256": "3024a1d8ee3936fade46b0b5a33a2b700708f4bb68b3a2f7554fdea50bb1d141"
+      },
+      "es": {
+        "src": "cc386db421840c17.json",
+        "bytes": 178,
+        "sha256": "cc386db421840c17370f90f37887eaa5ba1b1acab8970bcd4fc2ad988a38ec01"
+      },
+      "pt": {
+        "src": "520b0d5ce3bed271.json",
+        "bytes": 182,
+        "sha256": "520b0d5ce3bed27116f6b2f56af98b2608c8fb75a6308cc03ca57f2e39b3c234"
+      },
+      "de": {
+        "src": "fcdabb736012d7a2.json",
+        "bytes": 161,
+        "sha256": "fcdabb736012d7a29c5f7770f608a78d4cfe18c2eb79e8e5f80d32b701b40724"
+      },
+      "it": {
+        "src": "c0cec2bc2fa583e8.json",
+        "bytes": 188,
+        "sha256": "c0cec2bc2fa583e8807a88911965d6d21372744ebd2ac71fef79b2b903a89a3b"
+      },
+      "ar": {
+        "src": "8f6d42e5fed0b355.json",
+        "bytes": 207,
+        "sha256": "8f6d42e5fed0b355664fe6ed887fa90d4dfb3efa0f011298d7208466c57d0620"
+      }
+    },
+    "downloadBytes": {
+      "story": 8882,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Nouvel An",
+        "description": "Quatre contours pour fêter la nouvelle année : feux d’artifice, pluie de confettis, cadran de minuit et coupe de champagne doré."
+      },
+      "en": {
+        "name": "New Year",
+        "description": "Four rings to celebrate the new year: fireworks, a confetti shower, a midnight dial and a golden champagne coupe."
+      },
+      "es": {
+        "name": "Año Nuevo",
+        "description": "Cuatro contornos para celebrar el año nuevo: fuegos artificiales, lluvia de confeti, esfera de medianoche y copa de champán dorado."
+      },
+      "pt": {
+        "name": "Ano Novo",
+        "description": "Quatro contornos para celebrar o novo ano: fogo de artifício, chuva de confetes, mostrador da meia-noite e taça de champanhe dourado."
+      },
+      "de": {
+        "name": "Neujahr",
+        "description": "Vier Rahmen zum Feiern des neuen Jahres: Feuerwerk, Konfettiregen, Mitternachtszifferblatt und eine goldene Sektschale."
+      },
+      "it": {
+        "name": "Capodanno",
+        "description": "Quattro contorni per festeggiare il nuovo anno: fuochi d’artificio, pioggia di coriandoli, quadrante di mezzanotte e coppa di champagne dorato."
+      },
+      "ar": {
+        "name": "رأس السنة",
+        "description": "أربعة أطر للاحتفال بالعام الجديد: ألعاب نارية، ومطر القصاصات، وميناء منتصف الليل، وكأس شمبانيا ذهبية."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
+    }
+  },
+  {
+    "slug": "nouvel-an-contours-vifs",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 26,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "42d619364a80699a.webp",
+      "bytes": 12044,
+      "sha256": "42d619364a80699a21a7acec192f5653abe822810560d56072bcdb8cc8798de5"
+    },
+    "preview": null,
+    "contract": {
+      "src": "251605b8b56f33ac.json",
+      "bytes": 7330,
+      "sha256": "251605b8b56f33aced6bb0346f094295ab998b8688d59222c258bd981332ebc6"
+    },
+    "strings": {
+      "fr": {
+        "src": "3d777b771dfccd94.json",
+        "bytes": 164,
+        "sha256": "3d777b771dfccd94736ac1a94c91dadee1bfa624b3c8aaf043b37098ab119cd9"
+      },
+      "en": {
+        "src": "2deaba9b854fe776.json",
+        "bytes": 163,
+        "sha256": "2deaba9b854fe776e23fcea891aab81c06d74de1d491a71085ff94d9586ae5b2"
+      },
+      "es": {
+        "src": "05b846d5927284eb.json",
+        "bytes": 162,
+        "sha256": "05b846d5927284eb716d401212df98945c3e0c5e150aae1530a60b89c96075c2"
+      },
+      "pt": {
+        "src": "5af9db88c62d2a2a.json",
+        "bytes": 163,
+        "sha256": "5af9db88c62d2a2a622a81f292272e45cb50630235bd2cc8451be47adf72c014"
+      },
+      "de": {
+        "src": "4aeaa844bbacfebb.json",
+        "bytes": 165,
+        "sha256": "4aeaa844bbacfebbdc046a7df194a22838dfaf58d6906ea8e8932a86090e68df"
+      },
+      "it": {
+        "src": "2128bd9e6c4da21f.json",
+        "bytes": 169,
+        "sha256": "2128bd9e6c4da21fbb0f540cd220dd16193503602864b147824f90508b3041e2"
+      },
+      "ar": {
+        "src": "88aa72fd7aba415d.json",
+        "bytes": 210,
+        "sha256": "88aa72fd7aba415dcdf10796c80f7f6c60db8bb87f85751d356042149d6bae9c"
+      }
+    },
+    "downloadBytes": {
+      "story": 7330,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Nouvel An vivant",
+        "description": "Quatre contours animés pour le passage à la nouvelle année : un bouquet final, un envol de confettis, l’horloge qui sonne minuit et des bulles de champagne."
+      },
+      "en": {
+        "name": "Living New Year",
+        "description": "Four animated rings for the turn of the year: a grand finale, a confetti flurry, a clock striking midnight and champagne bubbles."
+      },
+      "es": {
+        "name": "Año Nuevo vivo",
+        "description": "Cuatro contornos animados para el cambio de año: un gran final, un vuelo de confeti, el reloj que da las doce y burbujas de champán."
+      },
+      "pt": {
+        "name": "Ano Novo vivo",
+        "description": "Quatro contornos animados para a passagem de ano: um grande final, um voo de confetes, o relógio a dar a meia-noite e bolhas de champanhe."
+      },
+      "de": {
+        "name": "Lebendiges Neujahr",
+        "description": "Vier animierte Rahmen für den Jahreswechsel: ein großes Finale, ein Konfettiwirbel, die Uhr, die Mitternacht schlägt, und Sektperlen."
+      },
+      "it": {
+        "name": "Capodanno vivo",
+        "description": "Quattro contorni animati per il passaggio al nuovo anno: un gran finale, un volo di coriandoli, l’orologio che batte la mezzanotte e bollicine di champagne."
+      },
+      "ar": {
+        "name": "رأس السنة الحي",
+        "description": "أربعة أطر متحركة لاستقبال العام الجديد: ختام كبير، وتطاير القصاصات، وساعة تدق منتصف الليل، وفقاعات الشمبانيا."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
     }
   }
 ]

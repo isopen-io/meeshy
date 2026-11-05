@@ -227,6 +227,50 @@
     "bannieres-atelier-noel": {
       "name": "Taller de Papá Noel",
       "description": "Los marcos de portada a juego con «Taller de Papá Noel»: Gorro de Papá Noel y Bastón de caramelo, en el borde para que tu foto siga a la vista."
+    },
+    "noel-bannieres": {
+      "name": "Banners de Navidad",
+      "description": "Seis imágenes de banner a juego con los packs de Navidad: escarcha, guirnalda y papel de regalo, luego una nevada, luces que titilan y las chispas del taller."
+    },
+    "noel-contours-fixes": {
+      "name": "Navidad · contornos fijos",
+      "description": "Los seis contornos de Navidad sin animación: copos, acebo, guirnalda, estrella, gorro y bastón de caramelo, para un avatar tranquilo."
+    },
+    "noel-cadres-fixes": {
+      "name": "Navidad · marcos fijos",
+      "description": "Los seis marcos de banner de Navidad sin animación, a juego con los contornos fijos: copos, acebo, guirnalda, estrella, gorro y bastón de caramelo."
+    },
+    "nouvel-an-contours": {
+      "name": "Año Nuevo",
+      "description": "Cuatro contornos para celebrar el año nuevo: fuegos artificiales, lluvia de confeti, esfera de medianoche y copa de champán dorado."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Año Nuevo vivo",
+      "description": "Cuatro contornos animados para el cambio de año: un gran final, un vuelo de confeti, el reloj que da las doce y burbujas de champán."
+    },
+    "nouvel-an-images": {
+      "name": "Banners de Año Nuevo",
+      "description": "Cuatro imágenes de banner para el año nuevo: una noche de fuegos, una fiesta de confeti, las doce campanadas y un champán dorado."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Banners animados de Año Nuevo",
+      "description": "Cuatro imágenes de banner animadas: fuegos que estallan, un chaparrón de confeti, la cuenta atrás de medianoche y burbujas de champán. Con movimiento reducido: una imagen fija."
+    },
+    "nouvel-an-cadres": {
+      "name": "Marcos de Año Nuevo",
+      "description": "Cuatro marcos de banner a juego con los contornos de Año Nuevo: fuegos artificiales, confeti, esfera de medianoche y copas de champán."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Marcos animados de Año Nuevo",
+      "description": "Cuatro marcos de banner animados, a juego con los contornos vivos: un ramillete que estalla, confeti que vuela, la aguja de medianoche que gira y copas que brindan."
+    },
+    "nouvel-an-fonds": {
+      "name": "Fondos de Año Nuevo",
+      "description": "Cuatro fondos de conversación para el año nuevo: cielo de fuegos, confeti, hora de medianoche y burbujas doradas, discretos para que cada burbuja se lea bien."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Año Nuevo vivo · fondos",
+      "description": "Cuatro fondos animados para el año nuevo: destellos lejanos, confeti que cae, una noche estrellada y burbujas que suben. Con movimiento reducido: un degradado fijo."
     }
   },
   "designs": {
@@ -265,7 +309,29 @@
     "sucre-d-orge-raye": "Rayas de caramelo",
     "neige-de-noel": "Nieve de Navidad",
     "ampoules-de-noel": "Bombillas de Navidad",
-    "etincelles-atelier": "Chispas del taller"
+    "etincelles-atelier": "Chispas del taller",
+    "banniere-noel-givre": "Escarcha",
+    "banniere-noel-guirlande": "Guirnalda",
+    "banniere-noel-cadeau": "Papel de regalo",
+    "banniere-noel-neige": "Nevada",
+    "banniere-noel-lumieres": "Luces que titilan",
+    "banniere-noel-etincelles": "Chispas de Navidad",
+    "banniere-artifice": "Noche de fuegos",
+    "banniere-confettis": "Fiesta de confeti",
+    "banniere-minuit": "Doce campanadas",
+    "banniere-champagne": "Champán dorado",
+    "banniere-artifice-vive": "Fuegos en vivo",
+    "banniere-confettis-vive": "Chaparrón de confeti",
+    "banniere-minuit-vive": "Cuenta atrás",
+    "banniere-champagne-vive": "Burbujas de champán",
+    "fond-artifice": "Cielo de fuegos",
+    "fond-confettis": "Confeti",
+    "fond-minuit": "Hora de medianoche",
+    "fond-champagne": "Burbujas doradas",
+    "fond-artifice-vif": "Destellos lejanos",
+    "fond-confettis-vif": "Confeti que cae",
+    "fond-minuit-vif": "Medianoche estrellada",
+    "fond-champagne-vif": "Burbujas que suben"
   },
   "rings": {
     "filet": "Filete",
@@ -344,7 +410,21 @@
     "guirlande-lumineuse": "Guirnalda de luces",
     "etoile-du-sapin": "Estrella del árbol",
     "bonnet-du-pere-noel": "Gorro de Papá Noel",
-    "sucre-d-orge": "Bastón de caramelo"
+    "sucre-d-orge": "Bastón de caramelo",
+    "flocons-tombants-fixe": "Copos que caen · fijo",
+    "couronne-de-houx-fixe": "Corona de acebo · fijo",
+    "guirlande-lumineuse-fixe": "Guirnalda de luces · fijo",
+    "etoile-du-sapin-fixe": "Estrella del árbol · fijo",
+    "bonnet-du-pere-noel-fixe": "Gorro de Papá Noel · fijo",
+    "sucre-d-orge-fixe": "Bastón de caramelo · fijo",
+    "feux-d-artifice": "Fuegos artificiales",
+    "pluie-de-confettis": "Lluvia de confeti",
+    "cadran-de-minuit": "Esfera de medianoche",
+    "coupe-de-champagne": "Copa de champán",
+    "bouquet-final": "Gran final",
+    "envol-de-confettis": "Vuelo de confeti",
+    "minuit-sonne": "Suenan las doce",
+    "champagne-petillant": "Champán burbujeante"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",
@@ -436,6 +516,20 @@
     "guirlande-lumineuse": "Guirnalda de luces",
     "etoile-du-sapin": "Estrella del árbol",
     "bonnet-du-pere-noel": "Gorro de Papá Noel",
-    "sucre-d-orge": "Bastón de caramelo"
+    "sucre-d-orge": "Bastón de caramelo",
+    "flocons-tombants-fixe": "Copos que caen · fijo",
+    "couronne-de-houx-fixe": "Corona de acebo · fijo",
+    "guirlande-lumineuse-fixe": "Guirnalda de luces · fijo",
+    "etoile-du-sapin-fixe": "Estrella del árbol · fijo",
+    "bonnet-du-pere-noel-fixe": "Gorro de Papá Noel · fijo",
+    "sucre-d-orge-fixe": "Bastón de caramelo · fijo",
+    "feux-d-artifice": "Fuegos artificiales",
+    "pluie-de-confettis": "Lluvia de confeti",
+    "cadran-de-minuit": "Esfera de medianoche",
+    "coupe-de-champagne": "Copa de champán",
+    "bouquet-final": "Gran final",
+    "envol-de-confettis": "Vuelo de confeti",
+    "minuit-sonne": "Suenan las doce",
+    "champagne-petillant": "Champán burbujeante"
   }
 }

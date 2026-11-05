@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.appearance.AppearanceCatalogLoader
+import me.meeshy.sdk.appearance.ServedAppearanceContractStore
 import me.meeshy.sdk.model.ProfileDecorRef
 import me.meeshy.sdk.model.ProfileDecorSide
 import me.meeshy.sdk.model.PackOrigin
@@ -81,6 +82,7 @@ class ProfileDecorViewModel @Inject constructor(
     private val loader: AppearanceCatalogLoader,
     private val packs: PackApi,
     private val shop: PackShopRepository,
+    private val served: ServedAppearanceContractStore,
 ) : ViewModel() {
 
     private val installed = MutableStateFlow<Installed?>(null)
@@ -134,9 +136,18 @@ class ProfileDecorViewModel @Inject constructor(
             heardDuringLoad = heardDuringLoad + event
             return
         }
-        val next = list(current, domain)?.applying(event) ?: read(domain) ?: return
+        val applied = list(current, domain)?.applying(event)?.takeUnless { event.installed && !paints(domain, event.slug) }
+        val next = applied ?: read(domain) ?: return
         installed.update { latest -> (latest ?: current).with(domain, next) }
+        if (applied != null) served.sync(domain, next)
     }
+
+    /**
+     * Un pack que le catalogue ne sait pas peindre (ni embarqué, ni servi déjà chargé) : l'événement ne dit pas son contrat,
+     * seule une relecture de SON domaine le donne (#16265).
+     */
+    private fun paints(domain: AppearancePackDomain, slug: String): Boolean =
+        loader.state.value?.packs(domain)?.any { it.slug == slug } ?: true
 
     private fun list(lists: Installed, domain: AppearancePackDomain) = when (domain) {
         AppearancePackDomain.AVATAR_RING -> lists.rings
@@ -160,12 +171,18 @@ class ProfileDecorViewModel @Inject constructor(
         heard.forEach { follow(it) }
     }
 
-    /** Une panne ne conclut rien (`null` : les packs installés d'office) ; un 404 (ancien serveur) ⇒ aucun pack. */
-    private suspend fun read(domain: AppearancePackDomain): List<InstalledPackSummary>? =
-        when (val result = apiCall { packs.installed(domain) }) {
+    /**
+     * Une panne ne conclut rien (`null` : les packs installés d'office) ; un 404 (ancien serveur) ⇒ aucun pack. Les packs
+     * servis non embarqués de la liste chargent leur contrat (#16265) : la feuille les propose dès qu'il est vérifié.
+     */
+    private suspend fun read(domain: AppearancePackDomain): List<InstalledPackSummary>? {
+        val list = when (val result = apiCall { packs.installed(domain) }) {
             is NetworkResult.Success -> result.data.packs
             is NetworkResult.Failure -> WallpaperPackOptions.installedFromFailure(result.error.httpStatus)
         }
+        served.sync(domain, list)
+        return list
+    }
 
     /** Équipe ([ref] `null` = retirer) ; sans effet si le côté porte déjà ce choix. */
     fun equip(ref: ProfileDecorRef?, side: ProfileDecorSide) {

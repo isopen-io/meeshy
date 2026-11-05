@@ -42,7 +42,9 @@ import {
   PACK_ERRORS as ERRORS,
   packEnvelope as envelope,
   packInstallationBroadcaster,
+  packPublisherJsonSchema,
   packRouteGuard,
+  sendPublicationRefused,
   packSlugParamsJsonSchema as slugParamsJsonSchema,
   registerPackRoutes,
   type PackSlugRequest as SlugRequest,
@@ -112,6 +114,7 @@ const summaryProperties = {
   name: { type: 'string' },
   description: { type: 'string' },
   author: { type: 'string' },
+  publisher: packPublisherJsonSchema,
   builtin: { type: 'boolean' },
   status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
   itemCount: { type: 'integer' },
@@ -245,7 +248,9 @@ export async function stickerPacksRoutes(fastify: FastifyInstance, options: Stic
           'par sticker, nommé comme son `asset`. Le manifeste est validé par `validateStickerPackManifest` (zones de texte ' +
           'des Instants comprises : le texte le plus long admis doit tenir) ; chaque image est ré-encodée et son genre ' +
           'confronté à son animation réelle. Le pack naît en attente de modération. 422 avec `problems` si le manifeste ' +
-          'est refusé.',
+          'est refusé. 403 PUBLISHER_ACCOUNT_UNVERIFIED (compte inactif ou sans adresse ni numéro vérifié), ' +
+          'PUBLISHER_NOT_OWNER (le champ `publisher` nomme un éditeur d’un autre compte) ou PUBLISHER_RESERVED (identité Meeshy) : ' +
+          'le pack est rattaché à l’éditeur du compte connecté (#16274).',
         tags: ['stickers'],
         summary: 'Submit a sticker pack',
         consumes: ['multipart/form-data'],
@@ -280,6 +285,8 @@ export async function stickerPacksRoutes(fastify: FastifyInstance, options: Stic
           return sendConflict(reply, `At most ${STICKER_PACK_LIMITS.maxPendingPerAuthor} packs can wait for review`, {
             code: STICKER_PACK_ERROR_CODES.TOO_MANY_PENDING,
           });
+        case 'refused':
+          return sendPublicationRefused(reply, outcome.reason);
       }
     }),
   );

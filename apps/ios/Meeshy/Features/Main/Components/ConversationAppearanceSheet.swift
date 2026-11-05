@@ -23,6 +23,8 @@ struct ConversationAppearanceSheet: View {
     /// Les packs de fonds possédés et installés (`nil` tant qu'ils ne sont pas lus : les packs installés d'office).
     /// Cache-first : la dernière liste lue pour ce compte, puis la relecture réseau.
     @State private var installedWallpapers: [ShopPack]? = InstalledWallpapersMemo.shared.packs(for: AuthManager.shared.currentUser?.id)
+    /// #16264 — les packs de fonds installés NON embarqués se proposent dès leur contrat arrivé.
+    @StateObject private var servedAppearance = ServedAppearanceRefresh()
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -94,6 +96,7 @@ struct ConversationAppearanceSheet: View {
         guard let list = WallpaperPackOptions.installedList(from: result) else { return }
         InstalledWallpapersMemo.shared.remember(list, for: AuthManager.shared.currentUser?.id)
         installedWallpapers = list
+        await ServedAppearanceStore.shared.prepare(domain: .wallpaper, installed: list)
     }
 
     private func syncDrafts() {

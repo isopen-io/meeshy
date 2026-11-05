@@ -19,7 +19,9 @@ public final class SceneSoundChipClock: ObservableObject {
 
     private var audios: [StoryAudioPlayerObject] = []
     private var slideDuration: TimeInterval = 0
-    private var elapsed: TimeInterval = 0
+    /// L'écoulé de la scène, LU par le chrono des pastilles (#16294) — jamais
+    /// publié : il change à chaque image, le chrono une fois par seconde.
+    public private(set) var elapsed: TimeInterval = 0
 
     public init() {}
 
@@ -67,6 +69,8 @@ public struct SceneSoundChipLayer: View {
     public let isInteractive: Bool
     /// Le son de la surface entière est coupé : la pastille se montre muette.
     public let isHostMuted: Bool
+    /// L'écoulé que lit le chrono des pastilles ; `nil` : il reste à zéro.
+    public let elapsed: SceneAudioChipElapsed?
 
     @ObservedObject private var muteRegistry: StoryReaderAudioMuteRegistry
 
@@ -75,8 +79,10 @@ public struct SceneSoundChipLayer: View {
                 slideDuration: TimeInterval? = nil,
                 isInteractive: Bool,
                 isHostMuted: Bool,
+                elapsed: SceneAudioChipElapsed? = nil,
                 muteRegistry: StoryReaderAudioMuteRegistry = .shared) {
         self.muteRegistry = muteRegistry
+        self.elapsed = elapsed
         self.audios = audios
         self.visibleIds = visibleIds
         self.slideDuration = slideDuration
@@ -127,6 +133,7 @@ public struct SceneSoundChipLayer: View {
             .scaleEffect(canvas.unit)
             .frame(width: geo.size.width, height: geo.size.height)
         }
+        .environment(\.sceneAudioChipElapsed, elapsed)
         .allowsHitTesting(isInteractive && !chips.isEmpty)
         .accessibilityHidden(!isInteractive)
     }
@@ -151,7 +158,8 @@ struct ClockedSceneSoundChips: View {
                             visibleIds: clock.visibleIds,
                             slideDuration: slideDuration,
                             isInteractive: true,
-                            isHostMuted: isHostMuted)
+                            isHostMuted: isHostMuted,
+                            elapsed: SceneAudioChipElapsed { [clock] in clock.elapsed })
             .task(id: configurationKey) {
                 clock.configure(audios: audios, slideDuration: slideDuration)
             }

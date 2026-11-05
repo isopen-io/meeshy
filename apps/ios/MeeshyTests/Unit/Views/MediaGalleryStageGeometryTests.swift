@@ -448,8 +448,8 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
             return XCTFail("`cadreRegion` introuvable")
         }
 
-        XCTAssertTrue(region.contains("currentStage.frame.width"))
-        XCTAssertTrue(region.contains("currentStage.frame.height"))
+        XCTAssertTrue(region.contains("OfferedStageFrame(stage: currentStage.frame)"),
+                      "le cadre du solveur borne la région sans l'imposer (#16290)")
         XCTAssertTrue(region.contains("currentStage.cornerRadius"),
                       "le rayon vient du solveur : il tombe à 0 en plein cadre")
     }

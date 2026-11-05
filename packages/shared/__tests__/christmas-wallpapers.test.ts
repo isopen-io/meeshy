@@ -11,6 +11,7 @@ import { CHRISTMAS_RING_PACKS } from '../scripts/christmas/packs';
 import { CHRISTMAS_WALLPAPER_PACKS } from '../scripts/christmas/wallpapers';
 import { MEESHY_COLLECTION_SLUGS } from '../scripts/compose-meeshy-collections';
 import { upsertPacks } from '../scripts/meeshy-collections/source-packs';
+import { SEASONAL_ADDED_SLUGS } from '../scripts/seasonal/slugs';
 
 /**
  * #15553 — les FONDS de conversation de Noël : un pack fixe et un pack animé, chacun avec un fond par thème de
@@ -96,7 +97,7 @@ describe('les fonds de conversation de Noël (#15553)', () => {
     expect(packs.filter((candidate) => CHRISTMAS_WALLPAPER_SLUGS.includes(candidate.slug))).toEqual(expected);
     const firstMeeshy = packs.findIndex((candidate) => MEESHY_COLLECTION_SLUGS.includes(candidate.slug));
     expected.forEach((served) => expect(packs.findIndex((candidate) => candidate.slug === served.slug)).toBeLessThan(firstMeeshy));
-    expect(packs.slice(-2).map((candidate) => candidate.slug)).toEqual(['meeshy-fonds', 'meeshy-fonds-vivants']);
+    expect(packs.filter((candidate) => !SEASONAL_ADDED_SLUGS.includes(candidate.slug)).slice(-2).map((candidate) => candidate.slug)).toEqual(['meeshy-fonds', 'meeshy-fonds-vivants']);
     expect(upsertPacks(text('wallpapers/designs.json'), expected, MEESHY_COLLECTION_SLUGS)).toBe(text('wallpapers/designs.json'));
   });
 
