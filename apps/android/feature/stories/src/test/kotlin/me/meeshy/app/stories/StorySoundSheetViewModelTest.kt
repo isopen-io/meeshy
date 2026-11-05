@@ -172,4 +172,29 @@ class StorySoundSheetViewModelTest {
         assertThat(vm.state.value.take).isNull()
         assertThat(file.exists()).isFalse()
     }
+
+    @Test
+    fun `OK with a ready sound places it with its chosen role, as Ajouter would (#16206)`() {
+        val vm = model()
+        val (item, _) = take()
+        vm.onTake(item, durationSeconds = 2.5f)
+        vm.onRole(ComposerAudioRole.FOREGROUND)
+        var placed: Pair<ComposerAudioRole, MediaUploadItem>? = null
+
+        vm.onDone(automatic = ComposerAudioRole.BACKGROUND) { _, role, handed -> placed = role to handed }
+
+        assertThat(placed).isEqualTo(ComposerAudioRole.FOREGROUND to item)
+        assertThat(vm.state.value.take).isNull()
+    }
+
+    @Test
+    fun `OK with nothing chosen places nothing (#16206)`() {
+        val vm = model()
+        var placed = 0
+
+        vm.onDone(automatic = ComposerAudioRole.BACKGROUND) { _, _, _ -> placed += 1 }
+
+        assertThat(placed).isEqualTo(0)
+    }
 }
+

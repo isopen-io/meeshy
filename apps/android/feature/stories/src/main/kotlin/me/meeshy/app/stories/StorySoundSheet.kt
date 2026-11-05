@@ -87,7 +87,12 @@ internal fun StorySoundSheet(
     val recorder = rememberStorySoundRecorder(onTake = viewModel::onTake)
     val importFile = rememberStorySoundImport(onTake = viewModel::onTake, onFailed = viewModel::onImportFailed)
     Column(Modifier.fillMaxWidth()) {
-        StorySoundSheetHeader(onDone = onDone)
+        StorySoundSheetHeader(
+            onDone = {
+                viewModel.onDone(ComposerSoundRoles.automatic(state.selectedSlideAudio), composer::onPlaceSendingSound)
+                onDone()
+            },
+        )
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.lg),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
