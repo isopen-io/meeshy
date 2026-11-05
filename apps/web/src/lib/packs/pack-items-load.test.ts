@@ -11,6 +11,9 @@ import { loadPackItems, packItemsQueryKey } from './pack-items-load';
  * contrat adressé par contenu, à la demande.
  */
 
+const settled = (pending: Promise<unknown>): Promise<'resolved' | 'rejected'> =>
+  pending.then(() => 'resolved' as const, () => 'rejected' as const);
+
 const depsAnswering = (answer: (request: HttpRequest) => ApiResult<unknown>): { deps: ConversationsDeps; calls: HttpRequest[] } => {
   const calls: HttpRequest[] = [];
   const transport = {
@@ -55,9 +58,9 @@ describe('charger les éléments d’un pack', () => {
 
   test('un détail en échec ou un contrat illisible est une ERREUR, que la fiche dit — jamais une fiche vide silencieuse', async () => {
     const failing = depsAnswering(() => ({ ok: false, status: 503, error: 'down' }));
-    await expect(loadPackItems({ domain: 'banner', slug: 'officiel', deps: failing.deps, loadContract: async () => null })).rejects.toThrow();
+    expect(await settled(loadPackItems({ domain: 'banner', slug: 'officiel', deps: failing.deps, loadContract: async () => null }))).toBe('rejected');
     const served = depsAnswering(() => ({ ok: true, data: { slug: 'officiel', name: 'O', description: '', installed: true, contract: contractRef } }));
-    await expect(loadPackItems({ domain: 'banner', slug: 'officiel', deps: served.deps, loadContract: async () => null })).rejects.toThrow();
+    expect(await settled(loadPackItems({ domain: 'banner', slug: 'officiel', deps: served.deps, loadContract: async () => null }))).toBe('rejected');
   });
 
   test('la clé de cache distingue le domaine et le slug', () => {

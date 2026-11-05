@@ -315,7 +315,7 @@ class BannerFrameDesignBoundsTest {
 
         val frames = catalog.bannerFramePacks.flatMap { it.frames }
 
-        assertThat(frames).hasSize(66)
+        assertThat(frames).hasSize(80)
         frames.forEach { frame ->
             val region = frame.drawableRegion(BannerFrameDesign.REFERENCE_WIDTH)
             assertThat(region.hole.width).isGreaterThan(0.0)
