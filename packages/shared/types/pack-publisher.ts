@@ -155,24 +155,43 @@ const readingSkeleton = (name: string): string =>
     [...mapped(name.normalize('NFKC'), CAPITAL_CONFUSABLE_TO_LATIN)].map(readAs).join(''),
   );
 
-/** Vrai si `window` peut se lire `target`, chaque joker valant n'importe quelle lettre, dans la limite de `MAX_JOKERS`. */
-const canRead = (window: string, target: string): boolean => {
-  const chars = [...window];
-  const fits = chars.every((char, index) => char === JOKER || char === target[index]);
-  return fits && chars.filter((char) => char === JOKER).length <= MAX_JOKERS;
+/**
+ * Vrai si `read` contient une suite qui se lit `target`, chaque joker valant
+ * UNE lettre (au plus `MAX_JOKERS` fois) ou RIEN — un sosie inséré entre deux
+ * lettres ne rallonge pas la fenêtre.
+ */
+const canRead = (read: readonly string[], target: string): boolean => {
+  const memo = new Map<string, boolean>();
+  const from = (i: number, j: number, used: number): boolean => {
+    if (j === target.length) return true;
+    if (i === read.length) return false;
+    const key = `${i}:${j}:${used}`;
+    const known = memo.get(key);
+    if (known !== undefined) return known;
+    const char = read[i];
+    const result =
+      char === JOKER
+        ? (j > 0 && from(i + 1, j, used)) || (used < MAX_JOKERS && from(i + 1, j + 1, used + 1))
+        : char === target[j] && from(i + 1, j + 1, used);
+    memo.set(key, result);
+    return result;
+  };
+  return read.some((_, start) => from(start, 0, 0));
 };
 
 /**
  * Vrai pour un nom qui PEUT se lire comme Meeshy (« Meeshy Officiel »,
- * « Мееѕһу », « ᴍeeshy », « rneeshy », « ⓜeeshy », « M❘eeshy »…) : la seule
- * réserve qui fait REFUSER une proposition. Fermée par défaut : un caractère
- * inconnu peut valoir la lettre qui manque. Un nom seulement mal formé n'est
- * pas une usurpation.
+ * « Мееѕһу », « ᴍeeshy », « rneeshy », « ⓜeeshy », « M❘eeshy », « Mee☆shy »…) :
+ * la seule réserve qui fait REFUSER une proposition. Deux contrôles, et l'un
+ * suffit : le SOCLE (tout ce qui n'est pas `[a-z0-9]` retiré, puis la
+ * sous-chaîne « meeshy »), et la lecture FERMÉE PAR DÉFAUT, où un caractère
+ * inconnu vaut une lettre ou rien. Un nom seulement mal formé n'est pas une
+ * usurpation.
  */
 export function impersonatesMeeshy(name: string): boolean {
-  const read = [...readingSkeleton(name)];
-  const target = MEESHY_PUBLISHER_SLUG;
-  return read.some((_, start) => start + target.length <= read.length && canRead(read.slice(start, start + target.length).join(''), target));
+  const read = readingSkeleton(name);
+  if (read.replace(/[^a-z0-9]/g, '').includes(MEESHY_PUBLISHER_SLUG)) return true;
+  return canRead([...read], MEESHY_PUBLISHER_SLUG);
 }
 
 /**
