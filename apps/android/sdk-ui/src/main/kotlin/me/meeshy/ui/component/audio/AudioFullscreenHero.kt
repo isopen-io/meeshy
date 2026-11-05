@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -78,7 +77,6 @@ internal fun AudioFullscreenHero(
                     opener.open(source.author)
                 }
                 .semantics {
-                    contentDescription = source.authorName
                     customActions = listOfNotNull(
                         onNext?.let { next -> CustomAccessibilityAction(nextLabel) { next(); true } },
                         onPrevious?.let { previous -> CustomAccessibilityAction(previousLabel) { previous(); true } },
