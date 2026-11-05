@@ -72,6 +72,11 @@ final class MessageUploadProgress: ObservableObject {
         Int((min(max(fraction, 0), 1) * 100 + 1e-9).rounded(.down))
     }
 
+    /// Le plus large libellé possible : le pied de bulle en réserve la largeur.
+    nonisolated static func reservedLabel(locale: Locale = .current) -> String {
+        accessibilityValue(percent: 100, locale: locale)
+    }
+
     nonisolated static func accessibilityValue(percent: Int, locale: Locale = .current) -> String {
         (Double(percent) / 100).formatted(.percent.precision(.fractionLength(0)).locale(locale))
     }
