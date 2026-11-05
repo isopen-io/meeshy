@@ -55,12 +55,13 @@ class ComposerHostViewModel @Inject constructor(
     val opening: ComposerOpening get() = ComposerProfile.of(door.origin).opensWith
 
     /**
-     * La porte a promis qu'on écrirait d'emblée (iOS `focusesContentOnAppear`) : dû jusqu'à ce que le champ ait pris le
-     * clavier, UNE fois — ni une bascule de format, ni une rotation, ni la restauration après la mort du processus ne le
-     * rejouent (la dette payée vit dans le [SavedStateHandle]).
+     * La porte a promis qu'on écrirait d'emblée sur une surface sans scène ([ComposerProfile.raisesKeyboardOnOpen]) : dû
+     * jusqu'à ce que le champ ait pris le clavier, UNE fois — ni une bascule de format, ni une rotation, ni la restauration
+     * après la mort du processus ne le rejouent (la dette payée vit dans le [SavedStateHandle]). Une scène s'ouvre au repos,
+     * comme la story (#16203).
      */
     val keyboardOwed: StateFlow<Boolean> =
-        saved.getStateFlow(KEYBOARD_OWED_KEY, ComposerProfile.of(door.origin).opensWith.focusesContentOnAppear)
+        saved.getStateFlow(KEYBOARD_OWED_KEY, ComposerProfile.of(door.origin).raisesKeyboardOnOpen)
 
     fun onKeyboardRaised() {
         saved[KEYBOARD_OWED_KEY] = false
