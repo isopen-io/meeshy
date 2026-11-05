@@ -105,6 +105,10 @@ fun CommunityAddChannelSheet(
                     items(visible, key = { it.id }, contentType = { "candidate" }) { c ->
                         CandidateRow(c, adding = state.addingId == c.id, enabled = state.addingId == null, onClick = { viewModel.onPick(c) }, modifier = Modifier.animateItem())
                     }
+                    if (state.hasMore) item(key = "more", contentType = "more") {
+                        LaunchedEffect(visible.size) { viewModel.loadMore() }
+                        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) }
+                    }
                 }
             }
         }
