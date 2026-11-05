@@ -66,7 +66,7 @@ export function publisherModels(seedUsers: Readonly<Record<string, PublisherUser
   const audit: AuditRow[] = [];
   const auditState = { down: false };
   const insert = (data: Record<string, unknown>) => {
-    const row = { id: `68e00000000000000000${String((seq += 1)).padStart(4, '0')}`, verifiedAt: null, verifiedBy: null, website: null, logoSrc: null, ...data } as ProfileRow;
+    const row: ProfileRow = { id: `68e00000000000000000${String((seq += 1)).padStart(4, '0')}`, verifiedAt: null, verifiedBy: null, website: null, logoSrc: null, ...data, userId: String(data.userId), displayName: String(data.displayName) };
     profiles.push(row);
     return row;
   };

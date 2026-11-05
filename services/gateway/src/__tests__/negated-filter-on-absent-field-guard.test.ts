@@ -37,6 +37,10 @@ const SCHEMA = join(__dirname, '../../../../packages/shared/prisma/schema.prisma
 const SITES_JUSTIFIES: Readonly<Record<string, string>> = {
   'routes/conversations/messages-search.ts#content': 'Message.content est requis ; seul Post.content est optionnel.',
   'routes/conversations/messages-list-views.ts#content': 'Message.content est requis ; seul Post.content est optionnel.',
+  'services/packs/PackPublishers.ts#userId':
+    "PartnerProfile.userId est requis (@unique, relation owner) : aucun profil d'éditeur n'en est privé, la négation n'écarte rien (#16274).",
+  'services/packs/PublisherNames.ts#userId':
+    "PartnerProfile.userId est requis (@unique, relation owner) : aucun profil d'éditeur n'en est privé, la négation n'écarte rien (#16274).",
   'services/posts/postReach.ts#sessionId':
     'PostEngagement.sessionId est requis (@unique) ; seul E2EERevokedIdentity.sessionId (#13013) est optionnel.',
   'services/posts/viewerEngagement.ts#parentId':
