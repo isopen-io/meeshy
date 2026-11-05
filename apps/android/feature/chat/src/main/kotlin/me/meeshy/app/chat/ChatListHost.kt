@@ -463,6 +463,7 @@ internal fun ChatListHost(
                 state = state,
                 clearance = LocalChatSignalClearance.current,
                 closure = host.composerClosure,
+                openCard = host.sheets.openExportCard,
             ),
         )
         else -> Unit

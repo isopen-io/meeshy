@@ -77,6 +77,11 @@ internal class ChatSheetVisibility {
 
     /** La vérification du numéro de sécurité d'un groupe chiffré de bout en bout (#13463). */
     var securityVerification by mutableStateOf(false)
+
+    /** « Imager » demandé hors du menu — la baguette du plein écran audio (#16334) : l'atelier s'ouvre sur ce message. */
+    var exportCardRequest by mutableStateOf<String?>(null)
+
+    val openExportCard: (messageId: String) -> Unit = { exportCardRequest = it }
 }
 
 /**
