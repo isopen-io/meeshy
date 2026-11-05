@@ -44,14 +44,50 @@ describe('la landing propose l’App Store et Google Play (#15120)', () => {
   });
 });
 
-describe('les badges de boutique gardent le blanc imposé, malgré la couleur des liens de la page (#15120)', () => {
-  test('la règle du badge l’emporte sur `.ld a` : même spécificité au moins, déclarée plus bas', async () => {
+describe('les badges de boutique gardent le blanc imposé, malgré la couleur des liens de la page (#15120, #16407)', () => {
+  test('la règle du badge l’emporte sur `.ld a` par sa spécificité, et sa feuille sert la landing comme /download', async () => {
     const { readFileSync } = await import('node:fs');
-    const css = readFileSync(new URL('../styles/landing.css', import.meta.url), 'utf8');
-    const linkRule = css.indexOf('.ld a {');
-    const badgeRule = css.indexOf('.ld .ld-store,\n.ld .ld-store:hover {');
-    expect(linkRule).toBeGreaterThanOrEqual(0);
-    expect(badgeRule).toBeGreaterThan(linkRule);
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+    const css = read('../styles/store-badge.css');
+    const badgeRule = css.indexOf('.ld-store.ld-store,\n.ld-store.ld-store:hover {');
+    expect(badgeRule).toBeGreaterThanOrEqual(0);
     expect(css.slice(badgeRule, css.indexOf('}', badgeRule))).toMatch(/color: #fff;/);
+    expect(read('../styles/landing.css')).toContain("@import './store-badge.css';");
+    expect(read('../routes/download.tsx')).toContain("import '@/styles/store-badge.css';");
+  });
+});
+
+const between = (html: string, start: string, end: string): string => {
+  const from = html.indexOf(start);
+  const to = html.indexOf(end, from + start.length);
+  return from < 0 || to < 0 ? '' : html.slice(from, to);
+};
+
+describe('les badges sont en face du titre, juste au-dessus de l’aperçu World (#16407)', () => {
+  test('dans chaque langue, les badges ouvrent la colonne de l’aperçu, avant le bloc World, hors de la colonne du titre', () => {
+    for (const language of LANDING_LANGUAGES) {
+      const html = renderToStaticMarkup(<LandingPage language={language} copy={LANDING_COPY[language]} />);
+      const titleColumn = between(html, '<div class="ld-hero-copy">', '<div class="ld-hero-side">');
+      const side = between(html, '<div class="ld-hero-side">', '</section>');
+      expect(titleColumn).toContain('<h1>');
+      expect(titleColumn).not.toContain('data-store=');
+      expect(side.indexOf('<div class="ld-stores"')).toBe('<div class="ld-hero-side">'.length);
+      expect(side.indexOf('data-store="app-store"')).toBeLessThan(side.indexOf('<aside class="ld-preview"'));
+      expect(side.indexOf('data-store="google-play"')).toBeLessThan(side.indexOf('<aside class="ld-preview"'));
+    }
+  });
+
+  test('le badge a UN rendu : la landing et /download servent le même composant', async () => {
+    const { StoreBadge } = await import('./store-logos');
+    const html = renderToStaticMarkup(<StoreBadge store="google-play" label="L" caption="C" />);
+    expect(html).toBe(
+      `<a href="${GOOGLE_PLAY_URL}" target="_blank" rel="noopener noreferrer" data-store="google-play" aria-label="L" class="ld-store">` +
+        html.slice(html.indexOf('<svg'), html.indexOf('</svg>') + '</svg>'.length) +
+        '<span class="ld-store-name"><span class="ld-store-caption">C</span>Google Play</span></a>',
+    );
+    const { readFileSync } = await import('node:fs');
+    const download = readFileSync(new URL('../routes/download.tsx', import.meta.url), 'utf8');
+    expect(download).toContain('<StoreBadge');
+    expect(download).not.toContain('BADGE_CLASS');
   });
 });
