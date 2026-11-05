@@ -22,7 +22,9 @@ import me.meeshy.sdk.model.playback.VoiceStackPlan
 import me.meeshy.sdk.model.playback.VoiceTrackLanguages
 import me.meeshy.sdk.model.voice.shouldShowConsentNotice
 import me.meeshy.ui.R
+import me.meeshy.sdk.model.settings.SettingsInvite
 import me.meeshy.ui.component.audio.AudioConsentNotice
+import me.meeshy.ui.settings.rememberSettingsInvite
 import me.meeshy.ui.theme.MeeshySpacing
 
 /** L'étiquette de test d'une rangée de la pile ; la rangée `i` (base 1) de l'attachement `id`. */
@@ -75,11 +77,12 @@ public fun BubbleAudioStack(
             }
         }
         if (content.showsVoiceConsentNotice()) {
+            val openConsent = callbacks.onTapConsentNotice ?: rememberSettingsInvite(SettingsInvite.VOICE_CONSENT)
             AudioConsentNotice(
                 message = stringResource(R.string.audio_consent_notice_message),
                 actionTitle = stringResource(R.string.audio_consent_notice_action),
                 accentHex = "#%06X".format(accent.toArgb() and 0xFFFFFF),
-                onTap = callbacks.onTapConsentNotice ?: {},
+                onTap = openConsent ?: {},
                 modifier = Modifier.padding(top = MeeshySpacing.xs),
             )
         }

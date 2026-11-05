@@ -383,6 +383,7 @@
     <string name="settings_section_profile">Profilo</string>
     <string name="settings_section_tools">Strumenti</string>
     <string name="settings_section_transcription">Trascrizione</string>
+    <string name="settings_section_voice">Profilo vocale</string>
     <string name="settings_security">Sicurezza</string>
     <string name="settings_share_links">Link di condivisione</string>
     <string name="settings_starred_messages">Messaggi preferiti</string>
@@ -400,6 +401,7 @@
     <string name="settings_transcription_engine">Motore di trascrizione</string>
     <string name="settings_transcription_engine_a11y">Motore di trascrizione</string>
     <string name="settings_version_label">Versione</string>
+    <string name="settings_voice_create">Crea un profilo vocale</string>
     <string name="support_a11y_opens">Apre %1$s</string>
     <string name="support_help_rate">Valuta l\'app</string>
     <string name="support_info_build">Build</string>
