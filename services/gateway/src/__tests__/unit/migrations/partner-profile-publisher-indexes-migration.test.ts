@@ -34,8 +34,9 @@ const fakeDatabase = (docs: readonly Doc[], seed: readonly Index[] = [{ name: '_
     dropIndex: (name: string) => indexes.splice(indexes.findIndex((index) => index.name === name), 1),
     createIndex: (key: Record<string, number>, options: Omit<Index, 'key'>) => indexes.push({ key, ...options }),
     aggregate: (pipeline: readonly Stage[]) => {
-      const match = pipeline.find((stage) => stage.$match)?.$match;
-      const group = pipeline.find((stage) => stage.$group)?.$group;
+      const groupAt = pipeline.findIndex((stage) => stage.$group);
+      const match = pipeline.slice(0, groupAt).find((stage) => stage.$match)?.$match;
+      const group = pipeline[groupAt]?.$group;
       const field = Object.values(group?._id ?? {})[0]?.slice(1) ?? '';
       const counts = new Map<string, number>();
       docs.filter((doc) => match === undefined || matchesStage(doc, match)).forEach((doc) => {
