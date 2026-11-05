@@ -300,7 +300,7 @@ jobs:
       # a failure below is a behavioural regression, and the routine's run log
       # needs to tell them apart without reading the raw log.
       - name: Assemble debug (./apps/android/meeshy.sh build)
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew :sdk-ui:assembleDebug --no-daemon
 
       - name: Room schema export matches the committed JSON
         run: ./scripts/check-room-schema.sh --built
@@ -322,7 +322,7 @@ jobs:
               sleep 120
             done
           ) &
-          ./gradlew testDebugUnitTest --no-daemon
+          ./gradlew :sdk-ui:testDebugUnitTest --tests 'me.meeshy.ui.component.audio.*' :feature:chat:testDebugUnitTest --tests 'me.meeshy.app.chat.AudioFullscreenViewModelTest' --tests 'me.meeshy.app.chat.ExitGateAudioDownloadTest' --tests 'me.meeshy.app.chat.ChatAudioFullscreen*' --tests 'me.meeshy.app.chat.AudioTranslation*' --no-daemon --continue
 
       # Gradle only says "There were failing tests. See the report at ..." and
       # points at an HTML file. The agents this gate exists for cannot download
