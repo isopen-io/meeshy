@@ -22,6 +22,10 @@ export type ComposerFoldSpec = {
  * d'aucun démontage. Une saisie qui commence (le focus entre dans le champ —
  * « Répondre », « dis-lui salut ») rouvre la barre, comme sur iOS.
  *
+ * Sous 360 px, le ⌄ n'est pas offert : ses 44 px ramèneraient le champ sous
+ * la largeur d'un doigt (`check-phone-frame.mjs`) ; une barre déjà repliée se
+ * rouvre toujours par sa bulle.
+ *
  * L'état est retenu PAR CONVERSATION (#16341) : on le retrouve en revenant, y
  * compris après un rechargement ; une conversation jamais touchée reste dépliée.
  */
@@ -93,7 +97,7 @@ export function ThreadComposerFold({ spec, children }: { readonly spec: Composer
           onPointerDown={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => choose(true)}
-          className="grid shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="grid shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 max-[359px]:hidden"
           style={{ width: FOLD_TARGET_PX, height: FOLD_TARGET_PX, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
         >
           <Glyph name="caretDown" size={14} />
