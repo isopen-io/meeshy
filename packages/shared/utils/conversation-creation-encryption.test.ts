@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   creationEncryptionOffer,
+  endToEndSupportsConversationType,
   isCreationEncryptionMode,
+  ENCRYPTION_MODE_UNSUPPORTED_CODE,
   mayChooseEndToEnd,
   IMPLICIT_CREATION_ENCRYPTION_MODE,
   type CreationEncryptionContext,
@@ -85,5 +87,18 @@ describe('isCreationEncryptionMode', () => {
   it('ne reconnaît que les trois modes', () => {
     expect(['server', 'hybrid', 'e2ee'].every(isCreationEncryptionMode)).toBe(true);
     expect([null, undefined, '', 'none', 'E2EE', 42].some(isCreationEncryptionMode)).toBe(false);
+  });
+});
+
+describe('endToEndSupportsConversationType (#16113)', () => {
+  it('le bout en bout ne se chiffre aujourd’hui qu’en tête-à-tête : aucun client ne scelle un groupe', () => {
+    expect(endToEndSupportsConversationType('direct')).toBe(true);
+    for (const type of ['group', 'public', 'global', 'broadcast', 'community', '', 'DIRECT']) {
+      expect(endToEndSupportsConversationType(type)).toBe(false);
+    }
+  });
+
+  it('le refus porte un code stable, le même à la création et à la bascule', () => {
+    expect(ENCRYPTION_MODE_UNSUPPORTED_CODE).toBe('ENCRYPTION_MODE_UNSUPPORTED');
   });
 });

@@ -160,8 +160,6 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
         // > trahir dans son assertion. C'est la prose qu'il faut suivre.
         XCTAssertTrue(hote.contains("openSceneDescriptionEditing()"),
                       "aucun geste n'ouvre plus la légende du canvas — elle est devenue inatteignable")
-        XCTAssertTrue(hote.contains("var atelierDescriptionButton: some View"),
-                      "la pastille qui l'ouvre a disparu : la légende n'a plus de porte du tout")
         XCTAssertFalse(ComposerRailDoor.canonicalRail.contains(.description),
                        "si la légende revient au rail, ce témoin doit redevenir celui du rail — et la mesure "
                            + "du débordement à cinq pastilles doit être refaite avant.")

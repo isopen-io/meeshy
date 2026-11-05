@@ -126,7 +126,7 @@ fun CommunityMembersScreen(
                 )
                 if (state.canInvite) {
                     IconButton(onClick = { haptics.light(); onInvite() }) {
-                        Icon(MeeshyIcons.PersonAdd, stringResource(R.string.community_detail_action_invite), tint = androidx.compose.ui.graphics.Color(0xFF6366F1))
+                        Icon(MeeshyIcons.PersonAdd, stringResource(R.string.community_detail_action_invite), tint = me.meeshy.ui.theme.MeeshyPalette.Indigo500)
                     }
                 }
             }

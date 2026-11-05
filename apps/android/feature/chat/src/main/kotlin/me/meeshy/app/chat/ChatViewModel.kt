@@ -127,6 +127,8 @@ class ChatViewModel @Inject constructor(
     private val openConversations: OpenConversationRegistry,
     reactionRows: me.meeshy.sdk.reaction.ReactionRowStore? = null,
     private val pendingPreviews: me.meeshy.sdk.media.PendingMediaPreviewing = me.meeshy.sdk.media.PendingMediaPreviewing.None,
+    translationsFetcher: me.meeshy.sdk.conversation.MessageTranslationsFetcher? = null,
+    audioTranslationTracker: me.meeshy.sdk.attachment.AudioTranslationRequestTracker? = null,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -253,6 +255,9 @@ class ChatViewModel @Inject constructor(
         sessionRepository = sessionRepository,
         messageSocketManager = messageSocketManager,
         conversationId = conversationId,
+        requestAttachmentTranslation = audioTranslationTracker?.asExplorerRequest(),
+        fetchTranslations = translationsFetcher?.asExplorerFetch(),
+        audioPendingKeys = audioTranslationTracker?.pendingKeys ?: kotlinx.coroutines.flow.flowOf(emptySet()),
     )
 
     private val replyJump = ChatReplyJumpController(screenState)
@@ -767,6 +772,9 @@ class ChatViewModel @Inject constructor(
     /** Retranslate a language from the explorer — force a fresh translation. */
     fun onExplorerRetranslate(messageId: String, code: String) =
         translation.onExplorerRetranslate(messageId, code)
+
+    /** Toucher une ligne de l'explorateur : sélectionner, ou demander la voix par pièce / le texte. */
+    fun onExplorerRowTap(messageId: String, code: String) = translation.onExplorerRowTap(messageId, code)
 
     // --- Reply jump, pins ----------------------------------------------------------------
 

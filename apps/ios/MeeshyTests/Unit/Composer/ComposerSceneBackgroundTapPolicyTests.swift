@@ -223,8 +223,8 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
 
     /// Le fusible de la garde ci-dessus : si un chemin devient faux, elle
     /// deviendrait verte sur zéro fichier.
-    func test_laGarde_litBienTroisFichiers() {
-        XCTAssertEqual(fichiersDeLaSurfaceNeuve.count, 3)
+    func test_laGarde_litBienDeuxFichiers() {
+        XCTAssertEqual(fichiersDeLaSurfaceNeuve.count, 2)
         for fichier in fichiersDeLaSurfaceNeuve {
             XCTAssertTrue(
                 FileManager.default.fileExists(atPath: fichier.path),
@@ -243,8 +243,7 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
             .deletingLastPathComponent()   // racine du dépôt
         return [
             racine.appendingPathComponent("apps/ios/Meeshy/Features/Composer/ComposerSceneSurface.swift"),
-            racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Story/EmbeddedSceneCanvas.swift"),
-            racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Story/EmbeddedSceneInspector.swift")
+            racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Story/EmbeddedSceneCanvas.swift")
         ]
     }
 }

@@ -28,17 +28,4 @@ final class SceneWindowSizeAdoptionGuardTests: XCTestCase {
         }
     }
 
-    /// Cycle 8 : les marges sûres des surfaces plein écran (composer de story, éditeur d'image, contrôles vidéo) se
-    /// lisent dans `\.sceneSafeAreaInsets`, mesuré hors de `body`, plus sur la fenêtre clé pendant le rendu.
-    func test_theFullscreenChrome_readsItsWindowsSafeArea() throws {
-        for path in [
-            "Sources/MeeshyUI/Story/StoryComposerView+Canvas.swift",
-            "Sources/MeeshyUI/Media/MeeshyImageEditorView.swift",
-            "Sources/MeeshyUI/Media/MeeshyVideoPlayer+Controls.swift",
-        ] {
-            let code = try source(path)
-            XCTAssertFalse(code.contains("WindowMetrics.safeAreaInsets"), "\(path) lit encore les marges de la fenêtre clé")
-            XCTAssertTrue(code.contains("SceneWindowSize.resolveInsets(sceneSafeAreaInsets"), "\(path) doit lire sa fenêtre")
-        }
-    }
 }

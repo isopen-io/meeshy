@@ -39,6 +39,7 @@ internal object StoryComposerUploadReducer {
         landings: List<ComposerMediaPlacement.Landing>,
         refused: Int = 0,
         items: List<MediaUploadItem> = emptyList(),
+        hints: List<IncomingMediaHint> = emptyList(),
     ): StoryComposerUiState =
         state.copy(
             isPreparingMedia = true,
@@ -46,6 +47,7 @@ internal object StoryComposerUploadReducer {
             uploadingMedia = List(landings.size) { MediaUploadProgress.Idle },
             mediaLandings = landings,
             incomingMedia = items,
+            incomingHints = hints,
             canRetryMedia = false,
         )
 
@@ -100,7 +102,7 @@ internal object StoryComposerUploadReducer {
         if (mediaId == null || isSelectedBackgroundMedia(mediaId)) this else toggleSelectedBackgroundMedia(mediaId)
 
     fun settled(state: StoryComposerUiState): StoryComposerUiState =
-        state.copy(isPreparingMedia = false, uploadingMedia = emptyList(), mediaLandings = emptyList(), incomingMedia = emptyList())
+        state.copy(isPreparingMedia = false, uploadingMedia = emptyList(), mediaLandings = emptyList(), incomingMedia = emptyList(), incomingHints = emptyList())
 
     /** The upload failed because a media's location cannot be removed ([MediaLocationRefusal]), not for a reason a retry could fix. */
     fun refusesForLocation(error: ApiError): Boolean = MediaLocationRefusal.isCode(error.code)

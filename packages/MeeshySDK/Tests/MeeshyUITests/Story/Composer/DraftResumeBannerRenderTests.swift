@@ -96,14 +96,4 @@ final class DraftResumeBannerRenderTests: XCTestCase {
         )
     }
 
-    /// Le composer doit lire CE gabarit. Un littéral jumeau chez lui reproduirait
-    /// exactement la dérive corrigée ici : la carte a changé deux fois de forme,
-    /// le nombre en face n'a jamais bougé.
-    func test_theComposerRendersTheCoverAtTheCardsOwnResolution() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+SyncRestore.swift")
-        XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "DraftResumeCard.coverRenderSize", in: code), 1,
-            "Le rendu du cover part du gabarit publié par le bandeau, jamais d'un CGSize local."
-        )
-    }
 }

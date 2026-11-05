@@ -50,7 +50,7 @@ extension MeeshyComposerHost {
                 repostOfId: intent.origin.repostedPostId,
                 audioUrl: moodSeed?.audioUrl
             )
-        case .scene, .document:
+        case .document:
             let emportes = carriedSceneAssets
             // L'audience est celle du SOCLE, jamais la graine de la porte.
             // `initialVisibility` la fournissait tant qu'`audienceChip` était un

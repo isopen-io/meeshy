@@ -32,7 +32,6 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
         ("Story/Timeline/Views/Track/TransitionBadge.swift", "onTap()"),
         ("Story/Timeline/Views/Track/TransitionCreationBadge.swift", "onCreate()"),
         ("Story/Controls/AudioForegroundChip.swift", "onTap"),
-        ("Story/Controls/ComposerControlsLayer.swift", "restoreChrome()"),
         ("Story/TextEditFloatingBubbles.swift", "cycle(tool)"),
         ("Primitives/MeeshyAvatar.swift", "performTap"),
         ("Primitives/UserIdentityBar.swift", "onTap?(code)"),

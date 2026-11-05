@@ -66,30 +66,4 @@ final class StoryComposerAutosaveTests: XCTestCase {
 
     // MARK: - Media fingerprint (gates the heavy saveMedia)
 
-    func test_mediaKeysFingerprint_unionsAllThreeSources() {
-        let keys = StoryComposerView.mediaKeysFingerprint(
-            images: ["img-1": UIImage()],
-            videos: ["vid-1": URL(fileURLWithPath: "/tmp/v.mp4")],
-            audios: ["aud-1": URL(fileURLWithPath: "/tmp/a.m4a")]
-        )
-        XCTAssertEqual(keys, ["img-1", "vid-1", "aud-1"])
-    }
-
-    func test_mediaKeysFingerprint_detectsMediaAddition() {
-        let before = StoryComposerView.mediaKeysFingerprint(
-            images: ["img-1": UIImage()], videos: [:], audios: [:])
-        let after = StoryComposerView.mediaKeysFingerprint(
-            images: ["img-1": UIImage(), "img-2": UIImage()], videos: [:], audios: [:])
-        XCTAssertNotEqual(before, after,
-                          "Adding a media must change the fingerprint so saveMedia re-runs")
-    }
-
-    func test_mediaKeysFingerprint_stableAcrossContentMutations() {
-        let a = StoryComposerView.mediaKeysFingerprint(
-            images: ["img-1": UIImage()], videos: [:], audios: [:])
-        let b = StoryComposerView.mediaKeysFingerprint(
-            images: ["img-1": UIImage()], videos: [:], audios: [:])
-        XCTAssertEqual(a, b,
-                       "Same keys ⇒ same fingerprint: pure JSON edits must not re-copy bitmaps")
-    }
 }

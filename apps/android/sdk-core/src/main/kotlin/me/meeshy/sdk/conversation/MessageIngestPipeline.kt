@@ -6,6 +6,7 @@ import me.meeshy.core.database.dao.sameStoredContentAs
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ConversationEventDeltas
 import me.meeshy.sdk.model.MessageMergePolicy
 import me.meeshy.sdk.model.PendingMessageMutations
@@ -37,13 +38,21 @@ internal class MessageIngestPipeline(
     private val events: MessageEventBuffer? = null,
     /** #14655 — un message chiffré que le serveur dit parti (supprimé, échu, vue unique ouverte) inscrit son effacement. */
     private val erasures: PlaintextErasureLedger? = null,
+    /** #16012 — les fichiers locaux d'une ligne réécrite avec ses adresses servies : adoptés, puis libérés. */
+    private val media: AcknowledgedBubbleMedia? = null,
 ) {
 
     /** Fusionne [messages] dans sa propre transaction ; rend les conversations réellement écrites. */
     suspend fun ingest(messages: List<ApiMessage>, nowMillis: Long): Set<String> {
         if (messages.isEmpty()) return emptySet()
-        return database.withTransaction { mergeInTransaction(messages, nowMillis) }
+        val settlements = media?.let { mutableListOf<LocalFilesSettlement>() }
+        val changed = database.withTransaction { mergeInTransaction(messages, nowMillis, settlements = settlements) }
+        settlements?.forEach { media?.settle(it.previous, it.written) }
+        return changed
     }
+
+    /** Les pièces `file://` d'une ligne réécrite ([previous]) et celles de la ligne qui la remplace ([written]). */
+    internal class LocalFilesSettlement(val previous: List<ApiMessageAttachment>, val written: List<ApiMessageAttachment>)
 
     /**
      * Fusionne [messages] — À APPELER dans la transaction de l'appelant (une page REST et son
@@ -57,6 +66,7 @@ internal class MessageIngestPipeline(
         messages: List<ApiMessage>,
         nowMillis: Long,
         conversationId: String? = null,
+        settlements: MutableList<LocalFilesSettlement>? = null,
     ): Set<String> {
         if (messages.isEmpty()) return emptySet()
         val pending = outboxGuard.load()
@@ -86,6 +96,7 @@ internal class MessageIngestPipeline(
                 replacedLocalIds += it.id
                 replacements += it to incoming
             }
+            if (settlements != null) listOfNotNull(direct, optimistic).distinct().forEach { settlements += settlementOf(it, row) }
             val unchanged = base != null && base.id == row.id && row.sameStoredContentAs(base)
             if (!unchanged) {
                 writes[row.id] = row
@@ -224,6 +235,18 @@ internal class MessageIngestPipeline(
             if (!attachments.isEmpty) supersededAttachments += keys to attachments
         }
         return RetainedChanges(outlived, superseded, supersededAttachments)
+    }
+
+    /**
+     * #16012 — une ligne qui nommait des fichiers de l'appareil (bulle optimiste, ou bulle que l'accusé socket a seulement
+     * renommée) et que [row] réécrit : ses pièces et celles de [row], à régler APRÈS l'écriture. Rien sans fichier local.
+     */
+    private fun settlementOf(previous: MessageEntity, row: MessageEntity): List<LocalFilesSettlement> {
+        if (!AcknowledgedBubbleMedia.mayHoldLocalFiles(previous.payload)) return emptyList()
+        val before = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(previous.payload).attachments }.getOrNull().orEmpty()
+        if (before.isEmpty()) return emptyList()
+        val after = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload).attachments }.getOrNull().orEmpty()
+        return listOf(LocalFilesSettlement(before, after))
     }
 
     /** Une rafale peut porter deux fois le même message : seul son dernier état compte. */

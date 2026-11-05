@@ -11,7 +11,9 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.appearance.AppearanceCatalogLoader
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ConversationSettingsForm
+import me.meeshy.sdk.model.MemberActionPolicy
 import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.knownUserRole
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.appearance.ConversationAppearance
@@ -31,7 +33,13 @@ data class ConversationSettingsUiState(
     /** L'accent PERSONNEL du lecteur ; `null` = « Automatique » (l'accent calculé de la conversation). */
     val appearance: ConversationAppearance = ConversationAppearance.DEFAULT,
     val catalog: AppearanceCatalog? = null,
+    /** Recherche LOCALE de la section « Gestion des membres » : filtre le roster déjà chargé, sans requête. */
+    val memberQuery: String = "",
+    /** Le rang du lecteur dans cette conversation (repli membre) : il décide du bouton « Ajouter un membre ». */
+    val viewerRole: MemberRole = MemberRole.MEMBER,
 ) {
+    val mayAddMember: Boolean get() = MemberActionPolicy.mayAddMember(viewerRole)
+
     val isLoaded: Boolean get() = form != null
     val isSaving: Boolean get() = status == SettingsSaveStatus.Saving
     val hasError: Boolean get() = status == SettingsSaveStatus.Error
@@ -83,11 +91,14 @@ class ConversationSettingsViewModel @Inject constructor(
                         mayEdit = mayEdit,
                         form = it.form ?: ConversationSettingsForm.from(conversation),
                         appearance = appearance,
+                        viewerRole = conversation.knownUserRole(sessionRepository.currentUser.value?.id) ?: MemberRole.MEMBER,
                     )
                 }
             }
         }
     }
+
+    fun setMemberQuery(query: String) = _state.update { it.copy(memberQuery = query) }
 
     fun setWriteRole(role: MemberRole) = editForm { it.withWriteRole(role) }
 

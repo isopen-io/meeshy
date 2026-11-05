@@ -32,6 +32,7 @@ import me.meeshy.sdk.model.renderFingerprint
 import me.meeshy.sdk.model.search.ListMessageHit
 import me.meeshy.sdk.model.search.ListMessageSearchState
 import me.meeshy.sdk.theme.otherParticipantUserId
+import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.component.CollapsibleSection
 import kotlinx.coroutines.flow.first
@@ -70,7 +71,11 @@ internal fun ConversationListBody(
         // compose eagerly (few items on a real account).
         val sections = ConversationSections.of(state.conversations, state.categories)
         val remembered by viewModel.rememberedSections.collectAsStateWithLifecycle()
-        val expandedSections = ConversationSectionExpansionStore.effective(remembered, state.categories)
+        val baseExpanded = ConversationSectionExpansionStore.effective(remembered, state.categories)
+        val drag = rememberConversationDragState()
+        val expandedSections = drag.collapsedExpanded ?: baseExpanded
+        val haptics = rememberMeeshyHaptics()
+        ConversationDragAutoScroll(drag, listState)
         val nowMillis by rememberMinuteClock()
         val tailHeight = LIST_TAIL_HEIGHT
         val stickerSkin = rememberLentilleListSkin()
@@ -82,7 +87,19 @@ internal fun ConversationListBody(
                 enteringSection = null
             }
         }
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag(CONVERSATION_LIST_TAG)) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag(CONVERSATION_LIST_TAG)
+                .conversationListDragWatch(
+                    state = drag,
+                    baseExpanded = { baseExpanded },
+                    onFinished = { restored ->
+                        restored?.filterNot { it in baseExpanded }?.forEach(viewModel::revealSection)
+                    },
+                ),
+        ) {
             item(key = "list-story-rail", contentType = "story-rail") { header() }
             conversationListStateItems(
                 content = content,
@@ -91,7 +108,7 @@ internal fun ConversationListBody(
             ) {
                 populatedItems(
                     state, sections, expandedSections, viewModel, nowMillis, signals, rowNavigation, tailHeight,
-                    placementSpec, stickerSkin, enteringSection,
+                    placementSpec, stickerSkin, enteringSection, drag, haptics,
                     onSectionToggled = { section, expand ->
                         if (expand) enteringSection = section.sectionId
                         viewModel.onSectionToggled(section, expand)
@@ -117,6 +134,8 @@ private fun LazyListScope.populatedItems(
     placementSpec: FiniteAnimationSpec<IntOffset>?,
     stickerSkin: Boolean,
     enteringSection: String?,
+    drag: ConversationDragState,
+    haptics: MeeshyHaptics,
     onSectionToggled: (ConversationSection, Boolean) -> Unit,
     messages: LazyListScope.() -> Unit,
 ) {
@@ -134,6 +153,14 @@ private fun LazyListScope.populatedItems(
                     foldedUnread = foldedUnread,
                     stickerSkin = stickerSkin,
                     onToggle = { onSectionToggled(section, it) },
+                    isDropTarget = drag.hoveredSectionId == section.sectionId,
+                    modifier = Modifier
+                        .sectionDropTarget(drag, section.sectionId, haptics, viewModel::onConversationDropped)
+                        .dragHeaderDecoration(
+                            isOrigin = drag.originSectionId == section.sectionId,
+                            isTarget = drag.hoveredSectionId == section.sectionId,
+                            sectionColor = section.containerColor(),
+                        ),
                 )
             }
         }
@@ -142,9 +169,13 @@ private fun LazyListScope.populatedItems(
                 Box(
                     Modifier
                         .animateItem(placementSpec = placementSpec)
-                        .sectionRowEntry(animate = section.sectionId == enteringSection),
+                        .sectionRowEntry(animate = section.sectionId == enteringSection)
+                        .conversationDragSource(drag, conversation.id, section.sectionId),
                 ) {
-                    ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
+                    ConversationListRow(
+                        state, conversation, viewModel, nowMillis, signals, rowNavigation,
+                        isDragging = drag.draggedId == conversation.id,
+                    )
                 }
             }
         }
@@ -171,6 +202,7 @@ private fun ConversationListRow(
     now: Long,
     signals: ConversationRowSignals,
     rowNavigation: ConversationRowNavigation,
+    isDragging: Boolean = false,
 ) {
     val currentUserId = state.currentUserId
     val actions = remember(viewModel, conversation, currentUserId, rowNavigation) {
@@ -197,6 +229,7 @@ private fun ConversationListRow(
             hasPendingSync = signals.hasPendingSync(conversation.id),
             here = signals.peerHere(conversation, currentUserId).toAvatarHere(),
             callInProgress = signals.hasCallInProgress(conversation.id),
+            isDragging = isDragging,
         ),
         actions = actions,
     )

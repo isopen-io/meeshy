@@ -6,6 +6,7 @@
     <string name="a11y_kit_toggle_on">مُفعَّل</string>
     <string name="a11y_media_download_action">تنزيل</string>
     <string name="a11y_media_download_cancel">إلغاء التنزيل</string>
+    <string name="a11y_message_actions_forward">إعادة توجيه</string>
     <string name="audio_consent_notice_action">التفعيل في الإعدادات</string>
     <string name="audio_consent_notice_message">فعّل الموافقة الصوتية لتُنسَخ رسائلك الصوتية نصًّا وتُترجَم.</string>
     <string name="audio_editor_a11y_playhead">موضع التشغيل</string>
@@ -304,6 +305,8 @@
     <string name="media_caption_see_less_hint">يطوي الشرح</string>
     <string name="media_caption_see_more">عرض المزيد</string>
     <string name="media_caption_see_more_hint">يعرض الشرح كاملاً</string>
+    <string name="media_compose_hint">يفتح المؤلف مع وضع هذه الوسائط.</string>
+    <string name="media_compose_title">أنشئ بهذه الوسائط</string>
     <string name="media_crop_a11y_handle_bottom">الحافة السفلية</string>
     <string name="media_crop_a11y_handle_bottomLeft">الزاوية السفلية اليسرى</string>
     <string name="media_crop_a11y_handle_bottomRight">الزاوية السفلية اليمنى</string>
@@ -320,6 +323,7 @@
     <string name="media_crop_a11y_position">الموضع الأفقي %1$s، العمودي %2$s</string>
     <string name="media_crop_a11y_size">العرض %1$s، الارتفاع %2$s</string>
     <string name="media_download">تنزيل</string>
+    <string name="media_forward_rail_hint">يرسل هذه الوسائط إلى محادثة أخرى.</string>
     <string name="media_label_audio">صوت</string>
     <string name="media_label_file">ملف</string>
     <string name="media_label_location">الموقع</string>
@@ -338,6 +342,10 @@
     <string name="media_permission_photos_denied_message">تم رفض الوصول إلى الصور — اضغط لفتح الإعدادات</string>
     <string name="media_permission_photos_denied_title">تم رفض الوصول إلى الصور</string>
     <string name="media_playAudio">تشغيل الصوت</string>
+    <string name="media_react_hint">يعرض صف الرموز التعبيرية للتفاعل مع هذه الوسائط.</string>
+    <string name="media_react_title">تفاعل</string>
+    <string name="media_reply_hint_inPlace">يفتح حقل الكتابة فوق هذه الوسيطة مع اقتباسها.</string>
+    <string name="media_reply_title">رد</string>
     <string name="media_skipBack10s">الرجوع 10 ثوانٍ</string>
     <string name="media_skipForward10s">التقدّم 10 ثوانٍ</string>
     <string name="media_summary_file">📎 ملف</string>

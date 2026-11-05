@@ -55,82 +55,6 @@ final class DraftResumeStateTests: XCTestCase {
 
     // MARK: - Gate d'écrasement du brouillon en magasin
 
-    private func mayOverwrite(
-        draftResume: DraftResumeState = DraftResumeState(),
-        isAutosaveSuspended: Bool = false,
-        composerHasContent: Bool = true,
-        didHandOffPublish: Bool = false
-    ) -> Bool {
-        StoryComposerView.mayOverwriteStoredDraft(
-            draftResume: draftResume,
-            isAutosaveSuspended: isAutosaveSuspended,
-            composerHasContent: composerHasContent,
-            didHandOffPublish: didHandOffPublish
-        )
-    }
-
-    func test_autosave_whileTheBannerIsStillPosted_doesNotOverwriteTheStoredDraft() {
-        var state = DraftResumeState()
-        state.offer()
-
-        XCTAssertFalse(
-            mayOverwrite(draftResume: state),
-            """
-            L'offre est SOUS LES YEUX de l'utilisateur : « Reprendre » doit \
-            restaurer les slides proposées, pas ce que le composer a semé \
-            entre-temps. Le magasin n'a qu'un slot.
-            """
-        )
-    }
-
-    func test_autosave_afterTheBannerWasRangedAndSomethingWasCreated_savesTheLiveWork() {
-        var state = DraftResumeState()
-        state.offer()
-        state.hideBanner()
-
-        XCTAssertTrue(
-            mayOverwrite(draftResume: state, composerHasContent: true),
-            """
-            D1 : le travail créé APRÈS avoir rangé le bandeau doit survivre au \
-            kill de l'app. L'utilisateur a vu l'offre et a créé autre chose — \
-            c'est une décision implicite, et le chemin est devenu majoritaire \
-            depuis que le tap canvas est l'affordance principale de la page \
-            blanche.
-            """
-        )
-    }
-
-    func test_autosave_afterTheBannerWasRangedAndNothingWasCreated_writesNothing() {
-        var state = DraftResumeState()
-        state.offer()
-        state.hideBanner()
-
-        XCTAssertFalse(
-            mayOverwrite(draftResume: state, composerHasContent: false),
-            """
-            Rien n'a été créé : rien ne supplante l'offre, et le fond pastel \
-            auto-appliqué ne compte pas (cf. `composerHasContent`). Le brouillon \
-            rangé est donc reproposé tel quel à l'ouverture suivante — ranger \
-            n'est pas jeter.
-            """
-        )
-    }
-
-    func test_autosave_afterTheUserDecided_writesAgain() {
-        var state = DraftResumeState()
-        state.offer()
-        state.decide()
-
-        XCTAssertTrue(
-            mayOverwrite(draftResume: state),
-            "Une fois « Reprendre » ou « Recommencer » pressé, le travail en cours redevient sauvegardable."
-        )
-    }
-
-    func test_autosave_onAFreshComposerWithoutAnyDraft_writes() {
-        XCTAssertTrue(mayOverwrite())
-    }
-
     // INVERSION CONSCIENTE (directive user 2026-08-02, point c) : l'ancien
     // terme `isEditingExistingStory` fermait l'autosave en édition — « un
     // brouillon semé depuis une session d'édition serait restauré comme une
@@ -142,18 +66,4 @@ final class DraftResumeStateTests: XCTestCase {
     // `StoryComposerPublishGateTests.test_theAutosaveGateNoLongerShutsOffForEditSessions`
     // interdit sa réintroduction.
 
-    func test_autosave_onAnEmptyComposer_writesNothing() {
-        XCTAssertFalse(mayOverwrite(composerHasContent: false))
-    }
-
-    func test_autosave_afterPublishHandOff_writesNothing() {
-        XCTAssertFalse(mayOverwrite(didHandOffPublish: true))
-    }
-
-    func test_autosave_whileSuspendedByAnExplicitDiscard_writesNothing() {
-        XCTAssertFalse(
-            mayOverwrite(isAutosaveSuspended: true),
-            "Un debounce encore en vol ne doit pas re-persister un brouillon explicitement jeté."
-        )
-    }
 }

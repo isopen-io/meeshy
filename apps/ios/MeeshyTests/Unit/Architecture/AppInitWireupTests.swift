@@ -138,125 +138,47 @@ final class AppInitWireupTests: XCTestCase {
         )
     }
 
-    // MARK: - Composer de story : le sélecteur de lieu vient de l'app
+    // MARK: - Composer de story : les fournisseurs viennent de l'app
 
-    /// Le composer de story vit au SDK ; le sélecteur de lieu, non (MapKit,
-    /// CoreLocation, `MediaPermissionCoordinator`, catalogue `.main`). Le SDK
-    /// expose donc `\.storyLocationPicker` et l'app l'alimente. Un site de
-    /// présentation qui oublie l'injection rend le chip « Lieu » invisible : la
-    /// pastille redevient inatteignable, sans le moindre signal.
-    func test_everyStoryComposerPresentation_injectsTheLocationPicker() throws {
-        for unit in Self.storyComposerPresentationUnits {
-            let src = try appUnit(unit)
-            let path = "\(unit)+*.swift"
-            let presentations = occurrences(of: "StoryComposerView(", in: src)
-            let injections = occurrences(of: ".storyLocationPickerProvided()", in: src)
-            XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
-            XCTAssertEqual(
-                injections, presentations,
-                "\(path) : chaque présentation du composer doit injecter le picker de lieu "
-                    + "(.storyLocationPickerProvided()) — sinon le chip « Lieu » n'est pas rendu."
-            )
-        }
-    }
-
-    /// S5 — mêmes causes, mêmes effets : la caméra (AVCaptureSession,
-    /// permissions), la pellicule (PhotoKit) et la lecture du presse-papier
-    /// (`NSItemProvider`, autorisation sandbox) restent app-side, le composer
-    /// SDK expose TROIS points d'injection. Un site de présentation qui les
-    /// oublie fait disparaître les amorces de la page blanche SANS le moindre
-    /// signal — c'est exactement ce que ce jumeau du garde-fou « Lieu »
-    /// interdit.
+    /// Le sélecteur de lieu (MapKit, CoreLocation), la caméra
+    /// (AVCaptureSession), la pellicule (PhotoKit), le presse-papier
+    /// (`NSItemProvider`) et la bibliothèque de stickers restent app-side : le
+    /// SDK expose des points d'injection, et le meuble les alimente. Un
+    /// présentateur qui les oublie fait disparaître la pastille « Lieu » ou la
+    /// capsule « Coller » SANS le moindre signal.
     ///
-    /// C5b l'a vérifié dans le mauvais sens : `storyPasteProvided()` a été
-    /// écrit, testé, et n'a JAMAIS été appelé — donc `\.storyPaste` restait
-    /// `nil` partout, donc `BlankCanvasPasteStarter` ne rendait rien sur aucun
-    /// écran. Cette garde ne connaissait que deux des trois injections : c'est
-    /// l'omission qu'elle couvre désormais.
-    func test_everyStoryComposerPresentation_injectsTheBlankCanvasStarters() throws {
-        let injections = [
-            ".storyCameraCaptureProvided()":
-                "sans injection caméra, l'amorce « Caméra » n'est pas rendue.",
-            ".storyRecentCameraRollProvided()":
-                "sans injection pellicule, la vignette « dernière photo » n'est pas rendue.",
-            ".storyPasteProvided()":
-                "sans injection presse-papier, la capsule « Coller » n'est pas rendue — "
-                    + "`\\.storyPaste` reste nil et `BlankCanvasPasteStarter` rend un corps vide."
-        ]
+    /// Depuis le #15629, l'atelier du SDK a quitté le dépôt : il n'y a plus de
+    /// « présentation du composer » à compter. La loi est désormais celle de
+    /// `composerPortalProviders` — UNE liste, posée à CHACUN des présentateurs
+    /// du meuble (feuilles système et ancrées). Chaque fournisseur y est écrit
+    /// une fois : un second exemplaire empilerait deux couches sur la même clé
+    /// d'environnement, la dernière gagnant en silence.
+    func test_theComposerPortals_injectEveryAppSideProvider_once() throws {
         for unit in Self.storyComposerPresentationUnits {
             let src = try appUnit(unit)
             let path = "\(unit)+*.swift"
-            let presentations = occurrences(of: "StoryComposerView(", in: src)
-            XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
-            for (modifier, why) in injections {
+            XCTAssertGreaterThanOrEqual(
+                occurrences(of: ".composerPortalProviders(format:", in: src), 2,
+                "\(path) : les deux présentateurs du meuble (feuilles système et ancrées) posent la MÊME liste."
+            )
+            for provider in [".storyLocationPickerProvided()",
+                             ".storyCameraCaptureProvided()",
+                             ".storyRecentCameraRollProvided()",
+                             ".storyPasteProvided()",
+                             ".storyStickerLibraryProvided()"] {
                 XCTAssertEqual(
-                    occurrences(of: modifier, in: src), presentations,
-                    "\(path) : \(why)"
+                    occurrences(of: provider, in: src), 1,
+                    "\(path) : \(provider) s'écrit UNE fois, dans `composerPortalProviders`."
                 )
             }
         }
     }
 
-    /// Tous les fichiers qui MONTENT un composer de story eux-mêmes : un site
-    /// oublié par ce garde-fou est un site où les amorces de page blanche
-    /// disparaissent sans le moindre signal. `MeeshyComposerHost` (C3) en fait
-    /// partie — c'est le meuble qui enveloppe l'atelier, donc un site de
-    /// présentation à part entière.
-    ///
-    /// V3-2 — `StoryTrayActions` en est SORTI, et c'est un acquis, pas un
-    /// oubli : la porte de création délègue désormais au meuble, qui pose les
-    /// fournisseurs au plus près de l'atelier. Les reposer sur le cover en
-    /// empilerait DEUX couches — la dernière gagne, en silence, et le compte
-    /// « injections == présentations » cesserait de mesurer quoi que ce soit.
-    /// L'invariant côté porte est tenu par
-    /// `test_theStoryCreationDoor_mountsTheComposerHost_andLetsItPoseTheProviders`.
-    /// **#5053 — la liste a MAIGRI, et c'est le résultat visé.**
-    ///
-    /// `StoryTrayView` en sort : son cover d'édition monte `StoryEditComposer`,
-    /// donc le meuble, qui pose les cinq fournisseurs au plus près de l'atelier.
-    /// Les reposer chez la porte empilerait deux couches sur la même clé
-    /// d'environnement — la dernière gagne, sans erreur ni signal.
-    ///
-    /// `StoryViewerView` en est sorti à son tour au **#5055** : « éditer et
-    /// republier en post » montait `UnifiedPostComposer`, le dernier composer
-    /// historique présenté nu du dépôt. Il monte désormais
-    /// `StoryRepublishComposer` — la même porte que « Republier », ouverte sur
-    /// `.post`.
-    ///
-    /// **Il ne reste donc qu'UNE entrée**, et c'est le résultat visé : le meuble
-    /// pose les cinq fournisseurs au plus près de l'atelier, une fois, pour
-    /// toutes ses portes. Que cette garde tienne encore sur un seul site est ce
-    /// qui la rend utile — elle tombera si quelqu'un remonte un atelier nu
-    /// ailleurs. `ComposerAtelierHasOneMountSiteTests` garde le compte, elle,
-    /// par un balayage récursif qui ne connaît aucune liste.
-    ///
-    /// > Une garde qui compte les sites d'un motif VOIT sa propre réussite comme
-    /// > une panne : « ne présente plus de composer ? » est ici la bonne nouvelle.
-    /// > Le retrait doit donc être fait à la main, en disant pourquoi — sinon la
-    /// > session suivante rétablit le site pour faire repasser le test au vert.
-    /// **L'UNITÉ, jamais le seul fichier qui PRÉSENTE** (2026-09-06).
-    ///
-    /// Cette liste a nommé `MeeshyComposerHost+Surfaces.swift`, où vit
-    /// `composerSurface` — et son commentaire disait déjà la bonne chose :
-    /// « l'adresse d'une garde suit le montage ». Le montage a rebougé. Les six
-    /// injecteurs d'environnement ont été regroupés dans `+Portals.swift`,
-    /// **au-dessus** du présentateur, précisément pour corriger le défaut que
-    /// ce fichier documente : « deux décisions justes, et un signal orphelin
-    /// entre les deux » — injecter au plus près de ce qui consomme, et
-    /// présenter tous les portails à un seul endroit, dont la SOMME plaçait
-    /// l'injecteur SOUS le présentateur. La garde a donc rougi POUR le
-    /// correctif.
-    ///
-    /// > La question qu'elle pose — « chaque présentation a-t-elle son
-    /// > injecteur ? » — se répond dans l'ARBRE DE VUES, jamais dans un
-    /// > fichier. `+Portals` l'écrit mot pour mot. Le meuble est découpé en
-    /// > quinze extensions ; lire l'UNITÉ est la seule approximation textuelle
-    /// > de son arbre qui ne se périme pas au prochain découpage — la doctrine
-    /// > d'`AppSourceGuard.unit`, portée ici.
-    ///
-    /// La garde ne s'affaiblit pas : elle exige toujours autant d'injections
-    /// que de présentations. Elle cesse seulement d'exiger qu'elles vivent dans
-    /// le MÊME fichier, ce qu'aucune règle du produit n'a jamais demandé.
+    /// L'UNITÉ du meuble, jamais un seul de ses fichiers : la question
+    /// « chaque présentateur a-t-il ses fournisseurs ? » se répond dans
+    /// l'ARBRE DE VUES, et lire l'unité en est la seule approximation
+    /// textuelle qui ne se périme pas au prochain découpage
+    /// (`AppSourceGuard.unit`).
     private static let storyComposerPresentationUnits = [
         "Meeshy/Features/Composer/MeeshyComposerHost"
     ]
@@ -330,24 +252,17 @@ final class AppInitWireupTests: XCTestCase {
     /// qui l'exigerait quand même ferait rougir du code correct — et serait
     /// désactivée à la première occasion.
     ///
-    /// V3-2 — la chaîne de création compte désormais DEUX maillons, et
-    /// l'audience doit traverser les deux : la porte la donne au meuble
-    /// (`MeeshyComposerHost(`), le meuble la donne à l'atelier
-    /// (`StoryComposerView(`). Le site seul ne suffit donc plus à nommer ce
-    /// qu'on y cherche — d'où le montage attendu, écrit fichier par fichier.
-    /// Un maillon qui l'oublie retombe sur `PostVisibility.friends` sans un mot.
+    /// Depuis le #15629 la chaîne n'a plus qu'UN maillon : la porte donne
+    /// l'audience au meuble (`MeeshyComposerHost(`), qui en sème lui-même le
+    /// sélecteur du socle (`MeeshyComposerHostGuardTests
+    /// .test_host_handsTheMemorisedAudienceToTheWorkshop`).
     private static let storyComposerCreationMounts: [(path: String, mount: String)] = [
         ("Meeshy/Features/Stories/Views/StoryTrayActions.swift", "MeeshyComposerHost("),
         // Lot 5 — la porte du média REÇU est le second site qui monte une
         // SCÈNE, et l'audience y traverse les mêmes deux maillons. Elle entre
         // ici plutôt que dans une garde à elle : le jour où un troisième site
         // ouvre l'atelier, c'est cette liste qu'on relira.
-        ("Meeshy/Features/Composer/MediaComposerDoor.swift", "MeeshyComposerHost("),
-        // #4102 — `composerSurface`, qui MONTE l'atelier, a suivi le découpage du
-        // meuble vers `+Surfaces`. L'adresse suit le montage, jamais le nom
-        // du type : laissée sur le fichier principal, la garde aurait rougi
-        // « le maillon a disparu » pour un maillon simplement déménagé.
-        ("Meeshy/Features/Composer/MeeshyComposerHost+Surfaces.swift", "StoryComposerView(")
+        ("Meeshy/Features/Composer/MediaComposerDoor.swift", "MeeshyComposerHost(")
     ]
 
     func test_everyCreationComposerPresentation_passesTheMemorisedAudience() throws {

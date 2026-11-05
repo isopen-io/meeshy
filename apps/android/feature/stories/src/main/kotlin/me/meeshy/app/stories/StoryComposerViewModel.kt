@@ -639,8 +639,13 @@ class StoryComposerViewModel @Inject constructor(
         mediaPick.pick(items, asBackground, replacing)
 
     /** [count] files chosen in a system picker: their placeholder holds the screen while [prepare] copies them (#15598). */
-    fun onMediaChosen(count: Int, asBackground: Boolean = false, replacing: String? = null, prepare: suspend () -> List<MediaUploadItem>) =
-        mediaPick.choose(count, asBackground, replacing, prepare)
+    fun onMediaChosen(
+        count: Int,
+        asBackground: Boolean = false,
+        replacing: String? = null,
+        hints: List<IncomingMediaHint> = emptyList(),
+        prepare: suspend () -> List<MediaUploadItem>,
+    ) = mediaPick.choose(count, asBackground, replacing, hints, prepare)
 
     /** ✕ sur l'espace réservé (R5 de #13863) : la préparation s'annule, et l'écran se libère dans la même image. */
     fun onCancelMediaPick() = mediaPick.cancel()

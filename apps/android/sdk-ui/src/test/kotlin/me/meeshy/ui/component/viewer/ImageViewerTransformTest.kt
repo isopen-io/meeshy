@@ -43,9 +43,10 @@ class ImageViewerTransformTest {
     }
 
     @Test
-    fun `the zoom reaches x5 like iOS`() {
-        assertThat(ImageViewerTransform.MAX_SCALE).isEqualTo(5f)
-        assertThat(ImageViewerTransform.clampScale(4.8f)).isEqualTo(4.8f)
+    fun `the zoom stops at x4 like iOS`() {
+        assertThat(ImageViewerTransform.MAX_SCALE).isEqualTo(4f)
+        assertThat(ImageViewerTransform.clampScale(4.8f)).isEqualTo(4f)
+        assertThat(ImageViewerTransform.clampScale(3.9f)).isEqualTo(3.9f)
     }
 
     @Test
@@ -60,8 +61,8 @@ class ImageViewerTransformTest {
     }
 
     @Test
-    fun `the zoom ceiling is five and a double tap goes between rest and two and a half`() {
-        assertThat(ImageViewerTransform.clampScale(8f)).isEqualTo(5f)
+    fun `the zoom ceiling is four and a double tap goes between rest and two and a half`() {
+        assertThat(ImageViewerTransform.clampScale(8f)).isEqualTo(4f)
         assertThat(ImageViewerTransform.doubleTapTarget(1f)).isEqualTo(2.5f)
         assertThat(ImageViewerTransform.doubleTapTarget(2.5f)).isEqualTo(1f)
     }

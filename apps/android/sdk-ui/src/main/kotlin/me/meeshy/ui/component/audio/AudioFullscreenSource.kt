@@ -5,6 +5,7 @@ import java.time.Instant
 import me.meeshy.sdk.model.FeedMedia
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MeeshyMediaConsumption
+import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.sdk.model.MessageTranscriptionSegment
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.QueuedAudio
@@ -43,6 +44,8 @@ public data class AudioFullscreenSource(
     /** La présence SERVIE de l'auteur ; absente ⇒ aucun point (le client ne la fabrique pas). */
     val authorPresence: PresenceState? = null,
     val servedConsumption: MeeshyMediaConsumption? = null,
+    /** Ce que le porteur laisse sortir ; inconnu ⇒ `null`, et rien ne s'enregistre ([me.meeshy.sdk.model.fullscreen.AudioFullscreenDownloadOffer]). */
+    val exitOffer: MessageExitOffer? = null,
 ) {
     val id: String get() = attachmentId
 
@@ -101,6 +104,7 @@ public data class AudioFullscreenSource(
                 isTranslatedTrack = audio.isAudioTranslated,
                 authorRing = bubble.senderRing,
                 servedConsumption = MediaConsumptionSeed.of(audio.lastPlayPositionMs, audio.listenedComplete),
+                exitOffer = bubble.exitOffer,
             )
         }
 

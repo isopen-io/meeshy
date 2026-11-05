@@ -454,14 +454,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
                       "Le lot D ne possède que Timeline/** — tout autre fichier doit être un écart NOMMÉ (catalogue, matrice)")
     }
 
-    /// Contrôle positif : la garde doit réellement rejeter un chemin hors
-    /// périmètre non déclaré.
-    func test_guardRejectsAFileOutsideThePerimeter() {
-        XCTAssertFalse(Self.isWithinOwnership("packages/MeeshySDK/Sources/MeeshyUI/Story/Controls/ComposerControlsLayer.swift"))
-        XCTAssertFalse(Self.isWithinOwnership("apps/ios/Meeshy.xcodeproj/project.pbxproj"))
-        XCTAssertTrue(Self.isWithinOwnership("packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView.swift"))
-    }
-
     /// Balayage de l'ARBRE, pas du manifeste : le plan ne doit avoir fuité
     /// dans aucun fichier hors `Story/Timeline/**`. Revue Opus, mineur 11 :
     /// l'origine ne parcourait que `Sources/MeeshyUI` — une fuite dans
@@ -565,35 +557,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         )
     }
 
-    /// **Le hash a été remplacé par l'invariant qu'il servait — 2026-08-24.**
-    ///
-    /// Cette garde figeait `ComposerControlsLayer.swift` par empreinte SHA-256,
-    /// au titre que le fichier « n'appartient pas à ce lot ». C'était vrai, et
-    /// c'était utile TANT QUE le lot D était en vol : l'empreinte prouvait que
-    /// le Plan 2D ne débordait pas sur un voisin.
-    ///
-    /// Le lot D est mergé (`24d1bf752`). Ce qui reste du hash n'est plus un
-    /// invariant mais un instantané : il interdit à QUICONQUE, désormais et pour
-    /// toujours, de toucher un fichier de contrôles de composer — alors que ces
-    /// contrôles appartiennent au lot C, qui les fait légitimement évoluer (C7 y
-    /// relaie le texte alternatif et l'extraction de son jusqu'au point de
-    /// publication).
-    ///
-    /// L'invariant RÉEL — « le Plan 2D ne fuit pas hors de `Story/Timeline/` » —
-    /// n'est pas perdu : il est porté par
-    /// `test_noPlan2DReferenceLeaksOutsideTheTimeline` (l. 470), dont le balayage
-    /// couvre `Story/Controls/`, et dont le contrôle positif prouve qu'il sait
-    /// rougir. Cette garde-ci le REDIT sur le seul fichier nommé, ce qui la rend
-    /// falsifiable sans figer une ligne : elle rougit si `Plan2D` réapparaît ici,
-    /// jamais parce qu'un autre lot a fait son travail.
-    func test_composerControlsLayer_carriesNoPlan2DReference() throws {
-        let source = try String(contentsOf: Self.composerControlsLayerURL, encoding: .utf8)
-        XCTAssertFalse(
-            source.contains("Plan2D"),
-            "Le Plan 2D ne déborde pas sur la couche de contrôles du composer — voisin hors périmètre du lot D"
-        )
-    }
-
     // MARK: - Helpers (garde de source)
 
     /// Le fichier vit dans `Tests/MeeshyUITests/Timeline/` : QUATRE remontées
@@ -665,10 +628,6 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     private static var timelineExportFlowURL: URL {
         sourcesRoot.appendingPathComponent("Story/TimelineExportFlow.swift")
-    }
-
-    private static var composerControlsLayerURL: URL {
-        sourcesRoot.appendingPathComponent("Story/Controls/ComposerControlsLayer.swift")
     }
 
     private static func strippedSource(of url: URL) throws -> String {

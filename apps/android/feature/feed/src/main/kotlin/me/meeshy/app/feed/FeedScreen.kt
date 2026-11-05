@@ -49,6 +49,8 @@ import me.meeshy.ui.share.open
 import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshySpacing
+import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.feed.FeedOverlayAppearance
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,7 +123,7 @@ fun FeedScreen(
         )
     }
 
-    MeeshyBackground {
+    MeeshyBackground(ambient = { dark -> FeedAmbientHalos(isDark = dark) }) {
     CompositionLocalProvider(LocalFeedSceneCoordinator provides sceneCoordinator, LocalFeedAutoplayCoordinator provides autoplay) {
     Scaffold(
         topBar = {
@@ -197,7 +199,7 @@ fun FeedScreen(
                     modifier = Modifier.sceneViewport(),
                     // Aucune marge horizontale de contenu : le rail court d'un bord à l'autre, comme en tête des
                     // conversations ; chaque carte porte sa propre marge.
-                    contentPadding = PaddingValues(bottom = MeeshySpacing.lg),
+                    contentPadding = PaddingValues(bottom = FeedOverlayAppearance.BOTTOM_CLEARANCE_DP.dp),
                     verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
                     // Le rail de stories d'iOS (`StoryTrayView`, `FeedView` : dans le contenu défilant), le MÊME composable que

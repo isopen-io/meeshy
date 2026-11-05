@@ -112,6 +112,8 @@ data class StoryComposerUiState(
     val mediaLandings: List<ComposerMediaPlacement.Landing> = emptyList(),
     /** Les médias de la sélection en cours d'envoi, dans l'ordre des lignes : leur aperçu et leur poids (R5 de #13863). */
     val incomingMedia: List<MediaUploadItem> = emptyList(),
+    /** Ce que le choix dit de chaque média avant sa copie (#16205) : sa nature et la vignette d'une photo. */
+    val incomingHints: List<IncomingMediaHint> = emptyList(),
     /** Un envoi a échoué et ses octets sont gardés : la ligne d'erreur offre « Réessayer » (R5 de #13863). */
     val canRetryMedia: Boolean = false,
     /** Le réseau est coupé (#13959) : un média en file se dit « Hors ligne » — et seulement alors. */

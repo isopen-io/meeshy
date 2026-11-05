@@ -161,4 +161,36 @@ class AudioTranslationRequestTrackerTest {
 
         assertThat(h.tracker.requests.value).isEmpty()
     }
+
+    @Test
+    fun `requestReporting says true when the request left cleanly and false after a refusal`() = runTest {
+        val h = Harness(this)
+        var ok: Boolean? = null
+        backgroundScope.launch { ok = h.tracker.requestReporting("m1", "a1", "ES", "en") }
+        runCurrent()
+        h.answers.removeFirst().complete(AttachmentTranslateOutcome.Success(AttachmentTranslateResponse(translations = listOf(spanish))))
+        runCurrent()
+        assertThat(ok).isTrue()
+        assertThat(h.asked.single().second).isEqualTo("es")
+
+        var refused: Boolean? = null
+        backgroundScope.launch { refused = h.tracker.requestReporting("m1", "a1", "de", "en") }
+        runCurrent()
+        h.answers.removeFirst().complete(AttachmentTranslateOutcome.Failed(ApiError("réseau", code = "NETWORK")))
+        runCurrent()
+        assertThat(refused).isFalse()
+    }
+
+    @Test
+    fun `pending keys follow the requests that wait for their track`() = runTest {
+        val h = Harness(this)
+        val seen = mutableListOf<Set<String>>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { h.tracker.pendingKeys.toList(seen) }
+        runCurrent()
+        ask(h)
+        assertThat(seen.last()).containsExactly("a1|es")
+        h.answers.removeFirst().complete(AttachmentTranslateOutcome.Failed(ApiError("réseau", code = "NETWORK")))
+        runCurrent()
+        assertThat(seen.last()).isEmpty()
+    }
 }

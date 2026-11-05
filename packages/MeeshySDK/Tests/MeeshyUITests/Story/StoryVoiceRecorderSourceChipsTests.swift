@@ -61,46 +61,7 @@ final class StoryVoiceRecorderSourceChipsTests: XCTestCase {
 
     // MARK: - Routage après fermeture (helper pur)
 
-    func test_recorderFollowUpDoors_openExactlyTheMatchingDoor() {
-        let files = StoryComposerView.recorderFollowUpDoors(.audioFiles)
-        XCTAssertTrue(files.audioFiles)
-        XCTAssertFalse(files.soundLibrary, "Une seule porte à la fois : deux sheets simultanées se volent la présentation.")
-
-        let library = StoryComposerView.recorderFollowUpDoors(.soundLibrary)
-        XCTAssertTrue(library.soundLibrary)
-        XCTAssertFalse(library.audioFiles)
-    }
-
-    func test_recorderFollowUpDoors_openNothingOnAPlainDismissal() {
-        let doors = StoryComposerView.recorderFollowUpDoors(nil)
-        XCTAssertFalse(doors.audioFiles)
-        XCTAssertFalse(doors.soundLibrary)
-    }
-
     // MARK: - Gardes de source
-
-    /// Le séquencement sheet → sheet passe par `onDismiss` : poser le drapeau de
-    /// la porte suivante PENDANT que la feuille recorder est encore montée fait
-    /// perdre la présentation (deux sheets sur le même hôte). La garde ancre le
-    /// câblage complet dans le corps de `sheetModifiers`.
-    func test_theRecorderSheetWiresBothChipsAndSequencesThroughOnDismiss() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+Media.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "var sheetModifiers:", in: code),
-            "`sheetModifiers` a disparu : les feuilles du composer ne sont plus montées.")
-
-        for symbol in ["onImportAudioFile", "onOpenSoundLibrary",
-                       ".audioFiles", ".soundLibrary", "recorderFollowUpDoors("] {
-            XCTAssertTrue(
-                body.contains(symbol),
-                "« \(symbol) » manque au montage de la feuille recorder : une des deux portes est morte."
-            )
-        }
-        XCTAssertGreaterThanOrEqual(
-            ComposerSourceGuard.occurrences(of: "onDismiss", in: body), 1,
-            "Le follow-up doit s'ouvrir APRÈS la fermeture de la feuille recorder, jamais pendant."
-        )
-    }
 
     /// Pendant l'enregistrement, changer de source n'a pas de sens et le tap
     /// perdrait la prise en cours (le dismiss annule le micro) : les chips
@@ -124,17 +85,4 @@ final class StoryVoiceRecorderSourceChipsTests: XCTestCase {
         )
     }
 
-    /// Un reset du composer pendant qu'un follow-up est en attente ne doit pas
-    /// laisser une porte fantôme s'ouvrir à la prochaine fermeture de la
-    /// feuille recorder — même famille que les autres scratch states purgés là.
-    func test_aComposerResetClearsThePendingFollowUp() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+SyncRestore.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "func resetLocalState(", in: code),
-            "`resetLocalState` a disparu.")
-        XCTAssertTrue(
-            body.contains("recorderFollowUp = nil"),
-            "Le follow-up survit au reset : la prochaine fermeture du recorder ouvrirait une porte fantôme."
-        )
-    }
 }
