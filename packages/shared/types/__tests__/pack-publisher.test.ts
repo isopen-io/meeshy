@@ -26,6 +26,20 @@ describe('isReservedPublisherIdentity — personne ne se fait passer pour Meeshy
     );
   });
 
+  it('réserve Meeshy écrit avec des homoglyphes cyrilliques, grecs ou pleine largeur (squelette UTS #39)', () => {
+    ['\u041Ceeshy', 'Meesh\u0443', 'M\u0435\u0435shy', '\u039Ceeshy', 'Mee\u0455hy', 'ＭＥＥＳＨＹ', 'Meeѕhу Studio', 'M3eshy'.replace('3', '\u0435')].forEach((name) =>
+      expect(isReservedPublisherIdentity(name)).toBe(true),
+    );
+  });
+
+  it('refuse un nom qui mêle l’alphabet latin et un autre alphabet', () => {
+    ['Studi\u043E', 'Lumi\u03B5re', 'Awa\u0410'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
+  });
+
+  it('laisse passer un nom écrit dans un seul autre alphabet', () => {
+    ['Студия', 'Στούντιο', '東京スタジオ'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(false));
+  });
+
   it('réserve les slugs qui servent de routes', () => {
     ['me', 'admin'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
   });
