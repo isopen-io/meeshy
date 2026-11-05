@@ -1,5 +1,6 @@
 package me.meeshy.sdk.outbox
 
+import kotlinx.serialization.decodeFromString
 import androidx.room.withTransaction
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
@@ -542,6 +543,13 @@ class OutboxRepository @Inject constructor(
         outboxDao.deleteAll(listOf(cmid))
         emit(OutboxOutcome.Cancelled(cmid))
     }
+
+    /** Les téléversements durables de la bulle [messageCid] (#16168), le plus ancien d'abord — ceux d'avant le champ n'y sont pas. */
+    suspend fun uploadsOfMessage(messageCid: String): List<OutboxEntity> =
+        outboxDao.byKind(OutboxKind.UPLOAD_MEDIA.name).filter { row ->
+            row.payload.isNotBlank() &&
+                runCatching { me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<MediaUploadPayload>(row.payload) }.getOrNull()?.messageCid == messageCid
+        }
 
     /** The queued row [cmid], or `null` once it is gone (delivered or discarded). */
     suspend fun row(cmid: String): OutboxEntity? = outboxDao.find(cmid)
