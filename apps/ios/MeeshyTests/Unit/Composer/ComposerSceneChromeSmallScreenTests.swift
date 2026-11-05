@@ -327,4 +327,34 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
         let offset = Int(point.y * image.scale) * cg.bytesPerRow + Int(point.x * image.scale) * pixel
         return CGFloat((0..<min(pixel, 3)).map { bytes[offset + $0] }.min() ?? 0) / 255
     }
+
+    // MARK: - DIAGNOSTIC TEMPORAIRE #16246 (retiré avant la PR)
+
+    private func scrollViewsDiag(in view: UIView) -> [UIScrollView] {
+        ((view as? UIScrollView).map { [$0] } ?? []) + view.subviews.flatMap { scrollViewsDiag(in: $0) }
+    }
+
+    private func dumpDiag(_ screen: RenderedScreen) -> String {
+        RunLoop.main.run(until: Date().addingTimeInterval(1.0))
+        let nodes = screen.nodes.filter { $0.identifier != nil && !($0.identifier ?? "").isEmpty }
+            .map { "\($0.identifier ?? "")@\($0.frame)" }.joined(separator: " ; ")
+        let svs = scrollViewsDiag(in: screen.root).map { sv in
+            "sv{\(sv.convert(sv.bounds, to: nil)) cs:\(sv.contentSize.height) off:\(sv.contentOffset.y) adj:\(sv.adjustedContentInset.top) id:\(sv.accessibilityIdentifier ?? "-") n:\(sv.accessibilityElementCount())}"
+        }.joined(separator: ",")
+        return "safe=\(screen.root.safeAreaInsets.top) NODES: \(nodes) SV: \(svs)"
+    }
+
+    func test_DIAG_16246_arbre() {
+        let a = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(paste: true), size: Self.iPhoneSE), size: Self.iPhoneSE)
+        let da = dumpDiag(a); a.dismount()
+        let items = ComposerEditRailItems.items(for: .background, actions: [],
+                                                backgroundActions: ComposerBackgroundEditAction.allCases,
+                                                sections: [], extras: [], keyframes: false,
+                                                backgroundEntries: ComposerBackgroundModifyEntry.allCases)
+        let column = ComposerSelectionColumn(level: .background, items: items, onItem: { _ in })
+        let b = RenderedScreen(Harness(chrome: Self.postAtTwoSlides(state: Self.selected(), selection: column),
+                                       size: Self.iPhoneSE), size: Self.iPhoneSE)
+        let db = dumpDiag(b); b.dismount()
+        XCTFail("DIAG16246A " + da + " DIAG16246B " + db)
+    }
 }
