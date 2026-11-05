@@ -40,6 +40,10 @@ describe('isReservedPublisherIdentity — personne ne se fait passer pour Meeshy
     ['Студия', 'Στούντιο', '東京スタジオ'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(false));
   });
 
+  it('réserve Meeshy écrit entièrement en confusables d’un seul alphabet', () => {
+    ['\u041C\u0435\u0435\u0455\u04BB\u0443', '\u039C\u0395\u0395\u0405\u0397\u03A5'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
+  });
+
   it('réserve les slugs qui servent de routes', () => {
     ['me', 'admin'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
   });

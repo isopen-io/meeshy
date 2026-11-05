@@ -76,13 +76,53 @@ export function publisherSlugOf(name: string): string {
 }
 
 /**
- * Vrai pour un nom ou un slug qu'aucun tiers ne peut porter : tout ce qui, une
- * fois replié, CONTIENT « meeshy » (« Meeshy Officiel », « Team-Meeshy »,
- * « Mée​shy » à espace invisible…), et les segments de route.
+ * Les CONFUSABLES vers le latin (UTS #39, `confusables.txt`, extrait minuscule) :
+ * les lettres cyrilliques et grecques qui se LISENT comme une lettre latine, et
+ * les chiffres qui se lisent comme une lettre. La pleine largeur est déjà
+ * repliée par NFKC. Appliquée après la mise en minuscules.
+ */
+const CONFUSABLE_TO_LATIN: Readonly<Record<string, string>> = {
+  // cyrillique
+  а: 'a', в: 'b', ь: 'b', с: 'c', ԁ: 'd', е: 'e', ё: 'e', є: 'e', һ: 'h', н: 'h', і: 'i', ї: 'i', ӏ: 'l', ј: 'j', к: 'k', м: 'm',
+  п: 'n', о: 'o', р: 'p', ԛ: 'q', г: 'r', ѕ: 's', т: 't', и: 'u', ц: 'u', ѵ: 'v', ԝ: 'w', ш: 'w', х: 'x', у: 'y', ү: 'y', з: '3',
+  // grec
+  α: 'a', β: 'b', ϲ: 'c', δ: 'd', ε: 'e', η: 'n', ι: 'i', ϳ: 'j', κ: 'k', μ: 'u', ν: 'v', ο: 'o', ρ: 'p', σ: 'o', τ: 't', υ: 'u',
+  ω: 'w', χ: 'x', γ: 'y', ζ: 'z', ϱ: 'p', ς: 'c',
+  // chiffres
+  '0': 'o', '1': 'l',
+};
+
+/** Les CAPITALES confusables, qui imitent une capitale latine différente de leur minuscule (Μ grec ≠ μ). */
+const CAPITAL_CONFUSABLE_TO_LATIN: Readonly<Record<string, string>> = {
+  А: 'a', В: 'b', Е: 'e', Ё: 'e', К: 'k', М: 'm', Н: 'h', О: 'o', Р: 'p', С: 'c', Т: 't', Х: 'x', У: 'y', Ѕ: 's', І: 'i', Ј: 'j',
+  Α: 'a', Β: 'b', Ε: 'e', Ζ: 'z', Η: 'h', Ι: 'i', Κ: 'k', Μ: 'm', Ν: 'n', Ο: 'o', Ρ: 'p', Τ: 't', Υ: 'y', Χ: 'x',
+};
+
+const mapped = (text: string, table: Readonly<Record<string, string>>): string => [...text].map((char) => table[char] ?? char).join('');
+
+/** Le squelette d'un nom : capitales confusables d'abord, puis replié, puis chaque minuscule confusable remplacée par la lettre latine qu'elle imite. */
+const skeleton = (name: string): string =>
+  mapped(folded(mapped(name.normalize('NFKC'), CAPITAL_CONFUSABLE_TO_LATIN)), CONFUSABLE_TO_LATIN);
+
+const LATIN_LETTER = /\p{Script=Latin}/u;
+const OTHER_SCRIPT_LETTER = /(?![\p{Script=Latin}])\p{L}/u;
+
+/** Un nom qui MÊLE l'alphabet latin et un autre alphabet : la forme même d'une usurpation par homoglyphe. */
+const mixesScripts = (name: string): boolean => {
+  const normalized = name.normalize('NFKC');
+  return LATIN_LETTER.test(normalized) && OTHER_SCRIPT_LETTER.test(normalized);
+};
+
+/**
+ * Vrai pour un nom ou un slug qu'aucun tiers ne peut porter : tout ce dont le
+ * SQUELETTE de confusables CONTIENT « meeshy » (« Meeshy Officiel »,
+ * « Team-Meeshy », « Мееѕһу » cyrillique, « ＭＥＥＳＨＹ », « Mée​shy » à espace
+ * invisible…), tout nom qui mêle l'alphabet latin et un autre alphabet, et les
+ * segments de route.
  */
 export function isReservedPublisherIdentity(name: string): boolean {
-  const compact = folded(name).replace(/[^a-z0-9]/g, '');
-  return compact.includes(MEESHY_PUBLISHER_SLUG) || ROUTE_SLUGS.has(publisherSlugOf(name));
+  const compact = skeleton(name).replace(/[^a-z0-9]/g, '');
+  return compact.includes(MEESHY_PUBLISHER_SLUG) || mixesScripts(name) || ROUTE_SLUGS.has(publisherSlugOf(name));
 }
 
 /**
