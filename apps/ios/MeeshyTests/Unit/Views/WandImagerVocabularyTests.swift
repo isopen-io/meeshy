@@ -73,7 +73,7 @@ final class WandImagerVocabularyTests: XCTestCase {
     /// Le rail du réel et celui du plein écran montent la baguette « Imager ».
     func test_reelAndFullscreenRails_carryTheImagerWand() throws {
         let reel = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ReelsPlayerView+ActionRail.swift")
-        let gallery = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
+        let gallery = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ConversationMediaGalleryView+Actions.swift")
 
         XCTAssertTrue(reel.contains("systemImage: FullscreenChromeSymbol.imager"))
         XCTAssertTrue(gallery.contains("systemImage: FullscreenChromeSymbol.imager"))

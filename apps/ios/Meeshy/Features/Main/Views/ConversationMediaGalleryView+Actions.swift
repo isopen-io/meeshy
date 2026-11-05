@@ -66,12 +66,24 @@ nonisolated enum MediaStageActionColumn {
 /// l'environnement — une extension de la galerie ne le peut pas —, et la photo
 /// d'une flamme ou d'une vue unique n'a donc pas ce bouton. « Transférer » suit
 /// le verdict de l'hôte, qui connaît la loi de transfert du message porteur.
+/// « Imager » au rail du plein écran (#16332) : la baguette fait du message
+/// porteur une carte image. Une pièce protégée (vue unique, flou, flamme) n'a
+/// pas de baguette — la carte ferait sortir ce que la protection retient.
+enum GalleryImagerOffer {
+    static func action(for attachment: MessageAttachment?,
+                       _ handler: ((MessageAttachment) -> Void)?) -> (() -> Void)? {
+        guard let handler, let attachment, !ComposableAttachment.isProtected(attachment) else { return nil }
+        return { HapticFeedback.light(); handler(attachment) }
+    }
+}
+
 struct GalleryRailExitActions: View {
     let contentId: String
     let offersSave: Bool
     let offersForward: Bool
     let onSave: () -> Void
     let onForward: () -> Void
+    var onImager: (() -> Void)? = nil
     @Environment(\.contentExitGate) private var exitGate
 
     var body: some View {
@@ -93,6 +105,16 @@ struct GalleryRailExitActions: View {
                              defaultValue: "Envoie ce média dans une autre conversation.", bundle: .main),
                 style: .disc(.adaptive),
                 action: onForward
+            )
+        }
+        if let onImager {
+            FullscreenActionButton(
+                systemImage: FullscreenChromeSymbol.imager,
+                label: MessageCardExportMenu.imageLabel,
+                hint: String(localized: "media.imager.rail.hint",
+                             defaultValue: "Fait du message et de ce média une carte image.", bundle: .main),
+                style: .disc(.adaptive),
+                action: onImager
             )
         }
     }

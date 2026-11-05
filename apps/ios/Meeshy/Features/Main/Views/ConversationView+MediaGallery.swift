@@ -146,6 +146,7 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             replyCitation: { viewModel.fullscreenReplyCitation(for: $0.id, carrier: carrier(of: $0)) },
             onReactToMedia: reactToMedia,
             onForwardMedia: forwardFromGallery,
+            onImagerMedia: { carrier(of: $0).map { beginMessageExport($0, quick: false) } },
             // « Composer » n'existe que si l'armer produit une cible (loi 4) :
             // la règle d'offre lit la loi de sortie (#9573), donc la pièce d'une
             // flamme ou d'une vue unique n'a pas ce bouton.
