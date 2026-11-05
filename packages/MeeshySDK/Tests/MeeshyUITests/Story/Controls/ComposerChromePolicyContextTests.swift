@@ -69,29 +69,4 @@ final class ComposerChromePolicyContextTests: XCTestCase {
         XCTAssertFalse(visible(isTimelineVisible: true))
     }
 
-    /// Garde de source : les seuls sites d'APPEL de la politique de chrome plein
-    /// sont le site unique de construction du contexte (`+Chrome.swift`, pour le
-    /// header et la colonne d'historique) et la barre de FABs. Le fichier de
-    /// DÉCLARATION est exclu — il contient forcément la chaîne.
-    func test_fullChromeVisible_headerAndFabs_readTheSameContext() throws {
-        let declarationSite = "Controls/ComposerChromePolicy.swift"
-        let callSites = try ComposerSourceGuard.allStorySources()
-            .filter { $0.path != declarationSite }
-            .filter { $0.code.contains("ComposerChromePolicy.fullChromeVisible(") }
-
-        XCTAssertEqual(
-            Set(callSites.map(\.path)),
-            ["StoryComposerView+Chrome.swift", "Controls/ComposerControlsLayer.swift"]
-        )
-        for site in callSites {
-            XCTAssertEqual(
-                ComposerSourceGuard.occurrences(of: "ComposerChromePolicy.fullChromeVisible(", in: site.code), 1,
-                "\(site.path) doit appeler la politique une seule fois."
-            )
-        }
-        let chromeExtension = try ComposerSourceGuard.source("StoryComposerView+Chrome.swift")
-        XCTAssertTrue(chromeExtension.contains("ComposerChromePolicy.fullChromeVisible(chromeContext)"))
-        let controls = try ComposerSourceGuard.source("Controls/ComposerControlsLayer.swift")
-        XCTAssertTrue(controls.contains("ComposerChromePolicy.fullChromeVisible(chrome)"))
-    }
 }

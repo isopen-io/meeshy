@@ -75,7 +75,10 @@ class MessageRepository internal constructor(
         /** L'index des médias de la conversation suit les messages supprimés. */
         mediaIndex: ConversationMediaHubIndex? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures, TranslationLayer.of(database)),
+        history = MessageHistoryReader(
+            messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures, TranslationLayer.of(database),
+            media = AcknowledgedBubbleMedia(adoption, previews, AcknowledgedBubbleMedia.ORIGIN_PAGE),
+        ),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews = previews, listPreviews = listPreviews),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
@@ -230,6 +233,10 @@ class MessageRepository internal constructor(
 
     /** The outbox exhausted its retries — surface the bubble as retryable, with the [reason] it says (#13550). */
     suspend fun markSendFailed(cmid: String, reason: String? = null) = sends.markSendFailed(cmid, reason)
+
+    /** Envoie la bulle déjà posée au tap [cid] avec les pièces montées (ou leurs téléversements durables), sans bulle de plus. */
+    suspend fun sendPostedBubble(cid: String, attachmentIds: List<String> = emptyList(), dependsOn: Set<String> = emptySet()): Boolean =
+        sends.sendPostedBubble(cid, attachmentIds, dependsOn)
 
     /** User-initiated retry of a failed bubble: back to `SENDING`, its outbox row revived. */
     suspend fun retrySend(cmid: String) = sends.retrySend(cmid)

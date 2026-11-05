@@ -169,16 +169,16 @@ nonisolated enum ComposerAutosaveOpening: Equatable, Sendable {
     /// Porte qui arrive avec sa matière (graine, partage, reprise d'humeur) :
     /// on ne reprend rien, et on n'écrit que si le tiroir est libre.
     case preservesStoredDraft
-    /// L'atelier du SDK tient son propre brouillon (`StoryDraftStore`) :
-    /// reprise de « Mes stories », édition, viseur vidéo, republication.
+    /// Le brouillon vit ailleurs : reprise de « Mes stories » et édition d'une
+    /// story (`ComposerStoredDraftKeeper`, `StoryDraftStore`), republication et
+    /// modification d'un post, qui ont leur source.
     case disabled
 
-    static func decide(opensOnAtelier: Bool,
-                       isHydrated: Bool,
+    static func decide(isHydrated: Bool,
                        resumesDraft: Bool,
                        isSeeded: Bool,
                        opensOnMood: Bool) -> ComposerAutosaveOpening {
-        if opensOnAtelier || isHydrated || resumesDraft { return .disabled }
+        if isHydrated || resumesDraft { return .disabled }
         if isSeeded || opensOnMood { return .preservesStoredDraft }
         return .restores
     }
@@ -186,7 +186,7 @@ nonisolated enum ComposerAutosaveOpening: Equatable, Sendable {
 
 /// **Rouvrir « Modifier » reprend l'édition en cours** (#8848).
 ///
-/// L'atelier autosauvegarde l'édition d'une story sous `editingPostId` depuis
+/// L'édition d'une story s'autosauvegarde sous `editingPostId` depuis
 /// le 2026-08-02 ; mais chaque « Modifier » hydratait de nouveau depuis le
 /// serveur, si bien que le brouillon d'édition s'écrivait et ne se relisait
 /// jamais. La session d'édition ADOPTE désormais le brouillon de son post —

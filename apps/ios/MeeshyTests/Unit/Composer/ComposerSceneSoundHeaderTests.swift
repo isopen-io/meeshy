@@ -134,15 +134,15 @@ final class ComposerSceneSoundHeaderTests: XCTestCase {
                        "un silence garde un trait")
     }
 
-    /// Les trois écritures du champ publié le normalisent au pic, depuis la
-    /// mesure absolue du cache : un seul contrat, tenu aux trois sites.
-    func test_leChampPublie_estEcritNormaliseAuPic_auxTroisSites() throws {
+    /// Les deux écritures du champ publié le normalisent au pic, depuis la
+    /// mesure absolue du cache : un seul contrat, tenu aux deux sites (la
+    /// troisième vivait dans l'atelier du SDK, parti au #15629).
+    func test_leChampPublie_estEcritNormaliseAuPic_auxDeuxSites() throws {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         for chemin in ["packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel+ContentMedia.swift",
-                       "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel+PastedAudio.swift",
-                       "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+Media.swift"] {
+                       "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel+PastedAudio.swift"] {
             let code = AppSourceGuard.stripComments(
                 try String(contentsOf: racine.appendingPathComponent(chemin), encoding: .utf8))
             XCTAssertTrue(code.contains("WaveformScale.peakNormalized("), "\(chemin) écrit la mesure brute dans le champ publié")

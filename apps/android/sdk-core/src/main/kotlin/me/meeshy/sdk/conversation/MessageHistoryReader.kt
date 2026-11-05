@@ -43,6 +43,8 @@ internal class MessageHistoryReader(
     private val erasures: PlaintextErasureLedger? = null,
     /** Les traductions déjà reçues, superposées aux messages servis. */
     private val translations: TranslationLayer? = null,
+    /** #16012 — les fichiers locaux de mon envoi suivent la ligne qu'une page sert avant l'accusé. */
+    private val media: AcknowledgedBubbleMedia? = null,
 ) {
     /**
      * #5189 — the nominal-flow observe window, per conversation: how many of
@@ -269,6 +271,7 @@ internal class MessageHistoryReader(
         events = events,
         erasures = erasures,
         translations = translations,
+        media = media,
     )
 
     companion object {

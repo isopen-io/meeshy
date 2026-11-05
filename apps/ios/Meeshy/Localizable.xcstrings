@@ -93073,53 +93073,6 @@
         }
       }
     },
-    "composer.publish.multiScene.mediaNotCarried": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يحمل هذا المنشور متعدد المشاهد وسائط لا يمكن نشرها بعد في منشور واحد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieser Beitrag mit mehreren Szenen enthält Medien, die noch nicht in einer einzigen Veröffentlichung gesendet werden können"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This multi-scene post has media that can’t yet be sent as a single publication"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta publicación de varias escenas contiene medios que aún no pueden enviarse en una sola publicación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce post à plusieurs scènes porte des médias qui ne peuvent pas encore partir en une seule publication"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questo post con più scene contiene contenuti multimediali che non possono ancora essere inviati in un'unica pubblicazione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este post com várias cenas tem mídias que ainda não podem ser enviadas em uma única publicação"
-          }
-        }
-      }
-    },
     "composer.quickEmoji.label": {
       "extractionState": "manual",
       "localizations": {

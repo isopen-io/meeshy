@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import me.meeshy.app.chat.ChatAudioViewModel
+import me.meeshy.app.chat.ChatRestingPositions
 import me.meeshy.app.chat.ChatVoiceThread
 import me.meeshy.app.chat.FakeVoiceEngine
 import me.meeshy.app.chat.voice
@@ -86,6 +87,7 @@ class QuotedAudioPlaybackTest {
             UploadedAttachmentIds(),
             TypedMediaCache(MediaCacheDirs(root, root)),
             UnconfinedTestDispatcher(),
+            ChatRestingPositions { null },
         )
     }
 

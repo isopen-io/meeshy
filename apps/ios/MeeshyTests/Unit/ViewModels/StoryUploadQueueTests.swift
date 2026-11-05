@@ -722,14 +722,14 @@ final class StoryUploadQueueTests: XCTestCase {
         XCTAssertFalse(StoryPublishCopy.queuedForOffline(.post).localizedCaseInsensitiveContains("story"))
     }
 
-    /// **#8522 — VoiceOver annonce ce que l'auteur publie** (atelier du SDK).
-    func test_publishStartedAnnouncement_suitLeTypePublie() {
-        XCTAssertNotEqual(StoryComposerView.publishStartedAnnouncement(for: .post),
-                          StoryComposerView.publishStartedAnnouncement(for: .story))
-        XCTAssertFalse(StoryComposerView.publishStartedAnnouncement(for: .post)
-            .localizedCaseInsensitiveContains("story"))
-        XCTAssertFalse(StoryComposerView.publishStartedAnnouncement(for: .reel)
-            .localizedCaseInsensitiveContains("story"))
+    /// **#8522 — VoiceOver annonce ce que l'auteur publie** (la scène du meuble).
+    func test_publishStartedAnnouncement_suitLeTypePublie() throws {
+        XCTAssertNotEqual(ComposerFormatWording(.post).publishStarted, ComposerFormatWording(.story).publishStarted)
+        XCTAssertFalse(ComposerFormatWording(.post).publishStarted.localizedCaseInsensitiveContains("story"))
+        XCTAssertFalse(ComposerFormatWording(.reel).publishStarted.localizedCaseInsensitiveContains("story"))
+        let scene = try AppSourceGuard.composerHostSource()
+        XCTAssertTrue(scene.contains("AdaptiveAccessibility.announce(ComposerFormatWording(format.postType).publishStarted)"),
+                      "La publication d'une scène s'annonce par le type servi.")
     }
 
     private static func makeGIF(frames: Int) throws -> Data {

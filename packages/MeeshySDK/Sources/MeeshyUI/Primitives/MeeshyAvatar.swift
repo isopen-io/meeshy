@@ -439,41 +439,7 @@ public struct MeeshyAvatar: View {
             storyRingSize: effectiveStoryState == .none ? nil : context.ringSize, decorRoom: ringDecorRoom,
             decor: ringShowsDecor
         )
-        .overlay(alignment: .bottomTrailing) {
-            if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
-                // Le mood vit les transitions du point (#9065) : il grossit en
-                // ressort à l'arrivée « ici » avec son gros pulse, se rétracte
-                // au départ puis revient cerné de vert.
-                moodBadge(emoji: emoji)
-                    .overlay {
-                        if shownPresence == .here && presenceChanged && !reduceMotion {
-                            PresenceArrivalRipple(color: PresenceStyle.hereDotColor, diameter: context.badgeSize)
-                        }
-                    }
-                    .id("mood.\(shownPresence?.transitionKey ?? "none")")
-                    .transition(presenceTransition)
-                    .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
-            } else if let presence = shownPresence {
-                let diameter = presence.diameter(avatarSize: context.size)
-                onlineDot(for: presence, diameter: diameter)
-                    .overlay {
-                        if presence == .here, !reduceMotion, let wave = PresenceHereWave.for(isHere) {
-                            PresenceHereWaveView(color: presence.color, diameter: diameter, wave: wave)
-                                .id(wave.duration)
-                        }
-                        if presence.arrivesWithRipple && presenceChanged && !reduceMotion {
-                            PresenceArrivalRipple(color: presence.color, diameter: diameter)
-                        }
-                    }
-                    .id(presence.transitionKey)
-                    .transition(presenceTransition)
-                    .offset(AvatarPresenceDot.centerOffset(
-                        avatarSize: context.size,
-                        frameSize: effectiveStoryState == .none ? context.size : context.ringSize,
-                        dotDiameter: diameter
-                    ))
-            }
-        }
+        .overlay(alignment: .bottomTrailing) { presenceBadge }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.5),
                    value: shownPresence?.transitionKey)
         .adaptiveOnChange(of: shownPresence?.transitionKey) { _, _ in presenceChanged = true }
@@ -504,6 +470,43 @@ public struct MeeshyAvatar: View {
         } else {
             tappable
                 .accessibilityLabel(accessibilityName)
+        }
+    }
+
+    @ViewBuilder
+    private var presenceBadge: some View {
+        if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
+            // Le mood vit les transitions du point (#9065) : il grossit en
+            // ressort à l'arrivée « ici » avec son gros pulse, se rétracte
+            // au départ puis revient cerné de vert.
+            moodBadge(emoji: emoji)
+                .overlay {
+                    if shownPresence == .here && presenceChanged && !reduceMotion {
+                        PresenceArrivalRipple(color: PresenceStyle.hereDotColor, diameter: context.badgeSize)
+                    }
+                }
+                .id("mood.\(shownPresence?.transitionKey ?? "none")")
+                .transition(presenceTransition)
+                .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
+        } else if let presence = shownPresence {
+            let diameter = presence.diameter(avatarSize: context.size)
+            onlineDot(for: presence, diameter: diameter)
+                .overlay {
+                    if presence == .here, !reduceMotion, let wave = PresenceHereWave.for(isHere) {
+                        PresenceHereWaveView(color: presence.color, diameter: diameter, wave: wave)
+                            .id(wave.duration)
+                    }
+                    if presence.arrivesWithRipple && presenceChanged && !reduceMotion {
+                        PresenceArrivalRipple(color: presence.color, diameter: diameter)
+                    }
+                }
+                .id(presence.transitionKey)
+                .transition(presenceTransition)
+                .offset(AvatarPresenceDot.centerOffset(
+                    avatarSize: context.size,
+                    frameSize: effectiveStoryState == .none ? context.size : context.ringSize,
+                    dotDiameter: diameter
+                ))
         }
     }
 

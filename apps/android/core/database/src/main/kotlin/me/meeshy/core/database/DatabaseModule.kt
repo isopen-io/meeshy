@@ -11,6 +11,8 @@ import dagger.hilt.components.SingletonComponent
 import me.meeshy.core.database.dao.BlockedUserDao
 import me.meeshy.core.database.dao.CacheEntryDao
 import me.meeshy.core.database.dao.CallHistoryDao
+import me.meeshy.core.database.dao.CallNetworkJournalDao
+import me.meeshy.core.database.dao.CallTranscriptDao
 import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.core.database.dao.DirectoryContactDao
 import me.meeshy.core.database.dao.EditRevisionDao
@@ -237,6 +239,14 @@ internal object DatabaseModule {
     @Provides
     fun providesNotificationDao(database: MeeshyDatabase): NotificationDao =
         database.notificationDao()
+
+    @Provides
+    fun providesCallNetworkJournalDao(database: MeeshyDatabase): CallNetworkJournalDao =
+        database.callNetworkJournalDao()
+
+    @Provides
+    fun providesCallTranscriptDao(database: MeeshyDatabase): CallTranscriptDao =
+        database.callTranscriptDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 

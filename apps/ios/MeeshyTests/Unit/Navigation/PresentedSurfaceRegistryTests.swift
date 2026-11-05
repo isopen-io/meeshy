@@ -184,66 +184,18 @@ final class PresentedSurfaceRegistryTests: XCTestCase {
         XCTAssertEqual(ComposerConversationYield.decide(.restores), .closes)
     }
 
-    func test_composerYield_seededOrAtelierDoor_retains() {
+    func test_composerYield_seededOrHydratedDoor_retains() {
         XCTAssertEqual(ComposerConversationYield.decide(.preservesStoredDraft), .retains)
         XCTAssertEqual(ComposerConversationYield.decide(.disabled), .retains)
     }
 
-    // MARK: - L'atelier de story ne retient plus (#10543)
+    // MARK: - Le brouillon repris ne retient pas (#10543, #15629)
 
-    func test_composerYield_atelierThatWritesItsDraft_closes() {
-        XCTAssertEqual(ComposerConversationYield.decide(.disabled, atelierWritesItsDraft: true), .closes)
-        XCTAssertEqual(ComposerConversationYield.decide(.preservesStoredDraft, atelierWritesItsDraft: true), .closes)
-    }
-
-    func test_atelierWritesItsDraft_mountedAndArmed_isTrue() {
-        XCTAssertTrue(ComposerConversationYield.atelierWritesItsDraft(
-            mounted: .atelier, exitIsArmed: true))
-    }
-
-    func test_atelierWritesItsDraft_unarmedOrOtherSurface_isFalse() {
-        XCTAssertFalse(ComposerConversationYield.atelierWritesItsDraft(
-            mounted: .atelier, exitIsArmed: false))
-        for mounted in ComposerMountedView.allCases where mounted != .atelier {
-            XCTAssertFalse(ComposerConversationYield.atelierWritesItsDraft(
-                mounted: mounted, exitIsArmed: true), "\(mounted)")
-        }
-    }
-
-    func test_close_armedAtelier_writesItsDraftBeforeClosing() {
-        let trigger = ComposerPublishTrigger()
-        var events: [String] = []
-        trigger.armExit {
-            events.append("brouillon écrit")
-            events.append("atelier refermé")
-        }
-
-        ComposerConversationYield.close(atelierWritesItsDraft: true, trigger: trigger) {
-            events.append("meuble refermé sans brouillon")
-        }
-
-        XCTAssertEqual(events, ["brouillon écrit", "atelier refermé"])
-    }
-
-    func test_close_atelierNotArmed_closesByTheHost() {
-        let trigger = ComposerPublishTrigger()
-        var hostCloses = 0
-
-        ComposerConversationYield.close(atelierWritesItsDraft: true, trigger: trigger) { hostCloses += 1 }
-
-        XCTAssertEqual(hostCloses, 1)
-    }
-
-    func test_close_blankDoor_neverPressesTheAtelierExit() {
-        let trigger = ComposerPublishTrigger()
-        var atelierExits = 0
-        var hostCloses = 0
-        trigger.armExit { atelierExits += 1 }
-
-        ComposerConversationYield.close(atelierWritesItsDraft: false, trigger: trigger) { hostCloses += 1 }
-
-        XCTAssertEqual(atelierExits, 0)
-        XCTAssertEqual(hostCloses, 1)
+    /// Le brouillon REPRIS et l'édition d'une story s'écrivent au même
+    /// `flushAutosave()` que la porte vierge : le meuble referme sans rien perdre.
+    func test_composerYield_storedDraftKept_closes() {
+        XCTAssertEqual(ComposerConversationYield.decide(.disabled, keepsStoredDraft: true), .closes)
+        XCTAssertEqual(ComposerConversationYield.decide(.preservesStoredDraft, keepsStoredDraft: true), .closes)
     }
 
     // MARK: - Une fenêtre ne referme que ses surfaces (#10543)

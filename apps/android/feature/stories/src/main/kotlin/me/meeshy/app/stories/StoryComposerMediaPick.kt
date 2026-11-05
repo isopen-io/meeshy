@@ -34,13 +34,22 @@ internal class StoryComposerMediaPick(
         land(Pick(items, asBackground, replacing.takeIf { asBackground }))
     }
 
-    /** [count] fichiers choisis que [prepare] copie sur l'appareil : leur espace réservé retient l'écran le temps de la copie. */
-    fun choose(count: Int, asBackground: Boolean, replacing: String?, prepare: suspend () -> List<MediaUploadItem>) {
+    /**
+     * [count] fichiers choisis que [prepare] copie sur l'appareil : leur espace réservé retient l'écran le temps de la copie,
+     * et montre dès le choix ce que [hints] en disent — vidéo ou image, la vignette d'une photo (#16205).
+     */
+    fun choose(
+        count: Int,
+        asBackground: Boolean,
+        replacing: String?,
+        hints: List<IncomingMediaHint> = emptyList(),
+        prepare: suspend () -> List<MediaUploadItem>,
+    ) {
         val current = state.value
         if (count <= 0 || current.intakeBlocks) return
         val landings = StoryComposerUploadReducer.landings(current, count, asBackground)
         if (refusesForLimit(current, landings)) return
-        state.update { StoryComposerUploadReducer.started(it, landings) }
+        state.update { StoryComposerUploadReducer.started(it, landings, hints = hints) }
         val mine = ++generation
         scope.launch {
             val items = try {

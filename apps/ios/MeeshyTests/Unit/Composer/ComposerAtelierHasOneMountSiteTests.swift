@@ -1,36 +1,18 @@
 import XCTest
 @testable import Meeshy
 
-/// **L'atelier de story n'a plus qu'UN site de montage, et rien ne peut en
-/// rouvrir un second** (#5054).
+/// **L'atelier de story a quitté le dépôt, et rien ne peut le rouvrir**
+/// (#5054, #15629).
 ///
-/// ## Ce que ce fichier garde, et pourquoi ce n'est pas ce qu'on avait demandé
+/// Le #5054 l'avait réduit à UN site de montage, le meuble ; le #15629 retire ce
+/// dernier site : reprendre un brouillon et modifier une story se composent sur
+/// la scène du meuble, comme la création. `StoryComposerView` et sa coquille
+/// (`ComposerControlsLayer`, `ComposerBottomBand`, `ComposerToolPanelHost`,
+/// `ComposerPublishTrigger`) ne sont plus cités nulle part, hors commentaires.
 ///
-/// La directive porteur du 2026-09-03 disait « décommissionner l'ancien composer
-/// de story […] certains agents travaillent sur l'ancien tant que les codes
-/// sources seront encore dans le repo ». La lecture littérale — effacer les 33
-/// fichiers `StoryComposer*` — **aurait effacé le composer NEUF** :
-/// `MeeshyComposerHost+Surfaces` les monte comme MOTEUR de sa scène.
-///
-/// Ce qui se supprime vraiment est l'ATTEIGNABILITÉ. Un agent qui ouvrira
-/// `StoryComposerView.swift` demain verra un fichier monté par un seul site, et
-/// ce site est le meuble : il saura qu'il travaille sur le moteur du composer
-/// ACTUEL, pas sur un ancêtre. C'est le motif de la directive, satisfait en
-/// entier — là où « supprimer les fichiers » ne se livre pas.
-///
-/// > Quand une demande de suppression bute sur une dépendance, relire le MOTIF
-/// > plutôt que l'objet.
-///
-/// ## Pourquoi la garde COMPTE au lieu de vérifier une présence
-///
-/// « `StoryComposerView(` apparaît dans `+Surfaces` » resterait vrai avec dix
-/// autres sites à côté. C'est le NOMBRE qui porte la règle, et c'est lui qui
-/// tombe quand une porte se rouvre — y compris dans un fichier qui n'existe pas
-/// encore, puisque le balayage est récursif et ne connaît aucune liste.
+/// Le balayage est RÉCURSIF et ne connaît aucune liste : il attrape un montage
+/// rouvert dans un fichier qui n'existe pas encore.
 final class ComposerAtelierHasOneMountSiteTests: XCTestCase {
-
-    /// Le seul site autorisé à MONTER l'atelier.
-    private static let siteUnique = "MeeshyComposerHost+Surfaces.swift"
 
     /// La racine des sources de l'app, calculée depuis CE fichier — jamais
     /// depuis le répertoire courant du runner, qui n'est pas le dépôt.
@@ -84,15 +66,13 @@ final class ComposerAtelierHasOneMountSiteTests: XCTestCase {
                           + "sait lire un motif de montage.")
     }
 
-    // MARK: - 1 · L'atelier n'est monté que par le meuble
+    // MARK: - 1 · Plus aucun site ne monte l'atelier
 
-    func test_lAtelierDeStory_nEstMonteQueParLeMeuble() {
+    func test_lAtelierDeStory_nEstPlusMonteNullePart() {
         let sites = fichiersMontant("StoryComposerView(")
-        XCTAssertEqual(sites, [Self.siteUnique],
-                       "L'atelier de story ne se monte QUE par `MeeshyComposerHost+Surfaces`. "
-                           + "Un second site le présenterait sans éventail de format, sans "
-                           + "plateau et sans socle — c'est-à-dire le composer d'avant #5053, "
-                           + "sous un nom neuf. Sites trouvés : \(sites)")
+        XCTAssertEqual(sites, [],
+                       "L'atelier de story est revenu : la story, le post et le réel se composent sur la "
+                           + "scène du meuble, quelle que soit la porte (#15629). Sites trouvés : \(sites)")
     }
 
     // MARK: - 2 · L'ancien atelier a quitté le dépôt
@@ -131,7 +111,9 @@ final class ComposerAtelierHasOneMountSiteTests: XCTestCase {
     /// de premier plan de l'atelier ouvrent la scène. Ils quittent le dépôt, et
     /// rien ne les y ramène.
     func test_lAncienAtelier_aQuitteLeDepot() {
-        for ancien in ["MeeshyVideoEditorView", "UnifiedPostComposer", "VideoPreviewView", "VideoEditorViewModel"] {
+        for ancien in ["MeeshyVideoEditorView", "UnifiedPostComposer", "VideoPreviewView", "VideoEditorViewModel",
+                       "StoryComposerView", "ComposerControlsLayer", "ComposerBottomBand", "ComposerToolPanelHost",
+                       "ComposerPublishTrigger", "ComposerChromeOwner"] {
             let sites = fichiersCitant(ancien)
             XCTAssertEqual(sites, [], "`\(ancien)` est revenu : \(sites)")
         }

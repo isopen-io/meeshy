@@ -13,9 +13,6 @@
 /// ou d'un média posé. Le document est parti ; la surface suffit à dire la vue.
 nonisolated enum ComposerMountedView: Equatable, CaseIterable {
 
-    /// L'atelier du SDK — story et réel, la scène plein écran.
-    case atelier
-
     /// **La scène** (`ComposerSceneSurface`) — story, post et réel, quelle que soit la porte.
     case scene
 
@@ -32,7 +29,6 @@ nonisolated enum ComposerMountedView: Equatable, CaseIterable {
     /// précisément ce que la scène porte.
     static func mounted(surface: ComposerSurfaceKind) -> ComposerMountedView {
         switch surface {
-        case .scene:    return .atelier
         case .mood:     return .mood
         case .document: return .scene
         }

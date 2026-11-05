@@ -434,7 +434,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 MessageLanguageExplorerSheet(
                     explorer = explorer,
                     accentColor = accentColor,
-                    onSelectLanguage = { code -> actions.onFlagTap(route.messageId, code) },
+                    onSelectLanguage = { code -> actions.onExplorerRowTap(route.messageId, code) },
                     onRetranslate = { code -> actions.onExplorerRetranslate(route.messageId, code) },
                     onDismiss = actions.dismissLanguageExplorer,
                     onTranslateAudio = audioInput?.let { { audioSheetOpen = true } },

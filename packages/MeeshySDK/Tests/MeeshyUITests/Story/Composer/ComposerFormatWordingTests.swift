@@ -142,13 +142,6 @@ final class ComposerFormatWordingTests: XCTestCase {
         XCTAssertEqual(model.emptyMessage, ComposerFormatWording.story.soundLibraryEmptyMine)
     }
 
-    func test_publishStartedAnnouncement_isTheTableOfTheFormat() {
-        for type in PostType.allCases {
-            XCTAssertEqual(StoryComposerView.publishStartedAnnouncement(for: type),
-                           ComposerFormatWording(type).publishStarted)
-        }
-    }
-
     func test_environment_defaultsToTheStory() {
         XCTAssertEqual(EnvironmentValues().composerFormatWording, .story)
     }

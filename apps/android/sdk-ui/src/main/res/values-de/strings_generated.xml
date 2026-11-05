@@ -6,6 +6,7 @@
     <string name="a11y_kit_toggle_on">Ein</string>
     <string name="a11y_media_download_action">Herunterladen</string>
     <string name="a11y_media_download_cancel">Download abbrechen</string>
+    <string name="a11y_message_actions_forward">Weiterleiten</string>
     <string name="audio_consent_notice_action">In Einstellungen aktivieren</string>
     <string name="audio_consent_notice_message">Aktiviere die Sprach-Einwilligung, damit deine Sprachnachrichten transkribiert und übersetzt werden.</string>
     <string name="audio_editor_a11y_playhead">Wiedergabeposition</string>
@@ -298,6 +299,8 @@
     <string name="media_caption_see_less_hint">Klappt die Bildunterschrift ein</string>
     <string name="media_caption_see_more">mehr anzeigen</string>
     <string name="media_caption_see_more_hint">Zeigt die vollständige Bildunterschrift</string>
+    <string name="media_compose_hint">Öffnet den Composer mit diesem Medium.</string>
+    <string name="media_compose_title">Mit diesem Medium erstellen</string>
     <string name="media_crop_a11y_handle_bottom">Untere Kante</string>
     <string name="media_crop_a11y_handle_bottomLeft">Untere linke Ecke</string>
     <string name="media_crop_a11y_handle_bottomRight">Untere rechte Ecke</string>
@@ -314,6 +317,7 @@
     <string name="media_crop_a11y_position">Horizontal %1$s, vertikal %2$s</string>
     <string name="media_crop_a11y_size">Breite %1$s, Höhe %2$s</string>
     <string name="media_download">Laden</string>
+    <string name="media_forward_rail_hint">Sendet dieses Medium in eine andere Unterhaltung.</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">Datei</string>
     <string name="media_label_location">Standort</string>
@@ -332,6 +336,10 @@
     <string name="media_permission_photos_denied_message">Fotozugriff verweigert — zum Öffnen der Einstellungen tippen</string>
     <string name="media_permission_photos_denied_title">Zugriff auf Fotos verweigert</string>
     <string name="media_playAudio">Audio abspielen</string>
+    <string name="media_react_hint">Zeigt die Emoji-Reihe an, um auf dieses Medium zu reagieren.</string>
+    <string name="media_react_title">Reagieren</string>
+    <string name="media_reply_hint_inPlace">Öffnet das Eingabefeld über diesem Medium und zitiert es.</string>
+    <string name="media_reply_title">Antworten</string>
     <string name="media_skipBack10s">10 Sekunden zurück</string>
     <string name="media_skipForward10s">10 Sekunden vor</string>
     <string name="media_summary_file">📎 Datei</string>

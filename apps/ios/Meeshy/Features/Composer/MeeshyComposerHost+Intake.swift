@@ -227,17 +227,6 @@ extension MeeshyComposerHost {
         )
     }
 
-    func carryContentIntoSceneIfNeeded() {
-        // E1 — la scène prend la langue DÉCLARÉE au composer comme défaut de
-        // tout objet posé.
-        viewModel.declaredContentLanguage = documentLanguage
-        // B1 — le texte ET le média déjà composés SUIVENT dans la scène.
-        viewModel.applyContentText(documentText)
-        documentMediaObjectIdBySource.merge(
-            viewModel.applyContentMedia(documentContentMedia)
-        ) { _, neuf in neuf }
-    }
-
     /// **Le SECOND opt-in n'est offert que sous la MÊME garde que le composer
     /// inline** — `FeedNearbyDiscoverability.offers(hasPlace:visibility:)`,
     /// APPELÉE et jamais recopiée (`hasPlace && visibility == .public`) : une

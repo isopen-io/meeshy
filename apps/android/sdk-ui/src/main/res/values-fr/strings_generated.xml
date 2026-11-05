@@ -6,6 +6,7 @@
     <string name="a11y_kit_toggle_on">Activé</string>
     <string name="a11y_media_download_action">Télécharger</string>
     <string name="a11y_media_download_cancel">Annuler le téléchargement</string>
+    <string name="a11y_message_actions_forward">Transférer</string>
     <string name="audio_consent_notice_action">Activer dans les Réglages</string>
     <string name="audio_consent_notice_message">Active le consentement vocal pour que tes messages audio soient transcrits et traduits.</string>
     <string name="audio_editor_a11y_playhead">Position de lecture</string>
@@ -300,6 +301,8 @@
     <string name="media_caption_see_less_hint">Replie la légende</string>
     <string name="media_caption_see_more">voir plus</string>
     <string name="media_caption_see_more_hint">Affiche la légende entière</string>
+    <string name="media_compose_hint">Ouvre le composer avec ce média posé.</string>
+    <string name="media_compose_title">Créer avec ce média</string>
     <string name="media_crop_a11y_handle_bottom">Bord inférieur</string>
     <string name="media_crop_a11y_handle_bottomLeft">Coin inférieur gauche</string>
     <string name="media_crop_a11y_handle_bottomRight">Coin inférieur droit</string>
@@ -316,6 +319,7 @@
     <string name="media_crop_a11y_position">Horizontal %1$s, vertical %2$s</string>
     <string name="media_crop_a11y_size">Largeur %1$s, hauteur %2$s</string>
     <string name="media_download">Télécharger</string>
+    <string name="media_forward_rail_hint">Envoie ce média dans une autre conversation.</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">Fichier</string>
     <string name="media_label_location">Position</string>
@@ -334,6 +338,10 @@
     <string name="media_permission_photos_denied_message">Accès aux photos refusé — toucher pour ouvrir les Réglages</string>
     <string name="media_permission_photos_denied_title">Accès aux photos refusé</string>
     <string name="media_playAudio">Lire l\'audio</string>
+    <string name="media_react_hint">Affiche la rangée d\'émojis pour réagir à ce média.</string>
+    <string name="media_react_title">Réagir</string>
+    <string name="media_reply_hint_inPlace">Ouvre la zone de saisie au-dessus de ce média, en le citant.</string>
+    <string name="media_reply_title">Répondre</string>
     <string name="media_skipBack10s">Reculer de 10 secondes</string>
     <string name="media_skipForward10s">Avancer de 10 secondes</string>
     <string name="media_summary_file">📎 Fichier</string>

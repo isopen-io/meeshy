@@ -122,7 +122,7 @@ nonisolated enum ComposerSoundDestination: Equatable {
     /// Une carte de lecture, sous le texte de la publication.
     case contentCard
 
-    /// `switch` exhaustif : une quatrième vue montée ne compilera pas tant
+    /// `switch` exhaustif : une troisième vue montée ne compilera pas tant
     /// qu'elle n'aura pas dit où son premier plan atterrit — ce qui est
     /// exactement la question qu'on oublie en ajoutant un écran.
     ///
@@ -133,7 +133,7 @@ nonisolated enum ComposerSoundDestination: Equatable {
     /// republication.
     static func forForeground(on view: ComposerMountedView) -> ComposerSoundDestination {
         switch view {
-        case .atelier, .scene:  return .sceneChip
+        case .scene:  return .sceneChip
         case .mood:             return .contentCard
         }
     }

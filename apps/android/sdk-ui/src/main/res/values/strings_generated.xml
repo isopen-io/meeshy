@@ -6,6 +6,7 @@
     <string name="a11y_kit_toggle_on">On</string>
     <string name="a11y_media_download_action">Download</string>
     <string name="a11y_media_download_cancel">Cancel download</string>
+    <string name="a11y_message_actions_forward">Forward</string>
     <string name="audio_consent_notice_action">Enable in Settings</string>
     <string name="audio_consent_notice_message">Enable voice consent so your audio messages are transcribed and translated.</string>
     <string name="audio_editor_a11y_playhead">Playback position</string>
@@ -298,6 +299,8 @@
     <string name="media_caption_see_less_hint">Collapses the caption</string>
     <string name="media_caption_see_more">see more</string>
     <string name="media_caption_see_more_hint">Shows the full caption</string>
+    <string name="media_compose_hint">Opens the composer with this media placed.</string>
+    <string name="media_compose_title">Create with this media</string>
     <string name="media_crop_a11y_handle_bottom">Bottom edge</string>
     <string name="media_crop_a11y_handle_bottomLeft">Bottom left corner</string>
     <string name="media_crop_a11y_handle_bottomRight">Bottom right corner</string>
@@ -314,6 +317,7 @@
     <string name="media_crop_a11y_position">Horizontal %1$s, vertical %2$s</string>
     <string name="media_crop_a11y_size">Width %1$s, height %2$s</string>
     <string name="media_download">Download</string>
+    <string name="media_forward_rail_hint">Sends this media to another conversation.</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">File</string>
     <string name="media_label_location">Location</string>
@@ -332,6 +336,10 @@
     <string name="media_permission_photos_denied_message">Photo access denied — tap to open Settings</string>
     <string name="media_permission_photos_denied_title">Photo access denied</string>
     <string name="media_playAudio">Play audio</string>
+    <string name="media_react_hint">Shows the emoji row to react to this media.</string>
+    <string name="media_react_title">React</string>
+    <string name="media_reply_hint_inPlace">Opens the composer above this media, quoting it.</string>
+    <string name="media_reply_title">Reply</string>
     <string name="media_skipBack10s">Back 10 seconds</string>
     <string name="media_skipForward10s">Forward 10 seconds</string>
     <string name="media_summary_file">📎 File</string>

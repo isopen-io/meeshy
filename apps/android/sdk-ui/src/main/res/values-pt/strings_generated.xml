@@ -6,6 +6,7 @@
     <string name="a11y_kit_toggle_on">Ativado</string>
     <string name="a11y_media_download_action">Baixar</string>
     <string name="a11y_media_download_cancel">Cancelar download</string>
+    <string name="a11y_message_actions_forward">Encaminhar</string>
     <string name="audio_consent_notice_action">Ativar nas Configurações</string>
     <string name="audio_consent_notice_message">Ative o consentimento de voz para que suas mensagens de áudio sejam transcritas e traduzidas.</string>
     <string name="audio_editor_a11y_playhead">Posição de reprodução</string>
@@ -300,6 +301,8 @@
     <string name="media_caption_see_less_hint">Recolhe a legenda</string>
     <string name="media_caption_see_more">ver mais</string>
     <string name="media_caption_see_more_hint">Mostra a legenda completa</string>
+    <string name="media_compose_hint">Abre o compositor com esta mídia posicionada.</string>
+    <string name="media_compose_title">Criar com esta mídia</string>
     <string name="media_crop_a11y_handle_bottom">Borda inferior</string>
     <string name="media_crop_a11y_handle_bottomLeft">Canto inferior esquerdo</string>
     <string name="media_crop_a11y_handle_bottomRight">Canto inferior direito</string>
@@ -316,6 +319,7 @@
     <string name="media_crop_a11y_position">Horizontal %1$s, vertical %2$s</string>
     <string name="media_crop_a11y_size">Largura %1$s, altura %2$s</string>
     <string name="media_download">Baixar</string>
+    <string name="media_forward_rail_hint">Envia esta mídia para outra conversa.</string>
     <string name="media_label_audio">Áudio</string>
     <string name="media_label_file">Arquivo</string>
     <string name="media_label_location">Localização</string>
@@ -334,6 +338,10 @@
     <string name="media_permission_photos_denied_message">Acesso às fotos negado — toque para abrir os Ajustes</string>
     <string name="media_permission_photos_denied_title">Acesso às fotos negado</string>
     <string name="media_playAudio">Reproduzir áudio</string>
+    <string name="media_react_hint">Mostra a fileira de emojis para reagir a esta mídia.</string>
+    <string name="media_react_title">Reagir</string>
+    <string name="media_reply_hint_inPlace">Abre a área de escrita acima desta mídia, citando-a.</string>
+    <string name="media_reply_title">Responder</string>
     <string name="media_skipBack10s">Voltar 10 segundos</string>
     <string name="media_skipForward10s">Avançar 10 segundos</string>
     <string name="media_summary_file">📎 Arquivo</string>

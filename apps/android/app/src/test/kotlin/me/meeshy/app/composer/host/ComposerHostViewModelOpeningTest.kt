@@ -23,11 +23,8 @@ class ComposerHostViewModelOpeningTest {
     )
 
     @Test
-    fun `the feed door owes the content field the keyboard until it has taken it`() {
-        val vm = viewModel("feed")
-        assertThat(vm.keyboardOwed.value).isTrue()
-        vm.onKeyboardRaised()
-        assertThat(vm.keyboardOwed.value).isFalse()
+    fun `the feed door opens its post on the scene at rest, like the story, and owes no keyboard (#16203)`() {
+        assertThat(viewModel("feed").keyboardOwed.value).isFalse()
     }
 
     @Test

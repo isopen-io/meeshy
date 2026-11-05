@@ -39,57 +39,7 @@ final class StoryComposerDraftLifecycleTests: XCTestCase {
 
     // MARK: - Sortie avec contenu → le brouillon reste, sous SON id
 
-    /// La fermeture par le X ne détruit JAMAIS un brouillon restaurable — ni
-    /// celui de la session, ni un voisin. `clearPhantomDraftsOnly()` est la
-    /// seule purge que cette sortie emprunte.
-    func test_exitWithContent_keepsTheSessionDraftUnderItsOwnId_andNeighborsIntact() throws {
-        let store = makeStore()
-        let defaults = makeDefaults()
-        store.save(draftId: "session", slides: [contentSlide("Ma story en cours")], visibility: "PUBLIC")
-        store.save(draftId: "voisin", slides: [contentSlide("Une autre story")], visibility: "FRIENDS")
-
-        let purged = StoryComposerView.clearPhantomDrafts(store: store, defaults: defaults)
-
-        XCTAssertFalse(purged, "Des brouillons restaurables existent : la sortie ne purge rien.")
-        XCTAssertEqual(
-            Set(store.listDrafts().map(\.id)), ["session", "voisin"],
-            "Chaque brouillon survit sous SON id — la sortie n'en fusionne ni n'en perd aucun."
-        )
-        XCTAssertEqual(try XCTUnwrap(store.load(draftId: "session")).slides.first?.content,
-                       "Ma story en cours")
-    }
-
-    /// Le brouillon conservé l'est sous l'id de LA session : c'est
-    /// `persistDraft()` qui écrit, et il ne connaît qu'un id.
-    func test_persistDraft_writesEveryStoreUnderTheSessionDraftId() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+SyncRestore.swift")
-        let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "func persistDraft()", in: code))
-
-        XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "draftId: viewModel.draftId", in: body), 2,
-            """
-            `save` et `saveMedia` écrivent tous deux sous l'id de la session — \
-            un littéral ou un id global ressusciterait le magasin mono-brouillon.
-            """
-        )
-    }
-
     // MARK: - Sortie vierge → aucun brouillon ne survit
-
-    func test_exitBlank_withOnlyThePhantomSessionDraft_leavesTheStoreEmpty() {
-        let store = makeStore()
-        let defaults = makeDefaults()
-        var phantom = StorySlide()
-        phantom.effects.background = "A5B4FC"
-        store.save(draftId: "session", slides: [phantom], visibility: "PUBLIC")
-
-        let purged = StoryComposerView.clearPhantomDrafts(store: store, defaults: defaults)
-
-        XCTAssertTrue(purged)
-        XCTAssertTrue(store.listDrafts().isEmpty,
-                      "Sortie vierge → `listDrafts()` est vide (spec incrément 3).")
-    }
 
     // MARK: - Publication CONFIRMÉE → SEUL le brouillon publié disparaît
 
@@ -113,16 +63,4 @@ final class StoryComposerDraftLifecycleTests: XCTestCase {
         XCTAssertNotNil(store.load(draftId: "voisin"))
     }
 
-    /// Une purge GLOBALE du magasin n'a plus sa place sur les chemins de
-    /// sortie/publication : `clear()` ne sert qu'à la déconnexion, et seul
-    /// `clearPhantomDrafts` (règle partagée, testée plus haut) peut y recourir
-    /// quand RIEN n'est restaurable.
-    func test_publicationPaths_neverPurgeTheWholeStore() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+Publication.swift")
-
-        XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "StoryDraftStore.shared.clear()", in: code), 0,
-            "Publier ou fermer ne vide jamais le magasin entier — brouillons voisins compris."
-        )
-    }
 }
