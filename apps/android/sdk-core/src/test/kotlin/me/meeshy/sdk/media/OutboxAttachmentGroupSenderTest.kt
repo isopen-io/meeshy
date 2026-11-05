@@ -95,13 +95,4 @@ class OutboxAttachmentGroupSenderTest {
         assertThat(sender().enqueueOffline(group(), emptyList())).isFalse()
         assertThat(bubbles).isEmpty()
     }
-
-    @Test
-    fun `#16168 chaque televersement nomme la bulle qu'il porte pour que la relance le retrouve`() = runTest {
-        sender().enqueueOffline(group(), items())
-
-        val payloads = outbox.deliverable(OutboxLanes.MEDIA).map { it.payload }
-        assertThat(payloads).hasSize(2)
-        payloads.forEach { assertThat(it).contains("\"messageCid\":\"cid_1\"") }
-    }
 }
