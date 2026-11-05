@@ -46,11 +46,13 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.QueuedAudio
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenChromeTiming
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenDismissDrag
+import me.meeshy.sdk.model.fullscreen.AudioFullscreenDownloadOffer
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenPaging
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenSequence
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeState
 import me.meeshy.sdk.model.media.PlaybackSpeed
 import me.meeshy.sdk.model.playback.AudioPlaybackState
+import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -96,6 +98,10 @@ public interface AudioFullscreenPlayer {
  * la lecture continue : rien ici n'arrête le moteur ; la conversation reprend sa file ([conversationTail]).
  *
  * Fond fixe sous le pager : la surface du thème, éclairée par l'[accent] de la conversation.
+ *
+ * Télécharger ([onDownload]) ne s'offre que sur une page dont le porteur laisse sortir le vocal, et jamais dans une
+ * conversation chiffrée de bout en bout ([AudioFullscreenDownloadOffer]). Le portrait porte la présence VIVANTE de
+ * l'auteur (la carte de la session), la présence servie par la source en repli — hors ligne : aucun point.
  */
 @Composable
 public fun AudioFullscreenScreen(
@@ -108,6 +114,8 @@ public fun AudioFullscreenScreen(
     conversationTail: (String) -> List<QueuedAudio> = { emptyList() },
     onDismissToMessage: (String) -> Unit = {},
     onDownload: ((AudioFullscreenSource) -> Unit)? = null,
+    conversationIsEndToEnd: Boolean = false,
+    actions: AudioFullscreenActionPort? = null,
 ) {
     val ordered = remember(sources) { AudioFullscreenSequence.ordered(sources) { it.createdAtEpochMs } }
     val ids = remember(ordered) { ordered.map { it.id } }
@@ -201,7 +209,7 @@ public fun AudioFullscreenScreen(
             ?.let(onDismissToMessage)
         onDismiss()
     }
-    BackHandler(onBack = dismiss)
+    BackHandler { if (chrome.overlay != null) chrome = chrome.closingOverlay() else dismiss() }
 
     val density = LocalDensity.current
     val dragOffset = remember { Animatable(0f) }
@@ -233,7 +241,7 @@ public fun AudioFullscreenScreen(
                 Box(Modifier.fillMaxSize())
                 return@HorizontalPager
             }
-            val source = ordered[index]
+            val source = ordered[index].withLivePresence()
             AudioFullscreenPage(
                 source = source,
                 pageIndex = index,
@@ -247,7 +255,12 @@ public fun AudioFullscreenScreen(
                 onToggleChrome = { chrome = chrome.tappingMedia() },
                 onRevealChrome = { chrome = chrome.revealing() },
                 onChromeInteraction = { touches += 1 },
-                onDownload = onDownload,
+                onDownload = onDownload?.takeIf { AudioFullscreenDownloadOffer.offers(source.exitOffer, conversationIsEndToEnd) },
+                rail = if (actions != null && index == pagerState.currentPage) {
+                    @Composable { AudioFullscreenActionRailSlot(actions, source, chrome, onChrome = { chrome = it }, onClose = dismiss) }
+                } else {
+                    null
+                },
                 onNext = AudioFullscreenSequence.next(source.id, ids)?.let { id ->
                     { scope.launch { pagerState.animateScrollToPage(latestIds.indexOf(id).coerceAtLeast(0)) }; Unit }
                 },
@@ -256,7 +269,18 @@ public fun AudioFullscreenScreen(
                 },
             )
         }
+        val posed = ordered.getOrNull(pagerState.currentPage)
+        if (actions != null && posed != null) {
+            AudioFullscreenActionOverlays(actions, posed, chrome, accent, onChrome = { chrome = it })
+        }
     }
+}
+
+/** La présence de l'auteur lue au niveau de SA page : la carte vivante, sinon celle que la source a servie. */
+@Composable
+private fun AudioFullscreenSource.withLivePresence(): AudioFullscreenSource {
+    val live = rememberPresence(author.userId) ?: return this
+    return if (live == authorPresence) this else copy(authorPresence = live)
 }
 
 /** La piste que l'écran a lui-même demandée — tenue HORS de l'état Compose : la noter ne refait aucune page. */

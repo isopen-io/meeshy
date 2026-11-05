@@ -275,6 +275,7 @@ internal class ChatHostActions(
     val addReactionFromDetails: (String, String) -> Unit,
     val dismissReport: () -> Unit,
     val onExplorerRetranslate: (String, String) -> Unit,
+    val onExplorerRowTap: (String, String) -> Unit,
     val dismissLanguageExplorer: () -> Unit,
     val dismissEmojiPicker: () -> Unit,
     val closeReactionDetails: () -> Unit,
@@ -326,6 +327,8 @@ internal class ChatHostActions(
     val toggleStars: (List<String>) -> Unit = {},
     /** Le drapeau d'une langue de piste d'un vocal : voix, texte et karaoké basculent ensemble. */
     val onAudioLanguage: (String, String) -> Unit = { _, _ -> },
+    /** Réagir, répondre et transférer depuis le plein écran d'un vocal (#16176). */
+    val audioFullscreenReplies: me.meeshy.app.chat.audio.AudioFullscreenReplyController? = null,
 )
 
 internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
@@ -409,6 +412,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     addReactionFromDetails = this::addReactionFromDetails,
     dismissReport = this::dismissReport,
     onExplorerRetranslate = this::onExplorerRetranslate,
+    onExplorerRowTap = this::onExplorerRowTap,
     dismissLanguageExplorer = this::dismissLanguageExplorer,
     dismissEmojiPicker = this::dismissEmojiPicker,
     closeReactionDetails = this::closeReactionDetails,
@@ -440,6 +444,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     deleteSelectionForMe = this::deleteSelectionForMe,
     toggleStars = this::toggleStars,
     onAudioLanguage = this::selectAudioLanguage,
+    audioFullscreenReplies = controllers.find<me.meeshy.app.chat.audio.AudioFullscreenReplyController>(),
 )
 
 /** Le rendu de l'éditeur audio est un m4a (AAC), comme la prise du micro. */

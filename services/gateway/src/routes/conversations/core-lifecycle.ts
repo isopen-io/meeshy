@@ -63,6 +63,7 @@ import {
 import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest';
 import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
 import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
+import { ENCRYPTION_MODE_UNSUPPORTED_CODE } from '@meeshy/shared/utils/conversation-creation-encryption';
 import {
   composeConversationUpdate,
   broadcastConversationUpdated,
@@ -541,7 +542,7 @@ export function registerCreateConversationRoute(
 function refuseCreationRegime(reply: FastifyReply, refusal: CreationRegimeRefusal) {
   if (refusal === 'end-to-end-direct-only') {
     return sendError(reply, 400, 'End-to-end encryption can only be chosen at creation for a direct conversation for now', {
-      code: 'ENCRYPTION_MODE_UNSUPPORTED',
+      code: ENCRYPTION_MODE_UNSUPPORTED_CODE,
     });
   }
   if (refusal === 'plaintext-with-end-to-end') {

@@ -39,6 +39,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 @Composable
 fun MeeshyBackground(
     modifier: Modifier = Modifier,
+    ambient: @Composable BoxScope.(isDark: Boolean) -> Unit = { AmbientOrbs(it) },
     content: @Composable BoxScope.() -> Unit,
 ) {
     val dark = MeeshyTheme.isDark
@@ -59,7 +60,7 @@ fun MeeshyBackground(
                     }
                     .background(MeeshyGradients.mainBackground(dark)),
             ) {
-                AmbientOrbs(dark)
+                ambient(dark)
             }
             content()
         }

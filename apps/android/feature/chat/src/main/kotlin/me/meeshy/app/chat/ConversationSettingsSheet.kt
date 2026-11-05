@@ -149,6 +149,14 @@ internal fun ConversationSettingsSheet(
                 onCheckedChange = viewModel::setAutoTranslate,
             )
 
+            MemberManagementSection(
+                conversationId = conversationId,
+                query = state.memberQuery,
+                onQueryChange = viewModel::setMemberQuery,
+                viewerRole = state.viewerRole,
+                accentColor = accentColor,
+            )
+
             if (state.hasError) {
                 Text(
                     stringResource(R.string.conversation_settings_error),

@@ -6,6 +6,7 @@
     <string name="a11y_kit_toggle_on">Attivo</string>
     <string name="a11y_media_download_action">Scarica</string>
     <string name="a11y_media_download_cancel">Annulla il download</string>
+    <string name="a11y_message_actions_forward">Inoltra</string>
     <string name="audio_consent_notice_action">Attiva nelle Impostazioni</string>
     <string name="audio_consent_notice_message">Attiva il consenso vocale affinché i tuoi messaggi audio siano trascritti e tradotti.</string>
     <string name="audio_editor_a11y_playhead">Posizione di riproduzione</string>
@@ -298,6 +299,8 @@
     <string name="media_caption_see_less_hint">Comprime la didascalia</string>
     <string name="media_caption_see_more">mostra di più</string>
     <string name="media_caption_see_more_hint">Mostra la didascalia completa</string>
+    <string name="media_compose_hint">Apre il compositore con questo media inserito.</string>
+    <string name="media_compose_title">Crea con questo media</string>
     <string name="media_crop_a11y_handle_bottom">Bordo inferiore</string>
     <string name="media_crop_a11y_handle_bottomLeft">Angolo in basso a sinistra</string>
     <string name="media_crop_a11y_handle_bottomRight">Angolo in basso a destra</string>
@@ -314,6 +317,7 @@
     <string name="media_crop_a11y_position">Orizzontale %1$s, verticale %2$s</string>
     <string name="media_crop_a11y_size">Larghezza %1$s, altezza %2$s</string>
     <string name="media_download">Scarica</string>
+    <string name="media_forward_rail_hint">Invia questo contenuto in un\'altra conversazione.</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">File</string>
     <string name="media_label_location">Posizione</string>
@@ -332,6 +336,10 @@
     <string name="media_permission_photos_denied_message">Accesso alle foto negato — tocca per aprire Impostazioni</string>
     <string name="media_permission_photos_denied_title">Accesso alle foto negato</string>
     <string name="media_playAudio">Riproduci l\'audio</string>
+    <string name="media_react_hint">Mostra la fila di emoji per reagire a questo media.</string>
+    <string name="media_react_title">Reagisci</string>
+    <string name="media_reply_hint_inPlace">Apre l’area di scrittura sopra questo media, citandolo.</string>
+    <string name="media_reply_title">Rispondi</string>
     <string name="media_skipBack10s">Indietro di 10 secondi</string>
     <string name="media_skipForward10s">Avanti di 10 secondi</string>
     <string name="media_summary_file">📎 File</string>

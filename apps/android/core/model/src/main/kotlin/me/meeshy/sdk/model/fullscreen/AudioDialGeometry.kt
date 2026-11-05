@@ -25,6 +25,16 @@ public object AudioDialGeometry {
 
     public const val BAR_COUNT: Int = 72
 
+    /** Rayon du curseur au repos, et pendant que le doigt le tient. */
+    public const val CURSOR_RADIUS: Float = 8f
+    public const val CURSOR_SCRUB_RADIUS: Float = 11f
+
+    /** Halo d'accent autour du curseur. */
+    public const val CURSOR_HALO: Float = 3f
+
+    /** Largeur d'une barre. */
+    public const val BAR_WIDTH: Float = 3f
+
     /** Pas d'un ajustement TalkBack. */
     public const val ADJUST_STEP: Double = 0.05
 
@@ -37,8 +47,13 @@ public object AudioDialGeometry {
         return if (turn < 0) turn + 1 else turn
     }
 
-    /** Le curseur ne saute jamais par-dessus midi : il bute sur la fin (ou le début). */
+    /**
+     * Le curseur ne saute jamais par-dessus midi : il bute sur la fin (ou le début) et TIENT sa butée tant que le doigt
+     * n'est pas revenu dans la moitié d'où il venait — passer midi puis dépasser 25 % ne le ramène pas au début.
+     */
     public fun scrubbed(previous: Double, raw: Double): Double = when {
+        previous >= 1.0 && raw < 0.5 -> 1.0
+        previous <= 0.0 && raw > 0.5 -> 0.0
         previous > 0.75 && raw < 0.25 -> 1.0
         previous < 0.25 && raw > 0.75 -> 0.0
         else -> raw

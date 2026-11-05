@@ -30,6 +30,43 @@ class AudioDialGeometryTest {
         assertThat(AudioDialGeometry.scrubbed(previous = 0.1, raw = 0.95)).isEqualTo(0.0)
     }
 
+    private fun drag(vararg raws: Double): List<Double> {
+        var shown: Double? = null
+        return raws.map { raw ->
+            AudioDialGeometry.scrubbed(shown ?: raw, raw).also { shown = it }
+        }
+    }
+
+    @Test
+    fun `la butee de fin tient tant que le doigt n est pas revenu dans la moitie d ou il venait`() {
+        assertThat(drag(0.9, 0.05, 0.3, 0.6)).containsExactly(0.9, 1.0, 1.0, 0.6).inOrder()
+    }
+
+    @Test
+    fun `la butee de debut tient tant que le doigt n est pas revenu dans la moitie d ou il venait`() {
+        assertThat(drag(0.1, 0.95, 0.7, 0.4)).containsExactly(0.1, 0.0, 0.0, 0.4).inOrder()
+    }
+
+    @Test
+    fun `un doigt qui repasse par midi dans le sens d origine reprend sa course`() {
+        assertThat(drag(0.9, 0.05, 0.3, 0.9, 0.95)).containsExactly(0.9, 1.0, 1.0, 0.9, 0.95).inOrder()
+    }
+
+    @Test
+    fun `un balayage complet du debut a la fin ne saute jamais`() {
+        val path = (0..40).map { it / 40.0 }
+        assertThat(drag(*path.toDoubleArray())).isEqualTo(path)
+    }
+
+    @Test
+    fun `le curseur est plus grand sous le doigt et son halo l entoure`() {
+        assertThat(AudioDialGeometry.CURSOR_SCRUB_RADIUS).isGreaterThan(AudioDialGeometry.CURSOR_RADIUS)
+        assertThat(AudioDialGeometry.CURSOR_RADIUS).isEqualTo(8f)
+        assertThat(AudioDialGeometry.CURSOR_SCRUB_RADIUS).isEqualTo(11f)
+        assertThat(AudioDialGeometry.CURSOR_HALO).isEqualTo(3f)
+        assertThat(AudioDialGeometry.BAR_WIDTH).isEqualTo(3f)
+    }
+
     @Test
     fun `un deplacement normal suit le doigt`() {
         assertThat(AudioDialGeometry.scrubbed(previous = 0.4, raw = 0.45)).isEqualTo(0.45)
