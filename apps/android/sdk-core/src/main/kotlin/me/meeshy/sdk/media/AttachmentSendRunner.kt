@@ -42,6 +42,9 @@ public interface LocalTranscriptions {
 
     public fun promoted(localId: String, serverId: String)
 
+    /** Ce qui est DÉJÀ connu, sans attendre : ce que l'envoi emporte quand le budget est épuisé (les vocaux prêts partent avec leur texte). */
+    public fun known(attachmentIds: List<String>): Map<String, TusTranscription> = emptyMap()
+
     public object None : LocalTranscriptions {
         override suspend fun await(attachmentIds: List<String>, tempId: String): Map<String, TusTranscription> = emptyMap()
 
@@ -144,9 +147,10 @@ public class AttachmentSendRunner(
     /** Attente bornée par le budget d'ENVOI : au-delà, le fichier part sans texte et la transcription reprend côté serveur. */
     private suspend fun withTranscriptions(group: OutgoingMediaGroup, items: List<GroupUploadItem>): List<GroupUploadItem> {
         if (!group.group.isAudio) return items
+        val ids = items.map { it.attachmentId }
         val awaited = withTimeoutOrNull(LocalTranscriptions.SEND_WAIT_BUDGET_MS) {
-            transcriptions.await(items.map { it.attachmentId }, group.tempId)
-        }.orEmpty()
+            transcriptions.await(ids, group.tempId)
+        } ?: transcriptions.known(ids)
         if (awaited.isEmpty()) return items
         return items.map { item ->
             val text = awaited[item.attachmentId] ?: return@map item
