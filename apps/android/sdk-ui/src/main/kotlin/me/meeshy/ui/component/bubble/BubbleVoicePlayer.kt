@@ -52,6 +52,8 @@ import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.audio.AudioPlayerActions
 import me.meeshy.ui.component.audio.AudioPlayerState
 import me.meeshy.ui.component.audio.AudioPlayerView
+import me.meeshy.ui.component.audio.AudioTranscriptionSlot
+import me.meeshy.ui.component.audio.AudioTranscriptionText
 import me.meeshy.ui.component.media.rememberMediaAvailability
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.DarkMeeshyTokens
@@ -91,7 +93,7 @@ public fun BubbleVoicePlayer(
         hasTranscription = audio.hasTranscription,
         reservedPassively = reservesTranscript,
         request = request,
-        canRequest = callbacks.onRequestTranscription != null && !audio.isProtected && audio.url?.let(LocalFileUrl::isLocal) != true,
+        canRequest = callbacks.onRequestTranscription != null && AudioPlayerChromePlan.plan(chrome).showsTranscribeCta && !audio.isProtected && audio.url?.let(LocalFileUrl::isLocal) != true,
     )
     val availability = rememberVoiceAvailability(audio)
     val measures = BubbleVoiceProjection.measuresWaveform(availability.state, audio.isProtected)
@@ -129,27 +131,11 @@ public fun BubbleVoicePlayer(
             actions = actions,
             chrome = chrome,
             modifier = modifier,
-            bottomSlot = when (block) {
-                AudioTranscriptionBlock.Kind.TRANSCRIPT -> {
-                    {
-                        BubbleVoiceTranscript(
-                            audio = audio,
-                            playback = playback,
-                            onColor = onColor,
-                            autoReveal = autoRevealTranscription,
-                            onReveal = haptics::light,
-                            onSeek = callbacks.onAudioSeek?.let { seek -> { seconds: Double -> seek(audio, seconds) } },
-                            onRetranscribe = callbacks.onRetranscribe
-                                ?.takeIf { AudioPlayerChromePlan.plan(chrome).showsRetranscribe && !audio.isProtected && audio.url?.let(LocalFileUrl::isLocal) != true }
-                                ?.let { retranscribe -> { haptics.light(); retranscribe(audio) } },
-                        )
-                    }
-                }
-                AudioTranscriptionBlock.Kind.SKELETON -> {
-                    { PendingTranscriptSkeleton(inFlight = request == MessageTranscriptionFiche.Request.IN_FLIGHT) }
-                }
-                AudioTranscriptionBlock.Kind.REQUEST -> {
-                    {
+            bottomSlot = if (block == AudioTranscriptionBlock.Kind.NONE) null else ({
+                AudioTranscriptionSlot(
+                    kind = block,
+                    skeleton = { PendingTranscriptSkeleton(inFlight = request == MessageTranscriptionFiche.Request.IN_FLIGHT) },
+                    request = {
                         RevealTranscriptionCta(
                             onColor = onColor,
                             onReveal = {
@@ -157,10 +143,25 @@ public fun BubbleVoicePlayer(
                                 latestCallbacks.onRequestTranscription?.invoke(audio)
                             },
                         )
-                    }
-                }
-                AudioTranscriptionBlock.Kind.NONE -> null
-            },
+                    },
+                    transcript = {
+                        BubbleVoiceTranscript(
+                            audio = audio,
+                            playback = playback,
+                            chrome = chrome,
+                            onColor = onColor,
+                            accent = playerAccent,
+                            autoReveal = autoRevealTranscription,
+                            onReveal = haptics::light,
+                            onSeek = callbacks.onAudioSeek?.let { seek -> { seconds: Double -> seek(audio, seconds) } },
+                            onFullscreen = if (opensFullscreen) ({ latestCallbacks.onAudioFullscreen?.invoke(audio) }) else null,
+                            onRetranscribe = callbacks.onRetranscribe
+                                ?.takeIf { AudioPlayerChromePlan.plan(chrome).showsRetranscribe && !audio.isProtected && audio.url?.let(LocalFileUrl::isLocal) != true }
+                                ?.let { retranscribe -> { haptics.light(); retranscribe(audio) } },
+                        )
+                    },
+                )
+            }),
         )
     }
     if (onLightInk) {
@@ -228,10 +229,13 @@ private class VoiceAvailability(val state: MediaAvailabilityState, val onDownloa
 private fun BubbleVoiceTranscript(
     audio: BubbleAudio,
     playback: BubbleAudioPlayback?,
+    chrome: AudioPlayerChrome,
     onColor: Color,
+    accent: Color,
     autoReveal: Boolean,
     onReveal: () -> Unit,
     onSeek: ((Double) -> Unit)?,
+    onFullscreen: (() -> Unit)?,
     onRetranscribe: (() -> Unit)? = null,
 ) {
     val segments = remember(audio) { audio.karaokeSegments }
@@ -259,12 +263,24 @@ private fun BubbleVoiceTranscript(
             )
         } else {
             Column {
-                KaraokeTranscript(
+                val seek = onSeek?.takeIf { live != null }
+                AudioTranscriptionText(
                     segments = segments,
-                    frame = frame,
-                    onColor = onColor,
-                    onSeek = onSeek?.takeIf { live != null },
-                )
+                    chrome = chrome,
+                    activeIndex = frame.activeIndex,
+                    ink = onColor,
+                    accent = accent,
+                    onSeek = seek,
+                    onFullscreen = onFullscreen,
+                ) { shown, expanded ->
+                    KaraokeTranscript(
+                        segments = shown,
+                        frame = frame,
+                        onColor = onColor,
+                        onSeek = seek,
+                        maxLines = if (expanded) Int.MAX_VALUE else CARD_COLLAPSED_LINES,
+                    )
+                }
                 if (onRetranscribe != null) {
                     // En attente de la nouvelle transcription : le bouton se grise jusqu'à ce que le texte change.
                     var asked by remember(audio.attachmentId, audio.transcriptionText) { mutableStateOf(false) }
@@ -341,3 +357,4 @@ private val PendingLineHeight = 10.dp
 private val NO_SAMPLES: StateFlow<List<Float>> = MutableStateFlow(emptyList<Float>()).asStateFlow()
 
 private const val INK_LUMINANCE_THRESHOLD = 0.5f
+private const val CARD_COLLAPSED_LINES = 6

@@ -74,6 +74,8 @@ data class CommentPresentation(
     val place: FeedLocationPresentation? = null,
     /** Le média du post que le commentaire cite (#6578) : le bandeau de sa ligne ; sa cible a pu disparaître. */
     val quotedMedia: CommentQuotedMedia? = null,
+    /** Les drapeaux BRUTS servis : la protection (éphémère, vue unique) n'est pas dans [effects], restreint aux bits d'un commentaire. */
+    val effectFlags: Int? = null,
 ) {
     /** Un commentaire flouté se lit sous un voile, en le touchant (iOS `CommentVeilRules`). */
     val isBlurred: Boolean get() = CommentVeilRules.isVeiled(effects, isRevealed = false)
@@ -152,6 +154,7 @@ object CommentProjection {
             effects = CommentEffects.served(comment.effectFlags),
             place = FeedPostLocationBuilder.build(comment.location),
             quotedMedia = comment.quotedCitation,
+            effectFlags = comment.effectFlags,
         )
     }
 

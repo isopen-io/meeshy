@@ -3207,7 +3207,7 @@ final class EndCallInternalTeardownOrderTests: XCTestCase {
         )
         let turnCredentials = try AppSourceGuard.unit(
             "Meeshy/Features/Call/Services/CallCollaborators/CallTurnCredentials.swift")
-        guard let cancelAll = DeclarationBodyScanner.body(containing: "func cancelAll() {", in: turnCredentials) else {
+        guard let cancelAll = DeclarationBodyScanner.body(containing: "func cancelAll()", in: turnCredentials) else {
             XCTFail("CallTurnCredentials.cancelAll() not found in CallTurnCredentials.swift"); return
         }
         XCTAssertTrue(
@@ -3548,7 +3548,7 @@ final class CallManagerDTMFTests: XCTestCase {
     func test_sendDTMF_validatesInput_inSourceCode() throws {
         let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
-        guard let funcBody = DeclarationBodyScanner.body(containing: "func sendDTMF(digits: String) {", in: source) else {
+        guard let funcBody = DeclarationBodyScanner.body(containing: "func sendDTMF(digits: String)", in: source) else {
             XCTFail("sendDTMF not found in the CallManager unit"); return
         }
 
@@ -3562,7 +3562,7 @@ final class CallManagerDTMFTests: XCTestCase {
     func test_sendDTMF_rejectsEmptyString_inSourceCode() throws {
         let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
-        guard let funcBody = DeclarationBodyScanner.body(containing: "func sendDTMF(digits: String) {", in: source) else {
+        guard let funcBody = DeclarationBodyScanner.body(containing: "func sendDTMF(digits: String)", in: source) else {
             XCTFail("sendDTMF not found in the CallManager unit"); return
         }
 

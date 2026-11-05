@@ -360,6 +360,31 @@ class MessageSendCoordinatorTest {
         assertThat(harness.outbox.row(cid)).isNull()
     }
 
+    @Test
+    fun `#16053 a send refused for its attachment right keeps that reason on the failed bubble`() = runHarnessTest { harness ->
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "salut", "fr", sender)
+
+        coordinator.markSendFailed(cid, ATTACHMENT_RIGHT_REASON)
+
+        val row = harness.database.messageDao().find(cid)!!
+        assertThat(row.sendState).isEqualTo(LocalSendState.FAILED.name)
+        assertThat(row.lastError).isEqualTo(ATTACHMENT_RIGHT_REASON)
+    }
+
+    @Test
+    fun `#16053 a bubble refused for its attachment right is retried by hand, never dropped - the right may come`() = runHarnessTest { harness ->
+        val coordinator = coordinator(harness)
+        val cid = coordinator.sendOptimistic("c1", "salut", "fr", sender)
+        harness.outbox.markExhausted(cid, ATTACHMENT_RIGHT_REASON)
+        coordinator.markSendFailed(cid, ATTACHMENT_RIGHT_REASON)
+
+        coordinator.retrySend(cid)
+
+        assertThat(harness.cachedSendState(cid)).isEqualTo(LocalSendState.SENDING.name)
+        assertThat(harness.outbox.deliverable("message:c1").single().cmid).isEqualTo(cid)
+    }
+
     private class RecordingPreviews : PendingMediaPreviewing {
         val released = mutableListOf<List<ApiMessageAttachment>>()
         override suspend fun keep(cmid: String, thumbnailPath: String?, effects: MessageEffects): String? = null
@@ -423,3 +448,5 @@ class MessageSendCoordinatorTest {
         assertThat(previews.released).containsExactly(listOf(previewed))
     }
 }
+
+private const val ATTACHMENT_RIGHT_REASON = "Refused: HTTP 403 ATTACHMENT_RIGHT_NOT_PERMITTED"

@@ -133,10 +133,11 @@ internal fun PostOptionsButton(
 internal fun ReportPostDialog(
     onDismiss: () -> Unit,
     onReport: (ReportReason) -> Unit,
+    @androidx.annotation.StringRes titleRes: Int = R.string.feed_report_title,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.feed_report_title)) },
+        title = { Text(stringResource(titleRes)) },
         text = {
             Column {
                 ReportReason.entries.filterNot { it == ReportReason.FAKE_PROFILE }.forEach { reason ->

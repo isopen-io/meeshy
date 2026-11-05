@@ -10841,53 +10841,6 @@
         }
       }
     },
-    "composer.edit.refusal.addsMedia": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يمكن بعد إضافة وسائط جديدة إلى منشور منشور بالفعل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Neue Medien können einem veröffentlichten Beitrag noch nicht hinzugefügt werden"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A new media can't be added to a published post yet"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Todavía no se puede añadir un nuevo medio a una publicación ya publicada"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un nouveau média ne s'ajoute pas encore à une publication déjà en ligne"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Non è ancora possibile aggiungere un nuovo media a un post già pubblicato"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ainda não é possível adicionar uma nova mídia a uma publicação já publicada"
-          }
-        }
-      }
-    },
     "composer.edit.refusal.generic": {
       "extractionState": "manual",
       "localizations": {
@@ -10935,49 +10888,143 @@
         }
       }
     },
-    "composer.edit.refusal.reshapesScene": {
+    "composer.edit.refusal.offline": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يمكن تعديل عناصر المشهد بعد: يُحفظ النص والجمهور والتنسيق واللغة والمكان وإزالة الوسائط"
+            "value": "يلزم الاتصال لإضافة وسائط إلى المنشور"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Szenenobjekte lassen sich noch nicht bearbeiten: Text, Publikum, Format, Sprache, Ort und das Entfernen von Medien werden gespeichert"
+            "value": "Für das Hinzufügen von Medien zum Beitrag ist eine Verbindung erforderlich"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scene objects can't be edited yet: text, audience, format, language, place and media removal are saved"
+            "value": "A connection is needed to add media to the post"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los objetos de la escena aún no se pueden modificar: se guardan el texto, la audiencia, el formato, el idioma, el lugar y la eliminación de un medio"
+            "value": "Se necesita conexión para añadir un medio a la publicación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les objets de la scène ne se modifient pas encore : texte, audience, format, langue, lieu et retrait d'un média s'enregistrent"
+            "value": "Connexion requise pour ajouter un média à la publication"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gli oggetti della scena non si possono ancora modificare: si salvano testo, pubblico, formato, lingua, luogo e rimozione di un media"
+            "value": "Serve una connessione per aggiungere un media al post"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Os objetos da cena ainda não podem ser editados: texto, público, formato, idioma, local e remoção de mídia são salvos"
+            "value": "É preciso estar conectado para adicionar mídia à publicação"
+          }
+        }
+      }
+    },
+    "composer.edit.save": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حفظ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speichern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salva"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvar"
+          }
+        }
+      }
+    },
+    "composer.edit.uploadFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر إرسال الوسائط الجديدة: لم يتغيّر المنشور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die neuen Medien konnten nicht gesendet werden: Der Beitrag wurde nicht geändert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new media couldn't be sent: the post hasn't changed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron enviar los nuevos medios: la publicación no ha cambiado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les nouveaux médias n'ont pas pu être envoyés : la publication n'a pas changé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile inviare i nuovi media: il post non è cambiato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível enviar as novas mídias: a publicação não mudou"
           }
         }
       }

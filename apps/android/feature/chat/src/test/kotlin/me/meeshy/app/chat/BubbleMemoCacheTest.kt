@@ -170,6 +170,21 @@ class BubbleMemoCacheTest {
         assertThat(buildArgs(memo, lost, currentUser = me).isLocationRefused).isFalse()
         assertThat(buildArgs(memo, plain, currentUser = me).isMediaLost).isFalse()
     }
+
+    @Test
+    fun `#16053 a send refused for its attachment right says so on its failed bubble, and only there`() {
+        val me = MeeshyUser(id = "me", username = "me")
+        val reason = "Refused: HTTP 403 ATTACHMENT_RIGHT_NOT_PERMITTED"
+        val refused = message("a", senderId = "me").copy(sendState = LocalSendState.FAILED, lastError = reason)
+        val sending = message("s", senderId = "me").copy(sendState = LocalSendState.SENDING, lastError = reason)
+        val plain = message("p", senderId = "me").copy(sendState = LocalSendState.FAILED, lastError = "Refused: HTTP 403 WRITE_NOT_PERMITTED")
+        val memo = BubbleMemoCache()
+
+        assertThat(buildArgs(memo, refused, currentUser = me).isAttachmentRightRefused).isTrue()
+        assertThat(buildArgs(memo, refused, currentUser = me).isLocationRefused).isFalse()
+        assertThat(buildArgs(memo, sending, currentUser = me).isAttachmentRightRefused).isFalse()
+        assertThat(buildArgs(memo, plain, currentUser = me).isAttachmentRightRefused).isFalse()
+    }
 }
 
 /** La signature du cache couvre TOUTES les entrées de la bulle : chacune, changée, force la reconstruction. */

@@ -92,4 +92,36 @@ class CallHistoryListTest {
         val state = CallHistoryUiState(missedOnly = true, searchQuery = "zoe")
         assertThat(CallHistoryEmptyKind.of(state)).isEqualTo(CallHistoryEmptyKind.NO_RESULTS)
     }
+
+    @Test
+    fun `visible merges the server answer with the loaded lines, newest first, without duplicates`() {
+        val loaded = listOf(record("a").copy(startedAt = "2026-07-03T10:00:00Z"))
+        val server = listOf(
+            record("old").copy(startedAt = "2026-05-01T10:00:00Z"),
+            record("a").copy(startedAt = "2026-07-03T10:00:00Z"),
+        )
+
+        val shown = CallHistoryList.visible(
+            records = loaded,
+            query = me.meeshy.sdk.model.call.CallJournalQuery(),
+            hidden = emptySet(),
+            fallbackName = "Inconnu",
+            searched = server,
+        )
+
+        assertThat(shown.map { it.callId }).containsExactly("a", "old").inOrder()
+    }
+
+    @Test
+    fun `visible keeps a line the reader erased off the server answer`() {
+        val shown = CallHistoryList.visible(
+            records = emptyList(),
+            query = me.meeshy.sdk.model.call.CallJournalQuery(),
+            hidden = setOf("old"),
+            fallbackName = "Inconnu",
+            searched = listOf(record("old")),
+        )
+
+        assertThat(shown).isEmpty()
+    }
 }

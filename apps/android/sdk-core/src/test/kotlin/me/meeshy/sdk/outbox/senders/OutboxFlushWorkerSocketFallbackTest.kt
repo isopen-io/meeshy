@@ -9,9 +9,11 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.e2ee.InMemoryEndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.send.AttachmentRightRefusal
 import me.meeshy.sdk.model.socket.SendMessageAck
 import me.meeshy.sdk.model.socket.SocketAckCodes
 import me.meeshy.sdk.model.socket.SocketAckRefusal
+import me.meeshy.sdk.model.socket.SocketSendFallbackPolicy
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.SendResult
@@ -44,7 +46,7 @@ class OutboxFlushWorkerSocketFallbackTest {
 
     private fun row() = outboxRow(OutboxKind.SEND_MESSAGE, targetId = "c1", payload = encodedPayload(request))
 
-    private fun http(status: Int) = HttpException(Response.error<Any>(status, """{"success":false,"error":"refus","code":"VALIDATION_ERROR"}""".toResponseBody("application/json".toMediaTypeOrNull())))
+    private fun http(status: Int, code: String = "VALIDATION_ERROR") = HttpException(Response.error<Any>(status, """{"success":false,"error":"refus","code":"$code"}""".toResponseBody("application/json".toMediaTypeOrNull())))
 
     @Test
     fun `un 5xx du REST bascule sur la socket avec le meme clientMessageId et reconcilie sur l'accuse`() = runTest {
@@ -123,6 +125,29 @@ class OutboxFlushWorkerSocketFallbackTest {
         val result = handler(RecordingSocket(MessageSocketOutcome.Refused(refusal, definitive = false))).send(row())
 
         assertThat(result).isEqualTo(SendResult.TransientFailure)
+    }
+
+    @Test
+    fun `#16053 un 403 REST ATTACHMENT_RIGHT_NOT_PERMITTED est definitif, sans socket, et sa raison le dit`() = runTest {
+        coEvery { messageApi.send(any(), any()) } throws http(403, AttachmentRightRefusal.CODE)
+        val socket = RecordingSocket(MessageSocketOutcome.Acked(ack))
+
+        val result = handler(socket).send(row())
+
+        assertThat(result).isInstanceOf(SendResult.PermanentFailure::class.java)
+        assertThat(AttachmentRightRefusal.isReason((result as SendResult.PermanentFailure).reason)).isTrue()
+        assertThat(socket.sent).isEmpty()
+    }
+
+    @Test
+    fun `#16053 l'acquittement socket ATTACHMENT_RIGHT_NOT_PERMITTED abandonne la ligne et sa raison le dit`() = runTest {
+        coEvery { messageApi.send(any(), any()) } throws http(503)
+        val refusal = SocketAckRefusal(code = AttachmentRightRefusal.CODE)
+
+        val result = handler(RecordingSocket(MessageSocketOutcome.Refused(refusal, SocketSendFallbackPolicy.isDefinitive(refusal)))).send(row())
+
+        assertThat(result).isInstanceOf(SendResult.PermanentFailure::class.java)
+        assertThat(AttachmentRightRefusal.isReason((result as SendResult.PermanentFailure).reason)).isTrue()
     }
 
     @Test

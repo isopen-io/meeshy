@@ -90,6 +90,7 @@ fun CommunitySettingsScreen(
     onCancel: () -> Unit,
     onSaved: () -> Unit,
     onDeleted: () -> Unit,
+    onLeft: () -> Unit = onDeleted,
     viewModel: CommunitySettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -97,11 +98,13 @@ fun CommunitySettingsScreen(
     val context = LocalContext.current
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 2) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var confirmLeave by rememberSaveable { mutableStateOf(false) }
     var pickTarget by rememberSaveable { mutableStateOf(ImageUploadTarget.AVATAR) }
+    val editor = rememberCommunityImageEditor { target, item -> viewModel.upload(target, item) }
     val pickScope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        pickScope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { viewModel.upload(pickTarget, it) } }
+        pickScope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { editor.offer(pickTarget, it) } }
     }
     fun pick(target: ImageUploadTarget) {
         pickTarget = target
@@ -117,6 +120,7 @@ fun CommunitySettingsScreen(
                     onSaved()
                 }
                 CommunitySettingsEffect.Deleted -> onDeleted()
+                CommunitySettingsEffect.Left -> onLeft()
                 is CommunitySettingsEffect.UploadResult -> {
                     val avatar = effect.target == ImageUploadTarget.AVATAR
                     if (effect.succeeded) haptics.success() else haptics.error()
@@ -165,7 +169,7 @@ fun CommunitySettingsScreen(
                 ) {
                     val fields = draft.current
                     val accent = remember(fields.color) { hexColor(fields.color) }
-                    Box(Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(16.dp))) {
+                    Box(Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(16.dp))) {
                         CommunityBanner(fields.bannerUrl.ifEmpty { null }, fields.color, Modifier.fillMaxSize())
                         Row(
                             Modifier
@@ -184,7 +188,7 @@ fun CommunitySettingsScreen(
                     Column(Modifier.fillMaxWidth().offset(y = (-40).dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Box {
                             MeeshyAvatar(
-                                name = fields.name, size = 88.dp, containerColor = accent,
+                                name = fields.name, size = 80.dp, containerColor = accent,
                                 imageUrl = fields.avatarUrl.ifEmpty { null },
                                 modifier = Modifier.border(4.dp, tokens.backgroundPrimary, CircleShape),
                             )
@@ -235,21 +239,13 @@ fun CommunitySettingsScreen(
                             }
                             Switch(checked = fields.isPrivate, onCheckedChange = { haptics.selection(); viewModel.onPrivate(it) })
                         }
-                        if (viewModel.isCreator) {
-                            SectionTitle(stringResource(R.string.community_settings_section_danger))
-                            val error = tokens.error
-                            Row(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(error.copy(alpha = 0.1f))
-                                    .pressableScale(onClick = { haptics.warning(); confirmDelete = true }, enabled = !state.isDeleting)
-                                    .padding(vertical = 14.dp),
-                                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                if (state.isDeleting) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = error)
-                                else Icon(MeeshyIcons.DeleteFilled, null, tint = error, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text(stringResource(R.string.community_settings_delete_label), color = error, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
+                        SectionTitle(stringResource(R.string.community_settings_section_danger))
+                        val creator = viewModel.isCreator
+                        DangerButton(
+                            label = stringResource(if (creator) R.string.community_settings_delete_label else R.string.community_settings_leave_label),
+                            busy = if (creator) state.isDeleting else state.isLeaving,
+                            onClick = { haptics.warning(); if (creator) confirmDelete = true else confirmLeave = true },
+                        )
                         Spacer(Modifier.navigationBarsPadding())
                     }
                 }
@@ -266,6 +262,20 @@ fun CommunitySettingsScreen(
             confirmButton = { TextButton(onClick = viewModel::dismissError) { Text(stringResource(R.string.community_common_ok)) } },
         )
     }
+    if (confirmLeave) {
+        AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = { Text(stringResource(R.string.community_settings_leave_confirm_title)) },
+            text = { Text(stringResource(R.string.community_settings_leave_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = { confirmLeave = false; viewModel.leave() }) {
+                    Text(stringResource(R.string.community_settings_leave_button), color = MeeshyTheme.tokens.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text(stringResource(R.string.community_common_cancel)) } },
+        )
+    }
+    CommunityImageEditorHost(editor)
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -278,6 +288,22 @@ fun CommunitySettingsScreen(
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.community_common_cancel)) } },
         )
+    }
+}
+
+@Composable
+private fun DangerButton(label: String, busy: Boolean, onClick: () -> Unit) {
+    val error = MeeshyTheme.tokens.error
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(error.copy(alpha = 0.1f))
+            .pressableScale(onClick = onClick, enabled = !busy)
+            .padding(vertical = 14.dp),
+        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = error)
+        else Icon(MeeshyIcons.DeleteFilled, null, tint = error, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, color = error, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -308,7 +334,7 @@ private fun Swatch(hex: String, index: Int, selected: Boolean, onClick: () -> Un
     val description = stringResource(R.string.community_settings_color_swatch_a11y, index + 1, PresetColors.size)
     Box(
         Modifier
-            .size(44.dp)
+            .size(38.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(CircleShape)
             .background(hexColor(hex))

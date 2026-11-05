@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,12 +42,20 @@ internal fun RetranscribeButton(onColor: Color, enabled: Boolean, onClick: () ->
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        Icon(
-            imageVector = MeeshyIcons.Refresh,
-            contentDescription = null,
-            tint = onColor.copy(alpha = if (enabled) 0.6f else 0.3f),
-            modifier = Modifier.size(14.dp),
-        )
+        if (enabled) {
+            Icon(
+                imageVector = MeeshyIcons.Refresh,
+                contentDescription = null,
+                tint = onColor.copy(alpha = 0.6f),
+                modifier = Modifier.size(14.dp),
+            )
+        } else {
+            CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                strokeWidth = 1.5.dp,
+                color = onColor.copy(alpha = 0.5f),
+            )
+        }
         Text(
             text = stringResource(R.string.media_audio_retranscribe),
             style = MaterialTheme.typography.labelSmall,

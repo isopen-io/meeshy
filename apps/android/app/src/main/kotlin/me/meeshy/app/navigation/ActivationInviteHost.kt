@@ -30,6 +30,16 @@ class ActivationInviteViewModel @Inject constructor(
 }
 
 /**
+ * Les écrans au-dessus desquels le bandeau ne se pose pas (#16223) : le compositeur — story, post, réel — et ce qu'il
+ * ouvre (viseur, éditeurs) prennent tout l'écran, comme sur iOS, qui n'y montre aucun bandeau. Il revient à leur fermeture.
+ */
+internal object ActivationInviteBandRoutes {
+    private val creation = setOf(Routes.STORY_COMPOSER_ROUTE, Routes.COMPOSER)
+
+    fun showsOver(route: String?): Boolean = route !in creation
+}
+
+/**
  * Le bandeau discret « Validez votre compte » (phase `invite`, #8239) : jamais une fenetre bloquante. Il n'est plus
  * peint PAR-DESSUS la navigation (#13854 : translucide, il se melait au ✕ du compositeur) — il se range au-dessus
  * d'elle, opaque, et la destination commence dessous ([ActivationInviteBand]). « Plus tard » le retire pour la
@@ -38,6 +48,7 @@ class ActivationInviteViewModel @Inject constructor(
 @Composable
 internal fun ActivationInviteBandHost(
     navController: NavHostController,
+    currentRoute: String?,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -46,7 +57,7 @@ internal fun ActivationInviteBandHost(
     val activation = user?.activation
     val invite = remember(activation) {
         UserActivationRules.invite(activation, System.currentTimeMillis())
-    }?.takeUnless { dismissed }
+    }?.takeIf { !dismissed && ActivationInviteBandRoutes.showsOver(currentRoute) }
     ActivationInviteBand(
         invite = invite,
         title = stringResource(R.string.activation_invite_banner_title),

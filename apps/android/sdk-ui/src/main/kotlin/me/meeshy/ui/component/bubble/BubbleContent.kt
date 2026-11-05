@@ -161,6 +161,8 @@ public data class BubbleContent(
     val isLocationRefused: Boolean = false,
     /** True when a failed send lost its media on the device (#13554): told, and removed on tap so the author picks it again. */
     val isMediaLost: Boolean = false,
+    /** True when a failed send was refused because this participant may not attach that kind of piece yet (#16053): told, retried by hand. */
+    val isAttachmentRightRefused: Boolean = false,
     /** What this message lets out of Meeshy (forward, copy, save, share…) — read by every exit instead of a raw flag. */
     val exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
     /**

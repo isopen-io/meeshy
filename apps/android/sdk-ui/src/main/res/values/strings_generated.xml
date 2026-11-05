@@ -91,6 +91,7 @@
     <string name="bubble_contact_card_on_meeshy">On Meeshy</string>
     <string name="bubble_contact_card_shared">Shared contact</string>
     <string name="bubble_edited">edited</string>
+    <string name="bubble_failed_attachment_right">You can’t send this type of attachment in this conversation yet.</string>
     <string name="bubble_footer_translation_request">Request translation</string>
     <string name="bubble_forwarded">Forwarded</string>
     <string name="bubble_forwarded_from">Forwarded from %1$s</string>
@@ -293,6 +294,8 @@
     <string name="media_audio_speed_cycle">Playback speed %1$s</string>
     <string name="media_audio_transcribe">Transcribe</string>
     <string name="media_audio_transcribing">Transcribing</string>
+    <string name="media_audio_transcription_see_more">See more</string>
+    <string name="media_audio_transcription_see_more_a11y">Read the full transcription in fullscreen</string>
     <string name="media_caption_see_less">see less</string>
     <string name="media_caption_see_less_hint">Collapses the caption</string>
     <string name="media_caption_see_more">see more</string>

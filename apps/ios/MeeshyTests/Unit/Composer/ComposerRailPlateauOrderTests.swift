@@ -70,10 +70,12 @@ final class ComposerRailPlateauOrderTests: XCTestCase {
         let code = compact(try sceneSurface())
         XCTAssertTrue(code.contains("sceneLetterboxsceneLayerchromeLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))ifarrangement==.rails{railsLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}else{restChrome.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}}"),
                       "sol, scène, chrome, repos (ou les rails du grand écran, #13839 L6) — dans cet ordre")
-        guard let debut = code.range(of: "privatevarfreeZone:someView{") else {
+        guard let debut = code.range(of: "varfreeZone:someView{"),
+              let etages = code.range(of: "varcomposingFloors:someView{") else {
             return XCTFail("La scène libre a changé de nom — la garde doit être re-pointée.")
         }
-        XCTAssertTrue(code[debut.upperBound...].contains(
+        XCTAssertTrue(code[debut.upperBound...].contains("composingFloors"), "La scène libre pose les étages du bas.")
+        XCTAssertTrue(code[etages.upperBound...].contains(
             "HStack(alignment:isRoomy?.center:.bottom,spacing:0){Spacer(minLength:0)iftrailingRailIsShown{ComposerTrailingRail("))
         let scene = try bloc("privatevarsceneLayer:someView{", jusqua: "privatevarchromeLayer:someView{")
         XCTAssertFalse(scene.contains("restChrome"), "le repos est monté dans le calque de la scène")

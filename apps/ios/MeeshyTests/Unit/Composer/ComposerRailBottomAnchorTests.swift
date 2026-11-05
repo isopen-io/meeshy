@@ -24,14 +24,18 @@ final class ComposerRailBottomAnchorTests: XCTestCase {
     /// pose sur la scène par son propre calque.
     func test_laColonneEtLeVolet_partagentLeBasDeLaSceneLibre_sansRailGauche() throws {
         let code = try compact()
-        guard let debut = code.range(of: "privatevarfreeZone:someView{") else {
+        guard let debut = code.range(of: "varfreeZone:someView{"),
+              let etagesDebut = code.range(of: "varcomposingFloors:someView{") else {
             return XCTFail("La scène libre a changé de nom — la garde doit être re-pointée.")
         }
         let libre = code[debut.upperBound...]
+        let etages = code[etagesDebut.upperBound...]
         XCTAssertTrue(libre.hasPrefix("ZStack(alignment:.bottom){"), "Un seul repère, aligné au bas.")
+        XCTAssertTrue(libre.contains("composingFloors"), "La scène libre pose les étages du bas.")
         XCTAssertFalse(libre.contains("floatingRail"), "le rail gauche est revenu dans la scène libre")
-        XCTAssertTrue(libre.contains("ComposerTrailingRail("))
-        XCTAssertTrue(libre.contains("descriptionOverlay"),
+        XCTAssertFalse(etages.contains("floatingRail"), "le rail gauche est revenu dans les étages du bas")
+        XCTAssertTrue(etages.contains("ComposerTrailingRail("))
+        XCTAssertTrue(etages.contains("descriptionOverlay"),
                       "Le volet se pose au bas de la scène libre, entre les deux rails (#4993).")
         XCTAssertTrue(libre.contains(".frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.bottom)"),
                       "La scène libre prend tout le vide du chrome et pose son contenu au bas.")

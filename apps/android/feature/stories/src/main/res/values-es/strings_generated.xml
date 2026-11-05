@@ -386,10 +386,10 @@
     <string name="story_canvas_action_trim">Recortar</string>
     <string name="story_caption_scroll_to_top">Volver al inicio del texto</string>
     <string name="story_caption_scroll_to_top_hint">Desplaza la descripción hasta su primera palabra</string>
-    <string name="story_composer_a11y_composition">Story, %1$s: %2$s</string>
+    <string name="story_composer_a11y_composition">Historia, %1$s: %2$s</string>
     <string name="story_composer_a11y_compositionCount_many">%1$d objetos</string>
     <string name="story_composer_a11y_compositionCount_one">1 objeto</string>
-    <string name="story_composer_a11y_composition_post">Post, %1$s: %2$s</string>
+    <string name="story_composer_a11y_composition_post">Publicación, %1$s: %2$s</string>
     <string name="story_composer_a11y_composition_reel">Reel, %1$s: %2$s</string>
     <string name="story_composer_cancel">Cancelar</string>
     <string name="story_composer_edit_slide_background">Editar el fondo</string>

@@ -70,7 +70,7 @@ class StorySceneSheetLayoutTest {
                         sheet = sheet(),
                         onSheetDismiss = onSheetDismiss,
                         sheetContent = { open ->
-                            ComposerAnchoredSheet(fill = open != StoryComposerSheet.AUDIENCE) {
+                            ComposerAnchoredSheet(fill = open.fillsHeight) {
                                 Box(Modifier.fillMaxWidth().fillMaxSize().testTag(SHEET))
                             }
                         },

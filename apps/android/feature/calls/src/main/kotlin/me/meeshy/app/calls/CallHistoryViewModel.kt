@@ -4,6 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,6 +15,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.call.CallHistoryRepository
+import me.meeshy.sdk.model.call.CallJournalQuery
 import me.meeshy.sdk.model.call.CallRecord
 import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject
@@ -23,6 +28,7 @@ import javax.inject.Inject
  * client-side (instant, with the video filter, the typed name and the erased lines), paging on by itself when the loaded pages hold too few. All list algebra lives in the pure
  * [CallHistoryList]; this class only orchestrates intents and side-effects.
  */
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class CallHistoryViewModel @Inject constructor(
     private val repository: CallHistoryRepository,
@@ -43,7 +49,19 @@ class CallHistoryViewModel @Inject constructor(
     /** Lines erased by the reader that the gateway has not confirmed yet — they stay off the list. */
     private var hiddenIds: Set<String> = emptySet()
 
+    /** What the reader asks for now; the server search follows it after [SEARCH_DEBOUNCE_MS]. */
+    private val queryFlow = MutableStateFlow(CallJournalQuery())
+
+    /** The gateway's answer for ONE query: only shown while it is still the query on screen. */
+    private var searched: Pair<CallJournalQuery, List<CallRecord>>? = null
+
     init {
+        viewModelScope.launch {
+            queryFlow
+                .debounce { if (it.foldedSearch.isEmpty()) 0L else SEARCH_DEBOUNCE_MS }
+                .distinctUntilChanged()
+                .collectLatest { searchServer(it) }
+        }
         viewModelScope.launch {
             repository.historyStream(
                 onSyncError = { error ->
@@ -66,18 +84,21 @@ class CallHistoryViewModel @Inject constructor(
      */
     fun setMissedOnly(value: Boolean) {
         _state.update { it.copy(missedOnly = value).withVisible() }
+        queryFlow.value = _state.value.query
         fillFilteredList()
     }
 
     /** Le filtre « Vidéo » (iOS `setType(.video)`) : local et immédiat, la liste se remplit en paginant. */
     fun setVideoOnly(value: Boolean) {
         _state.update { it.copy(videoOnly = value).withVisible() }
+        queryFlow.value = _state.value.query
         fillFilteredList()
     }
 
     /** Le nom tapé : la liste répond à chaque frappe sur les lignes déjà chargées, puis pagine si besoin. */
     fun setSearchQuery(value: String) {
         _state.update { it.copy(searchQuery = value).withVisible() }
+        queryFlow.value = _state.value.query
         fillFilteredList()
     }
 
@@ -93,6 +114,36 @@ class CallHistoryViewModel @Inject constructor(
         val ids = (streamRecords + pagedRecords).map { it.callId }
         if (ids.isEmpty()) return
         erase(ids) { repository.clearAll() }
+    }
+
+    /**
+     * Asks the gateway for [query] over the whole window (`q`, server side). Typing already
+     * answered from the loaded lines; this completes the list with older matches. A failure
+     * (offline) leaves the local answer in place, silently — typing never raises an error.
+     */
+    private suspend fun searchServer(query: CallJournalQuery) {
+        if (query.foldedSearch.isEmpty()) {
+            searched = null
+            _state.update { it.withVisible() }
+            return
+        }
+        try {
+            repository.journalStream(query, UNKNOWN_PEER).collect { result ->
+                if (queryFlow.value != query) return@collect
+                val answer = when (result) {
+                    is CacheResult.Fresh -> result.value
+                    is CacheResult.Stale -> result.value
+                    is CacheResult.Syncing -> result.value
+                    CacheResult.Empty -> null
+                } ?: return@collect
+                searched = query to answer
+                _state.update { it.withVisible() }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return
+        }
     }
 
     fun dismissEraseFailure() {
@@ -215,6 +266,7 @@ class CallHistoryViewModel @Inject constructor(
                 query = query,
                 hidden = hiddenIds,
                 fallbackName = UNKNOWN_PEER,
+                searched = searched?.takeIf { it.first == query }?.second.orEmpty(),
             ),
         )
 
@@ -238,6 +290,9 @@ class CallHistoryViewModel @Inject constructor(
 
     private companion object {
         const val LOAD_MORE_THRESHOLD = 5
+
+        /** IOS `CallsViewModel` waits this long after the last keystroke before asking the gateway. */
+        const val SEARCH_DEBOUNCE_MS = 250L
 
         /** Le repli de nom de `CallRecord.displayName` — ce que la recherche compare quand un appel n'a pas de nom. */
         const val UNKNOWN_PEER = "Inconnu"
