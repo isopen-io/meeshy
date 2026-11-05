@@ -9,18 +9,20 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.pluginapi.TestEnvironmentLifecyclePlugin
 
 /**
- * La garde de #15815, posée avant chaque témoin Robolectric du module : `AndroidUiDispatcher.Main`, dès qu'un témoin
- * précédent l'a créé, doit encore exécuter ce qu'on lui confie.
+ * La garde de #15815, posée avant chaque témoin Robolectric des modules Compose : `AndroidUiDispatcher.Main`, dès
+ * qu'un témoin précédent l'a créé, doit encore exécuter ce qu'on lui confie.
  *
- * Une écriture d'état Compose faite hors de toute composition (un détenteur d'état piloté sans `setContent`) réveille
- * `GlobalSnapshotManager`, qui poste son application sur la boucle principale. Si le témoin s'achève sans vider cette
- * boucle, Robolectric efface le message au démontage : le répartiteur reste « programmé » pour toute la JVM, plus
- * aucune écriture globale n'est appliquée, et chaque témoin Compose suivant attend 60 s puis tombe en
- * `AppNotIdleException` au premier `setContent`.
+ * Une écriture d'état Compose faite hors de toute composition (un détenteur d'état piloté sans `setContent`), ou un
+ * chargement qui reprend sur le fil principal après le démontage, poste sur la boucle principale. Si le témoin
+ * s'achève sans vider cette boucle, Robolectric efface le message au démontage : le répartiteur reste « programmé »
+ * pour toute la JVM, plus aucune écriture globale n'est appliquée, et chaque témoin Compose suivant attend 60 s puis
+ * tombe en `AppNotIdleException` au premier `setContent` — une cascade d'une heure loin de sa cause.
  *
- * Plutôt qu'une cascade d'une heure loin de sa cause, la garde fait échouer tout de suite, avec ce message, les
- * témoins qui suivent la fuite. Le coupable est celui qui précède le premier échec dans la même JVM ; il se corrige
- * en vidant la boucle principale après ses écritures (`shadowOf(Looper.getMainLooper()).idle()` dans un `@After`).
+ * La garde RÉPARE : le message effacé est la seule chose perdue, la file du répartiteur est intacte. Elle lève donc
+ * les deux drapeaux « déjà programmé » et redemande une distribution, qui exécute la file en attente. Le témoin
+ * suivant part d'une boucle saine, et la fuite est nommée sur la sortie d'erreur pour que son auteur la vide
+ * (`@After : shadowOf(Looper.getMainLooper()).idle()`). Si la réparation échoue, le témoin échoue tout de suite avec
+ * ce même message plutôt que d'attendre 60 s.
  *
  * Le répartiteur n'est jamais créé ici : avant la mise en place du témoin, l'affichage simulé n'existe pas encore et
  * `Choreographer` ne se construit pas.
@@ -32,10 +34,27 @@ public class ComposeMainDispatcherGuard : TestEnvironmentLifecyclePlugin {
         if (Looper.myLooper() !== mainLooper) return
         val context = createdMainDispatcher() ?: return
         val dispatcher = context[ContinuationInterceptor] as CoroutineDispatcher
+        if (runs(dispatcher, context, mainLooper)) return
+        System.err.println("ComposeMainDispatcherGuard : $LEAK La garde a relancé le répartiteur.")
+        clearScheduledFlags(dispatcher)
+        check(runs(dispatcher, context, mainLooper)) { LEAK }
+    }
+
+    private fun runs(dispatcher: CoroutineDispatcher, context: CoroutineContext, mainLooper: Looper): Boolean {
         var ran = false
         dispatcher.dispatch(context) { ran = true }
         shadowOf(mainLooper).idle()
-        check(ran) { LEAK }
+        return ran
+    }
+
+    private fun clearScheduledFlags(dispatcher: CoroutineDispatcher) {
+        SCHEDULED_FLAGS.forEach { name ->
+            runCatching {
+                AndroidUiDispatcher::class.java.getDeclaredField(name)
+                    .apply { isAccessible = true }
+                    .setBoolean(dispatcher, false)
+            }
+        }
     }
 
     private fun createdMainDispatcher(): CoroutineContext? {
@@ -48,10 +67,11 @@ public class ComposeMainDispatcherGuard : TestEnvironmentLifecyclePlugin {
     private companion object {
         const val MAIN_DELEGATE: String = "Main\$delegate"
 
+        val SCHEDULED_FLAGS: List<String> = listOf("scheduledTrampolineDispatch", "scheduledFrameDispatch")
+
         const val LEAK: String =
-            "AndroidUiDispatcher.Main n'exécute plus rien : un témoin qui a précédé celui-ci dans la même JVM a écrit " +
-                "un état Compose hors composition sans vider la boucle principale, et Robolectric a effacé " +
-                "l'application en attente de GlobalSnapshotManager. Videz la boucle après ses écritures " +
-                "(@After : shadowOf(Looper.getMainLooper()).idle()). Voir #15815."
+            "AndroidUiDispatcher.Main n'exécutait plus rien : un témoin qui a précédé celui-ci dans la même JVM a " +
+                "laissé un message sur la boucle principale, et Robolectric l'a effacé au démontage. Videz la boucle " +
+                "après ses écritures (@After : shadowOf(Looper.getMainLooper()).idle()). Voir #15815."
     }
 }
