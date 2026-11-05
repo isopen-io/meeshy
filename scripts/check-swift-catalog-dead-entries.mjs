@@ -582,6 +582,11 @@ const PENDING_CLIENT_ENTRIES = {
   'BringEndpoint.byUserId': { issue: 13936, reason: 'GET|POST /bring/:userId — disponibilité et envoi du Bring, sous-lot iOS' },
   'BringEndpoint.byBringId': { issue: 13936, reason: 'DELETE /bring/:bringId — arrêter un Bring d’un geste, sous-lot iOS' },
   'RelationsEndpoint.byUserIdSettings': { issue: 14229, reason: 'GET|PUT /relations/:userId/settings — les réglages par personne sur iOS' },
+  // L'éditeur de packs lié à un compte Meeshy vérifié (#16274, servi par la PR #16378) : la boutique iOS lira la
+  // fiche publique et l'espace de l'éditeur ; la liste d'administration reste à la console web.
+  'PublishersEndpoint.bySlug': { issue: 16274, reason: 'GET /publishers/:slug — la fiche publique de l’éditeur, lue par la boutique' },
+  'PublishersEndpoint.me': { issue: 16274, reason: 'GET|PUT /publishers/me — l’espace de l’éditeur connecté' },
+  'PublishersEndpoint.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web seulement' },
 };
 
 const BASELINE_DEAD_ENTRIES = 329;
