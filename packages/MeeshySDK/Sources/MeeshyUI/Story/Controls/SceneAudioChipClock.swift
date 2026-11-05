@@ -56,8 +56,7 @@ public nonisolated enum SceneAudioChipClock {
 
     /// « M:SS », secondes tronquées : le chiffre ne devance jamais le son.
     public static func label(_ seconds: TimeInterval) -> String {
-        let whole = seconds.isFinite && seconds > 0 ? Int(seconds) : 0
-        return String(format: "%d:%02d", whole / 60, whole % 60)
+        MediaFormat.duration(seconds, rounding: .down)
     }
 }
 
