@@ -74,6 +74,7 @@ private abstract class StubConversationApi : ConversationApi {
         ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun sharedWith(withUserId: String, limit: Int) =
         ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun listBefore(before: String?, limit: Int?) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) =
         ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun listConditional(
