@@ -30,6 +30,7 @@ import me.meeshy.sdk.mention.MentionLookupDriver
 import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.mention.reset
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.composer.SendPlaceTileLaw
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.ConversationDraft
@@ -443,7 +444,7 @@ internal class ChatComposerController(
                 throw e
             } catch (e: Exception) {
                 state.update { it.copy(errorMessage = e.message) }
-                if (_pendingPlace.value == null) _pendingPlace.value = place
+                SendPlaceTileLaw.restoration(place, sent = false, current = _pendingPlace.value)?.let { _pendingPlace.value = it }
             }
         }
     }
