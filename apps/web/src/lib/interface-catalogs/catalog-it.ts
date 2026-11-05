@@ -1048,6 +1048,8 @@ const it = {
   'media.reactions.badge.a11y': 'Reazioni',
   'media.reactions.badge.mine.a11y': 'compresa la tua',
   'message.join.noAccount': 'senza account',
+  'message.join.greet.one': 'Fai un saluto',
+  'message.join.greet.many': 'Salutali',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',

@@ -1048,6 +1048,8 @@ const en = {
   'media.reactions.badge.a11y': 'Reactions',
   'media.reactions.badge.mine.a11y': 'including yours',
   'message.join.noAccount': 'no account',
+  'message.join.greet.one': 'Say hi',
+  'message.join.greet.many': 'Say hi to them',
   'attachment.kind.image': 'Photo',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',

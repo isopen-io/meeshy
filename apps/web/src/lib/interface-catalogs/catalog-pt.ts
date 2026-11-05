@@ -1052,6 +1052,8 @@ const pt = {
   'media.reactions.badge.a11y': 'Reações',
   'media.reactions.badge.mine.a11y': 'incluindo a sua',
   'message.join.noAccount': 'sem conta',
+  'message.join.greet.one': 'Diz olá',
+  'message.join.greet.many': 'Diz-lhes olá',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Vídeo',
   'attachment.kind.audio': 'Áudio',

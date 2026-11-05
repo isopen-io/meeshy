@@ -77,6 +77,15 @@ describe('postGlobalArrival — une ligne par fenêtre de 10 minutes (#7740)', (
     expect(h.broadcast).toHaveBeenCalledTimes(1);
   });
 
+  it('garde le pseudo de chaque arrivant (#16338) : « dis-leur salut » l’écrit en mention', async () => {
+    const h = harness([openLine({ names: ['Aïcha'] })]);
+
+    await postGlobalArrival(h.deps, { ...arrival('p-tom', 'Tom'), username: 'tom_b' });
+
+    const { data } = h.prisma.message.update.mock.calls[0][0] as any;
+    expect(parseArrivalsNotice(data.metadata)?.arrivals[0]).toEqual({ participantId: 'p-tom', displayName: 'Tom', username: 'tom_b' });
+  });
+
   it('met À JOUR la ligne ouverte au lieu d’en poster une autre', async () => {
     const h = harness([openLine({ names: ['Aïcha'] })]);
 

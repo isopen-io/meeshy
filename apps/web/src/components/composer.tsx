@@ -44,6 +44,7 @@ import type { ImposedReplyProtection } from '@meeshy/shared/utils/reply-protecti
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { ComposerDraftReport } from '@/lib/view/use-draft';
+import { useComposerInserts } from '@/lib/view/composer-insert';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
@@ -239,15 +240,14 @@ export const Composer = memo(function Composer({
   /** LA MENTION (#7826, #7846) — le mécanisme PARTAGÉ par tous les champs
    * qui mentionnent (`use-mention-field.ts`) : curseur, clavier de la liste,
    * insertion. Sans `source`, il lit celle que le fil ouvert publie. */
-  const mention = useMentionField({
-    text,
-    fieldRef: field,
-    onText: (next) => {
-      setText(next);
-      onTextChange?.(next);
-      compose.setText(next);
-    },
-  });
+  const writeText = (next: string) => {
+    setText(next);
+    onTextChange?.(next);
+    compose.setText(next);
+  };
+  const mention = useMentionField({ text, fieldRef: field, onText: writeText });
+  /* « DIS-LUI SALUT » (#16338) — les mentions d'un avis d'arrivée s'écrivent ici, à la suite du texte. */
+  useComposerInserts({ text, fieldRef: field, onText: writeText });
   /* LA SÉLECTION (#7849) — non vide, elle fait paraître la barre de format. */
   const [hasSelection, setHasSelection] = useState(false);
   const syncSelection = (el: HTMLTextAreaElement) => setHasSelection(el.selectionEnd > el.selectionStart);

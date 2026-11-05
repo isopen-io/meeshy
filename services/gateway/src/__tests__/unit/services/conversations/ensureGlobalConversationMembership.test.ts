@@ -41,7 +41,7 @@ type Harness = {
 
 /** Le compte rend ce que le `select` DEMANDE (#9711) — rang 2 de son prisme. */
 const COMPTE: Record<string, unknown> = {
-  id: USER_ID, systemLanguage: '', regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: null,
+  id: USER_ID, systemLanguage: '', regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: null, username: 'new_user',
 };
 
 function harness(overrides: { globalConv?: any; existingMember?: any; memberCount?: number } = {}): Harness {
@@ -199,7 +199,8 @@ describe('ensureGlobalConversationMembership', () => {
       metadata: expect.objectContaining({
         kind: 'members-arrived',
         count: 1,
-        arrivals: [{ participantId: 'part-new', displayName: 'New User' }],
+        /* Le pseudo signe l'arrivée (#16338) : « dis-lui salut » l'écrit en mention. */
+        arrivals: [{ participantId: 'part-new', displayName: 'New User', username: 'new_user' }],
       }),
     });
   });

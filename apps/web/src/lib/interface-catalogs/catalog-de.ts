@@ -1048,6 +1048,8 @@ const de = {
   'media.reactions.badge.a11y': 'Reaktionen',
   'media.reactions.badge.mine.a11y': 'darunter Ihre',
   'message.join.noAccount': 'kein Konto',
+  'message.join.greet.one': 'Sag hallo',
+  'message.join.greet.many': 'Sagt hallo',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',
