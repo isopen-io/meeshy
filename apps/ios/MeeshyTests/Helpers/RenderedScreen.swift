@@ -213,9 +213,21 @@ final class RenderedScreen {
             pose = RenderedScreen.noeuds(root)
                 .first { $0.identifier == identifier && $0.frame.width > 0 }?
                 .frame
+                ?? RenderedScreen.vue(portant: identifier, dans: root)
+                    .map { $0.convert($0.bounds, to: nil) }
+                    .flatMap { $0.width > 0 ? $0 : nil }
             return pose != nil
         }
         return pose
+    }
+
+    /// La `UIView` qui porte l'identifiant, cherchée dans les SOUS-VUES : la
+    /// `UIScrollView` d'un `ScrollView` SwiftUI qui déborde le porte sans être
+    /// un élément d'accessibilité, et l'arbre d'accessibilité ne la rend pas
+    /// toujours (#16246).
+    private static func vue(portant identifier: String, dans vue: UIView) -> UIView? {
+        if vue.accessibilityIdentifier == identifier, !vue.isHidden, vue.window != nil { return vue }
+        return vue.subviews.lazy.compactMap { Self.vue(portant: identifier, dans: $0) }.first
     }
 
     /// Le cadre ANNONCÉ du premier nœud posé dont le libellé COMMENCE par
