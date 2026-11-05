@@ -98,7 +98,7 @@ describe('isReservedPublisherIdentity — personne ne se fait passer pour Meeshy
 
 describe('impersonatesMeeshy est FERMÉE PAR DÉFAUT — un caractère inconnu vaut n’importe quelle lettre (revue de sécurité #16274)', () => {
   it('réserve Meeshy écrit avec un symbole, une lettre de style, une barre ou une lettre latine hors table à la place d’une lettre', () => {
-    ['\u24DCeeshy', '\u2133eeshy', 'M\u0435\u0435shy', 'M\u2758eeshy', 'Meesh\u01B4', 'Mee\u00DFhy', 'M|eeshy'].forEach((name) => {
+    ['\u24DCeeshy', '\u2133eeshy', 'M\u0435\u0435shy', 'M\u2758eeshy', 'Meesh\u01B4', 'Mee\u00DFhy', 'M|eeshy', 'Mee\u2606shy', 'M\uD83D\uDE42eeshy', 'Meesh\u2726y', 'Me\u20DDeshy'].forEach((name) => {
       expect(impersonatesMeeshy(name)).toBe(true);
       expect(isReservedPublisherIdentity(name)).toBe(true);
     });
