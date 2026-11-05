@@ -1,6 +1,7 @@
 package me.meeshy.sdk.net
 
 import okhttp3.Interceptor
+import okhttp3.Request
 import okhttp3.Response
 import java.util.concurrent.TimeUnit
 
@@ -30,16 +31,29 @@ object UploadTransferTimeouts {
     }
 }
 
-/** Pose [UploadTransferTimeouts] sur chaque PATCH tus, et sur lui seul : le reste du trafic garde ses délais. */
+/**
+ * Pose [UploadTransferTimeouts] sur chaque PATCH tus et sur le POST multipart `attachments/upload` (#16168 : une photo de
+ * 1,7 Mo tombait en `SocketTimeoutException` à 10,6 s, la passerelle rendant encore vignette et variantes), et sur eux
+ * seuls : le reste du trafic garde ses délais.
+ */
 class UploadTransferTimeoutInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val body = request.body ?: return chain.proceed(request)
         val type = body.contentType() ?: return chain.proceed(request)
-        if ("${type.type}/${type.subtype}" != UploadTransferTimeouts.MEDIA_TYPE) return chain.proceed(request)
+        if (!isTransfer(request, "${type.type}/${type.subtype}")) return chain.proceed(request)
         return chain
             .withWriteTimeout(UploadTransferTimeouts.WRITE_MILLIS.toInt(), TimeUnit.MILLISECONDS)
             .withReadTimeout(UploadTransferTimeouts.readMillis(body.contentLength()).toInt(), TimeUnit.MILLISECONDS)
             .proceed(request)
+    }
+
+    private fun isTransfer(request: Request, mediaType: String): Boolean =
+        mediaType == UploadTransferTimeouts.MEDIA_TYPE ||
+            (request.method == "POST" && mediaType == MULTIPART && request.url.encodedPath.endsWith(ATTACHMENT_UPLOAD_PATH))
+
+    private companion object {
+        const val MULTIPART = "multipart/form-data"
+        const val ATTACHMENT_UPLOAD_PATH = "/attachments/upload"
     }
 }
