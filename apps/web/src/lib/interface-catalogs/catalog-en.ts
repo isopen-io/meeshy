@@ -993,6 +993,8 @@ const en = {
   'composer.viewOnce.activate': 'Enable view-once mode',
   'composer.viewOnce.active': 'View-once mode active',
   'composer.viewOnce.label': 'View once',
+  'conversation.composer.fold': 'Collapse the message bar',
+  'conversation.composer.unfold': 'Show the message bar',
   'composer.protection.ephemeral.state': 'Ephemeral mode active',
   'composer.protection.blur.state': 'Blur mode active',
   'message.location.shared': 'Shared location',

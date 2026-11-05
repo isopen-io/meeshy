@@ -993,6 +993,8 @@ const it = {
   'composer.viewOnce.activate': 'Attiva la modalità visione unica',
   'composer.viewOnce.active': 'Modalità visione unica attiva',
   'composer.viewOnce.label': 'Visione unica',
+  'conversation.composer.fold': 'Riduci la barra dei messaggi',
+  'conversation.composer.unfold': 'Mostra la barra dei messaggi',
   'composer.protection.ephemeral.state': 'Modalità effimera attiva',
   'composer.protection.blur.state': 'Modalità sfocatura attiva',
   'message.location.shared': 'Posizione condivisa',

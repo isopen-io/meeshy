@@ -938,7 +938,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             (#6537, « supprimer ces voiles, non pas simplement les rendre
             invisible, mais permettre qu'on manipule les éléments entre »). */
         <ThreadWriteLock conversationId={conversationId} conversation={conversation} messages={threadData.messages} viewerId={viewer.id ?? ''} title={title}>
-        <ThreadComposerChrome onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
+        <ThreadComposerChrome onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur} fold={{ conversationId }}>
           <MessageEditDock edit={compose.edit}>
           <Composer
             preferred={readerLanguages}

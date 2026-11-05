@@ -993,6 +993,8 @@ const de = {
   'composer.viewOnce.activate': 'Einmalansicht aktivieren',
   'composer.viewOnce.active': 'Einmalansicht aktiv',
   'composer.viewOnce.label': 'Einmalansicht',
+  'conversation.composer.fold': 'Nachrichtenleiste einklappen',
+  'conversation.composer.unfold': 'Nachrichtenleiste anzeigen',
   'composer.protection.ephemeral.state': 'Ephemerer Modus aktiv',
   'composer.protection.blur.state': 'Unschärfemodus aktiv',
   'message.location.shared': 'Geteilter Standort',

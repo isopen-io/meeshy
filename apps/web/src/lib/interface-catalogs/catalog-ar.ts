@@ -990,6 +990,8 @@ const ar = {
   'composer.viewOnce.activate': 'تفعيل وضع المشاهدة لمرة واحدة',
   'composer.viewOnce.active': 'وضع المشاهدة لمرة واحدة نشط',
   'composer.viewOnce.label': 'مشاهدة لمرة واحدة',
+  'conversation.composer.fold': 'طيّ شريط الرسائل',
+  'conversation.composer.unfold': 'إظهار شريط الرسائل',
   'composer.protection.ephemeral.state': 'الوضع المؤقت مفعّل',
   'composer.protection.blur.state': 'وضع التمويه مفعّل',
   'message.location.shared': 'موقع مشترك',

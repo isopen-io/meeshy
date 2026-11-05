@@ -993,6 +993,8 @@ const es = {
   'composer.viewOnce.activate': 'Activar el modo de vista única',
   'composer.viewOnce.active': 'Modo de vista única activo',
   'composer.viewOnce.label': 'Vista única',
+  'conversation.composer.fold': 'Contraer la barra de mensajes',
+  'conversation.composer.unfold': 'Mostrar la barra de mensajes',
   'composer.protection.ephemeral.state': 'Modo efímero activo',
   'composer.protection.blur.state': 'Modo desenfoque activo',
   'message.location.shared': 'Ubicación compartida',
