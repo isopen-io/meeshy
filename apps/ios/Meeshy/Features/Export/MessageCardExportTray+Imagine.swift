@@ -4,6 +4,18 @@ import MeeshyUI
 
 // MARK: - Les panneaux nés avec « Imagine » (#8692) : Format, Frame, Médias
 
+enum ImagerLengthLabel {
+
+    static func label(for choice: ImagerLengthChoice) -> String {
+        String(format: String(localized: "export.imager.length.option", defaultValue: "%1$lld/4 · %2$@", bundle: .main),
+               choice.quarter.rawValue, clock(choice.duration))
+    }
+
+    static func clock(_ seconds: TimeInterval) -> String {
+        MediaFormat.duration(seconds, style: .clockPromotingHours)
+    }
+}
+
 /// Ce que les panneaux « Frame » et « Médias » OFFRENT — un réglage n'existe
 /// que s'il change la carte (loi 4 : un contrôle existe s'il a un effet).
 /// Lois pures, lues par le plateau et par leurs témoins.
@@ -280,7 +292,7 @@ extension MessageCardExportTray {
         if !quarters.isEmpty {
             row {
                 ForEach(quarters, id: \.quarter) { choice in
-                    pill(ImagerPresenter.label(for: choice), selected: choice.quarter == clipQuarter) {
+                    pill(ImagerLengthLabel.label(for: choice), selected: choice.quarter == clipQuarter) {
                         clipQuarter = choice.quarter
                     }
                 }

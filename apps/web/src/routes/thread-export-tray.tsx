@@ -31,9 +31,13 @@ import { CardThumb, LinkGlyph, cssFontOf, paletteGradient, type ThumbSource } fr
  * ouvre son onglet (`TAB_OF_PART`). « Frame » vient AVANT « Fond » (#8693) ;
  * « Médias » n'apparaît que si la carte en porte, la langue que si le message
  * existe dans plusieurs, et tous deux viennent après les réglages de format.
+ * « Contenu » (#16393) — ce qu'on garde sur la carte d'un commentaire à
+ * réponses (modes, post en tête, réponses choisies, média de tête) — vient en
+ * PREMIER quand il y a des choix, et n'existe pas sinon : aucun contrôle ne
+ * vit plus au-dessus de l'aperçu.
  */
 
-export type ExportTab = 'styles' | 'frame' | 'palette' | 'typeface' | 'link' | 'details' | 'media' | 'language';
+export type ExportTab = 'content' | 'styles' | 'frame' | 'palette' | 'typeface' | 'link' | 'details' | 'media' | 'language';
 
 export const TAB_OF_PART: Readonly<Record<CardPart, ExportTab>> = {
   background: 'palette',
@@ -78,6 +82,7 @@ const OPTION_LABEL = {
 } as const satisfies Readonly<Record<MessageCardToggle, ExportCardCatalogKey>>;
 
 const TAB_LABEL = {
+  content: 'export.card.tab.content',
   styles: 'export.card.tab.styles',
   frame: 'export.card.tab.frame',
   palette: 'export.card.tab.palette',
@@ -89,6 +94,7 @@ const TAB_LABEL = {
 } as const satisfies Readonly<Record<ExportTab, ExportCardCatalogKey>>;
 
 const TAB_GLYPH = {
+  content: EXPORT_CARD_GLYPHS.listChecks,
   styles: EXPORT_CARD_GLYPHS.squaresFour,
   frame: EXPORT_CARD_GLYPHS.frameCorners,
   palette: EXPORT_CARD_GLYPHS.palette,
@@ -161,9 +167,11 @@ export type ExportTrayProps = {
   readonly languages: readonly string[];
   readonly exportLanguage: string | null;
   readonly onLanguage: (code: string | null) => void;
+  /** Les choix de contenu de la carte (#16393) — absents : pas d'onglet « Contenu ». */
+  readonly content?: ReactNode;
 };
 
-const STACKED: readonly ExportTab[] = ['frame', 'media'];
+const STACKED: readonly ExportTab[] = ['content', 'frame', 'media'];
 const WRAPPED: readonly ExportTab[] = ['details', 'language'];
 
 export function ExportTray(props: ExportTrayProps) {
@@ -171,6 +179,7 @@ export function ExportTray(props: ExportTrayProps) {
   const current = templateOf(format.template);
   const hasMedia = props.hasVisual || props.hasAudio;
   const tabs: readonly ExportTab[] = [
+    ...(props.content === undefined ? [] : (['content'] as const)),
     'styles',
     'frame',
     'palette',
@@ -190,6 +199,7 @@ export function ExportTray(props: ExportTrayProps) {
     .filter((part): part is string => part !== null)
     .join(' · ');
   const subtitle: Readonly<Record<ExportTab, string>> = {
+    content: '',
     styles: templateLabel(language, format.template),
     frame: '',
     palette: current.palette.name,
@@ -238,6 +248,8 @@ export function ExportTray(props: ExportTrayProps) {
             </button>
           </>
         ) : null}
+
+        {tab === 'content' ? <div data-export-content="">{props.content}</div> : null}
 
         {tab === 'frame' ? <FramePanel language={language} format={format} hasHeader={props.hasHeader} hasQuote={props.hasQuote} onChoice={props.onChoice} onToggle={props.onToggle} /> : null}
 

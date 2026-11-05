@@ -10,6 +10,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
+import me.meeshy.app.testing.TestWorkManagerRule
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.sdk.cache.CacheClock
@@ -29,6 +30,7 @@ import me.meeshy.sdk.outbox.ConversationModeReader
 import me.meeshy.sdk.outbox.EndToEndOutboxAdmission
 import me.meeshy.sdk.outbox.OutboxRepository
 import org.junit.After
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -44,6 +46,9 @@ import org.robolectric.RobolectricTestRunner
  */
 @RunWith(RobolectricTestRunner::class)
 class PushReplyAfterColdSeedTest {
+
+    @get:Rule
+    val testWorkManager = TestWorkManagerRule()
 
     private val me = MeeshyUser(id = "me", username = "me")
     private val database: MeeshyDatabase = Room.inMemoryDatabaseBuilder(

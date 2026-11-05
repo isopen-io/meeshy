@@ -606,7 +606,7 @@ struct StoryActionSidebarView: View {
         if railPlan.showsImager, let story = currentStory {
             StoryActionButton(icon: FullscreenChromeSymbol.imager, label: MessageCardExportMenu.imageLabel) {
                 HapticFeedback.light()
-                StoryPhotoSaveService.shared.image(story: story, author: currentGroup.map { StoryExportAuthor.served(from: $0) })
+                MessageCardExportPresenter.present(ImagerCardRequest.story(story, author: currentGroup.map { StoryExportAuthor.served(from: $0) }, accentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex))
             }
         }
     }

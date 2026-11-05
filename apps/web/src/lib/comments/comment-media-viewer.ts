@@ -1,7 +1,5 @@
 import type { FeedMedia } from '@/lib/api/feed-pages';
-import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
-import { mediaExportSubject, type SceneExportSubject } from '@/lib/export/scene/scene-export-subject';
 import { standaloneSharePage, type MediaViewerPage } from '@/lib/view/viewer-page-offers';
 
 /**
@@ -9,9 +7,8 @@ import { standaloneSharePage, type MediaViewerPage } from '@/lib/view/viewer-pag
  * `CommentMediaView` → `ConversationMediaGalleryView` iOS) — la visionneuse
  * commune, sur les photos et vidéos du commentaire. Aucun message ne porte la
  * pièce : elle se PARTAGE comme un média nu (`standaloneSharePage`) et
- * s'IMAGE par le moteur de composition des stories (`mediaExportSubject`),
- * longueur au choix au-delà d'une minute. Un son reste sur place : il n'a
- * rien à montrer en plein écran.
+ * s'IMAGE dans l'atelier de carte (#16393), signée par l'auteur du
+ * commentaire. Un son reste sur place : il n'a rien à montrer en plein écran.
  */
 const EPOCH_ISO = new Date(0).toISOString();
 
@@ -57,24 +54,10 @@ export function commentMediaAttachment(piece: FeedMedia, commentId: string): Att
 export function commentMediaPage(params: {
   readonly piece: FeedMedia;
   readonly commentId: string;
-  readonly watermark: string | null;
-  readonly imager: (subject: SceneExportSubject) => void;
+  readonly imager: (piece: FeedMedia) => void;
 }): MediaViewerPage | null {
   const { piece, commentId } = params;
   const base = standaloneSharePage(commentMediaAttachment(piece, commentId));
   if (base === null) return null;
-  const subject = mediaExportSubject({
-    key: `comment:${commentId}:${piece.id}`,
-    fileStem: `comment-${commentId}`,
-    media: {
-      id: piece.id,
-      src: attachmentSrc(piece.fileUrl),
-      mimeType: piece.mimeType ?? '',
-      width: piece.width ?? null,
-      height: piece.height ?? null,
-      durationMs: piece.duration ?? null,
-    },
-    watermark: params.watermark,
-  });
-  return subject === null ? base : { ...base, imager: () => params.imager(subject) };
+  return isVisual(piece) && piece.fileUrl.trim() !== '' ? { ...base, imager: () => params.imager(piece) } : base;
 }

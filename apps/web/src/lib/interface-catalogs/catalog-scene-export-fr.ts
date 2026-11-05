@@ -7,10 +7,6 @@
 const fr = {
   'sceneExport.menu.save': 'Sauvegarder',
   'sceneExport.menu.imager': 'Imager',
-  'sceneExport.length.title': 'Quelle durée imager ?',
-  'sceneExport.length.subtitle': 'Depuis le début de la publication',
-  'sceneExport.length.option': '{part}/4 · {duration}',
-  'sceneExport.length.cancel': 'Annuler',
   'sceneExport.tray.preparing': 'Préparation de l’export…',
   'sceneExport.tray.progress': 'Export en cours · {percent} %',
   'sceneExport.tray.delivering': 'Enregistrement du fichier…',

@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import me.meeshy.app.stories.StoryVideoExportMenuEntries
+import me.meeshy.app.feed.LocalPostCardImager
 import me.meeshy.app.stories.rememberSceneVideoExport
 import me.meeshy.feature.reels.R
 import me.meeshy.sdk.model.ReelMenu
@@ -83,6 +84,7 @@ private fun ReelMenuButton(
     val text = reel.captionOriginal ?: reel.caption
     // Le réel ENTIER, scène ou vidéo, sort par le moteur d'export des stories (#13896).
     val export = rememberSceneVideoExport { listOfNotNull(reel.export) }
+    val cardImager = LocalPostCardImager.current
     if (reporting) ReelReportDialog(
         onDismiss = { reporting = false },
         onPick = { reason ->
@@ -100,11 +102,16 @@ private fun ReelMenuButton(
         DropdownMenu(expanded = expanded && !export.busy, onDismissRequest = { expanded = false }) {
             ReelMenu.actions(isOwn = viewModel.isOwn(reel), hasText = !text.isNullOrBlank(), exportable = reel.export != null, canEdit = onEdit != null).forEach { action ->
                 if (action == ReelMenu.Action.EXPORT) {
-                    StoryVideoExportMenuEntries(onPick = { mode ->
-                        expanded = false
-                        haptics.light()
-                        export.start(mode)
-                    })
+                    StoryVideoExportMenuEntries(
+                        onPick = { mode ->
+                            expanded = false
+                            haptics.light()
+                            export.start(mode)
+                        },
+                        onImager = cardImager?.let { imager ->
+                            reel.imagerRequest(export)?.let { request -> { expanded = false; haptics.light(); imager(request) } }
+                        },
+                    )
                     return@forEach
                 }
                 ReelMenuEntry(action) {

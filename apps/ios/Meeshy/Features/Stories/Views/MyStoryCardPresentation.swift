@@ -19,7 +19,8 @@ enum MyStoryCardKind: Equatable {
 enum MyStoryGlyph: String, Equatable, Identifiable, CaseIterable {
     /// Ouvre la feuille des vues et des réactions.
     case viewsAndReactions
-    /// Indicateur de réactions — informatif, il n'ouvre rien.
+    /// Réactions — ouvre la même liste que l'œil : qui a vu, et ce que chacun
+    /// y a fait (#16386).
     case reactions
     /// Ouvre la feuille de commentaires.
     case comments
@@ -62,9 +63,9 @@ enum MyStoryGlyph: String, Equatable, Identifiable, CaseIterable {
         }
     }
 
-    /// `false` pour un indicateur pur : le rendre tapable promettrait une
-    /// action qui n'existe pas.
-    var isInteractive: Bool { self != .reactions }
+    /// Chaque glyphe ouvre quelque chose : les réactions mènent à la liste des
+    /// vues, où chaque personne porte les siennes (#16386).
+    var isInteractive: Bool { true }
 }
 
 // MARK: - Actions du menu « … »
@@ -149,12 +150,19 @@ enum MyStoryCardPresentation {
     private static var mediumDateFormatters: [String: DateFormatter] = [:]
 
     /// La bande basse. Une story publiée expose son engagement ; un brouillon
-    /// n'a ni vue ni réaction à montrer — il a un bouton publier.
+    /// n'a ni vue ni réaction à montrer — il a un bouton publier. Le « … » n'y
+    /// est plus : il se pose SUR la vignette (#16386).
     static func glyphs(for kind: MyStoryCardKind) -> [MyStoryGlyph] {
         switch kind {
-        case .published: return [.viewsAndReactions, .reactions, .comments, .more]
-        case .draft:     return [.publish, .more]
+        case .published: return [.viewsAndReactions, .reactions, .comments]
+        case .draft:     return [.publish]
         }
+    }
+
+    /// Le « … » se pose dans le coin haut de la vignette (#16386). En mode
+    /// sélection, ce coin appartient à la pastille de sélection.
+    static func showsMoreOnThumbnail(hasMenu: Bool, isSelecting: Bool) -> Bool {
+        hasMenu && !isSelecting
     }
 
     /// L'anneau d'export vers la photothèque remplace la vignette nue

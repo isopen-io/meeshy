@@ -397,7 +397,7 @@ internal fun PostDetailContent(
                         val scenes = post.scenes
                         if (scenes != null) {
                             Spacer(Modifier.height(MeeshySpacing.md))
-                            PostDetailSceneSection(scenes = scenes, viewport = sceneViewport)
+                            PostDetailSceneSection(scenes = scenes, viewport = sceneViewport, imager = rememberPostImager(post))
                         } else if (post.media.isNotEmpty() && !post.isReel) {
                             Spacer(Modifier.height(MeeshySpacing.md))
                             PostDetailMedia(
@@ -454,6 +454,7 @@ internal fun PostDetailContent(
                             quickEmojis = quickEmojis,
                             onReact = onReact,
                             onBookmark = onBookmark,
+                            onImager = if (post.showsReelCard) null else rememberPostImager(post),
                         )
                     }
                 }

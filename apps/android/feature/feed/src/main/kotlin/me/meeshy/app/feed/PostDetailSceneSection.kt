@@ -61,6 +61,7 @@ internal fun PostDetailSceneSection(
     scenes: FeedPostScenes,
     modifier: Modifier = Modifier,
     viewport: (() -> PostDetailViewport)? = null,
+    imager: (() -> Unit)? = null,
 ) {
     val rendered = LocalPostSceneCardRenderer.current != null && scenes.items.isNotEmpty()
     if (!rendered) {
@@ -117,6 +118,7 @@ internal fun PostDetailSceneSection(
                     live = !PostDetailScenePlayback.isPaused(visible = visible, viewerPaused = paused),
                     host = PostScenesHost.DETAIL,
                     muted = muted,
+                    imager = imager,
                 )
             }
         }

@@ -242,6 +242,7 @@ describe('/packs/glory-frame — un registre FIXTURE', () => {
       preview: ref('b'),
       previewUrl: `/api/v1/pack-assets/${ref('b').src}`,
       usage: { kind: 'rank', rank: 'ambassadeur', division: 4 },
+      publisher: { slug: 'meeshy', name: 'Meeshy', verified: true, official: true },
     });
     expect(data.map((p) => p.usage)).toEqual([{ kind: 'rank', rank: 'ambassadeur', division: 4 }, { kind: 'moment', family: 'flame' }, { kind: 'achievement' }]);
     await app.close();

@@ -40,8 +40,8 @@ describe('« Sauvegarder » d’une publication, au geste', () => {
         return 'saved';
       },
     });
-    expect(await launchSceneExport({ subject, mode: 'imager', deps })).toBe('saved');
-    expect(seen).toEqual([{ mode: 'imager', languages: ['es', 'fr'] }]);
+    expect(await launchSceneExport({ subject, mode: 'save', deps })).toBe('saved');
+    expect(seen).toEqual([{ mode: 'save', languages: ['es', 'fr'] }]);
     expect(deps.contexts.count).toBe(1);
     expect(exportJobs.getSnapshot().jobs).toEqual([]);
     expect(exportJobs.getSnapshot().notice?.notice).toBe('saved');
@@ -69,7 +69,7 @@ describe('« Sauvegarder » d’une publication, au geste', () => {
         return 'saved';
       },
     });
-    await launchSceneExport({ subject, mode: 'imager', audioContext: handed, deps });
+    await launchSceneExport({ subject, mode: 'save', audioContext: handed, deps });
     expect(seen).toEqual([handed]);
     expect(deps.contexts.count).toBe(0);
   });

@@ -14,10 +14,6 @@ import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.StorySourceWindowMs
 import me.meeshy.sdk.model.StoryTextObject
-import me.meeshy.sdk.model.composer.scene.SceneExportDestination
-import me.meeshy.sdk.model.scene.export.ImagerDecision
-import me.meeshy.sdk.model.scene.export.ImagerOffer
-import me.meeshy.sdk.model.scene.export.ImagerQuarter
 import me.meeshy.sdk.model.scene.export.StoryExportClipRange
 import me.meeshy.sdk.model.scene.export.StoryExportMode
 import me.meeshy.sdk.model.scene.export.StoryExportSoundRole
@@ -63,7 +59,6 @@ class StoryVideoExportPreparerTest {
 
     private class Recorder {
         val fetched = mutableListOf<String>()
-        var asked: ImagerOffer? = null
         var painted: StoryExportPaintRequest? = null
         val paints = mutableListOf<StoryExportPaintRequest>()
         val frames = mutableListOf<Pair<String, Long>>()
@@ -74,7 +69,6 @@ class StoryVideoExportPreparerTest {
         recorder: Recorder,
         durations: Map<String, Long> = mapOf("bg.mp4" to 10_000L, "voc.m4a" to 20_000L),
         failing: Set<String> = emptySet(),
-        answer: ImagerDecision? = ImagerDecision(SceneExportDestination.GALLERY, ImagerQuarter.TWO),
         paints: Boolean = true,
     ) = StoryVideoExportPreparer(
         fetch = { url, target ->
@@ -85,7 +79,6 @@ class StoryVideoExportPreparerTest {
         probeMillis = { file -> durations[file.readText()] },
         blankPicture = { it.writeText("noir") },
         lastFrame = { video, at, target -> recorder.frames += video.readText() to at; target.writeText("derniere"); true },
-        decideImager = { offer -> recorder.asked = offer; answer },
         paint = { request ->
             recorder.painted = request
             recorder.paints += request
@@ -112,7 +105,6 @@ class StoryVideoExportPreparerTest {
         assertThat(job.overlays.all { it is SceneExportOverlay.Stored }).isTrue()
         assertThat(job.plan.sounds.map { it.role }).containsExactly(StoryExportSoundRole.BACKGROUND_VIDEO, StoryExportSoundRole.FOREGROUND_AUDIO).inOrder()
         assertThat(job.sounds.values.map { it.durationMillis }).containsExactly(10_000L, 20_000L)
-        assertThat(recorder.asked).isNull()
     }
 
     @Test fun `un fond fixe se peint dans le calque sur une image noire`() = runTest {
@@ -122,48 +114,23 @@ class StoryVideoExportPreparerTest {
         assertThat(recorder.painted!!.withBackground).isTrue()
     }
 
-    @Test fun `imager une story de quatre minutes en deux quarts rend deux minutes, enregistrer rend tout sans demander`() = runTest {
+    @Test fun `la carte de l atelier ne rend que le debut d une story de quatre minutes, enregistrer rend tout`() = runTest {
         val long = listOf(StoryAudioPlayerObject(id = "bga", postMediaId = "m-voc", isBackground = true, duration = 240f))
-        val asked = Recorder()
-        val imaged = preparer(asked).prepare(StoryExportMode.IMAGER, subject(withVideo = false, audio = long), slide(false), folder.newFile("a.mp4"), folder.newFolder("w1"))
-        assertThat(asked.asked!!.choices.map { it.durationMillis }).containsExactly(60_000L, 120_000L, 180_000L, 240_000L).inOrder()
-        assertThat(imaged.plan.totalMillis).isEqualTo(120_000)
-        assertThat(imaged.plan.sounds.single().endMillis).isEqualTo(120_000)
+        val carded = preparer(Recorder()).prepare(StoryExportMode.CARD, subject(withVideo = false, audio = long), slide(false), folder.newFile("a.mp4"), folder.newFolder("w1"))
+        assertThat(carded.plan.totalMillis).isEqualTo(StoryExportMode.CARD_RENDER_MILLIS)
 
-        val saved = Recorder()
-        val whole = preparer(saved).prepare(StoryExportMode.SAVE, subject(withVideo = false, audio = long), slide(false), folder.newFile("b.mp4"), folder.newFolder("w2"))
-        assertThat(saved.asked).isNull()
+        val whole = preparer(Recorder()).prepare(StoryExportMode.SAVE, subject(withVideo = false, audio = long), slide(false), folder.newFile("b.mp4"), folder.newFolder("w2"))
         assertThat(whole.plan.totalMillis).isEqualTo(240_000)
     }
 
-    @Test fun `imager une story de trente secondes attend la vue imager avant de rendre, sans quart a choisir`() = runTest {
-        val recorder = Recorder()
-        val job = preparer(recorder, answer = ImagerDecision(SceneExportDestination.GALLERY))
-            .prepare(StoryExportMode.IMAGER, subject(withVideo = false), slide(false), folder.newFile("c.mp4"), folder.newFolder("wc"))
-        assertThat(recorder.asked).isEqualTo(ImagerOffer(22_000, emptyList()))
-        assertThat(job.plan.totalMillis).isEqualTo(22_000)
-        assertThat(job.destination).isEqualTo(SceneExportDestination.GALLERY)
-    }
-
-    @Test fun `partager depuis la vue imager remet la composition a la feuille de partage`() = runTest {
-        val job = preparer(Recorder(), answer = ImagerDecision(SceneExportDestination.SHARE))
-            .prepare(StoryExportMode.IMAGER, subject(withVideo = false), slide(false), folder.newFile("d.mp4"), folder.newFolder("wd"))
-        assertThat(job.destination).isEqualTo(SceneExportDestination.SHARE)
-    }
-
-    @Test fun `enregistrer et partager rendent sans la vue imager, vers la destination du lancement`() = runTest {
+    @Test fun `enregistrer, partager et la carte rendent vers la destination du lancement`() = runTest {
         val recorder = Recorder()
         val saved = preparer(recorder).prepare(StoryExportMode.SAVE, subject(withVideo = false), slide(false), folder.newFile("e.mp4"), folder.newFolder("we"))
         val shared = preparer(recorder).prepare(StoryExportMode.SHARE, subject(withVideo = false), slide(false), folder.newFile("f.mp4"), folder.newFolder("wf"))
-        assertThat(recorder.asked).isNull()
+        val carded = preparer(recorder).prepare(StoryExportMode.CARD, subject(withVideo = false), slide(false), folder.newFile("g.mp4"), folder.newFolder("wg"))
         assertThat(saved.destination).isNull()
         assertThat(shared.destination).isNull()
-    }
-
-    @Test(expected = CancellationException::class)
-    fun `fermer la vue imager arrete l export`() = runTest {
-        val long = listOf(StoryAudioPlayerObject(id = "bga", postMediaId = "m-voc", isBackground = true, duration = 240f))
-        preparer(Recorder(), answer = null).prepare(StoryExportMode.IMAGER, subject(withVideo = false, audio = long), slide(false), folder.newFile("a.mp4"), folder.newFolder("w"))
+        assertThat(carded.destination).isNull()
     }
 
     @Test fun `un son qui ne se rapatrie pas tombe, l export continue`() = runTest {
@@ -241,17 +208,15 @@ class StoryVideoExportPreparerTest {
         assertThat(job.overlays.map { it.startMillis }).containsAtLeast(0L, 1_000L, 30_000L, 31_000L).inOrder()
         assertThat(job.overlays.last().endMillis).isEqualTo(75_000)
         assertThat(job.plan.sounds.map { it.startMillis }).containsExactly(0L, 30_000L).inOrder()
-        assertThat(recorder.asked).isNull()
     }
 
-    @Test fun `imager un post de deux minutes en deux quarts ne rend que sa premiere scene`() = runTest {
+    @Test fun `la carte d un post de deux minutes ne rend que le debut de sa premiere scene`() = runTest {
         val recorder = Recorder()
         val scenes = listOf(scene("s1", 60f, "Un"), scene("s2", 60f, "Deux"))
         val job = preparer(recorder, durations = mapOf("s1.m4a" to 60_000L, "s2.m4a" to 60_000L))
-            .prepare(StoryExportMode.IMAGER, scenes, folder.newFile("post.mp4"), folder.newFolder("wi"))
+            .prepare(StoryExportMode.CARD, scenes, folder.newFile("post.mp4"), folder.newFolder("wi"))
 
-        assertThat(recorder.asked!!.choices.map { it.durationMillis }).containsExactly(30_000L, 60_000L, 90_000L, 120_000L).inOrder()
-        assertThat(job.plan.totalMillis).isEqualTo(60_000)
+        assertThat(job.plan.totalMillis).isEqualTo(StoryExportMode.CARD_RENDER_MILLIS)
         assertThat(job.fills).hasSize(1)
         assertThat(recorder.paints.map { it.slide.text }).containsExactly("Un")
     }

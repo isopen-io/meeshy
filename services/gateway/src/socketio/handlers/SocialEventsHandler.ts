@@ -504,8 +504,8 @@ export class SocialEventsHandler {
   /// Emitted when an author edits a published story (PUT /posts/:id). Mirrors
   /// `broadcastStoryCreated`'s visibility filtering — only viewers who can
   /// currently see the story receive the update.
-  /// `engagementReset: true` when the edit wiped views/reactions (content
-  /// edit) — clients must mark the story unseen again for every viewer.
+  /// `engagementReset` stays in the contract for older clients; an edit keeps
+  /// views and reactions since #16386, so the route sends `false`.
   async broadcastStoryUpdated(
     story: Post,
     authorId: string,

@@ -85,6 +85,7 @@ export function Bubble({
   viewerId,
   localDelivery,
   sendStartedAt,
+  sendProgressKey,
   sendFailureReason,
   onRetry,
   onDiscard,
@@ -138,6 +139,7 @@ export function Bubble({
   /** Epoch ms du début de la tentative en cours — l'horloge des 200 ms
    * (§5 étape 9 de la spécification #5813). */
   sendStartedAt?: number;
+  sendProgressKey?: string;
   /** LA CAUSE de l'échec, en clair (`sendFailureReason`) — portée par la
    * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
   sendFailureReason?: string;
@@ -614,6 +616,7 @@ export function Bubble({
                     status={checkStatus}
                     isMine={isMine}
                     {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                    {...(sendProgressKey === undefined ? {} : { progressKey: sendProgressKey })}
                     {...(openDetail === undefined ? {} : { onOpen: openDetail })}
                   />
                 )}
@@ -746,6 +749,7 @@ export function Bubble({
                       status={checkStatus}
                       isMine={isMine}
                       {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                      {...(sendProgressKey === undefined ? {} : { progressKey: sendProgressKey })}
                       {...(openDetail === undefined ? {} : { onOpen: openDetail })}
                     />
                   )}

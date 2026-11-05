@@ -24,7 +24,6 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.StoryItem
-import me.meeshy.sdk.model.composer.scene.SceneExportDestination
 import me.meeshy.sdk.model.composer.scene.SceneExportPlan
 import me.meeshy.sdk.model.composer.scene.SceneExportState
 import me.meeshy.sdk.model.scene.export.StoryExportAuthorFacts
@@ -35,22 +34,21 @@ import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.icons.MeeshyIcons
 
-/** L'export vidéo vu du lecteur : [start] lance Enregistrer, Partager, ou ouvre la vue Imager ; [busy] fige la lecture tant qu'il dure. */
 @Stable
 class StoryVideoExport internal constructor(
     val busy: Boolean,
-    private val launch: (StoryExportMode, List<Pair<StoryItem, StorySlideView>>?) -> Unit,
+    private val launch: (StoryExportMode, List<Pair<StoryItem, StorySlideView>>?, ((File?) -> Unit)?) -> Unit,
 ) {
-    /** Rend les scènes que l'hôte lit au moment du geste. */
-    fun start(mode: StoryExportMode) = launch(mode, null)
+    fun start(mode: StoryExportMode) = launch(mode, null, null)
 
-    /** Rend [scenes], choisies par le geste lui-même (le média d'une visionneuse). */
-    fun start(mode: StoryExportMode, scenes: List<Pair<StoryItem, StorySlideView>>) = launch(mode, scenes)
+    fun start(mode: StoryExportMode, scenes: List<Pair<StoryItem, StorySlideView>>) = launch(mode, scenes, null)
+
+    fun renderCard(scenes: List<Pair<StoryItem, StorySlideView>>, onRendered: (File?) -> Unit) = launch(StoryExportMode.CARD, scenes, onRendered)
 }
 
 /**
  * [item] rend la story telle que la passerelle l'a servie (ses objets sonores, ses fenêtres), [slide] sa projection —
- * celle que le lecteur peint. La vue Imager, la peinture des calques et le voile du bake vivent ici.
+ * celle que le lecteur peint. La peinture des calques et le voile du bake vivent ici.
  */
 @Composable
 internal fun rememberStoryVideoExport(item: () -> StoryItem?, slide: StorySlideView?, author: () -> StoryExportAuthorFacts? = { null }): StoryVideoExport {
@@ -60,7 +58,8 @@ internal fun rememberStoryVideoExport(item: () -> StoryItem?, slide: StorySlideV
 
 /**
  * L'export d'une ou plusieurs scènes ([scenes], lues au moment du geste) : un post à scène ou un réel s'exporte entier, ses
- * scènes bout à bout, par le même moteur que la story (#13896). La vue Imager, la peinture et le voile vivent ici.
+ * scènes bout à bout, par le même moteur que la story (#13896). La peinture et le voile vivent ici ; la sortie CARD remet
+ * son fichier à l'atelier de carte qui l'a demandé (#16393).
  * [key] sépare la course de cet hôte de celle d'un autre hôte du même écran : chacun remet ce qu'il a lancé, une fois.
  */
 @Composable
@@ -80,43 +79,40 @@ fun rememberSceneVideoExport(
     var lastRun by remember { mutableStateOf<SceneExportRun?>(null) }
     val permissions = rememberPermissionFlow()
 
-    fun run(mode: StoryExportMode, shown: List<Pair<StoryItem, StorySlideView>>, storyAuthor: StoryExportAuthorFacts?) {
+    fun run(mode: StoryExportMode, shown: List<Pair<StoryItem, StorySlideView>>, storyAuthor: StoryExportAuthorFacts?, onCard: ((File?) -> Unit)? = null) {
         scope.launch {
             // Android 8–9 : la photothèque s'écrit sous WRITE_EXTERNAL_STORAGE, demandé par la porte unique ; dès l'API 29, rien.
             if (mode == StoryExportMode.SAVE && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
-            lastRun = SceneExportRun(mode, shown, storyAuthor)
+            lastRun = SceneExportRun(mode, shown, storyAuthor, onCard)
             viewModel.export(mode, shown, storyAuthor)
         }
     }
 
-    when (val current = stage) {
-        // « Imager » ouvre SA VUE (#14326) : Enregistrer et Partager partent d'elle, jamais du menu.
-        is StoryVideoExportStage.Imagining -> ImagerSheet(current.offer, lastRun?.scenes?.firstOrNull()?.second) { decision ->
-            scope.launch {
-                val toGallery = decision?.destination == SceneExportDestination.GALLERY
-                if (toGallery && !permissions.ensure(PermissionNature.PHOTO_LIBRARY_ADD)) return@launch
-                viewModel.decideImager(decision)
-            }
-        }
-        else -> {
-            val painting = (current as? StoryVideoExportStage.Painting)?.request
-            SceneExportStatus(
-                exportState = exportState,
-                painting = painting?.let { request -> { StoryExportPainter(request, viewModel::painted) } },
-                onCancel = viewModel::cancel,
-                onRetry = { lastRun?.let { previous -> run(previous.mode, previous.scenes, previous.author) } },
-                onAcknowledge = viewModel::acknowledge,
-                onReady = { ready ->
-                    shareVideo(context, File(ready.path), shareTitle)
-                    viewModel.handedOver()
-                },
-            )
-        }
-    }
+    val painting = (stage as? StoryVideoExportStage.Painting)?.request
+    val card = lastRun?.onCard
+    SceneExportStatus(
+        exportState = exportState,
+        painting = painting?.let { request -> { StoryExportPainter(request, viewModel::painted) } },
+        onCancel = {
+            viewModel.cancel()
+            card?.invoke(null)
+        },
+        onRetry = { lastRun?.let { previous -> run(previous.mode, previous.scenes, previous.author, previous.onCard) } },
+        onAcknowledge = {
+            if (exportState == SceneExportState.Failed) card?.invoke(null)
+            viewModel.acknowledge()
+        },
+        onReady = { ready ->
+            if (card != null) card(File(ready.path)) else shareVideo(context, File(ready.path), shareTitle)
+            viewModel.handedOver()
+        },
+        announcesReady = card == null,
+    )
     PermissionFlowHost(permissions)
 
-    return StoryVideoExport(busy = exportState.isExporting || stage != StoryVideoExportStage.Idle) { mode, chosen ->
-        (chosen ?: currentScenes()).takeIf { it.isNotEmpty() }?.let { shown -> run(mode, shown, if (chosen == null) currentAuthor() else null) }
+    return StoryVideoExport(busy = exportState.isExporting || stage != StoryVideoExportStage.Idle) { mode, chosen, onCard ->
+        val shown = (chosen ?: currentScenes()).takeIf { it.isNotEmpty() }
+        if (shown == null) onCard?.invoke(null) else run(mode, shown, if (chosen == null) currentAuthor() else null, onCard)
     }
 }
 
@@ -134,6 +130,7 @@ internal fun SceneExportStatus(
     onRetry: () -> Unit,
     onAcknowledge: () -> Unit,
     onReady: (SceneExportState.Ready) -> Unit,
+    announcesReady: Boolean = true,
 ) {
     val announcer = rememberExportAnnouncer()
     val saved = stringResource(R.string.stories_scene_export_saved)
@@ -145,7 +142,7 @@ internal fun SceneExportStatus(
     LaunchedEffect(exportState) {
         val export = exportState
         if (export is SceneExportState.Running) announced?.let(announcer::withdraw)
-        SceneExportOutcome.of(export)?.let { outcome ->
+        SceneExportOutcome.of(export)?.takeUnless { it == SceneExportOutcome.SHARED && !announcesReady }?.let { outcome ->
             val announcement = when (outcome) {
                 SceneExportOutcome.SAVED -> ExportAnnouncement(saved)
                 SceneExportOutcome.SHARED -> ExportAnnouncement(shared)
@@ -169,7 +166,12 @@ internal fun SceneExportStatus(
 }
 
 /** Le dernier export lancé, que « Réessayer » relance tel quel : même sortie, mêmes scènes. */
-private class SceneExportRun(val mode: StoryExportMode, val scenes: List<Pair<StoryItem, StorySlideView>>, val author: StoryExportAuthorFacts?)
+private class SceneExportRun(
+    val mode: StoryExportMode,
+    val scenes: List<Pair<StoryItem, StorySlideView>>,
+    val author: StoryExportAuthorFacts?,
+    val onCard: ((File?) -> Unit)?,
+)
 
 /** Remet la vidéo, ou l'image d'une scène fixe, à la feuille de partage système, par le `FileProvider` de l'application. */
 private fun shareVideo(context: Context, file: File, chooserTitle: String) {
@@ -184,9 +186,8 @@ private fun shareVideo(context: Context, file: File, chooserTitle: String) {
     )
 }
 
-/** Les trois sorties vidéo du menu ⋮, offertes sur toute story, tout post à scène et tout réel, comme iOS « Exporter en vidéo ». */
 @Composable
-fun StoryVideoExportMenuEntries(onPick: (StoryExportMode) -> Unit) {
+fun StoryVideoExportMenuEntries(onPick: (StoryExportMode) -> Unit, onImager: (() -> Unit)? = null) {
     DropdownMenuItem(
         text = { Text(stringResource(R.string.stories_viewer_export_save)) },
         leadingIcon = { Icon(MeeshyIcons.Download, contentDescription = null) },
@@ -197,9 +198,11 @@ fun StoryVideoExportMenuEntries(onPick: (StoryExportMode) -> Unit) {
         leadingIcon = { Icon(MeeshyIcons.Share, contentDescription = null) },
         onClick = { onPick(StoryExportMode.SHARE) },
     )
-    DropdownMenuItem(
-        text = { Text(stringResource(R.string.stories_viewer_export_imager)) },
-        leadingIcon = { Icon(MeeshyIcons.PhotoFilled, contentDescription = null) },
-        onClick = { onPick(StoryExportMode.IMAGER) },
-    )
+    if (onImager != null) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.stories_viewer_export_imager)) },
+            leadingIcon = { Icon(MeeshyIcons.PhotoFilled, contentDescription = null) },
+            onClick = onImager,
+        )
+    }
 }

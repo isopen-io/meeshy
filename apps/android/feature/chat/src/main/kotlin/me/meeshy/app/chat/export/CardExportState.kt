@@ -56,7 +56,9 @@ internal class CardExportState(
 
     val subject: CardSubject? get() = source.subject(exportLanguage)
 
-    val renderKey: String get() = "${format.serialized}|${exportLanguage.orEmpty()}|${pictures.keys.sorted().joinToString(",")}"
+    val preparing: Boolean get() = source.preparing
+
+    val renderKey: String get() = "${format.serialized}|${exportLanguage.orEmpty()}|${pictures.keys.sorted().joinToString(",")}|${subject?.hero?.id.orEmpty()}"
     val ready: Boolean get() = rendered != null && renderedKey == renderKey
     val isDefault: Boolean get() = savedDefault == format
 

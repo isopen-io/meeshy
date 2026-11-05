@@ -121,7 +121,6 @@ export const browserStorySceneExporter: StorySceneExporter = async (input) => {
     host: input.host,
     gallerySaver: input.gallerySaver === undefined ? currentGallerySaver() : input.gallerySaver,
     relationLevel: relationLevelProvider(apiDeps),
-    chooseLength: async () => 4,
     signal: input.job.signal,
     onProgress: input.job.report,
     onDelivering: input.job.lockDelivery,
