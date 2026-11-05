@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import me.meeshy.sdk.model.playback.AudioLanguageStripLaw
 import me.meeshy.ui.R
 import me.meeshy.ui.component.fullscreen.FullscreenChromeButton
 import me.meeshy.ui.component.fullscreen.FullscreenChromeTone
@@ -28,7 +29,7 @@ internal fun audioFullscreenShowsLanguages(source: AudioFullscreenSource, transc
  * **Les langues du vocal, au pied du plein écran** (iOS `inlineLanguageFlags`) : le bandeau « Original » + une pastille par piste
  * traduite — la langue jouée remplie de l'accent de la conversation — qui défile à gauche, et à droite, HORS du défilement, le
  * disque « Traduire l'audio » qui ouvre la feuille des langues. Choisir une pastille change la piste jouée ([AudioFullscreenTranscriptPort.selectLanguage])
- * sans quitter la page ni perdre la file ; le bandeau ne décide rien, l'hôte reste maître de la langue. Sans [transcripts], ou
+ * sans quitter la page ni perdre la file — une AUTRE pastille la fait aussi jouer ([onLanguageChosen], iOS `selectLanguage`) ; le bandeau ne décide rien, l'hôte reste maître de la langue. Sans [transcripts], ou
  * s'il n'offre ni pistes ni traduction, la ligne n'existe pas.
  */
 @Composable
@@ -38,10 +39,12 @@ internal fun AudioFullscreenLanguages(
     accent: Color,
     onInteraction: () -> Unit,
     modifier: Modifier = Modifier,
+    onLanguageChosen: () -> Unit = {},
 ) {
     if (transcripts == null || !audioFullscreenShowsLanguages(source, transcripts)) return
     val canTranslate = transcripts.offersLanguages(source)
     val selected = if (source.isTranslatedTrack) source.trackLanguage else null
+    val playing = selected ?: AudioLanguageStripLaw.ORIGINAL
     val pills = rememberAudioLanguagePills(source.translatedLanguages, selected)
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -54,6 +57,7 @@ internal fun AudioFullscreenLanguages(
             isDark = MeeshyTheme.isDark,
             onSelect = { code ->
                 onInteraction()
+                if (!code.equals(playing, ignoreCase = true)) onLanguageChosen()
                 transcripts.selectLanguage(source, code)
             },
             modifier = Modifier.weight(1f),
