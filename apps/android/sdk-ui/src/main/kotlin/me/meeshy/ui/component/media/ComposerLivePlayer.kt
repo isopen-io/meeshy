@@ -61,6 +61,9 @@ class ComposerLiveEffects internal constructor(internal val effects: List<Effect
 @Stable
 class ComposerLivePlayerState internal constructor(val player: ExoPlayer, waiting: State<Boolean>) {
     val waiting: Boolean by waiting
+
+    /** La position du lecteur, en millisecondes : le chrono d'une puce son la lit sans dépendre de Media3 (#16293). */
+    val positionMs: Long get() = player.currentPosition
 }
 
 /**

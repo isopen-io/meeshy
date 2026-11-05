@@ -212,32 +212,59 @@ public enum ProfileBannerPaint: Equatable, Sendable {
     case plain
 }
 
-/// Résolution du dessin d'un décor servi : le `builtin` se lit dans le catalogue EMBARQUÉ, sans réseau.
-/// Un pack non embarqué (contrat adressé par contenu) n'est pas encore chargé côté iOS : `nil`, le
-/// profil se peint sans décor — jamais en erreur.
+/// Résolution du dessin d'un décor servi : le `builtin` se lit dans le catalogue EMBARQUÉ, sans réseau ;
+/// un pack non embarqué se lit dans son CONTRAT servi (#16264), s'il est sur l'appareil — sinon la copie
+/// embarquée s'il y en a une, sinon `nil` : le profil se peint sans décor, jamais en erreur. Aucune
+/// résolution ne touche le réseau : le chargement est l'affaire de l'écran (`ServedAppearanceProviding.load`).
 public enum ProfileDecorResolver {
-    public static func ring(_ item: ServedProfileDecorItem?, catalog: AvatarRingCatalog = .shared) -> AvatarRingDesign? {
-        guard let item, isEmbedded(item) else { return nil }
+    public static func ring(_ item: ServedProfileDecorItem?, catalog: AvatarRingCatalog = .shared,
+                            served: any ServedAppearanceProviding = ServedAppearanceStore.shared) -> AvatarRingDesign? {
+        guard let item else { return nil }
+        if let contract = servedContract(item, side: .avatarRing, served: served) {
+            return contract.rings.first { $0.key == item.item }
+        }
         return catalog.ring(pack: item.pack, item: item.item)
     }
 
-    public static func banner(_ item: ServedProfileDecorItem?, catalog: AppearanceCatalog = .shared) -> AppearanceDesign? {
-        guard let item, isEmbedded(item) else { return nil }
+    public static func banner(_ item: ServedProfileDecorItem?, catalog: AppearanceCatalog = .shared,
+                              served: any ServedAppearanceProviding = ServedAppearanceStore.shared) -> AppearanceDesign? {
+        guard let item else { return nil }
+        if let contract = servedContract(item, side: .banner, served: served) {
+            return contract.appearanceDesigns.first { $0.key == item.item }
+        }
         return catalog.bannerPacks.first { $0.slug == item.pack }?.designs.first { $0.key == item.item }
     }
 
     /// Le cadre posé SUR la bannière (#10935) : un `builtin` se lit dans le catalogue EMBARQUÉ (#10936).
-    public static func bannerFrame(_ item: ServedProfileDecorItem?, catalog: BannerFrameCatalog = .shared) -> BannerFrameDesign? {
-        guard let item, isEmbedded(item) else { return nil }
+    public static func bannerFrame(_ item: ServedProfileDecorItem?, catalog: BannerFrameCatalog = .shared,
+                                   served: any ServedAppearanceProviding = ServedAppearanceStore.shared) -> BannerFrameDesign? {
+        guard let item else { return nil }
+        if let contract = servedContract(item, side: .bannerFrame, served: served) {
+            return contract.frames.first { $0.key == item.item }
+        }
         return catalog.frame(pack: item.pack, item: item.item)
     }
 
     /// Ce que la bannière d'un profil peint (#10933) : la photo gagne TOUJOURS ; le design équipé
     /// ne se peint qu'en l'absence de photo, et rien ne se peint sans l'un ni l'autre.
-    public static func bannerPaint(photo: String?, decor: ServedProfileDecorItem?, catalog: AppearanceCatalog = .shared) -> ProfileBannerPaint {
+    public static func bannerPaint(photo: String?, decor: ServedProfileDecorItem?, catalog: AppearanceCatalog = .shared,
+                                   served: any ServedAppearanceProviding = ServedAppearanceStore.shared) -> ProfileBannerPaint {
         if let photo, !photo.isEmpty { return .photo(photo) }
-        if let design = banner(decor, catalog: catalog) { return .design(design) }
+        if let design = banner(decor, catalog: catalog, served: served) { return .design(design) }
         return .plain
+    }
+
+    /// Les adresses de contrat qu'un décor désigne et que l'appareil n'a pas encore : ce que l'écran charge.
+    public static func missingContracts(_ decor: ServedProfileDecor?,
+                                        served: any ServedAppearanceProviding = ServedAppearanceStore.shared) -> [String] {
+        guard let decor else { return [] }
+        let sources = ProfileDecorSide.allCases.compactMap { side in decor[side].flatMap { isEmbedded($0) ? nil : $0.contract } }
+        return Array(Set(sources)).sorted().filter { served.contract(src: $0) == nil }
+    }
+
+    private static func servedContract(_ item: ServedProfileDecorItem, side: ProfileDecorSide,
+                                       served: any ServedAppearanceProviding) -> ServedAppearanceContract? {
+        isEmbedded(item) ? nil : served.contract(for: item, side: side)
     }
 
     private static func isEmbedded(_ item: ServedProfileDecorItem) -> Bool {
@@ -266,17 +293,39 @@ public enum ProfileDecorOptions {
         groups.flatMap { group in group.items.map { Entry(ref: $0.ref, design: $0.design) } }
     }
 
-    public static func rings(installed: [ShopPack]?, catalog: AvatarRingCatalog = .shared) -> [OptionGroup<AvatarRingDesign>] {
-        groups(installed: installed, builtin: catalog.packs.map { ($0.slug, $0.installedByDefault, $0.rings) })
+    public static func rings(installed: [ShopPack]?, catalog: AvatarRingCatalog = .shared,
+                             served: any ServedAppearanceProviding = ServedAppearanceStore.shared) -> [OptionGroup<AvatarRingDesign>] {
+        let builtin = catalog.packs.map { ($0.slug, $0.installedByDefault, $0.rings) }
+        return groups(installed: installed, builtin: builtin)
+            + servedGroups(installed: installed, embedded: Set(builtin.map(\.0)), domain: .avatarRing, served: served, designs: \.rings)
     }
 
-    public static func banners(installed: [ShopPack]?, catalog: AppearanceCatalog = .shared) -> [OptionGroup<AppearanceDesign>] {
-        groups(installed: installed, builtin: catalog.bannerPacks.map { ($0.slug, $0.installedByDefault, $0.designs) })
+    public static func banners(installed: [ShopPack]?, catalog: AppearanceCatalog = .shared,
+                               served: any ServedAppearanceProviding = ServedAppearanceStore.shared) -> [OptionGroup<AppearanceDesign>] {
+        let builtin = catalog.bannerPacks.map { ($0.slug, $0.installedByDefault, $0.designs) }
+        return groups(installed: installed, builtin: builtin)
+            + servedGroups(installed: installed, embedded: Set(builtin.map(\.0)), domain: .banner, served: served, designs: \.appearanceDesigns)
     }
 
     /// Les cadres posés SUR la bannière (#10936) : deux packs sont installés d'office (#11165).
-    public static func bannerFrames(installed: [ShopPack]?, catalog: BannerFrameCatalog = .shared) -> [OptionGroup<BannerFrameDesign>] {
-        groups(installed: installed, builtin: catalog.framePacks.map { ($0.slug, $0.installedByDefault, $0.frames) })
+    public static func bannerFrames(installed: [ShopPack]?, catalog: BannerFrameCatalog = .shared,
+                                    served: any ServedAppearanceProviding = ServedAppearanceStore.shared) -> [OptionGroup<BannerFrameDesign>] {
+        let builtin = catalog.framePacks.map { ($0.slug, $0.installedByDefault, $0.frames) }
+        return groups(installed: installed, builtin: builtin)
+            + servedGroups(installed: installed, embedded: Set(builtin.map(\.0)), domain: .bannerFrame, served: served, designs: \.frames)
+    }
+
+    /// Les packs installés, possédés et NON embarqués dont le contrat servi est sur l'appareil (#16264),
+    /// après les embarqués ; un contrat absent laisse son pack hors de la grille sans toucher aux voisins.
+    private static func servedGroups<Design: Sendable>(
+        installed: [ShopPack]?, embedded: Set<String>, domain: PackDomain,
+        served: any ServedAppearanceProviding, designs: (ServedAppearanceContract) -> [Design]
+    ) -> [OptionGroup<Design>] where Design: Identifiable, Design.ID == String {
+        guard let installed else { return [] }
+        return installed.filter { $0.isEquipableOnProfile && !embedded.contains($0.slug) }.compactMap { pack in
+            guard let list = served.contract(domain: domain, slug: pack.slug).map(designs), !list.isEmpty else { return nil }
+            return OptionGroup(pack: pack.slug, items: list.map { (ref: ProfileDecorRef(pack: pack.slug, item: $0.id), design: $0) })
+        }
     }
 
     /// `installed == nil` (liste pas encore lue / ancien serveur) : les packs installés d'office.

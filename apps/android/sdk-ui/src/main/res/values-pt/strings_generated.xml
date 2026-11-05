@@ -51,6 +51,11 @@
     <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_airplay">Transmitir para um dispositivo</string>
     <string name="audio_fullscreen_dial">Posição na mensagem de voz</string>
+    <string name="audio_fullscreen_language_choose">Traduzir o áudio</string>
+    <string name="audio_fullscreen_transcription_action">Transcrever</string>
+    <string name="audio_fullscreen_transcription_empty">Sem transcrição</string>
+    <string name="audio_fullscreen_transcription_local">Transcrever no dispositivo</string>
+    <string name="audio_fullscreen_transcription_server">Transcrever pelo servidor</string>
     <string name="audio_recorder_micDenied">Permissão de microfone negada</string>
     <string name="audio_recorder_micDeniedSettings">Microfone negado — permita em Ajustes</string>
     <string name="audio_recorder_record">Gravar</string>

@@ -46,7 +46,12 @@ export interface ListLastMessageContext {
   readonly viewOnceConsumed: boolean;
 }
 
-function servedAttachment<A extends ListPreviewAttachmentRow>(attachment: A, protection: PreviewProtection | null) {
+/**
+ * La pièce d'aperçu servie par toute LIGNE de liste REST — `GET /conversations`
+ * et `GET /conversations/search` (#16021) : drapeaux de la pièce, texte
+ * alternatif retenu sous protection, puis la projection `servedPreviewAttachment`.
+ */
+export function servedListPreviewAttachment<A extends ListPreviewAttachmentRow>(attachment: A, protection: PreviewProtection | null) {
   return servedPreviewAttachment(
     {
       ...attachment,
@@ -73,7 +78,7 @@ export function projectListLastMessageBody<M extends ListLastMessageRow>(msg: M,
     // #7545 — la NATURE et le RÉSUMÉ de toutes les pièces jointes ; la liste
     // n'en SERT que la première en détail.
     ...resolveLastMessageNature(msg),
-    attachments: attachments.slice(0, 1).map((attachment) => servedAttachment(attachment, protection)),
+    attachments: attachments.slice(0, 1).map((attachment) => servedListPreviewAttachment(attachment, protection)),
     attachmentSummary: servedAttachmentSummary(attachments, msg._count?.attachments, protection),
     content: withheld ? '' : truncateMessagePreview(msg.content),
     ...(servedExpiresAt !== undefined ? { expiresAt: servedExpiresAt } : {}),

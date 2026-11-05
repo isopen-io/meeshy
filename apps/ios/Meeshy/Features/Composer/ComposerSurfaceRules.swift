@@ -82,6 +82,16 @@ nonisolated enum ComposerSurfaceRouting {
         }
     }
 
+    /// **Le clavier se lève à l'ouverture seulement sur une surface SANS
+    /// scène** (#16207, miroir d'Android `ComposerProfile.raisesKeyboardOnOpen`).
+    /// La story, le post et le réel s'ouvrent sur la MÊME scène au repos, quelle
+    /// que soit la porte : un clavier levé au montage réduirait la scène et
+    /// retirerait ses outils et Publier. La promesse de la porte
+    /// (`focusesContentOnAppear`) ne vaut donc que hors scène.
+    static func raisesKeyboardOnOpen(opening: ComposerOpening, format: ComposerFormat) -> Bool {
+        focusesContentOnAppear(opening: opening) && !ComposerFormatVariant.of(format).composesOnScene
+    }
+
     /// **Aucun viseur ne se lève AU MONTAGE.** Il n'existe pas de règle
     /// `armsCameraOnAppear` : une fonction qui rend faux partout se rebranche sans
     /// qu'on s'en aperçoive.

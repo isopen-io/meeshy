@@ -287,7 +287,6 @@ extension MeeshyComposerHost {
             // même résolveur, même loi, même capsule. Elle n'avait qu'un
             // consommateur, et la surface qu'une STORY monte n'était pas lui —
             // un fond posé sur une story jouait donc sans que rien ne le dise.
-            //
             // Il ne manquait ni composant, ni modèle, ni règle : seulement ce
             // câblage. C'est le motif que le composer répète — une feature
             // « absente » y est presque toujours une feature non branchée.
@@ -316,6 +315,7 @@ extension MeeshyComposerHost {
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
+        .environment(\.sceneAudioChipElapsed, .composerTimeline(viewModel.timelineViewModel))
         .adaptiveOnChange(of: viewModel.textEditingMode.activeTextId) { _, id in
             if id == nil { settleTextSceneAfterEditing() }
         }

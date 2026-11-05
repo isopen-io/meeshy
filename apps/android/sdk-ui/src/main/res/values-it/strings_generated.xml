@@ -51,6 +51,11 @@
     <string name="audio_editor_volume_normal">Normale</string>
     <string name="audio_fullscreen_airplay">Trasmetti a un dispositivo</string>
     <string name="audio_fullscreen_dial">Posizione nel messaggio vocale</string>
+    <string name="audio_fullscreen_language_choose">Traduci l\'audio</string>
+    <string name="audio_fullscreen_transcription_action">Trascrivi</string>
+    <string name="audio_fullscreen_transcription_empty">Nessuna trascrizione</string>
+    <string name="audio_fullscreen_transcription_local">Trascrivi sul dispositivo</string>
+    <string name="audio_fullscreen_transcription_server">Trascrivi tramite il server</string>
     <string name="audio_recorder_micDenied">Permesso microfono negato</string>
     <string name="audio_recorder_micDeniedSettings">Microfono negato — consentilo in Impostazioni</string>
     <string name="audio_recorder_record">Registra</string>

@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 
 /**
@@ -29,6 +30,7 @@ internal fun StorySceneOverlays(
 ) {
     val playheadSeconds = if (slide.needsPlayhead) progress.value * slideDurationMs / 1000f else 0f
     val focusHolder = StorySceneAudioFocus.holder(slide)
+    val chipClock = remember(progress, slideDurationMs) { AudioChipClock.Playhead({ progress.value * slideDurationMs / 1000.0 }) }
 
     StorySceneLayerOrder.order(slide).forEach { layer ->
         key(layer.key) {
@@ -61,6 +63,7 @@ internal fun StorySceneOverlays(
                     StoryAudioChipLayer(
                         chip = layer.view,
                         muted = layer.view.id in mutedTracks,
+                        clock = chipClock,
                         chipModifier = Modifier.storyAudioChipTap(
                             muted = layer.view.id in mutedTracks,
                             onToggle = onToggleTrack?.let { toggle -> { toggle(layer.view.id) } },

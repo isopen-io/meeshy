@@ -70,6 +70,14 @@ public actor ContentAddressedStore {
         return data
     }
 
+    /// Les octets de `file` s'ils sont déjà sur le disque et intacts, sans attendre ni télécharger :
+    /// la lecture synchrone d'un rendu (cache d'abord). Un fichier altéré ne se lit pas.
+    public nonisolated func storedData(for file: PackAssetFile) -> Data? {
+        guard let data = try? Data(contentsOf: directory.appendingPathComponent(file.name)),
+              Self.matches(data, file) else { return nil }
+        return data
+    }
+
     public func contains(_ file: PackAssetFile) -> Bool {
         readVerified(file) != nil
     }

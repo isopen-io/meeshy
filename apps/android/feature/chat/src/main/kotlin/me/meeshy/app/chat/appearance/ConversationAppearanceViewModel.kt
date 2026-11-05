@@ -82,9 +82,16 @@ class ConversationAppearanceViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Relit les packs installés ; ceux qui ne sont pas embarqués ont alors chargé leur contrat servi (#16265) et le
+     * catalogue complété les peint — dans le sélecteur ET au fond du fil, qui lit le même catalogue.
+     */
     private suspend fun refreshPacks() {
         val installed = packRepository.refresh()
-        _state.update { it.copy(packs = packsFor(it.catalog, installed ?: packRepository.cached)) }
+        _state.update {
+            val catalog = loader.current ?: it.catalog
+            it.copy(catalog = catalog, packs = packsFor(catalog, installed ?: packRepository.cached))
+        }
     }
 
     fun selectSignature() = commit { it.withSignature() }
