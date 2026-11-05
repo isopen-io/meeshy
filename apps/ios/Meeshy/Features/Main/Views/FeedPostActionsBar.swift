@@ -33,6 +33,8 @@ struct FeedPostActionsBar: View, Equatable {
     let onQuote: ((String) -> Void)?
     let onBookmark: ((String) -> Void)?
     let sendSubject: ShareSubject
+    var onImager: (() -> Void)? = nil
+    var onImagerQuick: (() -> Void)? = nil
 
     // Lecture directe sans @ObservedObject — même règle que la carte hôte.
     private var theme: ThemeManager { ThemeManager.shared }
@@ -57,6 +59,8 @@ struct FeedPostActionsBar: View, Equatable {
             && lhs.isBookmarkInFlight == rhs.isBookmarkInFlight
             && lhs.shareCount == rhs.shareCount
             && lhs.isShareInFlight == rhs.isShareInFlight
+            && (lhs.onImager == nil) == (rhs.onImager == nil)
+            && (lhs.onImagerQuick == nil) == (rhs.onImagerQuick == nil)
     }
 
     var body: some View {
@@ -105,8 +109,6 @@ struct FeedPostActionsBar: View, Equatable {
                         .contentTransition(.numericText())
                 }
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isHeartInFlight)
@@ -133,8 +135,6 @@ struct FeedPostActionsBar: View, Equatable {
                 }
                 .foregroundColor(isCommentsSheetPresented ? theme.accentText(accentColor) : theme.textSecondary)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .accessibilityLabel(String(localized: "feed.post.comments_count", defaultValue: "\(commentCount) commentaires", bundle: .main))
@@ -177,8 +177,6 @@ struct FeedPostActionsBar: View, Equatable {
                 .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isBookmarkInFlight)
@@ -215,14 +213,14 @@ struct FeedPostActionsBar: View, Equatable {
                 .foregroundColor(theme.textSecondary)
                 .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isShareInFlight)
             .accessibilityLabel(String(localized: "feed.post.send", defaultValue: "Envoyer", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), shareCount))
             .accessibilityHint(String(localized: "a11y.feed.post.send.hint", defaultValue: "Envoie cette publication dans une conversation Meeshy", bundle: .main))
+
+            imagerButton
 
             // Pas de bouton muet ici en E2 (correctif revue DoD, constat
             // majeur #2) : la carte n'embarque encore AUCUN lecteur local
@@ -235,6 +233,19 @@ struct FeedPostActionsBar: View, Equatable {
         }
         .padding(.top, MeeshySpacing.xs)
         .modifier(MeeshySendSheet(sent: $sent))
+    }
+
+    @ViewBuilder
+    private var imagerButton: some View {
+        if let onImager {
+            Spacer()
+            ImagerWandButton(
+                hint: String(localized: "feed.post.imager.hint", defaultValue: "Fait de cette publication une carte image.", bundle: .main),
+                tint: theme.textSecondary,
+                action: onImager,
+                quick: onImagerQuick
+            )
+        }
     }
 
     private var repostButton: some View {
