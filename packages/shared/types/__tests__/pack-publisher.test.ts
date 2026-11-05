@@ -44,6 +44,24 @@ describe('isReservedPublisherIdentity — personne ne se fait passer pour Meeshy
     ['\u041C\u0435\u0435\u0455\u04BB\u0443', '\u039C\u0395\u0395\u0405\u0397\u03A5'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
   });
 
+  it('refuse les petites capitales, les lettres IPA et les lettres modificatives latines (liste blanche, UTS #39 Highly Restrictive)', () => {
+    ['\u1D0Deeshy', 'Meesh\u028F', '\u028Deeshy', 'Studio \u02B0', 'Stra\u00DFe'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
+  });
+
+  it('refuse un nom qui mêle deux alphabets non latins', () => {
+    ['\u0421\u0442\u0443\u0434\u0438\u043E\u03B1', '\u0627\u0644\u0646\u0648\u0631 \u0421\u0442\u0443\u0434\u0438\u044F'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
+  });
+
+  it('refuse un nom porteur de symboles hors de la ponctuation courante', () => {
+    ['Studio \u2122', 'Awa \uD83D\uDE00', 'Awa\u2028'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
+  });
+
+  it('accepte un nom arabe légitime, un nom japonais et un nom latin accentué avec chiffres et ponctuation', () => {
+    ['\u0627\u0633\u062A\u0648\u062F\u064A\u0648 \u0627\u0644\u0646\u0648\u0631', '東京スタジオ', 'Studio Lumière 2026 — Awa & Co.', 'O’Brien Labs'].forEach((name) =>
+      expect(isReservedPublisherIdentity(name)).toBe(false),
+    );
+  });
+
   it('réserve les slugs qui servent de routes', () => {
     ['me', 'admin'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
   });
