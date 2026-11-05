@@ -1,8 +1,12 @@
 /**
- * Le double Prisma des ÉDITEURS (#16274) : `partnerProfile` et `user`, avec ce
- * que le vrai client refuse — les clés uniques `userId` et `slug` (P2002) — et
- * la lecture `{ slug: null } | { slug: { isSet: false } }` d'un profil d'avant
- * les éditeurs, dont le champ est ABSENT.
+ * Le double Prisma des ÉDITEURS (#16274) : `partnerProfile`, `user` et
+ * `adminAuditLog`, et la lecture `{ slug: null } | { slug: { isSet: false } }`
+ * d'un profil d'avant les éditeurs, dont le champ est ABSENT.
+ *
+ * SANS index unique (audit #16274, constats 1 et 2) : comme une base où la
+ * migration n'a pas encore tourné, il accepte deux profils pour un compte ou
+ * deux profils à la même adresse. Seul `upsert` est atomique, comme celui de
+ * Mongo sur une clé. Le code doit tenir l'unicité sans supposer l'index.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
@@ -19,8 +23,6 @@ export type ProfileRow = Record<string, unknown> & { id: string; userId: string;
 
 type Where = Record<string, unknown>;
 
-const uniqueViolation = () => Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
-
 const fieldMatches = (row: Record<string, unknown>, key: string, condition: unknown): boolean => {
   const value = row[key];
   if (condition !== null && typeof condition === 'object' && !(condition instanceof Date)) {
@@ -29,6 +31,7 @@ const fieldMatches = (row: Record<string, unknown>, key: string, condition: unkn
     if ('isSet' in spec) return spec.isSet === (key in row && value !== undefined);
     if ('not' in spec) return value !== spec.not;
   }
+  if (key === 'NOT') return !whereMatches(row, condition as Where);
   if (condition === null) return key in row && value === null;
   return value === condition;
 };
@@ -53,12 +56,19 @@ export const verifiedAccount = (id: string): PublisherUserSeed => ({ username: `
  * `fallback` : le compte rendu pour un identifiant que la suite n'a pas semé
  * (`verifiedAccount` pour les suites des boutiques) ; absent, le compte est inconnu.
  */
+export type AuditRow = Record<string, unknown>;
+
 export function publisherModels(seedUsers: Readonly<Record<string, PublisherUserSeed>>, profiles: ProfileRow[] = [], fallback?: (id: string) => PublisherUserSeed) {
   let seq = 0;
   const users = new Map(Object.entries(seedUsers).map(([id, seed]) => [id, accountOf(id, seed)]));
   const accountFor = (id: string) => users.get(id) ?? (fallback === undefined ? undefined : accountOf(id, fallback(id)));
-  const uniqueTaken = (data: Record<string, unknown>, except?: ProfileRow) =>
-    profiles.some((row) => row !== except && (row.userId === data.userId || (typeof data.slug === 'string' && row.slug === data.slug)));
+  const audit: AuditRow[] = [];
+  const auditState = { down: false };
+  const insert = (data: Record<string, unknown>) => {
+    const row = { id: `68e00000000000000000${String((seq += 1)).padStart(4, '0')}`, verifiedAt: null, verifiedBy: null, website: null, logoSrc: null, ...data } as ProfileRow;
+    profiles.push(row);
+    return row;
+  };
 
   const partnerProfile = {
     findUnique: async ({ where, select }: { where: Where; select?: Record<string, unknown> }) => project(profiles.find((row) => whereMatches(row, where)), select),
@@ -68,18 +78,16 @@ export function publisherModels(seedUsers: Readonly<Record<string, PublisherUser
       const sorted = orderBy?.createdAt === 'desc' ? [...hits].reverse() : hits;
       return sorted.map((row) => project(row, select));
     },
-    create: async ({ data, select }: { data: Record<string, unknown>; select?: Record<string, unknown> }) => {
-      if (uniqueTaken(data)) throw uniqueViolation();
-      const row = { id: `68e00000000000000000${String((seq += 1)).padStart(4, '0')}`, verifiedAt: null, verifiedBy: null, website: null, logoSrc: null, ...data } as ProfileRow;
-      profiles.push(row);
-      return project(row, select);
+    create: async ({ data, select }: { data: Record<string, unknown>; select?: Record<string, unknown> }) => project(insert(data), select),
+    upsert: async ({ where, create, update, select }: { where: Where; create: Record<string, unknown>; update: Record<string, unknown>; select?: Record<string, unknown> }) => {
+      const found = profiles.find((row) => whereMatches(row, where));
+      if (found === undefined) return project(insert(create), select);
+      Object.assign(found, update);
+      return project(found, select);
     },
     updateMany: async ({ where, data }: { where: Where; data: Record<string, unknown> }) => {
       const hits = profiles.filter((row) => whereMatches(row, where));
-      for (const row of hits) {
-        if (typeof data.slug === 'string' && profiles.some((other) => other !== row && other.slug === data.slug)) throw uniqueViolation();
-        Object.assign(row, data);
-      }
+      hits.forEach((row) => Object.assign(row, data));
       return { count: hits.length };
     },
     deleteMany: async ({ where }: { where: Where }) => {
@@ -99,10 +107,19 @@ export function publisherModels(seedUsers: Readonly<Record<string, PublisherUser
       }),
   };
 
-  return { partnerProfile, user, profiles, users };
+  const adminAuditLog = {
+    create: async ({ data }: { data: AuditRow }) => {
+      if (auditState.down) throw new Error('audit store unavailable');
+      audit.push(data);
+      return data;
+    },
+  };
+
+  return { partnerProfile, user, adminAuditLog, profiles, users, audit, auditState };
 }
 
 export function memoryPublisherDb(seedUsers: Readonly<Record<string, PublisherUserSeed>>) {
   const models = publisherModels(seedUsers);
-  return { prisma: { partnerProfile: models.partnerProfile, user: models.user } as unknown as PrismaClient, profiles: models.profiles };
+  const prisma = { partnerProfile: models.partnerProfile, user: models.user, adminAuditLog: models.adminAuditLog } as unknown as PrismaClient;
+  return { prisma, profiles: models.profiles, audit: models.audit, auditState: models.auditState, partnerProfile: models.partnerProfile };
 }

@@ -8,12 +8,13 @@
  */
 import { describe, expect, it } from '@jest/globals';
 import { MEESHY_PUBLISHER } from '@meeshy/shared/types/pack-publisher';
-import { PackPublishers, officialPublisherAccountFrom } from '../../../../services/packs/PackPublishers';
+import { NEUTRAL_PUBLISHER, PackPublishers, officialPublisherAccountFrom } from '../../../../services/packs/PackPublishers';
 import { memoryPublisherDb, type PublisherUserSeed } from './pack-publishers.fakes';
 
 const OFFICIAL = '68d0000000000000000000a0';
 const AWA = '68d0000000000000000000a1';
 const BINTA = '68d0000000000000000000a2';
+const PURGED = '68d0000000000000000000a9';
 const VERIFIED: PublisherUserSeed = { username: 'awa_k', emailVerifiedAt: new Date('2026-01-01T00:00:00Z') };
 
 function setup(users: Readonly<Record<string, PublisherUserSeed>> = { [AWA]: VERIFIED, [BINTA]: { username: 'binta', phoneVerifiedAt: new Date('2026-01-02T00:00:00Z') }, [OFFICIAL]: { username: 'meeshy_officiel', emailVerifiedAt: new Date() } }, official: string | null = OFFICIAL) {
@@ -47,6 +48,7 @@ describe('authorizePublication — qui peut publier', () => {
     const { publishers } = setup();
     const outcome = await publishers.authorizePublication(AWA, { author: '', claimed: null });
     expect(outcome).toMatchObject({ kind: 'allowed', publisher: { name: 'Éditeur' } });
+    expect((outcome as { publisher: { slug: string } }).publisher.slug).toMatch(/^editeur-[a-z0-9]{4}$/);
     expect(JSON.stringify(outcome)).not.toContain('awa_k');
   });
 
@@ -107,37 +109,107 @@ describe('authorizePublication — qui peut publier', () => {
     expect(await publishers.authorizePublication(OFFICIAL, { author: 'Meeshy', claimed: null })).toEqual({ kind: 'refused', reason: 'reserved' });
   });
 
-  it('départage deux éditeurs au même nom par un suffixe', async () => {
+  it('départage par un suffixe deux noms distincts qui donnent la même adresse, sans supposer d’index unique', async () => {
+    const { db, publishers } = setup();
+    const first = await publishers.authorizePublication(AWA, { author: 'Stickers', claimed: null });
+    const second = await publishers.authorizePublication(BINTA, { author: '日本 Stickers', claimed: null });
+    expect(first).toMatchObject({ publisher: { slug: 'stickers' } });
+    expect(second).toMatchObject({ kind: 'allowed', publisher: { name: '日本 Stickers' } });
+    expect((second as { publisher: { slug: string } }).publisher.slug).toMatch(/^stickers-[a-z0-9]{4}$/);
+    expect(new Set(db.profiles.map((row) => row.slug)).size).toBe(2);
+  });
+
+  it('refuse un nom qu’un autre éditeur porte déjà, à la casse, aux accents et aux confusables près (audit #16274, constat 7)', async () => {
+    const { db, publishers } = setup();
+    await publishers.authorizePublication(AWA, { author: 'Studio Lumière', claimed: null });
+    for (const author of ['Studio Lumière', 'studio lumiere', 'Studi\u043E Lumi\u0435re', 'STUDIO-LUMIERE']) {
+      expect(await publishers.authorizePublication(BINTA, { author, claimed: null })).toEqual({ kind: 'refused', reason: 'name-taken' });
+    }
+    expect(db.profiles).toHaveLength(1);
+  });
+
+  it('un compte ne reçoit jamais deux éditeurs, même par deux propositions simultanées', async () => {
+    const { db, publishers } = setup();
+    await Promise.all([
+      publishers.authorizePublication(AWA, { author: 'Studio Lumière', claimed: null }),
+      publishers.authorizePublication(AWA, { author: 'Studio Lumière', claimed: null }),
+    ]);
+    expect(db.profiles.filter((row) => row.userId === AWA)).toHaveLength(1);
+  });
+
+  it('résorbe les éditeurs en double d’un compte (base sans index) en gardant le plus ancien', async () => {
+    const { db, publishers } = setup();
+    db.profiles.push(
+      { id: '68e000000000000000000001', userId: AWA, slug: 'awa', displayName: 'Awa', verifiedAt: null, createdAt: new Date('2026-11-01T00:00:00Z') },
+      { id: '68e000000000000000000002', userId: AWA, slug: 'awa-x1y2', displayName: 'Awa', verifiedAt: null, createdAt: new Date('2026-11-02T00:00:00Z') },
+    );
+    const outcome = await publishers.authorizePublication(AWA, { author: 'Awa', claimed: null });
+    expect(outcome).toMatchObject({ kind: 'allowed', publisher: { slug: 'awa' } });
+    expect(db.profiles.filter((row) => row.userId === AWA).map((row) => row.id)).toEqual(['68e000000000000000000001']);
+  });
+
+  it('laisse publier un auteur au nom latin légitime (audit #16274, A3)', async () => {
     const { publishers } = setup();
-    const first = await publishers.authorizePublication(AWA, { author: 'Studio', claimed: null });
-    const second = await publishers.authorizePublication(BINTA, { author: 'Studio', claimed: null });
-    expect(first).toMatchObject({ publisher: { slug: 'studio' } });
-    expect(second).toMatchObject({ kind: 'allowed', publisher: { name: 'Studio' } });
-    expect((second as { publisher: { slug: string } }).publisher.slug).toMatch(/^studio-[a-z0-9]{4}$/);
+    expect(await publishers.authorizePublication(AWA, { author: 'Søren Studio', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Søren Studio' } });
+  });
+
+  it('un nom seulement mal formé ne refuse pas la proposition : l’éditeur naît sous un nom neutre', async () => {
+    const { publishers } = setup();
+    expect(await publishers.authorizePublication(AWA, { author: 'Ahmed \u0623\u062D\u0645\u062F', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Éditeur' } });
+  });
+
+  it('refuse le sosie « rneeshy » comme Meeshy (audit #16274, A1)', async () => {
+    const { publishers } = setup();
+    expect(await publishers.authorizePublication(AWA, { author: 'rneeshy', claimed: null })).toEqual({ kind: 'refused', reason: 'reserved' });
   });
 });
 
-describe('servedFor — l’éditeur que la boutique sert pour chaque pack', () => {
-  it('rattache à la volée les propositions d’avant les éditeurs, sous le nom d’auteur qu’elles portaient', async () => {
-    const { db, publishers } = setup();
+describe('servedFor — l’éditeur que la boutique sert pour chaque pack, en LECTURE SEULE', () => {
+  it('sert l’éditeur de chaque proposant qui en a un', async () => {
+    const { publishers } = setup();
+    await publishers.authorizePublication(AWA, { author: 'Awa Créations', claimed: null });
     const served = await publishers.servedFor([{ submitterId: AWA, author: 'Awa Créations' }, { submitterId: AWA, author: 'Awa Créations' }]);
     expect(served.get(AWA)).toEqual({ slug: 'awa-creations', name: 'Awa Créations', verified: false, official: false });
-    expect(db.profiles).toHaveLength(1);
   });
 
-  it('pose son adresse à un profil de partenaire d’avant #16274, sans en changer le nom', async () => {
+  it('ne crée AUCUN éditeur : un proposant d’avant les éditeurs est servi sous un nom neutre (audit #16274, constats 5 et 6)', async () => {
+    const { db, publishers } = setup();
+    const served = await publishers.servedFor([{ submitterId: AWA, author: 'Awa Créations' }]);
+    expect(served.get(AWA)).toEqual(NEUTRAL_PUBLISHER);
+    expect(db.profiles).toEqual([]);
+  });
+
+  it('n’écrit rien sur un profil de partenaire d’avant #16274 sans adresse : il est servi neutre jusqu’au rattrapage', async () => {
     const { db, publishers } = setup();
     db.profiles.push({ id: 'p-legacy', userId: BINTA, displayName: 'Lens Lab', verifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() });
-    const served = await publishers.servedFor([{ submitterId: BINTA, author: 'autre' }]);
-    expect(served.get(BINTA)).toEqual({ slug: 'lens-lab', name: 'Lens Lab', verified: true, official: false });
-    expect(db.profiles).toHaveLength(1);
+    const before = JSON.stringify(db.profiles);
+    expect((await publishers.servedFor([{ submitterId: BINTA, author: 'autre' }])).get(BINTA)).toEqual(NEUTRAL_PUBLISHER);
+    expect(JSON.stringify(db.profiles)).toBe(before);
+  });
+
+  it('après la purge RGPD, une lecture de la boutique ne recrée pas de profil pour le compte purgé (audit #16274, A4)', async () => {
+    const { db, publishers } = setup({ [PURGED]: VERIFIED });
+    await publishers.authorizePublication(PURGED, { author: 'Awa Diallo', claimed: null });
+    db.profiles.splice(0);
+    await publishers.servedFor([{ submitterId: PURGED, author: 'Compte supprimé' }]);
+    expect(db.profiles).toHaveLength(0);
+  });
+
+  it('une base en défaut dégrade la ligne au nom neutre, jamais tout le catalogue', async () => {
+    const { db, publishers } = setup();
+    db.partnerProfile.findMany = async () => {
+      throw new Error('mongo down');
+    };
+    const served = await publishers.servedFor([{ submitterId: AWA, author: 'Awa' }, { submitterId: OFFICIAL, author: 'x' }]);
+    expect(served.get(AWA)).toEqual(NEUTRAL_PUBLISHER);
+    expect(served.get(OFFICIAL)).toEqual(MEESHY_PUBLISHER);
   });
 
   it('ne sert jamais un nom réservé porté par un ancien profil tiers', async () => {
     const { db, publishers } = setup();
-    db.profiles.push({ id: 'p-squat', userId: BINTA, displayName: 'Meeshy', verifiedAt: null, createdAt: new Date(), updatedAt: new Date() });
+    db.profiles.push({ id: 'p-squat', userId: BINTA, slug: 'lens-lab', displayName: 'Meeshy', verifiedAt: null, createdAt: new Date(), updatedAt: new Date() });
     const served = await publishers.servedFor([{ submitterId: BINTA, author: 'Meeshy' }]);
-    expect(served.get(BINTA)).toEqual({ slug: 'editeur', name: 'Éditeur', verified: false, official: false });
+    expect(served.get(BINTA)).toEqual({ slug: 'lens-lab', name: 'Éditeur', verified: false, official: false });
   });
 
   it('sert Meeshy pour les packs du compte officiel', async () => {
@@ -155,11 +227,25 @@ describe('servedFor — l’éditeur que la boutique sert pour chaque pack', () 
 });
 
 describe('ensureOfficial — l’éditeur Meeshy appartient au compte officiel', () => {
-  it('le crée vérifié pour le compte configuré, une seule fois', async () => {
+  it('le crée vérifié pour le compte configuré, une seule fois, et l’écrit au journal d’audit une seule fois', async () => {
     const { db, publishers } = setup();
     expect(await publishers.ensureOfficial()).toBe('linked');
     expect(await publishers.ensureOfficial()).toBe('linked');
     expect(db.profiles).toEqual([expect.objectContaining({ userId: OFFICIAL, slug: 'meeshy', displayName: 'Meeshy', verifiedAt: expect.any(Date) })]);
+    expect(db.audit).toEqual([expect.objectContaining({ action: 'PACK_PUBLISHER_OFFICIAL_LINK', userId: OFFICIAL, entity: 'PartnerProfile', entityId: OFFICIAL })]);
+  });
+
+  it('journal indisponible : rien n’est lié (fail-closed)', async () => {
+    const { db, publishers } = setup();
+    db.auditState.down = true;
+    expect(await publishers.ensureOfficial()).toBe('audit-unavailable');
+    expect(db.profiles).toEqual([]);
+  });
+
+  it('refuse de lier un compte désactivé ou supprimé', async () => {
+    const { db, publishers } = setup({ [OFFICIAL]: { username: 'off', emailVerifiedAt: new Date(), deletedAt: new Date() } });
+    expect(await publishers.ensureOfficial()).toBe('inactive-account');
+    expect(db.profiles).toEqual([]);
   });
 
   it('ne fait rien sans configuration', async () => {
@@ -200,11 +286,17 @@ describe('une identité Meeshy ne survit pas à la fin du statut officiel', () =
     return { db, publishers };
   };
 
-  it('servedFor : l’ancien compte officiel reçoit une adresse et un nom neutres, et perd la vérification accordée', async () => {
+  it('servedFor : l’ancien compte officiel est servi neutre, sans rien écrire', async () => {
     const { db, publishers } = formerOfficial();
-    const served = (await publishers.servedFor([{ submitterId: OFFICIAL, author: 'Meeshy' }])).get(OFFICIAL);
-    expect(served).toEqual({ slug: 'editeur', name: 'Éditeur', verified: false, official: false });
-    expect(db.profiles[0]).toMatchObject({ slug: 'editeur', verifiedAt: null });
+    expect((await publishers.servedFor([{ submitterId: OFFICIAL, author: 'Meeshy' }])).get(OFFICIAL)).toEqual(NEUTRAL_PUBLISHER);
+    expect(db.profiles[0]).toMatchObject({ slug: 'meeshy' });
+  });
+
+  it('authorizePublication : l’ancien compte officiel reçoit une adresse neutre et perd la vérification accordée', async () => {
+    const { db, publishers } = formerOfficial();
+    expect(await publishers.authorizePublication(OFFICIAL, { author: 'Studio', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Éditeur', verified: false } });
+    expect(db.profiles[0]!.slug).toMatch(/^editeur-[a-z0-9]{4}$/);
+    expect(db.profiles[0]).toMatchObject({ verifiedAt: null });
   });
 
   it('authorizePublication : l’ancien compte officiel ne publie plus sous « meeshy »', async () => {
@@ -212,17 +304,19 @@ describe('une identité Meeshy ne survit pas à la fin du statut officiel', () =
     expect(await publishers.authorizePublication(OFFICIAL, { author: 'Studio', claimed: 'meeshy' })).toEqual({ kind: 'refused', reason: 'not-owner' });
   });
 
-  it('bySlug : « meeshy » ne désigne que l’éditeur officiel, jamais l’ancienne ligne', async () => {
+  it('bySlug : « meeshy » ne désigne que l’éditeur officiel, et l’adresse neutre ne désigne personne', async () => {
     const { publishers } = formerOfficial();
-    await publishers.servedFor([{ submitterId: OFFICIAL, author: 'x' }]);
-    expect(await publishers.bySlug('editeur')).toEqual({ slug: 'editeur', name: 'Éditeur', verified: false, official: false });
+    expect(await publishers.bySlug('meeshy')).toEqual(MEESHY_PUBLISHER);
+    expect(await publishers.bySlug('editeur')).toBeNull();
   });
 
   it('ensureOfficial retire « meeshy » à son ancien détenteur avant de lier le compte configuré', async () => {
     const { db, publishers } = formerOfficial();
     expect(await publishers.ensureOfficial()).toBe('linked');
-    expect(db.profiles.find((row) => row.userId === OFFICIAL)).toMatchObject({ slug: 'editeur', verifiedAt: null });
+    expect(db.profiles.find((row) => row.userId === OFFICIAL)!.slug).toMatch(/^editeur-[a-z0-9]{4}$/);
+    expect(db.profiles.find((row) => row.userId === OFFICIAL)).toMatchObject({ verifiedAt: null });
     expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ slug: 'meeshy', displayName: 'Meeshy' });
+    expect(db.audit).toEqual([expect.objectContaining({ action: 'PACK_PUBLISHER_OFFICIAL_LINK', metadata: expect.stringContaining(OFFICIAL) })]);
   });
 
   it('un slug réservé stocké sur un compte tiers est traité comme absent', async () => {
@@ -230,5 +324,24 @@ describe('une identité Meeshy ne survit pas à la fin du statut officiel', () =
     db.profiles.push({ id: 'p-squat', userId: AWA, slug: 'team-meeshy', displayName: 'Awa', verifiedAt: null, createdAt: new Date(), updatedAt: new Date() });
     const outcome = await publishers.authorizePublication(AWA, { author: 'Awa', claimed: null });
     expect(outcome).toEqual({ kind: 'allowed', publisher: { slug: 'awa', name: 'Awa', verified: false, official: false } });
+  });
+});
+
+describe('backfill — le rattrapage qui crée les éditeurs des propositions d’avant #16274', () => {
+  it('crée l’éditeur d’un proposant actif, pose l’adresse d’un ancien partenaire, saute un compte supprimé, et se rejoue sans rien changer', async () => {
+    const { db, publishers } = setup({ [AWA]: { username: 'awa' }, [BINTA]: VERIFIED, [PURGED]: { username: 'gone', deletedAt: new Date() } });
+    db.profiles.push({ id: 'p-legacy', userId: BINTA, displayName: 'Lens Lab', verifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() });
+    const packs = [{ submitterId: AWA, author: 'Awa Créations' }, { submitterId: BINTA, author: 'autre' }, { submitterId: PURGED, author: 'Compte supprimé' }];
+    expect(await publishers.backfill(packs)).toEqual({ created: 1, addressed: 1, kept: 0, skipped: 1 });
+    expect((await publishers.servedFor(packs)).get(BINTA)).toEqual({ slug: 'lens-lab', name: 'Lens Lab', verified: true, official: false });
+    expect(db.profiles.some((row) => row.userId === PURGED)).toBe(false);
+    expect(await publishers.backfill(packs)).toEqual({ created: 0, addressed: 0, kept: 2, skipped: 1 });
+  });
+
+  it('un auteur dont le nom est déjà pris reçoit un éditeur neutre plutôt que rien', async () => {
+    const { db, publishers } = setup();
+    await publishers.authorizePublication(AWA, { author: 'Studio Lumière', claimed: null });
+    await publishers.backfill([{ submitterId: BINTA, author: 'Studio Lumière' }]);
+    expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ displayName: 'Éditeur' });
   });
 });
