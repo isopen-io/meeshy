@@ -11,6 +11,7 @@ import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,7 +32,7 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragAndDropTransferData
 import androidx.compose.ui.draganddrop.mimeTypes
-import androidx.compose.ui.draganddrop.positionInRoot
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.boundsInRoot
@@ -170,7 +171,7 @@ internal fun Modifier.conversationListDragWatch(
         object : DragAndDropTarget {
             override fun onEntered(event: DragAndDropEvent) = state.onListEntered(latestBase())
             override fun onMoved(event: DragAndDropEvent) {
-                state.fingerY = event.positionInRoot.y
+                state.fingerY = event.toAndroidDragEvent().y
             }
             override fun onDrop(event: DragAndDropEvent): Boolean = false
             override fun onEnded(event: DragAndDropEvent) = latestFinished(state.finish())
@@ -210,7 +211,7 @@ internal fun Modifier.sectionDropTarget(
                 haptics.light()
             }
             override fun onMoved(event: DragAndDropEvent) {
-                state.fingerY = event.positionInRoot.y
+                state.fingerY = event.toAndroidDragEvent().y
             }
             override fun onExited(event: DragAndDropEvent) {
                 if (state.hoveredSectionId == sectionId) state.hover(null)
