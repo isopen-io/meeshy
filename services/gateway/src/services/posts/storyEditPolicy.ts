@@ -3,16 +3,14 @@
  * of a story — new text, new composition blob or newly attached media — as
  * opposed to a metadata-only update (visibility, audience).
  *
- * A content edit restarts the story's life: PostService wipes views,
- * reactions and impressions, and the route flags the story:updated
- * broadcast with `engagementReset: true` so clients mark the story unseen
- * again. Both sides MUST share this single predicate so they can never
- * disagree on the same payload.
+ * A content edit UPDATES the existing story (#16386, directive porteur
+ * 2026-11-05): views, reactions and impressions are kept; only the
+ * translations of the stale text are dropped and re-run. The story:updated
+ * broadcast says `engagementReset: false`, so clients keep it "seen".
  *
  * `removeMediaIds` alone is deliberately excluded: the composer always ships
  * a fresh `storyEffects` blob alongside any media removal, and the service
- * filters foreign ids the route cannot see — keying the reset on
- * removeMediaIds would let the two sides diverge.
+ * filters foreign ids the route cannot see.
  */
 export function storyContentEditRequested(data: {
   content?: string;

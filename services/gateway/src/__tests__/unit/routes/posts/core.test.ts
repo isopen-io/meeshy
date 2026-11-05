@@ -637,11 +637,10 @@ describe('PUT /posts/:postId — STORY type broadcasts story updated', () => {
     await app.close();
   });
 
-  // Directive 2026-07-29 : une édition de CONTENU (content / storyEffects /
-  // mediaIds) remet l'engagement à zéro côté service — le broadcast doit le
-  // dire aux clients (engagementReset: true) pour qu'ils repassent la story
-  // en « non vue ». Une mise à jour de visibilité seule ne le fait PAS.
-  it('flags engagementReset: true on a content edit broadcast', async () => {
+  // #16386 (directive porteur 2026-11-05) : une édition de CONTENU garde
+  // l'engagement — le broadcast le dit (engagementReset: false), et un ancien
+  // client garde donc la story « vue ».
+  it('#16386 — flags engagementReset: false on a content edit broadcast', async () => {
     mockUpdatePost.mockResolvedValueOnce({ id: POST_ID, content: 'Updated story', type: 'STORY' });
     const app = await buildApp({ withSocialEvents: true });
     await app.inject({
@@ -652,7 +651,7 @@ describe('PUT /posts/:postId — STORY type broadcasts story updated', () => {
     expect(se.broadcastStoryUpdated).toHaveBeenCalledWith(
       expect.objectContaining({ id: POST_ID }),
       USER_ID,
-      { engagementReset: true },
+      { engagementReset: false },
     );
     await app.close();
   });
