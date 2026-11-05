@@ -72,8 +72,8 @@ describe('isReservedPublisherIdentity — personne ne se fait passer pour Meeshy
     ['日本 Stickers', 'Tokyo スタジオ', '台北 ㄅㄆ Studio', '서울 Studio 漢'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(false));
   });
 
-  it('refuse le latin mêlé à un alphabet hors de ces mélanges', () => {
-    ['Ahmed \u0623\u062D\u0645\u062F', 'Studio \u0421\u0442\u0443\u0434\u0438\u044F'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
+  it('refuse le latin mêlé à un alphabet hors de ces mélanges (le latin et l’arabe en sont un, re-audit #16274)', () => {
+    ['Studio \u0421\u0442\u0443\u0434\u0438\u044F', 'Studio \u05E9\u05DC\u05D5\u05DD'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
   });
 
   it('réserve les sosies multi-caractères de Meeshy : rn ≈ m (audit #16274, A1)', () => {
@@ -114,7 +114,7 @@ describe('impersonatesMeeshy est FERMÉE PAR DÉFAUT — un caractère inconnu v
 
 describe('une lettre latine n’est valide que si elle se replie en ASCII ou figure dans la liste des lettres étendues légitimes', () => {
   it('refuse une lettre latine étendue hors de cette liste', () => {
-    ['Studio \u01B4', 'Stud\u0269o', 'Studio \u1E9C'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
+    ['Stud\u0269o', 'Studio \u1E9C', 'Studio \u0251'].forEach((name) => expect(isReservedPublisherIdentity(name)).toBe(true));
   });
 });
 
@@ -196,5 +196,40 @@ describe('lensCreditOf — la réserve Meeshy atteint les crédits de lens', () 
   it('crédite le compte officiel sous Meeshy, et un partenaire ordinaire sous son nom', () => {
     expect(lensCreditOf(lens, { ...partner('Meeshy'), official: true })?.partner).toMatchObject({ name: 'Meeshy' });
     expect(lensCreditOf(lens, partner('Studio Lumière'))?.partner).toMatchObject({ name: 'Studio Lumière' });
+  });
+});
+
+describe('re-audit #16274 — les orthographes réelles passent, les sosies et le leet non', () => {
+  it('B1 — chiffres et ponctuation lus comme lettres : « Mee5hy », « M33SHY », « Mee§hy », « M€€§HY » imitent Meeshy', () => {
+    ['Mee5hy', 'M33SHY', 'me3shy', 'Mee§hy', 'M€€§HY', 'M33$HY'].forEach((name) => expect([name, impersonatesMeeshy(name)]).toEqual([name, true]));
+  });
+
+  it('B2 — un nom en latin africain (bambara, peul, haoussa, ewe, azéri) est un nom de partenaire valide', () => {
+    ['Fɛɛrɛ Studio', 'Kɔfi Art', 'Ɗanjuma', 'Ɓaaba', 'Əli Studio', 'Ɲɛnajɛ', 'Ƙasa', 'Ƴiiri', 'Ʋɔ', 'Ɣana', 'ʃɔʒ'].forEach((name) =>
+      expect([name, parsePartnerProfileInput({ displayName: name }).ok]).toEqual([name, true]),
+    );
+  });
+
+  it('un nom qui mêle le latin et l’arabe est valide', () => {
+    expect(parsePartnerProfileInput({ displayName: 'Ahmed أحمد' })).toMatchObject({ ok: true, profile: { displayName: 'Ahmed أحمد' } });
+  });
+
+  it('les sosies latins restent refusés : petites capitales, IPA imitatrices, clics, pleine largeur', () => {
+    ['ɑrt Studio', 'ɡaia', 'ʍorld', 'Studio ɪris', 'ᴀtelier', 'Studio ǀ', 'Ｓtudio'].forEach((name) => expect([name, isReservedPublisherIdentity(name)]).toEqual([name, true]));
+  });
+
+  it('les lettres latines admises comptent comme jokers face à Meeshy : pas de régression', () => {
+    ['Mɛɛshy', 'Mɔɔshy', 'Meeʃhy', 'Mɛeshy Studio'].forEach((name) => expect([name, impersonatesMeeshy(name)]).toEqual([name, true]));
+    expect(isReservedPublisherIdentity('Kɔfi Art')).toBe(false);
+  });
+
+  it('un nom mal formé qui se LIT « MEESHY » est une imitation, quel que soit le nombre de caractères inconnus (cherokee)', () => {
+    expect(impersonatesMeeshy('ᎷᎬᎬSHY')).toBe(true);
+    expect(isReservedPublisherIdentity('ᎷᎬᎬSHY')).toBe(true);
+  });
+
+  it('le leet entre dans la clé : « Studio Lumi3re » et « Studio Lumière » sont un même nom', () => {
+    expect(publisherNameKey('Studio Lumi3re')).toBe(publisherNameKey('Studio Lumière'));
+    expect(publisherNameKey('Kɔfi Art')).not.toBe(publisherNameKey('Kofi Art'));
   });
 });

@@ -43,7 +43,7 @@ import { normalizeLensLut } from './lensLutImage';
 import { isUniqueViolation, type CommunityPackStore, type PackViewer } from './PackCatalog';
 import { logError } from '../../utils/logger';
 import type { PackPublisherRef } from '@meeshy/shared/types/pack-publisher';
-import { defaultPackPublishers, withPublishers, type PackPublishers, type PublicationRefusal } from './PackPublishers';
+import { defaultPackPublishers, servedAuthor, withPublishers, type PackPublishers, type PublicationRefusal } from './PackPublishers';
 
 
 export type LensPackDetail = PackSummary & {
@@ -175,7 +175,7 @@ export function lensPackDetail(row: LensPackRow, installed: boolean, viewer?: Pa
     slug: row.slug,
     name: row.name,
     description: '',
-    author: row.author || STICKER_PACK_AUTHOR_MEESHY,
+    author: servedAuthor(row.author || STICKER_PACK_AUTHOR_MEESHY, publisher),
     ...(publisher === undefined ? {} : { publisher }),
     builtin: false,
     status: row.status as PackStatus,
@@ -335,8 +335,8 @@ export class LensPacks {
     if (parsed.status === 'forbidden') return { kind: 'forbidden', reasons: parsed.reasons };
     if (parsed.status === 'invalid') return { kind: 'invalid' };
     const { lens } = parsed;
-    const authorization = await this.publishers.authorizePublication(userId, { author: lens.credits.author, claimed: input.claimed ?? null });
-    if (authorization.kind === 'refused') return authorization;
+    const vetting = await this.publishers.vetPublication(userId, { author: lens.credits.author, claimed: input.claimed ?? null });
+    if (vetting.kind === 'refused') return vetting;
     const measured = measureLensCost(lens);
     if (!isLensCostDeclaredHonestly(lens.cost, measured)) return { kind: 'cost-understated', declared: lens.cost, measured };
 
@@ -354,6 +354,8 @@ export class LensPacks {
     if (existing !== null && !replacing) return { kind: 'slug-taken' };
     const pending = await this.prisma.lensPack.count({ where: { submitterId: userId, status: 'pending' } });
     if (pending >= LENS_PACK_LIMITS.maxPendingPerAuthor) return { kind: 'too-many-pending' };
+    const authorization = await vetting.commit();
+    if (authorization.kind === 'refused') return authorization;
 
     const renamed = new Map([...normalized.files].map(([src, file]) => [src, file.src]));
     const stored = withLensAssets(lens, renamed);

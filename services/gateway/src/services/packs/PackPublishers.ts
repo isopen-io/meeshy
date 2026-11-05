@@ -11,18 +11,26 @@
  *    routes), ACTIF, et VÉRIFIÉ (adresse e-mail ou numéro), puis propriétaire de
  *    l'éditeur que la proposition nomme. Un compte sans éditeur en reçoit un à
  *    sa première proposition, nommé par l'auteur qu'elle déclare — jamais par
- *    son nom d'utilisateur — sauf si un autre éditeur porte déjà ce nom
- *    (`publisherNameKey`). Un auteur qui se lit comme Meeshy
- *    (`impersonatesMeeshy`) est refusé à tout autre compte que l'officiel ;
- *  - **servir** (`servedFor`) est une LECTURE : jamais une écriture. Un
+ *    son nom d'utilisateur. L'auteur déclaré, texte libre, est soumis à la
+ *    réserve (`isReservedPublisherIdentity`) et à l'unicité des noms
+ *    (`publisherNameKey`) pour tout autre compte que l'officiel. Tout se
+ *    VÉRIFIE d'abord sans écrire (`vetPublication`) ; l'éditeur ne se crée
+ *    qu'au moment où le pack s'écrit (`commit`), une fois tous les contrôles
+ *    de la proposition passés ;
+ *  - **un profil existant n'est JAMAIS renommé ni dévérifié** par la
+ *    publication ou le rattrapage : un ancien nom en double ou qui se lit comme
+ *    Meeshy est marqué « à arbitrer » (`nameDisputedAt`), un admin tranche ;
+ *  - **servir** (`servedFor`) est une LECTURE : jamais une écriture. L'auteur
+ *    servi aux anciens clients est le nom de l'éditeur (`servedAuthor`). Un
  *    proposant sans éditeur (proposition d'avant #16274, compte purgé) est servi
  *    sous `NEUTRAL_PUBLISHER`, et une base en défaut dégrade au même nom neutre
  *    plutôt que de casser le catalogue. Le rattrapage (`backfill`) crée les
  *    éditeurs manquants ;
  *  - **l'unicité** (un éditeur par compte, une adresse, un nom) ne suppose pas
- *    les index uniques que pose la migration du 2026-11-05 : la création est un
- *    `upsert` sur `userId`, les doublons d'un compte se résorbent au plus ancien,
- *    et une adresse se vérifie avant et après son écriture ;
+ *    les index uniques que pose la migration du 2026-11-05 pour rester CORRECT
+ *    (doublons d'un compte résorbés, adresse et nom relus après écriture), mais
+ *    seul l'index FERME les courses — un `upsert` sans index n'est pas atomique
+ *    dans MongoDB ; l'index se pose donc sur le staging avant la fusion ;
  *  - **le compte officiel** est désigné par `MEESHY_OFFICIAL_ACCOUNT_ID`, jamais
  *    écrit en dur. Sans configuration, aucun compte n'est officiel et
  *    l'identité « Meeshy » reste réservée à tous (fail-closed). Sa liaison
@@ -39,21 +47,31 @@ import {
   PACK_PUBLISHER_LIMITS,
   impersonatesMeeshy,
   isReservedPublisherIdentity,
+  publisherNameKey,
   publisherSlugOf,
   type PackPublisherRef,
 } from '@meeshy/shared/types/pack-publisher';
 import { PARTNER_PROFILE_LIMITS } from '@meeshy/shared/types/lens-partner';
 import { isUniqueViolation } from './PackCatalog';
-import { NEUTRAL_PUBLISHER_NAME, byAge, claimPublisherName, isNameKeyViolation, lostNameRace } from './PublisherNames';
+import { NEUTRAL_PUBLISHER_NAME, byAge, byPrecedence, claimPublisherName, isNameKeyViolation, lostNameRace } from './PublisherNames';
 
 export { NEUTRAL_PUBLISHER_NAME } from './PublisherNames';
 
 export type PackPublishersDb = Pick<PrismaClient, 'partnerProfile' | 'user' | 'adminAuditLog'>;
 
-export type PublicationRefusal = 'account-unverified' | 'not-owner' | 'reserved' | 'name-taken';
+export type PublicationRefusal = 'account-unverified' | 'not-owner' | 'reserved' | 'name-taken' | 'retry-later';
 
 export type PublicationAuthorization =
   | { readonly kind: 'allowed'; readonly publisher: PackPublisherRef }
+  | { readonly kind: 'refused'; readonly reason: PublicationRefusal };
+
+/**
+ * Une proposition VÉRIFIÉE sans rien écrire : `commit` crée ou complète
+ * l'éditeur, à appeler juste avant d'écrire le pack, une fois tous les autres
+ * contrôles passés — un refus d'adresse ou d'image ne réserve aucun nom.
+ */
+export type PublicationVetting =
+  | { readonly kind: 'vetted'; readonly commit: () => Promise<PublicationAuthorization> }
   | { readonly kind: 'refused'; readonly reason: PublicationRefusal };
 
 /** Ce qu'une proposition dit de son éditeur : l'auteur déclaré, et l'éditeur nommé (`null` : aucun, un ancien client). */
@@ -76,11 +94,36 @@ export type PublisherAdminView = {
 
 export type EnsureOfficialOutcome = 'linked' | 'unconfigured' | 'unknown-account' | 'inactive-account' | 'audit-unavailable' | 'conflict';
 
-/** Ce que le rattrapage a fait : éditeurs créés, adresses posées sur un ancien profil, éditeurs déjà complets, comptes sautés. */
-export type BackfillSummary = { readonly created: number; readonly addressed: number; readonly kept: number; readonly skipped: number };
+/** Ce que le rattrapage fait (ou ferait, en `dryRun`) d'un proposant. */
+export type BackfillEntry = { readonly userId: string; readonly outcome: 'created' | 'addressed' | 'kept' | 'skipped' | 'deferred'; readonly name: string | null };
 
-/** Ce que le rattrapage des clés de nom a fait : clés posées, profils ramenés au nom neutre (nom réservé ou déjà porté). */
-export type NameKeyBackfillSummary = { readonly keyed: number; readonly neutralized: number; readonly deferred: number };
+/** Ce que le rattrapage a fait : éditeurs créés, adresses posées sur un ancien profil, éditeurs déjà complets, comptes sautés, reportés. */
+export type BackfillSummary = {
+  readonly created: number;
+  readonly addressed: number;
+  readonly kept: number;
+  readonly skipped: number;
+  readonly deferred: number;
+  readonly entries: readonly BackfillEntry[];
+};
+
+/** Ce que le rattrapage des clés fait (ou ferait) d'un ancien profil : clé posée, ou nom gardé SANS clé, à arbitrer. */
+export type NameKeyEntry = {
+  readonly id: string;
+  readonly userId: string;
+  readonly displayName: string;
+  readonly verified: boolean;
+  readonly outcome: 'keyed' | 'disputed';
+  /** Pour un profil à arbitrer : `reserved` (se lit comme Meeshy) ou `name-taken` (un homonyme le précède). */
+  readonly reason?: 'reserved' | 'name-taken';
+  /** Le profil qui garde la clé de ce nom, pour un homonyme à arbitrer. */
+  readonly heldBy?: string;
+};
+
+/** Ce que le rattrapage des clés de nom a fait : clés posées, profils à arbitrer — aucun nom réécrit, aucune vérification retirée. */
+export type NameKeyBackfillSummary = { readonly keyed: number; readonly disputed: number; readonly entries: readonly NameKeyEntry[] };
+
+export type BackfillOptions = { readonly dryRun?: boolean };
 
 export type PackPublishersDeps = {
   readonly prisma: PackPublishersDb;
@@ -111,7 +154,7 @@ const MAX_SLUG_ATTEMPTS = 6;
 const INVISIBLE_OR_CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 const OFFICIAL_LINK_ACTION = 'PACK_PUBLISHER_OFFICIAL_LINK';
 
-const ROW_SELECT = { id: true, userId: true, slug: true, displayName: true, nameKey: true, verifiedAt: true, createdAt: true } as const;
+const ROW_SELECT = { id: true, userId: true, slug: true, displayName: true, nameKey: true, nameDisputedAt: true, verifiedAt: true, createdAt: true } as const;
 
 type PublisherRow = {
   readonly id: string;
@@ -119,6 +162,7 @@ type PublisherRow = {
   readonly slug: string | null;
   readonly displayName: string;
   readonly nameKey: string | null;
+  readonly nameDisputedAt?: Date | null;
   readonly verifiedAt: Date | null;
   readonly createdAt?: Date | null;
 };
@@ -158,8 +202,9 @@ const slugBaseOf = (name: string): string => {
   return isReservedPublisherIdentity(base) ? NEUTRAL_SLUG : base;
 };
 
-/** Un nom écrit avant #16274, sans sa clé de lecture : il passe par `claimPublisherName` avant d'être servi. */
-const lacksNameKey = (row: PublisherRow): boolean => row.displayName !== NEUTRAL_PUBLISHER_NAME && typeof row.nameKey !== 'string';
+/** Un nom écrit avant #16274, sans sa clé de lecture et pas encore à arbitrer : il passe par `claimPublisherName`. */
+const lacksNameKey = (row: PublisherRow): boolean =>
+  row.displayName !== NEUTRAL_PUBLISHER_NAME && typeof row.nameKey !== 'string' && !(row.nameDisputedAt instanceof Date);
 
 const WITHOUT_NAME_KEY = [{ nameKey: null }, { nameKey: { isSet: false } }];
 
@@ -186,26 +231,61 @@ export class PackPublishers {
    * Ce que la boutique sert d'un éditeur, ou `null` s'il n'est pas servable :
    * sans adresse, ou sous une adresse RÉSERVÉE portée par un compte qui n'est
    * pas l'officiel (un ancien compte officiel, une ligne d'avant la réserve).
-   * Un ancien nom réservé est servi sous le nom neutre.
+   * Un ancien nom qui se lit comme Meeshy est SERVI sous le nom neutre, sans
+   * jamais être réécrit ; tout autre ancien nom est un droit acquis.
    */
   private servable(row: PublisherRow | null | undefined): PackPublisherRef | null {
     if (row === null || row === undefined) return null;
     if (this.isOfficial(row.userId)) return MEESHY_PUBLISHER;
     if (!isThirdPartySlug(row.slug)) return null;
-    const name = isReservedPublisherIdentity(row.displayName) ? NEUTRAL_PUBLISHER_NAME : row.displayName;
+    const name = impersonatesMeeshy(row.displayName) ? NEUTRAL_PUBLISHER_NAME : row.displayName;
     return { slug: row.slug, name, verified: row.verifiedAt !== null, official: false };
   }
 
-  /** Publier : compte actif et vérifié, éditeur possédé, nom libre, identité « Meeshy » au seul compte officiel. */
+  /** Publier : vérifier sans écrire, puis créer l'éditeur — pour qui n'a aucun autre contrôle entre les deux. */
   async authorizePublication(userId: string, claim: PublicationClaim): Promise<PublicationAuthorization> {
+    const vetting = await this.vetPublication(userId, claim);
+    return vetting.kind === 'refused' ? vetting : vetting.commit();
+  }
+
+  /**
+   * Vérifie une proposition SANS RIEN ÉCRIRE : compte actif et vérifié, auteur
+   * hors réserve et hors du nom d'un autre éditeur, éditeur nommé possédé.
+   * Identité « Meeshy » au seul compte officiel.
+   */
+  async vetPublication(userId: string, claim: PublicationClaim): Promise<PublicationVetting> {
     const account = await this.prisma.user.findUnique({ where: { id: userId }, select: ACCOUNT_SELECT });
     if (!canPublish(account)) return { kind: 'refused', reason: 'account-unverified' };
-    const official = this.isOfficial(userId);
-    if (!official && impersonatesMeeshy(claim.author)) return { kind: 'refused', reason: 'reserved' };
-    const adopted = official ? await this.officialRow(userId) : await this.adopt(userId, claim.author);
-    if (adopted === 'name-taken') return { kind: 'refused', reason: 'name-taken' };
+    if (this.isOfficial(userId)) return { kind: 'vetted', commit: () => this.commitOfficial(userId, claim) };
+    if (isReservedPublisherIdentity(claim.author)) return { kind: 'refused', reason: 'reserved' };
+    if (claim.claimed === MEESHY_PUBLISHER_SLUG) return { kind: 'refused', reason: 'not-owner' };
+    const current = await this.firstRow(userId);
+    if (current !== null && claim.claimed !== null && typeof current.slug === 'string' && current.slug !== claim.claimed) return { kind: 'refused', reason: 'not-owner' };
+    const conflict = await this.authorConflict(userId, claim.author, current);
+    if (conflict !== null) return { kind: 'refused', reason: conflict };
+    return { kind: 'vetted', commit: () => this.commitThirdParty(userId, claim) };
+  }
+
+  /** L'auteur déclaré nomme-t-il un AUTRE éditeur ? `null` : non. Un doute du balayage : réessayer plus tard. */
+  private async authorConflict(userId: string, author: string, current: PublisherRow | null): Promise<'name-taken' | 'retry-later' | null> {
+    const name = storeNameOf(author);
+    if (name === NEUTRAL_PUBLISHER_NAME) return null;
+    if (current !== null && current.nameKey === publisherNameKey(name)) return null;
+    const claim = await claimPublisherName(this.prisma, { userId, name, official: false });
+    if (claim.kind === 'name-taken') return 'name-taken';
+    return claim.kind === 'inconclusive' ? 'retry-later' : null;
+  }
+
+  private async commitOfficial(userId: string, claim: PublicationClaim): Promise<PublicationAuthorization> {
+    const adopted = await this.officialRow(userId);
     if (adopted === null) return { kind: 'refused', reason: 'reserved' };
-    if (claim.claimed === MEESHY_PUBLISHER_SLUG && !official) return { kind: 'refused', reason: 'not-owner' };
+    if (claim.claimed !== null && claim.claimed !== adopted.slug) return { kind: 'refused', reason: 'not-owner' };
+    return { kind: 'allowed', publisher: adopted };
+  }
+
+  private async commitThirdParty(userId: string, claim: PublicationClaim): Promise<PublicationAuthorization> {
+    const adopted = await this.adopt(userId, claim.author);
+    if (adopted === 'name-taken' || adopted === 'retry-later') return { kind: 'refused', reason: adopted };
     if (claim.claimed !== null && claim.claimed !== adopted.slug) return { kind: 'refused', reason: 'not-owner' };
     return { kind: 'allowed', publisher: adopted };
   }
@@ -216,7 +296,7 @@ export class PackPublishers {
     if (ids.length === 0) return new Map();
     const rows = await this.rowsOf(ids);
     const byOwner = new Map<string, PublisherRow>();
-    [...rows].sort(byAge).forEach((row) => {
+    [...rows].sort(byPrecedence).forEach((row) => {
       if (!byOwner.has(row.userId)) byOwner.set(row.userId, row);
     });
     return new Map(ids.map((id) => [id, this.isOfficial(id) ? MEESHY_PUBLISHER : (this.servable(byOwner.get(id)) ?? NEUTRAL_PUBLISHER)] as const));
@@ -235,7 +315,7 @@ export class PackPublishers {
     if (this.isOfficial(userId)) return MEESHY_PUBLISHER;
     const rows = await this.rowsOf([userId]);
     if (rows.length === 0) return null;
-    return this.servable([...rows].sort(byAge)[0]) ?? NEUTRAL_PUBLISHER;
+    return this.servable([...rows].sort(byPrecedence)[0]) ?? NEUTRAL_PUBLISHER;
   }
 
   /** Tous les éditeurs avec leur compte propriétaire — pour BIGBOSS/ADMIN seulement. */
@@ -258,33 +338,41 @@ export class PackPublishers {
   /**
    * Le RATTRAPAGE des propositions d'avant #16274 : l'éditeur de chaque
    * proposant VIVANT est créé (sous l'auteur déclaré, ou neutre si ce nom est
-   * pris), ou reçoit son adresse s'il date d'avant les éditeurs. Un compte
-   * supprimé, désactivé ou inconnu est sauté — jamais recréé. Rejouable.
+   * réservé ou pris), ou reçoit son adresse s'il date d'avant les éditeurs. Un
+   * compte supprimé, désactivé ou inconnu est sauté — jamais recréé. Un doute
+   * du balayage des noms reporte le proposant. Rejouable ; `dryRun` liste ce
+   * qu'il ferait sans rien écrire.
    */
-  async backfill(packs: readonly PublishedBy[]): Promise<BackfillSummary> {
+  async backfill(packs: readonly PublishedBy[], options: BackfillOptions = {}): Promise<BackfillSummary> {
     const authorOf = new Map<string, string>();
     packs.forEach((pack) => {
       if (!authorOf.has(pack.submitterId)) authorOf.set(pack.submitterId, pack.author);
     });
-    const summary = { created: 0, addressed: 0, kept: 0, skipped: 0 };
+    const entries: BackfillEntry[] = [];
     for (const [userId, author] of authorOf) {
       if (this.isOfficial(userId)) continue;
-      const account = await this.prisma.user.findUnique({ where: { id: userId }, select: ACCOUNT_SELECT });
-      if (!isLive(account)) {
-        summary.skipped += 1;
-        continue;
-      }
-      const before = await this.single(userId);
-      if (this.servable(before) !== null) {
-        summary.kept += 1;
-        continue;
-      }
-      const adopted = await this.adopt(userId, author);
-      if (adopted === 'name-taken') await this.adopt(userId, '');
-      if (before === null) summary.created += 1;
-      else summary.addressed += 1;
+      entries.push(await this.backfillOne(userId, author, options.dryRun === true));
     }
-    return summary;
+    const count = (outcome: BackfillEntry['outcome']) => entries.filter((entry) => entry.outcome === outcome).length;
+    return { created: count('created'), addressed: count('addressed'), kept: count('kept'), skipped: count('skipped'), deferred: count('deferred'), entries };
+  }
+
+  private async backfillOne(userId: string, author: string, dryRun: boolean): Promise<BackfillEntry> {
+    const account = await this.prisma.user.findUnique({ where: { id: userId }, select: ACCOUNT_SELECT });
+    if (!isLive(account)) return { userId, outcome: 'skipped', name: null };
+    const before = dryRun ? await this.firstRow(userId) : await this.single(userId);
+    if (this.servable(before) !== null) return { userId, outcome: 'kept', name: before?.displayName ?? null };
+    const outcome = before === null ? 'created' : 'addressed';
+    if (dryRun) {
+      if (before !== null) return { userId, outcome, name: before.displayName };
+      const claim = await claimPublisherName(this.prisma, { userId, name: storeNameOf(author), official: false });
+      if (claim.kind === 'inconclusive') return { userId, outcome: 'deferred', name: null };
+      return { userId, outcome, name: claim.kind === 'ok' ? claim.displayName : NEUTRAL_PUBLISHER_NAME };
+    }
+    const first = await this.adopt(userId, author);
+    const adopted = first === 'name-taken' ? await this.adopt(userId, '') : first;
+    if (adopted === 'retry-later' || adopted === 'name-taken') return { userId, outcome: 'deferred', name: null };
+    return { userId, outcome, name: adopted.name };
   }
 
   /** Lie l'éditeur « Meeshy » au compte officiel configuré — appelé au démarrage, idempotent, journalisé. */
@@ -310,10 +398,16 @@ export class PackPublishers {
     }
   }
 
-  /** L'éditeur d'un compte ; s'il en a plusieurs (base sans index, course), le plus ancien est gardé et les autres retirés. */
+  /** L'éditeur d'un compte, en LECTURE seule : le premier par préséance (vérifié, puis plus ancien). */
+  private async firstRow(userId: string): Promise<PublisherRow | null> {
+    const rows: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { userId }, select: ROW_SELECT });
+    return [...rows].sort(byPrecedence)[0] ?? null;
+  }
+
+  /** L'éditeur d'un compte ; s'il en a plusieurs (base sans index, course), le premier par préséance est gardé et les autres retirés. */
   private async single(userId: string): Promise<PublisherRow | null> {
     const rows: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { userId }, select: ROW_SELECT });
-    const [kept, ...extras] = [...rows].sort(byAge);
+    const [kept, ...extras] = [...rows].sort(byPrecedence);
     if (extras.length > 0) await this.prisma.partnerProfile.deleteMany({ where: { userId, id: { in: extras.map((row) => row.id) } } });
     return kept ?? null;
   }
@@ -345,7 +439,7 @@ export class PackPublishers {
       previousSlug: current?.slug ?? null,
       previousDisplayName: current?.displayName ?? null,
     });
-    for (const holder of holders) await this.allocateSlug(holder);
+    for (const holder of holders) await this.allocateSlug(holder, { demoted: true });
     const now = this.now();
     const data = { slug: MEESHY_PUBLISHER_SLUG, displayName: MEESHY_PUBLISHER_NAME, nameKey: null, verifiedAt: current?.verifiedAt ?? now, updatedAt: now };
     await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, ...data, createdAt: now }, update: data });
@@ -356,18 +450,19 @@ export class PackPublishers {
   /**
    * L'éditeur d'un compte TIERS, servable : gardé s'il l'est déjà, créé s'il
    * n'existe pas (nommé par `author` si `claimPublisherName` l'accepte, neutre
-   * s'il est réservé, refusé s'il est pris), complété sinon — un ancien profil
-   * reçoit sa clé de nom, puis son adresse. La création est un `upsert` sur
-   * `userId` : deux propositions simultanées ne créent pas deux éditeurs.
+   * s'il est réservé, refusé s'il est pris, reporté sur un doute), complété
+   * sinon — un ancien profil reçoit sa clé de nom (ou est marqué à arbitrer),
+   * puis son adresse. Un profil existant n'est jamais renommé ni dévérifié.
    */
-  private async adopt(userId: string, author: string): Promise<PackPublisherRef | 'name-taken'> {
+  private async adopt(userId: string, author: string): Promise<PackPublisherRef | 'name-taken' | 'retry-later'> {
     const current = await this.single(userId);
     if (current !== null) {
       const named = lacksNameKey(current) ? await this.nameLegacy(current) : current;
-      return this.servable(named) ?? this.allocateSlug(named);
+      return this.servable(named) ?? this.allocateSlug(named, { demoted: false });
     }
     const claim = await claimPublisherName(this.prisma, { userId, name: storeNameOf(author), official: false });
-    if (claim.kind === 'name-taken' || claim.kind === 'inconclusive') return 'name-taken';
+    if (claim.kind === 'name-taken') return 'name-taken';
+    if (claim.kind === 'inconclusive') return 'retry-later';
     const { displayName, nameKey } = claim.kind === 'ok' ? claim : { displayName: NEUTRAL_PUBLISHER_NAME, nameKey: null };
     const now = this.now();
     try {
@@ -382,65 +477,104 @@ export class PackPublishers {
       await this.prisma.partnerProfile.deleteMany({ where: { id: created.id, OR: [{ slug: null }, { slug: { isSet: false } }] } });
       return 'name-taken';
     }
-    return this.servable(created) ?? this.allocateSlug(created);
+    return this.servable(created) ?? this.allocateSlug(created, { demoted: false });
   }
 
   /**
    * Un ancien profil (sans clé de nom) passe par `claimPublisherName` : nom
-   * libre, il reçoit sa clé ; nom réservé ou déjà porté par un autre éditeur,
-   * il est ramené au nom NEUTRE et perd la vérification qui portait sur ce nom.
-   * Un balayage inconcluant ne touche à rien : le profil reste tel quel, à
-   * renommer au prochain passage.
+   * libre, il reçoit sa clé ; nom qui se lit comme Meeshy, ou qu'un homonyme
+   * PRÉCÈDE (vérifié, puis plus ancien), il GARDE son nom et sa vérification,
+   * sans clé, marqué à arbitrer. Un balayage inconcluant ne touche à rien.
    */
   private async nameLegacy(row: PublisherRow): Promise<PublisherRow> {
-    const claim = await claimPublisherName(this.prisma, { userId: row.userId, name: row.displayName, official: this.isOfficial(row.userId), legacyClaimant: row });
+    if (this.isOfficial(row.userId)) return row;
+    const claim = await claimPublisherName(this.prisma, { userId: row.userId, name: row.displayName, official: false, legacyClaimant: row });
     if (claim.kind === 'inconclusive') return row;
-    const now = this.now();
-    const neutral = { displayName: NEUTRAL_PUBLISHER_NAME, nameKey: null, verifiedAt: null, verifiedBy: null, updatedAt: now };
+    if (claim.kind !== 'ok' || claim.nameKey === null) return this.markDisputed(row);
+    return this.keyLegacy(row, claim.nameKey);
+  }
+
+  /** Pose la clé d'un ancien profil ; un index qui refuse, ou un homonyme qui le précède, le marque à arbitrer. */
+  private async keyLegacy(row: PublisherRow, nameKey: string): Promise<PublisherRow> {
     try {
-      await this.prisma.partnerProfile.updateMany({ where: { id: row.id }, data: claim.kind === 'ok' ? { nameKey: claim.nameKey, updatedAt: now } : neutral });
+      await this.prisma.partnerProfile.updateMany({ where: { id: row.id, OR: WITHOUT_NAME_KEY }, data: { nameKey, updatedAt: this.now() } });
     } catch (error) {
       if (!isNameKeyViolation(error)) throw error;
-      await this.prisma.partnerProfile.updateMany({ where: { id: row.id }, data: neutral });
+      return this.markDisputed(row);
     }
     const settled = await this.single(row.userId);
     if (settled === null) throw new Error('publisher vanished while naming it');
-    if (typeof settled.nameKey === 'string' && (await lostNameRace(this.prisma, settled.nameKey, settled))) {
-      await this.prisma.partnerProfile.updateMany({ where: { id: row.id }, data: neutral });
-      return (await this.single(row.userId)) ?? settled;
-    }
+    if (settled.nameKey === nameKey && (await lostNameRace(this.prisma, nameKey, settled))) return this.markDisputed(settled);
     return settled;
+  }
+
+  /** « À arbitrer » : le profil garde son nom et sa vérification, sans clé ; seul un admin le renommera. */
+  private async markDisputed(row: PublisherRow): Promise<PublisherRow> {
+    const now = this.now();
+    await this.prisma.partnerProfile.updateMany({ where: { id: row.id }, data: { nameKey: null, nameDisputedAt: now, updatedAt: now } });
+    return (await this.single(row.userId)) ?? row;
   }
 
   /**
    * Le RATTRAPAGE des clés de nom, à jouer AVANT la pose de l'index unique de
-   * `nameKey` : chaque profil sans clé, du plus ancien au plus récent, passe
-   * par `claimPublisherName`. Le plus ancien garde un nom en double ; les
-   * suivants, comme un nom réservé, sont ramenés au nom neutre. Rejouable.
+   * `nameKey`. Le plan se calcule EN MÉMOIRE sur tous les profils (aucune borne
+   * de balayage) : par nom, la clé va au détenteur qui en a déjà une, sinon au
+   * profil vérifié, puis au plus ancien ; les autres, et tout nom qui se lit
+   * comme Meeshy, gardent leur nom sans clé, à arbitrer. Aucun nom réécrit,
+   * aucune vérification retirée. Rejouable ; `dryRun` rend le plan sans écrire.
    */
-  async backfillNameKeys(): Promise<NameKeyBackfillSummary> {
-    const rows: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { OR: WITHOUT_NAME_KEY }, select: ROW_SELECT });
-    const summary = { keyed: 0, neutralized: 0, deferred: 0 };
-    for (const row of [...rows].sort(byAge)) {
+  async backfillNameKeys(options: BackfillOptions = {}): Promise<NameKeyBackfillSummary> {
+    const keyed: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { nameKey: { not: null } }, select: ROW_SELECT });
+    const unkeyed: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { OR: WITHOUT_NAME_KEY }, select: ROW_SELECT });
+    const holders = new Map(keyed.filter((row) => typeof row.nameKey === 'string').map((row) => [row.nameKey as string, row] as const));
+    const planned: NameKeyEntry[] = [];
+    for (const row of [...unkeyed].sort(byPrecedence)) {
       if (this.isOfficial(row.userId) || !lacksNameKey(row)) continue;
-      const named = await this.nameLegacy(row);
-      if (lacksNameKey(named)) summary.deferred += 1;
-      else if (named.displayName === NEUTRAL_PUBLISHER_NAME) summary.neutralized += 1;
-      else summary.keyed += 1;
+      const base = { id: row.id, userId: row.userId, displayName: row.displayName, verified: row.verifiedAt !== null };
+      if (impersonatesMeeshy(row.displayName)) {
+        planned.push({ ...base, outcome: 'disputed', reason: 'reserved' });
+        continue;
+      }
+      const nameKey = publisherNameKey(row.displayName);
+      const holder = holders.get(nameKey);
+      if (holder !== undefined && holder.userId !== row.userId) {
+        planned.push({ ...base, outcome: 'disputed', reason: 'name-taken', heldBy: holder.id });
+        continue;
+      }
+      holders.set(nameKey, row);
+      planned.push({ ...base, outcome: 'keyed' });
     }
-    return summary;
+    const entries = options.dryRun === true ? planned : await this.applyNameKeys(planned, unkeyed);
+    return { keyed: entries.filter((entry) => entry.outcome === 'keyed').length, disputed: entries.filter((entry) => entry.outcome === 'disputed').length, entries };
+  }
+
+  private async applyNameKeys(planned: readonly NameKeyEntry[], rows: readonly PublisherRow[]): Promise<readonly NameKeyEntry[]> {
+    const byId = new Map(rows.map((row) => [row.id, row] as const));
+    const applied: NameKeyEntry[] = [];
+    for (const entry of planned) {
+      const row = byId.get(entry.id) as PublisherRow;
+      if (entry.outcome === 'disputed') {
+        await this.markDisputed(row);
+        applied.push(entry);
+        continue;
+      }
+      const settled = await this.keyLegacy(row, publisherNameKey(row.displayName));
+      applied.push(typeof settled.nameKey === 'string' ? entry : { ...entry, outcome: 'disputed', reason: 'name-taken' });
+    }
+    return applied;
   }
 
   /**
    * Pose une adresse libre sur ce profil, SANS supposer d'index unique :
    * l'adresse candidate est vérifiée libre avant l'écriture, puis relue après
    * — si un autre profil plus ancien l'a prise entre-temps, un suffixe est
-   * tiré. Une adresse réservée remplacée emporte la vérification qu'elle
-   * portait (celle d'`officialRow`) : fail-closed.
+   * tiré. `demoted` : l'ancien détenteur de l'adresse `meeshy` qu'`officialRow`
+   * réadresse perd la vérification qu'elle portait (journalisé) ; aucun autre
+   * chemin ne retire une vérification.
    */
-  private async allocateSlug(row: PublisherRow): Promise<PackPublisherRef> {
+  private async allocateSlug(row: PublisherRow, { demoted }: { readonly demoted: boolean }): Promise<PackPublisherRef> {
     const base = slugBaseOf(row.displayName);
-    const hadSlug = typeof row.slug === 'string' && row.slug.length > 0;
+    const hadSlug = demoted && typeof row.slug === 'string' && row.slug.length > 0;
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
       const slug = attempt === 0 && base !== NEUTRAL_SLUG ? base : `${base}-${this.suffix()}`;
       const taken = await this.prisma.partnerProfile.findFirst({ where: { slug, NOT: { userId: row.userId } }, select: { id: true } });
@@ -465,7 +599,19 @@ export class PackPublishers {
 export const defaultPackPublishers = (prisma: PackPublishersDb): PackPublishers =>
   new PackPublishers({ prisma, officialAccountId: officialPublisherAccountFrom(process.env) });
 
-/** Chaque pack projeté, avec l'éditeur de son proposant. */
+/**
+ * L'auteur SERVI aux anciens clients, qui n'affichent que lui : le nom de
+ * l'éditeur dès qu'un éditeur réel porte le pack, jamais le texte libre. Sans
+ * éditeur réel (proposition d'avant les éditeurs), le texte libre, sauf s'il
+ * est réservé.
+ */
+export const servedAuthor = (author: string, publisher: PackPublisherRef | undefined): string => {
+  if (publisher === undefined) return author;
+  if (publisher.slug !== NEUTRAL_SLUG) return publisher.name;
+  return isReservedPublisherIdentity(author) ? NEUTRAL_PUBLISHER_NAME : author;
+};
+
+/** Chaque pack projeté, avec l'éditeur de son proposant — et l'auteur servi qui en découle. */
 export async function withPublishers<R extends PublishedBy, D>(
   publishers: PackPublishers,
   rows: readonly R[],
@@ -474,6 +620,9 @@ export async function withPublishers<R extends PublishedBy, D>(
   const served = await publishers.servedFor(rows);
   return rows.map((row) => {
     const publisher = served.get(row.submitterId);
-    return publisher === undefined ? project(row) : { ...project(row), publisher };
+    const projected = project(row);
+    if (publisher === undefined) return projected;
+    const author = typeof (projected as { author?: unknown }).author === 'string' ? { author: servedAuthor((projected as { author: string }).author, publisher) } : {};
+    return { ...projected, ...author, publisher };
   });
 }

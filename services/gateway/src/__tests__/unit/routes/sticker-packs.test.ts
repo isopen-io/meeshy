@@ -297,6 +297,42 @@ describe('the publisher of a pack (#16274)', () => {
     expect(packs.some((pack) => pack.slug === 'copie')).toBe(false);
   });
 
+  it('a submission refused for its slug takes no store name: the publisher is created only once every check passed (re-audit #16274, N1)', async () => {
+    const { app, as, profiles } = await buildApp({ userId: BOB });
+    await submit(app, manifest({ slug: 'oiseaux', author: 'Bob Studio' }));
+    as(ALICE);
+    const res = await submit(app, manifest({ slug: 'oiseaux', author: 'Studio Lumière' }));
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('STICKER_PACK_SLUG_TAKEN');
+    expect(profiles.filter((row) => row.userId === ALICE)).toEqual([]);
+  });
+
+  it('serves the publisher name as the author old clients display, never the free text (re-audit #16274, N5)', async () => {
+    const { app } = await buildApp();
+    await submit(app, manifest({ slug: 'premier', author: 'Alice Studio' }));
+    const second = await submit(app, manifest({ slug: 'second', author: 'Un Autre Nom' }));
+    expect(second.statusCode).toBe(201);
+    expect(second.json().data).toMatchObject({ author: 'Alice Studio', publisher: { name: 'Alice Studio' } });
+    const mine = await app.inject({ method: 'GET', url: '/submissions' });
+    expect(mine.json().data.map((pack: { author: string }) => pack.author)).toEqual(['Alice Studio', 'Alice Studio']);
+  });
+
+  it('refuses a free-text author that reads as Meeshy in another script: 403 PUBLISHER_RESERVED (re-audit #16274, N5)', async () => {
+    const { app } = await buildApp();
+    const res = await submit(app, manifest({ author: 'ᎷᎬᎬSHY' }));
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PUBLISHER_RESERVED');
+  });
+
+  it('an inconclusive scan of legacy profiles answers 503 with Retry-After, never 409 (re-audit #16274, N6)', async () => {
+    const { app, profiles } = await buildApp();
+    profiles.push(...Array.from({ length: 2_000 }, (_, index) => ({ id: `68f0${String(index).padStart(20, '0')}`, userId: `68f1${String(index).padStart(20, '0')}`, displayName: `Studio ${index}`, verifiedAt: null, createdAt: new Date('2026-09-01T00:00:00Z') })));
+    const res = await submit(app, manifest({ author: 'Kɔfi Art' }));
+    expect(res.statusCode).toBe(503);
+    expect(res.headers['retry-after']).toBe('300');
+    expect(res.json().code).toBe('PUBLISHER_RETRY_LATER');
+  });
+
   it('a read never creates a publisher: a submitter without one is served under the neutral name (audit #16274)', async () => {
     const { app, profiles } = await buildApp();
     expect((await submit(app)).statusCode).toBe(201);

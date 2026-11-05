@@ -51,6 +51,8 @@ export const PACK_PUBLISHER_ERROR_CODES = {
   RESERVED: 'PUBLISHER_RESERVED',
   /** Un autre éditeur porte déjà ce nom de boutique, à la casse, aux accents et aux confusables près (`publisherNameKey`). */
   NAME_TAKEN: 'PUBLISHER_NAME_TAKEN',
+  /** La disponibilité du nom n'a pas pu être établie (anciens profils pas encore rattrapés) : réessayer plus tard (503, `Retry-After`). */
+  RETRY_LATER: 'PUBLISHER_RETRY_LATER',
 } as const;
 
 /** Les segments de route sous `/publishers` : aucun éditeur ne prend leur adresse. */
@@ -80,21 +82,24 @@ export function publisherSlugOf(name: string): string {
 /**
  * Les CONFUSABLES vers le latin (UTS #39, `confusables.txt`, extrait minuscule) :
  * les lettres cyrilliques et grecques qui se LISENT comme une lettre latine, les
- * petites capitales latines, et les chiffres qui se lisent comme une lettre. La
+ * petites capitales et les sosies IPA latins, et l'écriture « leet » — chiffres
+ * et ponctuation qui se lisent comme une lettre (« M33SHY », « Mee§hy »). La
  * pleine largeur est déjà repliée par NFKC. Appliquée après la mise en minuscules.
  */
 const CONFUSABLE_TO_LATIN: Readonly<Record<string, string>> = {
   // cyrillique
   а: 'a', в: 'b', ь: 'b', с: 'c', ԁ: 'd', е: 'e', ё: 'e', є: 'e', һ: 'h', н: 'h', і: 'i', ї: 'i', ӏ: 'l', ј: 'j', к: 'k', м: 'm',
-  п: 'n', о: 'o', р: 'p', ԛ: 'q', г: 'r', ѕ: 's', т: 't', и: 'u', ц: 'u', ѵ: 'v', ԝ: 'w', ш: 'w', х: 'x', у: 'y', ү: 'y', з: '3',
+  п: 'n', о: 'o', р: 'p', ԛ: 'q', г: 'r', ѕ: 's', т: 't', и: 'u', ц: 'u', ѵ: 'v', ԝ: 'w', ш: 'w', х: 'x', у: 'y', ү: 'y', з: 'e',
   // grec
   α: 'a', β: 'b', ϲ: 'c', δ: 'd', ε: 'e', η: 'n', ι: 'i', ϳ: 'j', κ: 'k', μ: 'u', ν: 'v', ο: 'o', ρ: 'p', σ: 'o', τ: 't', υ: 'u',
   ω: 'w', χ: 'x', γ: 'y', ζ: 'z', ϱ: 'p', ς: 'c',
   // petites capitales latines
   ᴀ: 'a', ʙ: 'b', ᴄ: 'c', ᴅ: 'd', ᴇ: 'e', ꜰ: 'f', ɢ: 'g', ʜ: 'h', ɪ: 'i', ᴊ: 'j', ᴋ: 'k', ʟ: 'l', ᴍ: 'm', ɴ: 'n', ᴏ: 'o', ᴘ: 'p',
   ʀ: 'r', ꜱ: 's', ᴛ: 't', ᴜ: 'u', ᴠ: 'v', ᴡ: 'w', ʏ: 'y', ᴢ: 'z',
-  // chiffres
-  '0': 'o', '1': 'l',
+  // sosies IPA
+  ɑ: 'a', ɡ: 'g', ɩ: 'i',
+  // leet : chiffres et ponctuation
+  '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '§': 's', '$': 's', '€': 'e', '|': 'i', '!': 'i', '@': 'a',
 };
 
 /** Les CAPITALES confusables, qui imitent une capitale latine différente de leur minuscule (Μ grec ≠ μ). */
@@ -130,39 +135,49 @@ const ASCII_ALNUM = /^[a-z0-9]+$/;
 const VISIBLE_UNKNOWN = /[\p{L}\p{N}\p{S}]/u;
 /** Un caractère que le squelette ne sait pas lire : il peut valoir N'IMPORTE quelle lettre. */
 const JOKER = '*';
-/** Au plus deux jokers dans la fenêtre « meeshy » : sans cette borne, tout nom de six lettres d'un autre alphabet serait réservé. */
+/**
+ * Au plus deux jokers dans la fenêtre « meeshy » pour un nom bien formé : sans
+ * cette borne, tout nom de six lettres d'un autre alphabet serait réservé. Un
+ * nom MAL formé (`isWhitelistedName`) n'a pas cette indulgence : chaque
+ * caractère inconnu peut y valoir une lettre (« ᎷᎬᎬSHY »).
+ */
 const MAX_JOKERS = 2;
 
 /**
- * Ce que l'œil lit d'un caractère, FERMÉ PAR DÉFAUT : une lettre latine
- * (diacritiques retirés) ou un chiffre se garde, un confusable connu se
- * remplace par la lettre qu'il imite, et tout autre caractère visible —
- * lettre, chiffre ou symbole inconnu (❘, ƴ, ß… ; ⓜ et ℳ sont déjà repliés par NFKC) —
- * devient un JOKER. La ponctuation, les espaces et les invisibles tombent.
+ * Ce que l'œil lit d'un caractère, FERMÉ PAR DÉFAUT : un confusable connu
+ * (ponctuation leet comprise) se remplace par la lettre qu'il imite, une lettre
+ * latine (diacritiques retirés) ou un chiffre se garde, et tout autre caractère
+ * visible — lettre, chiffre ou symbole inconnu (❘, ɛ, ß… ; ⓜ et ℳ sont déjà
+ * repliés par NFKC) — devient un JOKER. Le reste de la ponctuation, les espaces
+ * et les invisibles tombent.
  */
-const readAs = (char: string): string => {
-  if (SEPARATOR.test(char) || MARK.test(char)) return '';
+const readAs = (char: string, leetPunctuation: boolean): string => {
+  if (!leetPunctuation && LEET_PUNCTUATION.test(char)) return '';
   const lower = char.toLowerCase();
-  const base = lower.normalize('NFD').replace(/\p{M}/gu, '');
-  if (ASCII_ALNUM.test(base)) return mapped(base, CONFUSABLE_TO_LATIN);
   const confusable = CONFUSABLE_TO_LATIN[lower];
   if (confusable !== undefined) return confusable;
+  if (SEPARATOR.test(char) || MARK.test(char)) return '';
+  const base = lower.normalize('NFD').replace(/\p{M}/gu, '');
+  if (ASCII_ALNUM.test(base)) return mapped(base, CONFUSABLE_TO_LATIN);
   return VISIBLE_UNKNOWN.test(char) ? JOKER : '';
 };
 
+/** La ponctuation leet : elle peut REMPLACER une lettre (« Mee§hy ») ou S'INSÉRER entre deux (« M|eeshy ») — les deux lectures sont faites. */
+const LEET_PUNCTUATION = /^[§$€|!@]$/u;
+
 /** Le squelette de LECTURE d'un nom : chaque caractère lu (`readAs`), puis les séquences confusables. */
-const readingSkeleton = (name: string): string =>
+const readingSkeleton = (name: string, leetPunctuation: boolean): string =>
   SEQUENCE_CONFUSABLES.reduce(
     (text, [pattern, replacement]) => text.replace(pattern, replacement),
-    [...mapped(name.normalize('NFKC'), CAPITAL_CONFUSABLE_TO_LATIN)].map(readAs).join(''),
+    [...mapped(name.normalize('NFKC'), CAPITAL_CONFUSABLE_TO_LATIN)].map((char) => readAs(char, leetPunctuation)).join(''),
   );
 
 /**
  * Vrai si `read` contient une suite qui se lit `target`, chaque joker valant
- * UNE lettre (au plus `MAX_JOKERS` fois) ou RIEN — un sosie inséré entre deux
+ * UNE lettre (au plus `maxJokers` fois) ou RIEN — un sosie inséré entre deux
  * lettres ne rallonge pas la fenêtre.
  */
-const canRead = (read: readonly string[], target: string): boolean => {
+const canRead = (read: readonly string[], target: string, maxJokers: number): boolean => {
   const memo = new Map<string, boolean>();
   const from = (i: number, j: number, used: number): boolean => {
     if (j === target.length) return true;
@@ -173,7 +188,7 @@ const canRead = (read: readonly string[], target: string): boolean => {
     const char = read[i];
     const result =
       char === JOKER
-        ? (j > 0 && from(i + 1, j, used)) || (used < MAX_JOKERS && from(i + 1, j + 1, used + 1))
+        ? (j > 0 && from(i + 1, j, used)) || (used < maxJokers && from(i + 1, j + 1, used + 1))
         : char === target[j] && from(i + 1, j + 1, used);
     memo.set(key, result);
     return result;
@@ -191,9 +206,12 @@ const canRead = (read: readonly string[], target: string): boolean => {
  * usurpation.
  */
 export function impersonatesMeeshy(name: string): boolean {
-  const read = readingSkeleton(name);
-  if (read.replace(/[^a-z0-9]/g, '').includes(MEESHY_PUBLISHER_SLUG)) return true;
-  return canRead([...read], MEESHY_PUBLISHER_SLUG);
+  const lenient = isWhitelistedName(name);
+  return [true, false].some((leetPunctuation) => {
+    const read = readingSkeleton(name, leetPunctuation);
+    if (read.replace(/[^a-z0-9]/g, '').includes(MEESHY_PUBLISHER_SLUG)) return true;
+    return canRead([...read], MEESHY_PUBLISHER_SLUG, lenient ? MAX_JOKERS : read.length);
+  });
 }
 
 /**
@@ -236,8 +254,13 @@ const SCRIPTS = [
 
 type Script = (typeof SCRIPTS)[number][0];
 
-/** Les mélanges qu'admet le profil Highly Restrictive : le latin avec le japonais, le chinois à bopomofo ou le coréen. */
+/**
+ * Les mélanges admis : ceux du profil Highly Restrictive (le latin avec le
+ * japonais, le chinois à bopomofo ou le coréen), et le latin avec l'arabe,
+ * courant dans les noms de boutique bilingues.
+ */
 const MIXES: readonly ReadonlySet<Script>[] = [
+  new Set<Script>(['Latin', 'Arabic']),
   new Set<Script>(['Latin', 'Han', 'Hiragana', 'Katakana']),
   new Set<Script>(['Latin', 'Han', 'Bopomofo']),
   new Set<Script>(['Latin', 'Han', 'Hangul']),
@@ -253,16 +276,27 @@ const VISIBLE_NON_LETTER = /^[\p{N}\p{P}\p{S} ]$/u;
 /**
  * Les lettres latines étendues LÉGITIMES qui ne se replient pas en ASCII par
  * NFD : celles des langues écrites (danois, allemand, polonais, français,
- * vietnamien, islandais, turc, croate…). Toute autre lettre latine — petites
- * capitales, IPA, modificatives, pleine largeur, lettres à crochet ou à barre —
- * est refusée.
+ * vietnamien, islandais, turc, croate…), puis tout le Latin étendu B et l'IPA,
+ * où vivent les orthographes africaines et autres (ɛ ɔ ɓ ɗ ə ɲ ŋ ƙ ƴ ʋ ɣ ƒ ʃ ʒ :
+ * bambara, peul, haoussa, ewe, azéri…).
  */
 const LEGITIMATE_EXTENDED_LATIN: ReadonlySet<string> = new Set([...'øØßẞłŁœŒæÆđĐþÞðÐıŋŊħĦŧŦƒǆǅǄĳĲ']);
+const LATIN_EXTENDED_B_AND_IPA = /^[\u0180-\u02AF]$/u;
+/**
+ * La LISTE NOIRE : les lettres latines qui ne servent qu'à imiter une autre
+ * lettre — petites capitales (U+1D00–U+1D2B, ꜰ ꜱ et celles de l'IPA), sosies
+ * IPA (ɑ ɡ ʍ ɩ), lettres de clic qui se lisent « | » ou « ! », iota latin,
+ * lettres modificatives et pleine largeur.
+ */
+const LOOKALIKE_LATIN: ReadonlySet<string> = new Set([...'ɑɡʍɩɪʏʜʟɴʀʙɢꜰꜱǀǁǂǃƖ']);
+const SMALL_CAPITAL_OR_MODIFIER = /^[\u1D00-\u1D2B\uFF21-\uFF3A\uFF41-\uFF5A\p{Lm}]$/u;
 const ASCII_LETTER = /^[A-Za-z]$/;
 
-/** Une lettre latine valide : ASCII une fois ses diacritiques retirés (NFD), ou listée parmi les lettres étendues légitimes. */
+/** Une lettre latine valide : hors liste noire, ASCII une fois ses diacritiques retirés (NFD), étendue légitime, ou du Latin étendu B / de l'IPA. */
 const isValidLatin = (char: string): boolean =>
-  ASCII_LETTER.test(char.normalize('NFD').replace(/\p{M}/gu, '')) || LEGITIMATE_EXTENDED_LATIN.has(char);
+  !LOOKALIKE_LATIN.has(char) &&
+  !SMALL_CAPITAL_OR_MODIFIER.test(char) &&
+  (ASCII_LETTER.test(char.normalize('NFD').replace(/\p{M}/gu, '')) || LEGITIMATE_EXTENDED_LATIN.has(char) || LATIN_EXTENDED_B_AND_IPA.test(char));
 
 /** La marque de prolongation des kana (ー), commune à l'écriture japonaise : comptée comme katakana. */
 const PROLONGED_SOUND_MARK = '\u30FC';

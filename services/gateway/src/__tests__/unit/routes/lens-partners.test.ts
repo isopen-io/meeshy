@@ -484,6 +484,31 @@ describe('l’usage d’une lens se compte sans identifier personne', () => {
 });
 
 describe('le nom d’un partenaire passe par la loi des éditeurs (#16274, revue de sécurité)', () => {
+  it('« Kɔfi Art », un nom en latin africain, est un nom de partenaire valide (re-audit N3)', async () => {
+    const h = await harness();
+    expect((await saveProfile(h, { displayName: 'Kɔfi Art' })).statusCode).toBe(200);
+    expect((await saveProfile(h, { displayName: 'Ahmed أحمد' })).statusCode).toBe(200);
+  });
+
+  it('un partenaire existant au nom que la liste refuse garde son nom et enregistre son logo : droit acquis (re-audit N2/N3)', async () => {
+    const h = await harness();
+    const verifiedAt = new Date(START);
+    h.prisma.partnerProfile.rows.push({ id: 'p-legacy', userId: ALICE, displayName: 'Studio Студия', website: null, logoSrc: null, logoSha256: null, verifiedAt, verifiedBy: null, updatedAt: new Date(START), createdAt: new Date(START) });
+    const res = await saveProfile(h, { displayName: 'Studio Студия', website: 'https://studio.example' });
+    expect(res.statusCode).toBe(200);
+    expect(h.prisma.partnerProfile.rows.find((row) => row.userId === ALICE)).toMatchObject({ displayName: 'Studio Студия', verifiedAt });
+    expect((await saveProfile(h, { displayName: 'Autre Студия' })).statusCode).toBe(400);
+  });
+
+  it('un balayage inconcluant répond 503 avec Retry-After, jamais 409 (re-audit N6)', async () => {
+    const h = await harness();
+    h.prisma.partnerProfile.rows.push(...Array.from({ length: 2_000 }, (_, index) => ({ id: `68f0${String(index).padStart(20, '0')}`, userId: `68f1${String(index).padStart(20, '0')}`, displayName: `Studio ${index}`, website: null, logoSrc: null, logoSha256: null, verifiedAt: null, updatedAt: new Date(START), createdAt: new Date(START) })));
+    const res = await saveProfile(h, { displayName: 'Aurore Studio' });
+    expect(res.statusCode).toBe(503);
+    expect(res.headers['retry-after']).toBe('300');
+    expect(res.json().code).toBe('PUBLISHER_RETRY_LATER');
+  });
+
   it('créer ou renommer son profil vers un nom qu’un autre éditeur porte est refusé : 409 PUBLISHER_NAME_TAKEN', async () => {
     const h = await harness();
     expect((await call(h, 'PUT', '/partners/me', BOB, { displayName: 'Studio Lumière' })).statusCode).toBe(200);

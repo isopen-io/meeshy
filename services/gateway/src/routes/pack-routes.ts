@@ -47,15 +47,29 @@ export const packPublisherJsonSchema = {
   description: 'L’éditeur du pack (#16274) — Meeshy pour un pack du dépôt',
 } as const;
 
-const PUBLICATION_REFUSALS: Readonly<Record<PublicationRefusal, { readonly status: 403 | 409; readonly message: string; readonly code: string }>> = {
+const PUBLICATION_REFUSALS: Readonly<Record<Exclude<PublicationRefusal, 'retry-later'>, { readonly status: 403 | 409; readonly message: string; readonly code: string }>> = {
   'account-unverified': { status: 403, message: 'Publishing requires an active account with a verified email or phone', code: PACK_PUBLISHER_ERROR_CODES.ACCOUNT_UNVERIFIED },
   'not-owner': { status: 403, message: 'This publisher does not belong to your account', code: PACK_PUBLISHER_ERROR_CODES.NOT_OWNER },
   reserved: { status: 403, message: 'This publisher identity is reserved', code: PACK_PUBLISHER_ERROR_CODES.RESERVED },
   'name-taken': { status: 409, message: 'Another publisher already uses this store name', code: PACK_PUBLISHER_ERROR_CODES.NAME_TAKEN },
 };
 
-/** Une publication refusée par la loi des éditeurs (#16274) : 403, ou 409 pour un nom de boutique déjà pris. */
+/** Le délai, en secondes, après lequel réessayer quand la disponibilité d'un nom n'a pas pu être établie. */
+export const PUBLISHER_RETRY_AFTER_SECONDS = 300;
+
+/** La disponibilité d'un nom n'a pas pu être établie (anciens profils pas encore rattrapés) : 503 et `Retry-After`, jamais un 409. */
+export const sendPublisherRetryLater = (reply: FastifyReply) => {
+  reply.header('Retry-After', String(PUBLISHER_RETRY_AFTER_SECONDS));
+  return sendError(reply, 503, 'Store name availability could not be established, retry later', { code: PACK_PUBLISHER_ERROR_CODES.RETRY_LATER });
+};
+
+/**
+ * Une publication refusée par la loi des éditeurs (#16274) : 403, 409 pour un
+ * nom de boutique déjà pris (code inconnu des clients publiés, qui le rendent
+ * comme un échec générique), 503 pour réessayer plus tard.
+ */
 export const sendPublicationRefused = (reply: FastifyReply, reason: PublicationRefusal) => {
+  if (reason === 'retry-later') return sendPublisherRetryLater(reply);
   const refusal = PUBLICATION_REFUSALS[reason];
   return refusal.status === 409 ? sendConflict(reply, refusal.message, { code: refusal.code }) : sendForbidden(reply, refusal.message, { code: refusal.code });
 };

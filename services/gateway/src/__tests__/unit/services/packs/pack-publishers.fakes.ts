@@ -30,7 +30,7 @@ const fieldMatches = (row: Record<string, unknown>, key: string, condition: unkn
     if ('in' in spec) return (spec.in as readonly unknown[]).includes(value);
     if ('notIn' in spec) return !(spec.notIn as readonly unknown[]).includes(value);
     if ('isSet' in spec) return spec.isSet === (key in row && value !== undefined);
-    if ('not' in spec) return value !== spec.not;
+    if ('not' in spec) return spec.not === null ? value !== null && value !== undefined : value !== spec.not;
   }
   if (key === 'NOT') return !whereMatches(row, condition as Where);
   if (condition === null) return key in row && value === null;

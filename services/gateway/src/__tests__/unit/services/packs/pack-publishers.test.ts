@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from '@jest/globals';
 import { MEESHY_PUBLISHER } from '@meeshy/shared/types/pack-publisher';
-import { NEUTRAL_PUBLISHER, PackPublishers, officialPublisherAccountFrom } from '../../../../services/packs/PackPublishers';
+import { NEUTRAL_PUBLISHER, PackPublishers, officialPublisherAccountFrom, servedAuthor, withPublishers } from '../../../../services/packs/PackPublishers';
 import { memoryPublisherDb, type PublisherUserSeed } from './pack-publishers.fakes';
 
 const OFFICIAL = '68d0000000000000000000a0';
@@ -153,9 +153,15 @@ describe('authorizePublication — qui peut publier', () => {
     expect(await publishers.authorizePublication(AWA, { author: 'Søren Studio', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Søren Studio' } });
   });
 
-  it('un nom seulement mal formé ne refuse pas la proposition : l’éditeur naît sous un nom neutre', async () => {
+  it('un auteur mêlant le latin et l’arabe est un nom valide (re-audit #16274, N3)', async () => {
     const { publishers } = setup();
-    expect(await publishers.authorizePublication(AWA, { author: 'Ahmed \u0623\u062D\u0645\u062F', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Éditeur' } });
+    expect(await publishers.authorizePublication(AWA, { author: 'Ahmed \u0623\u062D\u0645\u062F', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Ahmed \u0623\u062D\u0645\u062F' } });
+  });
+
+  it('un auteur mal formé est refusé : le texte libre est soumis à la réserve (re-audit #16274, N5)', async () => {
+    const { db, publishers } = setup();
+    expect(await publishers.authorizePublication(AWA, { author: 'Studio \u0421\u0442\u0443\u0434\u0438\u044F', claimed: null })).toEqual({ kind: 'refused', reason: 'reserved' });
+    expect(db.profiles).toEqual([]);
   });
 
   it('refuse le sosie « rneeshy » comme Meeshy (audit #16274, A1)', async () => {
@@ -292,11 +298,11 @@ describe('une identité Meeshy ne survit pas à la fin du statut officiel', () =
     expect(db.profiles[0]).toMatchObject({ slug: 'meeshy' });
   });
 
-  it('authorizePublication : l’ancien compte officiel reçoit une adresse neutre et perd la vérification accordée', async () => {
+  it('authorizePublication : l’ancien compte officiel reçoit une adresse neutre et est SERVI neutre, non vérifié — sa ligne garde son nom et sa vérification, à arbitrer (re-audit #16274, N2)', async () => {
     const { db, publishers } = formerOfficial();
     expect(await publishers.authorizePublication(OFFICIAL, { author: 'Studio', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Éditeur', verified: false } });
     expect(db.profiles[0]!.slug).toMatch(/^editeur-[a-z0-9]{4}$/);
-    expect(db.profiles[0]).toMatchObject({ verifiedAt: null });
+    expect(db.profiles[0]).toMatchObject({ displayName: 'Meeshy', verifiedAt: new Date('2026-10-01T00:00:00Z'), nameDisputedAt: expect.any(Date) });
   });
 
   it('authorizePublication : l’ancien compte officiel ne publie plus sous « meeshy »', async () => {
@@ -332,10 +338,10 @@ describe('backfill — le rattrapage qui crée les éditeurs des propositions d�
     const { db, publishers } = setup({ [AWA]: { username: 'awa' }, [BINTA]: VERIFIED, [PURGED]: { username: 'gone', deletedAt: new Date() } });
     db.profiles.push({ id: 'p-legacy', userId: BINTA, displayName: 'Lens Lab', verifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() });
     const packs = [{ submitterId: AWA, author: 'Awa Créations' }, { submitterId: BINTA, author: 'autre' }, { submitterId: PURGED, author: 'Compte supprimé' }];
-    expect(await publishers.backfill(packs)).toEqual({ created: 1, addressed: 1, kept: 0, skipped: 1 });
+    expect(await publishers.backfill(packs)).toMatchObject({ created: 1, addressed: 1, kept: 0, skipped: 1, deferred: 0 });
     expect((await publishers.servedFor(packs)).get(BINTA)).toEqual({ slug: 'lens-lab', name: 'Lens Lab', verified: true, official: false });
     expect(db.profiles.some((row) => row.userId === PURGED)).toBe(false);
-    expect(await publishers.backfill(packs)).toEqual({ created: 0, addressed: 0, kept: 2, skipped: 1 });
+    expect(await publishers.backfill(packs)).toMatchObject({ created: 0, addressed: 0, kept: 2, skipped: 1, deferred: 0 });
   });
 
   it('un auteur dont le nom est déjà pris reçoit un éditeur neutre plutôt que rien', async () => {
@@ -366,12 +372,13 @@ describe('le nom d’un éditeur : un seul site d’écriture, unique même sous
     expect(await publishers.authorizePublication(AWA, { author: 'Studio Lumière', claimed: null })).toEqual({ kind: 'refused', reason: 'name-taken' });
   });
 
-  it('un ancien profil sans clé de nom, dont le nom est déjà porté, n’est rendu servable que sous le nom neutre', async () => {
+  it('un ancien profil sans clé de nom, dont le nom est déjà porté, GARDE son nom et sa vérification, sans clé, à arbitrer (re-audit #16274, N2)', async () => {
     const { db, publishers } = setup();
     await publishers.authorizePublication(AWA, { author: 'Lens Lab', claimed: null });
-    db.profiles.push({ id: 'p-legacy', userId: BINTA, displayName: 'Lens Lab', verifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() });
-    expect(await publishers.authorizePublication(BINTA, { author: 'x', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Éditeur', verified: false } });
-    expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ displayName: 'Éditeur', nameKey: null, verifiedAt: null });
+    const verifiedAt = new Date('2026-10-01T00:00:00Z');
+    db.profiles.push({ id: 'p-legacy', userId: BINTA, displayName: 'Lens Lab', verifiedAt, createdAt: new Date(), updatedAt: new Date() });
+    expect(await publishers.authorizePublication(BINTA, { author: 'Lens Lab', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Lens Lab', verified: true } });
+    expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ displayName: 'Lens Lab', nameKey: null, verifiedAt, nameDisputedAt: expect.any(Date) });
   });
 
   it('un ancien profil au nom libre reçoit sa clé de nom en devenant servable', async () => {
@@ -381,20 +388,28 @@ describe('le nom d’un éditeur : un seul site d’écriture, unique même sous
     expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ slug: 'lens-lab', nameKey: 'iensiab' });
   });
 
-  it('backfillNameKeys pose la clé des profils existants, le plus ancien garde un nom en double, et se rejoue sans rien changer', async () => {
+  it('backfillNameKeys pose la clé des profils existants ; un homonyme et un nom qui se lit comme Meeshy gardent nom et vérification, à arbitrer ; rejouable (re-audit #16274, N2)', async () => {
     const { db, publishers } = setup();
     db.profiles.push(
       { id: '68e000000000000000000001', userId: AWA, displayName: 'Lens Lab', verifiedAt: new Date(), createdAt: new Date('2026-10-01T00:00:00Z') },
       { id: '68e000000000000000000002', userId: BINTA, displayName: 'lens-lab', verifiedAt: new Date(), createdAt: new Date('2026-10-02T00:00:00Z') },
       { id: '68e000000000000000000003', userId: PURGED, displayName: 'Meeshy Partner', verifiedAt: new Date(), createdAt: new Date('2026-10-03T00:00:00Z') },
     );
-    expect(await publishers.backfillNameKeys()).toEqual({ keyed: 1, neutralized: 2, deferred: 0 });
-    expect(db.profiles.map((row) => [row.displayName, row.nameKey ?? null, row.verifiedAt])).toEqual([
-      ['Lens Lab', 'iensiab', expect.any(Date)],
-      ['Éditeur', null, null],
-      ['Éditeur', null, null],
+    expect(await publishers.backfillNameKeys()).toMatchObject({
+      keyed: 1,
+      disputed: 2,
+      entries: [
+        { id: '68e000000000000000000001', outcome: 'keyed' },
+        { id: '68e000000000000000000002', outcome: 'disputed', reason: 'name-taken', heldBy: '68e000000000000000000001' },
+        { id: '68e000000000000000000003', outcome: 'disputed', reason: 'reserved' },
+      ],
+    });
+    expect(db.profiles.map((row) => [row.displayName, row.nameKey ?? null, row.verifiedAt instanceof Date, row.nameDisputedAt instanceof Date])).toEqual([
+      ['Lens Lab', 'iensiab', true, false],
+      ['lens-lab', null, true, true],
+      ['Meeshy Partner', null, true, true],
     ]);
-    expect(await publishers.backfillNameKeys()).toEqual({ keyed: 0, neutralized: 0, deferred: 0 });
+    expect(await publishers.backfillNameKeys()).toEqual({ keyed: 0, disputed: 0, entries: [] });
   });
 });
 
@@ -406,14 +421,14 @@ describe('un ancien profil sans clé de nom détient son nom dès avant le rattr
     expect(db.profiles.filter((row) => row.userId === AWA)).toEqual([]);
   });
 
-  it('entre deux anciens profils au même nom, le plus ancien le garde au rattrapage', async () => {
+  it('entre deux anciens profils au même nom, la clé va au plus ancien ; l’autre garde son nom, à arbitrer', async () => {
     const { db, publishers } = setup();
     db.profiles.push(
       { id: '68e000000000000000000009', userId: BINTA, displayName: 'lens-lab', verifiedAt: new Date(), createdAt: new Date('2026-10-02T00:00:00Z') },
       { id: '68e000000000000000000008', userId: AWA, displayName: 'Lens Lab', verifiedAt: new Date(), createdAt: new Date('2026-10-01T00:00:00Z') },
     );
-    await publishers.authorizePublication(BINTA, { author: 'x', claimed: null });
-    expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ displayName: 'Éditeur', nameKey: null });
+    await publishers.authorizePublication(BINTA, { author: 'lens-lab', claimed: null });
+    expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ displayName: 'lens-lab', nameKey: null, verifiedAt: expect.any(Date), nameDisputedAt: expect.any(Date) });
   });
 });
 
@@ -433,5 +448,126 @@ describe('le balayage des anciens profils ne se contourne pas, et ne neutralise 
     db.profiles.push({ id: '68e0000000000000000000ff', userId: AWA, displayName: 'Lens Lab', verifiedAt: new Date('2026-10-01T00:00:00Z'), createdAt: new Date('2026-10-01T00:00:00Z') });
     await publishers.backfillNameKeys();
     expect(db.profiles.find((row) => row.userId === AWA)).toMatchObject({ displayName: 'Lens Lab', verifiedAt: new Date('2026-10-01T00:00:00Z') });
+  });
+});
+
+describe('re-audit #16274 — aucun profil existant renommé, aucun nom pris sans publier, aucun auteur trompeur', () => {
+  const V: PublisherUserSeed = { username: 'x', emailVerifiedAt: new Date('2026-01-01T00:00:00Z') };
+  const two = () => setup({ [AWA]: V, [BINTA]: V, [OFFICIAL]: V });
+
+  it('B3 — un auteur en alphabet non admis qui se LIT « MEESHY » (cherokee) est refusé comme auteur', async () => {
+    const { publishers } = two();
+    expect(await publishers.authorizePublication(AWA, { author: 'ᎷᎬᎬSHY', claimed: null })).toEqual({ kind: 'refused', reason: 'reserved' });
+  });
+
+  it('B4 — un ancien client dont l’auteur est déjà pris est refusé sous un code que les clients publiés rendent comme un échec générique, sans éditeur créé', async () => {
+    const { db, publishers } = two();
+    await publishers.authorizePublication(AWA, { author: 'Awa', claimed: null });
+    expect(await publishers.authorizePublication(BINTA, { author: 'awa', claimed: null })).toEqual({ kind: 'refused', reason: 'name-taken' });
+    expect(db.profiles.filter((row) => row.userId === BINTA)).toEqual([]);
+  });
+
+  it('B5 — au rattrapage, un profil VÉRIFIÉ garde son nom, sa vérification ET la clé face à un homonyme plus ancien non vérifié, qui garde aussi son nom', async () => {
+    const { db, publishers } = two();
+    db.profiles.push(
+      { id: '68e000000000000000000001', userId: AWA, displayName: 'studio lumiere', verifiedAt: null, createdAt: new Date('2025-01-01T00:00:00Z') },
+      { id: '68e000000000000000000002', userId: BINTA, displayName: 'Studio Lumière', verifiedAt: new Date('2025-06-01T00:00:00Z'), createdAt: new Date('2025-02-01T00:00:00Z') },
+    );
+    await publishers.backfillNameKeys();
+    const binta = db.profiles.find((row) => row.userId === BINTA)!;
+    const awa = db.profiles.find((row) => row.userId === AWA)!;
+    expect([binta.displayName, binta.verifiedAt !== null, binta.nameKey]).toEqual(['Studio Lumière', true, 'studioiumiere']);
+    expect([awa.displayName, awa.nameKey ?? null, awa.nameDisputedAt instanceof Date]).toEqual(['studio lumiere', null, true]);
+  });
+
+  it('B5 bis — par le chemin de publication aussi, le vérifié plus récent garde la clé et l’ancien non vérifié reste nommé', async () => {
+    const { db, publishers } = two();
+    db.profiles.push(
+      { id: '68e000000000000000000001', userId: AWA, displayName: 'studio lumiere', verifiedAt: null, createdAt: new Date('2025-01-01T00:00:00Z') },
+      { id: '68e000000000000000000002', userId: BINTA, displayName: 'Studio Lumière', verifiedAt: new Date('2025-06-01T00:00:00Z'), createdAt: new Date('2025-02-01T00:00:00Z') },
+    );
+    await publishers.authorizePublication(AWA, { author: 'studio lumiere', claimed: null });
+    expect(db.profiles.find((row) => row.userId === AWA)).toMatchObject({ displayName: 'studio lumiere', nameDisputedAt: expect.any(Date) });
+    await publishers.authorizePublication(BINTA, { author: 'Studio Lumière', claimed: null });
+    expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ displayName: 'Studio Lumière', nameKey: 'studioiumiere', verifiedAt: new Date('2025-06-01T00:00:00Z') });
+  });
+
+  it('B6 — un auteur au nom d’un tiers, sur la 2e proposition, est refusé', async () => {
+    const { publishers } = two();
+    await publishers.authorizePublication(AWA, { author: 'Studio Lumière', claimed: null });
+    await publishers.authorizePublication(BINTA, { author: 'Bob', claimed: null });
+    expect(await publishers.authorizePublication(BINTA, { author: 'Studio Lumière', claimed: null })).toEqual({ kind: 'refused', reason: 'name-taken' });
+  });
+
+  it('N1 — vérifier une proposition n’écrit rien : le nom ne se prend qu’au commit', async () => {
+    const { db, publishers } = two();
+    const vetting = await publishers.vetPublication(AWA, { author: 'Studio Lumière', claimed: null });
+    expect(vetting.kind).toBe('vetted');
+    expect(db.profiles).toEqual([]);
+    if (vetting.kind !== 'vetted') return;
+    expect(await vetting.commit()).toMatchObject({ kind: 'allowed', publisher: { name: 'Studio Lumière' } });
+    expect(db.profiles).toHaveLength(1);
+  });
+
+  it('N2 — un ancien partenaire au nom qui se lit comme Meeshy n’est jamais renommé : servi neutre et non vérifié, sa ligne intacte', async () => {
+    const { db, publishers } = two();
+    const verifiedAt = new Date('2026-10-01T00:00:00Z');
+    db.profiles.push({ id: 'p-legacy', userId: AWA, slug: 'fan', displayName: 'Meeshy Fan', verifiedAt, createdAt: new Date('2026-09-01T00:00:00Z') });
+    expect(await publishers.authorizePublication(AWA, { author: 'Studio', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Éditeur', verified: false } });
+    expect(db.profiles[0]).toMatchObject({ displayName: 'Meeshy Fan', verifiedAt, nameDisputedAt: expect.any(Date) });
+  });
+
+  it('N2 — le DRY_RUN des clés liste tout ce qu’il ferait, sans rien écrire', async () => {
+    const { db, publishers } = two();
+    db.profiles.push(
+      { id: '68e000000000000000000001', userId: AWA, displayName: 'Lens Lab', verifiedAt: null, createdAt: new Date('2026-10-01T00:00:00Z') },
+      { id: '68e000000000000000000002', userId: BINTA, displayName: 'lens lab', verifiedAt: null, createdAt: new Date('2026-10-02T00:00:00Z') },
+    );
+    const before = JSON.stringify(db.profiles);
+    expect(await publishers.backfillNameKeys({ dryRun: true })).toMatchObject({
+      keyed: 1,
+      disputed: 1,
+      entries: [
+        { id: '68e000000000000000000001', displayName: 'Lens Lab', outcome: 'keyed' },
+        { id: '68e000000000000000000002', displayName: 'lens lab', outcome: 'disputed', reason: 'name-taken', heldBy: '68e000000000000000000001' },
+      ],
+    });
+    expect(JSON.stringify(db.profiles)).toBe(before);
+  });
+
+  it('N2 — le DRY_RUN du rattrapage des éditeurs liste chaque proposant sans rien écrire', async () => {
+    const { db, publishers } = setup({ [AWA]: V, [BINTA]: V, [PURGED]: { username: 'gone', deletedAt: new Date() } });
+    const report = await publishers.backfill(
+      [{ submitterId: AWA, author: 'Awa Créations' }, { submitterId: PURGED, author: 'x' }],
+      { dryRun: true },
+    );
+    expect(report).toMatchObject({ created: 1, skipped: 1, entries: [{ userId: AWA, outcome: 'created', name: 'Awa Créations' }, { userId: PURGED, outcome: 'skipped' }] });
+    expect(db.profiles).toEqual([]);
+  });
+
+  it('N5 — l’auteur servi aux anciens clients est le nom de l’éditeur, jamais le texte libre', async () => {
+    const { publishers } = two();
+    await publishers.authorizePublication(BINTA, { author: 'Bob', claimed: null });
+    const [served] = await withPublishers(publishers, [{ submitterId: BINTA, author: 'Studio Lumière' }], (row) => ({ author: row.author }));
+    expect(served).toMatchObject({ author: 'Bob', publisher: { name: 'Bob' } });
+  });
+
+  it('N5 — sans éditeur réel, un auteur réservé est servi sous le nom neutre', () => {
+    expect(servedAuthor('ᎷᎬᎬSHY', NEUTRAL_PUBLISHER)).toBe('Éditeur');
+    expect(servedAuthor('Studio Minou', NEUTRAL_PUBLISHER)).toBe('Studio Minou');
+    expect(servedAuthor('Studio Minou', MEESHY_PUBLISHER)).toBe('Meeshy');
+  });
+
+  it('N6 — un balayage inconcluant à la proposition se lit « réessayer plus tard », jamais « nom pris »', async () => {
+    const { db, publishers } = two();
+    db.profiles.push(
+      ...Array.from({ length: 2_000 }, (_, index) => ({ id: `68f0${String(index).padStart(20, '0')}`, userId: `68f1${String(index).padStart(20, '0')}`, displayName: `Studio ${index}`, verifiedAt: null, createdAt: new Date('2026-09-01T00:00:00Z') })),
+    );
+    expect(await publishers.authorizePublication(AWA, { author: 'Kɔfi Art', claimed: null })).toEqual({ kind: 'refused', reason: 'retry-later' });
+  });
+
+  it('N3 — « Kɔfi Art » publie sous son nom', async () => {
+    const { publishers } = two();
+    expect(await publishers.authorizePublication(AWA, { author: 'Kɔfi Art', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Kɔfi Art' } });
   });
 });

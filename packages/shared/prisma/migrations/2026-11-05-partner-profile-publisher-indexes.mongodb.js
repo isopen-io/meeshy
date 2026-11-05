@@ -16,10 +16,13 @@
  * index ferment la course que le code ne peut pas fermer seul.
  *
  * ORDRE, IMPOSÉ : l'index de `nameKey` n'est pas posé tant qu'un profil nommé
- * n'a pas de clé. Jouer d'abord le rattrapage
- * `services/gateway/scripts/2026-11-05-backfill-pack-publishers.ts`, qui pose
- * `nameKey` sur les profils existants et départage les noms en double (le plus
- * ancien garde le nom) par la fonction même du code, puis ce script.
+ * n'a ni clé ni marque « à arbitrer » (`nameDisputedAt`). Jouer d'abord le
+ * rattrapage `services/gateway/scripts/2026-11-05-backfill-pack-publishers.ts`
+ * (avec `DRY_RUN=1` pour lire son plan), qui pose `nameKey` sur les profils
+ * existants : pour un nom en double, la clé va au profil vérifié, puis au plus
+ * ancien, et l'autre GARDE son nom sans clé, marqué à arbitrer — aucun nom
+ * réécrit, aucune vérification retirée. Puis ce script, sur le staging AVANT
+ * la fusion du code, et en production après feu vert et sauvegarde.
  *
  * Idempotente : un index se reconnaît à sa CLÉ et à ses options ; présent tel
  * quel, rien ne se passe ; présent avec d'autres options (l'unique NON partiel
@@ -80,6 +83,7 @@ for (const spec of specs) {
     const unkeyed = db.getCollection(COLLECTION).countDocuments({
       $or: [{ nameKey: null }, { nameKey: { $exists: false } }],
       displayName: { $nin: [NEUTRAL_NAME, OFFICIAL_NAME] },
+      nameDisputedAt: null,
     });
     if (unkeyed > 0) {
       report.blocked.push(`${COLLECTION}.${spec.name} — ${unkeyed} profil(s) nommé(s) sans clé : jouer d'abord services/gateway/scripts/2026-11-05-backfill-pack-publishers.ts`);

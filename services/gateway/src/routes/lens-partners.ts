@@ -30,7 +30,7 @@ import { lensUsageDedupFrom } from '../services/packs/lensUsageDedup';
 import { PACK_PUBLISHER_ERROR_CODES } from '@meeshy/shared/types/pack-publisher';
 import { sendBadRequest, sendConflict, sendError, sendForbidden, sendNotFound, sendSuccess } from '../utils/response.js';
 import { gameRateLimitConfig } from './me/game-shared';
-import { PACK_ERRORS, packEnvelope, packRouteGuard, packSlugParamsJsonSchema, type PackSlugRequest } from './pack-routes';
+import { PACK_ERRORS, packEnvelope, packRouteGuard, packSlugParamsJsonSchema, sendPublisherRetryLater, type PackSlugRequest } from './pack-routes';
 
 export const LENS_PARTNER_ERROR_CODES = {
   NOT_FOUND: 'PARTNER_NOT_FOUND',
@@ -172,7 +172,8 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
       },
     },
     guard('[PUT /lens/partners/me]', async (request, reply, viewer) => {
-      const parsed = parsePartnerProfileInput(request.body, { official: partners.isOfficial(viewer.userId) });
+      const current = await partners.ownProfile(viewer.userId);
+      const parsed = parsePartnerProfileInput(request.body, { official: partners.isOfficial(viewer.userId), currentName: current?.displayName ?? null });
       const body = (request.body ?? {}) as { logo?: unknown };
       const logo = logoSchema.safeParse(body.logo);
       if (!parsed.ok || !logo.success) return sendBadRequest(reply, 'Invalid partner profile', { code: 'VALIDATION_ERROR' });
@@ -184,6 +185,7 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
       if (outcome.kind === 'conflict') return profileChanged(reply);
       if (outcome.kind === 'reserved') return sendForbidden(reply, 'This publisher identity is reserved', { code: PACK_PUBLISHER_ERROR_CODES.RESERVED });
       if (outcome.kind === 'name-taken') return sendConflict(reply, 'Another publisher already uses this store name', { code: PACK_PUBLISHER_ERROR_CODES.NAME_TAKEN });
+      if (outcome.kind === 'retry-later') return sendPublisherRetryLater(reply);
       return sendSuccess(reply, outcome.profile);
     }),
   );

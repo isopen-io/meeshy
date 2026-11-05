@@ -85,8 +85,8 @@ export class PackSubmissions {
     const validation = this.spec.validateManifest(input);
     if ('problems' in validation) return { kind: 'invalid', problems: validation.problems };
     const { manifest } = validation;
-    const authorization = await this.publishers.authorizePublication(userId, { author: manifest.author, claimed: claimedPublisherSlug(input) });
-    if (authorization.kind === 'refused') return authorization;
+    const vetting = await this.publishers.vetPublication(userId, { author: manifest.author, claimed: claimedPublisherSlug(input) });
+    if (vetting.kind === 'refused') return vetting;
 
     const existing = await this.prisma.stickerPack.findUnique({ where: { slug: manifest.slug }, include: STICKER_PACK_INCLUDE });
     const replacing = existing !== null && existing.submitterId === userId && existing.status === 'rejected';
@@ -96,6 +96,8 @@ export class PackSubmissions {
 
     const images = await this.normalizeAll(manifest.items, assets);
     if ('reason' in images) return { kind: 'asset-refused', key: images.key, reason: images.reason };
+    const authorization = await vetting.commit();
+    if (authorization.kind === 'refused') return authorization;
 
     const folder = `sticker-packs/${this.newFileId()}`;
     const stored = manifest.items.map((item, position) => {

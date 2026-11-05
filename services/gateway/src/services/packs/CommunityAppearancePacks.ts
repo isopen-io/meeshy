@@ -27,7 +27,7 @@ import { isUniqueViolation, type CommunityPackStore, type PackViewer } from './P
 import type { PackIndex } from './PackIndex';
 import type { AppearancePackDetail } from './appearancePackSpec';
 import { claimedPublisherSlug, type PackPublisherRef } from '@meeshy/shared/types/pack-publisher';
-import { defaultPackPublishers, withPublishers, type PackPublishers, type PublicationRefusal } from './PackPublishers';
+import { defaultPackPublishers, servedAuthor, withPublishers, type PackPublishers, type PublicationRefusal } from './PackPublishers';
 
 export type CommunityAppearanceRow = {
   readonly id: string;
@@ -68,7 +68,7 @@ export function communityAppearanceDetail(row: CommunityAppearanceRow, installed
     slug: row.slug,
     name: row.name,
     description: row.description,
-    author: row.author,
+    author: servedAuthor(row.author, publisher),
     ...(publisher === undefined ? {} : { publisher }),
     builtin: false,
     status: row.status as PackStatus,
@@ -181,8 +181,8 @@ export class CommunityAppearancePacks {
     const validation = validateCommunityAppearanceManifest(domain, input);
     if ('problems' in validation) return { kind: 'invalid', problems: validation.problems };
     const { manifest } = validation;
-    const authorization = await this.publishers.authorizePublication(userId, { author: manifest.author, claimed: claimedPublisherSlug(input) });
-    if (authorization.kind === 'refused') return authorization;
+    const vetting = await this.publishers.vetPublication(userId, { author: manifest.author, claimed: claimedPublisherSlug(input) });
+    if (vetting.kind === 'refused') return vetting;
     const registries: PackRegistries = { [domain]: this.index.entries(domain).map((entry) => ({ slug: entry.slug, installedByDefault: entry.installedByDefault })) };
     if (isReservedPackSlug(domain, manifest.slug, registries)) return { kind: 'slug-taken' };
 
@@ -191,6 +191,8 @@ export class CommunityAppearancePacks {
     if (existing !== null && !replacing) return { kind: 'slug-taken' };
     const pending = await this.prisma.communityAppearancePack.count({ where: { submitterId: userId, status: 'pending' } });
     if (pending >= COMMUNITY_APPEARANCE_LIMITS.maxPendingPerAuthor) return { kind: 'too-many-pending' };
+    const authorization = await vetting.commit();
+    if (authorization.kind === 'refused') return authorization;
 
     const sha256 = createHash('sha256').update(manifest.contractJson, 'utf8').digest('hex');
     try {

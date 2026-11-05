@@ -33,8 +33,9 @@ const fakeDatabase = (docs: readonly Doc[], seed: readonly Index[] = [{ name: '_
     getIndexes: () => [...indexes],
     dropIndex: (name: string) => indexes.splice(indexes.findIndex((index) => index.name === name), 1),
     createIndex: (key: Record<string, number>, options: Omit<Index, 'key'>) => indexes.push({ key, ...options }),
-    countDocuments: (filter: { $or: readonly Record<string, unknown>[]; displayName: { $nin: readonly string[] } }) =>
+    countDocuments: (filter: { $or: readonly Record<string, unknown>[]; displayName: { $nin: readonly string[] }; nameDisputedAt?: null }) =>
       docs.filter((doc) => {
+        if ('nameDisputedAt' in filter && doc.nameDisputedAt !== undefined && doc.nameDisputedAt !== null) return false;
         const unkeyed = filter.$or.some((branch) => {
           const condition = branch.nameKey;
           if (condition === null) return 'nameKey' in doc && doc.nameKey === null;
@@ -137,6 +138,12 @@ describe('2026-11-05-partner-profile-publisher-indexes.mongodb.js', () => {
     const absent = fakeDatabase([...LEGACY, { userId: 'u5', displayName: 'Lens Lab', nameKey: null }]);
     run(absent);
     expect(shapeOf(absent).map((index) => index.key)).not.toContainEqual({ nameKey: 1 });
+  });
+
+  it('un ancien profil À ARBITRER garde son nom sans clé et ne bloque pas l’index de nameKey (re-audit #16274, N2)', () => {
+    const disputed = fakeDatabase([...LEGACY, { userId: 'u6', displayName: 'Studio Lumière', nameKey: null, nameDisputedAt: new Date('2026-11-05T00:00:00Z') }]);
+    run(disputed);
+    expect(shapeOf(disputed).map((index) => index.key)).toContainEqual({ nameKey: 1 });
   });
 
   it('remplace un index unique NON partiel de slug (posé par un ancien `db push`) par le partiel', () => {

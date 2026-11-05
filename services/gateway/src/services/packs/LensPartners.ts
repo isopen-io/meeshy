@@ -69,7 +69,9 @@ export type SavePartnerOutcome =
   | { readonly kind: 'logo-refused'; readonly reason: string }
   | { readonly kind: 'conflict' }
   | { readonly kind: 'reserved' }
-  | { readonly kind: 'name-taken' };
+  | { readonly kind: 'name-taken' }
+  /** La disponibilité du nom n'a pas pu être établie (anciens profils pas encore rattrapés) : réessayer plus tard. */
+  | { readonly kind: 'retry-later' };
 
 export type VerifyPartnerOutcome =
   | { readonly kind: 'done'; readonly profile: PartnerProfileView }
@@ -195,23 +197,28 @@ export class LensPartners {
    * plutôt que d'être écrasée. La création est un `upsert` : deux créations
    * simultanées ne lèvent pas, et la seconde naît non vérifiée.
    *
-   * Le NOM passe par `claimPublisherName` (#16274) : réservé ⇒ `reserved`,
-   * porté par un autre éditeur ⇒ `name-taken` — y compris quand deux écritures
-   * se croisent (P2002 de l'index de `nameKey`, ou course perdue relue après).
+   * Un NOUVEAU nom passe par `claimPublisherName` (#16274) : réservé ⇒
+   * `reserved`, porté par un autre éditeur ⇒ `name-taken` — y compris quand
+   * deux écritures se croisent (P2002 de l'index de `nameKey`, ou course perdue
+   * relue après) —, balayage inconcluant ⇒ `retry-later`. Un nom INCHANGÉ est
+   * un droit acquis : ni revendiqué de nouveau, ni réécrit, ni sa clé touchée.
    */
   async saveOwnProfile(userId: string, input: { readonly profile: PartnerProfileInput; readonly logo: Buffer | null | undefined }): Promise<SavePartnerOutcome> {
     const logo = await this.logoColumns(input.logo);
     if ('reason' in logo) return { kind: 'logo-refused', reason: logo.reason };
     const official = this.isOfficial(userId);
     const current = await this.prisma.partnerProfile.findUnique({ where: { userId }, select: PROFILE_SELECT });
-    const claim = await claimPublisherName(this.prisma, { userId, name: input.profile.displayName, official });
-    if (claim.kind === 'inconclusive') return { kind: 'name-taken' };
+    const unchanged = current !== null && !official && current.displayName === input.profile.displayName;
+    const claim = unchanged
+      ? ({ kind: 'ok', displayName: current.displayName, nameKey: null } as const)
+      : await claimPublisherName(this.prisma, { userId, name: input.profile.displayName, official });
+    if (claim.kind === 'inconclusive') return { kind: 'retry-later' };
     if (claim.kind !== 'ok') return { kind: claim.kind };
     const now = this.now();
-    const named = { displayName: claim.displayName, nameKey: claim.nameKey };
+    const named = unchanged ? {} : { displayName: claim.displayName, nameKey: claim.nameKey };
     try {
       if (current === null) {
-        const data = { ...named, website: input.profile.website, ...(logo.columns ?? NO_LOGO), verifiedAt: null, verifiedBy: null, updatedAt: now };
+        const data = { displayName: claim.displayName, nameKey: claim.nameKey, website: input.profile.website, ...(logo.columns ?? NO_LOGO), verifiedAt: null, verifiedBy: null, updatedAt: now };
         await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, createdAt: now, ...data }, update: data });
       } else {
         const nextLogoSha = logo.columns === undefined ? current.logoSha256 : logo.columns.logoSha256;

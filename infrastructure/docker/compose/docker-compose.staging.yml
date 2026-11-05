@@ -341,10 +341,11 @@ services:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET absente sur l hote. Vide, la passerelle signerait avec un secret publie dans le depot}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       # #16274 — le compte officiel Meeshy, propriétaire de l'éditeur « Meeshy »
-      # des packs : l'identifiant (ObjectId, 24 hex minuscules) d'un compte
-      # existant, posé sur l'hôte. Absente, vide ou mal formée : aucun compte
-      # n'est officiel et l'identité « Meeshy » reste réservée à tous (fail-closed).
-      - MEESHY_OFFICIAL_ACCOUNT_ID=${MEESHY_OFFICIAL_ACCOUNT_ID:-}
+      # des packs : « Meeshy Sama » (`meeshy`, BIGBOSS), même identifiant en
+      # staging et en production (décision porteur 2026-11-05). L'hôte peut le
+      # surcharger. Vide ou mal formé : aucun compte n'est officiel et l'identité
+      # « Meeshy » reste réservée à tous (fail-closed).
+      - MEESHY_OFFICIAL_ACCOUNT_ID=${MEESHY_OFFICIAL_ACCOUNT_ID:-68f2a81417a557e8ce4ddfbc}
       - UPLOAD_PATH=/app/uploads
       # #11267 — le seau des médias : effacement synchrone, relecture par la
       # passerelle quand le disque n'a plus un fichier, miroir continu des

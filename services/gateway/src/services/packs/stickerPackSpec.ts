@@ -21,7 +21,7 @@ import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 import { stickerPackAssetRef } from '@meeshy/shared/types/sticker-pack-asset';
 import { MEESHY_PUBLISHER, type PackPublisherRef } from '@meeshy/shared/types/pack-publisher';
 import type { CommunityPackStore, PackDomainSpec, PackViewer, RegistryPack } from './PackCatalog';
-import { defaultPackPublishers, withPublishers, type PackPublishers } from './PackPublishers';
+import { defaultPackPublishers, servedAuthor, withPublishers, type PackPublishers } from './PackPublishers';
 
 export type StickerItemRow = {
   readonly key: string;
@@ -96,7 +96,7 @@ export function stickerPackDetail(row: StickerPackRow, installed: boolean, viewe
     slug: row.slug,
     name: row.name,
     description: row.description,
-    author: row.author,
+    author: servedAuthor(row.author, publisher),
     ...(publisher === undefined ? {} : { publisher }),
     builtin: false,
     status: row.status as StickerPackStatus,

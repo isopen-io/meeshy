@@ -61,15 +61,21 @@ export type PartnerProfileParse = { readonly ok: true; readonly profile: Partner
 const INVISIBLE_OR_CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 /** Qui écrit le profil : le compte officiel Meeshy, seul, garde le nom « Meeshy » (#16274). */
-export type PartnerProfileAuthor = { readonly official: boolean };
+/**
+ * Qui écrit le profil : le compte officiel (seul à porter « Meeshy »), et le
+ * nom que le profil porte DÉJÀ — un nom inchangé est un droit acquis, il
+ * n'est pas soumis de nouveau à la liste blanche (#16274, re-audit N3).
+ */
+export type PartnerProfileAuthor = { readonly official: boolean; readonly currentName?: string | null };
 
 const cleanDisplayName = (raw: unknown, author: PartnerProfileAuthor): string | null => {
   if (typeof raw !== 'string') return null;
   const name = raw.normalize('NFKC').trim();
   if (name.length === 0 || name.length > PARTNER_PROFILE_LIMITS.maxDisplayNameLength) return null;
+  if (INVISIBLE_OR_CONTROL.test(name)) return null;
   if (author.official && name === MEESHY_PUBLISHER_NAME) return name;
-  if (isReservedPublisherIdentity(name)) return null;
-  return INVISIBLE_OR_CONTROL.test(name) ? null : name;
+  if (typeof author.currentName === 'string' && name === author.currentName.normalize('NFKC').trim()) return name;
+  return isReservedPublisherIdentity(name) ? null : name;
 };
 
 const cleanWebsite = (raw: unknown): string | null | undefined => {
