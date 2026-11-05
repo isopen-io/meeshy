@@ -6,10 +6,11 @@ import org.junit.Test
 class SettingsHubCatalogTest {
 
     @Test
-    fun `sections follow the iOS order with transcription slotted after appearance`() {
+    fun `sections follow the iOS order with voice then transcription slotted after appearance`() {
         assertThat(SettingsHubCatalog.sections().map { it.id }).containsExactly(
             SettingsHubSectionId.ACCOUNT,
             SettingsHubSectionId.APPEARANCE,
+            SettingsHubSectionId.VOICE,
             SettingsHubSectionId.TRANSCRIPTION,
             SettingsHubSectionId.NOTIFICATIONS,
             SettingsHubSectionId.DATA,

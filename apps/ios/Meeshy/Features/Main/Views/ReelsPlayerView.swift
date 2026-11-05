@@ -651,20 +651,14 @@ struct ReelPageView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            // **Le seul chemin vers les AUTRES médias d'un réel** (#4927).
-            // `mediaLayer` aiguille sur le média primaire — la vidéo gagne — donc
-            // un réel « une vidéo + deux photos » ne servait jamais les photos.
-            // La pastille n'apparaît que lorsqu'il y a vraiment plusieurs médias
-            // (loi 4 : un contrôle sans effet est ABSENT, jamais grisé) et fade
-            // avec le reste du chrome, en mode immersif comme les autres.
-            if galleryMediaCount > 1 {
+            // **Le seul chemin vers les AUTRES médias d'un réel mixte** (#4927),
+            // en points depuis #16321 : un réel dont le carrousel dessine déjà
+            // ses points n'en reçoit pas une seconde rangée, ni de compteur.
+            if case let .galleryDots(total, currentIndex) = mediaIndicator {
                 VStack {
                     HStack {
                         Spacer()
-                        ReelMediaCountBadge(
-                            total: galleryMediaCount,
-                            currentIndex: galleryStartIndex
-                        ) {
+                        ReelMediaGalleryDots(total: total, currentIndex: currentIndex) {
                             HapticFeedback.light()
                             showMediaGallery = true
                         }
@@ -811,10 +805,17 @@ struct ReelPageView: View {
         reel.reelDisplayMedia.filter { $0.type == .image || $0.type == .video }
     }
 
-    private var galleryMediaCount: Int { galleryMedia.count }
+    /// L'indicateur élu pour ce réel (#16321) : points du carrousel, points
+    /// menant à la galerie, ou rien.
+    private var mediaIndicator: ReelMediaIndicator {
+        ReelMediaIndicator.resolve(isScene: isSceneReel,
+                                   primaryType: reel.primaryReelDisplayMedia?.type,
+                                   visualCount: galleryMedia.count,
+                                   currentIndex: galleryStartIndex)
+    }
 
-    /// Le rang du média AFFICHÉ, pour que la pastille dise « 2 / 3 » quand c'est
-    /// la deuxième pièce qui est à l'écran plutôt que toujours « 1 / 3 ».
+    /// Le rang du média AFFICHÉ, pour que les points désignent la pièce qui
+    /// est à l'écran plutôt que toujours la première.
     private var galleryStartIndex: Int {
         guard let id = galleryStartMediaId,
               let index = galleryMedia.firstIndex(where: { $0.id == id }) else { return 0 }
@@ -822,8 +823,8 @@ struct ReelPageView: View {
     }
 
     /// Le média par lequel la galerie s'OUVRE : celui qu'on regarde, sinon le
-    /// primaire. Une pastille qui annonce « 1 / 3 » pendant qu'on lit la
-    /// deuxième image serait un contrôle qui ment — plus coûteux qu'un contrôle
+    /// primaire. Des points qui désignent la première pièce pendant qu'on lit la
+    /// deuxième image seraient un contrôle qui ment — plus coûteux qu'un contrôle
     /// absent, parce qu'on le croit.
     private var galleryStartMediaId: String? {
         visibleCarouselMediaId ?? reel.primaryReelDisplayMedia?.id

@@ -2,13 +2,16 @@ package me.meeshy.ui.component.bubble
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -19,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -55,6 +59,7 @@ internal fun JoinNoticeCard(
     createdAtIso: String?,
     onOpenProfile: ((participantId: String) -> Unit)?,
     modifier: Modifier = Modifier,
+    onSayHi: (() -> Unit)? = null,
 ) {
     val muted = MeeshyTheme.tokens.textMuted
     val label = stringResource(R.string.bubble_joinNotice_joined, join.primaryName)
@@ -112,8 +117,39 @@ internal fun JoinNoticeCard(
             JoinHeadline(join = join, label = label, noAccount = noAccount)
             JoinDetailRow(join = join)
         }
+        val greet = onSayHi?.takeIf { join.greetHandle != null }
+        if (greet != null) ArrivalGreetingInvite(text = stringResource(R.string.bubble_joinNotice_sayHi), onTap = greet)
     }
 }
+
+/**
+ * **L'invite « dis-lui salut »** (#16338) : en GRAS, hors de la capsule (son toucher simple ne se confond pas avec le
+ * double toucher de la fiche), une cible de 48 dp ; elle écrit les `@mentions` des arrivants dans le composeur.
+ */
+@Composable
+internal fun ArrivalGreetingInvite(text: String, onTap: () -> Unit) {
+    val haptics = rememberMeeshyHaptics()
+    Text(
+        text = text,
+        fontSize = 12.5.sp,
+        fontWeight = FontWeight.Bold,
+        color = MeeshyTheme.tokens.textSecondary,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .clickable(role = Role.Button) {
+                haptics.light()
+                onTap()
+            }
+            .wrapContentHeight(Alignment.CenterVertically)
+            .padding(horizontal = MeeshySpacing.md)
+            .testTag(ARRIVAL_GREETING_INVITE_TAG),
+    )
+}
+
+/** L'invite « dis-lui salut » d'un message d'arrivée, pour les témoins. */
+const val ARRIVAL_GREETING_INVITE_TAG: String = "arrival-greeting-invite"
 
 @Composable
 private fun JoinHeadline(join: JoinNoticePresentation, label: String, noAccount: String) {

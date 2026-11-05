@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.navigation.PostDetailLanding
 import me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility
 import me.meeshy.sdk.model.ProfileShareLink
 import me.meeshy.sdk.model.legal.LegalDocumentKind
+import me.meeshy.sdk.model.settings.SettingsInvite
 
 object Routes {
     const val LOGIN = "login"
@@ -135,6 +136,9 @@ object Routes {
     const val CONTACTS_DISCOVER = "contacts/discover"
     const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
+    /** #16339 — le hub Réglages ouvert par une invite de réglage, défilé jusqu'à la section désignée et mise en évidence. */
+    const val SETTINGS_FOCUS_ARG = "invite"
+    const val SETTINGS_FOCUS = "settings/focus/{$SETTINGS_FOCUS_ARG}"
     const val CHANGE_PASSWORD = "settings/change-password"
     const val TWO_FACTOR = "settings/two-factor"
     const val ACCOUNT_CONTACT = "settings/account-contact"
@@ -230,6 +234,7 @@ object Routes {
     fun story(userId: String, storyId: String? = null): String =
         if (storyId.isNullOrBlank()) "story/$userId" else "story/$userId?${StoryViewerViewModel.STORY_ID_ARG}=${java.net.URLEncoder.encode(storyId, "UTF-8").replace("+", "%20")}"
     fun legal(kind: LegalDocumentKind): String = "settings/legal/${kind.arg}"
+    fun settingsFocus(invite: SettingsInvite): String = "settings/focus/${invite.wire}"
     fun packShop(domain: String? = null, pack: String? = null): String =
         listOfNotNull(domain?.let { "domain=${Uri.encode(it)}" }, pack?.let { "pack=${Uri.encode(it)}" })
             .joinToString("&").let { query -> if (query.isEmpty()) PACK_SHOP else "$PACK_SHOP?$query" }

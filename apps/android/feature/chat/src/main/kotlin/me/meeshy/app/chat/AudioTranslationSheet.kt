@@ -38,7 +38,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.translation.AudioTranslationRequestState
+import me.meeshy.sdk.model.settings.SettingsInvite
 import me.meeshy.ui.component.audio.AudioConsentNotice
+import me.meeshy.ui.settings.rememberSettingsInvite
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
@@ -100,8 +102,10 @@ internal fun AudioTranslationSheet(
 }
 
 @Composable
-private fun ConsentNotice(accentColor: Color, onOpenConsent: (() -> Unit)?) {
+private fun ConsentNotice(accentColor: Color, onOpenConsentOverride: (() -> Unit)?) {
     val message = stringResource(UiR.string.audio_consent_notice_message)
+    // #16339 — sans geste fourni par l'hôte, l'invite ouvre les Réglages sur le profil vocal, mis en évidence.
+    val onOpenConsent = onOpenConsentOverride ?: rememberSettingsInvite(SettingsInvite.VOICE_CONSENT)
     if (onOpenConsent == null) {
         Text(text = message, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
         return
