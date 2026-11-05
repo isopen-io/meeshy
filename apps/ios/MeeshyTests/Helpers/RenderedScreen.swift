@@ -197,7 +197,10 @@ final class RenderedScreen {
     /// à l'apparition) ou qui s'anime à l'entrée (la connexion fait monter ses
     /// champs depuis l'opacité nulle) ne pose son contenu qu'après quelques
     /// tours : lire l'arbre une seule fois rendrait `nil` sur un écran juste.
-    /// Un cadre de largeur nulle n'est pas encore posé — il ne compte pas.
+    /// Un cadre de largeur nulle n'est pas encore posé — il ne compte pas, et
+    /// le nœud POSÉ qui porte le même identifiant gagne : un `ScrollView`
+    /// SwiftUI annonce son identifiant deux fois, par l'élément de son
+    /// conteneur (cadre nul) puis par sa `UIScrollView` (#16246).
     ///
     /// La borne est un PLAFOND, jamais une durée : l'attente s'arrête dès que
     /// le nœud est posé. 5 s ne suffisaient pas sur un runner CI chargé — la
@@ -207,7 +210,9 @@ final class RenderedScreen {
     func frame(of identifier: String, borne: TimeInterval = 20) -> CGRect? {
         var pose: CGRect?
         _ = RenderedScreen.attendre(borne: borne) {
-            pose = node(identifier).map(\.frame).flatMap { $0.width > 0 ? $0 : nil }
+            pose = RenderedScreen.noeuds(root)
+                .first { $0.identifier == identifier && $0.frame.width > 0 }?
+                .frame
             return pose != nil
         }
         return pose

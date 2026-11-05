@@ -34,7 +34,7 @@ public protocol ServedAppearanceProviding: AnyObject, Sendable {
 public final class ServedAppearanceStore: ServedAppearanceProviding, @unchecked Sendable {
     public static let shared = ServedAppearanceStore()
 
-    public typealias DetailFetch = @Sendable (PackDomain, String) async throws -> ShopPack
+    public typealias DetailFetch = @Sendable @concurrent (PackDomain, String) async throws -> ShopPack
 
     private static let indexKey = "meeshy.served-appearance.contracts.v1"
 
