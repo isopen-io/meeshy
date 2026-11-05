@@ -78,7 +78,12 @@ public nonisolated enum FullscreenChromeSymbol {
     public static let save = "arrow.down.to.line"
     public static let saved = "checkmark"
     public static let repost = "arrow.2.squarepath"
-    public static let compose = "wand.and.stars"
+    /// « Composer » : l'icône du POST (#16332), celle de `PostType.post.symbol`.
+    public static let compose = "square.and.pencil"
+    /// « Imager » sur un rail d'actions (#16332) : la baguette fait de
+    /// l'élément affiché une carte image. Les MENUS gardent l'icône d'image
+    /// (`MessageCardExportMenu.imageSymbol`).
+    public static let imager = "wand.and.stars"
 }
 
 /// Un palier d'un voile : l'opacité du noir à une position (0 = bord haut du voile).

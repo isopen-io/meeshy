@@ -317,6 +317,7 @@ struct ReelsPlayerView: View {
                 },
                 onSend: { sentReel = ReelSend.open(reel) },
                 onQuote: quoteHost == nil ? nil : { quotedReel = reel },
+                onImager: PostSaveAction.imagerAction(for: reel, coordinator: mediaSaveCoordinator),
                 onTapAuthorName: { openProfile(for: reel) },
                 onTapAvatar: { openAvatarDestination(for: reel) },
                 isWithinPreloadWindow: isWithinPreloadWindow(index, activeIndex: activeIndex)
@@ -516,6 +517,7 @@ struct ReelPageView: View {
     /// « Envoyer » du rail (#14310) — l'hôte présente la feuille Meeshy.
     var onSend: () -> Void
     var onQuote: (() -> Void)? = nil
+    var onImager: (() -> Void)? = nil
     /// Author name tap → profile.
     var onTapAuthorName: () -> Void
     /// Avatar tap → story (if active) else profile.
@@ -988,7 +990,7 @@ struct ReelPageView: View {
         ReelActionRail(
             viewModel: viewModel,
             reel: reel,
-            onComment: onComment, onSend: onSend, onQuote: onQuote
+            onComment: onComment, onSend: onSend, onQuote: onQuote, onImager: onImager
         )
     }
 }

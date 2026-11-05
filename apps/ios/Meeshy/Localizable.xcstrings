@@ -31927,6 +31927,53 @@
         }
       }
     },
+    "media.imager.rail.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحوّل الرسالة وهذه الوسائط إلى بطاقة صورة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Macht aus der Nachricht und diesem Medium eine Bildkarte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turns the message and this media into an image card."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convierte el mensaje y este contenido en una tarjeta de imagen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fait du message et de ce média une carte image."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trasforma il messaggio e questo contenuto in una scheda immagine."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transforma a mensagem e esta mídia em um cartão de imagem."
+          }
+        }
+      }
+    },
     "media.save.alreadyInPhotos": {
       "extractionState": "manual",
       "localizations": {

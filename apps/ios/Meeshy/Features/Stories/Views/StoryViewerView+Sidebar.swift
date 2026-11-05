@@ -46,6 +46,10 @@ nonisolated struct StoryActionRailPlan: Equatable {
     /// geste que l'entrée « Composer » du menu « … », qui reste. Sur sa propre
     /// story, le rail ne change pas.
     let showsCompose: Bool
+    /// « Imager » au rail (#16332) : la baguette fait de la story une carte
+    /// image, pour tout lecteur — comme l'entrée « Imager » du menu « … ».
+    /// Une story encore dans la file n'a rien à rendre.
+    var showsImager: Bool = false
 
     static func resolve(
         isOwnStory: Bool,
@@ -81,7 +85,8 @@ nonisolated struct StoryActionRailPlan: Equatable {
             // comme il choisit déjà sa langue d'export. Le Prisme est un outil
             // de lecture, pas une permission.
             showsTranslations: hasTranslatableContent,
-            showsCompose: !isOwnStory && canCompose
+            showsCompose: !isOwnStory && canCompose,
+            showsImager: true
         )
     }
 
@@ -595,6 +600,17 @@ struct StoryActionSidebarView: View {
         }
     }
 
+    /// « Imager » (#16332) : la baguette fait de la story affichée une carte image.
+    @ViewBuilder
+    private var imagerButton: some View {
+        if railPlan.showsImager, let story = currentStory {
+            StoryActionButton(icon: FullscreenChromeSymbol.imager, label: MessageCardExportMenu.imageLabel) {
+                HapticFeedback.light()
+                StoryPhotoSaveService.shared.image(story: story, author: currentGroup.map { StoryExportAuthor.served(from: $0) })
+            }
+        }
+    }
+
     private var railPlanAfterCommentsReconciled: StoryActionRailPlan {
         resolvedRailPlan(commentCount: storyCommentCount, canCompose: railPlan.showsCompose)
     }
@@ -804,16 +820,15 @@ struct StoryActionSidebarView: View {
             // « Composer » au rail sur la story d'une AUTRE personne (#9953) :
             // le même geste que l'entrée du menu « … » — la porte du conteneur.
             if railPlan.showsCompose {
-                StoryActionButton(
-                    icon: "wand.and.stars",
-                    label: String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)
-                ) {
+                StoryActionButton(icon: FullscreenChromeSymbol.compose,
+                                  label: String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)) {
                     guard let cible = composeTarget, let demanderComposer else { return }
                     HapticFeedback.light()
                     pauseTimer()
                     demanderComposer(cible)
                 }
             }
+            imagerButton
 
             // Author-only Enregistrer → `StoryPhotoSaveService.shared.save(story:)`,
             // EXACTEMENT comme sur la ligne « Mes stories » : un export lancé ici
