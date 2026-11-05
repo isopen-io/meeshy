@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.AudioQueueBuilder
 import me.meeshy.sdk.model.AudioQueueMessage
 import me.meeshy.sdk.model.QueuedAudio
 import me.meeshy.sdk.model.playback.MediaConsumptionSeed
+import me.meeshy.sdk.model.playback.VoiceVariant
 import me.meeshy.ui.component.bubble.BubbleAudio
 import me.meeshy.ui.component.bubble.BubbleContent
 
@@ -48,9 +49,7 @@ internal object ChatVoiceQueue {
     }
 
     /** La piste en lecture n'est pas celle que la bulle sert : un drapeau a basculé pendant l'écoute. */
-    fun isStale(playing: QueuedAudio, served: QueuedAudio): Boolean =
-        playing.attachmentId == served.attachmentId && playing.fileUrl != served.fileUrl &&
-            (playing.isTranslatedTrack != served.isTranslatedTrack || !playing.trackLanguage.equals(served.trackLanguage, ignoreCase = true))
+    fun isStale(playing: QueuedAudio, served: QueuedAudio): Boolean = VoiceVariant.isStale(playing, served)
 
     /** Un vocal du hub média, joué seul : aucune file ne le suit. */
     fun lone(audio: BubbleAudio, messageId: String, senderName: String, sentAtEpochMs: Long, conversationId: String): QueuedAudio? {
