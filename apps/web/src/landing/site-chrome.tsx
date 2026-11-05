@@ -29,6 +29,12 @@ import { LANDING_LANGUAGES, LANGUAGE_AUTONYMS, landingDirection, landingPath, ty
  * pas qui est là — il n'y a donc rien à basculer avant la première peinture :
  * c'est la garde de route (`lib/session-guard.ts`) qui envoie vers `/login` un
  * visiteur sans compte, et la connexion le ramène sur `/chats`.
+ *
+ * À côté, « Télécharger », vers `/download` (#16407, demande porteur du
+ * 2026-11-05) : un bouton discret, HORS de la `nav` que la barre masque sous
+ * 640 px — sur téléphone, il partage la seconde rangée avec « Mes
+ * conversations ». `/download` est une route de l'application, servie sur place
+ * partout, coque comprise : son adresse est le chemin, comme `/chats`.
  */
 export const GlobeIcon = ({ size }: { readonly size: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
@@ -62,6 +68,9 @@ export function SiteHeader({ language, copy, onLanding, languageControl, siteHre
         </nav>
         <span className="ld-spacer" />
         {languageControl}
+        <a href="/download" className="ld-btn ld-btn--ghost" data-download>
+          {copy.navDownload}
+        </a>
         <a href="/chats" className="ld-btn ld-btn--primary" data-my-conversations>
           {copy.myConversations}
         </a>

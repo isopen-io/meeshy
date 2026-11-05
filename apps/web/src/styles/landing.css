@@ -18,6 +18,7 @@
  */
 @import '@meeshy/design-tokens/ios.css';
 @import './site-chrome.css';
+@import './store-badge.css';
 
 :root {
   color-scheme: dark;
@@ -92,7 +93,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 56px;
-  align-items: center;
+  align-items: flex-start;
   padding-block: 72px 56px;
 }
 .ld-hero-copy {
@@ -197,10 +198,20 @@ body {
   color: var(--ios-ink-3);
 }
 
-/* L'APERÇU DU FIL — les rangées focal de l'application, en vitrine. */
-.ld-preview {
+/* LA COLONNE EN FACE DU TITRE (#16407) — les deux boutiques, puis l'aperçu
+ * World. Le héros aligne ses colonnes en HAUT : les badges se lisent à hauteur
+ * du titre, pas au milieu d'une colonne plus haute. Sur téléphone, la colonne
+ * passe sous le titre, badges en tête. */
+.ld-hero-side {
   flex: 1 1 340px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* L'APERÇU DU FIL — les rangées focal de l'application, en vitrine. */
+.ld-preview {
   position: relative;
   border-radius: 22px;
   background: var(--ios-surface);
@@ -407,40 +418,6 @@ body {
   font-size: 17px;
   line-height: 1.55;
   color: var(--ios-ink-2);
-}
-/* LES DEUX BOUTIQUES (#15120) — noir et gris des badges officiels, quel que soit le thème */
-.ld-stores {
-  margin-top: 20px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.ld .ld-store,
-.ld .ld-store:hover {
-  min-height: 52px;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 16px;
-  border-radius: 12px;
-  /* harmony-exempt: badge de magasin, noir imposé par Apple et Google */
-  background: #000;
-  /* harmony-exempt: badge de magasin, gris imposé par Apple et Google */
-  border: 1px solid #a6a6a6;
-  /* harmony-exempt: badge de magasin, blanc imposé par Apple et Google */
-  color: #fff;
-}
-.ld-store-name {
-  display: grid;
-  line-height: 1;
-  font-size: 21px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.ld-store-caption {
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0.02em;
 }
 .ld-world-actions {
   flex: 1 1 260px;
