@@ -122,7 +122,7 @@ describe('authorizePublication — qui peut publier', () => {
   it('refuse un nom qu’un autre éditeur porte déjà, à la casse, aux accents et aux confusables près (audit #16274, constat 7)', async () => {
     const { db, publishers } = setup();
     await publishers.authorizePublication(AWA, { author: 'Studio Lumière', claimed: null });
-    for (const author of ['Studio Lumière', 'studio lumiere', 'Studi\u043E Lumi\u0435re', 'STUDIO-LUMIERE']) {
+    for (const author of ['Studio Lumière', 'studio lumiere', 'Studio Lurnière', 'STUDIO-LUMIERE']) {
       expect(await publishers.authorizePublication(BINTA, { author, claimed: null })).toEqual({ kind: 'refused', reason: 'name-taken' });
     }
     expect(db.profiles).toHaveLength(1);
