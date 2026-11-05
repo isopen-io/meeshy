@@ -326,7 +326,8 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
         let pixel = cg.bitsPerPixel / 8
         let offset = Int(point.y * image.scale) * cg.bytesPerRow + Int(point.x * image.scale) * pixel
         return CGFloat((0..<min(pixel, 3)).map { bytes[offset + $0] }.min() ?? 0) / 255
-    
+    }
+
     // MARK: - DIAGNOSTIC TEMPORAIRE #16246 (retiré avant la PR)
 
     private struct ProbeHarness<Inner: View>: View {
