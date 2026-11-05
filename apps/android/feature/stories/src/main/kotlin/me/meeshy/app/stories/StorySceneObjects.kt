@@ -5,6 +5,9 @@ import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StorySticker
 import me.meeshy.sdk.model.scene.LayeredScale
+import me.meeshy.sdk.model.scene.SceneAudioChipClock
+import me.meeshy.sdk.model.scene.SceneAudioChipPose
+import me.meeshy.sdk.model.scene.SceneAudioChipTiming
 import me.meeshy.sdk.model.scene.SceneObjectNumbers
 import me.meeshy.sdk.model.scene.StoryElementVisibility
 import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
@@ -62,6 +65,13 @@ data class StoryAudioChipView(
     val duration: Double = 0.0,
     /** Son rang dans l'ordre unique de la scène (#13852) ; sans rang, la pastille reste au-dessus de tout, comme avant la pile. */
     val zIndex: Int = Int.MAX_VALUE,
+    /** Sa pose (#16293) : pincée, zoomée et tournée comme tout objet de la scène. */
+    val scale: Double = 1.0,
+    val rotation: Double = 0.0,
+    /** Ce que son chrono lit de la piste : entrée, passe, boucle. */
+    val timing: SceneAudioChipTiming = SceneAudioChipTiming(),
+    /** Le nom que l'auteur a donné à la piste ; `null` : aucun. */
+    val name: String? = null,
 ) {
     fun isVisible(atSeconds: Float): Boolean =
         StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
@@ -123,6 +133,10 @@ object StorySceneObjectsProjection {
         startTime = SceneObjectNumbers.seconds(startTime?.toDouble() ?: 0.0),
         duration = SceneObjectNumbers.seconds(duration?.toDouble() ?: 0.0),
         zIndex = zIndex ?: Int.MAX_VALUE,
+        scale = SceneAudioChipPose.scale(this),
+        rotation = SceneAudioChipPose.rotation(this),
+        timing = SceneAudioChipClock.timing(this),
+        name = name?.takeIf { it.isNotBlank() },
     )
 
     private fun creditLine(title: String?, username: String?): String? =
