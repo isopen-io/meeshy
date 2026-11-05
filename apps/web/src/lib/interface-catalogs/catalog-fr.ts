@@ -1043,6 +1043,8 @@ const fr = {
   'composer.viewOnce.activate': 'Activer le mode vue unique',
   'composer.viewOnce.active': 'Mode vue unique actif',
   'composer.viewOnce.label': 'Vue unique',
+  'conversation.composer.fold': 'Réduire la barre de message',
+  'conversation.composer.unfold': 'Afficher la barre de message',
   'composer.protection.ephemeral.state': 'Mode éphémère actif',
   'composer.protection.blur.state': 'Mode flou actif',
 

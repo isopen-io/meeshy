@@ -18,6 +18,8 @@ data class JoinNoticePresentation(
     val rules: JoinNoticeMetadata.LinkRules?,
     /** Le participant dont la fiche s'ouvre au double toucher ; vide ⇒ aucune fiche. */
     val participantId: String = "",
+    /** Le pseudo que « dis-lui salut » écrit dans le composeur (#16338) ; null : personne à saluer ([ArrivalGreeting.handleOf]). */
+    val greetHandle: String? = null,
 ) {
     /** Le glyphe de tête : masques pour un visiteur sans compte, personne+ sinon (iOS `theatermasks.fill` / `person.badge.plus`). */
     enum class Glyph { PersonPlus, Masks }
@@ -42,7 +44,7 @@ data class JoinNoticePresentation(
     )
 
     companion object {
-        fun of(notice: JoinNoticeMetadata): JoinNoticePresentation {
+        fun of(notice: JoinNoticeMetadata, isOwn: Boolean = false): JoinNoticePresentation {
             val primary = notice.givenName?.takeIf { it.isNotEmpty() } ?: notice.displayName
             val username = notice.username?.takeIf { it.isNotEmpty() && !notice.isAnonymous }
             return JoinNoticePresentation(
@@ -51,6 +53,7 @@ data class JoinNoticePresentation(
                 showsNoAccountBadge = notice.isAnonymous,
                 rules = notice.linkRules,
                 participantId = notice.participantId,
+                greetHandle = ArrivalGreeting.handleOf(notice, isOwn),
             )
         }
     }

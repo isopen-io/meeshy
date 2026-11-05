@@ -7,6 +7,7 @@ public enum class SettingsHubHaptic { LIGHT, HEAVY }
 public enum class SettingsHubSectionId {
     ACCOUNT,
     APPEARANCE,
+    VOICE,
     TRANSCRIPTION,
     NOTIFICATIONS,
     DATA,
@@ -26,6 +27,7 @@ public enum class SettingsHubRowId {
     INTERFACE_LANGUAGE,
     REGIONAL_LANGUAGE,
     INTERFACE_FEATURES,
+    VOICE_PROFILE_CREATE,
     TRANSCRIPTION_AUTO,
     TRANSCRIPTION_ENGINE,
     NOTIF_PUSH,
@@ -93,6 +95,7 @@ public object SettingsHubCatalog {
                 nav(SettingsHubRowId.INTERFACE_FEATURES),
             ),
         ),
+        SettingsHubSection(SettingsHubSectionId.VOICE, listOf(nav(SettingsHubRowId.VOICE_PROFILE_CREATE))),
         SettingsHubSection(
             SettingsHubSectionId.TRANSCRIPTION,
             listOf(nav(SettingsHubRowId.TRANSCRIPTION_AUTO), nav(SettingsHubRowId.TRANSCRIPTION_ENGINE)),

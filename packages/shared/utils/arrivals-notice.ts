@@ -30,6 +30,12 @@ export const ARRIVALS_NOTICE_STORED_LIMIT = 20;
 export type ArrivalsNoticeArrival = {
   readonly participantId: string;
   readonly displayName: string;
+  /**
+   * Le pseudo du compte (#16338) — ce que « dis-leur salut » écrit en mention
+   * dans le composeur. Optionnel : les lignes écrites avant lui se relisent
+   * sans, et un client ancien l'ignore.
+   */
+  readonly username?: string;
 };
 
 export type ArrivalsNoticeMetadata = {
@@ -107,7 +113,8 @@ function parseArrival(raw: unknown): ArrivalsNoticeArrival | null {
   const record = raw as Record<string, unknown>;
   if (typeof record.participantId !== 'string' || !record.participantId) return null;
   if (typeof record.displayName !== 'string' || !record.displayName) return null;
-  return { participantId: record.participantId, displayName: record.displayName };
+  const username = typeof record.username === 'string' && record.username.trim() !== '' ? record.username : undefined;
+  return { participantId: record.participantId, displayName: record.displayName, ...(username === undefined ? {} : { username }) };
 }
 
 /**

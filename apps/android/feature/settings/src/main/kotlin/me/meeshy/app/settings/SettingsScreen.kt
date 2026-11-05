@@ -21,8 +21,12 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -40,6 +44,9 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.sdk.model.settings.LogoutPhase
+import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 
 private val BottomMargin = 40.dp
 
@@ -73,6 +80,9 @@ fun SettingsScreen(
     onOpenTerms: () -> Unit = {},
     onOpenPrivacyPolicy: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
+    onOpenVoiceProfile: () -> Unit = {},
+    /** #16339 — la section qu'une invite de réglage désigne : le hub y défile et la met en évidence. */
+    focus: SettingsHubSectionId? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
     signOutViewModel: SignOutViewModel = hiltViewModel(),
 ) {
@@ -82,6 +92,16 @@ fun SettingsScreen(
     val scrollState = rememberScrollState()
     val sections = remember { SettingsHubCatalog.sections() }
     val logoutPhase by signOutViewModel.phase.collectAsStateWithLifecycle()
+    // Une invite ne met en évidence qu'UNE fois : revenir d'un sous-écran ne refait ni le défilement ni le halo.
+    var focusSpent by rememberSaveable(focus) { mutableStateOf(false) }
+    val activeFocus = focus.takeUnless { focusSpent }
+    val focusedTop = remember(activeFocus) { mutableStateOf<Float?>(null) }
+    val focusLanding = with(LocalDensity.current) { (CollapsibleHeaderMetrics.EXPANDED_HEIGHT.dp + MeeshySpacing.xl).toPx() }
+    LaunchedEffect(activeFocus) {
+        if (activeFocus == null) return@LaunchedEffect
+        val top = snapshotFlow { focusedTop.value }.filterNotNull().first()
+        scrollState.animateScrollTo((scrollState.value + top - focusLanding).roundToInt().coerceAtLeast(0))
+    }
     LaunchedEffect(signOutViewModel) {
         signOutViewModel.effects.collect { if (it == SignOutEffect.SignedOut) onSignedOut() }
     }
@@ -99,6 +119,14 @@ fun SettingsScreen(
             ) {
                 SettingsProfileCard(state = state, onOpenProfile = onOpenProfile)
                 sections.forEach { section ->
+                    SettingsFocusFrame(
+                        highlighted = section.id == activeFocus,
+                        tint = MeeshyPalette.Indigo500,
+                        onSettled = { focusSpent = true },
+                        modifier = if (section.id != activeFocus) Modifier else Modifier.onGloballyPositioned {
+                            if (focusedTop.value == null) focusedTop.value = it.positionInRoot().y
+                        },
+                    ) {
                     SettingsHubSectionHost(
                         section = section,
                         state = state,
@@ -124,12 +152,14 @@ fun SettingsScreen(
                         onOpenTerms = onOpenTerms,
                         onOpenPrivacyPolicy = onOpenPrivacyPolicy,
                         onOpenDeleteAccount = onOpenDeleteAccount,
+                        onOpenVoiceProfile = onOpenVoiceProfile,
                         signOutEnabled = !logoutPhase.blocksInteraction,
                         onSignOut = {
                             haptics.heavy()
                             signOutViewModel.onEvent(SignOutEvent.Requested)
                         },
                     )
+                    }
                 }
                 Spacer(Modifier.height(BottomMargin))
                 Spacer(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
@@ -191,6 +221,7 @@ private fun SettingsHubSectionHost(
     onOpenTerms: () -> Unit,
     onOpenPrivacyPolicy: () -> Unit,
     onOpenDeleteAccount: () -> Unit,
+    onOpenVoiceProfile: () -> Unit,
     signOutEnabled: Boolean,
     onSignOut: () -> Unit,
 ) {
@@ -200,6 +231,7 @@ private fun SettingsHubSectionHost(
             rows, onOpenPrivacy, onOpenSecurity, onOpenBlockedUsers, onOpenDeleteAccount,
         )
         SettingsHubSectionId.APPEARANCE -> SettingsAppearanceSection(rows, state, viewModel)
+        SettingsHubSectionId.VOICE -> SettingsVoiceSection(rows, onOpenVoiceProfile)
         SettingsHubSectionId.TRANSCRIPTION -> TranscriptionSection()
         SettingsHubSectionId.NOTIFICATIONS -> SettingsNotificationsQuickSection(rows, onOpenNotificationSettings)
         SettingsHubSectionId.DATA -> SettingsDataSection(

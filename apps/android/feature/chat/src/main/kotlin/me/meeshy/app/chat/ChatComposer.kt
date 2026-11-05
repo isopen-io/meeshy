@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -124,6 +125,9 @@ internal fun ChatComposer(
      * commentaire) : son image rejoint les pièces.
      */
     onSendSticker: ((ComposerStickerPick) -> Unit)? = null,
+    /** #16341 — la barre s'ouvre repliée si on l'a laissée ainsi dans cette conversation ; chaque repli ou dépliage est remonté. */
+    startsMinimized: Boolean = false,
+    onMinimizedChange: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     var guestSheetOpen by rememberSaveable { mutableStateOf(false) }
@@ -150,7 +154,9 @@ internal fun ChatComposer(
     PasteContentReceiverEffect(onPickFile)
     val voice = rememberComposerVoice(onStageVoiceFile, onPickFile, conversationTitle = conversationTitle)
     me.meeshy.ui.component.permission.PermissionFlowHost(voice.permissions, accent = accentColor)
-    var minimized by rememberSaveable { mutableStateOf(false) }
+    var minimized by rememberSaveable { mutableStateOf(startsMinimized) }
+    val reportMinimized by rememberUpdatedState(onMinimizedChange)
+    LaunchedEffect(minimized) { reportMinimized(minimized) }
     var fieldFocused by remember { mutableStateOf(false) }
     val isComposing = ConversationComposerFold.isComposing(isFocused = fieldFocused, isRecording = voice.isRecording)
     // Clavier baissé (retour système) = le champ rend la main, comme `resignFirstResponder` sur

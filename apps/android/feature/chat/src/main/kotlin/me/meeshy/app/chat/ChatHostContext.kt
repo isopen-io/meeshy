@@ -248,6 +248,8 @@ internal class ChatHostActions(
     val onPinnedBannerTap: () -> Unit,
     val openPinnedSheet: () -> Unit,
     val onMentionSelected: (MentionCandidate) -> Unit,
+    /** « Dis-lui salut » d'un message d'arrivée (#16338) : les @mentions des arrivants dans le composeur, et le focus. */
+    val greetArrivals: (messageId: String) -> Unit = {},
     val onDraftChange: (String) -> Unit,
     val onComposerLanguagePicked: (String) -> Unit,
     val send: () -> Unit,
@@ -323,6 +325,9 @@ internal class ChatHostActions(
     /** L'auteur que les cadres de la retouche écrivent (#12734). */
     val selfAuthor: () -> me.meeshy.sdk.model.composer.look.ComposerLookPerson? = { null },
     val trayNotices: Flow<String> = emptyFlow(),
+    /** #16341 — la barre de composition repliée ou dépliée, retenue par conversation ; `null` : aucune mémoire (aperçus). */
+    val composerMinimized: StateFlow<Boolean>? = null,
+    val setComposerMinimized: (Boolean) -> Unit = {},
     /** « Sélectionner » du menu d'appui long : entre dans le mode en semant ce message. */
     val beginSelection: (String) -> Unit = {},
     /** Coche ou décoche un message ; le verdict dit si le plafond de 100 est atteint. */
@@ -380,6 +385,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     onPinnedBannerTap = this::onPinnedBannerTap,
     openPinnedSheet = this::openPinnedSheet,
     onMentionSelected = this::onMentionSelected,
+    greetArrivals = this::greetArrivals,
     onDraftChange = this::onDraftChange,
     onComposerLanguagePicked = this::onComposerLanguagePicked,
     send = this::send,
@@ -401,6 +407,8 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     replacePendingAudio = { id, file -> controllers.find<ComposerTrayController>()?.replaceFile(id, file, EDITED_AUDIO_MIME) ?: file.delete() },
     selfAuthor = this::selfAuthor,
     trayNotices = controllers.find<ComposerTrayController>()?.notices ?: emptyFlow(),
+    composerMinimized = controllers.find<ComposerFoldController>()?.minimized,
+    setComposerMinimized = { minimized -> controllers.find<ComposerFoldController>()?.setMinimized(minimized) },
     dismissImageViewer = this::dismissImageViewer,
     openEmojiPicker = this::openEmojiPicker,
     startEdit = this::startEdit,
