@@ -14,6 +14,7 @@ import {
   publisherSlugOf,
 } from '../pack-publisher';
 import { lensCreditOf, parsePartnerProfileInput } from '../lens-partner';
+import { isWellFormedPublisherName } from '../pack-publisher';
 
 describe('MEESHY_PUBLISHER — l’éditeur des packs du dépôt', () => {
   it('se nomme Meeshy, sous le slug meeshy, officiel et vérifié', () => {
@@ -228,8 +229,40 @@ describe('re-audit #16274 — les orthographes réelles passent, les sosies et l
     expect(isReservedPublisherIdentity('ᎷᎬᎬSHY')).toBe(true);
   });
 
-  it('le leet entre dans la clé : « Studio Lumi3re » et « Studio Lumière » sont un même nom', () => {
-    expect(publisherNameKey('Studio Lumi3re')).toBe(publisherNameKey('Studio Lumière'));
+  it('C5 — le leet n’entre PAS dans la clé : « Studio 54 » et « Studio SA » sont deux boutiques (re-audit 3, N9)', () => {
+    expect(publisherNameKey('Studio 54')).not.toBe(publisherNameKey('Studio SA'));
+    expect(publisherNameKey('Team 4')).not.toBe(publisherNameKey('Team A'));
+    expect(publisherNameKey('Studio Lumi3re')).not.toBe(publisherNameKey('Studio Lumière'));
     expect(publisherNameKey('Kɔfi Art')).not.toBe(publisherNameKey('Kofi Art'));
+  });
+});
+
+describe('re-audit 3 #16274 — un alphabet absent n’est pas une imitation, les sosies latins le sont', () => {
+  it('C1 — les sosies latins à crochet, barre ou boucle sont refusés et se lisent comme Meeshy : « Mɇɇʂhy »', () => {
+    ['Mɇɇʂhy', 'ɱɇɇshy', 'Mɇɇʂħy', 'ɱeeʂħy', 'Meeʂɦy', 'Meeshɏ', 'Mǝǝshy', 'Mɘɘshy', 'Meeȿhy'].forEach((name) => {
+      expect([name, isReservedPublisherIdentity(name)]).toEqual([name, true]);
+      expect([name, impersonatesMeeshy(name)]).toEqual([name, true]);
+    });
+  });
+
+  it('C2 — un nom gujarati, gurmukhi, kannada, malayalam, oriya, cingalais, khmer, lao, birman, tibétain, thaana, n’ko ou tifinagh est valide', () => {
+    ['ગુજરાત સ્ટુડિયો', 'ਪੰਜਾਬ', 'ಕನ್ನಡ ಕಲೆ', 'മലയാളം', 'ଓଡ଼ିଆ', 'සිංහල', 'ខ្មែរ ស្ទូឌីយោ', 'ລາວ', 'မြန်မာ', 'བོད་ཡིག', 'ދިވެހި', 'ߒߞߏ', 'ⵜⴰⵎⴰⵣⵉⵖⵜ'].forEach((name) =>
+      expect([name, parsePartnerProfileInput({ displayName: name }).ok]).toEqual([name, true]),
+    );
+  });
+
+  it('N7 — un nom hors liste n’a plus de jokers illimités : il n’est pas lu comme Meeshy', () => {
+    ['Café Москва', 'ગુજરાત સ્ટુડિયો', 'ꯃꯩꯇꯩ ꯃꯌꯦꯛ'].forEach((name) => expect([name, impersonatesMeeshy(name)]).toEqual([name, false]));
+    expect(isWellFormedPublisherName('Café Москва')).toBe(false);
+  });
+
+  it('C4 — un ancien partenaire vérifié « Café Москва » (latin + cyrillique) garde son crédit de lens', () => {
+    const credit = lensCreditOf({ slug: 'l', name: 'L', status: 'approved' }, { id: 'p', displayName: 'Café Москва', verifiedAt: new Date(), logoSrc: null });
+    expect(credit?.partner?.name).toBe('Café Москва');
+  });
+
+  it('le cherokee qui imite des capitales latines se lit par la table de lecture : « ᎷᎬᎬSHY » reste une imitation', () => {
+    expect(impersonatesMeeshy('ᎷᎬᎬSHY')).toBe(true);
+    expect(impersonatesMeeshy('ꓟꓰꓰꓢꓧꓬ')).toBe(true);
   });
 });

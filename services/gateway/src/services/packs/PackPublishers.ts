@@ -47,6 +47,7 @@ import {
   PACK_PUBLISHER_LIMITS,
   impersonatesMeeshy,
   isReservedPublisherIdentity,
+  isWellFormedPublisherName,
   publisherNameKey,
   publisherSlugOf,
   type PackPublisherRef,
@@ -88,6 +89,8 @@ export type PublisherAdminView = {
   readonly verifiedAt: string | null;
   readonly official: boolean;
   readonly createdAt: string | null;
+  /** Posée quand ce profil garde un ancien nom sans clé, à arbitrer (#16348). */
+  readonly nameDisputedAt: string | null;
   /** Le compte propriétaire — servi à BIGBOSS/ADMIN seulement. */
   readonly owner: { readonly id: string; readonly username: string | null };
 };
@@ -118,6 +121,8 @@ export type NameKeyEntry = {
   readonly reason?: 'reserved' | 'name-taken';
   /** Le profil qui garde la clé de ce nom, pour un homonyme à arbitrer. */
   readonly heldBy?: string;
+  /** Un ancien nom HORS de la liste blanche (alphabet ou mélange non admis) : gardé et servi tel quel, signalé. */
+  readonly offList?: boolean;
 };
 
 /** Ce que le rattrapage des clés de nom a fait : clés posées, profils à arbitrer — aucun nom réécrit, aucune vérification retirée. */
@@ -338,6 +343,7 @@ export class PackPublishers {
       verifiedAt: row.verifiedAt?.toISOString() ?? null,
       official: this.isOfficial(row.userId),
       createdAt: row.createdAt?.toISOString() ?? null,
+      nameDisputedAt: row.nameDisputedAt?.toISOString() ?? null,
       owner: { id: row.userId, username: usernameOf.get(row.userId) ?? null },
     }));
   }
@@ -527,7 +533,8 @@ export class PackPublishers {
    * `nameKey`. Le plan se calcule EN MÉMOIRE sur tous les profils (aucune borne
    * de balayage) : par nom, la clé va au détenteur qui en a déjà une, sinon au
    * profil vérifié, puis au plus ancien ; les autres, et tout nom qui se lit
-   * comme Meeshy, gardent leur nom sans clé, à arbitrer. Aucun nom réécrit,
+   * comme Meeshy, gardent leur nom sans clé, à arbitrer. Un ancien nom hors de
+   * la liste blanche reçoit sa clé et reste servi tel quel, signalé `offList`. Aucun nom réécrit,
    * aucune vérification retirée. Rejouable ; `dryRun` rend le plan sans écrire.
    */
   async backfillNameKeys(options: BackfillOptions = {}): Promise<NameKeyBackfillSummary> {
@@ -549,7 +556,7 @@ export class PackPublishers {
         continue;
       }
       holders.set(nameKey, row);
-      planned.push({ ...base, outcome: 'keyed' });
+      planned.push({ ...base, outcome: 'keyed', ...(isWellFormedPublisherName(row.displayName) ? {} : { offList: true }) });
     }
     const entries = options.dryRun === true ? planned : await this.applyNameKeys(planned, unkeyed);
     return { keyed: entries.filter((entry) => entry.outcome === 'keyed').length, disputed: entries.filter((entry) => entry.outcome === 'disputed').length, entries };

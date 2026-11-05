@@ -571,3 +571,40 @@ describe('re-audit #16274 — aucun profil existant renommé, aucun nom pris san
     expect(await publishers.authorizePublication(AWA, { author: 'Kɔfi Art', claimed: null })).toMatchObject({ kind: 'allowed', publisher: { name: 'Kɔfi Art' } });
   });
 });
+
+describe('re-audit 3 #16274 — un alphabet absent n’est pas une imitation', () => {
+  const V: PublisherUserSeed = { username: 'x', emailVerifiedAt: new Date('2026-01-01T00:00:00Z') };
+
+  it('C1 — « Mɇɇʂhy » est refusé comme auteur', async () => {
+    const { publishers } = setup({ [AWA]: V });
+    expect(await publishers.authorizePublication(AWA, { author: 'Mɇɇʂhy', claimed: null })).toEqual({ kind: 'refused', reason: 'reserved' });
+  });
+
+  it('C3 — un ancien partenaire VÉRIFIÉ au nom gujarati est servi sous son nom, vérifié', async () => {
+    const { db, publishers } = setup({ [AWA]: V });
+    db.profiles.push({ id: '68e000000000000000000011', userId: AWA, displayName: 'ગુજરાત સ્ટુડિયો', slug: 'gujarat', nameKey: null, verifiedAt: new Date('2025-06-01T00:00:00Z'), createdAt: new Date('2025-01-01T00:00:00Z') });
+    const served = (await publishers.servedFor([{ submitterId: AWA, author: 'x' }])).get(AWA);
+    expect([served?.name, served?.verified]).toEqual(['ગુજરાત સ્ટુડિયો', true]);
+  });
+
+  it('N7 — un ancien nom hors liste reçoit sa clé au rattrapage, signalé « hors liste », jamais « se lit comme Meeshy », vérification gardée', async () => {
+    const { db, publishers } = setup({ [AWA]: V });
+    const verifiedAt = new Date('2025-06-01T00:00:00Z');
+    db.profiles.push({ id: '68e000000000000000000012', userId: AWA, displayName: 'Café Москва', slug: 'cafe', verifiedAt, createdAt: new Date('2025-01-01T00:00:00Z') });
+    expect(await publishers.backfillNameKeys()).toMatchObject({ keyed: 1, disputed: 0, entries: [{ id: '68e000000000000000000012', outcome: 'keyed', offList: true }] });
+    expect(db.profiles[0]).toMatchObject({ displayName: 'Café Москва', verifiedAt, nameKey: expect.any(String) });
+    expect((await publishers.servedFor([{ submitterId: AWA, author: 'x' }])).get(AWA)).toMatchObject({ name: 'Café Москва', verified: true });
+  });
+
+  it('N10 — l’administration voit les profils à arbitrer', async () => {
+    const { db, publishers } = setup({ [AWA]: V, [BINTA]: V });
+    db.profiles.push(
+      { id: '68e000000000000000000021', userId: AWA, displayName: 'Studio Lumière', slug: 'studio-lumiere', verifiedAt: new Date('2025-06-01T00:00:00Z'), createdAt: new Date('2025-01-01T00:00:00Z') },
+      { id: '68e000000000000000000022', userId: BINTA, displayName: 'studio lumiere', slug: 'studio-lumiere-2', verifiedAt: null, createdAt: new Date('2025-02-01T00:00:00Z') },
+    );
+    await publishers.backfillNameKeys();
+    const listed = await publishers.adminList();
+    expect(listed.find((row) => row.owner.id === AWA)?.nameDisputedAt).toBeNull();
+    expect(listed.find((row) => row.owner.id === BINTA)?.nameDisputedAt).toEqual('2026-11-05T10:00:00.000Z');
+  });
+});

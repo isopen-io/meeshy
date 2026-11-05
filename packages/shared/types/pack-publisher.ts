@@ -80,16 +80,17 @@ export function publisherSlugOf(name: string): string {
 }
 
 /**
- * Les CONFUSABLES vers le latin (UTS #39, `confusables.txt`, extrait minuscule) :
- * les lettres cyrilliques et grecques qui se LISENT comme une lettre latine, les
- * petites capitales et les sosies IPA latins, et l'écriture « leet » — chiffres
- * et ponctuation qui se lisent comme une lettre (« M33SHY », « Mee§hy »). La
- * pleine largeur est déjà repliée par NFKC. Appliquée après la mise en minuscules.
+ * Les CONFUSABLES vers le latin de la CLÉ de nom (UTS #39, `confusables.txt`,
+ * extrait minuscule) : les lettres cyrilliques et grecques qui se LISENT comme
+ * une lettre latine, les petites capitales et les sosies IPA latins, et les deux
+ * chiffres que la table d'UTS #39 confond avec une lettre (0, 1). Le leet n'y
+ * entre pas : « Studio 54 » et « Studio SA » sont deux boutiques. La pleine
+ * largeur est déjà repliée par NFKC. Appliquée après la mise en minuscules.
  */
 const CONFUSABLE_TO_LATIN: Readonly<Record<string, string>> = {
   // cyrillique
   а: 'a', в: 'b', ь: 'b', с: 'c', ԁ: 'd', е: 'e', ё: 'e', є: 'e', һ: 'h', н: 'h', і: 'i', ї: 'i', ӏ: 'l', ј: 'j', к: 'k', м: 'm',
-  п: 'n', о: 'o', р: 'p', ԛ: 'q', г: 'r', ѕ: 's', т: 't', и: 'u', ц: 'u', ѵ: 'v', ԝ: 'w', ш: 'w', х: 'x', у: 'y', ү: 'y', з: 'e',
+  п: 'n', о: 'o', р: 'p', ԛ: 'q', г: 'r', ѕ: 's', т: 't', и: 'u', ц: 'u', ѵ: 'v', ԝ: 'w', ш: 'w', х: 'x', у: 'y', ү: 'y', з: '3',
   // grec
   α: 'a', β: 'b', ϲ: 'c', δ: 'd', ε: 'e', η: 'n', ι: 'i', ϳ: 'j', κ: 'k', μ: 'u', ν: 'v', ο: 'o', ρ: 'p', σ: 'o', τ: 't', υ: 'u',
   ω: 'w', χ: 'x', γ: 'y', ζ: 'z', ϱ: 'p', ς: 'c',
@@ -98,14 +99,38 @@ const CONFUSABLE_TO_LATIN: Readonly<Record<string, string>> = {
   ʀ: 'r', ꜱ: 's', ᴛ: 't', ᴜ: 'u', ᴠ: 'v', ᴡ: 'w', ʏ: 'y', ᴢ: 'z',
   // sosies IPA
   ɑ: 'a', ɡ: 'g', ɩ: 'i',
-  // leet : chiffres et ponctuation
-  '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '§': 's', '$': 's', '€': 'e', '|': 'i', '!': 'i', '@': 'a',
+  // chiffres confusables d'UTS #39
+  '0': 'o', '1': 'l',
+};
+
+/**
+ * La table de LECTURE, qui ne sert QU'AU contrôle d'imitation de Meeshy
+ * (`impersonatesMeeshy`), jamais à la clé de nom : la clé, plus les sosies
+ * latins à crochet, barre ou boucle (ɱ ɇ ʂ ɦ ɏ…), et le « leet » — chiffres et
+ * ponctuation qui se lisent comme une lettre (« M33SHY », « Mee§hy »).
+ */
+const READING_TO_LATIN: Readonly<Record<string, string>> = {
+  ...CONFUSABLE_TO_LATIN,
+  з: 'e',
+  ɱ: 'm', ɯ: 'm', ɰ: 'm', ɇ: 'e', ɘ: 'e', ǝ: 'e', ɚ: 'e', ɜ: 'e', ɝ: 'e', ɞ: 'e', ʂ: 's', ȿ: 's', ƨ: 's', ƽ: 's', ɦ: 'h', ɧ: 'h', ɥ: 'h',
+  ʮ: 'h', ʯ: 'h', ɏ: 'y', ƴ: 'y', ʎ: 'y', ɵ: 'o', ƶ: 'z',
+  '1': 'i', '3': 'e', '4': 'a', '5': 's', '§': 's', '$': 's', '€': 'e', '|': 'i', '!': 'i', '@': 'a',
 };
 
 /** Les CAPITALES confusables, qui imitent une capitale latine différente de leur minuscule (Μ grec ≠ μ). */
 const CAPITAL_CONFUSABLE_TO_LATIN: Readonly<Record<string, string>> = {
   А: 'a', В: 'b', Е: 'e', Ё: 'e', К: 'k', М: 'm', Н: 'h', О: 'o', Р: 'p', С: 'c', Т: 't', Х: 'x', У: 'y', Ѕ: 's', І: 'i', Ј: 'j',
   Α: 'a', Β: 'b', Ε: 'e', Ζ: 'z', Η: 'h', Ι: 'i', Κ: 'k', Μ: 'm', Ν: 'n', Ο: 'o', Ρ: 'p', Τ: 't', Υ: 'y', Χ: 'x',
+};
+
+/** Les CAPITALES de la lecture : celles de la clé, plus les lettres cherokee et lisu qui se lisent comme une capitale latine (« ᎷᎬᎬSHY », « ꓟꓰꓰꓢꓧꓬ »). */
+const CAPITAL_READING_TO_LATIN: Readonly<Record<string, string>> = {
+  ...CAPITAL_CONFUSABLE_TO_LATIN,
+  Ꭺ: 'a', Ᏼ: 'b', Ꮯ: 'c', Ꭰ: 'd', Ꭼ: 'e', Ꮐ: 'g', Ꮋ: 'h', Ꭻ: 'j', Ꮶ: 'k', Ꮮ: 'l', Ꮇ: 'm', Ꮎ: 'o', Ꮲ: 'p', Ꮢ: 'r', Ꮪ: 's', Ꭲ: 't',
+  Ꮩ: 'v', Ꮃ: 'w', Ꭹ: 'y', Ꮓ: 'z',
+  // lisu
+  ꓮ: 'a', ꓐ: 'b', ꓚ: 'c', ꓓ: 'd', ꓰ: 'e', ꓝ: 'f', ꓖ: 'g', ꓧ: 'h', ꓲ: 'i', ꓙ: 'j', ꓗ: 'k', ꓡ: 'l', ꓟ: 'm', ꓠ: 'n', ꓳ: 'o', ꓑ: 'p',
+  ꓣ: 'r', ꓢ: 's', ꓔ: 't', ꓴ: 'u', ꓦ: 'v', ꓪ: 'w', ꓫ: 'x', ꓬ: 'y', ꓜ: 'z',
 };
 
 /**
@@ -136,10 +161,10 @@ const VISIBLE_UNKNOWN = /[\p{L}\p{N}\p{S}]/u;
 /** Un caractère que le squelette ne sait pas lire : il peut valoir N'IMPORTE quelle lettre. */
 const JOKER = '*';
 /**
- * Au plus deux jokers dans la fenêtre « meeshy » pour un nom bien formé : sans
- * cette borne, tout nom de six lettres d'un autre alphabet serait réservé. Un
- * nom MAL formé (`isWhitelistedName`) n'a pas cette indulgence : chaque
- * caractère inconnu peut y valoir une lettre (« ᎷᎬᎬSHY »).
+ * Au plus deux jokers dans la fenêtre « meeshy », pour TOUT nom : sans cette
+ * borne, tout nom de six lettres d'un alphabet absent des tables — gujarati,
+ * khmer… — se lirait comme Meeshy. Les sosies connus (cherokee, latin à
+ * crochet) sont lus par la table de lecture, pas par les jokers.
  */
 const MAX_JOKERS = 2;
 
@@ -154,11 +179,11 @@ const MAX_JOKERS = 2;
 const readAs = (char: string, leetPunctuation: boolean): string => {
   if (!leetPunctuation && LEET_PUNCTUATION.test(char)) return '';
   const lower = char.toLowerCase();
-  const confusable = CONFUSABLE_TO_LATIN[lower];
+  const confusable = READING_TO_LATIN[lower];
   if (confusable !== undefined) return confusable;
   if (SEPARATOR.test(char) || MARK.test(char)) return '';
   const base = lower.normalize('NFD').replace(/\p{M}/gu, '');
-  if (ASCII_ALNUM.test(base)) return mapped(base, CONFUSABLE_TO_LATIN);
+  if (ASCII_ALNUM.test(base)) return mapped(base, READING_TO_LATIN);
   return VISIBLE_UNKNOWN.test(char) ? JOKER : '';
 };
 
@@ -169,7 +194,7 @@ const LEET_PUNCTUATION = /^[§$€|!@]$/u;
 const readingSkeleton = (name: string, leetPunctuation: boolean): string =>
   SEQUENCE_CONFUSABLES.reduce(
     (text, [pattern, replacement]) => text.replace(pattern, replacement),
-    [...mapped(name.normalize('NFKC'), CAPITAL_CONFUSABLE_TO_LATIN)].map((char) => readAs(char, leetPunctuation)).join(''),
+    [...mapped(name.normalize('NFKC'), CAPITAL_READING_TO_LATIN)].map((char) => readAs(char, leetPunctuation)).join(''),
   );
 
 /**
@@ -206,11 +231,10 @@ const canRead = (read: readonly string[], target: string, maxJokers: number): bo
  * usurpation.
  */
 export function impersonatesMeeshy(name: string): boolean {
-  const lenient = isWhitelistedName(name);
   return [true, false].some((leetPunctuation) => {
     const read = readingSkeleton(name, leetPunctuation);
     if (read.replace(/[^a-z0-9]/g, '').includes(MEESHY_PUBLISHER_SLUG)) return true;
-    return canRead([...read], MEESHY_PUBLISHER_SLUG, lenient ? MAX_JOKERS : read.length);
+    return canRead([...read], MEESHY_PUBLISHER_SLUG, MAX_JOKERS);
   });
 }
 
@@ -250,6 +274,19 @@ const SCRIPTS = [
   ['Katakana', /\p{Script=Katakana}/u],
   ['Hangul', /\p{Script=Hangul}/u],
   ['Bopomofo', /\p{Script=Bopomofo}/u],
+  ['Gujarati', /\p{Script=Gujarati}/u],
+  ['Gurmukhi', /\p{Script=Gurmukhi}/u],
+  ['Kannada', /\p{Script=Kannada}/u],
+  ['Malayalam', /\p{Script=Malayalam}/u],
+  ['Oriya', /\p{Script=Oriya}/u],
+  ['Sinhala', /\p{Script=Sinhala}/u],
+  ['Khmer', /\p{Script=Khmer}/u],
+  ['Lao', /\p{Script=Lao}/u],
+  ['Myanmar', /\p{Script=Myanmar}/u],
+  ['Tibetan', /\p{Script=Tibetan}/u],
+  ['Thaana', /\p{Script=Thaana}/u],
+  ['Nko', /\p{Script=Nko}/u],
+  ['Tifinagh', /\p{Script=Tifinagh}/u],
 ] as const;
 
 type Script = (typeof SCRIPTS)[number][0];
@@ -285,10 +322,12 @@ const LATIN_EXTENDED_B_AND_IPA = /^[\u0180-\u02AF]$/u;
 /**
  * La LISTE NOIRE : les lettres latines qui ne servent qu'à imiter une autre
  * lettre — petites capitales (U+1D00–U+1D2B, ꜰ ꜱ et celles de l'IPA), sosies
- * IPA (ɑ ɡ ʍ ɩ), lettres de clic qui se lisent « | » ou « ! », iota latin,
- * lettres modificatives et pleine largeur.
+ * IPA (ɑ ɡ ʍ ɩ), toute lettre de « meeshy » à crochet, barre, boucle ou
+ * retournée (ɱ ɯ ɇ ɘ ǝ ɚ ɜ ʂ ȿ ƨ ɦ ɧ ɥ ɏ ʎ… ; ħ, maltais, et ƴ, peul, restent
+ * admis et se lisent comme leur lettre), lettres de clic qui se lisent « | »
+ * ou « ! », iota latin, lettres modificatives et pleine largeur.
  */
-const LOOKALIKE_LATIN: ReadonlySet<string> = new Set([...'ɑɡʍɩɪʏʜʟɴʀʙɢꜰꜱǀǁǂǃƖ']);
+const LOOKALIKE_LATIN: ReadonlySet<string> = new Set([...'ɑɡʍɩɪʏʜʟɴʀʙɢꜰꜱǀǁǂǃƖɱɯɰɇɆɘǝɚɜɝɞʂȿƨƽɦɧɥʮʯɏɎʎɵƶ']);
 const SMALL_CAPITAL_OR_MODIFIER = /^[\u1D00-\u1D2B\uFF21-\uFF3A\uFF41-\uFF5A\p{Lm}]$/u;
 const ASCII_LETTER = /^[A-Za-z]$/;
 
@@ -316,6 +355,8 @@ const isEmojiJoiner = (chars: readonly string[], index: number): boolean =>
  * dans UN alphabet ou dans un mélange admis. Lu en NFC : une forme de
  * compatibilité (pleine largeur, exposant) reste ce qu'elle est.
  */
+export const isWellFormedPublisherName = (name: string): boolean => isWhitelistedName(name);
+
 const isWhitelistedName = (name: string): boolean => {
   const chars = [...name.normalize('NFC')];
   const scripts = new Set<Script>();

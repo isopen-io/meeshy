@@ -35,6 +35,7 @@ const adminViewJsonSchema = {
     verifiedAt: nullableString,
     official: { type: 'boolean' },
     createdAt: nullableString,
+    nameDisputedAt: nullableString,
     owner: { type: 'object', additionalProperties: false, properties: { id: { type: 'string' }, username: nullableString } },
   },
 } as const;

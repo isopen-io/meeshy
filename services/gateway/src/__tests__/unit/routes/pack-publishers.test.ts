@@ -78,7 +78,7 @@ describe('/publishers — la boutique, le propriétaire, l’administration (#16
     as(ADMIN, 'ADMIN');
     const res = await app.inject({ method: 'GET', url: '/admin' });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data).toEqual([expect.objectContaining({ slug: 'studio-lumiere', displayName: 'Studio Lumière', owner: { id: AWA, username: 'awa_secret' } })]);
+    expect(res.json().data).toEqual([expect.objectContaining({ slug: 'studio-lumiere', displayName: 'Studio Lumière', nameDisputedAt: null, owner: { id: AWA, username: 'awa_secret' } })]);
   });
 
   it('refuse un invité de lien : 403 REGISTERED_USER_REQUIRED', async () => {

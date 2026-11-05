@@ -20,7 +20,7 @@
  *      `MessageAttachment.lensSlug`, `PostMedia.lensSlug`
  */
 import { LENS_LIMITS, LENS_PATTERNS } from './lens-format.js';
-import { MEESHY_PUBLISHER_NAME, isReservedPublisherIdentity } from './pack-publisher.js';
+import { MEESHY_PUBLISHER_NAME, impersonatesMeeshy, isReservedPublisherIdentity } from './pack-publisher.js';
 
 export const PARTNER_PROFILE_LIMITS = {
   maxDisplayNameLength: 60,
@@ -122,10 +122,14 @@ export type LensCreditPartner = {
   readonly official?: boolean;
 };
 
-/** Un partenaire qui crédite : vérifié, et jamais sous un nom réservé à Meeshy s'il n'est pas le compte officiel. */
+/**
+ * Un partenaire qui crédite : vérifié, et jamais sous un nom qui se lit comme
+ * Meeshy s'il n'est pas le compte officiel. Un ancien nom hors de la liste
+ * blanche (« Café Москва ») garde son crédit : droit acquis.
+ */
 const creditingPartner = (partner: LensCreditPartner | null): LensCreditPartner | null => {
   if (partner === null || partner.verifiedAt === null) return null;
-  return partner.official === true || !isReservedPublisherIdentity(partner.displayName) ? partner : null;
+  return partner.official === true || !impersonatesMeeshy(partner.displayName) ? partner : null;
 };
 
 /** Le crédit d'une lens PUBLIÉE ; `null` pour toute autre (en attente, refusée, retirée). */

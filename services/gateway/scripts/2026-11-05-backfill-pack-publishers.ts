@@ -54,7 +54,8 @@ async function publishedBy(prisma: PrismaClient): Promise<readonly PublishedBy[]
 function printNameKey(entry: NameKeyEntry): void {
   const verified = entry.verified ? ' (vérifié)' : '';
   const why = entry.reason === 'reserved' ? 'se lit comme Meeshy' : `homonyme — la clé va à ${entry.heldBy ?? '?'}`;
-  console.log(entry.outcome === 'keyed' ? `    clé posée    ${entry.id}  « ${entry.displayName} »${verified}` : `    À ARBITRER   ${entry.id}  « ${entry.displayName} »${verified} : ${why}`);
+  const offList = entry.offList === true ? ' — nom hors liste, servi tel quel' : '';
+  console.log(entry.outcome === 'keyed' ? `    clé posée    ${entry.id}  « ${entry.displayName} »${verified}${offList}` : `    À ARBITRER   ${entry.id}  « ${entry.displayName} »${verified} : ${why}`);
 }
 
 function printBackfill(entry: BackfillEntry): void {
