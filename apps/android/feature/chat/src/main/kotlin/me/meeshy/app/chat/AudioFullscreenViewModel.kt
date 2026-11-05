@@ -25,6 +25,7 @@ import me.meeshy.sdk.media.TypedMediaCache
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenTranscriptLaw
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
 import me.meeshy.sdk.model.playback.BubbleVoiceProjection
+import me.meeshy.sdk.model.waveform.WaveformLocation
 import me.meeshy.sdk.speech.SoundFileTranscriber
 import me.meeshy.sdk.speech.SoundTranscriptionOutcome
 import me.meeshy.ui.component.audio.AudioFullscreenSource
@@ -125,11 +126,12 @@ internal class AudioFullscreenViewModel @Inject constructor(
     /** La reconnaissance sur la copie entière ; `null` : rien à reconnaître ici (pas de copie, langue inconnue) — le serveur s'en charge. */
     private suspend fun recognize(source: AudioFullscreenSource): SoundTranscriptionOutcome? {
         val language = (source.originalLanguage ?: source.trackLanguage)?.trim()?.ifEmpty { null } ?: return null
-        val path = withContext(io) {
+        val location = withContext(io) {
             BubbleVoiceProjection.waveformLocation(source.url, isProtected = false) { address ->
                 wholeFiles.file(MediaCacheCategory.AUDIO, address)?.absolutePath
             }
-        }?.removePrefix("file://")?.removePrefix("file:") ?: return null
+        } ?: return null
+        val path = (WaveformLocation.parse(location) as? WaveformLocation.Local)?.path ?: return null
         return transcriber.transcribe(path, language)
     }
 

@@ -127,4 +127,69 @@ class AudioFullscreenSourceTest {
         assertThat(AudioFullscreenSource.fromFeed(FeedMedia(id = "i", type = FeedMediaType.IMAGE, url = "u"), author, null, "p", "N")).isNull()
         assertThat(AudioFullscreenSource.fromFeed(FeedMedia(id = "a", type = FeedMediaType.AUDIO), author, null, "p", "N")).isNull()
     }
+
+    private fun voiceWithTracks(played: String?, translated: Boolean) = BubbleAudio(
+        attachmentId = "a1",
+        url = "https://cdn.meeshy.me/a1-${played ?: "orig"}.m4a",
+        durationSeconds = 12,
+        isAudioTranslated = translated,
+        audioLanguage = played,
+        originalLanguage = "en",
+        translatedLanguages = listOf("fr", "es"),
+    )
+
+    @Test
+    fun `la page porte la langue d origine et les pistes pretes pour le bandeau`() {
+        val audio = voiceWithTracks(played = "fr", translated = true)
+
+        val page = AudioFullscreenSource.fromBubble(bubble(audio), audio, "c1", "Famille")!!
+
+        assertThat(page.originalLanguage).isEqualTo("en")
+        assertThat(page.translatedLanguages).containsExactly("fr", "es").inOrder()
+    }
+
+    @Test
+    fun `un prisme rang 1 sert la piste francaise d un vocal anglais et la page l ouvre dessus`() {
+        val audio = voiceWithTracks(played = "fr", translated = true)
+
+        val page = AudioFullscreenSource.fromBubble(bubble(audio), audio, "c1", "Famille")!!
+
+        assertThat(page.trackLanguage).isEqualTo("fr")
+        assertThat(page.isTranslatedTrack).isTrue()
+        assertThat(page.url).endsWith("a1-fr.m4a")
+    }
+
+    @Test
+    fun `un prisme rang 2 sert la piste espagnole, jamais la premiere traduction venue`() {
+        val audio = voiceWithTracks(played = "es", translated = true)
+
+        val page = AudioFullscreenSource.fromBubble(bubble(audio), audio, "c1", "Famille")!!
+
+        assertThat(page.trackLanguage).isEqualTo("es")
+        assertThat(page.translatedLanguages.first()).isEqualTo("fr")
+    }
+
+    @Test
+    fun `la voix d origine servie ouvre la page sur la langue d origine`() {
+        val audio = voiceWithTracks(played = null, translated = false)
+
+        val page = AudioFullscreenSource.fromBubble(bubble(audio), audio, "c1", "Famille")!!
+
+        assertThat(page.trackLanguage).isEqualTo("en")
+        assertThat(page.isTranslatedTrack).isFalse()
+    }
+
+    @Test
+    fun `une page de post n a ni langue d origine ni piste traduite`() {
+        val post = AudioFullscreenSource.fromFeed(
+            media = FeedMedia(id = "p1", type = FeedMediaType.AUDIO, url = "https://cdn.meeshy.me/p1.m4a"),
+            author = ProfileSheetUser(username = "ana"),
+            createdAtIso = "2026-11-04T08:00:00Z",
+            carrierId = "post1",
+            contextName = "Fil",
+        )!!
+
+        assertThat(post.originalLanguage).isNull()
+        assertThat(post.translatedLanguages).isEmpty()
+    }
 }

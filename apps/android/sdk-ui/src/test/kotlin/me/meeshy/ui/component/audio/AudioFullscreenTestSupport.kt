@@ -19,6 +19,7 @@ internal class FakeAudioFullscreenPlayer : AudioFullscreenPlayer {
     val replaced = mutableListOf<List<String>>()
     val skips = mutableListOf<Double>()
     val speeds = mutableListOf<PlaybackSpeed>()
+    val switched = mutableListOf<String>()
     var toggles = 0
     var stops = 0
 
@@ -43,6 +44,35 @@ internal class FakeAudioFullscreenPlayer : AudioFullscreenPlayer {
     override fun replaceUpcoming(upcoming: List<QueuedAudio>) { replaced += upcoming.map { it.attachmentId } }
 
     override fun samples(source: AudioFullscreenSource): StateFlow<List<Float>> = MutableStateFlow(emptyList())
+
+    override fun switchTrack(source: AudioFullscreenSource) { switched += source.url }
+}
+
+/** L'hôte de la transcription et des langues vu du plein écran : il note ce qu'on lui demande et sert l'état qu'on lui pose. */
+internal class FakeTranscriptPort(
+    private val transcribable: Boolean = true,
+    private val translatable: Boolean = true,
+    initial: AudioFullscreenTranscriptState = AudioFullscreenTranscriptState.Idle,
+) : AudioFullscreenTranscriptPort {
+    val state = MutableStateFlow(initial)
+    val onDevice = mutableListOf<String>()
+    val onServer = mutableListOf<String>()
+    val selected = mutableListOf<Pair<String, String>>()
+    val opened = mutableListOf<String>()
+
+    override fun offersTranscription(source: AudioFullscreenSource): Boolean = transcribable
+
+    override fun offersLanguages(source: AudioFullscreenSource): Boolean = translatable
+
+    override fun transcript(source: AudioFullscreenSource): StateFlow<AudioFullscreenTranscriptState> = state
+
+    override fun transcribeOnDevice(source: AudioFullscreenSource) { onDevice += source.id }
+
+    override fun transcribeOnServer(source: AudioFullscreenSource) { onServer += source.id }
+
+    override fun selectLanguage(source: AudioFullscreenSource, code: String) { selected += source.id to code }
+
+    override fun openLanguages(source: AudioFullscreenSource) { opened += source.id }
 }
 
 internal fun audioSource(id: String, receivedAt: Long, author: String = "Auteur $id") = AudioFullscreenSource(

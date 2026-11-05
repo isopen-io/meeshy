@@ -11,14 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
@@ -165,13 +164,12 @@ internal fun AudioFullscreenSideBySide(
 
 /** Le voile (iOS `frost`) : la couleur du sol, opaque presque jusqu'au bord puis fondue vers les paroles qui passent dessous. */
 private fun Modifier.veil(color: Color, towardsBottom: Boolean): Modifier = drawBehind {
-    val stops = arrayOf(0f to color, VEIL_SOLID_UNTIL to color, 1f to Color.Transparent)
-    val brush = if (towardsBottom) {
-        Brush.verticalGradient(colorStops = stops, startY = 0f, endY = size.height)
+    val stops = if (towardsBottom) {
+        arrayOf(0f to color, VEIL_SOLID_UNTIL to color, 1f to Color.Transparent)
     } else {
-        Brush.verticalGradient(colorStops = stops, startY = size.height, endY = 0f)
+        arrayOf(0f to Color.Transparent, 1f - VEIL_SOLID_UNTIL to color, 1f to color)
     }
-    drawRect(brush, topLeft = Offset.Zero, size = size)
+    drawRect(Brush.verticalGradient(*stops, startY = 0f, endY = size.height))
 }
 
 private const val VEIL_ALPHA = 0.82f

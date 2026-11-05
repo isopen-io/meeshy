@@ -154,4 +154,48 @@ class ChatAudioFullscreenHostTest {
         assertThat(rig.viewModel.conversationTail("a").map { it.attachmentId }).containsExactly("b", "c").inOrder()
         assertThat(rig.viewModel.conversationTail("b").map { it.attachmentId }).containsExactly("c")
     }
+
+    @Test
+    fun `choisir une langue recharge la piste de la meme piece et garde la file`() {
+        val rig = Rig()
+        rig.viewModel.bind(thread)
+        val pages = ChatAudioFullscreenSources.of("a", thread.messages, "conv", "Famille")!!
+        val player = rig.viewModel.fullscreenPlayer()
+        player.start(pages[0], pages.drop(1).map { it.queuedAudio() })
+
+        val english = pages[0].copy(url = "https://cdn.meeshy.me/a-en.m4a", trackLanguage = "en", isTranslatedTrack = true)
+        player.switchTrack(english)
+
+        assertThat(rig.engine.played).containsExactly("a", "a").inOrder()
+        assertThat(rig.coordinator.snapshot.value.queue.current?.fileUrl).isEqualTo("https://cdn.meeshy.me/a-en.m4a")
+        assertThat(rig.coordinator.snapshot.value.queue.current?.trackLanguage).isEqualTo("en")
+        assertThat(rig.coordinator.snapshot.value.queue.upcoming.map { it.attachmentId }).containsExactly("b", "c").inOrder()
+    }
+
+    @Test
+    fun `la piste deja servie ne recharge rien`() {
+        val rig = Rig()
+        rig.viewModel.bind(thread)
+        val pages = ChatAudioFullscreenSources.of("a", thread.messages, "conv", "Famille")!!
+        val player = rig.viewModel.fullscreenPlayer()
+        player.start(pages[0], emptyList())
+
+        player.switchTrack(pages[0])
+
+        assertThat(rig.engine.played).containsExactly("a")
+    }
+
+    @Test
+    fun `une langue choisie sur une page que le lecteur ne tient pas ne touche pas au lecteur`() {
+        val rig = Rig()
+        rig.viewModel.bind(thread)
+        val pages = ChatAudioFullscreenSources.of("a", thread.messages, "conv", "Famille")!!
+        val player = rig.viewModel.fullscreenPlayer()
+        player.start(pages[0], emptyList())
+
+        player.switchTrack(pages[1].copy(url = "https://cdn.meeshy.me/b-en.m4a", trackLanguage = "en", isTranslatedTrack = true))
+
+        assertThat(rig.engine.played).containsExactly("a")
+        assertThat(rig.coordinator.snapshot.value.queue.current?.attachmentId).isEqualTo("a")
+    }
 }
