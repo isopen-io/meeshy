@@ -45,8 +45,9 @@ object MediaUpload {
         MultipartBody.Part.createFormData(DESTINATION_FIELD_NAME, conversationId)
 
     /** Builds the multipart `files` part for [item] with resolved name + content type, streamed from its source (#13551). */
-    fun formPart(item: MediaUploadItem): MultipartBody.Part {
-        val body = item.requestBody(mimeType(item.mimeType).toMediaTypeOrNull())
+    fun formPart(item: MediaUploadItem, onProgress: ((sent: Long, total: Long) -> Unit)? = null): MultipartBody.Part {
+        val raw = item.requestBody(mimeType(item.mimeType).toMediaTypeOrNull())
+        val body = if (onProgress == null) raw else ProgressRequestBody(raw, onProgress)
         return MultipartBody.Part.createFormData(FIELD_NAME, fileName(item.fileName), body)
     }
 }
@@ -66,7 +67,12 @@ class MediaRepository @Inject constructor(
     private val sanitizer: OutgoingMediaSanitizer,
     private val seeder: UploadedMediaSeeder = UploadedMediaSeeder.None,
 ) {
-    suspend fun upload(items: List<MediaUploadItem>, conversationId: String? = null): NetworkResult<List<UploadedMedia>> {
+    /** [onProgress] dit les octets de la pièce à mesure que la passerelle les lit (#16133) ; sans lui, rien ne change. */
+    suspend fun upload(
+        items: List<MediaUploadItem>,
+        conversationId: String? = null,
+        onProgress: ((sent: Long, total: Long) -> Unit)? = null,
+    ): NetworkResult<List<UploadedMedia>> {
         if (items.isEmpty()) return NetworkResult.Success(emptyList())
         val clean = mutableListOf<Pair<MediaUploadItem, MediaUploadItem>>()
         try {
@@ -77,7 +83,7 @@ class MediaRepository @Inject constructor(
                 }
             }
             val destination = conversationId?.takeIf { it.isNotBlank() }?.let(MediaUpload::destinationPart)
-            val parts = listOfNotNull(destination) + clean.map { (sent, _) -> MediaUpload.formPart(sent) }
+            val parts = listOfNotNull(destination) + clean.map { (sent, _) -> MediaUpload.formPart(sent, onProgress) }
             val result = apiCall { mediaApi.upload(parts) }
             if (result is NetworkResult.Success) seed(clean.map { (sent, _) -> sent }, result.data.attachments)
             return result.map { response -> response.attachments.mapNotNull { it.toUploadedMedia() } }

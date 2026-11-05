@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pack_shop_detail_items">عناصر الحزمة</string>
+    <string name="pack_shop_detail_embedded">مضمّنة في التطبيق</string>
+    <string name="pack_shop_detail_embedded_size">مضمّنة في التطبيق · %1$s</string>
+    <string name="pack_shop_detail_price">%1$d Meeshes</string>
+    <string name="pack_shop_state_installed">مثبّتة</string>
+    <string name="pack_shop_state_embedded">مضمّنة</string>
+    <string name="pack_shop_state_to_download">للتنزيل</string>
+    <string name="pack_shop_download_required">التنزيل مطلوب</string>
+    <string name="pack_shop_viewer_position">%1$d / %2$d</string>
+    <string name="pack_shop_viewer_item_a11y">%1$s، العنصر %2$d من %3$d</string>
+    <string name="pack_shop_viewer_next">العنصر التالي</string>
+    <string name="pack_shop_viewer_previous">العنصر السابق</string>
+    <string name="pack_shop_close">إغلاق</string>
+    <string name="pack_shop_viewer_others">اقتراحات أخرى</string>
+    <string name="pack_shop_equip">تجهيز</string>
+    <string name="pack_shop_equip_a11y">تجهيز %1$s</string>
+    <string name="pack_shop_equipped">مُجهَّز</string>
+    <string name="pack_shop_equip_failed">تعذّر تجهيز العنصر.</string>
+    <string name="pack_shop_wallpaper_hint">اختر هذه الخلفية من مظهر إحدى المحادثات.</string>
+    <string name="pack_shop_open_pack_a11y">فتح حزمة %1$s</string>
+    <string name="pack_shop_open_item_a11y">عرض %1$s بملء الشاشة</string>
+    <string name="pack_shop_preview_bubble_in">مرحبًا! هل رأيت هذه الخلفية؟</string>
+    <string name="pack_shop_preview_bubble_out">نعم، أحببتها 😍</string>
+    <string name="pack_shop_preview_bubble_in_2">وكل شيء يبقى مقروءًا!</string>
+</resources>

@@ -227,6 +227,50 @@
     "bannieres-atelier-noel": {
       "name": "Werkstatt des Weihnachtsmanns",
       "description": "Bannerrahmen passend zu „Werkstatt des Weihnachtsmanns“: Weihnachtsmütze und Zuckerstange, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "noel-bannieres": {
+      "name": "Weihnachtsbanner",
+      "description": "Sechs Bannerbilder passend zu den Weihnachtspaketen: Raureif, Girlande und Geschenkpapier, dann Schneegestöber, funkelnde Lichter und Funken aus der Werkstatt."
+    },
+    "noel-contours-fixes": {
+      "name": "Weihnachten · ruhige Rahmen",
+      "description": "Die sechs Weihnachtsrahmen ohne Animation: Flocken, Stechpalme, Lichterkette, Stern, Mütze und Zuckerstange, für einen ruhigen Avatar."
+    },
+    "noel-cadres-fixes": {
+      "name": "Weihnachten · ruhige Bannerrahmen",
+      "description": "Die sechs Weihnachts-Bannerrahmen ohne Animation, passend zu den ruhigen Rahmen: Flocken, Stechpalme, Lichterkette, Stern, Mütze und Zuckerstange."
+    },
+    "nouvel-an-contours": {
+      "name": "Neujahr",
+      "description": "Vier Rahmen zum Feiern des neuen Jahres: Feuerwerk, Konfettiregen, Mitternachtszifferblatt und eine goldene Sektschale."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Lebendiges Neujahr",
+      "description": "Vier animierte Rahmen für den Jahreswechsel: ein großes Finale, ein Konfettiwirbel, die Uhr, die Mitternacht schlägt, und Sektperlen."
+    },
+    "nouvel-an-images": {
+      "name": "Neujahrsbanner",
+      "description": "Vier Bannerbilder für das neue Jahr: eine Feuerwerksnacht, ein Konfettifest, die zwölf Schläge um Mitternacht und goldener Sekt."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Animierte Neujahrsbanner",
+      "description": "Vier animierte Bannerbilder: aufblühendes Feuerwerk, ein Konfettischauer, der Countdown bis Mitternacht und Sektperlen. Bei reduzierter Bewegung: ein ruhiges Bild."
+    },
+    "nouvel-an-cadres": {
+      "name": "Neujahrsrahmen",
+      "description": "Vier Bannerrahmen passend zu den Neujahrsrahmen fürs Avatar: Feuerwerk, Konfetti, Mitternachtszifferblatt und Sektschalen."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Animierte Neujahrsrahmen",
+      "description": "Vier animierte Bannerrahmen passend zu den lebendigen Rahmen: ein aufblühendes Feuerwerk, fliegendes Konfetti, der kreisende Mitternachtszeiger und anstoßende Schalen."
+    },
+    "nouvel-an-fonds": {
+      "name": "Neujahrshintergründe",
+      "description": "Vier Chat-Hintergründe für das neue Jahr: Feuerwerkshimmel, Konfetti, Mitternachtsstunde und goldene Perlen, dezent genug, damit jede Blase lesbar bleibt."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Lebendiges Neujahr · Hintergründe",
+      "description": "Vier animierte Hintergründe für das neue Jahr: ferne Funken, fallendes Konfetti, eine Sternennacht und aufsteigende Perlen. Bei reduzierter Bewegung: ein ruhiger Verlauf."
     }
   },
   "designs": {
@@ -265,7 +309,29 @@
     "sucre-d-orge-raye": "Zuckerstangenstreifen",
     "neige-de-noel": "Weihnachtsschnee",
     "ampoules-de-noel": "Christbaumlichter",
-    "etincelles-atelier": "Werkstattfunken"
+    "etincelles-atelier": "Werkstattfunken",
+    "banniere-noel-givre": "Raureif",
+    "banniere-noel-guirlande": "Girlande",
+    "banniere-noel-cadeau": "Geschenkpapier",
+    "banniere-noel-neige": "Schneegestöber",
+    "banniere-noel-lumieres": "Funkelnde Lichter",
+    "banniere-noel-etincelles": "Weihnachtsfunken",
+    "banniere-artifice": "Feuerwerksnacht",
+    "banniere-confettis": "Konfettifest",
+    "banniere-minuit": "Zwölf Schläge",
+    "banniere-champagne": "Goldener Sekt",
+    "banniere-artifice-vive": "Lebendiges Feuerwerk",
+    "banniere-confettis-vive": "Konfettischauer",
+    "banniere-minuit-vive": "Countdown",
+    "banniere-champagne-vive": "Sektperlen",
+    "fond-artifice": "Feuerwerkshimmel",
+    "fond-confettis": "Konfetti",
+    "fond-minuit": "Mitternachtsstunde",
+    "fond-champagne": "Goldene Perlen",
+    "fond-artifice-vif": "Ferne Funken",
+    "fond-confettis-vif": "Fallendes Konfetti",
+    "fond-minuit-vif": "Sternenklare Mitternacht",
+    "fond-champagne-vif": "Aufsteigende Perlen"
   },
   "rings": {
     "filet": "Haarlinie",
@@ -344,7 +410,21 @@
     "guirlande-lumineuse": "Lichterkette",
     "etoile-du-sapin": "Tannenstern",
     "bonnet-du-pere-noel": "Weihnachtsmütze",
-    "sucre-d-orge": "Zuckerstange"
+    "sucre-d-orge": "Zuckerstange",
+    "flocons-tombants-fixe": "Fallende Flocken · ruhig",
+    "couronne-de-houx-fixe": "Stechpalmenkranz · ruhig",
+    "guirlande-lumineuse-fixe": "Lichterkette · ruhig",
+    "etoile-du-sapin-fixe": "Tannenstern · ruhig",
+    "bonnet-du-pere-noel-fixe": "Weihnachtsmütze · ruhig",
+    "sucre-d-orge-fixe": "Zuckerstange · ruhig",
+    "feux-d-artifice": "Feuerwerk",
+    "pluie-de-confettis": "Konfettiregen",
+    "cadran-de-minuit": "Mitternachtszifferblatt",
+    "coupe-de-champagne": "Sektschale",
+    "bouquet-final": "Großes Finale",
+    "envol-de-confettis": "Konfettiwirbel",
+    "minuit-sonne": "Mitternacht schlägt",
+    "champagne-petillant": "Prickelnder Sekt"
   },
   "gamut": {
     "indigo": "Meeshy-Indigo",
@@ -436,6 +516,20 @@
     "guirlande-lumineuse": "Lichterkette",
     "etoile-du-sapin": "Tannenstern",
     "bonnet-du-pere-noel": "Weihnachtsmütze",
-    "sucre-d-orge": "Zuckerstange"
+    "sucre-d-orge": "Zuckerstange",
+    "flocons-tombants-fixe": "Fallende Flocken · ruhig",
+    "couronne-de-houx-fixe": "Stechpalmenkranz · ruhig",
+    "guirlande-lumineuse-fixe": "Lichterkette · ruhig",
+    "etoile-du-sapin-fixe": "Tannenstern · ruhig",
+    "bonnet-du-pere-noel-fixe": "Weihnachtsmütze · ruhig",
+    "sucre-d-orge-fixe": "Zuckerstange · ruhig",
+    "feux-d-artifice": "Feuerwerk",
+    "pluie-de-confettis": "Konfettiregen",
+    "cadran-de-minuit": "Mitternachtszifferblatt",
+    "coupe-de-champagne": "Sektschale",
+    "bouquet-final": "Großes Finale",
+    "envol-de-confettis": "Konfettiwirbel",
+    "minuit-sonne": "Mitternacht schlägt",
+    "champagne-petillant": "Prickelnder Sekt"
   }
 }
