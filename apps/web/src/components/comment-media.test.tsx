@@ -7,7 +7,7 @@ import type { FeedMedia } from '@/lib/api/feed-pages';
 import { mediaCoordinator } from '@/lib/view/media-coordinator';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import type { SceneExportSubject } from '@/lib/export/scene/scene-export-subject';
+import type { PublicationImageRequest } from '@/lib/export/publication-image-store';
 
 import { CommentMedia } from './comment-media';
 import CommentMediaViewer from './comment-media-viewer';
@@ -128,11 +128,11 @@ describe('CommentMedia — une photo ou une vidéo s’ouvre en plein écran (#1
 });
 
 describe('CommentMediaViewer — « Imager » compose la pièce et referme la couche (#13881)', () => {
-  test('« … » offre Partager et Imager ; Imager lance la composition de CETTE pièce et ferme la visionneuse', async () => {
+  test('« … » offre Partager et Imager ; Imager ouvre l’ATELIER DE CARTE avec CETTE pièce et ferme la visionneuse (#16393)', async () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
-    const launched: SceneExportSubject[] = [];
+    const opened: PublicationImageRequest[] = [];
     let closed = 0;
     act(() => {
       root.render(
@@ -144,8 +144,8 @@ describe('CommentMediaViewer — « Imager » compose la pièce et referme la co
           onClose={() => {
             closed += 1;
           }}
-          launcher={async ({ subject }) => {
-            launched.push(subject);
+          open={(request) => {
+            opened.push(request);
           }}
         />,
       );
@@ -161,7 +161,9 @@ describe('CommentMediaViewer — « Imager » compose la pièce et referme la co
     });
     await settle();
     expect(closed).toBe(1);
-    expect(launched.map((subject) => subject.key)).toEqual(['comment:c-9:clip.mp4']);
-    expect(launched[0]?.watermark).toBe('@alice');
+    expect(opened.map((request) => request.key)).toEqual(['comment:c-9:clip.mp4']);
+    expect(opened[0]?.scene).toBeNull();
+    expect(opened[0]?.subject.reply).toMatchObject({ author: 'alice', handle: 'alice', text: '' });
+    expect(opened[0]?.subject.media.map((item) => [item.id, item.card.kind])).toEqual([['clip.mp4', 'video']]);
   });
 });

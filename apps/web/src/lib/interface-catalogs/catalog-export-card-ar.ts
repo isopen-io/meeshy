@@ -70,6 +70,7 @@ const ar = {
   'export.card.typeface.pairs': 'الخط يكسو الاقتباس والرد',
   'export.card.tab.frame': 'الإطار',
   'export.card.tab.media': 'الوسائط',
+  'export.card.tab.content': 'المحتوى',
   'export.card.part.media': 'الوسائط',
   'export.card.part.replies': 'الردود',
   'export.card.aspect': 'مقاس الصورة',

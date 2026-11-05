@@ -70,6 +70,7 @@ const es = {
   'export.card.typeface.pairs': 'La fuente viste la cita y la respuesta',
   'export.card.tab.frame': 'Marco',
   'export.card.tab.media': 'Medios',
+  'export.card.tab.content': 'Contenido',
   'export.card.part.media': 'Medios',
   'export.card.part.replies': 'Respuestas',
   'export.card.aspect': 'Formato de imagen',

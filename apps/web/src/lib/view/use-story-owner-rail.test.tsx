@@ -1,4 +1,5 @@
 import type { StoryBrandingContext } from '@/lib/export/scene/scene-export-branding-author';
+import { closePublicationImage, publicationImageRequest } from '@/lib/export/publication-image-store';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
@@ -217,22 +218,39 @@ describe('useStoryOwnerRail — « Vues » ouvre la feuille de CETTE story ; « 
     expect(spy.launched).toEqual([{ key: 'story:st-a', fileStem: 'story-st-a', mode: 'share', media: [MEDIA_URL], gestureContext: true }]);
   });
 
-  test('« Imager » s’offre sur une story et rend la même composition, au choix de longueur du bandeau', async () => {
+  test('« Imager » ouvre l’ATELIER DE CARTE avec la scène de la story à rendre — jamais l’export de scène (#16393)', async () => {
     const spy = launcherSpy();
     probe = mountProbe(undefined, null, undefined, spy.launcher);
     probe.render({ ...storyOf('st-a'), storyEffects: SCENE });
     act(() => probe?.rail().imager?.());
-    await settle(0);
-    expect(spy.launched.map(({ mode, key }) => ({ mode, key }))).toEqual([{ mode: 'imager', key: 'story:st-a' }]);
+    await settle(200);
+    const request = publicationImageRequest();
+    expect(request?.key).toBe('story:st-a');
+    expect(request?.scene?.fileStem).toBe('story-st-a');
+    expect(request?.scene?.branding).toBeUndefined();
+    expect(request?.scene?.watermark).toBeNull();
+    expect(spy.launched).toEqual([]);
+    closePublicationImage();
   });
 
-  test('la baguette du rail (#16333) lance le MÊME « Imager » que le menu « … »', async () => {
+  test('la baguette du rail (#16333) ouvre le MÊME atelier que le menu « … »', async () => {
     const spy = launcherSpy();
     probe = mountProbe(undefined, null, undefined, spy.launcher);
     probe.render({ ...storyOf('st-a'), storyEffects: SCENE });
     act(() => probe?.rail().handlers.imager?.());
-    await settle(0);
-    expect(spy.launched.map(({ mode, key }) => ({ mode, key }))).toEqual([{ mode: 'imager', key: 'story:st-a' }]);
+    await settle(200);
+    expect(publicationImageRequest()?.key).toBe('story:st-a');
+    expect(spy.launched).toEqual([]);
+    closePublicationImage();
+  });
+
+  test('TÉMOIN DE RANG — la légende d’une story s’image dans la langue SERVIE, pas l’original', async () => {
+    probe = mountProbe();
+    probe.render({ ...storyOf('st-a'), storyEffects: SCENE, content: 'Good evening', originalLanguage: 'en', translations: { fr: { text: 'Bonsoir' } } });
+    act(() => probe?.rail().imager?.());
+    await settle(200);
+    expect(publicationImageRequest()?.subject.reply.text).toBe('Bonsoir');
+    closePublicationImage();
   });
 
   test('une story sans rien à composer n’offre pas « Imager »', () => {

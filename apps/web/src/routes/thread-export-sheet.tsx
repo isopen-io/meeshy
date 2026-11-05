@@ -222,8 +222,9 @@ export function MessageExportSheet({
   random = Math.random,
   loadSources = defaultSourcesLoader,
   recordMotion = defaultMotionRecorder,
-  above,
+  content,
   subjectKey = '',
+  preparing = false,
 }: {
   /** La carte telle que le lecteur la lit. */
   readonly subject: MessageCardSubject;
@@ -247,10 +248,12 @@ export function MessageExportSheet({
   readonly loadSources?: SourcesLoader;
   /** Le GIF ou la vidéo de la carte (#8693) — injecté par les témoins. */
   readonly recordMotion?: MotionRecorder;
-  /** Au-dessus de l'aperçu : les choix de composition d'un commentaire de post (#9687). */
-  readonly above?: ReactNode;
+  /** Les choix de composition d'un commentaire de post (#9687) — l'onglet « Contenu » du plateau, le premier (#16393). */
+  readonly content?: ReactNode;
   /** Ce qui distingue une composition d'une autre : changer de composition repeint l'aperçu et ses vignettes. */
   readonly subjectKey?: string;
+  /** Un média de la carte se prépare encore — le rendu d'une œuvre composée (#16393) : rien ne part avant lui. */
+  readonly preparing?: boolean;
 }) {
   const language = currentInterfaceLanguage();
   const [savedDefault, setSavedDefault] = useState<MessageCardFormat | null>(() => readDefaultMessageCardFormat(storage));
@@ -259,7 +262,7 @@ export function MessageExportSheet({
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exportLanguage, setExportLanguage] = useState<string | null>(null);
-  const [tab, setTab] = useState<ExportTab>('styles');
+  const [tab, setTab] = useState<ExportTab>(content === undefined ? 'styles' : 'content');
   const [focus, setFocus] = useState<CardPart | null>(null);
   const [touched, setTouched] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -343,7 +346,7 @@ export function MessageExportSheet({
   );
 
   /* Une carte à médias n'est PRÊTE qu'avec leurs pixels : « Imager rapide » ne part jamais avec des cadres vides. */
-  const ready = rendered !== null && rendered.key === key && !media.loading;
+  const ready = rendered !== null && rendered.key === key && !media.loading && !preparing;
   /* Un média en échec retient « Imager rapide » : l'atelier le dit, et le geste attend « Réessayer » ou un choix explicite. */
   const quickReady = ready && media.failed.length === 0;
 
@@ -466,8 +469,6 @@ export function MessageExportSheet({
           <img aria-hidden="true" alt="" src={shown.url} className="pointer-events-none absolute inset-0 h-full w-full object-cover" style={{ filter: 'blur(48px) saturate(1.5)', opacity: 0.5, transform: 'scale(1.25)' }} />
         )}
 
-        {above === undefined ? null : <div className="relative shrink-0 px-3 pt-2">{above}</div>}
-
         <div className="relative min-h-0 flex-1" aria-live="polite" aria-busy={!ready && !failed}>
           <div className="absolute inset-x-6 inset-y-3" style={{ containerType: 'size' }}>
             <div className="grid h-full w-full place-items-center">
@@ -536,9 +537,9 @@ export function MessageExportSheet({
             <p data-export-motion={motionBusy} className="glass pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
               {translateExportCard(language, motionBusy === 'gif' ? 'export.card.motion.gif' : 'export.card.motion.video')}
             </p>
-          ) : touched || shown === null ? null : (
+          ) : (touched && !preparing) || shown === null ? null : (
             <p data-export-hint="" className="glass pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-3 py-1 text-caption" style={{ color: 'var(--color-ios-ink)' }}>
-              {translateExportCard(language, media.loading ? 'export.card.media.loading' : 'export.card.hint')}
+              {translateExportCard(language, media.loading || preparing ? 'export.card.media.loading' : 'export.card.hint')}
             </p>
           )}
         </div>
@@ -577,6 +578,7 @@ export function MessageExportSheet({
             languages={exportLanguages.codes}
             exportLanguage={exportLanguage}
             onLanguage={setExportLanguage}
+            {...(content === undefined ? {} : { content })}
           />
         </div>
 

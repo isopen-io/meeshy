@@ -84,8 +84,15 @@ describe('ReelPage — la baguette du rail image le réel (#16333)', () => {
     expect(imaged).toEqual([SCENE_MODEL.id]);
   });
 
-  test('un réel sans scène n’a rien à imager : aucune baguette', async () => {
-    const container = await mount(VIDEO_MODEL, () => undefined);
+  test('un réel SIMPLE (sa vidéo, sans scène) porte aussi la baguette, qui l’image (#16166)', async () => {
+    const imaged: string[] = [];
+    const container = await mount(VIDEO_MODEL, (model) => imaged.push(model.id));
+    act(() => wandOf(container)?.click());
+    expect(imaged).toEqual([VIDEO_MODEL.id]);
+  });
+
+  test('un réel protégé n’a rien à imager : aucune baguette', async () => {
+    const container = await mount({ ...VIDEO_MODEL, protection: { isViewOnce: true } }, () => undefined);
     expect(wandOf(container)).toBeNull();
   });
 

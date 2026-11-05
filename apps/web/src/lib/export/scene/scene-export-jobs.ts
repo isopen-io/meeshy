@@ -1,4 +1,3 @@
-import type { ImagerLengthChoice, ImagerQuarter } from './scene-export-length';
 import type { SceneDelivery } from './scene-export-run';
 
 /**
@@ -9,9 +8,7 @@ import type { SceneDelivery } from './scene-export-run';
  *
  * Miroir du store des stories (`lib/stories/save-store.ts`) : une poignée par
  * job, dont l'`AbortController` est l'identité ; un second départ sur la même
- * publication est refusé tant que le premier tourne. Le choix de longueur
- * d'« Imager » (1/4 · 2/4 · 3/4 · 4/4) vit ici aussi : le job ATTEND la
- * réponse du bandeau.
+ * publication est refusé tant que le premier tourne.
  *
  * « Partager » (#13881) peut attendre lui aussi : le rendu dure au moins la
  * longueur de la composition, et l'activation du geste qui l'a lancé a expiré
@@ -27,8 +24,6 @@ export type SceneExportJobView = {
   /** 0..1 ; `null` tant que rien ne s'est mesuré (préparation). */
   readonly progress: number | null;
   readonly cancellable: boolean;
-  /** Les parts offertes par « Imager », en attente d'une réponse — `null` sinon. */
-  readonly choosing: readonly ImagerLengthChoice[] | null;
   /** Le fichier est rendu et attend le toucher « Partager » du bandeau. */
   readonly ready: boolean;
 };
@@ -42,7 +37,6 @@ export type SceneExportJobHandle = {
   readonly signal: AbortSignal;
   readonly report: (progress: number | null) => void;
   readonly lockDelivery: () => void;
-  readonly chooseLength: (choices: readonly ImagerLengthChoice[]) => Promise<ImagerQuarter | null>;
   /** Le fichier attend un toucher neuf : `deliver` part DANS ce toucher (`deliverNow`). */
   readonly awaitDeliveryTap: (deliver: () => Promise<SceneDelivery>) => Promise<SceneDelivery>;
   readonly finish: () => void;
@@ -53,7 +47,6 @@ type PendingTap = { readonly deliver: () => Promise<SceneDelivery>; readonly res
 type Job = {
   readonly view: SceneExportJobView;
   readonly controller: AbortController;
-  readonly answer: ((quarter: ImagerQuarter | null) => void) | null;
   readonly tap: PendingTap | null;
 };
 
@@ -84,7 +77,6 @@ function update(key: string, controller: AbortController, next: (job: Job) => Jo
   const updated = next(job);
   const same =
     updated.view.cancellable === job.view.cancellable &&
-    updated.view.choosing === job.view.choosing &&
     updated.view.ready === job.view.ready &&
     percent(updated.view.progress) === percent(job.view.progress);
   jobs.set(key, updated);
@@ -94,20 +86,12 @@ function update(key: string, controller: AbortController, next: (job: Job) => Jo
 export function start(key: string): SceneExportJobHandle | null {
   if (jobs.has(key)) return null;
   const controller = new AbortController();
-  jobs.set(key, { view: { key, progress: null, cancellable: true, choosing: null, ready: false }, controller, answer: null, tap: null });
+  jobs.set(key, { view: { key, progress: null, cancellable: true, ready: false }, controller, tap: null });
   publish();
   return {
     signal: controller.signal,
     report: (progress) => update(key, controller, (job) => ({ ...job, view: { ...job.view, progress } })),
     lockDelivery: () => update(key, controller, (job) => ({ ...job, view: { ...job.view, progress: 1, cancellable: false } })),
-    chooseLength: (choices) =>
-      new Promise((resolve) => {
-        if (controller.signal.aborted || jobs.get(key)?.controller !== controller) {
-          resolve(null);
-          return;
-        }
-        update(key, controller, (job) => ({ ...job, view: { ...job.view, choosing: choices }, answer: resolve }));
-      }),
     awaitDeliveryTap: (deliver) =>
       new Promise((resolve) => {
         if (controller.signal.aborted || jobs.get(key)?.controller !== controller) {
@@ -122,16 +106,6 @@ export function start(key: string): SceneExportJobHandle | null {
       publish();
     },
   };
-}
-
-/** La part choisie (ou `null` : l'utilisateur renonce) — le job reprend. */
-export function choose(key: string, quarter: ImagerQuarter | null): void {
-  const job = jobs.get(key);
-  if (job === undefined || job.answer === null) return;
-  const answer = job.answer;
-  jobs.set(key, { ...job, view: { ...job.view, choosing: null }, answer: null });
-  publish();
-  answer(quarter);
 }
 
 /**
@@ -153,7 +127,6 @@ export function cancel(key: string): void {
   const job = jobs.get(key);
   if (job === undefined || !job.view.cancellable) return;
   job.controller.abort();
-  job.answer?.(null);
   job.tap?.resolve('cancelled');
   jobs.delete(key);
   publish();

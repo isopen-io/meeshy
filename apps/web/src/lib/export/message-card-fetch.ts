@@ -16,6 +16,9 @@ import { attachmentSrc } from '@/lib/api/media-url';
  * l'en-tête `Authorization` déclenche un pré-vol que ces hôtes refusent
  * (mesuré le 2026-09-30 : `OPTIONS static.meeshy.me` → 405) — la pièce que la
  * bulle montre ne se peignait alors jamais sur la carte.
+ *
+ * Une adresse `blob:` est un fichier DÉJÀ local — le rendu d'une œuvre
+ * composée posé sur la carte (#16393) : il se relit tel quel, sans jeton.
  */
 export type CardMediaFetchDeps = {
   readonly fetchImpl: typeof fetch;
@@ -39,6 +42,10 @@ export function cardMediaBlobFetcher(deps: CardMediaFetchDeps): (url: string, id
   const gateway = originOf(deps.apiBase === '' ? deps.documentBase : deps.apiBase, deps.documentBase);
   const resolve = deps.resolve ?? attachmentSrc;
   return async (url, id) => {
+    if (url.startsWith('blob:')) {
+      const response = await deps.fetchImpl(url).catch(() => null);
+      return response?.ok === true ? response.blob().catch(() => null) : null;
+    }
     const resolved = resolve(url);
     const absolute = originOf(resolved, deps.documentBase) === null ? resolved : new URL(resolved, deps.documentBase).href;
     if (originOf(absolute, deps.documentBase) !== gateway) {
