@@ -13,11 +13,13 @@ public enum class StageTransportIntent { None, Pause, TogglePlayback }
  * (cadre arrondi centré avec plateau autour, puis coins droits en plein cadre) et porte la RAISON de l'entrée.
  */
 public sealed interface StagePresentation {
-    public data object Carded : StagePresentation
-    public data class Full(val pausedOnEntry: Boolean) : StagePresentation
+    public data object Carded : StagePresentation {
+        override val pausedOnEntry: Boolean get() = false
+    }
+    public data class Full(override val pausedOnEntry: Boolean) : StagePresentation
 
     public val isFull: Boolean get() = this is Full
-    public val pausedOnEntry: Boolean get() = (this as? Full)?.pausedOnEntry ?: false
+    public val pausedOnEntry: Boolean
     public val showsPlateau: Boolean get() = !isFull
     public val framing: MediaStageFraming.Presentation
         get() = if (isFull) MediaStageFraming.Presentation.Full else MediaStageFraming.Presentation.Carded

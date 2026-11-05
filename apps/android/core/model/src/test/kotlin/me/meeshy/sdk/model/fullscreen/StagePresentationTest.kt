@@ -43,10 +43,10 @@ class StagePresentationTest {
 
     @Test fun `un glissement vertical suit puis ferme ou entre en plein cadre`() {
         val g = MediaStageGestures
-        assertThat(g.resolveDrag(100f, 20f, StagePresentation.Carded, 80f)).isEqualTo(g.DragOutcome.Ignored)
-        assertThat(g.resolveDrag(0f, -100f, StagePresentation.Carded, 80f)).isEqualTo(g.DragOutcome.EntersFull)
-        assertThat(g.resolveDrag(0f, -100f, full, 80f)).isEqualTo(g.DragOutcome.Follows)
-        assertThat(g.resolveDrag(0f, 100f, full, 80f)).isEqualTo(g.DragOutcome.Dismisses)
+        assertThat(g.resolveDrag(100f, 20f, StagePresentation.Carded, 80f)).isEqualTo(MediaStageGestures.DragOutcome.Ignored)
+        assertThat(g.resolveDrag(0f, -100f, StagePresentation.Carded, 80f)).isEqualTo(MediaStageGestures.DragOutcome.EntersFull)
+        assertThat(g.resolveDrag(0f, -100f, full, 80f)).isEqualTo(MediaStageGestures.DragOutcome.Follows)
+        assertThat(g.resolveDrag(0f, 100f, full, 80f)).isEqualTo(MediaStageGestures.DragOutcome.Dismisses)
         assertThat(g.longPressArmed(isActive = true, isTransformed = true)).isFalse()
     }
 }
