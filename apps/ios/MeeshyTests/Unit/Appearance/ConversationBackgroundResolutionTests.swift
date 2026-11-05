@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 import MeeshySDK
 @testable import Meeshy
@@ -23,6 +24,36 @@ final class ConversationBackgroundResolutionTests: XCTestCase {
     func test_resolve_unknownDesignOrPack_fallsBackToSignature() {
         XCTAssertEqual(ConversationBackgroundResolution.resolve(ConversationAppearance(background: .design(pack: "heritages", design: "futur")), isDark: false), .signature)
         XCTAssertEqual(ConversationBackgroundResolution.resolve(ConversationAppearance(background: .design(pack: "inconnu", design: "zellige")), isDark: false), .signature)
+    }
+
+    /// #16264 — un pack de fonds NON embarqué se peint depuis son contrat servi, déjà sur l'appareil.
+    private final class MockServedAppearance: ServedAppearanceProviding, @unchecked Sendable {
+        var contracts: [String: ServedAppearanceContract] = [:]
+        var sources: [String: String] = [:]
+        var changes: AnyPublisher<Void, Never> { Empty().eraseToAnyPublisher() }
+        func contract(src: String) -> ServedAppearanceContract? { contracts[src] }
+        func contractSource(domain: PackDomain, slug: String) -> String? { sources["\(domain.rawValue)/\(slug)"] }
+        func load(src: String) async -> ServedAppearanceContract? { contracts[src] }
+        func prepare(domain: PackDomain, installed: [ShopPack]) async {}
+        func prepare(domain: PackDomain, slug: String) async -> ServedAppearanceContract? { nil }
+    }
+
+    func test_resolve_aServedDesign_paintsFromItsContract_andAnAbsentContractIsSignature() {
+        let designs = AppearanceCatalog.shared.wallpaperPacks.first { $0.slug == "heritages" }?.designs ?? []
+        let served = MockServedAppearance()
+        let appearance = ConversationAppearance(background: .design(pack: "fonds-servis", design: "zellige"))
+        XCTAssertEqual(ConversationBackgroundResolution.resolve(appearance, isDark: false, served: served), .signature)
+
+        served.contracts["0123456789abcdef.json"] = .wallpaper(designs)
+        served.sources["wallpaper/fonds-servis"] = "0123456789abcdef.json"
+        guard case .design(let design) = ConversationBackgroundResolution.resolve(appearance, isDark: false, served: served) else {
+            return XCTFail("un modèle servi, sur l'appareil, se peint comme l'embarqué")
+        }
+        XCTAssertEqual(design.key, "zellige")
+        XCTAssertTrue(ConversationBackgroundResolution.needsServedWallpaper(appearance, served: MockServedAppearance()))
+        XCTAssertFalse(ConversationBackgroundResolution.needsServedWallpaper(appearance, served: served))
+        XCTAssertFalse(ConversationBackgroundResolution.needsServedWallpaper(ConversationAppearance(background: .design(pack: "heritages", design: "zellige")),
+                                                                             served: MockServedAppearance()), "l'embarqué ne se télécharge jamais")
     }
 
     func test_resolve_solid_followsTheColorScheme() {
