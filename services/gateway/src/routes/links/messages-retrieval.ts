@@ -11,6 +11,7 @@ import { createLegacyHybridRequest } from './utils/link-helpers';
 import { getConversationMessagesWithDetails, countConversationMessages } from './utils/prisma-queries';
 import { formatLinkMessageWithDetails } from './utils/message-formatters';
 import { revealAtRestRows } from '../../services/messaging/serverAtRest';
+import { withNoticeUsernames } from '../../services/messaging/noticeUsernames';
 import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import { loadQuotedEphemeralReaders } from '../conversations/ephemeralReaderDeadlines';
 import { mapMessageProtectionFields } from '../conversations/messageProtectionProjection';
@@ -224,8 +225,11 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
         readerPage.inherited
       ));
 
+      // #16421 — le pseudo d'un avis d'arrivée écrit avant qu'il y voyage.
+      const servedMessages = await withNoticeUsernames(fastify.prisma, formattedMessages);
+
       return sendSuccess(reply, {
-          messages: formattedMessages.reverse(),
+          messages: servedMessages.reverse(),
           conversation: shareLink.conversation,
           hasMore: totalMessages > pageOffset + messages.length,
           total: totalMessages
