@@ -12,8 +12,11 @@
  *
  * Un ANCIEN profil, écrit avant les clés de nom et que le rattrapage n'a pas
  * encore touché, détient lui aussi son nom : sa clé se recalcule à la lecture
- * (balayage borné — ces profils sont peu nombreux, et le rattrapage les
- * épuise). Entre deux détenteurs d'un même nom, le plus ancien le garde.
+ * (balayage borné, neutres et officiel exclus — ces profils sont peu nombreux,
+ * et le rattrapage les épuise). En DIRECT (création, renommage), tout ancien
+ * profil au même nom le détient, quel que soit son âge. Au RATTRAPAGE seul,
+ * où les deux portaient déjà le nom, le plus ancien le garde ; un balayage
+ * inconcluant y veut dire « réessayer plus tard », jamais « nom pris ».
  *
  * La vérification précède l'écriture ; deux écritures simultanées passent la
  * vérification toutes les deux. L'index unique partiel de `nameKey` (migration
@@ -33,16 +36,19 @@ export const NEUTRAL_PUBLISHER_NAME = 'Éditeur';
 export type PublisherNameClaim =
   | { readonly kind: 'ok'; readonly displayName: string; readonly nameKey: string | null }
   | { readonly kind: 'reserved' }
-  | { readonly kind: 'name-taken' };
+  | { readonly kind: 'name-taken' }
+  /** Le balayage des anciens profils n'a pas conclu : ni accordé ni refusé. */
+  | { readonly kind: 'inconclusive' };
 
 type AgedRow = { readonly id: string; readonly userId: string; readonly createdAt?: Date | null };
 
 /**
- * `claimant` : le profil qui revendique, s'il existe déjà (un renommage, un
- * ancien profil qu'on nomme) — face à un ancien profil sans clé au même nom, le
- * plus ancien des deux garde le nom. Absent : une création, la plus récente.
+ * `legacyClaimant` : AU RATTRAPAGE SEULEMENT, l'ancien profil qu'on nomme —
+ * face à un autre ancien profil au même nom, le plus ancien des deux le garde.
+ * Absent (création, renommage en direct) : tout ancien profil au même nom le
+ * détient, quel que soit son âge.
  */
-export type PublisherNameRequest = { readonly userId: string; readonly name: string; readonly official: boolean; readonly claimant?: AgedRow | null };
+export type PublisherNameRequest = { readonly userId: string; readonly name: string; readonly official: boolean; readonly legacyClaimant?: AgedRow };
 
 /** Au-delà, le balayage des anciens profils ne conclut pas : le nom est refusé (fail-closed) jusqu'au rattrapage. */
 export const LEGACY_NAME_SCAN_LIMIT = 2_000;
@@ -57,21 +63,26 @@ export async function claimPublisherName(prisma: PublisherNamesDb, request: Publ
   const nameKey = publisherNameKey(request.name);
   const holder = await prisma.partnerProfile.findFirst({ where: { nameKey, NOT: { userId: request.userId } }, select: { id: true } });
   if (holder !== null) return { kind: 'name-taken' };
-  return (await legacyHolds(prisma, nameKey, request)) ? { kind: 'name-taken' } : { kind: 'ok', displayName: request.name, nameKey };
+  const legacy = await legacyHolder(prisma, nameKey, request);
+  if (legacy === 'inconclusive') return { kind: 'inconclusive' };
+  return legacy === 'held' ? { kind: 'name-taken' } : { kind: 'ok', displayName: request.name, nameKey };
 }
 
-/** Vrai si un ancien profil sans clé, au même nom et plus ancien que le revendicateur, détient ce nom. */
-async function legacyHolds(prisma: PublisherNamesDb, nameKey: string, request: PublisherNameRequest): Promise<boolean> {
+/**
+ * Un ancien profil sans clé détient-il ce nom ? Les profils neutres et celui
+ * de « Meeshy » sont exclus DÈS LA REQUÊTE : ils ne détiennent aucun nom, et
+ * ne doivent pas remplir le balayage. Au-delà de la borne : `inconclusive`.
+ */
+async function legacyHolder(prisma: PublisherNamesDb, nameKey: string, request: PublisherNameRequest): Promise<'held' | 'free' | 'inconclusive'> {
   const legacy: readonly (AgedRow & { readonly displayName: string })[] = await prisma.partnerProfile.findMany({
-    where: { OR: WITHOUT_NAME_KEY, NOT: { userId: request.userId } },
+    where: { OR: WITHOUT_NAME_KEY, NOT: { userId: request.userId }, displayName: { notIn: [NEUTRAL_PUBLISHER_NAME, MEESHY_PUBLISHER_NAME] } },
     select: { id: true, userId: true, displayName: true, createdAt: true },
     take: LEGACY_NAME_SCAN_LIMIT,
   });
-  if (legacy.length >= LEGACY_NAME_SCAN_LIMIT) return true;
-  const claimant = request.claimant ?? null;
-  return legacy.some(
-    (row) => row.displayName !== NEUTRAL_PUBLISHER_NAME && publisherNameKey(row.displayName) === nameKey && (claimant === null || byAge(row, claimant) < 0),
-  );
+  if (legacy.length >= LEGACY_NAME_SCAN_LIMIT) return 'inconclusive';
+  const claimant = request.legacyClaimant;
+  const holds = legacy.some((row) => publisherNameKey(row.displayName) === nameKey && (claimant === undefined || byAge(row, claimant) < 0));
+  return holds ? 'held' : 'free';
 }
 
 /** Une écriture refusée par l'index unique de `nameKey` : le nom vient d'être pris. */

@@ -204,7 +204,8 @@ export class LensPartners {
     if ('reason' in logo) return { kind: 'logo-refused', reason: logo.reason };
     const official = this.isOfficial(userId);
     const current = await this.prisma.partnerProfile.findUnique({ where: { userId }, select: PROFILE_SELECT });
-    const claim = await claimPublisherName(this.prisma, { userId, name: input.profile.displayName, official, claimant: current });
+    const claim = await claimPublisherName(this.prisma, { userId, name: input.profile.displayName, official });
+    if (claim.kind === 'inconclusive') return { kind: 'name-taken' };
     if (claim.kind !== 'ok') return { kind: claim.kind };
     const now = this.now();
     const named = { displayName: claim.displayName, nameKey: claim.nameKey };

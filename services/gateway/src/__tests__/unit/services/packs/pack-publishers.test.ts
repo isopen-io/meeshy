@@ -388,13 +388,13 @@ describe('le nom d’un éditeur : un seul site d’écriture, unique même sous
       { id: '68e000000000000000000002', userId: BINTA, displayName: 'lens-lab', verifiedAt: new Date(), createdAt: new Date('2026-10-02T00:00:00Z') },
       { id: '68e000000000000000000003', userId: PURGED, displayName: 'Meeshy Partner', verifiedAt: new Date(), createdAt: new Date('2026-10-03T00:00:00Z') },
     );
-    expect(await publishers.backfillNameKeys()).toEqual({ keyed: 1, neutralized: 2 });
+    expect(await publishers.backfillNameKeys()).toEqual({ keyed: 1, neutralized: 2, deferred: 0 });
     expect(db.profiles.map((row) => [row.displayName, row.nameKey ?? null, row.verifiedAt])).toEqual([
       ['Lens Lab', 'iensiab', expect.any(Date)],
       ['Éditeur', null, null],
       ['Éditeur', null, null],
     ]);
-    expect(await publishers.backfillNameKeys()).toEqual({ keyed: 0, neutralized: 0 });
+    expect(await publishers.backfillNameKeys()).toEqual({ keyed: 0, neutralized: 0, deferred: 0 });
   });
 });
 

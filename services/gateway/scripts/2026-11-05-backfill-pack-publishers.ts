@@ -64,6 +64,7 @@ async function main(): Promise<void> {
     const names = await publishers.backfillNameKeys();
     console.log(`  clés de nom posées              : ${names.keyed}`);
     console.log(`  ramenés au nom neutre           : ${names.neutralized}`);
+    console.log(`  remis à plus tard (balayage)    : ${names.deferred}`);
     const report = await publishers.backfill(packs);
     console.log(`  éditeurs créés                  : ${report.created}`);
     console.log(`  adresses posées                 : ${report.addressed}`);

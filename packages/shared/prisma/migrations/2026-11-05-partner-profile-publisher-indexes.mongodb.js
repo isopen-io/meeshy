@@ -45,6 +45,8 @@ const specs = [
 
 /** Le nom neutre (`NEUTRAL_PUBLISHER_NAME`) n'a pas de clé : tous les éditeurs sans nom le partagent. */
 const NEUTRAL_NAME = 'Éditeur';
+/** Le profil officiel « Meeshy » n'a pas de clé non plus : il ne porte aucun nom qu'un tiers pourrait prendre. */
+const OFFICIAL_NAME = 'Meeshy';
 
 const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
@@ -75,7 +77,10 @@ for (const spec of specs) {
   }
 
   if (spec.requiresKeyedNames && exists) {
-    const unkeyed = db.getCollection(COLLECTION).countDocuments({ nameKey: null, displayName: { $ne: NEUTRAL_NAME } });
+    const unkeyed = db.getCollection(COLLECTION).countDocuments({
+      $or: [{ nameKey: null }, { nameKey: { $exists: false } }],
+      displayName: { $nin: [NEUTRAL_NAME, OFFICIAL_NAME] },
+    });
     if (unkeyed > 0) {
       report.blocked.push(`${COLLECTION}.${spec.name} — ${unkeyed} profil(s) nommé(s) sans clé : jouer d'abord services/gateway/scripts/2026-11-05-backfill-pack-publishers.ts`);
       continue;

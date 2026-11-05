@@ -38,6 +38,8 @@ function fieldMatches(row: Row, key: string, expected: unknown): boolean {
     switch (operator) {
       case 'in':
         return (operand as unknown[]).includes(actual);
+      case 'notIn':
+        return !(operand as unknown[]).includes(actual);
       case 'not':
         if (operand === null) return actual !== null && actual !== undefined;
         return actual !== operand;

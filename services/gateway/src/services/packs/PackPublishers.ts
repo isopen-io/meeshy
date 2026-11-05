@@ -80,7 +80,7 @@ export type EnsureOfficialOutcome = 'linked' | 'unconfigured' | 'unknown-account
 export type BackfillSummary = { readonly created: number; readonly addressed: number; readonly kept: number; readonly skipped: number };
 
 /** Ce que le rattrapage des clés de nom a fait : clés posées, profils ramenés au nom neutre (nom réservé ou déjà porté). */
-export type NameKeyBackfillSummary = { readonly keyed: number; readonly neutralized: number };
+export type NameKeyBackfillSummary = { readonly keyed: number; readonly neutralized: number; readonly deferred: number };
 
 export type PackPublishersDeps = {
   readonly prisma: PackPublishersDb;
@@ -367,7 +367,7 @@ export class PackPublishers {
       return this.servable(named) ?? this.allocateSlug(named);
     }
     const claim = await claimPublisherName(this.prisma, { userId, name: storeNameOf(author), official: false });
-    if (claim.kind === 'name-taken') return 'name-taken';
+    if (claim.kind === 'name-taken' || claim.kind === 'inconclusive') return 'name-taken';
     const { displayName, nameKey } = claim.kind === 'ok' ? claim : { displayName: NEUTRAL_PUBLISHER_NAME, nameKey: null };
     const now = this.now();
     try {
@@ -389,9 +389,12 @@ export class PackPublishers {
    * Un ancien profil (sans clé de nom) passe par `claimPublisherName` : nom
    * libre, il reçoit sa clé ; nom réservé ou déjà porté par un autre éditeur,
    * il est ramené au nom NEUTRE et perd la vérification qui portait sur ce nom.
+   * Un balayage inconcluant ne touche à rien : le profil reste tel quel, à
+   * renommer au prochain passage.
    */
   private async nameLegacy(row: PublisherRow): Promise<PublisherRow> {
-    const claim = await claimPublisherName(this.prisma, { userId: row.userId, name: row.displayName, official: this.isOfficial(row.userId), claimant: row });
+    const claim = await claimPublisherName(this.prisma, { userId: row.userId, name: row.displayName, official: this.isOfficial(row.userId), legacyClaimant: row });
+    if (claim.kind === 'inconclusive') return row;
     const now = this.now();
     const neutral = { displayName: NEUTRAL_PUBLISHER_NAME, nameKey: null, verifiedAt: null, verifiedBy: null, updatedAt: now };
     try {
@@ -417,11 +420,12 @@ export class PackPublishers {
    */
   async backfillNameKeys(): Promise<NameKeyBackfillSummary> {
     const rows: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { OR: WITHOUT_NAME_KEY }, select: ROW_SELECT });
-    const summary = { keyed: 0, neutralized: 0 };
+    const summary = { keyed: 0, neutralized: 0, deferred: 0 };
     for (const row of [...rows].sort(byAge)) {
       if (this.isOfficial(row.userId) || !lacksNameKey(row)) continue;
       const named = await this.nameLegacy(row);
-      if (named.displayName === NEUTRAL_PUBLISHER_NAME) summary.neutralized += 1;
+      if (lacksNameKey(named)) summary.deferred += 1;
+      else if (named.displayName === NEUTRAL_PUBLISHER_NAME) summary.neutralized += 1;
       else summary.keyed += 1;
     }
     return summary;
