@@ -163,7 +163,7 @@ internal fun AudioFullscreenPage(
             if (layout.arrangement == AudioFullscreenArrangement.SIDE_BY_SIDE) {
                 AudioFullscreenSideBySide(layout, railReserve, topBar, hero, identity, transport, lyrics, languages, rail)
             } else {
-                val showsLanguages = audioFullscreenShowsLanguages(source, transcripts)
+                val showsLanguages = remember(source, transcripts) { audioFullscreenShowsLanguages(source, transcripts) }
                 AudioFullscreenStacked(layout, maxHeight.value, railReserve, showsLanguages, topBar, hero, identity, transport, lyrics, languages, rail)
             }
         }
