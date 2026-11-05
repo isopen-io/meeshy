@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import java.io.File
+import me.meeshy.ui.component.bubble.LocalUploadProgress
 import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.sdk.media.MediaIntake
 import android.content.ContentResolver
@@ -163,6 +164,7 @@ fun ChatScreen(
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()
+    val uploadProgress = hiltViewModel<ChatUploadProgressViewModel>().progress
     val voicePlayback: ChatAudioViewModel = hiltViewModel()
     val transcriptionRequests: ChatTranscriptionRequestsViewModel = hiltViewModel()
     val isEndToEnd = state.isEndToEnd
@@ -180,6 +182,7 @@ fun ChatScreen(
     )
     CompositionLocalProvider(
         LocalBubbleContactCardAccounts provides contactCards,
+        LocalUploadProgress provides uploadProgress,
         LocalChatContactCardScope provides contactCards::underConversation,
         LocalChatSignalClearance provides signalClearance,
         LocalChatVoicePlayback provides voicePlayback,

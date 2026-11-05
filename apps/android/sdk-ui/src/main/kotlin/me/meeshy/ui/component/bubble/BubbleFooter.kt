@@ -79,6 +79,7 @@ internal fun BubbleMetaTrailing(
                 metaColor = metaColor,
                 readTint = tint,
                 sendStartedAtIso = content.createdAtIso,
+                uploadAttachmentIds = if (content.isPending) content.uploadAttachmentIds() else emptyList(),
                 onShowReadStatus = onShowReadStatus,
             )
         }

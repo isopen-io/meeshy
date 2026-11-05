@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.semantics
 import me.meeshy.sdk.model.DeliveryGlyphState
 import me.meeshy.sdk.model.DeliveryGlyphs
 import me.meeshy.sdk.model.SendLifecycleResolver
+import me.meeshy.ui.theme.MeeshyPalette
 
 /**
  * La coche unique de tous les pieds de bulle (iOS `BubbleDeliveryCheck`). L'horloge d'un envoi frais
@@ -23,24 +24,35 @@ internal fun BubbleDeliveryCheck(
     metaColor: Color,
     readTint: Color,
     sendStartedAtIso: String?,
+    uploadAttachmentIds: List<String> = emptyList(),
     onShowReadStatus: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val revealed = if (state == DeliveryGlyphState.Sending && !isOffline) {
-        rememberSendingGlyphRevealed(sendStartedAtIso)
-    } else {
-        true
-    }
+    val inFlight = (state == DeliveryGlyphState.Sending || state == DeliveryGlyphState.Slow) && !isOffline
+    val revealed = if (state == DeliveryGlyphState.Sending && !isOffline) rememberSendingGlyphRevealed(sendStartedAtIso) else true
     val tap = if (onShowReadStatus == null) {
         modifier
     } else {
         modifier.clickable(onClick = onShowReadStatus).semantics { role = Role.Button }
     }
-    Box(tap) {
+    val uploads = LocalUploadProgress.current
+    val clock: @Composable () -> Unit = {
         DeliveryGlyphIcon(
             glyph = DeliveryGlyphs.resolve(state, isOffline, sendingRevealed = revealed),
             metaColor = metaColor,
             readTint = readTint,
         )
+    }
+    Box(tap) {
+        if (inFlight && uploads != null && uploadAttachmentIds.isNotEmpty()) {
+            SendProgressPill(
+                attachmentIds = uploadAttachmentIds,
+                source = uploads,
+                color = if (state == DeliveryGlyphState.Slow) MeeshyPalette.Warning else metaColor,
+                fallback = clock,
+            )
+        } else {
+            clock()
+        }
     }
 }
