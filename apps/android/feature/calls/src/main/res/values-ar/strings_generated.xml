@@ -137,6 +137,7 @@
     <string name="call_journal_clear_message">يحتفظ المشاركون الآخرون بسجلاتهم.</string>
     <string name="call_journal_clear_title">مسح سجل المكالمات بالكامل؟</string>
     <string name="call_journal_close">إغلاق</string>
+    <string name="call_journal_empty_title">لا مكالمات حديثة</string>
     <string name="call_journal_erase_failed">تعذّر المسح. حاول مرة أخرى.</string>
     <string name="call_journal_filter_video">فيديو</string>
     <string name="call_journal_hide">مسح</string>
