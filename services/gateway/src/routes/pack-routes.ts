@@ -47,16 +47,17 @@ export const packPublisherJsonSchema = {
   description: 'L’éditeur du pack (#16274) — Meeshy pour un pack du dépôt',
 } as const;
 
-const PUBLICATION_REFUSALS: Readonly<Record<PublicationRefusal, { readonly message: string; readonly code: string }>> = {
-  'account-unverified': { message: 'Publishing requires an active account with a verified email or phone', code: PACK_PUBLISHER_ERROR_CODES.ACCOUNT_UNVERIFIED },
-  'not-owner': { message: 'This publisher does not belong to your account', code: PACK_PUBLISHER_ERROR_CODES.NOT_OWNER },
-  reserved: { message: 'This publisher identity is reserved', code: PACK_PUBLISHER_ERROR_CODES.RESERVED },
+const PUBLICATION_REFUSALS: Readonly<Record<PublicationRefusal, { readonly status: 403 | 409; readonly message: string; readonly code: string }>> = {
+  'account-unverified': { status: 403, message: 'Publishing requires an active account with a verified email or phone', code: PACK_PUBLISHER_ERROR_CODES.ACCOUNT_UNVERIFIED },
+  'not-owner': { status: 403, message: 'This publisher does not belong to your account', code: PACK_PUBLISHER_ERROR_CODES.NOT_OWNER },
+  reserved: { status: 403, message: 'This publisher identity is reserved', code: PACK_PUBLISHER_ERROR_CODES.RESERVED },
+  'name-taken': { status: 409, message: 'Another publisher already uses this store name', code: PACK_PUBLISHER_ERROR_CODES.NAME_TAKEN },
 };
 
-/** Une publication refusée par la loi des éditeurs (#16274) : toujours un 403. */
+/** Une publication refusée par la loi des éditeurs (#16274) : 403, ou 409 pour un nom de boutique déjà pris. */
 export const sendPublicationRefused = (reply: FastifyReply, reason: PublicationRefusal) => {
   const refusal = PUBLICATION_REFUSALS[reason];
-  return sendForbidden(reply, refusal.message, { code: refusal.code });
+  return refusal.status === 409 ? sendConflict(reply, refusal.message, { code: refusal.code }) : sendForbidden(reply, refusal.message, { code: refusal.code });
 };
 
 export const PACK_ERRORS = { 400: errorResponseSchema, 401: errorResponseSchema, 403: errorResponseSchema, 404: errorResponseSchema, 500: errorResponseSchema } as const;

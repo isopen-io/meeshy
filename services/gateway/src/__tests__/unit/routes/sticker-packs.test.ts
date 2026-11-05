@@ -236,7 +236,7 @@ describe('moderation and installation', () => {
     expect(firstFiles.some((f) => stored.has(f))).toBe(false);
 
     as(BOB);
-    expect((await submit(app, manifest({ name: 'Copie' }))).json()).toMatchObject({ code: 'STICKER_PACK_SLUG_TAKEN' });
+    expect((await submit(app, manifest({ name: 'Copie', author: 'Bob Studio' }))).json()).toMatchObject({ code: 'STICKER_PACK_SLUG_TAKEN' });
     await app.close();
   });
 
@@ -285,6 +285,26 @@ describe('the publisher of a pack (#16274)', () => {
     const byClaim = await submit(app, manifest({ publisher: 'meeshy' }));
     expect(byClaim.statusCode).toBe(403);
     expect(byClaim.json().code).toBe('PUBLISHER_NOT_OWNER');
+  });
+
+  it('refuses a store name another publisher already holds, up to case and accents: 409 PUBLISHER_NAME_TAKEN (audit #16274)', async () => {
+    const { app, as, packs } = await buildApp({ userId: BOB });
+    await submit(app, manifest({ slug: 'oiseaux', author: 'Bob Studio' }));
+    as(ALICE);
+    const res = await submit(app, manifest({ slug: 'copie', author: 'BOB studio' }));
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('PUBLISHER_NAME_TAKEN');
+    expect(packs.some((pack) => pack.slug === 'copie')).toBe(false);
+  });
+
+  it('a read never creates a publisher: a submitter without one is served under the neutral name (audit #16274)', async () => {
+    const { app, profiles } = await buildApp();
+    expect((await submit(app)).statusCode).toBe(201);
+    profiles.splice(0);
+    const res = await app.inject({ method: 'GET', url: '/submissions' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].publisher).toEqual({ slug: 'editeur', name: 'Éditeur', verified: false, official: false });
+    expect(profiles).toEqual([]);
   });
 
   it('refuses a guest of a link: 403 REGISTERED_USER_REQUIRED', async () => {

@@ -49,6 +49,8 @@ export const PACK_PUBLISHER_ERROR_CODES = {
   NOT_OWNER: 'PUBLISHER_NOT_OWNER',
   /** La proposition se présente sous l'identité réservée de Meeshy. */
   RESERVED: 'PUBLISHER_RESERVED',
+  /** Un autre éditeur porte déjà ce nom de boutique, à la casse, aux accents et aux confusables près (`publisherNameKey`). */
+  NAME_TAKEN: 'PUBLISHER_NAME_TAKEN',
 } as const;
 
 /** Les segments de route sous `/publishers` : aucun éditeur ne prend leur adresse. */
