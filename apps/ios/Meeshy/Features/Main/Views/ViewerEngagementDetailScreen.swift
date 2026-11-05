@@ -74,7 +74,7 @@ struct ViewerEngagementDetailScreen: View {
         } label: {
             Image(systemName: "chevron.left")
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                .foregroundColor(accentColor)
+                .foregroundStyle(accentColor)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -97,12 +97,12 @@ struct ViewerEngagementDetailScreen: View {
 
             Text(viewer.displayName)
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
             if !viewer.username.isEmpty, viewer.username != viewer.displayName {
                 Text("@\(viewer.username)")
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Label {
@@ -114,7 +114,7 @@ struct ViewerEngagementDetailScreen: View {
                 Image(systemName: "eye")
             }
             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-            .foregroundColor(.secondary)
+            .foregroundStyle(.secondary)
             .padding(.bottom, MeeshySpacing.xs)
         }
         .frame(maxWidth: .infinity)
@@ -126,14 +126,14 @@ struct ViewerEngagementDetailScreen: View {
         let marks = viewer.engagement.marks
         if marks.isEmpty {
             Text(String(localized: "viewer.engagement.onlyViewed", defaultValue: "A vu, sans autre interaction", bundle: .main))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         } else {
             ForEach(marks, id: \.self) { mark in
                 Label {
                     Text(ViewerEngagementWording.sentence(for: mark))
                 } icon: {
                     Image(systemName: ViewerEngagementWording.symbol(for: mark))
-                        .foregroundColor(accentColor)
+                        .foregroundStyle(accentColor)
                 }
             }
         }
@@ -147,7 +147,7 @@ struct ViewerEngagementDetailScreen: View {
             Label(String(localized: "viewer.engagement.openProfile", defaultValue: "Voir le profil", bundle: .main),
                   systemImage: "person.crop.circle")
                 .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                .foregroundColor(accentColor)
+                .foregroundStyle(accentColor)
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
         .accessibilityIdentifier("viewerDetail.openProfile")
