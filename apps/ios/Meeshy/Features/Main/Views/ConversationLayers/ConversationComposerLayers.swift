@@ -21,6 +21,8 @@ struct ConversationComposerCore: View {
     let bar: (Binding<String>, Bool, TimeInterval, [CGFloat]) -> UniversalComposerBar
     let onReplyRoute: (String?) -> Void
     let onFold: () -> Void
+    /// L'id de la conversation : son repli se retient (#16341).
+    var foldMemoryKey: String? = nil
 
     var body: some View {
         ComposerAudioHost(recorder: recorder) { isRecording, recordingDuration, audioLevels in
@@ -35,6 +37,7 @@ struct ConversationComposerCore: View {
                 isComposing: ConversationComposerFold.isComposing(
                     isFocused: isFocusedOrRequested,
                     isRecording: isRecording),
+                memoryKey: foldMemoryKey,
                 onFold: onFold)
         }
     }
