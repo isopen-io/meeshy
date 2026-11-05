@@ -62,9 +62,6 @@ public interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE state = :state ORDER BY createdAt ASC")
     public suspend fun byState(state: String): List<OutboxEntity>
 
-    @Query("SELECT * FROM outbox WHERE kind = :kind ORDER BY createdAt ASC")
-    public suspend fun byKind(kind: String): List<OutboxEntity>
-
     /** The `(cmid, state)` of the outbox rows named by [cmids] — rows absent from the result do not exist. */
     @Query("SELECT * FROM outbox WHERE cmid IN (:cmids)")
     public suspend fun findAll(cmids: List<String>): List<OutboxEntity>

@@ -27,7 +27,7 @@ public class OutboxAttachmentGroupSender(
         if (items.isEmpty()) return false
         val cmids = mutableListOf<String>()
         return try {
-            items.forEach { cmids += uploads.enqueue(it.item, conversationId = conversationId, messageCid = group.tempId) }
+            items.forEach { cmids += uploads.enqueue(it.item, conversationId = conversationId) }
             host.sendPostedBubble(group.tempId, attachmentIds = cmids, dependsOn = cmids.toSet())
         } catch (cancelled: CancellationException) {
             throw cancelled

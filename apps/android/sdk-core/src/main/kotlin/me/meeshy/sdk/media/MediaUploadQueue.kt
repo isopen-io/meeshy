@@ -55,42 +55,42 @@ class MediaUploadQueue @Inject constructor(
      *
      * [conversationId] names the chat conversation a message attachment is destined for, so
      * the outbox's end-to-end guard withholds the bytes even before the message row exists
-     * (#12956). [messageCid] names the bubble the piece belongs to, so a retry can find it again (#16168).
+     * (#12956).
      *
      * The blob and the row belong to the account of the gesture's ticket when one is installed (#13558), else to the
      * account signed in when this call BEGAN (#13555): if that account closes while
      * the octets are being sealed, neither is kept and [AccountClosedException] is thrown — a media picked by A never
      * leaves as B, however long the write took.
      */
-    suspend fun enqueue(item: MediaUploadItem, context: TusUploadContext? = null, conversationId: String? = null, messageCid: String? = null): String =
-        OutboxIds.cmid().also { enqueueAs(it, item, context, conversationId, messageCid) }
+    suspend fun enqueue(item: MediaUploadItem, context: TusUploadContext? = null, conversationId: String? = null): String =
+        OutboxIds.cmid().also { enqueueAs(it, item, context, conversationId) }
 
     /**
      * [enqueue] under a [cmid] the caller already gave the media: the story composer names a media the moment it lands,
      * sends it in the background, and only hands it to the queue when that send fails or a publication must wait on it —
      * the placeholder already riding in the slide stays its dependency key.
      */
-    suspend fun enqueueAs(cmid: String, item: MediaUploadItem, context: TusUploadContext? = null, conversationId: String? = null, messageCid: String? = null) {
+    suspend fun enqueueAs(cmid: String, item: MediaUploadItem, context: TusUploadContext? = null, conversationId: String? = null) {
         val ticket = blobStore.currentTicket()
         blobStore.put(cmid, item, ticket)
         try {
-            enqueueRow(cmid, context, conversationId, messageCid, ticket)
+            enqueueRow(cmid, context, conversationId, ticket)
         } catch (failure: Exception) {
             withContext(NonCancellable) { blobStore.remove(cmid) }
             throw failure
         }
     }
 
-    private suspend fun enqueueRow(cmid: String, context: TusUploadContext?, conversationId: String?, messageCid: String?, ticket: AccountTicket?) {
+    private suspend fun enqueueRow(cmid: String, context: TusUploadContext?, conversationId: String?, ticket: AccountTicket?) {
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.UPLOAD_MEDIA,
                 lane = OutboxLanes.MEDIA,
                 targetId = cmid,
-                payload = if (context == null && conversationId == null && messageCid == null) {
+                payload = if (context == null && conversationId == null) {
                     ""
                 } else {
-                    MeeshyApi.json.encodeToString(MediaUploadPayload(context?.wire, conversationId, messageCid))
+                    MeeshyApi.json.encodeToString(MediaUploadPayload(context?.wire, conversationId))
                 },
                 cmid = cmid,
             ),
