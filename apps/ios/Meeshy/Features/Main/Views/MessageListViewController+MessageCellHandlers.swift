@@ -138,7 +138,7 @@ extension MessageListViewController {
                 self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
             },
             consentNotice: { [weak self] in
-                self?.router.push(.settings)
+                SettingsFocusRequest.shared.request(.voiceProfile); self?.router.push(.settings)
             },
             audioQueueTail: { [weak self] attachmentId in
                 self?.conversationViewModel?.audioQueueTail(after: attachmentId) ?? []
