@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -125,7 +126,8 @@ internal class AudioFullscreenViewModel @Inject constructor(
 
     /** La reconnaissance sur la copie entière ; `null` : rien à reconnaître ici (pas de copie, langue inconnue) — le serveur s'en charge. */
     private suspend fun recognize(source: AudioFullscreenSource): SoundTranscriptionOutcome? {
-        val language = (source.originalLanguage ?: source.trackLanguage)?.trim()?.ifEmpty { null } ?: return null
+        val spoken = if (source.isTranslatedTrack) source.trackLanguage else source.originalLanguage ?: source.trackLanguage
+        val language = spoken?.trim()?.ifEmpty { null } ?: return null
         val location = withContext(io) {
             BubbleVoiceProjection.waveformLocation(source.url, isProtected = false) { address ->
                 wholeFiles.file(MediaCacheCategory.AUDIO, address)?.absolutePath
@@ -145,17 +147,11 @@ internal class AudioFullscreenViewModel @Inject constructor(
     }
 
     private fun begin(attachmentId: String): Boolean {
-        var started = false
-        work.update { all ->
+        val before = work.getAndUpdate { all ->
             val current = all[attachmentId] ?: Work()
-            if (current.running) {
-                all
-            } else {
-                started = true
-                all + (attachmentId to current.copy(running = true, failed = false))
-            }
+            if (current.running) all else all + (attachmentId to current.copy(running = true, failed = false))
         }
-        return started
+        return before[attachmentId]?.running != true
     }
 
     private fun end(attachmentId: String, result: AudioFullscreenTranscriptLaw.Local? = null, failed: Boolean = false) {
