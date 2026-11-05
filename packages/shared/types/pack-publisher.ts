@@ -14,7 +14,7 @@
  * packs du dépôt lui sont attribués par l'index des packs, sans réécrire un
  * seul registre.
  *
- * @see services/gateway/decisions/2026-11-05-un-editeur-de-packs-est-un-compte-meeshy.md
+ * @see services/gateway/decisions/2026-11-05-un-editeur-de-packs-est-un-compte-meeshy-16274.md
  */
 
 export const PACK_PUBLISHER_LIMITS = {

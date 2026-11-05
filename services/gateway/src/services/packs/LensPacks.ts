@@ -42,6 +42,8 @@ import type { PackInstallationBroadcast } from './PackCatalog';
 import { normalizeLensLut } from './lensLutImage';
 import { isUniqueViolation, type CommunityPackStore, type PackViewer } from './PackCatalog';
 import { logError } from '../../utils/logger';
+import type { PackPublisherRef } from '@meeshy/shared/types/pack-publisher';
+import { defaultPackPublishers, withPublishers, type PackPublishers, type PublicationRefusal } from './PackPublishers';
 
 
 export type LensPackDetail = PackSummary & {
@@ -88,7 +90,8 @@ export type SubmitLensOutcome =
   | { readonly kind: 'asset-refused'; readonly src: string; readonly reason: LensAssetRefusal }
   | { readonly kind: 'slug-taken' }
   | { readonly kind: 'too-many-pending' }
-  | { readonly kind: 'audit-unavailable' };
+  | { readonly kind: 'audit-unavailable' }
+  | { readonly kind: 'refused'; readonly reason: PublicationRefusal };
 
 export type LensReview = {
   readonly decision: 'approve' | 'reject';
@@ -117,7 +120,9 @@ export type RestoreLensOutcome =
 export type LensFile = { readonly bytes: Buffer; readonly contentType: string };
 
 export type LensPacksDeps = {
-  readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog' | 'userStickerPack'>;
+  readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog' | 'userStickerPack' | 'partnerProfile' | 'user'>;
+  /** Qui peut publier, et sous quel éditeur (#16274). */
+  readonly publishers?: PackPublishers;
   readonly now?: () => Date;
   readonly normalizeAsset?: (bytes: Buffer) => Promise<StickerImageOutcome>;
   readonly normalizeLut?: (bytes: Buffer) => Promise<StickerImageOutcome>;
@@ -164,13 +169,14 @@ const EXTENSION = { 'image/png': 'png', 'image/webp': 'webp' } as const;
 const isLensImageMime = (mime: string): mime is keyof typeof EXTENSION => mime in EXTENSION;
 const DOCUMENT_CONTENT_TYPE = 'application/json; charset=utf-8';
 
-export function lensPackDetail(row: LensPackRow, installed: boolean, viewer?: PackViewer): LensPackDetail {
+export function lensPackDetail(row: LensPackRow, installed: boolean, viewer?: PackViewer, publisher?: PackPublisherRef): LensPackDetail {
   const ownView = viewer !== undefined && (viewer.userId === row.submitterId || viewer.canModerate);
   return {
     slug: row.slug,
     name: row.name,
     description: '',
     author: row.author || STICKER_PACK_AUTHOR_MEESHY,
+    ...(publisher === undefined ? {} : { publisher }),
     builtin: false,
     status: row.status as PackStatus,
     itemCount: 1,
@@ -262,7 +268,8 @@ function decodeAssets(refs: readonly string[], provided: Readonly<Record<string,
 }
 
 export class LensPacks {
-  private readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog' | 'userStickerPack'>;
+  private readonly prisma: Pick<PrismaClient, 'lensPack' | 'lensPackAsset' | 'adminAuditLog' | 'userStickerPack' | 'partnerProfile' | 'user'>;
+  private readonly publishers: PackPublishers;
   private readonly now: () => Date;
   private readonly normalizeAsset: (bytes: Buffer) => Promise<StickerImageOutcome>;
   private readonly normalizeLut: (bytes: Buffer) => Promise<StickerImageOutcome>;
@@ -273,6 +280,7 @@ export class LensPacks {
     this.log = deps.log;
     this.broadcast = deps.broadcast;
     this.prisma = deps.prisma;
+    this.publishers = deps.publishers ?? defaultPackPublishers(deps.prisma);
     this.now = deps.now ?? (() => new Date());
     this.normalizeAsset = deps.normalizeAsset ?? normalizeStickerImage;
     this.normalizeLut = deps.normalizeLut ?? normalizeLensLut;
@@ -319,13 +327,16 @@ export class LensPacks {
     }
   }
 
-  async submit(userId: string, input: { readonly document: unknown; readonly assets: Readonly<Record<string, string>> }): Promise<SubmitLensOutcome> {
+  /** `claimed` : l'éditeur que la proposition NOMME (`claimedPublisherSlug`), `null` pour l'éditeur du compte connecté (#16274). */
+  async submit(userId: string, input: { readonly document: unknown; readonly assets: Readonly<Record<string, string>>; readonly claimed?: string | null }): Promise<SubmitLensOutcome> {
     if (Buffer.byteLength(JSON.stringify(input.document ?? null), 'utf8') > LENS_PACK_LIMITS.maxDocumentBytes) return { kind: 'invalid' };
     const parsed = parseLens(input.document);
     if (parsed.status === 'update-required') return { kind: 'update-required', schema: parsed.schema };
     if (parsed.status === 'forbidden') return { kind: 'forbidden', reasons: parsed.reasons };
     if (parsed.status === 'invalid') return { kind: 'invalid' };
     const { lens } = parsed;
+    const authorization = await this.publishers.authorizePublication(userId, { author: lens.credits.author, claimed: input.claimed ?? null });
+    if (authorization.kind === 'refused') return authorization;
     const measured = measureLensCost(lens);
     if (!isLensCostDeclaredHonestly(lens.cost, measured)) return { kind: 'cost-understated', declared: lens.cost, measured };
 
@@ -386,7 +397,7 @@ export class LensPacks {
       await this.prisma.lensPackAsset.createMany({
         data: [...normalized.files.values()].map((file) => ({ packId: row.id, src: file.src, sha256: file.sha256, mimeType: file.mimeType, bytes: Uint8Array.from(file.bytes), sizeBytes: file.bytes.length })),
       });
-      return { kind: 'submitted', pack: lensPackDetail(row, false, { userId, canModerate: false }) };
+      return { kind: 'submitted', pack: lensPackDetail(row, false, { userId, canModerate: false }, authorization.publisher) };
     } catch (error) {
       if (isUniqueViolation(error)) return { kind: 'slug-taken' };
       throw error;
@@ -396,13 +407,13 @@ export class LensPacks {
   /** Les propositions de l'appelant, les plus récentes d'abord — avec le mot du modérateur. */
   async submissions(userId: string): Promise<readonly LensPackDetail[]> {
     const rows = await this.prisma.lensPack.findMany({ where: { submitterId: userId }, orderBy: { createdAt: 'desc' }, select: ROW_SELECT });
-    return rows.map((row) => lensPackDetail(row, false, { userId, canModerate: false }));
+    return withPublishers(this.publishers, rows, (row) => lensPackDetail(row, false, { userId, canModerate: false }));
   }
 
   /** La file de modération, la plus ancienne proposition d'abord. */
   async pending(moderatorId: string): Promise<readonly LensPackDetail[]> {
     const rows = await this.prisma.lensPack.findMany({ where: { status: 'pending' }, orderBy: { createdAt: 'asc' }, select: ROW_SELECT });
-    return rows.map((row) => lensPackDetail(row, false, { userId: moderatorId, canModerate: true }));
+    return withPublishers(this.publishers, rows, (row) => lensPackDetail(row, false, { userId: moderatorId, canModerate: true }));
   }
 
   /**
@@ -606,6 +617,8 @@ export class LensPacks {
   store(options: { readonly audience: (userId: string) => Promise<PackAudience> }): CommunityPackStore<LensPackDetail> {
     const prisma = this.prisma;
     const now = this.now;
+    const publishers = this.publishers;
+    const publisherOf = async (row: LensPackRow): Promise<PackPublisherRef | undefined> => (await publishers.servedFor([row])).get(row.submitterId);
     const context = async (userId: string | undefined) => ({
       now: now(),
       audience: userId === undefined ? UNKNOWN_PACK_AUDIENCE : await options.audience(userId),
@@ -615,28 +628,29 @@ export class LensPacks {
     return {
       catalogue: async (installedOf, _ownedKeys, userId) => {
         const [rows, offer] = await Promise.all([approved(), context(userId)]);
-        return rows
-          .filter((row) => isPackShelved(offerOf(row), offer, { ownedByRow: false, installed: installedOf(row.slug) }))
-          .map((row) => lensPackDetail(row, installedOf(row.slug)));
+        const shelved = rows.filter((row) => isPackShelved(offerOf(row), offer, { ownedByRow: false, installed: installedOf(row.slug) }));
+        return withPublishers(publishers, shelved, (row) => lensPackDetail(row, installedOf(row.slug)));
       },
       installed: async (slugs) => {
         const rows = await approved({ slug: { in: [...slugs] } });
         const order = new Map(slugs.map((slug, index) => [slug, index]));
-        return [...rows].sort((a, b) => (order.get(a.slug) ?? 0) - (order.get(b.slug) ?? 0)).map((row) => lensPackDetail(row, true));
+        const sorted = [...rows].sort((a, b) => (order.get(a.slug) ?? 0) - (order.get(b.slug) ?? 0));
+        return withPublishers(publishers, sorted, (row) => lensPackDetail(row, true));
       },
       detail: async (slug, viewer, installedOf) => {
         const row = await prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
         if (row === null || !isVisible(row, viewer)) return null;
-        if (isOwnView(row, viewer)) return lensPackDetail(row, installedOf(slug), viewer);
+        if (isOwnView(row, viewer)) return lensPackDetail(row, installedOf(slug), viewer, await publisherOf(row));
         const shelved = isPackShelved(offerOf(row), await context(viewer.userId), { ownedByRow: false, installed: installedOf(slug) });
-        return shelved ? lensPackDetail(row, installedOf(slug), viewer) : null;
+        return shelved ? lensPackDetail(row, installedOf(slug), viewer, await publisherOf(row)) : null;
       },
       installable: async (slug, userId) => {
         const row = await prisma.lensPack.findUnique({ where: { slug }, select: ROW_SELECT });
         // Une lens RETIRÉE reste désinstallable par qui l'a ; elle n'est plus offerte à personne.
         if (row === null || (row.status !== 'approved' && row.status !== 'withdrawn')) return null;
+        const publisher = await publisherOf(row);
         if (row.status === 'withdrawn') {
-          return { id: row.id, installCount: row.installCount, version: 1, offered: false, project: (installed, installCount) => lensPackDetail({ ...row, installCount }, installed) };
+          return { id: row.id, installCount: row.installCount, version: 1, offered: false, project: (installed, installCount) => lensPackDetail({ ...row, installCount }, installed, undefined, publisher) };
         }
         const offer = await context(userId);
         return {
@@ -644,7 +658,7 @@ export class LensPacks {
           installCount: row.installCount,
           version: 1,
           offered: isPackShelved(offerOf(row), offer, { ownedByRow: false, installed: false }),
-          project: (installed, installCount) => lensPackDetail({ ...row, installCount }, installed),
+          project: (installed, installCount) => lensPackDetail({ ...row, installCount }, installed, undefined, publisher),
         };
       },
       addInstalls: async (id, delta) => {

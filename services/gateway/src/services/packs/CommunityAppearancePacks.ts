@@ -26,6 +26,8 @@ import { PACK_LIMITS, PACK_PRICE_MAX, isPackOwned, isReservedPackSlug, type Pack
 import { isUniqueViolation, type CommunityPackStore, type PackViewer } from './PackCatalog';
 import type { PackIndex } from './PackIndex';
 import type { AppearancePackDetail } from './appearancePackSpec';
+import { claimedPublisherSlug, type PackPublisherRef } from '@meeshy/shared/types/pack-publisher';
+import { defaultPackPublishers, withPublishers, type PackPublishers, type PublicationRefusal } from './PackPublishers';
 
 export type CommunityAppearanceRow = {
   readonly id: string;
@@ -58,7 +60,7 @@ const ROW_SELECT = {
 export type CommunityAppearanceDetail = AppearancePackDetail & { readonly reviewNote?: string | null };
 
 /** La projection d'un pack communautaire. Le mot du modérateur n'est servi qu'à son auteur et aux modérateurs. */
-export function communityAppearanceDetail(row: CommunityAppearanceRow, installed: boolean, ownedKeys: ReadonlySet<string> | undefined, viewer?: PackViewer): CommunityAppearanceDetail {
+export function communityAppearanceDetail(row: CommunityAppearanceRow, installed: boolean, ownedKeys: ReadonlySet<string> | undefined, viewer?: PackViewer, publisher?: PackPublisherRef): CommunityAppearanceDetail {
   const domain = row.domain as CommunityAppearanceDomain;
   const price = row.price ?? null;
   const ownView = viewer !== undefined && (viewer.userId === row.submitterId || viewer.canModerate);
@@ -67,6 +69,7 @@ export function communityAppearanceDetail(row: CommunityAppearanceRow, installed
     name: row.name,
     description: row.description,
     author: row.author,
+    ...(publisher === undefined ? {} : { publisher }),
     builtin: false,
     status: row.status as PackStatus,
     itemCount: row.itemKeys.length,
@@ -94,32 +97,35 @@ export const isCommunityAppearanceVisible = (row: Pick<CommunityAppearanceRow, '
   row.status === 'approved' || row.submitterId === viewer.userId || viewer.canModerate;
 
 /** Le magasin communautaire d'un domaine d'apparence : ses packs publiés, du plus installé au moins installé. */
-export function prismaCommunityAppearanceStore(prisma: PrismaClient, domain: CommunityAppearanceDomain): CommunityPackStore<AppearancePackDetail> {
+export function prismaCommunityAppearanceStore(prisma: PrismaClient, domain: CommunityAppearanceDomain, publishers: PackPublishers = defaultPackPublishers(prisma)): CommunityPackStore<AppearancePackDetail> {
+  const publisherOf = async (row: CommunityAppearanceRow): Promise<PackPublisherRef | undefined> => (await publishers.servedFor([row])).get(row.submitterId);
   return {
     priced: true,
     async catalogue(installedOf, ownedKeys) {
       const rows = await prisma.communityAppearancePack.findMany({ where: { domain, status: 'approved' }, orderBy: { installCount: 'desc' }, select: ROW_SELECT });
-      return rows.map((row) => communityAppearanceDetail(row, installedOf(row.slug), ownedKeys));
+      return withPublishers(publishers, rows, (row) => communityAppearanceDetail(row, installedOf(row.slug), ownedKeys));
     },
     async installed(slugs, ownedKeys) {
       const rows = await prisma.communityAppearancePack.findMany({ where: { domain, slug: { in: [...slugs] }, status: 'approved' }, select: ROW_SELECT });
       const order = new Map(slugs.map((slug, index) => [slug, index]));
-      return [...rows].sort((a, b) => (order.get(a.slug) ?? 0) - (order.get(b.slug) ?? 0)).map((row) => communityAppearanceDetail(row, true, ownedKeys));
+      const sorted = [...rows].sort((a, b) => (order.get(a.slug) ?? 0) - (order.get(b.slug) ?? 0));
+      return withPublishers(publishers, sorted, (row) => communityAppearanceDetail(row, true, ownedKeys));
     },
     async detail(slug, viewer, installedOf, ownedKeys) {
       const row = await prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug } }, select: ROW_SELECT });
       if (row === null || !isCommunityAppearanceVisible(row, viewer)) return null;
-      return communityAppearanceDetail(row, installedOf(slug), ownedKeys, viewer);
+      return communityAppearanceDetail(row, installedOf(slug), ownedKeys, viewer, await publisherOf(row));
     },
     async installable(slug) {
       const row = await prisma.communityAppearancePack.findUnique({ where: { domain_slug: { domain, slug } }, select: ROW_SELECT });
       if (row === null || row.status !== 'approved') return null;
+      const publisher = await publisherOf(row);
       return {
         id: row.id,
         installCount: row.installCount,
         ...(row.price === null ? {} : { price: row.price }),
         version: 1,
-        project: (installed, installCount, owned = true) => communityAppearanceDetail({ ...row, installCount }, installed, owned ? new Set([`${domain}.${slug}`]) : new Set()),
+        project: (installed, installCount, owned = true) => communityAppearanceDetail({ ...row, installCount }, installed, owned ? new Set([`${domain}.${slug}`]) : new Set(), undefined, publisher),
       };
     },
     async addInstalls(id, delta) {
@@ -133,7 +139,8 @@ export type SubmitCommunityAppearanceOutcome =
   | { readonly kind: 'submitted'; readonly pack: CommunityAppearanceDetail }
   | { readonly kind: 'invalid'; readonly problems: readonly CommunityAppearanceProblem[] }
   | { readonly kind: 'slug-taken' }
-  | { readonly kind: 'too-many-pending' };
+  | { readonly kind: 'too-many-pending' }
+  | { readonly kind: 'refused'; readonly reason: PublicationRefusal };
 
 export type CommunityReview = { readonly decision: 'approve' | 'reject'; readonly note: string | null; readonly price: number | null };
 
@@ -152,17 +159,21 @@ export type CommunityAppearanceContract = { readonly contractSchema: number; rea
 export type CommunityAppearancePacksDeps = {
   readonly prisma: PrismaClient;
   readonly index: PackIndex;
+  /** Qui peut publier, et sous quel éditeur (#16274). */
+  readonly publishers?: PackPublishers;
   readonly now?: () => Date;
 };
 
 export class CommunityAppearancePacks {
   private readonly prisma: PrismaClient;
   private readonly index: PackIndex;
+  private readonly publishers: PackPublishers;
   private readonly now: () => Date;
 
   constructor(deps: CommunityAppearancePacksDeps) {
     this.prisma = deps.prisma;
     this.index = deps.index;
+    this.publishers = deps.publishers ?? defaultPackPublishers(deps.prisma);
     this.now = deps.now ?? (() => new Date());
   }
 
@@ -170,6 +181,8 @@ export class CommunityAppearancePacks {
     const validation = validateCommunityAppearanceManifest(domain, input);
     if ('problems' in validation) return { kind: 'invalid', problems: validation.problems };
     const { manifest } = validation;
+    const authorization = await this.publishers.authorizePublication(userId, { author: manifest.author, claimed: claimedPublisherSlug(input) });
+    if (authorization.kind === 'refused') return authorization;
     const registries: PackRegistries = { [domain]: this.index.entries(domain).map((entry) => ({ slug: entry.slug, installedByDefault: entry.installedByDefault })) };
     if (isReservedPackSlug(domain, manifest.slug, registries)) return { kind: 'slug-taken' };
 
@@ -200,7 +213,7 @@ export class CommunityAppearancePacks {
         },
         select: ROW_SELECT,
       });
-      return { kind: 'submitted', pack: communityAppearanceDetail(row, false, undefined, { userId, canModerate: false }) };
+      return { kind: 'submitted', pack: communityAppearanceDetail(row, false, undefined, { userId, canModerate: false }, authorization.publisher) };
     } catch (error) {
       if (isUniqueViolation(error)) return { kind: 'slug-taken' };
       throw error;
@@ -210,13 +223,13 @@ export class CommunityAppearancePacks {
   /** Les propositions d'un auteur dans ce domaine, les plus récentes d'abord — avec le mot du modérateur. */
   async submissions(userId: string, domain: CommunityAppearanceDomain): Promise<readonly CommunityAppearanceDetail[]> {
     const rows = await this.prisma.communityAppearancePack.findMany({ where: { domain, submitterId: userId }, orderBy: { createdAt: 'desc' }, select: ROW_SELECT });
-    return rows.map((row) => communityAppearanceDetail(row, false, undefined, { userId, canModerate: false }));
+    return withPublishers(this.publishers, rows, (row) => communityAppearanceDetail(row, false, undefined, { userId, canModerate: false }));
   }
 
   /** La file de modération du domaine, la plus ancienne proposition d'abord. */
   async pending(moderatorId: string, domain: CommunityAppearanceDomain): Promise<readonly CommunityAppearanceDetail[]> {
     const rows = await this.prisma.communityAppearancePack.findMany({ where: { domain, status: 'pending' }, orderBy: { createdAt: 'asc' }, select: ROW_SELECT });
-    return rows.map((row) => communityAppearanceDetail(row, false, undefined, { userId: moderatorId, canModerate: true }));
+    return withPublishers(this.publishers, rows, (row) => communityAppearanceDetail(row, false, undefined, { userId: moderatorId, canModerate: true }));
   }
 
   /**

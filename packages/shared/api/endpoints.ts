@@ -62,6 +62,7 @@ import * as notificationsGroup from './endpoints/notifications.js';
 import * as packAssetsGroup from './endpoints/pack-assets.js';
 import * as packsGroup from './endpoints/packs.js';
 import * as postsGroup from './endpoints/posts.js';
+import * as publishersGroup from './endpoints/publishers.js';
 import * as reactionsGroup from './endpoints/reactions.js';
 import * as relationsGroup from './endpoints/relations.js';
 import * as reportsGroup from './endpoints/reports.js';
@@ -126,6 +127,7 @@ export const API_ENDPOINTS = {
   packAssets: packAssetsGroup,
   packs: packsGroup,
   posts: postsGroup,
+  publishers: publishersGroup,
   reactions: reactionsGroup,
   relations: relationsGroup,
   reports: reportsGroup,
@@ -676,6 +678,9 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/posts/search',
   '/api/v1/posts/stories/mine',
   '/api/v1/posts/user/:userId',
+  '/api/v1/publishers/:slug',
+  '/api/v1/publishers/admin',
+  '/api/v1/publishers/me',
   '/api/v1/reactions',
   '/api/v1/reactions/:messageId',
   '/api/v1/reactions/:messageId/:emoji',
@@ -1323,6 +1328,9 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/posts/search': ['GET'],
   '/api/v1/posts/stories/mine': ['GET'],
   '/api/v1/posts/user/:userId': ['GET'],
+  '/api/v1/publishers/:slug': ['GET'],
+  '/api/v1/publishers/admin': ['GET'],
+  '/api/v1/publishers/me': ['GET'],
   '/api/v1/reactions': ['POST'],
   '/api/v1/reactions/:messageId': ['GET'],
   '/api/v1/reactions/:messageId/:emoji': ['DELETE'],
