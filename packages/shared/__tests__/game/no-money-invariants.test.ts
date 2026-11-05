@@ -22,7 +22,7 @@ import { seasonStepReward } from '../../utils/game/season.js';
 import { duoReward } from '../../utils/game/duo.js';
 
 /** Ce qu'un coffre peut donner : des grandeurs du JEU, et elles seules. */
-const CHEST_CONTENTS = ['bonus', 'bonusPoints', 'fragment', 'freeze', 'glory', 'points'];
+const CHEST_CONTENTS = ['bonus', 'bonusPoints', 'earlyGlory', 'fragment', 'freeze', 'glory', 'points'];
 
 /** Des mots qui trahiraient de l'argent, un achat, un transfert ou un retrait. */
 const MONEY_WORDS = /price|cost|cash|money|euro|eur|usd|dollar|currency|coin|pay|purchase|buy|transfer|withdraw|redeem|gift|iap|sku/i;
@@ -38,18 +38,18 @@ describe('le coffre du jour', () => {
   it('ne donne dans aucun tirage autre chose que des points, de la Gloire, un fragment d\'étoile et un gel', () => {
     for (let day = 1; day <= 28; day += 1) {
       for (const effort of [0, 900, 4500]) {
-        const chest = dailyChest({ userId: 'u1', dayKey: `2026-10-${String(day).padStart(2, '0')}`, effort, nextMeeshPrice: 1221 });
+        const chest = dailyChest({ userId: 'u1', dayKey: `2026-10-${String(day).padStart(2, '0')}`, effort, nextMeeshPrice: 1221, elapsedHours: day - 1 });
         expect(Object.keys(chest).sort()).toEqual(CHEST_CONTENTS);
         expect(typeof chest.fragment).toBe('boolean');
         expect(['none', 'fifth', 'whole']).toContain(chest.bonus);
-        [chest.points, chest.glory, chest.bonusPoints].forEach((value) => expect(Number.isInteger(value)).toBe(true));
+        [chest.points, chest.glory, chest.earlyGlory, chest.bonusPoints].forEach((value) => expect(Number.isInteger(value)).toBe(true));
       }
     }
   });
 
   it('n\'ajoute que des points : la prime n\'excède jamais le prix d\'UNE Meesh, et rien ne se frappe au coffre', () => {
     for (let u = 0; u < 2000; u += 1) {
-      const chest = dailyChest({ userId: `u${u}`, dayKey: '2026-10-11', effort: 4500, nextMeeshPrice: 16_556 });
+      const chest = dailyChest({ userId: `u${u}`, dayKey: '2026-10-11', effort: 4500, nextMeeshPrice: 16_556, elapsedHours: u % 30 });
       expect(chest.bonusPoints).toBeLessThanOrEqual(16_556);
       expect(chest.points).toBe(10_000 + chest.bonusPoints);
     }
