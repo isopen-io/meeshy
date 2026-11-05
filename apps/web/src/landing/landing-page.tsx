@@ -1,9 +1,7 @@
 import type { LandingCopy } from './landing-copy';
 import type { LandingLanguage } from './landing-languages';
-import { APP_STORE_URL, GOOGLE_PLAY_URL } from '@/lib/store-links';
-
 import { GlobeIcon, LanguageSelect, SiteFooter, SiteHeader } from './site-chrome';
-import { AppleLogo, GooglePlayLogo } from './store-logos';
+import { StoreBadge } from './store-logos';
 
 /** L'image versionnée du QR (`public/world-qr.svg`, `scripts/generate-world-qr.mjs`). */
 export const WORLD_QR_PATH = '/world-qr.svg';
@@ -63,58 +61,60 @@ export function LandingPage({ language, copy }: LandingPageProps) {
             <p className="ld-note" data-world-unavailable hidden>
               {copy.unavailable}
             </p>
-            <StoreBadges copy={copy} />
           </div>
 
-          <aside className="ld-preview" aria-label={copy.previewLabel}>
-            <div className="ld-preview-head">
-              <span className="ld-preview-title">
-                World Wide
-                <span className="ld-preview-sub">{copy.previewSubtitle}</span>
-              </span>
-              <span className="ld-globe">
-                <GlobeIcon size={22} />
-              </span>
-            </div>
-            <div className="ld-rows">
-              <div className="ld-row ld-row--kenji">
-                <span className="ld-avatar" aria-hidden="true">KT</span>
-                <div>
-                  <div className="ld-author">Kenji</div>
-                  <div className="ld-text">{copy.previewKenji}</div>
-                  <div className="ld-translated">{copy.previewKenjiFrom}</div>
-                </div>
+          <div className="ld-hero-side">
+            <StoreBadges copy={copy} />
+            <aside className="ld-preview" aria-label={copy.previewLabel}>
+              <div className="ld-preview-head">
+                <span className="ld-preview-title">
+                  World Wide
+                  <span className="ld-preview-sub">{copy.previewSubtitle}</span>
+                </span>
+                <span className="ld-globe">
+                  <GlobeIcon size={22} />
+                </span>
               </div>
-              <div className="ld-row ld-row--luiza">
-                <span className="ld-avatar" aria-hidden="true">LS</span>
-                <div>
-                  <div className="ld-author">Luiza</div>
-                  <div className="ld-voice">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                    <span className="ld-wave" aria-hidden="true">
-                      <i />
-                      <i />
-                      <i />
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                    <span>0:12</span>
+              <div className="ld-rows">
+                <div className="ld-row ld-row--kenji">
+                  <span className="ld-avatar" aria-hidden="true">KT</span>
+                  <div>
+                    <div className="ld-author">Kenji</div>
+                    <div className="ld-text">{copy.previewKenji}</div>
+                    <div className="ld-translated">{copy.previewKenjiFrom}</div>
                   </div>
-                  <div className="ld-translated">{copy.previewLuizaNote}</div>
+                </div>
+                <div className="ld-row ld-row--luiza">
+                  <span className="ld-avatar" aria-hidden="true">LS</span>
+                  <div>
+                    <div className="ld-author">Luiza</div>
+                    <div className="ld-voice">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                      <span className="ld-wave" aria-hidden="true">
+                        <i />
+                        <i />
+                        <i />
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                      <span>0:12</span>
+                    </div>
+                    <div className="ld-translated">{copy.previewLuizaNote}</div>
+                  </div>
+                </div>
+                <div className="ld-row ld-row--you">
+                  <span className="ld-avatar" aria-hidden="true">VO</span>
+                  <div>
+                    <div className="ld-author">{copy.previewYourself}</div>
+                    <div className="ld-text">{copy.previewYou}</div>
+                  </div>
                 </div>
               </div>
-              <div className="ld-row ld-row--you">
-                <span className="ld-avatar" aria-hidden="true">VO</span>
-                <div>
-                  <div className="ld-author">{copy.previewYourself}</div>
-                  <div className="ld-text">{copy.previewYou}</div>
-                </div>
-              </div>
-            </div>
-          </aside>
+            </aside>
+          </div>
         </section>
 
         <section id="comment" className="ld-wrap ld-section">
@@ -194,31 +194,17 @@ function WorldQr({ copy, placement }: { readonly copy: LandingCopy; readonly pla
 
 /**
  * LES DEUX BOUTIQUES (#15120) — l'App Store et la fiche Google Play de l'app
- * native, sous l'entrée World Wide du héros : qui veut l'application la trouve
- * sans quitter la première vue. Les adresses viennent de `lib/store-links.ts`,
- * comme sur `/download` ; les logos sont dessinés en ligne, la page prérendue
- * n'attend aucune ressource pour les peindre.
+ * native, EN FACE DU TITRE, en tête de la colonne de l'aperçu World (#16407,
+ * demande porteur du 2026-11-05) : sur grand écran, ils ouvrent la colonne de
+ * droite à hauteur du titre ; sur téléphone, la colonne passe sous le titre et
+ * ils restent juste au-dessus du bloc World. Le badge est `StoreBadge`, le même
+ * que `/download` ; seuls les mots viennent de la copie de la landing.
  */
 function StoreBadges({ copy }: { readonly copy: LandingCopy }) {
   return (
     <div className="ld-stores" role="group" aria-label={copy.storesLabel}>
-      <a href={APP_STORE_URL} target="_blank" rel="noopener noreferrer" data-store="app-store" aria-label={copy.appStoreLabel} className="ld-store">
-        <AppleLogo />
-        <StoreName caption={copy.appStoreCaption} name="App Store" />
-      </a>
-      <a href={GOOGLE_PLAY_URL} target="_blank" rel="noopener noreferrer" data-store="google-play" aria-label={copy.googlePlayLabel} className="ld-store">
-        <GooglePlayLogo />
-        <StoreName caption={copy.googlePlayCaption} name="Google Play" />
-      </a>
+      <StoreBadge store="app-store" label={copy.appStoreLabel} caption={copy.appStoreCaption} />
+      <StoreBadge store="google-play" label={copy.googlePlayLabel} caption={copy.googlePlayCaption} />
     </div>
-  );
-}
-
-function StoreName({ caption, name }: { readonly caption: string; readonly name: string }) {
-  return (
-    <span className="ld-store-name">
-      <span className="ld-store-caption">{caption}</span>
-      {name}
-    </span>
   );
 }
