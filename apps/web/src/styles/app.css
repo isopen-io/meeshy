@@ -888,3 +888,11 @@
     --preview-top: 7.5dvh;
   }
 }
+
+/* UNE INVITE DE RÉGLAGE MÈNE AU RÉGLAGE (#16339) — la rangée demandée par
+   `?reglage=<clé>` s'allume un instant, dans la teinte de la marque, puis
+   s'éteint. La règle 32 coupe la transition sous mouvement réduit. */
+[data-setting-highlight] {
+  background-color: color-mix(in srgb, var(--color-ios-brand) 16%, transparent);
+  transition: background-color 400ms ease;
+}
