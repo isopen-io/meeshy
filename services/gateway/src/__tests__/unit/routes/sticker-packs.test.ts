@@ -31,8 +31,8 @@ const fakeNormalize = async (bytes: Buffer): Promise<StickerImageOutcome> => {
   return { ok: true, image: { bytes, mimeType: tag === 'A' ? 'image/webp' : 'image/png', width: 512, height: 512, animated: tag === 'A' } };
 };
 
-async function buildApp(o: { userId?: string; role?: string; anonymous?: boolean; realNormalize?: boolean } = {}) {
-  const db = memoryPrisma();
+async function buildApp(o: { userId?: string; role?: string; anonymous?: boolean; realNormalize?: boolean; accounts?: Parameters<typeof memoryPrisma>[0] } = {}) {
+  const db = memoryPrisma(o.accounts);
   const stored = new Map<string, Buffer>();
   const files: StickerFileStore = {
     write: async (p, b) => void stored.set(p, b),
@@ -236,7 +236,7 @@ describe('moderation and installation', () => {
     expect(firstFiles.some((f) => stored.has(f))).toBe(false);
 
     as(BOB);
-    expect((await submit(app, manifest({ name: 'Copie' }))).json()).toMatchObject({ code: 'STICKER_PACK_SLUG_TAKEN' });
+    expect((await submit(app, manifest({ name: 'Copie', author: 'Bob Studio' }))).json()).toMatchObject({ code: 'STICKER_PACK_SLUG_TAKEN' });
     await app.close();
   });
 
@@ -245,5 +245,122 @@ describe('moderation and installation', () => {
     as(MODO, 'MODERATOR');
     expect((await app.inject({ method: 'POST', url: '/inconnu/review', payload: { decision: 'approve' } })).statusCode).toBe(404);
     await app.close();
+  });
+});
+
+describe('the publisher of a pack (#16274)', () => {
+  it('attaches the submission to the publisher of the signed-in account, named by its store name — never its username', async () => {
+    const { app, profiles } = await buildApp({ accounts: { [ALICE]: { username: 'alice_secret', emailVerifiedAt: new Date('2026-01-01T00:00:00Z') } } });
+    const res = await submit(app);
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.publisher).toEqual({ slug: 'studio-minou', name: 'Studio Minou', verified: false, official: false });
+    expect(res.body).not.toContain('alice_secret');
+    expect(profiles).toEqual([expect.objectContaining({ userId: ALICE, slug: 'studio-minou' })]);
+  });
+
+  it('refuses an account that verified neither its email nor its phone: 403 PUBLISHER_ACCOUNT_UNVERIFIED, nothing stored', async () => {
+    const { app, packs, stored } = await buildApp({ accounts: { [ALICE]: { username: 'alice' } } });
+    const res = await submit(app);
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PUBLISHER_ACCOUNT_UNVERIFIED');
+    expect(packs).toEqual([]);
+    expect(stored.size).toBe(0);
+  });
+
+  it('refuses a submission naming a publisher owned by another account: 403 PUBLISHER_NOT_OWNER', async () => {
+    const { app, as, packs } = await buildApp({ userId: BOB });
+    expect((await submit(app, manifest({ slug: 'oiseaux', author: 'Bob Studio' }))).json().data.publisher.slug).toBe('bob-studio');
+    as(ALICE);
+    const res = await submit(app, manifest({ slug: 'usurpe', publisher: 'bob-studio' }));
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PUBLISHER_NOT_OWNER');
+    expect(packs.some((pack) => pack.slug === 'usurpe')).toBe(false);
+  });
+
+  it('refuses the Meeshy identity to a third party: 403 PUBLISHER_RESERVED or PUBLISHER_NOT_OWNER', async () => {
+    const { app } = await buildApp();
+    const byAuthor = await submit(app, manifest({ author: 'Meeshy Officiel' }));
+    expect(byAuthor.statusCode).toBe(403);
+    expect(byAuthor.json().code).toBe('PUBLISHER_RESERVED');
+    const byClaim = await submit(app, manifest({ publisher: 'meeshy' }));
+    expect(byClaim.statusCode).toBe(403);
+    expect(byClaim.json().code).toBe('PUBLISHER_NOT_OWNER');
+  });
+
+  it('refuses a store name another publisher already holds, up to case and accents: 409 PUBLISHER_NAME_TAKEN (audit #16274)', async () => {
+    const { app, as, packs } = await buildApp({ userId: BOB });
+    await submit(app, manifest({ slug: 'oiseaux', author: 'Bob Studio' }));
+    as(ALICE);
+    const res = await submit(app, manifest({ slug: 'copie', author: 'BOB studio' }));
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('PUBLISHER_NAME_TAKEN');
+    expect(packs.some((pack) => pack.slug === 'copie')).toBe(false);
+  });
+
+  it('a submission refused for its slug takes no store name: the publisher is created only once every check passed (re-audit #16274, N1)', async () => {
+    const { app, as, profiles } = await buildApp({ userId: BOB });
+    await submit(app, manifest({ slug: 'oiseaux', author: 'Bob Studio' }));
+    as(ALICE);
+    const res = await submit(app, manifest({ slug: 'oiseaux', author: 'Studio Lumière' }));
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('STICKER_PACK_SLUG_TAKEN');
+    expect(profiles.filter((row) => row.userId === ALICE)).toEqual([]);
+  });
+
+  it('serves the publisher name as the author old clients display, never the free text (re-audit #16274, N5)', async () => {
+    const { app } = await buildApp();
+    await submit(app, manifest({ slug: 'premier', author: 'Alice Studio' }));
+    const second = await submit(app, manifest({ slug: 'second', author: 'Un Autre Nom' }));
+    expect(second.statusCode).toBe(201);
+    expect(second.json().data).toMatchObject({ author: 'Alice Studio', publisher: { name: 'Alice Studio' } });
+    const mine = await app.inject({ method: 'GET', url: '/submissions' });
+    expect(mine.json().data.map((pack: { author: string }) => pack.author)).toEqual(['Alice Studio', 'Alice Studio']);
+  });
+
+  it('refuses a free-text author that reads as Meeshy in another script: 403 PUBLISHER_RESERVED (re-audit #16274, N5)', async () => {
+    const { app } = await buildApp();
+    const res = await submit(app, manifest({ author: 'ᎷᎬᎬSHY' }));
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PUBLISHER_RESERVED');
+  });
+
+  it('an inconclusive scan of legacy profiles answers 503 with Retry-After, never 409 (re-audit #16274, N6)', async () => {
+    const { app, profiles } = await buildApp();
+    profiles.push(...Array.from({ length: 2_000 }, (_, index) => ({ id: `68f0${String(index).padStart(20, '0')}`, userId: `68f1${String(index).padStart(20, '0')}`, displayName: `Studio ${index}`, verifiedAt: null, createdAt: new Date('2026-09-01T00:00:00Z') })));
+    const res = await submit(app, manifest({ author: 'Kɔfi Art' }));
+    expect(res.statusCode).toBe(503);
+    expect(res.headers['retry-after']).toBe('300');
+    expect(res.json().code).toBe('PUBLISHER_RETRY_LATER');
+  });
+
+  it('a read never creates a publisher: a submitter without one is served under the neutral name (audit #16274)', async () => {
+    const { app, profiles } = await buildApp();
+    expect((await submit(app)).statusCode).toBe(201);
+    profiles.splice(0);
+    const res = await app.inject({ method: 'GET', url: '/submissions' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].publisher).toEqual({ slug: 'editeur', name: 'Éditeur', verified: false, official: false });
+    expect(profiles).toEqual([]);
+  });
+
+  it('refuses a guest of a link: 403 REGISTERED_USER_REQUIRED', async () => {
+    const { app } = await buildApp({ anonymous: true });
+    const res = await submit(app);
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('REGISTERED_USER_REQUIRED');
+  });
+
+  it('serves the publisher in the shop for built-in and published packs, without the owner account', async () => {
+    const { app, as } = await buildApp({ accounts: { [ALICE]: { username: 'alice_secret', emailVerifiedAt: new Date('2026-01-01T00:00:00Z') } } });
+    await submit(app);
+    as(MODO, 'MODERATOR');
+    await app.inject({ method: 'POST', url: '/chats-de-paris/review', payload: { decision: 'approve' } });
+    as(BOB);
+    const shop = await app.inject({ method: 'GET', url: '/' });
+    const bySlug = new Map(shop.json().data.map((pack: { slug: string; publisher: unknown }) => [pack.slug, pack.publisher]));
+    expect(bySlug.get('mee')).toEqual({ slug: 'meeshy', name: 'Meeshy', verified: true, official: true });
+    expect(bySlug.get('chats-de-paris')).toEqual({ slug: 'studio-minou', name: 'Studio Minou', verified: false, official: false });
+    expect(shop.body).not.toContain(ALICE);
+    expect(shop.body).not.toContain('alice_secret');
   });
 });

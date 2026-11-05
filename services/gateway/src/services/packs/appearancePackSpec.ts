@@ -17,6 +17,7 @@ import type { PackAssetRef, PackDomain, PackLanguage, PackSummary } from '@meesh
 import type { PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
 import type { PackAvailability } from '@meeshy/shared/types/pack-availability';
 import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
+import { MEESHY_PUBLISHER, type PackPublisherRef } from '@meeshy/shared/types/pack-publisher';
 import type { CommunityPackStore, PackDomainSpec, RegistryPack } from './PackCatalog';
 import type { PackIndex } from './PackIndex';
 import { PACK_ASSET_PATH } from './gloryFramePackSpec';
@@ -43,13 +44,14 @@ export type AppearancePackDetail = AppearancePackSummary & {
 /** Les domaines dont un pack annonce sa loi d'usage : ce sont des CADRES. */
 const FRAMED_DOMAINS: ReadonlySet<PackDomain> = new Set<PackDomain>(['avatar-ring', 'banner-frame']);
 
-export function appearancePackDetail(entry: PackIndexEntry, installed: boolean, owned: boolean, itemCount = 0): AppearancePackDetail {
+export function appearancePackDetail(entry: PackIndexEntry, installed: boolean, owned: boolean, itemCount = 0, publisher: PackPublisherRef = MEESHY_PUBLISHER): AppearancePackDetail {
   const fr = entry.names.fr;
   return {
     slug: entry.slug,
     name: fr?.name ?? entry.slug,
     description: fr?.description ?? '',
     author: STICKER_PACK_AUTHOR_MEESHY,
+    publisher,
     builtin: entry.origin === 'builtin',
     status: 'approved',
     itemCount,
@@ -86,7 +88,7 @@ const registryOf = (index: PackIndex, domain: AppearancePackDomain): readonly Re
     version: entry.version,
     availability: entry.availability,
     targeting: entry.targeting,
-    project: (installed: boolean, owned: boolean) => appearancePackDetail(entry, installed, owned, index.itemCount(entry)),
+    project: (installed: boolean, owned: boolean) => appearancePackDetail(entry, installed, owned, index.itemCount(entry), index.publisherOf(entry)),
   }));
 
 export function appearancePackSpec(options: {

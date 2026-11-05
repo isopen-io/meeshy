@@ -20,6 +20,7 @@
  *      `MessageAttachment.lensSlug`, `PostMedia.lensSlug`
  */
 import { LENS_LIMITS, LENS_PATTERNS } from './lens-format.js';
+import { MEESHY_PUBLISHER_NAME, impersonatesMeeshy, isReservedPublisherIdentity } from './pack-publisher.js';
 
 export const PARTNER_PROFILE_LIMITS = {
   maxDisplayNameLength: 60,
@@ -59,11 +60,22 @@ export type PartnerProfileParse = { readonly ok: true; readonly profile: Partner
  */
 const INVISIBLE_OR_CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
-const cleanDisplayName = (raw: unknown): string | null => {
+/** Qui écrit le profil : le compte officiel Meeshy, seul, garde le nom « Meeshy » (#16274). */
+/**
+ * Qui écrit le profil : le compte officiel (seul à porter « Meeshy »), et le
+ * nom que le profil porte DÉJÀ — un nom inchangé est un droit acquis, il
+ * n'est pas soumis de nouveau à la liste blanche (#16274, re-audit N3).
+ */
+export type PartnerProfileAuthor = { readonly official: boolean; readonly currentName?: string | null };
+
+const cleanDisplayName = (raw: unknown, author: PartnerProfileAuthor): string | null => {
   if (typeof raw !== 'string') return null;
   const name = raw.normalize('NFKC').trim();
   if (name.length === 0 || name.length > PARTNER_PROFILE_LIMITS.maxDisplayNameLength) return null;
-  return INVISIBLE_OR_CONTROL.test(name) ? null : name;
+  if (INVISIBLE_OR_CONTROL.test(name)) return null;
+  if (author.official && name === MEESHY_PUBLISHER_NAME) return name;
+  if (typeof author.currentName === 'string' && name === author.currentName.normalize('NFKC').trim()) return name;
+  return isReservedPublisherIdentity(name) ? null : name;
 };
 
 const cleanWebsite = (raw: unknown): string | null | undefined => {
@@ -78,9 +90,9 @@ const cleanWebsite = (raw: unknown): string | null | undefined => {
 };
 
 /** Ce qu'un partenaire déclare de lui : un nom affichable et, au choix, un site https. */
-export function parsePartnerProfileInput(raw: unknown): PartnerProfileParse {
+export function parsePartnerProfileInput(raw: unknown, author: PartnerProfileAuthor = { official: false }): PartnerProfileParse {
   const input = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const displayName = cleanDisplayName(input.displayName);
+  const displayName = cleanDisplayName(input.displayName, author);
   if (displayName === null) return { ok: false, reason: 'display-name' };
   const website = cleanWebsite(input.website);
   if (website === undefined) return { ok: false, reason: 'website' };
@@ -101,12 +113,37 @@ export type LensCredit = {
 };
 
 export type LensCreditLens = { readonly slug: string; readonly name: string; readonly status: string };
-export type LensCreditPartner = { readonly id: string; readonly displayName: string; readonly verifiedAt: Date | null; readonly logoSrc: string | null };
+export type LensCreditPartner = {
+  readonly id: string;
+  readonly displayName: string;
+  readonly verifiedAt: Date | null;
+  readonly logoSrc: string | null;
+  /** Le profil du compte officiel Meeshy (#16274) : lui seul est crédité sous un nom réservé. */
+  readonly official?: boolean;
+  /** La marque « nom hors liste » posée par le rattrapage sur un profil HÉRITÉ — lue sur la ligne, jamais déduite du nom. */
+  readonly grandfathered?: boolean;
+};
+
+/**
+ * Un partenaire qui crédite : vérifié, et jamais sous un nom réservé s'il n'est
+ * pas le compte officiel. Seul un profil hérité MARQUÉ (« Café Москва » d'avant
+ * la liste blanche) garde son crédit hors liste, tant qu'il ne se lit pas comme
+ * Meeshy à jokers bornés : droit acquis.
+ */
+const creditingPartner = (partner: LensCreditPartner | null): LensCreditPartner | null => {
+  if (partner === null || partner.verifiedAt === null) return null;
+  const name = partner.displayName;
+  const credited =
+    partner.official === true ||
+    !isReservedPublisherIdentity(name) ||
+    (partner.grandfathered === true && !impersonatesMeeshy(name, { grandfathered: true }));
+  return credited ? partner : null;
+};
 
 /** Le crédit d'une lens PUBLIÉE ; `null` pour toute autre (en attente, refusée, retirée). */
 export function lensCreditOf(lens: LensCreditLens, partner: LensCreditPartner | null): LensCredit | null {
   if (lens.status !== 'approved') return null;
-  const verified = partner !== null && partner.verifiedAt !== null ? partner : null;
+  const verified = creditingPartner(partner);
   return {
     slug: lens.slug,
     name: lens.name,
