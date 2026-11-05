@@ -69,7 +69,7 @@ public class UploadMediaHandler @Inject constructor(
             } else {
                 val destination = payload?.conversationId?.takeIf { it.isNotBlank() }
                 MediaUploadSender.send(item, refusal = { destinationRefusal(it, destination) }) {
-                    mediaRepository.upload(listOf(it), destination)
+                    mediaRepository.upload(listOf(it), destination) { sent, total -> progressLedger.report(row.cmid, sent, total) }
                 }
             }
         } finally {

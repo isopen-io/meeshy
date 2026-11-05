@@ -269,4 +269,28 @@ class MediaRepositoryTest {
 
         assertThat(cache.adoptions).isEmpty()
     }
+
+    @Test
+    fun upload_reportsTheBytesOfThePieceWhenTheGatewayReadsIt() = runTest {
+        val parts = slot<List<MultipartBody.Part>>()
+        coEvery { api.upload(capture(parts)) } returns ApiResponse(success = true, data = MediaUploadResponse(attachments = emptyList()))
+        val seen = mutableListOf<Pair<Long, Long>>()
+
+        repository().upload(listOf(item())) { sent, total -> seen += sent to total }
+        okio.Buffer().also { parts.captured.single().body.writeTo(it) }
+
+        assertThat(seen).isNotEmpty()
+        assertThat(seen.last().first).isEqualTo(seen.last().second)
+    }
+
+    @Test
+    fun upload_withoutObserver_sendsThePieceAsBefore() = runTest {
+        val parts = slot<List<MultipartBody.Part>>()
+        coEvery { api.upload(capture(parts)) } returns ApiResponse(success = true, data = MediaUploadResponse(attachments = emptyList()))
+
+        repository().upload(listOf(item()))
+
+        val sent = okio.Buffer().also { parts.captured.single().body.writeTo(it) }.readByteArray()
+        assertThat(sent.toList()).containsAtLeast(1.toByte(), 2.toByte(), 3.toByte())
+    }
 }
