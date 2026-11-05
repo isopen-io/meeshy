@@ -21,4 +21,17 @@ class ChatUploadProgressViewModelTest {
         assertThat(source.landed("cmid-a")).isTrue()
         assertThat(source.landed("cmid-b")).isFalse()
     }
+
+    @Test
+    fun `une conversation rouverte en plein televersement retrouve les octets deja partis, le registre etant celui de l'application`() {
+        val ledger = MediaUploadProgressLedger()
+        val acknowledged = UploadedAttachmentIds()
+        val first = ChatUploadProgressViewModel(ledger, acknowledged)
+        ledger.report("cmid-v", 40L, 100L)
+
+        val reopened = ChatUploadProgressViewModel(ledger, acknowledged)
+
+        assertThat(first).isNotSameInstanceAs(reopened)
+        assertThat(reopened.progress.progress.value).containsExactly("cmid-v", MediaUploadProgress.Uploading(40L, 100L))
+    }
 }

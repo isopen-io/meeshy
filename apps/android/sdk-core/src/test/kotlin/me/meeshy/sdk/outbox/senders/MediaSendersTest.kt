@@ -316,4 +316,28 @@ class MediaSendersTest {
 
         assertThat(landedWhenCleared).containsExactly("media-9")
     }
+
+    @Test
+    fun `a chat piece resumed by the durable queue after a cut publishes its bytes again under the same cmid, from a fresh handler`() = runTest {
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
+        val seen = mutableListOf<me.meeshy.sdk.model.media.MediaUploadProgress?>()
+        var attempt = 0
+        coEvery { mediaRepository.upload(listOf(item), "c-1", any()) } coAnswers {
+            attempt += 1
+            val report = arg<(Long, Long) -> Unit>(2)
+            report(if (attempt == 1) 2L else 3L, 3L)
+            seen += ledger.progress.value["cmid-1"]
+            if (attempt == 1) NetworkResult.Failure(ApiError("offline")) else NetworkResult.Success(listOf(uploaded))
+        }
+
+        handler().send(chatRow())
+        assertThat(ledger.progress.value).isEmpty()
+        handler().send(chatRow())
+
+        assertThat(seen).containsExactly(
+            me.meeshy.sdk.model.media.MediaUploadProgress.Uploading(2L, 3L),
+            me.meeshy.sdk.model.media.MediaUploadProgress.Uploading(3L, 3L),
+        ).inOrder()
+        assertThat(ledger.progress.value).isEmpty()
+    }
 }
