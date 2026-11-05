@@ -30,6 +30,7 @@ import me.meeshy.sdk.model.send.SendAttemptContext
 import me.meeshy.sdk.model.socket.SendMessageAck
 import me.meeshy.sdk.model.socket.acknowledgedBy
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.media.OutgoingAttachmentRules
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.outbox.OutboxEnqueueResult
 import me.meeshy.sdk.outbox.OutboxIds
@@ -296,6 +297,54 @@ internal class MessageSendCoordinator(
         )
     }
 
+    /**
+     * Met en file l'envoi d'une bulle DÉJÀ posée au tap (groupe de pièces, texte, lieu) sous son `cid_` : le message réutilise
+     * l'identifiant de la bulle optimiste, sans en créer une seconde. [attachmentIds] sont les identifiants serveur des pièces
+     * montées, ou les `cmid` de leurs téléversements durables que le drainer greffera ([dependsOn]). Rend `false` si la bulle
+     * a disparu ou si la file est pleine (la bulle passe alors en échec).
+     */
+    suspend fun sendPostedBubble(cid: String, attachmentIds: List<String> = emptyList(), dependsOn: Set<String> = emptySet()): Boolean {
+        val row = messageDao.find(cid) ?: return false
+        val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
+        val trace = SendTrace.read(message)
+        val placeholders = attachmentIds.filter { it.isNotBlank() }.distinct()
+        val outgoing = OutgoingMessage(
+            conversationId = message.conversationId,
+            content = message.content,
+            relation = MessageRelation.legacy(
+                message.replyToId, message.storyReplyToId, message.forwardedFromId,
+                message.forwardedFromConversationId, trace.attachmentReplyToId,
+            ),
+            attachments = OutgoingAttachments(placeholders.ifEmpty { null }),
+            messageType = message.messageType,
+            location = message.location,
+            sticker = message.sticker,
+            copyAttachmentsFromMessageId = trace.copyAttachmentsFromMessageId,
+            forwardedAttachmentIds = trace.forwardedAttachmentIds,
+        )
+        val effects = message.effects.copy(ephemeralDuration = trace.ephemeralDuration)
+        val context = SendAttemptContext(
+            cid, clock.nowMillis(), effects, message.originalLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
+            reusesExistingRow = true,
+        )
+        val queued = outboxRepository.tryEnqueue(
+            OutboxMutation(
+                kind = OutboxKind.SEND_MESSAGE,
+                lane = OutboxLanes.forMessage(message.conversationId),
+                targetId = message.conversationId,
+                payload = MeeshyApi.json.encodeToString(outgoing.wireRequest(context, content = message.content)),
+                dependsOn = dependsOn,
+                cmid = cid,
+            ),
+            outboxRepository.currentTicket(),
+        )
+        if (queued is OutboxEnqueueResult.QueueFull) {
+            markSendFailed(cid)
+            return false
+        }
+        return true
+    }
+
     /** Relance la bulle en échec [cmid] — son état repasse à l'envoi, sa ligne et ses téléversements repartent. */
     suspend fun retryByClientMessageId(cmid: String) = retrySend(cmid)
 
@@ -322,5 +371,5 @@ internal class MessageSendCoordinator(
     }
 
     private fun isDefinitive(reason: String?): Boolean =
-        MediaLocationRefusal.isReason(reason) || MediaLoss.isReason(reason) || ConversationWriteRestriction.fromReason(reason) != null
+        MediaLocationRefusal.isReason(reason) || MediaLoss.isReason(reason) || OutgoingAttachmentRules.isDefinitiveReason(reason) || ConversationWriteRestriction.fromReason(reason) != null
 }

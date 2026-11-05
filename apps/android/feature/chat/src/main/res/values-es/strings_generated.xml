@@ -836,6 +836,9 @@
     <string name="transcription_fiche_transcribe">Transcribir</string>
     <string name="transcription_fiche_translations">Traducciones de audio</string>
     <string name="translation_audio_error">La traducción de audio ha fallado. Inténtalo de nuevo.</string>
+    <string name="upload_progress_a11y_label">Subiendo archivos</string>
+    <string name="upload_progress_a11y_value">%1$d %%, %2$d de %3$d archivos subidos</string>
+    <string name="upload_progress_files_count">%1$d/%2$d archivos</string>
     <string name="viewer_code_loading">Cargando...</string>
     <string name="viewer_contact_add">Añadir a contactos</string>
     <string name="viewer_contact_close">Cerrar la ficha</string>

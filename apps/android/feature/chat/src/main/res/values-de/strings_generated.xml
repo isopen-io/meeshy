@@ -828,6 +828,9 @@
     <string name="transcription_fiche_transcribe">Transkribieren</string>
     <string name="transcription_fiche_translations">Audio-Übersetzungen</string>
     <string name="translation_audio_error">Die Audio-Übersetzung ist fehlgeschlagen. Bitte erneut versuchen.</string>
+    <string name="upload_progress_a11y_label">Dateien werden hochgeladen</string>
+    <string name="upload_progress_a11y_value">%1$d %%, %2$d von %3$d Dateien hochgeladen</string>
+    <string name="upload_progress_files_count">%1$d/%2$d Dateien</string>
     <string name="viewer_code_loading">Laden...</string>
     <string name="viewer_contact_add">Zu Kontakten hinzufügen</string>
     <string name="viewer_contact_close">Karte schließen</string>

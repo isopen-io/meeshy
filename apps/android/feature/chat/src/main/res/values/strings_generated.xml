@@ -828,6 +828,9 @@
     <string name="transcription_fiche_transcribe">Transcribe</string>
     <string name="transcription_fiche_translations">Audio translations</string>
     <string name="translation_audio_error">The audio translation failed. Please try again.</string>
+    <string name="upload_progress_a11y_label">Uploading files</string>
+    <string name="upload_progress_a11y_value">%1$d%%, %2$d of %3$d files uploaded</string>
+    <string name="upload_progress_files_count">%1$d/%2$d files</string>
     <string name="viewer_code_loading">Loading...</string>
     <string name="viewer_contact_add">Add to Contacts</string>
     <string name="viewer_contact_close">Close contact card</string>
