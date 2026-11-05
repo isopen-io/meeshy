@@ -43,8 +43,6 @@ const until = async (ready: () => boolean) => {
   expect(ready()).toBe(true);
 };
 
-const SHA = 'abcdef0123456789'.padEnd(64, '0');
-
 const gateway = (answer: (request: HttpRequest) => ApiResult<unknown> | Promise<ApiResult<unknown>>): { deps: ConversationsDeps; calls: HttpRequest[] } => {
   const calls: HttpRequest[] = [];
   const transport = {

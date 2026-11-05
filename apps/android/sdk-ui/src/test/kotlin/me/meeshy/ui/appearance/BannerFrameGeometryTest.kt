@@ -24,9 +24,9 @@ class BannerFrameGeometryTest {
     private val frames: List<BannerFrameDesign> by lazy { packs.flatMap { it.frames } }
 
     @Test
-    fun `les vingt-deux packs embarques portent soixante-six cadres`() {
-        assertThat(packs).hasSize(22)
-        assertThat(frames).hasSize(66)
+    fun `les vingt-cinq packs embarques portent quatre-vingts cadres`() {
+        assertThat(packs).hasSize(25)
+        assertThat(frames).hasSize(80)
     }
 
     @Test
