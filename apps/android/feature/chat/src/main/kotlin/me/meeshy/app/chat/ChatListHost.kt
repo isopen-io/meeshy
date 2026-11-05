@@ -454,6 +454,13 @@ internal fun ChatListHost(
             download = state.fileDownload,
             onDismissDownload = actions.dismissFileDownload,
             onRetryDownload = actions.retryFileDownload,
+            actions = me.meeshy.app.chat.audio.rememberChatAudioFullscreenActions(
+                replies = actions.audioFullscreenReplies,
+                actions = actions,
+                state = state,
+                clearance = LocalChatSignalClearance.current,
+                closure = host.composerClosure,
+            ),
         )
         else -> Unit
     }

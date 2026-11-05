@@ -105,6 +105,26 @@ internal object CacheTables {
         createSql = "CREATE TABLE IF NOT EXISTS `message_audio_translations` (`messageId` TEXT NOT NULL, `attachmentId` TEXT NOT NULL, `language` TEXT NOT NULL, `url` TEXT NOT NULL, `transcription` TEXT NOT NULL, `durationMs` INTEGER, `format` TEXT, `cloned` INTEGER NOT NULL, `quality` REAL, `voiceModelId` TEXT, `ttsModel` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`messageId`, `attachmentId`, `language`))",
     )
 
+    /** Version 27 : les personnes et les réactions d'une ligne du journal d'appels, vides par défaut. */
+    val callHistory = CacheTableDefinition(
+        name = "call_history",
+        createSql = "CREATE TABLE IF NOT EXISTS `call_history` (`callId` TEXT NOT NULL, `payload` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL, `participants` TEXT NOT NULL DEFAULT '[]', `reactionCounts` TEXT NOT NULL DEFAULT '{}', PRIMARY KEY(`callId`))",
+    )
+
+    /** Version 27 : le journal réseau d'un appel, local à l'appareil, par compte. */
+    val callNetworkJournal = CacheTableDefinition(
+        name = "call_network_journal",
+        createSql = "CREATE TABLE IF NOT EXISTS `call_network_journal` (`account` TEXT NOT NULL, `callId` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `payload` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`account`, `callId`))",
+        indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_call_network_journal_account_startedAt` ON `call_network_journal` (`account`, `startedAt`)"),
+    )
+
+    /** Version 27 : les segments de transcription d'un appel, uniques par (appel, wireId). */
+    val callTranscript = CacheTableDefinition(
+        name = "call_transcript",
+        createSql = "CREATE TABLE IF NOT EXISTS `call_transcript` (`callId` TEXT NOT NULL, `wireId` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `callStartedAt` INTEGER NOT NULL, `speakerId` TEXT NOT NULL, `speakerName` TEXT NOT NULL, `isLocal` INTEGER NOT NULL, `text` TEXT NOT NULL, `translatedText` TEXT, `translatedLanguage` TEXT, `language` TEXT, `capturedAt` INTEGER NOT NULL, PRIMARY KEY(`callId`, `wireId`))",
+        indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_call_transcript_callId_capturedAt` ON `call_transcript` (`callId`, `capturedAt`)"),
+    )
+
     /** The columns version 20 appended to `messages`, exactly as Room declares them. */
     val messageColumnsAddedIn20: List<String> = listOf(
         "`serverId` TEXT",
@@ -155,7 +175,7 @@ internal object CacheTables {
         payloadTable("conversations", "id", "`updatedAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL, `unreadCount` INTEGER NOT NULL,"),
         messages,
         payloadTable("stories", "id", "`createdAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL,"),
-        payloadTable("call_history", "callId", "`startedAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL,"),
+        callHistory,
         payloadTable("friends", "userId", "`sortIndex` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL,"),
         payloadTable("discover_suggestions", "userId", "`sortIndex` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL,"),
         payloadTable("profile_stats_cache", "cacheKey", "`cachedAt` INTEGER NOT NULL,"),
@@ -177,6 +197,8 @@ internal object CacheTables {
         messageTranslations,
         messageTranscriptions,
         messageAudioTranslations,
+        callNetworkJournal,
+        callTranscript,
     )
 
     val names: Set<String> = all.map { it.name }.toSet()

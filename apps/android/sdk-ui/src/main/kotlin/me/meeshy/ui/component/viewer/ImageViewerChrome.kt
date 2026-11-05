@@ -89,6 +89,8 @@ internal fun ImageViewerTopBar(
     isBusy: Boolean,
     onExit: (ImageViewerExit) -> Unit,
     modifier: Modifier = Modifier,
+    menuOpen: Boolean = false,
+    onMenuOpenChange: ((Boolean) -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -99,7 +101,11 @@ internal fun ImageViewerTopBar(
     ) {
         FullscreenCloseButton(onClick = onClose)
         if (exits.isNotEmpty()) {
-            ImageViewerMoreMenu(exits = exits, isBusy = isBusy, onExit = onExit)
+            if (onMenuOpenChange != null) {
+                ImageViewerMoreMenuContent(exits, isBusy, onExit, menuOpen, onMenuOpenChange)
+            } else {
+                ImageViewerMoreMenu(exits = exits, isBusy = isBusy, onExit = onExit)
+            }
         }
     }
 }
@@ -115,12 +121,24 @@ internal fun ImageViewerMoreMenu(
     onExit: (ImageViewerExit) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    ImageViewerMoreMenuContent(exits, isBusy, onExit, expanded) { expanded = it }
+}
+
+/** Le menu ⋯ dont l'ouverture est portée par l'hôte : le bouton et l'appui long de la page l'ouvrent. */
+@Composable
+internal fun ImageViewerMoreMenuContent(
+    exits: List<ImageViewerExit>,
+    isBusy: Boolean,
+    onExit: (ImageViewerExit) -> Unit,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+) {
     val savingLabel = stringResource(R.string.viewer_saving)
     Box {
         FullscreenChromeButton(
             icon = FullscreenChromeSymbol.More.icon,
             label = stringResource(R.string.viewer_more),
-            onClick = { if (!isBusy) expanded = true },
+            onClick = { if (!isBusy) onExpandedChange(true) },
             modifier = Modifier.semantics { if (isBusy) stateDescription = savingLabel },
         )
         if (isBusy) {
@@ -132,7 +150,7 @@ internal fun ImageViewerMoreMenu(
                     .size(FullscreenChromeDimens.discDiameter),
             )
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
             exits.forEach { exit ->
                 val (label, symbol) = when (exit) {
                     ImageViewerExit.Save -> stringResource(R.string.viewer_save) to FullscreenChromeSymbol.Save
@@ -142,7 +160,7 @@ internal fun ImageViewerMoreMenu(
                     text = { Text(label) },
                     leadingIcon = { Icon(symbol.icon, contentDescription = null) },
                     onClick = {
-                        expanded = false
+                        onExpandedChange(false)
                         onExit(exit)
                     },
                 )

@@ -54,6 +54,8 @@ internal class MessageCacheSource(
     private val erasures: PlaintextErasureLedger? = null,
     /** Les traductions déjà reçues, superposées aux messages servis. */
     private val translations: TranslationLayer? = null,
+    /** #16012 — mon envoi servi par la page avant son accusé : ses fichiers locaux suivent la ligne servie. */
+    private val media: AcknowledgedBubbleMedia? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
@@ -232,8 +234,9 @@ internal class MessageCacheSource(
     private suspend fun persist(messages: List<ApiMessage>, newEtag: String?) {
         val now = clock.nowMillis()
         val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
+        val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
-            ingestion.mergeInTransaction(messages, now, conversationId)
+            ingestion.mergeInTransaction(messages, now, conversationId, settlements)
             erasures?.recordRemovedRows(pruned(messages, rows))
             if (rows.isEmpty()) {
                 messageDao.deleteMissing(conversationId, emptyList())
@@ -246,6 +249,7 @@ internal class MessageCacheSource(
             }
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, newEtag, null))
         }
+        settlements?.forEach { media?.settle(it.previous, it.written) }
     }
 
     /**
@@ -271,10 +275,12 @@ internal class MessageCacheSource(
     private suspend fun persistAfterBackfill(messages: List<ApiMessage>) {
         val now = clock.nowMillis()
         val currentEtag = syncMetaDao.etag(resourceKey)
+        val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
-            ingestion.mergeInTransaction(messages, now, conversationId)
+            ingestion.mergeInTransaction(messages, now, conversationId, settlements)
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, currentEtag, null))
         }
+        settlements?.forEach { media?.settle(it.previous, it.written) }
     }
 
     private companion object {

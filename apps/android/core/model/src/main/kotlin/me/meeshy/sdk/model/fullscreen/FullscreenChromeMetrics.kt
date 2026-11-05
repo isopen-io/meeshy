@@ -86,6 +86,7 @@ public enum class FullscreenChromeSymbol {
     AudioOutput,
     Play,
     Pause,
+    Forward,
 }
 
 /** Un palier d'un voile : l'opacité du noir à une position (0 = bord haut du voile). */

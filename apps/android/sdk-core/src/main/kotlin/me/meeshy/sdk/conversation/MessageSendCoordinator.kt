@@ -60,6 +60,7 @@ internal class MessageSendCoordinator(
     listPreviews: SendPreviewSink? = null,
 ) {
     private val stager = OptimisticMessageStager(database, messageDao, listPreviews)
+    private val settlement = AcknowledgedBubbleMedia(adoption, previews)
 
     /**
      * Optimistic send: the message appears instantly as a `SENDING` bubble backed by Room, and a
@@ -206,8 +207,7 @@ internal class MessageSendCoordinator(
         }
         TranslationLayer.of(database).forget(listOf(cmid))
         regime?.learnFromServed(listOf(serverMessage))
-        adoption?.adopt(optimisticAttachments, serverMessage.attachments)
-        previews?.release(optimisticAttachments)
+        settlement.settle(optimisticAttachments, serverMessage.attachments)
     }
 
     /** Le pont `cid_ -> id serveur` écrit à l'accusé ([MessageIdReconciliation.recordAck]) ; `null` tant que non acquitté. */
