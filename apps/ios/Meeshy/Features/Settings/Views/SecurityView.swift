@@ -174,7 +174,8 @@ struct SecurityView: View {
     private func focusMasterPinIfRequested(_ proxy: ScrollViewProxy) {
         guard SettingsFocusRequest.shared.consume(.masterPin) else { return }
         pinFocused = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        Task { @MainActor in
+            do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
             withAnimation(.easeInOut(duration: 0.4)) { proxy.scrollTo(SettingsFocus.masterPin.rawValue, anchor: .center) }
         }
     }

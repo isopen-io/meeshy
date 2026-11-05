@@ -30,6 +30,18 @@ enum ProfilePostsOpener {
             object: "postDetail:\(post.id)"
         )
     }
+
+    /// Le contenu « Publications » d'une feuille de profil hôte : la liste du
+    /// profil, dont chaque ouverture referme d'abord la feuille.
+    static func postsContent(dismiss: @escaping () -> Void) -> (String) -> AnyView {
+        { uid in
+            AnyView(ProfileUserPostsList(
+                userId: uid,
+                onOpenPost: { post in openPost(post, dismiss: dismiss) },
+                onOpenReel: { reel, reels in openReel(reel, in: reels, dismiss: dismiss) }
+            ))
+        }
+    }
 }
 
 /// Ce que fait un tap d'ouverture dans la liste d'un profil (#10483) : envoyer

@@ -129,7 +129,9 @@ final class StoryStillExportTests: XCTestCase {
     func test_theCardLead_ofAStillScene_isAnImage_bakedBare() async throws {
         let sut = makeSUT()
 
-        let file = try XCTUnwrap(await sut.service.renderSceneFile(of: stillScene()))
+        let rendered = await sut.service.renderSceneFile(of: stillScene())
+
+        let file = try XCTUnwrap(rendered)
         defer { try? FileManager.default.removeItem(at: file) }
 
         XCTAssertEqual(file.pathExtension, "jpg")
@@ -142,7 +144,9 @@ final class StoryStillExportTests: XCTestCase {
         var post = FeedPost(id: "post-\(UUID().uuidString)", author: "alice", type: "POST", content: "Fixe")
         post.storyEffects = StoryEffects(textObjects: [StoryTextObject(text: "Fixe")])
 
-        let file = try XCTUnwrap(await sut.service.renderSceneFile(of: post))
+        let rendered = await sut.service.renderSceneFile(of: post)
+
+        let file = try XCTUnwrap(rendered)
         defer { try? FileManager.default.removeItem(at: file) }
 
         XCTAssertEqual(file.pathExtension, "jpg")

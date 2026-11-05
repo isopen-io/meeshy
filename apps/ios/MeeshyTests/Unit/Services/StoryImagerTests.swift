@@ -83,7 +83,9 @@ final class StoryImagerTests: XCTestCase {
         let (sut, exporter, photos) = makeSUT()
         let request = try XCTUnwrap(ImagerCardRequest.post(composedPost(), viewer: Self.viewer, preferredLanguages: ["fr"], service: sut))
 
-        let file = try XCTUnwrap(await request.lead?.render())
+        let rendered = await request.lead?.render()
+
+        let file = try XCTUnwrap(rendered)
         defer { try? FileManager.default.removeItem(at: file) }
 
         XCTAssertEqual(exporter.prepareCallCount, 1)
@@ -159,7 +161,8 @@ final class StoryImagerTests: XCTestCase {
         XCTAssertEqual(request.subject.reply.author, "awa")
         XCTAssertEqual(request.subject.media.first?.author?.name, "awa")
         XCTAssertEqual(exporter.prepareCallCount, 0)
-        let file = try XCTUnwrap(await request.lead?.render())
+        let rendered = await request.lead?.render()
+        let file = try XCTUnwrap(rendered)
         defer { try? FileManager.default.removeItem(at: file) }
         XCTAssertEqual(exporter.lastAppendsBrandOutro, false)
         XCTAssertEqual(exporter.lastSlide?.computedTotalDuration(), 45)
@@ -182,7 +185,8 @@ final class StoryImagerTests: XCTestCase {
 
         XCTAssertEqual(request.lead?.id, scene.id)
         XCTAssertEqual(request.subject.heroID, scene.id)
-        let file = try XCTUnwrap(await request.lead?.render())
+        let rendered = await request.lead?.render()
+        let file = try XCTUnwrap(rendered)
         defer { try? FileManager.default.removeItem(at: file) }
         XCTAssertEqual(exporter.prepareCallCount, 1)
         XCTAssertEqual(request.lead?.media(rendered: file).media.kind, .image, "une scène fixe arrive en photo")

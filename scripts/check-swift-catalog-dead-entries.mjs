@@ -582,6 +582,11 @@ const PENDING_CLIENT_ENTRIES = {
   'BringEndpoint.byUserId': { issue: 13936, reason: 'GET|POST /bring/:userId — disponibilité et envoi du Bring, sous-lot iOS' },
   'BringEndpoint.byBringId': { issue: 13936, reason: 'DELETE /bring/:bringId — arrêter un Bring d’un geste, sous-lot iOS' },
   'RelationsEndpoint.byUserIdSettings': { issue: 14229, reason: 'GET|PUT /relations/:userId/settings — les réglages par personne sur iOS' },
+  // Les éditeurs de packs (#16378, adresses régénérées par af2e62f54d) : le nom d'éditeur en boutique iOS
+  // et l'espace éditeur sont le tour client de #16274.
+  'PublishersEndpoint.bySlug': { issue: 16274, reason: 'GET /publishers/:slug — la fiche d’un éditeur en boutique iOS' },
+  'PublishersEndpoint.me': { issue: 16274, reason: 'GET|PUT /publishers/me — l’espace éditeur du compte connecté' },
+  'PublishersEndpoint.admin': { issue: 16274, reason: 'GET /publishers/admin — la console d’administration des éditeurs' },
 };
 
 const BASELINE_DEAD_ENTRIES = 329;
