@@ -1799,37 +1799,38 @@ final class CallManagerStaleCallIdGuardTests: XCTestCase {
         // The thermal-critical branch calls `createOffer()` under `await`. Without a
         // post-await `self.currentCallId == callId` guard, the offer is emitted for a
         // call that may have ended during the SDP-creation suspension window.
-        let src = try source()
+        // The handler lives in `CallVideoSuspension` (`CallCollaborators/`, #11522).
+        let src = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallCollaborators/CallVideoSuspension.swift")
 
-        guard let thermalRange = src.range(of: "thermalStateDidChange") else {
-            XCTFail("thermalStateDidChange not found in CallManager.swift")
+        guard let thermalRange = src.range(of: "nonisolated func thermalStateDidChange(to state: ProcessInfo.ThermalState) {") else {
+            XCTFail("thermalStateDidChange not found in CallVideoSuspension.swift")
             return
         }
-        // Bound to the thermal handler body — up to the next top-level closing brace
-        // that returns to the class scope (heuristic: next `\n    func ` or `\n}`).
+        // Bound to the thermal handler body — up to the closing brace of the
+        // collaborator's class (`\n}\n`), the handler being its last member.
         let searchEnd = src.range(
-            of: "\n    func ",
+            of: "\n}\n",
             range: thermalRange.upperBound..<src.endIndex
         )?.lowerBound ?? src.endIndex
         let thermalBody = String(src[thermalRange.lowerBound..<searchEnd])
 
-        // Must see `let offer = await self.webRTCService.createOffer()` followed by
-        // `, self.currentCallId == callId` (the post-await stale-callId guard).
-        let hasCreateOffer = thermalBody.contains("await self.webRTCService.createOffer()")
+        // Must see `let offer = await call.webRTCService.createOffer()` followed by
+        // `, call.currentCallId == callId` (the post-await stale-callId guard).
+        let hasCreateOffer = thermalBody.contains("await call.webRTCService.createOffer()")
         XCTAssertTrue(hasCreateOffer,
             "thermalStateDidChange must contain a createOffer() suspension point")
 
         // The guard must appear as part of the same `if let` chain: the condition
-        // `, self.currentCallId == callId` must follow `let offer = await`.
-        guard let createOfferIdx = thermalBody.range(of: "let offer = await self.webRTCService.createOffer()")?.lowerBound else {
+        // `, call.currentCallId == callId` must follow `let offer = await`.
+        guard let createOfferIdx = thermalBody.range(of: "let offer = await call.webRTCService.createOffer()")?.lowerBound else {
             XCTFail("createOffer expression not found in thermalStateDidChange body")
             return
         }
         let afterOffer = String(thermalBody[createOfferIdx...])
         XCTAssertTrue(
-            afterOffer.contains("self.currentCallId == callId"),
+            afterOffer.contains("call.currentCallId == callId"),
             "Fix 9 regression: thermalStateDidChange renegotiation block must guard " +
-            "`self.currentCallId == callId` after `await createOffer()` to prevent " +
+            "`call.currentCallId == callId` after `await createOffer()` to prevent " +
             "emitting a stale SDP offer for a call that ended during the suspension window."
         )
     }
@@ -2273,18 +2274,18 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
             ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<nextFunc])
 
-        let previousHoldCaptures = body.components(separatedBy: "let inFlight = videoTransitionsInFlight()").count - 1
+        let previousHoldCaptures = body.components(separatedBy: "let inFlight = call.videoTransitionsInFlight()").count - 1
         XCTAssertEqual(
             previousHoldCaptures, 2,
             "Both the hold and unhold branches must capture the in-flight holdVideoTask before replacing it"
         )
-        let previousToggleCaptures = body.components(separatedBy: "let inFlight = videoTransitionsInFlight()").count - 1
+        let previousToggleCaptures = body.components(separatedBy: "let inFlight = call.videoTransitionsInFlight()").count - 1
         XCTAssertEqual(
             previousToggleCaptures, 2,
             "Both branches must also capture the in-flight videoToggleTask — a manual toggle racing " +
             "a hold transition actuates the same camera/transceiver."
         )
-        let previousSurvivalCaptures = body.components(separatedBy: "let inFlight = videoTransitionsInFlight()").count - 1
+        let previousSurvivalCaptures = body.components(separatedBy: "let inFlight = call.videoTransitionsInFlight()").count - 1
         XCTAssertEqual(
             previousSurvivalCaptures, 2,
             "Both branches must also capture the in-flight survivalVideoTask — a network-survival " +
@@ -2364,7 +2365,7 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         }
         let catchBody = String(body[catchRange.lowerBound...])
         XCTAssertTrue(
-            catchBody.contains("self.isVideoEnabled = false"),
+            catchBody.contains("call.isVideoEnabled = false"),
             "On camera-permission denial during unhold recovery, isVideoEnabled must be corrected to false " +
             "— otherwise the app believes video is active with no track and no way to recover."
         )
@@ -3204,8 +3205,10 @@ final class EndCallInternalTeardownOrderTests: XCTestCase {
             "endCallInternal must cancel the TURN refresh and its watchdog to stop TURN credential " +
             "refreshes on a dead call."
         )
-        guard let cancelAll = DeclarationBodyScanner.body(containing: "func cancelAll()", in: source) else {
-            XCTFail("CallTurnCredentials.cancelAll() not found in the CallManager unit"); return
+        let turnCredentials = try AppSourceGuard.unit(
+            "Meeshy/Features/Call/Services/CallCollaborators/CallTurnCredentials.swift")
+        guard let cancelAll = DeclarationBodyScanner.body(containing: "func cancelAll() {", in: turnCredentials) else {
+            XCTFail("CallTurnCredentials.cancelAll() not found in CallTurnCredentials.swift"); return
         }
         XCTAssertTrue(
             cancelAll.contains("turnRefreshTask?.cancel()") && cancelAll.contains("turnRefreshTask = nil"),
@@ -3545,11 +3548,9 @@ final class CallManagerDTMFTests: XCTestCase {
     func test_sendDTMF_validatesInput_inSourceCode() throws {
         let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
-        guard let funcRange = source.range(of: "func sendDTMF(digits: String)") else {
-            XCTFail("sendDTMF not found in CallManager.swift"); return
+        guard let funcBody = DeclarationBodyScanner.body(containing: "func sendDTMF(digits: String) {", in: source) else {
+            XCTFail("sendDTMF not found in the CallManager unit"); return
         }
-        let blockEnd = source.range(of: "}", range: funcRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let funcBody = String(source[funcRange.lowerBound..<blockEnd])
 
         XCTAssertTrue(
             funcBody.contains("guard") || funcBody.contains("allSatisfy") || funcBody.contains("CharacterSet"),
@@ -3561,11 +3562,9 @@ final class CallManagerDTMFTests: XCTestCase {
     func test_sendDTMF_rejectsEmptyString_inSourceCode() throws {
         let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
 
-        guard let funcRange = source.range(of: "func sendDTMF(digits: String)") else {
-            XCTFail("sendDTMF not found in CallManager.swift"); return
+        guard let funcBody = DeclarationBodyScanner.body(containing: "func sendDTMF(digits: String) {", in: source) else {
+            XCTFail("sendDTMF not found in the CallManager unit"); return
         }
-        let blockEnd = source.range(of: "}", range: funcRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let funcBody = String(source[funcRange.lowerBound..<blockEnd])
 
         XCTAssertTrue(
             funcBody.contains("isEmpty"),
@@ -5552,7 +5551,7 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
         let toggleFunc = String(source[funcRange.lowerBound..<searchEnd])
 
         XCTAssertTrue(
-            toggleFunc.contains("let inFlight = videoTransitionsInFlight()"),
+            toggleFunc.contains("let inFlight = call.videoTransitionsInFlight()"),
             "toggleVideo must capture the previous videoToggleTask before overwriting it, " +
             "so the new Task can await its completion."
         )
@@ -5566,7 +5565,7 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
         // and the network-survival controller — a hold landing exactly as a manual
         // toggle fires (or vice versa) actuates the same camera/transceiver otherwise.
         XCTAssertTrue(
-            toggleFunc.contains("let inFlight = videoTransitionsInFlight()"),
+            toggleFunc.contains("let inFlight = call.videoTransitionsInFlight()"),
             "toggleVideo must also capture the in-flight holdVideoTask before starting its own Task."
         )
         XCTAssertTrue(
@@ -5574,7 +5573,7 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
             "toggleVideo must await the previous hold task's completion too."
         )
         XCTAssertTrue(
-            toggleFunc.contains("let inFlight = videoTransitionsInFlight()"),
+            toggleFunc.contains("let inFlight = call.videoTransitionsInFlight()"),
             "toggleVideo must also capture the in-flight survivalVideoTask before starting its own Task."
         )
         XCTAssertTrue(
@@ -7233,7 +7232,7 @@ final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
     func test_toggleVideo_guardsHoldAndCaptureSuspensionBeforeUpgrading() throws {
         let body = try toggleVideoBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
+            body.contains("call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "toggleVideo must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — mirrors the guard applySurvivalVideoSend already applies for the " +
             "automatic survival-recovery path."
@@ -7332,7 +7331,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
             return ""
         }
         let bodyEnd = source.range(
-            of: "private func publishListeningIntentIfChanged()",
+            of: "protocol CallCameraActuatorProviding",
             range: funcRange.upperBound..<source.endIndex
         )?.lowerBound ?? source.endIndex
         return String(source[funcRange.lowerBound..<bodyEnd])
@@ -7343,7 +7342,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_switchCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
         let body = try switchCameraBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
+            body.contains("call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "switchCamera must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — mirrors the guard toggleVideo() applies (Vague 158) for the same " +
             "camera-actuation task chain."
@@ -7424,7 +7423,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_selectCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
         let body = try selectCameraBody(in: try callManagerSource())
         XCTAssertTrue(
-            body.contains("self.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
+            body.contains("call.isVideoSuspendedByHold || call.isVideoSuspendedByCaptureInterruption"),
             "selectCamera(id:) must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
             "before actuating — same capturer, same task chain as switchCamera()."
         )

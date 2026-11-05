@@ -19,6 +19,7 @@ nonisolated struct ComposerQuotedPublication: Equatable {
     let authorId: String
     let authorColor: String
     let authorAvatarURL: String?
+    let authorRing: ServedProfileDecorItem?
     let timestamp: Date
     let moodEmoji: String?
     let text: String
@@ -28,18 +29,21 @@ nonisolated struct ComposerQuotedPublication: Equatable {
 
     static func == (lhs: ComposerQuotedPublication, rhs: ComposerQuotedPublication) -> Bool {
         lhs.author == rhs.author && lhs.authorId == rhs.authorId && lhs.authorColor == rhs.authorColor
-            && lhs.authorAvatarURL == rhs.authorAvatarURL && lhs.timestamp == rhs.timestamp
+            && lhs.authorAvatarURL == rhs.authorAvatarURL && lhs.authorRing == rhs.authorRing
+            && lhs.timestamp == rhs.timestamp
             && lhs.moodEmoji == rhs.moodEmoji && lhs.text == rhs.text
             && lhs.primaryMedia?.id == rhs.primaryMedia?.id && lhs.mediaCount == rhs.mediaCount
             && lhs.visibility == rhs.visibility
     }
 
-    init(author: String, authorId: String, authorColor: String, authorAvatarURL: String?, timestamp: Date,
+    init(author: String, authorId: String, authorColor: String, authorAvatarURL: String?,
+         authorRing: ServedProfileDecorItem? = nil, timestamp: Date,
          moodEmoji: String?, text: String, primaryMedia: FeedMedia?, mediaCount: Int, visibility: String?) {
         self.author = author
         self.authorId = authorId
         self.authorColor = authorColor
         self.authorAvatarURL = authorAvatarURL
+        self.authorRing = authorRing
         self.timestamp = timestamp
         self.moodEmoji = moodEmoji
         self.text = text
@@ -55,7 +59,8 @@ nonisolated struct ComposerQuotedPublication: Equatable {
             return
         }
         self.init(author: post.author, authorId: post.authorId, authorColor: post.authorColor,
-                  authorAvatarURL: post.authorAvatarURL, timestamp: post.timestamp, moodEmoji: nil,
+                  authorAvatarURL: post.authorAvatarURL, authorRing: post.authorRing,
+                  timestamp: post.timestamp, moodEmoji: nil,
                   text: post.displayContent, primaryMedia: post.media.first, mediaCount: post.media.count,
                   visibility: post.visibility)
     }
@@ -65,7 +70,8 @@ nonisolated struct ComposerQuotedPublication: Equatable {
     /// du fil et le détail : la descente est faite à la conversion du post.
     init(repost: RepostContent) {
         self.init(author: repost.author, authorId: repost.authorId, authorColor: repost.authorColor,
-                  authorAvatarURL: repost.authorAvatarURL, timestamp: repost.timestamp,
+                  authorAvatarURL: repost.authorAvatarURL, authorRing: repost.authorRing,
+                  timestamp: repost.timestamp,
                   moodEmoji: repost.moodEmoji.flatMap { $0.isEmpty ? nil : $0 }, text: repost.displayContent,
                   primaryMedia: repost.media.first, mediaCount: repost.media.count,
                   visibility: repost.visibility)

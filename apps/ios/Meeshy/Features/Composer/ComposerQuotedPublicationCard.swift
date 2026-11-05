@@ -18,7 +18,8 @@ struct ComposerQuotedPublicationCard: View {
                     name: quoted.author,
                     context: .postComment,
                     accentColor: quoted.authorColor,
-                    avatarURL: quoted.authorAvatarURL
+                    avatarURL: quoted.authorAvatarURL,
+                    ring: quoted.authorRing
                 )
                 Text(quoted.author)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))

@@ -129,6 +129,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/NearbyDiscoveryView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Views/AudioFullscreenPage.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
         "Main/Components/PostSearchResultRow.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Main/Views/TypingIndicatorBubble.swift": "indicateur de frappe — les points qui bougent disent déjà la présence (#16114)",
         "Main/Components/ForwardPickerSheet.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
         "Main/Views/SharePickerView.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
         "Share/ShareSheetView.swift": "écran de partage unique en cours (#10947/#10948) — sa présence est l'affaire de son lot",
