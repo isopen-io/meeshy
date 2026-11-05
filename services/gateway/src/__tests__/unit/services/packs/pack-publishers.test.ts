@@ -192,3 +192,43 @@ describe('adminList et bySlug — ce que voit l’administration, ce que voit la
     expect(await publishers.bySlug('inconnu')).toBeNull();
   });
 });
+
+describe('une identité Meeshy ne survit pas à la fin du statut officiel', () => {
+  const formerOfficial = () => {
+    const { db, publishers } = setup(undefined, BINTA);
+    db.profiles.push({ id: 'p-old', userId: OFFICIAL, slug: 'meeshy', displayName: 'Meeshy', verifiedAt: new Date('2026-10-01T00:00:00Z'), createdAt: new Date(), updatedAt: new Date() });
+    return { db, publishers };
+  };
+
+  it('servedFor : l’ancien compte officiel reçoit une adresse et un nom neutres, et perd la vérification accordée', async () => {
+    const { db, publishers } = formerOfficial();
+    const served = (await publishers.servedFor([{ submitterId: OFFICIAL, author: 'Meeshy' }])).get(OFFICIAL);
+    expect(served).toEqual({ slug: 'editeur', name: 'Éditeur', verified: false, official: false });
+    expect(db.profiles[0]).toMatchObject({ slug: 'editeur', verifiedAt: null });
+  });
+
+  it('authorizePublication : l’ancien compte officiel ne publie plus sous « meeshy »', async () => {
+    const { publishers } = formerOfficial();
+    expect(await publishers.authorizePublication(OFFICIAL, { author: 'Studio', claimed: 'meeshy' })).toEqual({ kind: 'refused', reason: 'not-owner' });
+  });
+
+  it('bySlug : « meeshy » ne désigne que l’éditeur officiel, jamais l’ancienne ligne', async () => {
+    const { publishers } = formerOfficial();
+    await publishers.servedFor([{ submitterId: OFFICIAL, author: 'x' }]);
+    expect(await publishers.bySlug('editeur')).toEqual({ slug: 'editeur', name: 'Éditeur', verified: false, official: false });
+  });
+
+  it('ensureOfficial retire « meeshy » à son ancien détenteur avant de lier le compte configuré', async () => {
+    const { db, publishers } = formerOfficial();
+    expect(await publishers.ensureOfficial()).toBe('linked');
+    expect(db.profiles.find((row) => row.userId === OFFICIAL)).toMatchObject({ slug: 'editeur', verifiedAt: null });
+    expect(db.profiles.find((row) => row.userId === BINTA)).toMatchObject({ slug: 'meeshy', displayName: 'Meeshy' });
+  });
+
+  it('un slug réservé stocké sur un compte tiers est traité comme absent', async () => {
+    const { db, publishers } = setup();
+    db.profiles.push({ id: 'p-squat', userId: AWA, slug: 'team-meeshy', displayName: 'Awa', verifiedAt: null, createdAt: new Date(), updatedAt: new Date() });
+    const outcome = await publishers.authorizePublication(AWA, { author: 'Awa', claimed: null });
+    expect(outcome).toEqual({ kind: 'allowed', publisher: { slug: 'awa', name: 'Awa', verified: false, official: false } });
+  });
+});
