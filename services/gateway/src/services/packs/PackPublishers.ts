@@ -111,12 +111,13 @@ type AccountRow = {
   readonly phoneVerifiedAt: Date | null;
 };
 
+/** Actif, ni désactivé ni supprimé, et une adresse ou un numéro VÉRIFIÉ — seule une date prouve, tout le reste refuse. */
 const canPublish = (account: AccountRow | null): boolean =>
   account !== null &&
   account.isActive !== false &&
-  account.deactivatedAt === null &&
-  account.deletedAt === null &&
-  (account.emailVerifiedAt !== null || account.phoneVerifiedAt !== null);
+  !(account.deactivatedAt instanceof Date) &&
+  !(account.deletedAt instanceof Date) &&
+  (account.emailVerifiedAt instanceof Date || account.phoneVerifiedAt instanceof Date);
 
 /** Le nom de boutique qu'un éditeur reçoit à sa création : l'auteur déclaré s'il est acceptable, sinon un nom neutre. */
 const storeNameOf = (author: string): string => {
@@ -150,6 +151,16 @@ export class PackPublishers {
     return this.official !== null && userId === this.official;
   }
 
+  /**
+   * Une adresse que ce compte peut porter : une adresse RÉSERVÉE (`meeshy`,
+   * « team-meeshy »…) stockée sur un compte qui n'est pas l'officiel est traitée
+   * comme ABSENTE — c'est le cas d'un ancien compte officiel, et d'une ligne
+   * écrite avant la réserve. `ensureFor` la remplace alors par une adresse neutre.
+   */
+  private hasUsableSlug(row: PublisherRow): row is SluggedRow {
+    return hasSlug(row) && (this.isOfficial(row.userId) || !isReservedPublisherIdentity(row.slug));
+  }
+
   /** Ce que la boutique sert d'un éditeur — un ancien profil tiers au nom réservé est servi sous un nom neutre. */
   private refOf(row: SluggedRow): PackPublisherRef {
     if (this.isOfficial(row.userId)) return MEESHY_PUBLISHER;
@@ -166,6 +177,7 @@ export class PackPublishers {
     const row = official ? await this.officialRow(userId) : await this.ensureFor(userId, claim.author);
     if (row === null) return { kind: 'refused', reason: 'reserved' };
     const publisher = this.refOf(row);
+    if (claim.claimed === MEESHY_PUBLISHER_SLUG && !official) return { kind: 'refused', reason: 'not-owner' };
     if (claim.claimed !== null && claim.claimed !== publisher.slug) return { kind: 'refused', reason: 'not-owner' };
     return { kind: 'allowed', publisher };
   }
@@ -181,7 +193,7 @@ export class PackPublishers {
       ids.map(async (id) => {
         if (this.isOfficial(id)) return [id, MEESHY_PUBLISHER] as const;
         const row = byOwner.get(id);
-        const slugged = row !== undefined && hasSlug(row) ? row : await this.ensureFor(id, authorOf.get(id) ?? '');
+        const slugged = row !== undefined && this.hasUsableSlug(row) ? row : await this.ensureFor(id, authorOf.get(id) ?? '');
         return [id, this.refOf(slugged)] as const;
       }),
     );
@@ -192,7 +204,7 @@ export class PackPublishers {
   async bySlug(slug: string): Promise<PackPublisherRef | null> {
     if (slug === MEESHY_PUBLISHER_SLUG) return MEESHY_PUBLISHER;
     const row = await this.prisma.partnerProfile.findUnique({ where: { slug }, select: ROW_SELECT });
-    return row === null || !hasSlug(row) ? null : this.refOf(row);
+    return row === null || !this.hasUsableSlug(row) ? null : this.refOf(row);
   }
 
   /** L'éditeur du compte connecté, s'il en a un. */
@@ -200,7 +212,7 @@ export class PackPublishers {
     if (this.isOfficial(userId)) return MEESHY_PUBLISHER;
     const row = await this.prisma.partnerProfile.findUnique({ where: { userId }, select: ROW_SELECT });
     if (row === null) return null;
-    return this.refOf(hasSlug(row) ? row : await this.ensureFor(userId, row.displayName));
+    return this.refOf(this.hasUsableSlug(row) ? row : await this.ensureFor(userId, row.displayName));
   }
 
   /** Tous les éditeurs avec leur compte propriétaire — pour BIGBOSS/ADMIN seulement. */
@@ -231,6 +243,8 @@ export class PackPublishers {
 
   /** L'éditeur « Meeshy » du compte officiel, créé ou réadressé ; `null` si l'adresse `meeshy` est tenue par un autre profil. */
   private async officialRow(userId: string): Promise<SluggedRow | null> {
+    const holder = await this.prisma.partnerProfile.findFirst({ where: { slug: MEESHY_PUBLISHER_SLUG }, select: ROW_SELECT });
+    if (holder !== null && holder.userId !== userId) await this.ensureFor(holder.userId, '');
     const now = this.now();
     const current = await this.prisma.partnerProfile.findUnique({ where: { userId }, select: ROW_SELECT });
     try {
@@ -255,7 +269,7 @@ export class PackPublishers {
   private async ensureFor(userId: string, author: string): Promise<SluggedRow> {
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
       const current = await this.prisma.partnerProfile.findUnique({ where: { userId }, select: ROW_SELECT });
-      if (current !== null && hasSlug(current)) return current;
+      if (current !== null && this.hasUsableSlug(current)) return current;
       const name = current?.displayName ?? storeNameOf(author);
       const base = slugBaseOf(name);
       const slug = attempt === 0 ? base : `${base}-${this.suffix()}`;
@@ -263,15 +277,35 @@ export class PackPublishers {
       try {
         if (current === null) {
           await this.prisma.partnerProfile.create({ data: { userId, slug, displayName: name, createdAt: now, updatedAt: now } });
-        } else {
+        } else if (!hasSlug(current)) {
           await this.prisma.partnerProfile.updateMany({ where: { userId, OR: WITHOUT_SLUG }, data: { slug } });
+        } else {
+          // Une adresse réservée retirée emporte la vérification qu'elle portait (celle d'`officialRow`) : fail-closed.
+          await this.prisma.partnerProfile.updateMany({ where: { userId, slug: current.slug }, data: { slug, verifiedAt: null, verifiedBy: null, updatedAt: now } });
         }
       } catch (error) {
         if (!isUniqueViolation(error)) throw error;
       }
     }
     const settled = await this.prisma.partnerProfile.findUnique({ where: { userId }, select: ROW_SELECT });
-    if (settled !== null && hasSlug(settled)) return settled;
+    if (settled !== null && this.hasUsableSlug(settled)) return settled;
     throw new Error('no publisher address could be allocated');
   }
+}
+
+/** Les éditeurs de la passerelle : la base, et le compte officiel lu dans l'environnement. */
+export const defaultPackPublishers = (prisma: PackPublishersDb): PackPublishers =>
+  new PackPublishers({ prisma, officialAccountId: officialPublisherAccountFrom(process.env) });
+
+/** Chaque pack projeté, avec l'éditeur de son proposant. */
+export async function withPublishers<R extends PublishedBy, D>(
+  publishers: PackPublishers,
+  rows: readonly R[],
+  project: (row: R) => D,
+): Promise<readonly (D & { readonly publisher?: PackPublisherRef })[]> {
+  const served = await publishers.servedFor(rows);
+  return rows.map((row) => {
+    const publisher = served.get(row.submitterId);
+    return publisher === undefined ? project(row) : { ...project(row), publisher };
+  });
 }
