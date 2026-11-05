@@ -442,6 +442,18 @@ internal fun ChatListHost(
             voice = audioPlayer,
             accent = accentColor,
             onDismiss = media::close,
+            onDismissToMessage = actions.scrollToMessage,
+            conversationIsEndToEnd = state.isEndToEnd,
+            onDownload = { source ->
+                scope.launch {
+                    if (storageAccess.ensure(PermissionNature.PHOTO_LIBRARY_ADD, announcesRefusal = true)) {
+                        actions.onPieceSave(source.carrierId, source.id)
+                    }
+                }
+            },
+            download = state.fileDownload,
+            onDismissDownload = actions.dismissFileDownload,
+            onRetryDownload = actions.retryFileDownload,
             actions = me.meeshy.app.chat.audio.rememberChatAudioFullscreenActions(
                 replies = actions.audioFullscreenReplies,
                 actions = actions,

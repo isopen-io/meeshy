@@ -73,6 +73,19 @@ internal fun FileAttachmentDownloadOverlay(
         onDismiss()
     }
 
+    FileAttachmentDownloadBanner(download = download, onDismiss = onDismiss, onRetry = onRetry)
+}
+
+/**
+ * Le bandeau seul — avancement d'un « Enregistrer », échecs —, sans l'effet d'ouverture ni de partage : une fenêtre posée
+ * au-dessus du fil (le plein écran audio) le rend chez elle, l'overlay du fil restant le seul à agir à la fin.
+ */
+@Composable
+internal fun FileAttachmentDownloadBanner(
+    download: FileAttachmentDownloadUiState?,
+    onDismiss: () -> Unit,
+    onRetry: (FileAttachmentDownloadUiState) -> Unit,
+) {
     // `fillMaxSize` (not just width) so `align(BottomCenter)` below has vertical room to
     // work with — this overlay is a screen-wide sibling of `Scaffold`, not nested inside
     // one of its own layout slots.

@@ -36,6 +36,7 @@ import me.meeshy.sdk.media.TypedMediaCache
 import me.meeshy.sdk.media.UploadedAttachmentIds
 import me.meeshy.sdk.model.AudioQueueBuilder
 import me.meeshy.sdk.model.QueuedAudio
+import me.meeshy.sdk.model.fullscreen.AudioFullscreenResting
 import me.meeshy.sdk.model.media.MediaPlayerContext
 import me.meeshy.sdk.model.media.formatMediaDuration
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
@@ -128,6 +129,7 @@ internal class ChatAudioViewModel @Inject constructor(
     private val uploads: UploadedAttachmentIds,
     private val wholeFiles: TypedMediaCache,
     @IoDispatcher private val io: CoroutineDispatcher,
+    private val restingPositions: ChatRestingPositions,
 ) : ViewModel(), ChatVoicePlayback {
 
     private var thread: ChatVoiceThread? = null
@@ -147,9 +149,16 @@ internal class ChatAudioViewModel @Inject constructor(
             artworkUrl = { thread?.artworkUrl },
             accentHex = { thread?.accentHex },
             samplesOf = { source -> samples(BubbleAudio(attachmentId = source.attachmentId, url = source.url)) },
+            restingOf = { id -> AudioFullscreenResting.storedPositionMs(restingPositions.position(id), declaredDurationOf(id)) },
             scope = viewModelScope,
         )
     }
+
+    /** La durée déclarée d'un vocal du fil lié — bulle ou citation —, 0 si le fil ne le porte pas. */
+    private fun declaredDurationOf(attachmentId: String): Long = thread?.messages.orEmpty().firstNotNullOfOrNull { bubble ->
+        (bubble.audios.firstOrNull { it.attachmentId == attachmentId } ?: bubble.replyToAudio?.takeIf { it.attachmentId == attachmentId })
+            ?.declaredDurationMs
+    } ?: 0L
 
     init {
         viewModelScope.launch {
