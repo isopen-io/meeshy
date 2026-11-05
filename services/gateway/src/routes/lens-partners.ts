@@ -27,7 +27,8 @@ import { requireAdminRank } from '../middleware/authorize';
 import { getCacheStore } from '../services/CacheStore';
 import { LensPartners } from '../services/packs/LensPartners';
 import { lensUsageDedupFrom } from '../services/packs/lensUsageDedup';
-import { sendBadRequest, sendError, sendForbidden, sendNotFound, sendSuccess } from '../utils/response.js';
+import { PACK_PUBLISHER_ERROR_CODES } from '@meeshy/shared/types/pack-publisher';
+import { sendBadRequest, sendConflict, sendError, sendForbidden, sendNotFound, sendSuccess } from '../utils/response.js';
 import { gameRateLimitConfig } from './me/game-shared';
 import { PACK_ERRORS, packEnvelope, packRouteGuard, packSlugParamsJsonSchema, type PackSlugRequest } from './pack-routes';
 
@@ -162,7 +163,8 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
         description:
           'Écrit le profil partenaire (#11327) : `displayName`, `website` (https), `logo` en base64 (absent : gardé ; `null` : retiré). ' +
           'Le logo est ré-encodé et renommé par son empreinte. Changer le nom ou le logo RETIRE la vérification. 422 PARTNER_LOGO_REFUSED ; ' +
-          '409 PARTNER_PROFILE_CHANGED quand une autre écriture est passée entre la relecture et l’écriture (relire, puis réécrire).',
+          '409 PARTNER_PROFILE_CHANGED quand une autre écriture est passée entre la relecture et l’écriture (relire, puis réécrire) ; ' +
+          '409 PUBLISHER_NAME_TAKEN quand un autre éditeur porte déjà ce nom (#16274), 403 PUBLISHER_RESERVED pour un nom réservé.',
         tags,
         summary: 'Save my partner profile',
         body: { type: 'object', required: ['displayName'], properties: { displayName: { type: 'string' }, website: { type: 'string', nullable: true }, logo: { type: 'string', nullable: true } } },
@@ -170,7 +172,7 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
       },
     },
     guard('[PUT /lens/partners/me]', async (request, reply, viewer) => {
-      const parsed = parsePartnerProfileInput(request.body);
+      const parsed = parsePartnerProfileInput(request.body, { official: partners.isOfficial(viewer.userId) });
       const body = (request.body ?? {}) as { logo?: unknown };
       const logo = logoSchema.safeParse(body.logo);
       if (!parsed.ok || !logo.success) return sendBadRequest(reply, 'Invalid partner profile', { code: 'VALIDATION_ERROR' });
@@ -180,6 +182,8 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
         return reply.status(422).send({ success: false, error: 'Logo refused', message: 'Logo refused', code: LENS_PARTNER_ERROR_CODES.LOGO_REFUSED, reason: outcome.reason });
       }
       if (outcome.kind === 'conflict') return profileChanged(reply);
+      if (outcome.kind === 'reserved') return sendForbidden(reply, 'This publisher identity is reserved', { code: PACK_PUBLISHER_ERROR_CODES.RESERVED });
+      if (outcome.kind === 'name-taken') return sendConflict(reply, 'Another publisher already uses this store name', { code: PACK_PUBLISHER_ERROR_CODES.NAME_TAKEN });
       return sendSuccess(reply, outcome.profile);
     }),
   );

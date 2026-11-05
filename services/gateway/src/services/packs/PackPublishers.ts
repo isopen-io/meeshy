@@ -39,12 +39,14 @@ import {
   PACK_PUBLISHER_LIMITS,
   impersonatesMeeshy,
   isReservedPublisherIdentity,
-  publisherNameKey,
   publisherSlugOf,
   type PackPublisherRef,
 } from '@meeshy/shared/types/pack-publisher';
 import { PARTNER_PROFILE_LIMITS } from '@meeshy/shared/types/lens-partner';
 import { isUniqueViolation } from './PackCatalog';
+import { NEUTRAL_PUBLISHER_NAME, byAge, claimPublisherName, isNameKeyViolation, lostNameRace } from './PublisherNames';
+
+export { NEUTRAL_PUBLISHER_NAME } from './PublisherNames';
 
 export type PackPublishersDb = Pick<PrismaClient, 'partnerProfile' | 'user' | 'adminAuditLog'>;
 
@@ -77,6 +79,9 @@ export type EnsureOfficialOutcome = 'linked' | 'unconfigured' | 'unknown-account
 /** Ce que le rattrapage a fait : éditeurs créés, adresses posées sur un ancien profil, éditeurs déjà complets, comptes sautés. */
 export type BackfillSummary = { readonly created: number; readonly addressed: number; readonly kept: number; readonly skipped: number };
 
+/** Ce que le rattrapage des clés de nom a fait : clés posées, profils ramenés au nom neutre (nom réservé ou déjà porté). */
+export type NameKeyBackfillSummary = { readonly keyed: number; readonly neutralized: number };
+
 export type PackPublishersDeps = {
   readonly prisma: PackPublishersDb;
   /** Le compte officiel Meeshy (`officialPublisherAccountFrom(process.env)`) ; `null` : aucun. */
@@ -93,9 +98,6 @@ export const officialPublisherAccountFrom = (env: Readonly<Record<string, string
   return typeof raw === 'string' && OBJECT_ID.test(raw) ? raw : null;
 };
 
-/** Le nom donné à un éditeur dont la proposition ne déclarait aucun nom acceptable. */
-export const NEUTRAL_PUBLISHER_NAME = 'Éditeur';
-
 const NEUTRAL_SLUG = 'editeur';
 
 /**
@@ -109,13 +111,14 @@ const MAX_SLUG_ATTEMPTS = 6;
 const INVISIBLE_OR_CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 const OFFICIAL_LINK_ACTION = 'PACK_PUBLISHER_OFFICIAL_LINK';
 
-const ROW_SELECT = { id: true, userId: true, slug: true, displayName: true, verifiedAt: true, createdAt: true } as const;
+const ROW_SELECT = { id: true, userId: true, slug: true, displayName: true, nameKey: true, verifiedAt: true, createdAt: true } as const;
 
 type PublisherRow = {
   readonly id: string;
   readonly userId: string;
   readonly slug: string | null;
   readonly displayName: string;
+  readonly nameKey: string | null;
   readonly verifiedAt: Date | null;
   readonly createdAt?: Date | null;
 };
@@ -145,9 +148,6 @@ const storeNameOf = (author: string): string => {
   return acceptable ? name : NEUTRAL_PUBLISHER_NAME;
 };
 
-/** La clé d'unicité d'un nom de boutique ; aucune pour le nom neutre, que tous partagent. */
-const nameKeyOf = (name: string): string | null => (name === NEUTRAL_PUBLISHER_NAME ? null : publisherNameKey(name));
-
 /** Une adresse qu'un éditeur TIERS peut porter : ni l'adresse neutre, ni une adresse réservée. */
 const isThirdPartySlug = (slug: string | null | undefined): slug is string =>
   typeof slug === 'string' && slug.length > 0 && slug !== NEUTRAL_SLUG && !isReservedPublisherIdentity(slug);
@@ -158,12 +158,10 @@ const slugBaseOf = (name: string): string => {
   return isReservedPublisherIdentity(base) ? NEUTRAL_SLUG : base;
 };
 
-/** Le plus ancien d'abord : par date de création, puis par identifiant (un ObjectId croît avec le temps). */
-const byAge = (a: PublisherRow, b: PublisherRow): number => {
-  const at = a.createdAt?.getTime() ?? 0;
-  const bt = b.createdAt?.getTime() ?? 0;
-  return at === bt ? a.id.localeCompare(b.id) : at - bt;
-};
+/** Un nom écrit avant #16274, sans sa clé de lecture : il passe par `claimPublisherName` avant d'être servi. */
+const lacksNameKey = (row: PublisherRow): boolean => row.displayName !== NEUTRAL_PUBLISHER_NAME && typeof row.nameKey !== 'string';
+
+const WITHOUT_NAME_KEY = [{ nameKey: null }, { nameKey: { isSet: false } }];
 
 class AuditUnavailableError extends Error {}
 
@@ -357,37 +355,76 @@ export class PackPublishers {
 
   /**
    * L'éditeur d'un compte TIERS, servable : gardé s'il l'est déjà, créé s'il
-   * n'existe pas (nommé par `author`, sauf si un autre éditeur porte ce nom),
-   * réadressé sinon. La création est un `upsert` sur `userId` : deux
-   * propositions simultanées ne créent pas deux éditeurs.
+   * n'existe pas (nommé par `author` si `claimPublisherName` l'accepte, neutre
+   * s'il est réservé, refusé s'il est pris), complété sinon — un ancien profil
+   * reçoit sa clé de nom, puis son adresse. La création est un `upsert` sur
+   * `userId` : deux propositions simultanées ne créent pas deux éditeurs.
    */
   private async adopt(userId: string, author: string): Promise<PackPublisherRef | 'name-taken'> {
     const current = await this.single(userId);
-    const ready = this.servable(current);
-    if (ready !== null) return ready;
-    if (current !== null) return this.allocateSlug(current);
-    const name = storeNameOf(author);
-    const nameKey = nameKeyOf(name);
-    if (nameKey !== null && (await this.nameHolderOtherThan(nameKey, userId)) !== null) return 'name-taken';
+    if (current !== null) {
+      const named = lacksNameKey(current) ? await this.nameLegacy(current) : current;
+      return this.servable(named) ?? this.allocateSlug(named);
+    }
+    const claim = await claimPublisherName(this.prisma, { userId, name: storeNameOf(author), official: false });
+    if (claim.kind === 'name-taken') return 'name-taken';
+    const { displayName, nameKey } = claim.kind === 'ok' ? claim : { displayName: NEUTRAL_PUBLISHER_NAME, nameKey: null };
     const now = this.now();
-    await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, displayName: name, nameKey, createdAt: now, updatedAt: now }, update: {} });
+    try {
+      await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, displayName, nameKey, createdAt: now, updatedAt: now }, update: {} });
+    } catch (error) {
+      if (isNameKeyViolation(error)) return 'name-taken';
+      if (!isUniqueViolation(error)) throw error;
+    }
     const created = await this.single(userId);
     if (created === null) throw new Error('publisher vanished after creation');
-    if (nameKey !== null && (await this.lostNameRace(nameKey, created))) {
+    if (nameKey !== null && created.nameKey === nameKey && (await lostNameRace(this.prisma, nameKey, created))) {
       await this.prisma.partnerProfile.deleteMany({ where: { id: created.id, OR: [{ slug: null }, { slug: { isSet: false } }] } });
       return 'name-taken';
     }
     return this.servable(created) ?? this.allocateSlug(created);
   }
 
-  private async nameHolderOtherThan(nameKey: string, userId: string): Promise<{ readonly id: string } | null> {
-    return this.prisma.partnerProfile.findFirst({ where: { nameKey, NOT: { userId } }, select: { id: true } });
+  /**
+   * Un ancien profil (sans clé de nom) passe par `claimPublisherName` : nom
+   * libre, il reçoit sa clé ; nom réservé ou déjà porté par un autre éditeur,
+   * il est ramené au nom NEUTRE et perd la vérification qui portait sur ce nom.
+   */
+  private async nameLegacy(row: PublisherRow): Promise<PublisherRow> {
+    const claim = await claimPublisherName(this.prisma, { userId: row.userId, name: row.displayName, official: this.isOfficial(row.userId) });
+    const now = this.now();
+    const neutral = { displayName: NEUTRAL_PUBLISHER_NAME, nameKey: null, verifiedAt: null, verifiedBy: null, updatedAt: now };
+    try {
+      await this.prisma.partnerProfile.updateMany({ where: { id: row.id }, data: claim.kind === 'ok' ? { nameKey: claim.nameKey, updatedAt: now } : neutral });
+    } catch (error) {
+      if (!isNameKeyViolation(error)) throw error;
+      await this.prisma.partnerProfile.updateMany({ where: { id: row.id }, data: neutral });
+    }
+    const settled = await this.single(row.userId);
+    if (settled === null) throw new Error('publisher vanished while naming it');
+    if (typeof settled.nameKey === 'string' && (await lostNameRace(this.prisma, settled.nameKey, settled))) {
+      await this.prisma.partnerProfile.updateMany({ where: { id: row.id }, data: neutral });
+      return (await this.single(row.userId)) ?? settled;
+    }
+    return settled;
   }
 
-  /** Deux créations simultanées sous le même nom : la plus ancienne garde le nom. */
-  private async lostNameRace(nameKey: string, row: PublisherRow): Promise<boolean> {
-    const holders: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { nameKey }, select: ROW_SELECT });
-    return holders.some((holder) => holder.userId !== row.userId && byAge(holder, row) < 0);
+  /**
+   * Le RATTRAPAGE des clés de nom, à jouer AVANT la pose de l'index unique de
+   * `nameKey` : chaque profil sans clé, du plus ancien au plus récent, passe
+   * par `claimPublisherName`. Le plus ancien garde un nom en double ; les
+   * suivants, comme un nom réservé, sont ramenés au nom neutre. Rejouable.
+   */
+  async backfillNameKeys(): Promise<NameKeyBackfillSummary> {
+    const rows: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { OR: WITHOUT_NAME_KEY }, select: ROW_SELECT });
+    const summary = { keyed: 0, neutralized: 0 };
+    for (const row of [...rows].sort(byAge)) {
+      if (this.isOfficial(row.userId) || !lacksNameKey(row)) continue;
+      const named = await this.nameLegacy(row);
+      if (named.displayName === NEUTRAL_PUBLISHER_NAME) summary.neutralized += 1;
+      else summary.keyed += 1;
+    }
+    return summary;
   }
 
   /**
