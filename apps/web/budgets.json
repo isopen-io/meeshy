@@ -1007,6 +1007,33 @@
         "source": "Mesure du 2026-10-11 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 1,17 Ko pour la boutique GENERIQUE des packs (`components/pack-shop.tsx` : liste, Installer/Retirer optimiste, un geste en vol par pack, retour arriere sur refus), partagee par la Boutique des stickers (`composer-sticker-shop.tsx`) et la Boutique des cadres (`frame-pack-shop.tsx`), chacune par un import() — jamais un import statique. La premiere peinture ne bouge pas : 90,33 Ko avant, 90,31 Ko apres (meme arbre, sans puis avec le lot ; le depassement de 90 est anterieur au lot). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
       }
     },
+    "pack_sheet": {
+      "pattern": "^assets/pack-sheet-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #16267, NON ARBITREE",
+        "source": "Mesure du 2026-11-05 (`bun run build` puis gzip -9 du chunk de `dist/assets`, meme calcul que `scripts/measure-weight.mjs`) : 1,79 Ko pour la FICHE d'un pack de decor (`components/pack-sheet.tsx` : elements en grille, editeur, etat, poids, geste du pack), chargee par import() depuis la vitrine (`unified-shop.tsx`) au premier toucher d'une rangee, jamais au demarrage. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+      }
+    },
+    "decor_preview": {
+      "pattern": "^assets/decor-preview-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 5,
+        "status": "CIBLE -- MESUREE PAR #16267, NON ARBITREE",
+        "source": "Mesure du 2026-11-05 (`bun run build` puis gzip -9 du chunk de `dist/assets`, meme calcul que `scripts/measure-weight.mjs`) : 3,23 Ko pour le PLEIN ECRAN d'une decoration (`components/decor-preview.tsx` + `decor-stage.tsx` : element pose sur mon avatar, ma banniere ou une conversation, n / N, zoom, Equiper optimiste, autres propositions), charge par import() depuis la vitrine, jamais au demarrage. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
+      }
+    },
+    "interface_catalogs_pack_preview": {
+      "pattern": "^assets/catalog-pack-preview-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 5,
+        "status": "CIBLE -- MESUREE PAR #16267, NON ARBITREE",
+        "source": "Mesure du 2026-11-05 (`bun run build` puis gzip -9 des sept chunks de `dist/assets`, meme calcul que `scripts/measure-weight.mjs`) : 3,84 Ko pour les SEPT catalogues de la fiche et du plein ecran d'une decoration (24 cles sorties de `catalog-sticker-packs-*` qui depassait son plafond : 15,97 Ko > 15, redescendu a 13,47 Ko), charges par `lib/i18n-pack-preview-catalog.ts` au premier toucher d'une rangee de decor, jamais au demarrage. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
+      }
+    },
     "glory_painter": {
       "pattern": "^assets/glory-scene-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
