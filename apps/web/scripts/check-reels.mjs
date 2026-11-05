@@ -38,8 +38,9 @@
  *     fois (sur le rail, jamais une pastille de moteur en plus), le tap et la
  *     barre sur la PAGE et non dans la boîte 9:16, et aucun lecteur ni piste
  *     de son de fond ne survit au retour.
- * 15. commenter et repartager depuis le rail (#6484) : les six gestes dans
- *     l'ordre d'iOS ; « Commenter » ouvre la feuille PARTAGÉE avec le lecteur
+ * 15. commenter et repartager depuis le rail (#6484) : les sept gestes dans
+ *     l'ordre d'iOS (la baguette « Imager » après « Partager », #16333, sur
+ *     tout réel qui s'image — un réel vidéo simple compris, #16166) ; « Commenter » ouvre la feuille PARTAGÉE avec le lecteur
  *     de stories (D-89), pager inerte, focus dedans, une flèche n'y fait pas
  *     défiler le pager, un envoi fait monter le compteur du rail, Échap la
  *     referme et rend le focus ; « Repartager » OUVRE une confirmation avant
@@ -406,8 +407,8 @@ try {
       check(Object.values(inks).every((ratio) => ratio !== null && ratio >= WCAG_AA), `${label} : auteur, légende et compteur tiennent AA au pixel sur la mire (${JSON.stringify(inks)})`);
       const controls = await reach(page, '[data-reel-index="0"] [data-reel-gesture], [data-reels-back]');
       check(
-        controls.length === 7 && controls.every((c) => c.ok && c.h >= TAP_FLOOR && c.w >= TAP_FLOOR),
-        `${label} : retour, j'aime, commenter, enregistrer, repartager, partager, son — atteignables, 44 au moins (#6484, ${JSON.stringify(controls)})`,
+        controls.length === 8 && controls.every((c) => c.ok && c.h >= TAP_FLOOR && c.w >= TAP_FLOOR),
+        `${label} : retour, j'aime, commenter, enregistrer, repartager, partager, imager, son — atteignables, 44 au moins (#6484, #16166, ${JSON.stringify(controls)})`,
       );
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${label} : aucun défilement horizontal`);
 
@@ -472,17 +473,18 @@ try {
       const commentSel = '[data-reel-index="0"] [data-reel-gesture="comment"]';
       const repostSel = '[data-reel-index="0"] [data-reel-gesture="repost"]';
 
-      // Les SIX gestes du rail, dans l'ordre iOS (aimer · commenter ·
-      // enregistrer · repartager · partager · son), chacun ≥ 44 et atteignable.
+      // Les SEPT gestes du rail, dans l'ordre iOS (aimer · commenter ·
+      // enregistrer · repartager · partager · imager · son), chacun ≥ 44 et atteignable.
+      // La baguette vit sur tout réel qui s'image, le réel vidéo simple compris (#16166).
       const railOrder = await page.evaluate(() =>
         [...document.querySelectorAll('[data-reel-index="0"] [data-reel-gesture]')].map((el) => el.getAttribute('data-reel-gesture')),
       );
       const railTargets = await reach(page, '[data-reel-index="0"] [data-reel-gesture]');
       check(
-        railOrder.join(',') === 'like,comment,bookmark,repost,share,sound' &&
-          railTargets.length === 6 &&
+        railOrder.join(',') === 'like,comment,bookmark,repost,share,imager,sound' &&
+          railTargets.length === 7 &&
           railTargets.every((c) => c.ok && c.h >= TAP_FLOOR && c.w >= TAP_FLOOR),
-        `${label} : les six gestes, dans l'ordre iOS, tous atteignables et ≥ 44 (${JSON.stringify(railOrder)})`,
+        `${label} : les sept gestes, dans l'ordre iOS, tous atteignables et ≥ 44 (${JSON.stringify(railOrder)})`,
       );
 
       // LA CONFIRMATION AVANT L'ENVOI (revue-correction #6278, défaut majeur
