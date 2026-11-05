@@ -104,25 +104,85 @@ const mapped = (text: string, table: Readonly<Record<string, string>>): string =
 const skeleton = (name: string): string =>
   mapped(folded(mapped(name.normalize('NFKC'), CAPITAL_CONFUSABLE_TO_LATIN)), CONFUSABLE_TO_LATIN);
 
-const LATIN_LETTER = /\p{Script=Latin}/u;
-const OTHER_SCRIPT_LETTER = /(?![\p{Script=Latin}])\p{L}/u;
+/**
+ * Les alphabets qu'un nom d'éditeur peut employer (UTS #39, profil « Highly
+ * Restrictive ») : une lettre d'un alphabet absent de cette liste fait refuser
+ * le nom (fail-closed).
+ */
+const SCRIPTS = [
+  ['Latin', /\p{Script=Latin}/u],
+  ['Cyrillic', /\p{Script=Cyrillic}/u],
+  ['Greek', /\p{Script=Greek}/u],
+  ['Arabic', /\p{Script=Arabic}/u],
+  ['Hebrew', /\p{Script=Hebrew}/u],
+  ['Armenian', /\p{Script=Armenian}/u],
+  ['Georgian', /\p{Script=Georgian}/u],
+  ['Devanagari', /\p{Script=Devanagari}/u],
+  ['Bengali', /\p{Script=Bengali}/u],
+  ['Tamil', /\p{Script=Tamil}/u],
+  ['Telugu', /\p{Script=Telugu}/u],
+  ['Thai', /\p{Script=Thai}/u],
+  ['Ethiopic', /\p{Script=Ethiopic}/u],
+  ['Han', /\p{Script=Han}/u],
+  ['Hiragana', /\p{Script=Hiragana}/u],
+  ['Katakana', /\p{Script=Katakana}/u],
+  ['Hangul', /\p{Script=Hangul}/u],
+  ['Bopomofo', /\p{Script=Bopomofo}/u],
+] as const;
 
-/** Un nom qui MÊLE l'alphabet latin et un autre alphabet : la forme même d'une usurpation par homoglyphe. */
-const mixesScripts = (name: string): boolean => {
-  const normalized = name.normalize('NFKC');
-  return LATIN_LETTER.test(normalized) && OTHER_SCRIPT_LETTER.test(normalized);
+type Script = (typeof SCRIPTS)[number][0];
+
+/** Les seuls mélanges qu'admet le profil : le japonais, le chinois à bopomofo et le coréen, chacun avec les sinogrammes. */
+const MIXES: readonly ReadonlySet<Script>[] = [new Set<Script>(['Han', 'Hiragana', 'Katakana']), new Set<Script>(['Han', 'Bopomofo']), new Set<Script>(['Han', 'Hangul'])];
+
+/** Hors des lettres : les chiffres, l'espace et la ponctuation courante, rien d'autre. */
+const ALLOWED_NON_LETTER = /^[\p{Nd} \-_.,'’&+!?()#@:·—–]$/u;
+const ASCII_LETTER = /^[A-Za-z]$/;
+const LETTER = /\p{L}/u;
+const MARK = /\p{M}/u;
+
+/** Une lettre latine admise : une lettre ASCII, accentuée ou non (NFD) — jamais une petite capitale, une lettre IPA ou modificative. */
+const isPlainLatin = (char: string): boolean => ASCII_LETTER.test(char.normalize('NFD').replace(/\p{M}/gu, ''));
+
+/** L'alphabet d'une lettre, ou `null` pour un alphabet que le profil n'admet pas. */
+const scriptOf = (char: string): Script | null => SCRIPTS.find(([, pattern]) => pattern.test(char))?.[0] ?? null;
+
+/**
+ * Vrai pour un nom écrit selon la liste blanche : chaque caractère est une
+ * lettre d'un alphabet admis (latine ASCII éventuellement accentuée), une
+ * marque combinante, un chiffre, l'espace ou une ponctuation courante ; et
+ * toutes les lettres appartiennent à UN SEUL alphabet (ou à un mélange admis).
+ * Lu en NFC, jamais en NFKC : une forme de compatibilité (pleine largeur,
+ * exposant, ligature, ™) est elle-même refusée, au lieu d'être repliée.
+ */
+const isWhitelistedName = (name: string): boolean => {
+  const chars = [...name.normalize('NFC')];
+  const scripts = new Set<Script>();
+  for (const char of chars) {
+    if (MARK.test(char)) continue;
+    if (!LETTER.test(char)) {
+      if (!ALLOWED_NON_LETTER.test(char)) return false;
+      continue;
+    }
+    const script = scriptOf(char);
+    if (script === null) return false;
+    if (script === 'Latin' && !isPlainLatin(char)) return false;
+    scripts.add(script);
+  }
+  return scripts.size <= 1 || MIXES.some((mix) => [...scripts].every((script) => mix.has(script)));
 };
 
 /**
- * Vrai pour un nom ou un slug qu'aucun tiers ne peut porter : tout ce dont le
- * SQUELETTE de confusables CONTIENT « meeshy » (« Meeshy Officiel »,
- * « Team-Meeshy », « Мееѕһу » cyrillique, « ＭＥＥＳＨＹ », « Mée​shy » à espace
- * invisible…), tout nom qui mêle l'alphabet latin et un autre alphabet, et les
- * segments de route.
+ * Vrai pour un nom ou un slug qu'aucun tiers ne peut porter : tout nom hors de
+ * la liste blanche (`isWhitelistedName` : un seul alphabet, lettres latines
+ * ASCII accentuées seulement, chiffres et ponctuation courante), tout nom dont
+ * le SQUELETTE de confusables CONTIENT « meeshy » (« Meeshy Officiel »,
+ * « Team-Meeshy », « Мееѕһу » entièrement cyrillique…), et les segments de route.
  */
 export function isReservedPublisherIdentity(name: string): boolean {
+  if (!isWhitelistedName(name)) return true;
   const compact = skeleton(name).replace(/[^a-z0-9]/g, '');
-  return compact.includes(MEESHY_PUBLISHER_SLUG) || mixesScripts(name) || ROUTE_SLUGS.has(publisherSlugOf(name));
+  return compact.includes(MEESHY_PUBLISHER_SLUG) || ROUTE_SLUGS.has(publisherSlugOf(name));
 }
 
 /**
