@@ -196,6 +196,8 @@ private fun ChatComposerDock(host: ChatHostContext) {
             onRemoveClipboard = actions.removeClipboardContent,
             onPickFile = actions.pickFile,
             onSendSticker = actions.sendSticker,
+            startsMinimized = actions.composerMinimized?.value ?: false,
+            onMinimizedChange = actions.setComposerMinimized,
         )
     }
     if (pickerOpen) {

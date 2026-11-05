@@ -323,6 +323,9 @@ internal class ChatHostActions(
     /** L'auteur que les cadres de la retouche écrivent (#12734). */
     val selfAuthor: () -> me.meeshy.sdk.model.composer.look.ComposerLookPerson? = { null },
     val trayNotices: Flow<String> = emptyFlow(),
+    /** #16341 — la barre de composition repliée ou dépliée, retenue par conversation ; `null` : aucune mémoire (aperçus). */
+    val composerMinimized: StateFlow<Boolean>? = null,
+    val setComposerMinimized: (Boolean) -> Unit = {},
     /** « Sélectionner » du menu d'appui long : entre dans le mode en semant ce message. */
     val beginSelection: (String) -> Unit = {},
     /** Coche ou décoche un message ; le verdict dit si le plafond de 100 est atteint. */
@@ -401,6 +404,8 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     replacePendingAudio = { id, file -> controllers.find<ComposerTrayController>()?.replaceFile(id, file, EDITED_AUDIO_MIME) ?: file.delete() },
     selfAuthor = this::selfAuthor,
     trayNotices = controllers.find<ComposerTrayController>()?.notices ?: emptyFlow(),
+    composerMinimized = controllers.find<ComposerFoldController>()?.minimized,
+    setComposerMinimized = { minimized -> controllers.find<ComposerFoldController>()?.setMinimized(minimized) },
     dismissImageViewer = this::dismissImageViewer,
     openEmojiPicker = this::openEmojiPicker,
     startEdit = this::startEdit,
