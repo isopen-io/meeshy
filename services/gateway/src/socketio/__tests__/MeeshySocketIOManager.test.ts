@@ -2139,6 +2139,20 @@ describe('MeeshySocketIOManager', () => {
         language: 'en',
       }));
     });
+
+    // #16340 — une traduction TEXTE SEULE n'a pas de piste : les clients publiés joueraient `url: ''`.
+    it.each([SERVER_EVENTS.AUDIO_TRANSLATION_READY, SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE, SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED])(
+      'a text-only translation travels by the attachment delta, never as a playable track (%s)',
+      async (eventConstant) => {
+        prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
+        const delta = jest.spyOn(manager as any, '_broadcastAttachmentUpdated').mockResolvedValue(undefined);
+        const textOnly = { ...baseAudioData, translatedAudio: { ...baseAudioData.translatedAudio, url: '' } };
+        await (manager as any)._broadcastTranslationEvent(textOnly, eventConstant, '🎯');
+        expect(ioState.toEmit).not.toHaveBeenCalledWith(eventConstant, expect.anything());
+        expect(delta).toHaveBeenCalledWith('att-audio-1', 'msg-audio-1', expect.any(String));
+        delta.mockRestore();
+      }
+    );
   });
 
   // -------------------------------------------------------------------------
