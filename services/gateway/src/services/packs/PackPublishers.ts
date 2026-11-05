@@ -238,8 +238,8 @@ export class PackPublishers {
     if (row === null || row === undefined) return null;
     if (this.isOfficial(row.userId)) return MEESHY_PUBLISHER;
     if (!isThirdPartySlug(row.slug)) return null;
-    const name = impersonatesMeeshy(row.displayName) ? NEUTRAL_PUBLISHER_NAME : row.displayName;
-    return { slug: row.slug, name, verified: row.verifiedAt !== null, official: false };
+    if (impersonatesMeeshy(row.displayName)) return { slug: row.slug, name: NEUTRAL_PUBLISHER_NAME, verified: false, official: false };
+    return { slug: row.slug, name: row.displayName, verified: row.verifiedAt !== null, official: false };
   }
 
   /** Publier : vérifier sans écrire, puis créer l'éditeur — pour qui n'a aucun autre contrôle entre les deux. */
@@ -266,11 +266,18 @@ export class PackPublishers {
     return { kind: 'vetted', commit: () => this.commitThirdParty(userId, claim) };
   }
 
-  /** L'auteur déclaré nomme-t-il un AUTRE éditeur ? `null` : non. Un doute du balayage : réessayer plus tard. */
+  /**
+   * L'auteur déclaré nomme-t-il un AUTRE éditeur ? `null` : non — et jamais
+   * pour le nom que le profil du compte porte DÉJÀ, avec ou sans clé (droit
+   * acquis : l'arbitrage d'un ancien homonyme se fait au commit, par
+   * `nameLegacy`, sans refuser la proposition). Un doute du balayage :
+   * réessayer plus tard.
+   */
   private async authorConflict(userId: string, author: string, current: PublisherRow | null): Promise<'name-taken' | 'retry-later' | null> {
     const name = storeNameOf(author);
     if (name === NEUTRAL_PUBLISHER_NAME) return null;
-    if (current !== null && current.nameKey === publisherNameKey(name)) return null;
+    const key = publisherNameKey(name);
+    if (current !== null && (current.nameKey === key || publisherNameKey(current.displayName) === key)) return null;
     const claim = await claimPublisherName(this.prisma, { userId, name, official: false });
     if (claim.kind === 'name-taken') return 'name-taken';
     return claim.kind === 'inconclusive' ? 'retry-later' : null;
