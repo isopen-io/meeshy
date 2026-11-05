@@ -6,6 +6,7 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { idbDeviceRecords } from './device-records';
 import { createOutboxDurability, type OutboxDurability } from './outbox-durability';
 import { outboxStore } from './outbox-store';
+import { sendTransfer } from './send-transfer-instance';
 
 /**
  * LA FILE DURABLE DU FIL DE L'APPLICATION (#14698) — branchée sur l'outbox
@@ -21,7 +22,7 @@ export const outboxDurability: OutboxDurability = createOutboxDurability({
   outbox: outboxStore,
   records: idbDeviceRecords(),
   activeViewer,
-  deps: () => ({ ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online: isOnline() }),
+  deps: () => ({ ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online: isOnline(), transfer: sendTransfer }),
 });
 
 let started = false;

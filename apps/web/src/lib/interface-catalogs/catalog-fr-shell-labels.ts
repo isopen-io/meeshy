@@ -52,6 +52,8 @@ const frShellLabels = {
   'readingMode.river.thresholdToday': "S'ouvrira à {threshold} personnes actives — {current} aujourd'hui",
 
   'message.status.pending': 'en cours d’envoi',
+
+  'message.status.sending': 'Envoi en cours',
   'message.status.sent': 'envoyé',
   'message.status.delivered': 'remis',
   'message.status.read': 'lu',

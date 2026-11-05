@@ -47,6 +47,8 @@ const deShellLabels = {
   'readingMode.river.thresholdToday': 'Öffnet sich ab {threshold} aktiven Personen — heute {current}',
 
   'message.status.pending': 'wird gesendet',
+
+  'message.status.sending': 'Wird gesendet',
   'message.status.sent': 'gesendet',
   'message.status.delivered': 'zugestellt',
   'message.status.read': 'gelesen',
