@@ -5,7 +5,8 @@
  * ## Ce qu'il contient (décision du porteur, 2026-10-10, 3e et dernière précision)
  *
  *  - des POINTS, de 500 à 10 000, selon la COMPLEXITÉ des trois missions du jour ;
- *  - de la GLOIRE : un point de Gloire pour dix de ces points (`gloryForChest`, `glory.ts`), de 50 à 1 000 ;
+ *  - de la GLOIRE (porteur, 2026-11-05, #16414), de 1 250 à 5 800 : une BASE de 1 250 à 3 000 selon la même
+ *    complexité, et une PRIME DE PRÉCOCITÉ de 2 800 à 0 selon l'heure du jour de jeu où le coffre s'ouvre ;
  *  - une PRIME en points, tirée au sort, au cours de la Meesh du compte FIGÉ au début du jour de jeu (#10219) —
  *    `meeshPrice(frappées avant le jour + 1)`, `chestPriceMints` :
  *    une chance sur 20 le prix entier, sinon une chance sur 6 un cinquième du prix (arrondi), sinon rien ;
@@ -26,6 +27,24 @@
  *     points = 500 + round(9 500 × (effort − 300) ÷ 4 200), l'effort borné à [300, 4 500]
  *
  * Une droite monotone, en ENTIERS exacts : 300 d'effort vaut 500 points, 4 500 en vaut 10 000.
+ *
+ * ## La Gloire : la complexité, puis l'heure (#16414)
+ *
+ *     base      = 1 250 + round(1 750 × (effort − 300) ÷ 4 200), l'effort borné à [300, 4 500]
+ *     précocité = round(2 800 × (23 − h) ÷ 23), h = heures ENTIÈRES écoulées depuis le début du jour de jeu, bornée à [0, 23]
+ *
+ * La base suit la même droite que les points (1 250 au jour le plus léger, 3 000 au plus lourd). La précocité vaut
+ * 2 800 dans la première heure du jour de jeu et décroît d'un vingt-troisième par heure jusqu'à 0 dans la dernière ;
+ * un jour de jeu prolongé (`resolveGameDayKey`, au-delà de 24 h) n'en paie plus. Une heure illisible n'en paie pas.
+ *
+ * Le DÉBUT du jour de jeu (`chestDayStart`) est minuit de sa clé dans le fuseau du compte — sauf si les missions du
+ * jour ont été tirées AVANT cet instant : un fuseau changé en cours de journée (vers l'ouest) recule minuit après le
+ * tirage, et l'ouverture des missions, instant serveur que le fuseau ne déplace pas, fait alors foi. Changer de
+ * fuseau ne rajeunit donc jamais un jour de jeu.
+ *
+ * La passerelle calcule l'heure à l'instant SERVEUR de la réclamation et GRAVE la Gloire totale sur le coffre ; une
+ * réclamation rejouée rend la valeur gravée. L'aperçu (`GameChest.today`) sert la Gloire « si on l'ouvre maintenant »
+ * et sa part de précocité (`earlyGlory`) ; `glory` reste le total, le seul champ que lisent les clients d'avant.
  *
  * ## Les tirages, dans l'ordre où le générateur les consomme
  *
@@ -48,7 +67,6 @@
  */
 
 import { seededRng } from './day-prng.js';
-import { gloryForChest } from './glory.js';
 import { MISSION_TEMPLATES } from './mission-catalog.js';
 import { MISSION_BASE_POINTS, MISSION_DIFFICULTIES, type MissionDifficulty } from './missions.js';
 
@@ -57,6 +75,15 @@ export const CHEST_POINTS_MAX = 10_000;
 /** L'effort qui vaut le minimum de points, et celui qui vaut le maximum. */
 export const CHEST_EFFORT_FLOOR = 300;
 export const CHEST_EFFORT_CEILING = 4500;
+
+/** La Gloire du coffre (#16414) : la base, de 1 250 à 3 000 sur l'effort, puis la prime de précocité, de 2 800 à 0. */
+export const CHEST_GLORY_MIN = 1250;
+export const CHEST_GLORY_BASE_MAX = 3000;
+export const CHEST_EARLY_GLORY_MAX = 2800;
+export const CHEST_GLORY_MAX = CHEST_GLORY_BASE_MAX + CHEST_EARLY_GLORY_MAX;
+/** La dernière heure entière du jour de jeu : la précocité y vaut 0, et au-delà. */
+export const CHEST_EARLY_LAST_HOUR = 23;
+const HOUR_MS = 3_600_000;
 
 /** La prime : une chance sur 20 le prix entier de la prochaine Meesh, sinon une sur 6 un cinquième de ce prix. */
 export const CHEST_BONUS_FIFTH_DIVISOR = 5;
@@ -68,8 +95,8 @@ export const CHEST_ODDS = {
   /** UN fragment d'étoile. */
   fragment: 1 / 6,
   freeze: 1 / 20,
-  minGlory: CHEST_POINTS_MIN / 10,
-  maxGlory: CHEST_POINTS_MAX / 10,
+  minGlory: CHEST_GLORY_MIN,
+  maxGlory: CHEST_GLORY_MAX,
   bonusWhole: 1 / 20,
   bonusFifth: 1 / 6,
 } as const;
@@ -77,7 +104,10 @@ export const CHEST_ODDS = {
 /** Le contenu CERTAIN du coffre et les deux primes possibles, connus dès que les missions du jour sont tirées. */
 export type ChestContent = {
   readonly points: number;
+  /** La Gloire TOTALE si le coffre s'ouvre maintenant : la base et la précocité. */
   readonly glory: number;
+  /** La part de précocité de `glory` (#16414). */
+  readonly earlyGlory: number;
   /** La prime entière possible, en points : le prix de la prochaine Meesh du compte. */
   readonly bonusWhole: number;
   /** La prime d'un cinquième possible, en points. */
@@ -92,8 +122,10 @@ export type DailyChest = {
   /** UN fragment d'étoile trouvé (une chance sur six). */
   readonly fragment: boolean;
   readonly freeze: boolean;
-  /** La Gloire des points de l'effort (la prime n'en donne pas). */
+  /** La Gloire TOTALE : la base de l'effort et la précocité (la prime en points n'en donne pas). */
   readonly glory: number;
+  /** La part de précocité de `glory` (#16414). */
+  readonly earlyGlory: number;
   /** La prime tombée, et son montant en points (`0` sans prime). */
   readonly bonus: ChestBonus;
   readonly bonusPoints: number;
@@ -120,13 +152,39 @@ export const missionEffort = (mission: ChestMission): number =>
 /** L'effort du jour : la somme de ses missions. */
 export const dayEffort = (missions: readonly ChestMission[]): number => missions.reduce((sum, mission) => sum + missionEffort(mission), 0);
 
-/** Les points du coffre pour cet effort : une droite de 500 (300 d'effort) à 10 000 (4 500), arrondie au plus proche. */
-export const chestPointsForEffort = (effort: number): number => {
+/** Une droite de `low` (300 d'effort) à `high` (4 500), en entiers exacts, arrondie au plus proche. */
+const effortLine = (effort: number, low: number, high: number): number => {
   const bounded = Math.min(CHEST_EFFORT_CEILING, Math.max(CHEST_EFFORT_FLOOR, sanitize(effort)));
   const span = CHEST_EFFORT_CEILING - CHEST_EFFORT_FLOOR;
-  const gain = CHEST_POINTS_MAX - CHEST_POINTS_MIN;
-  return CHEST_POINTS_MIN + Math.floor((gain * (bounded - CHEST_EFFORT_FLOOR) * 2 + span) / (2 * span));
+  return low + Math.floor(((high - low) * (bounded - CHEST_EFFORT_FLOOR) * 2 + span) / (2 * span));
 };
+
+/** Les points du coffre pour cet effort : une droite de 500 (300 d'effort) à 10 000 (4 500), arrondie au plus proche. */
+export const chestPointsForEffort = (effort: number): number => effortLine(effort, CHEST_POINTS_MIN, CHEST_POINTS_MAX);
+
+/** La Gloire de base du coffre pour cet effort : une droite de 1 250 (300 d'effort) à 3 000 (4 500). */
+export const chestBaseGloryForEffort = (effort: number): number => effortLine(effort, CHEST_GLORY_MIN, CHEST_GLORY_BASE_MAX);
+
+/**
+ * La prime de précocité après `elapsedHours` heures du jour de jeu : 2 800 dans la première, 0 dans la dernière
+ * (la 24e) et au-delà, arrondie au plus proche. Une heure illisible ne paie rien ; une heure négative vaut la première.
+ */
+export const chestEarlyGlory = (elapsedHours: number): number => {
+  if (!Number.isFinite(elapsedHours)) return 0;
+  const hour = Math.min(CHEST_EARLY_LAST_HOUR, Math.max(0, Math.floor(elapsedHours)));
+  return Math.floor((CHEST_EARLY_GLORY_MAX * (CHEST_EARLY_LAST_HOUR - hour) * 2 + CHEST_EARLY_LAST_HOUR) / (2 * CHEST_EARLY_LAST_HOUR));
+};
+
+/**
+ * Le DÉBUT du jour de jeu pour la précocité : minuit de sa clé dans le fuseau du compte, ou l'ouverture des missions
+ * du jour si elle le précède (un fuseau changé vers l'ouest ne rajeunit pas la journée).
+ */
+export const chestDayStart = (params: { readonly localMidnight: Date; readonly missionsOpenedAt: readonly (Date | null | undefined)[] }): Date =>
+  chestPriceCutoff({ missionsOpenedAt: params.missionsOpenedAt, now: params.localMidnight });
+
+/** Les heures ENTIÈRES écoulées depuis le début du jour de jeu (négatives si `now` le précède). */
+export const chestElapsedHours = (params: { readonly dayStartedAt: Date; readonly now: Date }): number =>
+  Math.floor((params.now.getTime() - params.dayStartedAt.getTime()) / HOUR_MS);
 
 /** Les deux primes possibles au cours de la Meesh du compte : le prix entier, et son cinquième arrondi. */
 export const chestBonusAmounts = (nextMeeshPrice: number): { readonly whole: number; readonly fifth: number } => {
@@ -153,22 +211,34 @@ export const chestPriceCutoff = (params: { readonly missionsOpenedAt: readonly (
   return new Date(opened);
 };
 
-/** Le contenu certain du coffre pour cet effort, et les primes possibles au cours de la prochaine Meesh. */
-export const chestContentForEffort = (effort: number, nextMeeshPrice: number): ChestContent => {
-  const points = chestPointsForEffort(effort);
+/**
+ * Le contenu certain du coffre pour cet effort, ouvert après `elapsedHours` heures du jour de jeu, et les primes
+ * possibles au cours de la prochaine Meesh.
+ */
+export const chestContentForEffort = (effort: number, nextMeeshPrice: number, elapsedHours: number): ChestContent => {
   const bonus = chestBonusAmounts(nextMeeshPrice);
-  return { points, glory: gloryForChest(points), bonusWhole: bonus.whole, bonusFifth: bonus.fifth };
+  const earlyGlory = chestEarlyGlory(elapsedHours);
+  return {
+    points: chestPointsForEffort(effort),
+    glory: chestBaseGloryForEffort(effort) + earlyGlory,
+    earlyGlory,
+    bonusWhole: bonus.whole,
+    bonusFifth: bonus.fifth,
+  };
 };
 
 /**
  * Le coffre du jour. `nextMeeshPrice` est `meeshPrice(frappes avant chestPriceCutoff(…) + 1)` : le cours de la Meesh FIGÉ au
- * début du jour de jeu (#10219), gravé par le serveur. La réclamation est idempotente : le contenu gravé fait foi.
+ * début du jour de jeu (#10219), gravé par le serveur ; `elapsedHours` les heures entières du jour de jeu à
+ * l'instant SERVEUR de la réclamation (`chestElapsedHours`, #16414). La réclamation est idempotente : le contenu
+ * gravé fait foi.
  */
 export function dailyChest(params: {
   readonly userId: string;
   readonly dayKey: string;
   readonly effort: number;
   readonly nextMeeshPrice: number;
+  readonly elapsedHours: number;
 }): DailyChest {
   const rng = seededRng({ userId: params.userId, dayKey: params.dayKey, salt: 'chest' });
   rng();
@@ -176,8 +246,8 @@ export function dailyChest(params: {
   const freeze = rng() < CHEST_ODDS.freeze;
   const wholeDraw = rng() < CHEST_ODDS.bonusWhole;
   const fifthDraw = rng() < CHEST_ODDS.bonusFifth;
-  const content = chestContentForEffort(params.effort, params.nextMeeshPrice);
+  const content = chestContentForEffort(params.effort, params.nextMeeshPrice, params.elapsedHours);
   const bonus: ChestBonus = wholeDraw ? 'whole' : fifthDraw ? 'fifth' : 'none';
   const bonusPoints = bonus === 'whole' ? content.bonusWhole : bonus === 'fifth' ? content.bonusFifth : 0;
-  return { points: content.points + bonusPoints, fragment, freeze, glory: content.glory, bonus, bonusPoints };
+  return { points: content.points + bonusPoints, fragment, freeze, glory: content.glory, earlyGlory: content.earlyGlory, bonus, bonusPoints };
 }

@@ -126,11 +126,11 @@ struct GameBlockModelsTests {
     func chestSaysItsContentBeforeOpening() throws {
         let patched = GameBlockFixture.json.replacingOccurrences(
             of: "\"freeze\":0.05},\"reward\":null",
-            with: "\"freeze\":0.05,\"minGlory\":50,\"maxGlory\":1000,\"bonusWhole\":0.05,\"bonusFifth\":0.16666666666666666},\"reward\":null,\"today\":{\"points\":2083,\"glory\":208,\"bonusWhole\":1221,\"bonusFifth\":244}"
+            with: "\"freeze\":0.05,\"minGlory\":1250,\"maxGlory\":5800,\"bonusWhole\":0.05,\"bonusFifth\":0.16666666666666666},\"reward\":null,\"today\":{\"points\":2083,\"glory\":3125,\"earlyGlory\":1583,\"bonusWhole\":1221,\"bonusFifth\":244}"
         )
         let block = try #require(GameBlock.parse(Data(patched.utf8)))
-        #expect(block.chest.today == ChestContent(points: 2083, glory: 208, bonusWhole: 1221, bonusFifth: 244))
-        #expect(block.chest.odds.maxGlory == 1000)
+        #expect(block.chest.today == ChestContent(points: 2083, glory: 3125, earlyGlory: 1583, bonusWhole: 1221, bonusFifth: 244))
+        #expect(block.chest.odds.maxGlory == 5800)
         #expect(block.chest.odds.bonusWhole == 0.05)
     }
 
