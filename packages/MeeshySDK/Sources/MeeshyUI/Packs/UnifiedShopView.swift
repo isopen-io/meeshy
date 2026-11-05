@@ -107,7 +107,10 @@ public final class PackShopStore: ObservableObject {
 /// ouvre la vitrine filtrée (lien profond, « Plus dans la boutique »).
 public struct UnifiedShopView: View {
     @StateObject private var store: PackShopStore
+    /// La fiche et le plein écran d'un pack (#16268).
+    @StateObject private var showcase: PackShowcaseModel
     @State private var selected: PackDomain
+    private let wearer: PackStageWearer?
     private let domains: [PackDomain]
     private let focusedSlug: String?
     private let language: String
@@ -122,7 +125,9 @@ public struct UnifiedShopView: View {
     public init(initialDomain: PackDomain? = nil, domains: [PackDomain] = PackDomain.allCases,
                 focusedSlug: String? = nil, language: String = "fr",
                 usageText: ((FrameUsage) -> String)? = nil, rankName: ((GloryRank) -> String)? = nil,
-                store: PackShopStore? = nil) {
+                store: PackShopStore? = nil, wearer: PackStageWearer? = nil, showcase: PackShowcaseModel? = nil) {
+        self.wearer = wearer
+        _showcase = StateObject(wrappedValue: showcase ?? PackShowcaseModel(language: language))
         self.focusedSlug = focusedSlug
         self.language = language
         self.usageText = usageText
@@ -140,6 +145,29 @@ public struct UnifiedShopView: View {
             shelf
         }
         .task { await store.load(domains: domains) }
+        .sheet(item: $showcase.detail, onDismiss: { showcase.viewer = nil }) { target in
+            PackDetailView(model: showcase, target: target, context: context(for: target.domain))
+        }
+        .fullScreenCover(item: shopViewerBinding) { target in
+            PackElementViewer(model: showcase, context: context(for: target.domain)) { showcase.viewer = nil }
+        }
+    }
+
+    /// Le plein écran ouvert depuis la couverture d'une rangée ; ouvert depuis la fiche, c'est elle qui le présente.
+    private var shopViewerBinding: Binding<PackViewerTarget?> {
+        Binding(get: { showcase.detail == nil ? showcase.viewer : nil },
+                set: { if showcase.detail == nil { showcase.viewer = $0 } })
+    }
+
+    private func rows(in domain: PackDomain) -> [PackRow]? {
+        store.state.packs(in: domain)?.map { Self.row($0, language: language, usageText: usageText, rankName: rankName) }
+    }
+
+    private func context(for domain: PackDomain) -> PackShowcaseContext {
+        PackShowcaseContext(rows: rows(in: domain) ?? [], pending: pendingSlugs(in: domain),
+                            wearer: wearer ?? .current) { slug in
+            Task { await store.tap(domain: domain, slug: slug) }
+        }
     }
 
     private var failureText: String? {
@@ -225,11 +253,13 @@ public struct UnifiedShopView: View {
                 .foregroundStyle(.secondary)
         } else {
             let domain = selected
-            PackShopView(rows: store.state.packs(in: domain)?.map { Self.row($0, language: language, usageText: usageText, rankName: rankName) },
+            PackShopView(rows: rows(in: domain),
                          pending: pendingSlugs(in: domain),
                          showsFailure: store.state.failure != nil,
                          failureText: failureText,
-                         focusedSlug: focusedSlug) { slug in
+                         focusedSlug: focusedSlug,
+                         onOpen: { showcase.openDetail(domain: domain, slug: $0) },
+                         onOpenCover: { showcase.openViewer(domain: domain, slug: $0) }) { slug in
                 Task { await store.tap(domain: domain, slug: slug) }
             }
         }
@@ -260,7 +290,8 @@ public struct UnifiedShopView: View {
                        price: pack.price, owned: pack.isOwned, locked: pack.isLocked,
                        unlockText: pack.requirementPreview.flatMap {
                            PackUnlockCopy.line($0, language: language, rankName: rankName)
-                       })
+                       },
+                       bundled: pack.isBundled)
     }
 
     /// Le nom d'un domaine, tel que les puces et les réglages le disent.

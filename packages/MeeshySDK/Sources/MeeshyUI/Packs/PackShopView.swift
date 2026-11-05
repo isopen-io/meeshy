@@ -38,6 +38,10 @@ public struct PackRow: Identifiable, Hashable, Sendable {
     public let locked: Bool
     /// Ce qui reste à débloquer, en une ligne déjà traduite ; `nil` = rien à dire.
     public let unlockText: String?
+    /// Embarqué dans l'app : rien à télécharger (#16268).
+    public let bundled: Bool
+    /// Le poids du téléchargement, en octets ; `nil` = inconnu, la fiche se tait.
+    public let downloadBytes: Int?
 
     public var id: String { slug }
 
@@ -46,7 +50,10 @@ public struct PackRow: Identifiable, Hashable, Sendable {
 
     public init(slug: String, name: String, author: String = "", description: String = "",
                 installed: Bool, removable: Bool = true, cover: PackCover = .none, usageText: String? = nil,
-                price: Int? = nil, owned: Bool = true, locked: Bool = false, unlockText: String? = nil) {
+                price: Int? = nil, owned: Bool = true, locked: Bool = false, unlockText: String? = nil,
+                bundled: Bool = false, downloadBytes: Int? = nil) {
+        self.bundled = bundled
+        self.downloadBytes = downloadBytes
         self.slug = slug
         self.name = name
         self.author = author
@@ -82,8 +89,16 @@ public struct PackShopView: View {
     /// sa rangée est centrée une fois les rangées lues et marquée d'un contour.
     let focusedSlug: String?
 
+    /// Toucher la rangée ouvre la fiche du pack ; toucher sa couverture, son premier élément en plein
+    /// écran (#16268). `nil` : la rangée reste inerte, comme avant.
+    let onOpen: ((String) -> Void)?
+    let onOpenCover: ((String) -> Void)?
+
     public init(rows: [PackRow]?, pending: Set<String>, showsFailure: Bool, failureText: String? = nil,
-                focusedSlug: String? = nil, onToggle: @escaping (String) -> Void) {
+                focusedSlug: String? = nil, onOpen: ((String) -> Void)? = nil, onOpenCover: ((String) -> Void)? = nil,
+                onToggle: @escaping (String) -> Void) {
+        self.onOpen = onOpen
+        self.onOpenCover = onOpenCover
         self.focusedSlug = focusedSlug
         self.rows = rows
         self.pending = pending
@@ -138,48 +153,21 @@ public struct PackShopView: View {
 
     private func rowView(_ row: PackRow) -> some View {
         HStack(spacing: 12) {
-            PackCoverView(cover: row.cover, side: Self.coverSide)
-                .frame(width: Self.coverSide, height: Self.coverSide)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.name)
-                    .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
-                if !row.author.isEmpty {
-                    Text(String(format: String(localized: "sticker.sheet.pack.by", defaultValue: "par %@",
-                                               bundle: .module), row.author))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                if let usage = row.usageText {
-                    Label(usage, systemImage: "checkmark.seal")
-                        .font(MeeshyFont.relative(12, weight: .medium))
-                        .foregroundStyle(MeeshyColors.indigo500)
-                }
-                if Self.showsOwned(row) {
-                    Label(String(localized: "shop.owned", defaultValue: "Possédé", bundle: .module),
-                          systemImage: "checkmark.seal.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("shop.owned.\(row.slug)")
-                }
-                if !row.description.isEmpty {
-                    Text(row.description)
-                        .font(MeeshyFont.relative(12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                if let unlock = row.unlockText {
-                    Label(unlock, systemImage: row.locked ? "lock.fill" : "clock")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("shop.unlock.\(row.slug)")
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            cover(row)
+            rowText(row)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { open(row) }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(onOpen == nil ? [] : .isButton)
+                .accessibilityHint(onOpen == nil ? "" : String(localized: "shop.row.open.hint",
+                                                                defaultValue: "Ouvre la fiche du pack", bundle: .module))
+                .accessibilityAction { open(row) }
+                .accessibilityIdentifier("shop.row.\(row.slug)")
             if Self.showsLocked(row) {
                 lockedBadge(row)
             } else if !row.installed || row.removable {
-                toggleButton(row)
+                PackInstallButton(row: row, busy: pending.contains(row.slug), onToggle: onToggle)
             }
         }
         .padding(row.slug == focusedSlug ? 6 : 0)
@@ -193,6 +181,69 @@ public struct PackShopView: View {
         .id(row.slug)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(row.slug == focusedSlug ? .isSelected : [])
+    }
+
+    private func open(_ row: PackRow) {
+        guard let onOpen else { return }
+        HapticFeedback.light()
+        onOpen(row.slug)
+    }
+
+    @ViewBuilder
+    private func cover(_ row: PackRow) -> some View {
+        let art = PackCoverView(cover: row.cover, side: Self.coverSide)
+            .frame(width: Self.coverSide, height: Self.coverSide)
+        if let onOpenCover {
+            Button {
+                HapticFeedback.light()
+                onOpenCover(row.slug)
+            } label: {
+                art.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(format: String(localized: "shop.cover.a11y", defaultValue: "Voir %@ en plein écran",
+                                                      bundle: .module), row.name))
+            .accessibilityIdentifier("shop.cover.\(row.slug)")
+        } else {
+            art.accessibilityHidden(true)
+        }
+    }
+
+    private func rowText(_ row: PackRow) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(row.name)
+                .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
+            if !row.author.isEmpty {
+                Text(String(format: String(localized: "sticker.sheet.pack.by", defaultValue: "par %@",
+                                           bundle: .module), row.author))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            if let usage = row.usageText {
+                Label(usage, systemImage: "checkmark.seal")
+                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .foregroundStyle(MeeshyColors.indigo500)
+            }
+            if Self.showsOwned(row) {
+                Label(String(localized: "shop.owned", defaultValue: "Possédé", bundle: .module),
+                      systemImage: "checkmark.seal.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("shop.owned.\(row.slug)")
+            }
+            if !row.description.isEmpty {
+                Text(row.description)
+                    .font(MeeshyFont.relative(12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            if let unlock = row.unlockText {
+                Label(unlock, systemImage: row.locked ? "lock.fill" : "clock")
+                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("shop.unlock.\(row.slug)")
+            }
+        }
     }
 
     /// Un pack pas encore débloqué ne s'installe ni ne s'achète : « À débloquer » prend la place du bouton.
@@ -230,34 +281,6 @@ public struct PackShopView: View {
         guard let price = row.price, row.needsPurchase else { return "\(buttonTitle(for: row)) \(row.name)" }
         return String(format: String(localized: "shop.buy.a11y", defaultValue: "Acheter %1$@ pour %2$lld Meeshes",
                                      bundle: .module), row.name, price)
-    }
-
-    private func toggleButton(_ row: PackRow) -> some View {
-        let busy = pending.contains(row.slug)
-        let label = Self.buttonTitle(for: row)
-        return Button {
-            HapticFeedback.light()
-            onToggle(row.slug)
-        } label: {
-            Text(label)
-                .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
-                .foregroundStyle(row.installed ? Color.primary : Color.white)
-                .padding(.horizontal, 14)
-                .frame(minHeight: 32)
-                .background {
-                    if row.installed {
-                        Capsule().fill(Color.primary.opacity(0.08))
-                    } else {
-                        Capsule().fill(MeeshyColors.brandGradient)
-                    }
-                }
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .disabled(busy)
-        .opacity(busy ? 0.6 : 1)
-        .accessibilityLabel(Self.voiceOverLabel(for: row))
     }
 }
 
