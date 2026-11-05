@@ -323,7 +323,7 @@ jobs:
             done
           ) &
           ./gradlew :sdk-ui:testDebugUnitTest --tests 'me.meeshy.ui.component.audio.*' :feature:chat:testDebugUnitTest --tests 'me.meeshy.app.chat.AudioFullscreenViewModelTest' --tests 'me.meeshy.app.chat.ExitGateAudioDownloadTest' --tests 'me.meeshy.app.chat.ChatAudioFullscreen*' --tests 'me.meeshy.app.chat.AudioTranslation*' --no-daemon --continue || RC=$?
-          for f in apps/android/feature/chat/build/test-results/testDebugUnitTest/*.xml; do grep -o 'name="[^"]*" tests="[0-9]*" skipped="[0-9]*" failures="[0-9]*" errors="[0-9]*"' "$f" | head -1; done
+          for f in $(find . -path "*feature/chat/build/test-results*" -name "*.xml"); do grep -o 'name="[^"]*" tests="[0-9]*" skipped="[0-9]*" failures="[0-9]*" errors="[0-9]*"' "$f" | head -1; done
           exit ${RC:-0}
 
       # Gradle only says "There were failing tests. See the report at ..." and
