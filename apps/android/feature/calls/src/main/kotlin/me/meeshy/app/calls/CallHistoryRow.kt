@@ -29,6 +29,7 @@ import me.meeshy.ui.profile.LocalProfileSheetOpener
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.Color
 import me.meeshy.ui.icons.MeeshyIcons
@@ -42,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -56,6 +58,8 @@ import me.meeshy.sdk.model.call.CallRecord
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.rememberPresence
+import me.meeshy.ui.theme.MeeshyControlSize
+import me.meeshy.ui.theme.MeeshyOpacity
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -125,8 +129,13 @@ private fun CallHistoryRowContent(
             .padding(start = MeeshySpacing.lg, end = MeeshySpacing.xs, top = MeeshySpacing.sm, bottom = MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val spokenLabel = spokenLabel(record, name)
         Row(
-            modifier = Modifier.weight(1f).clickable(onClick = onOpen).padding(vertical = MeeshySpacing.xs),
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onOpen)
+                .padding(vertical = MeeshySpacing.xs)
+                .semantics(mergeDescendants = true) { contentDescription = spokenLabel },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val peer = record.peer?.takeIf { it.userId.isNotBlank() }
@@ -152,7 +161,7 @@ private fun CallHistoryRowContent(
             ) {
                 MeeshyAvatar(
                     name = name,
-                    size = 48.dp,
+                    size = MeeshyControlSize.tapTarget,
                     containerColor = hexColor(DynamicColorGenerator.colorForName(name), MeeshyPalette.Indigo500),
                     presence = presence,
                     imageUrl = record.avatarUrl,
@@ -222,7 +231,10 @@ internal fun CallRedialButton(defaultIsVideo: Boolean, onRedial: (isVideo: Boole
     Box {
         IconButton(
             onClick = { open = true },
-            modifier = Modifier.semantics { onClick(label = hint) { open = true; true } },
+            modifier = Modifier
+                .size(MeeshyControlSize.tapTarget)
+                .background(MeeshyPalette.Indigo500.copy(alpha = MeeshyOpacity.light), CircleShape)
+                .semantics { onClick(label = hint) { open = true; true } },
         ) {
             Icon(
                 imageVector = if (defaultIsVideo) Icons.Filled.Videocam else Icons.Filled.Call,
@@ -270,4 +282,26 @@ internal fun CallDirectionIcon(direction: CallDirection) {
         tint = tint,
         modifier = Modifier.size(16.dp),
     )
+}
+
+/** La phrase que TalkBack lit pour toute la ligne : type, direction, ancienneté, durée (iOS `rowAccessibilityLabel`). */
+@Composable
+private fun spokenLabel(record: CallRecord, name: String): String {
+    val age = CallTimeLabel.label(
+        startedAtIso = record.startedAt,
+        nowMillis = System.currentTimeMillis(),
+        zone = ZoneId.systemDefault(),
+        locale = Locale.getDefault(),
+        yesterday = stringResource(R.string.call_history_yesterday),
+    )
+    val direction = stringResource(
+        when (record.directionKind) {
+            CallDirection.INCOMING -> R.string.call_history_incoming
+            CallDirection.OUTGOING -> R.string.call_history_outgoing
+            CallDirection.MISSED -> R.string.call_history_missed
+        },
+    )
+    val type = stringResource(if (record.isVideo) R.string.call_detail_type_video else R.string.call_detail_type_audio)
+    val duration = record.durationLabel.ifBlank { null }?.let { "${stringResource(R.string.call_detail_duration)} $it" }
+    return CallJournalLabels.accessibility(name, record.participantsLabel, direction, type, age, duration)
 }

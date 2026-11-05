@@ -137,6 +137,7 @@
     <string name="call_journal_clear_message">Los demás participantes conservan el suyo.</string>
     <string name="call_journal_clear_title">¿Borrar todo el registro de llamadas?</string>
     <string name="call_journal_close">Cerrar</string>
+    <string name="call_journal_empty_title">No hay llamadas recientes</string>
     <string name="call_journal_erase_failed">No se pudo borrar. Inténtalo de nuevo.</string>
     <string name="call_journal_filter_video">Vídeo</string>
     <string name="call_journal_hide">Borrar</string>

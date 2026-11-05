@@ -137,6 +137,7 @@
     <string name="call_journal_clear_message">Les autres participants gardent le leur.</string>
     <string name="call_journal_clear_title">Effacer tout le journal d\'appels ?</string>
     <string name="call_journal_close">Fermer</string>
+    <string name="call_journal_empty_title">Aucun appel récent</string>
     <string name="call_journal_erase_failed">L\'effacement a échoué. Réessayez.</string>
     <string name="call_journal_filter_video">Vidéo</string>
     <string name="call_journal_hide">Effacer</string>

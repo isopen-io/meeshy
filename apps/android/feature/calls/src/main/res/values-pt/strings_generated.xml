@@ -137,6 +137,7 @@
     <string name="call_journal_clear_message">Os outros participantes mantêm o deles.</string>
     <string name="call_journal_clear_title">Apagar todo o histórico de chamadas?</string>
     <string name="call_journal_close">Fechar</string>
+    <string name="call_journal_empty_title">Nenhuma chamada recente</string>
     <string name="call_journal_erase_failed">Não foi possível apagar. Tente novamente.</string>
     <string name="call_journal_filter_video">Vídeo</string>
     <string name="call_journal_hide">Apagar</string>
