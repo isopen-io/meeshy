@@ -726,7 +726,7 @@ struct FeedPostCard: View {
             // Comments preview (compact)
             if !post.comments.isEmpty {
                 commentsPreview
-                    .commentMediaGallery(topLevel: post.comments)
+                    .commentMediaGallery(topLevel: post.comments, post: post)
             }
         }
         .background(

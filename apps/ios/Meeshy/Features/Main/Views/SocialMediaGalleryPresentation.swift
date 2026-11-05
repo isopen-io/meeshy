@@ -91,6 +91,16 @@ private struct SocialMediaGalleryLayer: ViewModifier {
     let preferredContentLanguages: [String]
     let zoomSourceID: String?
 
+    /// **Le fil que l'hôte a chargé** (#16322), quand il a déclaré
+    /// `.commentMediaGallery(…, post:)` pour CE post : la pellicule porte alors
+    /// les médias des commentaires dès l'ouverture, après ceux du post.
+    @Environment(\.commentMediaGallery) private var commentThread
+
+    private var thread: [FeedComment] {
+        guard let commentThread, let post, commentThread.post?.id == post.id else { return [] }
+        return commentThread.thread()
+    }
+
     /// Le namespace de la transition zoom, posé par la racine (#8598).
     @Environment(\.zoomTransitionNamespace) private var zoomNamespace
 
@@ -174,6 +184,7 @@ private struct SocialMediaGalleryLayer: ViewModifier {
                     startSceneIndex: startSceneIndex,
                     accentColor: accentColor,
                     playerLanguages: preferredContentLanguages,
+                    thread: thread,
                     // **Le même item, dans le menu de la PIÈCE** (arbitrage
                     // porteur 2026-09-11). C'est la rangée d'actions du plein
                     // écran — celle qui porte déjà « Créer avec ce média » en
@@ -271,6 +282,7 @@ struct SocialMediaGalleryContent: View {
          startSceneIndex: Int = 0,
          accentColor: String,
          playerLanguages: [String] = [],
+         thread: [FeedComment] = [],
          onCompose: ((ComposerSeedTarget) -> Void)? = nil,
          onQuote: ((CommentQuotedMedia) -> Void)? = nil) {
         self.post = post
@@ -280,9 +292,18 @@ struct SocialMediaGalleryContent: View {
         self.playerLanguages = playerLanguages
         self.onCompose = onCompose
         self.onQuote = onQuote
-        // La carte embarque quelques commentaires : ils sont là tout de suite,
-        // avant même que le cache réponde.
-        _comments = State(initialValue: post.comments)
+        // Le fil que l'hôte a chargé, puis ce que la carte embarque : tous
+        // sont là tout de suite, avant même que le cache réponde.
+        _comments = State(initialValue: Self.initialComments(post: post, thread: thread))
+    }
+
+    /// **Les commentaires servis à l'ouverture** (#16322) : le fil de l'hôte
+    /// dans SON ordre — c'est l'ordre que l'écran montrait —, puis les
+    /// commentaires embarqués par la carte qu'il ne porte pas. Sans fil, ceux
+    /// de la carte seuls.
+    nonisolated static func initialComments(post: FeedPost, thread: [FeedComment]) -> [FeedComment] {
+        let portes = Set(thread.map(\.id))
+        return thread + post.comments.filter { !portes.contains($0.id) }
     }
 
     /// Le Prisme du LECTEUR — la descente stricte qui gouverne ce qui s'AFFICHE

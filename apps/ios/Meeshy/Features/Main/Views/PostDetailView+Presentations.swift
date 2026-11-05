@@ -67,13 +67,13 @@ extension PostDetailView {
             // déjà `SocialMediaCaption.serving(for:carrier:)`, mot pour mot, et le
             // site unique appelle la même.
             .socialMediaGallery(
-                post: displayPost,
-                isPresented: $showFullscreenGallery,
+                post: displayPost, isPresented: $showFullscreenGallery,
                 startMediaId: fullscreenMediaId,
                 startSceneIndex: detailSceneIndex,
                 accentColor: accentColor,
                 preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             )
+            .commentMediaGallery(topLevel: viewModel.topLevelComments, replies: viewModel.repliesMap, post: displayPost)
             .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
             .mediaSaveFlow(mediaSaveCoordinator)
             .modifier(QuoteComposerCover(quoted: $quotedPost, host: quoteHost))
