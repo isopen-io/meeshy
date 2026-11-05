@@ -77,12 +77,14 @@ final class SceneAudioChipClockTests: XCTestCase {
     }
 
     /// La puce peinte (canvas, export) porte le même chrono que la vue.
+    @MainActor
     func test_painter_chrono_boucleAvecLeSon() {
         let audio = son(startTime: 2, sourceStart: 0, sourceEnd: 5, loop: true)
         XCTAssertEqual(StoryAudioChipPainter.chrono(of: audio, elapsed: 3), 3, accuracy: 1e-9)
         XCTAssertEqual(StoryAudioChipPainter.chrono(of: audio, elapsed: 6), 1, accuracy: 1e-9)
     }
 
+    @MainActor
     func test_placement_reserveLaPlaceDuChrono() {
         let placement = StoryAudioChipPlacement(audioId: "s", center: .zero, unit: 1, display: .waveform,
                                                 rotation: 0, muted: false, elapsed: 0, chrono: 4)
