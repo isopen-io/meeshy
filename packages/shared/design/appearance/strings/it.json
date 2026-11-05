@@ -227,6 +227,50 @@
     "bannieres-atelier-noel": {
       "name": "Laboratorio di Babbo Natale",
       "description": "Le cornici per il banner abbinate a «Laboratorio di Babbo Natale»: Berretto di Babbo Natale e Bastoncino di zucchero, al bordo perché la tua foto resti visibile."
+    },
+    "noel-bannieres": {
+      "name": "Banner di Natale",
+      "description": "Sei immagini di banner abbinate ai pacchetti di Natale: brina, ghirlanda e carta regalo, poi una nevicata, luci che brillano e le scintille del laboratorio."
+    },
+    "noel-contours-fixes": {
+      "name": "Natale · contorni fissi",
+      "description": "I sei contorni di Natale senza animazione: fiocchi, agrifoglio, ghirlanda, stella, berretto e bastoncino di zucchero, per un avatar tranquillo."
+    },
+    "noel-cadres-fixes": {
+      "name": "Natale · cornici fisse",
+      "description": "Le sei cornici di banner di Natale senza animazione, abbinate ai contorni fissi: fiocchi, agrifoglio, ghirlanda, stella, berretto e bastoncino di zucchero."
+    },
+    "nouvel-an-contours": {
+      "name": "Capodanno",
+      "description": "Quattro contorni per festeggiare il nuovo anno: fuochi d’artificio, pioggia di coriandoli, quadrante di mezzanotte e coppa di champagne dorato."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Capodanno vivo",
+      "description": "Quattro contorni animati per il passaggio al nuovo anno: un gran finale, un volo di coriandoli, l’orologio che batte la mezzanotte e bollicine di champagne."
+    },
+    "nouvel-an-images": {
+      "name": "Banner di Capodanno",
+      "description": "Quattro immagini di banner per il nuovo anno: una notte di fuochi, una festa di coriandoli, i dodici rintocchi e uno champagne dorato."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Banner animati di Capodanno",
+      "description": "Quattro immagini di banner animate: fuochi che esplodono, un acquazzone di coriandoli, il conto alla rovescia di mezzanotte e bollicine di champagne. Con movimento ridotto: un’immagine fissa."
+    },
+    "nouvel-an-cadres": {
+      "name": "Cornici di Capodanno",
+      "description": "Quattro cornici di banner abbinate ai contorni di Capodanno: fuochi d’artificio, coriandoli, quadrante di mezzanotte e coppe di champagne."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Cornici animate di Capodanno",
+      "description": "Quattro cornici di banner animate, abbinate ai contorni vivi: un bouquet che esplode, coriandoli che volano, la lancetta di mezzanotte che gira e coppe che brindano."
+    },
+    "nouvel-an-fonds": {
+      "name": "Sfondi di Capodanno",
+      "description": "Quattro sfondi di conversazione per il nuovo anno: cielo di fuochi, coriandoli, ora di mezzanotte e bollicine dorate, discreti perché ogni fumetto resti leggibile."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Capodanno vivo · sfondi",
+      "description": "Quattro sfondi animati per il nuovo anno: scoppi lontani, coriandoli che cadono, una notte stellata e bollicine che salgono. Con movimento ridotto: una sfumatura fissa."
     }
   },
   "designs": {
@@ -265,7 +309,29 @@
     "sucre-d-orge-raye": "Strisce di zucchero",
     "neige-de-noel": "Neve di Natale",
     "ampoules-de-noel": "Lampadine di Natale",
-    "etincelles-atelier": "Scintille del laboratorio"
+    "etincelles-atelier": "Scintille del laboratorio",
+    "banniere-noel-givre": "Brina",
+    "banniere-noel-guirlande": "Ghirlanda",
+    "banniere-noel-cadeau": "Carta regalo",
+    "banniere-noel-neige": "Nevicata",
+    "banniere-noel-lumieres": "Luci scintillanti",
+    "banniere-noel-etincelles": "Scintille di Natale",
+    "banniere-artifice": "Notte di fuochi",
+    "banniere-confettis": "Festa dei coriandoli",
+    "banniere-minuit": "Dodici rintocchi",
+    "banniere-champagne": "Champagne dorato",
+    "banniere-artifice-vive": "Fuochi vivi",
+    "banniere-confettis-vive": "Acquazzone di coriandoli",
+    "banniere-minuit-vive": "Conto alla rovescia",
+    "banniere-champagne-vive": "Bollicine di champagne",
+    "fond-artifice": "Cielo di fuochi",
+    "fond-confettis": "Coriandoli",
+    "fond-minuit": "Ora di mezzanotte",
+    "fond-champagne": "Bollicine dorate",
+    "fond-artifice-vif": "Scoppi lontani",
+    "fond-confettis-vif": "Coriandoli che cadono",
+    "fond-minuit-vif": "Mezzanotte stellata",
+    "fond-champagne-vif": "Bollicine che salgono"
   },
   "rings": {
     "filet": "Filetto",
@@ -344,7 +410,21 @@
     "guirlande-lumineuse": "Ghirlanda luminosa",
     "etoile-du-sapin": "Stella dell’albero",
     "bonnet-du-pere-noel": "Berretto di Babbo Natale",
-    "sucre-d-orge": "Bastoncino di zucchero"
+    "sucre-d-orge": "Bastoncino di zucchero",
+    "flocons-tombants-fixe": "Fiocchi che cadono · fisso",
+    "couronne-de-houx-fixe": "Corona di agrifoglio · fisso",
+    "guirlande-lumineuse-fixe": "Ghirlanda luminosa · fisso",
+    "etoile-du-sapin-fixe": "Stella dell’albero · fisso",
+    "bonnet-du-pere-noel-fixe": "Berretto di Babbo Natale · fisso",
+    "sucre-d-orge-fixe": "Bastoncino di zucchero · fisso",
+    "feux-d-artifice": "Fuochi d’artificio",
+    "pluie-de-confettis": "Pioggia di coriandoli",
+    "cadran-de-minuit": "Quadrante di mezzanotte",
+    "coupe-de-champagne": "Coppa di champagne",
+    "bouquet-final": "Gran finale",
+    "envol-de-confettis": "Volo di coriandoli",
+    "minuit-sonne": "Scocca la mezzanotte",
+    "champagne-petillant": "Champagne frizzante"
   },
   "gamut": {
     "indigo": "Indaco Meeshy",
@@ -436,6 +516,20 @@
     "guirlande-lumineuse": "Ghirlanda luminosa",
     "etoile-du-sapin": "Stella dell’albero",
     "bonnet-du-pere-noel": "Berretto di Babbo Natale",
-    "sucre-d-orge": "Bastoncino di zucchero"
+    "sucre-d-orge": "Bastoncino di zucchero",
+    "flocons-tombants-fixe": "Fiocchi che cadono · fisso",
+    "couronne-de-houx-fixe": "Corona di agrifoglio · fisso",
+    "guirlande-lumineuse-fixe": "Ghirlanda luminosa · fisso",
+    "etoile-du-sapin-fixe": "Stella dell’albero · fisso",
+    "bonnet-du-pere-noel-fixe": "Berretto di Babbo Natale · fisso",
+    "sucre-d-orge-fixe": "Bastoncino di zucchero · fisso",
+    "feux-d-artifice": "Fuochi d’artificio",
+    "pluie-de-confettis": "Pioggia di coriandoli",
+    "cadran-de-minuit": "Quadrante di mezzanotte",
+    "coupe-de-champagne": "Coppa di champagne",
+    "bouquet-final": "Gran finale",
+    "envol-de-confettis": "Volo di coriandoli",
+    "minuit-sonne": "Scocca la mezzanotte",
+    "champagne-petillant": "Champagne frizzante"
   }
 }

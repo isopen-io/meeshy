@@ -42,6 +42,8 @@ type SourcePack<T> = {
   readonly installedByDefault: boolean;
   readonly removable: boolean;
   readonly usage?: unknown;
+  /** La fenêtre de l'offre (#11274, #16270) : la boutique ne propose le pack qu'entre ces deux instants. */
+  readonly availability?: { readonly startsAt?: string; readonly endsAt?: string };
   readonly designs?: readonly T[];
   readonly rings?: readonly T[];
   readonly frames?: readonly T[];
@@ -155,6 +157,7 @@ async function buildEntry(kind: Kind, pack: SourcePack<unknown>, over: Record<st
     downloadBytes: { story: contract.bytes, square: null },
     names: names ?? Object.fromEntries(PACK_LANGUAGES.map((language) => [language, strings[language].packs[pack.slug]])),
     ...(pack.usage === undefined ? {} : { usage: pack.usage }),
+    ...(pack.availability === undefined ? {} : { availability: pack.availability }),
     ...over,
   };
 }

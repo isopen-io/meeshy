@@ -196,11 +196,14 @@ describe('les objets des offres saisonnières', () => {
     });
   });
 
-  it('aucune clé n’est reprise dans sa table de noms (fonds et bannières partagent la leur)', () => {
-    const keysOf = (domains: readonly Domain[]) => domains.flatMap((domain) => packsOf(domain).flatMap((pack) => itemsOf(domain, pack).map((item) => item.key)));
+  it('aucune clé saisonnière n’est reprise dans sa table de noms (fonds et bannières partagent la leur)', () => {
+    const own = new Set(seasonal.map(({ pack }) => pack.slug));
+    const keysOf = (domains: readonly Domain[], mine: boolean) =>
+      domains.flatMap((domain) => packsOf(domain).filter((pack) => own.has(pack.slug) === mine).flatMap((pack) => itemsOf(domain, pack).map((item) => item.key)));
     [['wallpaper', 'banner'], ['avatar-ring'], ['banner-frame']].forEach((domains) => {
-      const keys = keysOf(domains as Domain[]);
-      expect({ domains, duplicates: keys.filter((key, index) => keys.indexOf(key) !== index) }).toEqual({ domains, duplicates: [] });
+      const keys = keysOf(domains as Domain[], true);
+      const elsewhere = keysOf(domains as Domain[], false);
+      expect({ domains, duplicates: keys.filter((key, index) => keys.indexOf(key) !== index || elsewhere.includes(key)) }).toEqual({ domains, duplicates: [] });
     });
   });
 

@@ -1292,6 +1292,10 @@ enum AppearanceCatalogData {
       "order": 5,
       "installedByDefault": false,
       "removable": true,
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
+      },
       "designs": [
         {
           "key": "flocons-cristal",
@@ -1420,6 +1424,10 @@ enum AppearanceCatalogData {
       "order": 6,
       "installedByDefault": false,
       "removable": true,
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
+      },
       "designs": [
         {
           "key": "neige-de-noel",
@@ -2013,6 +2021,373 @@ enum AppearanceCatalogData {
           }
         }
       ]
+    },
+    {
+      "slug": "nouvel-an-fonds",
+      "order": 9,
+      "installedByDefault": false,
+      "removable": true,
+      "availability": {
+        "startsAt": "2026-12-26T00:00:00Z",
+        "endsAt": "2027-01-16T00:00:00Z"
+      },
+      "designs": [
+        {
+          "key": "fond-artifice",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#F7F7FB",
+              "ink": "#4338CA",
+              "soft": "#ECECF6"
+            },
+            "dark": {
+              "base": "#08091A",
+              "ink": "#FDE68A",
+              "soft": "#12142B"
+            }
+          },
+          "tile": {
+            "width": 76,
+            "height": 76,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M23 20L29 20M22.6 21.5L27.79 24.5M21.5 22.6L24.5 27.79M20 23L20 29M18.5 22.6L15.5 27.79M17.4 21.5L12.21 24.5M17 20L11 20M17.4 18.5L12.21 15.5M18.5 17.4L15.5 12.21M20 17L20 11M21.5 17.4L24.5 12.21M22.6 18.5L27.79 15.5",
+                "role": "ink",
+                "opacity": 0.07,
+                "width": 0.7
+              },
+              {
+                "d": "M57.85 54.75L61.1 56.06M56.78 55.84L58.15 59.06M55.25 55.85L53.94 59.1M54.16 54.78L50.94 56.15M54.15 53.25L50.9 51.94M55.22 52.16L53.85 48.94M56.75 52.15L58.06 48.9M57.84 53.22L61.06 51.85",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.6
+              },
+              {
+                "d": "M19 20A1 1 0 1 0 21 20A1 1 0 1 0 19 20ZM55.2 54A0.8 0.8 0 1 0 56.8 54A0.8 0.8 0 1 0 55.2 54ZM57.3 14A0.7 0.7 0 1 0 58.7 14A0.7 0.7 0 1 0 57.3 14ZM11.3 62A0.7 0.7 0 1 0 12.7 62A0.7 0.7 0 1 0 11.3 62Z",
+                "role": "ink",
+                "opacity": 0.08
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "fond-confettis",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#FDF9FB",
+              "ink": "#BE185D",
+              "soft": "#F6EAF0"
+            },
+            "dark": {
+              "base": "#120A10",
+              "ink": "#F9A8D4",
+              "soft": "#1E121B"
+            }
+          },
+          "tile": {
+            "width": 64,
+            "height": 64,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M9.83 11.55L15.27 14.09L14.17 16.45L8.73 13.91ZM41.38 10.76L45.21 7.55L46.62 9.24L42.79 12.45ZM30.2 36.74L32.25 42.37L29.8 43.26L27.75 37.63ZM51.73 50.48L56.65 51.35L56.27 53.52L51.35 52.65Z",
+                "role": "ink",
+                "opacity": 0.07
+              },
+              {
+                "d": "M22.6 24A1.4 1.4 0 1 0 25.4 24A1.4 1.4 0 1 0 22.6 24ZM50.8 30A1.2 1.2 0 1 0 53.2 30A1.2 1.2 0 1 0 50.8 30ZM8.6 50A1.4 1.4 0 1 0 11.4 50A1.4 1.4 0 1 0 8.6 50Z",
+                "role": "ink",
+                "opacity": 0.08
+              },
+              {
+                "d": "M34 58C37 54 40 62 43 58C46 54 49 62 52 58",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.7
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "fond-minuit",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#F5F7FC",
+              "ink": "#1E3A8A",
+              "soft": "#E7ECF7"
+            },
+            "dark": {
+              "base": "#070A16",
+              "ink": "#C7D2FE",
+              "soft": "#10152A"
+            }
+          },
+          "tile": {
+            "width": 84,
+            "height": 84,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M14 26A10 10 0 1 0 34 26A10 10 0 1 0 14 26Z",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.7
+              },
+              {
+                "d": "M31.8 26L33.2 26M30.75 29.9L31.97 30.6M27.9 32.75L28.6 33.97M24 33.8L24 35.2M20.1 32.75L19.4 33.97M17.25 29.9L16.03 30.6M16.2 26L14.8 26M17.25 22.1L16.03 21.4M20.1 19.25L19.4 18.03M24 18.2L24 16.8M27.9 19.25L28.6 18.03M30.75 22.1L31.97 21.4M24 26L24 18.8M24 26L21.5 21.67",
+                "role": "ink",
+                "opacity": 0.07,
+                "width": 0.7
+              },
+              {
+                "d": "M62 57.5L62.99 61.01L66.5 62L62.99 62.99L62 66.5L61.01 62.99L57.5 62L61.01 61.01ZM66 15.5L66.55 17.45L68.5 18L66.55 18.55L66 20.5L65.45 18.55L63.5 18L65.45 17.45ZM16 63.5L16.55 65.45L18.5 66L16.55 66.55L16 68.5L15.45 66.55L13.5 66L15.45 65.45Z",
+                "role": "ink",
+                "opacity": 0.08
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "fond-champagne",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#FCFAF4",
+              "ink": "#92650A",
+              "soft": "#F4EEDD"
+            },
+            "dark": {
+              "base": "#0F0C06",
+              "ink": "#FDE68A",
+              "soft": "#1A160C"
+            }
+          },
+          "tile": {
+            "width": 60,
+            "height": 76,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M10 22L26 22Q25.2 29.2 18.64 30L18.64 38L22.8 39.6L13.2 39.6L17.36 38L17.36 30Q10.8 29.2 10 22Z",
+                "role": "ink",
+                "opacity": 0.07,
+                "width": 0.7
+              },
+              {
+                "d": "M41.6 16A2.4 2.4 0 1 0 46.4 16A2.4 2.4 0 1 0 41.6 16ZM48.4 30A1.6 1.6 0 1 0 51.6 30A1.6 1.6 0 1 0 48.4 30ZM39 42A3 3 0 1 0 45 42A3 3 0 1 0 39 42ZM50.2 58A1.8 1.8 0 1 0 53.8 58A1.8 1.8 0 1 0 50.2 58ZM17.8 56A2.2 2.2 0 1 0 22.2 56A2.2 2.2 0 1 0 17.8 56ZM10.6 68A1.4 1.4 0 1 0 13.4 68A1.4 1.4 0 1 0 10.6 68Z",
+                "role": "ink",
+                "opacity": 0.06,
+                "width": 0.6
+              },
+              {
+                "d": "M29.2 6A0.8 0.8 0 1 0 30.8 6A0.8 0.8 0 1 0 29.2 6ZM5.2 40A0.8 0.8 0 1 0 6.8 40A0.8 0.8 0 1 0 5.2 40ZM33.2 66A0.8 0.8 0 1 0 34.8 66A0.8 0.8 0 1 0 33.2 66Z",
+                "role": "ink",
+                "opacity": 0.08
+              }
+            ]
+          },
+          "fit": "fill"
+        }
+      ]
+    },
+    {
+      "slug": "nouvel-an-fonds-vifs",
+      "order": 10,
+      "installedByDefault": false,
+      "removable": true,
+      "availability": {
+        "startsAt": "2026-12-26T00:00:00Z",
+        "endsAt": "2027-01-16T00:00:00Z"
+      },
+      "designs": [
+        {
+          "key": "fond-artifice-vif",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F6F6FB",
+              "ink": "#E4E1F6",
+              "soft": "#ECEAF5"
+            },
+            "dark": {
+              "base": "#07081A",
+              "ink": "#1A1840",
+              "soft": "#0D0E24"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0.1,
+                "r": 0.85,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "bc1df90d8f33543c.json",
+            "bytes": 26676,
+            "sha256": "bc1df90d8f33543ca8d88a42427643d723634590a95ac76d2620854fca1866eb"
+          }
+        },
+        {
+          "key": "fond-confettis-vif",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FDF8FA",
+              "ink": "#F8E1EC",
+              "soft": "#F5EEF3"
+            },
+            "dark": {
+              "base": "#110910",
+              "ink": "#2A1424",
+              "soft": "#170E15"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0,
+                "r": 0.85,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "26384b343577fca7.json",
+            "bytes": 24357,
+            "sha256": "26384b343577fca7683a52b4fb444b97f577e454fb29728828ca420ee9d138e8"
+          }
+        },
+        {
+          "key": "fond-minuit-vif",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#F4F6FC",
+              "ink": "#DCE3F5",
+              "soft": "#E9EDF8"
+            },
+            "dark": {
+              "base": "#060915",
+              "ink": "#151C3A",
+              "soft": "#0B1022"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0.05,
+                "r": 0.85,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "9cad567abaf81ac2.json",
+            "bytes": 21074,
+            "sha256": "9cad567abaf81ac2761dcb8847c6764261788613ffa85aa020bc84b6101260f1"
+          }
+        },
+        {
+          "key": "fond-champagne-vif",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FCFAF3",
+              "ink": "#F4E8C8",
+              "soft": "#F3EEDF"
+            },
+            "dark": {
+              "base": "#0E0B05",
+              "ink": "#2A210C",
+              "soft": "#15120A"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 1,
+                "r": 0.85,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "e05a213914daec54.json",
+            "bytes": 17262,
+            "sha256": "e05a213914daec5431965847fb11772f6369dfa4b58eb0c16258d70b01802523"
+          }
+        }
+      ]
     }
   ],
   "banners": [
@@ -2574,6 +2949,663 @@ enum AppearanceCatalogData {
             "src": "039a32b2874b1119.json",
             "bytes": 7855,
             "sha256": "039a32b2874b11197966a8793f3b6a36dbf098c553a58fe14f64c134f0f73e49"
+          }
+        }
+      ]
+    },
+    {
+      "slug": "noel-bannieres",
+      "order": 2,
+      "installedByDefault": false,
+      "removable": true,
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
+      },
+      "designs": [
+        {
+          "key": "banniere-noel-givre",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#E6EFFA",
+              "ink": "#1E3A8A",
+              "soft": "#D4E2F4"
+            },
+            "dark": {
+              "base": "#0B1730",
+              "ink": "#BFDBFE",
+              "soft": "#13254A"
+            }
+          },
+          "tile": {
+            "width": 80,
+            "height": 60,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M20 20L20 9M17.3 11.36L20 13.62M20 13.62L22.7 11.36M20 20L29.53 14.5M26.14 13.34L25.53 16.81M25.53 16.81L28.83 18.01M20 20L29.53 25.5M28.83 21.99L25.53 23.19M25.53 23.19L26.14 26.66M20 20L20 31M22.7 28.64L20 26.38M20 26.38L17.3 28.64M20 20L10.47 25.5M13.86 26.66L14.47 23.19M14.47 23.19L11.17 21.99M20 20L10.47 14.5M11.17 18.01L14.47 16.81M14.47 16.81L13.86 13.34",
+                "role": "ink",
+                "opacity": 0.28,
+                "width": 0.9
+              },
+              {
+                "d": "M60 42L60 35M58.28 36.5L60 37.94M60 37.94L61.72 36.5M60 42L66.06 38.5M63.91 37.76L63.52 39.97M63.52 39.97L65.62 40.74M60 42L66.06 45.5M65.62 43.26L63.52 44.03M63.52 44.03L63.91 46.24M60 42L60 49M61.72 47.5L60 46.06M60 46.06L58.28 47.5M60 42L53.94 45.5M56.09 46.24L56.48 44.03M56.48 44.03L54.38 43.26M60 42L53.94 38.5M54.38 40.74L56.48 39.97M56.48 39.97L56.09 37.76",
+                "role": "ink",
+                "opacity": 0.22,
+                "width": 0.7
+              },
+              {
+                "d": "M58.8 12A1.2 1.2 0 1 0 61.2 12A1.2 1.2 0 1 0 58.8 12ZM11 48A1 1 0 1 0 13 48A1 1 0 1 0 11 48ZM39.1 30A0.9 0.9 0 1 0 40.9 30A0.9 0.9 0 1 0 39.1 30ZM73.2 56A0.8 0.8 0 1 0 74.8 56A0.8 0.8 0 1 0 73.2 56Z",
+                "role": "ink",
+                "opacity": 0.3
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-noel-guirlande",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#14532D",
+              "ink": "#FDE68A",
+              "soft": "#166534"
+            },
+            "dark": {
+              "base": "#052E16",
+              "ink": "#FDE68A",
+              "soft": "#14532D"
+            }
+          },
+          "tile": {
+            "width": 96,
+            "height": 48,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M0 10C16 26 32 26 48 10C64 26 80 26 96 10",
+                "role": "ink",
+                "opacity": 0.24,
+                "width": 0.9
+              },
+              {
+                "d": "M20.8 25A3.2 3.2 0 1 0 27.2 25A3.2 3.2 0 1 0 20.8 25ZM68.8 25A3.2 3.2 0 1 0 75.2 25A3.2 3.2 0 1 0 68.8 25ZM5.4 18A2.6 2.6 0 1 0 10.6 18A2.6 2.6 0 1 0 5.4 18ZM37.4 18A2.6 2.6 0 1 0 42.6 18A2.6 2.6 0 1 0 37.4 18ZM53.4 18A2.6 2.6 0 1 0 58.6 18A2.6 2.6 0 1 0 53.4 18ZM85.4 18A2.6 2.6 0 1 0 90.6 18A2.6 2.6 0 1 0 85.4 18Z",
+                "role": "ink",
+                "opacity": 0.32
+              },
+              {
+                "d": "M48 34L48.88 37.12L52 38L48.88 38.88L48 42L47.12 38.88L44 38L47.12 37.12ZM0 35.6L0.53 37.47L2.4 38L0.53 38.53L0 40.4L-0.53 38.53L-2.4 38L-0.53 37.47ZM96 35.6L96.53 37.47L98.4 38L96.53 38.53L96 40.4L95.47 38.53L93.6 38L95.47 37.47Z",
+                "role": "ink",
+                "opacity": 0.26
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-noel-cadeau",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#991B1B",
+              "ink": "#FDE68A",
+              "soft": "#B91C1C"
+            },
+            "dark": {
+              "base": "#450A0A",
+              "ink": "#FCD34D",
+              "soft": "#7F1D1D"
+            }
+          },
+          "tile": {
+            "width": 60,
+            "height": 60,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M30 0V60M0 30H60",
+                "role": "ink",
+                "opacity": 0.22,
+                "width": 3
+              },
+              {
+                "d": "M30 30C22 20 14 22 18 28C20 32 26 31 30 30C38 20 46 22 42 28C40 32 34 31 30 30Z",
+                "role": "ink",
+                "opacity": 0.3,
+                "width": 1
+              },
+              {
+                "d": "M12 9.4L12.57 11.43L14.6 12L12.57 12.57L12 14.6L11.43 12.57L9.4 12L11.43 11.43ZM48 45.4L48.57 47.43L50.6 48L48.57 48.57L48 50.6L47.43 48.57L45.4 48L47.43 47.43ZM47 12A1 1 0 1 0 49 12A1 1 0 1 0 47 12ZM11 48A1 1 0 1 0 13 48A1 1 0 1 0 11 48Z",
+                "role": "ink",
+                "opacity": 0.32
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-noel-neige",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#1E3A8A",
+              "ink": "#60A5FA",
+              "soft": "#0F2747"
+            },
+            "dark": {
+              "base": "#0B1730",
+              "ink": "#1D4ED8",
+              "soft": "#020617"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0,
+                "r": 0.8,
+                "role": "ink",
+                "opacity": 0.35
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "e90155e8d1551e1d.json",
+            "bytes": 22554,
+            "sha256": "e90155e8d1551e1d070560d3b15d7ac1c88c39ba5a02168b4c191250ea65cf77"
+          }
+        },
+        {
+          "key": "banniere-noel-lumieres",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#14532D",
+              "ink": "#FDE68A",
+              "soft": "#052E16"
+            },
+            "dark": {
+              "base": "#052E16",
+              "ink": "#CA8A04",
+              "soft": "#022C22"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0.2,
+                "r": 0.7,
+                "role": "ink",
+                "opacity": 0.18
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "a8d54963a3235afb.json",
+            "bytes": 47864,
+            "sha256": "a8d54963a3235afb05e0d715653980e0dddc829ee2aad7345e9f36380606f4d4"
+          }
+        },
+        {
+          "key": "banniere-noel-etincelles",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#7F1D1D",
+              "ink": "#F59E0B",
+              "soft": "#450A0A"
+            },
+            "dark": {
+              "base": "#450A0A",
+              "ink": "#B45309",
+              "soft": "#1C0606"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 1,
+                "r": 0.8,
+                "role": "ink",
+                "opacity": 0.35
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "d920a02e0923fc46.json",
+            "bytes": 26681,
+            "sha256": "d920a02e0923fc462bae0d376fecc876239aaef660d5873e9d2ff31c498480bd"
+          }
+        }
+      ]
+    },
+    {
+      "slug": "nouvel-an-images",
+      "order": 3,
+      "installedByDefault": false,
+      "removable": true,
+      "availability": {
+        "startsAt": "2026-12-26T00:00:00Z",
+        "endsAt": "2027-01-16T00:00:00Z"
+      },
+      "designs": [
+        {
+          "key": "banniere-artifice",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#1E1B4B",
+              "ink": "#FBBF24",
+              "soft": "#312E81"
+            },
+            "dark": {
+              "base": "#0B1026",
+              "ink": "#FDE68A",
+              "soft": "#1E1B4B"
+            }
+          },
+          "tile": {
+            "width": 90,
+            "height": 60,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M26 22L35 22M25.6 23.74L33.71 27.64M24.49 25.13L30.11 32.16M22.89 25.9L24.89 34.67M21.11 25.9L19.11 34.67M19.51 25.13L13.89 32.16M18.4 23.74L10.29 27.64M18 22L9 22M18.4 20.26L10.29 16.36M19.51 18.87L13.89 11.84M21.11 18.1L19.11 9.33M22.89 18.1L24.89 9.33M24.49 18.87L30.11 11.84M25.6 20.26L33.71 16.36",
+                "role": "ink",
+                "opacity": 0.3,
+                "width": 1
+              },
+              {
+                "d": "M68.85 40.93L73.61 42.47M67.76 42.43L70.7 46.47M66 43L66 48M64.24 42.43L61.3 46.47M63.15 40.93L58.39 42.47M63.15 39.07L58.39 37.53M64.24 37.57L61.3 33.53M66 37L66 32M67.76 37.57L70.7 33.53M68.85 39.07L73.61 37.53",
+                "role": "ink",
+                "opacity": 0.22,
+                "width": 0.8
+              },
+              {
+                "d": "M20.4 22A1.6 1.6 0 1 0 23.6 22A1.6 1.6 0 1 0 20.4 22ZM64.8 40A1.2 1.2 0 1 0 67.2 40A1.2 1.2 0 1 0 64.8 40ZM79.1 8A0.9 0.9 0 1 0 80.9 8A0.9 0.9 0 1 0 79.1 8ZM5.1 52A0.9 0.9 0 1 0 6.9 52A0.9 0.9 0 1 0 5.1 52ZM47.3 10A0.7 0.7 0 1 0 48.7 10A0.7 0.7 0 1 0 47.3 10Z",
+                "role": "ink",
+                "opacity": 0.32
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-confettis",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#FFF1F7",
+              "ink": "#DB2777",
+              "soft": "#FCE7F3"
+            },
+            "dark": {
+              "base": "#2A0B1E",
+              "ink": "#F9A8D4",
+              "soft": "#3B1230"
+            }
+          },
+          "tile": {
+            "width": 70,
+            "height": 50,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M7.46 7.16L13.81 10.12L12.54 12.84L6.19 9.88ZM36.87 8.93L41.46 5.08L43.13 7.07L38.54 10.92ZM28.21 28.2L30.61 34.78L27.79 35.8L25.39 29.22ZM55.44 35.97L61.23 37.52L60.56 40.03L54.77 38.48Z",
+                "role": "ink",
+                "opacity": 0.3
+              },
+              {
+                "d": "M20.2 20A1.8 1.8 0 1 0 23.8 20A1.8 1.8 0 1 0 20.2 20ZM54.5 18A1.5 1.5 0 1 0 57.5 18A1.5 1.5 0 1 0 54.5 18ZM6.2 42A1.8 1.8 0 1 0 9.8 42A1.8 1.8 0 1 0 6.2 42ZM42.8 46A1.2 1.2 0 1 0 45.2 46A1.2 1.2 0 1 0 42.8 46Z",
+                "role": "ink",
+                "opacity": 0.26
+              },
+              {
+                "d": "M2 26C6 21 10 31 14 26C18 21 22 31 26 26M46 28C49 24 52 32 55 28C58 24 61 32 64 28",
+                "role": "ink",
+                "opacity": 0.2,
+                "width": 0.9
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-minuit",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#1E1B4B",
+              "ink": "#E2E8F0",
+              "soft": "#312E81"
+            },
+            "dark": {
+              "base": "#0F172A",
+              "ink": "#E2E8F0",
+              "soft": "#1E1B4B"
+            }
+          },
+          "tile": {
+            "width": 100,
+            "height": 60,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M11 28A15 15 0 1 0 41 28A15 15 0 1 0 11 28Z",
+                "role": "ink",
+                "opacity": 0.28,
+                "width": 1
+              },
+              {
+                "d": "M37.7 28L39.8 28M36.13 33.85L37.95 34.9M31.85 38.13L32.9 39.95M26 39.7L26 41.8M20.15 38.13L19.1 39.95M15.87 33.85L14.05 34.9M14.3 28L12.2 28M15.87 22.15L14.05 21.1M20.15 17.87L19.1 16.05M26 16.3L26 14.2M31.85 17.87L32.9 16.05M36.13 22.15L37.95 21.1M26 28L26 17.2M26 28L22.25 21.5",
+                "role": "ink",
+                "opacity": 0.32,
+                "width": 1
+              },
+              {
+                "d": "M70 14L70.88 17.12L74 18L70.88 18.88L70 22L69.12 18.88L66 18L69.12 17.12ZM86 41.2L86.62 43.38L88.8 44L86.62 44.62L86 46.8L85.38 44.62L83.2 44L85.38 43.38ZM58 46L58.44 47.56L60 48L58.44 48.44L58 50L57.56 48.44L56 48L57.56 47.56ZM92 6.4L92.35 7.65L93.6 8L92.35 8.35L92 9.6L91.65 8.35L90.4 8L91.65 7.65Z",
+                "role": "ink",
+                "opacity": 0.3
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-champagne",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#F7E7CE",
+              "ink": "#8A5A00",
+              "soft": "#EFD9B0"
+            },
+            "dark": {
+              "base": "#2B1F07",
+              "ink": "#FDE68A",
+              "soft": "#3D2C0B"
+            }
+          },
+          "tile": {
+            "width": 80,
+            "height": 56,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M9 12L31 12Q29.9 21.9 20.88 23L20.88 34L26.6 36.2L13.4 36.2L19.12 34L19.12 23Q10.1 21.9 9 12ZM24 14L44 14Q43 23 34.8 24L34.8 34L40 36L28 36L33.2 34L33.2 24Q25 23 24 14Z",
+                "role": "ink",
+                "opacity": 0.28,
+                "width": 0.9
+              },
+              {
+                "d": "M53.4 12A2.6 2.6 0 1 0 58.6 12A2.6 2.6 0 1 0 53.4 12ZM62.2 26A1.8 1.8 0 1 0 65.8 26A1.8 1.8 0 1 0 62.2 26ZM50.8 36A3.2 3.2 0 1 0 57.2 36A3.2 3.2 0 1 0 50.8 36ZM68 46A2 2 0 1 0 72 46A2 2 0 1 0 68 46ZM42.6 48A1.4 1.4 0 1 0 45.4 48A1.4 1.4 0 1 0 42.6 48Z",
+                "role": "ink",
+                "opacity": 0.24,
+                "width": 0.8
+              },
+              {
+                "d": "M27 3.4L27.57 5.43L29.6 6L27.57 6.57L27 8.6L26.43 6.57L24.4 6L26.43 5.43ZM74 4.2L74.4 5.6L75.8 6L74.4 6.4L74 7.8L73.6 6.4L72.2 6L73.6 5.6ZM6 44.2L6.4 45.6L7.8 46L6.4 46.4L6 47.8L5.6 46.4L4.2 46L5.6 45.6Z",
+                "role": "ink",
+                "opacity": 0.32
+              }
+            ]
+          },
+          "fit": "fill"
+        }
+      ]
+    },
+    {
+      "slug": "nouvel-an-images-vives",
+      "order": 4,
+      "installedByDefault": false,
+      "removable": true,
+      "availability": {
+        "startsAt": "2026-12-26T00:00:00Z",
+        "endsAt": "2027-01-16T00:00:00Z"
+      },
+      "designs": [
+        {
+          "key": "banniere-artifice-vive",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#0B1026",
+              "ink": "#7C3AED",
+              "soft": "#312E81"
+            },
+            "dark": {
+              "base": "#05071A",
+              "ink": "#6D28D9",
+              "soft": "#1E1B4B"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.2,
+                "y": 0.2,
+                "r": 0.5,
+                "role": "ink",
+                "opacity": 0.35
+              },
+              {
+                "x": 0.8,
+                "y": 0.3,
+                "r": 0.45,
+                "role": "ink",
+                "opacity": 0.25
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "66bec08c33669840.json",
+            "bytes": 26738,
+            "sha256": "66bec08c336698405d4abccc9a2230892c8aaa933bb7d65e8a2c7673ce0ea843"
+          }
+        },
+        {
+          "key": "banniere-confettis-vive",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FDF2F8",
+              "ink": "#FBCFE8",
+              "soft": "#EDE9FE"
+            },
+            "dark": {
+              "base": "#1F0B1A",
+              "ink": "#4C1D95",
+              "soft": "#2E1065"
+            }
+          },
+          "gradient": {
+            "angle": 120,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.1,
+                "y": 0.9,
+                "r": 0.5,
+                "role": "ink",
+                "opacity": 0.5
+              },
+              {
+                "x": 0.9,
+                "y": 0.1,
+                "r": 0.5,
+                "role": "soft",
+                "opacity": 0.5
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "73ac775e6ed0c52a.json",
+            "bytes": 32110,
+            "sha256": "73ac775e6ed0c52acde67e393e1f7e40b8feda592c738febeb7165900df114a4"
+          }
+        },
+        {
+          "key": "banniere-minuit-vive",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#0F172A",
+              "ink": "#4338CA",
+              "soft": "#1E1B4B"
+            },
+            "dark": {
+              "base": "#020617",
+              "ink": "#3730A3",
+              "soft": "#172554"
+            }
+          },
+          "gradient": {
+            "angle": 160,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.82,
+                "y": 0.5,
+                "r": 0.45,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "7cecf5480863bd24.json",
+            "bytes": 20552,
+            "sha256": "7cecf5480863bd24e62427441c94400e64cbf40058c273240a3afbdeb355fe7b"
+          }
+        },
+        {
+          "key": "banniere-champagne-vive",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#3B2A05",
+              "ink": "#CA8A04",
+              "soft": "#A16207"
+            },
+            "dark": {
+              "base": "#1C1403",
+              "ink": "#A16207",
+              "soft": "#713F12"
+            }
+          },
+          "gradient": {
+            "angle": 200,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 1,
+                "r": 0.7,
+                "role": "ink",
+                "opacity": 0.45
+              },
+              {
+                "x": 0.15,
+                "y": 0.2,
+                "r": 0.4,
+                "role": "soft",
+                "opacity": 0.35
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "8de67ccf264aa52e.json",
+            "bytes": 30455,
+            "sha256": "8de67ccf264aa52e03338a3cd058f53a4930a512f1488bc23bf75caaa2b8cd1d"
           }
         }
       ]
@@ -7820,6 +8852,10 @@ enum AppearanceCatalogData {
           "avatar"
         ]
       },
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
+      },
       "rings": [
         {
           "key": "flocons-tombants",
@@ -7980,6 +9016,10 @@ enum AppearanceCatalogData {
           "avatar"
         ]
       },
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
+      },
       "rings": [
         {
           "key": "guirlande-lumineuse",
@@ -8122,6 +9162,10 @@ enum AppearanceCatalogData {
         "surfaces": [
           "avatar"
         ]
+      },
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
       },
       "rings": [
         {
@@ -9069,6 +10113,915 @@ enum AppearanceCatalogData {
               "src": "ff9ce683d3827bb3.json",
               "bytes": 4549,
               "sha256": "ff9ce683d3827bb38363f8253124cf1aad484f7ebd059633c2e35e26367e4611"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "slug": "noel-contours-fixes",
+      "order": 24,
+      "installedByDefault": false,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "avatar"
+        ]
+      },
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
+      },
+      "rings": [
+        {
+          "key": "flocons-tombants-fixe",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#0F2747",
+              "#3B82F6",
+              "#F8FAFC",
+              "#BFE3FF"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 1,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M50 6L50 2M72 11.89L74 8.43M88.11 28L91.57 26M94 50L98 50M88.11 72L91.57 74M72 88.11L74 91.57M50 94L50 98M28 88.11L26 91.57M11.89 72L8.43 74M6 50L2 50M11.89 28L8.43 26M28 11.89L26 8.43",
+                "color": 2,
+                "opacity": 0.9,
+                "width": 0.6
+              },
+              {
+                "d": "M50 5.4L49.02 4.01L50 2.6L50.98 4.01ZM88.62 27.7L89.34 26.16L91.05 26.3L90.32 27.85ZM88.62 72.3L90.32 72.15L91.05 73.7L89.34 73.84ZM50 94.6L50.98 95.99L50 97.4L49.02 95.99ZM11.38 72.3L10.66 73.84L8.95 73.7L9.68 72.15ZM11.38 27.7L9.68 27.85L8.95 26.3L10.66 26.16Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 3,
+                "opacity": 0.8,
+                "width": 0.5
+              }
+            ]
+          }
+        },
+        {
+          "key": "couronne-de-houx-fixe",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#1F7A3A",
+              "#0E3B22",
+              "#C8102E",
+              "#FFE7A6"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M50 5.6L48.88 4.01L50 2.4L51.12 4.01ZM81.4 18.6L81.73 16.69L83.66 16.34L83.31 18.27ZM94.4 50L95.99 48.88L97.6 50L95.99 51.12ZM81.4 81.4L83.31 81.73L83.66 83.66L81.73 83.31ZM50 94.4L51.12 95.99L50 97.6L48.88 95.99ZM18.6 81.4L18.27 83.31L16.34 83.66L16.69 81.73ZM5.6 50L4.01 51.12L2.4 50L4.01 48.88ZM18.6 18.6L16.69 18.27L16.34 16.34L18.27 16.69Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M4.33 33.38A48.6 48.6 0 0 1 95.67 33.38",
+                "color": 3,
+                "opacity": 0.7,
+                "width": 0.5
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 1,
+                "opacity": 0.9,
+                "width": 0.5
+              }
+            ]
+          }
+        },
+        {
+          "key": "guirlande-lumineuse-fixe",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#0E3B22",
+              "#C8102E",
+              "#E8B547",
+              "#1F7A3A",
+              "#3B82F6"
+            ]
+          },
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 5.6
+              },
+              {
+                "d": "M50 5.8L48.74 4.02L50 2.2L51.26 4.02ZM94.2 50L95.98 48.74L97.8 50L95.98 51.26ZM50 94.2L51.26 95.98L50 97.8L48.74 95.98ZM5.8 50L4.02 51.26L2.2 50L4.02 48.74Z",
+                "color": 1,
+                "opacity": 1
+              },
+              {
+                "d": "M81.25 18.75L81.63 16.6L83.8 16.2L83.4 18.37ZM81.25 81.25L83.4 81.63L83.8 83.8L81.63 83.4ZM18.75 81.25L18.37 83.4L16.2 83.8L16.6 81.63ZM18.75 18.75L16.6 18.37L16.2 16.2L18.37 16.6Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M66.99 8.98L66.57 7.09L68.22 6.02L68.63 7.94ZM91.02 66.99L92.91 66.57L93.98 68.22L92.06 68.63ZM33.01 91.02L33.43 92.91L31.78 93.98L31.37 92.06ZM8.98 33.01L7.09 33.43L6.02 31.78L7.94 31.37Z",
+                "color": 3,
+                "opacity": 1
+              }
+            ]
+          }
+        },
+        {
+          "key": "etoile-du-sapin-fixe",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#E8B547",
+              "#9A6A17",
+              "#FFE7A6",
+              "#0E3B22"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 5.6,
+                "gradient": 0
+              },
+              {
+                "d": "M50 7.2L47.77 4.05L50 0.8L52.23 4.05Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M50 5.5L50 2.5M61.52 7.02L62.29 4.12M72.25 11.46L73.75 8.86M81.47 18.53L83.59 16.41M88.54 27.75L91.14 26.25M92.98 38.48L95.88 37.71M94.5 50L97.5 50M92.98 61.52L95.88 62.29M88.54 72.25L91.14 73.75M81.47 81.47L83.59 83.59M72.25 88.54L73.75 91.14M61.52 92.98L62.29 95.88M50 94.5L50 97.5M38.48 92.98L37.71 95.88M27.75 88.54L26.25 91.14M18.53 81.47L16.41 83.59M11.46 72.25L8.86 73.75M7.02 61.52L4.12 62.29M5.5 50L2.5 50M7.02 38.48L4.12 37.71M11.46 27.75L8.86 26.25M18.53 18.53L16.41 16.41M27.75 11.46L26.25 8.86M38.48 7.02L37.71 4.12",
+                "color": 3,
+                "opacity": 0.6,
+                "width": 0.5
+              },
+              {
+                "d": "M1 50A49 49 0 1 0 99 50 49 49 0 1 0 1 50ZM7 50A43 43 0 1 0 93 50 43 43 0 1 0 7 50Z",
+                "color": 1,
+                "opacity": 0.9,
+                "width": 0.5
+              }
+            ]
+          }
+        },
+        {
+          "key": "bonnet-du-pere-noel-fixe",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#C8102E",
+              "#7A0A1C",
+              "#F8FAFC",
+              "#E8B547"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M6.77 34.27A46 46 0 0 1 93.23 34.27",
+                "color": 2,
+                "opacity": 1,
+                "width": 6.8
+              },
+              {
+                "d": "M72.3 88.62L73.84 89.34L73.7 91.05L72.15 90.32ZM5.4 50L4.01 50.98L2.6 50L4.01 49.02ZM72.3 11.38L72.15 9.68L73.7 8.95L73.84 10.66Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 1,
+                "opacity": 0.8,
+                "width": 0.5
+              }
+            ]
+          }
+        },
+        {
+          "key": "sucre-d-orge-fixe",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#F8FAFC",
+              "#C8102E",
+              "#1F7A3A",
+              "#7A0A1C"
+            ]
+          },
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.8
+              },
+              {
+                "d": "M50 7L47.91 4.05L50 1L52.09 4.05ZM71.5 12.76L71.16 9.16L74.5 7.56L74.79 11.25ZM87.24 28.5L88.75 25.21L92.44 25.5L90.84 28.84ZM93 50L95.95 47.91L99 50L95.95 52.09ZM87.24 71.5L90.84 71.16L92.44 74.5L88.75 74.79ZM71.5 87.24L74.79 88.75L74.5 92.44L71.16 90.84ZM50 93L52.09 95.95L50 99L47.91 95.95ZM28.5 87.24L28.84 90.84L25.5 92.44L25.21 88.75ZM12.76 71.5L11.25 74.79L7.56 74.5L9.16 71.16ZM7 50L4.05 52.09L1 50L4.05 47.91ZM12.76 28.5L9.16 28.84L7.56 25.5L11.25 25.21ZM28.5 12.76L25.21 11.25L25.5 7.56L28.84 9.16Z",
+                "color": 1,
+                "opacity": 1
+              },
+              {
+                "d": "M50 95.4L51.81 97.97L50 100.6L48.19 97.97Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M0.4 50A49.6 49.6 0 1 0 99.6 50 49.6 49.6 0 1 0 0.4 50ZM7.5 50A42.5 42.5 0 1 0 92.5 50 42.5 42.5 0 1 0 7.5 50Z",
+                "color": 3,
+                "opacity": 0.8,
+                "width": 0.5
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "slug": "nouvel-an-contours",
+      "order": 25,
+      "installedByDefault": false,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "avatar"
+        ]
+      },
+      "availability": {
+        "startsAt": "2026-12-26T00:00:00Z",
+        "endsAt": "2027-01-16T00:00:00Z"
+      },
+      "rings": [
+        {
+          "key": "feux-d-artifice",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#0B1026",
+              "#EC4899",
+              "#FBBF24",
+              "#22D3EE"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.2,
+                "gradient": 0
+              },
+              {
+                "d": "M50.91 4L52.6 4M50.64 4.64L51.84 5.84M50 4.91L50 6.6M49.36 4.64L48.16 5.84M49.09 4L47.4 4M49.36 3.36L48.16 2.16M50 3.09L50 1.4M50.64 3.36L51.84 2.16M94.66 35.79L96.35 35.79M94.39 36.43L95.59 37.62M93.75 36.7L93.75 38.39M93.11 36.43L91.91 37.62M92.84 35.79L91.15 35.79M93.11 35.14L91.91 33.95M93.75 34.88L93.75 33.19M94.39 35.14L95.59 33.95M77.95 87.21L79.64 87.21M77.68 87.86L78.88 89.05M77.04 88.12L77.04 89.81M76.39 87.86L75.2 89.05M76.13 87.21L74.44 87.21M76.39 86.57L75.2 85.38M77.04 86.3L77.04 84.61M77.68 86.57L78.88 85.38M23.87 87.21L25.56 87.21M23.61 87.86L24.8 89.05M22.96 88.12L22.96 89.81M22.32 87.86L21.12 89.05M22.05 87.21L20.36 87.21M22.32 86.57L21.12 85.38M22.96 86.3L22.96 84.61M23.61 86.57L24.8 85.38M7.16 35.79L8.85 35.79M6.89 36.43L8.09 37.62M6.25 36.7L6.25 38.39M5.61 36.43L4.41 37.62M5.34 35.79L3.65 35.79M5.61 35.14L4.41 33.95M6.25 34.88L6.25 33.19M6.89 35.14L8.09 33.95",
+                "color": 2,
+                "opacity": 1,
+                "width": 0.6
+              },
+              {
+                "d": "M76.14 12.79A0.9 0.9 0 1 0 77.94 12.79A0.9 0.9 0 1 0 76.14 12.79ZM92.85 64.21A0.9 0.9 0 1 0 94.65 64.21A0.9 0.9 0 1 0 92.85 64.21ZM49.1 96A0.9 0.9 0 1 0 50.9 96A0.9 0.9 0 1 0 49.1 96ZM5.35 64.21A0.9 0.9 0 1 0 7.15 64.21A0.9 0.9 0 1 0 5.35 64.21ZM22.06 12.79A0.9 0.9 0 1 0 23.86 12.79A0.9 0.9 0 1 0 22.06 12.79Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 1,
+                "opacity": 0.9,
+                "width": 0.5
+              }
+            ]
+          }
+        },
+        {
+          "key": "pluie-de-confettis",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#FFFDF5",
+              "#F472B6",
+              "#FACC15",
+              "#2DD4BF"
+            ]
+          },
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.6
+              },
+              {
+                "d": "M48.8 4A1.2 1.2 0 1 0 51.2 4A1.2 1.2 0 1 0 48.8 4ZM88.64 27A1.2 1.2 0 1 0 91.04 27A1.2 1.2 0 1 0 88.64 27ZM88.64 73A1.2 1.2 0 1 0 91.04 73A1.2 1.2 0 1 0 88.64 73ZM48.8 96A1.2 1.2 0 1 0 51.2 96A1.2 1.2 0 1 0 48.8 96ZM8.96 73A1.2 1.2 0 1 0 11.36 73A1.2 1.2 0 1 0 8.96 73ZM8.96 27A1.2 1.2 0 1 0 11.36 27A1.2 1.2 0 1 0 8.96 27Z",
+                "color": 1,
+                "opacity": 1
+              },
+              {
+                "d": "M72 10.16A1 1 0 1 0 74 10.16A1 1 0 1 0 72 10.16ZM95 50A1 1 0 1 0 97 50A1 1 0 1 0 95 50ZM72 89.84A1 1 0 1 0 74 89.84A1 1 0 1 0 72 89.84ZM26 89.84A1 1 0 1 0 28 89.84A1 1 0 1 0 26 89.84ZM3 50A1 1 0 1 0 5 50A1 1 0 1 0 3 50ZM26 10.16A1 1 0 1 0 28 10.16A1 1 0 1 0 26 10.16Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M61.39 7.5L62.42 3.64M81.11 18.89L83.94 16.06M92.5 38.61L96.36 37.58M92.5 61.39L96.36 62.42M81.11 81.11L83.94 83.94M61.39 92.5L62.42 96.36M38.61 92.5L37.58 96.36M18.89 81.11L16.06 83.94M7.5 61.39L3.64 62.42M7.5 38.61L3.64 37.58M18.89 18.89L16.06 16.06M38.61 7.5L37.58 3.64",
+                "color": 3,
+                "opacity": 1,
+                "width": 0.9
+              },
+              {
+                "d": "M0.4 50A49.6 49.6 0 1 0 99.6 50 49.6 49.6 0 1 0 0.4 50ZM7.5 50A42.5 42.5 0 1 0 92.5 50 42.5 42.5 0 1 0 7.5 50Z",
+                "color": 1,
+                "opacity": 0.8,
+                "width": 0.5
+              }
+            ]
+          }
+        },
+        {
+          "key": "cadran-de-minuit",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#1E1B4B",
+              "#D4AF37",
+              "#E2E8F0",
+              "#4338CA"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 3,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M50 5L50 2.6M54.7 5.25L54.95 2.86M59.36 5.98L59.86 3.64M63.91 7.2L64.65 4.92M68.3 8.89L69.28 6.7M72.5 11.03L73.7 8.95M76.45 13.59L77.86 11.65M80.11 16.56L81.72 14.77M83.44 19.89L85.23 18.28M86.41 23.55L88.35 22.14M88.97 27.5L91.05 26.3M91.11 31.7L93.3 30.72M92.8 36.09L95.08 35.35M94.02 40.64L96.36 40.14M94.75 45.3L97.14 45.05M95 50L97.4 50M94.75 54.7L97.14 54.95M94.02 59.36L96.36 59.86M92.8 63.91L95.08 64.65M91.11 68.3L93.3 69.28M88.97 72.5L91.05 73.7M86.41 76.45L88.35 77.86M83.44 80.11L85.23 81.72M80.11 83.44L81.72 85.23M76.45 86.41L77.86 88.35M72.5 88.97L73.7 91.05M68.3 91.11L69.28 93.3M63.91 92.8L64.65 95.08M59.36 94.02L59.86 96.36M54.7 94.75L54.95 97.14M50 95L50 97.4M45.3 94.75L45.05 97.14M40.64 94.02L40.14 96.36M36.09 92.8L35.35 95.08M31.7 91.11L30.72 93.3M27.5 88.97L26.3 91.05M23.55 86.41L22.14 88.35M19.89 83.44L18.28 85.23M16.56 80.11L14.77 81.72M13.59 76.45L11.65 77.86M11.03 72.5L8.95 73.7M8.89 68.3L6.7 69.28M7.2 63.91L4.92 64.65M5.98 59.36L3.64 59.86M5.25 54.7L2.86 54.95M5 50L2.6 50M5.25 45.3L2.86 45.05M5.98 40.64L3.64 40.14M7.2 36.09L4.92 35.35M8.89 31.7L6.7 30.72M11.03 27.5L8.95 26.3M13.59 23.55L11.65 22.14M16.56 19.89L14.77 18.28M19.89 16.56L18.28 14.77M23.55 13.59L22.14 11.65M27.5 11.03L26.3 8.95M31.7 8.89L30.72 6.7M36.09 7.2L35.35 4.92M40.64 5.98L40.14 3.64M45.3 5.25L45.05 2.86",
+                "color": 2,
+                "opacity": 0.55,
+                "width": 0.25
+              },
+              {
+                "d": "M50 6.6L50 1.4M71.7 12.41L74.3 7.91M87.59 28.3L92.09 25.7M93.4 50L98.6 50M87.59 71.7L92.09 74.3M71.7 87.59L74.3 92.09M50 93.4L50 98.6M28.3 87.59L25.7 92.09M12.41 71.7L7.91 74.3M6.6 50L1.4 50M12.41 28.3L7.91 25.7M28.3 12.41L25.7 7.91",
+                "color": 1,
+                "opacity": 1,
+                "width": 0.9
+              },
+              {
+                "d": "M50 6L48.6 4.02L50 2L51.4 4.02ZM94 50L95.98 48.6L98 50L95.98 51.4ZM50 94L51.4 95.98L50 98L48.6 95.98ZM6 50L4.02 51.4L2 50L4.02 48.6Z",
+                "color": 1,
+                "opacity": 1
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 1,
+                "opacity": 0.9,
+                "width": 0.5
+              }
+            ]
+          }
+        },
+        {
+          "key": "coupe-de-champagne",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#F7E7CE",
+              "#D4A017",
+              "#8A5A00",
+              "#FFFDF5"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 1,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.6,
+                "gradient": 0
+              },
+              {
+                "d": "M49.2 4A0.8 0.8 0 1 0 50.8 4A0.8 0.8 0 1 0 49.2 4ZM64.93 6.77A0.8 0.8 0 1 0 66.53 6.77A0.8 0.8 0 1 0 64.93 6.77ZM78.77 14.76A0.8 0.8 0 1 0 80.37 14.76A0.8 0.8 0 1 0 78.77 14.76ZM89.04 27A0.8 0.8 0 1 0 90.64 27A0.8 0.8 0 1 0 89.04 27ZM94.5 42.01A0.8 0.8 0 1 0 96.1 42.01A0.8 0.8 0 1 0 94.5 42.01ZM94.5 57.99A0.8 0.8 0 1 0 96.1 57.99A0.8 0.8 0 1 0 94.5 57.99ZM89.04 73A0.8 0.8 0 1 0 90.64 73A0.8 0.8 0 1 0 89.04 73ZM78.77 85.24A0.8 0.8 0 1 0 80.37 85.24A0.8 0.8 0 1 0 78.77 85.24ZM64.93 93.23A0.8 0.8 0 1 0 66.53 93.23A0.8 0.8 0 1 0 64.93 93.23ZM49.2 96A0.8 0.8 0 1 0 50.8 96A0.8 0.8 0 1 0 49.2 96ZM33.47 93.23A0.8 0.8 0 1 0 35.07 93.23A0.8 0.8 0 1 0 33.47 93.23ZM19.63 85.24A0.8 0.8 0 1 0 21.23 85.24A0.8 0.8 0 1 0 19.63 85.24ZM9.36 73A0.8 0.8 0 1 0 10.96 73A0.8 0.8 0 1 0 9.36 73ZM3.9 57.99A0.8 0.8 0 1 0 5.5 57.99A0.8 0.8 0 1 0 3.9 57.99ZM3.9 42.01A0.8 0.8 0 1 0 5.5 42.01A0.8 0.8 0 1 0 3.9 42.01ZM9.36 27A0.8 0.8 0 1 0 10.96 27A0.8 0.8 0 1 0 9.36 27ZM19.63 14.76A0.8 0.8 0 1 0 21.23 14.76A0.8 0.8 0 1 0 19.63 14.76ZM33.47 6.77A0.8 0.8 0 1 0 35.07 6.77A0.8 0.8 0 1 0 33.47 6.77Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M48.4 4A1.6 1.6 0 1 0 51.6 4A1.6 1.6 0 1 0 48.4 4ZM88.24 73A1.6 1.6 0 1 0 91.44 73A1.6 1.6 0 1 0 88.24 73ZM8.56 73A1.6 1.6 0 1 0 11.76 73A1.6 1.6 0 1 0 8.56 73Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M0.4 50A49.6 49.6 0 1 0 99.6 50 49.6 49.6 0 1 0 0.4 50ZM7.5 50A42.5 42.5 0 1 0 92.5 50 42.5 42.5 0 1 0 7.5 50Z",
+                "color": 2,
+                "opacity": 0.9,
+                "width": 0.5
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "slug": "nouvel-an-contours-vifs",
+      "order": 26,
+      "installedByDefault": false,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "avatar"
+        ]
+      },
+      "availability": {
+        "startsAt": "2026-12-26T00:00:00Z",
+        "endsAt": "2027-01-16T00:00:00Z"
+      },
+      "rings": [
+        {
+          "key": "bouquet-final",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#0B1026",
+              "#7C3AED",
+              "#FBBF24",
+              "#22D3EE"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M50 5.5L48.95 4.01L50 2.5L51.05 4.01ZM81.47 18.53L81.78 16.74L83.59 16.41L83.26 18.22ZM94.5 50L95.99 48.95L97.5 50L95.99 51.05ZM81.47 81.47L83.26 81.78L83.59 83.59L81.78 83.26ZM50 94.5L51.05 95.99L50 97.5L48.95 95.99ZM18.53 81.47L18.22 83.26L16.41 83.59L16.74 81.78ZM5.5 50L4.01 51.05L2.5 50L4.01 48.95ZM18.53 18.53L16.74 18.22L16.41 16.41L18.22 16.74Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M58.58 6.85L59.36 2.92M74.45 13.42L76.67 10.09M86.58 25.55L89.91 23.33M93.15 41.42L97.08 40.64M93.15 58.58L97.08 59.36M86.58 74.45L89.91 76.67M74.45 86.58L76.67 89.91M58.58 93.15L59.36 97.08M41.42 93.15L40.64 97.08M25.55 86.58L23.33 89.91M13.42 74.45L10.09 76.67M6.85 58.58L2.92 59.36M6.85 41.42L2.92 40.64M13.42 25.55L10.09 23.33M25.55 13.42L23.33 10.09M41.42 6.85L40.64 2.92",
+                "color": 3,
+                "opacity": 0.75,
+                "width": 0.5
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 2,
+                "opacity": 0.85,
+                "width": 0.5
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "519c4d754ddc8e0f.json",
+              "bytes": 1461,
+              "sha256": "519c4d754ddc8e0fd84e7229f48a6c36edd41eb2583827347cb46c886fc9e78e"
+            },
+            "front": {
+              "src": "003a7a2a158eaf8f.json",
+              "bytes": 19290,
+              "sha256": "003a7a2a158eaf8fe6fe0107df38be3d5acecb22e19f49829a1829b672cb4190"
+            }
+          }
+        },
+        {
+          "key": "envol-de-confettis",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#7C3AED",
+              "#F472B6",
+              "#FACC15",
+              "#2DD4BF"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M50 5.6L48.88 4.01L50 2.4L51.12 4.01ZM88.45 27.8L89.27 26.04L91.22 26.2L90.38 27.97ZM88.45 72.2L90.38 72.03L91.22 73.8L89.27 73.96ZM50 94.4L51.12 95.99L50 97.6L48.88 95.99ZM11.55 72.2L10.73 73.96L8.78 73.8L9.62 72.03ZM11.55 27.8L9.62 27.97L8.78 26.2L10.73 26.04Z",
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "d": "M72.3 11.38L72.15 9.68L73.7 8.95L73.84 10.66ZM94.6 50L95.99 49.02L97.4 50L95.99 50.98ZM72.3 88.62L73.84 89.34L73.7 91.05L72.15 90.32ZM27.7 88.62L27.85 90.32L26.3 91.05L26.16 89.34ZM5.4 50L4.01 50.98L2.6 50L4.01 49.02ZM27.7 11.38L26.16 10.66L26.3 8.95L27.85 9.68Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 1,
+                "opacity": 0.85,
+                "width": 0.5
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "abd72b09e5c1d706.json",
+              "bytes": 1468,
+              "sha256": "abd72b09e5c1d70689f2e28448dd39c8745ba230e5f25e491329f443dd350f4a"
+            },
+            "front": {
+              "src": "96a29c8ed611e64f.json",
+              "bytes": 22199,
+              "sha256": "96a29c8ed611e64f88db76518cfbe7db073d6eef05763e6a4c90740c6b41eedf"
+            }
+          }
+        },
+        {
+          "key": "minuit-sonne",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#1E1B4B",
+              "#4338CA",
+              "#E2E8F0",
+              "#D4AF37"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M50 6.4L50 1.6M71.8 12.24L74.2 8.08M87.76 28.2L91.92 25.8M93.6 50L98.4 50M87.76 71.8L91.92 74.2M71.8 87.76L74.2 91.92M50 93.6L50 98.4M28.2 87.76L25.8 91.92M12.24 71.8L8.08 74.2M6.4 50L1.6 50M12.24 28.2L8.08 25.8M28.2 12.24L25.8 8.08",
+                "color": 2,
+                "opacity": 0.9,
+                "width": 0.8
+              },
+              {
+                "d": "M50 7L47.91 4.05L50 1L52.09 4.05Z",
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 3,
+                "opacity": 0.8,
+                "width": 0.5
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "27d7934ad53e027a.json",
+              "bytes": 1461,
+              "sha256": "27d7934ad53e027a56386475e98177b1d9f063b309b2a651c3cb33ced8abbded"
+            },
+            "front": {
+              "src": "1541182329644f2f.json",
+              "bytes": 7277,
+              "sha256": "1541182329644f2f7e89612daee62c765d87d803a376b3b98ac29c02a757b6bb"
+            }
+          }
+        },
+        {
+          "key": "champagne-petillant",
+          "stroke": {
+            "style": "none",
+            "width": 0.04,
+            "colors": [
+              "#D4A017",
+              "#8A5A00",
+              "#F7E7CE",
+              "#FFFDF5"
+            ]
+          },
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 1,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.45
+                },
+                {
+                  "color": 2,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "ornament": {
+            "paths": [
+              {
+                "d": "M4 50A46 46 0 1 0 96 50 46 46 0 1 0 4 50Z",
+                "color": 0,
+                "opacity": 1,
+                "width": 6.4,
+                "gradient": 0
+              },
+              {
+                "d": "M9.16 27A1 1 0 1 0 11.16 27A1 1 0 1 0 9.16 27ZM26 10.16A1 1 0 1 0 28 10.16A1 1 0 1 0 26 10.16ZM72 10.16A1 1 0 1 0 74 10.16A1 1 0 1 0 72 10.16ZM88.84 27A1 1 0 1 0 90.84 27A1 1 0 1 0 88.84 27ZM88.84 73A1 1 0 1 0 90.84 73A1 1 0 1 0 88.84 73ZM72 89.84A1 1 0 1 0 74 89.84A1 1 0 1 0 72 89.84ZM26 89.84A1 1 0 1 0 28 89.84A1 1 0 1 0 26 89.84ZM9.16 73A1 1 0 1 0 11.16 73A1 1 0 1 0 9.16 73Z",
+                "color": 3,
+                "opacity": 0.9
+              },
+              {
+                "d": "M4.33 33.38A48.6 48.6 0 0 1 95.67 33.38",
+                "color": 2,
+                "opacity": 0.8,
+                "width": 0.5
+              },
+              {
+                "d": "M0.6 50A49.4 49.4 0 1 0 99.4 50 49.4 49.4 0 1 0 0.6 50ZM7.3 50A42.7 42.7 0 1 0 92.7 50 42.7 42.7 0 1 0 7.3 50Z",
+                "color": 1,
+                "opacity": 0.9,
+                "width": 0.5
+              }
+            ]
+          },
+          "decor": {
+            "reach": 1.4,
+            "back": {
+              "src": "85902e0ea085c8c8.json",
+              "bytes": 4806,
+              "sha256": "85902e0ea085c8c8d5bfc82273bb9b2b8cad490ed92e948e8abf99e7f65b4199"
+            },
+            "front": {
+              "src": "c53d7ea17d52a02b.json",
+              "bytes": 14057,
+              "sha256": "c53d7ea17d52a02ba830207ad1e551c3eab49dca7b96d90a7cdd896a344eaf6a"
             }
           }
         }
@@ -19249,6 +21202,10 @@ enum AppearanceCatalogData {
           "banner"
         ]
       },
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
+      },
       "frames": [
         {
           "key": "flocons-tombants",
@@ -19628,6 +21585,10 @@ enum AppearanceCatalogData {
         "surfaces": [
           "banner"
         ]
+      },
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
       },
       "frames": [
         {
@@ -20036,6 +21997,10 @@ enum AppearanceCatalogData {
         "surfaces": [
           "banner"
         ]
+      },
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
       },
       "frames": [
         {
@@ -21705,6 +23670,2646 @@ enum AppearanceCatalogData {
           ]
         }
       ]
+    },
+    {
+      "slug": "noel-cadres-fixes",
+      "order": 22,
+      "installedByDefault": false,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "banner"
+        ]
+      },
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
+      },
+      "frames": [
+        {
+          "key": "flocons-tombants-fixe",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#0F2747",
+            "#3B82F6",
+            "#F8FAFC",
+            "#BFE3FF"
+          ],
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 1,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "border": {
+            "width": 5.6,
+            "color": 0,
+            "gradient": 0,
+            "opacity": 0.9,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "inset": 5,
+                "width": 0.4,
+                "color": 2,
+                "opacity": 0.8
+              }
+            ]
+          },
+          "reach": {
+            "corner": 16,
+            "cartouche": {
+              "width": 20,
+              "depth": 19,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M8 8L8 1.4M6.5 3.1L8 4.4L9.5 3.1M8 8L13.7 4.7M11.5 4.2L11.1 6.2L13 6.9M8 8L13.7 11.3M13 9.1L11.1 9.8L11.5 11.8M8 8L8 14.6M9.5 12.9L8 11.6L6.5 12.9M8 8L2.3 11.3M4.5 11.8L4.9 9.8L3 9.1M8 8L2.3 4.7M3 6.9L4.9 6.2L4.5 4.2",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 0.6,
+                  "group": "c0"
+                },
+                {
+                  "d": "M8 7C8.55 7 9 7.45 9 8C9 8.55 8.55 9 8 9C7.45 9 7 8.55 7 8C7 7.45 7.45 7 8 7Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M8 92L8 98.6M6.5 96.9L8 95.6L9.5 96.9M8 92L13.7 95.3M11.5 95.8L11.1 93.8L13 93.1M8 92L13.7 88.7M13 90.9L11.1 90.2L11.5 88.2M8 92L8 85.4M9.5 87.1L8 88.4L6.5 87.1M8 92L2.3 88.7M4.5 88.2L4.9 90.2L3 90.9M8 92L2.3 95.3M3 93.1L4.9 93.8L4.5 95.8",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 0.6,
+                  "group": "c3"
+                },
+                {
+                  "d": "M8 93C8.55 93 9 92.55 9 92C9 91.45 8.55 91 8 91C7.45 91 7 91.45 7 92C7 92.55 7.45 93 8 93Z",
+                  "color": 3,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M150 9.6L150 1.2M148.1 3.4L150 5L151.9 3.4M150 9.6L157.3 5.4M154.4 4.8L154 7.3L156.4 8.2M150 9.6L157.3 13.8M156.4 11L154 11.9L154.4 14.4M150 9.6L150 18M151.9 15.8L150 14.2L148.1 15.8M150 9.6L142.7 13.8M145.6 14.4L146 11.9L143.6 11M150 9.6L142.7 5.4M143.6 8.2L146 7.3L145.6 4.8",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 0.75,
+                  "group": "flocon"
+                },
+                {
+                  "d": "M150 8L151.6 9.6L150 11.2L148.4 9.6L150 8Z",
+                  "color": 3,
+                  "opacity": 1,
+                  "group": "flocon"
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M292 8L292 1.4M293.5 3.1L292 4.4L290.5 3.1M292 8L286.3 4.7M288.5 4.2L288.9 6.2L287 6.9M292 8L286.3 11.3M287 9.1L288.9 9.8L288.5 11.8M292 8L292 14.6M290.5 12.9L292 11.6L293.5 12.9M292 8L297.7 11.3M295.5 11.8L295.1 9.8L297 9.1M292 8L297.7 4.7M297 6.9L295.1 6.2L295.5 4.2",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 0.6,
+                  "group": "c1"
+                },
+                {
+                  "d": "M292 7C291.45 7 291 7.45 291 8C291 8.55 291.45 9 292 9C292.55 9 293 8.55 293 8C293 7.45 292.55 7 292 7Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M292 92L292 98.6M293.5 96.9L292 95.6L290.5 96.9M292 92L286.3 95.3M288.5 95.8L288.9 93.8L287 93.1M292 92L286.3 88.7M287 90.9L288.9 90.2L288.5 88.2M292 92L292 85.4M290.5 87.1L292 88.4L293.5 87.1M292 92L297.7 88.7M295.5 88.2L295.1 90.2L297 90.9M292 92L297.7 95.3M297 93.1L295.1 93.8L295.5 95.8",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 0.6,
+                  "group": "c2"
+                },
+                {
+                  "d": "M292 93C291.45 93 291 92.55 291 92C291 91.45 291.45 91 292 91C292.55 91 293 91.45 293 92C293 92.55 292.55 93 292 93Z",
+                  "color": 3,
+                  "opacity": 1
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 12,
+              "from": 17,
+              "to": 17,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M20 2.8L20 1.1M19.6 1.5L20 1.9L20.4 1.5M20 2.8L21.5 2M20.9 1.8L20.8 2.3L21.3 2.5M20 2.8L21.5 3.6M21.3 3.1L20.8 3.3L20.9 3.8M20 2.8L20 4.5M20.4 4.1L20 3.7L19.6 4.1M20 2.8L18.5 3.6M19.1 3.8L19.2 3.3L18.7 3.1M20 2.8L18.5 1.9M18.7 2.5L19.2 2.3L19.1 1.8M20 97.2L20 98.9M19.6 98.5L20 98.1L20.4 98.5M20 97.2L21.5 98M20.9 98.2L20.8 97.7L21.3 97.5M20 97.2L21.5 96.4M21.3 96.9L20.8 96.7L20.9 96.2M20 97.2L20 95.5M20.4 95.9L20 96.3L19.6 95.9M20 97.2L18.5 96.4M19.1 96.2L19.2 96.7L18.7 96.9M20 97.2L18.5 98.1M18.7 97.5L19.2 97.7L19.1 98.2",
+                  "color": 2,
+                  "opacity": 0.9,
+                  "width": 0.35,
+                  "group": "neige-a"
+                },
+                {
+                  "d": "M26 2.8C26.33 2.8 26.6 3.07 26.6 3.4C26.6 3.73 26.33 4 26 4C25.67 4 25.4 3.73 25.4 3.4C25.4 3.07 25.67 2.8 26 2.8ZM26 97.2C26.33 97.2 26.6 96.93 26.6 96.6C26.6 96.27 26.33 96 26 96C25.67 96 25.4 96.27 25.4 96.6C25.4 96.93 25.67 97.2 26 97.2Z",
+                  "color": 3,
+                  "opacity": 0.9,
+                  "group": "neige-b"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "couronne-de-houx-fixe",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#1F7A3A",
+            "#0E3B22",
+            "#C8102E",
+            "#FFE7A6"
+          ],
+          "border": {
+            "width": 5.4,
+            "color": 1,
+            "opacity": 0.92,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 3,
+                "opacity": 0.9
+              },
+              {
+                "inset": 4.8,
+                "width": 0.4,
+                "color": 2,
+                "opacity": 1
+              }
+            ]
+          },
+          "reach": {
+            "corner": 19,
+            "cartouche": {
+              "width": 30,
+              "depth": 14,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M4.6 4.6L7.3 1.6L9.4 3L11.4 1.1L13.4 2.8L15.5 1.3L18.2 4.6L15.5 7.9L13.4 6.4L11.4 8.1L9.4 6.2L7.3 7.6L4.6 4.6ZM4.6 4.6L7.6 7.3L6.2 9.4L8.1 11.4L6.4 13.4L7.9 15.5L4.6 18.2L1.3 15.5L2.8 13.4L1.1 11.4L3 9.4L1.6 7.3L4.6 4.6Z",
+                  "color": 0,
+                  "opacity": 1
+                },
+                {
+                  "d": "M4.6 4.6L7.9 4.4L8.3 6.4L10.5 6.5L10.7 8.6L12.7 9L12.4 12.4L9 12.7L8.6 10.7L6.5 10.5L6.4 8.3L4.4 7.9L4.6 4.6Z",
+                  "color": 1,
+                  "opacity": 1
+                },
+                {
+                  "d": "M3.48 3.1C4.53 3.1 5.38 3.95 5.38 5C5.38 6.05 4.53 6.9 3.48 6.9C2.43 6.9 1.58 6.05 1.58 5C1.58 3.95 2.43 3.1 3.48 3.1ZM6.52 3.67C7.57 3.67 8.42 4.52 8.42 5.57C8.42 6.62 7.57 7.47 6.52 7.47C5.47 7.47 4.62 6.62 4.62 5.57C4.62 4.52 5.47 3.67 6.52 3.67ZM5 1.39C6.05 1.39 6.9 2.24 6.9 3.29C6.9 4.34 6.05 5.19 5 5.19C3.95 5.19 3.1 4.34 3.1 3.29C3.1 2.24 3.95 1.39 5 1.39Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c0"
+                },
+                {
+                  "d": "M4.6 95.4L7.3 98.4L9.4 97L11.4 98.9L13.4 97.2L15.5 98.7L18.2 95.4L15.5 92.1L13.4 93.6L11.4 91.9L9.4 93.8L7.3 92.4L4.6 95.4ZM4.6 95.4L7.6 92.7L6.2 90.6L8.1 88.6L6.4 86.6L7.9 84.5L4.6 81.8L1.3 84.5L2.8 86.6L1.1 88.6L3 90.6L1.6 92.7L4.6 95.4Z",
+                  "color": 0,
+                  "opacity": 1
+                },
+                {
+                  "d": "M4.6 95.4L7.9 95.6L8.3 93.6L10.5 93.5L10.7 91.4L12.7 91L12.4 87.6L9 87.3L8.6 89.3L6.5 89.5L6.4 91.7L4.4 92.1L4.6 95.4Z",
+                  "color": 1,
+                  "opacity": 1
+                },
+                {
+                  "d": "M3.48 96.9C4.53 96.9 5.38 96.05 5.38 95C5.38 93.95 4.53 93.1 3.48 93.1C2.43 93.1 1.58 93.95 1.58 95C1.58 96.05 2.43 96.9 3.48 96.9ZM6.52 96.33C7.57 96.33 8.42 95.48 8.42 94.43C8.42 93.38 7.57 92.53 6.52 92.53C5.47 92.53 4.62 93.38 4.62 94.43C4.62 95.48 5.47 96.33 6.52 96.33ZM5 98.61C6.05 98.61 6.9 97.76 6.9 96.71C6.9 95.66 6.05 94.81 5 94.81C3.95 94.81 3.1 95.66 3.1 96.71C3.1 97.76 3.95 98.61 5 98.61Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c3"
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M148.4 5L146.2 7.8L144.3 6.8L142.7 8.6L140.8 7.2L139.1 8.7L136.4 6L138.6 3L140.5 4.1L142.2 2.4L144.1 3.9L145.8 2.6L148.4 5ZM151.6 5L154.2 2.6L155.9 3.9L157.8 2.4L159.5 4.1L161.4 3L163.6 6L160.9 8.7L159.2 7.2L157.3 8.6L155.7 6.8L153.8 7.8L151.6 5Z",
+                  "color": 0,
+                  "opacity": 1
+                },
+                {
+                  "d": "M149 6L148.7 8.7L147 8.7L146.7 10.5L144.9 10.3L144.3 11.9L141.6 11.2L141.9 8.4L143.5 8.4L144 6.7L145.8 6.9L146.4 5.4L149 6ZM151 6L153.6 5.4L154.2 6.9L156 6.7L156.5 8.4L158.1 8.4L158.4 11.2L155.7 11.9L155.1 10.3L153.3 10.5L153 8.7L151.3 8.7L151 6Z",
+                  "color": 1,
+                  "opacity": 1
+                },
+                {
+                  "d": "M148.32 4.1C149.48 4.1 150.42 5.04 150.42 6.2C150.42 7.36 149.48 8.3 148.32 8.3C147.16 8.3 146.22 7.36 146.22 6.2C146.22 5.04 147.16 4.1 148.32 4.1ZM151.68 4.73C152.84 4.73 153.78 5.67 153.78 6.83C153.78 7.99 152.84 8.93 151.68 8.93C150.52 8.93 149.58 7.99 149.58 6.83C149.58 5.67 150.52 4.73 151.68 4.73ZM150 2.21C151.16 2.21 152.1 3.15 152.1 4.31C152.1 5.47 151.16 6.41 150 6.41C148.84 6.41 147.9 5.47 147.9 4.31C147.9 3.15 148.84 2.21 150 2.21Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "baies"
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M295.4 4.6L292.7 1.6L290.6 3L288.6 1.1L286.6 2.8L284.5 1.3L281.8 4.6L284.5 7.9L286.6 6.4L288.6 8.1L290.6 6.2L292.7 7.6L295.4 4.6ZM295.4 4.6L292.4 7.3L293.8 9.4L291.9 11.4L293.6 13.4L292.1 15.5L295.4 18.2L298.7 15.5L297.2 13.4L298.9 11.4L297 9.4L298.4 7.3L295.4 4.6Z",
+                  "color": 0,
+                  "opacity": 1
+                },
+                {
+                  "d": "M295.4 4.6L292.1 4.4L291.7 6.4L289.5 6.5L289.3 8.6L287.3 9L287.6 12.4L291 12.7L291.4 10.7L293.5 10.5L293.6 8.3L295.6 7.9L295.4 4.6Z",
+                  "color": 1,
+                  "opacity": 1
+                },
+                {
+                  "d": "M296.52 3.1C295.47 3.1 294.62 3.95 294.62 5C294.62 6.05 295.47 6.9 296.52 6.9C297.57 6.9 298.42 6.05 298.42 5C298.42 3.95 297.57 3.1 296.52 3.1ZM293.48 3.67C292.43 3.67 291.58 4.52 291.58 5.57C291.58 6.62 292.43 7.47 293.48 7.47C294.53 7.47 295.38 6.62 295.38 5.57C295.38 4.52 294.53 3.67 293.48 3.67ZM295 1.39C293.95 1.39 293.1 2.24 293.1 3.29C293.1 4.34 293.95 5.19 295 5.19C296.05 5.19 296.9 4.34 296.9 3.29C296.9 2.24 296.05 1.39 295 1.39Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c1"
+                },
+                {
+                  "d": "M295.4 95.4L292.7 98.4L290.6 97L288.6 98.9L286.6 97.2L284.5 98.7L281.8 95.4L284.5 92.1L286.6 93.6L288.6 91.9L290.6 93.8L292.7 92.4L295.4 95.4ZM295.4 95.4L292.4 92.7L293.8 90.6L291.9 88.6L293.6 86.6L292.1 84.5L295.4 81.8L298.7 84.5L297.2 86.6L298.9 88.6L297 90.6L298.4 92.7L295.4 95.4Z",
+                  "color": 0,
+                  "opacity": 1
+                },
+                {
+                  "d": "M295.4 95.4L292.1 95.6L291.7 93.6L289.5 93.5L289.3 91.4L287.3 91L287.6 87.6L291 87.3L291.4 89.3L293.5 89.5L293.6 91.7L295.6 92.1L295.4 95.4Z",
+                  "color": 1,
+                  "opacity": 1
+                },
+                {
+                  "d": "M296.52 96.9C295.47 96.9 294.62 96.05 294.62 95C294.62 93.95 295.47 93.1 296.52 93.1C297.57 93.1 298.42 93.95 298.42 95C298.42 96.05 297.57 96.9 296.52 96.9ZM293.48 96.33C292.43 96.33 291.58 95.48 291.58 94.43C291.58 93.38 292.43 92.53 293.48 92.53C294.53 92.53 295.38 93.38 295.38 94.43C295.38 95.48 294.53 96.33 293.48 96.33ZM295 98.61C293.95 98.61 293.1 97.76 293.1 96.71C293.1 95.66 293.95 94.81 295 94.81C296.05 94.81 296.9 95.66 296.9 96.71C296.9 97.76 296.05 98.61 295 98.61Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c2"
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 10,
+              "from": 20,
+              "to": 20,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M25 1.8C25.5 1.8 25.9 2.2 25.9 2.7C25.9 3.2 25.5 3.6 25 3.6C24.5 3.6 24.1 3.2 24.1 2.7C24.1 2.2 24.5 1.8 25 1.8ZM25 98.2C25.5 98.2 25.9 97.8 25.9 97.3C25.9 96.8 25.5 96.4 25 96.4C24.5 96.4 24.1 96.8 24.1 97.3C24.1 97.8 24.5 98.2 25 98.2Z",
+                  "color": 2,
+                  "opacity": 0.95,
+                  "group": "grains"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "guirlande-lumineuse-fixe",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#0E3B22",
+            "#C8102E",
+            "#E8B547",
+            "#1F7A3A",
+            "#3B82F6"
+          ],
+          "border": {
+            "width": 6.6,
+            "color": 0,
+            "opacity": 0.92,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 2,
+                "opacity": 1
+              }
+            ]
+          },
+          "reach": {
+            "corner": 14
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M3 14C3 14 4.4 26 4.4 32C4.4 38 3 44 3 50C3 56 4.4 62 4.4 68C4.4 74 3 86 3 86",
+                  "color": 3,
+                  "opacity": 1,
+                  "width": 0.5
+                },
+                {
+                  "d": "M3.6 22C3.6 22 5.1 22.8 5.1 23.4C5.1 24 4.1 25.4 3.6 25.4C3.1 25.4 2.1 24 2.1 23.4C2.1 22.8 3.6 22 3.6 22ZM3.6 46C3.6 46 5.1 46.8 5.1 47.4C5.1 48 4.1 49.4 3.6 49.4C3.1 49.4 2.1 48 2.1 47.4C2.1 46.8 3.6 46 3.6 46ZM3.6 70C3.6 70 5.1 70.8 5.1 71.4C5.1 72 4.1 73.4 3.6 73.4C3.1 73.4 2.1 72 2.1 71.4C2.1 70.8 3.6 70 3.6 70Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "ampoules-1"
+                },
+                {
+                  "d": "M0.6 12C0.6 12 1.1 4.9 3 3C4.9 1.1 12 0.6 12 0.6",
+                  "color": 0,
+                  "opacity": 1,
+                  "width": 0.8
+                },
+                {
+                  "d": "M2.4 7C2.4 7 4.3 8 4.3 8.7C4.3 9.4 3 11.1 2.4 11.1C1.8 11.1 0.5 9.4 0.5 8.7C0.5 8 2.4 7 2.4 7Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c0"
+                },
+                {
+                  "d": "M6.6 2.6C6.6 2.6 8.5 3.6 8.5 4.3C8.5 5 7.2 6.7 6.6 6.7C6 6.7 4.7 5 4.7 4.3C4.7 3.6 6.6 2.6 6.6 2.6Z",
+                  "color": 4,
+                  "opacity": 1,
+                  "group": "c0"
+                },
+                {
+                  "d": "M0.6 88C0.6 88 1.1 95.1 3 97C4.9 98.9 12 99.4 12 99.4",
+                  "color": 0,
+                  "opacity": 1,
+                  "width": 0.8
+                },
+                {
+                  "d": "M2.4 93C2.4 93 4.3 92 4.3 91.3C4.3 90.6 3 88.9 2.4 88.9C1.8 88.9 0.5 90.6 0.5 91.3C0.5 92 2.4 93 2.4 93Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c3"
+                },
+                {
+                  "d": "M6.6 97.4C6.6 97.4 8.5 96.4 8.5 95.7C8.5 95 7.2 93.3 6.6 93.3C6 93.3 4.7 95 4.7 95.7C4.7 96.4 6.6 97.4 6.6 97.4Z",
+                  "color": 4,
+                  "opacity": 1,
+                  "group": "c3"
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M297 14C297 14 295.6 26 295.6 32C295.6 38 297 44 297 50C297 56 295.6 62 295.6 68C295.6 74 297 86 297 86",
+                  "color": 3,
+                  "opacity": 1,
+                  "width": 0.5
+                },
+                {
+                  "d": "M296.4 22C296.4 22 294.9 22.8 294.9 23.4C294.9 24 295.9 25.4 296.4 25.4C296.9 25.4 297.9 24 297.9 23.4C297.9 22.8 296.4 22 296.4 22ZM296.4 46C296.4 46 294.9 46.8 294.9 47.4C294.9 48 295.9 49.4 296.4 49.4C296.9 49.4 297.9 48 297.9 47.4C297.9 46.8 296.4 46 296.4 46ZM296.4 70C296.4 70 294.9 70.8 294.9 71.4C294.9 72 295.9 73.4 296.4 73.4C296.9 73.4 297.9 72 297.9 71.4C297.9 70.8 296.4 70 296.4 70Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "ampoules-1"
+                },
+                {
+                  "d": "M299.4 12C299.4 12 298.9 4.9 297 3C295.1 1.1 288 0.6 288 0.6",
+                  "color": 0,
+                  "opacity": 1,
+                  "width": 0.8
+                },
+                {
+                  "d": "M297.6 7C297.6 7 295.7 8 295.7 8.7C295.7 9.4 297 11.1 297.6 11.1C298.2 11.1 299.5 9.4 299.5 8.7C299.5 8 297.6 7 297.6 7Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c1"
+                },
+                {
+                  "d": "M293.4 2.6C293.4 2.6 291.5 3.6 291.5 4.3C291.5 5 292.8 6.7 293.4 6.7C294 6.7 295.3 5 295.3 4.3C295.3 3.6 293.4 2.6 293.4 2.6Z",
+                  "color": 4,
+                  "opacity": 1,
+                  "group": "c1"
+                },
+                {
+                  "d": "M299.4 88C299.4 88 298.9 95.1 297 97C295.1 98.9 288 99.4 288 99.4",
+                  "color": 0,
+                  "opacity": 1,
+                  "width": 0.8
+                },
+                {
+                  "d": "M297.6 93C297.6 93 295.7 92 295.7 91.3C295.7 90.6 297 88.9 297.6 88.9C298.2 88.9 299.5 90.6 299.5 91.3C299.5 92 297.6 93 297.6 93Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c2"
+                },
+                {
+                  "d": "M293.4 97.4C293.4 97.4 291.5 96.4 291.5 95.7C291.5 95 292.8 93.3 293.4 93.3C294 93.3 295.3 95 295.3 95.7C295.3 96.4 293.4 97.4 293.4 97.4Z",
+                  "color": 4,
+                  "opacity": 1,
+                  "group": "c2"
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 24,
+              "from": 14,
+              "to": 14,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M14 1.2C14 1.2 18 2 20 2.3C22 2.6 24 2.8 26 2.8C28 2.8 30 2.6 32 2.3C34 2 38 1.2 38 1.2M14 98.8C14 98.8 18 98 20 97.7C22 97.4 24 97.2 26 97.2C28 97.2 30 97.4 32 97.7C34 98 38 98.8 38 98.8",
+                  "color": 3,
+                  "opacity": 1,
+                  "width": 0.5
+                },
+                {
+                  "d": "M18 2C18 2 19.8 3 19.8 3.6C19.8 4.2 18.6 5.8 18 5.8C17.4 5.8 16.2 4.2 16.2 3.6C16.2 3 18 2 18 2ZM18 98C18 98 19.8 97 19.8 96.4C19.8 95.8 18.6 94.2 18 94.2C17.4 94.2 16.2 95.8 16.2 96.4C16.2 97 18 98 18 98Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "ampoules-0"
+                },
+                {
+                  "d": "M26 2.8C26 2.8 27.8 3.8 27.8 4.4C27.8 5 26.6 6.6 26 6.6C25.4 6.6 24.2 5 24.2 4.4C24.2 3.8 26 2.8 26 2.8ZM26 97.2C26 97.2 27.8 96.2 27.8 95.6C27.8 95 26.6 93.4 26 93.4C25.4 93.4 24.2 95 24.2 95.6C24.2 96.2 26 97.2 26 97.2Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "ampoules-1"
+                },
+                {
+                  "d": "M34 2C34 2 35.8 3 35.8 3.6C35.8 4.2 34.6 5.8 34 5.8C33.4 5.8 32.2 4.2 32.2 3.6C32.2 3 34 2 34 2ZM34 98C34 98 35.8 97 35.8 96.4C35.8 95.8 34.6 94.2 34 94.2C33.4 94.2 32.2 95.8 32.2 96.4C32.2 97 34 98 34 98Z",
+                  "color": 4,
+                  "opacity": 1,
+                  "group": "ampoules-2"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "etoile-du-sapin-fixe",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#E8B547",
+            "#9A6A17",
+            "#FFE7A6",
+            "#0E3B22"
+          ],
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 1,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "border": {
+            "width": 6,
+            "color": 3,
+            "opacity": 0.92,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.5,
+                "color": 0,
+                "gradient": 0,
+                "opacity": 1
+              },
+              {
+                "inset": 5.4,
+                "width": 0.4,
+                "color": 0,
+                "opacity": 1
+              }
+            ]
+          },
+          "reach": {
+            "corner": 19,
+            "cartouche": {
+              "width": 30,
+              "depth": 19,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M0.8 0.8L17.7 7M4.2 2L8.9 0.3M4.2 2L6.7 6.4M7.1 3.1L11.9 1.4M7.1 3.1L9.7 7.5M10.1 4.2L14.8 2.5M10.1 4.2L12.6 8.6M13.1 5.3L17.8 3.5M13.1 5.3L15.6 9.6M16 6.3L20.8 4.6M16 6.3L18.5 10.7M0.8 0.8L7 17.7M2 4.2L6.4 6.7M2 4.2L0.3 8.9M3.1 7.1L7.5 9.7M3.1 7.1L1.4 11.9M4.2 10.1L8.6 12.6M4.2 10.1L2.5 14.8M5.3 13.1L9.6 15.6M5.3 13.1L3.5 17.8M6.3 16L10.7 18.5M6.3 16L4.6 20.8",
+                  "color": 0,
+                  "opacity": 0.9,
+                  "width": 0.5
+                },
+                {
+                  "d": "M10 4.6C10.99 4.6 11.8 5.41 11.8 6.4C11.8 7.39 10.99 8.2 10 8.2C9.01 8.2 8.2 7.39 8.2 6.4C8.2 5.41 9.01 4.6 10 4.6ZM6 10.2C6.77 10.2 7.4 10.83 7.4 11.6C7.4 12.37 6.77 13 6 13C5.23 13 4.6 12.37 4.6 11.6C4.6 10.83 5.23 10.2 6 10.2Z",
+                  "color": 0,
+                  "opacity": 1,
+                  "gradient": 0,
+                  "group": "c0"
+                },
+                {
+                  "d": "M0.8 99.2L17.7 93M4.2 98L8.9 99.7M4.2 98L6.7 93.6M7.1 96.9L11.9 98.6M7.1 96.9L9.7 92.5M10.1 95.8L14.8 97.5M10.1 95.8L12.6 91.4M13.1 94.7L17.8 96.5M13.1 94.7L15.6 90.4M16 93.7L20.8 95.4M16 93.7L18.5 89.3M0.8 99.2L7 82.3M2 95.8L6.4 93.3M2 95.8L0.3 91.1M3.1 92.9L7.5 90.3M3.1 92.9L1.4 88.1M4.2 89.9L8.6 87.4M4.2 89.9L2.5 85.2M5.3 86.9L9.6 84.4M5.3 86.9L3.5 82.2M6.3 84L10.7 81.5M6.3 84L4.6 79.2",
+                  "color": 0,
+                  "opacity": 0.9,
+                  "width": 0.5
+                },
+                {
+                  "d": "M10 95.4C10.99 95.4 11.8 94.59 11.8 93.6C11.8 92.61 10.99 91.8 10 91.8C9.01 91.8 8.2 92.61 8.2 93.6C8.2 94.59 9.01 95.4 10 95.4ZM6 89.8C6.77 89.8 7.4 89.17 7.4 88.4C7.4 87.63 6.77 87 6 87C5.23 87 4.6 87.63 4.6 88.4C4.6 89.17 5.23 89.8 6 89.8Z",
+                  "color": 0,
+                  "opacity": 1,
+                  "gradient": 0,
+                  "group": "c3"
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M154 8.8L164 9.4L154 10L154 8.8ZM153.2 11.8L157.4 16.8L152.4 12.6L153.2 11.8ZM150.6 13.4L150 23.4L149.4 13.4L150.6 13.4ZM147.6 12.6L142.6 16.8L146.8 11.8L147.6 12.6ZM146 10L136 9.4L146 8.8L146 10ZM146.8 7L142.6 2L147.6 6.2L146.8 7ZM149.4 5.4L150 -4.6L150.6 5.4L149.4 5.4ZM152.4 6.2L157.4 2L153.2 7L152.4 6.2Z",
+                  "color": 2,
+                  "opacity": 0.6,
+                  "group": "rayons"
+                },
+                {
+                  "d": "M150 1.8L152 6.6L157.2 7.1L153.3 10.5L154.5 15.5L150 12.8L145.5 15.5L146.7 10.5L142.8 7.1L148 6.6L150 1.8Z",
+                  "color": 0,
+                  "opacity": 1,
+                  "gradient": 0,
+                  "group": "etoile"
+                },
+                {
+                  "d": "M150 1.8L152 6.6L157.2 7.1L153.3 10.5L154.5 15.5L150 12.8L145.5 15.5L146.7 10.5L142.8 7.1L148 6.6L150 1.8Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.45,
+                  "group": "etoile"
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M299.2 0.8L282.3 7M295.8 2L291.1 0.3M295.8 2L293.3 6.4M292.9 3.1L288.1 1.4M292.9 3.1L290.3 7.5M289.9 4.2L285.2 2.5M289.9 4.2L287.4 8.6M286.9 5.3L282.2 3.5M286.9 5.3L284.4 9.6M284 6.3L279.2 4.6M284 6.3L281.5 10.7M299.2 0.8L293 17.7M298 4.2L293.6 6.7M298 4.2L299.7 8.9M296.9 7.1L292.5 9.7M296.9 7.1L298.6 11.9M295.8 10.1L291.4 12.6M295.8 10.1L297.5 14.8M294.7 13.1L290.4 15.6M294.7 13.1L296.5 17.8M293.7 16L289.3 18.5M293.7 16L295.4 20.8",
+                  "color": 0,
+                  "opacity": 0.9,
+                  "width": 0.5
+                },
+                {
+                  "d": "M290 4.6C289.01 4.6 288.2 5.41 288.2 6.4C288.2 7.39 289.01 8.2 290 8.2C290.99 8.2 291.8 7.39 291.8 6.4C291.8 5.41 290.99 4.6 290 4.6ZM294 10.2C293.23 10.2 292.6 10.83 292.6 11.6C292.6 12.37 293.23 13 294 13C294.77 13 295.4 12.37 295.4 11.6C295.4 10.83 294.77 10.2 294 10.2Z",
+                  "color": 0,
+                  "opacity": 1,
+                  "gradient": 0,
+                  "group": "c1"
+                },
+                {
+                  "d": "M299.2 99.2L282.3 93M295.8 98L291.1 99.7M295.8 98L293.3 93.6M292.9 96.9L288.1 98.6M292.9 96.9L290.3 92.5M289.9 95.8L285.2 97.5M289.9 95.8L287.4 91.4M286.9 94.7L282.2 96.5M286.9 94.7L284.4 90.4M284 93.7L279.2 95.4M284 93.7L281.5 89.3M299.2 99.2L293 82.3M298 95.8L293.6 93.3M298 95.8L299.7 91.1M296.9 92.9L292.5 90.3M296.9 92.9L298.6 88.1M295.8 89.9L291.4 87.4M295.8 89.9L297.5 85.2M294.7 86.9L290.4 84.4M294.7 86.9L296.5 82.2M293.7 84L289.3 81.5M293.7 84L295.4 79.2",
+                  "color": 0,
+                  "opacity": 0.9,
+                  "width": 0.5
+                },
+                {
+                  "d": "M290 95.4C289.01 95.4 288.2 94.59 288.2 93.6C288.2 92.61 289.01 91.8 290 91.8C290.99 91.8 291.8 92.61 291.8 93.6C291.8 94.59 290.99 95.4 290 95.4ZM294 89.8C293.23 89.8 292.6 89.17 292.6 88.4C292.6 87.63 293.23 87 294 87C294.77 87 295.4 87.63 295.4 88.4C295.4 89.17 294.77 89.8 294 89.8Z",
+                  "color": 0,
+                  "opacity": 1,
+                  "gradient": 0,
+                  "group": "c2"
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 14,
+              "from": 20,
+              "to": 20,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M27 1.4L27.3 2.6L28.5 2.9L27.3 3.2L27 4.4L26.7 3.2L25.5 2.9L26.7 2.6L27 1.4ZM27 98.6L27.3 97.4L28.5 97.1L27.3 96.8L27 95.6L26.7 96.8L25.5 97.1L26.7 97.4L27 98.6Z",
+                  "color": 2,
+                  "opacity": 0.95,
+                  "group": "eclats"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "bonnet-du-pere-noel-fixe",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#C8102E",
+            "#7A0A1C",
+            "#F8FAFC",
+            "#E8B547"
+          ],
+          "border": {
+            "width": 5.4,
+            "color": 0,
+            "opacity": 0.94,
+            "filets": [
+              {
+                "inset": 4.9,
+                "width": 0.4,
+                "color": 3,
+                "opacity": 1
+              }
+            ]
+          },
+          "reach": {
+            "corner": 13,
+            "cartouche": {
+              "width": 34,
+              "depth": 18,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M2.2 12.8C3.42 12.8 4.4 13.78 4.4 15C4.4 16.22 3.42 17.2 2.2 17.2C0.98 17.2 0 16.22 0 15C0 13.78 0.98 12.8 2.2 12.8ZM2.2 15.98C3.42 15.98 4.4 16.97 4.4 18.18C4.4 19.4 3.42 20.38 2.2 20.38C0.98 20.38 0 19.4 0 18.18C0 16.97 0.98 15.98 2.2 15.98ZM2.2 19.16C3.42 19.16 4.4 20.15 4.4 21.36C4.4 22.58 3.42 23.56 2.2 23.56C0.98 23.56 0 22.58 0 21.36C0 20.15 0.98 19.16 2.2 19.16ZM2.2 22.35C3.42 22.35 4.4 23.33 4.4 24.55C4.4 25.76 3.42 26.75 2.2 26.75C0.98 26.75 0 25.76 0 24.55C0 23.33 0.98 22.35 2.2 22.35ZM2.2 25.53C3.42 25.53 4.4 26.51 4.4 27.73C4.4 28.94 3.42 29.93 2.2 29.93C0.98 29.93 0 28.94 0 27.73C0 26.51 0.98 25.53 2.2 25.53ZM2.2 28.71C3.42 28.71 4.4 29.69 4.4 30.91C4.4 32.12 3.42 33.11 2.2 33.11C0.98 33.11 0 32.12 0 30.91C0 29.69 0.98 28.71 2.2 28.71ZM2.2 31.89C3.42 31.89 4.4 32.88 4.4 34.09C4.4 35.31 3.42 36.29 2.2 36.29C0.98 36.29 0 35.31 0 34.09C0 32.88 0.98 31.89 2.2 31.89ZM2.2 35.07C3.42 35.07 4.4 36.06 4.4 37.27C4.4 38.49 3.42 39.47 2.2 39.47C0.98 39.47 0 38.49 0 37.27C0 36.06 0.98 35.07 2.2 35.07ZM2.2 38.25C3.42 38.25 4.4 39.24 4.4 40.45C4.4 41.67 3.42 42.65 2.2 42.65C0.98 42.65 0 41.67 0 40.45C0 39.24 0.98 38.25 2.2 38.25ZM2.2 41.44C3.42 41.44 4.4 42.42 4.4 43.64C4.4 44.85 3.42 45.84 2.2 45.84C0.98 45.84 0 44.85 0 43.64C0 42.42 0.98 41.44 2.2 41.44ZM2.2 44.62C3.42 44.62 4.4 45.6 4.4 46.82C4.4 48.03 3.42 49.02 2.2 49.02C0.98 49.02 0 48.03 0 46.82C0 45.6 0.98 44.62 2.2 44.62ZM2.2 47.8C3.42 47.8 4.4 48.78 4.4 50C4.4 51.22 3.42 52.2 2.2 52.2C0.98 52.2 0 51.22 0 50C0 48.78 0.98 47.8 2.2 47.8ZM2.2 50.98C3.42 50.98 4.4 51.97 4.4 53.18C4.4 54.4 3.42 55.38 2.2 55.38C0.98 55.38 0 54.4 0 53.18C0 51.97 0.98 50.98 2.2 50.98ZM2.2 54.16C3.42 54.16 4.4 55.15 4.4 56.36C4.4 57.58 3.42 58.56 2.2 58.56C0.98 58.56 0 57.58 0 56.36C0 55.15 0.98 54.16 2.2 54.16ZM2.2 57.35C3.42 57.35 4.4 58.33 4.4 59.55C4.4 60.76 3.42 61.75 2.2 61.75C0.98 61.75 0 60.76 0 59.55C0 58.33 0.98 57.35 2.2 57.35ZM2.2 60.53C3.42 60.53 4.4 61.51 4.4 62.73C4.4 63.94 3.42 64.93 2.2 64.93C0.98 64.93 0 63.94 0 62.73C0 61.51 0.98 60.53 2.2 60.53ZM2.2 63.71C3.42 63.71 4.4 64.69 4.4 65.91C4.4 67.12 3.42 68.11 2.2 68.11C0.98 68.11 0 67.12 0 65.91C0 64.69 0.98 63.71 2.2 63.71ZM2.2 66.89C3.42 66.89 4.4 67.88 4.4 69.09C4.4 70.31 3.42 71.29 2.2 71.29C0.98 71.29 0 70.31 0 69.09C0 67.88 0.98 66.89 2.2 66.89ZM2.2 70.07C3.42 70.07 4.4 71.06 4.4 72.27C4.4 73.49 3.42 74.47 2.2 74.47C0.98 74.47 0 73.49 0 72.27C0 71.06 0.98 70.07 2.2 70.07ZM2.2 73.25C3.42 73.25 4.4 74.24 4.4 75.45C4.4 76.67 3.42 77.65 2.2 77.65C0.98 77.65 0 76.67 0 75.45C0 74.24 0.98 73.25 2.2 73.25ZM2.2 76.44C3.42 76.44 4.4 77.42 4.4 78.64C4.4 79.85 3.42 80.84 2.2 80.84C0.98 80.84 0 79.85 0 78.64C0 77.42 0.98 76.44 2.2 76.44ZM2.2 79.62C3.42 79.62 4.4 80.6 4.4 81.82C4.4 83.03 3.42 84.02 2.2 84.02C0.98 84.02 0 83.03 0 81.82C0 80.6 0.98 79.62 2.2 79.62ZM2.2 82.8C3.42 82.8 4.4 83.78 4.4 85C4.4 86.22 3.42 87.2 2.2 87.2C0.98 87.2 0 86.22 0 85C0 83.78 0.98 82.8 2.2 82.8Z",
+                  "color": 2,
+                  "opacity": 0.95
+                },
+                {
+                  "d": "M6 1.4C8.54 1.4 10.6 3.46 10.6 6C10.6 8.54 8.54 10.6 6 10.6C3.46 10.6 1.4 8.54 1.4 6C1.4 3.46 3.46 1.4 6 1.4Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c0"
+                },
+                {
+                  "d": "M6 1.4C8.54 1.4 10.6 3.46 10.6 6C10.6 8.54 8.54 10.6 6 10.6C3.46 10.6 1.4 8.54 1.4 6C1.4 3.46 3.46 1.4 6 1.4Z",
+                  "color": 1,
+                  "opacity": 0.4,
+                  "width": 0.3
+                },
+                {
+                  "d": "M6 98.6C8.54 98.6 10.6 96.54 10.6 94C10.6 91.46 8.54 89.4 6 89.4C3.46 89.4 1.4 91.46 1.4 94C1.4 96.54 3.46 98.6 6 98.6Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c3"
+                },
+                {
+                  "d": "M6 98.6C8.54 98.6 10.6 96.54 10.6 94C10.6 91.46 8.54 89.4 6 89.4C3.46 89.4 1.4 91.46 1.4 94C1.4 96.54 3.46 98.6 6 98.6Z",
+                  "color": 1,
+                  "opacity": 0.4,
+                  "width": 0.3
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M140 9.6C140 9.6 141.8 4.3 144 3C146.2 1.7 150.2 1 153 1.6C155.8 2.2 161 6.4 161 6.4C161 6.4 163.1 10.1 162.6 10.6C162.1 11.1 158 9.6 158 9.6L140 9.6Z",
+                  "color": 0,
+                  "opacity": 1,
+                  "group": "bonnet"
+                },
+                {
+                  "d": "M162.6 9.6C164.04 9.6 165.2 10.76 165.2 12.2C165.2 13.64 164.04 14.8 162.6 14.8C161.16 14.8 160 13.64 160 12.2C160 10.76 161.16 9.6 162.6 9.6Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "bonnet"
+                },
+                {
+                  "d": "M139.6 9.2C140.59 9.2 141.4 10.01 141.4 11C141.4 11.99 140.59 12.8 139.6 12.8C138.61 12.8 137.8 11.99 137.8 11C137.8 10.01 138.61 9.2 139.6 9.2ZM142.37 9.2C143.37 9.2 144.17 10.01 144.17 11C144.17 11.99 143.37 12.8 142.37 12.8C141.38 12.8 140.57 11.99 140.57 11C140.57 10.01 141.38 9.2 142.37 9.2ZM145.14 9.2C146.14 9.2 146.94 10.01 146.94 11C146.94 11.99 146.14 12.8 145.14 12.8C144.15 12.8 143.34 11.99 143.34 11C143.34 10.01 144.15 9.2 145.14 9.2ZM147.91 9.2C148.91 9.2 149.71 10.01 149.71 11C149.71 11.99 148.91 12.8 147.91 12.8C146.92 12.8 146.11 11.99 146.11 11C146.11 10.01 146.92 9.2 147.91 9.2ZM150.69 9.2C151.68 9.2 152.49 10.01 152.49 11C152.49 11.99 151.68 12.8 150.69 12.8C149.69 12.8 148.89 11.99 148.89 11C148.89 10.01 149.69 9.2 150.69 9.2ZM153.46 9.2C154.45 9.2 155.26 10.01 155.26 11C155.26 11.99 154.45 12.8 153.46 12.8C152.46 12.8 151.66 11.99 151.66 11C151.66 10.01 152.46 9.2 153.46 9.2ZM156.23 9.2C157.22 9.2 158.03 10.01 158.03 11C158.03 11.99 157.22 12.8 156.23 12.8C155.23 12.8 154.43 11.99 154.43 11C154.43 10.01 155.23 9.2 156.23 9.2ZM159 9.2C159.99 9.2 160.8 10.01 160.8 11C160.8 11.99 159.99 12.8 159 12.8C158.01 12.8 157.2 11.99 157.2 11C157.2 10.01 158.01 9.2 159 9.2Z",
+                  "color": 2,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M297.8 12.8C296.58 12.8 295.6 13.78 295.6 15C295.6 16.22 296.58 17.2 297.8 17.2C299.02 17.2 300 16.22 300 15C300 13.78 299.02 12.8 297.8 12.8ZM297.8 15.98C296.58 15.98 295.6 16.97 295.6 18.18C295.6 19.4 296.58 20.38 297.8 20.38C299.02 20.38 300 19.4 300 18.18C300 16.97 299.02 15.98 297.8 15.98ZM297.8 19.16C296.58 19.16 295.6 20.15 295.6 21.36C295.6 22.58 296.58 23.56 297.8 23.56C299.02 23.56 300 22.58 300 21.36C300 20.15 299.02 19.16 297.8 19.16ZM297.8 22.35C296.58 22.35 295.6 23.33 295.6 24.55C295.6 25.76 296.58 26.75 297.8 26.75C299.02 26.75 300 25.76 300 24.55C300 23.33 299.02 22.35 297.8 22.35ZM297.8 25.53C296.58 25.53 295.6 26.51 295.6 27.73C295.6 28.94 296.58 29.93 297.8 29.93C299.02 29.93 300 28.94 300 27.73C300 26.51 299.02 25.53 297.8 25.53ZM297.8 28.71C296.58 28.71 295.6 29.69 295.6 30.91C295.6 32.12 296.58 33.11 297.8 33.11C299.02 33.11 300 32.12 300 30.91C300 29.69 299.02 28.71 297.8 28.71ZM297.8 31.89C296.58 31.89 295.6 32.88 295.6 34.09C295.6 35.31 296.58 36.29 297.8 36.29C299.02 36.29 300 35.31 300 34.09C300 32.88 299.02 31.89 297.8 31.89ZM297.8 35.07C296.58 35.07 295.6 36.06 295.6 37.27C295.6 38.49 296.58 39.47 297.8 39.47C299.02 39.47 300 38.49 300 37.27C300 36.06 299.02 35.07 297.8 35.07ZM297.8 38.25C296.58 38.25 295.6 39.24 295.6 40.45C295.6 41.67 296.58 42.65 297.8 42.65C299.02 42.65 300 41.67 300 40.45C300 39.24 299.02 38.25 297.8 38.25ZM297.8 41.44C296.58 41.44 295.6 42.42 295.6 43.64C295.6 44.85 296.58 45.84 297.8 45.84C299.02 45.84 300 44.85 300 43.64C300 42.42 299.02 41.44 297.8 41.44ZM297.8 44.62C296.58 44.62 295.6 45.6 295.6 46.82C295.6 48.03 296.58 49.02 297.8 49.02C299.02 49.02 300 48.03 300 46.82C300 45.6 299.02 44.62 297.8 44.62ZM297.8 47.8C296.58 47.8 295.6 48.78 295.6 50C295.6 51.22 296.58 52.2 297.8 52.2C299.02 52.2 300 51.22 300 50C300 48.78 299.02 47.8 297.8 47.8ZM297.8 50.98C296.58 50.98 295.6 51.97 295.6 53.18C295.6 54.4 296.58 55.38 297.8 55.38C299.02 55.38 300 54.4 300 53.18C300 51.97 299.02 50.98 297.8 50.98ZM297.8 54.16C296.58 54.16 295.6 55.15 295.6 56.36C295.6 57.58 296.58 58.56 297.8 58.56C299.02 58.56 300 57.58 300 56.36C300 55.15 299.02 54.16 297.8 54.16ZM297.8 57.35C296.58 57.35 295.6 58.33 295.6 59.55C295.6 60.76 296.58 61.75 297.8 61.75C299.02 61.75 300 60.76 300 59.55C300 58.33 299.02 57.35 297.8 57.35ZM297.8 60.53C296.58 60.53 295.6 61.51 295.6 62.73C295.6 63.94 296.58 64.93 297.8 64.93C299.02 64.93 300 63.94 300 62.73C300 61.51 299.02 60.53 297.8 60.53ZM297.8 63.71C296.58 63.71 295.6 64.69 295.6 65.91C295.6 67.12 296.58 68.11 297.8 68.11C299.02 68.11 300 67.12 300 65.91C300 64.69 299.02 63.71 297.8 63.71ZM297.8 66.89C296.58 66.89 295.6 67.88 295.6 69.09C295.6 70.31 296.58 71.29 297.8 71.29C299.02 71.29 300 70.31 300 69.09C300 67.88 299.02 66.89 297.8 66.89ZM297.8 70.07C296.58 70.07 295.6 71.06 295.6 72.27C295.6 73.49 296.58 74.47 297.8 74.47C299.02 74.47 300 73.49 300 72.27C300 71.06 299.02 70.07 297.8 70.07ZM297.8 73.25C296.58 73.25 295.6 74.24 295.6 75.45C295.6 76.67 296.58 77.65 297.8 77.65C299.02 77.65 300 76.67 300 75.45C300 74.24 299.02 73.25 297.8 73.25ZM297.8 76.44C296.58 76.44 295.6 77.42 295.6 78.64C295.6 79.85 296.58 80.84 297.8 80.84C299.02 80.84 300 79.85 300 78.64C300 77.42 299.02 76.44 297.8 76.44ZM297.8 79.62C296.58 79.62 295.6 80.6 295.6 81.82C295.6 83.03 296.58 84.02 297.8 84.02C299.02 84.02 300 83.03 300 81.82C300 80.6 299.02 79.62 297.8 79.62ZM297.8 82.8C296.58 82.8 295.6 83.78 295.6 85C295.6 86.22 296.58 87.2 297.8 87.2C299.02 87.2 300 86.22 300 85C300 83.78 299.02 82.8 297.8 82.8Z",
+                  "color": 2,
+                  "opacity": 0.95
+                },
+                {
+                  "d": "M294 1.4C291.46 1.4 289.4 3.46 289.4 6C289.4 8.54 291.46 10.6 294 10.6C296.54 10.6 298.6 8.54 298.6 6C298.6 3.46 296.54 1.4 294 1.4Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c1"
+                },
+                {
+                  "d": "M294 1.4C291.46 1.4 289.4 3.46 289.4 6C289.4 8.54 291.46 10.6 294 10.6C296.54 10.6 298.6 8.54 298.6 6C298.6 3.46 296.54 1.4 294 1.4Z",
+                  "color": 1,
+                  "opacity": 0.4,
+                  "width": 0.3
+                },
+                {
+                  "d": "M294 98.6C291.46 98.6 289.4 96.54 289.4 94C289.4 91.46 291.46 89.4 294 89.4C296.54 89.4 298.6 91.46 298.6 94C298.6 96.54 296.54 98.6 294 98.6Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c2"
+                },
+                {
+                  "d": "M294 98.6C291.46 98.6 289.4 96.54 289.4 94C289.4 91.46 291.46 89.4 294 89.4C296.54 89.4 298.6 91.46 298.6 94C298.6 96.54 296.54 98.6 294 98.6Z",
+                  "color": 1,
+                  "opacity": 0.4,
+                  "width": 0.3
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 6,
+              "from": 13,
+              "to": 13,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M16 0C16.88 0 17.6 0.72 17.6 1.6C17.6 2.48 16.88 3.2 16 3.2C15.12 3.2 14.4 2.48 14.4 1.6C14.4 0.72 15.12 0 16 0ZM16 100C16.88 100 17.6 99.28 17.6 98.4C17.6 97.52 16.88 96.8 16 96.8C15.12 96.8 14.4 97.52 14.4 98.4C14.4 99.28 15.12 100 16 100Z",
+                  "color": 2,
+                  "opacity": 0.95,
+                  "group": "bande"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "sucre-d-orge-fixe",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#F8FAFC",
+            "#C8102E",
+            "#1F7A3A",
+            "#7A0A1C"
+          ],
+          "border": {
+            "width": 6,
+            "color": 0,
+            "opacity": 0.96,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 3,
+                "opacity": 1
+              },
+              {
+                "inset": 5.5,
+                "width": 0.45,
+                "color": 3,
+                "opacity": 1
+              }
+            ]
+          },
+          "reach": {
+            "corner": 17,
+            "cartouche": {
+              "width": 24,
+              "depth": 13,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M0.4 21L5.6 18L5.6 20L0.4 23L0.4 21ZM0.4 26.5L5.6 23.5L5.6 25.5L0.4 28.5L0.4 26.5ZM0.4 31.9L5.6 28.9L5.6 30.9L0.4 33.9L0.4 31.9ZM0.4 37.4L5.6 34.4L5.6 36.4L0.4 39.4L0.4 37.4ZM0.4 42.8L5.6 39.8L5.6 41.8L0.4 44.8L0.4 42.8ZM0.4 48.3L5.6 45.3L5.6 47.3L0.4 50.3L0.4 48.3ZM0.4 53.7L5.6 50.7L5.6 52.7L0.4 55.7L0.4 53.7ZM0.4 59.2L5.6 56.2L5.6 58.2L0.4 61.2L0.4 59.2ZM0.4 64.6L5.6 61.6L5.6 63.6L0.4 66.6L0.4 64.6ZM0.4 70.1L5.6 67.1L5.6 69.1L0.4 72.1L0.4 70.1ZM0.4 75.5L5.6 72.5L5.6 74.5L0.4 77.5L0.4 75.5ZM0.4 81L5.6 78L5.6 80L0.4 83L0.4 81Z",
+                  "color": 1,
+                  "opacity": 0.95
+                },
+                {
+                  "d": "M3.7 16.4C3.7 16.4 2.9 7.3 3.7 5C4.5 2.7 6.9 2.4 8.4 2.4C9.9 2.4 11.9 4 12.6 5C13.3 6 12.6 8.4 12.6 8.4",
+                  "color": 0,
+                  "opacity": 1,
+                  "width": 3
+                },
+                {
+                  "d": "M3.7 16.4C3.7 16.4 2.9 7.3 3.7 5C4.5 2.7 6.9 2.4 8.4 2.4C9.9 2.4 11.9 4 12.6 5C13.3 6 12.6 8.4 12.6 8.4",
+                  "color": 3,
+                  "opacity": 0.5,
+                  "width": 0.4
+                },
+                {
+                  "d": "M2.2 4L5.2 2.4L5.2 3.4L2.2 5L2.2 4ZM2.2 7L5.2 5.4L5.2 6.4L2.2 8L2.2 7ZM2.2 10L5.2 8.4L5.2 9.4L2.2 11L2.2 10ZM2.2 13L5.2 11.4L5.2 12.4L2.2 14L2.2 13ZM2.2 16L5.2 14.4L5.2 15.4L2.2 17L2.2 16Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c0"
+                },
+                {
+                  "d": "M3.7 83.6C3.7 83.6 2.9 92.7 3.7 95C4.5 97.3 6.9 97.6 8.4 97.6C9.9 97.6 11.9 96 12.6 95C13.3 94 12.6 91.6 12.6 91.6",
+                  "color": 0,
+                  "opacity": 1,
+                  "width": 3
+                },
+                {
+                  "d": "M3.7 83.6C3.7 83.6 2.9 92.7 3.7 95C4.5 97.3 6.9 97.6 8.4 97.6C9.9 97.6 11.9 96 12.6 95C13.3 94 12.6 91.6 12.6 91.6",
+                  "color": 3,
+                  "opacity": 0.5,
+                  "width": 0.4
+                },
+                {
+                  "d": "M2.2 96L5.2 97.6L5.2 96.6L2.2 95L2.2 96ZM2.2 93L5.2 94.6L5.2 93.6L2.2 92L2.2 93ZM2.2 90L5.2 91.6L5.2 90.6L2.2 89L2.2 90ZM2.2 87L5.2 88.6L5.2 87.6L2.2 86L2.2 87ZM2.2 84L5.2 85.6L5.2 84.6L2.2 83L2.2 84Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c3"
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M150 5C150 5 147.9 1.5 146.4 0.9C144.9 0.3 141 1.6 141 1.6C141 1.6 143.1 5.1 144.6 5.7C146.1 6.3 150 5 150 5ZM150 5C150 5 153.9 6.3 155.4 5.7C156.9 5.1 159 1.6 159 1.6C159 1.6 155.1 0.3 153.6 0.9C152.1 1.5 150 5 150 5ZM150 5L146 12L147.6 12L150 6.6L150 5ZM150 5L154 12L152.4 12L150 6.6L150 5Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "noeud"
+                },
+                {
+                  "d": "M150 3.4C150.99 3.4 151.8 4.12 151.8 5C151.8 5.88 150.99 6.6 150 6.6C149.01 6.6 148.2 5.88 148.2 5C148.2 4.12 149.01 3.4 150 3.4Z",
+                  "color": 3,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M299.6 21L294.4 18L294.4 20L299.6 23L299.6 21ZM299.6 26.5L294.4 23.5L294.4 25.5L299.6 28.5L299.6 26.5ZM299.6 31.9L294.4 28.9L294.4 30.9L299.6 33.9L299.6 31.9ZM299.6 37.4L294.4 34.4L294.4 36.4L299.6 39.4L299.6 37.4ZM299.6 42.8L294.4 39.8L294.4 41.8L299.6 44.8L299.6 42.8ZM299.6 48.3L294.4 45.3L294.4 47.3L299.6 50.3L299.6 48.3ZM299.6 53.7L294.4 50.7L294.4 52.7L299.6 55.7L299.6 53.7ZM299.6 59.2L294.4 56.2L294.4 58.2L299.6 61.2L299.6 59.2ZM299.6 64.6L294.4 61.6L294.4 63.6L299.6 66.6L299.6 64.6ZM299.6 70.1L294.4 67.1L294.4 69.1L299.6 72.1L299.6 70.1ZM299.6 75.5L294.4 72.5L294.4 74.5L299.6 77.5L299.6 75.5ZM299.6 81L294.4 78L294.4 80L299.6 83L299.6 81Z",
+                  "color": 1,
+                  "opacity": 0.95
+                },
+                {
+                  "d": "M296.3 16.4C296.3 16.4 297.1 7.3 296.3 5C295.5 2.7 293.1 2.4 291.6 2.4C290.1 2.4 288.1 4 287.4 5C286.7 6 287.4 8.4 287.4 8.4",
+                  "color": 0,
+                  "opacity": 1,
+                  "width": 3
+                },
+                {
+                  "d": "M296.3 16.4C296.3 16.4 297.1 7.3 296.3 5C295.5 2.7 293.1 2.4 291.6 2.4C290.1 2.4 288.1 4 287.4 5C286.7 6 287.4 8.4 287.4 8.4",
+                  "color": 3,
+                  "opacity": 0.5,
+                  "width": 0.4
+                },
+                {
+                  "d": "M297.8 4L294.8 2.4L294.8 3.4L297.8 5L297.8 4ZM297.8 7L294.8 5.4L294.8 6.4L297.8 8L297.8 7ZM297.8 10L294.8 8.4L294.8 9.4L297.8 11L297.8 10ZM297.8 13L294.8 11.4L294.8 12.4L297.8 14L297.8 13ZM297.8 16L294.8 14.4L294.8 15.4L297.8 17L297.8 16Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c1"
+                },
+                {
+                  "d": "M296.3 83.6C296.3 83.6 297.1 92.7 296.3 95C295.5 97.3 293.1 97.6 291.6 97.6C290.1 97.6 288.1 96 287.4 95C286.7 94 287.4 91.6 287.4 91.6",
+                  "color": 0,
+                  "opacity": 1,
+                  "width": 3
+                },
+                {
+                  "d": "M296.3 83.6C296.3 83.6 297.1 92.7 296.3 95C295.5 97.3 293.1 97.6 291.6 97.6C290.1 97.6 288.1 96 287.4 95C286.7 94 287.4 91.6 287.4 91.6",
+                  "color": 3,
+                  "opacity": 0.5,
+                  "width": 0.4
+                },
+                {
+                  "d": "M297.8 96L294.8 97.6L294.8 96.6L297.8 95L297.8 96ZM297.8 93L294.8 94.6L294.8 93.6L297.8 92L297.8 93ZM297.8 90L294.8 91.6L294.8 90.6L297.8 89L297.8 90ZM297.8 87L294.8 88.6L294.8 87.6L297.8 86L297.8 87ZM297.8 84L294.8 85.6L294.8 84.6L297.8 83L297.8 84Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c2"
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 6,
+              "from": 17,
+              "to": 17,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M17.4 5.6L20.4 0.4L22.4 0.4L19.4 5.6L17.4 5.6ZM17.4 94.4L20.4 99.6L22.4 99.6L19.4 94.4L17.4 94.4Z",
+                  "color": 1,
+                  "opacity": 0.95,
+                  "group": "bande"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "nouvel-an-cadres",
+      "order": 23,
+      "installedByDefault": false,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "banner"
+        ]
+      },
+      "availability": {
+        "startsAt": "2026-12-26T00:00:00Z",
+        "endsAt": "2027-01-16T00:00:00Z"
+      },
+      "frames": [
+        {
+          "key": "feux-d-artifice",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#0B1026",
+            "#FBBF24",
+            "#EC4899",
+            "#22D3EE",
+            "#7C3AED"
+          ],
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 1,
+              "y2": 0,
+              "stops": [
+                {
+                  "color": 4,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 4,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "border": {
+            "width": 5.2,
+            "color": 0,
+            "gradient": 0,
+            "opacity": 0.92,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 1,
+                "opacity": 1
+              },
+              {
+                "inset": 4.6,
+                "width": 0.4,
+                "color": 2,
+                "opacity": 0.9
+              }
+            ]
+          },
+          "reach": {
+            "corner": 18,
+            "cartouche": {
+              "width": 32,
+              "depth": 18,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M9 6.6L9 1M10.4 7.1L13.7 2.5M11.3 8.3L16.6 6.5M11.3 9.7L16.6 11.5M10.4 10.9L13.7 15.5M9 11.4L9 17M7.6 10.9L4.3 15.5M6.7 9.7L1.4 11.5M6.7 8.3L1.4 6.5M7.6 7.1L4.3 2.5",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.7,
+                  "group": "c0"
+                },
+                {
+                  "d": "M9 7.8C9.66 7.8 10.2 8.34 10.2 9C10.2 9.66 9.66 10.2 9 10.2C8.34 10.2 7.8 9.66 7.8 9C7.8 8.34 8.34 7.8 9 7.8Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M9 93.4L9 99M10.4 92.9L13.7 97.5M11.3 91.7L16.6 93.5M11.3 90.3L16.6 88.5M10.4 89.1L13.7 84.5M9 88.6L9 83M7.6 89.1L4.3 84.5M6.7 90.3L1.4 88.5M6.7 91.7L1.4 93.5M7.6 92.9L4.3 97.5",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.7,
+                  "group": "c3"
+                },
+                {
+                  "d": "M9 92.2C9.66 92.2 10.2 91.66 10.2 91C10.2 90.34 9.66 89.8 9 89.8C8.34 89.8 7.8 90.34 7.8 91C7.8 91.66 8.34 92.2 9 92.2Z",
+                  "color": 3,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M150 6L150 0M151.3 6.3L153.9 0.9M152.3 7.1L157 3.4M152.9 8.3L158.8 7M152.9 9.7L158.8 11M152.3 10.9L157 14.6M151.3 11.7L153.9 17.1M150 12L150 18M148.7 11.7L146.1 17.1M147.7 10.9L143 14.6M147.1 9.7L141.2 11M147.1 8.3L141.2 7M147.7 7.1L143 3.4M148.7 6.3L146.1 0.9",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 0.8,
+                  "group": "bouquet"
+                },
+                {
+                  "d": "M150.6 7.7L152 4.9M151.4 8.7L154.5 8M151.1 9.9L153.6 11.9M150 10.4L150 13.6M148.9 9.9L146.4 11.9M148.6 8.7L145.5 8M149.4 7.7L148 4.8",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.6,
+                  "group": "bouquet"
+                },
+                {
+                  "d": "M139 4L139 1.6M139.7 4.3L141.4 2.6M140 5L142.4 5M139.7 5.7L141.4 7.4M139 6L139 8.4M138.3 5.7L136.6 7.4M138 5L135.6 5M138.3 4.3L136.6 2.6",
+                  "color": 3,
+                  "opacity": 1,
+                  "width": 0.5,
+                  "group": "gerbe-a"
+                },
+                {
+                  "d": "M161 4L161 1.6M161.7 4.3L163.4 2.6M162 5L164.4 5M161.7 5.7L163.4 7.4M161 6L161 8.4M160.3 5.7L158.6 7.4M160 5L157.6 5M160.3 4.3L158.6 2.6",
+                  "color": 3,
+                  "opacity": 1,
+                  "width": 0.5,
+                  "group": "gerbe-b"
+                },
+                {
+                  "d": "M150 7.7C150.72 7.7 151.3 8.28 151.3 9C151.3 9.72 150.72 10.3 150 10.3C149.28 10.3 148.7 9.72 148.7 9C148.7 8.28 149.28 7.7 150 7.7Z",
+                  "color": 1,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M291 6.6L291 1M289.6 7.1L286.3 2.5M288.7 8.3L283.4 6.5M288.7 9.7L283.4 11.5M289.6 10.9L286.3 15.5M291 11.4L291 17M292.4 10.9L295.7 15.5M293.3 9.7L298.6 11.5M293.3 8.3L298.6 6.5M292.4 7.1L295.7 2.5",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.7,
+                  "group": "c1"
+                },
+                {
+                  "d": "M291 7.8C290.34 7.8 289.8 8.34 289.8 9C289.8 9.66 290.34 10.2 291 10.2C291.66 10.2 292.2 9.66 292.2 9C292.2 8.34 291.66 7.8 291 7.8Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M291 93.4L291 99M289.6 92.9L286.3 97.5M288.7 91.7L283.4 93.5M288.7 90.3L283.4 88.5M289.6 89.1L286.3 84.5M291 88.6L291 83M292.4 89.1L295.7 84.5M293.3 90.3L298.6 88.5M293.3 91.7L298.6 93.5M292.4 92.9L295.7 97.5",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.7,
+                  "group": "c2"
+                },
+                {
+                  "d": "M291 92.2C290.34 92.2 289.8 91.66 289.8 91C289.8 90.34 290.34 89.8 291 89.8C291.66 89.8 292.2 90.34 292.2 91C292.2 91.66 291.66 92.2 291 92.2Z",
+                  "color": 3,
+                  "opacity": 1
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 14,
+              "from": 22,
+              "to": 22,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M26 1.3L26.4 2.4L27.5 2.8L26.4 3.2L26 4.3L25.6 3.2L24.5 2.8L25.6 2.4L26 1.3ZM26 98.7L26.4 97.6L27.5 97.2L26.4 96.8L26 95.7L25.6 96.8L24.5 97.2L25.6 97.6L26 98.7Z",
+                  "color": 1,
+                  "opacity": 0.95,
+                  "group": "etincelles-a"
+                },
+                {
+                  "d": "M32 2.65C32.3 2.65 32.55 2.9 32.55 3.2C32.55 3.5 32.3 3.75 32 3.75C31.7 3.75 31.45 3.5 31.45 3.2C31.45 2.9 31.7 2.65 32 2.65ZM32 97.35C32.3 97.35 32.55 97.1 32.55 96.8C32.55 96.5 32.3 96.25 32 96.25C31.7 96.25 31.45 96.5 31.45 96.8C31.45 97.1 31.7 97.35 32 97.35Z",
+                  "color": 3,
+                  "opacity": 0.95,
+                  "group": "etincelles-b"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "pluie-de-confettis",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#6D28D9",
+            "#F472B6",
+            "#FACC15",
+            "#2DD4BF",
+            "#FFFDF5"
+          ],
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 1,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "border": {
+            "width": 4.8,
+            "color": 0,
+            "gradient": 0,
+            "opacity": 0.9,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "inset": 4.4,
+                "width": 0.4,
+                "color": 4,
+                "opacity": 0.85
+              }
+            ]
+          },
+          "reach": {
+            "corner": 18,
+            "cartouche": {
+              "width": 36,
+              "depth": 16,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M4.3 9.9L8.7 12.4L7.7 14.1L3.3 11.6L4.3 9.9ZM11.7 5.5L15.3 3L16.3 4.5L12.7 7L11.7 5.5Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c0"
+                },
+                {
+                  "d": "M12.3 10.9L13.3 14.7L11.7 15.1L10.7 11.3L12.3 10.9Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M5 3.9C5.61 3.9 6.1 4.39 6.1 5C6.1 5.61 5.61 6.1 5 6.1C4.39 6.1 3.9 5.61 3.9 5C3.9 4.39 4.39 3.9 5 3.9ZM16 13.2C16.44 13.2 16.8 13.56 16.8 14C16.8 14.44 16.44 14.8 16 14.8C15.56 14.8 15.2 14.44 15.2 14C15.2 13.56 15.56 13.2 16 13.2Z",
+                  "color": 1,
+                  "opacity": 1
+                },
+                {
+                  "d": "M4.3 90.1L8.7 87.6L7.7 85.9L3.3 88.4L4.3 90.1ZM11.7 94.5L15.3 97L16.3 95.5L12.7 93L11.7 94.5Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c3"
+                },
+                {
+                  "d": "M12.3 89.1L13.3 85.3L11.7 84.9L10.7 88.7L12.3 89.1Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M5 96.1C5.61 96.1 6.1 95.61 6.1 95C6.1 94.39 5.61 93.9 5 93.9C4.39 93.9 3.9 94.39 3.9 95C3.9 95.61 4.39 96.1 5 96.1ZM16 86.8C16.44 86.8 16.8 86.44 16.8 86C16.8 85.56 16.44 85.2 16 85.2C15.56 85.2 15.2 85.56 15.2 86C15.2 86.44 15.56 86.8 16 86.8Z",
+                  "color": 1,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M134 3C134 3 138 8.8 140 9C142 9.2 144 3.8 146 4C148 4.2 150 9.8 152 10C154 10.2 155.7 4.8 158 5C160.3 5.2 166 11 166 11",
+                  "color": 4,
+                  "opacity": 1,
+                  "width": 0.8
+                },
+                {
+                  "d": "M136.2 9.4L140.4 10.9L139.8 12.6L135.6 11.1L136.2 9.4ZM153.9 14.1L156.7 10.7L158.1 11.9L155.3 15.3L153.9 14.1Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "pluie-a"
+                },
+                {
+                  "d": "M145.9 10.8L147.6 14.5L146.1 15.2L144.4 11.5L145.9 10.8ZM161.2 2.9L165.1 3.6L164.8 5.1L160.9 4.4L161.2 2.9Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "pluie-b"
+                },
+                {
+                  "d": "M147.8 3.9L151.6 2.6L152.2 4.1L148.4 5.4L147.8 3.9ZM134.3 3.2L136.8 5.7L135.7 6.8L133.2 4.3L134.3 3.2Z",
+                  "color": 3,
+                  "opacity": 1,
+                  "group": "pluie-c"
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M295.7 9.9L291.3 12.4L292.3 14.1L296.7 11.6L295.7 9.9ZM288.3 5.5L284.7 3L283.7 4.5L287.3 7L288.3 5.5Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c1"
+                },
+                {
+                  "d": "M287.7 10.9L286.7 14.7L288.3 15.1L289.3 11.3L287.7 10.9Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M295 3.9C294.39 3.9 293.9 4.39 293.9 5C293.9 5.61 294.39 6.1 295 6.1C295.61 6.1 296.1 5.61 296.1 5C296.1 4.39 295.61 3.9 295 3.9ZM284 13.2C283.56 13.2 283.2 13.56 283.2 14C283.2 14.44 283.56 14.8 284 14.8C284.44 14.8 284.8 14.44 284.8 14C284.8 13.56 284.44 13.2 284 13.2Z",
+                  "color": 1,
+                  "opacity": 1
+                },
+                {
+                  "d": "M295.7 90.1L291.3 87.6L292.3 85.9L296.7 88.4L295.7 90.1ZM288.3 94.5L284.7 97L283.7 95.5L287.3 93L288.3 94.5Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c2"
+                },
+                {
+                  "d": "M287.7 89.1L286.7 85.3L288.3 84.9L289.3 88.7L287.7 89.1Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M295 96.1C294.39 96.1 293.9 95.61 293.9 95C293.9 94.39 294.39 93.9 295 93.9C295.61 93.9 296.1 94.39 296.1 95C296.1 95.61 295.61 96.1 295 96.1ZM284 86.8C283.56 86.8 283.2 86.44 283.2 86C283.2 85.56 283.56 85.2 284 85.2C284.44 85.2 284.8 85.56 284.8 86C284.8 86.44 284.44 86.8 284 86.8Z",
+                  "color": 1,
+                  "opacity": 1
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 12,
+              "from": 20,
+              "to": 20,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M21.9 1.4L24.9 3.5L24.1 4.6L21.1 2.5L21.9 1.4ZM21.9 98.6L24.9 96.5L24.1 95.4L21.1 97.5L21.9 98.6Z",
+                  "color": 2,
+                  "opacity": 0.95,
+                  "group": "frise-a"
+                },
+                {
+                  "d": "M29 2.2C29.44 2.2 29.8 2.56 29.8 3C29.8 3.44 29.44 3.8 29 3.8C28.56 3.8 28.2 3.44 28.2 3C28.2 2.56 28.56 2.2 29 2.2ZM29 97.8C29.44 97.8 29.8 97.44 29.8 97C29.8 96.56 29.44 96.2 29 96.2C28.56 96.2 28.2 96.56 28.2 97C28.2 97.44 28.56 97.8 29 97.8Z",
+                  "color": 1,
+                  "opacity": 0.95,
+                  "group": "frise-b"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "cadran-de-minuit",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#1E1B4B",
+            "#E2E8F0",
+            "#D4AF37",
+            "#6366F1"
+          ],
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 3,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "border": {
+            "width": 5.4,
+            "color": 0,
+            "gradient": 0,
+            "opacity": 0.92,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "inset": 5,
+                "width": 0.4,
+                "color": 1,
+                "opacity": 0.8
+              }
+            ]
+          },
+          "reach": {
+            "corner": 16,
+            "cartouche": {
+              "width": 26,
+              "depth": 20,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M8 3.4L9 7L12.6 8L9 9L8 12.6L7 9L3.4 8L7 7L8 3.4Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c0"
+                },
+                {
+                  "d": "M14 3.1C14.5 3.1 14.9 3.5 14.9 4C14.9 4.5 14.5 4.9 14 4.9C13.5 4.9 13.1 4.5 13.1 4C13.1 3.5 13.5 3.1 14 3.1ZM4 13.3C4.39 13.3 4.7 13.61 4.7 14C4.7 14.39 4.39 14.7 4 14.7C3.61 14.7 3.3 14.39 3.3 14C3.3 13.61 3.61 13.3 4 13.3Z",
+                  "color": 2,
+                  "opacity": 1
+                },
+                {
+                  "d": "M8 96.6L9 93L12.6 92L9 91L8 87.4L7 91L3.4 92L7 93L8 96.6Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c3"
+                },
+                {
+                  "d": "M14 96.9C14.5 96.9 14.9 96.5 14.9 96C14.9 95.5 14.5 95.1 14 95.1C13.5 95.1 13.1 95.5 13.1 96C13.1 96.5 13.5 96.9 14 96.9ZM4 86.7C4.39 86.7 4.7 86.39 4.7 86C4.7 85.61 4.39 85.3 4 85.3C3.61 85.3 3.3 85.61 3.3 86C3.3 86.39 3.61 86.7 4 86.7Z",
+                  "color": 2,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M150 1C155.19 1 159.4 5.21 159.4 10.4C159.4 15.59 155.19 19.8 150 19.8C144.81 19.8 140.6 15.59 140.6 10.4C140.6 5.21 144.81 1 150 1Z",
+                  "color": 0,
+                  "opacity": 1
+                },
+                {
+                  "d": "M150 1C155.19 1 159.4 5.21 159.4 10.4C159.4 15.59 155.19 19.8 150 19.8C144.81 19.8 140.6 15.59 140.6 10.4C140.6 5.21 144.81 1 150 1Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 0.9
+                },
+                {
+                  "d": "M150 3.4L150 2M153.5 4.3L154.2 3.1M156.1 6.9L157.3 6.2M157 10.4L158.4 10.4M156.1 13.9L157.3 14.6M153.5 16.5L154.2 17.7M150 17.4L150 18.8M146.5 16.5L145.8 17.7M143.9 13.9L142.7 14.6M143 10.4L141.6 10.4M143.9 6.9L142.7 6.2M146.5 4.3L145.8 3.1",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.55
+                },
+                {
+                  "d": "M150 10.4L150 4.6",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 1.2
+                },
+                {
+                  "d": "M150 15.4L150 3.2",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.6,
+                  "group": "aiguille"
+                },
+                {
+                  "d": "M135 4.4L136.6 6L135 7.6L133.4 6L135 4.4ZM165 4.4L166.6 6L165 7.6L163.4 6L165 4.4Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "eclats"
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M292 3.4L291 7L287.4 8L291 9L292 12.6L293 9L296.6 8L293 7L292 3.4Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c1"
+                },
+                {
+                  "d": "M286 3.1C285.5 3.1 285.1 3.5 285.1 4C285.1 4.5 285.5 4.9 286 4.9C286.5 4.9 286.9 4.5 286.9 4C286.9 3.5 286.5 3.1 286 3.1ZM296 13.3C295.61 13.3 295.3 13.61 295.3 14C295.3 14.39 295.61 14.7 296 14.7C296.39 14.7 296.7 14.39 296.7 14C296.7 13.61 296.39 13.3 296 13.3Z",
+                  "color": 2,
+                  "opacity": 1
+                },
+                {
+                  "d": "M292 96.6L291 93L287.4 92L291 91L292 87.4L293 91L296.6 92L293 93L292 96.6Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c2"
+                },
+                {
+                  "d": "M286 96.9C285.5 96.9 285.1 96.5 285.1 96C285.1 95.5 285.5 95.1 286 95.1C286.5 95.1 286.9 95.5 286.9 96C286.9 96.5 286.5 96.9 286 96.9ZM296 86.7C295.61 86.7 295.3 86.39 295.3 86C295.3 85.61 295.61 85.3 296 85.3C296.39 85.3 296.7 85.61 296.7 86C296.7 86.39 296.39 86.7 296 86.7Z",
+                  "color": 2,
+                  "opacity": 1
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 13,
+              "from": 18,
+              "to": 18,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M22 1.4L22.3 2.7L23.6 3L22.3 3.3L22 4.6L21.7 3.3L20.4 3L21.7 2.7L22 1.4ZM22 98.6L22.3 97.3L23.6 97L22.3 96.7L22 95.4L21.7 96.7L20.4 97L21.7 97.3L22 98.6Z",
+                  "color": 1,
+                  "opacity": 0.9,
+                  "group": "etoiles-a"
+                },
+                {
+                  "d": "M28 1.85C28.3 1.85 28.55 2.1 28.55 2.4C28.55 2.7 28.3 2.95 28 2.95C27.7 2.95 27.45 2.7 27.45 2.4C27.45 2.1 27.7 1.85 28 1.85ZM28 98.15C28.3 98.15 28.55 97.9 28.55 97.6C28.55 97.3 28.3 97.05 28 97.05C27.7 97.05 27.45 97.3 27.45 97.6C27.45 97.9 27.7 98.15 28 98.15Z",
+                  "color": 2,
+                  "opacity": 0.9,
+                  "group": "etoiles-b"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "coupe-de-champagne",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#B8860B",
+            "#F7E7CE",
+            "#7C4A03",
+            "#FFFDF5"
+          ],
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 1,
+              "y2": 0,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.35
+                },
+                {
+                  "color": 1,
+                  "at": 0.5
+                },
+                {
+                  "color": 0,
+                  "at": 0.65
+                }
+              ]
+            }
+          ],
+          "border": {
+            "width": 5.6,
+            "color": 0,
+            "gradient": 0,
+            "opacity": 0.95,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 1,
+                "opacity": 1
+              },
+              {
+                "inset": 5.1,
+                "width": 0.4,
+                "color": 2,
+                "opacity": 0.9
+              }
+            ]
+          },
+          "reach": {
+            "corner": 17,
+            "cartouche": {
+              "width": 30,
+              "depth": 18,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M7 6.6C8.33 6.6 9.4 7.67 9.4 9C9.4 10.33 8.33 11.4 7 11.4C5.67 11.4 4.6 10.33 4.6 9C4.6 7.67 5.67 6.6 7 6.6ZM12 2.8C12.88 2.8 13.6 3.52 13.6 4.4C13.6 5.28 12.88 6 12 6C11.12 6 10.4 5.28 10.4 4.4C10.4 3.52 11.12 2.8 12 2.8ZM4 12.8C4.66 12.8 5.2 13.34 5.2 14C5.2 14.66 4.66 15.2 4 15.2C3.34 15.2 2.8 14.66 2.8 14C2.8 13.34 3.34 12.8 4 12.8Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.55,
+                  "group": "c0"
+                },
+                {
+                  "d": "M14 11.4C14.33 11.4 14.6 11.67 14.6 12C14.6 12.33 14.33 12.6 14 12.6C13.67 12.6 13.4 12.33 13.4 12C13.4 11.67 13.67 11.4 14 11.4Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M7 93.4C8.33 93.4 9.4 92.33 9.4 91C9.4 89.67 8.33 88.6 7 88.6C5.67 88.6 4.6 89.67 4.6 91C4.6 92.33 5.67 93.4 7 93.4ZM12 97.2C12.88 97.2 13.6 96.48 13.6 95.6C13.6 94.72 12.88 94 12 94C11.12 94 10.4 94.72 10.4 95.6C10.4 96.48 11.12 97.2 12 97.2ZM4 87.2C4.66 87.2 5.2 86.66 5.2 86C5.2 85.34 4.66 84.8 4 84.8C3.34 84.8 2.8 85.34 2.8 86C2.8 86.66 3.34 87.2 4 87.2Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.55,
+                  "group": "c3"
+                },
+                {
+                  "d": "M14 88.6C14.33 88.6 14.6 88.33 14.6 88C14.6 87.67 14.33 87.4 14 87.4C13.67 87.4 13.4 87.67 13.4 88C13.4 88.33 13.67 88.6 14 88.6Z",
+                  "color": 3,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M139.7 3.7L150.3 6.3L148.5 9.3L145.5 10.3L144.2 10.5L142.9 15.8L145.3 17.5L138.9 15.9L141.8 15.5L143.1 10.2L142.1 9.5L139.9 7.1L139.7 3.7ZM149.7 6.3L160.3 3.7L160.1 7.1L157.9 9.5L156.9 10.2L158.2 15.5L161.1 15.9L154.7 17.5L157.1 15.8L155.8 10.5L154.5 10.3L151.5 9.3L149.7 6.3Z",
+                  "color": 0,
+                  "opacity": 1
+                },
+                {
+                  "d": "M139.7 3.7L150.3 6.3L148.5 9.3L145.5 10.3L144.2 10.5L142.9 15.8L145.3 17.5L138.9 15.9L141.8 15.5L143.1 10.2L142.1 9.5L139.9 7.1L139.7 3.7ZM149.7 6.3L160.3 3.7L160.1 7.1L157.9 9.5L156.9 10.2L158.2 15.5L161.1 15.9L154.7 17.5L157.1 15.8L155.8 10.5L154.5 10.3L151.5 9.3L149.7 6.3Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 0.5
+                },
+                {
+                  "d": "M150 -0.2L150.5 1.9L152.6 2.4L150.5 2.9L150 5L149.5 2.9L147.4 2.4L149.5 1.9L150 -0.2Z",
+                  "color": 3,
+                  "opacity": 1,
+                  "group": "tchin"
+                },
+                {
+                  "d": "M141 0.6C141.55 0.6 142 1.05 142 1.6C142 2.15 141.55 2.6 141 2.6C140.45 2.6 140 2.15 140 1.6C140 1.05 140.45 0.6 141 0.6ZM159 0.6C159.44 0.6 159.8 0.96 159.8 1.4C159.8 1.84 159.44 2.2 159 2.2C158.56 2.2 158.2 1.84 158.2 1.4C158.2 0.96 158.56 0.6 159 0.6ZM138 5.4C138.33 5.4 138.6 5.67 138.6 6C138.6 6.33 138.33 6.6 138 6.6C137.67 6.6 137.4 6.33 137.4 6C137.4 5.67 137.67 5.4 138 5.4ZM162 5.4C162.33 5.4 162.6 5.67 162.6 6C162.6 6.33 162.33 6.6 162 6.6C161.67 6.6 161.4 6.33 161.4 6C161.4 5.67 161.67 5.4 162 5.4Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.4,
+                  "group": "bulles"
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M293 6.6C291.67 6.6 290.6 7.67 290.6 9C290.6 10.33 291.67 11.4 293 11.4C294.33 11.4 295.4 10.33 295.4 9C295.4 7.67 294.33 6.6 293 6.6ZM288 2.8C287.12 2.8 286.4 3.52 286.4 4.4C286.4 5.28 287.12 6 288 6C288.88 6 289.6 5.28 289.6 4.4C289.6 3.52 288.88 2.8 288 2.8ZM296 12.8C295.34 12.8 294.8 13.34 294.8 14C294.8 14.66 295.34 15.2 296 15.2C296.66 15.2 297.2 14.66 297.2 14C297.2 13.34 296.66 12.8 296 12.8Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.55,
+                  "group": "c1"
+                },
+                {
+                  "d": "M286 11.4C285.67 11.4 285.4 11.67 285.4 12C285.4 12.33 285.67 12.6 286 12.6C286.33 12.6 286.6 12.33 286.6 12C286.6 11.67 286.33 11.4 286 11.4Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M293 93.4C291.67 93.4 290.6 92.33 290.6 91C290.6 89.67 291.67 88.6 293 88.6C294.33 88.6 295.4 89.67 295.4 91C295.4 92.33 294.33 93.4 293 93.4ZM288 97.2C287.12 97.2 286.4 96.48 286.4 95.6C286.4 94.72 287.12 94 288 94C288.88 94 289.6 94.72 289.6 95.6C289.6 96.48 288.88 97.2 288 97.2ZM296 87.2C295.34 87.2 294.8 86.66 294.8 86C294.8 85.34 295.34 84.8 296 84.8C296.66 84.8 297.2 85.34 297.2 86C297.2 86.66 296.66 87.2 296 87.2Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.55,
+                  "group": "c2"
+                },
+                {
+                  "d": "M286 88.6C285.67 88.6 285.4 88.33 285.4 88C285.4 87.67 285.67 87.4 286 87.4C286.33 87.4 286.6 87.67 286.6 88C286.6 88.33 286.33 88.6 286 88.6Z",
+                  "color": 3,
+                  "opacity": 1
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 11,
+              "from": 19,
+              "to": 19,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M22 1.9C22.61 1.9 23.1 2.39 23.1 3C23.1 3.61 22.61 4.1 22 4.1C21.39 4.1 20.9 3.61 20.9 3C20.9 2.39 21.39 1.9 22 1.9ZM22 98.1C22.61 98.1 23.1 97.61 23.1 97C23.1 96.39 22.61 95.9 22 95.9C21.39 95.9 20.9 96.39 20.9 97C20.9 97.61 21.39 98.1 22 98.1Z",
+                  "color": 1,
+                  "opacity": 0.95,
+                  "width": 0.45,
+                  "group": "perles-a"
+                },
+                {
+                  "d": "M27 1.6C27.33 1.6 27.6 1.87 27.6 2.2C27.6 2.53 27.33 2.8 27 2.8C26.67 2.8 26.4 2.53 26.4 2.2C26.4 1.87 26.67 1.6 27 1.6ZM27 98.4C27.33 98.4 27.6 98.13 27.6 97.8C27.6 97.47 27.33 97.2 27 97.2C26.67 97.2 26.4 97.47 26.4 97.8C26.4 98.13 26.67 98.4 27 98.4Z",
+                  "color": 3,
+                  "opacity": 0.95,
+                  "group": "perles-b"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "nouvel-an-cadres-vifs",
+      "order": 24,
+      "installedByDefault": false,
+      "removable": true,
+      "usage": {
+        "kind": "free",
+        "surfaces": [
+          "banner"
+        ]
+      },
+      "availability": {
+        "startsAt": "2026-12-26T00:00:00Z",
+        "endsAt": "2027-01-16T00:00:00Z"
+      },
+      "frames": [
+        {
+          "key": "bouquet-final",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#0B1026",
+            "#FBBF24",
+            "#EC4899",
+            "#22D3EE",
+            "#7C3AED"
+          ],
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 1,
+              "y2": 0,
+              "stops": [
+                {
+                  "color": 4,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.5
+                },
+                {
+                  "color": 4,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "border": {
+            "width": 5.2,
+            "color": 0,
+            "gradient": 0,
+            "opacity": 0.92,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 1,
+                "opacity": 1
+              },
+              {
+                "inset": 4.6,
+                "width": 0.4,
+                "color": 2,
+                "opacity": 0.9
+              }
+            ]
+          },
+          "reach": {
+            "corner": 18,
+            "cartouche": {
+              "width": 32,
+              "depth": 18,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M9 6.6L9 1M10.4 7.1L13.7 2.5M11.3 8.3L16.6 6.5M11.3 9.7L16.6 11.5M10.4 10.9L13.7 15.5M9 11.4L9 17M7.6 10.9L4.3 15.5M6.7 9.7L1.4 11.5M6.7 8.3L1.4 6.5M7.6 7.1L4.3 2.5",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.7,
+                  "group": "c0"
+                },
+                {
+                  "d": "M9 7.8C9.66 7.8 10.2 8.34 10.2 9C10.2 9.66 9.66 10.2 9 10.2C8.34 10.2 7.8 9.66 7.8 9C7.8 8.34 8.34 7.8 9 7.8Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M9 93.4L9 99M10.4 92.9L13.7 97.5M11.3 91.7L16.6 93.5M11.3 90.3L16.6 88.5M10.4 89.1L13.7 84.5M9 88.6L9 83M7.6 89.1L4.3 84.5M6.7 90.3L1.4 88.5M6.7 91.7L1.4 93.5M7.6 92.9L4.3 97.5",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.7,
+                  "group": "c3"
+                },
+                {
+                  "d": "M9 92.2C9.66 92.2 10.2 91.66 10.2 91C10.2 90.34 9.66 89.8 9 89.8C8.34 89.8 7.8 90.34 7.8 91C7.8 91.66 8.34 92.2 9 92.2Z",
+                  "color": 3,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M150 6L150 0M151.3 6.3L153.9 0.9M152.3 7.1L157 3.4M152.9 8.3L158.8 7M152.9 9.7L158.8 11M152.3 10.9L157 14.6M151.3 11.7L153.9 17.1M150 12L150 18M148.7 11.7L146.1 17.1M147.7 10.9L143 14.6M147.1 9.7L141.2 11M147.1 8.3L141.2 7M147.7 7.1L143 3.4M148.7 6.3L146.1 0.9",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 0.8,
+                  "group": "bouquet"
+                },
+                {
+                  "d": "M150.6 7.7L152 4.9M151.4 8.7L154.5 8M151.1 9.9L153.6 11.9M150 10.4L150 13.6M148.9 9.9L146.4 11.9M148.6 8.7L145.5 8M149.4 7.7L148 4.8",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.6,
+                  "group": "bouquet"
+                },
+                {
+                  "d": "M139 4L139 1.6M139.7 4.3L141.4 2.6M140 5L142.4 5M139.7 5.7L141.4 7.4M139 6L139 8.4M138.3 5.7L136.6 7.4M138 5L135.6 5M138.3 4.3L136.6 2.6",
+                  "color": 3,
+                  "opacity": 1,
+                  "width": 0.5,
+                  "group": "gerbe-a"
+                },
+                {
+                  "d": "M161 4L161 1.6M161.7 4.3L163.4 2.6M162 5L164.4 5M161.7 5.7L163.4 7.4M161 6L161 8.4M160.3 5.7L158.6 7.4M160 5L157.6 5M160.3 4.3L158.6 2.6",
+                  "color": 3,
+                  "opacity": 1,
+                  "width": 0.5,
+                  "group": "gerbe-b"
+                },
+                {
+                  "d": "M150 7.7C150.72 7.7 151.3 8.28 151.3 9C151.3 9.72 150.72 10.3 150 10.3C149.28 10.3 148.7 9.72 148.7 9C148.7 8.28 149.28 7.7 150 7.7Z",
+                  "color": 1,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M291 6.6L291 1M289.6 7.1L286.3 2.5M288.7 8.3L283.4 6.5M288.7 9.7L283.4 11.5M289.6 10.9L286.3 15.5M291 11.4L291 17M292.4 10.9L295.7 15.5M293.3 9.7L298.6 11.5M293.3 8.3L298.6 6.5M292.4 7.1L295.7 2.5",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.7,
+                  "group": "c1"
+                },
+                {
+                  "d": "M291 7.8C290.34 7.8 289.8 8.34 289.8 9C289.8 9.66 290.34 10.2 291 10.2C291.66 10.2 292.2 9.66 292.2 9C292.2 8.34 291.66 7.8 291 7.8Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M291 93.4L291 99M289.6 92.9L286.3 97.5M288.7 91.7L283.4 93.5M288.7 90.3L283.4 88.5M289.6 89.1L286.3 84.5M291 88.6L291 83M292.4 89.1L295.7 84.5M293.3 90.3L298.6 88.5M293.3 91.7L298.6 93.5M292.4 92.9L295.7 97.5",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.7,
+                  "group": "c2"
+                },
+                {
+                  "d": "M291 92.2C290.34 92.2 289.8 91.66 289.8 91C289.8 90.34 290.34 89.8 291 89.8C291.66 89.8 292.2 90.34 292.2 91C292.2 91.66 291.66 92.2 291 92.2Z",
+                  "color": 3,
+                  "opacity": 1
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 14,
+              "from": 22,
+              "to": 22,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M26 1.3L26.4 2.4L27.5 2.8L26.4 3.2L26 4.3L25.6 3.2L24.5 2.8L25.6 2.4L26 1.3ZM26 98.7L26.4 97.6L27.5 97.2L26.4 96.8L26 95.7L25.6 96.8L24.5 97.2L25.6 97.6L26 98.7Z",
+                  "color": 1,
+                  "opacity": 0.95,
+                  "group": "etincelles-a"
+                },
+                {
+                  "d": "M32 2.65C32.3 2.65 32.55 2.9 32.55 3.2C32.55 3.5 32.3 3.75 32 3.75C31.7 3.75 31.45 3.5 31.45 3.2C31.45 2.9 31.7 2.65 32 2.65ZM32 97.35C32.3 97.35 32.55 97.1 32.55 96.8C32.55 96.5 32.3 96.25 32 96.25C31.7 96.25 31.45 96.5 31.45 96.8C31.45 97.1 31.7 97.35 32 97.35Z",
+                  "color": 3,
+                  "opacity": 0.95,
+                  "group": "etincelles-b"
+                }
+              ]
+            }
+          ],
+          "motion": [
+            {
+              "kind": "pulse",
+              "targets": [
+                "bouquet"
+              ],
+              "duration": 2.4,
+              "amplitude": 0.22,
+              "origin": "self"
+            },
+            {
+              "kind": "pulse",
+              "targets": [
+                "gerbe-a",
+                "gerbe-b"
+              ],
+              "duration": 2.4,
+              "stagger": 1.2,
+              "amplitude": 0.3,
+              "origin": "self"
+            },
+            {
+              "kind": "twinkle",
+              "targets": [
+                "etincelles-a",
+                "etincelles-b",
+                "c0",
+                "c1",
+                "c2",
+                "c3"
+              ],
+              "duration": 2.8,
+              "stagger": 0.45,
+              "amplitude": 0.75
+            }
+          ]
+        },
+        {
+          "key": "envol-de-confettis",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#6D28D9",
+            "#F472B6",
+            "#FACC15",
+            "#2DD4BF",
+            "#FFFDF5"
+          ],
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 1,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 0,
+                  "at": 0
+                },
+                {
+                  "color": 1,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "border": {
+            "width": 4.8,
+            "color": 0,
+            "gradient": 0,
+            "opacity": 0.9,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "inset": 4.4,
+                "width": 0.4,
+                "color": 4,
+                "opacity": 0.85
+              }
+            ]
+          },
+          "reach": {
+            "corner": 18,
+            "cartouche": {
+              "width": 36,
+              "depth": 16,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M4.3 9.9L8.7 12.4L7.7 14.1L3.3 11.6L4.3 9.9ZM11.7 5.5L15.3 3L16.3 4.5L12.7 7L11.7 5.5Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c0"
+                },
+                {
+                  "d": "M12.3 10.9L13.3 14.7L11.7 15.1L10.7 11.3L12.3 10.9Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M5 3.9C5.61 3.9 6.1 4.39 6.1 5C6.1 5.61 5.61 6.1 5 6.1C4.39 6.1 3.9 5.61 3.9 5C3.9 4.39 4.39 3.9 5 3.9ZM16 13.2C16.44 13.2 16.8 13.56 16.8 14C16.8 14.44 16.44 14.8 16 14.8C15.56 14.8 15.2 14.44 15.2 14C15.2 13.56 15.56 13.2 16 13.2Z",
+                  "color": 1,
+                  "opacity": 1
+                },
+                {
+                  "d": "M4.3 90.1L8.7 87.6L7.7 85.9L3.3 88.4L4.3 90.1ZM11.7 94.5L15.3 97L16.3 95.5L12.7 93L11.7 94.5Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c3"
+                },
+                {
+                  "d": "M12.3 89.1L13.3 85.3L11.7 84.9L10.7 88.7L12.3 89.1Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M5 96.1C5.61 96.1 6.1 95.61 6.1 95C6.1 94.39 5.61 93.9 5 93.9C4.39 93.9 3.9 94.39 3.9 95C3.9 95.61 4.39 96.1 5 96.1ZM16 86.8C16.44 86.8 16.8 86.44 16.8 86C16.8 85.56 16.44 85.2 16 85.2C15.56 85.2 15.2 85.56 15.2 86C15.2 86.44 15.56 86.8 16 86.8Z",
+                  "color": 1,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M134 3C134 3 138 8.8 140 9C142 9.2 144 3.8 146 4C148 4.2 150 9.8 152 10C154 10.2 155.7 4.8 158 5C160.3 5.2 166 11 166 11",
+                  "color": 4,
+                  "opacity": 1,
+                  "width": 0.8
+                },
+                {
+                  "d": "M136.2 9.4L140.4 10.9L139.8 12.6L135.6 11.1L136.2 9.4ZM153.9 14.1L156.7 10.7L158.1 11.9L155.3 15.3L153.9 14.1Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "pluie-a"
+                },
+                {
+                  "d": "M145.9 10.8L147.6 14.5L146.1 15.2L144.4 11.5L145.9 10.8ZM161.2 2.9L165.1 3.6L164.8 5.1L160.9 4.4L161.2 2.9Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "pluie-b"
+                },
+                {
+                  "d": "M147.8 3.9L151.6 2.6L152.2 4.1L148.4 5.4L147.8 3.9ZM134.3 3.2L136.8 5.7L135.7 6.8L133.2 4.3L134.3 3.2Z",
+                  "color": 3,
+                  "opacity": 1,
+                  "group": "pluie-c"
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M295.7 9.9L291.3 12.4L292.3 14.1L296.7 11.6L295.7 9.9ZM288.3 5.5L284.7 3L283.7 4.5L287.3 7L288.3 5.5Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c1"
+                },
+                {
+                  "d": "M287.7 10.9L286.7 14.7L288.3 15.1L289.3 11.3L287.7 10.9Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M295 3.9C294.39 3.9 293.9 4.39 293.9 5C293.9 5.61 294.39 6.1 295 6.1C295.61 6.1 296.1 5.61 296.1 5C296.1 4.39 295.61 3.9 295 3.9ZM284 13.2C283.56 13.2 283.2 13.56 283.2 14C283.2 14.44 283.56 14.8 284 14.8C284.44 14.8 284.8 14.44 284.8 14C284.8 13.56 284.44 13.2 284 13.2Z",
+                  "color": 1,
+                  "opacity": 1
+                },
+                {
+                  "d": "M295.7 90.1L291.3 87.6L292.3 85.9L296.7 88.4L295.7 90.1ZM288.3 94.5L284.7 97L283.7 95.5L287.3 93L288.3 94.5Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "c2"
+                },
+                {
+                  "d": "M287.7 89.1L286.7 85.3L288.3 84.9L289.3 88.7L287.7 89.1Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M295 96.1C294.39 96.1 293.9 95.61 293.9 95C293.9 94.39 294.39 93.9 295 93.9C295.61 93.9 296.1 94.39 296.1 95C296.1 95.61 295.61 96.1 295 96.1ZM284 86.8C283.56 86.8 283.2 86.44 283.2 86C283.2 85.56 283.56 85.2 284 85.2C284.44 85.2 284.8 85.56 284.8 86C284.8 86.44 284.44 86.8 284 86.8Z",
+                  "color": 1,
+                  "opacity": 1
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 12,
+              "from": 20,
+              "to": 20,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M21.9 1.4L24.9 3.5L24.1 4.6L21.1 2.5L21.9 1.4ZM21.9 98.6L24.9 96.5L24.1 95.4L21.1 97.5L21.9 98.6Z",
+                  "color": 2,
+                  "opacity": 0.95,
+                  "group": "frise-a"
+                },
+                {
+                  "d": "M29 2.2C29.44 2.2 29.8 2.56 29.8 3C29.8 3.44 29.44 3.8 29 3.8C28.56 3.8 28.2 3.44 28.2 3C28.2 2.56 28.56 2.2 29 2.2ZM29 97.8C29.44 97.8 29.8 97.44 29.8 97C29.8 96.56 29.44 96.2 29 96.2C28.56 96.2 28.2 96.56 28.2 97C28.2 97.44 28.56 97.8 29 97.8Z",
+                  "color": 1,
+                  "opacity": 0.95,
+                  "group": "frise-b"
+                }
+              ]
+            }
+          ],
+          "motion": [
+            {
+              "kind": "skew",
+              "targets": [
+                "pluie-a",
+                "pluie-b",
+                "pluie-c"
+              ],
+              "duration": 2.6,
+              "stagger": 0.5,
+              "amplitude": 0.4,
+              "direction": "alternate",
+              "origin": "self"
+            },
+            {
+              "kind": "rotate",
+              "targets": [
+                "frise-a"
+              ],
+              "duration": 6,
+              "origin": "self"
+            },
+            {
+              "kind": "twinkle",
+              "targets": [
+                "frise-b",
+                "c0",
+                "c1",
+                "c2",
+                "c3"
+              ],
+              "duration": 3,
+              "stagger": 0.5,
+              "amplitude": 0.6
+            }
+          ]
+        },
+        {
+          "key": "minuit-sonne",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#1E1B4B",
+            "#E2E8F0",
+            "#D4AF37",
+            "#6366F1"
+          ],
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 0,
+              "y2": 1,
+              "stops": [
+                {
+                  "color": 3,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 1
+                }
+              ]
+            }
+          ],
+          "border": {
+            "width": 5.4,
+            "color": 0,
+            "gradient": 0,
+            "opacity": 0.92,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 2,
+                "opacity": 1
+              },
+              {
+                "inset": 5,
+                "width": 0.4,
+                "color": 1,
+                "opacity": 0.8
+              }
+            ]
+          },
+          "reach": {
+            "corner": 16,
+            "cartouche": {
+              "width": 26,
+              "depth": 20,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M8 3.4L9 7L12.6 8L9 9L8 12.6L7 9L3.4 8L7 7L8 3.4Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c0"
+                },
+                {
+                  "d": "M14 3.1C14.5 3.1 14.9 3.5 14.9 4C14.9 4.5 14.5 4.9 14 4.9C13.5 4.9 13.1 4.5 13.1 4C13.1 3.5 13.5 3.1 14 3.1ZM4 13.3C4.39 13.3 4.7 13.61 4.7 14C4.7 14.39 4.39 14.7 4 14.7C3.61 14.7 3.3 14.39 3.3 14C3.3 13.61 3.61 13.3 4 13.3Z",
+                  "color": 2,
+                  "opacity": 1
+                },
+                {
+                  "d": "M8 96.6L9 93L12.6 92L9 91L8 87.4L7 91L3.4 92L7 93L8 96.6Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c3"
+                },
+                {
+                  "d": "M14 96.9C14.5 96.9 14.9 96.5 14.9 96C14.9 95.5 14.5 95.1 14 95.1C13.5 95.1 13.1 95.5 13.1 96C13.1 96.5 13.5 96.9 14 96.9ZM4 86.7C4.39 86.7 4.7 86.39 4.7 86C4.7 85.61 4.39 85.3 4 85.3C3.61 85.3 3.3 85.61 3.3 86C3.3 86.39 3.61 86.7 4 86.7Z",
+                  "color": 2,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M150 1C155.19 1 159.4 5.21 159.4 10.4C159.4 15.59 155.19 19.8 150 19.8C144.81 19.8 140.6 15.59 140.6 10.4C140.6 5.21 144.81 1 150 1Z",
+                  "color": 0,
+                  "opacity": 1
+                },
+                {
+                  "d": "M150 1C155.19 1 159.4 5.21 159.4 10.4C159.4 15.59 155.19 19.8 150 19.8C144.81 19.8 140.6 15.59 140.6 10.4C140.6 5.21 144.81 1 150 1Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 0.9
+                },
+                {
+                  "d": "M150 3.4L150 2M153.5 4.3L154.2 3.1M156.1 6.9L157.3 6.2M157 10.4L158.4 10.4M156.1 13.9L157.3 14.6M153.5 16.5L154.2 17.7M150 17.4L150 18.8M146.5 16.5L145.8 17.7M143.9 13.9L142.7 14.6M143 10.4L141.6 10.4M143.9 6.9L142.7 6.2M146.5 4.3L145.8 3.1",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.55
+                },
+                {
+                  "d": "M150 10.4L150 4.6",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 1.2
+                },
+                {
+                  "d": "M150 15.4L150 3.2",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.6,
+                  "group": "aiguille"
+                },
+                {
+                  "d": "M135 4.4L136.6 6L135 7.6L133.4 6L135 4.4ZM165 4.4L166.6 6L165 7.6L163.4 6L165 4.4Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "group": "eclats"
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M292 3.4L291 7L287.4 8L291 9L292 12.6L293 9L296.6 8L293 7L292 3.4Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c1"
+                },
+                {
+                  "d": "M286 3.1C285.5 3.1 285.1 3.5 285.1 4C285.1 4.5 285.5 4.9 286 4.9C286.5 4.9 286.9 4.5 286.9 4C286.9 3.5 286.5 3.1 286 3.1ZM296 13.3C295.61 13.3 295.3 13.61 295.3 14C295.3 14.39 295.61 14.7 296 14.7C296.39 14.7 296.7 14.39 296.7 14C296.7 13.61 296.39 13.3 296 13.3Z",
+                  "color": 2,
+                  "opacity": 1
+                },
+                {
+                  "d": "M292 96.6L291 93L287.4 92L291 91L292 87.4L293 91L296.6 92L293 93L292 96.6Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "group": "c2"
+                },
+                {
+                  "d": "M286 96.9C285.5 96.9 285.1 96.5 285.1 96C285.1 95.5 285.5 95.1 286 95.1C286.5 95.1 286.9 95.5 286.9 96C286.9 96.5 286.5 96.9 286 96.9ZM296 86.7C295.61 86.7 295.3 86.39 295.3 86C295.3 85.61 295.61 85.3 296 85.3C296.39 85.3 296.7 85.61 296.7 86C296.7 86.39 296.39 86.7 296 86.7Z",
+                  "color": 2,
+                  "opacity": 1
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 13,
+              "from": 18,
+              "to": 18,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M22 1.4L22.3 2.7L23.6 3L22.3 3.3L22 4.6L21.7 3.3L20.4 3L21.7 2.7L22 1.4ZM22 98.6L22.3 97.3L23.6 97L22.3 96.7L22 95.4L21.7 96.7L20.4 97L21.7 97.3L22 98.6Z",
+                  "color": 1,
+                  "opacity": 0.9,
+                  "group": "etoiles-a"
+                },
+                {
+                  "d": "M28 1.85C28.3 1.85 28.55 2.1 28.55 2.4C28.55 2.7 28.3 2.95 28 2.95C27.7 2.95 27.45 2.7 27.45 2.4C27.45 2.1 27.7 1.85 28 1.85ZM28 98.15C28.3 98.15 28.55 97.9 28.55 97.6C28.55 97.3 28.3 97.05 28 97.05C27.7 97.05 27.45 97.3 27.45 97.6C27.45 97.9 27.7 98.15 28 98.15Z",
+                  "color": 2,
+                  "opacity": 0.9,
+                  "group": "etoiles-b"
+                }
+              ]
+            }
+          ],
+          "motion": [
+            {
+              "kind": "rotate",
+              "targets": [
+                "aiguille"
+              ],
+              "duration": 12,
+              "origin": "self"
+            },
+            {
+              "kind": "pulse",
+              "targets": [
+                "eclats"
+              ],
+              "duration": 3,
+              "amplitude": 0.25,
+              "origin": "self"
+            },
+            {
+              "kind": "twinkle",
+              "targets": [
+                "etoiles-a",
+                "etoiles-b",
+                "c0",
+                "c1",
+                "c2",
+                "c3"
+              ],
+              "duration": 3.6,
+              "stagger": 0.6,
+              "amplitude": 0.7
+            }
+          ]
+        },
+        {
+          "key": "champagne-petillant",
+          "viewBox": [
+            0,
+            0,
+            300,
+            100
+          ],
+          "palette": [
+            "#B8860B",
+            "#F7E7CE",
+            "#7C4A03",
+            "#FFFDF5"
+          ],
+          "gradients": [
+            {
+              "kind": "linear",
+              "x1": 0,
+              "y1": 0,
+              "x2": 1,
+              "y2": 0,
+              "stops": [
+                {
+                  "color": 2,
+                  "at": 0
+                },
+                {
+                  "color": 0,
+                  "at": 0.35
+                },
+                {
+                  "color": 1,
+                  "at": 0.5
+                },
+                {
+                  "color": 0,
+                  "at": 0.65
+                }
+              ]
+            }
+          ],
+          "border": {
+            "width": 5.6,
+            "color": 0,
+            "gradient": 0,
+            "opacity": 0.95,
+            "filets": [
+              {
+                "inset": 0.5,
+                "width": 0.45,
+                "color": 1,
+                "opacity": 1
+              },
+              {
+                "inset": 5.1,
+                "width": 0.4,
+                "color": 2,
+                "opacity": 0.9
+              }
+            ]
+          },
+          "reach": {
+            "corner": 17,
+            "cartouche": {
+              "width": 30,
+              "depth": 18,
+              "edge": "top"
+            }
+          },
+          "pieces": [
+            {
+              "anchor": "start",
+              "paths": [
+                {
+                  "d": "M7 6.6C8.33 6.6 9.4 7.67 9.4 9C9.4 10.33 8.33 11.4 7 11.4C5.67 11.4 4.6 10.33 4.6 9C4.6 7.67 5.67 6.6 7 6.6ZM12 2.8C12.88 2.8 13.6 3.52 13.6 4.4C13.6 5.28 12.88 6 12 6C11.12 6 10.4 5.28 10.4 4.4C10.4 3.52 11.12 2.8 12 2.8ZM4 12.8C4.66 12.8 5.2 13.34 5.2 14C5.2 14.66 4.66 15.2 4 15.2C3.34 15.2 2.8 14.66 2.8 14C2.8 13.34 3.34 12.8 4 12.8Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.55,
+                  "group": "c0"
+                },
+                {
+                  "d": "M14 11.4C14.33 11.4 14.6 11.67 14.6 12C14.6 12.33 14.33 12.6 14 12.6C13.67 12.6 13.4 12.33 13.4 12C13.4 11.67 13.67 11.4 14 11.4Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M7 93.4C8.33 93.4 9.4 92.33 9.4 91C9.4 89.67 8.33 88.6 7 88.6C5.67 88.6 4.6 89.67 4.6 91C4.6 92.33 5.67 93.4 7 93.4ZM12 97.2C12.88 97.2 13.6 96.48 13.6 95.6C13.6 94.72 12.88 94 12 94C11.12 94 10.4 94.72 10.4 95.6C10.4 96.48 11.12 97.2 12 97.2ZM4 87.2C4.66 87.2 5.2 86.66 5.2 86C5.2 85.34 4.66 84.8 4 84.8C3.34 84.8 2.8 85.34 2.8 86C2.8 86.66 3.34 87.2 4 87.2Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.55,
+                  "group": "c3"
+                },
+                {
+                  "d": "M14 88.6C14.33 88.6 14.6 88.33 14.6 88C14.6 87.67 14.33 87.4 14 87.4C13.67 87.4 13.4 87.67 13.4 88C13.4 88.33 13.67 88.6 14 88.6Z",
+                  "color": 3,
+                  "opacity": 1
+                }
+              ]
+            },
+            {
+              "anchor": "center",
+              "paths": [
+                {
+                  "d": "M139.7 3.7L150.3 6.3L148.5 9.3L145.5 10.3L144.2 10.5L142.9 15.8L145.3 17.5L138.9 15.9L141.8 15.5L143.1 10.2L142.1 9.5L139.9 7.1L139.7 3.7ZM149.7 6.3L160.3 3.7L160.1 7.1L157.9 9.5L156.9 10.2L158.2 15.5L161.1 15.9L154.7 17.5L157.1 15.8L155.8 10.5L154.5 10.3L151.5 9.3L149.7 6.3Z",
+                  "color": 0,
+                  "opacity": 1
+                },
+                {
+                  "d": "M139.7 3.7L150.3 6.3L148.5 9.3L145.5 10.3L144.2 10.5L142.9 15.8L145.3 17.5L138.9 15.9L141.8 15.5L143.1 10.2L142.1 9.5L139.9 7.1L139.7 3.7ZM149.7 6.3L160.3 3.7L160.1 7.1L157.9 9.5L156.9 10.2L158.2 15.5L161.1 15.9L154.7 17.5L157.1 15.8L155.8 10.5L154.5 10.3L151.5 9.3L149.7 6.3Z",
+                  "color": 2,
+                  "opacity": 1,
+                  "width": 0.5
+                },
+                {
+                  "d": "M150 -0.2L150.5 1.9L152.6 2.4L150.5 2.9L150 5L149.5 2.9L147.4 2.4L149.5 1.9L150 -0.2Z",
+                  "color": 3,
+                  "opacity": 1,
+                  "group": "tchin"
+                },
+                {
+                  "d": "M141 0.6C141.55 0.6 142 1.05 142 1.6C142 2.15 141.55 2.6 141 2.6C140.45 2.6 140 2.15 140 1.6C140 1.05 140.45 0.6 141 0.6ZM159 0.6C159.44 0.6 159.8 0.96 159.8 1.4C159.8 1.84 159.44 2.2 159 2.2C158.56 2.2 158.2 1.84 158.2 1.4C158.2 0.96 158.56 0.6 159 0.6ZM138 5.4C138.33 5.4 138.6 5.67 138.6 6C138.6 6.33 138.33 6.6 138 6.6C137.67 6.6 137.4 6.33 137.4 6C137.4 5.67 137.67 5.4 138 5.4ZM162 5.4C162.33 5.4 162.6 5.67 162.6 6C162.6 6.33 162.33 6.6 162 6.6C161.67 6.6 161.4 6.33 161.4 6C161.4 5.67 161.67 5.4 162 5.4Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.4,
+                  "group": "bulles"
+                }
+              ]
+            },
+            {
+              "anchor": "end",
+              "paths": [
+                {
+                  "d": "M293 6.6C291.67 6.6 290.6 7.67 290.6 9C290.6 10.33 291.67 11.4 293 11.4C294.33 11.4 295.4 10.33 295.4 9C295.4 7.67 294.33 6.6 293 6.6ZM288 2.8C287.12 2.8 286.4 3.52 286.4 4.4C286.4 5.28 287.12 6 288 6C288.88 6 289.6 5.28 289.6 4.4C289.6 3.52 288.88 2.8 288 2.8ZM296 12.8C295.34 12.8 294.8 13.34 294.8 14C294.8 14.66 295.34 15.2 296 15.2C296.66 15.2 297.2 14.66 297.2 14C297.2 13.34 296.66 12.8 296 12.8Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.55,
+                  "group": "c1"
+                },
+                {
+                  "d": "M286 11.4C285.67 11.4 285.4 11.67 285.4 12C285.4 12.33 285.67 12.6 286 12.6C286.33 12.6 286.6 12.33 286.6 12C286.6 11.67 286.33 11.4 286 11.4Z",
+                  "color": 3,
+                  "opacity": 1
+                },
+                {
+                  "d": "M293 93.4C291.67 93.4 290.6 92.33 290.6 91C290.6 89.67 291.67 88.6 293 88.6C294.33 88.6 295.4 89.67 295.4 91C295.4 92.33 294.33 93.4 293 93.4ZM288 97.2C287.12 97.2 286.4 96.48 286.4 95.6C286.4 94.72 287.12 94 288 94C288.88 94 289.6 94.72 289.6 95.6C289.6 96.48 288.88 97.2 288 97.2ZM296 87.2C295.34 87.2 294.8 86.66 294.8 86C294.8 85.34 295.34 84.8 296 84.8C296.66 84.8 297.2 85.34 297.2 86C297.2 86.66 296.66 87.2 296 87.2Z",
+                  "color": 1,
+                  "opacity": 1,
+                  "width": 0.55,
+                  "group": "c2"
+                },
+                {
+                  "d": "M286 88.6C285.67 88.6 285.4 88.33 285.4 88C285.4 87.67 285.67 87.4 286 87.4C286.33 87.4 286.6 87.67 286.6 88C286.6 88.33 286.33 88.6 286 88.6Z",
+                  "color": 3,
+                  "opacity": 1
+                }
+              ]
+            }
+          ],
+          "friezes": [
+            {
+              "module": 11,
+              "from": 19,
+              "to": 19,
+              "fit": "justify",
+              "paths": [
+                {
+                  "d": "M22 1.9C22.61 1.9 23.1 2.39 23.1 3C23.1 3.61 22.61 4.1 22 4.1C21.39 4.1 20.9 3.61 20.9 3C20.9 2.39 21.39 1.9 22 1.9ZM22 98.1C22.61 98.1 23.1 97.61 23.1 97C23.1 96.39 22.61 95.9 22 95.9C21.39 95.9 20.9 96.39 20.9 97C20.9 97.61 21.39 98.1 22 98.1Z",
+                  "color": 1,
+                  "opacity": 0.95,
+                  "width": 0.45,
+                  "group": "perles-a"
+                },
+                {
+                  "d": "M27 1.6C27.33 1.6 27.6 1.87 27.6 2.2C27.6 2.53 27.33 2.8 27 2.8C26.67 2.8 26.4 2.53 26.4 2.2C26.4 1.87 26.67 1.6 27 1.6ZM27 98.4C27.33 98.4 27.6 98.13 27.6 97.8C27.6 97.47 27.33 97.2 27 97.2C26.67 97.2 26.4 97.47 26.4 97.8C26.4 98.13 26.67 98.4 27 98.4Z",
+                  "color": 3,
+                  "opacity": 0.95,
+                  "group": "perles-b"
+                }
+              ]
+            }
+          ],
+          "motion": [
+            {
+              "kind": "pulse",
+              "targets": [
+                "tchin"
+              ],
+              "duration": 2.2,
+              "amplitude": 0.35,
+              "origin": "self"
+            },
+            {
+              "kind": "twinkle",
+              "targets": [
+                "bulles",
+                "perles-a",
+                "perles-b",
+                "c0",
+                "c1",
+                "c2",
+                "c3"
+              ],
+              "duration": 2.6,
+              "stagger": 0.4,
+              "amplitude": 0.7
+            }
+          ]
+        }
+      ]
     }
   ],
   "strings": {
@@ -21937,6 +26542,50 @@ enum AppearanceCatalogData {
         "bannieres-atelier-noel": {
           "name": "Atelier du Père Noël",
           "description": "Les cadres de bannière assortis à « Atelier du Père Noël » : Bonnet du Père Noël et Sucre d’orge, posés en bordure pour laisser voir votre photo."
+        },
+        "noel-bannieres": {
+          "name": "Bannières de Noël",
+          "description": "Six images de bannière assorties aux packs de Noël : givre, guirlande et papier cadeau, puis une tempête de neige, des lumières qui scintillent et les étincelles de l’atelier."
+        },
+        "noel-contours-fixes": {
+          "name": "Noël · contours fixes",
+          "description": "Les six contours de Noël sans animation : flocons, houx, guirlande, étoile, bonnet et sucre d’orge, pour qui préfère un avatar immobile."
+        },
+        "noel-cadres-fixes": {
+          "name": "Noël · cadres fixes",
+          "description": "Les six cadres de bannière de Noël sans animation, assortis aux contours fixes : flocons, houx, guirlande, étoile, bonnet et sucre d’orge."
+        },
+        "nouvel-an-contours": {
+          "name": "Nouvel An",
+          "description": "Quatre contours pour fêter la nouvelle année : feux d’artifice, pluie de confettis, cadran de minuit et coupe de champagne doré."
+        },
+        "nouvel-an-contours-vifs": {
+          "name": "Nouvel An vivant",
+          "description": "Quatre contours animés pour le passage à la nouvelle année : un bouquet final, un envol de confettis, l’horloge qui sonne minuit et des bulles de champagne."
+        },
+        "nouvel-an-images": {
+          "name": "Bannières du Nouvel An",
+          "description": "Quatre images de bannière pour la nouvelle année : une nuit d’artifice, une fête de confettis, les douze coups de minuit et un champagne doré."
+        },
+        "nouvel-an-images-vives": {
+          "name": "Bannières du Nouvel An animées",
+          "description": "Quatre images de bannière animées : des gerbes qui éclatent, une averse de confettis, le compte à rebours de minuit et des bulles de champagne. Animations réduites : une image fixe."
+        },
+        "nouvel-an-cadres": {
+          "name": "Cadres du Nouvel An",
+          "description": "Quatre cadres de bannière assortis aux contours du Nouvel An : feux d’artifice, confettis, cadran de minuit et coupes de champagne."
+        },
+        "nouvel-an-cadres-vifs": {
+          "name": "Cadres du Nouvel An animés",
+          "description": "Quatre cadres de bannière animés, assortis aux contours vivants : un bouquet qui éclate, des confettis qui volent, l’aiguille de minuit qui tourne et des coupes qui trinquent."
+        },
+        "nouvel-an-fonds": {
+          "name": "Fonds du Nouvel An",
+          "description": "Quatre fonds de conversation pour la nouvelle année : ciel d’artifice, confettis, heure de minuit et bulles dorées, assez discrets pour laisser lire chaque bulle."
+        },
+        "nouvel-an-fonds-vifs": {
+          "name": "Nouvel An vivant · fonds",
+          "description": "Quatre fonds animés pour la nouvelle année : des gerbes lointaines, des confettis qui tombent, une nuit étoilée et des bulles qui montent. Animations réduites : un dégradé fixe."
         }
       },
       "designs": {
@@ -21975,7 +26624,29 @@ enum AppearanceCatalogData {
         "sucre-d-orge-raye": "Rayures sucre d’orge",
         "neige-de-noel": "Neige de Noël",
         "ampoules-de-noel": "Ampoules de Noël",
-        "etincelles-atelier": "Étincelles de l’atelier"
+        "etincelles-atelier": "Étincelles de l’atelier",
+        "banniere-noel-givre": "Givre",
+        "banniere-noel-guirlande": "Guirlande",
+        "banniere-noel-cadeau": "Papier cadeau",
+        "banniere-noel-neige": "Tempête de neige",
+        "banniere-noel-lumieres": "Lumières scintillantes",
+        "banniere-noel-etincelles": "Étincelles de Noël",
+        "banniere-artifice": "Nuit d’artifice",
+        "banniere-confettis": "Fête des confettis",
+        "banniere-minuit": "Douze coups",
+        "banniere-champagne": "Champagne doré",
+        "banniere-artifice-vive": "Feu d’artifice vivant",
+        "banniere-confettis-vive": "Averse de confettis",
+        "banniere-minuit-vive": "Compte à rebours",
+        "banniere-champagne-vive": "Bulles de champagne",
+        "fond-artifice": "Ciel d’artifice",
+        "fond-confettis": "Confettis",
+        "fond-minuit": "Heure de minuit",
+        "fond-champagne": "Bulles dorées",
+        "fond-artifice-vif": "Gerbes lointaines",
+        "fond-confettis-vif": "Confettis qui tombent",
+        "fond-minuit-vif": "Nuit étoilée de minuit",
+        "fond-champagne-vif": "Bulles qui montent"
       },
       "rings": {
         "filet": "Filet",
@@ -22054,7 +26725,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "Guirlande lumineuse",
         "etoile-du-sapin": "Étoile du sapin",
         "bonnet-du-pere-noel": "Bonnet du Père Noël",
-        "sucre-d-orge": "Sucre d’orge"
+        "sucre-d-orge": "Sucre d’orge",
+        "flocons-tombants-fixe": "Flocons qui tombent · fixe",
+        "couronne-de-houx-fixe": "Couronne de houx · fixe",
+        "guirlande-lumineuse-fixe": "Guirlande lumineuse · fixe",
+        "etoile-du-sapin-fixe": "Étoile du sapin · fixe",
+        "bonnet-du-pere-noel-fixe": "Bonnet du Père Noël · fixe",
+        "sucre-d-orge-fixe": "Sucre d’orge · fixe",
+        "feux-d-artifice": "Feux d’artifice",
+        "pluie-de-confettis": "Pluie de confettis",
+        "cadran-de-minuit": "Cadran de minuit",
+        "coupe-de-champagne": "Coupe de champagne",
+        "bouquet-final": "Bouquet final",
+        "envol-de-confettis": "Envol de confettis",
+        "minuit-sonne": "Minuit sonne",
+        "champagne-petillant": "Champagne pétillant"
       },
       "gamut": {
         "indigo": "Indigo Meeshy",
@@ -22146,7 +26831,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "Guirlande lumineuse",
         "etoile-du-sapin": "Étoile du sapin",
         "bonnet-du-pere-noel": "Bonnet du Père Noël",
-        "sucre-d-orge": "Sucre d’orge"
+        "sucre-d-orge": "Sucre d’orge",
+        "flocons-tombants-fixe": "Flocons qui tombent · fixe",
+        "couronne-de-houx-fixe": "Couronne de houx · fixe",
+        "guirlande-lumineuse-fixe": "Guirlande lumineuse · fixe",
+        "etoile-du-sapin-fixe": "Étoile du sapin · fixe",
+        "bonnet-du-pere-noel-fixe": "Bonnet du Père Noël · fixe",
+        "sucre-d-orge-fixe": "Sucre d’orge · fixe",
+        "feux-d-artifice": "Feux d’artifice",
+        "pluie-de-confettis": "Pluie de confettis",
+        "cadran-de-minuit": "Cadran de minuit",
+        "coupe-de-champagne": "Coupe de champagne",
+        "bouquet-final": "Bouquet final",
+        "envol-de-confettis": "Envol de confettis",
+        "minuit-sonne": "Minuit sonne",
+        "champagne-petillant": "Champagne pétillant"
       }
     },
     "en": {
@@ -22378,6 +27077,50 @@ enum AppearanceCatalogData {
         "bannieres-atelier-noel": {
           "name": "Santa’s workshop",
           "description": "Banner frames to match “Santa’s workshop”: Santa hat and Candy cane, kept to the edge so your photo stays in view."
+        },
+        "noel-bannieres": {
+          "name": "Christmas banners",
+          "description": "Six banner images to match the Christmas packs: frost, garland and gift wrap, then a snowstorm, twinkling lights and sparks from the workshop."
+        },
+        "noel-contours-fixes": {
+          "name": "Christmas · still rings",
+          "description": "The six Christmas rings without animation: snowflakes, holly, string lights, star, Santa hat and candy cane, for a calm avatar."
+        },
+        "noel-cadres-fixes": {
+          "name": "Christmas · still frames",
+          "description": "The six Christmas banner frames without animation, to match the still rings: snowflakes, holly, string lights, star, Santa hat and candy cane."
+        },
+        "nouvel-an-contours": {
+          "name": "New Year",
+          "description": "Four rings to celebrate the new year: fireworks, a confetti shower, a midnight dial and a golden champagne coupe."
+        },
+        "nouvel-an-contours-vifs": {
+          "name": "Living New Year",
+          "description": "Four animated rings for the turn of the year: a grand finale, a confetti flurry, a clock striking midnight and champagne bubbles."
+        },
+        "nouvel-an-images": {
+          "name": "New Year banners",
+          "description": "Four banner images for the new year: a firework night, a confetti party, the twelve strokes of midnight and golden champagne."
+        },
+        "nouvel-an-images-vives": {
+          "name": "Animated New Year banners",
+          "description": "Four animated banner images: bursting fireworks, a confetti shower, the midnight countdown and champagne bubbles. With reduced motion: a still image."
+        },
+        "nouvel-an-cadres": {
+          "name": "New Year frames",
+          "description": "Four banner frames to match the New Year rings: fireworks, confetti, a midnight dial and champagne coupes."
+        },
+        "nouvel-an-cadres-vifs": {
+          "name": "Animated New Year frames",
+          "description": "Four animated banner frames to match the living rings: a bursting bouquet, flying confetti, the midnight hand turning and coupes clinking."
+        },
+        "nouvel-an-fonds": {
+          "name": "New Year backgrounds",
+          "description": "Four chat backgrounds for the new year: a firework sky, confetti, the midnight hour and golden bubbles, subtle enough to keep every bubble readable."
+        },
+        "nouvel-an-fonds-vifs": {
+          "name": "Living New Year · backgrounds",
+          "description": "Four animated backgrounds for the new year: distant bursts, falling confetti, a starry night and rising bubbles. With reduced motion: a still gradient."
         }
       },
       "designs": {
@@ -22416,7 +27159,29 @@ enum AppearanceCatalogData {
         "sucre-d-orge-raye": "Candy-cane stripes",
         "neige-de-noel": "Christmas snow",
         "ampoules-de-noel": "Christmas bulbs",
-        "etincelles-atelier": "Workshop sparks"
+        "etincelles-atelier": "Workshop sparks",
+        "banniere-noel-givre": "Frost",
+        "banniere-noel-guirlande": "Garland",
+        "banniere-noel-cadeau": "Gift wrap",
+        "banniere-noel-neige": "Snowstorm",
+        "banniere-noel-lumieres": "Twinkling lights",
+        "banniere-noel-etincelles": "Christmas sparks",
+        "banniere-artifice": "Firework night",
+        "banniere-confettis": "Confetti party",
+        "banniere-minuit": "Twelve strokes",
+        "banniere-champagne": "Golden champagne",
+        "banniere-artifice-vive": "Live fireworks",
+        "banniere-confettis-vive": "Confetti burst",
+        "banniere-minuit-vive": "Countdown",
+        "banniere-champagne-vive": "Champagne bubbles",
+        "fond-artifice": "Firework sky",
+        "fond-confettis": "Confetti",
+        "fond-minuit": "Midnight hour",
+        "fond-champagne": "Golden bubbles",
+        "fond-artifice-vif": "Distant bursts",
+        "fond-confettis-vif": "Falling confetti",
+        "fond-minuit-vif": "Starry midnight",
+        "fond-champagne-vif": "Rising bubbles"
       },
       "rings": {
         "filet": "Hairline",
@@ -22495,7 +27260,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "String lights",
         "etoile-du-sapin": "Tree-top star",
         "bonnet-du-pere-noel": "Santa hat",
-        "sucre-d-orge": "Candy cane"
+        "sucre-d-orge": "Candy cane",
+        "flocons-tombants-fixe": "Falling snowflakes · still",
+        "couronne-de-houx-fixe": "Holly wreath · still",
+        "guirlande-lumineuse-fixe": "String lights · still",
+        "etoile-du-sapin-fixe": "Tree-top star · still",
+        "bonnet-du-pere-noel-fixe": "Santa hat · still",
+        "sucre-d-orge-fixe": "Candy cane · still",
+        "feux-d-artifice": "Fireworks",
+        "pluie-de-confettis": "Confetti shower",
+        "cadran-de-minuit": "Midnight dial",
+        "coupe-de-champagne": "Champagne coupe",
+        "bouquet-final": "Grand finale",
+        "envol-de-confettis": "Confetti flurry",
+        "minuit-sonne": "Midnight strikes",
+        "champagne-petillant": "Sparkling champagne"
       },
       "gamut": {
         "indigo": "Meeshy Indigo",
@@ -22587,7 +27366,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "String lights",
         "etoile-du-sapin": "Tree-top star",
         "bonnet-du-pere-noel": "Santa hat",
-        "sucre-d-orge": "Candy cane"
+        "sucre-d-orge": "Candy cane",
+        "flocons-tombants-fixe": "Falling snowflakes · still",
+        "couronne-de-houx-fixe": "Holly wreath · still",
+        "guirlande-lumineuse-fixe": "String lights · still",
+        "etoile-du-sapin-fixe": "Tree-top star · still",
+        "bonnet-du-pere-noel-fixe": "Santa hat · still",
+        "sucre-d-orge-fixe": "Candy cane · still",
+        "feux-d-artifice": "Fireworks",
+        "pluie-de-confettis": "Confetti shower",
+        "cadran-de-minuit": "Midnight dial",
+        "coupe-de-champagne": "Champagne coupe",
+        "bouquet-final": "Grand finale",
+        "envol-de-confettis": "Confetti flurry",
+        "minuit-sonne": "Midnight strikes",
+        "champagne-petillant": "Sparkling champagne"
       }
     },
     "es": {
@@ -22819,6 +27612,50 @@ enum AppearanceCatalogData {
         "bannieres-atelier-noel": {
           "name": "Taller de Papá Noel",
           "description": "Los marcos de portada a juego con «Taller de Papá Noel»: Gorro de Papá Noel y Bastón de caramelo, en el borde para que tu foto siga a la vista."
+        },
+        "noel-bannieres": {
+          "name": "Banners de Navidad",
+          "description": "Seis imágenes de banner a juego con los packs de Navidad: escarcha, guirnalda y papel de regalo, luego una nevada, luces que titilan y las chispas del taller."
+        },
+        "noel-contours-fixes": {
+          "name": "Navidad · contornos fijos",
+          "description": "Los seis contornos de Navidad sin animación: copos, acebo, guirnalda, estrella, gorro y bastón de caramelo, para un avatar tranquilo."
+        },
+        "noel-cadres-fixes": {
+          "name": "Navidad · marcos fijos",
+          "description": "Los seis marcos de banner de Navidad sin animación, a juego con los contornos fijos: copos, acebo, guirnalda, estrella, gorro y bastón de caramelo."
+        },
+        "nouvel-an-contours": {
+          "name": "Año Nuevo",
+          "description": "Cuatro contornos para celebrar el año nuevo: fuegos artificiales, lluvia de confeti, esfera de medianoche y copa de champán dorado."
+        },
+        "nouvel-an-contours-vifs": {
+          "name": "Año Nuevo vivo",
+          "description": "Cuatro contornos animados para el cambio de año: un gran final, un vuelo de confeti, el reloj que da las doce y burbujas de champán."
+        },
+        "nouvel-an-images": {
+          "name": "Banners de Año Nuevo",
+          "description": "Cuatro imágenes de banner para el año nuevo: una noche de fuegos, una fiesta de confeti, las doce campanadas y un champán dorado."
+        },
+        "nouvel-an-images-vives": {
+          "name": "Banners animados de Año Nuevo",
+          "description": "Cuatro imágenes de banner animadas: fuegos que estallan, un chaparrón de confeti, la cuenta atrás de medianoche y burbujas de champán. Con movimiento reducido: una imagen fija."
+        },
+        "nouvel-an-cadres": {
+          "name": "Marcos de Año Nuevo",
+          "description": "Cuatro marcos de banner a juego con los contornos de Año Nuevo: fuegos artificiales, confeti, esfera de medianoche y copas de champán."
+        },
+        "nouvel-an-cadres-vifs": {
+          "name": "Marcos animados de Año Nuevo",
+          "description": "Cuatro marcos de banner animados, a juego con los contornos vivos: un ramillete que estalla, confeti que vuela, la aguja de medianoche que gira y copas que brindan."
+        },
+        "nouvel-an-fonds": {
+          "name": "Fondos de Año Nuevo",
+          "description": "Cuatro fondos de conversación para el año nuevo: cielo de fuegos, confeti, hora de medianoche y burbujas doradas, discretos para que cada burbuja se lea bien."
+        },
+        "nouvel-an-fonds-vifs": {
+          "name": "Año Nuevo vivo · fondos",
+          "description": "Cuatro fondos animados para el año nuevo: destellos lejanos, confeti que cae, una noche estrellada y burbujas que suben. Con movimiento reducido: un degradado fijo."
         }
       },
       "designs": {
@@ -22857,7 +27694,29 @@ enum AppearanceCatalogData {
         "sucre-d-orge-raye": "Rayas de caramelo",
         "neige-de-noel": "Nieve de Navidad",
         "ampoules-de-noel": "Bombillas de Navidad",
-        "etincelles-atelier": "Chispas del taller"
+        "etincelles-atelier": "Chispas del taller",
+        "banniere-noel-givre": "Escarcha",
+        "banniere-noel-guirlande": "Guirnalda",
+        "banniere-noel-cadeau": "Papel de regalo",
+        "banniere-noel-neige": "Nevada",
+        "banniere-noel-lumieres": "Luces que titilan",
+        "banniere-noel-etincelles": "Chispas de Navidad",
+        "banniere-artifice": "Noche de fuegos",
+        "banniere-confettis": "Fiesta de confeti",
+        "banniere-minuit": "Doce campanadas",
+        "banniere-champagne": "Champán dorado",
+        "banniere-artifice-vive": "Fuegos en vivo",
+        "banniere-confettis-vive": "Chaparrón de confeti",
+        "banniere-minuit-vive": "Cuenta atrás",
+        "banniere-champagne-vive": "Burbujas de champán",
+        "fond-artifice": "Cielo de fuegos",
+        "fond-confettis": "Confeti",
+        "fond-minuit": "Hora de medianoche",
+        "fond-champagne": "Burbujas doradas",
+        "fond-artifice-vif": "Destellos lejanos",
+        "fond-confettis-vif": "Confeti que cae",
+        "fond-minuit-vif": "Medianoche estrellada",
+        "fond-champagne-vif": "Burbujas que suben"
       },
       "rings": {
         "filet": "Filete",
@@ -22936,7 +27795,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "Guirnalda de luces",
         "etoile-du-sapin": "Estrella del árbol",
         "bonnet-du-pere-noel": "Gorro de Papá Noel",
-        "sucre-d-orge": "Bastón de caramelo"
+        "sucre-d-orge": "Bastón de caramelo",
+        "flocons-tombants-fixe": "Copos que caen · fijo",
+        "couronne-de-houx-fixe": "Corona de acebo · fijo",
+        "guirlande-lumineuse-fixe": "Guirnalda de luces · fijo",
+        "etoile-du-sapin-fixe": "Estrella del árbol · fijo",
+        "bonnet-du-pere-noel-fixe": "Gorro de Papá Noel · fijo",
+        "sucre-d-orge-fixe": "Bastón de caramelo · fijo",
+        "feux-d-artifice": "Fuegos artificiales",
+        "pluie-de-confettis": "Lluvia de confeti",
+        "cadran-de-minuit": "Esfera de medianoche",
+        "coupe-de-champagne": "Copa de champán",
+        "bouquet-final": "Gran final",
+        "envol-de-confettis": "Vuelo de confeti",
+        "minuit-sonne": "Suenan las doce",
+        "champagne-petillant": "Champán burbujeante"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -23028,7 +27901,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "Guirnalda de luces",
         "etoile-du-sapin": "Estrella del árbol",
         "bonnet-du-pere-noel": "Gorro de Papá Noel",
-        "sucre-d-orge": "Bastón de caramelo"
+        "sucre-d-orge": "Bastón de caramelo",
+        "flocons-tombants-fixe": "Copos que caen · fijo",
+        "couronne-de-houx-fixe": "Corona de acebo · fijo",
+        "guirlande-lumineuse-fixe": "Guirnalda de luces · fijo",
+        "etoile-du-sapin-fixe": "Estrella del árbol · fijo",
+        "bonnet-du-pere-noel-fixe": "Gorro de Papá Noel · fijo",
+        "sucre-d-orge-fixe": "Bastón de caramelo · fijo",
+        "feux-d-artifice": "Fuegos artificiales",
+        "pluie-de-confettis": "Lluvia de confeti",
+        "cadran-de-minuit": "Esfera de medianoche",
+        "coupe-de-champagne": "Copa de champán",
+        "bouquet-final": "Gran final",
+        "envol-de-confettis": "Vuelo de confeti",
+        "minuit-sonne": "Suenan las doce",
+        "champagne-petillant": "Champán burbujeante"
       }
     },
     "pt": {
@@ -23260,6 +28147,50 @@ enum AppearanceCatalogData {
         "bannieres-atelier-noel": {
           "name": "Oficina do Pai Natal",
           "description": "As molduras de capa a condizer com «Oficina do Pai Natal»: Gorro do Pai Natal e Bastão de doce, na borda para que a tua foto fique à vista."
+        },
+        "noel-bannieres": {
+          "name": "Banners de Natal",
+          "description": "Seis imagens de banner a condizer com os packs de Natal: geada, grinalda e papel de embrulho, depois um nevão, luzes que cintilam e as faíscas da oficina."
+        },
+        "noel-contours-fixes": {
+          "name": "Natal · contornos fixos",
+          "description": "Os seis contornos de Natal sem animação: flocos, azevinho, grinalda, estrela, gorro e bastão de doce, para um avatar tranquilo."
+        },
+        "noel-cadres-fixes": {
+          "name": "Natal · molduras fixas",
+          "description": "As seis molduras de banner de Natal sem animação, a condizer com os contornos fixos: flocos, azevinho, grinalda, estrela, gorro e bastão de doce."
+        },
+        "nouvel-an-contours": {
+          "name": "Ano Novo",
+          "description": "Quatro contornos para celebrar o novo ano: fogo de artifício, chuva de confetes, mostrador da meia-noite e taça de champanhe dourado."
+        },
+        "nouvel-an-contours-vifs": {
+          "name": "Ano Novo vivo",
+          "description": "Quatro contornos animados para a passagem de ano: um grande final, um voo de confetes, o relógio a dar a meia-noite e bolhas de champanhe."
+        },
+        "nouvel-an-images": {
+          "name": "Banners de Ano Novo",
+          "description": "Quatro imagens de banner para o novo ano: uma noite de artifício, uma festa de confetes, as doze badaladas e um champanhe dourado."
+        },
+        "nouvel-an-images-vives": {
+          "name": "Banners animados de Ano Novo",
+          "description": "Quatro imagens de banner animadas: fogo de artifício a rebentar, um aguaceiro de confetes, a contagem decrescente da meia-noite e bolhas de champanhe. Com movimento reduzido: uma imagem fixa."
+        },
+        "nouvel-an-cadres": {
+          "name": "Molduras de Ano Novo",
+          "description": "Quatro molduras de banner a condizer com os contornos de Ano Novo: fogo de artifício, confetes, mostrador da meia-noite e taças de champanhe."
+        },
+        "nouvel-an-cadres-vifs": {
+          "name": "Molduras animadas de Ano Novo",
+          "description": "Quatro molduras de banner animadas, a condizer com os contornos vivos: um ramo que rebenta, confetes a voar, o ponteiro da meia-noite a girar e taças a brindar."
+        },
+        "nouvel-an-fonds": {
+          "name": "Fundos de Ano Novo",
+          "description": "Quatro fundos de conversa para o novo ano: céu de artifício, confetes, hora da meia-noite e bolhas douradas, discretos para que cada balão se leia bem."
+        },
+        "nouvel-an-fonds-vifs": {
+          "name": "Ano Novo vivo · fundos",
+          "description": "Quatro fundos animados para o novo ano: explosões ao longe, confetes a cair, uma noite estrelada e bolhas a subir. Com movimento reduzido: um degradê fixo."
         }
       },
       "designs": {
@@ -23298,7 +28229,29 @@ enum AppearanceCatalogData {
         "sucre-d-orge-raye": "Riscas de bastão de doce",
         "neige-de-noel": "Neve de Natal",
         "ampoules-de-noel": "Lâmpadas de Natal",
-        "etincelles-atelier": "Faíscas da oficina"
+        "etincelles-atelier": "Faíscas da oficina",
+        "banniere-noel-givre": "Geada",
+        "banniere-noel-guirlande": "Grinalda",
+        "banniere-noel-cadeau": "Papel de embrulho",
+        "banniere-noel-neige": "Nevão",
+        "banniere-noel-lumieres": "Luzes cintilantes",
+        "banniere-noel-etincelles": "Faíscas de Natal",
+        "banniere-artifice": "Noite de artifício",
+        "banniere-confettis": "Festa dos confetes",
+        "banniere-minuit": "Doze badaladas",
+        "banniere-champagne": "Champanhe dourado",
+        "banniere-artifice-vive": "Fogo de artifício vivo",
+        "banniere-confettis-vive": "Aguaceiro de confetes",
+        "banniere-minuit-vive": "Contagem decrescente",
+        "banniere-champagne-vive": "Bolhas de champanhe",
+        "fond-artifice": "Céu de artifício",
+        "fond-confettis": "Confetes",
+        "fond-minuit": "Hora da meia-noite",
+        "fond-champagne": "Bolhas douradas",
+        "fond-artifice-vif": "Explosões ao longe",
+        "fond-confettis-vif": "Confetes a cair",
+        "fond-minuit-vif": "Meia-noite estrelada",
+        "fond-champagne-vif": "Bolhas a subir"
       },
       "rings": {
         "filet": "Filete",
@@ -23377,7 +28330,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "Grinalda de luzes",
         "etoile-du-sapin": "Estrela da árvore",
         "bonnet-du-pere-noel": "Gorro do Pai Natal",
-        "sucre-d-orge": "Bastão de doce"
+        "sucre-d-orge": "Bastão de doce",
+        "flocons-tombants-fixe": "Flocos a cair · fixo",
+        "couronne-de-houx-fixe": "Coroa de azevinho · fixo",
+        "guirlande-lumineuse-fixe": "Grinalda de luzes · fixo",
+        "etoile-du-sapin-fixe": "Estrela da árvore · fixo",
+        "bonnet-du-pere-noel-fixe": "Gorro do Pai Natal · fixo",
+        "sucre-d-orge-fixe": "Bastão de doce · fixo",
+        "feux-d-artifice": "Fogo de artifício",
+        "pluie-de-confettis": "Chuva de confetes",
+        "cadran-de-minuit": "Mostrador da meia-noite",
+        "coupe-de-champagne": "Taça de champanhe",
+        "bouquet-final": "Grande final",
+        "envol-de-confettis": "Voo de confetes",
+        "minuit-sonne": "Soa a meia-noite",
+        "champagne-petillant": "Champanhe espumante"
       },
       "gamut": {
         "indigo": "Índigo Meeshy",
@@ -23469,7 +28436,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "Grinalda de luzes",
         "etoile-du-sapin": "Estrela da árvore",
         "bonnet-du-pere-noel": "Gorro do Pai Natal",
-        "sucre-d-orge": "Bastão de doce"
+        "sucre-d-orge": "Bastão de doce",
+        "flocons-tombants-fixe": "Flocos a cair · fixo",
+        "couronne-de-houx-fixe": "Coroa de azevinho · fixo",
+        "guirlande-lumineuse-fixe": "Grinalda de luzes · fixo",
+        "etoile-du-sapin-fixe": "Estrela da árvore · fixo",
+        "bonnet-du-pere-noel-fixe": "Gorro do Pai Natal · fixo",
+        "sucre-d-orge-fixe": "Bastão de doce · fixo",
+        "feux-d-artifice": "Fogo de artifício",
+        "pluie-de-confettis": "Chuva de confetes",
+        "cadran-de-minuit": "Mostrador da meia-noite",
+        "coupe-de-champagne": "Taça de champanhe",
+        "bouquet-final": "Grande final",
+        "envol-de-confettis": "Voo de confetes",
+        "minuit-sonne": "Soa a meia-noite",
+        "champagne-petillant": "Champanhe espumante"
       }
     },
     "de": {
@@ -23701,6 +28682,50 @@ enum AppearanceCatalogData {
         "bannieres-atelier-noel": {
           "name": "Werkstatt des Weihnachtsmanns",
           "description": "Bannerrahmen passend zu „Werkstatt des Weihnachtsmanns“: Weihnachtsmütze und Zuckerstange, nur am Rand, damit dein Foto sichtbar bleibt."
+        },
+        "noel-bannieres": {
+          "name": "Weihnachtsbanner",
+          "description": "Sechs Bannerbilder passend zu den Weihnachtspaketen: Raureif, Girlande und Geschenkpapier, dann Schneegestöber, funkelnde Lichter und Funken aus der Werkstatt."
+        },
+        "noel-contours-fixes": {
+          "name": "Weihnachten · ruhige Rahmen",
+          "description": "Die sechs Weihnachtsrahmen ohne Animation: Flocken, Stechpalme, Lichterkette, Stern, Mütze und Zuckerstange, für einen ruhigen Avatar."
+        },
+        "noel-cadres-fixes": {
+          "name": "Weihnachten · ruhige Bannerrahmen",
+          "description": "Die sechs Weihnachts-Bannerrahmen ohne Animation, passend zu den ruhigen Rahmen: Flocken, Stechpalme, Lichterkette, Stern, Mütze und Zuckerstange."
+        },
+        "nouvel-an-contours": {
+          "name": "Neujahr",
+          "description": "Vier Rahmen zum Feiern des neuen Jahres: Feuerwerk, Konfettiregen, Mitternachtszifferblatt und eine goldene Sektschale."
+        },
+        "nouvel-an-contours-vifs": {
+          "name": "Lebendiges Neujahr",
+          "description": "Vier animierte Rahmen für den Jahreswechsel: ein großes Finale, ein Konfettiwirbel, die Uhr, die Mitternacht schlägt, und Sektperlen."
+        },
+        "nouvel-an-images": {
+          "name": "Neujahrsbanner",
+          "description": "Vier Bannerbilder für das neue Jahr: eine Feuerwerksnacht, ein Konfettifest, die zwölf Schläge um Mitternacht und goldener Sekt."
+        },
+        "nouvel-an-images-vives": {
+          "name": "Animierte Neujahrsbanner",
+          "description": "Vier animierte Bannerbilder: aufblühendes Feuerwerk, ein Konfettischauer, der Countdown bis Mitternacht und Sektperlen. Bei reduzierter Bewegung: ein ruhiges Bild."
+        },
+        "nouvel-an-cadres": {
+          "name": "Neujahrsrahmen",
+          "description": "Vier Bannerrahmen passend zu den Neujahrsrahmen fürs Avatar: Feuerwerk, Konfetti, Mitternachtszifferblatt und Sektschalen."
+        },
+        "nouvel-an-cadres-vifs": {
+          "name": "Animierte Neujahrsrahmen",
+          "description": "Vier animierte Bannerrahmen passend zu den lebendigen Rahmen: ein aufblühendes Feuerwerk, fliegendes Konfetti, der kreisende Mitternachtszeiger und anstoßende Schalen."
+        },
+        "nouvel-an-fonds": {
+          "name": "Neujahrshintergründe",
+          "description": "Vier Chat-Hintergründe für das neue Jahr: Feuerwerkshimmel, Konfetti, Mitternachtsstunde und goldene Perlen, dezent genug, damit jede Blase lesbar bleibt."
+        },
+        "nouvel-an-fonds-vifs": {
+          "name": "Lebendiges Neujahr · Hintergründe",
+          "description": "Vier animierte Hintergründe für das neue Jahr: ferne Funken, fallendes Konfetti, eine Sternennacht und aufsteigende Perlen. Bei reduzierter Bewegung: ein ruhiger Verlauf."
         }
       },
       "designs": {
@@ -23739,7 +28764,29 @@ enum AppearanceCatalogData {
         "sucre-d-orge-raye": "Zuckerstangenstreifen",
         "neige-de-noel": "Weihnachtsschnee",
         "ampoules-de-noel": "Christbaumlichter",
-        "etincelles-atelier": "Werkstattfunken"
+        "etincelles-atelier": "Werkstattfunken",
+        "banniere-noel-givre": "Raureif",
+        "banniere-noel-guirlande": "Girlande",
+        "banniere-noel-cadeau": "Geschenkpapier",
+        "banniere-noel-neige": "Schneegestöber",
+        "banniere-noel-lumieres": "Funkelnde Lichter",
+        "banniere-noel-etincelles": "Weihnachtsfunken",
+        "banniere-artifice": "Feuerwerksnacht",
+        "banniere-confettis": "Konfettifest",
+        "banniere-minuit": "Zwölf Schläge",
+        "banniere-champagne": "Goldener Sekt",
+        "banniere-artifice-vive": "Lebendiges Feuerwerk",
+        "banniere-confettis-vive": "Konfettischauer",
+        "banniere-minuit-vive": "Countdown",
+        "banniere-champagne-vive": "Sektperlen",
+        "fond-artifice": "Feuerwerkshimmel",
+        "fond-confettis": "Konfetti",
+        "fond-minuit": "Mitternachtsstunde",
+        "fond-champagne": "Goldene Perlen",
+        "fond-artifice-vif": "Ferne Funken",
+        "fond-confettis-vif": "Fallendes Konfetti",
+        "fond-minuit-vif": "Sternenklare Mitternacht",
+        "fond-champagne-vif": "Aufsteigende Perlen"
       },
       "rings": {
         "filet": "Haarlinie",
@@ -23818,7 +28865,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "Lichterkette",
         "etoile-du-sapin": "Tannenstern",
         "bonnet-du-pere-noel": "Weihnachtsmütze",
-        "sucre-d-orge": "Zuckerstange"
+        "sucre-d-orge": "Zuckerstange",
+        "flocons-tombants-fixe": "Fallende Flocken · ruhig",
+        "couronne-de-houx-fixe": "Stechpalmenkranz · ruhig",
+        "guirlande-lumineuse-fixe": "Lichterkette · ruhig",
+        "etoile-du-sapin-fixe": "Tannenstern · ruhig",
+        "bonnet-du-pere-noel-fixe": "Weihnachtsmütze · ruhig",
+        "sucre-d-orge-fixe": "Zuckerstange · ruhig",
+        "feux-d-artifice": "Feuerwerk",
+        "pluie-de-confettis": "Konfettiregen",
+        "cadran-de-minuit": "Mitternachtszifferblatt",
+        "coupe-de-champagne": "Sektschale",
+        "bouquet-final": "Großes Finale",
+        "envol-de-confettis": "Konfettiwirbel",
+        "minuit-sonne": "Mitternacht schlägt",
+        "champagne-petillant": "Prickelnder Sekt"
       },
       "gamut": {
         "indigo": "Meeshy-Indigo",
@@ -23910,7 +28971,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "Lichterkette",
         "etoile-du-sapin": "Tannenstern",
         "bonnet-du-pere-noel": "Weihnachtsmütze",
-        "sucre-d-orge": "Zuckerstange"
+        "sucre-d-orge": "Zuckerstange",
+        "flocons-tombants-fixe": "Fallende Flocken · ruhig",
+        "couronne-de-houx-fixe": "Stechpalmenkranz · ruhig",
+        "guirlande-lumineuse-fixe": "Lichterkette · ruhig",
+        "etoile-du-sapin-fixe": "Tannenstern · ruhig",
+        "bonnet-du-pere-noel-fixe": "Weihnachtsmütze · ruhig",
+        "sucre-d-orge-fixe": "Zuckerstange · ruhig",
+        "feux-d-artifice": "Feuerwerk",
+        "pluie-de-confettis": "Konfettiregen",
+        "cadran-de-minuit": "Mitternachtszifferblatt",
+        "coupe-de-champagne": "Sektschale",
+        "bouquet-final": "Großes Finale",
+        "envol-de-confettis": "Konfettiwirbel",
+        "minuit-sonne": "Mitternacht schlägt",
+        "champagne-petillant": "Prickelnder Sekt"
       }
     },
     "it": {
@@ -24142,6 +29217,50 @@ enum AppearanceCatalogData {
         "bannieres-atelier-noel": {
           "name": "Laboratorio di Babbo Natale",
           "description": "Le cornici per il banner abbinate a «Laboratorio di Babbo Natale»: Berretto di Babbo Natale e Bastoncino di zucchero, al bordo perché la tua foto resti visibile."
+        },
+        "noel-bannieres": {
+          "name": "Banner di Natale",
+          "description": "Sei immagini di banner abbinate ai pacchetti di Natale: brina, ghirlanda e carta regalo, poi una nevicata, luci che brillano e le scintille del laboratorio."
+        },
+        "noel-contours-fixes": {
+          "name": "Natale · contorni fissi",
+          "description": "I sei contorni di Natale senza animazione: fiocchi, agrifoglio, ghirlanda, stella, berretto e bastoncino di zucchero, per un avatar tranquillo."
+        },
+        "noel-cadres-fixes": {
+          "name": "Natale · cornici fisse",
+          "description": "Le sei cornici di banner di Natale senza animazione, abbinate ai contorni fissi: fiocchi, agrifoglio, ghirlanda, stella, berretto e bastoncino di zucchero."
+        },
+        "nouvel-an-contours": {
+          "name": "Capodanno",
+          "description": "Quattro contorni per festeggiare il nuovo anno: fuochi d’artificio, pioggia di coriandoli, quadrante di mezzanotte e coppa di champagne dorato."
+        },
+        "nouvel-an-contours-vifs": {
+          "name": "Capodanno vivo",
+          "description": "Quattro contorni animati per il passaggio al nuovo anno: un gran finale, un volo di coriandoli, l’orologio che batte la mezzanotte e bollicine di champagne."
+        },
+        "nouvel-an-images": {
+          "name": "Banner di Capodanno",
+          "description": "Quattro immagini di banner per il nuovo anno: una notte di fuochi, una festa di coriandoli, i dodici rintocchi e uno champagne dorato."
+        },
+        "nouvel-an-images-vives": {
+          "name": "Banner animati di Capodanno",
+          "description": "Quattro immagini di banner animate: fuochi che esplodono, un acquazzone di coriandoli, il conto alla rovescia di mezzanotte e bollicine di champagne. Con movimento ridotto: un’immagine fissa."
+        },
+        "nouvel-an-cadres": {
+          "name": "Cornici di Capodanno",
+          "description": "Quattro cornici di banner abbinate ai contorni di Capodanno: fuochi d’artificio, coriandoli, quadrante di mezzanotte e coppe di champagne."
+        },
+        "nouvel-an-cadres-vifs": {
+          "name": "Cornici animate di Capodanno",
+          "description": "Quattro cornici di banner animate, abbinate ai contorni vivi: un bouquet che esplode, coriandoli che volano, la lancetta di mezzanotte che gira e coppe che brindano."
+        },
+        "nouvel-an-fonds": {
+          "name": "Sfondi di Capodanno",
+          "description": "Quattro sfondi di conversazione per il nuovo anno: cielo di fuochi, coriandoli, ora di mezzanotte e bollicine dorate, discreti perché ogni fumetto resti leggibile."
+        },
+        "nouvel-an-fonds-vifs": {
+          "name": "Capodanno vivo · sfondi",
+          "description": "Quattro sfondi animati per il nuovo anno: scoppi lontani, coriandoli che cadono, una notte stellata e bollicine che salgono. Con movimento ridotto: una sfumatura fissa."
         }
       },
       "designs": {
@@ -24180,7 +29299,29 @@ enum AppearanceCatalogData {
         "sucre-d-orge-raye": "Strisce di zucchero",
         "neige-de-noel": "Neve di Natale",
         "ampoules-de-noel": "Lampadine di Natale",
-        "etincelles-atelier": "Scintille del laboratorio"
+        "etincelles-atelier": "Scintille del laboratorio",
+        "banniere-noel-givre": "Brina",
+        "banniere-noel-guirlande": "Ghirlanda",
+        "banniere-noel-cadeau": "Carta regalo",
+        "banniere-noel-neige": "Nevicata",
+        "banniere-noel-lumieres": "Luci scintillanti",
+        "banniere-noel-etincelles": "Scintille di Natale",
+        "banniere-artifice": "Notte di fuochi",
+        "banniere-confettis": "Festa dei coriandoli",
+        "banniere-minuit": "Dodici rintocchi",
+        "banniere-champagne": "Champagne dorato",
+        "banniere-artifice-vive": "Fuochi vivi",
+        "banniere-confettis-vive": "Acquazzone di coriandoli",
+        "banniere-minuit-vive": "Conto alla rovescia",
+        "banniere-champagne-vive": "Bollicine di champagne",
+        "fond-artifice": "Cielo di fuochi",
+        "fond-confettis": "Coriandoli",
+        "fond-minuit": "Ora di mezzanotte",
+        "fond-champagne": "Bollicine dorate",
+        "fond-artifice-vif": "Scoppi lontani",
+        "fond-confettis-vif": "Coriandoli che cadono",
+        "fond-minuit-vif": "Mezzanotte stellata",
+        "fond-champagne-vif": "Bollicine che salgono"
       },
       "rings": {
         "filet": "Filetto",
@@ -24259,7 +29400,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "Ghirlanda luminosa",
         "etoile-du-sapin": "Stella dell’albero",
         "bonnet-du-pere-noel": "Berretto di Babbo Natale",
-        "sucre-d-orge": "Bastoncino di zucchero"
+        "sucre-d-orge": "Bastoncino di zucchero",
+        "flocons-tombants-fixe": "Fiocchi che cadono · fisso",
+        "couronne-de-houx-fixe": "Corona di agrifoglio · fisso",
+        "guirlande-lumineuse-fixe": "Ghirlanda luminosa · fisso",
+        "etoile-du-sapin-fixe": "Stella dell’albero · fisso",
+        "bonnet-du-pere-noel-fixe": "Berretto di Babbo Natale · fisso",
+        "sucre-d-orge-fixe": "Bastoncino di zucchero · fisso",
+        "feux-d-artifice": "Fuochi d’artificio",
+        "pluie-de-confettis": "Pioggia di coriandoli",
+        "cadran-de-minuit": "Quadrante di mezzanotte",
+        "coupe-de-champagne": "Coppa di champagne",
+        "bouquet-final": "Gran finale",
+        "envol-de-confettis": "Volo di coriandoli",
+        "minuit-sonne": "Scocca la mezzanotte",
+        "champagne-petillant": "Champagne frizzante"
       },
       "gamut": {
         "indigo": "Indaco Meeshy",
@@ -24351,7 +29506,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "Ghirlanda luminosa",
         "etoile-du-sapin": "Stella dell’albero",
         "bonnet-du-pere-noel": "Berretto di Babbo Natale",
-        "sucre-d-orge": "Bastoncino di zucchero"
+        "sucre-d-orge": "Bastoncino di zucchero",
+        "flocons-tombants-fixe": "Fiocchi che cadono · fisso",
+        "couronne-de-houx-fixe": "Corona di agrifoglio · fisso",
+        "guirlande-lumineuse-fixe": "Ghirlanda luminosa · fisso",
+        "etoile-du-sapin-fixe": "Stella dell’albero · fisso",
+        "bonnet-du-pere-noel-fixe": "Berretto di Babbo Natale · fisso",
+        "sucre-d-orge-fixe": "Bastoncino di zucchero · fisso",
+        "feux-d-artifice": "Fuochi d’artificio",
+        "pluie-de-confettis": "Pioggia di coriandoli",
+        "cadran-de-minuit": "Quadrante di mezzanotte",
+        "coupe-de-champagne": "Coppa di champagne",
+        "bouquet-final": "Gran finale",
+        "envol-de-confettis": "Volo di coriandoli",
+        "minuit-sonne": "Scocca la mezzanotte",
+        "champagne-petillant": "Champagne frizzante"
       }
     },
     "ar": {
@@ -24583,6 +29752,50 @@ enum AppearanceCatalogData {
         "bannieres-atelier-noel": {
           "name": "ورشة بابا نويل",
           "description": "أطر لافتة تُناسب «ورشة بابا نويل»: قبعة بابا نويل وعصا الحلوى، عند الحافة كي تبقى صورتك ظاهرة."
+        },
+        "noel-bannieres": {
+          "name": "لافتات الميلاد",
+          "description": "ست صور لافتة تُناسب حزم الميلاد: الصقيع والإكليل وورق الهدايا، ثم عاصفة ثلجية وأضواء متلألئة وشرارات الورشة."
+        },
+        "noel-contours-fixes": {
+          "name": "الميلاد · أطر ثابتة",
+          "description": "أطر الميلاد الستة بلا حركة: ندف الثلج، والبهشية، وسلسلة الأضواء، والنجمة، والقبعة، وعصا الحلوى، لصورة رمزية هادئة."
+        },
+        "noel-cadres-fixes": {
+          "name": "الميلاد · إطارات لافتة ثابتة",
+          "description": "إطارات لافتة الميلاد الستة بلا حركة، تُناسب الأطر الثابتة: ندف الثلج، والبهشية، وسلسلة الأضواء، والنجمة، والقبعة، وعصا الحلوى."
+        },
+        "nouvel-an-contours": {
+          "name": "رأس السنة",
+          "description": "أربعة أطر للاحتفال بالعام الجديد: ألعاب نارية، ومطر القصاصات، وميناء منتصف الليل، وكأس شمبانيا ذهبية."
+        },
+        "nouvel-an-contours-vifs": {
+          "name": "رأس السنة الحي",
+          "description": "أربعة أطر متحركة لاستقبال العام الجديد: ختام كبير، وتطاير القصاصات، وساعة تدق منتصف الليل، وفقاعات الشمبانيا."
+        },
+        "nouvel-an-images": {
+          "name": "لافتات رأس السنة",
+          "description": "أربع صور لافتة للعام الجديد: ليلة ألعاب نارية، وحفلة قصاصات، ودقات منتصف الليل الاثنتا عشرة، وشمبانيا ذهبية."
+        },
+        "nouvel-an-images-vives": {
+          "name": "لافتات رأس السنة المتحركة",
+          "description": "أربع صور لافتة متحركة: ألعاب نارية تتفجر، ووابل من القصاصات، والعدّ التنازلي لمنتصف الليل، وفقاعات الشمبانيا. مع تقليل الحركة: صورة ثابتة."
+        },
+        "nouvel-an-cadres": {
+          "name": "إطارات رأس السنة",
+          "description": "أربعة إطارات لافتة تُناسب أطر رأس السنة: ألعاب نارية، وقصاصات، وميناء منتصف الليل، وكؤوس الشمبانيا."
+        },
+        "nouvel-an-cadres-vifs": {
+          "name": "إطارات رأس السنة المتحركة",
+          "description": "أربعة إطارات لافتة متحركة تُناسب الأطر الحية: باقة تتفجر، وقصاصات تتطاير، وعقرب منتصف الليل يدور، وكؤوس تتلاقى."
+        },
+        "nouvel-an-fonds": {
+          "name": "خلفيات رأس السنة",
+          "description": "أربع خلفيات للمحادثة للعام الجديد: سماء الألعاب النارية، وقصاصات، وساعة منتصف الليل، وفقاعات ذهبية، هادئة بما يكفي لتبقى كل فقاعة مقروءة."
+        },
+        "nouvel-an-fonds-vifs": {
+          "name": "رأس السنة الحي · خلفيات",
+          "description": "أربع خلفيات متحركة للعام الجديد: شرارات بعيدة، وقصاصات متساقطة، وليلة مرصعة بالنجوم، وفقاعات صاعدة. مع تقليل الحركة: تدرّج ثابت."
         }
       },
       "designs": {
@@ -24621,7 +29834,29 @@ enum AppearanceCatalogData {
         "sucre-d-orge-raye": "خطوط عصا الحلوى",
         "neige-de-noel": "ثلج الميلاد",
         "ampoules-de-noel": "مصابيح الميلاد",
-        "etincelles-atelier": "شرارات الورشة"
+        "etincelles-atelier": "شرارات الورشة",
+        "banniere-noel-givre": "الصقيع",
+        "banniere-noel-guirlande": "الإكليل",
+        "banniere-noel-cadeau": "ورق الهدايا",
+        "banniere-noel-neige": "عاصفة ثلجية",
+        "banniere-noel-lumieres": "أضواء متلألئة",
+        "banniere-noel-etincelles": "شرارات الميلاد",
+        "banniere-artifice": "ليلة الألعاب النارية",
+        "banniere-confettis": "حفلة القصاصات",
+        "banniere-minuit": "اثنتا عشرة دقة",
+        "banniere-champagne": "شمبانيا ذهبية",
+        "banniere-artifice-vive": "ألعاب نارية حيّة",
+        "banniere-confettis-vive": "وابل القصاصات",
+        "banniere-minuit-vive": "العدّ التنازلي",
+        "banniere-champagne-vive": "فقاعات الشمبانيا",
+        "fond-artifice": "سماء الألعاب النارية",
+        "fond-confettis": "قصاصات",
+        "fond-minuit": "ساعة منتصف الليل",
+        "fond-champagne": "فقاعات ذهبية",
+        "fond-artifice-vif": "شرارات بعيدة",
+        "fond-confettis-vif": "قصاصات متساقطة",
+        "fond-minuit-vif": "منتصف ليل مرصّع",
+        "fond-champagne-vif": "فقاعات صاعدة"
       },
       "rings": {
         "filet": "خط رفيع",
@@ -24700,7 +29935,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "سلسلة أضواء",
         "etoile-du-sapin": "نجمة الشجرة",
         "bonnet-du-pere-noel": "قبعة بابا نويل",
-        "sucre-d-orge": "عصا الحلوى"
+        "sucre-d-orge": "عصا الحلوى",
+        "flocons-tombants-fixe": "ندف متساقطة · ثابت",
+        "couronne-de-houx-fixe": "إكليل البهشية · ثابت",
+        "guirlande-lumineuse-fixe": "سلسلة أضواء · ثابت",
+        "etoile-du-sapin-fixe": "نجمة الشجرة · ثابت",
+        "bonnet-du-pere-noel-fixe": "قبعة بابا نويل · ثابت",
+        "sucre-d-orge-fixe": "عصا الحلوى · ثابت",
+        "feux-d-artifice": "ألعاب نارية",
+        "pluie-de-confettis": "مطر القصاصات",
+        "cadran-de-minuit": "ميناء منتصف الليل",
+        "coupe-de-champagne": "كأس الشمبانيا",
+        "bouquet-final": "الختام الكبير",
+        "envol-de-confettis": "تطاير القصاصات",
+        "minuit-sonne": "دقّت منتصف الليل",
+        "champagne-petillant": "شمبانيا فوّارة"
       },
       "gamut": {
         "indigo": "نيلي ميشي",
@@ -24792,7 +30041,21 @@ enum AppearanceCatalogData {
         "guirlande-lumineuse": "سلسلة أضواء",
         "etoile-du-sapin": "نجمة الشجرة",
         "bonnet-du-pere-noel": "قبعة بابا نويل",
-        "sucre-d-orge": "عصا الحلوى"
+        "sucre-d-orge": "عصا الحلوى",
+        "flocons-tombants-fixe": "ندف متساقطة · ثابت",
+        "couronne-de-houx-fixe": "إكليل البهشية · ثابت",
+        "guirlande-lumineuse-fixe": "سلسلة أضواء · ثابت",
+        "etoile-du-sapin-fixe": "نجمة الشجرة · ثابت",
+        "bonnet-du-pere-noel-fixe": "قبعة بابا نويل · ثابت",
+        "sucre-d-orge-fixe": "عصا الحلوى · ثابت",
+        "feux-d-artifice": "ألعاب نارية",
+        "pluie-de-confettis": "مطر القصاصات",
+        "cadran-de-minuit": "ميناء منتصف الليل",
+        "coupe-de-champagne": "كأس الشمبانيا",
+        "bouquet-final": "الختام الكبير",
+        "envol-de-confettis": "تطاير القصاصات",
+        "minuit-sonne": "دقّت منتصف الليل",
+        "champagne-petillant": "شمبانيا فوّارة"
       }
     }
   }

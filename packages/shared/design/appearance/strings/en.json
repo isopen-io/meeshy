@@ -227,6 +227,50 @@
     "bannieres-atelier-noel": {
       "name": "Santa’s workshop",
       "description": "Banner frames to match “Santa’s workshop”: Santa hat and Candy cane, kept to the edge so your photo stays in view."
+    },
+    "noel-bannieres": {
+      "name": "Christmas banners",
+      "description": "Six banner images to match the Christmas packs: frost, garland and gift wrap, then a snowstorm, twinkling lights and sparks from the workshop."
+    },
+    "noel-contours-fixes": {
+      "name": "Christmas · still rings",
+      "description": "The six Christmas rings without animation: snowflakes, holly, string lights, star, Santa hat and candy cane, for a calm avatar."
+    },
+    "noel-cadres-fixes": {
+      "name": "Christmas · still frames",
+      "description": "The six Christmas banner frames without animation, to match the still rings: snowflakes, holly, string lights, star, Santa hat and candy cane."
+    },
+    "nouvel-an-contours": {
+      "name": "New Year",
+      "description": "Four rings to celebrate the new year: fireworks, a confetti shower, a midnight dial and a golden champagne coupe."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Living New Year",
+      "description": "Four animated rings for the turn of the year: a grand finale, a confetti flurry, a clock striking midnight and champagne bubbles."
+    },
+    "nouvel-an-images": {
+      "name": "New Year banners",
+      "description": "Four banner images for the new year: a firework night, a confetti party, the twelve strokes of midnight and golden champagne."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Animated New Year banners",
+      "description": "Four animated banner images: bursting fireworks, a confetti shower, the midnight countdown and champagne bubbles. With reduced motion: a still image."
+    },
+    "nouvel-an-cadres": {
+      "name": "New Year frames",
+      "description": "Four banner frames to match the New Year rings: fireworks, confetti, a midnight dial and champagne coupes."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Animated New Year frames",
+      "description": "Four animated banner frames to match the living rings: a bursting bouquet, flying confetti, the midnight hand turning and coupes clinking."
+    },
+    "nouvel-an-fonds": {
+      "name": "New Year backgrounds",
+      "description": "Four chat backgrounds for the new year: a firework sky, confetti, the midnight hour and golden bubbles, subtle enough to keep every bubble readable."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Living New Year · backgrounds",
+      "description": "Four animated backgrounds for the new year: distant bursts, falling confetti, a starry night and rising bubbles. With reduced motion: a still gradient."
     }
   },
   "designs": {
@@ -265,7 +309,29 @@
     "sucre-d-orge-raye": "Candy-cane stripes",
     "neige-de-noel": "Christmas snow",
     "ampoules-de-noel": "Christmas bulbs",
-    "etincelles-atelier": "Workshop sparks"
+    "etincelles-atelier": "Workshop sparks",
+    "banniere-noel-givre": "Frost",
+    "banniere-noel-guirlande": "Garland",
+    "banniere-noel-cadeau": "Gift wrap",
+    "banniere-noel-neige": "Snowstorm",
+    "banniere-noel-lumieres": "Twinkling lights",
+    "banniere-noel-etincelles": "Christmas sparks",
+    "banniere-artifice": "Firework night",
+    "banniere-confettis": "Confetti party",
+    "banniere-minuit": "Twelve strokes",
+    "banniere-champagne": "Golden champagne",
+    "banniere-artifice-vive": "Live fireworks",
+    "banniere-confettis-vive": "Confetti burst",
+    "banniere-minuit-vive": "Countdown",
+    "banniere-champagne-vive": "Champagne bubbles",
+    "fond-artifice": "Firework sky",
+    "fond-confettis": "Confetti",
+    "fond-minuit": "Midnight hour",
+    "fond-champagne": "Golden bubbles",
+    "fond-artifice-vif": "Distant bursts",
+    "fond-confettis-vif": "Falling confetti",
+    "fond-minuit-vif": "Starry midnight",
+    "fond-champagne-vif": "Rising bubbles"
   },
   "rings": {
     "filet": "Hairline",
@@ -344,7 +410,21 @@
     "guirlande-lumineuse": "String lights",
     "etoile-du-sapin": "Tree-top star",
     "bonnet-du-pere-noel": "Santa hat",
-    "sucre-d-orge": "Candy cane"
+    "sucre-d-orge": "Candy cane",
+    "flocons-tombants-fixe": "Falling snowflakes · still",
+    "couronne-de-houx-fixe": "Holly wreath · still",
+    "guirlande-lumineuse-fixe": "String lights · still",
+    "etoile-du-sapin-fixe": "Tree-top star · still",
+    "bonnet-du-pere-noel-fixe": "Santa hat · still",
+    "sucre-d-orge-fixe": "Candy cane · still",
+    "feux-d-artifice": "Fireworks",
+    "pluie-de-confettis": "Confetti shower",
+    "cadran-de-minuit": "Midnight dial",
+    "coupe-de-champagne": "Champagne coupe",
+    "bouquet-final": "Grand finale",
+    "envol-de-confettis": "Confetti flurry",
+    "minuit-sonne": "Midnight strikes",
+    "champagne-petillant": "Sparkling champagne"
   },
   "gamut": {
     "indigo": "Meeshy Indigo",
@@ -436,6 +516,20 @@
     "guirlande-lumineuse": "String lights",
     "etoile-du-sapin": "Tree-top star",
     "bonnet-du-pere-noel": "Santa hat",
-    "sucre-d-orge": "Candy cane"
+    "sucre-d-orge": "Candy cane",
+    "flocons-tombants-fixe": "Falling snowflakes · still",
+    "couronne-de-houx-fixe": "Holly wreath · still",
+    "guirlande-lumineuse-fixe": "String lights · still",
+    "etoile-du-sapin-fixe": "Tree-top star · still",
+    "bonnet-du-pere-noel-fixe": "Santa hat · still",
+    "sucre-d-orge-fixe": "Candy cane · still",
+    "feux-d-artifice": "Fireworks",
+    "pluie-de-confettis": "Confetti shower",
+    "cadran-de-minuit": "Midnight dial",
+    "coupe-de-champagne": "Champagne coupe",
+    "bouquet-final": "Grand finale",
+    "envol-de-confettis": "Confetti flurry",
+    "minuit-sonne": "Midnight strikes",
+    "champagne-petillant": "Sparkling champagne"
   }
 }

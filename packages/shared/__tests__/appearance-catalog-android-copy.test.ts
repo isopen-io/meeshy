@@ -17,14 +17,14 @@ describe('la copie Android du catalogue d’apparence (#11611)', () => {
     expect(androidCopy()).toBe(read(IOS_CATALOG_PATH));
   });
 
-  it('porte la version 1, les 16 couleurs, 9 packs de fonds, 2 de bannières, 24 de contours, 22 de cadres (collections Meeshy de #15158, packs de Noël — contours, fonds — et bannières assorties de #15553 compris) et les 7 langues', () => {
+  it('porte la version 1, les 16 couleurs, 11 packs de fonds, 5 de bannières, 27 de contours, 25 de cadres (collections Meeshy de #15158, packs de Noël — contours, fonds — et bannières assorties de #15553, offres de Noël et du Nouvel An de #16270 et #16271 compris) et les 7 langues', () => {
     const catalog = JSON.parse(androidCopy()) as ReturnType<typeof buildAppearanceCatalog>;
     expect(catalog.version).toBe(1);
     expect(catalog.gamut.map((entry) => entry.key)).toEqual([...GAMUT_KEYS]);
-    expect(catalog.wallpapers).toHaveLength(9);
-    expect(catalog.banners).toHaveLength(2);
-    expect(catalog.rings).toHaveLength(24);
-    expect(catalog.bannerFrames).toHaveLength(22);
+    expect(catalog.wallpapers).toHaveLength(11);
+    expect(catalog.banners).toHaveLength(5);
+    expect(catalog.rings).toHaveLength(27);
+    expect(catalog.bannerFrames).toHaveLength(25);
     expect(Object.keys(catalog.strings).sort()).toEqual(['ar', 'de', 'en', 'es', 'fr', 'it', 'pt']);
   });
 });
