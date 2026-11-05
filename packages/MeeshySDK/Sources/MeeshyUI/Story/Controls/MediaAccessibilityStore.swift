@@ -12,7 +12,7 @@ import MeeshySDK
 /// rien ne les COLLECTAIT côté UI avant ce fichier (C7-UI, 2026-08-23).
 ///
 /// Ce store est la SURFACE de collecte, pas le point de persistance final :
-/// `mediaAltPayload()` rend exactement la forme attendue par
+/// `payload(.alt)` rend exactement la forme attendue par
 /// `PostService.create(… mediaAlt:)` (dictionnaire id de média → texte), prête
 /// à être relayée par l'appelant qui tient déjà le VM/publish (hors du
 /// périmètre `Story/Controls/`).
@@ -123,7 +123,7 @@ public final class MediaAccessibilityStore: ObservableObject {
 
     /// Ce que le BROUILLON retient de la collecte (F2).
     ///
-    /// Rend le dictionnaire tel quel, vide compris, là où `mediaAltPayload()`
+    /// Rend le dictionnaire tel quel, vide compris, là où `payload(_:)`
     /// rend `nil` : un brouillon persiste un état d'édition, pas une requête —
     /// « aucun texte » n'y dit rien de plus que « dictionnaire vide », alors
     /// que le transport, lui, distingue les deux.
@@ -155,17 +155,7 @@ public final class MediaAccessibilityStore: ObservableObject {
         return collected.isEmpty ? nil : collected
     }
 
-    public func mediaAltPayload() -> [String: String]? { payload(.alt) }
-
     /// Snapshot prêt pour `PostService.create/update(… mediaCaption:)` (#4055).
     /// Même règle de `nil` que pour le texte alternatif.
     public func mediaCaptionPayload() -> [String: String]? { payload(.caption) }
-
-    /// Snapshot prêt pour `PostService.create/update(… allowSoundExtraction:)`.
-    /// `nil` tant que l'auteur n'a jamais touché l'interrupteur — le
-    /// transport doit alors garder son défaut serveur (`false`), pas recevoir
-    /// un `false` explicite qui écraserait un update partiel différent.
-    public func allowSoundExtractionPayload() -> Bool? {
-        allowSoundExtractionOverride
-    }
 }

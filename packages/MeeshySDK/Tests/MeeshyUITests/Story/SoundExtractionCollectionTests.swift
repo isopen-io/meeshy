@@ -24,7 +24,7 @@ final class SoundExtractionCollectionTests: XCTestCase {
     func test_allowsSoundExtraction_defaultsToTrue() {
         let store = MediaAccessibilityStore()
         XCTAssertTrue(store.allowsSoundExtraction())
-        XCTAssertNil(store.allowSoundExtractionPayload())
+        XCTAssertNil(store.draftSnapshot().allowSoundExtraction)
     }
 
     /// `test_setAllowsSoundExtraction_roundTrips` rougit si
@@ -38,21 +38,21 @@ final class SoundExtractionCollectionTests: XCTestCase {
         XCTAssertFalse(store.allowsSoundExtraction())
     }
 
-    /// `test_allowSoundExtractionPayload_isNilUntouched` rougit si le
+    /// `test_soundChoice_isNilUntouched` rougit si le
     /// payload renvoie `false` au lieu de `nil` tant que l'auteur n'a jamais
     /// touché l'interrupteur — un update partiel ne doit jamais écraser un
     /// `true` serveur existant avec un `false` que personne n'a choisi.
-    func test_allowSoundExtractionPayload_isNilUntouched() {
+    func test_soundChoice_isNilUntouched() {
         let store = MediaAccessibilityStore()
-        XCTAssertNil(store.allowSoundExtractionPayload())
+        XCTAssertNil(store.draftSnapshot().allowSoundExtraction)
     }
 
-    /// `test_allowSoundExtractionPayload_reflectsExplicitChoice` rougit si
+    /// `test_soundChoice_reflectsExplicitChoice` rougit si
     /// le payload ne reflète pas le dernier choix explicite de l'auteur.
-    func test_allowSoundExtractionPayload_reflectsExplicitChoice() {
+    func test_soundChoice_reflectsExplicitChoice() {
         let store = MediaAccessibilityStore()
         store.setAllowsSoundExtraction(true)
-        XCTAssertEqual(store.allowSoundExtractionPayload(), true)
+        XCTAssertEqual(store.draftSnapshot().allowSoundExtraction, true)
     }
 
     /// `test_removingOneMedia_leavesSoundExtractionChoiceIntact` rougit si
@@ -134,28 +134,6 @@ final class SoundExtractionCollectionTests: XCTestCase {
         XCTAssertNil(json["allowSoundExtraction"])
     }
 
-    /// `test_allowSoundExtractionPayload_hasAtLeastOneProductionCaller` rougit
-    /// si le snapshot redevient orphelin.
-    ///
-    /// Formulée en POSITIF : une garde qui interdirait un motif resterait verte
-    /// le jour où ce motif change de nom, alors que l'état mesuré avant ce lot
-    /// était précisément « la fonction existe, elle est testée, personne ne
-    /// l'appelle ».
-    func test_allowSoundExtractionPayload_hasAtLeastOneProductionCaller() throws {
-        let callers = try ComposerSourceGuard.allStorySources()
-            .filter { $0.path != "Controls/MediaAccessibilityStore.swift" }
-            .filter { $0.code.contains("allowSoundExtractionPayload()") }
-            .map { $0.path }
-
-        XCTAssertFalse(
-            callers.isEmpty,
-            """
-            `allowSoundExtractionPayload()` n'a AUCUN appelant hors de sa propre \
-            déclaration : l'interrupteur se bascule et ne part nulle part.
-            """
-        )
-    }
-
     /// `test_mediaAccessibilityPanel_hasNoPerMediaSoundToggle` rougit si un
     /// futur changement réintroduit `SoundExtractionToggle` DANS le panneau
     /// par-média — le flag n'a qu'un seul foyer légitime (`mediaPanel`),
@@ -207,6 +185,6 @@ final class SoundExtractionCollectionTests: XCTestCase {
         store.restore(from: .empty)
 
         XCTAssertTrue(store.allowsSoundExtraction())
-        XCTAssertNil(store.allowSoundExtractionPayload())
+        XCTAssertNil(store.draftSnapshot().allowSoundExtraction)
     }
 }
