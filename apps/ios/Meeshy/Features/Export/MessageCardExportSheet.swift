@@ -21,6 +21,7 @@ struct MessageCardExportRequest {
     let quick: Bool
     /// Un commentaire de post (#9686) : les compositions offertes au-dessus de l'aperçu.
     var composition: MessageCardCommentComposition? = nil
+    var lead: MessageCardLead? = nil
 }
 
 /// **« IMAGINE » — UN MESSAGE OU UN COMMENTAIRE DEVIENT UNE IMAGE, UN GIF OU
@@ -85,6 +86,8 @@ struct MessageCardExportSheet: View {
     @State var chosenReplies: Set<String> = []
     /// Le média du support choisi pour la tête (#11783) — `nil` : le premier visuel.
     @State var headMediaID: String?
+    @State var lead: MessageCardSubjectMedia?
+    @State var leadSettled = false
 
     struct Rendered {
         let key: String
@@ -104,11 +107,14 @@ struct MessageCardExportSheet: View {
     var accent: Color { Color(hex: request.accentColor) }
 
     var subject: MessageCardSubject {
+        let base: MessageCardSubject
         if let composition = request.composition, let compositionMode,
            let composed = composition.subject(mode: compositionMode, showsPost: showsPost, chosen: chosenReplies, headMediaID: headMediaID) {
-            return composed
+            base = composed
+        } else {
+            base = exportLanguage.flatMap(request.subjectIn) ?? request.subject
         }
-        return exportLanguage.flatMap(request.subjectIn) ?? request.subject
+        return lead.map(base.replacing(lead:)) ?? base
     }
 
     /// Le choix de composition, dans la clé de peinture : changer de mode repeint l'aperçu.
@@ -163,13 +169,13 @@ struct MessageCardExportSheet: View {
     private var isDefault: Bool { savedDefault == format }
 
     private var tabs: [MessageCardExportTab] {
-        MessageCardExportTab.offered(hasMedia: !subject.media.isEmpty, languageCount: request.languages.count)
+        MessageCardExportTab.offered(hasMedia: !subject.media.isEmpty, languageCount: request.languages.count,
+                                     offersContent: request.composition?.showsBar == true)
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: MeeshySpacing.md) {
-                compositionBar
                 stage
                 notices
                 AdaptiveGlassContainer(spacing: 12) {
@@ -189,13 +195,17 @@ struct MessageCardExportSheet: View {
         }
         .tint(accent)
         .onAppear(perform: load)
-        .onDisappear { motionTask?.cancel() }
+        .onDisappear {
+            motionTask?.cancel()
+            discardLead()
+        }
         // Une sortie que la carte n'offre plus (une seule photo choisie après « GIF ») retombe sur l'image (#9235).
         .adaptiveOnChange(of: offeredOutputs) { _, offered in
             if !offered.contains(output) { output = .image }
         }
-        .task(id: "\(loaded)|\(mediaAttempt)|\(soundsKey)|\(compositionKey)") { await loadMedia() }
-        .task(id: "\(loaded)|\(renderKey)") { await render() }
+        .task(id: "\(loaded)|\(mediaAttempt)") { await settleLead() }
+        .task(id: "\(loaded)|\(leadSettled)|\(lead?.fileURL ?? "")|\(mediaAttempt)|\(soundsKey)|\(compositionKey)") { await loadMedia() }
+        .task(id: "\(loaded)|\(leadSettled)|\(renderKey)") { await render() }
         .sheet(isPresented: $galleryOpen) {
             MessageCardExportGallery(
                 usage: usage,
@@ -345,7 +355,8 @@ struct MessageCardExportSheet: View {
             thumbs: thumbSource,
             onTab: openTab,
             onGallery: { galleryOpen = true },
-            onExcerptStart: { clipStart = $0 }
+            onExcerptStart: { clipStart = $0 },
+            contentPanel: contentPanel
         )
     }
 
@@ -370,7 +381,7 @@ struct MessageCardExportSheet: View {
             case .typeface: focus = focus == .quote || focus == .reply ? focus : .reply
             case .frame: focus = painted.contains(.header) ? .header : nil
             case .media: focus = painted.contains(.media) ? .media : (painted.contains(.transcript) ? .transcript : nil)
-            case .styles, .format, .details, .language: focus = nil
+            case .content, .styles, .format, .details, .language: focus = nil
             }
         }
     }
@@ -418,6 +429,7 @@ struct MessageCardExportSheet: View {
         format = stored ?? .initial
         usage = MessageCardUsage.read(from: store)
         popular = MessageCardUsage.popular(usage, count: Self.popularCount)
+        if request.composition?.showsBar == true { tab = .content }
         if let composition = request.composition, let first = composition.modes.first {
             compositionMode = first
             showsPost = first.showsPostByDefault
@@ -448,7 +460,7 @@ struct MessageCardExportSheet: View {
     private func loadMedia() async {
         let items = subject.media
         let wanted = loadedMedia.missing(items)
-        guard loaded, !wanted.isEmpty else { return }
+        guard loaded, leadSettled, !wanted.isEmpty else { return }
         let result = await Task.detached(priority: .userInitiated) {
             await MessageCardMediaLoader.load(wanted)
         }.value
@@ -462,8 +474,33 @@ struct MessageCardExportSheet: View {
         subject.media.isEmpty || (mediaVersion > 0 && loadedMedia.failed.isEmpty)
     }
 
+    private func settleLead() async {
+        guard loaded, lead == nil else { return }
+        guard let pending = request.lead else {
+            leadSettled = true
+            return
+        }
+        let file = await pending.render()
+        guard !Task.isCancelled else {
+            if let file { Self.discard(file) }
+            return
+        }
+        lead = file.map { pending.media(rendered: $0) }
+        leadSettled = true
+    }
+
+    private func discardLead() {
+        guard let file = lead.flatMap({ URL(string: $0.fileURL) }) else { return }
+        Self.discard(file)
+    }
+
+    private static func discard(_ file: URL) {
+        guard file.isFileURL else { return }
+        try? FileManager.default.removeItem(at: file)
+    }
+
     private func render() async {
-        guard loaded else { return }
+        guard loaded, leadSettled else { return }
         let key = renderKey
         failed = false
         let input = input(for: format)

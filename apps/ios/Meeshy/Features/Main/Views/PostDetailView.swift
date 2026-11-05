@@ -16,10 +16,6 @@ struct PostDetailView: View {
     /// du parent puis défile jusqu'à ce fil (la réponse y apparaît).
     var targetParentCommentId: String?
 
-    // `internal` et non `private` : les deux écrans d'absence vivent dans
-    // `PostDetailView+AbsenceStates.swift`, et un `private` de portée FICHIER
-    // les rendrait inaccessibles depuis une extension frère (piège documenté
-    // dans `apps/ios/CLAUDE.md`, déjà payé sur `composerFocusTrigger`).
     @State private var showsReactionPalette = false
     @StateObject var viewModel = PostDetailViewModel()
     /// Autocomplétion @mention pour le composer de commentaire — contexte `.post`,
@@ -798,19 +794,6 @@ EngagementGlyph(
 
             Spacer()
 
-            // **Commentaires — le deuxieme item de la cible `2h`** (#4086).
-            //
-            // La rangee du detail n'en portait que trois (coeur, repost,
-            // signet) la ou la carte du fil en porte cinq et la cible quatre.
-            // Le lecteur qui cherchait le nombre de commentaires devait
-            // defiler dans un cas et pas dans l'autre — meme publication, deux
-            // rangees.
-            //
-            // Il AGIT : le tap amene a la section, deja ancree
-            // `.id("commentsSection")` et deja visee par
-            // `attemptScrollToTargetComment`. Un item de comptage sans effet
-            // aurait fait mentir la rangee entiere (loi 4) — les trois autres
-            // agissent.
             Button {
                 HapticFeedback.light()
                 withAnimation { scrollProxy.scrollTo("commentsSection", anchor: .top) }
@@ -907,8 +890,7 @@ EngagementGlyph(
                 : String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main))
             .accessibilityHint(String(localized: "a11y.post.bookmark.hint", defaultValue: "Enregistrer cette publication", bundle: .main))
 
-            // Plus de baffle ici (#9677, directive porteur 2026-10-08) : c'est la
-            // NOTE du crédit, au-dessus de la scène, qui coupe le son de fond.
+            detailImagerButton
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.vertical, MeeshySpacing.smPlus)
@@ -919,6 +901,21 @@ EngagementGlyph(
                               isDark: theme.mode.isDark,
                               anchor: .bottomLeading,
                               offsetY: -46) { sendDetailReaction($0) }
+    }
+
+    @ViewBuilder
+    private var detailImagerButton: some View {
+        if let post = displayPost, let action = PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator) {
+            Spacer()
+            ImagerWandButton(
+                hint: String(localized: "feed.post.imager.hint", defaultValue: "Fait de cette publication une carte image.", bundle: .main),
+                glyphSize: 18,
+                tint: theme.textSecondary,
+                action: action,
+                quick: MessageCardExportMenu.hasDefaultFormat
+                    ? PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator, quick: true) : nil
+            )
+        }
     }
 
     // MARK: - Comments Header
