@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import me.meeshy.sdk.model.BubbleSendProgress
 import me.meeshy.sdk.model.DeliveryGlyphState
 import me.meeshy.sdk.model.DeliveryGlyphs
 import me.meeshy.sdk.model.SendLifecycleResolver
@@ -24,7 +25,7 @@ internal fun BubbleDeliveryCheck(
     metaColor: Color,
     readTint: Color,
     sendStartedAtIso: String?,
-    uploadAttachmentIds: List<String> = emptyList(),
+    uploadPieces: List<BubbleSendProgress.Piece> = emptyList(),
     onShowReadStatus: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -44,9 +45,9 @@ internal fun BubbleDeliveryCheck(
         )
     }
     Box(tap) {
-        if (inFlight && uploads != null && uploadAttachmentIds.isNotEmpty()) {
+        if (inFlight && uploads != null && uploadPieces.isNotEmpty()) {
             SendProgressPill(
-                attachmentIds = uploadAttachmentIds,
+                pieces = uploadPieces,
                 source = uploads,
                 color = if (state == DeliveryGlyphState.Slow) MeeshyPalette.Warning else metaColor,
                 fallback = clock,

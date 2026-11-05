@@ -4,6 +4,8 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.e2ee.InMemoryEndToEndRegimeLedger
 import me.meeshy.sdk.media.MediaBlobStore
@@ -291,5 +293,27 @@ class MediaSendersTest {
         handler().send(chatRow())
 
         assertThat(ledger.progress.value).isEmpty()
+    }
+
+    @Test
+    fun `a landed chat piece is known landed by the time its progress leaves the ledger, so its bubble never falls back`() = runTest {
+        coEvery { mediaBlobStore.get("cmid-1", any()) } returns item
+        coEvery { mediaRepository.upload(listOf(item), "c-1", any()) } coAnswers {
+            arg<(Long, Long) -> Unit>(2)(3L, 3L)
+            NetworkResult.Success(listOf(uploaded))
+        }
+        val acknowledged = UploadedAttachmentIds()
+        val landedWhenCleared = mutableListOf<String?>()
+        var reported = false
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            ledger.progress.collect { progress ->
+                if ("cmid-1" in progress) reported = true
+                else if (reported) landedWhenCleared += acknowledged.serverIdOf("cmid-1")
+            }
+        }
+
+        UploadMediaHandler(mediaBlobStore, mediaRepository, tusUploadRepository, senderJson, ledger, regimes, acknowledged).send(chatRow())
+
+        assertThat(landedWhenCleared).containsExactly("media-9")
     }
 }
