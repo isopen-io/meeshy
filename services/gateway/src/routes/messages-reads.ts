@@ -45,6 +45,7 @@ import { readDeviceServedTo } from '../utils/read-device-visibility';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 import { servePostReplyCitations } from '../services/messaging/servedPostReply';
 import { servedLinkMetadata } from '../services/messaging/linkTrackingAuthor';
+import { withNoticeUsernames } from '../services/messaging/noticeUsernames';
 import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility';
 
 /**
@@ -399,7 +400,7 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       // #7950 — la citation d'une story retirée sort expurgée de `metadata`.
       // #11381 — un message `server`/`hybrid` sort en clair, ses traductions comprises.
       const opened = await revealAtRest(message, lazyKeyring(() => getEncryptionService(prisma)));
-      const [citedMessage] = await servePostReplyCitations(prisma, [opened]);
+      const [citedMessage] = await withNoticeUsernames(prisma, await servePostReplyCitations(prisma, [opened]));
       return sendSuccess(reply, projectViewOnceForReader(hoistStickerOnto(hoistLocationOnto({
         // #11375 — `data` traverse entier : les colonnes de l'éditeur tiers en
         // sortent, ce lecteur reçoit ce que `servedEditAttribution` lui accorde.

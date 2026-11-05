@@ -131,7 +131,7 @@ struct MyStoryCard: View {
             Menu { moreMenu } label: {
                 Image(systemName: MyStoryGlyph.more.systemImage)
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(Color.black.opacity(0.45)))
                     .shadow(color: .black.opacity(0.3), radius: 2)
@@ -162,7 +162,7 @@ struct MyStoryCard: View {
                 Circle().fill(accentColor)
                 Image(systemName: "checkmark")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
             }
             .frame(width: 22, height: 22)
             .shadow(color: .black.opacity(0.35), radius: 2)
@@ -249,7 +249,7 @@ struct MyStoryCard: View {
             if let title = model.title, !title.isEmpty {
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .lineLimit(2)
                     .padding(MeeshySpacing.sm)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -293,13 +293,13 @@ struct MyStoryCard: View {
     private var placeholderFill: some View {
         Rectangle()
             .fill(accentColor.opacity(0.20))
-            .overlay(Image(systemName: "photo").foregroundColor(accentColor))
+            .overlay(Image(systemName: "photo").foregroundStyle(accentColor))
     }
 
     private var dateLabel: some View {
         Text(MyStoryCardPresentation.dateLabel(for: model.date, now: now, locale: locale))
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-            .foregroundColor(.secondary)
+            .foregroundStyle(.secondary)
             .lineLimit(1)
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.bottom, MeeshySpacing.sm)
