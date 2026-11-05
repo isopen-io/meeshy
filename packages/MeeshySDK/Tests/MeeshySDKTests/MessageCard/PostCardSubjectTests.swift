@@ -102,5 +102,18 @@ final class PostCardSubjectTests: XCTestCase {
 
         XCTAssertEqual(subject.media.map(\.media.id), ["scene:post", "p1"])
         XCTAssertEqual(subject.media.first?.author?.name, "Awa")
+        XCTAssertEqual(subject.heroID, "scene:post")
+    }
+
+    func test_ofPost_storyWithItsRenderedScene_paintsTheSceneAlone() throws {
+        let scene = MessageCardSubjectMedia(
+            media: MessageCardMedia(id: "scene:post", kind: .image, aspect: 9.0 / 16.0),
+            fileURL: "file:///tmp/scene.jpg")
+        let story = Self.makePost(content: "Texte de la scène", type: "STORY", media: [Self.photo("p1")])
+
+        let subject = try XCTUnwrap(MessageCardSubject.of(post: story, viewer: Self.viewer, preferredLanguages: ["fr"], leadMedia: [scene]))
+
+        XCTAssertEqual(subject.media.map(\.media.id), ["scene:post"])
+        XCTAssertEqual(subject.reply.text, "")
     }
 }
