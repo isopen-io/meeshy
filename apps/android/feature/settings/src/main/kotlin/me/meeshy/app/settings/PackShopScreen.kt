@@ -1,5 +1,6 @@
 package me.meeshy.app.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -41,6 +42,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -87,8 +89,10 @@ private const val SKELETON_ROWS = 3
 fun PackShopScreen(
     onBack: () -> Unit,
     viewModel: PackShopViewModel = hiltViewModel(),
+    browse: PackShopBrowseViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.state.collectAsStateWithLifecycle()
+    val browsing by browse.state.collectAsStateWithLifecycle()
     val haptics = rememberMeeshyHaptics()
     val language = remember { Locale.getDefault().language }
     val insufficient = stringResource(R.string.pack_shop_error_insufficient)
@@ -99,7 +103,11 @@ fun PackShopScreen(
         null -> null
     }
 
-    MeeshyBackground {
+    val covered = browsing.stack.isOpen
+    LaunchedEffect(ui.selected, ui.packs) { ui.packs?.let { browse.prepare(ui.selected, it, language) } }
+    BackHandler(enabled = covered) { browse.back() }
+    Box(Modifier.fillMaxSize()) {
+    MeeshyBackground(Modifier.then(if (covered) Modifier.clearAndSetSemantics { } else Modifier)) {
         CollapsibleHeaderPage(
             title = stringResource(R.string.settings_packs_title),
             onBack = onBack,
@@ -130,6 +138,8 @@ fun PackShopScreen(
                         ui, language,
                         onRetry = { haptics.light(); viewModel.retry() },
                         onToggleInstall = { slug -> haptics.light(); viewModel.toggleInstall(slug) },
+                        onOpen = { slug -> haptics.light(); browse.openDetail(ui.selected, slug) },
+                        onOpenCover = { slug -> haptics.light(); browse.openViewer(ui.selected, slug, 0) },
                     ) { slug ->
                         haptics.light()
                         viewModel.buy(slug)
@@ -137,6 +147,15 @@ fun PackShopScreen(
                 }
             }
         }
+    }
+    PackShopBrowseLayer(
+        shop = ui,
+        browsing = browsing,
+        language = language,
+        browse = browse,
+        onToggleInstall = { slug -> haptics.light(); viewModel.toggleInstall(slug) },
+        onBuy = { slug -> haptics.light(); viewModel.buy(slug) },
+    )
     }
 }
 
@@ -208,6 +227,8 @@ private fun Shelf(
     language: String,
     onRetry: () -> Unit,
     onToggleInstall: (String) -> Unit,
+    onOpen: (String) -> Unit,
+    onOpenCover: (String) -> Unit,
     onBuy: (String) -> Unit,
 ) {
     val packs = ui.packs
@@ -227,6 +248,8 @@ private fun Shelf(
                 focused = pack.slug == ui.focusTarget,
                 onBuy = { onBuy(pack.slug) },
                 onToggleInstall = { onToggleInstall(pack.slug) },
+                onOpen = { onOpen(pack.slug) },
+                onOpenCover = { onOpenCover(pack.slug) },
             )
         }
     }
@@ -281,6 +304,8 @@ internal fun PackRow(
     focused: Boolean,
     onBuy: () -> Unit,
     onToggleInstall: () -> Unit = {},
+    onOpen: (() -> Unit)? = null,
+    onOpenCover: (() -> Unit)? = null,
 ) {
     val requester = remember { BringIntoViewRequester() }
     LaunchedEffect(focused) { if (focused) requester.bringIntoView() }
@@ -288,16 +313,21 @@ internal fun PackRow(
     val name = pack.localizedName(language)
     val description = pack.localizedDescription(language)
     val outline = if (focused) Modifier.border(BorderStroke(2.dp, MeeshyPalette.Indigo500), RoundedCornerShape(MeeshyRadius.md)).padding(6.dp) else Modifier
+    val openLabel = stringResource(R.string.pack_shop_open_pack_a11y, name)
+    val opens = onOpen?.let { open ->
+        Modifier.clip(RoundedCornerShape(MeeshyRadius.md)).clickable(onClickLabel = openLabel, role = Role.Button, onClick = open)
+    } ?: Modifier
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .bringIntoViewRequester(requester)
             .then(outline)
+            .then(opens)
             .semantics { this.selected = focused },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Cover(pack)
+        Cover(pack, onOpen = onOpenCover?.let { open -> stringResource(R.string.pack_shop_open_item_a11y, name) to open })
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = name,
@@ -330,13 +360,19 @@ internal fun PackRow(
                 )
             }
         }
-        when (val action = presentation.action) {
-            PackRowAction.Locked -> LockedBadge()
-            is PackRowAction.Buy -> BuyButton(name, action.meeshes, busy, onBuy)
-            PackRowAction.Install -> InstallButton(name, installed = false, busy = busy, onClick = onToggleInstall)
-            PackRowAction.Remove -> InstallButton(name, installed = true, busy = busy, onClick = onToggleInstall)
-            PackRowAction.None -> Unit
-        }
+        PackAction(presentation.action, name, busy, onBuy, onToggleInstall)
+    }
+}
+
+/** Le geste d'un pack — acheter, installer, retirer, ou le cadenas — le même sur la rangée et sur la fiche. */
+@Composable
+internal fun PackAction(action: PackRowAction, name: String, busy: Boolean, onBuy: () -> Unit, onToggleInstall: () -> Unit) {
+    when (action) {
+        PackRowAction.Locked -> LockedBadge()
+        is PackRowAction.Buy -> BuyButton(name, action.meeshes, busy, onBuy)
+        PackRowAction.Install -> InstallButton(name, installed = false, busy = busy, onClick = onToggleInstall)
+        PackRowAction.Remove -> InstallButton(name, installed = true, busy = busy, onClick = onToggleInstall)
+        PackRowAction.None -> Unit
     }
 }
 
@@ -380,16 +416,21 @@ private fun BuyButton(name: String, price: Int, busy: Boolean, onBuy: () -> Unit
  * de placeholder, sinon la tuile générique reste visible dessous (aussi en cas d'échec de chargement).
  */
 @Composable
-private fun Cover(pack: ShopPack) {
+internal fun Cover(pack: ShopPack, side: androidx.compose.ui.unit.Dp = CoverSide, onOpen: Pair<String, () -> Unit>? = null) {
     val base = LocalMediaBaseUrl.current
     val model = remember(pack.coverPath, base) { pack.coverPath?.let { resolveMediaUrl(it, base) } }
     val hash = rememberThumbHashPainter(pack.coverThumbHash)
+    val opens = onOpen?.let { (label, open) ->
+        Modifier
+            .clickable(role = Role.Button, onClick = open)
+            .clearAndSetSemantics { contentDescription = label; role = Role.Button; onClick(label) { open(); true } }
+    } ?: Modifier.clearAndSetSemantics { }
     Box(
         modifier = Modifier
-            .size(CoverSide)
+            .size(side)
             .clip(RoundedCornerShape(MeeshyRadius.sm))
             .background(MeeshyTheme.tokens.surfaceFill)
-            .clearAndSetSemantics { },
+            .then(opens),
         contentAlignment = Alignment.Center,
     ) {
         Icon(MeeshyIcons.Shopping, contentDescription = null, tint = MeeshyTheme.tokens.textMuted, modifier = Modifier.size(24.dp))
@@ -407,7 +448,7 @@ private fun Cover(pack: ShopPack) {
 
 /** « Installer » / « Retirer » : lu avec le nom du pack ; optimiste côté modèle, un seul geste à la fois par pack. */
 @Composable
-private fun InstallButton(name: String, installed: Boolean, busy: Boolean, onClick: () -> Unit) {
+internal fun InstallButton(name: String, installed: Boolean, busy: Boolean, onClick: () -> Unit) {
     val label = stringResource(if (installed) R.string.pack_shop_remove else R.string.pack_shop_install)
     val spoken = "$label $name"
     Box(
