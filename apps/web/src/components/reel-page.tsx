@@ -22,6 +22,7 @@ import { documentAnnouncesSound } from '@/lib/canvas/document';
 import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import type { FeedCardMedia, FeedCardModel, FeedCardScene } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
+import { publicationImageable } from '@/lib/feed/publication-imageable';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { reelStageOf } from '@/lib/reels/scene';
@@ -89,10 +90,11 @@ export type ReelPageProps = {
   /** Repartage SIMPLE, optimiste, append-only (#6484, miroir
    * `ReelsViewModel.repost`). Même garde d'absence que `onComment`. */
   readonly onRepost?: (postId: string) => void;
-  /** « Imager » le réel (#16333) — la baguette du rail, le même geste que
-   * l'entrée du menu « … ». Absent, ou réel sans scène à composer ⇒ pas de
-   * baguette (loi 4). Stable chez l'hôte : la page reste mémoïsée. */
-  readonly onImager?: (model: FeedCardModel) => void;
+  /** « Imager » le réel (#16333, #16393) — la baguette du rail, le même geste
+   * que l'entrée du menu « … » : l'atelier de carte. Absent, ou réel qui ne
+   * s'image pas (`publicationImageable`) ⇒ pas de baguette (loi 4). Stable
+   * chez l'hôte : la page reste mémoïsée. */
+  readonly onImager?: (model: FeedCardModel) => unknown;
   /** Un `play()` SONORE de la SCÈNE refusé par la politique de lecture
    * automatique (#6903) — même politique que le réel vidéo (`soundOn =
    * false`), câblée par l'écran (`routes/reels.tsx`). */
@@ -411,12 +413,12 @@ function reelActions({
       onPress: () => onShare(model.id),
       probe: { 'data-reel-gesture': 'share' },
     },
-    /* LA BAGUETTE IMAGE LE RÉEL (#16333) — là où le menu « … » l'offre : une scène à composer. */
+    /* LA BAGUETTE IMAGE LE RÉEL (#16333, #16166) — là où le menu « … » l'offre : tout réel qui s'image. */
     {
       action: 'imager',
       label: translate(language, 'media.viewer.imager'),
       glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={GLYPH_SIZE.lg} />,
-      onPress: onImager === undefined || model.scene === undefined ? undefined : () => onImager(model),
+      onPress: onImager === undefined || !publicationImageable(model) ? undefined : () => void onImager(model),
       probe: { 'data-reel-gesture': 'imager' },
     },
     {

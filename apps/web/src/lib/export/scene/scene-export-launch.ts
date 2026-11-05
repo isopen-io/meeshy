@@ -12,7 +12,7 @@ import type { SceneExportMode, SceneExportResult } from './scene-export-run';
 import { gestureAudioContext, type SceneExportSubject } from './scene-export-subject';
 
 /**
- * **« SAUVEGARDER », « PARTAGER » ET « IMAGER » D'UNE PUBLICATION, AU GESTE** (#13873, #13881) —
+ * **« SAUVEGARDER » ET « PARTAGER » D'UNE PUBLICATION, AU GESTE** (#13873, #13881) —
  * le départ SYNCHRONE d'un export : le contexte audio naît dans le geste
  * (sans quoi Safari le laisse muet), le job entre au bandeau global
  * (`SceneExportTray`), puis le moteur se charge et tourne pendant que
@@ -54,7 +54,6 @@ const browserRunner: SceneExportRunner = async (input) => {
     host: browserFileDeliveryHost(),
     gallerySaver: currentGallerySaver(),
     relationLevel: relationLevelProvider(apiDeps),
-    chooseLength: input.job.chooseLength,
     awaitDeliveryTap: input.job.awaitDeliveryTap,
     signal: input.job.signal,
     onProgress: input.job.report,

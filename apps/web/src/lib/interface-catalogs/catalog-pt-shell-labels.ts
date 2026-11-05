@@ -47,6 +47,8 @@ const ptShellLabels = {
   'readingMode.river.thresholdToday': 'Abrirá com {threshold} pessoas ativas — {current} hoje',
 
   'message.status.pending': 'enviando',
+
+  'message.status.sending': 'Enviando',
   'message.status.sent': 'enviada',
   'message.status.delivered': 'entregue',
   'message.status.read': 'lida',

@@ -40,6 +40,7 @@ struct MessageCardExportTray: View {
     let onGallery: () -> Void
     /// Le passage glissé sur l'onde : son nouveau point de départ, en secondes.
     let onExcerptStart: (Double) -> Void
+    var contentPanel: MessageCardCompositionBar? = nil
 
     /// Le plateau prend sa hauteur IDÉALE : ses rangées défilent à l'horizontale,
     /// donc se laisseraient écraser à la verticale, et un panneau haut (un vocal
@@ -90,6 +91,10 @@ struct MessageCardExportTray: View {
     @ViewBuilder
     private var panel: some View {
         switch tab {
+        case .content:
+            if let contentPanel {
+                contentPanel.padding(.horizontal, MeeshySpacing.md)
+            }
         case .styles: stylesPanel
         case .format: formatPanel
         case .frame: framePanel

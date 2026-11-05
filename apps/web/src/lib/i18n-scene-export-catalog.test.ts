@@ -35,7 +35,7 @@ describe('chaque langue porte toutes les clés du français, et rien d’autre',
     const french = await loadSceneExportCatalog('fr');
     for (const [language, catalog] of await loadAll()) {
       if (language === 'fr') continue;
-      for (const key of ['sceneExport.menu.save', 'sceneExport.menu.imager', 'sceneExport.length.title', 'sceneExport.notice.saved', 'sceneExport.tray.cancel'] as const) {
+      for (const key of ['sceneExport.menu.save', 'sceneExport.menu.imager', 'sceneExport.notice.saved', 'sceneExport.tray.cancel'] as const) {
         expect({ language, key, copied: catalog[key] === french[key] }).toEqual({ language, key, copied: false });
       }
     }
@@ -43,8 +43,9 @@ describe('chaque langue porte toutes les clés du français, et rien d’autre',
 });
 
 describe('translateSceneExport', () => {
-  test('la part offerte dit sa durée', async () => {
-    await loadSceneExportCatalog('fr');
-    expect(translateSceneExport('fr', 'sceneExport.length.option', { part: '2', duration: '2:00' })).toBe('2/4 · 2:00');
+  test('« Imager » ne propose plus de parts : l’atelier de carte le reçoit (#16393)', async () => {
+    const french = await loadSceneExportCatalog('fr');
+    expect(Object.keys(french).filter((key) => key.startsWith('sceneExport.length.'))).toEqual([]);
+    expect(translateSceneExport('fr', 'sceneExport.menu.imager')).toBe('Imager');
   });
 });

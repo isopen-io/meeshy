@@ -76,6 +76,15 @@ struct CommentRowView: View, Equatable {
         )
     }
 
+    private var imagerButton: CommentImagerButton {
+        CommentImagerButton(
+            target: CommentImagerTarget(comment: comment, showOriginal: showOriginal, accentColor: accentColor,
+                                        root: threadRoot, loadedReplies: threadReplies, post: post),
+            glyphSize: isReply ? 12 : 14,
+            tint: theme.textMuted
+        )
+    }
+
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.comment.id == rhs.comment.id &&
         lhs.isLiked == rhs.isLiked &&
@@ -274,9 +283,6 @@ struct CommentRowView: View, Equatable {
                 }
 
                 HStack(spacing: MeeshySpacing.xl) {
-                    // Le contour d'accent — « c'est MOI qui ai liké » ;
-                    // `filledWhenInactive` garde le cœur plein dès qu'il existe
-                    // des likes, sans revendiquer les miens.
                     CommentLikeButton(isLiked: isLiked, likeCount: likeCount, isInFlight: isInFlight, look: likeLook) {
                         onLikeComment?()
                         HapticFeedback.light()
@@ -333,6 +339,7 @@ struct CommentRowView: View, Equatable {
 
                     Spacer()
 
+                    imagerButton
                     moreMenu
                 }
                 .padding(.top, isReply ? 2 : 4)

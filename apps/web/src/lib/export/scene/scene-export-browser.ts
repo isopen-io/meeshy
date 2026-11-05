@@ -6,17 +6,17 @@ import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 import { prepareSceneExport } from './scene-export-assets';
 import { BRANDING_BUDGET_MS, brandPreparedScene } from './scene-export-branding';
 import { noRelationLevel, type RelationLevelProvider } from './scene-export-branding-level';
-import type { ImagerLengthChoice, ImagerQuarter } from './scene-export-length';
 import type { ExportPalette } from './scene-export-paint';
 import { renderSceneExport, type RenderEnvironment } from './scene-export-render';
-import { runSceneExport, type SceneDelivery, type SceneExportMode, type SceneExportResult } from './scene-export-run';
+import { runSceneExport, type SceneDelivery, type SceneExportMode, type SceneExportResult, type SceneExportRunDeps } from './scene-export-run';
 import { sceneDeliveryOf, shareSceneFile } from './scene-export-share';
 import type { SceneExportSubject } from './scene-export-subject';
 
 /**
  * **L'EXPORT DANS LE NAVIGATEUR** (#13873) — le seul module qui touche au DOM,
- * au réseau et à Web Audio. Chargé à la demande, au premier « Enregistrer » ou
- * « Imager » : aucun lecteur qui ne tape jamais ces gestes ne le paie.
+ * au réseau et à Web Audio. Chargé à la demande, au premier « Enregistrer »,
+ * « Partager » ou « Imager » d'une œuvre composée (`renderSceneFile`) : aucun
+ * lecteur qui ne tape jamais ces gestes ne le paie.
  *
  * « Enregistrer » range le fichier (galerie de la coque, sinon la porte de
  * fichier) ; « Partager » le remet à la feuille de partage (#13881,
@@ -80,6 +80,99 @@ async function deliverFile(params: {
   return sceneDeliveryOf(portal === null ? 'unavailable' : await portal.deliver(params.blob, params.fileName, params.mimeType));
 }
 
+type SceneEngine = Pick<SceneExportRunDeps, 'prepare' | 'render'>;
+
+function sceneEngine(params: {
+  readonly subject: SceneExportSubject;
+  readonly audioContext: AudioContext | null;
+  readonly preferredLanguages: readonly string[];
+  readonly placeHere: string;
+  readonly relationLevel?: RelationLevelProvider | undefined;
+}): SceneEngine {
+  const { subject, audioContext } = params;
+  const doc = document;
+  const env: RenderEnvironment = {
+    doc,
+    MediaRecorder: typeof MediaRecorder === 'undefined' ? undefined : MediaRecorder,
+    audioContext,
+    requestFrame: requestFrame(doc),
+    now: () => performance.now(),
+    palette: exportPalette(doc),
+    labels: { placeHere: params.placeHere },
+  };
+  return {
+    prepare: async (signal) => {
+      const prepared = await prepareSceneExport({
+        document: subject.document,
+        carrier: subject.carrier,
+        signal,
+        deps: {
+          doc,
+          fetchBlob: (src) => fetchCardMediaBlob(src, mediaIdOf(src)),
+          createObjectURL: (blob) => URL.createObjectURL(blob),
+          revokeObjectURL: (url) => URL.revokeObjectURL(url),
+          decodeImage: typeof createImageBitmap === 'function' ? (blob) => createImageBitmap(blob) : undefined,
+          imageDecoder: typeof ImageDecoder === 'function' ? ImageDecoder : undefined,
+          decodeAudio: audioContext === null ? null : (data) => audioContext.decodeAudioData(data),
+        },
+      });
+      if (subject.branding === undefined || prepared === 'cancelled') return prepared;
+      return brandPreparedScene({
+        prepared,
+        author: subject.branding.author,
+        signal,
+        deps: { loadImage: brandingImage, relationLevel: params.relationLevel ?? noRelationLevel, now: () => Date.now(), budgetMs: BRANDING_BUDGET_MS },
+      });
+    },
+    render: ({ prepared, lengthMs, signal, onProgress }) =>
+      renderSceneExport({
+        prepared,
+        document: subject.document,
+        carrier: subject.carrier,
+        preferredLanguages: params.preferredLanguages,
+        watermark: subject.watermark,
+        lengthMs,
+        env,
+        signal,
+        onProgress,
+      }),
+  };
+}
+
+/**
+ * **LE RENDU D'UNE SCÈNE, SANS LIVRAISON** (#16393) — le fichier qu'« Imager »
+ * pose comme média sur la carte d'une œuvre composée : la composition
+ * entière, image fixe ou vidéo. `null` : rien n'a pu se rendre.
+ */
+export async function renderSceneFile(params: {
+  readonly subject: SceneExportSubject;
+  readonly audioContext: AudioContext | null;
+  readonly preferredLanguages: readonly string[];
+  readonly placeHere: string;
+  readonly signal: AbortSignal;
+  readonly onProgress?: (fraction: number) => void;
+}): Promise<RenderedSceneFile | null> {
+  const engine = sceneEngine(params);
+  try {
+    const prepared = await engine.prepare(params.signal).catch(() => null);
+    if (prepared === null || prepared === 'cancelled') return null;
+    try {
+      const outcome = await engine.render({ prepared, lengthMs: prepared.plan.totalMs, signal: params.signal, onProgress: params.onProgress ?? (() => undefined) });
+      if (outcome.kind === 'video') return { blob: outcome.blob, mimeType: outcome.mimeType };
+      if (outcome.kind === 'image') return { blob: outcome.blob, mimeType: outcome.blob.type || 'image/png' };
+      return null;
+    } finally {
+      prepared.dispose();
+    }
+  } catch {
+    return null;
+  } finally {
+    void params.audioContext?.close().catch(() => undefined);
+  }
+}
+
+export type RenderedSceneFile = { readonly blob: Blob; readonly mimeType: string };
+
 export async function startSceneExport(params: {
   readonly subject: SceneExportSubject;
   readonly mode: SceneExportMode;
@@ -90,7 +183,6 @@ export async function startSceneExport(params: {
   readonly gallerySaver: GallerySaver | null;
   /** Le niveau de lien de l'auteur (#13997) — le port injecté du logo de cercle (`relationLevelProvider`) ; absent : aucun logo. */
   readonly relationLevel?: RelationLevelProvider;
-  readonly chooseLength: (choices: readonly ImagerLengthChoice[]) => Promise<ImagerQuarter | null>;
   /** « Partager » : le fichier prêt attend un toucher neuf — absent, il se livre sans attendre. */
   readonly awaitDeliveryTap?: (deliver: () => Promise<SceneDelivery>) => Promise<SceneDelivery>;
   readonly signal: AbortSignal;
@@ -98,19 +190,10 @@ export async function startSceneExport(params: {
   readonly onDelivering?: () => void;
 }): Promise<SceneExportResult> {
   const { subject, audioContext } = params;
-  const doc = document;
   /* La livraison se charge PENDANT le rendu : prête au moment de livrer,
      elle ne retarde pas le partage au-delà de l'activation du geste. */
   void import('@/lib/media/deliver-file').catch(() => undefined);
-  const env: RenderEnvironment = {
-    doc,
-    MediaRecorder: typeof MediaRecorder === 'undefined' ? undefined : MediaRecorder,
-    audioContext,
-    requestFrame: requestFrame(doc),
-    now: () => performance.now(),
-    palette: exportPalette(doc),
-    labels: { placeHere: params.placeHere },
-  };
+  const engine = sceneEngine(params);
   try {
     return await runSceneExport({
       mode: params.mode,
@@ -119,46 +202,11 @@ export async function startSceneExport(params: {
       onProgress: params.onProgress,
       ...(params.onDelivering !== undefined ? { onDelivering: params.onDelivering } : {}),
       deps: {
-        prepare: async (signal) => {
-          const prepared = await prepareSceneExport({
-            document: subject.document,
-            carrier: subject.carrier,
-            signal,
-            deps: {
-              doc,
-              fetchBlob: (src) => fetchCardMediaBlob(src, mediaIdOf(src)),
-              createObjectURL: (blob) => URL.createObjectURL(blob),
-              revokeObjectURL: (url) => URL.revokeObjectURL(url),
-              decodeImage: typeof createImageBitmap === 'function' ? (blob) => createImageBitmap(blob) : undefined,
-              imageDecoder: typeof ImageDecoder === 'function' ? ImageDecoder : undefined,
-              decodeAudio: audioContext === null ? null : (data) => audioContext.decodeAudioData(data),
-            },
-          });
-          if (subject.branding === undefined || prepared === 'cancelled') return prepared;
-          return brandPreparedScene({
-            prepared,
-            author: subject.branding.author,
-            signal,
-            deps: { loadImage: brandingImage, relationLevel: params.relationLevel ?? noRelationLevel, now: () => Date.now(), budgetMs: BRANDING_BUDGET_MS },
-          });
-        },
-        render: ({ prepared, lengthMs, signal, onProgress }) =>
-          renderSceneExport({
-            prepared,
-            document: subject.document,
-            carrier: subject.carrier,
-            preferredLanguages: params.preferredLanguages,
-            watermark: subject.watermark,
-            lengthMs,
-            env,
-            signal,
-            onProgress,
-          }),
+        ...engine,
         deliver: (blob, fileName, mimeType) =>
           params.mode === 'share'
             ? shareSceneFile({ blob, fileName, mimeType, host: params.host, awaitTap: params.awaitDeliveryTap ?? ((deliver) => deliver()) })
             : deliverFile({ blob, fileName, mimeType, host: params.host, gallerySaver: params.gallerySaver }),
-        chooseLength: params.chooseLength,
       },
     });
   } finally {

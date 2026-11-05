@@ -669,8 +669,8 @@ extension StoryViewModel {
             // 5. Les originaux plus référencés par la composition éditée.
             let removeMediaIds = edit.originalMediaIds.filter { !keptOriginalIds.contains($0) }
 
-            // 6. PUT — le gateway pose `contentEditedAt`, remet l'engagement à
-            // zéro et broadcast `story:updated` avec `engagementReset: true`.
+            // 6. PUT — le gateway met l'existant à jour et GARDE ses vues
+            // (#16386) ; `story:updated` part avec `engagementReset: false`.
             //
             // TRI-ÉTAT des références : `nil` tant que le composer n'a pas pu
             // hydrater l'ensemble déclaré (le serveur préserve alors) ; sinon

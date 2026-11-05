@@ -19,17 +19,12 @@ struct MyStoryActionBar: View, Equatable {
     /// → le glyphe est rendu nu, jamais suivi d'un « 0 » décoratif.
     let counts: [MyStoryGlyph: Int]
     let onSelect: (MyStoryGlyph) -> Void
-    /// Contenu du menu « … ». Fourni par l'appelant car il dépend du contexte
-    /// (story publiée, brouillon) et de ses propres actions.
-    let moreMenu: AnyView?
 
     init(glyphs: [MyStoryGlyph],
          counts: [MyStoryGlyph: Int] = [:],
-         moreMenu: AnyView? = nil,
          onSelect: @escaping (MyStoryGlyph) -> Void) {
         self.glyphs = glyphs
         self.counts = counts
-        self.moreMenu = moreMenu
         self.onSelect = onSelect
     }
 
@@ -48,10 +43,7 @@ struct MyStoryActionBar: View, Equatable {
 
     @ViewBuilder
     private func item(_ glyph: MyStoryGlyph) -> some View {
-        if glyph == .more, let moreMenu {
-            Menu { moreMenu } label: { label(glyph) }
-                .accessibilityLabel(glyph.accessibilityLabel)
-        } else if glyph.isInteractive {
+        if glyph.isInteractive {
             Button { onSelect(glyph) } label: { label(glyph) }
                 .buttonStyle(.plain)
                 .accessibilityLabel(glyph.accessibilityLabel)

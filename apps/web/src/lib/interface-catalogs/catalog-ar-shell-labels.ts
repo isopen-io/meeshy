@@ -47,6 +47,8 @@ const arShellLabels = {
   'readingMode.river.thresholdToday': 'يُفتح عند {threshold} أشخاص نشطين — {current} اليوم',
 
   'message.status.pending': 'جارٍ الإرسال',
+
+  'message.status.sending': 'جارٍ الإرسال',
   'message.status.sent': 'أُرسلت',
   'message.status.delivered': 'وصلت',
   'message.status.read': 'قُرئت',

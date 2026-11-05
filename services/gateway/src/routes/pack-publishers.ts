@@ -15,6 +15,7 @@ import { PACK_PUBLISHER_LIMITS } from '@meeshy/shared/types/pack-publisher';
 
 import { requireAdminRank } from '../middleware/authorize';
 import { defaultPackPublishers, type PackPublishers } from '../services/packs/PackPublishers';
+import { logError, logWarn } from '../utils/logger';
 import { sendNotFound, sendSuccess } from '../utils/response.js';
 import { PACK_ERRORS, packEnvelope, packPublisherJsonSchema, packRouteGuard } from './pack-routes';
 
@@ -55,9 +56,9 @@ export async function packPublisherRoutes(fastify: FastifyInstance, options: Pac
     publishers
       .ensureOfficial()
       .then((outcome) => {
-        if (outcome !== 'linked') fastify.log.warn(`[publishers] l'éditeur Meeshy n'est lié à aucun compte officiel : ${outcome}`);
+        if (outcome !== 'linked') logWarn(fastify.log, `[publishers] l'éditeur Meeshy n'est lié à aucun compte officiel : ${outcome}`);
       })
-      .catch((error: unknown) => fastify.log.error({ err: error }, '[publishers] liaison de l’éditeur Meeshy impossible'));
+      .catch((error: unknown) => logError(fastify.log, '[publishers] liaison de l’éditeur Meeshy impossible', error));
   }
 
   fastify.get(

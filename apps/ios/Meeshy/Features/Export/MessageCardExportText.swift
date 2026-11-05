@@ -7,12 +7,13 @@ import MeeshySDK
 /// L'ORDRE est celui du porteur (#8692) : le format de l'image se choisit en
 /// tête des réglages, et « Frame » — la disposition — vient AVANT « Fond ».
 enum MessageCardExportTab: String, CaseIterable, Identifiable {
-    case styles, format, frame, palette, typeface, link, media, details, language
+    case content, styles, format, frame, palette, typeface, link, media, details, language
 
     var id: String { rawValue }
 
     var systemImage: String {
         switch self {
+        case .content: return "square.stack.3d.up"
         case .styles: return "square.grid.2x2"
         case .format: return "aspectratio"
         case .frame: return "rectangle.dashed"
@@ -27,6 +28,7 @@ enum MessageCardExportTab: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
+        case .content: return MessageCardExportText.text("export.card.tab.content", "Contenu")
         case .styles: return MessageCardExportText.text("export.card.tab.styles", "Styles")
         case .format: return MessageCardExportText.text("export.card.tab.format", "Format")
         case .frame: return MessageCardExportText.text("export.card.tab.frame", "Frame")
@@ -52,9 +54,10 @@ enum MessageCardExportTab: String, CaseIterable, Identifiable {
 
     /// Les onglets qu'un contenu OFFRE : « Médias » n'existe qu'avec un média,
     /// « Langue » qu'avec une seconde langue.
-    static func offered(hasMedia: Bool, languageCount: Int) -> [MessageCardExportTab] {
+    static func offered(hasMedia: Bool, languageCount: Int, offersContent: Bool = false) -> [MessageCardExportTab] {
         allCases.filter { tab in
             switch tab {
+            case .content: return offersContent
             case .media: return hasMedia
             case .language: return languageCount > 1
             default: return true

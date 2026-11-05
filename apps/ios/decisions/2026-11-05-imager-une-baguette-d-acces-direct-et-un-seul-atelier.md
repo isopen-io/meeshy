@@ -1,0 +1,23 @@
+## 2026-11-05 : « Imager » a une baguette d'accès direct, et un seul atelier, celui de la carte (#16163, #16166, #16393)
+
+**Contexte.** Directive porteur du 2026-11-04 (#16162) : chaque élément qu'on peut imager porte une icône « Imager » d'accès direct, et tout ce qui peut s'imager s'image. #16332 a posé la baguette `wand.and.stars` sur les rails du plein écran, du réel et de la story. Il restait la carte de post, le détail et la rangée de commentaire, ainsi que les posts et réels « simples » : « Imager » n'existait que pour une œuvre composée. Second constat du porteur, le 2026-11-05 (#16393) : « Imager » d'un post, d'un réel et d'une story ouvrait une autre fenêtre (la vue Imager de scène, #14325) que celle d'un commentaire ou d'une image (l'atelier de carte), et la feuille d'un commentaire à réponses montrait un bouton isolé au-dessus de l'aperçu.
+
+**Décision.**
+1. **Position de la baguette**, la référence pour le web (#16164) et Android (#16165) :
+   - carte de post du fil (`FeedPostActionsBar`) : dernière action, après « Envoyer » ;
+   - détail d'un post (`PostDetailView`, barre d'engagement) : dernière action, après le favori ;
+   - rangée d'un commentaire (`CommentRowView`) : juste avant le « ⋯ » ;
+   - réel et story : déjà livrés par #16332 ;
+   - **la bulle de message ne porte pas de baguette.** Mesure : son appui long ouvre la bande d'émojis (des réactions seulement) puis la liste verticale des actions, où « Imager » et « Export rapide » sont déjà (`PrimaryAction.exportImage`, `.exportQuick`), à deux gestes. Il n'existe pas de rangée d'actions rapides en icônes, et poser une icône dans la bande de réactions mélangerait deux vocabulaires.
+2. **Glyphe, mot, geste** : `FullscreenChromeSymbol.imager`, libellé et VoiceOver « Imager » (`MessageCardExportMenu.imageLabel`), cible de 44 pt (`ImagerWandButton`). Un tap ouvre l'atelier. Un appui long offre « Export rapide », et seulement quand un format par défaut est enregistré.
+3. **La loi qui affiche la baguette est celle du menu du même élément**, jamais une copie. Post et réel : `PostSaveAction.imagerAction` (portillon `MediaSaveCoordinator.mayLeave`, puis une carte qui a quelque chose à peindre). Commentaire : `CommentImagerTarget`, extrait du menu « ⋯ », que le menu et la baguette lisent tous les deux.
+4. **Un seul atelier.** Tout « Imager » (message, pièce, commentaire, post, réel, story, scène de galerie) ouvre `MessageCardExportPresenter`. La vue de scène (`ImagerPresenter`, `ImagerSheet`) et `StoryPhotoSaveService.image(...)` sortent du dépôt. Les libellés de durée vivent désormais dans `ImagerLengthLabel`, à côté du plateau qui les lit.
+5. **Un post ou un réel simple s'image comme un message** (#16166) : `MessageCardSubject.of(post:)` (SDK) peint le texte que le Prisme sert (`FeedPost.resolved(preferredLanguages:)`), lu comme dans le fil, avec ses photos, vidéos et sons, et l'auteur qui signe. Une story ou un statut n'y passe que par le rendu de sa scène.
+6. **Une œuvre composée arrive par le rendu de sa scène** (`MessageCardLead`) : `renderSceneFile(of:)` pour un post ou une scène de galerie, `renderStoryWorkFile(of:author:)` pour une story (l'œuvre seule, sans prélude ni carte de fin : la carte signe elle-même). L'atelier s'ouvre tout de suite sur « Préparation de l'image… », puis rend le média : une image pour une scène fixe et muette, une vidéo sinon, et le plateau en offre déjà la durée. Le fichier rendu est jeté à la fermeture.
+7. **Les choix de contenu d'un commentaire sont un onglet** : « Contenu » (`MessageCardExportTab.content`), premier du rail et présent seulement quand il y a un choix (`composition.showsBar`). Il porte les modes, « Post en tête », les réponses choisies et le média de tête. Rien ne reste au-dessus de l'aperçu.
+
+**Conséquences.**
+- « Sauvegarder » ne change pas : `PostSaveRoute` garde sa loi (fichier brut ou scène rendue).
+- Les gardes de sortie ne changent pas : portillon fermé ⇒ aucune baguette ; commentaire éphémère, flouté, à vue unique ou vide ⇒ aucune baguette. Un post n'a ni flou, ni vue unique, ni chiffrement. L'audience d'un post ne retient pas sa propre carte : seul son lecteur l'image, comme un message d'une conversation privée. La tête d'une carte de commentaire, elle, reste réservée à un support public.
+- Laissé hors du lot : la rangée d'un commentaire de story (`StoryCommentRowView`) n'a pas encore de baguette (son menu « ⋯ » offre « Imager »). La préparation n'affiche aucune progression : c'est le texte existant, sans pourcentage.
+- Témoins : `PostCardSubjectTests` (SDK : texte, photo, plusieurs photos, vidéo, vocal, document seul, story, rang Prisme), `StoryImagerTests`, `StoryStillExportTests`, `ImagerWandPlacementTests`.

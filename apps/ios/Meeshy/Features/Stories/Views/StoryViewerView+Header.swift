@@ -514,7 +514,7 @@ struct StoryHeaderView: View {
             if let story = currentStory {
                 Button {
                     HapticFeedback.light()
-                    StoryPhotoSaveService.shared.image(story: story, author: currentGroup.map { StoryExportAuthor.served(from: $0) })
+                    MessageCardExportPresenter.present(ImagerCardRequest.story(story, author: currentGroup.map { StoryExportAuthor.served(from: $0) }, accentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex))
                 } label: {
                     Label(MessageCardExportMenu.imageLabel, systemImage: MessageCardExportMenu.imageSymbol)
                 }

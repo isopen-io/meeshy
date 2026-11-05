@@ -18,6 +18,7 @@ import { conversationQuery, conversationsQuery, refreshConversations } from './c
 import type { PendingAttachment } from '@/lib/send/attachments';
 
 import { apiDeps } from './deps';
+import { sendTransfer } from '@/lib/send/send-transfer-instance';
 import { feedQuery, refreshFeed } from './feed';
 import { forwardMessages, type ForwardResult, type ForwardSource } from './forward';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
@@ -463,7 +464,7 @@ export function sendAction(params: {
     draft,
     viewerId,
     ...(sender === undefined ? {} : { sender }),
-    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online },
+    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online, transfer: sendTransfer },
   });
 }
 
@@ -476,7 +477,7 @@ export function retrySendAction(params: {
   return retrySend({
     conversationId,
     clientMessageId,
-    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online },
+    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online, transfer: sendTransfer },
   });
 }
 

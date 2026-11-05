@@ -47,6 +47,8 @@ const esShellLabels = {
   'readingMode.river.thresholdToday': 'Se abrirá con {threshold} personas activas — {current} hoy',
 
   'message.status.pending': 'enviando',
+
+  'message.status.sending': 'Enviando',
   'message.status.sent': 'enviado',
   'message.status.delivered': 'entregado',
   'message.status.read': 'leído',

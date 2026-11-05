@@ -1873,54 +1873,34 @@ describe('PostService', () => {
     });
 
     // -----------------------------------------------------------------------
-    // Story edit — engagement reset (directive 2026-07-29)
+    // Story edit — engagement PRESERVED (directive porteur 2026-11-05, #16386,
+    // qui remplace celle du 2026-07-29)
     //
-    // Editing a published STORY's content restarts its life: views, reactions
-    // and impressions are wiped (rows + denormalized counters + embedded JSON)
-    // so every viewer sees it as new again. The publication date never moves:
-    // createdAt/expiresAt are NOT part of the update payload.
+    // Modifier une story en cours met l'existant à jour : ses vues, réactions
+    // et impressions restent, et la garde « vu » des clients ne cède pas
+    // (`contentEditedAt` ne bouge pas). Seules les traductions du texte
+    // périmé tombent. La date de publication ne bouge jamais.
     // -----------------------------------------------------------------------
 
-    describe('STORY content edit — engagement reset', () => {
-      it('wipes views, reactions and impressions when storyEffects change', async () => {
+    describe('STORY content edit — engagement preserved', () => {
+      it('#16386 — garde vues, réactions et impressions quand la composition change', async () => {
         prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
         await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { storyEffects: { background: { kind: 'color' } } });
 
-        expect(prisma.postView.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
-        expect(prisma.postReaction.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
-        expect(prisma.postImpression.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
-        expect(prisma.post.update).toHaveBeenCalledWith(
-          expect.objectContaining({
-            data: expect.objectContaining({
-              viewCount: 0,
-              impressionCount: 0,
-              reactionCount: 0,
-              likeCount: 0,
-              reactionSummary: {},
-              reactions: [],
-              storyViews: [],
-              isEdited: true,
-              contentEditedAt: expect.any(Date),
-            }),
-          }),
-        );
-      });
-
-      it('#11065 — remet aussi à zéro les personnes distinctes et les parts anonymes : aucune liste vidée sous un compteur plein', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
-        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
-
-        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { storyEffects: { background: { kind: 'color' } } });
-
-        expect(prisma.post.update).toHaveBeenCalledWith(
-          expect.objectContaining({ data: expect.objectContaining(STORY_VIEW_RESET) }),
-        );
-        expect(STORY_VIEW_RESET).toMatchObject({
-          viewCount: 0, impressionCount: 0, uniqueViewCount: 0,
-          anonymousViewCount: 0, anonymousUniqueViewCount: 0, anonymousImpressionCount: 0,
-        });
+        expect(prisma.postView.deleteMany).not.toHaveBeenCalled();
+        expect(prisma.postReaction.deleteMany).not.toHaveBeenCalled();
+        expect(prisma.postImpression.deleteMany).not.toHaveBeenCalled();
+        const dataArg = prisma.post.update.mock.calls[0][0].data;
+        for (const counter of Object.keys(STORY_VIEW_RESET)) {
+          expect(dataArg).not.toHaveProperty(counter);
+        }
+        expect(dataArg).not.toHaveProperty('reactionCount');
+        expect(dataArg).not.toHaveProperty('reactions');
+        expect(dataArg).not.toHaveProperty('storyViews');
+        expect(dataArg).not.toHaveProperty('contentEditedAt');
+        expect(dataArg.isEdited).toBe(true);
       });
 
       it('#11065 — la republication remet à zéro les mêmes compteurs que l’édition', async () => {
@@ -2020,13 +2000,13 @@ describe('PostService', () => {
         ]);
       });
 
-      it('adding media to a STORY counts as a content edit (engagement reset)', async () => {
+      it('#16386 — adding media to a STORY keeps its views', async () => {
         prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
         await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { mediaIds: ['new-m1'] });
 
-        expect(prisma.postView.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
+        expect(prisma.postView.deleteMany).not.toHaveBeenCalled();
       });
 
       it('never writes mediaIds as a scalar field on the post', async () => {
