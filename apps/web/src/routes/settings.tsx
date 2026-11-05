@@ -22,6 +22,7 @@ import {
 } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { useDevicePushRow } from '@/lib/push/use-device-push';
+import { useSettingFocusFromAddress } from '@/lib/view/use-setting-focus';
 import { currentThemePreference, setThemePreference, type ThemePreference } from '@/lib/scheme';
 import { href, navigate } from '@/routes/route-table';
 import { AccountSwitcherSheet, SwitchAccountButton } from '@/routes/settings-accounts';
@@ -205,6 +206,7 @@ function SettingsHome() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
   const deviceTranslation = useDeviceTranslationSetting();
+  useSettingFocusFromAddress();
 
   useEffect(() => {
     if (notice === null) return undefined;

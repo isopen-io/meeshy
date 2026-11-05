@@ -66,6 +66,23 @@ class TranslatedAudioVersion:
     audio_mime_type: Optional[str] = None
     # Segments traduits pour synchronisation audio
     segments: Optional[List[Dict[str, Any]]] = None
+    # Vrai quand la TTS a échoué : le texte traduit voyage seul, sans piste (#16340)
+    text_only: bool = False
+
+    @classmethod
+    def text_only_version(cls, language: str, translated_text: str) -> "TranslatedAudioVersion":
+        return cls(
+            language=language,
+            translated_text=translated_text,
+            audio_path="",
+            audio_url="",
+            duration_ms=0,
+            format="",
+            voice_cloned=False,
+            voice_quality=0.0,
+            processing_time_ms=0,
+            text_only=True,
+        )
 
 
 class TranslationStage:
@@ -494,44 +511,27 @@ class TranslationStage:
                 message_id=message_id
             )
 
-            # 2. Generate TTS audio
-            if voice_model:
-                # PRIORITÉ 1: Utiliser les conditionals pré-calculés si disponibles
-                # (plus rapide et qualité constante - évite recalcul à chaque synthèse)
-                has_conditionals = (
-                    hasattr(voice_model, 'chatterbox_conditionals') and
-                    voice_model.chatterbox_conditionals is not None
+            # 2. Generate TTS audio — une synthèse en échec garde le TEXTE (#16340)
+            try:
+                tts_result = await self._synthesize_translation(
+                    target_lang=target_lang,
+                    translated_text=translated_text,
+                    voice_model=voice_model,
+                    message_id=message_id,
+                    attachment_id=attachment_id,
+                    cloning_params=cloning_params,
+                    source_audio_path=source_audio_path,
                 )
-
-                if has_conditionals:
-                    tts_result = await self.tts_service.synthesize_with_conditionals(
-                        text=translated_text,
-                        conditionals=voice_model.chatterbox_conditionals,
-                        target_language=target_lang,
-                        output_format=self.tts_output_format,
-                        message_id=f"{message_id}_{attachment_id}",
-                        cloning_params=cloning_params
-                    )
-                else:
-                    # PRIORITÉ 2: Calculer depuis l'audio de référence
-                    # (fallback si pas de conditionals pré-calculés)
-                    speaker_audio = source_audio_path if source_audio_path and os.path.exists(source_audio_path) else getattr(voice_model, 'reference_audio_path', None)
-
-                    tts_result = await self.tts_service.synthesize_with_voice(
-                        text=translated_text,
-                        speaker_audio_path=speaker_audio,
-                        target_language=target_lang,
-                        output_format=self.tts_output_format,
-                        message_id=f"{message_id}_{attachment_id}",
-                        cloning_params=cloning_params
-                    )
-            else:
-                tts_result = await self.tts_service.synthesize(
-                    text=translated_text,
-                    language=target_lang,
-                    output_format=self.tts_output_format,
-                    cloning_params=cloning_params
+            except Exception as tts_error:
+                logger.error(
+                    f"[TRANSLATION_STAGE] TTS en échec pour {target_lang}, traduction texte seule: {tts_error}"
                 )
+                text_only = TranslatedAudioVersion.text_only_version(target_lang, translated_text)
+                await self._notify_translation_ready(
+                    on_translation_ready, target_languages, target_lang,
+                    message_id, attachment_id, text_only, None,
+                )
+                return (target_lang, text_only)
 
             # 3. RE-TRANSCRIPTION LÉGÈRE POUR SEGMENTS FINS (mono-locuteur)
             # ═══════════════════════════════════════════════════════════════
@@ -631,37 +631,10 @@ class TranslationStage:
             )
 
             # 6. Callback pour remontée progressive (MONO-SPEAKER)
-            if on_translation_ready and target_languages:
-                try:
-                    # Déterminer le type d'événement selon le nombre de langues
-                    total_languages = len(target_languages)
-                    is_single_language = total_languages == 1
-                    current_index = target_languages.index(target_lang) + 1
-                    is_last_language = current_index == total_languages
-
-                    translation_data = {
-                        'message_id': message_id,
-                        'attachment_id': attachment_id,
-                        'language': target_lang,
-                        'translation': translation_result,
-                        'segments': fine_segments,
-                        # Métadonnées pour déterminer le type d'événement
-                        'is_single_language': is_single_language,
-                        'is_last_language': is_last_language,
-                        'current_index': current_index,
-                        'total_languages': total_languages
-                    }
-
-                    # Appeler le callback (peut être async)
-                    if asyncio.iscoroutinefunction(on_translation_ready):
-                        await on_translation_ready(translation_data)
-                    else:
-                        on_translation_ready(translation_data)
-
-                except Exception as e:
-                    logger.warning(f"[TRANSLATION_STAGE] ⚠️ Erreur callback traduction: {e}")
-                    import traceback
-                    traceback.print_exc()
+            await self._notify_translation_ready(
+                on_translation_ready, target_languages, target_lang,
+                message_id, attachment_id, translation_result, fine_segments,
+            )
 
             # 7. Return result
             return (target_lang, translation_result)
@@ -671,6 +644,98 @@ class TranslationStage:
             import traceback
             traceback.print_exc()
             return (target_lang, None)
+
+    async def _synthesize_translation(
+        self,
+        target_lang: str,
+        translated_text: str,
+        voice_model: Optional[VoiceModel],
+        message_id: str,
+        attachment_id: str,
+        cloning_params: Optional[Dict[str, Any]],
+        source_audio_path: Optional[str],
+    ):
+        if voice_model:
+            # PRIORITÉ 1: Utiliser les conditionals pré-calculés si disponibles
+            # (plus rapide et qualité constante - évite recalcul à chaque synthèse)
+            has_conditionals = (
+                hasattr(voice_model, 'chatterbox_conditionals') and
+                voice_model.chatterbox_conditionals is not None
+            )
+
+            if has_conditionals:
+                tts_result = await self.tts_service.synthesize_with_conditionals(
+                    text=translated_text,
+                    conditionals=voice_model.chatterbox_conditionals,
+                    target_language=target_lang,
+                    output_format=self.tts_output_format,
+                    message_id=f"{message_id}_{attachment_id}",
+                    cloning_params=cloning_params
+                )
+            else:
+                # PRIORITÉ 2: Calculer depuis l'audio de référence
+                # (fallback si pas de conditionals pré-calculés)
+                speaker_audio = source_audio_path if source_audio_path and os.path.exists(source_audio_path) else getattr(voice_model, 'reference_audio_path', None)
+
+                tts_result = await self.tts_service.synthesize_with_voice(
+                    text=translated_text,
+                    speaker_audio_path=speaker_audio,
+                    target_language=target_lang,
+                    output_format=self.tts_output_format,
+                    message_id=f"{message_id}_{attachment_id}",
+                    cloning_params=cloning_params
+                )
+        else:
+            tts_result = await self.tts_service.synthesize(
+                text=translated_text,
+                language=target_lang,
+                output_format=self.tts_output_format,
+                cloning_params=cloning_params
+            )
+
+        return tts_result
+
+    async def _notify_translation_ready(
+        self,
+        on_translation_ready,
+        target_languages: Optional[List[str]],
+        target_lang: str,
+        message_id: str,
+        attachment_id: str,
+        translation_result: "TranslatedAudioVersion",
+        fine_segments: Optional[List[Dict[str, Any]]],
+    ) -> None:
+        if on_translation_ready and target_languages:
+            try:
+                # Déterminer le type d'événement selon le nombre de langues
+                total_languages = len(target_languages)
+                is_single_language = total_languages == 1
+                current_index = target_languages.index(target_lang) + 1
+                is_last_language = current_index == total_languages
+
+                translation_data = {
+                    'message_id': message_id,
+                    'attachment_id': attachment_id,
+                    'language': target_lang,
+                    'translation': translation_result,
+                    'segments': fine_segments,
+                    # Métadonnées pour déterminer le type d'événement
+                    'is_single_language': is_single_language,
+                    'is_last_language': is_last_language,
+                    'current_index': current_index,
+                    'total_languages': total_languages
+                }
+
+                # Appeler le callback (peut être async)
+                if asyncio.iscoroutinefunction(on_translation_ready):
+                    await on_translation_ready(translation_data)
+                else:
+                    on_translation_ready(translation_data)
+
+            except Exception as e:
+                logger.warning(f"[TRANSLATION_STAGE] ⚠️ Erreur callback traduction: {e}")
+                import traceback
+                traceback.print_exc()
 
     async def _translate_text_with_cache(
         self,

@@ -32,6 +32,9 @@ struct ReelActionRail: View {
     var onSend: () -> Void
     /// « Citer » du choix Repost (#15869) — `nil` = absent du choix.
     var onQuote: (() -> Void)? = nil
+    /// « Imager » (#16332) : la baguette fait du réel une carte image — `nil`
+    /// quand le réel n'a pas de scène à rendre.
+    var onImager: (() -> Void)? = nil
 
     @State private var showsReactionPalette = false
     @State private var showRepostOptions = false
@@ -142,6 +145,14 @@ struct ReelActionRail: View {
             count: reel.shareCount,
             action: onSend
         )
+
+        if let onImager {
+            ReelRailAction(
+                systemImage: FullscreenChromeSymbol.imager,
+                label: MessageCardExportMenu.imageLabel,
+                action: onImager
+            )
+        }
     }
 
     private func closeReactionPalette() {

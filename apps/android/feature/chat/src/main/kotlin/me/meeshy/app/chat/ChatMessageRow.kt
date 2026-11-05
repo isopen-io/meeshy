@@ -27,6 +27,7 @@ import me.meeshy.ui.component.bubble.BubbleAccessibilityAction
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.FlatRowFocus
+import me.meeshy.ui.component.bubble.greetsArrivals
 import me.meeshy.ui.format.bubbleClockLabel
 import me.meeshy.sdk.model.BubbleFlagTap
 import me.meeshy.sdk.model.playback.VoiceFlagRoute
@@ -74,6 +75,8 @@ internal class ChatMessageRowActions(
     val onSenderTap: (bubble: BubbleContent) -> Unit = {},
     /** Double toucher sur un avis d'arrivée : la fiche de participation de l'arrivant. */
     val onOpenJoinProfile: (bubble: BubbleContent) -> Unit = {},
+    /** « Dis-lui salut » d'un message d'arrivée (#16338) : les @mentions des arrivants dans le composeur. */
+    val onGreetArrivals: (messageId: String) -> Unit = {},
     /** Double tap sur une notice d'appel de la rangée plate : rappeler (ou rejoindre l'appel en cours). */
     val onCallBack: (bubble: BubbleContent) -> Unit = {},
     /** Icône de traduction de l'élu Focal : l'explorateur des langues du message. */
@@ -191,7 +194,7 @@ internal fun ChatMessageRow(
             onShowReadStatus = { actions.onLongPress(messageId) },
             onRetry = { actions.onRetry(messageId) },
             onCallBack = { actions.onCallBack(bubble) }.takeIf { bubble.callSummary != null },
-            onSayHi = { actions.onReply(messageId) }.takeIf { canWrite && bubble.isArrivalsNotice },
+            onSayHi = { actions.onGreetArrivals(messageId) }.takeIf { canWrite && bubble.greetsArrivals },
             onOpenJoinProfile = { _: String -> actions.onOpenJoinProfile(bubble) }.takeIf { bubble.joinNotice?.opensProfile == true },
             onAddReaction = { actions.onAddReaction(messageId) }.takeIf { reacts },
             onOpenReactPicker = { actions.onOpenReactPicker(messageId) }.takeIf { reacts },

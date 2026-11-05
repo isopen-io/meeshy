@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "androidName": "pack_shop_detail_items",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_detail_embedded",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_detail_embedded_size",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_detail_price",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_state_installed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_state_embedded",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_state_to_download",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_download_required",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_viewer_position",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_viewer_item_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_viewer_next",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_viewer_previous",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_viewer_others",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_equip",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_equip_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_equipped",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_equip_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_wallpaper_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_open_pack_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_open_item_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_preview_bubble_in",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_preview_bubble_out",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_preview_bubble_in_2",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

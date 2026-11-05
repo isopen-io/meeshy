@@ -227,6 +227,50 @@
     "bannieres-atelier-noel": {
       "name": "Atelier du Père Noël",
       "description": "Les cadres de bannière assortis à « Atelier du Père Noël » : Bonnet du Père Noël et Sucre d’orge, posés en bordure pour laisser voir votre photo."
+    },
+    "noel-bannieres": {
+      "name": "Bannières de Noël",
+      "description": "Six images de bannière assorties aux packs de Noël : givre, guirlande et papier cadeau, puis une tempête de neige, des lumières qui scintillent et les étincelles de l’atelier."
+    },
+    "noel-contours-fixes": {
+      "name": "Noël · contours fixes",
+      "description": "Les six contours de Noël sans animation : flocons, houx, guirlande, étoile, bonnet et sucre d’orge, pour qui préfère un avatar immobile."
+    },
+    "noel-cadres-fixes": {
+      "name": "Noël · cadres fixes",
+      "description": "Les six cadres de bannière de Noël sans animation, assortis aux contours fixes : flocons, houx, guirlande, étoile, bonnet et sucre d’orge."
+    },
+    "nouvel-an-contours": {
+      "name": "Nouvel An",
+      "description": "Quatre contours pour fêter la nouvelle année : feux d’artifice, pluie de confettis, cadran de minuit et coupe de champagne doré."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Nouvel An vivant",
+      "description": "Quatre contours animés pour le passage à la nouvelle année : un bouquet final, un envol de confettis, l’horloge qui sonne minuit et des bulles de champagne."
+    },
+    "nouvel-an-images": {
+      "name": "Bannières du Nouvel An",
+      "description": "Quatre images de bannière pour la nouvelle année : une nuit d’artifice, une fête de confettis, les douze coups de minuit et un champagne doré."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Bannières du Nouvel An animées",
+      "description": "Quatre images de bannière animées : des gerbes qui éclatent, une averse de confettis, le compte à rebours de minuit et des bulles de champagne. Animations réduites : une image fixe."
+    },
+    "nouvel-an-cadres": {
+      "name": "Cadres du Nouvel An",
+      "description": "Quatre cadres de bannière assortis aux contours du Nouvel An : feux d’artifice, confettis, cadran de minuit et coupes de champagne."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Cadres du Nouvel An animés",
+      "description": "Quatre cadres de bannière animés, assortis aux contours vivants : un bouquet qui éclate, des confettis qui volent, l’aiguille de minuit qui tourne et des coupes qui trinquent."
+    },
+    "nouvel-an-fonds": {
+      "name": "Fonds du Nouvel An",
+      "description": "Quatre fonds de conversation pour la nouvelle année : ciel d’artifice, confettis, heure de minuit et bulles dorées, assez discrets pour laisser lire chaque bulle."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Nouvel An vivant · fonds",
+      "description": "Quatre fonds animés pour la nouvelle année : des gerbes lointaines, des confettis qui tombent, une nuit étoilée et des bulles qui montent. Animations réduites : un dégradé fixe."
     }
   },
   "designs": {
@@ -265,7 +309,29 @@
     "sucre-d-orge-raye": "Rayures sucre d’orge",
     "neige-de-noel": "Neige de Noël",
     "ampoules-de-noel": "Ampoules de Noël",
-    "etincelles-atelier": "Étincelles de l’atelier"
+    "etincelles-atelier": "Étincelles de l’atelier",
+    "banniere-noel-givre": "Givre",
+    "banniere-noel-guirlande": "Guirlande",
+    "banniere-noel-cadeau": "Papier cadeau",
+    "banniere-noel-neige": "Tempête de neige",
+    "banniere-noel-lumieres": "Lumières scintillantes",
+    "banniere-noel-etincelles": "Étincelles de Noël",
+    "banniere-artifice": "Nuit d’artifice",
+    "banniere-confettis": "Fête des confettis",
+    "banniere-minuit": "Douze coups",
+    "banniere-champagne": "Champagne doré",
+    "banniere-artifice-vive": "Feu d’artifice vivant",
+    "banniere-confettis-vive": "Averse de confettis",
+    "banniere-minuit-vive": "Compte à rebours",
+    "banniere-champagne-vive": "Bulles de champagne",
+    "fond-artifice": "Ciel d’artifice",
+    "fond-confettis": "Confettis",
+    "fond-minuit": "Heure de minuit",
+    "fond-champagne": "Bulles dorées",
+    "fond-artifice-vif": "Gerbes lointaines",
+    "fond-confettis-vif": "Confettis qui tombent",
+    "fond-minuit-vif": "Nuit étoilée de minuit",
+    "fond-champagne-vif": "Bulles qui montent"
   },
   "rings": {
     "filet": "Filet",
@@ -344,7 +410,21 @@
     "guirlande-lumineuse": "Guirlande lumineuse",
     "etoile-du-sapin": "Étoile du sapin",
     "bonnet-du-pere-noel": "Bonnet du Père Noël",
-    "sucre-d-orge": "Sucre d’orge"
+    "sucre-d-orge": "Sucre d’orge",
+    "flocons-tombants-fixe": "Flocons qui tombent · fixe",
+    "couronne-de-houx-fixe": "Couronne de houx · fixe",
+    "guirlande-lumineuse-fixe": "Guirlande lumineuse · fixe",
+    "etoile-du-sapin-fixe": "Étoile du sapin · fixe",
+    "bonnet-du-pere-noel-fixe": "Bonnet du Père Noël · fixe",
+    "sucre-d-orge-fixe": "Sucre d’orge · fixe",
+    "feux-d-artifice": "Feux d’artifice",
+    "pluie-de-confettis": "Pluie de confettis",
+    "cadran-de-minuit": "Cadran de minuit",
+    "coupe-de-champagne": "Coupe de champagne",
+    "bouquet-final": "Bouquet final",
+    "envol-de-confettis": "Envol de confettis",
+    "minuit-sonne": "Minuit sonne",
+    "champagne-petillant": "Champagne pétillant"
   },
   "gamut": {
     "indigo": "Indigo Meeshy",
@@ -436,6 +516,20 @@
     "guirlande-lumineuse": "Guirlande lumineuse",
     "etoile-du-sapin": "Étoile du sapin",
     "bonnet-du-pere-noel": "Bonnet du Père Noël",
-    "sucre-d-orge": "Sucre d’orge"
+    "sucre-d-orge": "Sucre d’orge",
+    "flocons-tombants-fixe": "Flocons qui tombent · fixe",
+    "couronne-de-houx-fixe": "Couronne de houx · fixe",
+    "guirlande-lumineuse-fixe": "Guirlande lumineuse · fixe",
+    "etoile-du-sapin-fixe": "Étoile du sapin · fixe",
+    "bonnet-du-pere-noel-fixe": "Bonnet du Père Noël · fixe",
+    "sucre-d-orge-fixe": "Sucre d’orge · fixe",
+    "feux-d-artifice": "Feux d’artifice",
+    "pluie-de-confettis": "Pluie de confettis",
+    "cadran-de-minuit": "Cadran de minuit",
+    "coupe-de-champagne": "Coupe de champagne",
+    "bouquet-final": "Bouquet final",
+    "envol-de-confettis": "Envol de confettis",
+    "minuit-sonne": "Minuit sonne",
+    "champagne-petillant": "Champagne pétillant"
   }
 }

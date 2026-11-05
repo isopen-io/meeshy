@@ -143,6 +143,11 @@ export function reconcileStoryActionRailComments(
  *
  * `share` et `save` sont les DEUX faces de `showsExport` (`StoryExportRailButtons`,
  * `:88-108`) : elles apparaissent et disparaissent toujours ensemble.
+ *
+ * `imager` (#16333) — la BAGUETTE, à la fente de « Composer » d'iOS (après Vues
+ * ou Repartager) : elle fait de la story une carte image, pour TOUT lecteur.
+ * La loi l'admet toujours ; c'est le gestionnaire (une story à composer, une
+ * porte de fichier) qui décide de sa présence (loi 4).
  */
 export const STORY_ACTION_RAIL_ORDER = [
   'sound',
@@ -151,6 +156,7 @@ export const STORY_ACTION_RAIL_ORDER = [
   'forward',
   'repost',
   'views',
+  'imager',
   'share',
   'save',
   'comments',
@@ -166,6 +172,7 @@ const GATE: Readonly<Record<StoryActionRailButton, (plan: StoryActionRailPlan) =
   forward: (p) => p.showsForward,
   repost: (p) => p.showsRepost,
   views: (p) => p.showsViews,
+  imager: () => true,
   share: (p) => p.showsExport,
   save: (p) => p.showsExport,
   comments: (p) => p.showsComments,

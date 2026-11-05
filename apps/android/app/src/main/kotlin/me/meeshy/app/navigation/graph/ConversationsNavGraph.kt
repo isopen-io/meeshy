@@ -42,6 +42,7 @@ import me.meeshy.app.feed.StatusesViewModel
 import me.meeshy.app.navigation.rememberStatusBubbleController
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.search.PostSearchDestination
+import me.meeshy.sdk.model.settings.SettingsInvite
 import me.meeshy.app.stories.StoriesViewModel
 
 /** Liste, recherche, tableau de bord, liens de partage, fil de discussion et messages favoris. */
@@ -113,7 +114,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
                 },
                 onMoodShown = { userId -> moodsNow().statusIdOf(userId)?.let(statusesViewModel::trackAvatarImpression) },
             ),
-            onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+            onOpenSettings = { navController.navigate(Routes.settingsFocus(SettingsInvite.MASTER_PIN)) },
             onOpenMessage = { conversationId, messageId ->
                 navController.navigate(Routes.chat(conversationId, highlightMessageId = messageId))
             },

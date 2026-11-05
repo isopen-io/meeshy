@@ -494,7 +494,7 @@ struct StoryHeaderView: View {
                     demanderComposer(cible)
                 } label: {
                     Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main),
-                          systemImage: "wand.and.stars")
+                          systemImage: FullscreenChromeSymbol.compose)
                 }
             }
         case .share:

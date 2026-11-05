@@ -227,6 +227,50 @@
     "bannieres-atelier-noel": {
       "name": "Oficina do Pai Natal",
       "description": "As molduras de capa a condizer com «Oficina do Pai Natal»: Gorro do Pai Natal e Bastão de doce, na borda para que a tua foto fique à vista."
+    },
+    "noel-bannieres": {
+      "name": "Banners de Natal",
+      "description": "Seis imagens de banner a condizer com os packs de Natal: geada, grinalda e papel de embrulho, depois um nevão, luzes que cintilam e as faíscas da oficina."
+    },
+    "noel-contours-fixes": {
+      "name": "Natal · contornos fixos",
+      "description": "Os seis contornos de Natal sem animação: flocos, azevinho, grinalda, estrela, gorro e bastão de doce, para um avatar tranquilo."
+    },
+    "noel-cadres-fixes": {
+      "name": "Natal · molduras fixas",
+      "description": "As seis molduras de banner de Natal sem animação, a condizer com os contornos fixos: flocos, azevinho, grinalda, estrela, gorro e bastão de doce."
+    },
+    "nouvel-an-contours": {
+      "name": "Ano Novo",
+      "description": "Quatro contornos para celebrar o novo ano: fogo de artifício, chuva de confetes, mostrador da meia-noite e taça de champanhe dourado."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Ano Novo vivo",
+      "description": "Quatro contornos animados para a passagem de ano: um grande final, um voo de confetes, o relógio a dar a meia-noite e bolhas de champanhe."
+    },
+    "nouvel-an-images": {
+      "name": "Banners de Ano Novo",
+      "description": "Quatro imagens de banner para o novo ano: uma noite de artifício, uma festa de confetes, as doze badaladas e um champanhe dourado."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Banners animados de Ano Novo",
+      "description": "Quatro imagens de banner animadas: fogo de artifício a rebentar, um aguaceiro de confetes, a contagem decrescente da meia-noite e bolhas de champanhe. Com movimento reduzido: uma imagem fixa."
+    },
+    "nouvel-an-cadres": {
+      "name": "Molduras de Ano Novo",
+      "description": "Quatro molduras de banner a condizer com os contornos de Ano Novo: fogo de artifício, confetes, mostrador da meia-noite e taças de champanhe."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Molduras animadas de Ano Novo",
+      "description": "Quatro molduras de banner animadas, a condizer com os contornos vivos: um ramo que rebenta, confetes a voar, o ponteiro da meia-noite a girar e taças a brindar."
+    },
+    "nouvel-an-fonds": {
+      "name": "Fundos de Ano Novo",
+      "description": "Quatro fundos de conversa para o novo ano: céu de artifício, confetes, hora da meia-noite e bolhas douradas, discretos para que cada balão se leia bem."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Ano Novo vivo · fundos",
+      "description": "Quatro fundos animados para o novo ano: explosões ao longe, confetes a cair, uma noite estrelada e bolhas a subir. Com movimento reduzido: um degradê fixo."
     }
   },
   "designs": {
@@ -265,7 +309,29 @@
     "sucre-d-orge-raye": "Riscas de bastão de doce",
     "neige-de-noel": "Neve de Natal",
     "ampoules-de-noel": "Lâmpadas de Natal",
-    "etincelles-atelier": "Faíscas da oficina"
+    "etincelles-atelier": "Faíscas da oficina",
+    "banniere-noel-givre": "Geada",
+    "banniere-noel-guirlande": "Grinalda",
+    "banniere-noel-cadeau": "Papel de embrulho",
+    "banniere-noel-neige": "Nevão",
+    "banniere-noel-lumieres": "Luzes cintilantes",
+    "banniere-noel-etincelles": "Faíscas de Natal",
+    "banniere-artifice": "Noite de artifício",
+    "banniere-confettis": "Festa dos confetes",
+    "banniere-minuit": "Doze badaladas",
+    "banniere-champagne": "Champanhe dourado",
+    "banniere-artifice-vive": "Fogo de artifício vivo",
+    "banniere-confettis-vive": "Aguaceiro de confetes",
+    "banniere-minuit-vive": "Contagem decrescente",
+    "banniere-champagne-vive": "Bolhas de champanhe",
+    "fond-artifice": "Céu de artifício",
+    "fond-confettis": "Confetes",
+    "fond-minuit": "Hora da meia-noite",
+    "fond-champagne": "Bolhas douradas",
+    "fond-artifice-vif": "Explosões ao longe",
+    "fond-confettis-vif": "Confetes a cair",
+    "fond-minuit-vif": "Meia-noite estrelada",
+    "fond-champagne-vif": "Bolhas a subir"
   },
   "rings": {
     "filet": "Filete",
@@ -344,7 +410,21 @@
     "guirlande-lumineuse": "Grinalda de luzes",
     "etoile-du-sapin": "Estrela da árvore",
     "bonnet-du-pere-noel": "Gorro do Pai Natal",
-    "sucre-d-orge": "Bastão de doce"
+    "sucre-d-orge": "Bastão de doce",
+    "flocons-tombants-fixe": "Flocos a cair · fixo",
+    "couronne-de-houx-fixe": "Coroa de azevinho · fixo",
+    "guirlande-lumineuse-fixe": "Grinalda de luzes · fixo",
+    "etoile-du-sapin-fixe": "Estrela da árvore · fixo",
+    "bonnet-du-pere-noel-fixe": "Gorro do Pai Natal · fixo",
+    "sucre-d-orge-fixe": "Bastão de doce · fixo",
+    "feux-d-artifice": "Fogo de artifício",
+    "pluie-de-confettis": "Chuva de confetes",
+    "cadran-de-minuit": "Mostrador da meia-noite",
+    "coupe-de-champagne": "Taça de champanhe",
+    "bouquet-final": "Grande final",
+    "envol-de-confettis": "Voo de confetes",
+    "minuit-sonne": "Soa a meia-noite",
+    "champagne-petillant": "Champanhe espumante"
   },
   "gamut": {
     "indigo": "Índigo Meeshy",
@@ -436,6 +516,20 @@
     "guirlande-lumineuse": "Grinalda de luzes",
     "etoile-du-sapin": "Estrela da árvore",
     "bonnet-du-pere-noel": "Gorro do Pai Natal",
-    "sucre-d-orge": "Bastão de doce"
+    "sucre-d-orge": "Bastão de doce",
+    "flocons-tombants-fixe": "Flocos a cair · fixo",
+    "couronne-de-houx-fixe": "Coroa de azevinho · fixo",
+    "guirlande-lumineuse-fixe": "Grinalda de luzes · fixo",
+    "etoile-du-sapin-fixe": "Estrela da árvore · fixo",
+    "bonnet-du-pere-noel-fixe": "Gorro do Pai Natal · fixo",
+    "sucre-d-orge-fixe": "Bastão de doce · fixo",
+    "feux-d-artifice": "Fogo de artifício",
+    "pluie-de-confettis": "Chuva de confetes",
+    "cadran-de-minuit": "Mostrador da meia-noite",
+    "coupe-de-champagne": "Taça de champanhe",
+    "bouquet-final": "Grande final",
+    "envol-de-confettis": "Voo de confetes",
+    "minuit-sonne": "Soa a meia-noite",
+    "champagne-petillant": "Champanhe espumante"
   }
 }

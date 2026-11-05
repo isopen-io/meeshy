@@ -66,12 +66,32 @@ nonisolated enum MediaStageActionColumn {
 /// l'environnement — une extension de la galerie ne le peut pas —, et la photo
 /// d'une flamme ou d'une vue unique n'a donc pas ce bouton. « Transférer » suit
 /// le verdict de l'hôte, qui connaît la loi de transfert du message porteur.
+/// « Imager » au rail du plein écran (#16332) : la baguette fait du message
+/// porteur une carte image. Même garde que Transférer : la loi de sortie du
+/// PORTEUR (`offers(.imagine)`) et la protection de la pièce ou de son message
+/// (vue unique, flou, flamme, chiffré). Un porteur inconnu n'a pas de baguette.
+enum GalleryImagerOffer {
+    static func offers(_ attachment: MessageAttachment, carrier: Message?) -> Bool {
+        guard let carrier else { return false }
+        return carrier.exitOffer.offers(.imagine) && !MessagePieceTarget.isProtected(attachment, in: carrier)
+    }
+
+    static func action(for attachment: MessageAttachment?,
+                       _ handler: ((MessageAttachment) -> Void)?,
+                       offered: ((MessageAttachment) -> Bool)?) -> (() -> Void)? {
+        guard let handler, let offered, let attachment, offered(attachment),
+              !ComposableAttachment.isProtected(attachment) else { return nil }
+        return { HapticFeedback.light(); handler(attachment) }
+    }
+}
+
 struct GalleryRailExitActions: View {
     let contentId: String
     let offersSave: Bool
     let offersForward: Bool
     let onSave: () -> Void
     let onForward: () -> Void
+    var onImager: (() -> Void)? = nil
     @Environment(\.contentExitGate) private var exitGate
 
     var body: some View {
@@ -93,6 +113,16 @@ struct GalleryRailExitActions: View {
                              defaultValue: "Envoie ce média dans une autre conversation.", bundle: .main),
                 style: .disc(.adaptive),
                 action: onForward
+            )
+        }
+        if let onImager {
+            FullscreenActionButton(
+                systemImage: FullscreenChromeSymbol.imager,
+                label: MessageCardExportMenu.imageLabel,
+                hint: String(localized: "media.imager.rail.hint",
+                             defaultValue: "Fait du message et de ce média une carte image.", bundle: .main),
+                style: .disc(.adaptive),
+                action: onImager
             )
         }
     }

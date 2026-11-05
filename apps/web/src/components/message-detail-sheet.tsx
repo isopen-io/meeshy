@@ -119,7 +119,7 @@ export function MessageDetailSheet({
   const language = currentInterfaceLanguage();
 
   const creations = [
-    { id: 'compose', run: create.onCompose, labelKey: 'message.menu.compose', glyph: THREAD_MENU_GLYPHS.magicWand },
+    { id: 'compose', run: create.onCompose, labelKey: 'message.menu.compose', glyph: THREAD_MENU_GLYPHS.notePencil },
     { id: 'image', run: create.onImage, labelKey: 'message.menu.export', glyph: THREAD_MENU_GLYPHS.imageSquare },
   ] as const;
 

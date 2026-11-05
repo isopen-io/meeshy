@@ -74,6 +74,8 @@ class StoryRailTaps(
     val onRepost: () -> Unit = {},
     val onViews: () -> Unit = {},
     val onCompose: () -> Unit = {},
+    /** « Imager » : la baguette du rail ouvre la vue Imager de la story (#16334). */
+    val onImager: () -> Unit = {},
     val onComments: () -> Unit = {},
     val onToggleSound: () -> Unit = {},
     val onSave: () -> Unit = {},
@@ -99,7 +101,8 @@ private val RailSpacingTight = MeeshySpacing.xsPlus
 
 /**
  * Right-side action rail of the story viewer — Android mirror of the iOS `StoryActionSidebarView` : Son, Réagir,
- * Répondre, Envoyer, Republier ou Vues, Composer, Enregistrer, Commentaires, Traductions, dans l'ordre d'iOS. Réagir et
+ * Répondre, Envoyer, Republier ou Vues, Composer, Imager, Enregistrer, Commentaires, Traductions, dans l'ordre d'iOS.
+ * Composer porte l'icône du post ; la baguette est Imager (#16334). Réagir et
  * Traductions carry two gesture layers: a plain tap and a longpress-then-drag that streams [StoryScrubEvent]s to the
  * screen, which owns the bars, the hit-testing and the flight animation. Le rail prend la densité qui tient : espacement
  * normal, puis resserré, puis défilement vertical ; le plan qu'on lui remet est figé par l'hôte à l'entrée de la slide.
@@ -310,7 +313,11 @@ private fun StoryRailTapButtons(plan: StoryRailPlan, counts: StoryRailCounts, em
     }
     if (plan.showsCompose) {
         val compose = stringResource(R.string.story_viewer_compose)
-        StoryRailButton(icon = MeeshyIcons.MagicWand, caption = compose, accessibilityLabel = compose, onTap = taps.onCompose)
+        StoryRailButton(icon = FullscreenChromeSymbol.Compose.icon, caption = compose, accessibilityLabel = compose, onTap = taps.onCompose)
+    }
+    if (plan.showsImager) {
+        val imager = stringResource(R.string.stories_viewer_export_imager)
+        StoryRailButton(icon = FullscreenChromeSymbol.Imager.icon, caption = imager, accessibilityLabel = imager, onTap = taps.onImager)
     }
     if (plan.showsExport) StoryRailSaveButton(emphasis.saving, taps.onSave)
 }

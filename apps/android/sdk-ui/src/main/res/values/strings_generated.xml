@@ -324,6 +324,7 @@
     <string name="media_crop_a11y_size">Width %1$s, height %2$s</string>
     <string name="media_download">Download</string>
     <string name="media_forward_rail_hint">Sends this media to another conversation.</string>
+    <string name="media_imager_title">Picture it</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">File</string>
     <string name="media_label_location">Location</string>

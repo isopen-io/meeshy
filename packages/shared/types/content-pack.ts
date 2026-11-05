@@ -19,6 +19,7 @@
  */
 import type { GloryAtmosphere } from './glory-atmospheres.js';
 import type { PackEligibilityRule } from './pack-ownership.js';
+import type { PackPublisherRef } from './pack-publisher.js';
 
 /** `banner` : le FOND de bannière (un dessin qui s'affiche sans photo) ; `banner-frame` : le CADRE posé sur la photo, centre transparent (#10932). */
 /** `lens` : une lens MeeshyLens v1 proposée par un partenaire (#11271) ; un ancien client la lit comme un domaine inconnu et l'ignore. */
@@ -150,7 +151,10 @@ export type PackSummaryBase = {
   readonly slug: string;
   readonly name: string;
   readonly description: string;
+  /** Le texte libre d'avant les éditeurs, servi pendant la transition (#16274) : la boutique affiche `publisher.name`. */
   readonly author: string;
+  /** L'éditeur du pack (#16274) — Meeshy pour un pack du dépôt. Additif : un ancien client l'ignore. */
+  readonly publisher?: PackPublisherRef;
   readonly builtin: boolean;
   readonly status: PackStatus;
   readonly itemCount: number;

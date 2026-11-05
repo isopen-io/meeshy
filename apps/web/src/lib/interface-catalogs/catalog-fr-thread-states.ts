@@ -94,6 +94,8 @@ const frThreadStates = {
      du catalogue iOS. Elle était EN DUR, en français, sous un fil servi en
      sept langues. */
   'message.join.noAccount': 'sans compte',
+  'message.join.greet.one': 'Dis-lui salut',
+  'message.join.greet.many': 'Dis-leur salut',
 } as const;
 
 export default frThreadStates;

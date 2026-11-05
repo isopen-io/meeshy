@@ -71,6 +71,9 @@ final class RenderedScreen {
     ///
     /// - Parameter borne: temps maximal accordé à SwiftUI pour parler. Dépassée,
     ///   le montage échoue explicitement plutôt que de rendre un arbre muet.
+    /// - Parameter hostSafeArea: `false` pour un écran émulé (un SE de
+    ///   375 × 667) qui ne doit pas hériter de la bande haute du simulateur
+    ///   hôte — 62 pt de Dynamic Island sur la CI (#16246).
     /// **L'arbre d'accessibilité n'existe que si un CLIENT le réclame.**
     ///
     /// UIKit ne le construit pas tant qu'aucun client d'accessibilité n'est
@@ -110,6 +113,7 @@ final class RenderedScreen {
         _ vue: some View,
         size: CGSize = CGSize(width: 402, height: 874),
         borne: TimeInterval = 10,
+        hostSafeArea: Bool = true,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
@@ -120,6 +124,7 @@ final class RenderedScreen {
         window.frame = CGRect(origin: .zero, size: size)
 
         let host = UIHostingController(rootView: vue)
+        if !hostSafeArea, #available(iOS 16.4, *) { host.safeAreaRegions = [] }
         window.rootViewController = host
         window.isHidden = false
         window.makeKeyAndVisible()
@@ -192,7 +197,10 @@ final class RenderedScreen {
     /// à l'apparition) ou qui s'anime à l'entrée (la connexion fait monter ses
     /// champs depuis l'opacité nulle) ne pose son contenu qu'après quelques
     /// tours : lire l'arbre une seule fois rendrait `nil` sur un écran juste.
-    /// Un cadre de largeur nulle n'est pas encore posé — il ne compte pas.
+    /// Un cadre de largeur nulle n'est pas encore posé — il ne compte pas, et
+    /// le nœud POSÉ qui porte le même identifiant gagne : un `ScrollView`
+    /// SwiftUI annonce son identifiant deux fois, par l'élément de son
+    /// conteneur (cadre nul) puis par sa `UIScrollView` (#16246).
     ///
     /// La borne est un PLAFOND, jamais une durée : l'attente s'arrête dès que
     /// le nœud est posé. 5 s ne suffisaient pas sur un runner CI chargé — la
@@ -202,10 +210,24 @@ final class RenderedScreen {
     func frame(of identifier: String, borne: TimeInterval = 20) -> CGRect? {
         var pose: CGRect?
         _ = RenderedScreen.attendre(borne: borne) {
-            pose = node(identifier).map(\.frame).flatMap { $0.width > 0 ? $0 : nil }
+            pose = RenderedScreen.noeuds(root)
+                .first { $0.identifier == identifier && $0.frame.width > 0 }?
+                .frame
+                ?? RenderedScreen.vue(portant: identifier, dans: root)
+                    .map { $0.convert($0.bounds, to: nil) }
+                    .flatMap { $0.width > 0 ? $0 : nil }
             return pose != nil
         }
         return pose
+    }
+
+    /// La `UIView` qui porte l'identifiant, cherchée dans les SOUS-VUES : la
+    /// `UIScrollView` d'un `ScrollView` SwiftUI qui déborde le porte sans être
+    /// un élément d'accessibilité, et l'arbre d'accessibilité ne la rend pas
+    /// toujours (#16246).
+    private static func vue(portant identifier: String, dans vue: UIView) -> UIView? {
+        if vue.accessibilityIdentifier == identifier, !vue.isHidden, vue.window != nil { return vue }
+        return vue.subviews.lazy.compactMap { Self.vue(portant: identifier, dans: $0) }.first
     }
 
     /// Le cadre ANNONCÉ du premier nœud posé dont le libellé COMMENCE par
@@ -240,10 +262,15 @@ final class RenderedScreen {
         // `UIAccessibilityIdentification` : le cast échouait en silence et rendait
         // `nil` pour tout l'arbre, alors que les objets répondent bien au
         // sélecteur. On interroge donc la réponse, pas le type.
-        let identifier: String? = objet.responds(to: Selector(("accessibilityIdentifier")))
-            ? objet.value(forKey: "accessibilityIdentifier") as? String
-            : nil
-        var trouves = [Node(identifier: identifier, label: objet.accessibilityLabel, frame: objet.accessibilityFrame)]
+        // Une `UIView` qui porte l'identifiant sans être un élément (la
+        // `UIScrollView` d'un `ScrollView` SwiftUI, #16246) le DÉCLARE par le
+        // protocole, et son cadre d'accessibilité est nul : on lit alors son
+        // cadre dans la fenêtre.
+        let identifier: String? = (objet as? UIAccessibilityIdentification)?.accessibilityIdentifier
+            ?? (objet.responds(to: Selector(("accessibilityIdentifier")))
+                ? objet.value(forKey: "accessibilityIdentifier") as? String
+                : nil)
+        var trouves = [Node(identifier: identifier, label: objet.accessibilityLabel, frame: cadre(de: objet))]
         for element in elements(de: objet) {
             trouves.append(contentsOf: noeuds(element, profondeur: profondeur + 1))
         }
@@ -253,6 +280,12 @@ final class RenderedScreen {
             }
         }
         return trouves
+    }
+
+    private static func cadre(de objet: NSObject) -> CGRect {
+        let annonce = objet.accessibilityFrame
+        guard annonce.isEmpty, let vue = objet as? UIView, vue.window != nil else { return annonce }
+        return vue.convert(vue.bounds, to: nil)
     }
 
     /// Attend une CONDITION plutôt qu'une durée — voir le doc-comment du type.

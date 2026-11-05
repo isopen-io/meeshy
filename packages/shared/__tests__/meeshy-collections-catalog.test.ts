@@ -11,10 +11,13 @@ import { parsePackIndex } from '../types/content-pack-index';
 import { validateLottie } from '../utils/lottie-validate';
 import { collectionsOf, sourcePacks } from '../scripts/compose-meeshy-collections';
 import { upsertPacks } from '../scripts/meeshy-collections/source-packs';
+import { SEASONAL_ADDED_SLUGS } from '../scripts/seasonal/slugs';
 
 /**
  * #15158 — la boutique propose des COLLECTIONS « par Meeshy » : contours d'avatar, fonds de conversation
- * et cadres de bannière, une collection fixe et une animée pour chacun, ajoutées EN FIN de leur source.
+ * et cadres de bannière, une collection fixe et une animée pour chacun, ajoutées EN FIN de leur source. Les offres
+ * saisonnières de #16270 et #16271 se posent APRÈS elles (`seasonal-offers.test.ts`) : ce témoin lit la source
+ * qui les précède.
  */
 const DIR = join(__dirname, '../design/appearance');
 const text = (file: string): string => readFileSync(join(DIR, file), 'utf8');
@@ -22,7 +25,7 @@ const read = (file: string): unknown => JSON.parse(text(file)) as unknown;
 
 type Ref = { readonly src: string; readonly bytes: number; readonly sha256: string };
 type Pack = { readonly slug: string; readonly order: number; readonly installedByDefault: boolean; readonly removable: boolean; readonly usage?: unknown } & Record<string, unknown>;
-const packsOf = (file: string): readonly Pack[] => (read(file) as { packs: readonly Pack[] }).packs;
+const packsOf = (file: string): readonly Pack[] => (read(file) as { packs: readonly Pack[] }).packs.filter((pack) => !SEASONAL_ADDED_SLUGS.includes(pack.slug));
 
 const SOURCES = [
   { file: 'avatar-rings/rings.json', itemsKey: 'rings', slugs: ['meeshy-signature', 'meeshy-vivants'], minimum: [6, 6], usage: { kind: 'free', surfaces: ['avatar'] }, table: 'rings' },

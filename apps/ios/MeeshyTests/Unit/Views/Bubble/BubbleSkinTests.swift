@@ -115,7 +115,7 @@ final class BubbleSkinTests: XCTestCase {
     /// La peau entre dans la cellule ET dans l'aperçu du menu : sans montage, la bulle garde la marque par défaut.
     func test_guard_skinIsMountedOnTheCellAndTheMenuPreview() throws {
         let rows = try String(contentsOf: Self.appRoot.appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController+Rows.swift"), encoding: .utf8)
-        XCTAssertEqual(AppSourceGuard.stripComments(rows).components(separatedBy: ".environment(\\.bubbleSkin, skin)").count - 1, 2)
+        XCTAssertEqual(AppSourceGuard.stripComments(rows).components(separatedBy: ".environment(\\.bubbleSkin, scene.skin)").count - 1, 2)
         let menu = try String(contentsOf: Self.appRoot.appendingPathComponent("Meeshy/Features/Main/Components/MessageOverlayMenu.swift"), encoding: .utf8)
         XCTAssertTrue(AppSourceGuard.stripComments(menu).contains(".environment(\\.bubbleSkin, previewSkin)"))
     }

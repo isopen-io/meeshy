@@ -326,6 +326,7 @@
     <string name="media_crop_a11y_size">Largura %1$s, altura %2$s</string>
     <string name="media_download">Baixar</string>
     <string name="media_forward_rail_hint">Envia esta mídia para outra conversa.</string>
+    <string name="media_imager_title">Criar imagem</string>
     <string name="media_label_audio">Áudio</string>
     <string name="media_label_file">Arquivo</string>
     <string name="media_label_location">Localização</string>

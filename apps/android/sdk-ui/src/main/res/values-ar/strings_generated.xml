@@ -332,6 +332,7 @@
     <string name="media_crop_a11y_size">العرض %1$s، الارتفاع %2$s</string>
     <string name="media_download">تنزيل</string>
     <string name="media_forward_rail_hint">يرسل هذه الوسائط إلى محادثة أخرى.</string>
+    <string name="media_imager_title">حوِّل إلى صورة</string>
     <string name="media_label_audio">صوت</string>
     <string name="media_label_file">ملف</string>
     <string name="media_label_location">الموقع</string>

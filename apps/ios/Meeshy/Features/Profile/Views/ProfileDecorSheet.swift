@@ -27,7 +27,11 @@ final class ProfileDecorModel: ObservableObject {
     private let installedPacks: @Sendable @concurrent (PackDomain) async -> [ShopPack]?
     private let userId: @MainActor () -> String?
     private let publish: @MainActor (ServedProfileDecor) -> Void
+    /// Les contrats des packs installés NON embarqués (#16264) : ils se proposent et se peignent comme l'embarqué.
+    private let served: any ServedAppearanceProviding
     private var subscription: AnyCancellable?
+    private var servedSubscription: AnyCancellable?
+    private var installedLists: [PackDomain: [ShopPack]] = [:]
     /// Le numéro du DERNIER choix de chaque côté : une réponse plus ancienne,
     /// arrivée après lui, ne l'écrase ni ne le rétablit.
     private var latestChoice: [ProfileDecorSide: Int] = [:]
@@ -46,13 +50,15 @@ final class ProfileDecorModel: ObservableObject {
             guard let user = AuthManager.shared.currentUser else { return }
             AuthManager.shared.currentUser = user.withProfileDecor(decor)
         },
-        center: NotificationCenter = .default
+        center: NotificationCenter = .default,
+        served: any ServedAppearanceProviding = ServedAppearanceStore.shared
     ) {
         self.state = ProfileDecorState(decor: decor ?? .empty)
         self.accepted = decor ?? .empty
-        self.rings = ProfileDecorOptions.rings(installed: nil)
-        self.banners = ProfileDecorOptions.banners(installed: nil)
-        self.frames = ProfileDecorOptions.bannerFrames(installed: nil)
+        self.rings = ProfileDecorOptions.rings(installed: nil, served: served)
+        self.banners = ProfileDecorOptions.banners(installed: nil, served: served)
+        self.frames = ProfileDecorOptions.bannerFrames(installed: nil, served: served)
+        self.served = served
         self.service = service
         self.installedPacks = installedPacks
         self.userId = userId
@@ -61,6 +67,10 @@ final class ProfileDecorModel: ObservableObject {
             .compactMap { $0.object as? ProfileDecorUpdatedEvent }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in MainActor.assumeIsolated { self?.receive(event) } }
+        // Un contrat arrivé : les grilles se recomposent et l'aperçu se repeint.
+        self.servedSubscription = served.changes
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in MainActor.assumeIsolated { self?.recompose() } }
     }
 
     /// La liste des packs installés fait foi dès qu'elle est lue ; avant, les packs installés d'office.
@@ -70,9 +80,28 @@ final class ProfileDecorModel: ObservableObject {
         async let bannerPacks = installed(.banner)
         async let framePacks = installed(.bannerFrame)
         let (installedRings, installedBanners, installedFrames) = await (ringPacks, bannerPacks, framePacks)
-        rings = ProfileDecorOptions.rings(installed: installedRings)
-        banners = ProfileDecorOptions.banners(installed: installedBanners)
-        frames = ProfileDecorOptions.bannerFrames(installed: installedFrames)
+        installedLists = [.avatarRing: installedRings, .banner: installedBanners, .bannerFrame: installedFrames].compactMapValues { $0 }
+        recompose()
+        let served = self.served
+        let lists = installedLists
+        let decor = state.decor
+        await withTaskGroup(of: Void.self) { group in
+            for (domain, packs) in lists {
+                group.addTask { await served.prepare(domain: domain, installed: packs) }
+            }
+            for src in ProfileDecorResolver.missingContracts(decor, served: served) {
+                group.addTask { await served.load(src: src) }
+            }
+        }
+        recompose()
+    }
+
+    /// Les grilles depuis la dernière liste lue (avant : les packs installés d'office) et les contrats sur l'appareil.
+    private func recompose() {
+        rings = ProfileDecorOptions.rings(installed: installedLists[.avatarRing], served: served)
+        banners = ProfileDecorOptions.banners(installed: installedLists[.banner], served: served)
+        frames = ProfileDecorOptions.bannerFrames(installed: installedLists[.bannerFrame], served: served)
+        objectWillChange.send()
     }
 
     /// Le choix en cours d'un côté (`nil` = aucun).
@@ -85,7 +114,7 @@ final class ProfileDecorModel: ObservableObject {
         failed = false
         let choice = (latestChoice[side] ?? 0) + 1
         latestChoice[side] = choice
-        let item = ref.map { ServedProfileDecorItem(pack: $0.pack, item: $0.item, origin: .builtin, contract: nil) }
+        let item = ref.map { served.servedItem($0, side: side) }
         state.equip(item, side: side)
         publish(state.decor)
         let outcome: Result<ServedProfileDecor, Error>

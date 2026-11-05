@@ -18,6 +18,7 @@
  * demandée (`select`) : un `select` qui oublie une colonne la perd ici aussi.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { publisherModels, verifiedAccount, type PublisherUserSeed } from '../services/packs/pack-publishers.fakes';
 
 export type Row = Record<string, unknown> & { id: string };
 
@@ -37,6 +38,8 @@ function fieldMatches(row: Row, key: string, expected: unknown): boolean {
     switch (operator) {
       case 'in':
         return (operand as unknown[]).includes(actual);
+      case 'notIn':
+        return !(operand as unknown[]).includes(actual);
       case 'not':
         if (operand === null) return actual !== null && actual !== undefined;
         return actual !== operand;
@@ -58,13 +61,19 @@ function fieldMatches(row: Row, key: string, expected: unknown): boolean {
 
 export function matches(row: Row, where: Where = {}): boolean {
   return Object.entries(where).every(([key, expected]) =>
-    key === 'OR' ? (expected as Where[]).some((branch) => matches(row, branch)) : fieldMatches(row, key, expected),
+    key === 'OR'
+      ? (expected as Where[]).some((branch) => matches(row, branch))
+      : key === 'NOT'
+        ? !matches(row, expected as Where)
+        : fieldMatches(row, key, expected),
   );
 }
 
 const uniqueViolation = () => Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
 
-export function memoryPrisma() {
+/** `accounts` : les comptes que la suite sème (#16274) ; tout autre compte est inscrit, actif et vérifié. */
+export function memoryPrisma(accounts: Readonly<Record<string, PublisherUserSeed>> = {}) {
+  const publishers = publisherModels(accounts, [], verifiedAccount);
   const packs: Row[] = [];
   const items: Row[] = [];
   const choices: Row[] = [];
@@ -166,5 +175,11 @@ export function memoryPrisma() {
     },
   };
 
-  return { prisma: { stickerPack, stickerPackItem, userStickerPack } as unknown as PrismaClient, packs, items, choices };
+  return {
+    prisma: { stickerPack, stickerPackItem, userStickerPack, partnerProfile: publishers.partnerProfile, user: publishers.user, adminAuditLog: publishers.adminAuditLog } as unknown as PrismaClient,
+    packs,
+    items,
+    choices,
+    profiles: publishers.profiles,
+  };
 }

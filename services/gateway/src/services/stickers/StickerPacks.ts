@@ -17,6 +17,7 @@ import { validateStickerPackManifest, type StickerPackDetail, type StickerPackSu
 import { PackCatalog, type PackInstallationBroadcast, type PackViewer } from '../packs/PackCatalog';
 import { PackSubmissions, type ReviewDecision, type SubmitStickerPackOutcome } from '../packs/PackSubmissions';
 import { stickerPackSpec } from '../packs/stickerPackSpec';
+import { defaultPackPublishers, type PackPublishers } from '../packs/PackPublishers';
 import { normalizeStickerImage, type StickerImageOutcome } from './stickerImage';
 import type { StickerFileStore } from './StickerLibrary';
 
@@ -32,6 +33,8 @@ export type StickerPacksDeps = {
   readonly newFileId?: () => string;
   /** `pack:installation-updated` vers les autres appareils du compte ; absent ⇒ rien n'est diffusé. */
   readonly broadcast?: PackInstallationBroadcast;
+  /** Les éditeurs (#16274) : qui peut publier, et l'éditeur servi avec chaque pack. */
+  readonly publishers?: PackPublishers;
 };
 
 export class StickerPacks {
@@ -40,9 +43,11 @@ export class StickerPacks {
   private readonly proposals: PackSubmissions;
 
   constructor(deps: StickerPacksDeps) {
-    this.catalog = new PackCatalog({ prisma: deps.prisma, spec: stickerPackSpec(deps.prisma), now: deps.now, broadcast: deps.broadcast });
+    const publishers = deps.publishers ?? defaultPackPublishers(deps.prisma);
+    this.catalog = new PackCatalog({ prisma: deps.prisma, spec: stickerPackSpec(deps.prisma, publishers), now: deps.now, broadcast: deps.broadcast });
     this.proposals = new PackSubmissions({
       prisma: deps.prisma,
+      publishers,
       spec: { validateManifest: validateStickerPackManifest, normalizeAsset: deps.normalize ?? normalizeStickerImage, files: deps.files },
       now: deps.now,
       newFileId: deps.newFileId,

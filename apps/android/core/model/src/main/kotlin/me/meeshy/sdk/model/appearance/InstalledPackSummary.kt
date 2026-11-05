@@ -5,6 +5,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import me.meeshy.sdk.model.pack.PackAssetRef
 
 /**
  * Un pack d'apparence tel que `GET /packs/<domaine>/installed` le liste — la
@@ -22,12 +25,35 @@ data class InstalledPackSummary(
     val price: Int? = null,
     /** `false` = un pack inclus (Essentiels, Contours essentiels…) que le serveur refuse de retirer. Absent ⇒ `true`. */
     val removable: Boolean = true,
+    /** `builtin` (dessins dans l'APK), `official` ou `community` ; absent (ancien serveur) ⇒ lu comme embarqué. */
+    val origin: String? = null,
+    /** Le contrat servi, adressé par contenu (#16265) ; illisible ⇒ `null`, sans emporter le pack. */
+    @Serializable(with = LossyPackAssetRefSerializer::class)
+    val contract: PackAssetRef? = null,
+    /** Le nom français du pack (repli des [names]). */
+    val name: String? = null,
+    /** `{ "<langue>": { "name": …, "description": … } }` ; lu au mieux. */
+    val names: JsonObject? = null,
 ) {
     val isPaid: Boolean get() = (price ?: 0) > 0
+
+    /** Un pack dont les dessins ne sont PAS dans l'APK : il se peint depuis son [contract], une fois installé et possédé. */
+    val isServed: Boolean get() = origin != null && origin != BUILTIN_ORIGIN && contract != null && installed && isOwned
+
+    /** Langue → nom, depuis [names], le nom français en repli. */
+    val localizedNames: Map<String, String>
+        get() {
+            val served = names.orEmpty().mapNotNull { (language, value) ->
+                ((value as? JsonObject)?.get("name") as? JsonPrimitive)?.takeIf { it.isString }?.content?.let { language to it }
+            }.toMap()
+            return name?.let { mapOf("fr" to it) + served } ?: served
+        }
 
     /** La règle unique de possession : un pack gratuit est possédé par tout compte ; un pack payant l'est quand le serveur le dit. */
     val isOwned: Boolean get() = owned ?: !isPaid
 }
+
+private const val BUILTIN_ORIGIN = "builtin"
 
 /**
  * Les packs installés d'un domaine : chaque entrée se décode SEULE, un pack illisible

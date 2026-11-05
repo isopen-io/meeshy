@@ -324,6 +324,7 @@
     <string name="media_crop_a11y_size">Breite %1$s, Höhe %2$s</string>
     <string name="media_download">Laden</string>
     <string name="media_forward_rail_hint">Sendet dieses Medium in eine andere Unterhaltung.</string>
+    <string name="media_imager_title">Als Bild</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">Datei</string>
     <string name="media_label_location">Standort</string>

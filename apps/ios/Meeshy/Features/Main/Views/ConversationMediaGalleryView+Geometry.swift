@@ -351,20 +351,22 @@ struct MediaStageBackdrop: View {
     let source: StoryLetterboxFill.Source
 
     var body: some View {
-        ZStack {
-            Color.black
-
-            if let fill {
-                // `.scaledToFill` : la bande doit être PLEINE. Un `.fit` y
-                // laisserait ses propres bandes — un letterbox dans un letterbox.
-                Image(uiImage: fill)
-                    .resizable()
-                    .interpolation(.low)
-                    .scaledToFill()
-                    .opacity(Double(StoryLetterboxFill.fillOpacity))
-                    .accessibilityHidden(true)
+        Color.black
+            .overlay {
+                if let fill {
+                    // `.scaledToFill` : la bande doit être PLEINE. Un `.fit` y
+                    // laisserait ses propres bandes — un letterbox dans un letterbox.
+                    // En CALQUE et clippée : l'image débordante ne donne jamais sa
+                    // taille au cadre (#16290).
+                    Image(uiImage: fill)
+                        .resizable()
+                        .interpolation(.low)
+                        .scaledToFill()
+                        .opacity(Double(StoryLetterboxFill.fillOpacity))
+                        .accessibilityHidden(true)
+                }
             }
-        }
+            .clipped()
     }
 
     /// Le décodage (~1 ms) n'a lieu qu'au changement de source : les deux pages
@@ -378,6 +380,25 @@ struct MediaStageBackdrop: View {
     private var fill: UIImage? {
         guard case .thumbHash(let hash) = source else { return nil }
         return UIImage.fromThumbHash(hash)
+    }
+}
+
+// MARK: - Le chrome ne réclame jamais plus que sa place
+
+/// **Le chrome du plateau se borne au cadre du média SANS l'exiger** (#16290).
+///
+/// Le média s'ouvre en plein écran et son cadre vaut l'écran entier ; le chrome
+/// qui se pose dessus vit, lui, ENTRE les couloirs. Un cadre fixe à la taille
+/// du média y réclamait donc l'écran plus les couloirs : la galerie grandissait,
+/// sa mesure du viewport suivait, le cadre grandissait encore — 292 pt par passe
+/// jusqu'au chien de garde, dès qu'une vidéo en lecture montrait son chrome.
+/// Le cadre devient un MAXIMUM : jamais plus que le média, jamais plus que la
+/// place offerte.
+struct OfferedStageFrame: ViewModifier {
+    let stage: CGSize
+
+    func body(content: Content) -> some View {
+        content.frame(maxWidth: stage.width, maxHeight: stage.height)
     }
 }
 
@@ -557,7 +578,7 @@ extension ConversationMediaGalleryView {
     var cadreRegion: some View {
         ZStack {
             cadreCenterPlayPause
-                .frame(width: currentStage.frame.width, height: currentStage.frame.height)
+                .modifier(OfferedStageFrame(stage: currentStage.frame))
                 .clipShape(RoundedRectangle(cornerRadius: currentStage.cornerRadius, style: .continuous))
 
             // #12420 — le rail se pose À CÔTÉ du bloc d'informations, comme celui

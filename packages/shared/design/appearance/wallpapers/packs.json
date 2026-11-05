@@ -555,6 +555,10 @@
         "name": "خلفيات الميلاد",
         "description": "ثلاث خلفيات للمحادثة تُناسب حزم الميلاد: ندف بلورية وإكليل النجوم وخطوط عصا الحلوى، هادئة بما يكفي لتبقى كل فقاعة مقروءة."
       }
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
     }
   },
   {
@@ -648,6 +652,10 @@
         "name": "ميلاد حي",
         "description": "ثلاث خلفيات متحركة تُناسب حزم الميلاد: ثلج من البلورات، وإكليل تضيء مصابيحه بالتناوب، وشرارات الورشة. مع تقليل الحركة: تدرّج ثابت."
       }
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
     }
   },
   {
@@ -834,6 +842,200 @@
         "name": "خلفيات حيّة",
         "description": "أربع خلفيات متحركة من Meeshy تتحرك بهدوء خلف رسائلك: يراعات، وستار الشفق، وثلج ناعم، وتموّجات."
       }
+    }
+  },
+  {
+    "slug": "nouvel-an-fonds",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 9,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "e214f8ada8ee876f.webp",
+      "bytes": 650,
+      "sha256": "e214f8ada8ee876fd6809b8035f17ac96d1323bb345174f8a65646f9cd2aa7a7"
+    },
+    "preview": null,
+    "contract": {
+      "src": "4874e0577e1a68db.json",
+      "bytes": 4720,
+      "sha256": "4874e0577e1a68db77d12b2c3da2bfc9e0d163ea5e27f9b2a245397db95bd7e5"
+    },
+    "strings": {
+      "fr": {
+        "src": "e19a761d2598fbc6.json",
+        "bytes": 146,
+        "sha256": "e19a761d2598fbc64c75621822611e85ba4109c68d6578f9b36d2edf5f0f9399"
+      },
+      "en": {
+        "src": "96171cc96c1fb177.json",
+        "bytes": 138,
+        "sha256": "96171cc96c1fb1779fbb4ec1d62d6caf1415179e0220db67e9e75cb5132b77f4"
+      },
+      "es": {
+        "src": "48df3553e9cf60db.json",
+        "bytes": 147,
+        "sha256": "48df3553e9cf60db2b32ee0a5fb44c48b60cde67e9cbc41b70214c7bc7f9f9e5"
+      },
+      "pt": {
+        "src": "e419c74dc6fe3828.json",
+        "bytes": 150,
+        "sha256": "e419c74dc6fe382890ba612b4c4e9766ce5388c04a995cb245da4ee446bb7f3f"
+      },
+      "de": {
+        "src": "c6fd716afea43afe.json",
+        "bytes": 147,
+        "sha256": "c6fd716afea43afee6ba65462c69b9ef86fcfd1984d8fb4dd3f6515aa091afbd"
+      },
+      "it": {
+        "src": "49977fa79f42395c.json",
+        "bytes": 149,
+        "sha256": "49977fa79f42395c17142367fc701ae9b0b458384634e6d782faa734c62e2f8f"
+      },
+      "ar": {
+        "src": "8a02ef9355a926eb.json",
+        "bytes": 194,
+        "sha256": "8a02ef9355a926ebe55a99b39adc1c8b9996d4b763225ab130510eedd2abfe46"
+      }
+    },
+    "downloadBytes": {
+      "story": 4720,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Fonds du Nouvel An",
+        "description": "Quatre fonds de conversation pour la nouvelle année : ciel d’artifice, confettis, heure de minuit et bulles dorées, assez discrets pour laisser lire chaque bulle."
+      },
+      "en": {
+        "name": "New Year backgrounds",
+        "description": "Four chat backgrounds for the new year: a firework sky, confetti, the midnight hour and golden bubbles, subtle enough to keep every bubble readable."
+      },
+      "es": {
+        "name": "Fondos de Año Nuevo",
+        "description": "Cuatro fondos de conversación para el año nuevo: cielo de fuegos, confeti, hora de medianoche y burbujas doradas, discretos para que cada burbuja se lea bien."
+      },
+      "pt": {
+        "name": "Fundos de Ano Novo",
+        "description": "Quatro fundos de conversa para o novo ano: céu de artifício, confetes, hora da meia-noite e bolhas douradas, discretos para que cada balão se leia bem."
+      },
+      "de": {
+        "name": "Neujahrshintergründe",
+        "description": "Vier Chat-Hintergründe für das neue Jahr: Feuerwerkshimmel, Konfetti, Mitternachtsstunde und goldene Perlen, dezent genug, damit jede Blase lesbar bleibt."
+      },
+      "it": {
+        "name": "Sfondi di Capodanno",
+        "description": "Quattro sfondi di conversazione per il nuovo anno: cielo di fuochi, coriandoli, ora di mezzanotte e bollicine dorate, discreti perché ogni fumetto resti leggibile."
+      },
+      "ar": {
+        "name": "خلفيات رأس السنة",
+        "description": "أربع خلفيات للمحادثة للعام الجديد: سماء الألعاب النارية، وقصاصات، وساعة منتصف الليل، وفقاعات ذهبية، هادئة بما يكفي لتبقى كل فقاعة مقروءة."
+      }
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
+    }
+  },
+  {
+    "slug": "nouvel-an-fonds-vifs",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 10,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "6d685dd02806d9e6.webp",
+      "bytes": 534,
+      "sha256": "6d685dd02806d9e6fa810a1c3afc3b436d4c96941f748dad9650f9b3497afc21"
+    },
+    "preview": null,
+    "contract": {
+      "src": "07333c16a46af2cf.json",
+      "bytes": 2977,
+      "sha256": "07333c16a46af2cfea1f387d6d29f3efa9ba5d0c35ec39e45e284368430939d5"
+    },
+    "strings": {
+      "fr": {
+        "src": "fa2f11dc4845c88c.json",
+        "bytes": 187,
+        "sha256": "fa2f11dc4845c88c0009dee932f9433d4d1b2b568ce977cb8858532175c25d3c"
+      },
+      "en": {
+        "src": "8f755503162b3f23.json",
+        "bytes": 166,
+        "sha256": "8f755503162b3f239ce4cefcb1dec54a0188383c76e18b4fae930a155b632558"
+      },
+      "es": {
+        "src": "fb3e2dc80df92c28.json",
+        "bytes": 178,
+        "sha256": "fb3e2dc80df92c28fd3b2dc1675615f430b8bdb565462f3969d798fd282b34d6"
+      },
+      "pt": {
+        "src": "36ecca1849a83fcc.json",
+        "bytes": 175,
+        "sha256": "36ecca1849a83fcc2e408e64553f8cde3930ecfe639e4df936c08f6db0aaa4cd"
+      },
+      "de": {
+        "src": "47a80e593ec61700.json",
+        "bytes": 180,
+        "sha256": "47a80e593ec6170091f12e188c1596b701a16c0fcf0fa8024cd338ac554b8410"
+      },
+      "it": {
+        "src": "6f9b4a96e230bf07.json",
+        "bytes": 182,
+        "sha256": "6f9b4a96e230bf077897c14cd98fe8656e78096bfd6f85c55ead9586e273c1b8"
+      },
+      "ar": {
+        "src": "316416258671b2b5.json",
+        "bytes": 208,
+        "sha256": "316416258671b2b51b65c4b90267932718f40528e9d9983fd1499a4c27f1ae12"
+      }
+    },
+    "downloadBytes": {
+      "story": 2977,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Nouvel An vivant · fonds",
+        "description": "Quatre fonds animés pour la nouvelle année : des gerbes lointaines, des confettis qui tombent, une nuit étoilée et des bulles qui montent. Animations réduites : un dégradé fixe."
+      },
+      "en": {
+        "name": "Living New Year · backgrounds",
+        "description": "Four animated backgrounds for the new year: distant bursts, falling confetti, a starry night and rising bubbles. With reduced motion: a still gradient."
+      },
+      "es": {
+        "name": "Año Nuevo vivo · fondos",
+        "description": "Cuatro fondos animados para el año nuevo: destellos lejanos, confeti que cae, una noche estrellada y burbujas que suben. Con movimiento reducido: un degradado fijo."
+      },
+      "pt": {
+        "name": "Ano Novo vivo · fundos",
+        "description": "Quatro fundos animados para o novo ano: explosões ao longe, confetes a cair, uma noite estrelada e bolhas a subir. Com movimento reduzido: um degradê fixo."
+      },
+      "de": {
+        "name": "Lebendiges Neujahr · Hintergründe",
+        "description": "Vier animierte Hintergründe für das neue Jahr: ferne Funken, fallendes Konfetti, eine Sternennacht und aufsteigende Perlen. Bei reduzierter Bewegung: ein ruhiger Verlauf."
+      },
+      "it": {
+        "name": "Capodanno vivo · sfondi",
+        "description": "Quattro sfondi animati per il nuovo anno: scoppi lontani, coriandoli che cadono, una notte stellata e bollicine che salgono. Con movimento ridotto: una sfumatura fissa."
+      },
+      "ar": {
+        "name": "رأس السنة الحي · خلفيات",
+        "description": "أربع خلفيات متحركة للعام الجديد: شرارات بعيدة، وقصاصات متساقطة، وليلة مرصعة بالنجوم، وفقاعات صاعدة. مع تقليل الحركة: تدرّج ثابت."
+      }
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
     }
   }
 ]

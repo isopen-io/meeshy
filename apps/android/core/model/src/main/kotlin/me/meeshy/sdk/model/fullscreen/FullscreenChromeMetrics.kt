@@ -82,7 +82,10 @@ public enum class FullscreenChromeSymbol {
     Save,
     Saved,
     Repost,
+    /** « Créer avec ce média » : ouvre la composition — l'icône du POST, jamais la baguette (#16334). */
     Compose,
+    /** « Imager » sur un rail d'actions : la baguette, qui fait de l'élément affiché une carte image (#16334). */
+    Imager,
     AudioOutput,
     Play,
     Pause,

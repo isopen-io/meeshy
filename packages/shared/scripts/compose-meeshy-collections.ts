@@ -21,6 +21,7 @@ import { renderFilm } from './compose-illustrated-ring-lotties.js';
 import { FRAMES_SIGNATURE, FRAMES_VIVANTS, LANGUAGES, RINGS_SIGNATURE, RINGS_VIVANTS, WALLPAPERS_SIGNATURE, WALLPAPERS_VIVANTS, type Collection } from './meeshy-collections/packs.js';
 import { VIVANT_REACH } from './meeshy-collections/rings-vivants.js';
 import { upsertPacks } from './meeshy-collections/source-packs.js';
+import { SEASONAL_ADDED_SLUGS } from './seasonal/slugs.js';
 
 type Write = (src: string, bytes: Buffer) => void;
 type Ref = { readonly src: string; readonly bytes: number; readonly sha256: string };
@@ -89,14 +90,14 @@ export function collectionsOf(write: Write = () => undefined) {
 
 export const MEESHY_COLLECTION_SLUGS: readonly string[] = [RINGS_SIGNATURE, RINGS_VIVANTS, WALLPAPERS_SIGNATURE, WALLPAPERS_VIVANTS, FRAMES_SIGNATURE, FRAMES_VIVANTS].map((c) => c.slug);
 
-/** Les packs de source : après TOUS les packs qui ne sont pas des collections Meeshy, dans l'ordre déclaré. */
+/** Les packs de source : après TOUS les packs qui ne sont ni des collections Meeshy ni les offres saisonnières posées après elles (#16270), dans l'ordre déclaré. */
 export function sourcePacks(
   existing: readonly SourcePack[],
   entries: readonly { readonly collection: Collection<unknown>; readonly items: readonly unknown[] }[],
   itemsKey: 'rings' | 'designs' | 'frames',
   usage?: { readonly kind: 'free'; readonly surfaces: readonly string[] },
 ) {
-  const after = Math.max(...existing.filter((pack) => !MEESHY_COLLECTION_SLUGS.includes(pack.slug)).map((pack) => pack.order));
+  const after = Math.max(...existing.filter((pack) => !MEESHY_COLLECTION_SLUGS.includes(pack.slug) && !SEASONAL_ADDED_SLUGS.includes(pack.slug)).map((pack) => pack.order));
   return entries.map(({ collection, items }, index) => ({
     slug: collection.slug,
     order: after + 1 + index,
