@@ -1,17 +1,16 @@
 export const meta = {
   name: 'meeshy-issues-dev',
   description:
-    "Développe des issues de bout en bout depuis une session cloud, au moindre coût : une chaîne par plateforme (android, ios, web, serveur) en parallèle, lots en série dans chaque chaîne ; par lot : cadrage contre dev vivant, branche poussée tôt, TDD rouge→vert, gates locaux, revue-correction opus, audit adversarial si sensible, preuve CI par workflow_dispatch (CI des PR gelée), PR « Refs #n » fusionnée dans dev, consignes de recette appareil laissées dans l'issue. La recette sur S8, iPhone ou simulateur n'est PAS faite : elle revient à la machine qui a les appareils.",
+    "Développe d'un coup une liste d'issues depuis une session cloud, au moindre coût, jusqu'à une PR prête par lot, SANS la fusionner (le porteur fusionne dans dev quand il veut tester). Tous les lots partent en parallèle ; un lot qui dépend d'un autre part de la branche de son prédécesseur. Par lot : cadrage contre dev vivant, branche poussée tôt, TDD rouge→vert, gates locaux, revue-correction opus, audit adversarial si sensible, preuve CI par workflow_dispatch (CI des PR gelée), PR vers dev, consignes de recette appareil dans l'issue. dev est refusionné dans chaque branche au début de chaque étape, avant chaque push et toutes les ~10 minutes. Ni recette sur appareil (S8, iPhone, simulateur), ni fusion dans dev.",
   whenToUse:
-    "Lancer le développement d'une liste d'issues depuis une session cloud (sans Xcode ni SDK Android). Args, tous optionnels : { issues ([{ n, plateforme: 'android'|'ios'|'web'|'serveur', cle, branche?, apres?: [cles], notes? }] — défaut : le lot « progression d'envoi par bulle » #16168, #14702, #16133, #16134, #16275), attribution (lignes de pied de commit ; défaut AUCUNE), repo ('/home/user/meeshy'), base ('dev'), essais (2), sauter [cles], seulement [cles] }.",
+    "Développer d'un coup une liste d'issues depuis une session cloud (sans Xcode ni SDK Android), jusqu'aux PR prêtes. Args, tous optionnels : { issues ([{ n, plateforme: 'android'|'ios'|'web'|'serveur', cle, branche?, apres?: cle, notes? }] — défaut : #16168, #14702 (suite), #16133, #16134, #16275 ×3), attribution (lignes de pied de commit ; défaut AUCUNE), repo ('/home/user/meeshy'), base ('dev'), essais (2), sauter [cles], seulement [cles] }.",
   phases: [
-    { title: 'Développer', detail: 'cadrage, branche poussée tôt, témoin rouge, vert, gates locaux', model: 'sonnet' },
+    { title: 'Développer', detail: 'sync dev, cadrage, branche poussée tôt, témoin rouge, vert, gates locaux', model: 'sonnet' },
     { title: 'Relire', detail: 'revue-correction contre l’issue et les règles du dépôt', model: 'opus' },
     { title: 'Auditer', detail: 'auditeur-adversarial sur les lots sensibles seulement' },
-    { title: 'Prouver', detail: 'workflow_dispatch android.yml / ios.yml sur la branche à jour de dev', model: 'sonnet' },
+    { title: 'Prouver', detail: 'sync dev puis workflow_dispatch android.yml / ios.yml, ou gates web complets', model: 'sonnet' },
     { title: 'Corriger', detail: 'cause racine des rouges, au plus « essais » tours', model: 'sonnet' },
-    { title: 'Fusionner', detail: 'PR Refs #n fusionnée dans dev, preuve et recette appareil dans l’issue', model: 'sonnet' },
-    { title: 'Bilan', detail: 'CI de dev sur la tête finale, consignes de recette rassemblées', model: 'sonnet' },
+    { title: 'PR', detail: 'sync dev, PR prête vers dev (non fusionnée), preuve et recette appareil dans l’issue', model: 'sonnet' },
   ],
 }
 
@@ -40,20 +39,20 @@ réellement appliqué au client de téléversement (lecture/écriture/appel) et 
 fichier, sans toucher aux délais des appels courts. Un témoin rouge par cause.`,
   },
   {
-    n: 14702, plateforme: 'ios', cle: 'ios-14702', branche: 'claude/ios-14702',
-    notes: `Lot DÉJÀ écrit sur la branche claude/ios-14702 (commit f5500ddd02, PR #16212 ouverte) : le reprendre, ne pas
-le refaire. Y fusionner origin/${BASE} (107 commits de retard le 2026-11-05). À corriger avant fusion :
+    n: 14702, plateforme: 'ios', cle: 'ios-14702-suite',
+    notes: `Le lot iOS de #14702 est FUSIONNÉ dans ${BASE} (PR #16212, merge 1eec5c5261, le 2026-11-05) sans avoir été
+prouvé ni repris. Branche neuve depuis origin/${BASE}. À corriger :
 1. AttachmentSendRunner.run : « uploadSession(batch) ?? firstSession » fait lire à la 2e bulle la progression de la
    1re (souvent 100 %) quand sa session ne se crée pas. Sans session : pas d'anneau, l'horloge reste. Témoin rouge.
 2. apps/ios/Meeshy/Features/Main/Components/UploadProgressBar.swift n'a plus aucun appelant : le retirer (fichier +
-   les 4 entrées de project.pbxproj, ou régénérer le pbxproj selon apps/ios/CLAUDE.md) et réécrire la garde de
+   entrées de project.pbxproj, ou régénération selon apps/ios/CLAUDE.md) et réécrire la garde de
    ComposerUploadLedgerTests qui cherche « UploadProgressBar( » pour qu'elle reste significative.
-3. test_accessibilityValue_spellsThePercent n'a jamais été rejoué après son assouplissement : la preuve est ios.yml.
+3. test_accessibilityValue_spellsThePercent n'a jamais été rejoué après son assouplissement : la preuve ios.yml le dira.
 4. Le pourcentage change de largeur (9 % → 10 % → 100 %) dans le pied de bulle : réserver la largeur pour qu'aucune
    image ne saute (dimension Fluidité).`,
   },
   {
-    n: 16133, plateforme: 'android', cle: 'android-bulle-progression-envoi', apres: ['android-relance-garde-sa-piece'],
+    n: 16133, plateforme: 'android', cle: 'android-bulle-progression-envoi',
     notes: `Les données existent : MediaUploadProgressLedger (sdk-core/.../media/) est alimenté par cmid dans
 MediaSenders.kt. Aucun fichier de feature/chat ne le lit. Le porter sur la bulle optimiste (cmid = clientMessageId) à
 la place de l'horloge d'envoi, comme iOS #14702 : anneau + pourcentage, seule la pastille observe la progression (pas
@@ -67,20 +66,20 @@ bulle optimiste (à la place de l'horloge), comme iOS #14702. Seule la pastille 
 Lecteur d'écran : pourcentage annoncé. Pas de barre globale dans le compositeur de conversation.`,
   },
   {
-    n: 16275, plateforme: 'ios', cle: 'ios-progression-durable', apres: ['ios-14702'],
+    n: 16275, plateforme: 'ios', cle: 'ios-progression-durable', apres: 'ios-14702-suite',
     notes: `Volet iOS de #16275 : le registre de progression devient un registre pour toute l'application indexé par
 clientMessageId (vérifier d'abord que tempId en est un), survit à la sortie de la conversation, et la reprise de
 OfflineQueue / AttachmentGroupOutbox l'alimente aussi. Respecter SDK Purity (packages/MeeshySDK/CLAUDE.md) pour le
 placement.`,
   },
   {
-    n: 16275, plateforme: 'android', cle: 'android-progression-durable', apres: ['android-bulle-progression-envoi'],
+    n: 16275, plateforme: 'android', cle: 'android-progression-durable', apres: 'android-bulle-progression-envoi',
     notes: `Volet Android de #16275 : vérifier par un témoin que la REPRISE de la voie media (après coupure, après mort
 du processus) alimente MediaUploadProgressLedger pour le même cmid, et que la bulle la lit après retour dans la
 conversation. Corriger seulement si le témoin rougit ; sinon le lot se résume au témoin.`,
   },
   {
-    n: 16275, plateforme: 'web', cle: 'web-progression-durable', apres: ['web-bulle-progression-envoi'],
+    n: 16275, plateforme: 'web', cle: 'web-progression-durable', apres: 'web-bulle-progression-envoi',
     notes: `Volet web de #16275 : le magasin de progression de #16134 vit au niveau de l'application (pas du composant
 de conversation), survit à la navigation, et la file d'envoi web (reprise après coupure) l'alimente aussi.`,
   },
@@ -102,18 +101,24 @@ const SOCLE = `
 DÉPÔT ${GH}, clone ${REPO}, base ${BASE}. Session CLOUD : pas d'Xcode, pas de SDK Android (dl.google.com refusé),
 pas d'appareil. La recette sur S8, iPhone ou simulateur N'EST PAS de ton ressort : elle se fera après, sur une autre
 machine — tu la PRÉPARES (étapes précises), tu ne la simules pas et tu ne prétends jamais l'avoir faite.
+TU NE FUSIONNES RIEN DANS ${BASE} NI DANS main : le porteur fusionne lui-même les PR quand il veut tester.
+
+SYNCHRONISATION AVEC ${BASE} (obligatoire — ne jamais travailler en déphasage)
+- Au DÉBUT de ton étape, AVANT CHAQUE push, et toutes les ~10 minutes d'un travail long :
+  git fetch origin && git merge --no-edit origin/${BASE} dans ta branche.
+- Conflit : résous-le en gardant les deux intentions (lis le commit de ${BASE} qui l'a causé), rejoue les gates
+  locaux, commit. Si ${BASE} a déjà livré ce que fait ton lot, dis-le plutôt que de dupliquer.
+- Jamais de rebase d'une branche poussée, jamais de force-push, jamais de push sur ${BASE} ni main.
 
 GIT
-- Synchroniser = git fetch origin puis git merge origin/${BASE} (jamais de rebase d'une branche poussée, jamais de
-  force-push, jamais de push sur ${BASE} ni main). git add <chemins> puis git diff --cached relu ; jamais git commit -a.
-- Commits en français qui disent le RÉSULTAT, ${PIED}. Message : « Refs #n », JAMAIS « Closes » (l'issue reste
-  ouverte jusqu'à la recette appareil).
+- git add <chemins> puis git diff --cached relu ; jamais git commit -a.
+- Commits en français qui disent le RÉSULTAT, ${PIED}. « Refs #n », JAMAIS « Closes ».
 - Push : git push -u origin <branche>, réessayé 4 fois (2, 4, 8, 16 s) sur erreur réseau seulement.
 
 GITHUB
 - gh s'il est authentifié, sinon ToolSearch « select:mcp__github__pull_request_read,mcp__github__create_pull_request,
-  mcp__github__merge_pull_request,mcp__github__update_pull_request,mcp__github__actions_list,mcp__github__actions_get,
-  mcp__github__actions_run_trigger,mcp__github__get_job_logs,mcp__github__issue_read,mcp__github__add_issue_comment ».
+  mcp__github__update_pull_request,mcp__github__actions_list,mcp__github__actions_get,mcp__github__actions_run_trigger,
+  mcp__github__get_job_logs,mcp__github__issue_read,mcp__github__add_issue_comment ».
 - Tout commentaire GitHub finit par « --- » puis « _Generated by [Claude Code](https://claude.ai/code)_ ».
 
 CI (la CI des PR est GELÉE : vars.PR_CI_GEL ; un job « skipped » sur une PR ne prouve rien)
@@ -128,7 +133,7 @@ CI (la CI des PR est GELÉE : vars.PR_CI_GEL ; un job « skipped » sur une PR n
 - Serveur : depuis services/gateway, bun run test:coverage ciblé puis complet ; tsc.
 - Attendre un run : jamais de sleep au premier plan ; boucle de surveillance en ARRIÈRE-PLAN (Bash
   run_in_background, curl -sS "https://api.github.com/repos/${GH}/actions/runs/<id>" toutes les 90 s, sort au
-  verdict) et attendre sa notification. Les journaux ne se lisent que par mcp__github__get_job_logs ou gh run view --log-failed.
+  verdict) et attendre sa notification. Les journaux se lisent par mcp__github__get_job_logs ou gh run view --log-failed.
 `
 
 // ---------------------------------------------------------------------------
@@ -140,7 +145,7 @@ const DEV = {
     branche: { type: 'string' },
     sha: { type: 'string' },
     temoins: { type: 'array', items: { type: 'string' }, description: 'témoins ajoutés : fichier::nom' },
-    rougeAvant: { type: 'string', description: 'preuve du rouge avant correctif (sortie locale ou raison : compilation impossible dans le cloud, le rouge sera montré par la CI au commit du témoin)' },
+    rougeAvant: { type: 'string', description: 'preuve du rouge avant correctif (sortie locale, ou SHA du commit du témoin seul que la CI montrera rouge)' },
     gatesLocaux: { type: 'string' },
     recette: { type: 'array', items: { type: 'string' }, description: 'étapes de recette appareil, précises et observables' },
     bloque: { type: 'string', description: 'vide si rien ne bloque' },
@@ -161,7 +166,7 @@ const REVUE = {
 const AUDIT = {
   type: 'object',
   properties: {
-    verdict: { type: 'string', enum: ['fusionnable', 'bloquant'] },
+    verdict: { type: 'string', enum: ['acceptable', 'bloquant'] },
     constats: { type: 'array', items: { type: 'string' } },
   },
   required: ['verdict', 'constats'],
@@ -176,24 +181,14 @@ const PREUVE = {
   },
   required: ['sha', 'vert', 'run', 'echecs'],
 }
-const FUSION = {
+const PR = {
   type: 'object',
   properties: {
     pr: { type: 'integer' },
-    fusionne: { type: 'boolean' },
+    url: { type: 'string' },
     sha: { type: 'string' },
-    raison: { type: 'string' },
   },
-  required: ['fusionne', 'raison'],
-}
-const BILAN = {
-  type: 'object',
-  properties: {
-    devSha: { type: 'string' },
-    ci: { type: 'array', items: { type: 'string' }, description: 'workflow : conclusion (URL)' },
-    rougesDeNosLots: { type: 'array', items: { type: 'string' } },
-  },
-  required: ['devSha', 'ci', 'rougesDeNosLots'],
+  required: ['pr', 'url', 'sha'],
 }
 
 // ---------------------------------------------------------------------------
@@ -201,7 +196,7 @@ const BILAN = {
 // ---------------------------------------------------------------------------
 const titre = l => `#${l.n} ${l.cle}`
 
-const developper = l => agent(`${SOCLE}
+const developper = (l, depart) => agent(`${SOCLE}
 LOT ${titre(l)} — plateforme ${l.plateforme}.
 1. Lis l'issue #${l.n} (corps ET commentaires) : son critère de fin fait foi. Notes du coordinateur :
 ${l.notes || '(aucune)'}
@@ -209,145 +204,132 @@ ${l.notes || '(aucune)'}
    (chemins, symboles, comportement). Si le travail est déjà fait sur ${BASE}, dis-le dans bloque et arrête.
    Si une branche vivante d'une autre session écrit déjà ces chemins (git log origin --since=2.hours -- <chemins>),
    cède : bloque = « cédé à <branche> ».
-3. Branche ${l.branche ? `existante « ${l.branche} » : git checkout ${l.branche} && git merge origin/${BASE}` : `« claude/${l.cle} » depuis origin/${BASE}`}.
+3. Branche « ${l.branche || `claude/${l.cle}`} » ${depart
+    ? `créée depuis origin/${depart.branche} (lot ${depart.cle}, dont celui-ci dépend), puis git merge origin/${BASE}`
+    : `créée depuis origin/${BASE} (ou reprise si elle existe, puis git merge origin/${BASE})`}.
    Pousse dans les 15 minutes (le témoin rouge suffit).
 4. TDD : témoin(s) de COMPORTEMENT rouge(s) d'abord, commit et push du rouge seul ; puis le minimum pour le vert ;
    puis refactorer si cela apporte. Règles du dépôt à tenir : fichier ≤ 1200 lignes (aucun ajout à un fichier
    hors budget : extraire d'abord), fonction ≤ 80 lignes, pas de any, immuabilité, une seule source de vérité,
    rétrocompatibilité serveur/clients, optimistic update + jamais de spinner sur cache non vide, accessibilité
    (TalkBack / VoiceOver / lecteur d'écran), chaînes localisées par le mécanisme de la plateforme.
-5. Gates locaux de la plateforme (voir CI ci-dessus), commit, push.
+5. Gates locaux de la plateforme (voir CI ci-dessus), sync ${BASE}, commit, push.
 6. Rédige les étapes de recette APPAREIL (S8 pour Android, iPhone/simulateur pour iOS, Chrome pour le web) :
    compte, conversation, réseau (ralenti, coupé), gestes, et ce qu'on doit VOIR. Ne les exécute pas.`,
   { label: `dev ${l.cle}`, phase: 'Développer', model: 'sonnet', effort: 'medium', schema: DEV })
 
 const relire = (l, d) => agent(`${SOCLE}
 REVUE-CORRECTION du lot ${titre(l)}, branche ${d.branche} (tête ${d.sha}).
-Tu n'approuves pas : tu cherches ce qui casse. git fetch ; git diff origin/${BASE}...origin/${d.branche}.
+Tu n'approuves pas : tu cherches ce qui casse. Sync ${BASE} d'abord, puis git diff origin/${BASE}...HEAD.
 - Le critère de fin de l'issue #${l.n} est-il atteint, cas par cas ? Les témoins testent-ils le COMPORTEMENT, et
   auraient-ils rougi sans le correctif (relis le commit du rouge) ?
 - Défauts : concurrence, cycle de vie (fuite d'observateur, état qui survit ou meurt au mauvais moment), états
   manquants (hors ligne, échec, reprise, mort du processus), recomposition / redessin inutile, accessibilité,
   rétrocompatibilité, ce qui part À CÔTÉ de la valeur corrigée.
-- Corrige toi-même sur la branche (témoin d'abord pour tout défaut de comportement), gates locaux, commit, push.
+- Corrige toi-même sur la branche (témoin d'abord pour tout défaut de comportement), gates locaux, sync, commit, push.
 - sensible = vrai seulement si le lot touche crypto, auth, contrôle d'accès, migration de données ou protocole.`,
   { label: `revue ${l.cle}`, phase: 'Relire', model: 'opus', effort: 'high', schema: REVUE })
 
-const auditer = (l, r, d) => agent(`Audit adversarial avant fusion du lot ${titre(l)} : branche ${d.branche} (tête ${r.sha}),
+const auditer = (l, r, d) => agent(`Audit adversarial du lot ${titre(l)} : branche ${d.branche} (tête ${r.sha}),
 dépôt ${REPO}, diff contre origin/${BASE}. Cherche à casser : fuite de données, contournement, migration non
-réversible, ancien client cassé. Rends « bloquant » avec constats reproductibles, ou « fusionnable ».`,
+réversible, ancien client cassé. Rends « bloquant » avec constats reproductibles, ou « acceptable ».
+Tu ne fusionnes rien.`,
   { label: `audit ${l.cle}`, phase: 'Auditer', agentType: 'auditeur-adversarial', schema: AUDIT })
 
 const prouver = (l, branche) => agent(`${SOCLE}
 PREUVE du lot ${titre(l)}, branche ${branche}.
-1. git fetch ; git checkout ${branche} ; git merge origin/${BASE} (conflit : résous-le en gardant les deux
-   intentions, gates locaux, commit) ; push.
+1. git fetch ; git checkout ${branche} ; sync ${BASE} (conflit : résous, gates locaux, commit) ; push.
 2. ${l.plateforme === 'android' ? 'workflow_dispatch android.yml sur la branche, au SHA poussé.'
     : l.plateforme === 'ios' ? 'workflow_dispatch ios.yml sur la branche, au SHA poussé.'
     : 'Gates LOCAUX complets de la plateforme (web : bun test complet depuis apps/web + tsc ; serveur : test:coverage complet + tsc). run = « local ».'}
 3. Attends le verdict (surveillance en arrière-plan). Si rouge : extrais chaque échec (compilation fichier:ligne,
-   témoin classe.méthode — message) sans rien corriger.`,
+   témoin classe.méthode — message) sans rien corriger. Marque « préexistant » un échec déjà rouge sur origin/${BASE}.`,
   { label: `preuve ${l.cle}`, phase: 'Prouver', model: 'sonnet', effort: 'low', schema: PREUVE })
 
 const corriger = (l, branche, p, tour) => agent(`${SOCLE}
 CORRECTION (tour ${tour}/${ESSAIS}) du lot ${titre(l)}, branche ${branche}, preuve rouge ${p.run} au SHA ${p.sha} :
 ${p.echecs.map(e => `- ${e}`).join('\n')}
-Pour chaque échec : cause racine (pas de témoin affaibli, pas de @Ignore/skip, pas de seuil relâché). Un échec déjà
-rouge sur origin/${BASE} sans lien avec le lot : ne le corrige pas, note-le dans echecs avec « préexistant ».
-Gates locaux, commit, push. Rends vert = vrai seulement si tous les échecs du lot sont corrigés localement
-(la preuve CI sera rejouée).`,
+Sync ${BASE} d'abord (le rouge est peut-être déjà réparé sur ${BASE}). Pour chaque échec du lot : cause racine (pas de
+témoin affaibli, pas de @Ignore/skip, pas de seuil relâché). Un échec « préexistant » sans lien avec le lot : ne le
+corrige pas. Gates locaux, sync, commit, push. vert = vrai seulement si tous les échecs du lot sont corrigés
+localement (la preuve CI sera rejouée).`,
   { label: `correction ${l.cle} #${tour}`, phase: 'Corriger', model: 'sonnet', effort: 'medium', schema: PREUVE })
 
-const fusionner = (l, branche, d, p) => agent(`${SOCLE}
-FUSION du lot ${titre(l)}, branche ${branche}, prouvée verte : ${p.run} au SHA ${p.sha}.
-1. git fetch : si origin/${BASE} a avancé depuis ${p.sha} sur des chemins de ${l.plateforme}, fusionne-le dans la
-   branche, gates locaux, push (pas de nouvelle preuve CI si la fusion est sans conflit et hors des fichiers du lot ;
-   sinon rends fusionne = faux, raison = « re-preuve »).
-2. PR vers ${BASE} (réutilise celle de la branche si elle existe, sortie du brouillon) : titre = résultat attendu,
-   gabarit du dépôt, « Refs #${l.n} », section Testing = témoins + preuve ; corps terminé par
-   « 🤖 Generated with [Claude Code](https://claude.com/claude-code) ».
-3. Fusionne (merge commit) en exigeant le SHA de tête attendu. Ne supprime pas la branche.
-4. Commentaire sur #${l.n} : ce qui est livré (PR, SHA de fusion, témoins, preuve), dimensions mûres et restantes,
-   puis « Recette appareil à faire » avec ces étapes :
+const ouvrirPR = (l, d, p, r, depart) => agent(`${SOCLE}
+PR du lot ${titre(l)}, branche ${d.branche}. Preuve : ${p.vert ? `verte (${p.run} au SHA ${p.sha})` : `ROUGE après ${ESSAIS} corrections (${p.run}) — échecs : ${p.echecs.join(' ; ')}`}.
+1. Sync ${BASE}, push.
+2. PR vers ${BASE}, PRÊTE (pas en brouillon) — réutilise celle de la branche si elle existe. Titre = résultat attendu ;
+   gabarit du dépôt ; « Refs #${l.n} »${depart && depart.pr ? ` ; « Dépend de #${depart.pr} (à fusionner avant) »` : ''} ;
+   section Testing = témoins + preuve${p.vert ? '' : ' + échecs restants, en tête du corps, en gras'} ;
+   ${r.reste.length ? `section « Reste » : ${r.reste.join(' ; ')} ; ` : ''}corps terminé par
+   « 🤖 Generated with [Claude Code](https://claude.com/claude-code) ». NE LA FUSIONNE PAS.
+3. Commentaire sur #${l.n} : la PR, les témoins, la preuve, les dimensions mûres et restantes, puis
+   « Recette appareil à faire (après fusion dans ${BASE}) » :
 ${d.recette.map(s => `   - ${s}`).join('\n')}
-   L'issue reste OUVERTE (Status In Progress) : elle se ferme après la recette appareil.`,
-  { label: `fusion ${l.cle}`, phase: 'Fusionner', model: 'sonnet', effort: 'low', schema: FUSION })
+   L'issue reste OUVERTE.`,
+  { label: `PR ${l.cle}`, phase: 'PR', model: 'sonnet', effort: 'low', schema: PR })
 
-async function lot(l) {
-  const d = await developper(l)
-  if (!d || d.bloque) return { lot: titre(l), etat: 'bloqué', raison: d ? d.bloque : 'agent perdu' }
+// ---------------------------------------------------------------------------
+// UN LOT, de bout en bout jusqu'à sa PR
+// ---------------------------------------------------------------------------
+async function lot(l, depart) {
+  const d = await developper(l, depart)
+  if (!d || d.bloque) return { cle: l.cle, lot: titre(l), etat: 'bloqué', raison: d ? d.bloque : 'agent perdu' }
   const r = await relire(l, d)
-  if (!r) return { lot: titre(l), etat: 'bloqué', raison: 'revue perdue' }
+  if (!r) return { cle: l.cle, lot: titre(l), etat: 'bloqué', branche: d.branche, raison: 'revue perdue' }
   if (r.sensible) {
     const a = await auditer(l, r, d)
-    if (!a || a.verdict === 'bloquant') return { lot: titre(l), etat: 'bloqué', raison: `audit : ${a ? a.constats.join(' ; ') : 'perdu'}` }
+    if (!a || a.verdict === 'bloquant') {
+      return { cle: l.cle, lot: titre(l), etat: 'bloqué', branche: d.branche, raison: `audit : ${a ? a.constats.join(' ; ') : 'perdu'}` }
+    }
   }
   let p = await prouver(l, d.branche)
   for (let tour = 1; p && !p.vert && tour <= ESSAIS; tour++) {
-    const c = await corriger(l, d.branche, p, tour)
-    if (!c) break
+    if (!(await corriger(l, d.branche, p, tour))) break
     p = await prouver(l, d.branche)
   }
-  if (!p || !p.vert) return { lot: titre(l), etat: 'rouge', branche: d.branche, echecs: p ? p.echecs : [], recette: d.recette }
-  let f = await fusionner(l, d.branche, d, p)
-  if (f && !f.fusionne && /re-preuve/.test(f.raison)) {
-    p = await prouver(l, d.branche)
-    if (p && p.vert) f = await fusionner(l, d.branche, d, p)
-  }
+  if (!p) return { cle: l.cle, lot: titre(l), etat: 'bloqué', branche: d.branche, raison: 'preuve perdue' }
+  const pr = await ouvrirPR(l, d, p, r, depart)
   return {
-    lot: titre(l), etat: f && f.fusionne ? 'fusionné' : 'non fusionné', branche: d.branche,
-    pr: f ? f.pr : undefined, raison: f ? f.raison : 'fusion perdue',
-    reste: r.reste, recette: d.recette,
+    cle: l.cle, lot: titre(l), etat: p.vert ? 'PR verte' : 'PR rouge', branche: d.branche,
+    pr: pr ? pr.pr : undefined, url: pr ? pr.url : undefined,
+    echecs: p.vert ? [] : p.echecs, reste: r.reste, recette: d.recette,
   }
 }
 
 // ---------------------------------------------------------------------------
-// CHAÎNES — une par plateforme, en parallèle ; dans une chaîne, les lots passent en série
-// (même zone de code, et une seule preuve CI lourde à la fois par plateforme)
+// TOUT D'UN COUP — chaque lot part aussitôt ; un lot dépendant attend la PR de son prédécesseur
+// et part de sa branche (PR empilée, « Dépend de #… »)
 // ---------------------------------------------------------------------------
-const PLATEFORMES = [...new Set(LOTS.map(l => l.plateforme))]
-log(`${LOTS.length} lots sur ${PLATEFORMES.join(', ')}${SAUTER.size ? ` — sautés : ${[...SAUTER].join(', ')}` : ''}`)
+log(`${LOTS.length} lots en parallèle : ${LOTS.map(l => l.cle).join(', ')}${SAUTER.size ? ` — sautés : ${[...SAUTER].join(', ')}` : ''}`)
 
-const resultats = {}
-async function chaine(plateforme) {
-  const sortie = []
-  for (const l of LOTS.filter(x => x.plateforme === plateforme)) {
-    const manquants = (l.apres || []).filter(k => LOTS.some(x => x.cle === k) && (!resultats[k] || resultats[k].etat !== 'fusionné'))
-    if (manquants.length) {
-      const r = { lot: titre(l), etat: 'non lancé', raison: `attend ${manquants.join(', ')}` }
-      resultats[l.cle] = r
-      sortie.push(r)
-      continue
+const enCours = {}
+const lancer = l => {
+  if (enCours[l.cle]) return enCours[l.cle]
+  const pred = l.apres ? LOTS.find(x => x.cle === l.apres) : null
+  enCours[l.cle] = (async () => {
+    const depart = pred ? await lancer(pred) : null
+    if (depart && !depart.branche) {
+      return { cle: l.cle, lot: titre(l), etat: 'non lancé', raison: `prédécesseur ${pred.cle} bloqué : ${depart.raison}` }
     }
-    const r = await lot(l)
-    resultats[l.cle] = r
-    log(`${r.lot} : ${r.etat}`)
-    sortie.push(r)
-  }
-  return sortie
+    const r = await lot(l, depart)
+    log(`${r.lot} : ${r.etat}${r.pr ? ` (PR #${r.pr})` : ''}`)
+    return r
+  })()
+  return enCours[l.cle]
 }
 
-const parChaine = (await parallel(PLATEFORMES.map(p => () => chaine(p)))).filter(Boolean).flat()
-
-// ---------------------------------------------------------------------------
-// BILAN — la CI de dev sur la tête finale fait foi
-// ---------------------------------------------------------------------------
-phase('Bilan')
-const fusionnes = parChaine.filter(r => r.etat === 'fusionné')
-const bilan = fusionnes.length ? await agent(`${SOCLE}
-BILAN. Lots fusionnés dans ${BASE} : ${fusionnes.map(r => `${r.lot} (PR #${r.pr})`).join(', ')}.
-1. git fetch ; tête de origin/${BASE}. Attends les runs du push sur cette tête (ci.yml, ios.yml, android.yml selon
-   les chemins touchés) — surveillance en arrière-plan, au plus 90 minutes.
-2. Pour chaque run rouge : l'échec vient-il d'un de nos lots ? Si oui, liste-le dans rougesDeNosLots (fichier:ligne
-   ou témoin), sans corriger.
-3. Si android.yml est vert sur cette tête : commente #16012 et #16013 avec la preuve (URL du run, SHA) ; ne les
-   ferme que si leur fil montre déjà la recette S8 faite, sinon rappelle qu'elle reste à faire.`,
-  { label: 'bilan dev', phase: 'Bilan', model: 'sonnet', effort: 'low', schema: BILAN }) : null
+const resultats = (await parallel(LOTS.map(l => () => lancer(l)))).filter(Boolean)
 
 return {
-  lots: parChaine,
-  ciDev: bilan,
-  recetteAppareil: parChaine
+  prs: resultats.filter(r => r.pr).map(r => ({ lot: r.lot, etat: r.etat, pr: r.pr, url: r.url, echecs: r.echecs })),
+  bloques: resultats.filter(r => !r.pr).map(r => ({ lot: r.lot, etat: r.etat, raison: r.raison })),
+  ordreDeFusion: resultats.filter(r => r.pr).map(r => {
+    const l = LOTS.find(x => x.cle === r.cle)
+    const pred = l && l.apres ? resultats.find(x => x.cle === l.apres) : null
+    return pred && pred.pr ? `#${r.pr} après #${pred.pr}` : `#${r.pr}`
+  }),
+  recetteAppareil: resultats
     .filter(r => r.recette && r.recette.length)
-    .map(r => ({ lot: r.lot, etat: r.etat, etapes: r.recette })),
+    .map(r => ({ lot: r.lot, pr: r.pr, etapes: r.recette })),
 }
