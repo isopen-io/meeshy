@@ -9,8 +9,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -38,6 +37,7 @@ import me.meeshy.sdk.model.speech.RecognitionLanguageList
 import me.meeshy.sdk.model.speech.RecognitionLanguageOption
 import me.meeshy.ui.R
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -94,14 +94,17 @@ public fun RecognitionLanguagePickerContent(
             placeholder = { Text(stringResource(R.string.recognition_language_search), color = tokens.textMuted) },
         )
         Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .toggleable(value = showAll, role = Role.Switch, onValueChange = { showAll = it }),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(stringResource(R.string.recognition_language_show_all), color = tokens.textPrimary, fontSize = 14.sp)
             Switch(
                 checked = showAll,
-                onCheckedChange = { showAll = it },
+                onCheckedChange = null,
                 colors = SwitchDefaults.colors(checkedTrackColor = accent),
             )
         }
@@ -135,7 +138,7 @@ private fun LanguageRow(option: RecognitionLanguageOption, active: Boolean, acce
             Text(option.code, color = tokens.textMuted, fontSize = 12.sp)
         }
         if (active) {
-            Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.recognition_language_selected), tint = accent)
+            Icon(MeeshyIcons.Check, contentDescription = stringResource(R.string.recognition_language_selected), tint = accent)
         }
     }
 }

@@ -67,7 +67,6 @@ feature/chat/src/main/kotlin/me/meeshy/app/chat/ReplyThreadSheet.kt
 feature/chat/src/main/kotlin/me/meeshy/app/chat/ReportMessageSheet.kt
 feature/chat/src/main/kotlin/me/meeshy/app/chat/StarredMessagesScreen.kt
 feature/contacts/src/main/kotlin/me/meeshy/app/contacts/ContactsListTab.kt
-feature/contacts/src/main/kotlin/me/meeshy/app/contacts/ContactsScreen.kt
 feature/contacts/src/main/kotlin/me/meeshy/app/contacts/DiscoverTab.kt
 feature/conversations/src/main/kotlin/me/meeshy/app/conversations/ConversationContextMenu.kt
 feature/conversations/src/main/kotlin/me/meeshy/app/conversations/ConversationListBody.kt

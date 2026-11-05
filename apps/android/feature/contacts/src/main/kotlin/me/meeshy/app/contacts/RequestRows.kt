@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +32,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.time.Instant
+import java.time.ZoneId
+import java.util.Locale
 import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
@@ -48,12 +48,10 @@ import me.meeshy.ui.component.circles.levelTitle
 import me.meeshy.ui.component.circles.tint
 import me.meeshy.ui.format.RelativeTimeLongText
 import me.meeshy.ui.format.rememberRelativeTimeLongStrings
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
-import java.time.Instant
-import java.time.ZoneId
-import java.util.Locale
 
 /** Cible tactile des deux boutons ronds d'une demande reçue. */
 internal val RequestActionSize = 44.dp
@@ -88,7 +86,7 @@ internal fun ReceivedRequestRow(
         modifier = modifier,
     ) {
         RoundRequestAction(
-            icon = Icons.Filled.Close,
+            icon = MeeshyIcons.Close,
             description = stringResource(R.string.contacts_requests_reject_a11y, name),
             background = Modifier.background(MeeshyTheme.tokens.textSecondary.copy(alpha = NEUTRAL_ALPHA)),
             tint = MeeshyTheme.tokens.textSecondary,
@@ -96,7 +94,7 @@ internal fun ReceivedRequestRow(
         )
         Spacer(Modifier.width(8.dp))
         RoundRequestAction(
-            icon = Icons.Filled.Check,
+            icon = MeeshyIcons.Check,
             description = stringResource(R.string.contacts_requests_accept_a11y, name),
             background = Modifier.background(Brush.linearGradient(listOf(MeeshyPalette.Success, MeeshyPalette.SuccessDeep))),
             tint = Color.White,
