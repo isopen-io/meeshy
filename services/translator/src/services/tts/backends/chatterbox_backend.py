@@ -426,7 +426,7 @@ class ChatterboxBackend(BaseTTSBackend):
         Les paramètres non-standards (temperature, repetition_penalty, min_p, top_p)
         sont IGNORÉS car ils causent des troncatures audio.
         """
-        import torchaudio
+        from utils.wav_write import write_wav
 
         # Normaliser le code langue (ex: fr-FR -> fr)
         lang_code = language.split('-')[0].lower() if language else 'en'
@@ -589,7 +589,7 @@ class ChatterboxBackend(BaseTTSBackend):
                 await with_synth_watchdog(
                     loop.run_in_executor(
                         None,
-                        lambda: torchaudio.save(output_path, wav, sample_rate)
+                        lambda: write_wav(output_path, wav, sample_rate)
                     ),
                     timeout_s=DEFAULT_TTS_SAVE_TIMEOUT_S,
                     label=f"{synth_label}:save",
