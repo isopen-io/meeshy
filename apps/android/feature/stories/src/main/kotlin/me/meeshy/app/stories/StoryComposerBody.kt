@@ -124,7 +124,10 @@ private fun SceneFirstFrame(
                 CompositionLocalProvider(LocalPlacedReframe provides placedReframe(edition.placedBand, placed, viewModel)) {
                     Box(modifier) {
                         StoryComposerScene(state, viewModel, comparison, Modifier.fillMaxSize(), capture, captureOffered, zoom)
-                        ComposerSceneInvite(sceneInviteShown(state, armed, panel != null || typing != null || openSheet != null))
+                        ComposerSceneInvite(
+                            shown = sceneInviteShown(state, armed, panel != null || typing != null || openSheet != null),
+                            hint = capture?.offer?.takeIf { captureOffered },
+                        )
                     }
                 }
             },

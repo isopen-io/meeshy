@@ -176,14 +176,37 @@ class SceneCaptureHintClearanceTest {
         assertHintClearsEveryControl(ComposerFormat.STORY, 360.dp, 545.dp)
     }
 
+    private fun invite(): Rect = compose.onNodeWithText(string(R.string.composer_scene_invite)).fetchSemanticsNode().boundsInRoot
+
     @Test
     @Config(sdk = [34], qualifiers = "w411dp-h891dp")
-    fun `the camera line sits in the free middle of the scene, as on iOS`() {
+    fun `the invite and the camera line sit together in the free middle of the scene, as on iOS`() {
         show(ComposerFormat.POST, 411.dp, 846.dp)
         val scene = bounds(canvasLabel(ComposerFormat.POST))
+        val invite = invite()
+        val hint = hint()
+        val block = Rect(minOf(invite.left, hint.left), invite.top, maxOf(invite.right, hint.right), hint.bottom)
+
+        assertThat(block.center.x).isWithin(2f).of(scene.center.x)
+        assertThat(block.center.y).isWithin(2f).of(scene.center.y)
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "fr-w360dp-h740dp")
+    fun `on the S8 the camera line reads under the invite, never on top of it (#16204)`() {
+        show(ComposerFormat.STORY, 360.dp, 545.dp)
+        val invite = invite()
         val hint = hint()
 
-        assertThat(hint.center.x).isWithin(2f).of(scene.center.x)
-        assertThat(hint.center.y).isWithin(2f).of(scene.center.y)
+        assertThat(invite.overlaps(hint)).isFalse()
+        assertThat(hint.top).isAtLeast(invite.bottom)
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "fr-w360dp-h740dp")
+    fun `a post shows the same invite and camera line as the story (#16204)`() {
+        show(ComposerFormat.POST, 360.dp, 545.dp)
+
+        assertThat(invite().overlaps(hint())).isFalse()
     }
 }

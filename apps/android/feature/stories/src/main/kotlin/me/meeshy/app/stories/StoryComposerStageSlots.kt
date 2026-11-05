@@ -151,7 +151,6 @@ internal fun StoryComposerScene(
                 )
             }
             zoom?.let { ViewportZoomResetButton(it, Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 12.dp)) }
-            armsCapture?.offer?.let { offer -> StorySceneCaptureHint(offer) }
             capture?.takeIf { it.armed }?.let { scene -> scene.viewfinder(scene, Modifier.fillMaxSize()) }
     }
     }
