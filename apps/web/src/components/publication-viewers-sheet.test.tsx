@@ -94,31 +94,38 @@ describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => 
     expect(host.querySelector('[data-story-viewer="u-viewer-elan"] [data-story-viewer-marks]')).toBeNull();
   });
 
-  test('toucher une ligne ouvre SON détail, en toutes lettres, avec le lien vers son profil', async () => {
+  test('toucher une ligne ouvre SON détail en feuille PLEIN ÉCRAN, avec en-tête et (<), en toutes lettres et le lien vers son profil (#16386)', async () => {
     const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
     const row = host.querySelector<HTMLButtonElement>('[data-story-viewer="u-viewer-noor"] [data-story-viewer-open]');
     expect(row?.getAttribute('aria-label')).toBe('Voir ce que Noor Haddad a fait');
     row?.click();
     await mounter.settle();
 
-    const detail = host.querySelector('[data-viewer-detail="u-viewer-noor"]');
-    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(0);
+    const sheet = host.querySelector<HTMLDialogElement>('dialog[data-viewer-detail-sheet]');
+    expect(sheet?.getAttribute('data-sheet-presentation')).toBe('fullscreen');
+    expect(sheet?.querySelector('[data-sheet-title]')?.textContent).toBe('Noor Haddad');
+    expect(sheet?.querySelector('[data-sheet-close]')).toBeNull();
+    const back = sheet?.querySelector<HTMLButtonElement>('[data-sheet-back]');
+    expect(back?.getAttribute('aria-label')).toBe('Retour aux vues');
+
+    const detail = sheet?.querySelector('[data-viewer-detail="u-viewer-noor"]');
     expect([...(detail?.querySelectorAll('[data-viewer-detail-mark]') ?? [])].map((mark) => mark.textContent)).toEqual([
       'Réactions : 🔥 ❤️',
       '1 commentaire',
       '2 réponses',
     ]);
     expect(detail?.querySelector<HTMLAnchorElement>('[data-viewer-detail-profile]')?.getAttribute('href')).toBe('/u/noor.haddad');
-    expect(document.activeElement).toBe(detail?.querySelector('[data-viewer-detail-back]') ?? null);
+    expect(detail?.querySelector('[data-viewer-detail-back]')).toBeNull();
   });
 
-  test('« Retour aux vues » rend la liste et le focus à la ligne d’où l’on venait', async () => {
+  test('le chevron (<) referme le détail, rend la liste intacte et le focus à la ligne d’où l’on venait', async () => {
     const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
     host.querySelector<HTMLButtonElement>('[data-story-viewer="u-viewer-elan"] [data-story-viewer-open]')?.click();
     await mounter.settle();
     expect(host.querySelector('[data-viewer-detail-only-viewed]')?.textContent).toBe('A vu, sans autre interaction');
-    host.querySelector<HTMLButtonElement>('[data-viewer-detail-back]')?.click();
+    host.querySelector<HTMLButtonElement>('dialog[data-viewer-detail-sheet] [data-sheet-back]')?.click();
     await mounter.settle();
+    expect(host.querySelector('dialog[data-viewer-detail-sheet]')).toBeNull();
     expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(3);
     expect(document.activeElement).toBe(host.querySelector('[data-story-viewer="u-viewer-elan"] [data-story-viewer-open]'));
   });

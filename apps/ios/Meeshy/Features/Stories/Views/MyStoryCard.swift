@@ -78,7 +78,6 @@ struct MyStoryCard: View {
             MyStoryActionBar(
                 glyphs: MyStoryCardPresentation.glyphs(for: model.kind),
                 counts: model.counts,
-                moreMenu: moreMenu,
                 onSelect: onGlyph
             )
             .equatable()
@@ -113,12 +112,35 @@ struct MyStoryCard: View {
             .overlay(thumbnailLayers)
             .clipped()
             .overlay(alignment: .topTrailing) { selectionBadge }
+            .overlay(alignment: .topTrailing) { moreButton }
             .overlay { saveProgressOverlay }
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
             .accessibilityAddTraits(.isButton)
             .accessibilityAddTraits(selectionIndicator == .selected ? .isSelected : [])
             .accessibilityLabel(thumbnailAccessibilityLabel)
+    }
+
+    /// Le « … » posé SUR la vignette (#16386) : un rond translucide lisible sur
+    /// toute couverture, cible de 44 pt. Son coin appartient à la pastille de
+    /// sélection quand la grille sélectionne.
+    @ViewBuilder
+    private var moreButton: some View {
+        if MyStoryCardPresentation.showsMoreOnThumbnail(hasMenu: moreMenu != nil, isSelecting: isSelecting),
+           let moreMenu {
+            Menu { moreMenu } label: {
+                Image(systemName: MyStoryGlyph.more.systemImage)
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Color.black.opacity(0.45)))
+                    .shadow(color: .black.opacity(0.3), radius: 2)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(MyStoryGlyph.more.accessibilityLabel)
+            .accessibilityIdentifier("myStoryCard.more")
+        }
     }
 
     /// Pastille de sélection — cercle vide (à sélectionner) ou plein avec
