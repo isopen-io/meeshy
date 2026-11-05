@@ -84,4 +84,19 @@ class PostCardImagingTest {
         assertThat(card(handleOnly)?.reply).isEqualTo(PostCommentCardPart("@kofi", "x", "kofi"))
         assertThat(card(anonymous)?.reply).isEqualTo(PostCommentCardPart("Meeshy", "x", null))
     }
+
+    @Test
+    fun `a composed work becomes a card of its served text, its render to come as the media`() {
+        val subject = PostCardImaging.sceneCardOf(author, "  Bonjour  ", createdAtMillis = 42L)
+
+        assertThat(subject.reply).isEqualTo(PostCommentCardPart("Awa Diop", "Bonjour", "awa"))
+        assertThat(subject.quoted).isNull()
+        assertThat(subject.media).isEmpty()
+        assertThat(subject.sentAtMillis).isEqualTo(42L)
+    }
+
+    @Test
+    fun `a composed work without text still images, its render carries it`() {
+        assertThat(PostCardImaging.sceneCardOf(author, "", createdAtMillis = 0L).reply.text).isEmpty()
+    }
 }
