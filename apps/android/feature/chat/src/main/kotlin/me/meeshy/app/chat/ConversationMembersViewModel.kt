@@ -77,7 +77,7 @@ data class ConversationMembersUiState(
         MemberModeration.canRemove(actor = viewerRole, target = member.role, isSelf = isSelf(member))
 
     fun roleActions(member: PaginatedParticipant): List<MemberRoleAction> =
-        MemberModeration.roleActions(actor = viewerRole, target = member.role, isSelf = isSelf(member))
+        MemberModeration.roleActions(actor = viewerRole, target = member.role, isSelf = isSelf(member), hasAccount = member.userId != null)
 
     fun canBan(member: PaginatedParticipant): Boolean =
         MemberModeration.canBan(actor = viewerRole, target = member.role, isSelf = isSelf(member))
@@ -212,7 +212,7 @@ class ConversationMembersViewModel @Inject constructor(
      */
     fun changeRole(member: PaginatedParticipant, action: MemberRoleAction) {
         val id = _state.value.conversationId ?: return
-        val userId = member.userId ?: member.id
+        val userId = MemberModeration.addressKey(member)
         val previous = _state.value.roster
 
         _state.update { it.copy(roster = it.roster.withRole(userId, action.target), actionFailed = false) }
@@ -234,7 +234,7 @@ class ConversationMembersViewModel @Inject constructor(
      */
     fun removeMember(member: PaginatedParticipant) {
         val id = _state.value.conversationId ?: return
-        val userId = member.userId ?: member.id
+        val userId = MemberModeration.addressKey(member)
         val previous = _state.value.roster
 
         _state.update { it.copy(roster = it.roster.withoutUser(userId), actionFailed = false) }
@@ -258,7 +258,7 @@ class ConversationMembersViewModel @Inject constructor(
      */
     fun banMember(member: PaginatedParticipant) {
         val id = _state.value.conversationId ?: return
-        val userId = member.userId ?: member.id
+        val userId = MemberModeration.addressKey(member)
         val previous = _state.value.roster
 
         _state.update { it.copy(roster = it.roster.withoutUser(userId), actionFailed = false) }

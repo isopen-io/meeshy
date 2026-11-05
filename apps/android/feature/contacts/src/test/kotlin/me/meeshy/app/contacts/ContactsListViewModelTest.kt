@@ -51,7 +51,9 @@ class ContactsListViewModelTest {
     }
 
     private val repository: FriendRepository = mockk(relaxed = true)
-    private val listRepository: FriendListRepository = mockk(relaxed = true)
+    private val listRepository: FriendListRepository = mockk(relaxed = true) {
+        coEvery { ticket() } returns null
+    }
 
     private class FixedClock(private val now: Long = 0L) : CacheClock {
         override fun nowMillis(): Long = now
@@ -139,6 +141,67 @@ class ContactsListViewModelTest {
         assertThat(vm.state.value.friends.single().displayName).isEqualTo("Alicia")
         coVerify(exactly = 1) { repository.friendshipGraph(any()) }
         coVerify { listRepository.persist(match { it.single().displayName == "Alicia" }, any()) }
+    }
+
+    @Test
+    fun `a user updated received after an account switch never writes the served roster into the next account (#13560)`() = runTest {
+        val ticketOfA = me.meeshy.sdk.session.AccountTicket(ownerId = "a", generation = 1)
+        val ticketOfB = me.meeshy.sdk.session.AccountTicket(ownerId = "b", generation = 2)
+        coEvery { listRepository.ticket() } returns ticketOfA
+        val updates = MutableSharedFlow<me.meeshy.sdk.model.UserUpdatedEvent>(extraBufferCapacity = 4)
+        val vm = viewModel(
+            received = listOf(accepted("r1", sender = user("alice", displayName = "Alice"))),
+            userUpdates = updates,
+        )
+        coEvery { listRepository.ticket() } returns ticketOfB
+
+        updates.tryEmit(
+            me.meeshy.sdk.model.UserUpdatedEvent(userId = "alice", displayName = "Alicia", username = "alice", hasNameGroup = true),
+        )
+
+        coVerify(exactly = 0) { listRepository.persist(any(), ticketOfB) }
+        coVerify(exactly = 0) { listRepository.persist(match { it.single().displayName == "Alicia" }, any()) }
+        assertThat(vm.state.value.friends.single().displayName).isEqualTo("Alice")
+    }
+
+    @Test
+    fun `a cached roster repainted after an account switch is never written into the next account (#13560)`() = runTest {
+        val ticketOfA = me.meeshy.sdk.session.AccountTicket(ownerId = "a", generation = 1)
+        val ticketOfB = me.meeshy.sdk.session.AccountTicket(ownerId = "b", generation = 2)
+        coEvery { listRepository.ticket() } returns ticketOfA
+        val updates = MutableSharedFlow<me.meeshy.sdk.model.UserUpdatedEvent>(extraBufferCapacity = 4)
+        coEvery { repository.friendshipGraph(any()) } returns NetworkResult.Failure(ApiError("offline"))
+        coEvery { listRepository.cachedSnapshot() } returns listOf(user("alice", displayName = "Alice"))
+        val vm = ContactsListViewModel(
+            repository, listRepository, FriendshipCache(), session(), statusBarCache(), socketManager(),
+            messageSocket = mockk<me.meeshy.sdk.socket.MessageSocketManager> { every { userUpdated } returns updates },
+        )
+        coEvery { listRepository.ticket() } returns ticketOfB
+
+        updates.tryEmit(
+            me.meeshy.sdk.model.UserUpdatedEvent(userId = "alice", displayName = "Alicia", username = "alice", hasNameGroup = true),
+        )
+
+        coVerify(exactly = 0) { listRepository.persist(any(), any()) }
+        assertThat(vm.state.value.friends.single().displayName).isEqualTo("Alice")
+    }
+
+    @Test
+    fun `a cross-screen unfriend after an account switch keeps the ticket the roster was loaded under (#13560)`() = runTest {
+        val ticketOfA = me.meeshy.sdk.session.AccountTicket(ownerId = "a", generation = 1)
+        val ticketOfB = me.meeshy.sdk.session.AccountTicket(ownerId = "b", generation = 2)
+        coEvery { listRepository.ticket() } returns ticketOfA
+        val cache = FriendshipCache()
+        viewModel(
+            received = listOf(accepted("r1", sender = user("alice")), accepted("r2", sender = user("bob"))),
+            cache = cache,
+        )
+        coEvery { listRepository.ticket() } returns ticketOfB
+
+        cache.didRemoveFriend("bob")
+
+        coVerify(exactly = 0) { listRepository.persist(any(), ticketOfB) }
+        coVerify { listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("alice") }, ticketOfA) }
     }
 
     @Test

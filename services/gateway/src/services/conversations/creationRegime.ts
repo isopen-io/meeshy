@@ -21,6 +21,7 @@ import { ObjectId } from 'mongodb';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   IMPLICIT_CREATION_ENCRYPTION_MODE,
+  endToEndSupportsConversationType,
   mayChooseEndToEnd,
   type CreationEncryptionMode,
 } from '@meeshy/shared/utils/conversation-creation-encryption';
@@ -49,7 +50,7 @@ export function decideCreationRegime(request: CreationRegimeRequest): CreationRe
   }
   // Aucun client n'écrit encore dans un groupe chiffré de bout en bout, et le
   // bout en bout ne se quitte pas : un groupe `e2ee` né ici serait muet à jamais.
-  if (request.requestedMode === 'e2ee' && request.conversationType !== 'direct') {
+  if (request.requestedMode === 'e2ee' && !endToEndSupportsConversationType(request.conversationType)) {
     return { kind: 'refused', refusal: 'end-to-end-direct-only' };
   }
   return { kind: 'allowed', mode: request.requestedMode ?? IMPLICIT_CREATION_ENCRYPTION_MODE };

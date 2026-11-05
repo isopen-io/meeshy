@@ -345,7 +345,9 @@ describe('POST /conversations/:conversationId/encryption', () => {
     ['un ANALYST de plateforme créateur du groupe, rôle en minuscules', { role: 'creator', user: { role: 'analyst' } }, 'group'],
   ])('active le chiffrement pour %s (#12517, #12588)', async (_label, member, type) => {
     const app = await buildApp({ conversation: { participants: [{ userId: USER_ID, ...member }], type } });
-    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
+    // #16113 — un groupe ne monte pas en bout en bout : le droit s'y prouve sur un mode au repos.
+    const mode = type === 'group' ? 'hybrid' : 'e2ee';
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode } });
     expect(res.statusCode).toBe(200);
     await app.close();
   });
@@ -480,7 +482,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
   it("pose une clé localisable sur l'avis système, jamais seulement le texte anglais (#7545)", async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group' },
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'direct' },
       senderParticipant: { id: PARTICIPANT_ID },
     });
     const create = (app as unknown as { prisma: { message: { create: jest.Mock } } }).prisma.message.create;
@@ -493,7 +495,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
   it('skips system message creation when senderParticipant is null', async () => {
     const app = await buildApp({
-      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group' },
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'direct' },
       senderParticipant: null,
     });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/encryption`, headers: AUTH, payload: { mode: 'e2ee' } });
@@ -508,8 +510,9 @@ describe('POST /conversations/:conversationId/encryption', () => {
     await app.close();
   });
   describe("diffusion de l'avis aux membres (#11416)", () => {
-    const ADMIN_GROUP = {
-      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'group' },
+    // #16113 — l'avis du bout en bout se prouve sur un tête-à-tête : un groupe ne monte pas en e2ee.
+    const ADMIN_DIRECT = {
+      conversation: { participants: [{ userId: USER_ID, role: 'admin', user: { role: 'ADMIN' } }], type: 'direct' },
       senderParticipant: { id: PARTICIPANT_ID },
     };
     const enable = (app: FastifyInstance) =>
@@ -517,7 +520,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
     it("diffuse l'avis par le chemin ordinaire des messages (message:new + conversation:updated)", async () => {
       const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined);
-      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const app = await buildApp(ADMIN_DIRECT, broadcastMessage);
       const res = await enable(app);
       expect(res.statusCode).toBe(200);
       await new Promise((resolve) => setImmediate(resolve));
@@ -528,7 +531,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
     it("fait de l'avis le dernier message du fil : l'horloge avance sur son createdAt", async () => {
       const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined);
-      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const app = await buildApp(ADMIN_DIRECT, broadcastMessage);
       const update = (app as unknown as { prisma: { conversation: { update: jest.Mock } } }).prisma.conversation.update;
       await enable(app);
       expect(update).toHaveBeenCalledWith(expect.objectContaining({
@@ -539,7 +542,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
     });
 
     it("pose l'avis comme message système, sa clé localisable et son texte de repli anglais (rétrocompatible)", async () => {
-      const app = await buildApp(ADMIN_GROUP, jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined));
+      const app = await buildApp(ADMIN_DIRECT, jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined));
       const create = (app as unknown as { prisma: { message: { create: jest.Mock } } }).prisma.message.create;
       await enable(app);
       expect(create).toHaveBeenCalledWith(expect.objectContaining({
@@ -561,7 +564,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
       const unhandled: unknown[] = [];
       const onUnhandled = (reason: unknown) => unhandled.push(reason);
       process.on('unhandledRejection', onUnhandled);
-      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const app = await buildApp(ADMIN_DIRECT, broadcastMessage);
       const res = await enable(app);
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -576,7 +579,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
       const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockImplementation(() => {
         throw new Error('encoder crash');
       });
-      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const app = await buildApp(ADMIN_DIRECT, broadcastMessage);
       const res = await enable(app);
       expect(res.statusCode).toBe(200);
       await app.close();
@@ -584,7 +587,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
     it("la réponse n'attend pas la diffusion : une émission qui ne finit jamais ne la retient pas", async () => {
       const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockReturnValue(new Promise<void>(() => undefined));
-      const app = await buildApp(ADMIN_GROUP, broadcastMessage);
+      const app = await buildApp(ADMIN_DIRECT, broadcastMessage);
       const res = await enable(app);
       expect(res.statusCode).toBe(200);
       expect(broadcastMessage).toHaveBeenCalledTimes(1);
@@ -593,7 +596,7 @@ describe('POST /conversations/:conversationId/encryption', () => {
 
     it("n'écrit ni ne diffuse aucun avis quand l'acteur n'a pas de ligne Participant active", async () => {
       const broadcastMessage = jest.fn<(message: unknown, conversationId: string) => Promise<void>>().mockResolvedValue(undefined);
-      const app = await buildApp({ ...ADMIN_GROUP, senderParticipant: null }, broadcastMessage);
+      const app = await buildApp({ ...ADMIN_DIRECT, senderParticipant: null }, broadcastMessage);
       const res = await enable(app);
       expect(res.statusCode).toBe(200);
       expect(broadcastMessage).not.toHaveBeenCalled();

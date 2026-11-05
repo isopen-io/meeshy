@@ -442,6 +442,13 @@ internal fun ChatListHost(
             voice = audioPlayer,
             accent = accentColor,
             onDismiss = media::close,
+            actions = me.meeshy.app.chat.audio.rememberChatAudioFullscreenActions(
+                replies = actions.audioFullscreenReplies,
+                actions = actions,
+                state = state,
+                clearance = LocalChatSignalClearance.current,
+                closure = host.composerClosure,
+            ),
         )
         else -> Unit
     }
