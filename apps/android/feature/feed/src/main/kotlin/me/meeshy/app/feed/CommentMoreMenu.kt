@@ -15,12 +15,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.card.PostCommentCardSubject
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -34,16 +33,22 @@ internal class CommentImaging(
 )
 
 /**
- * The « … » of a comment (iOS `CommentMoreMenu`): a 44 dp target that opens Copy text for
- * every comment, Imager when the comment composes a card, and Delete for one's own — in iOS's
- * order. Replaces the 16 dp trash icon that deleted on the first touch.
+ * Le « … » d'un commentaire (iOS `CommentMoreMenu`) : UNE cible de 44 dp, UN menu dont la loi est
+ * [me.meeshy.sdk.model.CommentMenuPolicy] — Copier, Imager, Modifier, Signaler, Supprimer, Retirer, dans l'ordre d'iOS —
+ * et les mêmes entrées en actions personnalisées TalkBack. Sans entrée, aucun bouton.
  */
 @Composable
 internal fun CommentMoreMenu(comment: CommentPresentation, onDelete: (String) -> Unit, imaging: CommentImaging? = null) {
     var expanded by remember { mutableStateOf(false) }
-    val clipboard = LocalClipboardManager.current
+    val haptics = rememberMeeshyHaptics()
+    val entries = rememberCommentMenuEntries(comment, onDelete, imaging)
+    if (entries.isEmpty()) return
     Box {
-        IconButton(onClick = { expanded = true }, enabled = !comment.isPending, modifier = Modifier.size(44.dp)) {
+        IconButton(
+            onClick = { haptics.light(); expanded = true },
+            enabled = !comment.isPending,
+            modifier = Modifier.size(44.dp),
+        ) {
             Icon(
                 imageVector = Icons.Filled.MoreHoriz,
                 contentDescription = stringResource(R.string.post_comments_more_options),
@@ -52,29 +57,12 @@ internal fun CommentMoreMenu(comment: CommentPresentation, onDelete: (String) ->
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.post_comments_copy_text)) },
-                onClick = {
-                    expanded = false
-                    clipboard.setText(AnnotatedString(comment.content))
-                },
-            )
-            val card = imaging?.cardOf?.invoke(comment.id)
-            if (imaging != null && card != null) {
+            entries.forEach { entry ->
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.feed_comment_imagine)) },
+                    text = { Text(entry.label, color = if (entry.destructive) MeeshyPalette.Error else androidx.compose.ui.graphics.Color.Unspecified) },
                     onClick = {
                         expanded = false
-                        imaging.open(comment.id, card)
-                    },
-                )
-            }
-            if (comment.isOwn) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.post_comments_delete_action), color = MeeshyPalette.Error) },
-                    onClick = {
-                        expanded = false
-                        onDelete(comment.id)
+                        entry.run()
                     },
                 )
             }

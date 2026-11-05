@@ -56,6 +56,8 @@ import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.SendFailureClassifier
 import me.meeshy.sdk.outbox.SendResult
+import me.meeshy.sdk.model.comment.CommentEditRequest
+import me.meeshy.sdk.model.comment.CommentEditing
 import me.meeshy.sdk.model.comment.echoReconciled
 import me.meeshy.sdk.model.comment.echoReconciledReply
 import me.meeshy.sdk.model.comment.isOwnQueuedEcho
@@ -65,8 +67,13 @@ import me.meeshy.sdk.post.UnsentComments
 import me.meeshy.sdk.post.CommentGestureQueue
 import me.meeshy.sdk.post.CommentGestureRollback
 import me.meeshy.sdk.post.CommentHeartTransport
+import me.meeshy.sdk.post.CommentEditOutcome
 import me.meeshy.sdk.post.PostCommentsEngine
+import me.meeshy.sdk.post.PostModerationRepository
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.ContentRemovalReason
 import me.meeshy.sdk.post.UnsentCommentStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
@@ -83,65 +90,6 @@ import javax.inject.Inject
  * [CommentProjection], so a francophone reader sees comments in French exactly as the
  * post itself. Replies (`getCommentReplies`) and comment likes are a later slice.
  */
-data class PostCommentsUiState(
-    val comments: List<CommentPresentation> = emptyList(),
-    val replyThreads: Map<String, ReplyThreadUiState> = emptyMap(),
-    val mentionDisplayNames: Map<String, String> = emptyMap(),
-    val draft: String = "",
-    val mention: MentionAutocompleteState = MentionAutocompleteState(),
-    val replyTarget: ReplyTarget? = null,
-    val isLoading: Boolean = false,
-    val isLoadingMore: Boolean = false,
-    val showSkeleton: Boolean = false,
-    val isSubmitting: Boolean = false,
-    val canLoadMore: Boolean = false,
-    val isEmpty: Boolean = false,
-    val errorMessage: String? = null,
-    /** The first page could not load: the section draws « Error loading comments » + Try again. */
-    val loadFailed: Boolean = false,
-    /** A one-shot localized feedback, cleared by [PostCommentsViewModel.consumeNotice]. */
-    val notice: CommentNotice? = null,
-    val translatingLanguages: Set<String> = emptySet(),
-    /** Les pièces jointes au commentaire en cours (#12972). */
-    val attachments: CommentAttachmentTray = CommentAttachmentTray(),
-    /** La langue que montre la pastille du composeur (#14384) : choisie, sinon détectée, sinon celle du lecteur. */
-    val composerLanguageCode: String = ComposerLanguage.DEFAULT,
-    /** Le flou et les effets permanents posés sur le commentaire en cours (#14385). */
-    val effects: MessageEffects = MessageEffects(),
-    /** Le lieu joint au commentaire en cours (#14387) ; il part avec le texte ou une pièce. */
-    val place: SharedPlace? = null,
-) {
-    /** Envoyer : du texte ou une pièce, rien qui se téléverse encore, aucun envoi en vol. */
-    val canSubmit: Boolean get() = (draft.isNotBlank() || attachments.hasMedia) && !attachments.isUploading && !isSubmitting
-}
-
-/**
- * The projected reply thread beneath one top-level comment. When [isExpanded] the full loaded
- * list is shown; when [isPreview] (loaded but collapsed — auto-preloaded, or a manually-collapsed
- * thread falling back to its taste) only the first replies are shown, with [hiddenReplyCount]
- * more available behind a "View all" affordance.
- */
-data class ReplyThreadUiState(
-    val isExpanded: Boolean,
-    val isLoading: Boolean,
-    val replies: List<CommentPresentation>,
-    val isPreview: Boolean = false,
-    val hiddenReplyCount: Int = 0,
-)
-
-/**
- * The composer's active reply context: the *root* [parentId] the reply attaches to (flat
- * 2-level threading) and the targeted comment's [authorName] for the "Replying to …" chip.
- */
-data class ReplyTarget(
-    val parentId: String,
-    val authorName: String?,
-    /** Le commentaire VISÉ (pas sa racine) : l'ancre `comment-<id>` que la liste garde en vue au-dessus du clavier. */
-    val commentId: String? = null,
-    /** Sa première ligne, citée dans la bannière « en réponse à ». */
-    val excerpt: String? = null,
-)
-
 @HiltViewModel
 class PostCommentsViewModel @Inject constructor(
     private val postRepository: PostRepository,
@@ -161,6 +109,8 @@ class PostCommentsViewModel @Inject constructor(
     unsentQueue: UnsentComments? = null,
     private val commentDrafts: CommentDraftStore? = null,
     commentQuotations: CommentQuotationStore? = null,
+    private val reports: ReportRepository? = null,
+    private val moderation: PostModerationRepository? = null,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
@@ -257,7 +207,11 @@ class PostCommentsViewModel @Inject constructor(
             }.combine(composerDraft) { (inputs, replyTarget, langs), draft ->
                 ProjectionBundle(inputs, replyTarget, langs, draft)
             }.combine(translatingLanguages) { bundle, translating ->
-                project(bundle.inputs, bundle.replyTarget, bundle.activeLanguages, bundle.draft, translating)
+                projectComments(
+                    bundle, translating, config.apiBaseUrl,
+                    readerLanguage = ::readerLanguage,
+                    onRoster = mentions::updateRoster,
+                )
             }.combine(attachments) { projected, tray -> projected.copy(attachments = tray) }
                 .collect { projected -> _state.value = projected }
         }
@@ -440,8 +394,7 @@ class PostCommentsViewModel @Inject constructor(
      * post, an unknown/unloaded comment, or an id not currently present.
      */
     private fun onCommentUpdated(comment: ApiPostComment) {
-        thread.update { it.replaced(comment) }
-        replies.update { it.replacedReply(comment) }
+        PostCommentsEngine.applyEcho(thread, replies, comment)
     }
 
     private fun onCommentAdded(comment: ApiPostComment, clientMutationId: String? = null) {
@@ -581,7 +534,7 @@ class PostCommentsViewModel @Inject constructor(
      */
     fun onDraftChange(value: String) {
         composerDraft.update { it.copy(text = value, language = it.language.onDraftChanged(value)) }
-        commentDrafts?.save(postId, value)
+        if (composerDraft.value.editing == null) commentDrafts?.save(postId, value)
         mentions.onTextChange(value)
     }
 
@@ -633,6 +586,7 @@ class PostCommentsViewModel @Inject constructor(
      * the composer draft + mention panel reset for the next comment.
      */
     fun submit() {
+        composerDraft.value.editing?.let { return submitEdit(it) }
         val content = composerDraft.value.text.trim()
         val tray = attachments.value
         if (postId.isBlank() || status.value.isSubmitting) return
@@ -785,6 +739,89 @@ class PostCommentsViewModel @Inject constructor(
         val prefill = ReplyMentionPrefill.apply(composerDraft.value.text, prefilledMention, replyToParentId = null, authorUsername = null)
         prefilledMention = null
         composerDraft.update { it.copy(text = prefill.text) }
+    }
+
+    /** Modifier : le composer charge le texte, les effets, le flou et la LANGUE du commentaire (iOS `beginEditComment`, #6600). */
+    fun beginEdit(commentId: String) {
+        val target = findComment(commentId) ?: return
+        if (postId.isBlank() || target.id in thread.value.pendingIds) return
+        val seed = CommentEditing.seed(target)
+        composer.value = null
+        mentions.reset()
+        composerDraft.value = ComposerDraft(
+            text = seed.text,
+            language = seed.languageCode?.let { ComposerLanguageState().withManualPick(it) } ?: ComposerLanguageState().onDraftReplaced(seed.text),
+            effects = seed.effects,
+            editing = target,
+        )
+    }
+
+    /** La croix du bandeau : retour à la création, le texte effacé. */
+    fun cancelEdit() {
+        if (composerDraft.value.editing == null) return
+        mentions.reset()
+        composerDraft.value = ComposerDraft()
+    }
+
+    private fun submitEdit(target: ApiPostComment) {
+        val draft = composerDraft.value
+        val content = draft.text.trim()
+        if (status.value.isSubmitting || !CommentEditing.canSend(content, hasMedia = !target.media.isNullOrEmpty())) return
+        val request = CommentEditRequest(
+            commentId = target.id,
+            content = content,
+            effectFlags = CommentEditing.wireFlags(draft.effects),
+            originalLanguage = draft.language.display(readerLanguage(sessionRepository.currentUser.value)),
+        )
+        attachments.value.pieces.flatMap { it.owned }.forEach(MediaIntake::release)
+        attachments.value = CommentAttachmentTray()
+        mentions.reset()
+        composerDraft.value = ComposerDraft()
+        viewModelScope.launch {
+            val outcome = PostCommentsEngine.edit(thread, replies, target, request) { sent ->
+                postRepository.updateComment(postId, sent.commentId, sent.content, sent.effectFlags, sent.originalLanguage)
+            }
+            if (outcome is CommentEditOutcome.Refused) status.update { it.copy(notice = CommentNotice.EDIT_FAILED) }
+        }
+    }
+
+    /** Signale le commentaire d'un autre ; le résultat se dit par un toast (iOS `reportComment`). */
+    fun reportComment(commentId: String, reason: ReportReason) {
+        val sender = reports ?: return
+        viewModelScope.launch {
+            val sent = try {
+                sender.reportComment(commentId, reason, null) is NetworkResult.Success
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+            status.update { it.copy(notice = if (sent) CommentNotice.REPORTED else CommentNotice.REPORT_FAILED) }
+        }
+    }
+
+    /** La modération retire le commentaire d'un autre avec un motif : il quitte le fil aussitôt, et revient si la passerelle refuse. */
+    fun removeComment(commentId: String, reason: String) {
+        val moderator = moderation ?: return
+        val clean = ContentRemovalReason.normalized(reason) ?: return
+        if (postId.isBlank() || findComment(commentId) == null) return
+        val threadSnapshot = thread.value
+        val repliesSnapshot = replies.value
+        onCommentDeleted(commentId)
+        viewModelScope.launch {
+            val removed = try {
+                moderator.removeComment(postId, commentId, clean) is NetworkResult.Success
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+            if (!removed) {
+                thread.value = threadSnapshot
+                replies.value = repliesSnapshot
+            }
+            status.update { it.copy(notice = if (removed) CommentNotice.REMOVED else CommentNotice.REMOVE_FAILED) }
+        }
     }
 
     /** Reset the composer text + mention tracking after a send. */
@@ -1105,90 +1142,10 @@ class PostCommentsViewModel @Inject constructor(
         }
     }
 
-    private fun project(
-        inputs: ProjectionInputs,
-        replyTarget: ReplyTarget?,
-        activeLanguages: Map<String, String>,
-        draft: ComposerDraft,
-        translatingLanguages: Set<String>,
-    ): PostCommentsUiState {
-        val thread = inputs.thread
-        val st = inputs.status
-        val likeState = inputs.likes
-        val replyState = inputs.replies
-        val prefs: LanguageResolver.ContentLanguagePreferences = inputs.user ?: EmptyContentPreferences
-        val currentUserId = inputs.user?.id
-        val topLevel = thread.comments.filter { it.parentId.isNullOrBlank() }
-        val rows = topLevel.map {
-            CommentProjection.build(
-                it,
-                prefs,
-                config.apiBaseUrl,
-                isPending = it.id in thread.pendingIds,
-                likeState = likeState,
-                activeLanguageCode = activeLanguages[it.id],
-                currentUserId = currentUserId,
-            )
-        }
-        val replyThreads = topLevel
-            .filter { replyState.isExpanded(it.id) || replyState.isLoaded(it.id) }
-            .associate { comment ->
-                val expanded = replyState.isExpanded(comment.id)
-                val all = replyState.repliesFor(comment.id)
-                val shown = if (expanded) all else all.take(PREVIEW_REPLY_LIMIT)
-                comment.id to ReplyThreadUiState(
-                    isExpanded = expanded,
-                    isLoading = replyState.isLoading(comment.id),
-                    replies = shown.map {
-                        CommentProjection.build(
-                            it,
-                            prefs,
-                            config.apiBaseUrl,
-                            isPending = replyState.isPendingReply(it.id),
-                            likeState = likeState,
-                            activeLanguageCode = activeLanguages[it.id],
-                            currentUserId = currentUserId,
-                            depth = 1,
-                        )
-                    },
-                    isPreview = !expanded && shown.isNotEmpty(),
-                    hiddenReplyCount = (all.size - shown.size).coerceAtLeast(0),
-                )
-            }
-        val allComments = thread.comments + replyState.repliesByParent.values.flatten()
-        val mentionDisplayNames = CommentMentionDirectory.build(allComments)
-        mentions.updateRoster(CommentMentionRoster.build(allComments, excludeUserId = inputs.user?.id))
-        val showSkeleton = st.isLoading && !thread.hasLoaded && thread.comments.isEmpty() && st.error == null
-        return PostCommentsUiState(
-            comments = rows,
-            replyThreads = replyThreads,
-            mentionDisplayNames = mentionDisplayNames,
-            draft = draft.text,
-            mention = draft.mention,
-            replyTarget = replyTarget,
-            isLoading = st.isLoading,
-            isLoadingMore = st.isLoadingMore,
-            showSkeleton = showSkeleton,
-            isSubmitting = st.isSubmitting,
-            canLoadMore = thread.canLoadMore,
-            isEmpty = thread.hasLoaded && thread.comments.isEmpty(),
-            errorMessage = st.error,
-            loadFailed = st.error != null && !st.isLoading && !thread.hasLoaded && thread.comments.isEmpty(),
-            notice = st.notice,
-            translatingLanguages = translatingLanguages,
-            composerLanguageCode = draft.language.display(readerLanguage(inputs.user)),
-            effects = draft.effects,
-            place = draft.place,
-        )
-    }
-
     companion object {
         const val POST_ID_ARG = "postId"
         private const val PAGE_SIZE = 20
         private const val HEART_EMOJI = "❤️"
-
-        /** Replies shown in a collapsed preview before the viewer taps "View all". */
-        private const val PREVIEW_REPLY_LIMIT = 2
 
         /** Top-level comments whose replies auto-preload (mirror of iOS `prefix(5)`). */
         private const val PREVIEW_PRELOAD_LIMIT = 5

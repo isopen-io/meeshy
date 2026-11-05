@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="comment_menu_edit">Edit</string>
+    <string name="comment_menu_report">Report</string>
+    <string name="comment_menu_remove">Remove</string>
+    <string name="comment_menu_cancel_edit">Cancel editing</string>
+    <string name="comment_menu_edit_failed">Couldn\'t edit the comment</string>
+    <string name="comment_menu_report_title">Report this comment</string>
+    <string name="comment_menu_reported">Report sent. Thank you.</string>
+    <string name="comment_menu_report_failed">Couldn\'t send the report</string>
+    <string name="comment_menu_remove_title">Remove this comment?</string>
+    <string name="comment_menu_remove_hint">Reason (required, 3 characters minimum)</string>
+    <string name="comment_menu_removed">Comment removed</string>
+    <string name="comment_menu_remove_failed">Couldn\'t remove the comment</string>
+</resources>
