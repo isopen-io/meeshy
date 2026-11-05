@@ -543,7 +543,6 @@ struct ConversationMediaGalleryView: View {
                 // `activeURL` set → `hasPlayingInlineVideo` stayed true.
                 videoManager.release(urlString: oldAtt.fileUrl)
             }
-            HapticFeedback.light()
         }
 
         if oldID != newID { trackImageOpen(leaving: oldID, entering: newID) }
