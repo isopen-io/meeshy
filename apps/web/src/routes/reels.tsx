@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { ModelPostMenu, type PostMenuHost } from '@/components/feed-post-menu';
+import { imagerReel } from '@/lib/reels/reel-imager';
 import { GlyphSvg, Glyph } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
@@ -499,6 +500,7 @@ export default function ReelsScreen() {
             viewAttribution={viewAttribution}
             chromeHidden={chromeYielded}
             sceneYield={index === active ? sceneYield : 'full'}
+            onImager={imagerReel}
             {...(canWrite ? { onComment: comments.open, onRepost } : { onComment: ask })}
           />
         ))}

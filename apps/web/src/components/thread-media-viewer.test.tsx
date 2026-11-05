@@ -10,7 +10,7 @@ import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
 import type { ActionScope } from '@/lib/view/message-action-scope';
-import { ThreadMediaContext } from '@/lib/view/thread-media-context';
+import { ThreadMediaContext, type ThreadMediaContextValue } from '@/lib/view/thread-media-context';
 import { menuScope } from '@/test-support/menu-viewer';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -115,6 +115,7 @@ function mountThreadGrid(
   onReplyToMedia: (messageId: string, attachmentId: string) => void,
   viewerId = 'u-me',
   actionScope: ActionScope = menuScope({ id: viewerId }),
+  imagerOf?: ThreadMediaContextValue['imagerOf'],
 ): void {
   container = document.createElement('div');
   container.id = 'root';
@@ -124,7 +125,7 @@ function mountThreadGrid(
   act(() => {
     root.render(
       <QueryClientProvider client={client}>
-        <ThreadMediaContext.Provider value={{ viewerId, onReplyToMedia, actionScope }}>
+        <ThreadMediaContext.Provider value={{ viewerId, onReplyToMedia, actionScope, ...(imagerOf === undefined ? {} : { imagerOf }) }}>
           <Attachments
             attachments={opened.attachments as readonly Attachment[]}
             message={opened}
@@ -187,6 +188,30 @@ describe('le fil ouvre la visionneuse conversation-entière (#6303)', () => {
       mime: 'image/jpeg',
       exit: { id: M2, pieces: [{ id: A3 }] },
     });
+  });
+
+  test('#16333 — la baguette du rail referme la visionneuse et IMAGE le message de la pièce regardée', async () => {
+    const imaged: string[] = [];
+    mountThreadGrid(() => {}, 'u-me', menuScope({ id: 'u-me' }), (message) => () => imaged.push(message.id));
+    act(() => {
+      container.querySelectorAll<HTMLButtonElement>('[data-media-tile]')[1]!.click();
+    });
+    await until(() => viewer()?.querySelector('[data-viewer-action="imager"]') != null);
+    act(() => {
+      viewer()!.querySelector<HTMLButtonElement>('[data-viewer-action="imager"]')!.click();
+    });
+    expect(imaged).toEqual([M2]);
+    await until(() => viewer() === null);
+    expect(viewer()).toBeNull();
+  });
+
+  test('#16333 — un message que le fil ne sait pas imager n’a pas de baguette', async () => {
+    mountThreadGrid(() => {}, 'u-me', menuScope({ id: 'u-me' }), () => null);
+    act(() => {
+      container.querySelectorAll<HTMLButtonElement>('[data-media-tile]')[1]!.click();
+    });
+    await until(() => viewer()?.querySelector('[data-viewer-action="reply"]') != null);
+    expect(viewer()!.querySelector('[data-viewer-action="imager"]')).toBeNull();
   });
 
   const openOnSecondTile = async () => {

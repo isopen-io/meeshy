@@ -350,6 +350,10 @@ const THREAD_MENU = [
   'push-pin',
   'prohibit',
   'lock-simple',
+  // L'icône de POST (#16333) : « Composer » ouvre la composition par un carré
+  // et un crayon, miroir de `square.and.pencil` d'iOS. La baguette reste
+  // celle d'« Imager » sur les rails d'actions.
+  'note-pencil',
 ];
 
 emit({

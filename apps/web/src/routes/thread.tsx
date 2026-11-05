@@ -524,7 +524,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * la PIÈCE quand les verdicts du menu l'admettent (#11372) ; valeur STABLE,
    * lue par chaque grille de médias (`Attachments`).
    */
-  const threadMedia = useThreadMediaValue({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia, conversation, actionScope: messageMenu.scope });
+  const threadMedia = useThreadMediaValue({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia, conversation, actionScope: messageMenu.scope, imaging: { messages, menuContextOf: messageMenu.menuContextOf, setExportFor: messageMenu.setExportFor } });
 
   /**
    * LES TROIS SORTIES DU RÉSUMÉ VIVANT (#5695, #7429) — miroir

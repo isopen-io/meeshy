@@ -141,10 +141,10 @@ function hangingFetch(): { readonly calls: () => number } {
 }
 
 describe('useStoryOwnerRail — ce que le plan auteur OFFRE', () => {
-  test('story AVEC média exportable ⇒ Vues, Partager et Enregistrer', () => {
+  test('story AVEC média exportable ⇒ Vues, Imager, Partager et Enregistrer (#16333 : la baguette du rail)', () => {
     probe = mountProbe();
     probe.render(storyOf('st-a'));
-    expect(Object.keys(probe.rail().handlers).sort()).toEqual(['save', 'share', 'views']);
+    expect(Object.keys(probe.rail().handlers).sort()).toEqual(['imager', 'save', 'share', 'views']);
   });
 
   test('story SANS média ⇒ « Vues » seule : Partager et Enregistrer disparaissent ENSEMBLE (Q1)', () => {
@@ -222,6 +222,15 @@ describe('useStoryOwnerRail — « Vues » ouvre la feuille de CETTE story ; « 
     probe = mountProbe(undefined, null, undefined, spy.launcher);
     probe.render({ ...storyOf('st-a'), storyEffects: SCENE });
     act(() => probe?.rail().imager?.());
+    await settle(0);
+    expect(spy.launched.map(({ mode, key }) => ({ mode, key }))).toEqual([{ mode: 'imager', key: 'story:st-a' }]);
+  });
+
+  test('la baguette du rail (#16333) lance le MÊME « Imager » que le menu « … »', async () => {
+    const spy = launcherSpy();
+    probe = mountProbe(undefined, null, undefined, spy.launcher);
+    probe.render({ ...storyOf('st-a'), storyEffects: SCENE });
+    act(() => probe?.rail().handlers.imager?.());
     await settle(0);
     expect(spy.launched.map(({ mode, key }) => ({ mode, key }))).toEqual([{ mode: 'imager', key: 'story:st-a' }]);
   });
@@ -386,7 +395,7 @@ describe('useStoryOwnerRail — une story à SCÈNE s’enregistre composée, te
   test('une story de TEXTE seul offre « Enregistrer » : sa scène se compose', () => {
     probe = mountProbe();
     probe.render({ ...storyOf('st-texte', false), storyEffects: SCENE });
-    expect(Object.keys(probe.rail().handlers).sort()).toEqual(['save', 'share', 'views']);
+    expect(Object.keys(probe.rail().handlers).sort()).toEqual(['imager', 'save', 'share', 'views']);
   });
 
   test('« Enregistrer » passe par la composition, avec le Prisme du lecteur, et l’annonce', async () => {
