@@ -59,6 +59,4 @@ extension ComposerSceneSurface {
         ComposerFriseRail(plateauTint: plateauTint, onTime: onTimeButton, timeIsOpen: timeIsOpen,
                           reservesUndo: onUndo != nil, reservesRedo: onRedo != nil)
     }
-
-    @ViewBuilder
 }

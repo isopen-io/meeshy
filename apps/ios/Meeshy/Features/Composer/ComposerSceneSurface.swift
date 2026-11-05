@@ -907,6 +907,7 @@ struct ComposerSceneSurface: View {
         }
     }
 
+    @ViewBuilder
     var composingFloors: some View {
         ZStack(alignment: .bottom) {
             // Sur grand écran, les rails se CENTRENT en hauteur (maquette
