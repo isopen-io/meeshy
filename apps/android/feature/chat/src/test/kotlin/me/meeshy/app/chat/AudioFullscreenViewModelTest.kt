@@ -123,6 +123,18 @@ class AudioFullscreenViewModelTest {
     }
 
     @Test
+    fun `sur une piste traduite l appareil reconnait la langue que la piste parle`() = runTest {
+        val rig = Rig()
+        coEvery { rig.transcriber.transcribe(any(), any()) } returns heard()
+        val english = source().copy(url = "https://cdn.meeshy.me/a-en.m4a", trackLanguage = "en", isTranslatedTrack = true)
+
+        rig.viewModel.transcribeOnDevice(english)
+
+        coVerify(exactly = 1) { rig.transcriber.transcribe("/cache/a.m4a", "en") }
+        coVerify(exactly = 0) { rig.transcriber.transcribe(any(), "fr") }
+    }
+
+    @Test
     fun `une demande locale en cours n est pas relancee`() = runTest {
         val rig = Rig()
         val gate = CompletableDeferred<Unit>()
