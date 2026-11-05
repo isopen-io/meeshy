@@ -23,6 +23,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageEffectsEncoder
 import me.meeshy.sdk.model.MessageSticker
+import me.meeshy.sdk.model.send.AttachmentRightRefusal
 import me.meeshy.sdk.model.send.MessageRelation
 import me.meeshy.sdk.model.send.OutgoingAttachments
 import me.meeshy.sdk.model.send.OutgoingMessage
@@ -239,11 +240,12 @@ internal class MessageSendCoordinator(
     /**
      * The outbox exhausted its retries — surface the bubble as retryable. A send refused because a media's
      * location cannot be removed ([MediaLocationRefusal], #13550), or whose media was lost on the device ([MediaLoss], #13554),
-     * keeps that reason on the bubble, which says it.
+     * keeps that reason on the bubble, which says it. So does a send refused for its attachment right ([AttachmentRightRefusal],
+     * #16053) — but that bubble stays retryable by hand: the right may come.
      */
     suspend fun markSendFailed(cmid: String, reason: String? = null) {
         val row = messageDao.find(cmid)
-        if (row == null || !isDefinitive(reason)) {
+        if (row == null || !(isDefinitive(reason) || AttachmentRightRefusal.isReason(reason))) {
             messageDao.updateSendState(cmid, LocalSendState.FAILED.name)
             return
         }

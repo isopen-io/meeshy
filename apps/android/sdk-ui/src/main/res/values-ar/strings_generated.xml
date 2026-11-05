@@ -99,6 +99,7 @@
     <string name="bubble_contact_card_on_meeshy">على Meeshy</string>
     <string name="bubble_contact_card_shared">جهة اتصال مشتركة</string>
     <string name="bubble_edited">معدَّلة</string>
+    <string name="bubble_failed_attachment_right">لا يمكنك بعد إرسال هذا النوع من المرفقات في هذه المحادثة.</string>
     <string name="bubble_footer_translation_request">طلب الترجمة</string>
     <string name="bubble_forwarded">تمت إعادة التوجيه</string>
     <string name="bubble_forwarded_from">تمت إعادة التوجيه من %1$s</string>

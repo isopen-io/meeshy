@@ -93,6 +93,7 @@
     <string name="bubble_contact_card_on_meeshy">En Meeshy</string>
     <string name="bubble_contact_card_shared">Contacto compartido</string>
     <string name="bubble_edited">editado</string>
+    <string name="bubble_failed_attachment_right">Aún no puedes enviar este tipo de archivo adjunto en esta conversación.</string>
     <string name="bubble_footer_translation_request">Solicitar traducción</string>
     <string name="bubble_forwarded">Reenviado</string>
     <string name="bubble_forwarded_from">Reenviado desde %1$s</string>
