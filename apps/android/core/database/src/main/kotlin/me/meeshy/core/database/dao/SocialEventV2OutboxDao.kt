@@ -37,9 +37,15 @@ public abstract class SocialEventV2OutboxDao {
         trim(row.owner, MAX_PER_OWNER)
     }
 
-    /** Les plus anciens d'abord, au plus [limit]. */
-    @Query("SELECT * FROM social_events_v2_outbox WHERE owner = :owner ORDER BY createdAt ASC, eventId ASC LIMIT :limit")
-    public abstract suspend fun oldest(owner: String, limit: Int): List<SocialEventV2OutboxEntity>
+    /** Les plus anciens d'abord, au plus [limit], sans jamais rendre une ligne de plus de 72 h à l'instant [now]. */
+    public suspend fun oldest(owner: String, limit: Int, now: Long): List<SocialEventV2OutboxEntity> =
+        oldestSince(owner, limit, now - RETENTION_MILLIS)
+
+    @Query(
+        "SELECT * FROM social_events_v2_outbox WHERE owner = :owner AND createdAt >= :cutoff " +
+            "ORDER BY createdAt ASC, eventId ASC LIMIT :limit",
+    )
+    protected abstract suspend fun oldestSince(owner: String, limit: Int, cutoff: Long): List<SocialEventV2OutboxEntity>
 
     @Query("SELECT COUNT(*) FROM social_events_v2_outbox WHERE owner = :owner")
     public abstract suspend fun count(owner: String): Int

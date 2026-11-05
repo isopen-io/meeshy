@@ -41,7 +41,7 @@ class SocialEventV2OutboxDaoTest {
         dao.enqueue(row("e1", 100), now = 100)
 
         assertThat(dao.count("acc")).isEqualTo(1)
-        assertThat(dao.oldest("acc", 10).single().payload).isEqualTo("{\"id\":\"e1\"}")
+        assertThat(dao.oldest("acc", 10, now = 100).single().payload).isEqualTo("{\"id\":\"e1\"}")
     }
 
     @Test
@@ -49,7 +49,7 @@ class SocialEventV2OutboxDaoTest {
         (1..5_002).forEach { dao.enqueue(row("e$it", it.toLong()), now = it.toLong()) }
 
         assertThat(dao.count("acc")).isEqualTo(5_000)
-        assertThat(dao.oldest("acc", 1).single().eventId).isEqualTo("e3")
+        assertThat(dao.oldest("acc", 1, now = 5_002).single().eventId).isEqualTo("e3")
     }
 
     @Test
@@ -61,7 +61,7 @@ class SocialEventV2OutboxDaoTest {
 
         dao.enqueue(row("new", now), now = now)
 
-        assertThat(dao.oldest("acc", 10).map { it.eventId }).containsExactly("limit", "new").inOrder()
+        assertThat(dao.oldest("acc", 10, now = now).map { it.eventId }).containsExactly("limit", "new").inOrder()
         assertThat(dao.count("other")).isEqualTo(1)
     }
 
@@ -81,7 +81,27 @@ class SocialEventV2OutboxDaoTest {
     fun `les lignes d'un compte ne sont jamais rendues pour un autre`() = runTest {
         dao.enqueue(row("e1", 1), now = 1)
 
-        assertThat(dao.oldest("other", 10)).isEmpty()
+        assertThat(dao.oldest("other", 10, now = 1)).isEmpty()
+    }
+
+    @Test
+    fun `un meme identifiant enfile par deux comptes garde une ligne pour chacun`() = runTest {
+        dao.enqueue(row("e1", 1, owner = "acc"), now = 1)
+        dao.enqueue(row("e1", 2, owner = "other"), now = 2)
+
+        assertThat(dao.count("acc")).isEqualTo(1)
+        assertThat(dao.count("other")).isEqualTo(1)
+        assertThat(dao.oldest("acc", 10, now = 2).single().createdAt).isEqualTo(1)
+    }
+
+    @Test
+    fun `une ligne de plus de 72 heures n'est jamais rendue a l'envoi meme avant sa purge`() = runTest {
+        val now = 100 * HOUR
+        dao.enqueue(row("old", now - 73 * HOUR), now = now - 73 * HOUR)
+        dao.enqueue(row("limit", now - 72 * HOUR), now = now - 72 * HOUR)
+        dao.enqueue(row("fresh", now - HOUR), now = now - HOUR)
+
+        assertThat(dao.oldest("acc", 10, now = now).map { it.eventId }).containsExactly("limit", "fresh").inOrder()
     }
 
     @Test
@@ -89,9 +109,11 @@ class SocialEventV2OutboxDaoTest {
         dao.enqueue(row("e1", 1), now = 1)
         dao.enqueue(row("e2", 2), now = 2)
         dao.enqueue(row("e1", 1, owner = "other"), now = 2)
+        assertThat(dao.count("acc")).isEqualTo(2)
 
         dao.delete("acc", listOf("e1"))
-        assertThat(dao.oldest("acc", 10).map { it.eventId }).containsExactly("e2")
+        assertThat(dao.oldest("acc", 10, now = 2).map { it.eventId }).containsExactly("e2")
+        assertThat(dao.oldest("other", 10, now = 2).map { it.eventId }).containsExactly("e1")
 
         dao.deleteOwner("acc")
         assertThat(dao.count("acc")).isEqualTo(0)

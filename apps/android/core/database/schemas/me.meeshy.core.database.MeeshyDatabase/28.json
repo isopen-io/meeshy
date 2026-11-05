@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 28,
-    "identityHash": "3f7b66f6b4975b2df27d6e70d267520e",
+    "identityHash": "60363b4334566ca61ff289547855919b",
     "entities": [
       {
         "tableName": "conversations",
@@ -1710,7 +1710,7 @@
       },
       {
         "tableName": "pending_counting_events",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventId` TEXT NOT NULL, `owner` TEXT NOT NULL, `queueKey` TEXT NOT NULL, `kind` TEXT NOT NULL, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`eventId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventId` TEXT NOT NULL, `owner` TEXT NOT NULL, `queueKey` TEXT NOT NULL, `kind` TEXT NOT NULL, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`owner`, `eventId`))",
         "fields": [
           {
             "fieldPath": "eventId",
@@ -1752,6 +1752,7 @@
         "primaryKey": {
           "autoGenerate": false,
           "columnNames": [
+            "owner",
             "eventId"
           ]
         },
@@ -1772,7 +1773,7 @@
       },
       {
         "tableName": "social_events_v2_outbox",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventId` TEXT NOT NULL, `owner` TEXT NOT NULL, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`eventId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`eventId` TEXT NOT NULL, `owner` TEXT NOT NULL, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`owner`, `eventId`))",
         "fields": [
           {
             "fieldPath": "eventId",
@@ -1802,6 +1803,7 @@
         "primaryKey": {
           "autoGenerate": false,
           "columnNames": [
+            "owner",
             "eventId"
           ]
         },
@@ -1855,7 +1857,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3f7b66f6b4975b2df27d6e70d267520e')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '60363b4334566ca61ff289547855919b')"
     ]
   }
 }

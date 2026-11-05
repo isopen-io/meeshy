@@ -125,17 +125,17 @@ internal object CacheTables {
         indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_call_transcript_callId_capturedAt` ON `call_transcript` (`callId`, `capturedAt`)"),
     )
 
-    /** Version 28 : les comptages (vue, impression, ouverture, durée) en attente d'envoi, une ligne par événement. */
+    /** Version 28 : les comptages (vue, impression, ouverture, durée) en attente d'envoi, une ligne par (compte, événement). */
     val pendingCountingEvents = CacheTableDefinition(
         name = "pending_counting_events",
-        createSql = "CREATE TABLE IF NOT EXISTS `pending_counting_events` (`eventId` TEXT NOT NULL, `owner` TEXT NOT NULL, `queueKey` TEXT NOT NULL, `kind` TEXT NOT NULL, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`eventId`))",
+        createSql = "CREATE TABLE IF NOT EXISTS `pending_counting_events` (`eventId` TEXT NOT NULL, `owner` TEXT NOT NULL, `queueKey` TEXT NOT NULL, `kind` TEXT NOT NULL, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`owner`, `eventId`))",
         indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_pending_counting_events_owner_queueKey_createdAt` ON `pending_counting_events` (`owner`, `queueKey`, `createdAt`)"),
     )
 
-    /** Version 28 : les événements sociaux v2 en attente d'envoi, conservés tels quels. */
+    /** Version 28 : les événements sociaux v2 en attente d'envoi, conservés tels quels, une ligne par (compte, événement). */
     val socialEventsV2Outbox = CacheTableDefinition(
         name = "social_events_v2_outbox",
-        createSql = "CREATE TABLE IF NOT EXISTS `social_events_v2_outbox` (`eventId` TEXT NOT NULL, `owner` TEXT NOT NULL, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`eventId`))",
+        createSql = "CREATE TABLE IF NOT EXISTS `social_events_v2_outbox` (`eventId` TEXT NOT NULL, `owner` TEXT NOT NULL, `payload` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`owner`, `eventId`))",
         indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_social_events_v2_outbox_owner_createdAt` ON `social_events_v2_outbox` (`owner`, `createdAt`)"),
     )
 

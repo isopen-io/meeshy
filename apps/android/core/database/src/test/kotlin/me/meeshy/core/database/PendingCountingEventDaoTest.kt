@@ -79,15 +79,27 @@ class PendingCountingEventDaoTest {
     }
 
     @Test
+    fun `un meme identifiant enfile par deux comptes garde une ligne pour chacun`() = runTest {
+        dao.enqueue(event("e1", 1, owner = "acc"))
+        dao.enqueue(event("e1", 2, owner = "other"))
+
+        assertThat(dao.count("acc", "feed")).isEqualTo(1)
+        assertThat(dao.count("other", "feed")).isEqualTo(1)
+        assertThat(dao.oldest("acc", "feed", 10).single().createdAt).isEqualTo(1)
+    }
+
+    @Test
     fun `supprimer un paquet envoye ne retire que ces evenements de ce compte`() = runTest {
         dao.enqueue(event("e1", 1))
         dao.enqueue(event("e2", 2))
         dao.enqueue(event("e1", 1, owner = "other"))
 
+        assertThat(dao.count("acc", "feed")).isEqualTo(2)
+
         dao.delete("acc", listOf("e1"))
 
         assertThat(dao.oldest("acc", "feed", 10).map { it.eventId }).containsExactly("e2")
-        assertThat(dao.count("other", "feed")).isEqualTo(1)
+        assertThat(dao.oldest("other", "feed", 10).map { it.eventId }).containsExactly("e1")
     }
 
     @Test
