@@ -70,7 +70,7 @@ final class MediaCaptionCollectionTests: XCTestCase {
 
         XCTAssertEqual(store.alt(for: "media-1"), "Une foule dense sous des parasols")
         XCTAssertEqual(store.caption(for: "media-1"), "Le marché de Yaoundé, 6 h")
-        XCTAssertEqual(store.mediaAltPayload(), ["media-1": "Une foule dense sous des parasols"])
+        XCTAssertEqual(store.payload(.alt), ["media-1": "Une foule dense sous des parasols"])
         XCTAssertEqual(store.mediaCaptionPayload(), ["media-1": "Le marché de Yaoundé, 6 h"])
     }
 
@@ -82,7 +82,7 @@ final class MediaCaptionCollectionTests: XCTestCase {
         store.setAlt("alt", for: "media-1")
         store.setCaption("légende", for: "media-1")
         store.remove(mediaId: "media-1")
-        XCTAssertNil(store.mediaAltPayload())
+        XCTAssertNil(store.payload(.alt))
         XCTAssertNil(store.mediaCaptionPayload())
     }
 

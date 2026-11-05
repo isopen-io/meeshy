@@ -37,7 +37,7 @@ final class MediaAltCollectionTests: XCTestCase {
         store.setAlt("Un texte", for: "media-1")
         store.setAlt("", for: "media-1")
         XCTAssertEqual(store.alt(for: "media-1"), "")
-        XCTAssertNil(store.mediaAltPayload())
+        XCTAssertNil(store.payload(.alt))
     }
 
     /// `test_setAlt_clampsToMaxLength` rougit si le clamp
@@ -52,21 +52,21 @@ final class MediaAltCollectionTests: XCTestCase {
         XCTAssertEqual(store.alt(for: "media-1").count, MediaAccessibilityStore.maxAltLength)
     }
 
-    /// `test_mediaAltPayload_isNilWhenNoEntriesSet` rougit si
-    /// `mediaAltPayload()` renvoie un dictionnaire vide au lieu de `nil` :
+    /// `test_altPayload_isNilWhenNoEntriesSet` rougit si
+    /// `payload(.alt)` renvoie un dictionnaire vide au lieu de `nil` :
     /// un payload vide et une absence de payload sont deux signaux
     /// différents pour `PostService.create(… mediaAlt:)`.
-    func test_mediaAltPayload_isNilWhenNoEntriesSet() {
+    func test_altPayload_isNilWhenNoEntriesSet() {
         let store = MediaAccessibilityStore()
-        XCTAssertNil(store.mediaAltPayload())
+        XCTAssertNil(store.payload(.alt))
     }
 
-    /// `test_mediaAltPayload_includesOnlyTouchedMedia` rougit si le payload
+    /// `test_altPayload_includesOnlyTouchedMedia` rougit si le payload
     /// inclut un média qui n'a jamais été touché.
-    func test_mediaAltPayload_includesOnlyTouchedMedia() {
+    func test_altPayload_includesOnlyTouchedMedia() {
         let store = MediaAccessibilityStore()
         store.setAlt("Un chat", for: "media-1")
-        let payload = store.mediaAltPayload()
+        let payload = store.payload(.alt)
         XCTAssertEqual(payload, ["media-1": "Un chat"])
     }
 
@@ -78,7 +78,7 @@ final class MediaAltCollectionTests: XCTestCase {
         store.setAlt("Un texte", for: "media-1")
         store.remove(mediaId: "media-1")
         XCTAssertEqual(store.alt(for: "media-1"), "")
-        XCTAssertNil(store.mediaAltPayload())
+        XCTAssertNil(store.payload(.alt))
     }
 
     // MARK: - Gardes de source — le champ EST accessible, pas seulement persisté
@@ -172,31 +172,6 @@ final class MediaAltCollectionTests: XCTestCase {
         XCTAssertTrue(keyed.isEmpty)
     }
 
-    // MARK: - Gardes POSITIVES : la charge a un appelant, et il publie
-
-    /// `test_mediaAltPayload_hasAtLeastOneProductionCaller` rougit si le
-    /// snapshot redevient orphelin.
-    ///
-    /// Formulée en POSITIF (« au moins un appelant ») et non en négatif : une
-    /// garde qui vérifierait l'ABSENCE d'un motif interdit resterait verte le
-    /// jour où le motif change de nom, et c'est exactement l'état mesuré avant
-    /// ce lot — `mediaAltPayload()` compilait, était testé, et n'était appelé
-    /// par personne.
-    func test_mediaAltPayload_hasAtLeastOneProductionCaller() throws {
-        let callers = try ComposerSourceGuard.allStorySources()
-            .filter { $0.path != "Controls/MediaAccessibilityStore.swift" }
-            .filter { $0.code.contains("mediaAltPayload()") }
-            .map { $0.path }
-
-        XCTAssertFalse(
-            callers.isEmpty,
-            """
-            `mediaAltPayload()` n'a AUCUN appelant hors de sa propre déclaration : \
-            le texte alternatif se saisit, se conserve, et ne part nulle part.
-            """
-        )
-    }
-
     // MARK: - F2 — la collecte SURVIT à la fermeture du composer
 
     /// `test_draftSnapshot_carriesTheTypedAltText` rougit si l'instantané que
@@ -227,7 +202,7 @@ final class MediaAltCollectionTests: XCTestCase {
         store.restore(from: StoryDraftAccessibility(mediaAlt: ["media-1": "Une plage au couchant"]))
 
         XCTAssertEqual(store.alt(for: "media-1"), "Une plage au couchant")
-        XCTAssertEqual(store.mediaAltPayload(), ["media-1": "Une plage au couchant"])
+        XCTAssertEqual(store.payload(.alt), ["media-1": "Une plage au couchant"])
     }
 
     /// `test_restore_replacesTheCollectionRatherThanMergingIntoIt` rougit si
@@ -242,7 +217,7 @@ final class MediaAltCollectionTests: XCTestCase {
         store.restore(from: StoryDraftAccessibility(mediaAlt: ["media-1": "Une plage au couchant"]))
 
         XCTAssertEqual(store.alt(for: "media-9"), "")
-        XCTAssertEqual(store.mediaAltPayload(), ["media-1": "Une plage au couchant"])
+        XCTAssertEqual(store.payload(.alt), ["media-1": "Une plage au couchant"])
     }
 
     /// `test_restore_clampsAltTextToTheTransportLimit` rougit si la reprise

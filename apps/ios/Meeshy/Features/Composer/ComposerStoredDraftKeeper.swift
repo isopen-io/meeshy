@@ -35,6 +35,10 @@ nonisolated enum ComposerStoredDraftScope {
 @MainActor
 final class ComposerStoredDraftKeeper: ObservableObject {
 
+    // iOS 26.1 : deinit synthétisée isolée → double-free au démontage hors tâche.
+    // Garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
+
     typealias Capture = @MainActor () -> StoryStoredDraftFrame
 
     private let store: StoryDraftStore
