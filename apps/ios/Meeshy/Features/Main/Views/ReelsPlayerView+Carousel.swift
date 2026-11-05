@@ -76,24 +76,8 @@ struct ReelImageView: View {
     }
 
     private var dots: some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            ForEach(images) { media in
-                Circle()
-                    .fill(Color.white.opacity(media.id == currentImageId ? 0.95 : 0.4))
-                    .frame(width: 6, height: 6)
-            }
-        }
-        // Decorative dots → expose the position to VoiceOver ("2 / 5") instead of
-        // announcing each anonymous circle.
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "reels.carousel.image", defaultValue: "Image", bundle: .main))
-        // Le séparateur « / » reste : sa forme EST la donnée (« 3 / 10 » se lit
-        // comme une seule position), et 239i l'a explicitement distingué de la
-        // puce de mise en page qu'elle bannissait. Seuls les CHIFFRES changent.
-        .accessibilityValue(
-            LocalizedNumber.exact((images.firstIndex { $0.id == currentImageId } ?? 0) + 1)
-            + " / " + LocalizedNumber.exact(images.count)
-        )
+        ReelMediaDots(total: images.count,
+                      currentIndex: images.firstIndex { $0.id == currentImageId } ?? 0)
     }
 }
 
@@ -218,37 +202,57 @@ struct ReelImageBackdrop: View, Equatable {
     }
 }
 
-// MARK: - Reel Media Count Badge
+// MARK: - Reel Media Indicator
 
-/// **La pastille qui dit qu'un réel porte PLUSIEURS médias — et qui y mène**
-/// (#4927).
+/// **Ce qui dit qu'un réel porte PLUSIEURS médias — une seule fois** (#16321).
 ///
-/// ## Le défaut qu'elle ferme
-///
-/// `mediaLayer` aiguille sur le type du média PRIMAIRE, et
-/// `primaryReelDisplayMedia` préfère la vidéo. Un réel « une vidéo + deux
-/// photos » rendait donc `ReelVideoView(media:)` — **une seule pièce** — et les
-/// deux photos n'avaient aucun chemin, nulle part. Le chemin IMAGE, lui, avait
-/// déjà son carrousel : le trou ne concernait que les réels MIXTES, ce qui le
-/// rendait invisible à une lecture rapide du fichier.
-///
-/// > Ce n'est pas un contrôle inerte — le lecteur fait exactement ce qu'il dit.
-/// > C'est plus discret : un auteur publie trois médias, deux ne sont servis à
-/// > personne, et rien dans l'app ne le signale.
-///
-/// ## Pourquoi une pastille, et pas un geste
-///
-/// Le réel a déjà ses quatre gestes (tap, appui long, glissement vertical vers
-/// le réel suivant, glissement horizontal du carrousel d'images). En ajouter un
-/// cinquième obligerait à en déplacer un autre — la directive demande d'ATTEINDRE
-/// les autres médias, pas de renégocier l'idiome du format.
-///
-/// La pastille reprend le vocabulaire du fil (`FeedPostCardCarousel.counter` :
-/// « 1 / 3 », capsule noire translucide, chiffres monospacés) parce que c'est le
-/// même fait montré au même endroit — coin haut, sur le média. Elle est en
-/// revanche TAPABLE, là où celle du fil est décorative : ici, elle est le seul
-/// chemin.
-struct ReelMediaCountBadge: View {
+/// Le carrousel d'images dessine ses points ; la pastille « 2 / 3 » posée au
+/// coin haut redisait le même fait (recette porteur du 2026-11-05). Un réel
+/// élit donc UN indicateur : les points du carrousel quand le carrousel les
+/// dessine, des points TAPABLES menant à la galerie quand le média affiché
+/// n'en a pas (réel mixte dont la vidéo gagne, réel composé), rien pour un
+/// seul média — loi 4 : un contrôle sans effet est absent.
+enum ReelMediaIndicator: Equatable {
+    case none
+    case carouselDots
+    case galleryDots(total: Int, currentIndex: Int)
+
+    static func resolve(isScene: Bool, primaryType: FeedMediaType?,
+                        visualCount: Int, currentIndex: Int) -> ReelMediaIndicator {
+        guard visualCount > 1 else { return .none }
+        if !isScene && primaryType == .image { return .carouselDots }
+        return .galleryDots(total: visualCount, currentIndex: min(max(currentIndex, 0), visualCount - 1))
+    }
+}
+
+/// Les points ○ ○ ○ d'un réel, site UNIQUE de leur dessin : le carrousel et
+/// le chemin vers la galerie montrent la même chose de la même façon.
+struct ReelMediaDots: View {
+    let total: Int
+    let currentIndex: Int
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            ForEach(0..<total, id: \.self) { index in
+                Circle()
+                    .fill(Color.white.opacity(index == currentIndex ? 0.95 : 0.4))
+                    .frame(width: 6, height: 6)
+            }
+        }
+        // Decorative dots → expose the position to VoiceOver ("2 / 5") instead of
+        // announcing each anonymous circle. Le séparateur « / » reste pour
+        // VoiceOver seul : sa forme EST la donnée (239i).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "reels.carousel.image", defaultValue: "Image", bundle: .main))
+        .accessibilityValue(LocalizedNumber.exact(currentIndex + 1) + " / " + LocalizedNumber.exact(total))
+    }
+}
+
+/// **Le chemin vers les AUTRES médias d'un réel mixte** (#4927), dessiné en
+/// points depuis #16321. `mediaLayer` aiguille sur le média primaire — la
+/// vidéo gagne — donc un réel « une vidéo + deux photos » ne servait jamais
+/// les photos : ces points sont leur seul chemin, d'où le bouton.
+struct ReelMediaGalleryDots: View {
 
     let total: Int
     let currentIndex: Int
@@ -256,15 +260,13 @@ struct ReelMediaCountBadge: View {
 
     var body: some View {
         Button(action: action) {
-            Text("\(currentIndex + 1) / \(total)")
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
-                .foregroundColor(MeeshyColors.mediaChromeForeground)
+            ReelMediaDots(total: total, currentIndex: currentIndex)
+                .accessibilityHidden(true)
                 .padding(.horizontal, MeeshySpacing.smPlus)
-                .padding(.vertical, MeeshySpacing.xs)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(Capsule().fill(MeeshyColors.mediaScrim))
-                // La capsule mesure ~28 pt de haut : le cadre porte la cible à
-                // 44 pt sans épaissir le dessin, la zone tactile débordant
-                // au-dessus et au-dessous de ce qui est peint.
+                // La capsule est fine : le cadre porte la cible à 44 pt sans
+                // épaissir le dessin.
                 .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .contentShape(Rectangle())
         }
