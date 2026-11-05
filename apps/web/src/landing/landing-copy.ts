@@ -18,6 +18,8 @@ export type LandingCopy = {
   readonly navHow: string;
   readonly navWorld: string;
   readonly navFaq: string;
+  /** Le lien de l'en-tête vers `/download` (#16407) — court : il partage la rangée de « Mes conversations » sur téléphone. */
+  readonly navDownload: string;
   readonly languageLabel: string;
   readonly myConversations: string;
   readonly presence: string;
@@ -77,6 +79,7 @@ const fr: LandingCopy = {
   navHow: 'Comment ça marche',
   navWorld: 'World Wide',
   navFaq: 'FAQ',
+  navDownload: 'Télécharger',
   languageLabel: "Langue de l'interface",
   myConversations: 'Mes conversations',
   presence: '{count} personnes dans World Wide',
@@ -139,6 +142,7 @@ const en: LandingCopy = {
   navHow: 'How it works',
   navWorld: 'World Wide',
   navFaq: 'FAQ',
+  navDownload: 'Download',
   languageLabel: 'Interface language',
   myConversations: 'My conversations',
   presence: '{count} people in World Wide',
@@ -201,6 +205,7 @@ const es: LandingCopy = {
   navHow: 'Cómo funciona',
   navWorld: 'World Wide',
   navFaq: 'Preguntas frecuentes',
+  navDownload: 'Descargar',
   languageLabel: 'Idioma de la interfaz',
   myConversations: 'Mis conversaciones',
   presence: '{count} personas en World Wide',
@@ -263,6 +268,7 @@ const pt: LandingCopy = {
   navHow: 'Como funciona',
   navWorld: 'World Wide',
   navFaq: 'Perguntas frequentes',
+  navDownload: 'Baixar',
   languageLabel: 'Idioma da interface',
   myConversations: 'Minhas conversas',
   presence: '{count} pessoas no World Wide',
@@ -325,6 +331,7 @@ const de: LandingCopy = {
   navHow: "So funktioniert's",
   navWorld: 'World Wide',
   navFaq: 'FAQ',
+  navDownload: 'Download',
   languageLabel: 'Sprache der Oberfläche',
   myConversations: 'Meine Unterhaltungen',
   presence: '{count} Personen in World Wide',
@@ -387,6 +394,7 @@ const it: LandingCopy = {
   navHow: 'Come funziona',
   navWorld: 'World Wide',
   navFaq: 'FAQ',
+  navDownload: 'Scarica',
   languageLabel: "Lingua dell'interfaccia",
   myConversations: 'Le mie conversazioni',
   presence: '{count} persone in World Wide',
@@ -449,6 +457,7 @@ const ar: LandingCopy = {
   navHow: 'كيف يعمل',
   navWorld: 'World Wide',
   navFaq: 'الأسئلة الشائعة',
+  navDownload: 'تنزيل',
   languageLabel: 'لغة الواجهة',
   myConversations: 'محادثاتي',
   presence: '{count} شخصًا في World Wide',

@@ -1,7 +1,14 @@
+import { APP_STORE_URL, GOOGLE_PLAY_URL } from '@/lib/store-links';
+
 /**
  * LES LOGOS DES DEUX BOUTIQUES (#15120) — dessinés en ligne, sans fichier ni
  * requête : ils servent `/download` et la landing prérendue, qui n'a aucune
  * ressource externe à attendre pour peindre ses badges.
+ *
+ * `StoreBadge` est LE badge (#16407) : un seul markup pour la landing et
+ * `/download`, une seule feuille (`styles/store-badge.css`, CSS écrit à la
+ * main — la landing prérendue ne charge pas Tailwind). Chaque hôte ne passe
+ * que ses mots, tirés de son propre catalogue.
  */
 export function AppleLogo() {
   return (
@@ -23,5 +30,33 @@ export function GooglePlayLogo() {
       {/* harmony-exempt: logo Google Play */}
       <path fill="#FBBC04" d="m16.6 8.62 3.8 2.18c.9.52.9 1.88 0 2.4l-3.8 2.18L13.4 12Z" />
     </svg>
+  );
+}
+
+export type Store = 'app-store' | 'google-play';
+
+const STORES = {
+  'app-store': { href: APP_STORE_URL, name: 'App Store', Logo: AppleLogo },
+  'google-play': { href: GOOGLE_PLAY_URL, name: 'Google Play', Logo: GooglePlayLogo },
+} as const satisfies Record<Store, { readonly href: string; readonly name: string; readonly Logo: () => unknown }>;
+
+export type StoreBadgeProps = {
+  readonly store: Store;
+  /** Le nom que lit un lecteur d'écran (« Télécharger dans l'App Store »). */
+  readonly label: string;
+  /** La petite ligne au-dessus du nom de la boutique (« Télécharger dans »). */
+  readonly caption: string;
+};
+
+export function StoreBadge({ store, label, caption }: StoreBadgeProps) {
+  const { href, name, Logo } = STORES[store];
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" data-store={store} aria-label={label} className="ld-store">
+      <Logo />
+      <span className="ld-store-name">
+        <span className="ld-store-caption">{caption}</span>
+        {name}
+      </span>
+    </a>
   );
 }
