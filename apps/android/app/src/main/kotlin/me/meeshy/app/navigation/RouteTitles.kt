@@ -3,6 +3,7 @@ package me.meeshy.app.navigation
 import androidx.annotation.StringRes
 import me.meeshy.app.R
 import me.meeshy.app.navigation.graph.CommunityRoutes
+import me.meeshy.app.navigation.graph.FriendRequestListDestinations
 import me.meeshy.app.navigation.graph.FriendRequestsDestinations
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.LinksRoutes
@@ -37,6 +38,7 @@ internal object RouteTitles {
         Routes.SAVED_POSTS to R.string.route_title_bookmarks,
         Routes.STARRED to R.string.route_title_starred,
         FriendRequestsDestinations.ROUTE to R.string.route_title_friend_requests,
+        FriendRequestListDestinations.ROUTE to R.string.route_title_friend_requests,
         Routes.STORY_VIEWER to R.string.route_title_story,
         Routes.MOOD_SPOTLIGHT to R.string.route_title_mood,
     ).mapKeys { (route, _) -> base(route) }
