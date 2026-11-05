@@ -68,7 +68,6 @@ class StoryExportVideoLookTest {
         fetch = { url, target -> target.writeText(url.substringAfterLast('/')) },
         probeMillis = { file -> 6_000L.takeIf { file.readText().endsWith(".mp4") } },
         blankPicture = { it.writeText("noir") },
-        decideImager = { null },
         paint = { request -> request.frames.mapIndexed { i, _ -> File(request.directory, "calque-$i.png").also { it.writeText("png") } } },
         exportLook = { source, look, signer, maxLongSide ->
             resolved += Resolved(source.readText(), look, signer, maxLongSide)

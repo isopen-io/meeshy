@@ -40,7 +40,6 @@ class StoryExportBareVideoLengthTest {
         fetch = { url, target -> target.writeText(url) },
         probeMillis = { probed },
         blankPicture = { it.writeText("noir") },
-        decideImager = { null },
         paint = { request -> request.frames.mapIndexed { i, _ -> File(request.directory, "calque-$i.png").also { it.writeText("png") } } },
     )
 
