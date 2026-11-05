@@ -177,7 +177,10 @@ final class FeedPostCardLikeWiringSourceGuardTests: XCTestCase {
     /// Les rappels optionnels que la carte n'affiche QUE s'ils sont fournis
     /// (« Citer » dans le choix du repartage, « Épingler », « Modifier »).
     /// Leur absence retire le contrôle : elle ne peut pas le rendre inerte.
-    private static let conditionalActions: Set<String> = ["onQuote", "onPin", "onEdit"]
+    /// « Imager » (#16332) : la baguette n'existe que sous `if let onImager`,
+    /// et l'entrée rapide du menu de la baguette que sous `if let quick` —
+    /// `test_lesRappelsImager_retirentLeurControleEnLeurAbsence` le mesure.
+    private static let conditionalActions: Set<String> = ["onQuote", "onPin", "onEdit", "onImager", "onImagerQuick"]
 
     /// Montages délibérément muets, chacun justifié par une MESURE.
     private static let deliberatelyUnwired: [String: Set<String>] = [:]
@@ -243,6 +246,27 @@ final class FeedPostCardLikeWiringSourceGuardTests: XCTestCase {
             Les ajouter à `unconditionalActions` (et câbler chaque montage), ou prouver que le \
             contrôle disparaît en leur absence et les ranger dans `conditionalActions`.
             """)
+    }
+
+    /// La preuve qui range `onImager` / `onImagerQuick` parmi les rappels
+    /// CONDITIONNELS : la barre ne monte la baguette que si `onImager` est
+    /// fourni, et la baguette ne propose son entrée rapide que si `quick`
+    /// l'est. Leur absence retire le contrôle, jamais ne le rend inerte.
+    func test_lesRappelsImager_retirentLeurControleEnLeurAbsence() throws {
+        let features = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features")
+        let bar = AppSourceGuard.stripComments(try String(
+            contentsOf: features.appendingPathComponent("Main/Views/FeedPostActionsBar.swift"), encoding: .utf8))
+        let wand = AppSourceGuard.stripComments(try String(
+            contentsOf: features.appendingPathComponent("Export/ImagerWandButton.swift"), encoding: .utf8))
+
+        let guarded = try XCTUnwrap(bar.range(of: "if let onImager {"), "la baguette n'est plus conditionnée à `onImager`")
+        let block = bar[guarded.upperBound...].prefix(400)
+        XCTAssertTrue(block.contains("ImagerWandButton("), "la baguette doit vivre sous `if let onImager`")
+        XCTAssertTrue(block.contains("quick: onImagerQuick"), "l'entrée rapide voyage par `quick`")
+        XCTAssertTrue(wand.contains("if let quick {"), "l'entrée rapide de la baguette doit disparaître sans `quick`")
     }
 
     private static func optionalCallbacks(declaredBy type: String, in relativePath: String) throws -> Set<String> {
