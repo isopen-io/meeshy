@@ -101,6 +101,8 @@ fun UserProfileSheet(
     ProfileSheetActionsBinding(state, actionsViewModel, environment, toasts)
     val sharedId = state.profile?.id?.takeIf { it.isNotBlank() && !state.isSelf }
     LaunchedEffect(sharedId) { sharedId?.let(sharedConversationsViewModel::load) }
+    val servedDecor = state.profile?.servedDecor
+    LaunchedEffect(servedDecor, catalog) { servedDecor?.let(bannerViewModel::request) }
     LaunchedEffect(state.content) {
         // L'état VIVANT, pas l'instantané composé : une fiche précédente fermée ne referme pas la suivante.
         if (viewModel.state.value.content == ProfileSheetContent.Close) close()
