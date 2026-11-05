@@ -383,6 +383,7 @@
     <string name="settings_section_profile">الملف الشخصي</string>
     <string name="settings_section_tools">الأدوات</string>
     <string name="settings_section_transcription">النسخ النصي</string>
+    <string name="settings_section_voice">الملف الصوتي</string>
     <string name="settings_security">الأمان</string>
     <string name="settings_share_links">روابط المشاركة</string>
     <string name="settings_starred_messages">الرسائل المفضّلة</string>
@@ -400,6 +401,7 @@
     <string name="settings_transcription_engine">محرك النسخ النصي</string>
     <string name="settings_transcription_engine_a11y">محرك النسخ النصي</string>
     <string name="settings_version_label">الإصدار</string>
+    <string name="settings_voice_create">إنشاء ملف صوتي</string>
     <string name="support_a11y_opens">يفتح %1$s</string>
     <string name="support_help_rate">تقييم التطبيق</string>
     <string name="support_info_build">الإصدار</string>
