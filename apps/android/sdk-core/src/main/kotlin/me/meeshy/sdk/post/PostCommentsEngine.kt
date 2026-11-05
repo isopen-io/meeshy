@@ -5,7 +5,15 @@ import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.classifyCache
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.CommentRepliesState
+import me.meeshy.sdk.model.CommentThreadState
+import me.meeshy.sdk.model.comment.CommentEditRequest
+import me.meeshy.sdk.model.comment.CommentEditing
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
 import javax.inject.Inject
@@ -35,4 +43,50 @@ public class PostCommentsEngine(
     public suspend fun keep(postId: String, comments: List<ApiPostComment>) {
         cache.keep(postId, comments, ticket())
     }
+
+    public companion object {
+        /**
+         * L'ÉDITION en place d'un commentaire (iOS `updateComment`) : la ligne est remplacée aussitôt, même id, jamais
+         * insérée, dans le fil ou dans les réponses qui la portent ; [send] part ensuite. Le serveur confirme avec sa
+         * ligne, et la ligne éditée reste ; l'écho `comment:updated` la reconfirme par [applyEcho] (idempotent). S'il refuse,
+         * ou si l'envoi échoue, la ligne d'origine revient.
+         */
+        public suspend fun edit(
+            thread: MutableStateFlow<CommentThreadState>,
+            replies: MutableStateFlow<CommentRepliesState>,
+            target: ApiPostComment,
+            request: CommentEditRequest,
+            send: suspend (CommentEditRequest) -> NetworkResult<ApiPostComment>,
+        ): CommentEditOutcome {
+            applyEcho(thread, replies, CommentEditing.edited(target, request))
+            return try {
+                when (val result = send(request)) {
+                    is NetworkResult.Success -> CommentEditOutcome.Confirmed(result.data)
+                    is NetworkResult.Failure -> CommentEditOutcome.Refused(result.error.message).also { applyEcho(thread, replies, target) }
+                }
+            } catch (e: CancellationException) {
+                applyEcho(thread, replies, target)
+                throw e
+            } catch (e: Exception) {
+                applyEcho(thread, replies, target)
+                CommentEditOutcome.Refused(e.message)
+            }
+        }
+
+        /** Remplace la ligne [comment] là où elle vit, racine ou réponse — inerte si elle n'est plus là. */
+        public fun applyEcho(
+            thread: MutableStateFlow<CommentThreadState>,
+            replies: MutableStateFlow<CommentRepliesState>,
+            comment: ApiPostComment,
+        ) {
+            thread.update { it.replaced(comment) }
+            replies.update { it.replacedReply(comment) }
+        }
+    }
+}
+
+/** L'issue d'une édition : la ligne du serveur, ou le refus (la ligne d'origine est déjà revenue). */
+public sealed interface CommentEditOutcome {
+    public data class Confirmed(val comment: ApiPostComment) : CommentEditOutcome
+    public data class Refused(val message: String?) : CommentEditOutcome
 }

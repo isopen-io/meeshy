@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="comment_menu_edit">Modifica</string>
+    <string name="comment_menu_report">Segnala</string>
+    <string name="comment_menu_remove">Rimuovi</string>
+    <string name="comment_menu_cancel_edit">Annulla la modifica</string>
+    <string name="comment_menu_edit_failed">Impossibile modificare il commento</string>
+    <string name="comment_menu_report_title">Segnala questo commento</string>
+    <string name="comment_menu_reported">Segnalazione inviata. Grazie.</string>
+    <string name="comment_menu_report_failed">Impossibile inviare la segnalazione</string>
+    <string name="comment_menu_remove_title">Rimuovere questo commento?</string>
+    <string name="comment_menu_remove_hint">Motivo (obbligatorio, minimo 3 caratteri)</string>
+    <string name="comment_menu_removed">Commento rimosso</string>
+    <string name="comment_menu_remove_failed">Impossibile rimuovere il commento</string>
+</resources>

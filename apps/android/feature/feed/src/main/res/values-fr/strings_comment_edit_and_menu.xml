@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="comment_menu_edit">Modifier</string>
+    <string name="comment_menu_report">Signaler</string>
+    <string name="comment_menu_remove">Retirer</string>
+    <string name="comment_menu_cancel_edit">Annuler la modification</string>
+    <string name="comment_menu_edit_failed">Impossible de modifier le commentaire</string>
+    <string name="comment_menu_report_title">Signaler ce commentaire</string>
+    <string name="comment_menu_reported">Signalement envoyé. Merci.</string>
+    <string name="comment_menu_report_failed">Impossible d\'envoyer le signalement</string>
+    <string name="comment_menu_remove_title">Retirer ce commentaire ?</string>
+    <string name="comment_menu_remove_hint">Motif (obligatoire, 3 caractères minimum)</string>
+    <string name="comment_menu_removed">Commentaire retiré</string>
+    <string name="comment_menu_remove_failed">Impossible de retirer le commentaire</string>
+</resources>

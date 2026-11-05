@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="comment_menu_edit">Editar</string>
+    <string name="comment_menu_report">Denunciar</string>
+    <string name="comment_menu_remove">Remover</string>
+    <string name="comment_menu_cancel_edit">Cancelar a edição</string>
+    <string name="comment_menu_edit_failed">Não foi possível editar o comentário</string>
+    <string name="comment_menu_report_title">Denunciar este comentário</string>
+    <string name="comment_menu_reported">Denúncia enviada. Obrigado.</string>
+    <string name="comment_menu_report_failed">Não foi possível enviar a denúncia</string>
+    <string name="comment_menu_remove_title">Remover este comentário?</string>
+    <string name="comment_menu_remove_hint">Motivo (obrigatório, mínimo de 3 caracteres)</string>
+    <string name="comment_menu_removed">Comentário removido</string>
+    <string name="comment_menu_remove_failed">Não foi possível remover o comentário</string>
+</resources>

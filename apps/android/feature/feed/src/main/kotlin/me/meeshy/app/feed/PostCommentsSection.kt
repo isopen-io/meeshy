@@ -150,6 +150,7 @@ private fun rememberCommentImaging(viewModel: PostCommentsViewModel, support: Po
 private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsViewModel, modifier: Modifier, imaging: CommentImaging?, showsTitle: Boolean) {
     ProvideCommentAnchors { anchors ->
     KeepsReplyTargetInView(replyingToId = state.replyTarget?.commentId, anchors = anchors)
+    ProvideCommentMenu(state, viewModel) {
     Column(modifier = modifier.fillMaxWidth()) {
         if (showsTitle) {
             Text(
@@ -196,6 +197,7 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
         }
     }
     }
+    }
 }
 
 /**
@@ -229,6 +231,8 @@ fun PostCommentsComposerBar(
             canSubmit = state.canSubmit,
             attachments = state.attachments,
             replyTarget = state.replyTarget,
+            editing = state.editing,
+            onCancelEdit = viewModel::cancelEdit,
             onDraftChange = viewModel::onDraftChange,
             onMentionSelected = viewModel::onMentionSelected,
             onAttach = viewModel::attachMedia,
@@ -263,13 +267,14 @@ private fun CommentRow(
     val timeText = comment.createdAtIso?.let { detailRelativeTime(it) }
     val replyLabelFormat = stringResource(R.string.post_comments_reply_a11y_label)
     val veiledLabel = stringResource(me.meeshy.ui.R.string.a11y_message_blurred)
+    val menuActions = Modifier.commentMenuCustomActions(rememberCommentMenuEntries(comment, onDelete, imaging))
     val textBlockSemantics = if (comment.isReply) {
         Modifier.semantics(mergeDescendants = true) {
             val spoken = if (comment.isBlurred) comment.copy(content = veiledLabel) else comment
             contentDescription = spoken.accessibilityLabel(replyLabelFormat, timeText.orEmpty(), unknownAuthor)
-        }
+        }.then(menuActions)
     } else {
-        Modifier
+        Modifier.semantics(mergeDescendants = true) {}.then(menuActions)
     }
     Row(
         modifier = Modifier
@@ -583,6 +588,8 @@ private fun CommentComposer(
     canSubmit: Boolean,
     attachments: CommentAttachmentTray,
     replyTarget: ReplyTarget?,
+    editing: CommentEditTarget?,
+    onCancelEdit: () -> Unit,
     onDraftChange: (String) -> Unit,
     onMentionSelected: (MentionCandidate) -> Unit,
     onAttach: (MediaUploadItem) -> Unit,
@@ -602,8 +609,8 @@ private fun CommentComposer(
 ) {
     val composer = LocalUniversalComposer.current ?: return
     val intake = rememberComposerMediaIntake(onAttach)
-    val canAttach = !attachments.isFull && !isSubmitting
-    val focusTrigger = rememberReplyFocusTrigger(replyTarget)
+    val canAttach = !attachments.isFull && !isSubmitting && editing == null
+    val focusTrigger = rememberReplyFocusTrigger(replyTarget, editing)
     val placeholder = stringResource(if (replyTarget != null) R.string.post_comments_composer_reply_hint else R.string.post_comments_composer_hint)
     composer(
         UniversalComposerSpec(
@@ -630,6 +637,7 @@ private fun CommentComposer(
             onRemovePlace = place.onRemove,
             topSlot = {
                 MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected)
+                if (editing != null) CommentEditBanner(target = editing, onCancel = onCancelEdit)
                 if (replyTarget != null) ReplyTargetBanner(target = replyTarget, onCancelReply = onCancelReply)
                 CommentQuotationChip(quotation, accent = MeeshyPalette.Indigo500, onRemove = onRemoveQuotation)
                 CommentAttachmentBar(tray = attachments, onEdit = onEditPiece, onRemove = onRemovePiece)
@@ -648,9 +656,9 @@ private class CommentPlaceDoor(
 
 /** Viser un commentaire pour y répondre rend la main au champ (iOS `beginReply` → `composerFocusTrigger`). */
 @Composable
-private fun rememberReplyFocusTrigger(replyTarget: ReplyTarget?): Int {
+private fun rememberReplyFocusTrigger(replyTarget: ReplyTarget?, editing: CommentEditTarget?): Int {
     var trigger by remember { mutableIntStateOf(0) }
-    LaunchedEffect(replyTarget) { if (replyTarget != null) trigger += 1 }
+    LaunchedEffect(replyTarget, editing) { if (replyTarget != null || editing != null) trigger += 1 }
     return trigger
 }
 
@@ -666,6 +674,19 @@ private fun ReplyTargetBanner(target: ReplyTarget, onCancelReply: () -> Unit) {
         accent = MeeshyPalette.Indigo500,
         onCancel = onCancelReply,
         quote = target.excerpt,
+    )
+}
+
+/** Le bandeau « Modification » (iOS `CommentEditingBanner`) : la première ligne citée, la croix revient en création en effaçant le texte. */
+@Composable
+private fun CommentEditBanner(target: CommentEditTarget, onCancel: () -> Unit) {
+    CommentComposerBanner(
+        title = stringResource(R.string.comment_composer_editing),
+        cancelLabel = stringResource(R.string.comment_menu_cancel_edit),
+        accent = MeeshyPalette.Indigo500,
+        onCancel = onCancel,
+        quote = target.excerpt,
+        icon = me.meeshy.ui.icons.MeeshyIcons.Edit,
     )
 }
 
