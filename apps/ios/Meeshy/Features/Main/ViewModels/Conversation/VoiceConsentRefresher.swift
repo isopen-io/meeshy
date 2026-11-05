@@ -18,7 +18,7 @@ final class VoiceConsentRefresher {
     private var generation = 0
     private var foreground: AnyCancellable?
 
-    nonisolated init(gate: any VoiceConsentGateProviding) {
+    init(gate: any VoiceConsentGateProviding) {
         self.gate = gate
     }
 
