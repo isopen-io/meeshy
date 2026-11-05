@@ -15,7 +15,8 @@
  * `PackPublishers` vérifie ces unicités lui-même sans supposer les index ; les
  * index ferment la course que le code ne peut pas fermer seul.
  *
- * ORDRE : jouer d'abord le rattrapage
+ * ORDRE, IMPOSÉ : l'index de `nameKey` n'est pas posé tant qu'un profil nommé
+ * n'a pas de clé. Jouer d'abord le rattrapage
  * `services/gateway/scripts/2026-11-05-backfill-pack-publishers.ts`, qui pose
  * `nameKey` sur les profils existants et départage les noms en double (le plus
  * ancien garde le nom) par la fonction même du code, puis ce script.
@@ -39,8 +40,11 @@ const COLLECTION = 'PartnerProfile';
 const specs = [
   { name: 'PartnerProfile_userId_key', key: { userId: 1 }, unique: true },
   { name: 'PartnerProfile_slug_key', key: { slug: 1 }, unique: true, partialFilterExpression: { slug: { $type: 'string' } } },
-  { name: 'PartnerProfile_nameKey_key', key: { nameKey: 1 }, unique: true, partialFilterExpression: { nameKey: { $type: 'string' } } },
+  { name: 'PartnerProfile_nameKey_key', key: { nameKey: 1 }, unique: true, partialFilterExpression: { nameKey: { $type: 'string' } }, requiresKeyedNames: true },
 ];
+
+/** Le nom neutre (`NEUTRAL_PUBLISHER_NAME`) n'a pas de clé : tous les éditeurs sans nom le partagent. */
+const NEUTRAL_NAME = 'Éditeur';
 
 const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
@@ -68,6 +72,14 @@ for (const spec of specs) {
   if (match && sameOptions(match, spec)) {
     report.present.push(`${COLLECTION}.${match.name}`);
     continue;
+  }
+
+  if (spec.requiresKeyedNames && exists) {
+    const unkeyed = db.getCollection(COLLECTION).countDocuments({ nameKey: null, displayName: { $ne: NEUTRAL_NAME } });
+    if (unkeyed > 0) {
+      report.blocked.push(`${COLLECTION}.${spec.name} — ${unkeyed} profil(s) nommé(s) sans clé : jouer d'abord services/gateway/scripts/2026-11-05-backfill-pack-publishers.ts`);
+      continue;
+    }
   }
 
   const groups = exists ? duplicateGroups(spec) : 0;

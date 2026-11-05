@@ -10,6 +10,11 @@
  * compte officiel porte « Meeshy », sans clé. Le nom neutre n'a pas de clé :
  * tous les éditeurs sans nom le partagent.
  *
+ * Un ANCIEN profil, écrit avant les clés de nom et que le rattrapage n'a pas
+ * encore touché, détient lui aussi son nom : sa clé se recalcule à la lecture
+ * (balayage borné — ces profils sont peu nombreux, et le rattrapage les
+ * épuise). Entre deux détenteurs d'un même nom, le plus ancien le garde.
+ *
  * La vérification précède l'écriture ; deux écritures simultanées passent la
  * vérification toutes les deux. L'index unique partiel de `nameKey` (migration
  * du 2026-11-05) les départage par un P2002 que `isNameKeyViolation` lit comme
@@ -30,7 +35,19 @@ export type PublisherNameClaim =
   | { readonly kind: 'reserved' }
   | { readonly kind: 'name-taken' };
 
-export type PublisherNameRequest = { readonly userId: string; readonly name: string; readonly official: boolean };
+type AgedRow = { readonly id: string; readonly userId: string; readonly createdAt?: Date | null };
+
+/**
+ * `claimant` : le profil qui revendique, s'il existe déjà (un renommage, un
+ * ancien profil qu'on nomme) — face à un ancien profil sans clé au même nom, le
+ * plus ancien des deux garde le nom. Absent : une création, la plus récente.
+ */
+export type PublisherNameRequest = { readonly userId: string; readonly name: string; readonly official: boolean; readonly claimant?: AgedRow | null };
+
+/** Au-delà, le balayage des anciens profils ne conclut pas : le nom est refusé (fail-closed) jusqu'au rattrapage. */
+export const LEGACY_NAME_SCAN_LIMIT = 2_000;
+
+const WITHOUT_NAME_KEY = [{ nameKey: null }, { nameKey: { isSet: false } }];
 
 /** Ce qu'un compte peut écrire comme nom de boutique, et la clé qui l'accompagne. */
 export async function claimPublisherName(prisma: PublisherNamesDb, request: PublisherNameRequest): Promise<PublisherNameClaim> {
@@ -39,7 +56,22 @@ export async function claimPublisherName(prisma: PublisherNamesDb, request: Publ
   if (isReservedPublisherIdentity(request.name)) return { kind: 'reserved' };
   const nameKey = publisherNameKey(request.name);
   const holder = await prisma.partnerProfile.findFirst({ where: { nameKey, NOT: { userId: request.userId } }, select: { id: true } });
-  return holder === null ? { kind: 'ok', displayName: request.name, nameKey } : { kind: 'name-taken' };
+  if (holder !== null) return { kind: 'name-taken' };
+  return (await legacyHolds(prisma, nameKey, request)) ? { kind: 'name-taken' } : { kind: 'ok', displayName: request.name, nameKey };
+}
+
+/** Vrai si un ancien profil sans clé, au même nom et plus ancien que le revendicateur, détient ce nom. */
+async function legacyHolds(prisma: PublisherNamesDb, nameKey: string, request: PublisherNameRequest): Promise<boolean> {
+  const legacy: readonly (AgedRow & { readonly displayName: string })[] = await prisma.partnerProfile.findMany({
+    where: { OR: WITHOUT_NAME_KEY, NOT: { userId: request.userId } },
+    select: { id: true, userId: true, displayName: true, createdAt: true },
+    take: LEGACY_NAME_SCAN_LIMIT,
+  });
+  if (legacy.length >= LEGACY_NAME_SCAN_LIMIT) return true;
+  const claimant = request.claimant ?? null;
+  return legacy.some(
+    (row) => row.displayName !== NEUTRAL_PUBLISHER_NAME && publisherNameKey(row.displayName) === nameKey && (claimant === null || byAge(row, claimant) < 0),
+  );
 }
 
 /** Une écriture refusée par l'index unique de `nameKey` : le nom vient d'être pris. */
@@ -49,8 +81,6 @@ export function isNameKeyViolation(error: unknown): boolean {
   const text = Array.isArray(target) ? target.join(',') : String(target ?? (error as Error).message ?? '');
   return text.includes('nameKey');
 }
-
-type AgedRow = { readonly id: string; readonly userId: string; readonly createdAt?: Date | null };
 
 /** Le plus ancien d'abord : par date de création, puis par identifiant (un ObjectId croît avec le temps). */
 export const byAge = (a: AgedRow, b: AgedRow): number => {

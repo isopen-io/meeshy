@@ -391,7 +391,7 @@ export class PackPublishers {
    * il est ramené au nom NEUTRE et perd la vérification qui portait sur ce nom.
    */
   private async nameLegacy(row: PublisherRow): Promise<PublisherRow> {
-    const claim = await claimPublisherName(this.prisma, { userId: row.userId, name: row.displayName, official: this.isOfficial(row.userId) });
+    const claim = await claimPublisherName(this.prisma, { userId: row.userId, name: row.displayName, official: this.isOfficial(row.userId), claimant: row });
     const now = this.now();
     const neutral = { displayName: NEUTRAL_PUBLISHER_NAME, nameKey: null, verifiedAt: null, verifiedBy: null, updatedAt: now };
     try {

@@ -104,9 +104,9 @@ describe('2026-11-05-partner-profile-publisher-indexes.mongodb.js', () => {
 
   it('relève les doublons et ne pose pas l’index qu’ils bloquent : deux éditeurs pour un compte, deux éditeurs à la même adresse', () => {
     const database = fakeDatabase([
-      { userId: 'u1', slug: 'studio', displayName: 'Studio' },
-      { userId: 'u1', slug: 'studio-ab12', displayName: 'Studio' },
-      { userId: 'u2', slug: 'studio', displayName: 'Studio' },
+      { userId: 'u1', slug: 'studio', nameKey: 'studio', displayName: 'Studio' },
+      { userId: 'u1', slug: 'studio-ab12', nameKey: 'studiob', displayName: 'Studio B' },
+      { userId: 'u2', slug: 'studio', nameKey: 'studioc', displayName: 'Studio C' },
     ]);
     const printed = run(database);
     expect(shapeOf(database)).toEqual([{ key: { nameKey: 1 }, unique: true, partial: { nameKey: { $type: 'string' } } }]);
