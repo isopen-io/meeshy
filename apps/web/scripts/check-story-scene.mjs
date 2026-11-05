@@ -884,7 +884,10 @@ async function runAuthorRail(colorScheme) {
   });
   /* #9727 — une ligne ouvre le DÉTAIL de la personne (ce qu'elle a fait), et
      le profil s'y ouvre par « Voir le profil » : chaque lecteur mène toujours
-     à son profil, à un toucher de plus. « Retour aux vues » rend la liste. */
+     à son profil, à un toucher de plus. #16386 — le détail est une SECONDE
+     feuille plein écran posée sur la liste (`data-viewer-detail-sheet`), dont
+     le chevron (<) de l'en-tête (`data-sheet-back`, « Retour aux vues ») la
+     referme et rend la liste. */
   const liens = [];
   for (const id of await page.$$eval('dialog[open] [data-story-viewer]', (els) => els.map((e) => e.getAttribute('data-story-viewer')))) {
     await page.click(`dialog[open] [data-story-viewer="${id}"] [data-story-viewer-open]`, { timeout: 3000 }).catch(() => {});
@@ -894,7 +897,8 @@ async function runAuthorRail(colorScheme) {
         .then((lien) => lien.getAttribute('href'))
         .catch(() => null),
     );
-    await page.click('dialog[open] [data-viewer-detail-back]', { timeout: 3000 }).catch(() => {});
+    await page.click('dialog[open][data-viewer-detail-sheet] [data-sheet-back]', { timeout: 3000 }).catch(() => {});
+    await page.waitForSelector('dialog[open][data-viewer-detail-sheet]', { state: 'detached', timeout: 3000 }).catch(() => {});
     await page.waitForSelector(`dialog[open] [data-story-viewer="${id}"]`, { timeout: 3000 }).catch(() => {});
   }
   feuille.liens = liens;
@@ -913,11 +917,16 @@ async function runAuthorRail(colorScheme) {
      feuille fermée ET le focus posé quelque part — ou le lecteur parti, le
      défaut que ce témoin existe pour attraper. Échap ferme le `<dialog>` natif
      AVANT que React ne démonte la feuille et ne rende le focus (un effet) :
-     lire le focus dès `open` retiré lisait l'entre-deux, `BODY`. */
+     lire le focus dès `open` retiré lisait l'entre-deux, `BODY` — ou, depuis
+     la feuille détail imbriquée (#16386), le bouton de la feuille FERMÉE qui
+     garde le focus jusqu'au démontage. Le fait attendu est donc un focus HORS
+     de tout `<dialog>`. */
   await page
     .waitForFunction(
       () =>
-        document.querySelector('dialog[open]') === null && document.activeElement !== document.body,
+        document.querySelector('dialog[open]') === null &&
+        document.activeElement !== document.body &&
+        document.activeElement?.closest('dialog') === null,
       undefined,
       { timeout: 3000 },
     )
