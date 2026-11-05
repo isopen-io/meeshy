@@ -1045,6 +1045,8 @@ const ar = {
   'media.reactions.badge.a11y': 'التفاعلات',
   'media.reactions.badge.mine.a11y': 'بما في ذلك تفاعلك',
   'message.join.noAccount': 'بدون حساب',
+  'message.join.greet.one': 'قل مرحبًا',
+  'message.join.greet.many': 'قل لهم مرحبًا',
   'attachment.kind.image': 'صورة',
   'attachment.kind.video': 'فيديو',
   'attachment.kind.audio': 'مقطع صوتي',
