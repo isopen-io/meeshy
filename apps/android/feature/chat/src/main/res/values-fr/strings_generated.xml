@@ -123,8 +123,11 @@
     <string name="chat_exit_blocked_title">Ce message ne sort pas de Meeshy</string>
     <string name="chat_exit_blocked_understood">Compris</string>
     <string name="chat_exit_blocked_view_once">Il est à vue unique : il ne se transfère, ne s’enregistre et ne se partage pas. Il reste dans la conversation, le temps d’être vu.</string>
+    <string name="chat_explorer_close_translation">Fermer la traduction</string>
     <string name="chat_explorer_original">Original</string>
+    <string name="chat_explorer_original_banner">Original • %1$s</string>
     <string name="chat_explorer_retranslate">Retraduire</string>
+    <string name="chat_explorer_retranslate_a11y">Retraduire</string>
     <string name="chat_explorer_title">Langues</string>
     <string name="chat_explorer_translate">Traduire</string>
     <plurals name="chat_forward_members">

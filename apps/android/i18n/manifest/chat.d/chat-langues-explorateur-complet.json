@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.original",
+          "androidName": "chat_explorer_original_banner",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.a11y.close-translation",
+          "androidName": "chat_explorer_close_translation",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "message-detail.a11y.retranslate",
+          "androidName": "chat_explorer_retranslate_a11y",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

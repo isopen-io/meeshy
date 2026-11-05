@@ -100,6 +100,20 @@ class AudioTranslationRequestTracker internal constructor(
     }
 
     /**
+     * Comme [request], et dit si la demande est partie sans échec ni consentement manquant : l'appelant (l'explorateur de
+     * langues) remonte alors l'échec à l'utilisateur au lieu de laisser la ligne muette.
+     */
+    suspend fun requestReporting(messageId: String, attachmentId: String, language: String, sourceLanguage: String?): Boolean {
+        val target = language.trim().lowercase().ifEmpty { return false }
+        request(messageId, attachmentId, target, sourceLanguage)
+        val key = keyOf(attachmentId, target)
+        return key !in consents.value && !hasFailed(messageId, attachmentId, target, waiting = false)
+    }
+
+    /** Les clés `attachmentId|langue` des demandes encore sans piste : la source de l'état « en cours » de l'audio. */
+    val pendingKeys: Flow<Set<String>> get() = requested.map { it.keys }.distinctUntilChanged()
+
+    /**
      * L'état de la demande de ([attachmentId], [language]), tenu à jour : [hasTrack] dit si la piste est déjà dans le cache
      * (elle l'emporte sur toute demande restée), en cours jusqu'au plafond de silence (UNE réémission, à l'échéance).
      */

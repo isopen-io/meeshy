@@ -120,8 +120,11 @@
     <string name="chat_exit_blocked_title">This message stays in Meeshy</string>
     <string name="chat_exit_blocked_understood">Got it</string>
     <string name="chat_exit_blocked_view_once">It’s view-once: it can’t be forwarded, saved or shared. It stays in the conversation until it’s seen.</string>
+    <string name="chat_explorer_close_translation">Close translation</string>
     <string name="chat_explorer_original">Original</string>
+    <string name="chat_explorer_original_banner">Original • %1$s</string>
     <string name="chat_explorer_retranslate">Retranslate</string>
+    <string name="chat_explorer_retranslate_a11y">Translate again</string>
     <string name="chat_explorer_title">Languages</string>
     <string name="chat_explorer_translate">Translate</string>
     <plurals name="chat_forward_members">
