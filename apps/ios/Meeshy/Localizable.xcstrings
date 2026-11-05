@@ -93073,53 +93073,6 @@
         }
       }
     },
-    "composer.publish.multiScene.mediaNotCarried": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يحمل هذا المنشور متعدد المشاهد وسائط لا يمكن نشرها بعد في منشور واحد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieser Beitrag mit mehreren Szenen enthält Medien, die noch nicht in einer einzigen Veröffentlichung gesendet werden können"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This multi-scene post has media that can’t yet be sent as a single publication"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta publicación de varias escenas contiene medios que aún no pueden enviarse en una sola publicación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce post à plusieurs scènes porte des médias qui ne peuvent pas encore partir en une seule publication"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questo post con più scene contiene contenuti multimediali che non possono ancora essere inviati in un'unica pubblicazione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este post com várias cenas tem mídias que ainda não podem ser enviadas em uma única publicação"
-          }
-        }
-      }
-    },
     "composer.quickEmoji.label": {
       "extractionState": "manual",
       "localizations": {
@@ -113800,6 +113753,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Você não pode enviar mensagens para este usuário."
+          }
+        }
+      }
+    },
+    "conversation.send.attachmentRightNotPermitted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكنك بعد إرسال هذا النوع من المرفقات في هذه المحادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst diese Art von Anhang in dieser Unterhaltung noch nicht senden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can’t send this type of attachment in this conversation yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no puedes enviar este tipo de archivo adjunto en esta conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous ne pouvez pas encore envoyer ce type de pièce jointe dans cette conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non puoi ancora inviare questo tipo di allegato in questa conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você ainda não pode enviar este tipo de anexo nesta conversa."
           }
         }
       }

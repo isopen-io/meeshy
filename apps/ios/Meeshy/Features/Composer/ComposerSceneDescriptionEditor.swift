@@ -38,7 +38,6 @@ struct ComposerSceneDescriptionEditor: View {
     /// un champ qu'on ne sait pas lire est un champ qu'on n'ose pas remplir.
     let plateauTint: Color
     let onDone: () -> Void
-    let onHeightChange: (CGFloat) -> Void
 
     /// **La langue du texte, servie AU-DESSUS de la coche** (#5137). Simple
     /// relais : la zone ne construit pas la capsule — elle ne sait ni quelle
@@ -150,7 +149,6 @@ struct ComposerSceneDescriptionEditor: View {
         .background { mesure }
         .onPreferenceChange(ComposerDescriptionEditorHeightKey.self) { hauteur in
             mesureHauteur = hauteur
-            onHeightChange(hauteur)
         }
     }
 

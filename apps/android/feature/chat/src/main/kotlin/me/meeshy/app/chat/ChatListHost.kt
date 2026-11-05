@@ -305,6 +305,7 @@ internal fun ChatListHost(
             },
             onReplyPreviewClick = { messageId -> actions.onReplyPreviewTap(messageId) },
             onFlagTap = { messageId, code -> actions.onFlagTap(messageId, code) },
+            onAudioLanguage = { messageId, code -> actions.onAudioLanguage(messageId, code) },
             onReplyCountTap = { messageId -> actions.onReplyCountTap(messageId) },
             onReplyCountLongPress = { messageId -> actions.openReplyThread(messageId) },
             onRetry = { messageId -> actions.retryMessage(messageId) },

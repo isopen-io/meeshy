@@ -144,6 +144,14 @@
     <string name="code_viewer_loading">جارٍ التحميل...</string>
     <string name="code_viewer_loading_file">جارٍ تحميل الملف...</string>
     <string name="code_viewer_more_lines">%1$d أسطر إضافية</string>
+    <string name="comment_quote_a11y">بخصوص: %1$s</string>
+    <string name="comment_quote_about">بخصوص</string>
+    <string name="comment_quote_kind_audio">مقطع صوتي</string>
+    <string name="comment_quote_kind_file">مرفق</string>
+    <string name="comment_quote_kind_image">صورة</string>
+    <string name="comment_quote_kind_location">موقع</string>
+    <string name="comment_quote_kind_video">فيديو</string>
+    <string name="comment_quote_remove">إزالة الاقتباس</string>
     <string name="common_cancel">إلغاء</string>
     <string name="common_clearSearch">مسح البحث</string>
     <string name="common_clear_search">مسح البحث</string>
@@ -286,7 +294,9 @@
     <string name="location_fullscreen_sharedPosition">موقع مشارَك</string>
     <string name="media_audio_open_fullscreen">فتح بملء الشاشة، التشغيل %1$d%%</string>
     <string name="media_audio_open_fullscreen_hint">يعرض واجهة ملء الشاشة مع خيارات الحفظ</string>
+    <string name="media_audio_original">الأصل</string>
     <string name="media_audio_play">تشغيل الصوت</string>
+    <string name="media_audio_retranscribe">إعادة النسخ النصي</string>
     <string name="media_audio_speed_cycle">سرعة التشغيل %1$s</string>
     <string name="media_audio_transcribe">نسخ نصي</string>
     <string name="media_audio_transcribing">جارٍ النسخ النصي</string>

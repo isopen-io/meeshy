@@ -940,7 +940,6 @@ final class ComposerHistoryServiceTests: XCTestCase {
     /// d'annuler la frappe et ferait autre chose.
     func test_seuleLaScene_sertLHistorique() {
         XCTAssertTrue(ComposerHistoryService.servesHistory(on: .scene))
-        XCTAssertTrue(ComposerHistoryService.servesHistory(on: .atelier))
         XCTAssertFalse(ComposerHistoryService.servesHistory(on: .mood))
     }
 

@@ -172,7 +172,6 @@ struct MeeshyComposerHost: View {
     /// lisent tous par `selectedFormat` / `armedChoice`. La disposition des
     /// scènes et le réel d'accompagnement voyagent avec lui.
     @State var formatState: ComposerFormatState
-    @State var atelierFanOut = ComposerAtelierFanOut()
 
     /// Le format que la PORTE a ouvert, gardé pour la bascule automatique vers
     /// le réel : désarmée, elle rend la porte (`ComposerReelAutoSwitch`).
@@ -667,26 +666,12 @@ struct MeeshyComposerHost: View {
     @State var soundExtractionChoice: Bool?
     @State var sceneLayout = ComposerSceneLayoutState()
 
-    /// La hauteur RENDUE de la zone de saisie — déclarée à l'atelier en
-    /// réserve basse pour que le canvas se rétracte AU-DESSUS d'elle au lieu
-    /// d'être recouvert.
-    @State var sceneDescriptionEditorHeight: CGFloat = 0
-
-    /// **La télécommande de publication de l'atelier.**
-    ///
-    /// `@StateObject` et non `@State` : le meuble doit se re-rendre quand
-    /// l'atelier RAPPORTE sa matière (`canPublish`) ou arme son œil, sinon la
-    /// flèche du socle resterait grise sur une composition devenue publiable —
-    /// une commande qui ment sur son propre état.
-    ///
-    /// Elle est CONSTRUITE ici et pressée ici ; c'est l'atelier qui l'arme avec
-    /// `publishAllSlides` et `presentPreview`. Le meuble ne recompose rien : ni
-    /// le rabattement des effets du canvas, ni la langue, ni les médias
-    /// préchargés — trois choses qu'il ne voit pas.
-    @StateObject var publishTrigger = ComposerPublishTrigger()
 
     /// La sauvegarde automatique de la création en cours.
     @StateObject var autosave = ComposerAutosaveController()
+
+    /// Le brouillon de « Mes stories » repris, ou l'édition d'une story (#15629).
+    @StateObject var storedDraft = ComposerStoredDraftKeeper()
 
     /// **La section description est-elle DÉPLIÉE ?** Repliée par
     /// défaut (une barre compacte qui ne mange pas le canvas) ; un tap la
@@ -930,14 +915,10 @@ struct MeeshyComposerHost: View {
         .adaptiveOnChange(of: ComposerSceneCamera.initialMode(for: selectedFormat) != nil, initial: true) { _, filme in
             if filme { sceneCapture.prewarm() }
         }
-        // Le report du contenu vers la scène, en UN seul site :
-        // dès que `mountedSurface` DEVIENT `.scene` (par l'éventail STORY/RÉEL
-        // ou par une couleur de fond), le texte et le média composés suivent.
-        // `mountedSurface` est calculée à chaque passe ; `initial: true` couvre
-        // les portes qui OUVRENT déjà sur la scène (storyTray, reprise, graine).
-        .adaptiveOnChange(of: mountedSurface, initial: true) { _, surface in
-            guard surface == .scene else { return }
-            carryContentIntoSceneIfNeeded()
+        // E1 — la scène prend la langue DÉCLARÉE au composer comme défaut de
+        // tout objet posé ; une story qu'on modifie garde donc la sienne.
+        .adaptiveOnChange(of: documentLanguage, initial: true) { _, langue in
+            viewModel.declaredContentLanguage = langue
         }
         // En Post, chaque média ingéré devient SA slide. Site UNIQUE :
         // les trois portes d'ingestion (photothèque, caméra, importateur)

@@ -18,8 +18,17 @@ class BubbleVoiceStackFooterTest {
     )
 
     @Test
-    fun `un seul vocal garde les drapeaux du texte`() {
-        assertThat(BubbleVoiceStackFooter.chips(content(track("a", "en", "es")))).containsExactly(textChip)
+    fun `un seul vocal sans langue de piste garde les drapeaux du texte`() {
+        assertThat(BubbleVoiceStackFooter.chips(content(track("a", null)))).containsExactly(textChip)
+    }
+
+    @Test
+    fun `un seul vocal porte les drapeaux de ses pistes, l'origine d'abord (iOS audioFooter)`() {
+        val chips = BubbleVoiceStackFooter.chips(content(track("a", "en", "es", "fr", served = "es")))
+
+        assertThat(chips.map { it.code }).containsExactly("en", "es", "fr").inOrder()
+        assertThat(chips.single { it.code == "es" }.isActive).isTrue()
+        assertThat(chips.single { it.code == "en" }.isOriginal).isTrue()
     }
 
     @Test

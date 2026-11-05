@@ -305,18 +305,18 @@ internal fun EditingChromeVisibility(visible: Boolean, content: @Composable () -
 }
 
 /**
- * Ce que TalkBack dit quand la colonne change de rôle (#13956) : « Édition : Sticker » (« Édition : Fond » pour le fond,
- * #13973) à la sélection, « Retour aux outils
- * de la scène » à la désélection, rien à l'ouverture ([ComposerEditingChrome.announcement]). Une région vivante polie,
- * posée hors des surimpressions pour qu'une feuille ouverte ne lui fasse rien oublier.
+ * Ce que TalkBack dit quand la colonne change de rôle, avec les mots de VoiceOver (#13956, #15863 — iOS
+ * `ComposerSelectionCopy.selected` / `.deselected`) : « Sticker sélectionné », « Fond sélectionné »… à la sélection,
+ * « Sélection retirée » à la désélection, rien à l'ouverture ([ComposerEditingChrome.announcement]). Une région vivante
+ * polie, posée hors des surimpressions pour qu'une feuille ouverte ne lui fasse rien oublier.
  */
 @Composable
-internal fun EditingAnnouncer(editing: String?) {
+internal fun EditingAnnouncer(selected: String?) {
     var spoken by remember { mutableStateOf<ComposerEditingAnnouncement?>(null) }
-    LaunchedEffect(editing) { spoken = ComposerEditingChrome.announcement(spoken, editing != null) }
+    LaunchedEffect(selected) { spoken = ComposerEditingChrome.announcement(spoken, selected != null) }
     val text = when (spoken) {
-        ComposerEditingAnnouncement.EDITING -> editing?.let { stringResource(R.string.composer_editing_announce, it) }
-        ComposerEditingAnnouncement.TOOLS_BACK -> stringResource(R.string.composer_editing_done)
+        ComposerEditingAnnouncement.EDITING -> selected
+        ComposerEditingAnnouncement.TOOLS_BACK -> stringResource(SELECTION_CLEARED_ANNOUNCEMENT)
         null -> null
     }
     Box(
@@ -326,6 +326,20 @@ internal fun EditingAnnouncer(editing: String?) {
         },
     )
 }
+
+/** L'annonce d'iOS quand un objet posé est sélectionné : sa famille, nommée comme VoiceOver la nomme. */
+internal fun SceneObjectFamily.selectedAnnouncementRes(): Int = when (this) {
+    SceneObjectFamily.TEXT -> R.string.composer_selection_selected_text
+    SceneObjectFamily.IMAGE -> R.string.composer_selection_selected_image
+    SceneObjectFamily.VIDEO -> R.string.composer_selection_selected_video
+    SceneObjectFamily.SOUND -> R.string.composer_selection_selected_audio
+    SceneObjectFamily.STICKER -> R.string.composer_selection_selected_sticker
+    SceneObjectFamily.PLACE -> R.string.composer_selection_selected_place
+}
+
+internal val BACKGROUND_SELECTED_ANNOUNCEMENT: Int get() = R.string.composer_selection_selected_background
+
+internal val SELECTION_CLEARED_ANNOUNCEMENT: Int get() = R.string.composer_selection_deselected
 
 internal fun ComposerSelectionAction.glyph(): ImageVector = when (this) {
     ComposerSelectionAction.EDIT -> MeeshyIcons.Edit

@@ -86,7 +86,7 @@ extension MeeshyComposerHost {
     func requestComposerClose() {
         switch ComposerCloseGuard.decide(hasContent: composedAutosaveState().hasContent,
                                          surfaceIsAutosaved: autosaveState() != nil,
-                                         controllerKeeps: autosave.keepsDraft) {
+                                         controllerKeeps: autosave.keepsDraft || storedDraft.keepsDraft) {
         case .closes:
             onDismiss()
         case .asks(let offersKeep):
@@ -103,6 +103,7 @@ extension MeeshyComposerHost {
             // Le brouillon part AVANT la fermeture : `onDisappear` sauvegarde, et
             // `discard` est ce qui l'en empêche.
             discardAutosavedDraft()
+            storedDraft.discard()
         }
         onDismiss()
     }

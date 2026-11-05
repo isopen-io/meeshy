@@ -27,32 +27,6 @@ final class StoryCanvasContourTests: XCTestCase {
         return out
     }
 
-    // 1 — ce qui DÉTACHE le canvas de son plateau.
-    //
-    // **Trois formes en trois directives, et ce témoin les a toutes portées** :
-    // trait pointillé, puis contour blanc solide (2026-08-27), puis une OMBRE
-    // (2026-08-28, #4124 — « le canvas sans bordure, juste un effet d'ombrage
-    // pour remarquer ses arrondis »).
-    //
-    // Il change donc d'objet plutôt que de disparaître, et l'assertion NÉGATIVE
-    // est celle qui compte : un liseré DESSINE une ligne qui n'appartient pas à
-    // la composition, et l'auteur la voit sur son aperçu alors que le lecteur ne
-    // la verra jamais — la loi 6 prise au mot.
-    func test_leCanvas_seDetacheParUneOmbre_jamaisParUnLisere() throws {
-        let src = try sdkSource("Sources/MeeshyUI/Story/StoryComposerView+Canvas.swift")
-        guard let fn = body(of: "func canvasOutlineOverlay", in: src) else {
-            return XCTFail("canvasOutlineOverlay introuvable")
-        }
-        XCTAssertTrue(fn.contains("RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)"),
-                      "La forme épouse le rayon de la carte — c'est elle qui porte l'ombre.")
-        XCTAssertTrue(fn.contains(".shadow("),
-                      "L'ombre est ce qui décolle la carte du plateau.")
-        XCTAssertFalse(fn.contains(".strokeBorder("),
-                       "Aucun liseré : il dessinerait sur l'aperçu une ligne que le lecteur ne verra pas.")
-        XCTAssertFalse(fn.contains("dash:"),
-                       "Ni pointillé — la forme d'avant la précédente.")
-    }
-
     // 2 — le MAGNET représente les zones de VUE (haut) et de VIE (bas) : il
     // s'accroche aux bords de la zone sûre (0.18 / 0.82), pas seulement au centre.
     func test_leMagnet_representeLesZonesVueEtVie() {

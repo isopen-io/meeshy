@@ -163,7 +163,7 @@ private fun SceneFirstFrame(
             rails = rails,
             incoming = incomingLayer(state, viewModel),
         )
-        EditingAnnouncer(editing = editedWord(state, editing.editing))
+        EditingAnnouncer(selected = selectedAnnouncement(state, editing.editing))
         edited.background?.let { BackgroundRemoveConfirmation(it) }
     }
 }
@@ -279,10 +279,12 @@ private fun rememberSceneBackground(
 
 /** Le mot de ce qui est en édition, pour TalkBack : la famille de l'objet, ou « Fond » pour le fond média (#13973). */
 @Composable
-private fun editedWord(state: StoryComposerUiState, editing: Boolean): String? {
+private fun selectedAnnouncement(state: StoryComposerUiState, editing: Boolean): String? {
     val ref = state.selectedSceneObject?.takeIf { editing } ?: return null
-    return if (state.selectionSubject == ComposerSelectionSubject.BACKGROUND) stringResource(R.string.stories_composer_background)
-    else familyWord(state.familyOf(ref))
+    return stringResource(
+        if (state.selectionSubject == ComposerSelectionSubject.BACKGROUND) BACKGROUND_SELECTED_ANNOUNCEMENT
+        else state.familyOf(ref).selectedAnnouncementRes(),
+    )
 }
 
 /**
@@ -483,7 +485,7 @@ private fun StoryComposerUiState.activeSceneTool(): ComposerSceneTool? = when (b
 
 /**
  * Texte pose un texte, Média et Son ouvrent leur sélecteur (ou leur panneau s'il y a déjà de quoi), Dessin prend le pinceau,
- * Fond ouvre son panneau, Mention et Lieu leur feuille (#14049), « Texte du post » son champ collé au clavier (#14457).
+ * Fond sélectionne le fond média peint, sinon ouvre son panneau (#15863), Mention et Lieu leur feuille (#14049), « Texte du post » son champ collé au clavier (#14457).
  */
 @Composable
 private fun rememberSceneToolAction(
@@ -504,7 +506,7 @@ private fun rememberSceneToolAction(
             ComposerSceneTool.STICKER -> openStickers()
             ComposerSceneTool.SOUND -> doors.onOpenSoundShelf()
             ComposerSceneTool.DRAWING -> viewModel.onEnterDrawingMode()
-            ComposerSceneTool.BACKGROUND -> viewModel.onBandToolSwipeUp(StoryToolMode.TEXTURE)
+            ComposerSceneTool.BACKGROUND -> viewModel.onBackgroundTool()
             ComposerSceneTool.MENTION -> more.onOpenSheet(StoryComposerSheet.MENTION)
             ComposerSceneTool.PLACE -> more.onOpenSheet(StoryComposerSheet.PLACE)
             ComposerSceneTool.POST_TEXT -> more.onMorePanel(StoryMorePanel.POST_TEXT)

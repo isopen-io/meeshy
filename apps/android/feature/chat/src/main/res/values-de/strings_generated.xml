@@ -19,6 +19,7 @@
     <string name="attachment_stage_loading">Wird geladen</string>
     <string name="attachment_stage_thumbnailing">Vorschau</string>
     <string name="attachment_sticker">Sticker</string>
+    <string name="audio_fullscreen_language_choose">Audio übersetzen</string>
     <string name="chat_action_copy">Kopieren</string>
     <string name="chat_action_copy_link">Link kopieren</string>
     <string name="chat_action_delete_for_everyone">Für alle löschen</string>
@@ -809,6 +810,7 @@
     <string name="transcription_fiche_speakers">%1$d Sprecher erkannt</string>
     <string name="transcription_fiche_transcribe">Transkribieren</string>
     <string name="transcription_fiche_translations">Audio-Übersetzungen</string>
+    <string name="translation_audio_error">Die Audio-Übersetzung ist fehlgeschlagen. Bitte erneut versuchen.</string>
     <string name="viewer_code_loading">Laden...</string>
     <string name="viewer_contact_add">Zu Kontakten hinzufügen</string>
     <string name="viewer_contact_close">Karte schließen</string>

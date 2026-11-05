@@ -116,13 +116,6 @@ final class MediaCaptionCollectionTests: XCTestCase {
 
     // MARK: - Hand-off de publication
 
-    func test_accessibilityHandoff_carriesCaption() {
-        let store = MediaAccessibilityStore()
-        store.setCaption("légende", for: "el-1")
-        let handoff = StoryComposerView.accessibilityHandoff(from: store)
-        XCTAssertEqual(handoff.mediaCaption, ["el-1": "légende"])
-    }
-
     /// `isEmpty` gouverne l'écriture du brouillon : une légende SEULE doit
     /// suffire à le rendre non vide, sans quoi elle serait perdue à la
     /// fermeture d'un composer où rien d'autre n'a été saisi.

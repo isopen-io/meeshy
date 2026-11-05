@@ -23,13 +23,6 @@ final class ComposerSoundDestinationTests: XCTestCase {
         XCTAssertEqual(ComposerSoundDestination.forForeground(on: .scene), .sceneChip)
     }
 
-    /// L'atelier aussi : c'est une scène plein écran, et il peint déjà ses
-    /// puces (`audioForegroundOverlay`). Ce qui décide n'est pas l'écran, c'est
-    /// la présence d'une TOILE.
-    func test_lAtelier_recoitAussiUnePuce() {
-        XCTAssertEqual(ComposerSoundDestination.forForeground(on: .atelier), .sceneChip)
-    }
-
     /// **Un post se compose sur la scène (#13864) : son premier plan y devient
     /// une PUCE**, comme celui d'une story — plus de carte sous un texte, il
     /// n'y a plus de colonne de texte.

@@ -29,9 +29,10 @@ struct SendResultAcceptanceTests {
             .recipientBlocked,
             .queuedForRetry(reason: "r"),
             .retryEnqueueFailed(reason: "r"),
-            .endToEndUnsealed(.sessionUnavailable)
+            .endToEndUnsealed(.sessionUnavailable),
+            .attachmentRightRefused
         ]
-        #expect(failures.count == 8)
+        #expect(failures.count == 9)
         for failure in failures {
             let result: Result<SentMessageReceipt, SendFailure> = .failure(failure)
             #expect(!result.isAccepted)

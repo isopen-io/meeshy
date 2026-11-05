@@ -27,7 +27,6 @@ extension MeeshyComposerHost {
 
     var autosaveOpening: ComposerAutosaveOpening {
         ComposerAutosaveOpening.decide(
-            opensOnAtelier: mountedSurface == .scene,
             isHydrated: hydration != nil,
             resumesDraft: draftId != nil,
             isSeeded: mediaSeed != nil || moodSeed != nil,
@@ -94,6 +93,7 @@ extension MeeshyComposerHost {
     }
 
     func bindAutosave() {
+        bindStoredDraft()
         guard let restored = autosave.bind(account: autosaveAccount, opening: autosaveOpening) else { return }
         guard let state = ComposerAutosaveCodec.state(from: restored) else {
             autosave.abandonRestoredDraft()
@@ -130,15 +130,41 @@ extension MeeshyComposerHost {
 
     func scheduleAutosave() {
         autosave.schedule { autosaveState() }
+        storedDraft.schedule { storedDraftFrame }
     }
 
     func flushAutosave() {
         autosave.flushNow { autosaveState() }
+        storedDraft.flush { storedDraftFrame }
     }
 
     /// Appelé par les deux sites où la publication est ACCEPTÉE (socle).
-    func discardAutosavedDraft() { autosave.discard() }
-    func handOverAutosavedDraft() { autosave.handOver(to: ComposerPublicationHandoff.take()) { autosaveState() } }
+    func discardAutosavedDraft() {
+        autosave.discard()
+        storedDraft.stopWriting()
+    }
+    func handOverAutosavedDraft() {
+        autosave.handOver(to: ComposerPublicationHandoff.take()) { autosaveState() }
+        storedDraft.stopWriting()
+    }
+
+    /// Le brouillon de « Mes stories » repris ou l'édition d'une story
+    /// (#15629) : la scène du meuble le relit et l'écrit, sans atelier.
+    func bindStoredDraft() {
+        let garde = ComposerStoredDraftScope.keepsStoredDraft(adoptsDraft: viewModel.isAdoptedDraftSession,
+                                                               hydration: hydration)
+        guard let repris = storedDraft.bind(viewModel, keeps: garde) else { return }
+        let audience = ComposerStoredDraftScope.restoredAudience(repris)
+        composerVisibility = audience.visibility
+        composerVisibilityUserIds = audience.userIds
+        if let langue = repris.originalLanguage { documentLanguage = langue }
+    }
+
+    var storedDraftFrame: StoryStoredDraftFrame {
+        StoryStoredDraftFrame(visibility: composerVisibility.rawValue,
+                              visibilityUserIds: composerVisibilityUserIds,
+                              originalLanguage: documentLanguage)
+    }
 
     func withComposerAutosave<Content: View>(_ content: Content) -> some View {
         content
@@ -154,50 +180,26 @@ extension MeeshyComposerHost {
             }
             .onDisappear { flushAutosave() }
             .closesForConversationOpening(.composer, answer: { conversationOpeningYield }, close: {
-                ComposerConversationYield.close(atelierWritesItsDraft: atelierWritesItsDraft,
-                                                trigger: publishTrigger) {
-                    flushAutosave()
-                    onDismiss()
-                }
+                flushAutosave()
+                onDismiss()
             })
     }
 
     /// Une conversation qui s'ouvre ne referme le meuble que s'il sait rendre
     /// ce qu'il tient (#10539) : la porte vierge, dont le brouillon s'écrit à la
-    /// fermeture et se relit à la réouverture — et l'ATELIER, qui écrit le sien
-    /// par sa propre sortie (#10543). Toute autre porte — une graine du meuble
-    /// — RETIENT : rien ne se perd, et la conversation s'ouvre quand l'auteur
-    /// a fini.
+    /// fermeture et se relit à la réouverture — et le brouillon REPRIS ou
+    /// l'édition d'une story, que `ComposerStoredDraftKeeper` écrit au même
+    /// `flushAutosave()` (#10543, #15629). Toute autre porte — une graine du
+    /// meuble — RETIENT : rien ne se perd, et la conversation s'ouvre quand
+    /// l'auteur a fini.
     var conversationOpeningYield: PresentedSurfaceYield {
-        ComposerConversationYield.decide(autosaveOpening, atelierWritesItsDraft: atelierWritesItsDraft)
-    }
-
-    var atelierWritesItsDraft: Bool {
-        ComposerConversationYield.atelierWritesItsDraft(mounted: mountedComposerView,
-                                                        exitIsArmed: publishTrigger.offersExit)
+        ComposerConversationYield.decide(autosaveOpening, keepsStoredDraft: storedDraft.keepsDraft)
     }
 }
 
 nonisolated enum ComposerConversationYield {
     static func decide(_ opening: ComposerAutosaveOpening,
-                       atelierWritesItsDraft: Bool = false) -> PresentedSurfaceYield {
-        opening == .restores || atelierWritesItsDraft ? .closes : .retains
-    }
-
-    /// L'atelier monté ET armé sait écrire son brouillon (`StoryDraftStore`),
-    /// proposé à la réouverture.
-    static func atelierWritesItsDraft(mounted: ComposerMountedView,
-                                      exitIsArmed: Bool) -> Bool {
-        mounted == .atelier && exitIsArmed
-    }
-
-    /// La sortie de l'atelier écrit son brouillon PUIS referme ; sans elle, le
-    /// meuble referme par son propre chemin.
-    @MainActor
-    static func close(atelierWritesItsDraft: Bool,
-                      trigger: ComposerPublishTrigger,
-                      hostClose: () -> Void) {
-        if atelierWritesItsDraft, trigger.requestExit() { return }
-        hostClose()
+                       keepsStoredDraft: Bool = false) -> PresentedSurfaceYield {
+        opening == .restores || keepsStoredDraft ? .closes : .retains
     }
 }

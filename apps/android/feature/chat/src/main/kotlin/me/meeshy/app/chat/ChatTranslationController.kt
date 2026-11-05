@@ -15,6 +15,8 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.VoiceQueueProtection
+import me.meeshy.sdk.model.playback.AudioLanguageStripLaw
 import me.meeshy.sdk.model.translation.ServerTranslationAdmission
 import me.meeshy.sdk.model.translation.TranslationRequestFailure
 import me.meeshy.ui.component.bubble.RowFailure
@@ -108,6 +110,22 @@ internal class ChatTranslationController(
                 }
             }
         }
+    }
+
+    /**
+     * Le drapeau (ou la pastille) d'une langue de PISTE d'un vocal : il écrit sur le MÊME canal que les drapeaux de texte,
+     * de sorte que le texte, le karaoké et la voix suivent une seule langue. La sentinelle « Original » épingle la langue
+     * d'origine de CETTE pièce (sa transcription) : lever la bascule rendrait la main au Prisme, qui peut préférer la piste
+     * traduite. Un vocal protégé n'offre aucune piste.
+     */
+    fun selectAudioLanguage(messageId: String, code: String) {
+        val message = messages.value.firstOrNull { it.message.id == messageId }?.message ?: return
+        val voices = message.attachments.filter { it.mimeType?.startsWith("audio/") == true }
+        if (voices.isEmpty() || voices.any { VoiceQueueProtection.ofPiece(it, message) }) return
+        val target = AudioLanguageStripLaw.overrideFor(code)
+            ?: (voices.firstNotNullOfOrNull { it.transcription?.language.normalizedCode() } ?: message.originalLanguage.normalizedCode())
+            ?: return
+        mutableActiveLanguageOverride.update { it + (messageId to target) }
     }
 
     private fun forgetManualChoice(messageId: String) {

@@ -324,6 +324,8 @@ internal class ChatHostActions(
     val deleteSelectionForEveryone: (List<String>) -> Unit = {},
     val deleteSelectionForMe: (List<String>) -> Unit = {},
     val toggleStars: (List<String>) -> Unit = {},
+    /** Le drapeau d'une langue de piste d'un vocal : voix, texte et karaoké basculent ensemble. */
+    val onAudioLanguage: (String, String) -> Unit = { _, _ -> },
 )
 
 internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
@@ -437,6 +439,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     deleteSelectionForEveryone = this::deleteSelectionForEveryone,
     deleteSelectionForMe = this::deleteSelectionForMe,
     toggleStars = this::toggleStars,
+    onAudioLanguage = this::selectAudioLanguage,
 )
 
 /** Le rendu de l'éditeur audio est un m4a (AAC), comme la prise du micro. */

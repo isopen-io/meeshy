@@ -183,9 +183,9 @@ describe('la puce d’identité du mode focus', () => {
 describe('la cellule de frappe', () => {
   const entry: TypingEntry = { userId: 'u-kwame', displayName: 'Kwame Mensah', expiresAt: 0 };
 
-  test('celui qui écrit est en ligne, dans les deux tenues', () => {
+  test('ne porte aucun indicateur de présence, dans les deux tenues (#16114)', () => {
     for (const flat of [true, false]) {
-      expect(dotOf(renderToStaticMarkup(<TypingRosterCell typists={[entry]} accent="#5B4CFF" flat={flat} />))).toBe('online');
+      expect(dotOf(renderToStaticMarkup(<TypingRosterCell typists={[entry]} accent="#5B4CFF" flat={flat} />))).toBeNull();
     }
   });
 });

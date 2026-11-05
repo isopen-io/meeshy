@@ -348,12 +348,7 @@ nonisolated enum ComposerDocumentPublishGate {
     }
 
     /// - Parameters:
-    ///   - surface: la surface MONTÉE. `.scene` rend toujours `false`, et ce
-    ///     n'est pas une précaution gratuite : le jour où le socle publiera sous
-    ///     la scène, il devra passer par le gate de l'atelier (`canPublish`,
-    ///     `internal` à `MeeshyUI`) et non par celui-ci, qui ne voit ni les
-    ///     diapositives ni la timeline. Rendre `false` REFUSE ; il n'invente pas
-    ///     une réponse qu'il n'a pas.
+    ///   - surface: la surface MONTÉE — la scène du meuble ou le mood.
     ///   - visibility: l'audience COURANTE du meuble.
     ///   - visibilityUserIds: sa liste nominative. Elle et l'audience sont SANS
     ///     valeur par défaut : un défaut les aurait fait disparaître d'un site
@@ -382,16 +377,6 @@ nonisolated enum ComposerDocumentPublishGate {
         visibilityUserIds: [String],
         isPublishing: Bool,
         repostOfId: String?,
-        /// **La matière de l'ATELIER, RELAYÉE** (#4135) — jamais recalculée ici.
-        /// Le meuble ne voit ni le son de fond ni les traits de dessin : il
-        /// conclurait « rien à publier » sur une story « fond + musique »
-        /// parfaitement publiable. `StoryComposerView.canPublish` reste
-        /// l'unique juge, et la télécommande le transporte.
-        ///
-        /// Défaut `false`, et c'est le sens SÛR : un appelant qui l'ignore
-        /// obtient une flèche INERTE sur la scène, jamais une flèche armée
-        /// au-dessus d'une composition vide.
-        atelierHasMatter: Bool = false,
         /// **La matière du DOCUMENT — des pièces jointes, un lieu (#4514).**
         ///
         /// Elle manquait, et le défaut était silencieux : un post de deux photos
@@ -408,8 +393,6 @@ nonisolated enum ComposerDocumentPublishGate {
         guard !isPublishing else { return false }
         guard audienceIsComplete(visibility, userIds: visibilityUserIds) else { return false }
         switch surface {
-        case .scene:
-            return atelierHasMatter
         case .mood:
             return ComposerMoodPolicy.canPublish(emoji: emoji, isPublishing: isPublishing)
         case .document:

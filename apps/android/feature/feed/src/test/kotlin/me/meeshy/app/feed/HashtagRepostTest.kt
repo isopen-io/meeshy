@@ -52,7 +52,7 @@ class HashtagRepostTest {
         every { session.currentUser } returns MutableStateFlow(reader)
         every { hashtags.cachedFirstPage(any()) } returns null
         coEvery { hashtags.posts("paris", null, any()) } returns NetworkResult.Success(PostPage(served.toList(), null, false))
-        return HashtagResultsViewModel(hashtags, posts, mockk(relaxed = true), session, MeeshyConfig(), SavedStateHandle(mapOf("tag" to "paris")))
+        return HashtagResultsViewModel(hashtags, posts, mockk(relaxed = true), session, MeeshyConfig(), SavedStateHandle(mapOf("tag" to "paris")), FakeProfileSocial().socket)
     }
 
     private fun HashtagResultsViewModel.card(id: String) = state.value.posts.single { it.id == id }

@@ -226,6 +226,8 @@ type AvatarProps = {
   ring?: AvatarRingDesign | null;
   /** La place libre (px) que l'hôte réserve autour de l'empreinte : le cadre illustré s'y montre sans réduire l'avatar (#15157). */
   ringRoom?: number;
+  /** `false` : le contour sans ses films illustrés — la seule surface qui le retire est la cellule de frappe (#16114). */
+  ringDecor?: boolean;
 };
 
 /**
@@ -259,10 +261,10 @@ export const avatarPhotoEvents = {
 } as const;
 
 export function Avatar(props: AvatarProps) {
-  const { ring, ringRoom, ...bare } = props;
+  const { ring, ringRoom, ringDecor, ...bare } = props;
   if (ring !== undefined && ring !== null) {
     return (
-      <AvatarRingFrame ring={ring} size={props.size} room={ringRoom ?? 0}>
+      <AvatarRingFrame ring={ring} size={props.size} room={ringRoom ?? 0} decor={ringDecor ?? true}>
         {renderAvatar({ ...bare, size: ringedAvatarSize(props.size, props.storyRing !== undefined) }, true)}
       </AvatarRingFrame>
     );

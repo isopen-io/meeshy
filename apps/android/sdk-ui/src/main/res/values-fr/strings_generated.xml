@@ -138,6 +138,14 @@
     <string name="code_viewer_loading">Chargement...</string>
     <string name="code_viewer_loading_file">Chargement du fichier...</string>
     <string name="code_viewer_more_lines">%1$d lignes de plus</string>
+    <string name="comment_quote_a11y">À propos de : %1$s</string>
+    <string name="comment_quote_about">À propos de</string>
+    <string name="comment_quote_kind_audio">Un audio</string>
+    <string name="comment_quote_kind_file">Une pièce jointe</string>
+    <string name="comment_quote_kind_image">Une photo</string>
+    <string name="comment_quote_kind_location">Un lieu</string>
+    <string name="comment_quote_kind_video">Une vidéo</string>
+    <string name="comment_quote_remove">Retirer la citation</string>
     <string name="common_cancel">Annuler</string>
     <string name="common_clearSearch">Effacer la recherche</string>
     <string name="common_clear_search">Effacer la recherche</string>
@@ -280,7 +288,9 @@
     <string name="location_fullscreen_sharedPosition">Position partagée</string>
     <string name="media_audio_open_fullscreen">Ouvrir en plein écran, lecture %1$d%%</string>
     <string name="media_audio_open_fullscreen_hint">Affiche la vue plein écran avec les options de sauvegarde</string>
+    <string name="media_audio_original">Original</string>
     <string name="media_audio_play">Lire l\'audio</string>
+    <string name="media_audio_retranscribe">Re-transcrire</string>
     <string name="media_audio_speed_cycle">Vitesse de lecture %1$s</string>
     <string name="media_audio_transcribe">Transcrire</string>
     <string name="media_audio_transcribing">Transcription en cours</string>

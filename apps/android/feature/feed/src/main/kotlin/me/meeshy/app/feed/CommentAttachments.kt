@@ -42,7 +42,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.CommentPieceKind
 import me.meeshy.ui.component.bubble.BubbleFile
+import me.meeshy.ui.component.comments.CommentAttachmentsTray
+import me.meeshy.ui.component.comments.CommentTrayLabels
+import me.meeshy.ui.component.comments.CommentTrayTile
 import me.meeshy.ui.component.bubble.BubbleFileRow
 import me.meeshy.ui.component.composer.PieceRemoveBadge
 import me.meeshy.ui.component.composer.PieceRemoveBadgeGeometry
@@ -122,39 +126,19 @@ private fun CommentVisualStrip(media: List<CommentMediaPreview>) {
 }
 
 /**
- * Le bandeau des pièces du composeur (#12972) : une vignette par pièce ; la toucher, son centre compris, l'ouvre dans la
- * retouche unique (#12735) ; le ✕ à cheval sur son coin la retire (#15229) ; une pièce qui se téléverse porte son indicateur.
+ * Le bandeau des pièces du composeur (#12972) : la zone commune [CommentAttachmentsTray] (sdk-ui, mêmes tuiles que le
+ * message) ; la vignette, elle, vient d'ici — la zone ne lit aucun fichier.
  */
 @Composable
 internal fun CommentAttachmentBar(tray: CommentAttachmentTray, onEdit: (CommentPendingPiece) -> Unit, onRemove: (String) -> Unit) {
-    if (!tray.hasMedia) return
-    val removeLabel = stringResource(R.string.feed_composer_remove_media)
-    val editLabel = stringResource(R.string.post_comments_edit_media)
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-            .padding(start = MeeshySpacing.md, end = PieceRemoveBadgeGeometry.ReachEnd, top = PieceRemoveBadgeGeometry.ReachTop, bottom = MeeshySpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(PieceRemoveBadgeGeometry.ReachEnd),
-    ) {
-        tray.pieces.forEach { piece ->
-            Box(Modifier.size(PieceSize)) {
-                Box(
-                    Modifier.size(PieceSize).clip(PieceShape).background(MeeshyTheme.tokens.inputBackground)
-                        .clickable(onClickLabel = editLabel, role = Role.Button) { onEdit(piece) }
-                        .semantics { contentDescription = editLabel },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PieceThumbnail(piece)
-                    if (piece.uploaded == null) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                }
-                PieceRemoveBadge(
-                    label = removeLabel,
-                    onClick = { onRemove(piece.id) },
-                    discColor = Color.Black.copy(alpha = 0.6f),
-                    glyphColor = MeeshyPalette.White,
-                    modifier = Modifier.align(Alignment.TopEnd),
-                )
-            }
-        }
+    val labels = CommentTrayLabels(
+        edit = stringResource(R.string.post_comments_edit_media),
+        remove = stringResource(R.string.feed_composer_remove_media),
+        preparing = stringResource(R.string.comment_tray_preparing),
+    )
+    val tiles = tray.pieces.map { CommentTrayTile(it.id, CommentPieceKind.of(it.item.mimeType), it.item.fileName, isLoading = it.uploaded == null) }
+    CommentAttachmentsTray(tiles, labels, onEdit = { tile -> tray.piece(tile.id)?.let(onEdit) }, onRemove = onRemove) { tile ->
+        tray.piece(tile.id)?.let { PieceThumbnail(it) }
     }
 }
 

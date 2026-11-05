@@ -7,12 +7,14 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -40,9 +42,11 @@ class ListedPostActionsTest {
         val notice get() = actions.state.value.notice
     }
 
+    private val pushed = MutableSharedFlow<SocketPostTranslationUpdatedData>(extraBufferCapacity = 8)
+
     private fun subject(vararg served: ApiPost, reader: MeeshyUser? = null): Subject {
         val list = MutableStateFlow(PostPageListState().appended(served.toList(), nextCursor = null, hasMore = false))
-        val actions = ListedPostActions(CoroutineScope(UnconfinedTestDispatcher()), posts, reports, list) { reader }
+        val actions = ListedPostActions(CoroutineScope(UnconfinedTestDispatcher()), posts, reports, list, pushed) { reader }
         return Subject(list, actions)
     }
 
@@ -183,5 +187,44 @@ class ListedPostActionsTest {
         s.actions.onFlagTap("p1", "de")
 
         coVerify(exactly = 1) { posts.requestTranslation("p1", "de") }
+    }
+
+    private val french = MeeshyUser(id = "me", username = "moi", systemLanguage = "fr")
+
+    private fun hallo(postId: String) = SocketPostTranslationUpdatedData(postId, "de", ApiPostTranslationEntry(text = "Hallo"))
+
+    @Test
+    fun `la traduction demandee arrive dans SA carte, qui passe dans cette langue, et les autres ne bougent pas (#16004)`() = runTest {
+        coEvery { posts.requestTranslation("p1", "de") } returns NetworkResult.Success(Unit)
+        val s = subject(post("p1").copy(originalLanguage = "en"), post("p2"), reader = french)
+        val other = s.post("p2")
+
+        s.actions.onFlagTap("p1", "de")
+        pushed.tryEmit(hallo("p1"))
+
+        assertThat(s.post("p1").translations?.get("de")?.text).isEqualTo("Hallo")
+        assertThat(s.actions.state.value.languageOverrides).containsExactly("p1", "de")
+        assertThat(s.post("p2")).isEqualTo(other)
+    }
+
+    @Test
+    fun `une traduction poussee sans demande se range dans la carte sans en changer la langue`() = runTest {
+        val s = subject(post("p1").copy(originalLanguage = "en"), reader = french)
+
+        pushed.tryEmit(hallo("p1"))
+
+        assertThat(s.post("p1").translations?.get("de")?.text).isEqualTo("Hallo")
+        assertThat(s.actions.state.value.languageOverrides).isEmpty()
+    }
+
+    @Test
+    fun `une demande refusee par le serveur ne fait pas basculer la carte a une arrivee tardive`() = runTest {
+        coEvery { posts.requestTranslation("p1", "de") } returns refused
+        val s = subject(post("p1").copy(originalLanguage = "en"), reader = french)
+
+        s.actions.onFlagTap("p1", "de")
+        pushed.tryEmit(hallo("p1"))
+
+        assertThat(s.actions.state.value.languageOverrides).isEmpty()
     }
 }

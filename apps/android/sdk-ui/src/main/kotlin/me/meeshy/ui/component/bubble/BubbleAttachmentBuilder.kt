@@ -44,10 +44,12 @@ internal object BubbleAttachmentBuilder {
         mediaBaseUrl: String?,
         displayDensity: Float,
         contactScope: ContactCardResolutionScope = ContactCardResolutionScope.Unknown,
+        /** La bascule de langue posée par un drapeau : texte, karaoké et piste des vocaux la suivent d'une seule descente. */
+        manualLanguage: String? = null,
     ): BubbleAttachments {
         // #13106 — un blob chiffré de bout en bout n'est aucun genre de pièce : ni nom, ni lien.
         val openable = visibleAttachments.filterNot { it.isEndToEndBlob }
-        return project(openable, effects, preferences, mediaBaseUrl, displayDensity, contactScope)
+        return project(openable, effects, preferences, mediaBaseUrl, displayDensity, contactScope, manualLanguage)
     }
 
     private fun project(
@@ -57,6 +59,7 @@ internal object BubbleAttachmentBuilder {
         mediaBaseUrl: String?,
         displayDensity: Float,
         contactScope: ContactCardResolutionScope,
+        manualLanguage: String?,
     ): BubbleAttachments {
         val files = visibleAttachments
             .filterNot { it.isImage || it.isLocation || it.isAudio }
@@ -94,7 +97,7 @@ internal object BubbleAttachmentBuilder {
                 },
             audios = visibleAttachments
                 .filter { it.isAudio }
-                .map { attachment -> buildAudio(attachment, preferences, mediaBaseUrl) },
+                .map { attachment -> buildAudio(attachment, preferences, mediaBaseUrl, manualLanguage) },
             videos = visibleAttachments
                 .filter { it.isVideo && !it.isContactCard && !PieceSealing.isSealed(it) }
                 .map { attachment ->
@@ -200,9 +203,10 @@ internal object BubbleAttachmentBuilder {
         attachment: ApiMessageAttachment,
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
+        manualLanguage: String? = null,
     ): BubbleAudio {
-        val resolved = resolveTranscription(attachment, preferences)
-        val translatedAudio = resolveTranslatedAudio(attachment, preferences)
+        val voice = AttachmentTranscriptPrism.servedVoice(attachment.transcription, attachment.translations, preferences, manualLanguage)
+        val translatedAudio = voice.track
         val playableUrl = translatedAudio?.url ?: attachment.fileUrl
         val durationSeconds = translatedAudio?.durationMs?.let { it / 1000 }
             ?: attachment.duration?.let { it / 1000 }
@@ -212,12 +216,12 @@ internal object BubbleAttachmentBuilder {
             url = playableUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
             durationSeconds = durationSeconds,
             sizeBytes = attachment.fileSize,
-            transcriptionText = resolved?.text,
-            transcriptionLanguage = resolved?.language,
-            isTranscriptionTranslated = resolved?.isTranslated == true,
+            transcriptionText = voice.text,
+            transcriptionLanguage = voice.textLanguage,
+            isTranscriptionTranslated = voice.isTranslated,
             isAudioTranslated = translatedAudio != null,
-            audioLanguage = translatedAudio?.language ?: resolved?.language,
-            transcriptionSegments = servedSegments(attachment, resolved, playedLanguage = translatedAudio?.language),
+            audioLanguage = translatedAudio?.language ?: voice.textLanguage,
+            transcriptionSegments = servedSegments(attachment, voice),
             lastPlayPositionMs = attachment.currentUserConsumption?.lastPlayPositionMs,
             listenedComplete = attachment.currentUserConsumption?.listenedComplete == true,
             originalLanguage = attachment.transcription?.language?.trim()?.ifBlank { null },
@@ -229,21 +233,22 @@ internal object BubbleAttachmentBuilder {
 
     /**
      * Les segments du texte servi (#13878) : ceux de la transcription d'origine, ou ceux de la traduction servie. Leurs
-     * horodatages ne valent que sur la piste qu'ils décrivent ; servis au-dessus d'une autre voix, ils les perdent et le
-     * karaoké avance à la progression plutôt que d'allumer un mot à contretemps.
+     * horodatages ne valent que sur la piste qu'ils décrivent ([AttachmentTranscriptPrism.ServedVoice.segmentsDescribeTrack]) ;
+     * servis au-dessus d'une autre voix, ils les perdent et le karaoké avance à la progression plutôt que d'allumer un
+     * mot à contretemps.
      */
     private fun servedSegments(
         attachment: ApiMessageAttachment,
-        served: AttachmentTranscriptPrism.Served?,
-        playedLanguage: String?,
+        voice: AttachmentTranscriptPrism.ServedVoice,
     ): List<MessageTranscriptionSegment> {
-        served ?: return emptyList()
-        val segments = if (served.isTranslated) {
-            attachment.translations.orEmpty().entries.firstOrNull { it.key.equals(served.language, ignoreCase = true) }?.value?.segments
-        } else {
+        voice.text ?: return emptyList()
+        val language = voice.segmentsLanguage
+        val segments = if (language == null) {
             attachment.transcription?.segments
+        } else {
+            attachment.translations.orEmpty().entries.firstOrNull { it.key.equals(language, ignoreCase = true) }?.value?.segments
         }
-        val describesPlayedTrack = if (served.isTranslated) served.language.equals(playedLanguage, ignoreCase = true) else playedLanguage == null
+        val describesPlayedTrack = voice.segmentsDescribeTrack
         return segments.orEmpty().mapNotNull { segment ->
             segment.text.trim().ifBlank { null }?.let { text ->
                 MessageTranscriptionSegment(
@@ -255,24 +260,6 @@ internal object BubbleAttachmentBuilder {
             }
         }
     }
-
-    /**
-     * The played voice: [AttachmentTranscriptPrism.playedTrack], the SAME single Prisme descent as the
-     * transcription line next to it, so the voice and the text are always in one language — the coupling
-     * lives in `:core:model`, where the voice queue reads it too. Null means the original voice note.
-     */
-    private fun resolveTranslatedAudio(
-        attachment: ApiMessageAttachment,
-        preferences: LanguageResolver.ContentLanguagePreferences,
-    ): AttachmentTranscriptPrism.Track? =
-        AttachmentTranscriptPrism.playedTrack(attachment.transcription, attachment.translations, preferences)
-
-    /** The Prisme-served transcription line — [AttachmentTranscriptPrism], the site the transcription fiche reads too. */
-    private fun resolveTranscription(
-        attachment: ApiMessageAttachment,
-        preferences: LanguageResolver.ContentLanguagePreferences,
-    ): AttachmentTranscriptPrism.Served? =
-        AttachmentTranscriptPrism.served(attachment.transcription, attachment.translations, preferences)
 
     /**
      * L'URL de la variante WebP d'aperçu quand elle est plus légère que l'original, `null`

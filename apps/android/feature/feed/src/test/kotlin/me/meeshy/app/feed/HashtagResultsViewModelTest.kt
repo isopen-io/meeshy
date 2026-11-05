@@ -14,7 +14,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -36,6 +38,7 @@ class HashtagResultsViewModelTest {
     private val hashtags: PostHashtagRepository = mockk(relaxed = true)
     private val posts: PostRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
+    private val social = FakeProfileSocial()
 
     private fun post(id: String, liked: Boolean = false, likes: Int = 0) =
         ApiPost(id = id, content = "Post $id", isLikedByMe = liked, likeCount = likes)
@@ -43,10 +46,10 @@ class HashtagResultsViewModelTest {
     private fun page(vararg ids: String, cursor: String? = null, more: Boolean = false) =
         NetworkResult.Success(PostPage(ids.map { post(it) }, cursor, more))
 
-    private fun viewModel(tag: String = "#Paris", cached: PostPage? = null): HashtagResultsViewModel {
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+    private fun viewModel(tag: String = "#Paris", cached: PostPage? = null, reader: MeeshyUser? = null): HashtagResultsViewModel {
+        every { session.currentUser } returns MutableStateFlow(reader)
         every { hashtags.cachedFirstPage(any()) } returns cached
-        return HashtagResultsViewModel(hashtags, posts, mockk(relaxed = true), session, MeeshyConfig(), SavedStateHandle(mapOf("tag" to tag)))
+        return HashtagResultsViewModel(hashtags, posts, mockk(relaxed = true), session, MeeshyConfig(), SavedStateHandle(mapOf("tag" to tag)), social.socket)
     }
 
     @Test
@@ -116,5 +119,20 @@ class HashtagResultsViewModelTest {
 
         assertThat(vm.state.value.posts.single().isLiked).isTrue()
         assertThat(vm.state.value.posts.single().likeCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `une traduction demandee d un drapeau arrive dans SA carte et seulement elle (#16004)`() = runTest {
+        val english = ApiPost(id = "a", content = "Hello", originalLanguage = "en")
+        coEvery { hashtags.posts("paris", null, any()) } returns NetworkResult.Success(PostPage(listOf(english, post("b")), null, false))
+        coEvery { posts.requestTranslation("a", "de") } returns NetworkResult.Success(Unit)
+        val vm = viewModel(reader = MeeshyUser(id = "me", username = "moi", systemLanguage = "fr"))
+        val untouched = vm.state.value.posts.single { it.id == "b" }
+
+        vm.cards.onFlagTap("a", "de")
+        social.translatedFlow.tryEmit(SocketPostTranslationUpdatedData("a", "de", ApiPostTranslationEntry(text = "Hallo")))
+
+        assertThat(vm.state.value.posts.single { it.id == "a" }.content).isEqualTo("Hallo")
+        assertThat(vm.state.value.posts.single { it.id == "b" }).isEqualTo(untouched)
     }
 }

@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.SystemNoticeText
 import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.TranscriptSecondaryTexts
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.piece.MessagePieceTarget
@@ -123,6 +124,7 @@ public object BubbleContentBuilder {
             mediaBaseUrl = mediaBaseUrl,
             displayDensity = displayDensity,
             contactScope = ContactCardResolutionScope.of(message),
+            manualLanguage = activeLanguageCode.normalizedCode(),
         )
         val messagePlace = message.location
             ?.takeUnless { isDeleted || isEndToEndSealed || viewOnceSealed }
@@ -188,7 +190,7 @@ public object BubbleContentBuilder {
             originalText = if (isTranslated && !isShowingOriginal && !viewOnceSealed) message.content else null,
             languageStrip = languageStrip,
             primaryLanguageCode = preferredCode ?: originalCode,
-            secondaryTexts = secondaryTexts(languageStrip, message.translations),
+            secondaryTexts = voiceSecondaryTexts(visibleAttachments, protectedVoiceIds) + secondaryTexts(languageStrip, message.translations),
             senderName = senderName,
             showSenderName = showSenderName && !isOutgoing,
             senderId = message.senderId,
@@ -377,6 +379,19 @@ public object BubbleContentBuilder {
         this == originalCode || message.translations.any {
             it.targetLanguage.normalizedCode() == this && it.translatedContent.isNotBlank()
         }
+
+    /**
+     * Le panneau secondaire s'applique aussi à la transcription : `langue -> texte` des vocaux ouverts (jamais un vocal
+     * protégé), le texte du message l'emportant sur une même langue.
+     */
+    private fun voiceSecondaryTexts(attachments: List<ApiMessageAttachment>, protectedIds: Set<String>): Map<String, String> =
+        attachments
+            .filter { it.mimeType?.startsWith("audio/") == true && !it.isEndToEndBlob && it.id !in protectedIds }
+            .fold(LinkedHashMap<String, String>()) { acc, attachment ->
+                TranscriptSecondaryTexts.of(attachment.transcription, attachment.translations)
+                    .forEach { (code, text) -> acc.putIfAbsent(code, text) }
+                acc
+            }
 
     /** `langue -> texte` des langues du pied qui portent un contenu : la matière du panneau secondaire. */
     private fun secondaryTexts(

@@ -136,6 +136,14 @@
     <string name="code_viewer_loading">Loading...</string>
     <string name="code_viewer_loading_file">Loading file...</string>
     <string name="code_viewer_more_lines">%1$d more lines</string>
+    <string name="comment_quote_a11y">About: %1$s</string>
+    <string name="comment_quote_about">About</string>
+    <string name="comment_quote_kind_audio">An audio clip</string>
+    <string name="comment_quote_kind_file">An attachment</string>
+    <string name="comment_quote_kind_image">A photo</string>
+    <string name="comment_quote_kind_location">A place</string>
+    <string name="comment_quote_kind_video">A video</string>
+    <string name="comment_quote_remove">Remove quote</string>
     <string name="common_cancel">Cancel</string>
     <string name="common_clearSearch">Clear search</string>
     <string name="common_clear_search">Clear search</string>
@@ -278,7 +286,9 @@
     <string name="location_fullscreen_sharedPosition">Shared position</string>
     <string name="media_audio_open_fullscreen">Open full screen, playback %1$d%%</string>
     <string name="media_audio_open_fullscreen_hint">Shows the full-screen view with saving options</string>
+    <string name="media_audio_original">Original</string>
     <string name="media_audio_play">Play audio</string>
+    <string name="media_audio_retranscribe">Re-transcribe</string>
     <string name="media_audio_speed_cycle">Playback speed %1$s</string>
     <string name="media_audio_transcribe">Transcribe</string>
     <string name="media_audio_transcribing">Transcribing</string>

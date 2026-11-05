@@ -96,15 +96,24 @@ final class AvatarRingViewTests: XCTestCase {
         XCTAssertEqual(context.ringSize * layout.contentScale, context.size * 0.84 / 1.4, accuracy: 0.001)
     }
 
-    /// Liste et mini-avatar : trop petits pour lire l'illustration, l'anneau seul, à sa taille d'avant.
-    func test_layout_listAndMiniAvatar_fallBackToTheRingAlone() throws {
+    /// Liste, bulle et mini-avatar : le cadre s'affiche ENTIER, dans l'empreinte, l'avatar réduit avec lui (#16114).
+    func test_layout_listAndMiniAvatar_showTheWholeFrame() throws {
         for size in [AvatarContext.conversationList.size, AvatarContext.messageBubble.size, AvatarContext.postReaction.size] {
             let layout = AvatarRingLayout.make(try toile(), box: size, baseScale: 0.84)
-            XCTAssertNil(layout.decor, "\(size)")
-            XCTAssertTrue(layout.drawsStill)
-            XCTAssertEqual(layout.paintedSide(box: size), size)
-            XCTAssertEqual(layout.contentScale, 0.84, accuracy: 0.0001)
+            XCTAssertNotNil(layout.decor, "\(size)")
+            XCTAssertFalse(layout.drawsStill)
+            XCTAssertEqual(layout.paintedSide(box: size), size, accuracy: 0.001)
+            XCTAssertEqual(layout.contentScale, 0.84 / 1.4, accuracy: 0.0001)
         }
+    }
+
+    /// La bulle de frappe retire les films : l'anneau fixe seul, à sa taille d'avant (#16114).
+    func test_layout_withoutDecor_keepsTheRingAlone() throws {
+        let layout = AvatarRingLayout.make(try toile(), box: 22, baseScale: 0.84, decor: false)
+        XCTAssertNil(layout.decor)
+        XCTAssertTrue(layout.drawsStill)
+        XCTAssertEqual(layout.paintedSide(box: 22), 22)
+        XCTAssertEqual(layout.contentScale, 0.84, accuracy: 0.0001)
     }
 
     /// Une place déclarée libre par l'hôte se prend, jamais plus.
@@ -136,11 +145,11 @@ final class AvatarRingViewTests: XCTestCase {
         XCTAssertEqual(AvatarRingLayout.paintBeyondAvatar(design, avatarSize: avatar), (box * 1.4 - avatar) / 2, accuracy: 0.001)
     }
 
-    func test_fullSpill_withoutFilmOrTooSmall_isZero() throws {
+    func test_fullSpill_withoutFilm_isZero() throws {
         let plain = try XCTUnwrap(AvatarRingCatalog.shared.packs.flatMap(\.rings).first { $0.decor == nil })
         XCTAssertEqual(AvatarRingLayout.fullSpill(plain, box: 107), 0)
         XCTAssertEqual(AvatarRingLayout.fullSpill(nil, box: 107), 0)
         XCTAssertEqual(AvatarRingLayout.paintBeyondAvatar(plain, avatarSize: 90), 0)
-        XCTAssertEqual(AvatarRingLayout.fullSpill(try toile(), box: 40), 0)
+        XCTAssertEqual(AvatarRingLayout.fullSpill(try toile(), box: 40), 8, accuracy: 0.001, "même petit, le film demande sa place (#16114)")
     }
 }

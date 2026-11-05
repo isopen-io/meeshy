@@ -2,6 +2,8 @@ package me.meeshy.app.feed
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.PostTranslationMerge
 import me.meeshy.sdk.model.comments.CommentsTitleCount
 
 /**
@@ -114,6 +116,16 @@ data class PostPageListState(
         val target = posts.firstOrNull { it.id == postId } ?: return this
         if (target.isPinned == true) return this
         return copy(posts = posts.map { if (it.id == postId) it.copy(isPinned = true) else it })
+    }
+
+    /**
+     * Une traduction poussée par la passerelle (`post:translation-updated`) se range dans [postId], par la loi de fusion du
+     * fil ([PostTranslationMerge]). Inerte (même instance) si le post est absent ou si la fusion n'apporte rien.
+     */
+    fun translated(postId: String, language: String, entry: ApiPostTranslationEntry): PostPageListState {
+        val target = posts.firstOrNull { it.id == postId } ?: return this
+        val merged = PostTranslationMerge.mergeTranslation(target, language, entry) ?: return this
+        return copy(posts = posts.map { if (it.id == postId) merged else it })
     }
 
     /** Une suppression refusée : [post] reprend sa place [index] (bornée à la liste). Inerte s'il y est déjà. */
