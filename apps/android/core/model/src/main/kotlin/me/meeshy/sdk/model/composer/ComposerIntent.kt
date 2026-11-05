@@ -20,6 +20,14 @@ data class ComposerProfile(
     val allowsCapture: Boolean,
     val routesToLegacy: LegacyComposer?,
 ) {
+    /**
+     * Le clavier se lève à l'ouverture seulement sur une surface SANS scène (#16203) : la story, le post et le réel
+     * s'ouvrent sur la MÊME scène au repos, quelle que soit la porte ; le texte du post s'écrit depuis son option de la
+     * colonne, jamais par un clavier qui réduit la scène et retire ses outils dès l'arrivée.
+     */
+    val raisesKeyboardOnOpen: Boolean
+        get() = opensWith.focusesContentOnAppear && !ComposerFormatVariant.of(initialFormat).composesOnScene
+
     companion object {
         fun of(
             origin: ComposerOrigin,
