@@ -9,6 +9,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.height
@@ -40,7 +41,12 @@ class StoryActionRailComposeTest {
         hasAudibleSound = true,
     )
 
-    private fun show(height: Dp, plan: StoryRailPlan = viewerPlan, emphasis: StoryRailEmphasis = StoryRailEmphasis()) {
+    private fun show(
+        height: Dp,
+        plan: StoryRailPlan = viewerPlan,
+        emphasis: StoryRailEmphasis = StoryRailEmphasis(),
+        taps: StoryRailTaps = StoryRailTaps(),
+    ) {
         compose.setContent {
             MeeshyTheme {
                 Box(Modifier.size(width = 360.dp, height = height)) {
@@ -57,6 +63,7 @@ class StoryActionRailComposeTest {
                         onHeartBounds = {},
                         onLanguageBounds = {},
                         emphasis = emphasis,
+                        taps = taps,
                     )
                 }
             }
@@ -116,5 +123,28 @@ class StoryActionRailComposeTest {
         assertThat(storyRailContourColor(StoryRailContour.NONE, accent)).isNull()
         assertThat(storyRailContourColor(StoryRailContour.PARTICIPATED, accent)).isEqualTo(accent)
         assertThat(storyRailContourColor(StoryRailContour.LIVE, accent)).isNotEqualTo(accent)
+    }
+
+    @Test
+    fun `the wand on the rail images the story, for the author as for a viewer (#16334)`() {
+        var imaged = 0
+        show(900.dp, taps = StoryRailTaps(onImager = { imaged++ }))
+
+        compose.onNodeWithContentDescription("Picture it").performClick()
+
+        assertThat(imaged).isEqualTo(1)
+        assertThat(StoryRailPlan.resolve(isOwnStory = true, hasTranslatableContent = false).showsImager).isTrue()
+        assertThat(viewerPlan.showsImager).isTrue()
+    }
+
+    @Test
+    fun `compose keeps its own entry, the wand no longer opens it (#16334)`() {
+        var composed = 0
+        var imaged = 0
+        show(900.dp, taps = StoryRailTaps(onCompose = { composed++ }, onImager = { imaged++ }))
+
+        compose.onNodeWithContentDescription("Compose").performClick()
+
+        assertThat(composed to imaged).isEqualTo(1 to 0)
     }
 }
