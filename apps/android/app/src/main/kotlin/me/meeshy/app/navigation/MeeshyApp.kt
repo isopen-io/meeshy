@@ -227,6 +227,7 @@ fun MeeshyApp(
                     PendingLinkBanner(isVisible = rootState.showsPendingLinkNotice && currentRoute == Routes.LOGIN)
                     ActivationInviteBandHost(
                         navController = navController,
+                        currentRoute = currentRoute,
                         modifier = Modifier
                             .weight(1f)
                             .then(if (showsCallPill || miniPlayerShown) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),

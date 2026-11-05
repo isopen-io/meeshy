@@ -22,7 +22,7 @@ data class ContactsUiState(
 
 @HiltViewModel
 class ContactsViewModel @Inject constructor(
-    private val friendshipCache: FriendshipCache = FriendshipCache(),
+    private val friendshipCache: FriendshipCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContactsUiState(pendingReceivedCount = friendshipCache.pendingReceivedCount))

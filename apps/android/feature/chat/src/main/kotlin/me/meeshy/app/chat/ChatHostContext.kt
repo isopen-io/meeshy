@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.MessageTranscriptionFiche
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.composer.PendingAttachment
@@ -226,6 +227,8 @@ internal class ChatHostActions(
     val pieceOverlayFor: (String, String) -> PieceOverlayModel?,
     /** Les pièces d'un message chargé, telles que le serveur les sert : la fiche Transcription les lit (#13779). */
     val attachmentsOf: (String) -> List<ApiMessageAttachment> = { emptyList() },
+    /** La piste parlée d'une traduction se joue protégée : message protégé, inconnu ou conversation chiffrée. */
+    val transcriptionPlaybackProtected: (String) -> Boolean = { true },
     val onPieceReact: (String, String, String) -> Unit,
     val onPieceDelete: (String, String) -> Unit,
     val openForwardPiece: (String, String) -> Unit,
@@ -354,7 +357,10 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     onFileAttachmentTap = this::onFileAttachmentTap,
     onPieceSave = this::onPieceSave,
     pieceOverlayFor = this::pieceOverlayFor,
-    attachmentsOf = this::attachmentsOf,
+    attachmentsOf = { messageId -> messageOf(messageId)?.attachments.orEmpty() },
+    transcriptionPlaybackProtected = { messageId ->
+        MessageTranscriptionFiche.playbackIsProtected(messageOf(messageId), state.value.isEndToEnd)
+    },
     onPieceReact = this::onPieceReact,
     onPieceDelete = this::onPieceDelete,
     openForwardPiece = this::openForwardPiece,

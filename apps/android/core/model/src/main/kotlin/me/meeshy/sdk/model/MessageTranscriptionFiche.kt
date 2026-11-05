@@ -39,6 +39,8 @@ object MessageTranscriptionFiche {
         val durationSeconds: Int?,
         val isCloned: Boolean,
         val isServed: Boolean,
+        /** La piste TTS jouable au toucher (iOS : la ligne « Traductions audio » se lit), ou `null` sans fichier servi. */
+        val audioUrl: String? = null,
     )
 
     sealed interface State {
@@ -97,6 +99,16 @@ object MessageTranscriptionFiche {
         }
     }
 
+    /**
+     * La piste parlée d'une traduction se joue-t-elle PROTÉGÉE (jamais écrite sur le disque) ? Message introuvable,
+     * conversation de bout en bout, message protégé ([VoiceQueueProtection.ofMessage]) ou l'une de ses pièces
+     * ([VoiceQueueProtection.ofPiece]) : oui. Fermée par défaut.
+     */
+    fun playbackIsProtected(message: ApiMessage?, conversationIsEndToEnd: Boolean): Boolean =
+        message == null || conversationIsEndToEnd ||
+            VoiceQueueProtection.ofMessage(message) ||
+            message.attachments.orEmpty().any { VoiceQueueProtection.ofPiece(it, message) }
+
     private fun translationsOf(
         attachment: ApiMessageAttachment,
         preferences: LanguageResolver.ContentLanguagePreferences,
@@ -111,6 +123,7 @@ object MessageTranscriptionFiche {
                 durationSeconds = translation.durationMs?.let { it / MILLIS_PER_SECOND },
                 isCloned = translation.cloned == true,
                 isServed = served != null && language.equals(served, ignoreCase = true),
+                audioUrl = translation.url?.trim()?.ifBlank { null },
             )
         }.sortedWith(compareByDescending<Translation> { it.isServed }.thenBy { it.language.lowercase() })
     }

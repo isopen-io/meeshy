@@ -8,6 +8,7 @@ import java.io.File
 import java.util.Locale
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.composer.ComposerFormat
+import me.meeshy.sdk.model.composer.ComposerFormatLabel
 import me.meeshy.sdk.model.composer.ComposerFormatVariant
 import me.meeshy.sdk.model.composer.ComposerSceneNoun
 import org.junit.Test
@@ -65,6 +66,37 @@ class ComposerFormatLabelsTest {
     }
 
     @Test
+    fun `the summary the screen reader speaks on the scene names the post and the reel, never the story`() {
+        val en = resourcesIn("en")
+        val fr = resourcesIn("fr")
+        fun summary(resources: Resources, noun: ComposerSceneNoun) =
+            resources.getString(ComposerFormatLabel.COMPOSITION_SUMMARY.res(noun), "2 objects", "Text")
+
+        assertWithMessage("post [en]").that(summary(en, ComposerSceneNoun.POST)).isEqualTo("Post, 2 objects: Text")
+        assertWithMessage("reel [en]").that(summary(en, ComposerSceneNoun.REEL)).isEqualTo("Reel, 2 objects: Text")
+        assertWithMessage("story [en]").that(summary(en, ComposerSceneNoun.STORY)).isEqualTo("Story, 2 objects: Text")
+        assertWithMessage("post [fr]").that(summary(fr, ComposerSceneNoun.POST)).isEqualTo("Post, 2 objects : Text")
+        assertWithMessage("reel [fr]").that(summary(fr, ComposerSceneNoun.REEL)).isEqualTo("Réel, 2 objects : Text")
+    }
+
+    @Test
+    fun `the summary uses the word of the format chip, in the seven languages`() {
+        val chip = mapOf(
+            "es" to mapOf(ComposerSceneNoun.STORY to "Historia", ComposerSceneNoun.POST to "Publicación", ComposerSceneNoun.REEL to "Reel"),
+            "it" to mapOf(ComposerSceneNoun.STORY to "Storia", ComposerSceneNoun.POST to "Post", ComposerSceneNoun.REEL to "Reel"),
+            "pt" to mapOf(ComposerSceneNoun.STORY to "Story", ComposerSceneNoun.POST to "Publicação", ComposerSceneNoun.REEL to "Reel"),
+            "de" to mapOf(ComposerSceneNoun.STORY to "Story", ComposerSceneNoun.POST to "Beitrag", ComposerSceneNoun.REEL to "Reel"),
+            "ar" to mapOf(ComposerSceneNoun.STORY to "قصة", ComposerSceneNoun.POST to "منشور", ComposerSceneNoun.REEL to "ريل"),
+        )
+        chip.forEach { (tag, byNoun) ->
+            byNoun.forEach { (noun, word) ->
+                val text = resourcesIn(tag).getString(ComposerFormatLabel.COMPOSITION_SUMMARY.res(noun), "N", "X")
+                assertWithMessage("$noun [$tag] « $text »").that(text).startsWith(word)
+            }
+        }
+    }
+
+    @Test
     fun `the sound notices a post and a reel share with the story name no format`() {
         val shared = listOf(R.string.story_sound_sheet_transcription_server)
         shared.forEach { res ->
@@ -86,6 +118,7 @@ class ComposerFormatLabelsTest {
             "story_media_soundExtraction_caption",
             "story_media_soundExtraction_a11yHint",
             "composer_post_text",
+            "story_composer_a11y_composition",
         )
         val sources = File("src/main/kotlin").walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
         storyOnly.forEach { name ->

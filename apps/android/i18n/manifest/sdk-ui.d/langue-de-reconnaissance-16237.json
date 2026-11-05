@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "recognition_language_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "recognition_language_show_all",
+          "status": "android-only"
+        },
+        {
+          "androidName": "recognition_language_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "recognition_language_search",
+          "status": "android-only"
+        },
+        {
+          "androidName": "recognition_language_selected",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
