@@ -343,6 +343,7 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
         }
     }
 
+    @available(iOS 16.4, *)
     private struct Isolated<Content: View>: UIViewControllerRepresentable {
         let content: Content
         func makeUIViewController(context: Context) -> UIHostingController<Content> {
