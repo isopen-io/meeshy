@@ -4,11 +4,13 @@ import android.content.Context
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.playback.AudioPlaybackState
@@ -216,6 +218,38 @@ class AudioFullscreenLanguagesTest {
         compose.waitForIdle()
 
         assertThat(player.toggles).isEqualTo(1)
+    }
+
+    @Test
+    fun `une langue touchee a l arret joue la piste choisie, comme iOS`() {
+        val player = FakeAudioFullscreenPlayer().apply { switchReloads = true }
+        player.mutablePlayback.value = AudioPlaybackState(attachmentId = "a", isPlaying = false, durationMs = 4_000L)
+        val source = mutableStateOf(voice())
+        val port = FakeTranscriptPort()
+        showPage(source, player, port)
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(audioLanguagePillTag("en")).performSemanticsAction(SemanticsActions.OnClick)
+        compose.runOnIdle { source.value = source.value.copy(url = "https://cdn.meeshy.me/a-en.m4a", trackLanguage = "en", isTranslatedTrack = true) }
+        compose.waitForIdle()
+
+        assertThat(port.selected).containsExactly("a" to "en")
+        assertThat(player.switched).containsExactly("https://cdn.meeshy.me/a-en.m4a")
+    }
+
+    @Test
+    fun `retoucher la langue deja jouee n arme aucune relance`() {
+        val player = FakeAudioFullscreenPlayer().apply { switchReloads = true }
+        player.mutablePlayback.value = AudioPlaybackState(attachmentId = "a", isPlaying = false, durationMs = 4_000L)
+        val source = mutableStateOf(voice())
+        showPage(source, player, FakeTranscriptPort())
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(audioLanguagePillTag(AudioLanguageStripLaw.ORIGINAL)).performSemanticsAction(SemanticsActions.OnClick)
+        compose.runOnIdle { source.value = source.value.copy(url = "https://cdn.meeshy.me/a-en.m4a", trackLanguage = "en", isTranslatedTrack = true) }
+        compose.waitForIdle()
+
+        assertThat(player.switched).isEmpty()
     }
 
     private fun playLabel(): String =
