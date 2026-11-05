@@ -177,6 +177,13 @@ class StorySoundSheetViewModel internal constructor(
         }
     }
 
+    /**
+     * « OK » ferme la feuille : un son prêt n'y reste pas en suspens, il se pose comme par « Ajouter » (#16206) — l'auteur
+     * qui a choisi un son et touche OK s'attend à le voir sur la scène. Un son encore en préparation reste dans la feuille.
+     */
+    fun onDone(automatic: ComposerAudioRole, onPlaced: (ComposedStorySound, ComposerAudioRole, MediaUploadItem) -> Unit) =
+        onAdd(automatic, onPlaced)
+
     private fun transcribe() {
         transcription?.cancel()
         val take = _state.value.take ?: return
