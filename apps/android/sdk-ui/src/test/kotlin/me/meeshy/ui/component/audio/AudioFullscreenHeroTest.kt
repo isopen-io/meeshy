@@ -5,7 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -149,7 +151,14 @@ class AudioFullscreenHeroTest {
     fun `sans decoration l avatar seul tient le portrait et aucun film ne joue`() {
         show(ring = null)
         assertThat(filmCount()).isEqualTo(0)
-        compose.onAllNodesWithContentDescription("Ada").assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Ada", useUnmergedTree = true).assertCountEquals(1)
+    }
+
+    @Test
+    fun `TalkBack dit le nom de l auteur une seule fois sur le portrait decore`() {
+        show(onde)
+        compose.onNodeWithContentDescription("Ada")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Ada")))
     }
 
     @Test
