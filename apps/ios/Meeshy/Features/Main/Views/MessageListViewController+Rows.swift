@@ -358,7 +358,6 @@ extension MessageListViewController {
         let statuses = scene.statuses
         let convList = scene.conversationList
         let timestampReveal = scene.timestampReveal
-        let skin = scene.skin
         let focalRow = parts.focalRow
         let messageBubble = parts.bubble.equatable()
         let makeThemedBubble = parts.makeBubble
@@ -392,7 +391,8 @@ extension MessageListViewController {
             .environmentObject(host)
             .environmentObject(stories)
             .environmentObject(statuses)
-            .environment(\.bubbleSkin, skin)
+            .environment(\.bubbleSkin, scene.skin)
+            .environment(\.pendingUploadProgress, self.conversationViewModel?.collaborators.uploadProgress.progress(for: messageId))
             .environment(\.bubbleContainerWidth, self.collectionView.bounds.width > 0 ? self.collectionView.bounds.width : nil)
             .environment(\.messagePieceLongPress, selectionModeActive ? nil : pieceLongPressHandler)
             .environment(\.pieceSpotlight, self.pieceSpotlight.eraseToAnyPublisher())
@@ -410,7 +410,7 @@ extension MessageListViewController {
                             .environmentObject(timestampReveal)
                     } else {
                         makeThemedBubble(true)
-                            .environment(\.bubbleSkin, skin)
+                            .environment(\.bubbleSkin, scene.skin)
                             .environmentObject(host)
                             .environmentObject(stories)
                             .environmentObject(statuses)

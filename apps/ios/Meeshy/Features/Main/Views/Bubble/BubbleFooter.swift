@@ -30,6 +30,7 @@ struct BubbleFooter: View, Equatable {
     let isDark: Bool
     @Environment(\.bubbleSenderMoodTap) private var senderMoodTap
     @Environment(\.bubbleSkin) private var skin
+    @Environment(\.pendingUploadProgress) private var pendingUpload
 
     static func == (lhs: BubbleFooter, rhs: BubbleFooter) -> Bool {
         lhs.model == rhs.model && lhs.style == rhs.style && lhs.isDark == rhs.isDark
@@ -254,7 +255,7 @@ struct BubbleFooter: View, Equatable {
                 readTint: readTint,
                 sendStartedAt: model.sendStartedAt
             )
-            if let onShowReadStatus = actions.onShowReadStatus {
+            if pendingUpload == nil || delivery != .sending, let onShowReadStatus = actions.onShowReadStatus {
                 // Tap sur les coches -> ouvre le sheet detail a l'onglet
                 // "Vues" pour consulter qui a recu / qui a lu. Le bouton
                 // englobe une hit-area 22pt pour rester confortable au
