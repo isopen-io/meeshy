@@ -9,8 +9,10 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.attachment.TranscriptionRequestTracker
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.MessageTranscriptionFiche.Request
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.playback.AudioPlaybackEngine
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.util.resolveMediaUrl
 
 /**
  * La demande de transcription de la fiche (#13779) : au repos, en cours, en échec. L'état n'est plus local : il vient du
@@ -23,6 +25,7 @@ class MessageTranscriptionViewModel @Inject constructor(
     private val tracker: TranscriptionRequestTracker,
     private val playback: AudioPlaybackEngine,
     sessionRepository: SessionRepository,
+    private val config: MeeshyConfig,
 ) : ViewModel() {
 
     private val user = sessionRepository.currentUser
@@ -40,10 +43,16 @@ class MessageTranscriptionViewModel @Inject constructor(
     /**
      * Joue la piste parlée d'une traduction au toucher ; une autre piste en cours s'arrête (le moteur est unique).
      * [isProtected] est la protection RÉELLE du message ([me.meeshy.sdk.model.MessageTranscriptionFiche.playbackIsProtected]) :
-     * protégée, la piste ne s'écrit jamais sur le disque.
+     * protégée, la piste ne s'écrit jamais sur le disque. [url] est celle que la passerelle sert, souvent RELATIVE
+     * (`/api/v1/attachments/file/translated/…`) : elle se résout comme celle de la bulle ([resolveMediaUrl]).
      */
     fun playTranslation(messageId: String, language: String, url: String, isProtected: Boolean) {
-        startedPlayback = playback.play(attachmentId = "$messageId:tts:$language", url = url, isProtected = isProtected) || startedPlayback
+        val played = playback.play(
+            attachmentId = "$messageId:tts:$language",
+            url = resolveMediaUrl(url, config.apiBaseUrl),
+            isProtected = isProtected,
+        )
+        startedPlayback = played || startedPlayback
     }
 
     private var startedPlayback = false
