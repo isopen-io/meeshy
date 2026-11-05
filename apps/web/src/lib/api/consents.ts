@@ -70,4 +70,6 @@ export function effectiveConsent(granted: GrantedConsents, purpose: ConsentPurpo
  * consentement vocal manque tant que le PROFIL VOCAL n'est pas effectif
  * (`voiceRecordingConsentAt` du statut voice-profile = `voiceProfileConsentAt`).
  */
-export const voiceConsentMissing = (granted: GrantedConsents): boolean => !effectiveConsent(granted, 'voice-profile');
+export const VOICE_CONSENT_PURPOSE: ConsentPurpose = 'voice-profile';
+
+export const voiceConsentMissing = (granted: GrantedConsents): boolean => !effectiveConsent(granted, VOICE_CONSENT_PURPOSE);

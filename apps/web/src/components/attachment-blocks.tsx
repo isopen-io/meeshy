@@ -1,6 +1,7 @@
 import { Fragment, Suspense, lazy, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { maskedAttachment as servedMasked } from '@meeshy/shared/utils/attachment-protection';
+import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared-translation-eligibility';
 import { isContactCardAttachment } from '@meeshy/shared/utils/vcard';
 
 
@@ -45,6 +46,7 @@ import { MaskedAttachment } from './masked-attachment';
 import { MediaGrid } from './media-grid';
 import { AttachmentReactionBadge } from './attachment-reaction-badge';
 import { VoiceFileName, VoiceTranscribeZone } from './voice-bubble-parts';
+import { VoiceConsentNotice } from './voice-consent-notice';
 import { VeilRevealContext, revealedAttachment, useAttachmentMasked } from './view-once-opened';
 
 /**
@@ -669,6 +671,18 @@ export function Attachments({
           />
         ),
       )}
+
+      {/* MON VOCAL SANS CONSENTEMENT VOCAL (#16419) — la note d'iOS, seulement là où le serveur lit le message. */}
+      {isMine &&
+      audio.length > 0 &&
+      message !== undefined &&
+      sharedTranslationServerReadsMessage({
+        conversationEncryptionMode: thread?.conversationEncryptionMode,
+        messageIsEncrypted: message.isEncrypted,
+        messageEncryptionMode: message.encryptionMode,
+      }) ? (
+        <VoiceConsentNotice />
+      ) : null}
 
       {nonMedia.map((attachment, i) =>
         maskedAttachment(attachment) ? (

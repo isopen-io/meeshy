@@ -27,6 +27,7 @@ import { currentThemePreference, setThemePreference, type ThemePreference } from
 import { href, navigate } from '@/routes/route-table';
 import { AccountSwitcherSheet, SwitchAccountButton } from '@/routes/settings-accounts';
 import { CircleNotifySection } from '@/routes/settings-circle-notify';
+import { VoiceSection } from '@/routes/settings-voice';
 import {
   AboutSection,
   AccountSection,
@@ -198,6 +199,8 @@ function SettingsHome() {
   const sessionUser = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const enabled = apiDeps.source === 'fixtures' || sessionUser !== null;
   const query = useQuery({ ...appPreferencesQueryOptions(apiDeps), enabled }, appQueryClient);
+  /* Les droits de ma voix (#16419) ne se lisent que sur la passerelle : un consentement n'a pas de double de recette. */
+  const voiceEnabled = apiDeps.source === 'gateway' && sessionUser !== null;
 
   const [theme, setTheme] = useState<ThemePreference>(currentThemePreference);
   const [interfaceChoice, setInterfaceChoice] = useState<InterfaceLanguage | null>(interfaceLanguageChoice);
@@ -284,6 +287,16 @@ function SettingsHome() {
               if (outcome.status !== 'saved') setNotice(translate(language, notices[outcome.status]));
             }}
           />
+          {voiceEnabled ? (
+            <VoiceSection
+              language={language}
+              enabled={voiceEnabled}
+              online={online}
+              onOutcome={(outcome) => {
+                if (outcome.status !== 'saved') setNotice(translate(language, notices[outcome.status]));
+              }}
+            />
+          ) : null}
           <DataSection language={language} deviceTranslation={deviceTranslation} />
           <PacksSection language={language} />
           <ToolsSection language={language} showAdmin={peutAdministrer} />

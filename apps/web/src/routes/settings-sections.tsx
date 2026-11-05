@@ -324,7 +324,7 @@ type ToggleSpec = {
   readonly tint: string;
 };
 
-function Switch({ checked }: { readonly checked: boolean }) {
+export function Switch({ checked }: { readonly checked: boolean }) {
   return (
     <span
       aria-hidden="true"
