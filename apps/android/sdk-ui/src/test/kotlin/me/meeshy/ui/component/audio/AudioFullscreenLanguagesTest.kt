@@ -166,11 +166,12 @@ class AudioFullscreenLanguagesTest {
         val player = FakeAudioFullscreenPlayer()
         player.mutablePlayback.value = AudioPlaybackState(attachmentId = "a", isPlaying = true, durationMs = 4_000L)
         val source = mutableStateOf(voice())
+        compose.mainClock.autoAdvance = false
         showPage(source, player, FakeTranscriptPort())
-        compose.waitForIdle()
+        elapse(100)
 
         compose.runOnIdle { source.value = source.value.copy(url = "https://cdn.meeshy.me/a-en.m4a", trackLanguage = "en", isTranslatedTrack = true) }
-        compose.waitForIdle()
+        elapse(100)
 
         assertThat(player.switched.last()).isEqualTo("https://cdn.meeshy.me/a-en.m4a")
         assertThat(player.starts).isEmpty()
@@ -211,11 +212,12 @@ class AudioFullscreenLanguagesTest {
     fun `a l arret sur la piste deja servie, lire reprend la lecture`() {
         val player = FakeAudioFullscreenPlayer()
         player.mutablePlayback.value = AudioPlaybackState(attachmentId = "a", isPlaying = false, durationMs = 4_000L)
+        compose.mainClock.autoAdvance = false
         showPage(mutableStateOf(voice()), player, FakeTranscriptPort())
-        compose.waitForIdle()
+        elapse(100)
 
         compose.onNodeWithContentDescription(playLabel()).performClick()
-        compose.waitForIdle()
+        elapse(100)
 
         assertThat(player.toggles).isEqualTo(1)
     }
@@ -250,6 +252,15 @@ class AudioFullscreenLanguagesTest {
         compose.waitForIdle()
 
         assertThat(player.switched).isEmpty()
+    }
+
+    /**
+     * Une page qui JOUE anime son cadran à chaque image ; l'horloge qui avance seule ne trouve donc jamais le repos. Les témoins
+     * d'écoute pilotent l'horloge à la main, image par image, comme ceux de l'écran (masquage du chrome, rail d'actions).
+     */
+    private fun elapse(millis: Long) {
+        val until = compose.mainClock.currentTime + millis
+        while (compose.mainClock.currentTime < until) compose.mainClock.advanceTimeByFrame()
     }
 
     private fun playLabel(): String =
