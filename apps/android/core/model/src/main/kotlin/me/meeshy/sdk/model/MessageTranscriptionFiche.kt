@@ -39,6 +39,8 @@ object MessageTranscriptionFiche {
         val durationSeconds: Int?,
         val isCloned: Boolean,
         val isServed: Boolean,
+        /** La piste TTS jouable au toucher (iOS : la ligne « Traductions audio » se lit), ou `null` sans fichier servi. */
+        val audioUrl: String? = null,
     )
 
     sealed interface State {
@@ -111,6 +113,7 @@ object MessageTranscriptionFiche {
                 durationSeconds = translation.durationMs?.let { it / MILLIS_PER_SECOND },
                 isCloned = translation.cloned == true,
                 isServed = served != null && language.equals(served, ignoreCase = true),
+                audioUrl = translation.url?.trim()?.ifBlank { null },
             )
         }.sortedWith(compareByDescending<Translation> { it.isServed }.thenBy { it.language.lowercase() })
     }

@@ -173,4 +173,19 @@ class MessageTranscriptionFicheTest {
             MessageTranscriptionFiche.Segment("there", "FF6B6B"),
         ).inOrder()
     }
+
+    @Test
+    fun `a spoken translation carries its audio url, blank urls are dropped`() {
+        val state = readyOf(
+            voice(
+                translations = mapOf(
+                    "fr" to ApiAttachmentTranslation(transcription = "Bonjour", url = " https://cdn/fr.mp3 "),
+                    "es" to ApiAttachmentTranslation(transcription = "Hola", url = "  "),
+                    "it" to ApiAttachmentTranslation(transcription = "Ciao"),
+                ),
+            ),
+        )
+        assertThat(state.translations.associate { it.language to it.audioUrl })
+            .containsExactly("fr", "https://cdn/fr.mp3", "es", null, "it", null)
+    }
 }

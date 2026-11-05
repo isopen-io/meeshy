@@ -3,6 +3,7 @@ package me.meeshy.app.chat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -23,12 +24,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -45,6 +51,8 @@ import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.MessageTranscriptionFiche
 import me.meeshy.sdk.model.MessageTranscriptionFiche.Request
 import me.meeshy.sdk.model.MessageTranscriptionFiche.State
+import me.meeshy.sdk.model.format.LocalizedNumber
+import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -69,6 +77,15 @@ internal fun MessageTranscriptionSheet(
     }
     val request by requests.collectAsStateWithLifecycle(initialValue = Request.IDLE)
     val state = MessageTranscriptionFiche.of(attachments, viewModel.preferences, request)
+    val haptics = rememberMeeshyHaptics()
+    var requestedByTap by remember { mutableStateOf(false) }
+    LaunchedEffect(request, state is State.Ready, requestedByTap) {
+        if (!requestedByTap) return@LaunchedEffect
+        when {
+            state is State.Ready -> { haptics.success(); requestedByTap = false }
+            request == Request.FAILED -> { haptics.error(); requestedByTap = false }
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -85,19 +102,27 @@ internal fun MessageTranscriptionSheet(
         )
         when (state) {
             State.Unavailable -> Unit
-            is State.Empty -> TranscriptionEmpty(state, accentColor) { attachmentId -> viewModel.transcribe(messageId, attachmentId) }
-            is State.Ready -> TranscriptionReady(state, accentColor)
+            is State.Empty -> TranscriptionEmpty(state, accentColor) { attachmentId ->
+                haptics.light()
+                requestedByTap = true
+                viewModel.transcribe(messageId, attachmentId)
+            }
+            is State.Ready -> TranscriptionReady(state, accentColor) { translation, url ->
+                haptics.light()
+                viewModel.playTranslation(messageId, translation.language, url)
+            }
         }
     }
 }
 
 @Composable
-private fun TranscriptionReady(state: State.Ready, accentColor: Color) {
+private fun TranscriptionReady(state: State.Ready, accentColor: Color, onPlay: (MessageTranscriptionFiche.Translation, String) -> Unit) {
+    val locale = LocalConfiguration.current.locales[0]
     val original = state.original
     val language = original.language?.let { LanguageData.info(it)?.name ?: it }
     val inLanguage = language?.let { stringResource(R.string.transcription_fiche_a11y_in_language, it) }
     val confidence = original.confidencePercent?.let { stringResource(R.string.transcription_fiche_a11y_confidence, it) }
-    val bannerLabel = listOfNotNull(inLanguage, confidence, original.durationSeconds?.let(::clock)).joinToString(", ")
+    val bannerLabel = listOfNotNull(inLanguage, confidence, original.durationSeconds?.let { LocalizedNumber.spokenDuration(it, locale) }).joinToString(", ")
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -134,7 +159,7 @@ private fun TranscriptionReady(state: State.Ready, accentColor: Color) {
             color = MeeshyTheme.tokens.textMuted,
             modifier = Modifier.padding(top = MeeshySpacing.sm).semantics { heading() },
         )
-        state.translations.forEach { TranslationRow(it, accentColor) }
+        state.translations.forEach { TranslationRow(it, accentColor, locale, onPlay) }
     }
 }
 
@@ -170,11 +195,16 @@ private fun TranscriptionWords(segments: List<MessageTranscriptionFiche.Segment>
 }
 
 @Composable
-private fun TranslationRow(translation: MessageTranscriptionFiche.Translation, accentColor: Color) {
+private fun TranslationRow(
+    translation: MessageTranscriptionFiche.Translation,
+    accentColor: Color,
+    locale: java.util.Locale,
+    onPlay: (MessageTranscriptionFiche.Translation, String) -> Unit,
+) {
     val info = LanguageData.info(translation.language)
     val name = info?.name ?: translation.language
     val clonedLabel = stringResource(R.string.transcription_fiche_a11y_cloned_voice)
-    val label = listOfNotNull(name, clonedLabel.takeIf { translation.isCloned }, translation.durationSeconds?.let(::clock), translation.text)
+    val label = listOfNotNull(name, clonedLabel.takeIf { translation.isCloned }, translation.durationSeconds?.let { LocalizedNumber.spokenDuration(it, locale) }, translation.text)
         .joinToString(", ")
     Column(
         modifier = Modifier
@@ -182,6 +212,11 @@ private fun TranslationRow(translation: MessageTranscriptionFiche.Translation, a
             .border(
                 BorderStroke(if (translation.isServed) 1.5.dp else 0.5.dp, accentColor.copy(alpha = if (translation.isServed) 0.6f else 0.15f)),
                 RoundedCornerShape(MeeshyRadius.sm),
+            )
+            .then(
+                translation.audioUrl?.let { url ->
+                    Modifier.clickable(role = Role.Button) { onPlay(translation, url) }
+                } ?: Modifier,
             )
             .padding(MeeshySpacing.md)
             .clearAndSetSemantics { contentDescription = label },

@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.attachment.TranscriptionRequestTracker
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.MessageTranscriptionFiche.Request
+import me.meeshy.sdk.playback.AudioPlaybackEngine
 import me.meeshy.sdk.session.SessionRepository
 
 /**
@@ -20,6 +21,7 @@ import me.meeshy.sdk.session.SessionRepository
 @HiltViewModel
 class MessageTranscriptionViewModel @Inject constructor(
     private val tracker: TranscriptionRequestTracker,
+    private val playback: AudioPlaybackEngine,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
 
@@ -33,5 +35,14 @@ class MessageTranscriptionViewModel @Inject constructor(
 
     fun transcribe(messageId: String, attachmentId: String) {
         viewModelScope.launch { tracker.request(messageId, attachmentId) }
+    }
+
+    /** Joue la piste parlée d'une traduction au toucher ; une autre piste en cours s'arrête (le moteur est unique). */
+    fun playTranslation(messageId: String, language: String, url: String) {
+        playback.play(attachmentId = "$messageId:tts:$language", url = url, isProtected = false)
+    }
+
+    override fun onCleared() {
+        playback.stop()
     }
 }
