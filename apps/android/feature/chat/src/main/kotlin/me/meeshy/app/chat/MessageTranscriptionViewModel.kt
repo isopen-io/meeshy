@@ -39,10 +39,12 @@ class MessageTranscriptionViewModel @Inject constructor(
 
     /** Joue la piste parlée d'une traduction au toucher ; une autre piste en cours s'arrête (le moteur est unique). */
     fun playTranslation(messageId: String, language: String, url: String) {
-        playback.play(attachmentId = "$messageId:tts:$language", url = url, isProtected = false)
+        startedPlayback = playback.play(attachmentId = "$messageId:tts:$language", url = url, isProtected = false) || startedPlayback
     }
 
+    private var startedPlayback = false
+
     override fun onCleared() {
-        playback.stop()
+        if (startedPlayback) playback.stop()
     }
 }
