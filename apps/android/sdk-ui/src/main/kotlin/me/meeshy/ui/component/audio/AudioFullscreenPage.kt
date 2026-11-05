@@ -11,14 +11,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.animateFloatAsState
@@ -49,9 +45,6 @@ import me.meeshy.sdk.model.fullscreen.AudioFullscreenPlaybackScope
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeSymbol
 import me.meeshy.sdk.model.playback.AudioPlaybackState
 import me.meeshy.ui.R
-import me.meeshy.ui.component.bubble.BubbleAudioKaraoke
-import me.meeshy.ui.component.bubble.BubbleAudioPlayback
-import me.meeshy.ui.component.bubble.KaraokeTranscript
 import me.meeshy.ui.component.chrome.FullscreenTopBar
 import me.meeshy.ui.component.fullscreen.FullscreenChromeButton
 import me.meeshy.ui.component.fullscreen.FullscreenChromeDimens
@@ -133,7 +126,11 @@ internal fun AudioFullscreenPage(
                     modifier = Modifier.widthIn(max = layout.contentMaxWidth.dp),
                 ) {
                     AudioFullscreenIdentity(source)
-                    AudioFullscreenTranscript(source, playback, layout.transcriptMaxHeight)
+                    AudioFullscreenTranscript(source, playback, layout.transcriptMaxHeight, accent) { seconds ->
+                        onChromeInteraction()
+                        val totalSeconds = totalMs / MS_PER_SECOND
+                        if (isLoaded && totalSeconds > 0.0) player.seek((seconds / totalSeconds).coerceIn(0.0, 1.0))
+                    }
                     AudioChromeFade(visible = chromeVisible, onReveal = onRevealChrome) {
                         AudioFullscreenTransport(
                             speed = playback.speed,
@@ -243,7 +240,13 @@ private fun AudioFullscreenIdentity(source: AudioFullscreenSource) {
 
 /** La transcription servie, allumée segment par segment pendant que SA piste joue (le karaoké de la bulle). */
 @Composable
-private fun AudioFullscreenTranscript(source: AudioFullscreenSource, playback: AudioPlaybackState, maxHeight: Float) {
+private fun AudioFullscreenTranscript(
+    source: AudioFullscreenSource,
+    playback: AudioPlaybackState,
+    maxHeight: Float,
+    accent: Color,
+    onSeek: (Double) -> Unit,
+) {
     val segments = remember(source.transcriptionSegments, source.transcriptionText) {
         source.transcriptionSegments.ifEmpty {
             listOfNotNull(
@@ -252,33 +255,17 @@ private fun AudioFullscreenTranscript(source: AudioFullscreenSource, playback: A
         }
     }
     if (segments.isEmpty()) return
-    val live = if (playback.attachmentId == source.id) {
-        BubbleAudioPlayback(
-            attachmentId = source.id,
-            isPlaying = playback.isPlaying,
-            isLoading = playback.isLoading,
-            progress = playback.progress.toFloat(),
-            timeLabel = "",
-            currentSeconds = playback.currentTimeMs / MS_PER_SECOND,
-        )
-    } else {
-        null
-    }
-    val frame = BubbleAudioKaraoke.frame(segments, live)
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(max = maxHeight.dp)
-            .verticalScroll(rememberScrollState()),
-    ) {
-        KaraokeTranscript(
-            segments = segments,
-            frame = frame,
-            onColor = MeeshyTheme.tokens.textPrimary,
-            onSeek = null,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
+    val loaded = playback.attachmentId == source.id
+    MediaTranscriptionView(
+        segments = segments,
+        currentSeconds = if (loaded) playback.currentTimeMs / MS_PER_SECOND else 0.0,
+        isPlaying = loaded && playback.isPlaying,
+        progress = if (loaded) playback.progress else 0.0,
+        accent = accent,
+        ink = MeeshyTheme.tokens.textPrimary,
+        maxHeight = maxHeight,
+        onSeek = onSeek,
+    )
 }
 
 /**

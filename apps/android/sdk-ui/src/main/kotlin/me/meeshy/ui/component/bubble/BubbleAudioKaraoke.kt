@@ -118,6 +118,7 @@ internal fun KaraokeTranscript(
     onColor: Color,
     onSeek: ((Double) -> Unit)?,
     modifier: Modifier = Modifier,
+    maxLines: Int = 3,
 ) {
     val palette = remember(onColor) { BubbleAudioKaraoke.Palette.of(onColor) }
     val text = remember(segments, frame, palette) { BubbleAudioKaraoke.text(segments, frame, palette) }
@@ -127,7 +128,7 @@ internal fun KaraokeTranscript(
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall,
-        maxLines = 3,
+        maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         onTextLayout = { layout = it },
         modifier = if (!seekable) modifier else modifier.pointerInput(segments) {
