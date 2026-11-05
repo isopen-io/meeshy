@@ -95,6 +95,9 @@
     <string name="conversations_new">Neue Unterhaltung</string>
     <string name="conversations_obsolete_error">Die Unterhaltung konnte nicht als veraltet markiert werden.</string>
     <string name="conversations_open_dashboard">Übersicht</string>
+    <string name="conversations_pagination_allLoaded">Alle Unterhaltungen geladen</string>
+    <string name="conversations_pagination_errorTitle">Weitere konnten nicht geladen werden</string>
+    <string name="conversations_pagination_retry">Erneut versuchen</string>
     <string name="conversations_preview_draft_label">Entwurf</string>
     <string name="conversations_preview_draft_prefix">Entwurf:</string>
     <string name="conversations_preview_ephemeral_content_description">Flüchtige Nachricht</string>

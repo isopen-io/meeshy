@@ -95,6 +95,9 @@
     <string name="conversations_new">محادثة جديدة</string>
     <string name="conversations_obsolete_error">تعذّر جعل المحادثة متقادمة.</string>
     <string name="conversations_open_dashboard">لوحة التحكم</string>
+    <string name="conversations_pagination_allLoaded">تم تحميل جميع المحادثات</string>
+    <string name="conversations_pagination_errorTitle">تعذّر تحميل المزيد</string>
+    <string name="conversations_pagination_retry">إعادة المحاولة</string>
     <string name="conversations_preview_draft_label">مسودة</string>
     <string name="conversations_preview_draft_prefix">مسودة:</string>
     <string name="conversations_preview_ephemeral_content_description">رسالة مؤقتة</string>

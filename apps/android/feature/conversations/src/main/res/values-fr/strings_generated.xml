@@ -95,6 +95,9 @@
     <string name="conversations_new">Nouvelle conversation</string>
     <string name="conversations_obsolete_error">Impossible de rendre la conversation obsolète.</string>
     <string name="conversations_open_dashboard">Tableau de bord</string>
+    <string name="conversations_pagination_allLoaded">Toutes les conversations sont chargées</string>
+    <string name="conversations_pagination_errorTitle">Impossible de charger plus</string>
+    <string name="conversations_pagination_retry">Réessayer</string>
     <string name="conversations_preview_draft_label">Brouillon</string>
     <string name="conversations_preview_draft_prefix">Brouillon :</string>
     <string name="conversations_preview_ephemeral_content_description">Message éphémère</string>

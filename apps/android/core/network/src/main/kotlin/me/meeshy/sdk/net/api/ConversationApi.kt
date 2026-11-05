@@ -114,6 +114,18 @@ interface ConversationApi {
         @Header("If-None-Match") ifNoneMatch: String? = null,
     ): Response<ApiResponse<List<ApiConversation>>>
 
+    /**
+     * `GET /conversations?before=…&limit=…` — la page SUIVANTE par curseur (gateway `core-list.ts`,
+     * `resolveListCursor`) : [before] est le `nextCursor` servi, ou l'identifiant (24 hexadécimaux) de la
+     * conversation la plus ancienne connue. Le curseur de la suite est à la racine de l'enveloppe
+     * (`cursorPagination`), d'où l'enveloppe brute.
+     */
+    @GET("conversations")
+    suspend fun listBefore(
+        @Query("before") before: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiConversation>>
+
     @GET("conversations/{id}")
     suspend fun getById(@Path("id") id: String): ApiResponse<ApiConversation>
 

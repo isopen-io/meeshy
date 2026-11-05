@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "conversations.pagination.allLoaded", "androidName": "conversations_pagination_allLoaded", "status": "adopted" },
+        { "catalog": "app", "iosKey": "conversations.pagination.errorTitle", "androidName": "conversations_pagination_errorTitle", "status": "adopted" },
+        { "catalog": "app", "iosKey": "conversations.pagination.retry", "androidName": "conversations_pagination_retry", "status": "adopted" }
+      ]
+    }
+  }
+}

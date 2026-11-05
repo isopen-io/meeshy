@@ -170,6 +170,19 @@ class ConversationRepository @Inject constructor(
         conversationDao.recentByUpdatedAt(limit)
             .map { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
 
+    /** L'identifiant de la conversation la plus ancienne en cache : le repli du curseur de pagination. */
+    suspend fun oldestCachedId(): String? = conversationDao.oldestId()
+
+    /**
+     * Range une page de la suite de la liste (pagination par curseur) : ajoute sans jamais élaguer.
+     * Rend combien d'identifiants étaient NOUVEAUX — la garde « zéro progrès » du pager en dépend.
+     */
+    suspend fun rememberPage(page: List<ApiConversation>): Int {
+        val known = conversationDao.allIds().toHashSet()
+        page.forEach { cacheSource.rememberServed(it) }
+        return page.count { it.id !in known }
+    }
+
     /** Explicit refresh (pull-to-refresh / retry). Throws on failure. */
     suspend fun refresh() {
         cacheSource.revalidate()

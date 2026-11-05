@@ -33,6 +33,7 @@ import me.meeshy.sdk.model.conversationlist.ConversationAvatarTarget
 import me.meeshy.sdk.model.conversationlist.ConversationFilterComposition
 import me.meeshy.sdk.model.conversationlist.avatarTarget
 import me.meeshy.sdk.model.conversationlist.ConversationListLoadState
+import me.meeshy.sdk.model.conversationlist.PaginationState
 import me.meeshy.sdk.model.search.ListMessageSearchState
 import me.meeshy.sdk.search.ListMessageSearchSource
 import me.meeshy.sdk.network.NetworkMonitor
@@ -205,6 +206,15 @@ class ConversationListViewModel @Inject constructor(
     /** The explicit cache-first load state (fresh, stale, loading, offline, loaded, error). */
     val loadState: StateFlow<ConversationListLoadState> = loader.loadState
 
+    /** La pagination du pied de liste : un flux à part, la liste ne se recompose pas quand il change. */
+    val paginationState: StateFlow<PaginationState> = loadingDeps.pagination.state
+    val hasMorePages: StateFlow<Boolean> = loadingDeps.pagination.hasMore
+
+    /** Charge la page suivante (le pied, la sentinelle ou le défilement) ; sans effet si une page est déjà en route. */
+    fun loadMore() {
+        viewModelScope.launch { loadingDeps.pagination.loadMore() }
+    }
+
     /** One event per successful pull-to-refresh — the screen plays the success haptic. */
     val pullRefreshSucceeded: Flow<Unit> = loader.pullRefreshSucceeded
 
@@ -350,6 +360,7 @@ class ConversationListViewModel @Inject constructor(
      * back, and ends once every one of them is back.
      */
     fun refresh() {
+        viewModelScope.launch { loadingDeps.pagination.reset() }
         _state.update { it.copy(errorMessage = null, isSyncing = true, isUserRefreshing = true) }
         viewModelScope.launch {
             try {

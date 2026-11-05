@@ -87,6 +87,10 @@ internal fun ConversationListBody(
                 enteringSection = null
             }
         }
+        val paginationState by viewModel.paginationState.collectAsStateWithLifecycle()
+        val hasMorePages by viewModel.hasMorePages.collectAsStateWithLifecycle()
+        val paginates = content == ConversationListContent.Populated && state.searchText.isBlank()
+        ConversationPaginationTrigger(listState, enabled = paginates, onLoadMore = viewModel::loadMore)
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -115,6 +119,16 @@ internal fun ConversationListBody(
                     },
                 ) {
                     messageSearchItems(messageSearch, state.currentUserId, viewModel::conversationFor, onOpenMessage)
+                }
+                if (paginates) {
+                    item(key = "list-pagination-footer", contentType = "pagination-footer") {
+                        ConversationPaginationFooter(
+                            state = paginationState,
+                            hasMore = hasMorePages,
+                            conversationCount = state.conversations.size,
+                            onLoadMore = viewModel::loadMore,
+                        )
+                    }
                 }
             }
         }

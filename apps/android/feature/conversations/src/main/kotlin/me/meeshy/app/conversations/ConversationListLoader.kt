@@ -15,7 +15,9 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.chat.ExplicitUnreadMarks
 import me.meeshy.sdk.conversation.AppForegroundSignal
+import me.meeshy.sdk.conversation.ConversationPaginating
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.conversation.NoConversationPagination
 import me.meeshy.sdk.conversation.ListRefreshCoordinator
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.conversationlist.ConversationListCacheReading
@@ -32,6 +34,7 @@ class ConversationListLoadingDeps @Inject constructor(
     val foreground: AppForegroundSignal,
     val explicitUnreadMarks: ExplicitUnreadMarks,
     val activeConversation: ActiveConversationStore,
+    val pagination: ConversationPaginating = NoConversationPagination,
 ) {
     companion object {
         fun detached(): ConversationListLoadingDeps = ConversationListLoadingDeps(

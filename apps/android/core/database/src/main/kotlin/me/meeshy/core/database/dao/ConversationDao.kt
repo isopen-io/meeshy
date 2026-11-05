@@ -32,6 +32,10 @@ public interface ConversationDao {
     @Query("SELECT * FROM conversations WHERE id = :id")
     public fun observeById(id: String): Flow<ConversationEntity?>
 
+    /** L'identifiant de la conversation la plus ancienne en cache (repli du curseur de pagination). */
+    @Query("SELECT id FROM conversations ORDER BY updatedAt ASC LIMIT 1")
+    public suspend fun oldestId(): String?
+
     @Query("SELECT * FROM conversations WHERE id = :id")
     public suspend fun find(id: String): ConversationEntity?
 

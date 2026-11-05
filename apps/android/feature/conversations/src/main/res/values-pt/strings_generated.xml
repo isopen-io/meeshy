@@ -95,6 +95,9 @@
     <string name="conversations_new">Nova conversa</string>
     <string name="conversations_obsolete_error">Não foi possível tornar a conversa obsoleta.</string>
     <string name="conversations_open_dashboard">Painel</string>
+    <string name="conversations_pagination_allLoaded">Todas as conversas carregadas</string>
+    <string name="conversations_pagination_errorTitle">Não foi possível carregar mais</string>
+    <string name="conversations_pagination_retry">Tentar novamente</string>
     <string name="conversations_preview_draft_label">Rascunho</string>
     <string name="conversations_preview_draft_prefix">Rascunho:</string>
     <string name="conversations_preview_ephemeral_content_description">Mensagem efêmera</string>
