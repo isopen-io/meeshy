@@ -389,7 +389,7 @@
     <string name="story_composer_a11y_composition">Story, %1$s: %2$s</string>
     <string name="story_composer_a11y_compositionCount_many">%1$d objetos</string>
     <string name="story_composer_a11y_compositionCount_one">1 objeto</string>
-    <string name="story_composer_a11y_composition_post">Post, %1$s: %2$s</string>
+    <string name="story_composer_a11y_composition_post">Publicação, %1$s: %2$s</string>
     <string name="story_composer_a11y_composition_reel">Reel, %1$s: %2$s</string>
     <string name="story_composer_cancel">Cancelar</string>
     <string name="story_composer_edit_slide_background">Editar o fundo</string>

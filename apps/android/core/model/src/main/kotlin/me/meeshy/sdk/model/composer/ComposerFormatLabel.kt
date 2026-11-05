@@ -14,6 +14,9 @@ enum class ComposerFormatLabel {
     /** Ce que la toile annonce au lecteur d'écran. */
     CANVAS,
 
+    /** Le résumé de la scène que le lecteur d'écran lit : « Post, 2 objets : … » (#16222). */
+    COMPOSITION_SUMMARY,
+
     /** Le titre de la feuille Son. */
     SOUND_SHEET_TITLE,
 

@@ -26,6 +26,12 @@ internal enum class StoryComposerSheet {
 
     /** Les feuilles qui se lisent sur la scène, sombres comme elle : le son et ce qui nomme la publication. */
     val isDarkOnScene: Boolean get() = this == SOUND || this == MENTION || this == HASHTAGS || this == PLACE || this == PLACE_REPOINT
+
+    /**
+     * Les feuilles qui montent à leur hauteur maximale : les grilles de stickers, qui défilent. Les autres — le son (#16225),
+     * l'audience — prennent la hauteur de leur contenu, plafonnée par la scène, et laissent à celle-ci tout le reste.
+     */
+    val fillsHeight: Boolean get() = this == STICKERS || this == STICKER_SWAP
 }
 
 /** La feuille [open] (aucune : `null`), ce qui la referme, ce qui en ouvre une, et ce qu'elle montre. */

@@ -386,7 +386,7 @@
     <string name="story_canvas_action_trim">Ritaglia</string>
     <string name="story_caption_scroll_to_top">Torna all\'inizio del testo</string>
     <string name="story_caption_scroll_to_top_hint">Fa scorrere la descrizione fino alla prima parola</string>
-    <string name="story_composer_a11y_composition">Story, %1$s: %2$s</string>
+    <string name="story_composer_a11y_composition">Storia, %1$s: %2$s</string>
     <string name="story_composer_a11y_compositionCount_many">%1$d oggetti</string>
     <string name="story_composer_a11y_compositionCount_one">1 oggetto</string>
     <string name="story_composer_a11y_composition_post">Post, %1$s: %2$s</string>
