@@ -6,6 +6,7 @@ import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { myProfileQueryOptions } from '@/lib/api/profile';
+import { translatePackPreview } from '@/lib/i18n-pack-preview-catalog';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { equipChoiceOf, isAnimatedDecor, stepIndex, type DecorItem } from '@/lib/packs/decor-items';
@@ -63,6 +64,7 @@ const isRtl = (element: HTMLElement | null): boolean => element !== null && getC
 export function DecorPreview(props: DecorPreviewProps) {
   const { language, deps, pack, index, packs, action, busy, notice, onIndex, onProposal, onAction, onClose } = props;
   const t = translateStickerPacks;
+  const tp = translatePackPreview;
   const ref = useRef<HTMLDialogElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -172,7 +174,7 @@ export function DecorPreview(props: DecorPreviewProps) {
   };
 
   const itemName = item === undefined ? '' : decorItemName(names, item);
-  const status = equipFailed ? t(language, 'packs.preview.equipFailed') : notice;
+  const status = equipFailed ? tp(language, 'packs.preview.equipFailed') : notice;
   const roundButton = 'grid min-h-11 min-w-11 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40';
   const chrome = { color: 'var(--color-ios-ink)', backgroundColor: 'var(--color-ios-fill)', outlineColor: 'var(--color-ios-brand)' } as const;
 
@@ -191,7 +193,7 @@ export function DecorPreview(props: DecorPreviewProps) {
     >
       <div className="flex h-full flex-col pt-safe pb-safe">
         <header className="flex shrink-0 items-center gap-2 px-3 py-2">
-          <button type="button" data-decor-preview-close aria-label={t(language, 'packs.preview.close')} onClick={onClose} className={roundButton} style={chrome}>
+          <button type="button" data-decor-preview-close aria-label={tp(language, 'packs.preview.close')} onClick={onClose} className={roundButton} style={chrome}>
             <Glyph name="x" size={20} />
           </button>
           <div className="min-w-0 flex-1">
@@ -201,14 +203,14 @@ export function DecorPreview(props: DecorPreviewProps) {
             {count === 0 ? null : (
               <p data-decor-position className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
                 <span aria-hidden="true">{`${shown + 1} / ${count}`}</span>
-                <span className="sr-only">{t(language, 'packs.preview.position', { index: String(shown + 1), count: String(count) })}</span>
+                <span className="sr-only">{tp(language, 'packs.preview.position', { index: String(shown + 1), count: String(count) })}</span>
               </p>
             )}
           </div>
-          <button type="button" data-decor-zoom-out aria-label={t(language, 'packs.preview.zoomOut')} disabled={!zoomed} onClick={() => setScale(zoomBy(zoom, -1))} className={roundButton} style={chrome}>
+          <button type="button" data-decor-zoom-out aria-label={tp(language, 'packs.preview.zoomOut')} disabled={!zoomed} onClick={() => setScale(zoomBy(zoom, -1))} className={roundButton} style={chrome}>
             <GlyphSvg glyph={PACK_PREVIEW_GLYPHS.minus} size={18} />
           </button>
-          <button type="button" data-decor-zoom-in aria-label={t(language, 'packs.preview.zoomIn')} onClick={() => setScale(zoomBy(zoom, 1))} className={roundButton} style={chrome}>
+          <button type="button" data-decor-zoom-in aria-label={tp(language, 'packs.preview.zoomIn')} onClick={() => setScale(zoomBy(zoom, 1))} className={roundButton} style={chrome}>
             <Glyph name="plus" size={18} />
           </button>
         </header>
@@ -237,7 +239,7 @@ export function DecorPreview(props: DecorPreviewProps) {
             ) : items.isError ? (
               <div className="grid justify-items-center gap-3 text-center">
                 <p role="status" className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-                  {t(language, 'packs.sheet.failed')}
+                  {tp(language, 'packs.sheet.failed')}
                 </p>
                 <button type="button" data-decor-retry onClick={() => void items.refetch()} className="min-h-11 rounded-full px-4 text-body font-semibold" style={chrome}>
                   {t(language, 'packs.retry')}
@@ -247,7 +249,7 @@ export function DecorPreview(props: DecorPreviewProps) {
               <div data-decor-loading role="status" className="grid justify-items-center gap-3">
                 <span aria-hidden="true" className="block size-48 animate-pulse rounded-card motion-reduce:animate-none" style={{ backgroundColor: 'var(--color-ios-fill)' }} />
                 <span className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-                  {t(language, 'packs.sheet.loading')}
+                  {tp(language, 'packs.sheet.loading')}
                 </span>
               </div>
             )}
@@ -257,7 +259,7 @@ export function DecorPreview(props: DecorPreviewProps) {
               <button
                 type="button"
                 data-decor-previous
-                aria-label={t(language, 'packs.preview.previous')}
+                aria-label={tp(language, 'packs.preview.previous')}
                 disabled={!canStep}
                 onClick={() => step(-1)}
                 className={`${roundButton} absolute start-3 top-1/2 -translate-y-1/2`}
@@ -268,7 +270,7 @@ export function DecorPreview(props: DecorPreviewProps) {
               <button
                 type="button"
                 data-decor-next
-                aria-label={t(language, 'packs.preview.next')}
+                aria-label={tp(language, 'packs.preview.next')}
                 disabled={!canStep}
                 onClick={() => step(1)}
                 className={`${roundButton} absolute end-3 top-1/2 -translate-y-1/2`}
@@ -289,25 +291,25 @@ export function DecorPreview(props: DecorPreviewProps) {
                 </p>
                 {isAnimatedDecor(item) ? (
                   <p data-decor-animated className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-                    {t(language, 'packs.preview.animated')}
+                    {tp(language, 'packs.preview.animated')}
                   </p>
                 ) : null}
               </div>
               {target === null ? null : equipped ? (
                 <span data-decor-equipped className="shrink-0 px-4 text-body font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-                  {t(language, 'packs.preview.equipped')}
+                  {tp(language, 'packs.preview.equipped')}
                 </span>
               ) : installable && decor !== undefined ? (
                 <button
                   type="button"
                   data-decor-equip
                   aria-busy={busy}
-                  aria-label={`${t(language, 'packs.preview.equip')} ${itemName}`}
+                  aria-label={`${tp(language, 'packs.preview.equip')} ${itemName}`}
                   onClick={() => void equip()}
                   className="min-h-11 shrink-0 rounded-full px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
                   style={{ backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)', outlineColor: 'var(--color-ios-brand)' }}
                 >
-                  {t(language, 'packs.preview.equip')}
+                  {tp(language, 'packs.preview.equip')}
                 </button>
               ) : action.kind === 'buy' ? (
                 <button type="button" data-decor-pack-action aria-busy={busy} onClick={() => void onAction()} className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold" style={chrome}>
@@ -322,7 +324,7 @@ export function DecorPreview(props: DecorPreviewProps) {
           )}
           {item?.domain === 'wallpaper' ? (
             <p data-decor-wallpaper-hint className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {t(language, 'packs.preview.wallpaperHint')}
+              {tp(language, 'packs.preview.wallpaperHint')}
             </p>
           ) : null}
           <p role="status" aria-live="polite" className="text-caption empty:hidden" style={{ color: 'var(--ios-error)' }}>
@@ -331,7 +333,7 @@ export function DecorPreview(props: DecorPreviewProps) {
           {proposals.length === 0 ? null : (
             <section aria-labelledby={`${titleId}-others`} className="flex flex-col gap-2 pb-3">
               <h3 id={`${titleId}-others`} className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-                {t(language, 'packs.preview.others')}
+                {tp(language, 'packs.preview.others')}
               </h3>
               <ul className="flex gap-2 overflow-x-auto pb-1">
                 {proposals.map((proposal) => (

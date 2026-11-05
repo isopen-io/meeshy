@@ -7,7 +7,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import type { MyProfile } from '@/lib/api/profile';
 import { designStyle } from '@/lib/appearance/backdrop-view';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
+import { translatePackPreview } from '@/lib/i18n-pack-preview-catalog';
 import type { DecorItem } from '@/lib/packs/decor-items';
 import type { DecorDesigns } from '@/lib/profile-decor/use-decor-designs';
 import { initialsOf } from '@/lib/view/conversation';
@@ -163,7 +163,7 @@ export function DecorStage({ item, profile, mine, accent, scheme, language }: St
                   : { backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', border: '1px solid var(--color-ios-hairline)' }
               }
             >
-              {translateStickerPacks(language, bubble.key)}
+              {translatePackPreview(language, bubble.key)}
             </p>
           ))}
         </div>
