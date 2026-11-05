@@ -16,11 +16,12 @@ class AudioLyricsScrollTest {
     }
 
     @Test
-    fun `l ancre du premier tiers place le segment plus haut que le centre`() {
-        val anchor = me.meeshy.sdk.model.fullscreen.AudioFullscreenLayout.lyricAnchor(header = 300f, footer = 100f, height = 900f)
-        val third = AudioLyricsScroll.target(itemTop = 400f, itemHeight = 40f, viewport = 900f, anchor = anchor, maxScroll = 2_000)
-        val centre = AudioLyricsScroll.target(itemTop = 400f, itemHeight = 40f, viewport = 900f, anchor = 0.5f, maxScroll = 2_000)
-        assertThat(third).isGreaterThan(centre)
+    fun `l ancre du premier tiers pose le segment au premier tiers de la bande libre`() {
+        val anchor = AudioFullscreenLayout.lyricAnchor(header = 300f, footer = 100f, height = 900f)
+        val target = AudioLyricsScroll.target(itemTop = 1_500f, itemHeight = 40f, viewport = 900f, anchor = anchor, maxScroll = 4_000)
+        val centreOnScreen = 1_500f + 20f - target
+        assertThat(centreOnScreen).isWithin(1f).of(anchor * 900f)
+        assertThat(anchor * 900f).isWithin(1f).of(300f + 500f / 3f)
     }
 
     @Test

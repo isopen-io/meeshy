@@ -7,23 +7,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +40,6 @@ import me.meeshy.sdk.model.fullscreen.AudioFullscreenLayout
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenPageProgress
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenPlaybackScope
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeSymbol
-import me.meeshy.sdk.model.playback.AudioPlaybackState
 import me.meeshy.ui.R
 import me.meeshy.ui.component.chrome.FullscreenTopBar
 import me.meeshy.ui.component.fullscreen.FullscreenChromeButton
@@ -79,6 +75,7 @@ internal fun AudioFullscreenPage(
     onNext: (() -> Unit)?,
     onPrevious: (() -> Unit)?,
     rail: (@Composable () -> Unit)? = null,
+    transcripts: AudioFullscreenTranscriptPort? = null,
 ) {
     val playback by remember(player, source.id) {
         player.playback.map { AudioFullscreenPlaybackScope.of(it, source.id) }.distinctUntilChanged()
@@ -89,6 +86,13 @@ internal fun AudioFullscreenPage(
     val progress = AudioFullscreenPageProgress.fraction(source.id, playback, resting, source.servedConsumption, source.durationMs)
     val totalMs = if (isLoaded && playback.durationMs > 0L) playback.durationMs else source.durationMs
     val samples by remember(source.id) { player.samples(source) }.collectAsState()
+
+    LaunchedEffect(source.url) { player.switchTrack(source) }
+    val seekToSeconds: (Double) -> Unit = { seconds ->
+        onChromeInteraction()
+        val totalSeconds = totalMs / MS_PER_SECOND
+        if (isLoaded && totalSeconds > 0.0) player.seek((seconds / totalSeconds).coerceIn(0.0, 1.0))
+    }
 
     Box(
         Modifier
@@ -119,87 +123,79 @@ internal fun AudioFullscreenPage(
                     onPrevious = onPrevious,
                 )
             }
-            val details: @Composable () -> Unit = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-                    modifier = Modifier.widthIn(max = layout.contentMaxWidth.dp),
-                ) {
-                    AudioFullscreenIdentity(source)
-                    AudioFullscreenTranscript(source, playback, layout.transcriptMaxHeight, accent) { seconds ->
-                        onChromeInteraction()
-                        val totalSeconds = totalMs / MS_PER_SECOND
-                        if (isLoaded && totalSeconds > 0.0) player.seek((seconds / totalSeconds).coerceIn(0.0, 1.0))
-                    }
-                    AudioChromeFade(visible = chromeVisible, onReveal = onRevealChrome) {
-                        AudioFullscreenTransport(
-                            speed = playback.speed,
-                            isPlaying = isLoaded && playback.isPlaying,
-                            isLoading = isLoaded && playback.isLoading,
-                            accent = accent,
-                            onSpeedChange = player::setSpeed,
-                            onSkip = { seconds -> if (isLoaded) player.skip(seconds) },
-                            onPlayPause = { if (isLoaded) player.togglePlayPause() else player.start(source, upcoming()) },
-                            onInteraction = onChromeInteraction,
-                        )
-                    }
-                }
-            }
-            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            val transport: @Composable () -> Unit = {
                 AudioChromeFade(visible = chromeVisible, onReveal = onRevealChrome) {
-                    FullscreenTopBar(
-                        onClose = onClose,
-                        tone = FullscreenChromeTone.Adaptive,
-                        leading = {
-                            if (pageCount > 1) {
-                                Text(
-                                    text = "${pageIndex + 1} / $pageCount",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MeeshyTheme.tokens.textSecondary,
-                                )
-                            }
-                        },
-                        trailing = {
-                            if (onDownload != null) {
-                                FullscreenChromeButton(
-                                    icon = FullscreenChromeSymbol.Save.icon,
-                                    label = stringResource(R.string.media_download),
-                                    onClick = {
-                                        onChromeInteraction()
-                                        onDownload(source)
-                                    },
-                                    tone = FullscreenChromeTone.Adaptive,
-                                )
-                            }
-                        },
+                    AudioFullscreenTransport(
+                        speed = playback.speed,
+                        isPlaying = isLoaded && playback.isPlaying,
+                        isLoading = isLoaded && playback.isLoading,
+                        accent = accent,
+                        onSpeedChange = player::setSpeed,
+                        onSkip = { seconds -> if (isLoaded) player.skip(seconds) },
+                        onPlayPause = { if (isLoaded) player.togglePlayPause() else player.start(source, upcoming()) },
+                        onInteraction = onChromeInteraction,
                     )
                 }
-                Spacer(Modifier.weight(1f))
-                if (layout.arrangement == AudioFullscreenArrangement.SIDE_BY_SIDE) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxl),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(start = MeeshySpacing.lg, end = MeeshySpacing.lg + railReserve),
-                    ) {
-                        hero()
-                        details()
-                    }
-                } else {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(AudioFullscreenLayout.STACK_SPACING.dp),
-                        modifier = Modifier.padding(start = MeeshySpacing.lg, end = MeeshySpacing.lg + railReserve),
-                    ) {
-                        hero()
-                        details()
-                    }
-                }
-                Spacer(Modifier.weight(1f))
             }
-            if (rail != null) {
-                Box(Modifier.align(Alignment.BottomEnd).padding(end = MeeshySpacing.lg, bottom = MeeshySpacing.lg)) { rail() }
+            val topBar: @Composable () -> Unit = {
+                AudioFullscreenTopBar(source, pageIndex, pageCount, chromeVisible, onClose, onRevealChrome, onChromeInteraction, onDownload)
+            }
+            val lyrics: @Composable (Modifier, LyricsPlacement) -> Unit = { lyricsModifier, placement ->
+                AudioFullscreenLyrics(source, playback, transcripts, accent, placement, lyricsModifier, seekToSeconds)
+            }
+            val languages: @Composable (Modifier) -> Unit = { languagesModifier ->
+                AudioFullscreenLanguages(source, transcripts, accent, onChromeInteraction, languagesModifier)
+            }
+            val identity: @Composable () -> Unit = { AudioFullscreenIdentity(source) }
+            if (layout.arrangement == AudioFullscreenArrangement.SIDE_BY_SIDE) {
+                AudioFullscreenSideBySide(layout, railReserve, topBar, hero, identity, transport, lyrics, languages, rail)
+            } else {
+                val showsLanguages = audioFullscreenShowsLanguages(source, transcripts)
+                AudioFullscreenStacked(layout, maxHeight.value, railReserve, showsLanguages, topBar, hero, identity, transport, lyrics, languages, rail)
             }
         }
+    }
+}
+
+/** La barre haute : la croix, le compteur « i / n » et le téléchargement ; elle s'efface avec le chrome. */
+@Composable
+internal fun AudioFullscreenTopBar(
+    source: AudioFullscreenSource,
+    pageIndex: Int,
+    pageCount: Int,
+    chromeVisible: Boolean,
+    onClose: () -> Unit,
+    onRevealChrome: () -> Unit,
+    onChromeInteraction: () -> Unit,
+    onDownload: ((AudioFullscreenSource) -> Unit)?,
+) {
+    AudioChromeFade(visible = chromeVisible, onReveal = onRevealChrome) {
+        FullscreenTopBar(
+            onClose = onClose,
+            tone = FullscreenChromeTone.Adaptive,
+            leading = {
+                if (pageCount > 1) {
+                    Text(
+                        text = "${pageIndex + 1} / $pageCount",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MeeshyTheme.tokens.textSecondary,
+                    )
+                }
+            },
+            trailing = {
+                if (onDownload != null) {
+                    FullscreenChromeButton(
+                        icon = FullscreenChromeSymbol.Save.icon,
+                        label = stringResource(R.string.media_download),
+                        onClick = {
+                            onChromeInteraction()
+                            onDownload(source)
+                        },
+                        tone = FullscreenChromeTone.Adaptive,
+                    )
+                }
+            },
+        )
     }
 }
 
@@ -236,36 +232,6 @@ private fun AudioFullscreenIdentity(source: AudioFullscreenSource) {
             Text(text = date, style = MaterialTheme.typography.bodySmall, color = tokens.textMuted)
         }
     }
-}
-
-/** La transcription servie, allumée segment par segment pendant que SA piste joue (le karaoké de la bulle). */
-@Composable
-private fun AudioFullscreenTranscript(
-    source: AudioFullscreenSource,
-    playback: AudioPlaybackState,
-    maxHeight: Float,
-    accent: Color,
-    onSeek: (Double) -> Unit,
-) {
-    val segments = remember(source.transcriptionSegments, source.transcriptionText) {
-        source.transcriptionSegments.ifEmpty {
-            listOfNotNull(
-                source.transcriptionText?.trim()?.ifBlank { null }?.let { me.meeshy.sdk.model.MessageTranscriptionSegment(text = it) },
-            )
-        }
-    }
-    if (segments.isEmpty()) return
-    val loaded = playback.attachmentId == source.id
-    MediaTranscriptionView(
-        segments = segments,
-        currentSeconds = if (loaded) playback.currentTimeMs / MS_PER_SECOND else 0.0,
-        isPlaying = loaded && playback.isPlaying,
-        progress = if (loaded) playback.progress else 0.0,
-        accent = accent,
-        ink = MeeshyTheme.tokens.textPrimary,
-        maxHeight = maxHeight,
-        onSeek = onSeek,
-    )
 }
 
 /**

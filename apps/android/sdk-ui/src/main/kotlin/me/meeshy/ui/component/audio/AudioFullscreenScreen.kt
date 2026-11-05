@@ -87,6 +87,12 @@ public interface AudioFullscreenPlayer {
 
     /** Le spectre de [source] (niveaux 0…1), calculé sur une copie déjà en cache ; vide sinon. */
     public fun samples(source: AudioFullscreenSource): StateFlow<List<Float>>
+
+    /**
+     * La piste servie de [source] a changé (une langue choisie) : si le moteur tient encore l'autre piste de CE vocal, il
+     * recharge celle-ci au même point et garde la file. Inerte par défaut (un hôte sans variantes, une doublure).
+     */
+    public fun switchTrack(source: AudioFullscreenSource) {}
 }
 
 /**
@@ -116,6 +122,7 @@ public fun AudioFullscreenScreen(
     onDownload: ((AudioFullscreenSource) -> Unit)? = null,
     conversationIsEndToEnd: Boolean = false,
     actions: AudioFullscreenActionPort? = null,
+    transcripts: AudioFullscreenTranscriptPort? = null,
 ) {
     val ordered = remember(sources) { AudioFullscreenSequence.ordered(sources) { it.createdAtEpochMs } }
     val ids = remember(ordered) { ordered.map { it.id } }
@@ -267,6 +274,7 @@ public fun AudioFullscreenScreen(
                 onPrevious = AudioFullscreenSequence.previous(source.id, ids)?.let { id ->
                     { scope.launch { pagerState.animateScrollToPage(latestIds.indexOf(id).coerceAtLeast(0)) }; Unit }
                 },
+                transcripts = transcripts,
             )
         }
         val posed = ordered.getOrNull(pagerState.currentPage)

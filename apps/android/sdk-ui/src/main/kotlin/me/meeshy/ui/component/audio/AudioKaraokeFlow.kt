@@ -58,7 +58,8 @@ internal data class KaraokeInk(val active: Color, val past: Color, val ahead: Co
  * **Le flux karaoké** (iOS `inlineFlowTranscription` / `MediaTranscriptionView.flowTranscription`) : les segments de la
  * transcription coulent comme du texte, chacun tappable (haptique légère, [onSeek] vers son `startTime`). Le segment
  * [activeIndex] — résolu par `TranscriptionKaraokeResolver`, `null` à l'arrêt — passe en accent gras sur un fond léger et
- * grossit un peu ; Réduire les animations supprime l'échelle et l'élévation et garde couleur et graisse.
+ * grossit un peu ; Réduire les animations supprime l'échelle et l'élévation et garde couleur et graisse. [onActiveBounds]
+ * rend le haut et la hauteur MESURÉE du segment allumé : le défilement des paroles place son milieu sur l'ancre.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -71,6 +72,7 @@ public fun AudioKaraokeFlow(
     modifier: Modifier = Modifier,
     fontSize: TextUnit = 14.sp,
     onActivePlaced: ((Float) -> Unit)? = null,
+    onActiveBounds: ((top: Float, height: Float) -> Unit)? = null,
 ) {
     val colors = KaraokeInk.of(accent, ink)
     val haptics = rememberMeeshyHaptics()
@@ -88,7 +90,14 @@ public fun AudioKaraokeFlow(
                     haptics.light()
                     seek(segment.startTime ?: 0.0)
                 },
-                onPlaced = onActivePlaced?.takeIf { phase == KaraokeSegmentPhase.Active },
+                onPlaced = if (phase == KaraokeSegmentPhase.Active && (onActivePlaced != null || onActiveBounds != null)) {
+                    { top, height ->
+                        onActivePlaced?.invoke(top)
+                        onActiveBounds?.invoke(top, height)
+                    }
+                } else {
+                    null
+                },
             )
         }
     }
@@ -102,7 +111,7 @@ private fun KaraokeSegment(
     accent: Color,
     fontSize: TextUnit,
     onClick: () -> Unit,
-    onPlaced: ((Float) -> Unit)?,
+    onPlaced: ((top: Float, height: Float) -> Unit)?,
 ) {
     val active = phase == KaraokeSegmentPhase.Active
     val reduceMotion = LocalReduceMotion.current
@@ -132,7 +141,7 @@ private fun KaraokeSegment(
             .clip(RoundedCornerShape(MeeshyRadius.xxs))
             .background(accent.copy(alpha = background))
             .clickable(role = Role.Button, onClick = onClick)
-            .then(if (onPlaced != null) Modifier.onGloballyPositioned { onPlaced(it.positionInParent().y) } else Modifier)
+            .then(if (onPlaced != null) Modifier.onGloballyPositioned { onPlaced(it.positionInParent().y, it.size.height.toFloat()) } else Modifier)
             .padding(horizontal = if (active) 3.dp else 0.dp, vertical = if (active) 1.dp else 0.dp),
     )
 }
