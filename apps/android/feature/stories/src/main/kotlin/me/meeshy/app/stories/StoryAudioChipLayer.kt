@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -81,7 +79,7 @@ internal fun StoryAudioChipLayer(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                if (muted) me.meeshy.ui.icons.MeeshyIcons.VolumeOff else Icons.Filled.GraphicEq,
+                if (muted) me.meeshy.ui.icons.MeeshyIcons.VolumeOff else me.meeshy.ui.icons.MeeshyIcons.Waveform,
                 contentDescription = null,
                 tint = MeeshyPalette.Indigo500,
                 modifier = Modifier.size(unit * AUDIO_CHIP_ICON),

@@ -57,7 +57,7 @@ internal class ComposerLiveSlot(val subject: ComposerLiveSubject, private val pl
  * entière, ramenée au début de la fenêtre que joue le son.
  */
 internal class ComposerLiveSoundClock(val id: String, private val player: ComposerLivePlayerState, private val windowStartMs: Long) {
-    val chip: AudioChipClock = AudioChipClock.Live { SceneAudioChipClock.livePositionSeconds(player.player.currentPosition, windowStartMs) }
+    val chip: AudioChipClock = AudioChipClock.Live { SceneAudioChipClock.livePositionSeconds(player.positionMs, windowStartMs) }
 }
 
 /**
