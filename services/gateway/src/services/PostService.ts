@@ -1156,25 +1156,15 @@ export class PostService {
       updateData.translations = {};
     }
 
-    // Editing a published story's CONTENT restarts its life (directive
-    // 2026-07-29): views, reactions and impressions are wiped — rows,
-    // denormalized counters AND embedded JSON mirrors — so every viewer sees
-    // the story as new again. The publication date never moves: createdAt and
-    // expiresAt are absent from updateData. Metadata-only updates (visibility)
-    // leave engagement untouched. Same predicate as the route's broadcast flag.
+    // Modifier une story en cours met l'EXISTANT à jour (directive porteur
+    // 2026-11-05, #16386, qui remplace celle du 2026-07-29) : ses vues, ses
+    // réactions et ses impressions restent, et `contentEditedAt` ne bouge pas
+    // — la garde « vu » des clients ne cède donc pas. Seul le texte périmé
+    // perd ses traductions. La date de publication ne bouge jamais :
+    // createdAt et expiresAt restent hors de updateData.
     const editedTextObjects = storyTranslatableTexts(data.storyEffects);
     const storyContentEdit = post.type === PostType.STORY && storyContentEditRequested(data);
     if (storyContentEdit) {
-      // `updatedAt` bouge sur CHAQUE écriture (compteurs de vues inclus) —
-      // ce champ dédié est le SEUL horodatage fiable pour que les clients
-      // fassent céder leur garde « viewed monotone » après cette édition.
-      updateData.contentEditedAt = new Date();
-      Object.assign(updateData, STORY_VIEW_RESET);
-      updateData.reactionCount = 0;
-      updateData.likeCount = 0;
-      updateData.reactionSummary = {};
-      updateData.reactions = [];
-      updateData.storyViews = [];
       // Text changed → the existing translations describe the OLD content.
       // (languageChanged already wiped them with the new source language.)
       if (!languageChanged) {
@@ -1234,11 +1224,6 @@ export class PostService {
         writtenMediaAlts = await writeMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
         writtenMediaCaptions = await writeMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
         await applyMediaOrder(tx, postId, mediaIdsToAttach);
-      }
-      if (storyContentEdit) {
-        await tx.postView.deleteMany({ where: { postId } });
-        await tx.postReaction.deleteMany({ where: { postId } });
-        await tx.postImpression.deleteMany({ where: { postId } });
       }
       return tx.post.update({
         where: { id: postId, ...(updateData.visibility && updateData.visibility !== PostVisibility.PRIVATE ? { OR: [{ moderationHiddenAt: null }, { moderationHiddenAt: { isSet: false } }] } : {}) },

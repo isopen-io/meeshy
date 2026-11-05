@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import me.meeshy.app.testing.TestWorkManagerRule
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.conversation.ConversationRepository
@@ -29,12 +30,16 @@ import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.AccountTicketContext
 import me.meeshy.sdk.session.SessionRepository
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class PushNotificationActionHandlerTest {
+
+    @get:Rule
+    val testWorkManager = TestWorkManagerRule()
 
     private val me = MeeshyUser(id = "me", username = "me")
 
