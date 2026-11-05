@@ -45,9 +45,6 @@ struct ComposerSceneOverlayChrome: View {
     var sceneTopInset: CGFloat = 0
 
     @State private var press = ComposerRailDoorPress()
-    /// La bande haute que la fenêtre réserve (Dynamic Island, barre d'état),
-    /// quand l'hôte pose ce chrome dessous (#16246).
-    @State private var unsafeTop: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -75,11 +72,7 @@ struct ComposerSceneOverlayChrome: View {
                    value: ComposerRestChrome.selectionColumnIsShown(state))
         .padding(.horizontal, MeeshySpacing.smPlus)
         .padding(.horizontal, max(0, sceneSideInset))
-        // Rien ne se pose dans la bande haute de la fenêtre (#16246) : une
-        // colonne qui défile et dont le haut y tombe l'annexe jusqu'au bord de
-        // l'écran — cadre et toucher — et passe sous ↶ ↷.
-        .padding(.top, MeeshySpacing.xs + max(0, sceneTopInset, unsafeTop))
-        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { unsafeTop = max(0, $0) }
+        .padding(.top, MeeshySpacing.xs + max(0, sceneTopInset))
     }
 
     private var topRow: some View {
