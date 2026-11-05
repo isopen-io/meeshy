@@ -183,7 +183,7 @@ final class ProfileDecorTests: XCTestCase {
     func test_catalog_embedsTheNineRingsAndTheNineBanners() {
         let firstPacks = AvatarRingCatalog.shared.packs.filter { ["contours-essentiels", "contours-animes"].contains($0.slug) }
         XCTAssertEqual(firstPacks.flatMap(\.rings).map(\.key), ["filet", "double-filet", "perle", "aurore", "deco", "laurier", "halo-or", "prisme-vivant", "onde"])
-        XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.flatMap(\.designs).count, 9)
+        XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.filter { ["bannieres-essentielles", "bannieres-animees"].contains($0.slug) }.flatMap(\.designs).count, 9)
         XCTAssertEqual(AvatarRingCatalog.shared.ringName("filet", language: "en") != nil, true)
     }
 
