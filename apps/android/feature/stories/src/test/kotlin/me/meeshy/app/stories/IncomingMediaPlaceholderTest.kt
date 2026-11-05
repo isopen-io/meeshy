@@ -83,4 +83,33 @@ class IncomingMediaPlaceholderTest {
         assertThat(StoryComposerUploadReducer.settled(state).incomingPlaceholder()).isNull()
         assertThat(StoryComposerUploadReducer.settled(state).incomingMedia).isEmpty()
     }
+
+    private fun choosing(state: StoryComposerUiState, vararg hints: IncomingMediaHint): StoryComposerUiState =
+        StoryComposerUploadReducer.started(state, StoryComposerUploadReducer.landings(state, hints.size), hints = hints.toList())
+
+    @Test
+    fun `while a chosen video is still being copied, the placeholder already says it loads a video (#16205)`() {
+        val placeholder = choosing(empty, IncomingMediaHint(preview = null, isVideo = true)).incomingPlaceholder()!!
+
+        assertThat(placeholder.isVideo).isTrue()
+        assertThat(placeholder.preview).isNull()
+    }
+
+    @Test
+    fun `while a chosen photo is still being copied, the placeholder already shows it (#16205)`() {
+        val picked = "content://media/picker/0/42"
+
+        val placeholder = choosing(empty, IncomingMediaHint(preview = picked, isVideo = false)).incomingPlaceholder()!!
+
+        assertThat(placeholder.isVideo).isFalse()
+        assertThat(placeholder.preview).isEqualTo(picked)
+    }
+
+    @Test
+    fun `the hints of a pick leave with it (#16205)`() {
+        val state = choosing(empty, IncomingMediaHint(preview = "content://p", isVideo = false))
+
+        assertThat(StoryComposerUploadReducer.settled(state).incomingHints).isEmpty()
+    }
 }
+
