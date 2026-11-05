@@ -87,7 +87,10 @@ internal fun AudioFullscreenPage(
     val totalMs = if (isLoaded && playback.durationMs > 0L) playback.durationMs else source.durationMs
     val samples by remember(source.id) { player.samples(source) }.collectAsState()
 
-    LaunchedEffect(source.url) { player.switchTrack(source) }
+    LaunchedEffect(source.url) {
+        val now = player.playback.value
+        if (now.isPlaying && now.attachmentId == source.id) player.switchTrack(source)
+    }
     val seekToSeconds: (Double) -> Unit = { seconds ->
         onChromeInteraction()
         val totalSeconds = totalMs / MS_PER_SECOND
@@ -132,7 +135,13 @@ internal fun AudioFullscreenPage(
                         accent = accent,
                         onSpeedChange = player::setSpeed,
                         onSkip = { seconds -> if (isLoaded) player.skip(seconds) },
-                        onPlayPause = { if (isLoaded) player.togglePlayPause() else player.start(source, upcoming()) },
+                        onPlayPause = {
+                            when {
+                                !isLoaded -> player.start(source, upcoming())
+                                !playback.isPlaying && player.switchTrack(source) -> Unit
+                                else -> player.togglePlayPause()
+                            }
+                        },
                         onInteraction = onChromeInteraction,
                     )
                 }

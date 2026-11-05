@@ -139,10 +139,12 @@ internal class CoordinatorAudioFullscreenPlayer(
     override fun samples(source: AudioFullscreenSource): StateFlow<List<Float>> = samplesOf(source)
 
     /** Une langue de piste choisie : le moteur recharge la piste servie de CE vocal au même point, la file et le contexte la reprennent. */
-    override fun switchTrack(source: AudioFullscreenSource) {
-        val playing = coordinator.snapshot.value.queue.current ?: return
+    override fun switchTrack(source: AudioFullscreenSource): Boolean {
+        val playing = coordinator.snapshot.value.queue.current ?: return false
         val served = source.queuedAudio()
-        if (VoiceVariant.isStale(playing, served)) coordinator.switchVariant(served)
+        if (!VoiceVariant.isStale(playing, served)) return false
+        coordinator.switchVariant(served)
+        return true
     }
 }
 
@@ -171,8 +173,8 @@ internal fun ChatAudioFullscreen(
     onRetryDownload: () -> Unit = {},
     actions: me.meeshy.ui.component.audio.AudioFullscreenActionPort? = null,
     languages: ChatAudioFullscreenLanguages? = null,
+    transcription: AudioFullscreenViewModel = hiltViewModel(),
 ) {
-    val transcription: AudioFullscreenViewModel = hiltViewModel()
     val player = voice?.fullscreenPlayer()
     val sources = remember(attachmentId, thread, conversationId, conversationName) {
         ChatAudioFullscreenSources.of(attachmentId, thread, conversationId, conversationName)

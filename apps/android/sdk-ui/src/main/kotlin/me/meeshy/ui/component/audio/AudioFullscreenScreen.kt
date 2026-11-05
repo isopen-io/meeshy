@@ -90,9 +90,10 @@ public interface AudioFullscreenPlayer {
 
     /**
      * La piste servie de [source] a changé (une langue choisie) : si le moteur tient encore l'autre piste de CE vocal, il
-     * recharge celle-ci au même point et garde la file. Inerte par défaut (un hôte sans variantes, une doublure).
+     * recharge celle-ci au même point, la JOUE, et garde la file ; `true` si une bascule a eu lieu. Inerte par défaut (un hôte
+     * sans variantes, une doublure). La page ne l'appelle que pendant l'écoute, ou au toucher Lire (iOS `syncActiveTrack`).
      */
-    public fun switchTrack(source: AudioFullscreenSource) {}
+    public fun switchTrack(source: AudioFullscreenSource): Boolean = false
 }
 
 /**
