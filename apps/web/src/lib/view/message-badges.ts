@@ -65,6 +65,8 @@ export type SystemRow =
       readonly displayName: string;
       readonly handle: string | null;
       readonly isAnonymous: boolean;
+      /** Le pseudo de l'arrivant (#16338) — la mention que « dis-lui salut » écrit. */
+      readonly username?: string;
       /** Le membre qui l'a fait entrer (#7593) — absent quand il est venu de lui-même. */
       readonly addedBy?: string;
     }
@@ -109,6 +111,7 @@ export function systemRowOf(message: Pick<Message, 'messageType' | 'messageSourc
       displayName: primaryName,
       handle,
       isAnonymous: joinNotice.isAnonymous,
+      ...(username === undefined || joinNotice.isAnonymous ? {} : { username }),
       ...(joinNotice.addedBy === undefined ? {} : { addedBy: joinNotice.addedBy.displayName }),
     };
   }

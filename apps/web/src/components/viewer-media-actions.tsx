@@ -29,7 +29,7 @@ import { ViewerMenu, ViewerReactionTray } from './viewer-chrome-menu';
  * Disposition demandée par le porteur le 2026-10-23 (#12424, jumelles iOS
  * #12420 et #12421) : le rail vertical à droite de la légende porte, de haut
  * en bas et dans l'ordre d'iOS (`cadreActionColumn`), Réagir · Répondre ·
- * Créer avec ce média · Enregistrer · Transférer, 40 de verre dans 44 de cible
+ * Créer avec ce média · Imager (#16333) · Enregistrer · Transférer, 40 de verre dans 44 de cible
  * (`viewer-chrome.tsx`, #8879) ; une vidéo y ajoute dessous le son et « … ». Enregistrer et
  * Transférer restent AUSSI dans le menu « … » de la barre haute. Transférer
  * ouvre la feuille d'envoi commune (`openSendSheet`), que l'hôte a déjà
@@ -206,9 +206,18 @@ function ActionRail({
     {
       action: 'compose',
       label: translate(language, 'media.viewer.compose'),
-      glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={GLYPH_SIZE.lg} />,
+      glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.notePencil} size={GLYPH_SIZE.lg} />,
       busy: composing,
       onPress: offers.compose ? compose : undefined,
+    },
+    /* LA BAGUETTE IMAGE LA PIÈCE (#16333) : le message et sa pièce, ou le média
+       nu, en carte image — le même geste que l'entrée « Imager » du menu « … »,
+       qui garde, elle, son icône d'image. */
+    {
+      action: 'imager',
+      label: translate(language, 'media.viewer.imager'),
+      glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={GLYPH_SIZE.lg} />,
+      onPress: page.imager,
     },
     {
       action: 'save',

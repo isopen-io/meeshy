@@ -32,6 +32,9 @@ public interface AudioFullscreenActionPort {
     /** Ouvre la feuille de transfert de la pièce. La lecture continue. */
     public fun forward(source: AudioFullscreenSource) {}
 
+    /** « Imager » (#16334) : ferme et ouvre l'atelier sur le message porteur de [source], avec sa pièce. */
+    public fun imager(source: AudioFullscreenSource) {}
+
     /** « Créer avec ce média » : ferme et ouvre le composeur avec ce son. */
     public fun compose(source: AudioFullscreenSource) {}
 

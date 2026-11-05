@@ -10,6 +10,7 @@ struct SecurityView: View {
     @EnvironmentObject private var authManager: AuthManager
 
     @State private var showChangePassword = false
+    @State private var pinFocused = false
     @State private var showActiveSessions = false
 
     // 2FA
@@ -49,9 +50,8 @@ struct SecurityView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            // Retour en verre de l'en-tête partagé (#6481) ; la page possède
-            // le défilement, l'écran ne fournit que ses sections.
-            CollapsibleHeaderPage(
+            // Retour en verre de l'en-tête partagé (#6481) ; la page possède le défilement.
+            ScrollViewReader { proxy in CollapsibleHeaderPage(
                 title: String(localized: "settings.security.title", defaultValue: "Sécurité", bundle: .main),
                 onBack: { dismiss() },
                 titleColor: theme.textPrimary,
@@ -59,7 +59,7 @@ struct SecurityView: View {
                 backgroundColor: theme.backgroundPrimary
             ) {
                 sectionsContent
-            }
+            }.onAppear { focusMasterPinIfRequested(proxy) } }
         }
         .onDisappear {
             resendTimer?.invalidate()
@@ -160,12 +160,23 @@ struct SecurityView: View {
             emailSection
             phoneSection
             conversationLockSection
+                .id(SettingsFocus.masterPin.rawValue)
+                .modifier(SettingsFocusHighlight(isActive: pinFocused))
             activeSessionsSection
             EncryptedDevicesEntry()
             Spacer().frame(height: 40)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.lg)
+    }
+
+    /// #16339 — l'invite « configurez un master PIN » a désigné ce réglage.
+    private func focusMasterPinIfRequested(_ proxy: ScrollViewProxy) {
+        guard SettingsFocusRequest.shared.consume(.masterPin) else { return }
+        pinFocused = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(.easeInOut(duration: 0.4)) { proxy.scrollTo(SettingsFocus.masterPin.rawValue, anchor: .center) }
+        }
     }
 
     // MARK: - Password Section

@@ -535,6 +535,11 @@ const PENDING_CLIENT_ENTRIES = {
   'bring.byUserId': { issue: 13936, reason: 'GET|POST /bring/:userId — disponibilité et envoi du Bring, sous-lot web' },
   'bring.byBringId': { issue: 13936, reason: 'DELETE /bring/:bringId — arrêter un Bring, sous-lot web' },
   'relations.byUserIdSettings': { issue: 13936, reason: 'GET|PUT /relations/:userId/settings — bloquer le Bring de quelqu’un, sous-lot web' },
+  // L'éditeur de packs lié à un compte Meeshy vérifié (#16274, servi par la PR #16378) : la
+  // boutique et la console web liront sa fiche, son espace et sa liste d'administration.
+  'publishers.bySlug': { issue: 16274, reason: 'GET /publishers/:slug — la fiche publique de l’éditeur, lue par la boutique web' },
+  'publishers.me': { issue: 16274, reason: 'GET|PUT /publishers/me — l’espace de l’éditeur connecté' },
+  'publishers.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web' },
 };
 
 const BASELINE_DEAD_ENTRIES = 276;

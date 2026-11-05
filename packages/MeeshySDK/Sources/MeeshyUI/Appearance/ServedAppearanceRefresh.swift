@@ -12,6 +12,9 @@ import MeeshySDK
 public final class ServedAppearanceRefresh: ObservableObject {
     nonisolated deinit {}
 
+    /// Le magasin d'apparence servie de l'appareil : celui que les écrans du SDK lisent quand on ne leur en donne pas.
+    nonisolated public static var store: any ServedAppearanceProviding { ServedAppearanceStore.shared }
+
     @Published public private(set) var revision = 0
 
     private let served: any ServedAppearanceProviding

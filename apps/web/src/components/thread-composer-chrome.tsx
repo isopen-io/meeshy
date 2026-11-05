@@ -2,6 +2,8 @@ import { useSyncExternalStore, type FocusEventHandler, type ReactNode } from 're
 
 import { isWide, subscribeWide } from '@/lib/view/split-query';
 
+import { ThreadComposerFold, type ComposerFoldSpec } from './thread-composer-fold';
+
 /**
  * LA BANDE BASSE DU FIL — le composeur, ou le bandeau qui le remplace
  * (`ThreadWriteLock`, #9928) : UNE pose, partagée par les deux.
@@ -20,13 +22,19 @@ import { isWide, subscribeWide } from '@/lib/view/split-query';
  * La STRUCTURE ne change pas d'un gabarit à l'autre (le dock existe toujours,
  * sans verre au téléphone) : franchir 1024 px déplace une classe, il ne
  * remonte pas le composeur ni son brouillon en cours.
+ *
+ * `fold` rend la barre REPLIABLE et en retient l'état par conversation
+ * (#16341, `thread-composer-fold.tsx`) ; le bandeau qui remplace la barre
+ * (`ThreadWriteLock`) ne le passe pas : il n'a rien à replier.
  */
 export function ThreadComposerChrome({
   children,
   onFocus,
   onBlur,
+  fold,
 }: {
   readonly children: ReactNode;
+  readonly fold?: ComposerFoldSpec;
   readonly onFocus?: FocusEventHandler<HTMLDivElement>;
   readonly onBlur?: FocusEventHandler<HTMLDivElement>;
 }) {
@@ -37,7 +45,9 @@ export function ThreadComposerChrome({
       onFocus={onFocus}
       onBlur={onBlur}
     >
-      <div className={wide ? 'thread-composer-dock glass-prominent' : 'thread-composer-dock'}>{children}</div>
+      <div className={wide ? 'thread-composer-dock glass-prominent' : 'thread-composer-dock'}>
+        {fold === undefined ? children : <ThreadComposerFold spec={fold}>{children}</ThreadComposerFold>}
+      </div>
     </div>
   );
 }

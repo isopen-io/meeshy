@@ -42,13 +42,13 @@ export type PackInspection<P extends ShopPack> = {
   readonly sheet: P | null;
   readonly preview: { readonly pack: P; readonly index: number } | null;
   readonly packs: readonly P[];
-  readonly openPreview: (pack: P, index: number) => void;
-  readonly closePreview: () => void;
-  readonly closeSheet: () => void;
+  openPreview(pack: P, index: number): void;
+  closePreview(): void;
+  closeSheet(): void;
   /** Installer / Retirer / Acheter, optimiste ; rend `true` une fois confirmé, `false` sur un refus (état d'avant rétabli). */
-  readonly toggle: (pack: P) => Promise<boolean>;
-  readonly busy: (pack: P) => boolean;
-  readonly actionOf: (pack: P) => PackAction;
+  toggle(pack: P): Promise<boolean>;
+  busy(pack: P): boolean;
+  actionOf(pack: P): PackAction;
   readonly notice: string;
 };
 

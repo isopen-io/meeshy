@@ -197,7 +197,10 @@ final class RenderedScreen {
     /// à l'apparition) ou qui s'anime à l'entrée (la connexion fait monter ses
     /// champs depuis l'opacité nulle) ne pose son contenu qu'après quelques
     /// tours : lire l'arbre une seule fois rendrait `nil` sur un écran juste.
-    /// Un cadre de largeur nulle n'est pas encore posé — il ne compte pas.
+    /// Un cadre de largeur nulle n'est pas encore posé — il ne compte pas, et
+    /// le nœud POSÉ qui porte le même identifiant gagne : un `ScrollView`
+    /// SwiftUI annonce son identifiant deux fois, par l'élément de son
+    /// conteneur (cadre nul) puis par sa `UIScrollView` (#16246).
     ///
     /// La borne est un PLAFOND, jamais une durée : l'attente s'arrête dès que
     /// le nœud est posé. 5 s ne suffisaient pas sur un runner CI chargé — la
@@ -207,10 +210,24 @@ final class RenderedScreen {
     func frame(of identifier: String, borne: TimeInterval = 20) -> CGRect? {
         var pose: CGRect?
         _ = RenderedScreen.attendre(borne: borne) {
-            pose = node(identifier).map(\.frame).flatMap { $0.width > 0 ? $0 : nil }
+            pose = RenderedScreen.noeuds(root)
+                .first { $0.identifier == identifier && $0.frame.width > 0 }?
+                .frame
+                ?? RenderedScreen.vue(portant: identifier, dans: root)
+                    .map { $0.convert($0.bounds, to: nil) }
+                    .flatMap { $0.width > 0 ? $0 : nil }
             return pose != nil
         }
         return pose
+    }
+
+    /// La `UIView` qui porte l'identifiant, cherchée dans les SOUS-VUES : la
+    /// `UIScrollView` d'un `ScrollView` SwiftUI qui déborde le porte sans être
+    /// un élément d'accessibilité, et l'arbre d'accessibilité ne la rend pas
+    /// toujours (#16246).
+    private static func vue(portant identifier: String, dans vue: UIView) -> UIView? {
+        if vue.accessibilityIdentifier == identifier, !vue.isHidden, vue.window != nil { return vue }
+        return vue.subviews.lazy.compactMap { Self.vue(portant: identifier, dans: $0) }.first
     }
 
     /// Le cadre ANNONCÉ du premier nœud posé dont le libellé COMMENCE par

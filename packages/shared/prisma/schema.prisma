@@ -502,6 +502,8 @@ model User {
   pushTokens               PushToken[]
   stickers                 UserSticker[]
   stickerPacks             UserStickerPack[]
+  /// L'ÉDITEUR de packs que ce compte possède (#16274) — au plus un.
+  packPublisher            PartnerProfile?
   packOwnerships           UserPackOwnership[]
 
   // Signal Protocol E2EE Relations
@@ -6631,17 +6633,45 @@ model LensPack {
   @@index([documentSrc])
 }
 
-/// L'IDENTITÉ d'un partenaire qui propose des lens (#11327, S26) : un nom
-/// affichable, un site et un logo, VÉRIFIÉS par BIGBOSS ou ADMIN (décision
-/// #11251). Optionnel : une lens sans profil vérifié se publie, mais ne crédite
-/// personne. Changer son nom ou son logo RETIRE la vérification — une identité
-/// vérifiée ne se remplace pas après coup. Gratuit des deux côtés : aucun
-/// champ de prix ni de paiement.
+/// L'ÉDITEUR d'un pack (#16274), généralisation à TOUS les domaines de
+/// l'identité partenaire des lens (#11327, S26) : stickers, fonds, contours,
+/// bannières, lens — Meeshy compris. Un éditeur appartient à UN compte Meeshy
+/// (`userId`, relation obligatoire `owner`), et un compte possède au plus un
+/// éditeur (`userId @unique`) : le pack se rattache à l'éditeur du compte qui
+/// le PROPOSE (`*.submitterId`), sans seconde référence qui pourrait diverger.
+/// `displayName` est le nom de BOUTIQUE, distinct du nom d'utilisateur, qui
+/// n'est jamais servi aux clients de la boutique (l'admin seule le voit).
+/// L'éditeur « Meeshy » (`slug = meeshy`) appartient au compte officiel désigné
+/// par `MEESHY_OFFICIAL_ACCOUNT_ID`, jamais à un compte écrit en dur.
+/// VÉRIFIÉ par BIGBOSS ou ADMIN (décision #11251). Changer son nom ou son logo
+/// RETIRE la vérification. Gratuit des deux côtés : aucun champ de prix.
 model PartnerProfile {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
-  /// Le compte qui propose les lens (`LensPack.submitterId`).
+  /// Le compte PROPRIÉTAIRE (`ownerUserId` de #16274) : celui qui propose les packs (`submitterId`).
   userId      String    @unique @db.ObjectId
+  /// L'adresse de l'éditeur en boutique (`publisherSlugOf`), stable une fois posée.
+  /// Absente sur un profil de partenaire d'avant #16274 jusqu'à sa première
+  /// proposition, ou jusqu'au rattrapage (`scripts/backfill-pack-publishers.ts`).
+  /// Unique par un index PARTIEL (`{ slug: { $type: 'string' } }`) que pose
+  /// `migrations/2026-11-05-partner-profile-publisher-indexes.mongodb.js` — PAS
+  /// d'`@unique` ici : `prisma db push` poserait un index unique non partiel, qui
+  /// échoue dès que deux profils n'ont pas encore d'adresse. `PackPublishers`
+  /// vérifie l'unicité lui-même, sans supposer l'index.
+  slug        String?
   displayName String
+  /// La clé de lecture du nom (`publisherNameKey` : casse, accents, ponctuation et
+  /// confusables repliés) : deux éditeurs ne portent pas le même nom. Absente pour un
+  /// nom neutre. Unique par un index PARTIEL posé par la même migration.
+  nameKey     String?
+  /// Posée quand ce profil, écrit avant les clés de nom, porte un nom qu'un autre
+  /// détient déjà (homonyme vérifié ou plus ancien) ou qui se lit comme Meeshy :
+  /// le profil GARDE son nom (droit acquis), sans clé, et un admin tranche.
+  nameDisputedAt DateTime?
+  /// Posée par le rattrapage quand ce profil HÉRITÉ porte un nom hors de la liste
+  /// blanche : lui seul garde la lecture à jokers bornés (`impersonatesMeeshy(name,
+  /// { grandfathered: true })`), donc son service et son crédit. Lue sur la ligne,
+  /// jamais déduite du nom ; aucune écriture directe ne la pose.
+  nameOffListAt DateTime?
   /// https seulement (`parsePartnerProfileInput`).
   website     String?
   /// `<sha16>.webp|png` — le logo ré-encodé, composé dans le filigrane À CÔTÉ de celui de Meeshy.
@@ -6655,6 +6685,8 @@ model PartnerProfile {
   verifiedBy  String?   @db.ObjectId
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  owner User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([verifiedAt])
 }

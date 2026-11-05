@@ -2534,6 +2534,15 @@ export class MeeshySocketIOManager {
         logger.debug(`audio-translation:ready no segments lang=${data.language} msg=${data.messageId}`);
       }
 
+      // #16340 — une traduction TEXTE SEULE (TTS en échec) n'a pas de piste :
+      // les clients publiés jouent `url` sans le tester. Elle voyage par la
+      // pièce re-sérialisée, où une entrée sans `url` est déjà ignorée.
+      if (!translationData.translatedAudio.url) {
+        logger.info('audio-translation:text-only', { messageId: data.messageId, attachmentId: data.attachmentId, lang: data.language });
+        await this._broadcastAttachmentUpdated(data.attachmentId, data.messageId, normalizedId);
+        return;
+      }
+
       // Diffuser dans la room de conversation
       // Nom d'événement CALCULÉ : socket.io ne le vérifie PAS (mesure du
       // cycle 104 — sur un `Ev` union, `EventParams` s'effondre en union de

@@ -117,7 +117,7 @@ final class SceneAudioStageSurfacesTests: XCTestCase {
 
     func test_theLiveChip_appliesTheSameRotation() throws {
         XCTAssertTrue(try source("Controls/AudioForegroundChip.swift")
-            .contains(".rotationEffect(.degrees(audioObject.rotation ?? 0))"))
+            .contains(".rotationEffect(.degrees(audioObject.rotation ?? 0) + twist)"))
     }
 
     // MARK: - La couche de pastilles d'une surface (SceneSoundChipLayer)

@@ -27,7 +27,7 @@ final class ProfileSheetLoader: ObservableObject {
     private var servedSubscription: AnyCancellable?
     private var servedDecorLoad: Task<Void, Never>?
 
-    init(served: any ServedAppearanceProviding = ServedAppearanceStore.shared) {
+    init(served: any ServedAppearanceProviding = ServedAppearanceRefresh.store) {
         self.served = served
         servedSubscription = served.changes
             .receive(on: DispatchQueue.main)

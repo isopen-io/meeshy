@@ -49,6 +49,8 @@ struct SettingsView: View {
         self.packShopLauncher = packShopLauncher
     }
     @State private var scrollRelay = ScrollOffsetRelay()
+    /// Le réglage qu'une invite a désigné (#16339) — défilé et allumé.
+    @State private var focusedSetting: SettingsFocus?
     /// Miroirs des trois interrupteurs d'interface (#6482), lus UNE fois au
     /// montage comme `interfaceLanguageChoice` : chaque bascule écrit le miroir
     /// ET `LentilleFeatureFlag.setEnabled` — le drapeau reste la seule source.
@@ -174,6 +176,7 @@ struct SettingsView: View {
             .sheet(isPresented: $showDataStorage) { DataStorageView() }
             .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
             .sheet(isPresented: $showPacks) { PacksSettingsView(initialDomain: packsInitialDomain, focusedPack: packsFocusedPack) }
+            .onReceive(SettingsFocusRequest.shared.$pending.compactMap { $0 }, perform: receiveFocus)
             .onReceive(packShopLauncher.$pending.compactMap { $0 }) { _ in
                 let request = packShopLauncher.consume()
                 packsInitialDomain = request?.domain
@@ -202,7 +205,17 @@ struct SettingsView: View {
 
     // MARK: - Scroll Content
 
+    /// #16339 — le réglage désigné par une invite ; le master PIN vit dans
+    /// Sécurité, qui consomme la demande à son tour.
+    private func receiveFocus(_ focus: SettingsFocus) {
+        if !focus.opensSecurity { _ = SettingsFocusRequest.shared.consume() }
+        focusedSetting = focus
+        guard focus.opensSecurity else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { showSecurity = true }
+    }
+
     private var scrollContent: some View {
+        ScrollViewReader { proxy in
         ScrollView(showsIndicators: false) {
             GeometryReader { geo in
                 Color.clear.preference(
@@ -218,8 +231,12 @@ struct SettingsView: View {
                 VStack(spacing: MeeshySpacing.xl) {
                     profileCard
                     accountSection
+                        .id(SettingsFocus.masterPin.settingsAnchor)
+                        .modifier(SettingsFocusHighlight(isActive: focusedSetting == .masterPin))
                     appearanceSection
                     voiceProfileSection
+                        .id(SettingsFocus.voiceProfile.settingsAnchor)
+                        .modifier(SettingsFocusHighlight(isActive: focusedSetting == .voiceProfile))
                     transcriptionSection
                     notificationsSection
                     dataSection
@@ -238,6 +255,13 @@ struct SettingsView: View {
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
+        .adaptiveOnChange(of: focusedSetting, initial: true) { _, focus in
+            guard let focus else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.easeInOut(duration: 0.4)) { proxy.scrollTo(focus.settingsAnchor, anchor: .center) }
+            }
+        }
+        }
     }
 
     // MARK: - Account Section

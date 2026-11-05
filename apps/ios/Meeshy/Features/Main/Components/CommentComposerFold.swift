@@ -28,18 +28,14 @@ extension View {
         modifier(CommentComposerFoldModifier(isReplying: isReplying))
     }
 
-    /// Rend la barre d'une CONVERSATION repliable (#9955, directive porteur
-    /// 2026-10-10) — le MÊME repli que la story et les commentaires. Le ⌄
-    /// s'efface pendant qu'on écrit ou qu'on enregistre (`isComposing`), et
-    /// une saisie qui commence rouvre la barre (une réponse, une édition qui
-    /// demandent le focus). Une réponse en cours ne force PAS l'ouverture :
-    /// elle survit au repli, comme le brouillon et les pièces jointes.
-    func foldableConversationComposer(isComposing: Bool, onFold: @escaping () -> Void) -> some View {
+    /// Rend la barre d'une CONVERSATION repliable (#9955) — le MÊME repli que la
+    /// story et les commentaires. Le ⌄ s'efface pendant qu'on écrit ou enregistre,
+    /// une saisie qui commence rouvre la barre ; une réponse en cours survit au
+    /// repli. Le repli se RETIENT par conversation (`memoryKey`, #16341).
+    func foldableConversationComposer(isComposing: Bool, memoryKey: String? = nil, onFold: @escaping () -> Void) -> some View {
         modifier(CommentComposerFoldModifier(
-            isReplying: false,
-            isComposing: isComposing,
-            wording: .conversation,
-            onFold: onFold))
+            isReplying: false, isComposing: isComposing, wording: .conversation, onFold: onFold,
+            memoryKey: memoryKey, memory: memoryKey == nil ? nil : ConversationComposerFoldMemory.shared))
     }
 }
 
@@ -93,6 +89,8 @@ struct CommentComposerFoldModifier: ViewModifier {
     var isComposing: Bool = false
     var wording: ComposerFoldWording = .comment
     var onFold: (() -> Void)? = nil
+    var memoryKey: String? = nil
+    var memory: ConversationComposerFoldMemoryProviding? = nil
     @State private var userFolded = false
 
     func body(content: Content) -> some View {
@@ -118,8 +116,17 @@ struct CommentComposerFoldModifier: ViewModifier {
         .animation(.spring(response: 0.32, dampingFraction: 0.82), value: isFolded)
         .adaptiveOnChange(of: isComposing) { _, composing in
             guard ConversationComposerFold.reopens(userFolded: userFolded, isComposing: composing) else { return }
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { userFolded = false }
+            setFolded(false)
         }
+        .adaptiveOnChange(of: memoryKey, initial: true) { _, key in
+            guard let key, let memory else { return }
+            userFolded = memory.isFolded(conversationId: key)
+        }
+    }
+
+    private func setFolded(_ folded: Bool) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { userFolded = folded }
+        if let memoryKey { memory?.remember(folded: folded, conversationId: memoryKey) }
     }
 
     private func foldControl(isFolded: Bool) -> ComposerFoldControl? {
@@ -135,12 +142,12 @@ struct CommentComposerFoldModifier: ViewModifier {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         HapticFeedback.light()
         onFold?()
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { userFolded = true }
+        setFolded(true)
     }
 
     private func unfold() {
         HapticFeedback.light()
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { userFolded = false }
+        setFolded(false)
     }
 
     private var unfoldButton: some View {

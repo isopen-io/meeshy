@@ -1,4 +1,5 @@
 import Foundation
+import MeeshyUI
 
 // MARK: - LE vocabulaire des actions d'un message (#11234)
 //
@@ -76,7 +77,7 @@ enum MessageActionVerb: CaseIterable {
         case .forward: return "arrowshape.turn.up.right"
         case .edit: return "pencil"
         case .select: return "checkmark.circle"
-        case .compose: return "wand.and.stars"
+        case .compose: return FullscreenChromeSymbol.compose
         case .imager: return MessageCardExportMenu.imageSymbol
         case .exportQuick: return MessageCardExportMenu.quickSymbol
         case .create: return MessageCardExportMenu.createSymbol

@@ -99,7 +99,8 @@ final class ComposerSceneChromeSmallScreenTests: XCTestCase {
         let bounds = CGRect(origin: .zero, size: size)
         let zones = Self.controls.compactMap { id in screen.node(id).map { (id, $0.frame) } }
         for rail in rails {
-            let frame = try XCTUnwrap(screen.frame(of: rail), "\(size) : \(rail) introuvable dans l'arbre rendu",
+            let frame = try XCTUnwrap(screen.frame(of: rail), "\(size) : \(rail) introuvable dans l'arbre rendu — "
+                                      + "nœuds portant l'identifiant : \(screen.nodes.filter { $0.identifier == rail }.map(\.frame))",
                                       file: file, line: line)
             XCTAssertTrue(bounds.contains(frame.insetBy(dx: 0.5, dy: 0.5)),
                           "\(size) : \(rail) sort de l'écran : \(frame)", file: file, line: line)

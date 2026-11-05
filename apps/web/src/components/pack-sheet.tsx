@@ -5,6 +5,7 @@ import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { myProfileQueryOptions } from '@/lib/api/profile';
+import { translatePackPreview } from '@/lib/i18n-pack-preview-catalog';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { decorPackState, isAnimatedDecor } from '@/lib/packs/decor-items';
@@ -55,6 +56,7 @@ const weightOf = (language: InterfaceLanguage, bytes: number): string => {
 
 export function PackSheet({ language, deps, pack, cover, action, busy, notice, onAction, onOpenItem, onClose }: PackSheetProps) {
   const t = translateStickerPacks;
+  const tp = translatePackPreview;
   const scheme = useScheme();
   const names = useAppearanceNames(language);
   const items = usePackItems(pack, deps);
@@ -65,9 +67,9 @@ export function PackSheet({ language, deps, pack, cover, action, busy, notice, o
   const state = decorPackState({ embedded, installed: pack.installed });
   const bytes = items.data?.bytes ?? null;
   const facts = [
-    t(language, 'packs.sheet.publisher', { author: pack.author === '' ? PUBLISHER_FALLBACK : pack.author }),
-    ...(items.data === undefined ? [] : [t(language, state === 'embedded' ? 'packs.sheet.state.embedded' : state === 'installed' ? 'packs.sheet.state.installed' : 'packs.sheet.state.download')]),
-    ...(bytes === null ? [] : [t(language, 'packs.sheet.size', { size: weightOf(language, bytes) })]),
+    tp(language, 'packs.sheet.publisher', { author: pack.author === '' ? PUBLISHER_FALLBACK : pack.author }),
+    ...(items.data === undefined ? [] : [tp(language, state === 'embedded' ? 'packs.sheet.state.embedded' : state === 'installed' ? 'packs.sheet.state.installed' : 'packs.sheet.state.download')]),
+    ...(bytes === null ? [] : [tp(language, 'packs.sheet.size', { size: weightOf(language, bytes) })]),
     ...(pack.price === null ? [] : [pack.owned ? t(language, 'packs.owned') : t(language, 'packs.price', { price: String(pack.price) })]),
   ];
   const wide = pack.domain === 'banner' || pack.domain === 'banner-frame';
@@ -120,9 +122,9 @@ export function PackSheet({ language, deps, pack, cover, action, busy, notice, o
         <p role="status" aria-live="polite" className="text-caption empty:hidden" style={{ color: 'var(--ios-error)' }}>
           {notice}
         </p>
-        <section aria-label={t(language, 'packs.sheet.items')} className="flex flex-col gap-2">
+        <section aria-label={tp(language, 'packs.sheet.items')} className="flex flex-col gap-2">
           <h3 className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {t(language, 'packs.sheet.items')}
+            {tp(language, 'packs.sheet.items')}
           </h3>
           {list.length > 0 ? (
             <ul className={`grid ${grid} gap-2`}>
@@ -131,7 +133,7 @@ export function PackSheet({ language, deps, pack, cover, action, busy, notice, o
                   <button
                     type="button"
                     data-pack-sheet-item={item.key}
-                    aria-label={`${decorItemName(names, item)}${isAnimatedDecor(item) ? ` · ${t(language, 'packs.preview.animated')}` : ''}`}
+                    aria-label={`${decorItemName(names, item)}${isAnimatedDecor(item) ? ` · ${tp(language, 'packs.preview.animated')}` : ''}`}
                     onClick={() => onOpenItem(index)}
                     className="grid w-full place-items-center gap-1 rounded-card p-2 text-caption focus-visible:outline-2 focus-visible:outline-offset-2"
                     style={{ minHeight: 44, backgroundColor: 'var(--color-ios-fill)', outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
@@ -147,7 +149,7 @@ export function PackSheet({ language, deps, pack, cover, action, busy, notice, o
           ) : items.isError ? (
             <div className="flex flex-col items-start gap-2">
               <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-                {t(language, 'packs.sheet.failed')}
+                {tp(language, 'packs.sheet.failed')}
               </p>
               <button type="button" data-pack-sheet-retry onClick={() => void items.refetch()} className="min-h-11 rounded-full px-4 text-body font-semibold" style={{ backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }}>
                 {t(language, 'packs.retry')}
@@ -155,7 +157,7 @@ export function PackSheet({ language, deps, pack, cover, action, busy, notice, o
             </div>
           ) : (
             <div data-pack-sheet-loading role="status" aria-busy="true" className="flex flex-col gap-2">
-              <span className="sr-only">{t(language, 'packs.sheet.loading')}</span>
+              <span className="sr-only">{tp(language, 'packs.sheet.loading')}</span>
               <ul aria-hidden="true" className={`grid ${grid} gap-2`}>
                 {SKELETON.map((cell) => (
                   <li key={cell} className={`block animate-pulse rounded-card motion-reduce:animate-none ${wide ? 'aspect-[3/1]' : 'aspect-square'}`} style={{ backgroundColor: 'var(--color-ios-fill)' }} />

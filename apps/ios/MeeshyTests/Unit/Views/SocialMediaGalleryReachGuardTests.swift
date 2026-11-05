@@ -84,14 +84,16 @@ final class SocialMediaGalleryReachGuardTests: XCTestCase {
                       "…et ses alternatives de langue")
     }
 
-    /// La pastille du réel n'existe QUE lorsqu'elle a un effet — loi 4 : un
-    /// contrôle sans effet est absent, jamais grisé.
+    /// Le chemin du réel mixte n'existe QUE lorsqu'il a un effet — loi 4 : un
+    /// contrôle sans effet est absent, jamais grisé. Depuis #16321 ce sont des
+    /// points, élus par `ReelMediaIndicator` (que `ReelMediaIndicatorTests`
+    /// éprouve), plus une pastille « n / M ».
     func test_laPastilleDuReelNApparaitQuAvecPlusieursMedias() throws {
         let code = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
 
-        XCTAssertTrue(code.contains("if galleryMediaCount > 1 {"),
-                      "la pastille se monte sous condition du nombre de médias")
-        XCTAssertTrue(code.contains("ReelMediaCountBadge("),
-                      "…et c'est bien la pastille qui est montée")
+        XCTAssertTrue(code.contains("if case let .galleryDots(total, currentIndex) = mediaIndicator {"),
+                      "les points se montent sous condition de l'indicateur élu")
+        XCTAssertTrue(code.contains("ReelMediaGalleryDots("),
+                      "…et ce sont bien les points menant à la galerie qui sont montés")
     }
 }

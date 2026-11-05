@@ -11,6 +11,7 @@ import { loadShop, purchasePack, setShopPackInstalled, shopPackText, type ShopPa
 import type { GloryRankKey } from '@meeshy/shared/utils/game/glory';
 
 import { loadGameCatalogParts, translateGame } from '@/lib/i18n-game-catalog';
+import { usePackPreviewCatalog } from '@/lib/i18n-pack-preview-catalog';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import { packIsLocked, packUnlockLine } from '@/lib/packs/unlock-line';
 import { stickerPackCoverSrc } from '@/lib/sticker-packs/src';
@@ -104,6 +105,7 @@ function UnifiedPackInspector({
   readonly deps: ConversationsDeps;
   readonly queryClient: QueryClient;
 }) {
+  const catalogReady = usePackPreviewCatalog(language);
   const refOf = (pack: UnifiedPack) => (isDecorDomain(pack.domain) ? { domain: pack.domain, slug: pack.rawSlug } : null);
   const decorPacks = inspection.packs.flatMap((pack) => {
     const ref = refOf(pack);
@@ -113,6 +115,7 @@ function UnifiedPackInspector({
   const sheetRef = sheet === null ? null : refOf(sheet);
   const preview = inspection.preview;
   const previewRef = preview === null ? null : refOf(preview.pack);
+  if (!catalogReady) return null;
   return (
     <Suspense fallback={null}>
       {sheet === null || sheetRef === null ? null : (

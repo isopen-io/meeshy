@@ -498,7 +498,7 @@ extension MessageListViewController {
             onSetActiveDisplayLanguage: handlers.setActiveDisplayLanguage,
             onSetSecondaryLanguage: handlers.setSecondaryLanguage,
             onOpenProfile: handlers.openProfile,
-            onOpenParticipantProfile: handlers.openParticipantProfile,
+            onOpenParticipantProfile: handlers.openParticipantProfile, onGreetArrivals: callbacks.greetArrivals,
             voiceConsentMissing: inputs.voiceConsentMissing,
             onTapConsentNotice: handlers.consentNotice,
             standalone: standalone

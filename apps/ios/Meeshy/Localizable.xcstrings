@@ -31927,6 +31927,53 @@
         }
       }
     },
+    "media.imager.rail.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحوّل الرسالة وهذه الوسائط إلى بطاقة صورة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Macht aus der Nachricht und diesem Medium eine Bildkarte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turns the message and this media into an image card."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convierte el mensaje y este contenido en una tarjeta de imagen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fait du message et de ce média une carte image."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trasforma il messaggio e questo contenuto in una scheda immagine."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transforma a mensagem e esta mídia em um cartão de imagem."
+          }
+        }
+      }
+    },
     "media.save.alreadyInPhotos": {
       "extractionState": "manual",
       "localizations": {
@@ -64842,6 +64889,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Solicitar tradução"
+          }
+        }
+      }
+    },
+    "bubble.arrivals.greet.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يكتب إشارة إلى كل وافد جديد في رسالتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreibt eine Erwähnung jedes Neuankömmlings in deine Nachricht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writes a mention of each newcomer in your message."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribe una mención de cada recién llegado en tu mensaje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrit la mention de chaque arrivant dans le message."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrive una menzione di ogni nuovo arrivato nel tuo messaggio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escreve uma menção a cada recém-chegado na sua mensagem."
           }
         }
       }

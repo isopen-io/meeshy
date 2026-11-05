@@ -8,11 +8,13 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { matches, memoryPrisma, type Row } from './sticker-packs.harness';
+import type { PublisherUserSeed } from '../services/packs/pack-publishers.fakes';
 
 const uniqueViolation = () => Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
 
-export function appearancePrisma() {
-  const base = memoryPrisma();
+/** `accounts` : les comptes semés pour la loi des éditeurs (#16274) ; tout autre compte est inscrit, actif et vérifié. */
+export function appearancePrisma(accounts: Readonly<Record<string, PublisherUserSeed>> = {}) {
+  const base = memoryPrisma(accounts);
   const ledger: Row[] = [];
   const ownerships: Row[] = [];
   const users = new Map<string, Record<string, unknown>>();
@@ -91,8 +93,10 @@ export function appearancePrisma() {
     },
   };
 
+  // Un compte sans ligne semée ici est celui du double de base : inscrit, actif et vérifié (#16274) — l'éditeur le lit pour autoriser une proposition.
+  const baseUser = (base.prisma as unknown as { user: { findUnique: (args: { where: { id: string }; select?: Record<string, unknown> }) => Promise<unknown> } }).user;
   const user = {
-    findUnique: async ({ where }: { where: { id: string } }) => users.get(where.id) ?? null,
+    findUnique: async (args: { where: { id: string }; select?: Record<string, unknown> }) => users.get(args.where.id) ?? baseUser.findUnique(args),
     update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       users.set(where.id, { ...(users.get(where.id) ?? {}), ...data });
       return users.get(where.id);

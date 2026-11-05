@@ -184,13 +184,14 @@ describe('storyActionRailButtons — l’ORDRE se lit dans la loi, il ne se reco
     expect(STORY_ACTION_RAIL_ORDER[0]).toBe('sound');
   });
 
-  test('la story d’autrui rend son rail dans l’ordre d’iOS, sans vues ni export', () => {
+  test('la story d’autrui rend son rail dans l’ordre d’iOS, sans vues ni export ; la baguette « Imager » à la fente de « Composer » (#16333)', () => {
     expect(storyActionRailButtons(resolveStoryActionRailPlan(autrui()))).toEqual([
       'sound',
       'react',
       'reply',
       'forward',
       'repost',
+      'imager',
       'comments',
       'translations',
     ]);
@@ -201,6 +202,7 @@ describe('storyActionRailButtons — l’ORDRE se lit dans la loi, il ne se reco
       'sound',
       'forward',
       'views',
+      'imager',
       'share',
       'save',
       'comments',
@@ -221,6 +223,6 @@ describe('storyActionRailButtons — l’ORDRE se lit dans la loi, il ne se reco
           autrui({ isOwnStory: false, canReply: false, hasAudibleSound: false, commentCount: 0, hasTranslatableContent: false }),
         ),
       ),
-    ).toEqual(['react', 'forward', 'repost']);
+    ).toEqual(['react', 'forward', 'repost', 'imager']);
   });
 });

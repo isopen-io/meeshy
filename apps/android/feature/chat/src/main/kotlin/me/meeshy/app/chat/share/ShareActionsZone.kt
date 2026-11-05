@@ -167,7 +167,7 @@ private fun StudioChip(accent: Color, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        Icon(MeeshyIcons.MagicWand, null, tint = accent, modifier = Modifier.size(18.dp))
+        Icon(MeeshyIcons.ComposeNew, null, tint = accent, modifier = Modifier.size(18.dp))
         Text(label, style = MaterialTheme.typography.labelLarge, color = accent)
     }
 }

@@ -1,0 +1,104 @@
+/**
+ * LES ÉDITEURS DE PACKS — `/publishers` (#16274).
+ *
+ *   - `GET /publishers/me`     l'éditeur du compte connecté (`null` s'il n'en a pas encore) ;
+ *   - `GET /publishers/admin`  tous les éditeurs AVEC leur compte propriétaire (BIGBOSS/ADMIN seulement) ;
+ *   - `GET /publishers/:slug`  un éditeur tel que la boutique le montre : nom de boutique, jamais le compte.
+ *
+ * Le nom, le site et le logo s'écrivent toujours par `PUT /lens/partners/me`
+ * (#11327), chemin gardé pour les clients publiés. Au montage, l'éditeur
+ * « Meeshy » est lié au compte officiel configuré (`MEESHY_OFFICIAL_ACCOUNT_ID`).
+ * La loi vit dans `services/packs/PackPublishers.ts`. Comptes INSCRITS seulement.
+ */
+import type { FastifyInstance } from 'fastify';
+import { PACK_PUBLISHER_LIMITS } from '@meeshy/shared/types/pack-publisher';
+
+import { requireAdminRank } from '../middleware/authorize';
+import { defaultPackPublishers, type PackPublishers } from '../services/packs/PackPublishers';
+import { sendNotFound, sendSuccess } from '../utils/response.js';
+import { PACK_ERRORS, packEnvelope, packPublisherJsonSchema, packRouteGuard } from './pack-routes';
+
+export const PACK_PUBLISHER_NOT_FOUND = 'PUBLISHER_NOT_FOUND';
+
+export type PackPublisherRoutesOptions = { readonly publishers?: PackPublishers };
+
+const nullableString = { type: 'string', nullable: true } as const;
+
+const adminViewJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: { type: 'string' },
+    slug: nullableString,
+    displayName: { type: 'string' },
+    verified: { type: 'boolean' },
+    verifiedAt: nullableString,
+    official: { type: 'boolean' },
+    createdAt: nullableString,
+    nameDisputedAt: nullableString,
+    owner: { type: 'object', additionalProperties: false, properties: { id: { type: 'string' }, username: nullableString } },
+  },
+} as const;
+
+const slugParamsJsonSchema = {
+  type: 'object',
+  required: ['slug'],
+  properties: { slug: { type: 'string', pattern: '^[a-z0-9-]+$', maxLength: PACK_PUBLISHER_LIMITS.maxSlugLength } },
+} as const;
+
+export async function packPublisherRoutes(fastify: FastifyInstance, options: PackPublisherRoutesOptions = {}) {
+  const publishers = options.publishers ?? defaultPackPublishers(fastify.prisma);
+  const guard = packRouteGuard(fastify, { internalErrorMessage: 'Error handling pack publishers' });
+  const tags = ['packs'];
+
+  if (options.publishers === undefined) {
+    publishers
+      .ensureOfficial()
+      .then((outcome) => {
+        if (outcome !== 'linked') fastify.log.warn(`[publishers] l'éditeur Meeshy n'est lié à aucun compte officiel : ${outcome}`);
+      })
+      .catch((error: unknown) => fastify.log.error({ err: error }, '[publishers] liaison de l’éditeur Meeshy impossible'));
+  }
+
+  fastify.get(
+    '/me',
+    {
+      onRequest: [fastify.authenticate],
+      schema: { description: 'L’éditeur du compte connecté (#16274), `null` s’il n’a encore rien proposé.', tags, summary: 'Get my publisher', response: { 200: packEnvelope({ ...packPublisherJsonSchema, nullable: true }), ...PACK_ERRORS } },
+    },
+    guard('[GET /publishers/me]', async (_request, reply, viewer) => sendSuccess(reply, await publishers.own(viewer.userId))),
+  );
+
+  fastify.get(
+    '/admin',
+    {
+      onRequest: [fastify.authenticate, requireAdminRank()],
+      schema: {
+        description: 'Tous les éditeurs avec leur compte propriétaire et son nom d’utilisateur (#16274, BIGBOSS/ADMIN) — ce que la boutique ne montre jamais.',
+        tags: [...tags, 'admin'],
+        summary: 'List pack publishers with their owner account',
+        response: { 200: packEnvelope({ type: 'array', items: adminViewJsonSchema }), ...PACK_ERRORS },
+      },
+    },
+    guard('[GET /publishers/admin]', async (_request, reply) => sendSuccess(reply, await publishers.adminList())),
+  );
+
+  fastify.get<{ Params: { slug: string } }>(
+    '/:slug',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: 'Un éditeur tel que la boutique le montre (#16274) : son adresse et son nom de boutique, jamais le compte qui le possède.',
+        tags,
+        summary: 'Get a pack publisher',
+        params: slugParamsJsonSchema,
+        response: { 200: packEnvelope(packPublisherJsonSchema), ...PACK_ERRORS },
+      },
+    },
+    guard('[GET /publishers/:slug]', async (request, reply) => {
+      const publisher = await publishers.bySlug((request.params as { slug: string }).slug);
+      if (publisher === null) return sendNotFound(reply, 'No publisher under this address', { code: PACK_PUBLISHER_NOT_FOUND });
+      return sendSuccess(reply, publisher);
+    }),
+  );
+}

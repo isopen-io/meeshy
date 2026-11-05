@@ -101,7 +101,7 @@ struct ConversationListModalPresentations: ViewModifier {
                 .environmentObject(theme)
             }
             .alert(String(localized: "conversation.list.master_pin_required.title", bundle: .main), isPresented: $showNoMasterPinAlert) {
-                Button(String(localized: "conversation.list.master_pin_required.configure", bundle: .main), role: .none) { router.push(.settings) }
+                Button(String(localized: "conversation.list.master_pin_required.configure", bundle: .main), role: .none) { SettingsFocusRequest.shared.request(.masterPin); router.push(.settings) }
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) {}
             } message: {
                 Text(String(localized: "conversation.list.master_pin_required.message", bundle: .main))

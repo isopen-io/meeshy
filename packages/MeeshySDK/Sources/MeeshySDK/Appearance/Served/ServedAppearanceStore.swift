@@ -31,47 +31,50 @@ public protocol ServedAppearanceProviding: AnyObject, Sendable {
     var changes: AnyPublisher<Void, Never> { get }
 }
 
-public final class ServedAppearanceStore: ServedAppearanceProviding, @unchecked Sendable {
+public final class ServedAppearanceStore: ServedAppearanceProviding, Sendable {
     public static let shared = ServedAppearanceStore()
 
-    public typealias DetailFetch = @Sendable (PackDomain, String) async throws -> ShopPack
+    public typealias DetailFetch = @Sendable @concurrent (PackDomain, String) async throws -> ShopPack
 
     private static let indexKey = "meeshy.served-appearance.contracts.v1"
 
+    private struct State {
+        let defaults: UserDefaults
+        let subject = PassthroughSubject<Void, Never>()
+        var memory: [String: ServedAppearanceContract] = [:]
+        var absent: Set<String> = []
+        var index: [String: PackAssetRef]
+    }
+
     private let bytes: PackContractBytesReading
     private let detail: DetailFetch
-    private let defaults: UserDefaults
-    private let lock = NSLock()
-    private var memory: [String: ServedAppearanceContract] = [:]
-    private var absent: Set<String> = []
-    private var index: [String: PackAssetRef]
-    private let subject = PassthroughSubject<Void, Never>()
+    private let state: Locked<State>
 
     public init(bytes: PackContractBytesReading = ContentAddressedStore.shared,
                 detail: @escaping DetailFetch = { try await PackService<ShopPack>(domain: $0).detail(slug: $1) },
                 defaults: UserDefaults = .standard) {
         self.bytes = bytes
         self.detail = detail
-        self.defaults = defaults
-        self.index = defaults.data(forKey: Self.indexKey)
+        let index = defaults.data(forKey: Self.indexKey)
             .flatMap { try? JSONDecoder().decode([String: PackAssetRef].self, from: $0) } ?? [:]
+        self.state = Locked(uncheckedState: State(defaults: defaults, index: index))
     }
 
-    public var changes: AnyPublisher<Void, Never> { subject.eraseToAnyPublisher() }
+    public var changes: AnyPublisher<Void, Never> { state.mutateUnchecked { $0.subject }.eraseToAnyPublisher() }
 
     public func contract(src: String) -> ServedAppearanceContract? {
-        if let known = lock.withLock({ memory[src] }) { return known }
-        guard lock.withLock({ !absent.contains(src) }), let file = file(for: src) else { return nil }
+        if let known = state.mutateUnchecked({ $0.memory[src] }) { return known }
+        guard state.mutateUnchecked({ !$0.absent.contains(src) }), let file = file(for: src) else { return nil }
         guard let data = bytes.storedData(for: file), let contract = Self.verified(data, file) else {
-            lock.withLock { _ = absent.insert(src) }
+            state.mutateUnchecked { _ = $0.absent.insert(src) }
             return nil
         }
-        lock.withLock { memory[src] = contract }
+        state.mutateUnchecked { $0.memory[src] = contract }
         return contract
     }
 
     public func contractSource(domain: PackDomain, slug: String) -> String? {
-        lock.withLock { index[Self.key(domain, slug)]?.src }
+        state.mutateUnchecked { $0.index[Self.key(domain, slug)]?.src }
     }
 
     @discardableResult
@@ -80,9 +83,10 @@ public final class ServedAppearanceStore: ServedAppearanceProviding, @unchecked 
         guard let file = file(for: src),
               let data = try? await bytes.data(for: file),
               let contract = Self.verified(data, file) else { return nil }
-        lock.withLock {
-            memory[src] = contract
-            absent.remove(src)
+        let subject = state.mutateUnchecked { state in
+            state.memory[src] = contract
+            state.absent.remove(src)
+            return state.subject
         }
         subject.send(())
         return contract
@@ -109,19 +113,19 @@ public final class ServedAppearanceStore: ServedAppearanceProviding, @unchecked 
     // MARK: - Interne
 
     private func remember(_ ref: PackAssetRef, domain: PackDomain, slug: String) {
-        let snapshot: [String: PackAssetRef]? = lock.withLock {
-            guard index[Self.key(domain, slug)] != ref else { return nil }
-            index[Self.key(domain, slug)] = ref
-            return index
+        let written: (snapshot: [String: PackAssetRef], defaults: UserDefaults)? = state.mutateUnchecked { state in
+            guard state.index[Self.key(domain, slug)] != ref else { return nil }
+            state.index[Self.key(domain, slug)] = ref
+            return (state.index, state.defaults)
         }
-        guard let snapshot, let data = try? JSONEncoder().encode(snapshot) else { return }
-        defaults.set(data, forKey: Self.indexKey)
+        guard let written, let data = try? JSONEncoder().encode(written.snapshot) else { return }
+        written.defaults.set(data, forKey: Self.indexKey)
     }
 
     /// L'empreinte ENTIÈRE quand un détail l'a servie ; sinon le préfixe que l'adresse engage
     /// (le décor d'autrui ne sert que l'adresse). Une adresse non adressée par contenu ne se lit pas.
     private func file(for src: String) -> PackAssetFile? {
-        let full = lock.withLock { index.values.first { $0.src == src } }
+        let full = state.mutateUnchecked { $0.index.values.first { $0.src == src } }
         return full?.file ?? PackAssetFile(name: src).flatMap { $0.name.hasSuffix(".json") ? $0 : nil }
     }
 

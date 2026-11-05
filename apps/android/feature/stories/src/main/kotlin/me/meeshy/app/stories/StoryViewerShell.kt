@@ -245,6 +245,7 @@ internal fun StoryViewerShell(
                         onRepost = { rail.closeBars(); actions.repost() },
                         onViews = { rail.closeBars(); haptics.light(); chrome.showViewers = true },
                         onCompose = { rail.closeBars(); haptics.light(); state.currentStoryId?.let { id -> actions.onComposeStory?.invoke(id) } },
+                        onImager = { rail.closeBars(); haptics.light(); videoExport.start(StoryExportMode.IMAGER) },
                         onComments = { rail.closeBars(); haptics.light(); chrome.showComments = true },
                         onToggleSound = { haptics.light(); viewModel.toggleMute() },
                         onSave = { rail.closeBars(); haptics.light(); videoExport.start(StoryExportMode.SAVE) },

@@ -84,4 +84,16 @@ class SceneAudioChipClockTest {
         assertThat(SceneAudioChipClock.label(-3.0)).isEqualTo("0:00")
         assertThat(SceneAudioChipClock.label(Double.POSITIVE_INFINITY)).isEqualTo("0:00")
     }
+
+    @Test
+    fun `a live player held on the whole source reads from the start of its window`() {
+        assertThat(SceneAudioChipClock.livePositionSeconds(currentMs = 7_500, windowStartMs = 2_000)).isWithin(1e-9).of(5.5)
+        assertThat(SceneAudioChipClock.livePositionSeconds(currentMs = 1_000, windowStartMs = 2_000)).isEqualTo(0.0)
+    }
+
+    @Test
+    fun `the timing carries what the chrono needs from the track`() {
+        val timing = SceneAudioChipClock.timing(sound(startTime = 1f, sourceStart = 1f, sourceEnd = 4f, loop = true))
+        assertThat(timing).isEqualTo(SceneAudioChipTiming(startTime = 1.0, passSeconds = 3.0, loop = true, isBackground = false))
+    }
 }

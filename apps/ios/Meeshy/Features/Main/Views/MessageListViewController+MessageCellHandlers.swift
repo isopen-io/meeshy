@@ -48,6 +48,7 @@ struct MessageCellCallbacks {
     let shareFile: ((URL) -> Void)?
     let callBack: ((CallSummaryMetadata) -> Void)?
     let callDetail: ((String) -> Void)?
+    let greetArrivals: ((String) -> Void)?
     let mediaTap: ((MessageAttachment) -> Void)?
     let consumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
     let requestTranslation: ((String, String) -> Void)?
@@ -138,7 +139,7 @@ extension MessageListViewController {
                 self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
             },
             consentNotice: { [weak self] in
-                self?.router.push(.settings)
+                SettingsFocusRequest.shared.request(.voiceProfile); self?.router.push(.settings)
             },
             audioQueueTail: { [weak self] attachmentId in
                 self?.conversationViewModel?.audioQueueTail(after: attachmentId) ?? []
@@ -171,6 +172,7 @@ extension MessageListViewController {
             shareFile: onFocalShareFile,
             callBack: onCallBack,
             callDetail: onCallDetailRequest,
+            greetArrivals: onGreetArrivals,
             mediaTap: onMediaTap,
             consumeViewOnce: onConsumeViewOnce,
             requestTranslation: onRequestTranslation

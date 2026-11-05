@@ -34,13 +34,16 @@ import { LensPacks, type LensPackDetail } from '../services/packs/LensPacks';
 import { readPackAudience } from '../services/packs/packAudience';
 import { sendBadRequest, sendConflict, sendError, sendForbidden, sendNotFound, sendSuccess } from '../utils/response.js';
 import { gameRateLimitConfig } from './me/game-shared';
+import { claimedPublisherSlug } from '@meeshy/shared/types/pack-publisher';
 import {
   PACK_ERRORS,
   packEnvelope,
   packInstallationBroadcaster,
+  packPublisherJsonSchema,
   packRouteGuard,
   packSlugParamsJsonSchema,
   registerPackRoutes,
+  sendPublicationRefused,
   type PackSlugRequest,
 } from './pack-routes';
 
@@ -87,6 +90,7 @@ export const lensPackJsonSchema = {
     name: { type: 'string' },
     description: { type: 'string' },
     author: { type: 'string' },
+    publisher: packPublisherJsonSchema,
     builtin: { type: 'boolean' },
     status: { type: 'string' },
     itemCount: { type: 'integer' },
@@ -187,7 +191,7 @@ export async function lensPacksRoutes(fastify: FastifyInstance, options: LensPac
     guard(`[POST ${basePath}/submissions]`, async (request, reply, viewer) => {
       const body = submissionSchema.safeParse(request.body);
       if (!body.success) return sendBadRequest(reply, 'Invalid lens submission', { code: 'VALIDATION_ERROR' });
-      const outcome = await packs.submit(viewer.userId, { document: body.data.document, assets: body.data.assets });
+      const outcome = await packs.submit(viewer.userId, { document: body.data.document, assets: body.data.assets, claimed: claimedPublisherSlug(request.body) });
       const refuse = (code: string, extra: object = {}) => reply.status(422).send({ success: false, error: 'Lens refused', message: 'Lens refused', code, ...extra });
       switch (outcome.kind) {
         case 'submitted':
@@ -208,6 +212,8 @@ export async function lensPacksRoutes(fastify: FastifyInstance, options: LensPac
           return sendConflict(reply, `At most ${LENS_PACK_LIMITS.maxPendingPerAuthor} lenses can wait for review`, { code: LENS_PACK_ERROR_CODES.TOO_MANY_PENDING });
         case 'audit-unavailable':
           return auditUnavailable(reply);
+        case 'refused':
+          return sendPublicationRefused(reply, outcome.reason);
       }
     }),
   );

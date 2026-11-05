@@ -36,6 +36,8 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     /// aurait été une SECONDE écriture de la citation, qui aurait divergé de la
     /// bannière du composer au premier ajustement de l'une.
     let onReply: (Message) -> Void
+    /// « Imager » (#16332) : l'export du message porteur, celui des menus (`beginMessageExport`).
+    let onImager: (Message) -> Void
 
     /// **TOUS les médias de la conversation, pas seulement la fenêtre** (#8095).
     ///
@@ -51,13 +53,15 @@ struct ConversationMediaGalleryLayer: ViewModifier {
          composerState: Binding<ConversationComposerState>,
          accentColor: String,
          authority: ConversationMenuAuthority,
-         onReply: @escaping (Message) -> Void) {
+         onReply: @escaping (Message) -> Void,
+         onImager: @escaping (Message) -> Void) {
         self.viewModel = viewModel
         self._scrollState = scrollState
         self._composerState = composerState
         self.accentColor = accentColor
         self.authority = authority
         self.onReply = onReply
+        self.onImager = onImager
         self._catalog = StateObject(wrappedValue: ConversationMediaCatalog(conversationId: viewModel.conversationId))
     }
 
@@ -146,6 +150,11 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             replyCitation: { viewModel.fullscreenReplyCitation(for: $0.id, carrier: carrier(of: $0)) },
             onReactToMedia: reactToMedia,
             onForwardMedia: forwardFromGallery,
+            onImagerMedia: { att in
+                guard let porteur = carrier(of: att), GalleryImagerOffer.offers(att, carrier: porteur) else { return }
+                onImager(porteur)
+            },
+            imageableMedia: { GalleryImagerOffer.offers($0, carrier: carrier(of: $0)) },
             // « Composer » n'existe que si l'armer produit une cible (loi 4) :
             // la règle d'offre lit la loi de sortie (#9573), donc la pièce d'une
             // flamme ou d'une vue unique n'a pas ce bouton.

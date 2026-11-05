@@ -45,6 +45,7 @@ public final class StoryAudioChipLayer: CALayer {
 
     public private(set) var audio: StoryAudioPlayerObject?
     var paintedFrame: Int?
+    var paintedChronoSecond: Int?
     var renderSize: CGSize = .zero
     var painter: StoryAudioChipPainter?
 
@@ -73,6 +74,7 @@ public final class StoryAudioChipLayer: CALayer {
         zPosition = CGFloat(item.zIndex)
         name = item.id
         paintedFrame = nil
+        paintedChronoSecond = nil
         repaint(elapsed: elapsed)
     }
 
@@ -88,6 +90,7 @@ public final class StoryAudioChipLayer: CALayer {
         guard bounds.size != pose.size else { return }
         bounds = CGRect(origin: .zero, size: pose.size)
         paintedFrame = nil
+        paintedChronoSecond = nil
         repaint(elapsed: 0)
     }
 
@@ -124,14 +127,17 @@ public final class StoryAudioChipLayer: CALayer {
     private func repaint(elapsed: TimeInterval) {
         guard let audio, bounds.width > 0, bounds.height > 0 else { return }
         let clock = audio.isMuted ? 0 : max(0, elapsed)
+        let chrono = StoryAudioChipPainter.chrono(of: audio, elapsed: elapsed)
         let frame = Int((clock * Self.framesPerSecond).rounded(.down))
-        guard frame != paintedFrame else { return }
+        let second = Int(chrono)
+        guard frame != paintedFrame || second != paintedChronoSecond else { return }
         paintedFrame = frame
+        paintedChronoSecond = second
         let pose = StoryAudioChipPainter.placement(for: audio, renderSize: renderSize, elapsed: clock)
         let local = StoryAudioChipPlacement(audioId: pose.audioId,
                                             center: CGPoint(x: bounds.midX, y: bounds.midY),
                                             unit: pose.unit, display: pose.display, rotation: 0,
-                                            muted: pose.muted, elapsed: pose.elapsed)
+                                            muted: pose.muted, elapsed: pose.elapsed, chrono: chrono)
         let peintre = painter ?? StoryAudioChipPainter()
         painter = peintre
         let format = UIGraphicsImageRendererFormat()
