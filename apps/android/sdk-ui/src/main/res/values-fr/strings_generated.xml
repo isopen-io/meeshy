@@ -51,6 +51,11 @@
     <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_airplay">Diffuser sur un appareil</string>
     <string name="audio_fullscreen_dial">Position dans le vocal</string>
+    <string name="audio_fullscreen_language_choose">Traduire l\'audio</string>
+    <string name="audio_fullscreen_transcription_action">Transcrire</string>
+    <string name="audio_fullscreen_transcription_empty">Aucune transcription</string>
+    <string name="audio_fullscreen_transcription_local">Transcrire sur l\'appareil</string>
+    <string name="audio_fullscreen_transcription_server">Transcrire via le serveur</string>
     <string name="audio_recorder_micDenied">Permission micro refusée</string>
     <string name="audio_recorder_micDeniedSettings">Micro refusé — autorisez-le dans Réglages</string>
     <string name="audio_recorder_record">Enregistrer</string>
