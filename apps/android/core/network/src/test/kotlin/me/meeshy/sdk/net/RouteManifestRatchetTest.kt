@@ -114,8 +114,13 @@ class RouteManifestRatchetTest {
          * 143 : moins sept routes que des lots fusionnés le 2026-11-03 ont implémentées : les cinq lectures
          * `GET /me/preferences/{application,document,encryption,message,video}` (`PreferencesApi`),
          * `GET /user/deleted-conversations` et `POST /user-preferences/communities/reorder`.
+         * 127 : moins les seize routes du chat que `ConversationChatRestApi` et `MessageChatRestApi` déclarent depuis
+         * #15470 (accusés de réception et de lecture, masquer et restaurer pour moi, fil, épinglés, statut, capture,
+         * nouveau lien, invitation, débannissement, vider l'historique) : le lot les a portées sans les retirer d'ici.
+         * 126 : moins `GET /messages/:messageId/translations` (l'explorateur de langues d'un message lit toutes ses traductions),
+         * que porte `MessageChatRestApi.translations`.
          */
-        const val TO_PORT_CEILING = 143
+        const val TO_PORT_CEILING = 126
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

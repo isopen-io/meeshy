@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
@@ -34,6 +37,9 @@ data class AddParticipantUiState(
     val results: List<AddParticipantRow> = emptyList(),
     val isSearching: Boolean = false,
     val errorMessage: String? = null,
+    /** Une recherche ou un ajout a échoué : l'écran dit un message localisé, jamais `errorMessage` (texte réseau brut). */
+    val addFailed: Boolean = false,
+    val searchFailed: Boolean = false,
 )
 
 /**
@@ -52,6 +58,9 @@ class AddParticipantViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(AddParticipantUiState())
     val state: StateFlow<AddParticipantUiState> = _state.asStateFlow()
+
+    private val hapticChannel = Channel<FeedbackHaptic>(Channel.BUFFERED)
+    val haptics: Flow<FeedbackHaptic> = hapticChannel.receiveAsFlow()
 
     private val queryFlow = MutableStateFlow("")
     private var conversationId: String = ""
@@ -77,7 +86,7 @@ class AddParticipantViewModel @Inject constructor(
     }
 
     fun onQueryChange(value: String) {
-        _state.update { it.copy(query = value, errorMessage = null) }
+        _state.update { it.copy(query = value, errorMessage = null, addFailed = false, searchFailed = false) }
         queryFlow.value = value
     }
 
@@ -90,7 +99,7 @@ class AddParticipantViewModel @Inject constructor(
     fun addParticipant(userId: String, onAdded: () -> Unit) {
         if (userId in addingUserIds || userId in addedUserIds) return
         addingUserIds += userId
-        _state.update { it.copy(results = projectedRows(), errorMessage = null) }
+        _state.update { it.copy(results = projectedRows(), errorMessage = null, addFailed = false, searchFailed = false) }
         viewModelScope.launch {
             try {
                 when (val result = conversationRepository.addParticipant(conversationId, userId)) {
@@ -98,18 +107,21 @@ class AddParticipantViewModel @Inject constructor(
                         addingUserIds -= userId
                         addedUserIds += userId
                         _state.update { it.copy(results = projectedRows()) }
+                        hapticChannel.trySend(FeedbackHaptic.SUCCESS)
                         onAdded()
                     }
                     is NetworkResult.Failure -> {
                         addingUserIds -= userId
-                        _state.update { it.copy(results = projectedRows(), errorMessage = result.error.message) }
+                        _state.update { it.copy(results = projectedRows(), errorMessage = result.error.message, addFailed = true) }
+                        hapticChannel.trySend(FeedbackHaptic.ERROR)
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 addingUserIds -= userId
-                _state.update { it.copy(results = projectedRows(), errorMessage = e.message) }
+                _state.update { it.copy(results = projectedRows(), errorMessage = e.message, addFailed = true) }
+                hapticChannel.trySend(FeedbackHaptic.ERROR)
             }
         }
     }
@@ -129,12 +141,12 @@ class AddParticipantViewModel @Inject constructor(
                     _state.update { it.copy(results = projectedRows(), isSearching = false) }
                 }
                 is NetworkResult.Failure ->
-                    _state.update { it.copy(isSearching = false, errorMessage = result.error.message) }
+                    _state.update { it.copy(isSearching = false, errorMessage = result.error.message, searchFailed = true) }
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            _state.update { it.copy(isSearching = false, errorMessage = e.message) }
+            _state.update { it.copy(isSearching = false, errorMessage = e.message, searchFailed = true) }
         }
     }
 

@@ -127,3 +127,16 @@ class AudioPlayerChromePlanTest {
         }
     }
 }
+
+class AudioPlayerChromeElectionTest {
+
+    @Test
+    fun `la ligne focale elue prend la bande enrichie`() {
+        assertThat(AudioPlayerChromeElection.of(isElectedFocalRow = true)).isEqualTo(AudioPlayerChrome.FlatFocused)
+    }
+
+    @Test
+    fun `toute autre ligne garde la carte riche`() {
+        assertThat(AudioPlayerChromeElection.of(isElectedFocalRow = false)).isEqualTo(AudioPlayerChrome.Card)
+    }
+}

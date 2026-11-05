@@ -8,6 +8,7 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.e2ee.PlaintextErasureLedger
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentLiveDeltas
@@ -50,6 +51,8 @@ class MessageDeltaApplier internal constructor(
     private val events: MessageEventBuffer? = null,
     /** Le clair E2EE d'un message parti s'inscrit dans la file durable qui vide le coffre (#14633, #14655). */
     private val erasures: PlaintextErasureLedger? = null,
+    /** L'index des médias de la conversation : un message retiré ou expiré quitte TOUS les genres. */
+    private val mediaIndex: ConversationMediaHubIndex? = null,
 ) {
     @Inject
     constructor(
@@ -59,9 +62,10 @@ class MessageDeltaApplier internal constructor(
         fence: me.meeshy.sdk.session.AccountFence?,
         events: MessageEventBuffer,
         erasures: PlaintextErasureLedger,
-    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, events, erasures)
+        mediaIndex: ConversationMediaHubIndex,
+    ) : this(database, CachedMessageUpdater(database, messageDao, fence), clock, events, erasures, mediaIndex)
 
-    private val tombstones = MessageTombstoneWriter(updater, null, events)
+    private val tombstones = MessageTombstoneWriter(updater, null, events, mediaIndex)
 
     /**
      * Applique [event] s'il est un delta local et rend `true` ; rend `false` pour un événement qui
@@ -83,7 +87,12 @@ class MessageDeltaApplier internal constructor(
             }
             is MessageCitedPostWithdrawnEvent -> withdrawCitedPost(event)
             is AttachmentReactionUpdateEvent -> transform(event.messageId) {
-                ConversationEventDeltas.attachmentReactions(it, event.attachmentId, event.reactionSummary)
+                val mine = viewerId != null && event.userId == viewerId
+                ConversationEventDeltas.attachmentReactions(
+                    it, event.attachmentId, event.reactionSummary,
+                    ownEmoji = event.emoji.takeIf { mine },
+                    ownAdding = !event.isRemoval,
+                )
             }
             is AttachmentStatusUpdatedEvent -> transform(event.messageId) { AttachmentLiveDeltas.status(it, event, viewerId) }
             is MessageAttachmentUpdatedEvent -> enrich(event.messageId, event.conversationId, event.servedAttachmentId, event.attachment)
@@ -128,7 +137,7 @@ class MessageDeltaApplier internal constructor(
     }
 
     private suspend fun transform(messageId: String, delta: (ApiMessage) -> ApiMessage) {
-        updater.update(messageId, requireSynced = false, transform = delta)
+        updater.update(messageId, requireSynced = false, openedAt = clock.nowMillis(), transform = delta)
     }
 
     /** Une suppression pour tous laisse une pierre tombale ; une expiration retire la ligne. */
@@ -166,8 +175,13 @@ class MessageDeltaApplier internal constructor(
      */
     suspend fun expireLocally(messageIds: List<String>) = erasing(messageIds) { purge(messageIds) }
 
-    /** La vue unique que CE lecteur vient de refermer : son clair E2EE quitte le coffre sans attendre l'écho (#14633). */
-    suspend fun erasePlaintexts(messageIds: List<String>) = erasing(messageIds) {}
+    /**
+     * La vue unique que CE lecteur vient de refermer : son clair E2EE quitte le coffre sans attendre l'écho (#14633), et
+     * la ligne Room se scelle comme à un `message:consumed` par soi (contenu, traductions, pièces vidés, #15897).
+     */
+    suspend fun erasePlaintexts(messageIds: List<String>) = erasing(messageIds) {
+        messageIds.forEach { id -> transform(id) { ConversationEventDeltas.sealedAsOpened(it) } }
+    }
 
     /** Une vue unique ouverte par CE lecteur (ici ou sur un autre de ses appareils) : son clair quitte le coffre. */
     private suspend fun consumed(event: MessageConsumedEvent, viewerId: String?) {
@@ -189,14 +203,13 @@ class MessageDeltaApplier internal constructor(
         }
     }
 
-    /** Retire les lignes nommées (par l'une ou l'autre de leurs deux clés), en une transaction. */
+    /** Retire les lignes nommées (par l'une ou l'autre de leurs deux clés) et leurs traductions retenues, en une transaction. */
     private suspend fun purge(messageIds: List<String>) {
         if (messageIds.isEmpty()) return
-        database.withTransaction {
-            val rowIds = messageIds.mapNotNull { MessageIdReconciliation.locate(database, it)?.id }.distinct()
-            if (rowIds.isNotEmpty()) database.messageDao().deleteByIds(rowIds)
-            messageIds.forEach { database.editRevisionDao().deleteForMessage(it) }
-        }
+        val ticket = updater.ticket()
+        val known = if (mediaIndex == null) emptyList() else messageIds.mapNotNull { id -> updater.find(id)?.let { it.conversationId to id } }
+        database.withTransaction { CachedMessageUpdater.purgeInTransaction(database, messageIds) }
+        known.forEach { (conversationId, id) -> mediaIndex?.forgetMessage(conversationId, id, ticket) }
     }
 
     private fun ApiMessage.isFrom(userId: String?): Boolean =

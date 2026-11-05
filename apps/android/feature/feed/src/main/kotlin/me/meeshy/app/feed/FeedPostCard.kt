@@ -22,16 +22,16 @@ internal fun PostCard(
     onOpenReel: (String) -> Unit = onOpenPost,
     onImageTap: (Int) -> Unit,
     isOwn: Boolean = false,
-    onShare: () -> Unit = {},
+    onShare: (() -> Unit)? = null,
     onSend: (() -> Unit)? = null,
-    onCopyLink: () -> Unit = {},
-    onCopyText: () -> Unit = {},
+    onCopyLink: (() -> Unit)? = null,
+    onCopyText: (() -> Unit)? = null,
     onOpenProfile: ((String) -> Unit)? = null,
-    onRepost: () -> Unit = {},
-    onQuote: () -> Unit = {},
-    onPin: () -> Unit = {},
-    onReport: () -> Unit = {},
-    onDelete: () -> Unit = {},
+    onRepost: (() -> Unit)? = null,
+    onQuote: (() -> Unit)? = null,
+    onPin: (() -> Unit)? = null,
+    onReport: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
     onComments: () -> Unit = onClick,
     onReplyToComment: (String) -> Unit = {},
     onOpenHashtag: (String) -> Unit = {},
@@ -96,7 +96,10 @@ internal fun PostCard(
                 onSelectLanguage = onSelectLanguage,
             )
             FeedPostCardMediaSlot(post = post, onImageTap = onImageTap, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
-            if (pendingSend != null) return@Column
+            if (pendingSend != null) {
+                FeedPendingPublicationChip(pendingSend)
+                return@Column
+            }
             FeedPostCardFooter(
                 post = post,
                 onLike = onLike,

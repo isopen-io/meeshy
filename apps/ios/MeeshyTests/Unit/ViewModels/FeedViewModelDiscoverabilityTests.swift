@@ -118,20 +118,10 @@ final class FeedViewModelDiscoverabilityTests: XCTestCase {
     /// atteindre la file.** `location` y survivait déjà au flush pendant que la
     /// précision se perdait entre le composer et la file : le consentement
     /// n'avait alors aucun effet, et rien ne le disait.
-    func test_createOfflineMediaPost_carriesThePrecisionIntoTheDurableRow() async {
+    func test_publishMedia_carriesThePrecisionIntoTheDurableRow() async {
         let (sut, _, queue) = makeSUT()
 
-        await sut.createOfflineMediaPost(
-            localMediaURLs: [URL(fileURLWithPath: "/tmp/concert.mp4")],
-            content: "Concert",
-            type: "REEL",
-            location: makePlace(),
-            discoverabilityPrecision: .city,
-            mobileTranscription: nil,
-            storyEffects: nil,
-            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
-            allowSoundExtraction: nil
-        )
+        await sut.publish(concertReel(precision: .city))
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
         XCTAssertEqual(queue.enqueuePostMediaCalls.first?.discoverabilityPrecision, .city)
@@ -141,21 +131,22 @@ final class FeedViewModelDiscoverabilityTests: XCTestCase {
         )
     }
 
-    func test_createOfflineMediaPost_withoutConsent_carriesNoPrecision() async {
+    func test_publishMedia_withoutConsent_carriesNoPrecision() async {
         let (sut, _, queue) = makeSUT()
 
-        await sut.createOfflineMediaPost(
-            localMediaURLs: [URL(fileURLWithPath: "/tmp/concert.mp4")],
-            content: "Concert",
-            type: "REEL",
-            location: makePlace(),
-            mobileTranscription: nil,
-            storyEffects: nil,
-            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
-            allowSoundExtraction: nil
-        )
+        await sut.publish(concertReel(precision: nil))
 
         XCTAssertNil(queue.enqueuePostMediaCalls.first?.discoverabilityPrecision)
+    }
+
+    private func concertReel(precision: DiscoverabilityPrecision?) -> PublishIntent {
+        PublishIntent.document(
+            localMedia: [ComposerDocumentMedia(url: URL(fileURLWithPath: "/tmp/concert.mp4"), mimeType: "video/mp4", durationMs: 8000)],
+            declaredType: .reel, forcePlainPost: false, content: "Concert", visibility: "PUBLIC",
+            visibilityUserIds: nil, originalLanguage: nil, mentions: nil, location: makePlace(),
+            discoverabilityPrecision: precision, transcription: nil, storyEffects: nil,
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
+        )
     }
 
     /// Le témoin qui refuse le second juge : quel que soit le palier

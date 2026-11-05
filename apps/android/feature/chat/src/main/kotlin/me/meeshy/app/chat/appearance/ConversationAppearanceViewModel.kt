@@ -18,11 +18,13 @@ import me.meeshy.sdk.mediahub.BackgroundPhotoSource
 import me.meeshy.sdk.mediahub.ConversationBackgroundPhotos
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
 import me.meeshy.sdk.model.appearance.AppearanceDesignPack
+import me.meeshy.sdk.model.appearance.AppearancePackDomain
 import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.appearance.WallpaperPackOptions
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.RequestCredential
 import me.meeshy.sdk.net.TokenStore
+import me.meeshy.sdk.packs.PackShopRepository
 
 @Immutable
 data class ConversationAppearanceUiState(
@@ -43,6 +45,7 @@ class ConversationAppearanceViewModel @Inject constructor(
     private val conversations: ConversationRepository,
     private val loader: AppearanceCatalogLoader,
     private val packRepository: WallpaperPackRepository,
+    private val shop: PackShopRepository,
     private val photos: ConversationBackgroundPhotos,
     private val tokenStore: TokenStore,
     config: MeeshyConfig,
@@ -70,9 +73,24 @@ class ConversationAppearanceViewModel @Inject constructor(
                 _state.update { it.copy(appearance = appearance) }
             }
         }
+        viewModelScope.launch { refreshPacks() }
+        // « Plus dans la boutique » installe puis revient (ou un autre appareil installe) : le sélecteur relit les packs.
         viewModelScope.launch {
-            val installed = packRepository.refresh()
-            _state.update { it.copy(packs = packsFor(it.catalog, installed ?: packRepository.cached)) }
+            shop.installations.collect { event ->
+                if (event.appearanceDomain == AppearancePackDomain.WALLPAPER) refreshPacks()
+            }
+        }
+    }
+
+    /**
+     * Relit les packs installés ; ceux qui ne sont pas embarqués ont alors chargé leur contrat servi (#16265) et le
+     * catalogue complété les peint — dans le sélecteur ET au fond du fil, qui lit le même catalogue.
+     */
+    private suspend fun refreshPacks() {
+        val installed = packRepository.refresh()
+        _state.update {
+            val catalog = loader.current ?: it.catalog
+            it.copy(catalog = catalog, packs = packsFor(catalog, installed ?: packRepository.cached))
         }
     }
 

@@ -64,8 +64,25 @@ export function isCreationEncryptionMode(value: unknown): value is CreationEncry
   return typeof value === 'string' && (CREATION_ENCRYPTION_MODES as readonly string[]).includes(value);
 }
 
+/**
+ * **Le bout en bout ne se chiffre aujourd'hui qu'en tête-à-tête** (#16113).
+ * iOS et Android scellent un message pour UN correspondant (Sesame, sans
+ * Sender Keys ni MLS) et le web ne détient aucune clé : un groupe `e2ee`
+ * serait muet à jamais, le bout en bout ne se quittant pas (#12949). La
+ * passerelle refuse donc ce mode, à la création comme à la bascule, avec
+ * `ENCRYPTION_MODE_UNSUPPORTED_CODE` ; l'offre de création dit « bientôt ».
+ */
+export function endToEndSupportsConversationType(conversationType: string): boolean {
+  return conversationType === 'direct';
+}
+
+export const ENCRYPTION_MODE_UNSUPPORTED_CODE = 'ENCRYPTION_MODE_UNSUPPORTED' as const;
+
+export const END_TO_END_DIRECT_ONLY_MESSAGE =
+  'End-to-end encryption is only available for a direct conversation for now: no Meeshy app can encrypt a group end to end yet';
+
 function endToEndUnavailability(context: CreationEncryptionContext): CreationEncryptionUnavailability | null {
-  if (context.conversationType !== 'direct') return 'groups-not-yet';
+  if (!endToEndSupportsConversationType(context.conversationType)) return 'groups-not-yet';
   if (!context.endToEndSupported) return 'client-not-yet';
   return null;
 }

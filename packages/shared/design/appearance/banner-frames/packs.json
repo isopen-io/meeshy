@@ -691,5 +691,1811 @@
         "banner"
       ]
     }
+  },
+  {
+    "slug": "bannieres-illustrees",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 7,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "4424382d06e4151d.webp",
+      "bytes": 3842,
+      "sha256": "4424382d06e4151d692f87f6a7bd39757c3e09c36a0f1a38d79210426e730125"
+    },
+    "preview": null,
+    "contract": {
+      "src": "e142d68d56ccb10c.json",
+      "bytes": 38713,
+      "sha256": "e142d68d56ccb10ce4267202704248ff5bde5c1e4d3cd6c87fb32958675d4b53"
+    },
+    "strings": {
+      "fr": {
+        "src": "9c35d1c2d6a33c28.json",
+        "bytes": 217,
+        "sha256": "9c35d1c2d6a33c2889bbbd86a1fdfb83c0d06f113a6331d01135d2c56f211501"
+      },
+      "en": {
+        "src": "bae9935e7e2e3fea.json",
+        "bytes": 193,
+        "sha256": "bae9935e7e2e3fea800a34a498540854a0092465232d73cac595afc75531f737"
+      },
+      "es": {
+        "src": "fffaacdb0668fe8d.json",
+        "bytes": 212,
+        "sha256": "fffaacdb0668fe8d9b75f15b77482741be7d1f29aa19b259a5c5a206162e0468"
+      },
+      "pt": {
+        "src": "84ac7d797903e287.json",
+        "bytes": 215,
+        "sha256": "84ac7d797903e28728957ff13f037237f41b75d2182bf96b2f86d196d64cb4e2"
+      },
+      "de": {
+        "src": "72c0b4de231cdec1.json",
+        "bytes": 202,
+        "sha256": "72c0b4de231cdec120ba906c094652c16cc13bd01cf1423dcd0da52d32bf532e"
+      },
+      "it": {
+        "src": "751d8b6db55e9778.json",
+        "bytes": 209,
+        "sha256": "751d8b6db55e9778091339e69b8b6e4c4a7bdb0dbeaf6f1fd3a3005dc3136d0f"
+      },
+      "ar": {
+        "src": "827e4483814ee1bd.json",
+        "bytes": 254,
+        "sha256": "827e4483814ee1bd798ac25909fa41e2e1a1354400ff48622502d0803a3356c2"
+      }
+    },
+    "downloadBytes": {
+      "story": 38713,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres illustrés",
+        "description": "Les cadres de bannière assortis à « Cadres illustrés » : Masque félin, Toile d’araignée, Ailes d’ange, Cercle runique, Griffes d’os et Ailes de démon, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Illustrated frames",
+        "description": "Banner frames to match “Illustrated frames”: Feline mask, Spider web, Angel wings, Runic circle, Bone claws and Demon wings, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Marcos ilustrados",
+        "description": "Los marcos de portada a juego con «Marcos ilustrados»: Máscara felina, Telaraña, Alas de ángel, Círculo rúnico, Garras de hueso y Alas de demonio, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Molduras ilustradas",
+        "description": "As molduras de capa a condizer com «Molduras ilustradas»: Máscara felina, Teia de aranha, Asas de anjo, Círculo rúnico, Garras de osso e Asas de demônio, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Illustrierte Rahmen",
+        "description": "Bannerrahmen passend zu „Illustrierte Rahmen“: Katzenmaske, Spinnennetz, Engelsflügel, Runenkreis, Knochenkrallen und Dämonenflügel, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Cornici illustrate",
+        "description": "Le cornici per il banner abbinate a «Cornici illustrate»: Maschera felina, Ragnatela, Ali d’angelo, Cerchio runico, Artigli d’osso e Ali di demone, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "إطارات مرسومة",
+        "description": "أطر لافتة تُناسب «إطارات مرسومة»: قناع سنّوري، شبكة عنكبوت، جناحا ملاك، دائرة الرموز، مخالب العظم وجناحا شيطان، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "bannieres-asiatiques",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 8,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "aee45e870a06b295.webp",
+      "bytes": 3966,
+      "sha256": "aee45e870a06b295b3dc574fba80374fe6e7c2780349584a9de93a1ed69c55d0"
+    },
+    "preview": null,
+    "contract": {
+      "src": "2b5a270ddb06e78c.json",
+      "bytes": 21820,
+      "sha256": "2b5a270ddb06e78cd4ef00b28179867c5a78dbb159206052fe211d5404fd05fa"
+    },
+    "strings": {
+      "fr": {
+        "src": "79adca1379b403d2.json",
+        "bytes": 115,
+        "sha256": "79adca1379b403d2139c537ab8965fd19945f0793a09d27344484bcd4b76069a"
+      },
+      "en": {
+        "src": "62e3c8ecbb83f74f.json",
+        "bytes": 104,
+        "sha256": "62e3c8ecbb83f74f9523a0123f2edb728e24f06a71d305035ba0083904ab273b"
+      },
+      "es": {
+        "src": "b5d48b103c36a5da.json",
+        "bytes": 115,
+        "sha256": "b5d48b103c36a5daed10a739f38fd1515bec482c833f9de1d33dc197b9f02538"
+      },
+      "pt": {
+        "src": "f244f7372671efd7.json",
+        "bytes": 115,
+        "sha256": "f244f7372671efd7e52513f886ae24ffc7f2acd155d26d85ba78fffb95591edf"
+      },
+      "de": {
+        "src": "ce16d858232bf6bc.json",
+        "bytes": 104,
+        "sha256": "ce16d858232bf6bc4a902f46321be8fe06f1b8f9ef069e7a54d6257762073fa1"
+      },
+      "it": {
+        "src": "653656ff974579db.json",
+        "bytes": 113,
+        "sha256": "653656ff974579db6d2ef6a3b57c410f6905ad1e20ef51365cceb71e9dcc81b7"
+      },
+      "ar": {
+        "src": "2e787f75f0e35a96.json",
+        "bytes": 131,
+        "sha256": "2e787f75f0e35a9676dea9610de9df2d70bb40d9eae22a31caa3439b61b118f9"
+      }
+    },
+    "downloadBytes": {
+      "story": 21820,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres d’Asie",
+        "description": "Les cadres de bannière assortis à « Cadres d’Asie » : Dragon de jade, Nuages de soie et Lanternes de papier, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Asian frames",
+        "description": "Banner frames to match “Asian frames”: Jade dragon, Silk clouds and Paper lanterns, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Marcos de Asia",
+        "description": "Los marcos de portada a juego con «Marcos de Asia»: Dragón de jade, Nubes de seda y Farolillos de papel, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Molduras da Ásia",
+        "description": "As molduras de capa a condizer com «Molduras da Ásia»: Dragão de jade, Nuvens de seda e Lanternas de papel, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Asiatische Rahmen",
+        "description": "Bannerrahmen passend zu „Asiatische Rahmen“: Jadedrache, Seidenwolken und Papierlaternen, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Cornici d’Asia",
+        "description": "Le cornici per il banner abbinate a «Cornici d’Asia»: Drago di giada, Nuvole di seta e Lanterne di carta, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "إطارات آسيوية",
+        "description": "أطر لافتة تُناسب «إطارات آسيوية»: تنين اليشم، غيوم الحرير وفوانيس ورقية، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "bannieres-africaines",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 9,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "b835ab457407d8e8.webp",
+      "bytes": 4046,
+      "sha256": "b835ab457407d8e87f90198653b58415d814d03bb6f4db9794f48f36cc532992"
+    },
+    "preview": null,
+    "contract": {
+      "src": "f93f65b548892e03.json",
+      "bytes": 22544,
+      "sha256": "f93f65b548892e03631237a0db7d5a0d4360d913485085e22b6f18636319ba32"
+    },
+    "strings": {
+      "fr": {
+        "src": "f69f27e39b1ed6d4.json",
+        "bytes": 120,
+        "sha256": "f69f27e39b1ed6d4320c6deee9e5215580c5b428fd8922015444e7b5888eda54"
+      },
+      "en": {
+        "src": "68d9b739d01ab322.json",
+        "bytes": 104,
+        "sha256": "68d9b739d01ab322fb2134b12ceaa7da43f32aba3f5911d72720107449476c4b"
+      },
+      "es": {
+        "src": "ce011f71f0107dc6.json",
+        "bytes": 119,
+        "sha256": "ce011f71f0107dc6c74b3e7a0b327926dac9f0bbc60d3516e026ee965e26b748"
+      },
+      "pt": {
+        "src": "a02c5547c695d455.json",
+        "bytes": 117,
+        "sha256": "a02c5547c695d4552cbebc408439f69a8c4ae41e528744f73c38ce9e2be33bd0"
+      },
+      "de": {
+        "src": "2ad8f55eb8dd2cba.json",
+        "bytes": 104,
+        "sha256": "2ad8f55eb8dd2cbaff3014cc3159232984c2310b847f37bfc977e7c6e2e3993b"
+      },
+      "it": {
+        "src": "ce945b7e0776a29c.json",
+        "bytes": 117,
+        "sha256": "ce945b7e0776a29ccc6e61aa02469b998f37ac981b45a7aded4950a0705ac4a5"
+      },
+      "ar": {
+        "src": "0c9d0674f8ba3bba.json",
+        "bytes": 133,
+        "sha256": "0c9d0674f8ba3bbab2173fea383f97d9569df4e54b967c06ee5ef9ada5c2dc78"
+      }
+    },
+    "downloadBytes": {
+      "story": 22544,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres d’Afrique",
+        "description": "Les cadres de bannière assortis à « Cadres d’Afrique » : Masque d’ébène, Bandes tissées et Collier de perles, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "African frames",
+        "description": "Banner frames to match “African frames”: Ebony mask, Woven bands and Bead necklace, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Marcos de África",
+        "description": "Los marcos de portada a juego con «Marcos de África»: Máscara de ébano, Bandas tejidas y Collar de cuentas, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Molduras de África",
+        "description": "As molduras de capa a condizer com «Molduras de África»: Máscara de ébano, Faixas tecidas e Colar de contas, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Afrikanische Rahmen",
+        "description": "Bannerrahmen passend zu „Afrikanische Rahmen“: Ebenholzmaske, Webbänder und Perlenkette, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Cornici d’Africa",
+        "description": "Le cornici per il banner abbinate a «Cornici d’Africa»: Maschera d’ebano, Bande tessute e Collana di perle, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "إطارات أفريقية",
+        "description": "أطر لافتة تُناسب «إطارات أفريقية»: قناع الأبنوس، أشرطة منسوجة وعقد الخرز، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "bannieres-celtes",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 10,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "14aacb4be7595b1d.webp",
+      "bytes": 6286,
+      "sha256": "14aacb4be7595b1d21b2c4be1eafcb8be18046eef6f924bbcf65203090c9bd69"
+    },
+    "preview": null,
+    "contract": {
+      "src": "f7415d9f11e0655b.json",
+      "bytes": 20623,
+      "sha256": "f7415d9f11e0655bf0f9ff000c38682cc61fbbae8f3a2ad14ee00aaed422b75c"
+    },
+    "strings": {
+      "fr": {
+        "src": "6947256943ea2b5b.json",
+        "bytes": 124,
+        "sha256": "6947256943ea2b5b44afce90b1b17295b4b8bf4ecc9441f849862e5b8b8e3e6a"
+      },
+      "en": {
+        "src": "83ec761085cb1ec1.json",
+        "bytes": 113,
+        "sha256": "83ec761085cb1ec14741922baa3e91864227b921416aabaeb68db1490b0e28ee"
+      },
+      "es": {
+        "src": "93818be8100ef575.json",
+        "bytes": 120,
+        "sha256": "93818be8100ef5754c679645d4022ab116dd33e8855b365975a5adf48fa17953"
+      },
+      "pt": {
+        "src": "e4d08d2c2493a3ae.json",
+        "bytes": 118,
+        "sha256": "e4d08d2c2493a3ae6caf324b0f7d0bb3b24db682f3ef79bb0f74ae14be2433e1"
+      },
+      "de": {
+        "src": "f460c6c1aecede8f.json",
+        "bytes": 112,
+        "sha256": "f460c6c1aecede8f330da27328e54c67431515a4a6ee14fb5fb1de0f9cb70798"
+      },
+      "it": {
+        "src": "5b11ff661110b78a.json",
+        "bytes": 118,
+        "sha256": "5b11ff661110b78a8c8704b67becc2ac2adc61e4827f8d02ac6ccdfcfa39d09a"
+      },
+      "ar": {
+        "src": "b7e74f8caca12f8a.json",
+        "bytes": 163,
+        "sha256": "b7e74f8caca12f8a3dc3418bd8b01770e3998900b6ff9d3181da0bdf76afc1d0"
+      }
+    },
+    "downloadBytes": {
+      "story": 20623,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres celtes",
+        "description": "Les cadres de bannière assortis à « Cadres celtes » : Nœud entrelacé, Spirale triple et Lierre d’émeraude, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Celtic frames",
+        "description": "Banner frames to match “Celtic frames”: Interlaced knot, Triple spiral and Emerald ivy, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Marcos celtas",
+        "description": "Los marcos de portada a juego con «Marcos celtas»: Nudo entrelazado, Espiral triple y Hiedra esmeralda, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Molduras celtas",
+        "description": "As molduras de capa a condizer com «Molduras celtas»: Nó entrelaçado, Espiral tripla e Hera esmeralda, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Keltische Rahmen",
+        "description": "Bannerrahmen passend zu „Keltische Rahmen“: Flechtknoten, Dreifachspirale und Smaragdefeu, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Cornici celtiche",
+        "description": "Le cornici per il banner abbinate a «Cornici celtiche»: Nodo intrecciato, Spirale tripla e Edera smeraldo, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "إطارات سلتية",
+        "description": "أطر لافتة تُناسب «إطارات سلتية»: العقدة المتشابكة، اللولب الثلاثي واللبلاب الزمرّدي، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "bannieres-nordiques",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 11,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "40aedd6e4c251224.webp",
+      "bytes": 1400,
+      "sha256": "40aedd6e4c251224d15344510356086d018442bb3dd8c5c6b6501c1c51196a64"
+    },
+    "preview": null,
+    "contract": {
+      "src": "c08ca8cb40a0c086.json",
+      "bytes": 18371,
+      "sha256": "c08ca8cb40a0c086ae4a74806b3d868a9d0a8798b97521dcd8b616a7c1889eb0"
+    },
+    "strings": {
+      "fr": {
+        "src": "da3350313e54e21e.json",
+        "bytes": 181,
+        "sha256": "da3350313e54e21e6539625ab60a1b003585559e52243e37ea3b5f63c23ddb34"
+      },
+      "en": {
+        "src": "c5f7d58fddb241c7.json",
+        "bytes": 165,
+        "sha256": "c5f7d58fddb241c7cad80a1e58f19e5e89d5d0137e6774b5b6373de12eb539f7"
+      },
+      "es": {
+        "src": "ae6a17f21a907963.json",
+        "bytes": 175,
+        "sha256": "ae6a17f21a907963f0c6944074d14abb3724a283b63fd75a09b8b84ceb923f47"
+      },
+      "pt": {
+        "src": "f36e5f30928a9f4a.json",
+        "bytes": 173,
+        "sha256": "f36e5f30928a9f4a9fea9a94187c92af4c3581de8c8b5beced0a3c30025848d1"
+      },
+      "de": {
+        "src": "a1a268569087e68e.json",
+        "bytes": 167,
+        "sha256": "a1a268569087e68ed8aefe144fe9b1ee5f069199fcb259392a8663585cacc760"
+      },
+      "it": {
+        "src": "bbb0d6af076fb960.json",
+        "bytes": 170,
+        "sha256": "bbb0d6af076fb960d8ec850e9e5b0492415de8856fe43918fcb8bee67694dab3"
+      },
+      "ar": {
+        "src": "d9ccd15e7939aeda.json",
+        "bytes": 212,
+        "sha256": "d9ccd15e7939aeda1e288837a5d39c0bb3a3f51eaa0042beedee66abc0bb1e58"
+      }
+    },
+    "downloadBytes": {
+      "story": 18371,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres nordiques",
+        "description": "Les cadres de bannière assortis à « Cadres nordiques » : Corbeaux tournoyants, Aurore boréale, Anneau de pierre gravée et Proue sculptée, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Nordic frames",
+        "description": "Banner frames to match “Nordic frames”: Circling ravens, Northern lights, Carved stone ring and Carved prow, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Marcos nórdicos",
+        "description": "Los marcos de portada a juego con «Marcos nórdicos»: Cuervos en círculo, Aurora boreal, Anillo de piedra grabada y Proa tallada, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Molduras nórdicas",
+        "description": "As molduras de capa a condizer com «Molduras nórdicas»: Corvos em círculo, Aurora boreal, Anel de pedra gravada e Proa esculpida, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Nordische Rahmen",
+        "description": "Bannerrahmen passend zu „Nordische Rahmen“: Kreisende Raben, Nordlicht, Gravierter Steinring und Geschnitzter Bug, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Cornici nordiche",
+        "description": "Le cornici per il banner abbinate a «Cornici nordiche»: Corvi in volo, Aurora boreale, Anello di pietra incisa e Prua scolpita, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "إطارات شمالية",
+        "description": "أطر لافتة تُناسب «إطارات شمالية»: غربان محلّقة، الشفق القطبي، حلقة الحجر المنقوش ومقدّمة منحوتة، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "bannieres-egyptiennes",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 12,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "7b470c660b06de09.webp",
+      "bytes": 4842,
+      "sha256": "7b470c660b06de0923cc7cc26262ea759ec577126e8727abd7aae249242a898f"
+    },
+    "preview": null,
+    "contract": {
+      "src": "ac9fcc5521ce97a7.json",
+      "bytes": 27416,
+      "sha256": "ac9fcc5521ce97a7fa664af539b4311ca1de8d8f6601a715a8599e6d68752299"
+    },
+    "strings": {
+      "fr": {
+        "src": "3910d32ff7d463c3.json",
+        "bytes": 146,
+        "sha256": "3910d32ff7d463c30dade92bb4f8d66197095c23563c727012561906029056bc"
+      },
+      "en": {
+        "src": "040259621587e80c.json",
+        "bytes": 135,
+        "sha256": "040259621587e80c0712fa78f5acc4a6cd86e485c5000b1aff991c7ff4aefd28"
+      },
+      "es": {
+        "src": "f7b8373834d377f0.json",
+        "bytes": 147,
+        "sha256": "f7b8373834d377f07ffd1808686bf3cadfadba50722b0297be35fab440e82752"
+      },
+      "pt": {
+        "src": "2707240c325e757f.json",
+        "bytes": 147,
+        "sha256": "2707240c325e757f3cf7f14d0ea4330b17569b7e5aec50290a3d2ad35e2cf3c7"
+      },
+      "de": {
+        "src": "e009190490559ab5.json",
+        "bytes": 147,
+        "sha256": "e009190490559ab57d56ca35b7f09cdcf722f28ba1eba1cc69737a873a2ccb51"
+      },
+      "it": {
+        "src": "5ee60ad6bc7b1fb3.json",
+        "bytes": 146,
+        "sha256": "5ee60ad6bc7b1fb333d52f0c3200d0c5097e3be388e977018eb8269b2331ba33"
+      },
+      "ar": {
+        "src": "564c59254d574a92.json",
+        "bytes": 188,
+        "sha256": "564c59254d574a929945b6ae9f32077b6e1603038513ff35021271cec5bab4bb"
+      }
+    },
+    "downloadBytes": {
+      "story": 27416,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres égyptiens",
+        "description": "Les cadres de bannière assortis à « Cadres égyptiens » : Cobra d’or, Scarabée ailé, Soleil du désert et Lotus du Nil, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Egyptian frames",
+        "description": "Banner frames to match “Egyptian frames”: Golden cobra, Winged scarab, Desert sun and Nile lotus, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Marcos egipcios",
+        "description": "Los marcos de portada a juego con «Marcos egipcios»: Cobra dorada, Escarabajo alado, Sol del desierto y Loto del Nilo, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Molduras egípcias",
+        "description": "As molduras de capa a condizer com «Molduras egípcias»: Naja dourada, Escaravelho alado, Sol do deserto e Lótus do Nilo, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Ägyptische Rahmen",
+        "description": "Bannerrahmen passend zu „Ägyptische Rahmen“: Goldene Kobra, Geflügelter Skarabäus, Wüstensonne und Nil-Lotus, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Cornici egizie",
+        "description": "Le cornici per il banner abbinate a «Cornici egizie»: Cobra d’oro, Scarabeo alato, Sole del deserto e Loto del Nilo, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "إطارات مصرية",
+        "description": "أطر لافتة تُناسب «إطارات مصرية»: الكوبرا الذهبية، الجُعَل المجنّح، شمس الصحراء ولوتس النيل، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "bannieres-mayas",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 13,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "d42c2ce5efd1fe08.webp",
+      "bytes": 4472,
+      "sha256": "d42c2ce5efd1fe0817b98083262b7cddc4cb676cb6ae749a502feb54c012020f"
+    },
+    "preview": null,
+    "contract": {
+      "src": "87725a95917157e4.json",
+      "bytes": 21962,
+      "sha256": "87725a95917157e43969cbd5f50ebfea1cc489b5b634b62128da2ce4ab845cd3"
+    },
+    "strings": {
+      "fr": {
+        "src": "12437034f5491e7d.json",
+        "bytes": 177,
+        "sha256": "12437034f5491e7d339467fe9b614c05354f42034e4821f7eff2386d609e7712"
+      },
+      "en": {
+        "src": "5617c3b15cc18469.json",
+        "bytes": 161,
+        "sha256": "5617c3b15cc184692877ad7f110481e2e6896fd7f1369b84fe0fe3370d3aa162"
+      },
+      "es": {
+        "src": "70597c8aac9fb2b3.json",
+        "bytes": 176,
+        "sha256": "70597c8aac9fb2b3160508a8553a66585167568f22f6a2601f1d765cfad98235"
+      },
+      "pt": {
+        "src": "b8bddefeaa9d2cf4.json",
+        "bytes": 172,
+        "sha256": "b8bddefeaa9d2cf43de02d3b210079cda4354447fe2663ca8d181334f94bbccf"
+      },
+      "de": {
+        "src": "e2adc6bc5afb6ebf.json",
+        "bytes": 161,
+        "sha256": "e2adc6bc5afb6ebfa379843e4e56b9de6b77354ad0916733712ccd417393769f"
+      },
+      "it": {
+        "src": "3ba3657e67559f8a.json",
+        "bytes": 178,
+        "sha256": "3ba3657e67559f8afbc86b725b9b0322093ae948f5a6db428daf32d380fd0a85"
+      },
+      "ar": {
+        "src": "611cbaaea300e8ce.json",
+        "bytes": 202,
+        "sha256": "611cbaaea300e8ce630496cf874212e5a9f792e930af6776691f76dabbe39329"
+      }
+    },
+    "downloadBytes": {
+      "story": 21962,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres mayas",
+        "description": "Les cadres de bannière assortis à « Cadres mayas » : Serpent de jade, Cartouches de glyphes, Frise à gradins et Jaguar de la jungle, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Maya frames",
+        "description": "Banner frames to match “Maya frames”: Jade serpent, Glyph cartouches, Stepped frieze and Jungle jaguar, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Marcos mayas",
+        "description": "Los marcos de portada a juego con «Marcos mayas»: Serpiente de jade, Cartuchos de glifos, Friso escalonado y Jaguar de la selva, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Molduras maias",
+        "description": "As molduras de capa a condizer com «Molduras maias»: Serpente de jade, Cartuchos de glifos, Friso em degraus e Jaguar da selva, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Maya-Rahmen",
+        "description": "Bannerrahmen passend zu „Maya-Rahmen“: Jadeschlange, Glyphenkartuschen, Stufenfries und Dschungeljaguar, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Cornici maya",
+        "description": "Le cornici per il banner abbinate a «Cornici maya»: Serpente di giada, Cartigli di glifi, Fregio a gradoni e Giaguaro della giungla, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "إطارات مايا",
+        "description": "أطر لافتة تُناسب «إطارات مايا»: ثعبان اليشم، خراطيش الرموز، الإفريز المدرّج ونمر الأدغال، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "bannieres-indiennes",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 14,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "306b759ec5773005.webp",
+      "bytes": 4416,
+      "sha256": "306b759ec577300527a3116cdfecbfe50a6ad6cd7bd2a6c9225affba067529a8"
+    },
+    "preview": null,
+    "contract": {
+      "src": "6fe1798d7af002a2.json",
+      "bytes": 41396,
+      "sha256": "6fe1798d7af002a20e677db13d3da3e0c5f9a19b3c41352bf03f82fd1ec3b2ab"
+    },
+    "strings": {
+      "fr": {
+        "src": "0843812b93767810.json",
+        "bytes": 123,
+        "sha256": "0843812b93767810093e1e218c31b34e1b6a7f0a2587a869398948ee2366402e"
+      },
+      "en": {
+        "src": "7e376864478a655e.json",
+        "bytes": 114,
+        "sha256": "7e376864478a655e0604e3ffa5374865f04fe1fdd37706db18c3f471d53a4d8a"
+      },
+      "es": {
+        "src": "032d572a5084142b.json",
+        "bytes": 127,
+        "sha256": "032d572a5084142be140699d98a6f7be82387e01824701c5d61f03eee2378638"
+      },
+      "pt": {
+        "src": "3c14a8e19621851d.json",
+        "bytes": 116,
+        "sha256": "3c14a8e19621851d5836e64edbcaa5e884466fe5d18f0e2f9c02980667aaa561"
+      },
+      "de": {
+        "src": "30f5d244f970d559.json",
+        "bytes": 121,
+        "sha256": "30f5d244f970d559eaf9105ec261cd29f4b5f503d6d93f41ab9c3a17a9309d41"
+      },
+      "it": {
+        "src": "0b99c2c8d539a35d.json",
+        "bytes": 129,
+        "sha256": "0b99c2c8d539a35d93f8a6c775ee3c1baadfe5d5f5ba72f736594a1e7a385342"
+      },
+      "ar": {
+        "src": "51471f8a9bef1d9a.json",
+        "bytes": 147,
+        "sha256": "51471f8a9bef1d9a2683c055e600de006782b7d61baaa9fe714db6585cfefea7"
+      }
+    },
+    "downloadBytes": {
+      "story": 41396,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres indiens",
+        "description": "Les cadres de bannière assortis à « Cadres indiens » : Mandala floral, Paon qui fait la roue et Guirlande de soucis, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Indian frames",
+        "description": "Banner frames to match “Indian frames”: Floral mandala, Fanning peacock and Marigold garland, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Marcos indios",
+        "description": "Los marcos de portada a juego con «Marcos indios»: Mandala floral, Pavo real en abanico y Guirnalda de caléndulas, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Molduras indianas",
+        "description": "As molduras de capa a condizer com «Molduras indianas»: Mandala floral, Pavão em leque e Grinalda de cravos, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Indische Rahmen",
+        "description": "Bannerrahmen passend zu „Indische Rahmen“: Blumenmandala, Radschlagender Pfau und Ringelblumengirlande, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Cornici indiane",
+        "description": "Le cornici per il banner abbinate a «Cornici indiane»: Mandala floreale, Pavone che fa la ruota e Ghirlanda di calendule, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "إطارات هندية",
+        "description": "أطر لافتة تُناسب «إطارات هندية»: ماندالا زهرية، طاووس يفرد ذيله وإكليل القطيفة، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "bannieres-amerindiennes",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 15,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "be09ee47ce9508b9.webp",
+      "bytes": 3348,
+      "sha256": "be09ee47ce9508b9e14766ee2efb7c9b9d17828289fbe31b4d735808faf9fc4a"
+    },
+    "preview": null,
+    "contract": {
+      "src": "9fff350bd328bb41.json",
+      "bytes": 14562,
+      "sha256": "9fff350bd328bb41621a5a9bc2299c9752a3044b17cc5f810e92a4a92dc8007a"
+    },
+    "strings": {
+      "fr": {
+        "src": "21e405a1386425fb.json",
+        "bytes": 141,
+        "sha256": "21e405a1386425fb4a335e8be6285d89c0dfe3ad9e2c3bce0804e6516bff6ab4"
+      },
+      "en": {
+        "src": "f0ed8d82d3a5c157.json",
+        "bytes": 131,
+        "sha256": "f0ed8d82d3a5c1571d23268386e73bd479c8675d11915305a469e9a2a607cc9d"
+      },
+      "es": {
+        "src": "80b26fe662201370.json",
+        "bytes": 135,
+        "sha256": "80b26fe662201370dbec2cb94a08944d118db029e8bb5f04f37710cb9feb1ca3"
+      },
+      "pt": {
+        "src": "c489df268e675108.json",
+        "bytes": 137,
+        "sha256": "c489df268e675108e3f4d2c2d5436552266b39bf0400ac3f28958dcf35969e26"
+      },
+      "de": {
+        "src": "b91b2a42d43d5cb6.json",
+        "bytes": 126,
+        "sha256": "b91b2a42d43d5cb6be8c6232b582f76c3562e6c306f7871fb8a4c329254f3a32"
+      },
+      "it": {
+        "src": "88401f013af3584b.json",
+        "bytes": 138,
+        "sha256": "88401f013af3584bfb7cdc9fdffd9f21e93e1e2b97c9640f74a7231bcb1ed44a"
+      },
+      "ar": {
+        "src": "29b76ebfddd13090.json",
+        "bytes": 155,
+        "sha256": "29b76ebfddd130907c5ae8f1aca26500cdea294eee3cbc11b0905e84fddf8c55"
+      }
+    },
+    "downloadBytes": {
+      "story": 14562,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres amérindiens",
+        "description": "Les cadres de bannière assortis à « Cadres amérindiens » : Cercle tissé aux plumes, Perlage en losanges et Soleil sur les montagnes, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Native American frames",
+        "description": "Banner frames to match “Native American frames”: Feathered woven hoop, Beaded diamonds and Sun over the mountains, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Marcos amerindios",
+        "description": "Los marcos de portada a juego con «Marcos amerindios»: Aro tejido con plumas, Rombos de cuentas y Sol sobre las montañas, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Molduras ameríndias",
+        "description": "As molduras de capa a condizer com «Molduras ameríndias»: Aro tecido com penas, Losangos de miçangas e Sol sobre as montanhas, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Indigene amerikanische Rahmen",
+        "description": "Bannerrahmen passend zu „Indigene amerikanische Rahmen“: Gewebter Federreif, Perlenrauten und Sonne über den Bergen, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Cornici amerindie",
+        "description": "Le cornici per il banner abbinate a «Cornici amerindie»: Cerchio intrecciato con piume, Rombi di perline e Sole sulle montagne, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "إطارات أمريكية أصلية",
+        "description": "أطر لافتة تُناسب «إطارات أمريكية أصلية»: طوق منسوج بالريش، معيّنات الخرز وشمس فوق الجبال، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "bannieres-australes",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 16,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "d1639f7fce66b4e7.webp",
+      "bytes": 4580,
+      "sha256": "d1639f7fce66b4e7bb84ea5af61e57c4a09e995f476eabac06d6d5d610631cdb"
+    },
+    "preview": null,
+    "contract": {
+      "src": "215dc789ff3904ba.json",
+      "bytes": 33455,
+      "sha256": "215dc789ff3904ba8f967d08578655dff24c5ea08cb6d944f8aa26a3c3c3694c"
+    },
+    "strings": {
+      "fr": {
+        "src": "1f557fd2840b62e2.json",
+        "bytes": 111,
+        "sha256": "1f557fd2840b62e2b269cee0168dd202b2a21c8d5cc9e9e4fb885971b18ed83e"
+      },
+      "en": {
+        "src": "4ba432d56366e411.json",
+        "bytes": 104,
+        "sha256": "4ba432d56366e4119520198151bfeac0efe5f12418f536b5497565d2580e48dc"
+      },
+      "es": {
+        "src": "9e109d8149259189.json",
+        "bytes": 114,
+        "sha256": "9e109d81492591892de0cf70d5a986ee28266ca239af8f59e8f0cb5e4d0e2978"
+      },
+      "pt": {
+        "src": "178fea53e943e5b5.json",
+        "bytes": 120,
+        "sha256": "178fea53e943e5b5a90f7f53d7d9ed0df293ce725ab876cb266d2ffc9b8fcb01"
+      },
+      "de": {
+        "src": "d00765b037407da7.json",
+        "bytes": 115,
+        "sha256": "d00765b037407da7bcbdecfe928f2a5386c57365785c0cf390305410af264fc2"
+      },
+      "it": {
+        "src": "ff282ac064c3e5bf.json",
+        "bytes": 113,
+        "sha256": "ff282ac064c3e5bf7364a7bb5c5e6b73d4f06375821a980a1c7020ab9fd46c9a"
+      },
+      "ar": {
+        "src": "6266fd48cb96670b.json",
+        "bytes": 136,
+        "sha256": "6266fd48cb96670b9df52e944cb5ab765f76f70ecebbb0ce99f06cc94c71d4d2"
+      }
+    },
+    "downloadBytes": {
+      "story": 33455,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres australs",
+        "description": "Les cadres de bannière assortis à « Cadres australs » : Cercles de points, Tortue marine et Croix du Sud, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Southern frames",
+        "description": "Banner frames to match “Southern frames”: Dot circles, Sea turtle and Southern Cross, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Marcos australes",
+        "description": "Los marcos de portada a juego con «Marcos australes»: Círculos de puntos, Tortuga marina y Cruz del Sur, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Molduras austrais",
+        "description": "As molduras de capa a condizer com «Molduras austrais»: Círculos de pontos, Tartaruga marinha e Cruzeiro do Sul, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Südliche Rahmen",
+        "description": "Bannerrahmen passend zu „Südliche Rahmen“: Punktkreise, Meeresschildkröte und Kreuz des Südens, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Cornici australi",
+        "description": "Le cornici per il banner abbinate a «Cornici australi»: Cerchi di punti, Tartaruga marina e Croce del Sud, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "إطارات جنوبية",
+        "description": "أطر لافتة تُناسب «إطارات جنوبية»: دوائر النقاط، سلحفاة بحرية وصليب الجنوب، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "bannieres-noel-enneige",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 17,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "78e89808f4b8255c.webp",
+      "bytes": 4026,
+      "sha256": "78e89808f4b8255c92d8f4d71c346f98de7992f3357af42be23484ba25510c82"
+    },
+    "preview": null,
+    "contract": {
+      "src": "fd2883fb88d85e35.json",
+      "bytes": 12147,
+      "sha256": "fd2883fb88d85e357d1c7c1d7f5730c29878baf726582ca109ebd6e3de682ced"
+    },
+    "strings": {
+      "fr": {
+        "src": "e784489a2ccce264.json",
+        "bytes": 88,
+        "sha256": "e784489a2ccce264f742f288dc0f8583682e31863afdc8c77f8dc6f66bad33cf"
+      },
+      "en": {
+        "src": "ae5a7fae3df923c2.json",
+        "bytes": 83,
+        "sha256": "ae5a7fae3df923c26e404a1fcecb020d93e4e7433f73231b1b6555c69c27317f"
+      },
+      "es": {
+        "src": "50285d5a947447b5.json",
+        "bytes": 82,
+        "sha256": "50285d5a947447b5ec7e1adba572b285e8cbe0bd0d671a062bfad8d5ecdb28c9"
+      },
+      "pt": {
+        "src": "1ee5b7677a68bec5.json",
+        "bytes": 83,
+        "sha256": "1ee5b7677a68bec52de83e8138e53ef56804bb7919a3df68fb8ea6c93f3ab5f0"
+      },
+      "de": {
+        "src": "7ca2248dc3f2a357.json",
+        "bytes": 85,
+        "sha256": "7ca2248dc3f2a3573d65968dcd31b02cf1096733f2b03d87d7d8ac4f505d317b"
+      },
+      "it": {
+        "src": "a1f46c593851617c.json",
+        "bytes": 91,
+        "sha256": "a1f46c593851617c786ee428e3daa159639e90878f02a6974da8a4bb3c263905"
+      },
+      "ar": {
+        "src": "2130326607fa28f3.json",
+        "bytes": 99,
+        "sha256": "2130326607fa28f3e51bf28edb72b563dcc4b857711a6f1b87413c414715fbdf"
+      }
+    },
+    "downloadBytes": {
+      "story": 12147,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Noël enneigé",
+        "description": "Les cadres de bannière assortis à « Noël enneigé » : Flocons qui tombent et Couronne de houx, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Snowy Christmas",
+        "description": "Banner frames to match “Snowy Christmas”: Falling snowflakes and Holly wreath, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Navidad nevada",
+        "description": "Los marcos de portada a juego con «Navidad nevada»: Copos que caen y Corona de acebo, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Natal com neve",
+        "description": "As molduras de capa a condizer com «Natal com neve»: Flocos a cair e Coroa de azevinho, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Verschneite Weihnacht",
+        "description": "Bannerrahmen passend zu „Verschneite Weihnacht“: Fallende Flocken und Stechpalmenkranz, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Natale innevato",
+        "description": "Le cornici per il banner abbinate a «Natale innevato»: Fiocchi che cadono e Corona di agrifoglio, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "عيد ميلاد مثلج",
+        "description": "أطر لافتة تُناسب «عيد ميلاد مثلج»: ندف متساقطة وإكليل البهشية، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "bannieres-lumieres-noel",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 18,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "fc7b9feff415a734.webp",
+      "bytes": 4594,
+      "sha256": "fc7b9feff415a73432e52afc8573b2cad7f899cc1aaeda34f653d85796a703bb"
+    },
+    "preview": null,
+    "contract": {
+      "src": "d138127de11abaf8.json",
+      "bytes": 12083,
+      "sha256": "d138127de11abaf8ceca8e3184da663e3ff8cdea2643dccb58ce45bd8b19a824"
+    },
+    "strings": {
+      "fr": {
+        "src": "7d52067e8fc981e5.json",
+        "bytes": 90,
+        "sha256": "7d52067e8fc981e5da00e5ddee233183c6ef871c03f1074098750132384a56bc"
+      },
+      "en": {
+        "src": "dd63a85488350531.json",
+        "bytes": 81,
+        "sha256": "dd63a85488350531771c743fbe6ac9620aafa0265e02e7947b144259602d782c"
+      },
+      "es": {
+        "src": "674d995c1d4611a5.json",
+        "bytes": 92,
+        "sha256": "674d995c1d4611a5649924e07e6e7b2a07a5078ee73e6db71da12f4f0f0443cf"
+      },
+      "pt": {
+        "src": "69c9f435cd8b2b3e.json",
+        "bytes": 90,
+        "sha256": "69c9f435cd8b2b3eababe06bcccf7936afe4a85e3da0e41aed66f0e4c423e856"
+      },
+      "de": {
+        "src": "32fd0480937d34ec.json",
+        "bytes": 78,
+        "sha256": "32fd0480937d34ecc2745c53e0539c0894f587aa81b7375aa1c159927e17ff8a"
+      },
+      "it": {
+        "src": "250eb78b899724af.json",
+        "bytes": 93,
+        "sha256": "250eb78b899724af120c27ce01c2f20f0aa0191e9bf3ac5a98f876406e46965c"
+      },
+      "ar": {
+        "src": "8cde1c603c1feff5.json",
+        "bytes": 97,
+        "sha256": "8cde1c603c1feff5830f96882ff8828ec2aafaac0b11633996354c448452d892"
+      }
+    },
+    "downloadBytes": {
+      "story": 12083,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Lumières de Noël",
+        "description": "Les cadres de bannière assortis à « Lumières de Noël » : Guirlande lumineuse et Étoile du sapin, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Christmas lights",
+        "description": "Banner frames to match “Christmas lights”: String lights and Tree-top star, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Luces de Navidad",
+        "description": "Los marcos de portada a juego con «Luces de Navidad»: Guirnalda de luces y Estrella del árbol, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Luzes de Natal",
+        "description": "As molduras de capa a condizer com «Luzes de Natal»: Grinalda de luzes e Estrela da árvore, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Weihnachtslichter",
+        "description": "Bannerrahmen passend zu „Weihnachtslichter“: Lichterkette und Tannenstern, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Luci di Natale",
+        "description": "Le cornici per il banner abbinate a «Luci di Natale»: Ghirlanda luminosa e Stella dell’albero, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "أضواء الميلاد",
+        "description": "أطر لافتة تُناسب «أضواء الميلاد»: سلسلة أضواء ونجمة الشجرة، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "bannieres-atelier-noel",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 19,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "3b7ef7ea0a3198c5.webp",
+      "bytes": 5726,
+      "sha256": "3b7ef7ea0a3198c5101772df78b6a20834451dfaef5aaa2f01281d9d4bc53db6"
+    },
+    "preview": null,
+    "contract": {
+      "src": "ec690fb1902a8916.json",
+      "bytes": 18152,
+      "sha256": "ec690fb1902a89162a302dc485b8b6c261521a71d52a565400dc4c4cd3ad8654"
+    },
+    "strings": {
+      "fr": {
+        "src": "817c0847244cc5fc.json",
+        "bytes": 87,
+        "sha256": "817c0847244cc5fc553ebeea060b28cc45a582747d7e1507ae1a993413f175e9"
+      },
+      "en": {
+        "src": "4eb48590aa435c3a.json",
+        "bytes": 71,
+        "sha256": "4eb48590aa435c3ac424285621ca0f406dc37e95175523e62d7f419fad6dfcf2"
+      },
+      "es": {
+        "src": "a3efa2627a25f97a.json",
+        "bytes": 90,
+        "sha256": "a3efa2627a25f97a7608359bc4638810ad3dfe9979f073ce67466c7c1d1ff97d"
+      },
+      "pt": {
+        "src": "acbd34dfef19c26b.json",
+        "bytes": 85,
+        "sha256": "acbd34dfef19c26baf3854278543a64771df5b6887a238c650c0e9700e75ce84"
+      },
+      "de": {
+        "src": "7a148e86611b3ba6.json",
+        "bytes": 80,
+        "sha256": "7a148e86611b3ba6cfa2a23da3b3017ddfa2a5dd80d80c86bf0f8c918f8ab2da"
+      },
+      "it": {
+        "src": "6c8b19cb294a4468.json",
+        "bytes": 98,
+        "sha256": "6c8b19cb294a44682eb42ff614c0523d846ae5877a8c3e261ca1b2e0cdb1eaeb"
+      },
+      "ar": {
+        "src": "5a18869b8dfea695.json",
+        "bytes": 97,
+        "sha256": "5a18869b8dfea6954a2f904beb2e241d53073c893eefa1d99e708d165955b688"
+      }
+    },
+    "downloadBytes": {
+      "story": 18152,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Atelier du Père Noël",
+        "description": "Les cadres de bannière assortis à « Atelier du Père Noël » : Bonnet du Père Noël et Sucre d’orge, posés en bordure pour laisser voir votre photo."
+      },
+      "en": {
+        "name": "Santa’s workshop",
+        "description": "Banner frames to match “Santa’s workshop”: Santa hat and Candy cane, kept to the edge so your photo stays in view."
+      },
+      "es": {
+        "name": "Taller de Papá Noel",
+        "description": "Los marcos de portada a juego con «Taller de Papá Noel»: Gorro de Papá Noel y Bastón de caramelo, en el borde para que tu foto siga a la vista."
+      },
+      "pt": {
+        "name": "Oficina do Pai Natal",
+        "description": "As molduras de capa a condizer com «Oficina do Pai Natal»: Gorro do Pai Natal e Bastão de doce, na borda para que a tua foto fique à vista."
+      },
+      "de": {
+        "name": "Werkstatt des Weihnachtsmanns",
+        "description": "Bannerrahmen passend zu „Werkstatt des Weihnachtsmanns“: Weihnachtsmütze und Zuckerstange, nur am Rand, damit dein Foto sichtbar bleibt."
+      },
+      "it": {
+        "name": "Laboratorio di Babbo Natale",
+        "description": "Le cornici per il banner abbinate a «Laboratorio di Babbo Natale»: Berretto di Babbo Natale e Bastoncino di zucchero, al bordo perché la tua foto resti visibile."
+      },
+      "ar": {
+        "name": "ورشة بابا نويل",
+        "description": "أطر لافتة تُناسب «ورشة بابا نويل»: قبعة بابا نويل وعصا الحلوى، عند الحافة كي تبقى صورتك ظاهرة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "meeshy-bordures",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 20,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "45888ef3790330ed.webp",
+      "bytes": 884,
+      "sha256": "45888ef3790330ed9dabd79dbdf83f3f38922225708ca0dddf0faa2014c80829"
+    },
+    "preview": null,
+    "contract": {
+      "src": "1f019d788d1a113f.json",
+      "bytes": 17029,
+      "sha256": "1f019d788d1a113f22dddd71d11a6e045194326c56d3591bd8b743faf4124c02"
+    },
+    "strings": {
+      "fr": {
+        "src": "67f3f2f23f233bd9.json",
+        "bytes": 165,
+        "sha256": "67f3f2f23f233bd9499549571d48c58bdbfa2c9922eb69db1535621b11d3c194"
+      },
+      "en": {
+        "src": "d8639d7fdb5556c0.json",
+        "bytes": 160,
+        "sha256": "d8639d7fdb5556c036834338a4e728d1ea08ea847106601d6418ecef4e993755"
+      },
+      "es": {
+        "src": "69bf4a194ec31bdc.json",
+        "bytes": 172,
+        "sha256": "69bf4a194ec31bdc40792bee4b74d8cfb712193b5f992e9a01b1ea91a80fad72"
+      },
+      "pt": {
+        "src": "3134424ae66b40f4.json",
+        "bytes": 171,
+        "sha256": "3134424ae66b40f451103dfb0115b6362ef09c42d69b4ed1911b62933d310d07"
+      },
+      "de": {
+        "src": "0b652e4715afc2d7.json",
+        "bytes": 161,
+        "sha256": "0b652e4715afc2d70590e3ec817626352ee5ad92cef89c59b081345e3eedd403"
+      },
+      "it": {
+        "src": "38a87c2a06f8be99.json",
+        "bytes": 166,
+        "sha256": "38a87c2a06f8be998eb66ada426a4a317bd1c224d2d7db6e3662fdb23e07d871"
+      },
+      "ar": {
+        "src": "33eca17479597817.json",
+        "bytes": 192,
+        "sha256": "33eca1747959781785fd91c1eab5b1e17f27366295b02708266c43b786c05195"
+      }
+    },
+    "downloadBytes": {
+      "story": 17029,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Encadrements signature",
+        "description": "Six cadres de bannière par Meeshy, posés à la lisière pour laisser voir votre niveau et vos compteurs : liseré d’or, volutes, rang de perles, onyx, marqueterie et minuit."
+      },
+      "en": {
+        "name": "Signature borders",
+        "description": "Six banner frames by Meeshy, kept to the edge so your level and counters stay in view: gold piping, scrolls, pearl string, onyx, marquetry and midnight."
+      },
+      "es": {
+        "name": "Marcos de firma",
+        "description": "Seis marcos de portada de Meeshy, en el borde para que tu nivel y tus contadores sigan a la vista: ribete de oro, volutas, hilera de perlas, ónix, marquetería y medianoche."
+      },
+      "pt": {
+        "name": "Molduras assinatura",
+        "description": "Seis molduras de capa da Meeshy, na borda para que o teu nível e os teus contadores fiquem à vista: debrum de ouro, volutas, fio de pérolas, ónix, marchetaria e meia-noite."
+      },
+      "de": {
+        "name": "Signatur-Rahmen",
+        "description": "Sechs Bannerrahmen von Meeshy, nur am Rand, damit Level und Zähler sichtbar bleiben: Goldpaspel, Voluten, Perlenschnur, Onyx, Intarsie und Mitternacht."
+      },
+      "it": {
+        "name": "Cornici firma",
+        "description": "Sei cornici per il banner di Meeshy, al bordo perché livello e contatori restino visibili: filetto d’oro, volute, filo di perle, onice, intarsio e mezzanotte."
+      },
+      "ar": {
+        "name": "أطر مميّزة",
+        "description": "ستة أطر للافتة من Meeshy، عند الحافة كي يبقى مستواك وعدّاداتك ظاهرة: حاشية ذهبية، ولفائف، وعقد لؤلؤ، وجزع، وترصيع، ومنتصف الليل."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "meeshy-bordures-vivantes",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 21,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "4d5dfe28ea8a0166.webp",
+      "bytes": 1208,
+      "sha256": "4d5dfe28ea8a0166ca2129d9b29071ee4653d81fdcb2b4efaaf46fd5167c4830"
+    },
+    "preview": null,
+    "contract": {
+      "src": "6a6fb6bac7010fb2.json",
+      "bytes": 13863,
+      "sha256": "6a6fb6bac7010fb29e75d932c703d418bbe6d3307bf6bc73ccbef78386f2a962"
+    },
+    "strings": {
+      "fr": {
+        "src": "5a3f9d2f9b64592a.json",
+        "bytes": 132,
+        "sha256": "5a3f9d2f9b64592adaa0d4d7ce1904d4de4b7b9a074590c0589db1be8b0e4463"
+      },
+      "en": {
+        "src": "5f7693ce95767335.json",
+        "bytes": 124,
+        "sha256": "5f7693ce95767335ffb8caae18d7dbeb649791fe3b4adb9156823ee126bf228f"
+      },
+      "es": {
+        "src": "4f94dd08ab180b89.json",
+        "bytes": 127,
+        "sha256": "4f94dd08ab180b89e92f073955f5f8dd6a46f171a3489fa7cb2c3860cee6e3f2"
+      },
+      "pt": {
+        "src": "f12a13167699e31b.json",
+        "bytes": 127,
+        "sha256": "f12a13167699e31b7d4e1a5533de17c015ebaa2af9d1f4fa7dcaa58d78ae12ee"
+      },
+      "de": {
+        "src": "6ac6357e82a491f4.json",
+        "bytes": 123,
+        "sha256": "6ac6357e82a491f40eb9999103dfcddfc254a0058eaf328c3867a0c298dabb41"
+      },
+      "it": {
+        "src": "4e33e7ffcb42fbe9.json",
+        "bytes": 126,
+        "sha256": "4e33e7ffcb42fbe9418af73abe41d393577a6c2f805c32af5587b3a8c6eb7e6d"
+      },
+      "ar": {
+        "src": "f31ff035fe824043.json",
+        "bytes": 147,
+        "sha256": "f31ff035fe824043a779647eda3747dcaa06abff0404170234ab28b66f6ef67b"
+      }
+    },
+    "downloadBytes": {
+      "story": 13863,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Encadrements vivants",
+        "description": "Quatre cadres de bannière animés par Meeshy : un reflet qui glisse sur l’or, des perles qui brillent, une nuit qui scintille et un néon."
+      },
+      "en": {
+        "name": "Living borders",
+        "description": "Four animated banner frames by Meeshy: a glint gliding over gold, shining pearls, a twinkling night and a neon light."
+      },
+      "es": {
+        "name": "Marcos vivos",
+        "description": "Cuatro marcos de portada animados de Meeshy: un reflejo que se desliza sobre el oro, perlas que brillan, una noche que centellea y un neón."
+      },
+      "pt": {
+        "name": "Molduras vivas",
+        "description": "Quatro molduras de capa animadas da Meeshy: um reflexo que desliza sobre o ouro, pérolas que brilham, uma noite que cintila e um néon."
+      },
+      "de": {
+        "name": "Lebendige Rahmen",
+        "description": "Vier animierte Bannerrahmen von Meeshy: ein Glanz, der über Gold gleitet, schimmernde Perlen, eine funkelnde Nacht und ein Neonlicht."
+      },
+      "it": {
+        "name": "Cornici vive",
+        "description": "Quattro cornici animate per il banner di Meeshy: un riflesso che scorre sull’oro, perle che brillano, una notte che scintilla e un neon."
+      },
+      "ar": {
+        "name": "أطر حيّة",
+        "description": "أربعة أطر متحركة للافتة من Meeshy: لمعة تنزلق على الذهب، ولآلئ تتلألأ، وليل يومض، وضوء نيون."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "noel-cadres-fixes",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 22,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "78e89808f4b8255c.webp",
+      "bytes": 4026,
+      "sha256": "78e89808f4b8255c92d8f4d71c346f98de7992f3357af42be23484ba25510c82"
+    },
+    "preview": null,
+    "contract": {
+      "src": "80eb1c98e9986633.json",
+      "bytes": 40002,
+      "sha256": "80eb1c98e9986633bdbc72fad0e59353488237b977b07bc7961f9b98fd5757af"
+    },
+    "strings": {
+      "fr": {
+        "src": "7f23b1f630c3769e.json",
+        "bytes": 337,
+        "sha256": "7f23b1f630c3769e264c649399b2fcf483a284ac3b727bee9880f7bdb5657e5c"
+      },
+      "en": {
+        "src": "b9f7ff1505dbec07.json",
+        "bytes": 313,
+        "sha256": "b9f7ff1505dbec075548b5a38588fa13a6ecc79f9db92eeb725ee6102a106ea8"
+      },
+      "es": {
+        "src": "cea106485607cfb2.json",
+        "bytes": 336,
+        "sha256": "cea106485607cfb2a25c4c8a99261ac5197556d100c600d67ded1c5c4be4f417"
+      },
+      "pt": {
+        "src": "655e73157ebd8a66.json",
+        "bytes": 330,
+        "sha256": "655e73157ebd8a66616f67133246846e28a9ff9727c7384eb64e17dbbfc5214c"
+      },
+      "de": {
+        "src": "d9688ca8d7797410.json",
+        "bytes": 321,
+        "sha256": "d9688ca8d77974104e59bb4e56fa850f6c83a39e06818cfb259ae6123aacf32e"
+      },
+      "it": {
+        "src": "e1c7f069ff9fa383.json",
+        "bytes": 360,
+        "sha256": "e1c7f069ff9fa38354b1b393a09984884557731958d0e379c7bbe8791fe27f7b"
+      },
+      "ar": {
+        "src": "68cadfc2c7a1042b.json",
+        "bytes": 389,
+        "sha256": "68cadfc2c7a1042bfd70f7b161c8a96891804f3e671d3fc3f76d825dd4874ce5"
+      }
+    },
+    "downloadBytes": {
+      "story": 40002,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Noël · cadres fixes",
+        "description": "Les six cadres de bannière de Noël sans animation, assortis aux contours fixes : flocons, houx, guirlande, étoile, bonnet et sucre d’orge."
+      },
+      "en": {
+        "name": "Christmas · still frames",
+        "description": "The six Christmas banner frames without animation, to match the still rings: snowflakes, holly, string lights, star, Santa hat and candy cane."
+      },
+      "es": {
+        "name": "Navidad · marcos fijos",
+        "description": "Los seis marcos de banner de Navidad sin animación, a juego con los contornos fijos: copos, acebo, guirnalda, estrella, gorro y bastón de caramelo."
+      },
+      "pt": {
+        "name": "Natal · molduras fixas",
+        "description": "As seis molduras de banner de Natal sem animação, a condizer com os contornos fixos: flocos, azevinho, grinalda, estrela, gorro e bastão de doce."
+      },
+      "de": {
+        "name": "Weihnachten · ruhige Bannerrahmen",
+        "description": "Die sechs Weihnachts-Bannerrahmen ohne Animation, passend zu den ruhigen Rahmen: Flocken, Stechpalme, Lichterkette, Stern, Mütze und Zuckerstange."
+      },
+      "it": {
+        "name": "Natale · cornici fisse",
+        "description": "Le sei cornici di banner di Natale senza animazione, abbinate ai contorni fissi: fiocchi, agrifoglio, ghirlanda, stella, berretto e bastoncino di zucchero."
+      },
+      "ar": {
+        "name": "الميلاد · إطارات لافتة ثابتة",
+        "description": "إطارات لافتة الميلاد الستة بلا حركة، تُناسب الأطر الثابتة: ندف الثلج، والبهشية، وسلسلة الأضواء، والنجمة، والقبعة، وعصا الحلوى."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "nouvel-an-cadres",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 23,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "10db428e22393050.webp",
+      "bytes": 4420,
+      "sha256": "10db428e2239305029b8be21d598f53b67f912a9b1b6ac4cd659f5473f90a99b"
+    },
+    "preview": null,
+    "contract": {
+      "src": "309e89173757e909.json",
+      "bytes": 21610,
+      "sha256": "309e89173757e909c9d117818e8ab6278c3d6bb1b547b457d364e37aad3db922"
+    },
+    "strings": {
+      "fr": {
+        "src": "8dda20166282e6fd.json",
+        "bytes": 175,
+        "sha256": "8dda20166282e6fd9ead094a651505a18a15239dbb7add8dcee2551e389617c5"
+      },
+      "en": {
+        "src": "3024a1d8ee3936fa.json",
+        "bytes": 158,
+        "sha256": "3024a1d8ee3936fade46b0b5a33a2b700708f4bb68b3a2f7554fdea50bb1d141"
+      },
+      "es": {
+        "src": "cc386db421840c17.json",
+        "bytes": 178,
+        "sha256": "cc386db421840c17370f90f37887eaa5ba1b1acab8970bcd4fc2ad988a38ec01"
+      },
+      "pt": {
+        "src": "520b0d5ce3bed271.json",
+        "bytes": 182,
+        "sha256": "520b0d5ce3bed27116f6b2f56af98b2608c8fb75a6308cc03ca57f2e39b3c234"
+      },
+      "de": {
+        "src": "fcdabb736012d7a2.json",
+        "bytes": 161,
+        "sha256": "fcdabb736012d7a29c5f7770f608a78d4cfe18c2eb79e8e5f80d32b701b40724"
+      },
+      "it": {
+        "src": "c0cec2bc2fa583e8.json",
+        "bytes": 188,
+        "sha256": "c0cec2bc2fa583e8807a88911965d6d21372744ebd2ac71fef79b2b903a89a3b"
+      },
+      "ar": {
+        "src": "8f6d42e5fed0b355.json",
+        "bytes": 207,
+        "sha256": "8f6d42e5fed0b355664fe6ed887fa90d4dfb3efa0f011298d7208466c57d0620"
+      }
+    },
+    "downloadBytes": {
+      "story": 21610,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres du Nouvel An",
+        "description": "Quatre cadres de bannière assortis aux contours du Nouvel An : feux d’artifice, confettis, cadran de minuit et coupes de champagne."
+      },
+      "en": {
+        "name": "New Year frames",
+        "description": "Four banner frames to match the New Year rings: fireworks, confetti, a midnight dial and champagne coupes."
+      },
+      "es": {
+        "name": "Marcos de Año Nuevo",
+        "description": "Cuatro marcos de banner a juego con los contornos de Año Nuevo: fuegos artificiales, confeti, esfera de medianoche y copas de champán."
+      },
+      "pt": {
+        "name": "Molduras de Ano Novo",
+        "description": "Quatro molduras de banner a condizer com os contornos de Ano Novo: fogo de artifício, confetes, mostrador da meia-noite e taças de champanhe."
+      },
+      "de": {
+        "name": "Neujahrsrahmen",
+        "description": "Vier Bannerrahmen passend zu den Neujahrsrahmen fürs Avatar: Feuerwerk, Konfetti, Mitternachtszifferblatt und Sektschalen."
+      },
+      "it": {
+        "name": "Cornici di Capodanno",
+        "description": "Quattro cornici di banner abbinate ai contorni di Capodanno: fuochi d’artificio, coriandoli, quadrante di mezzanotte e coppe di champagne."
+      },
+      "ar": {
+        "name": "إطارات رأس السنة",
+        "description": "أربعة إطارات لافتة تُناسب أطر رأس السنة: ألعاب نارية، وقصاصات، وميناء منتصف الليل، وكؤوس الشمبانيا."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
+    }
+  },
+  {
+    "slug": "nouvel-an-cadres-vifs",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 24,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "10db428e22393050.webp",
+      "bytes": 4420,
+      "sha256": "10db428e2239305029b8be21d598f53b67f912a9b1b6ac4cd659f5473f90a99b"
+    },
+    "preview": null,
+    "contract": {
+      "src": "0049c0d2f1861d40.json",
+      "bytes": 23619,
+      "sha256": "0049c0d2f1861d406f0c9f66eb875114b85d4d361d3b9e0d2d10601424ff81be"
+    },
+    "strings": {
+      "fr": {
+        "src": "3d777b771dfccd94.json",
+        "bytes": 164,
+        "sha256": "3d777b771dfccd94736ac1a94c91dadee1bfa624b3c8aaf043b37098ab119cd9"
+      },
+      "en": {
+        "src": "2deaba9b854fe776.json",
+        "bytes": 163,
+        "sha256": "2deaba9b854fe776e23fcea891aab81c06d74de1d491a71085ff94d9586ae5b2"
+      },
+      "es": {
+        "src": "05b846d5927284eb.json",
+        "bytes": 162,
+        "sha256": "05b846d5927284eb716d401212df98945c3e0c5e150aae1530a60b89c96075c2"
+      },
+      "pt": {
+        "src": "5af9db88c62d2a2a.json",
+        "bytes": 163,
+        "sha256": "5af9db88c62d2a2a622a81f292272e45cb50630235bd2cc8451be47adf72c014"
+      },
+      "de": {
+        "src": "4aeaa844bbacfebb.json",
+        "bytes": 165,
+        "sha256": "4aeaa844bbacfebbdc046a7df194a22838dfaf58d6906ea8e8932a86090e68df"
+      },
+      "it": {
+        "src": "2128bd9e6c4da21f.json",
+        "bytes": 169,
+        "sha256": "2128bd9e6c4da21fbb0f540cd220dd16193503602864b147824f90508b3041e2"
+      },
+      "ar": {
+        "src": "88aa72fd7aba415d.json",
+        "bytes": 210,
+        "sha256": "88aa72fd7aba415dcdf10796c80f7f6c60db8bb87f85751d356042149d6bae9c"
+      }
+    },
+    "downloadBytes": {
+      "story": 23619,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadres du Nouvel An animés",
+        "description": "Quatre cadres de bannière animés, assortis aux contours vivants : un bouquet qui éclate, des confettis qui volent, l’aiguille de minuit qui tourne et des coupes qui trinquent."
+      },
+      "en": {
+        "name": "Animated New Year frames",
+        "description": "Four animated banner frames to match the living rings: a bursting bouquet, flying confetti, the midnight hand turning and coupes clinking."
+      },
+      "es": {
+        "name": "Marcos animados de Año Nuevo",
+        "description": "Cuatro marcos de banner animados, a juego con los contornos vivos: un ramillete que estalla, confeti que vuela, la aguja de medianoche que gira y copas que brindan."
+      },
+      "pt": {
+        "name": "Molduras animadas de Ano Novo",
+        "description": "Quatro molduras de banner animadas, a condizer com os contornos vivos: um ramo que rebenta, confetes a voar, o ponteiro da meia-noite a girar e taças a brindar."
+      },
+      "de": {
+        "name": "Animierte Neujahrsrahmen",
+        "description": "Vier animierte Bannerrahmen passend zu den lebendigen Rahmen: ein aufblühendes Feuerwerk, fliegendes Konfetti, der kreisende Mitternachtszeiger und anstoßende Schalen."
+      },
+      "it": {
+        "name": "Cornici animate di Capodanno",
+        "description": "Quattro cornici di banner animate, abbinate ai contorni vivi: un bouquet che esplode, coriandoli che volano, la lancetta di mezzanotte che gira e coppe che brindano."
+      },
+      "ar": {
+        "name": "إطارات رأس السنة المتحركة",
+        "description": "أربعة إطارات لافتة متحركة تُناسب الأطر الحية: باقة تتفجر، وقصاصات تتطاير، وعقرب منتصف الليل يدور، وكؤوس تتلاقى."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
+    }
   }
 ]

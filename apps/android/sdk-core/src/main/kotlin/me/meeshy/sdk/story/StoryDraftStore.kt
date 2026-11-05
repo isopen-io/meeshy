@@ -26,7 +26,7 @@ public interface StoryDraftStoring {
         draftId: String,
         snapshot: StoryComposerDraftSnapshot,
         files: Map<String, File>,
-        imageFileNames: List<String> = files.keys.filter(::looksLikeImage),
+        imageFileNames: List<String> = files.keys.filter { looksLikeImage(it) },
         thumbHash: String? = null,
     ): Boolean
 
@@ -175,7 +175,7 @@ public class StoryDraftDiskStore(
     }
 
     override fun listDrafts(): List<StoryDraftSummary> = synchronized(lock) {
-        root.list().orEmpty().filter(::isValidId).mapNotNull { id ->
+        root.list().orEmpty().filter { isValidId(it) }.mapNotNull { id ->
             readMeta(id)?.toSummary(id, media(id).path) { File(it).isFile }
         }.sortedByDescending { it.updatedAtMillis }
     }

@@ -19,7 +19,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PhotoFilter
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -88,6 +90,10 @@ fun MediaDownloadScreen(
                     .fillMaxWidth(),
             ) {
                 InfoBanner()
+                GallerySection(
+                    savesToGallery = state.savesMediaToGallery,
+                    onSavesToGallery = viewModel::setSaveMediaToGallery,
+                )
                 MediaKindSection(
                     title = stringResource(R.string.media_download_images),
                     icon = Icons.Filled.Image,
@@ -314,6 +320,38 @@ private fun CaptureToggleRow(
             )
         }
         Switch(checked = checked, onCheckedChange = null)
+    }
+}
+
+/** « Galerie » (#14640) : la préférence serveur `privacy.saveMediaToGallery`, la même que Réglages › Confidentialité. */
+@Composable
+private fun GallerySection(savesToGallery: Boolean, onSavesToGallery: (Boolean) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.PhotoLibrary,
+                contentDescription = null,
+                tint = MeeshyPalette.Indigo500,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(MeeshySpacing.sm))
+            Text(
+                text = stringResource(R.string.settings_media_autosave_header),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MeeshyPalette.Indigo500,
+            )
+        }
+        CaptureToggleRow(
+            icon = Icons.Filled.Download,
+            title = stringResource(R.string.settings_media_autosave_title),
+            subtitle = stringResource(R.string.settings_media_autosave_subtitle),
+            checked = savesToGallery,
+            onCheckedChange = onSavesToGallery,
+        )
     }
 }
 

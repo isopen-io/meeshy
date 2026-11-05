@@ -28,14 +28,38 @@ export type DepartureRequest = {
   readonly returnToList: boolean;
 };
 
-export type DepartureFailure = { readonly kind: DepartureKind; readonly offline: boolean };
+/**
+ * `requestSender` (#14690) : la passerelle a refusé de rendre obsolète un
+ * tête-à-tête — le lecteur y est l'expéditeur d'une demande que l'autre n'a
+ * pas acceptée, la seule porte qu'un membre d'une directe ouverte se voit
+ * fermer (`DELETE …/obsolete`, 403).
+ */
+export type DepartureFailure = { readonly kind: DepartureKind; readonly offline: boolean; readonly refusal?: 'requestSender' };
 
 type DepartureState = {
   readonly request: DepartureRequest | null;
   readonly failure: DepartureFailure | null;
+  /**
+   * LES REFUS RETENUS (#14690) — les conversations où la passerelle a refusé
+   * « Rendre obsolète » : la passerelle ne sert pas à l'expéditeur d'une
+   * demande qu'elle est en attente, son refus est le seul signal. Le geste ne
+   * se repropose plus pour elles, ni au menu, ni au balayage, ni à la fiche,
+   * jusqu'au prochain chargement de l'application.
+   */
+  readonly obsoleteRefused: readonly string[];
 };
 
-export const departureStore = createStore<DepartureState>(() => ({ request: null, failure: null }));
+export const departureStore = createStore<DepartureState>(() => ({ request: null, failure: null, obsoleteRefused: [] }));
+
+export function markObsoleteRefused(conversationId: string): void {
+  const { obsoleteRefused } = departureStore.getState();
+  if (obsoleteRefused.includes(conversationId)) return;
+  departureStore.setState({ obsoleteRefused: [...obsoleteRefused, conversationId] });
+}
+
+export function isObsoleteRefused(conversationId: string | undefined): boolean {
+  return conversationId !== undefined && departureStore.getState().obsoleteRefused.includes(conversationId);
+}
 
 export function requestDeparture(request: DepartureRequest): void {
   departureStore.setState({ request, failure: null });

@@ -85,8 +85,6 @@ extension MeeshyComposerHost {
     @ViewBuilder
     var surface: some View {
         switch mountedComposerView {
-        case .atelier:
-            composerSurface
         case .scene:
             sceneSurface
         case .mood:

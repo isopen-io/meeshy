@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.call.frames
 
 import me.meeshy.sdk.model.call.CallScreenMode
+import me.meeshy.sdk.model.call.ThermalState
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -63,7 +64,7 @@ object CallLiveFrameRule {
     }
 
     /** Le plus long côté des couches peintes, en pixels : au-delà, la carte graphique agrandit, le processeur ne peint pas plus. */
-    const val PAINT_LONGEST_SIDE: Int = 1280
+    const val PAINT_LONGEST_SIDE: Int = 2048
 
     /** Un cadre bouge s'il porte un ornement animé ou une couche de scène qui n'est pas une illustration fixe (#12683). */
     fun animates(design: CallFrameDesign): Boolean =
@@ -103,6 +104,34 @@ object CallLiveFrameRule {
         val factor = if (longest > PAINT_LONGEST_SIDE) PAINT_LONGEST_SIDE.toDouble() / longest else 1.0
         return (viewWidth * factor).roundToInt() to (viewHeight * factor).roundToInt()
     }
+
+    /**
+     * **Aucun texte du cadre sous un contrôle** (#9777) : en haut la rangée d'en-tête, en bas la pilule des commandes.
+     * Ces hauteurs (dp) s'ajoutent aux encarts du système ; le cadre se peint à la taille de l'écran.
+     */
+    const val HEADER_ROW_DP: Double = 52.0
+    const val CONTROLS_PILL_DP: Double = 84.0
+
+    fun chromeReserve(viewHeight: Double, topInset: Double, bottomInset: Double): CallFrameChromeReserve =
+        CallFrameChromeReserve.covering(topInset + HEADER_ROW_DP, bottomInset + CONTROLS_PILL_DP, viewHeight)
+
+    /** Ce qui, une fois changé, force à repeindre les couches : jamais une image vidéo. */
+    data class LayerInputs(
+        val frameId: String,
+        val people: List<CallFramePerson>,
+        val texts: CallFrameTexts,
+        val width: Int,
+        val height: Int,
+        val reserve: CallFrameChromeReserve,
+        val animates: Boolean,
+    )
+
+    /** Faut-il repeindre ? Seulement si une entrée a changé. */
+    fun needsRepaint(current: LayerInputs?, next: LayerInputs): Boolean = current != next
+
+    /** L'appareil se protège : chaleur sévère ou pire, ou économie d'énergie. */
+    fun isDeviceConstrained(thermal: ThermalState, powerSave: Boolean): Boolean =
+        powerSave || thermal >= ThermalState.SERIOUS
 
     /** La forme d'un identifiant du catalogue, celle que la passerelle exige. */
     fun isFrameId(value: String): Boolean {

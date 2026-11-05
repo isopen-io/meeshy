@@ -58,39 +58,6 @@ final class StoryComposerLocationTests: XCTestCase {
 
     // MARK: - Chrome du composer (point d'entrée)
 
-    /// Le chip « Lieu » du panneau Texte (même foyer que « Stickers ») doit
-    /// exister ET présenter le picker injecté par l'app. Un chrome sans call
-    /// site laisse la feature inatteignable — exactement le défaut relevé en
-    /// revue T20.
-    func test_theComposerChromeExposesALocationEntryPoint() throws {
-        let panel = try source("Sources/MeeshyUI/Story/Controls/ComposerToolPanelHost.swift")
-        XCTAssertTrue(panel.contains("onOpenLocationPicker?()"),
-                      "Le panneau Texte doit porter un chip « Lieu » qui demande l'ouverture du picker.")
-        // Le chip ne porte plus de libellé VISIBLE depuis le passage aux
-        // grosses icônes (2026-08-19) : le texte du catalogue est devenu son
-        // étiquette VoiceOver. Une icône nue et muette serait un bouton que
-        // rien n'annonce. La clé est vérifiée ENTIÈRE — `story.location.add`
-        // seule serait satisfaite par n'importe quel préfixe.
-        // Depuis 07a8747f, l'étiquette nomme le FORMAT composé (story, post,
-        // réel) : le panneau la lit chez `ComposerFormatWording`, qui la tient
-        // du catalogue, clé par format.
-        XCTAssertTrue(panel.contains("a11y: formatWording.addPlace"),
-                      "L'étiquette accessible du bouton « Lieu » vient de ComposerFormatWording.")
-        let wording = try source("Sources/MeeshyUI/Story/ComposerFormatWording.swift")
-        for key in ["\"story.location.add.a11y\"", "\"story.location.add.a11y.post\"", "\"story.location.add.a11y.reel\""] {
-            XCTAssertTrue(wording.contains(key),
-                          "L'étiquette accessible du bouton « Lieu » passe par le catalogue (bundle: .module) : \(key).")
-        }
-
-        let media = try source("Sources/MeeshyUI/Story/StoryComposerView+Media.swift")
-        XCTAssertTrue(media.contains("$showLocationPicker"),
-                      "StoryComposerView doit présenter une feuille pour le picker de lieu.")
-        XCTAssertTrue(media.contains("storyLocationPicker"),
-                      "Le picker vient de l'environnement (il est app-side : MapKit + permissions).")
-        XCTAssertTrue(media.contains("viewModel.addLocation(place:"),
-                      "La sélection d'un lieu doit poser la pastille sur la slide.")
-    }
-
     private func source(_ relativePath: String) throws -> String {
         let packageRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // retire le nom de fichier

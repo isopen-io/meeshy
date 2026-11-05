@@ -56,6 +56,15 @@ final class StoryOptionsMenuPlanTests: XCTestCase {
         XCTAssertEqual(plan.sections, [[.fullscreen, .transcript], [.share, .compose, .exportVideo, .imager], [.delete], [.close]])
     }
 
+    /// #15198 — « Supprimer » une story en attente, c'est annuler son envoi
+    /// par la file ; rien de ce que le serveur sert (lien, republication,
+    /// export) n'est offert sur un id local.
+    func test_theMenu_ofAPendingStory_onlyReadsCancelsTheSendAndCloses() {
+        let plan = StoryOptionsMenuPlan.resolve(
+            hasStory: true, isOwnStory: true, hasAudioTranscript: true, canCompose: true, isPending: true)
+        XCTAssertEqual(plan.sections, [[.fullscreen, .transcript], [.cancelSend], [.close]])
+    }
+
     func test_close_isTheLastEntry_forEveryReader() {
         for plan in StoryOptionsMenuPlanFixture.everyReader {
             XCTAssertEqual(plan.entries.last, .close, "« Fermer » doit être la DERNIÈRE option : \(plan.entries)")

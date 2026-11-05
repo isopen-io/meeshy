@@ -39,6 +39,7 @@ import me.meeshy.ui.theme.MeeshySpacing
  * Un réel republié montre le réel source, signé de son auteur d'origine (« Republié par … »), et ouvre ce réel-là.
  *
  * [showsActions] retire la rangée d'actions quand l'écran porte déjà la sienne (détail du post) ; [captionLines] borne la légende.
+ * Un geste que l'hôte ne passe pas n'est pas dessiné : la carte n'affiche jamais un bouton sans effet (#13244).
  */
 @Composable
 internal fun ReelPostCard(
@@ -49,25 +50,25 @@ internal fun ReelPostCard(
     isOwn: Boolean = false,
     showsActions: Boolean = true,
     captionLines: Int = 2,
-    onLike: () -> Unit = {},
-    onBookmark: () -> Unit = {},
-    onComments: () -> Unit = {},
-    onRepost: () -> Unit = {},
-    onQuote: () -> Unit = {},
-    onShare: () -> Unit = {},
+    onLike: (() -> Unit)? = null,
+    onBookmark: (() -> Unit)? = null,
+    onComments: (() -> Unit)? = null,
+    onRepost: (() -> Unit)? = null,
+    onQuote: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
     onSend: (() -> Unit)? = null,
-    onCopyLink: () -> Unit = {},
-    onCopyText: () -> Unit = {},
-    onPin: () -> Unit = {},
-    onReport: () -> Unit = {},
-    onDelete: () -> Unit = {},
+    onCopyLink: (() -> Unit)? = null,
+    onCopyText: (() -> Unit)? = null,
+    onPin: (() -> Unit)? = null,
+    onReport: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
     onOpenProfile: ((String) -> Unit)? = null,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     val source = post.republishedReel
     val authorName = source?.authorName ?: post.authorName ?: unknownAuthor
     val authorAvatar = if (source != null) source.authorAvatarUrl else post.authorAvatarUrl
-    val authorId = if (source != null) source.authorId else post.authorId
+    val authorProfileUser = if (source != null) source.authorProfile() else post.authorProfile()
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -113,7 +114,7 @@ internal fun ReelPostCard(
                     name = authorName,
                     size = 32.dp,
                     imageUrl = authorAvatar,
-                    modifier = Modifier.opensAuthorProfile(authorId, onOpenProfile),
+                    modifier = Modifier.opensAuthorProfile(authorProfileUser),
                 )
                 Spacer(Modifier.width(MeeshySpacing.sm))
                 Text(
@@ -123,7 +124,7 @@ internal fun ReelPostCard(
                     color = MeeshyPalette.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false).opensAuthorProfile(authorId, onOpenProfile),
+                    modifier = Modifier.weight(1f, fill = false).opensAuthorProfile(authorProfileUser),
                 )
             }
             post.content.takeIf { it.isNotBlank() }?.let { caption ->

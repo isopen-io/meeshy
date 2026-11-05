@@ -30,7 +30,7 @@ describe('departureStore', () => {
   test('une demande remplace l’échec affiché, l’annulation la retire', () => {
     failDeparture({ kind: 'leave', offline: true });
     requestDeparture({ conversationId: 'c1', kind: 'delete', returnToList: false });
-    expect(departureStore.getState()).toEqual({ request: { conversationId: 'c1', kind: 'delete', returnToList: false }, failure: null });
+    expect(departureStore.getState()).toMatchObject({ request: { conversationId: 'c1', kind: 'delete', returnToList: false }, failure: null });
 
     cancelDeparture();
     expect(departureStore.getState().request).toBeNull();

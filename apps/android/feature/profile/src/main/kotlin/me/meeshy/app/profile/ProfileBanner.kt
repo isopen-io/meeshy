@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -55,6 +56,7 @@ internal data class ProfileBannerContent(val paint: ProfileBannerPaint, val fram
 @Composable
 internal fun ProfileBanner(user: MeeshyUser, modifier: Modifier = Modifier, viewModel: ProfileBannerViewModel = hiltViewModel()) {
     val catalog by viewModel.catalog.collectAsStateWithLifecycle()
+    LaunchedEffect(user.servedDecor, catalog) { viewModel.request(user.servedDecor) }
     val content = remember(user.banner, user.profileDecor, catalog) { catalog?.let { ProfileBannerContent.of(user, it) } } ?: return
     val isDark = MeeshyTheme.isDark
     val apiBaseUrl = LocalMediaBaseUrl.current

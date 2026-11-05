@@ -12,6 +12,7 @@ import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.media.MediaAdoption
 import me.meeshy.sdk.media.PendingMediaPreviewing
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.socket.SendMessageAck
 import me.meeshy.sdk.model.ReadStatusSummary
@@ -20,6 +21,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessageSticker
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.TranscriptionSegment
 import me.meeshy.sdk.model.search.ConversationSearchResults
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
@@ -70,8 +72,13 @@ class MessageRepository internal constructor(
         previews: PendingMediaPreviewing? = null,
         /** L'aperçu de la liste de conversations suit mon envoi optimiste et son retrait. */
         listPreviews: SendPreviewSink? = null,
+        /** L'index des médias de la conversation suit les messages supprimés. */
+        mediaIndex: ConversationMediaHubIndex? = null,
     ) : this(
-        history = MessageHistoryReader(messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures),
+        history = MessageHistoryReader(
+            messageApi, database, messageDao, syncMetaDao, clock, fence, regime, events, erasures, TranslationLayer.of(database),
+            media = AcknowledgedBubbleMedia(adoption, previews, AcknowledgedBubbleMedia.ORIGIN_PAGE),
+        ),
         sends = MessageSendCoordinator(database, messageDao, outboxRepository, clock, regime, adoption, previews = previews, listPreviews = listPreviews),
         mutations = MessageMutationWriter(
             CachedMessageUpdater(database, messageDao, fence),
@@ -79,8 +86,9 @@ class MessageRepository internal constructor(
             clock,
             EditRevisionLedger(database.editRevisionDao(), clock, fence),
             events,
+            mediaIndex = mediaIndex,
         ),
-        enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi),
+        enrichment = MessageEnrichmentWriter(CachedMessageUpdater(database, messageDao, fence), translationApi, TranslationLayer.of(database), clock),
         receipts = MessageReceiptWriter(database, messageDao, fence),
         erasures = erasures,
         searches = MessageSearchReader(messageApi, database, clock, fence, regime, events, erasures),
@@ -106,6 +114,10 @@ class MessageRepository internal constructor(
      */
     suspend fun refreshMessage(conversationId: String, messageId: String): Boolean =
         history.refreshMessage(conversationId, messageId)
+
+    /** [refreshMessage] over the [limit] messages around [messageId] (the single transcription refetch). */
+    suspend fun refreshAround(conversationId: String, messageId: String, limit: Int): Boolean =
+        history.refreshMessage(conversationId, messageId, limit)
 
     /**
      * Cache-only read of a conversation's [limit] most recent messages, oldest first — a "peek"
@@ -216,8 +228,15 @@ class MessageRepository internal constructor(
     /** Server ACK of the socket fallback: the optimistic bubble becomes the acknowledged message. */
     suspend fun reconcileAcknowledged(cmid: String, ack: SendMessageAck) = sends.reconcileAcknowledged(cmid, ack)
 
+    /** L'id serveur d'un message envoyé sous [localId] (`cid_`), une fois acquitté ; `null` sinon. */
+    suspend fun serverIdOf(localId: String): String? = sends.serverIdOf(localId)
+
     /** The outbox exhausted its retries — surface the bubble as retryable, with the [reason] it says (#13550). */
     suspend fun markSendFailed(cmid: String, reason: String? = null) = sends.markSendFailed(cmid, reason)
+
+    /** Envoie la bulle déjà posée au tap [cid] avec les pièces montées (ou leurs téléversements durables), sans bulle de plus. */
+    suspend fun sendPostedBubble(cid: String, attachmentIds: List<String> = emptyList(), dependsOn: Set<String> = emptySet()): Boolean =
+        sends.sendPostedBubble(cid, attachmentIds, dependsOn)
 
     /** User-initiated retry of a failed bubble: back to `SENDING`, its outbox row revived. */
     suspend fun retrySend(cmid: String) = sends.retrySend(cmid)
@@ -255,7 +274,9 @@ class MessageRepository internal constructor(
         language: String?,
         confidence: Double?,
         durationMs: Long?,
-    ) = enrichment.applyTranscription(messageId, attachmentId, text, language, confidence, durationMs)
+        segments: List<TranscriptionSegment>? = null,
+        speakerCount: Int? = null,
+    ) = enrichment.applyTranscription(messageId, attachmentId, text, language, confidence, durationMs, segments, speakerCount)
 
     /**
      * Applies an `audio:translation-ready` socket update (the cloned-voice translation) to the
@@ -273,6 +294,7 @@ class MessageRepository internal constructor(
         quality: Double?,
         voiceModelId: String?,
         ttsModel: String?,
+        segments: List<TranscriptionSegment>? = null,
     ) = enrichment.applyAudioTranslation(
         messageId,
         attachmentId,
@@ -285,6 +307,7 @@ class MessageRepository internal constructor(
         quality,
         voiceModelId,
         ttsModel,
+        segments,
     )
 
     /**

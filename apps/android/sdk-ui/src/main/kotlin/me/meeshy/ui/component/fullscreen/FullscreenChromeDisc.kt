@@ -103,6 +103,7 @@ public val FullscreenChromeSymbol.icon: ImageVector
         FullscreenChromeSymbol.AudioOutput -> Icons.Filled.Cast
         FullscreenChromeSymbol.Play -> Icons.Filled.PlayArrow
         FullscreenChromeSymbol.Pause -> Icons.Filled.Pause
+        FullscreenChromeSymbol.Forward -> MeeshyIcons.ForwardMessage
     }
 
 /** L'encre d'un glyphe du chrome : la teinte d'un état ACTIF d'abord, la tonalité sinon. */

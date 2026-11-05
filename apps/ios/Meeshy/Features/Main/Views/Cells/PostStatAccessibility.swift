@@ -1,16 +1,16 @@
 import Foundation
 
-/// La source unique des libellés « N j'aime / N commentaires / N repartages /
-/// N réponses » du fil. Chaque clé (`feed.post.stat.*`) porte une
+/// La source unique des libellés « N j'aime / N commentaires / N réponses » du
+/// fil. Chaque clé (`feed.post.stat.*`) porte une
 /// `variations.plural` complète — 2 formes dans les 6 locales latines, **6 en
 /// arabe** — donc l'accord est celui du CATALOGUE, jamais du code.
 ///
 /// ## Ce n'est pas un pis-aller réservé à UIKit
 ///
-/// Les cellules `TextPostCell` / `MediaPostCell` (UIKit) posent ces chaînes en
-/// `accessibilityLabel` — leur bouton n'affiche que le nombre nu (« 5 »), et
-/// sans libellé VoiceOver annonce « 5, bouton » sans dire de quoi. Mais les
-/// écrans SwiftUI du fil rendaient les MÊMES compteurs par **quatre clés plates**
+/// Les anciennes cellules UIKit du fil (retirées avec #15994, jamais
+/// instanciées) posaient ces chaînes en `accessibilityLabel` — un bouton qui
+/// n'affiche que le nombre nu (« 5 ») s'annonce sinon « 5, bouton » sans dire
+/// de quoi. Mais les écrans SwiftUI du fil rendaient les MÊMES compteurs par **quatre clés plates**
 /// (`a11y.feed.post.like.value`, `a11y.comment.replies.count`,
 /// `feed.post.comment.replies_count`, `a11y.comment.show_replies`), qui gravaient
 /// « %d réponses » : « **1 réponses** » en français, « **1 replies** » en
@@ -46,17 +46,6 @@ enum PostStatAccessibility {
         String(
             localized: "feed.post.stat.comments",
             defaultValue: "\(count) \(count == 1 ? "comment" : "comments")",
-            bundle: bundle,
-            locale: locale
-        )
-    }
-
-    static func repostsLabel(_ count: Int,
-                             bundle: Bundle = .main,
-                             locale: Locale = .current) -> String {
-        String(
-            localized: "feed.post.stat.reposts",
-            defaultValue: "\(count) \(count == 1 ? "repost" : "reposts")",
             bundle: bundle,
             locale: locale
         )

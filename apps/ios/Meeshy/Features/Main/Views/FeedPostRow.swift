@@ -169,6 +169,7 @@ struct FeedPostRow: View {
                 actions.onOpenReelComments(post)
             },
             onRepost: { postId in actions.onRepost(postId) },
+            onQuote: { postId in actions.onQuote(postId) },
             onBookmark: { postId in actions.onBookmark(postId) },
             onShare: { postId in actions.onShare(postId) },
             onTapAuthor: { authorId in

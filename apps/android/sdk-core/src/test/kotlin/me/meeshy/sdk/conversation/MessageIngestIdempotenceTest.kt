@@ -92,6 +92,8 @@ class MessageIngestIdempotenceTest {
         val row = dao.find("m1")!!
         assertThat(row.deliveredCount).isEqualTo(3)
         assertThat(row.viewOnceOpenedAt).isEqualTo(77L)
+        assertThat(payloadOf(row.payload).content).isEqualTo("salut")
+        assertThat(payloadOf(row.payload).attachments.single().fileUrl).isEqualTo("https://cdn/a1.jpg")
         assertThat(row.retryCount).isEqualTo(2)
         assertThat(row.lastError).isEqualTo("timeout")
         assertThat(dao.find("cid_local")!!.sendState).isEqualTo(LocalSendState.SENDING.name)

@@ -52,6 +52,21 @@ describe('composeConversationPreview — le fichier de cas commun (web + iOS)', 
     'en-view-once-placeholder-not-translated',
     'sticker-text',
     'sticker-text-view-once',
+    'photo-with-caption',
+    'file-with-caption',
+    'audio-named-with-caption',
+    'contact-card-with-caption',
+    'videos-with-caption',
+    'attachments-with-caption',
+    'attachments-mixed-with-caption',
+    'ephemeral-photo',
+    'ephemeral-named-audio',
+    'ephemeral-file',
+    'ephemeral-photo-with-caption',
+    'ephemeral-photos-many',
+    'ephemeral-contact-card',
+    'text-direct-member',
+    'text-direct-self',
   ])('le fichier couvre le cas exigé %s', (id) => {
     expect(caseById(id).text.length).toBeGreaterThan(0);
   });
@@ -103,6 +118,113 @@ describe('sécurité — un message protégé ne transporte ni texte, ni traduct
   it('le même éphémère, recomposé après son échéance, bascule seul en expiré', () => {
     const later = { ...caseById('ephemeral-live').input, now: '2026-09-23T10:04:00.000Z' };
     expect(renderConversationPreviewText(composeConversationPreview(later), 'fr')).toBe('Alice : ⏱ Message expiré');
+  });
+});
+
+describe('pièce jointe détaillée — la légende ne fait disparaître ni le nombre ni les détails', () => {
+  const textOf = (id: string): string => {
+    const { input } = caseById(id);
+    return renderConversationPreviewText(composeConversationPreview(input), input.language);
+  };
+  const NBSP = '\u00a0';
+
+  it.each([
+    ['photo-with-caption', `Alice : 📷 Au bord du lac · 450${NBSP}×${NBSP}456 · 234 Ko`],
+    ['file-with-caption', 'Alice : 📄 Le contrat · contrat.pdf · 12 pages · 2 Mo'],
+    ['audio-named-with-caption', 'Alice : 🎵 Écoute · nom.mp3 · 3:05 · 4,2 Mo'],
+    ['contact-card-with-caption', 'Alice : 👤 Voici son numéro · Zoé Sanscompte'],
+  ])('%s garde la légende ET les détails de la pièce seule', (id, expected) => {
+    expect(textOf(id)).toBe(expected);
+  });
+
+  it.each([
+    ['attachments-with-caption', 'Alice : 📷 3 photos · Nos vacances · 1,4 Mo'],
+    ['videos-with-caption', 'Alice : 🎬 2 vidéos · Le match · 30 Mo'],
+    ['attachments-mixed-with-caption', 'Alice : 📎 4 pièces jointes · Nos vacances'],
+  ])('%s garde le nombre devant la légende', (id, expected) => {
+    expect(textOf(id)).toBe(expected);
+  });
+
+  it('une légende servie par le Prisme garde ses détails', () => {
+    const { input } = caseById('photo-with-caption');
+    const served = composeConversationPreview({
+      ...input,
+      lastMessage: {
+        ...input.lastMessage!,
+        originalLanguage: 'en',
+        content: 'By the lake',
+        translations: { fr: 'Au bord du lac' },
+      },
+    });
+    expect(served.segments[0]).toEqual({ kind: 'text', text: 'Au bord du lac', language: 'fr' });
+    expect(served.segments).toHaveLength(3);
+  });
+
+  it('une légende servie au rang 2 du Prisme garde ses détails', () => {
+    const { input } = caseById('photo-with-caption');
+    const served = composeConversationPreview({
+      ...input,
+      preferredLanguages: ['de', 'fr'],
+      lastMessage: {
+        ...input.lastMessage!,
+        originalLanguage: 'en',
+        content: 'By the lake',
+        translations: { fr: 'Au bord du lac' },
+      },
+    });
+    expect(served.segments.map((segment) => segment.text)).toEqual(['Au bord du lac', '450\u00a0×\u00a0456', '234 Ko']);
+    expect(served.segments[0]).toEqual({ kind: 'text', text: 'Au bord du lac', language: 'fr' });
+  });
+
+  it('un vocal légendé garde sa durée et jamais son nom', () => {
+    expect(textOf('voice-with-caption')).toMatch(/^Alice : 🎤 Écoute ça · \d+:\d{2}/);
+  });
+
+  it('les dimensions s’écrivent « L × H » avec des espaces insécables, partout', () => {
+    expect(textOf('video')).toContain(`1920${NBSP}×${NBSP}1080`);
+    expect(textOf('photo')).toContain(`450${NBSP}×${NBSP}456`);
+    expect(textOf('photo-without-size')).toBe(`Alice : 📷 Photo · 450${NBSP}×${NBSP}456`);
+  });
+});
+
+describe('éphémère — la ligne dit la nature et jamais la pièce', () => {
+  const EPHEMERAL = [
+    ['ephemeral-photo', 'Alice : 🔥 4 min · Photo'],
+    ['ephemeral-named-audio', 'Alice : 🔥 4 min · Audio'],
+    ['ephemeral-file', 'Alice : 🔥 4 min · Fichier'],
+    ['ephemeral-photos-many', 'Alice : 🔥 4 min · 3 photos'],
+    ['ephemeral-contact-card', 'Alice : 🔥 4 min · Contact partagé'],
+    ['ephemeral-photo-with-caption', 'Alice : 🔥 4 min · Photo · Au bord du lac'],
+  ] as const;
+
+  it.each(EPHEMERAL)('%s ne rend que le décompte, la nature et le texte servi', (id, expected) => {
+    const { input } = caseById(id);
+    expect(renderConversationPreviewText(composeConversationPreview(input), input.language)).toBe(expected);
+  });
+
+  it.each(EPHEMERAL.map(([id]) => [id] as const))('%s ne transporte ni dimension, ni poids, ni durée, ni nom, ni page', (id) => {
+    const serialized = JSON.stringify(composeConversationPreview(caseById(id).input));
+    ['450', '456', '234', ' Ko', ' Mo', 'nom.mp3', '3:05', 'contrat.pdf', 'pages', 'Zoé', 'Sanscompte', '.vcf', '×'].forEach((leak) =>
+      expect(serialized, `${id} laisse fuir ${leak}`).not.toContain(leak),
+    );
+  });
+
+  it('le même message, une fois l’éphémère retombé en lecture simple, retrouve ses détails', () => {
+    const { input } = caseById('ephemeral-photo');
+    const { ephemeralDuration: _removed, ...rest } = input.lastMessage!;
+    const plain = composeConversationPreview({ ...input, lastMessage: rest });
+    expect(plain.segments.map((segment) => segment.text)).toEqual(['Photo', `450${'\u00a0'}×${'\u00a0'}456`, '234 Ko']);
+  });
+});
+
+describe('conversation directe — l’auteur est toujours devant (non-régression)', () => {
+  it.each([
+    ['text-direct-member', 'Alice : Bonjour'],
+    ['text-direct-self', 'Vous : Bonjour'],
+  ])('%s', (id, expected) => {
+    const { input } = caseById(id);
+    expect(input.isDirect).toBe(true);
+    expect(renderConversationPreviewText(composeConversationPreview(input), input.language)).toBe(expected);
   });
 });
 

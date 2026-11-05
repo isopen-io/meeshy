@@ -13,6 +13,7 @@ import {
   departureStore,
   dismissDepartureFailure,
   failDeparture,
+  markObsoleteRefused,
   type DepartureFailure,
   type DepartureKind,
   type DepartureRequest,
@@ -67,7 +68,16 @@ export function ConversationDepartureHost({
     const online = isOnline();
     if (online && pending.returnToList) onReturnToList();
     const outcome = await performDeparture({ conversationId: pending.conversationId, kind: pending.kind, online, deps });
+    if (outcome === 'refused') return refuse(pending);
     if (outcome !== 'departed') failDeparture({ kind: pending.kind, offline: outcome === 'offline' });
+  };
+
+  /* REFUSÉ (#14690) — le geste ne se repropose plus pour cette conversation ;
+     sur un tête-à-tête, le refus a un seul motif à dire. */
+  const refuse = (pending: DepartureRequest): void => {
+    markObsoleteRefused(pending.conversationId);
+    const direct = cachedConversation(deps, pending.conversationId)?.type === 'direct';
+    failDeparture({ kind: pending.kind, offline: false, ...(direct ? { refusal: 'requestSender' as const } : {}) });
   };
 
   return (
@@ -141,7 +151,9 @@ function confirmWordsOf(kind: DepartureKind, language: InterfaceLanguage, title:
   };
 }
 
-const failureTextOf = (kind: DepartureKind, language: InterfaceLanguage): string => {
+const failureTextOf = (failure: DepartureFailure, language: InterfaceLanguage): string => {
+  const { kind } = failure;
+  if (failure.refusal === 'requestSender') return translateConversationManage(language, 'conversationManage.obsolete.requestSender');
   if (kind === 'obsolete') return translateConversationManage(language, 'conversationManage.obsolete.error');
   return translate(language, kind === 'leave' ? 'conversation.departure.leave.error' : 'conversation.departure.delete.error');
 };
@@ -154,7 +166,7 @@ function DepartureFailureNotice({ failure, language }: { readonly failure: Depar
 
   const message = failure.offline
     ? translate(language, 'conversation.departure.offline')
-    : failureTextOf(failure.kind, language);
+    : failureTextOf(failure, language);
 
   return (
     <div className="fixed inset-x-0 z-50 flex justify-center px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>

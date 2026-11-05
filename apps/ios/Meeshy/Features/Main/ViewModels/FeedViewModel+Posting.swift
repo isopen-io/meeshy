@@ -204,114 +204,6 @@ extension FeedViewModel {
     /// from any isolation (matches `SyncPillViewModel.staleInflightThreshold`).
     nonisolated static let offlineStuckThreshold: TimeInterval = 60
 
-    /// U1b — durably publishes an OFFLINE media post. Inserts an optimistic post
-    /// keyed by a fresh cmid (rendering the picked files as a local-URL preview)
-    /// and routes the media through `enqueuePostMedia` (relocate + write-ahead
-    /// `.createPost`). The OutboxFlusher uploads the files via TUS on reconnect
-    /// and creates the post; the gateway echoes the cmid on `post:created`, where
-    /// the reconcile (U1 ST2) swaps the optimistic post for the server one (no
-    /// duplicate). Rolls back on synchronous enqueue refusal or `.exhausted`.
-    /// Falls back to the text-only path when there are no media URLs.
-    ///
-    /// `type` mirrors the online media path (`ReelComposition.defaultType`): a
-    /// video / multi-image post created offline is enqueued as a `REEL` so it
-    /// lands on the reels surface once the OutboxFlusher uploads it — reusing the
-    /// exact post durability machinery, only the server-side `type` differs.
-    ///
-    /// `location` widens the call surface so both `FeedView+Attachments.swift`
-    /// call sites can pass `pendingPlace` — Task 17 a donné à `CreatePostPayload`
-    /// / `enqueuePostMedia` un champ `location`, donc un média posté hors-ligne
-    /// avec une position attachée la conserve désormais jusqu'au flush.
-    ///
-    /// `discoverabilityPrecision` fait le même trajet, et devait le faire :
-    /// sans lui, la position d'un REEL hors ligne survivait au flush pendant
-    /// que le consentement, lui, se perdait entre le composer et la file.
-    func createOfflineMediaPost(
-        localMediaURLs: [URL],
-        content: String?,
-        visibility: String = "PUBLIC",
-        visibilityUserIds: [String]? = nil,
-        originalLanguage: String? = nil,
-        type: String = "POST",
-        location: SharedPlace? = nil,
-        mentions: [PostMentionInput]? = nil,
-        discoverabilityPrecision: DiscoverabilityPrecision? = nil,
-        /// SANS défaut, délibérément : un média VISUEL n'a pas de voix, et il
-        /// le DIT en toutes lettres. Un défaut ici ferait disparaître la
-        /// transcription d'un site d'appel sans casser la moindre compilation
-        /// — le mécanisme exact par lequel la branche hors ligne de
-        /// `StatusViewModel.setStatus` avait perdu la source et la voix d'un
-        /// mood pendant que sa jumelle en ligne les passait.
-        mobileTranscription: MobileTranscriptionPayload?,
-        /// Le canvas (#4756), sans défaut — même raison qu'au-dessus.
-        storyEffects: StoryEffects?,
-        /// Les légendes par fichier (#4756), alignées par index sur `localMediaURLs`.
-        mediaCaptions: [String?]?,
-        /// Les alternatives textuelles et l'identifiant d'objet de canvas de
-        /// chaque fichier (2026-09-05). **Sans défaut**, et c'est le point :
-        /// cette entrée est partagée par la feuille du fil — qui n'a ni
-        /// éditeur d'objet ni scène, et passe donc `nil` en le DISANT — et par
-        /// des chemins qui en portent. Un défaut ferait disparaître ces champs
-        /// d'un site d'appel sans casser la moindre compilation.
-        mediaAlts: [String?]?,
-        mediaObjectIds: [String?]?,
-        /// L'autorisation d'extraction du son (#3996) — même discipline que
-        /// `mediaAlts`/`mediaObjectIds` juste au-dessus : cette entrée n'a ni
-        /// éditeur d'objet ni scène, et passe donc `nil` en le DISANT.
-        allowSoundExtraction: Bool?
-    ) async {
-        publishError = nil
-        publishSuccess = false
-        guard !localMediaURLs.isEmpty else {
-            await enqueueDurableTextPost(
-                content: content ?? "",
-                visibility: visibility,
-                // Le repli perdait la liste NOMMÉE d'une audience
-                // `ONLY`/`EXCEPT` — `visibilityUserIds` porte un défaut `nil`
-                // chez le destinataire, et un défaut fait disparaître un champ
-                // d'un site d'appel sans casser la moindre compilation. Le
-                // gateway refuse alors la charge (`CreatePostSchema.refine`),
-                // le rejet est PERMANENT, et le post est perdu.
-                visibilityUserIds: visibilityUserIds,
-                originalLanguage: originalLanguage,
-                location: location,
-                mentions: mentions,
-                discoverabilityPrecision: discoverabilityPrecision,
-                // Le repli sans média porte la scène (#4756).
-                storyEffects: storyEffects,
-                // …et son TYPE (#5197) : sans lui, un réel ou une story
-                // composés d'une scène sans fichier local partaient en POST.
-                type: type
-            )
-            return
-        }
-
-        await enqueueDurableMediaPost(
-            clientMutationId: ClientMutationId.generate(),
-            localMediaURLs: localMediaURLs,
-            // Ce chemin n'a AUCUN MIME sous la main — il le DIT plutôt que de
-            // laisser un défaut le dire pour lui. Le dispatcher retombe alors
-            // sur l'extension, ce qui suffit pour des médias VISUELS (toutes
-            // leurs extensions sont dans la table) et ne suffisait pas pour une
-            // voix importée depuis Fichiers.
-            localMediaMimeTypes: nil,
-            content: content,
-            visibility: visibility,
-            visibilityUserIds: visibilityUserIds,
-            originalLanguage: originalLanguage,
-            type: type,
-            location: location,
-            mentions: mentions,
-            discoverabilityPrecision: discoverabilityPrecision,
-            mobileTranscription: mobileTranscription,
-            storyEffects: storyEffects,
-            mediaCaptions: mediaCaptions,
-            mediaAlts: mediaAlts,
-            mediaObjectIds: mediaObjectIds,
-            allowSoundExtraction: allowSoundExtraction
-        )
-    }
-
     /// **Le geste « je publie ce que j'ai produit ».**
     ///
     /// Un `PublishIntent` est une matière composée UNE fois, à un endroit
@@ -365,7 +257,7 @@ extension FeedViewModel {
         )
     }
 
-    /// Le cœur PARTAGÉ des deux entrées ci-dessus — insertion optimiste +
+    /// Le cœur de `publish(_:)` — insertion optimiste +
     /// enfilage durable. Il prend le jeton en paramètre plutôt que de le
     /// fabriquer : `publish(_:)` doit reprendre celui de l'intention, sans quoi
     /// le post optimiste serait clé par un identifiant que rien n'échoue, et le

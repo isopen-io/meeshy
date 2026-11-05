@@ -2,7 +2,9 @@ package me.meeshy.app.widget
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
+import java.util.Locale
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,22 +65,24 @@ internal class QuickReplyWidget : GlanceAppWidget() {
         val conversations = entryPoint.conversationRepository().recentCachedConversations()
         val currentUserId = entryPoint.tokenStore().userId
         val labels = widgetPreviewLabels(context)
+        val prism = WidgetReaderPrismStore(context).load()
+        val chips = quickReplyChips(context, QuickReplyDrafts.draftLanguage(prism))
         val presentation = QuickReplyWidgetPresentation.from(
             conversations = conversations,
             currentUserId = currentUserId,
             previewLabels = labels,
-            preferredLanguages = WidgetReaderPrismStore(context).load(),
+            preferredLanguages = prism,
             ephemeralLabel = widgetEphemeralLabel(context),
         )
 
         provideContent {
-            QuickReplyWidgetContent(presentation)
+            QuickReplyWidgetContent(presentation, chips)
         }
     }
 }
 
 @Composable
-private fun QuickReplyWidgetContent(presentation: QuickReplyWidgetPresentation?) {
+private fun QuickReplyWidgetContent(presentation: QuickReplyWidgetPresentation?, chips: List<QuickReplyChip>) {
     val context = LocalContext.current
     Column(
         modifier = GlanceModifier
@@ -116,37 +120,49 @@ private fun QuickReplyWidgetContent(presentation: QuickReplyWidgetPresentation?)
                 maxLines = 2,
             )
             Row(modifier = GlanceModifier.fillMaxWidth().padding(top = 8.dp)) {
-                QuickReplyChip(text = "👍", conversationId = presentation.conversationId)
-                QuickReplyChip(
-                    text = context.getString(R.string.widget_quick_reply_ok),
-                    conversationId = presentation.conversationId,
-                )
-                QuickReplyChip(
-                    text = context.getString(R.string.widget_quick_reply_thanks),
-                    conversationId = presentation.conversationId,
-                )
-                QuickReplyChip(
-                    text = context.getString(R.string.widget_quick_reply_call_me),
-                    conversationId = presentation.conversationId,
-                )
+                chips.forEach { chip ->
+                    QuickReplyChipView(chip = chip, conversationId = presentation.conversationId)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun QuickReplyChip(text: String, conversationId: String) {
+private fun QuickReplyChipView(chip: QuickReplyChip, conversationId: String) {
     val context = LocalContext.current
     Box(
         modifier = GlanceModifier
             .padding(end = 6.dp)
             .background(WidgetTheme.chipBackground)
-            .clickable(actionStartActivityIntent(quickReplyIntent(context, conversationId, text)))
+            .clickable(actionStartActivityIntent(quickReplyIntent(context, conversationId, chip.draft)))
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
-        Text(text = text, style = TextStyle(fontSize = 12.sp, color = WidgetTheme.chipText))
+        Text(text = chip.label, style = TextStyle(fontSize = 12.sp, color = WidgetTheme.chipText))
     }
 }
+
+/**
+ * Libellés selon la locale de l'appareil (chrome), brouillons selon la langue du compte (contenu
+ * signé par l'utilisateur) : un compte francophone sur un téléphone anglais lit « Thanks! » et
+ * dépose « Merci ! ». Même source de chaînes, deux locales.
+ */
+private fun quickReplyChips(context: Context, draftLanguage: String?): List<QuickReplyChip> {
+    val labels = quickReplyTexts(context)
+    val drafts = draftLanguage?.let { tag ->
+        val configuration = Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag(tag)) }
+        quickReplyTexts(context.createConfigurationContext(configuration))
+    }
+    return QuickReplyDrafts.chips(labels, drafts)
+}
+
+private fun quickReplyTexts(context: Context): QuickReplyTexts =
+    QuickReplyTexts(
+        thumbsUp = "👍",
+        ok = context.getString(R.string.widget_quick_reply_ok),
+        thanks = context.getString(R.string.widget_quick_reply_thanks),
+        callMe = context.getString(R.string.widget_quick_reply_call_me),
+    )
 
 private fun quickReplyIntent(context: Context, conversationId: String, text: String): Intent =
     Intent(

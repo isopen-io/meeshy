@@ -6,6 +6,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import javax.inject.Inject
+import me.meeshy.sdk.reading.SharedPreferencesReadingModeStore
 import me.meeshy.sdk.session.PerAccountCache
 
 /** Vide les modes de lecture mémorisés à la déconnexion ou au changement de compte. */

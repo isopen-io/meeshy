@@ -15,12 +15,9 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MobileTranscriptionPayload
-import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.composer.sound.ComposerAudioRole
 import me.meeshy.sdk.model.speech.OnDeviceTranscription
 import me.meeshy.sdk.model.speech.OnDeviceTranscriptionSegment
-import me.meeshy.sdk.net.ApiError
-import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.speech.SoundFileTranscriber
 import me.meeshy.sdk.speech.SoundTranscriptionOutcome
@@ -48,22 +45,14 @@ class StorySoundSheetViewModelTest {
         coEvery { it.transcribe(any(), any()) } answers { languagesAsked += secondArg<String>(); outcome }
     }
 
-    private fun uploader(result: NetworkResult<List<UploadedMedia>>) = mockk<StoryMediaUploader>().also {
-        coEvery { it.upload(any(), any()) } returns result
-    }
-
-    private val uploaded = UploadedMedia("pm1", "https://cdn/pm1.m4a", "audio/mp4", 10, null, null, 2_500, null)
-
     private fun session(system: String? = "pt") = mockk<SessionRepository>().also {
         every { it.currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me", systemLanguage = system))
     }
 
     private fun model(
         outcome: SoundTranscriptionOutcome = SoundTranscriptionOutcome.Heard(heard),
-        upload: NetworkResult<List<UploadedMedia>> = NetworkResult.Success(listOf(uploaded)),
     ) = StorySoundSheetViewModel(
         transcriber = transcriber(outcome),
-        uploader = uploader(upload),
         waveforms = object : WaveformMeasuring {
             override suspend fun measure(location: me.meeshy.sdk.model.waveform.WaveformLocation, count: Int) = floatArrayOf(0.1f, 0.4f)
         },
@@ -117,23 +106,25 @@ class StorySoundSheetViewModelTest {
     }
 
     @Test
-    fun `adding uploads the take and hands the composer the sound, its role and its transcription`() {
+    fun `adding hands the composer the sound with its file, its role and its transcription, sent nowhere yet`() {
         val vm = model()
         val (item, file) = take()
         vm.onTake(item, durationSeconds = 2.5f)
         vm.onRole(ComposerAudioRole.FOREGROUND)
-        var placed: Pair<ComposedStorySound, ComposerAudioRole>? = null
-        vm.onAdd(automatic = ComposerAudioRole.BACKGROUND) { sound, role -> placed = sound to role }
-        val (sound, role) = placed!!
+        var placed: Triple<ComposedStorySound, ComposerAudioRole, MediaUploadItem>? = null
+        vm.onAdd(automatic = ComposerAudioRole.BACKGROUND) { sound, role, handed -> placed = Triple(sound, role, handed) }
+        val (sound, role, handed) = placed!!
         assertThat(role).isEqualTo(ComposerAudioRole.FOREGROUND)
-        assertThat(sound.postMediaId).isEqualTo("pm1")
-        assertThat(sound.url).isEqualTo("https://cdn/pm1.m4a")
+        assertThat(handed).isSameInstanceAs(item)
+        assertThat(sound.postMediaId).isEmpty()
+        assertThat(sound.url).isEqualTo("file://${file.path}")
+        assertThat(sound.durationSeconds).isEqualTo(2.5f)
         assertThat(sound.language).isEqualTo("pt")
         assertThat(sound.transcription!!.text).isEqualTo("bom dia")
         assertThat(sound.transcription!!.segments.single().end).isEqualTo(1.2)
         assertThat(sound.waveform).containsExactly(0.25f, 1f).inOrder()
         assertThat(vm.state.value.take).isNull()
-        assertThat(file.exists()).isFalse()
+        assertThat(file.exists()).isTrue()
     }
 
     @Test
@@ -141,30 +132,17 @@ class StorySoundSheetViewModelTest {
         val vm = model()
         vm.onTake(take().first, durationSeconds = 2.5f)
         var role: ComposerAudioRole? = null
-        vm.onAdd(automatic = ComposerAudioRole.BACKGROUND) { _, r -> role = r }
+        vm.onAdd(automatic = ComposerAudioRole.BACKGROUND) { _, r, _ -> role = r }
         assertThat(role).isEqualTo(ComposerAudioRole.BACKGROUND)
     }
 
     @Test
-    fun `a refused upload keeps the take and says it`() {
-        val vm = model(upload = NetworkResult.Failure(ApiError(message = "offline", code = "OFFLINE")))
-        vm.onTake(take().first, durationSeconds = 2.5f)
-        var placed = false
-        vm.onAdd(automatic = ComposerAudioRole.BACKGROUND) { _, _ -> placed = true }
-        assertThat(placed).isFalse()
-        assertThat(vm.state.value.take!!.phase).isEqualTo(SoundTakePhase.PREVIEW)
-        assertThat(vm.state.value.failure).isEqualTo(SoundSheetFailure.UPLOAD)
-    }
-
-    @Test
-    fun `while the sound uploads, writing or changing the language never re-arms Ajouter nor transcribes again`() {
-        val pending = kotlinx.coroutines.CompletableDeferred<NetworkResult<List<UploadedMedia>>>()
-        val uploader = mockk<StoryMediaUploader>().also { coEvery { it.upload(any(), any()) } coAnswers { pending.await() } }
+    fun `while the sound is being placed, writing or changing the language never re-arms Ajouter nor transcribes again`() {
+        val measured = kotlinx.coroutines.CompletableDeferred<FloatArray>()
         val vm = StorySoundSheetViewModel(
             transcriber = transcriber(SoundTranscriptionOutcome.Heard(heard)),
-            uploader = uploader,
             waveforms = object : WaveformMeasuring {
-                override suspend fun measure(location: me.meeshy.sdk.model.waveform.WaveformLocation, count: Int) = floatArrayOf(0.1f)
+                override suspend fun measure(location: me.meeshy.sdk.model.waveform.WaveformLocation, count: Int) = measured.await()
             },
             session = session(),
             deviceLanguage = { "en" },
@@ -172,16 +150,16 @@ class StorySoundSheetViewModelTest {
         )
         vm.onTake(take().first, durationSeconds = 2.5f)
         var placed = 0
-        vm.onAdd(automatic = ComposerAudioRole.BACKGROUND) { _, _ -> placed += 1 }
+        vm.onAdd(automatic = ComposerAudioRole.BACKGROUND) { _, _, _ -> placed += 1 }
         vm.onWriteTranscription("autre chose")
         vm.onLanguage("es")
         vm.onRetryTranscription()
-        assertThat(vm.state.value.take!!.phase).isEqualTo(SoundTakePhase.UPLOADING)
+        assertThat(vm.state.value.take!!.phase).isEqualTo(SoundTakePhase.PLACING)
         assertThat(vm.state.value.take!!.transcription!!.text).isEqualTo("bom dia")
         assertThat(languagesAsked).containsExactly("pt")
         assertThat(vm.state.value.language).isEqualTo("pt")
-        vm.onAdd(automatic = ComposerAudioRole.BACKGROUND) { _, _ -> placed += 1 }
-        pending.complete(NetworkResult.Success(listOf(uploaded)))
+        vm.onAdd(automatic = ComposerAudioRole.BACKGROUND) { _, _, _ -> placed += 1 }
+        measured.complete(floatArrayOf(0.1f))
         assertThat(placed).isEqualTo(1)
     }
 
@@ -194,4 +172,29 @@ class StorySoundSheetViewModelTest {
         assertThat(vm.state.value.take).isNull()
         assertThat(file.exists()).isFalse()
     }
+
+    @Test
+    fun `OK with a ready sound places it with its chosen role, as Ajouter would (#16206)`() {
+        val vm = model()
+        val (item, _) = take()
+        vm.onTake(item, durationSeconds = 2.5f)
+        vm.onRole(ComposerAudioRole.FOREGROUND)
+        var placed: Pair<ComposerAudioRole, MediaUploadItem>? = null
+
+        vm.onDone(automatic = ComposerAudioRole.BACKGROUND) { _, role, handed -> placed = role to handed }
+
+        assertThat(placed).isEqualTo(ComposerAudioRole.FOREGROUND to item)
+        assertThat(vm.state.value.take).isNull()
+    }
+
+    @Test
+    fun `OK with nothing chosen places nothing (#16206)`() {
+        val vm = model()
+        var placed = 0
+
+        vm.onDone(automatic = ComposerAudioRole.BACKGROUND) { _, _, _ -> placed += 1 }
+
+        assertThat(placed).isEqualTo(0)
+    }
 }
+

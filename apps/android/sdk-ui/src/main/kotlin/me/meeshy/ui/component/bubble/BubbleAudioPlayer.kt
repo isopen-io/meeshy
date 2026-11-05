@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.AudioTranscriptionReveal
+import me.meeshy.sdk.model.media.PlaybackSpeed
 import me.meeshy.ui.R
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
@@ -63,6 +64,10 @@ public data class BubbleAudioPlayback(
     val timeLabel: String,
     /** Position du lecteur, en secondes : le karaoké de la transcription s'y aligne (#13878). */
     val currentSeconds: Double = 0.0,
+    /** La vitesse du moteur partagé (×1, ×1,5, ×2) : la puce de la bulle l'affiche. */
+    val speed: PlaybackSpeed = PlaybackSpeed.DEFAULT,
+    /** La durée mesurée par le moteur, en secondes ; 0 tant qu'il ne la connaît pas (la bulle garde sa durée déclarée). */
+    val durationSeconds: Double = 0.0,
 )
 
 /**
@@ -182,14 +187,15 @@ public fun AudioBubble(
     }
 }
 
-private const val TRANSCRIPT_FADE_MILLIS = 180
+internal const val TRANSCRIPT_FADE_MILLIS: Int = 180
 
 /**
- * iOS `AudioPlayerView.transcriptionBlock` : la transcription existe mais son affichage automatique
- * est coupé sur les messages reçus. Le tap ne fait que la révéler, aucune requête n'est émise.
+ * iOS `AudioPlayerView.transcriptionBlock` : le bouton « Transcrire ». Deux usages, et l'hôte choisit l'effet du tap :
+ * la transcription existe mais son affichage automatique est coupé (le tap la révèle, aucune requête) ; ou rien ne la
+ * transcrit encore ([me.meeshy.sdk.model.AudioTranscriptionBlock.Kind.REQUEST], le tap la demande au serveur).
  */
 @Composable
-private fun RevealTranscriptionCta(onColor: Color, onReveal: () -> Unit) {
+internal fun RevealTranscriptionCta(onColor: Color, onReveal: () -> Unit) {
     Row(
         modifier = Modifier
             .padding(top = MeeshySpacing.xs)

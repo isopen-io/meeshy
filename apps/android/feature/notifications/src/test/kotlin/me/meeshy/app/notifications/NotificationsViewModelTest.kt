@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.sdk.model.NotificationState
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
+import me.meeshy.sdk.notification.NotificationScopePage
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -69,10 +70,14 @@ class NotificationsViewModelTest {
         }
         every { repository.unreadCountStream } returns unreadCount
         every { repository.hasMoreStream } returns hasMore
-        coEvery { repository.list(any(), any(), any(), any(), any(), any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.listScopePage(any(), any(), any(), any()) } returns NetworkResult.Success(page(emptyList()))
+        every { repository.cachedItems(any()) } returns null
         coEvery { repository.markAsRead(any()) } returns NetworkResult.Success(notification("read"))
         return repository
     }
+
+    private fun page(rows: List<ApiNotification>, hasMore: Boolean = false, nextCursor: String? = null) =
+        NotificationScopePage(rows, hasMore, nextCursor)
 
     private fun performer(): NotificationQuickActionPerformer {
         val performer: NotificationQuickActionPerformer = mockk(relaxed = true)
@@ -319,17 +324,16 @@ class NotificationsViewModelTest {
 
         vm.selectCategory(NotificationFilterCategory.MESSAGES)
 
-        val query = NotificationFilterCategory.MESSAGES.serverQuery
         coVerify(exactly = 1) {
-            repo.list(0, 30, false, null, query.types, query.hideReadTypes)
+            repo.listScopePage(NotificationFilterCategory.MESSAGES.scope(), null, 0, any())
         }
     }
 
     @Test
     fun `rows older than the shared first page appear under their category`() = runTest {
         val repo = repository()
-        coEvery { repo.list(any(), any(), any(), any(), any(), any()) } returns
-            NetworkResult.Success(listOf(typed("old", "new_message")))
+        coEvery { repo.listScopePage(any(), any(), any(), any()) } returns
+            NetworkResult.Success(page(listOf(typed("old", "new_message"))))
         val vm = NotificationsViewModel(repo, performer())
 
         vm.selectCategory(NotificationFilterCategory.MESSAGES)
@@ -340,7 +344,7 @@ class NotificationsViewModelTest {
     @Test
     fun `a failed category fetch on an empty list shows the error state, not the empty one`() = runTest {
         val repo = repository()
-        coEvery { repo.list(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { repo.listScopePage(any(), any(), any(), any()) } returns
             NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "boom"))
         val vm = NotificationsViewModel(repo, performer())
 
@@ -350,17 +354,47 @@ class NotificationsViewModelTest {
     }
 
     @Test
-    fun `a category paginates its own list with the offset of what it holds`() = runTest {
+    fun `a category paginates its own list by the cursor the gateway served`() = runTest {
         val repo = repository()
+        val scope = NotificationFilterCategory.MESSAGES.scope()
         val full = (1..30).map { typed("m$it", "new_message") }
-        coEvery { repo.list(0, any(), any(), any(), any(), any()) } returns NetworkResult.Success(full)
+        coEvery { repo.listScopePage(scope, null, 0, any()) } returns NetworkResult.Success(page(full, true, "cur-1"))
+        coEvery { repo.listScopePage(scope, "cur-1", any(), any()) } returns
+            NetworkResult.Success(page(listOf(typed("m31", "new_message")), false, null))
         val vm = NotificationsViewModel(repo, performer())
 
         vm.selectCategory(NotificationFilterCategory.MESSAGES)
         vm.loadMore()
 
-        coVerify(exactly = 1) { repo.list(30, 30, false, null, any(), any()) }
+        coVerify(exactly = 1) { repo.listScopePage(scope, "cur-1", any(), any()) }
         coVerify(exactly = 0) { repo.loadMore() }
+        assertThat(vm.state.value.filteredNotifications).hasSize(31)
+        assertThat(vm.state.value.canLoadMore).isFalse()
+    }
+
+    @Test
+    fun `each category keeps its own cursor when the user comes back to its chip`() = runTest {
+        val repo = repository()
+        val messages = NotificationFilterCategory.MESSAGES.scope()
+        coEvery { repo.listScopePage(messages, null, 0, any()) } returns
+            NetworkResult.Success(page(listOf(typed("m1", "new_message")), true, "cur-m"))
+        val vm = NotificationsViewModel(repo, performer())
+
+        vm.selectCategory(NotificationFilterCategory.MESSAGES)
+        vm.selectCategory(NotificationFilterCategory.CALLS)
+        vm.selectCategory(NotificationFilterCategory.MESSAGES)
+
+        assertThat(vm.state.value.categoryHasMore).isTrue()
+    }
+
+    @Test
+    fun `the unread chip asks the gateway for unreadOnly`() = runTest {
+        val repo = repository()
+        val vm = NotificationsViewModel(repo, performer())
+
+        vm.selectCategory(NotificationFilterCategory.UNREAD)
+
+        coVerify { repo.listScopePage(match { it.unreadOnly }, null, 0, any()) }
     }
 
     @Test
@@ -438,7 +472,7 @@ class NotificationsViewModelTest {
     }
 
     private fun categoryVm(repo: NotificationRepository, vararg served: ApiNotification): NotificationsViewModel {
-        coEvery { repo.list(any(), any(), any(), any(), any(), any()) } returns NetworkResult.Success(served.toList())
+        coEvery { repo.listScopePage(any(), any(), any(), any()) } returns NetworkResult.Success(page(served.toList()))
         return NotificationsViewModel(repo, performer())
     }
 

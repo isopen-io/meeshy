@@ -3,10 +3,12 @@ package me.meeshy.app.chat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -15,12 +17,15 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.VoiceQueueProtection
+import me.meeshy.sdk.model.playback.AudioLanguageStripLaw
 import me.meeshy.sdk.model.translation.ServerTranslationAdmission
 import me.meeshy.sdk.model.translation.TranslationRequestFailure
 import me.meeshy.ui.component.bubble.RowFailure
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.collectArrived
+import me.meeshy.ui.component.bubble.LanguageExplorerRowAction
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import me.meeshy.ui.component.bubble.MessageDetailExplorer
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
@@ -45,8 +50,15 @@ internal class ChatTranslationController(
     private val sessionRepository: SessionRepository,
     private val messageSocketManager: MessageSocketManager,
     private val conversationId: String,
-    /** La demande de traduction d'UNE pièce audio ; `null` tant que la feuille ne l'offre pas. */
-    private val requestAttachmentTranslation: (suspend (attachmentId: String, language: String) -> Boolean)? = null,
+    /**
+     * La demande de traduction d'UNE pièce audio (message, pièce, langue cible, langue de sa transcription) ; vrai quand elle
+     * est partie sans échec. `null` tant qu'elle n'est pas branchée.
+     */
+    private val requestAttachmentTranslation: (suspend (messageId: String, attachmentId: String, language: String, sourceLanguage: String?) -> Boolean)? = null,
+    /** Lit toutes les traductions d'un message à l'ouverture de l'explorateur ; `null` : rien à lire (jamais pour un post). */
+    private val fetchTranslations: (suspend (messageId: String) -> Unit)? = null,
+    /** Les clés `attachmentId|langue` des traductions audio encore attendues : l'état « en cours » d'une voix survit à la feuille. */
+    private val audioPendingKeys: Flow<Set<String>> = flowOf(emptySet()),
 ) {
 
     private val mutableFailures = MutableStateFlow<Map<String, TranslationRequestFailure>>(emptyMap())
@@ -84,12 +96,19 @@ internal class ChatTranslationController(
                 messages,
                 sessionRepository.currentUser,
                 state.flow.map { it.translatingLanguages }.distinctUntilChanged(),
-                activeLanguageOverride.combine(mutableFailures) { overrides, failures -> overrides to failures },
-            ) { explorerId, loaded, user, translating, (overrides, failures) ->
-                buildLanguageExplorer(explorerId, loaded, user, translating, overrides, failures)
+                combine(activeLanguageOverride, mutableFailures, audioPendingKeys) { overrides, failures, pending ->
+                    Triple(overrides, failures, pending)
+                },
+            ) { explorerId, loaded, user, translating, (overrides, failures, pending) ->
+                buildLanguageExplorer(explorerId, loaded, user, translating + pending, overrides, failures)
             }
                 .distinctUntilChanged()
                 .collect { explorer -> state.update { it.copy(languageExplorer = explorer) } }
+        }
+        scope.launch {
+            messageSocketManager.messageEdited.collectArrived { edited ->
+                if (edited.conversationId == conversationId) forgetManualChoice(edited.id)
+            }
         }
         scope.launch {
             messageSocketManager.translationReceived.collectArrived { event ->
@@ -103,6 +122,27 @@ internal class ChatTranslationController(
                 }
             }
         }
+    }
+
+    /**
+     * Le drapeau (ou la pastille) d'une langue de PISTE d'un vocal : il écrit sur le MÊME canal que les drapeaux de texte,
+     * de sorte que le texte, le karaoké et la voix suivent une seule langue. La sentinelle « Original » épingle la langue
+     * d'origine de CETTE pièce (sa transcription) : lever la bascule rendrait la main au Prisme, qui peut préférer la piste
+     * traduite. Un vocal protégé n'offre aucune piste.
+     */
+    fun selectAudioLanguage(messageId: String, code: String) {
+        val message = messages.value.firstOrNull { it.message.id == messageId }?.message ?: return
+        val voices = message.attachments.filter { it.mimeType?.startsWith("audio/") == true }
+        if (voices.isEmpty() || voices.any { VoiceQueueProtection.ofPiece(it, message) }) return
+        val target = AudioLanguageStripLaw.overrideFor(code)
+            ?: (voices.firstNotNullOfOrNull { it.transcription?.language.normalizedCode() } ?: message.originalLanguage.normalizedCode())
+            ?: return
+        mutableActiveLanguageOverride.update { it + (messageId to target) }
+    }
+
+    private fun forgetManualChoice(messageId: String) {
+        mutableShowingOriginal.update { it - messageId }
+        mutableActiveLanguageOverride.update { it - messageId }
     }
 
     fun toggleShowOriginal(messageId: String) {
@@ -181,6 +221,7 @@ internal class ChatTranslationController(
     fun requestAudioTranslation(messageId: String, attachmentId: String, language: String) {
         val request = requestAttachmentTranslation ?: return
         val target = language.normalizedCode() ?: return
+        val source = messages.value.firstOrNull { it.message.id == messageId }?.message?.let(ExplorerVoiceSource::of)?.sourceLanguage
         val key = TranslationRequestFailure.rowKey(messageId, target)
         if (key in state.value.translatingLanguages) return
         val refusal = refusalOrNull(messageId, target, TranslationRequestFailure.Kind.AUDIO)
@@ -192,7 +233,7 @@ internal class ChatTranslationController(
         state.update { it.copy(translatingLanguages = it.translatingLanguages + key) }
         scope.launch {
             try {
-                if (!request(attachmentId, target)) {
+                if (!request(messageId, attachmentId, target, source)) {
                     publishFailure(messageId, target, TranslationRequestFailure.Kind.AUDIO, null)
                 }
             } catch (cancellation: CancellationException) {
@@ -238,6 +279,44 @@ internal class ChatTranslationController(
      */
     fun openLanguageExplorer(messageId: String) {
         state.update { it.copy(explorerMessageId = messageId, actionMessageId = null) }
+        fetchAllTranslations(messageId)
+    }
+
+    private fun fetchAllTranslations(messageId: String) {
+        val fetch = fetchTranslations ?: return
+        val message = messages.value.firstOrNull { it.message.id == messageId }?.message ?: return
+        val current = state.value
+        if (current.isEndToEnd || !ServerTranslationAdmission.admits(message, current.encryptionMode)) return
+        scope.launch {
+            try {
+                fetch(messageId)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Unit
+            }
+        }
+    }
+
+    /**
+     * Toucher une ligne de l'explorateur : sélectionner ce qui existe (texte ou voix, un second toucher revient au Prisme),
+     * sinon demander la voix PAR PIÈCE pour un vocal ou le texte pour un message. Une ligne déjà en cours n'envoie rien.
+     */
+    fun onExplorerRowTap(messageId: String, code: String) {
+        val target = code.normalizedCode() ?: return
+        val explorer = state.value.languageExplorer ?: return
+        val row = explorer.rows.firstOrNull { it.code == target } ?: return
+        when (val action = LanguageExplorerRowAction.of(row, explorer.audioAttachmentId)) {
+            LanguageExplorerRowAction.Select ->
+                if (row.hasContent) onFlagTap(messageId, target) else toggleAudioOverride(messageId, target)
+            is LanguageExplorerRowAction.RequestAudio -> requestAudioTranslation(messageId, action.attachmentId, target)
+            LanguageExplorerRowAction.RequestText -> requestOnDemandTranslation(messageId, target)
+            LanguageExplorerRowAction.None -> Unit
+        }
+    }
+
+    private fun toggleAudioOverride(messageId: String, code: String) {
+        mutableActiveLanguageOverride.update { if (it[messageId] == code) it - messageId else it + (messageId to code) }
     }
 
     fun dismissLanguageExplorer() {
@@ -274,14 +353,17 @@ internal class ChatTranslationController(
     ): MessageLanguageExplorer? {
         val id = explorerMessageId ?: return null
         val message = loaded.firstOrNull { it.message.id == id }?.message ?: return null
-        val prefix = "$id|"
-        val translatingCodes = translating
-            .filter { it.startsWith(prefix) }
-            .map { it.removePrefix(prefix) }
+        val voiceId = ExplorerVoiceSource.of(message)?.attachmentId
+        val translatingCodes = listOfNotNull("$id|", voiceId?.let { "$it|" })
+            .flatMap { prefix -> translating.filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) } }
             .toSet()
+        val voice = ExplorerVoiceSource.of(message)
         return MessageDetailExplorer.build(
             originalLanguage = message.originalLanguage,
             content = message.content,
+            transcription = voice?.transcription,
+            audioTranslations = voice?.tracks.orEmpty(),
+            audioAttachmentId = voice?.attachmentId,
             translations = message.translations,
             preferences = user ?: EmptyContentPreferences,
             translatingCodes = translatingCodes,

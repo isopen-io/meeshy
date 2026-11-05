@@ -2,7 +2,12 @@ package me.meeshy.ui.component.focal
 
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -61,5 +66,16 @@ class FocalLongMessageTest {
 
         assertThat(toggled).isEqualTo(1)
         compose.onNodeWithText(long).assertIsDisplayed()
+    }
+
+    @Test
+    fun `le lien annonce son etat et offre une cible d'au moins 48 dp`() {
+        compose.setContent {
+            FocalLongMessage("m1", long, Color.Blue, expansion = FlatRowExpansion(isExpanded = false) {}) { Text(it) }
+        }
+
+        compose.onNodeWithText("Read more")
+            .assertHeightIsAtLeast(48.dp)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed"))
     }
 }

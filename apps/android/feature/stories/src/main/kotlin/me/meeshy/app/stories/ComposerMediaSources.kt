@@ -82,7 +82,7 @@ internal fun MediaSourcesAnchor(
     }
 }
 
-private fun ComposerMediaSource.labelRes(): Int = when (this) {
+internal fun ComposerMediaSource.labelRes(): Int = when (this) {
     ComposerMediaSource.CAMERA -> R.string.composer_media_from_camera
     ComposerMediaSource.PHOTO_LIBRARY -> R.string.composer_media_from_library
     ComposerMediaSource.FILES -> R.string.composer_media_from_files

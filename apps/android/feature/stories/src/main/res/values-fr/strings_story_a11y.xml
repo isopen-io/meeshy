@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="story_a11y_pause">Pause</string>
+    <string name="story_a11y_resume">Reprendre la lecture</string>
+    <string name="story_a11y_hint">Menu d’actions : story suivante, story précédente, pause, plein écran, fermer</string>
+</resources>

@@ -1,5 +1,6 @@
 package me.meeshy.app.game.progression
 
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -26,6 +28,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -42,6 +45,8 @@ import me.meeshy.sdk.model.game.GameNumberFormat
 import me.meeshy.sdk.model.game.engagement.BadgeGuideFamilyGroup
 import me.meeshy.sdk.model.game.engagement.BadgeGuideResolver
 import me.meeshy.sdk.model.game.engagement.GameBadgeTiers
+import me.meeshy.sdk.model.game.rules.GameRulesFocus
+import kotlinx.coroutines.delay
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.game.GameMedalFamily
 import me.meeshy.ui.component.game.GameMedalGlyph
@@ -69,22 +74,34 @@ enum class GameRulesSection(val wire: String) {
  * ([focused]), elle y défile ; sans section, elle s'ouvre en haut.
  */
 @Composable
-fun GameRulesScreen(onBack: () -> Unit, focused: GameRulesSection? = null) {
+fun GameRulesScreen(onBack: () -> Unit, focused: GameRulesSection? = null, focusedRule: Int? = null) {
     val scroll = rememberScrollState()
     val reduceMotion = LocalReduceMotion.current
+    val density = LocalDensity.current
+    val viewportPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     var topY by remember { mutableStateOf<Float?>(null) }
     var badgesY by remember { mutableStateOf<Float?>(null) }
+    var rulesY by remember { mutableStateOf<Float?>(null) }
+    val ruleYs = remember { mutableStateMapOf<Int, Float>() }
+    var highlighted by remember { mutableStateOf<Int?>(null) }
     var focusDone by remember { mutableStateOf(false) }
-    LaunchedEffect(focused, topY, badgesY) {
+    val anchorPx = viewportPx * GameRulesFocus.ANCHOR
+    LaunchedEffect(focused, focusedRule, topY, badgesY, rulesY, ruleYs.size) {
         if (focusDone) return@LaunchedEffect
         val top = topY ?: return@LaunchedEffect
-        val target = when (focused) {
-            GameRulesSection.Badges -> badgesY
-            null -> null
+        val target = when {
+            focused == GameRulesSection.Badges -> badgesY
+            focusedRule != null -> rulesY?.let { list -> ruleYs[focusedRule]?.let { list + it } }
+            else -> null
         } ?: return@LaunchedEffect
-        val offset = (target - top).toInt().coerceAtLeast(0)
-        if (reduceMotion) scroll.scrollTo(offset) else scroll.animateScrollTo(offset)
         focusDone = true
+        val offset = (target - top - anchorPx).toInt().coerceAtLeast(0)
+        if (focused == null && focusedRule != null) highlighted = focusedRule
+        if (reduceMotion) scroll.scrollTo(offset) else scroll.animateScrollTo(offset, tween(GameRulesFocus.SCROLL_MILLIS))
+        if (highlighted != null) {
+            delay(GameRulesFocus.HOLD_MILLIS.toLong())
+            highlighted = null
+        }
     }
     GamePageScaffold(
         title = stringResource(R.string.game_rules_page_title),
@@ -94,7 +111,12 @@ fun GameRulesScreen(onBack: () -> Unit, focused: GameRulesSection? = null) {
         scroll = scroll,
     ) {
         RulesIntro(Modifier.onGloballyPositioned { topY = it.positionInParent().y })
-        RulesList(Modifier.padding(top = MeeshySpacing.md))
+        RulesList(
+            Modifier.padding(top = MeeshySpacing.md).onGloballyPositioned { rulesY = it.positionInParent().y },
+            highlighted = highlighted,
+            reduceMotion = reduceMotion,
+            onRulePositioned = { index, y -> ruleYs[index] = y },
+        )
         RulesGlossary(Modifier.padding(top = MeeshySpacing.md))
         Box(Modifier.padding(top = MeeshySpacing.md).onGloballyPositioned { badgesY = it.positionInParent().y }) {
             RulesBadgesSection()

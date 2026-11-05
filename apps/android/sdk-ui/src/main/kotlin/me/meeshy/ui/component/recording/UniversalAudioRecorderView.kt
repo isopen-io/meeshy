@@ -50,6 +50,9 @@ import me.meeshy.sdk.model.recording.RecorderScreenState
 import me.meeshy.sdk.playback.AudioPlaybackEngine
 import me.meeshy.sdk.recording.AudioRecordingProviding
 import me.meeshy.ui.R
+import me.meeshy.ui.component.audio.editor.AudioEditorHost
+import me.meeshy.ui.component.audio.editor.LocalAudioEditorHost
+import me.meeshy.ui.component.audio.editor.NoAudioEditorHost
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.openAppSettings
@@ -94,6 +97,8 @@ public fun UniversalAudioRecorderView(
     val context = LocalContext.current
     val tokens = MeeshyTheme.tokens
     val take = handle.take
+    val editor = LocalAudioEditorHost.current
+    val edit = onEdit ?: editorEntry(editor, onComplete)
     Box(
         modifier
             .fillMaxSize()
@@ -117,7 +122,7 @@ public fun UniversalAudioRecorderView(
                         engine = playback,
                         onAccept = { onComplete(recorded) },
                         onRedo = handle::redo,
-                        onEdit = onEdit?.let { edit -> { edit(recorded) } },
+                        onEdit = edit?.let { open -> { open(recorded) } },
                     )
                 } else {
                     RecorderCenter(handle, accent)
@@ -130,6 +135,24 @@ public fun UniversalAudioRecorderView(
             }
         }
         PermissionFlowHost(permissions, accent = accent)
+    }
+}
+
+/**
+ * Le bouton « éditer » de l'aperçu ouvre l'éditeur audio plein écran quand l'application en fournit un
+ * (absent sinon, jamais grisé) : l'audio confirmé remplace la prise et l'enregistreur se conclut.
+ */
+private fun editorEntry(editor: AudioEditorHost, onComplete: (RecordedAudio) -> Unit): ((RecordedAudio) -> Unit)? {
+    if (editor === NoAudioEditorHost) return null
+    return { recorded ->
+        editor.open(
+            source = recorded.file,
+            onConfirm = { edited ->
+                val mime = if (edited.file.extension == "m4a") "audio/mp4" else recorded.mimeType
+                onComplete(RecordedAudio(edited.file, edited.durationSeconds, emptyList(), mime))
+            },
+            onCancel = {},
+        )
     }
 }
 

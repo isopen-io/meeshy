@@ -17,9 +17,13 @@ internal data class UnreadWidgetPresentation(
         /** Sans session : jamais le total du compte sortant. */
         fun signedOut(): UnreadWidgetPresentation = UnreadWidgetPresentation(count = 0, hasUnread = false)
 
-        /** La MEME formule que le badge et l'onglet : les autres conversations que l'ouverte. */
-        fun fromCounts(counts: Map<String, Int>, open: Set<String>): UnreadWidgetPresentation =
-            from(UnreadRules.totalConversationsUnread(counts, open))
+        /** La MEME formule que le badge et l'onglet : les autres conversations que l'ouverte, hors sourdines (iOS). */
+        fun fromCounts(
+            counts: Map<String, Int>,
+            open: Set<String>,
+            muted: Set<String> = emptySet(),
+        ): UnreadWidgetPresentation =
+            from(UnreadRules.totalConversationsUnread(counts.filterKeys { it !in muted }, open))
 
         fun from(totalUnread: Int): UnreadWidgetPresentation {
             val clamped = totalUnread.coerceAtLeast(0)

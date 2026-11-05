@@ -5,269 +5,13 @@ import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
-// **Ce que le meuble MONTE** — les trois surfaces, l'accessoire d'en-tête de
-// l'atelier et le calque de description. Extrait de `MeeshyComposerHost.swift`
+// **Ce que le meuble MONTE** — la scène, le mood et le calque de description. Extrait de `MeeshyComposerHost.swift`
 // au #4102 ; le contrat du découpage est écrit en tête de ce fichier-là.
 
 extension MeeshyComposerHost {
 
     // MARK: - La scène
 
-    /// L'atelier du SDK, monté tel quel — la scène vit dedans.
-    ///
-    /// Périmètre CONSIGNÉ de C2 : la zone contextuelle reste celle de l'atelier
-    /// existant. Le host ne lui impose pas ses capacités par une API neuve ; il
-    /// gouverne ce que LUI monte autour. Passer des capacités à l'atelier
-    /// appartient à l'écriture v3 native, hors de ce lot.
-    ///
-    /// **Le plateau n'est plus monté ICI depuis le lot 4.7.** Il coiffe les
-    /// trois surfaces depuis le `body`, sous `paintsFormatFan` : le tenir dans
-    /// ce bloc le réservait de fait à la scène, et le chip « Post » d'une
-    /// republication de mood n'existait alors sur aucun écran. La disposition
-    /// visuelle de la scène n'a pas changé pour autant — le `body` empile déjà
-    /// le plateau au-dessus de la surface.
-    ///
-    /// Les cinq fournisseurs sont posés SUR l'atelier, au plus près de son
-    /// montage : c'est la forme que `AppInitWireupTests` compte, site par site.
-    var composerSurface: some View {
-        StoryComposerView(
-            viewModel: viewModel,
-            initialVisibility: initialVisibility,
-            // **Les deux moitiés de l'audience d'un contenu REPRIS** (#5053).
-            //
-            // Elles étaient le troisième des trois manques que `ComposerIntent`
-            // énumérait pour router `.repost` vers l'atelier nu : « il ne passe
-            // ni `allowedVisibilities` ni `initialVisibilityUserIds` à
-            // l'atelier, si bien que le plafond d'audience du repost (loi 10)
-            // tomberait EN SILENCE ».
-            //
-            // Le mot est SILENCE : un plafond absent ne rougit pas, il offre
-            // simplement une audience de plus, que l'auteur choisit et que le
-            // serveur refuse ensuite — 403 `REPOST_AUDIENCE_WIDENING`, après
-            // que la composition est faite.
-            //
-            // Les ids voyagent AVEC le plafond, jamais séparément : une
-            // audience `ONLY` sans sa liste est une audience VIDE, et le repost
-            // ne serait visible de personne sans que rien ne le dise.
-            initialVisibilityUserIds: hydration?.initialVisibilityUserIds ?? [],
-            allowedVisibilities: hydration?.allowedVisibilities,
-            chromeOwner: chromeOwner,
-            // #4135 — sans elle, `chromeOwner == .host` laisserait la scène
-            // SANS aucun chemin de départ : l'atelier n'assemble plus ses
-            // commandes, et le socle n'aurait personne à presser.
-            publishTrigger: publishTrigger,
-            publishTargetType: selectedFormat.postType,
-            // **La remise passe par le meuble, pour y GREFFER les légendes**
-            // (#4890) : il ne publie pas, il complète la charge de l'atelier de
-            // sa carte de légendes (`accessibilityCarryingComposerCaptions`,
-            // site UNIQUE de la greffe).
-            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs,
-                                        loadedAudioURLs, loadedStickerAnimations, originalLanguage,
-                                        visibility, visibilityUserIds, draftId, references,
-                                        accessibility, targetType in
-                // Une remise par format coché (#13920) ; un post ou un réel de M
-                // scènes part en UNE publication (#8520).
-                let remises = atelierFanOut.take(served: targetType, alsoAsReel: accessibility.alsoAsReel)
-                return ComposerSeveralFormats.relay(remises, staysOnAtelier: {
-                    atelierHandOffStaysOnAtelier(targetType: $0, sceneCount: slides.count)
-                }) { remise in
-                    let charge = ComposerSeveralFormats.slides(slides, for: remise, among: remises, postText: documentText,
-                                                               currentSlideId: viewModel.currentSlide.id)
-                    return onPublishAllInBackground(
-                        charge, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations,
-                        originalLanguage, visibility, visibilityUserIds, draftId, references,
-                        accessibilityCarryingComposerCaptions(accessibility, slides: charge)
-                            .carryingAlsoAsReel(remise.alsoAsReel),
-                        remise.format.postType)
-                }
-            },
-            onPreview: onPreview,
-            onDismiss: onDismiss,
-            // **La vignette d'une slide ouvre son FOND** (#5041, directive
-            // porteur : « Longpress editer sur la miniature des slide permet
-            // d'ouvrir le background »).
-            //
-            // Le MÊME site que toutes les autres portes de l'éditeur d'objet —
-            // `openObjectEditor` est l'unique façon d'ouvrir un objet, quelle
-            // que soit la porte, et recopier ici ce qu'il contient est
-            // exactement ce qui a fait diverger deux chemins au #4634.
-            //
-            // Sa PRÉSENCE gouverne l'affordance : `SlideThumbEditAffordance` lit
-            // `onEditSceneObject != nil` pour décider si l'entrée existe. Un
-            // hôte qui ne le branche pas ne voit aucun « Éditer le fond »,
-            // plutôt qu'une entrée qui aurait l'air de marcher jusqu'au tap.
-            onEditSceneObject: { openObjectEditor($0) }
-        )
-        // **Les six magasins ont MONTÉ D'UN CRAN le 2026-09-05** — ils sont
-        // désormais posés dans `surfaceWithIntakePortals`, AU-DESSUS du
-        // `.sheet` qui présente les portails. La raison est dans
-        // `MeeshyComposerHost+Portals`, à leur nouveau site.
-        //
-        // En une phrase : l'environnement descend, et une feuille présentée
-        // PLUS HAUT que l'injecteur ne le voit pas. La palette de stickers
-        // avait perdu ses sections « Lieu » et « Mes stickers » sans qu'aucune
-        // ligne ne soit fausse.
-        // **L'icône de description DESCEND dans la rangée d'outils** (#4136,
-        // directive porteur 2026-08-28). Elle vivait dans la rangée haute
-        // depuis #4124, où elle avait été posée pour une raison de PLACE : à
-        // droite, le groupe d'actions passait à cinq pastilles et l'audience se
-        // tronquait en « F ». Cette raison est éteinte — le socle porte
-        // désormais l'audience, l'œil et la flèche (#4135), et la rangée haute
-        // n'a plus que la croix, le type et le `⋯`.
-        //
-        // Le déplacement est un CHOIX, pas un effet de bord : la description
-        // vise la SLIDE, comme les six outils visent la scène. De gauche à
-        // droite, la rangée descend les niveaux du modèle — le même ordre que
-        // le bas de l'écran tient de haut en bas. La laisser dans l'en-tête
-        // l'aurait rangée parmi ce qui QUALIFIE la publication, où elle n'est
-        // pas.
-        .storyComposerToolRowLeadingAccessory { atelierDescriptionButton }
-        // **Le volet de description, sous la scène de l'ATELIER** (#4742).
-        //
-        // Il est aussi monté par `ComposerSceneSurface` (la scène incrustée
-        // d'un post). Deux surfaces, un seul volet : c'est la même propriété
-        // qui les sert, et elles ne peuvent donc pas montrer deux descriptions
-        // différentes du même texte.
-        //
-        // La leçon coûte d'être dite : ce volet a d'abord été monté SEULEMENT
-        // dans `ComposerSceneSurface`, et il n'a jamais paru — une story se
-        // compose dans l'ATELIER, que ce flux monte à la place. Un composant
-        // écrit, câblé et invisible parce qu'il est posé sur la surface que
-        // l'écran n'affiche pas.
-        //
-        // Retiré de la place d'un rail de chaque côté (#8388) : les rails
-        // flottent sur la scène depuis #8370, et un volet pleine largeur
-        // recouvrait leurs dernières entrées.
-        .storyComposerBelowCanvasAccessory {
-            if let volet = sceneDescriptionPanel {
-                volet.padding(.horizontal, ComposerRailGeometry.lane)
-            }
-        }
-        // **#4361 — ce que le meuble occupe en bas, l'atelier le libère.** Le
-        // canvas se rétracte au-dessus de la saisie (`bottomInset` du solveur de
-        // cadrage), exactement comme il le fait déjà devant une band. `0` quand
-        // la saisie est fermée : la scène retrouve sa géométrie de repos.
-        // **La réserve vaut pour les DEUX zones d'écriture** (directive porteur
-        // 2026-09-05). Elle ne testait que `editsSceneDescription` : en mode
-        // CONTENU la scène ne se rétractait donc pas du tout, et la zone lui
-        // passait par-dessus — alors que la directive demande l'inverse, un
-        // retrait PLUS grand pour le contenu que pour la description.
-        //
-        // > Les deux zones écrivaient déjà la même hauteur mesurée
-        // > (`sceneDescriptionEditorHeight`, posée par leurs deux
-        // > `onHeightChange`). Seule la CONDITION qui la sert en avait oublié
-        // > une — le défaut ne se voyait donc ni dans la mesure, ni dans la
-        // > zone, mais dans le prédicat entre les deux.
-        //
-        // `textEditingZones` garantit qu'elles sont exclusives : la hauteur
-        // servie est toujours celle de la zone montée.
-        .storyComposerCanvasBottomReservation(canvasBottomReservation)
-    }
-
-    /// **Ce que le bas de l'écran occupe, et que le canvas doit libérer.**
-    ///
-    /// Les deux textes ne le prennent plus de la même façon depuis #6126, et
-    /// c'est ce que ce calcul rend visible :
-    ///
-    /// - **le CORPS du post** s'écrit dans une zone montée en bas ; ce qu'elle
-    ///   occupe est sa hauteur MESURÉE (`sceneDescriptionEditorHeight`), posée
-    ///   par son propre `onHeightChange` ;
-    /// - **la LÉGENDE n'en prend AUCUNE**, et c'est une mesure, pas un choix.
-    ///
-    /// ## Ce qui a été mesuré, et pourquoi la branche a disparu (#6126)
-    ///
-    /// Le lot avait d'abord câblé ici `keyboardTransition?.height` — la légende
-    /// s'écrivant en place, ce qui menace de la couvrir est le CLAVIER et non
-    /// une zone dont on mesure la hauteur. Le raisonnement se tenait ; **il
-    /// était faux deux fois**, et seul le simulateur pouvait le dire :
-    ///
-    /// 1. **la légende n'a pas besoin d'être soulevée.** `StoryComposerView`
-    ///    déclare `.ignoresSafeArea(.keyboard)`, ce qui empêche le CANVAS d'être
-    ///    poussé — mais la colonne du meuble, elle, est bien comprimée par la
-    ///    zone sûre du clavier, et la couche de contrôles ancrée en bas remonte
-    ///    avec elle. Capture 2026-09-12 11:12 : clavier levé, champ au tiers
-    ///    haut de l'écran, coche et capsule de langue visibles.
-    /// 2. **la réserve n'avait de toute façon aucun effet sur ce chemin.**
-    ///    Forcée à une constante de 260 pt, l'écran est resté STRICTEMENT
-    ///    identique (captures 11:12 et 11:13, binaire réinstallé et horodaté
-    ///    entre les deux). `composerSurface` — qui porte
-    ///    `.storyComposerCanvasBottomReservation(…)` — n'est pas le montage de
-    ///    l'atelier Story.
-    ///
-    /// > Une réserve qu'on ne peut pas voir agir n'est pas une précaution, c'est
-    /// > un contrôle inerte (loi 4) — et elle aurait fait croire, à la relecture,
-    /// > que la légende est protégée par elle.
-    ///
-    /// Le CORPS du post garde la sienne, telle qu'elle était avant le lot. Si
-    /// elle est inerte elle aussi, c'est un défaut ANTÉRIEUR et distinct : il se
-    /// mesure et se corrige à part.
-    var canvasBottomReservation: CGFloat {
-        if editsPostContent { return sceneDescriptionEditorHeight }
-        return 0
-    }
-
-    /// **L'icône qui ouvre la description de la slide** (#4124).
-    ///
-    /// Elle remplace le « Touchez pour écrire » qui occupait le bas de l'écran
-    /// en permanence — un calque de lecture y prenait la place que la scène
-    /// centrée réclame, pour un texte que l'auteur ne regarde pas la plupart du
-    /// temps.
-    ///
-    /// Le glyphe dit ce qu'il ouvre : `text.alignleft` est le PARAGRAPHE, pas
-    /// un crayon (qui aurait dit « modifier la scène ») ni une bulle (qui aurait
-    /// dit « commenter »).
-    ///
-    /// **Le point signale un texte DÉJÀ écrit**, sans le lire : un contrôle qui
-    /// n'affiche jamais son état oblige à l'ouvrir pour savoir s'il est vide.
-    ///
-    /// **Elle se pose du côté qui QUALIFIE**, avec le type — pas dans le groupe
-    /// d'actions. Ce n'est pas un rangement : posée à droite, elle portait ce
-    /// groupe à cinq pastilles sur 402 pt, et la mesure a montré le sélecteur
-    /// d'audience tronqué en « F » avec l'icône à moitié sous la flèche. Un
-    /// ATTRIBUT rangé parmi les ACTIONS déborde.
-    var atelierDescriptionButton: some View {
-        Button {
-            HapticFeedback.light()
-            openSceneDescriptionEditing()
-        } label: {
-            // **La FORME est celle de la rangée, pas celle de l'en-tête**
-            // (#4136). Elle portait une pastille de verre, juste parce qu'elle
-            // vivait parmi les commandes de la rangée haute, qui en sont toutes.
-            // Descendue dans la rangée d'outils, cette pastille faisait d'elle
-            // la seule entrée cerclée d'une rangée qu'on venait précisément
-            // d'unifier — mesuré à l'écran, et voyant.
-            //
-            // **`glassControlForeground()`, jamais `textPrimary(isDark: true)`**
-            // — et la différence se voit. Le chrome du document vit sur un
-            // plateau SOMBRE en permanence, donc y coder « clair » marchait ;
-            // celui de l'atelier suit `canvasChromeScheme`, qui bascule avec
-            // le FOND du canvas. Un glyphe clair posé sur un fond de scène
-            // pastel disparaît, mesuré à l'écran.
-            Image(systemName: "text.alignleft")
-                .font(.title3)
-                .symbolRenderingMode(.hierarchical)
-                .glassControlForeground()
-                // 44 pt de cible malgré le glyphe nu — le débord est invisible,
-                // la même raison qui donne à `ComposerToolRow` son `hitSide`.
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-                .overlay(alignment: .topTrailing) {
-                    if !documentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        // **Le point signale un texte DÉJÀ écrit**, sans le lire :
-                        // un contrôle qui n'affiche jamais son état oblige à
-                        // l'ouvrir pour savoir s'il est vide.
-                        Circle()
-                            .fill(MeeshyColors.indigo400)
-                            .frame(width: 7, height: 7)
-                            .offset(x: -6, y: 6)
-                    }
-                }
-        }
-        .accessibilityLabel(Text(ComposerDescriptionCopy.openLayer))
-        .accessibilityValue(Text(documentText.isEmpty
-                                 ? ComposerDescriptionCopy.amorce
-                                 : documentText))
-    }
     // **La bande de mentions du texte de scène est partie à l'ÉDITEUR**
     // (2026-09-05). Elle interprétait la frappe INLINE sur le canvas de cette
     // surface ; or la frappe n'a plus lieu ici. `enterTextEditingMode` n'a que
@@ -342,6 +86,7 @@ extension MeeshyComposerHost {
             // surface, aucun overlay posé sur elle ne pouvait le couvrir.
             cameraStage: sceneCameraStage,
             quickCaptureHint: sceneQuickCaptureHint,
+            quotedPublication: hydration?.quotedPublication,
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
             // écrit dans un corps de vue ne s'interroge qu'à la garde de
@@ -431,14 +176,7 @@ extension MeeshyComposerHost {
             band: ComposerSceneBand.opened(requestedSceneBand,
                                            served: openableSceneBands),
             bandColors: StoryBackgroundPalette.colors,
-            onPickBandColor: { hex in
-                documentBackground = hex
-                viewModel.applyBackground(hex: hex)
-                // La bande se referme sur le choix : la couleur est visible sur
-                // la scène juste au-dessus, donc la garder ouverte occuperait
-                // l'espace pour montrer ce que l'écran montre déjà.
-                requestedSceneBand = nil
-            },
+            onPickBandColor: { pickSceneBandColor($0) },
             bandOpeningEffect: sceneTransitions.opening,
             // **La bande NE se referme PAS sur un effet d'ouverture**, et c'est
             // la différence avec la couleur juste au-dessus : une couleur se
@@ -549,7 +287,6 @@ extension MeeshyComposerHost {
             // même résolveur, même loi, même capsule. Elle n'avait qu'un
             // consommateur, et la surface qu'une STORY monte n'était pas lui —
             // un fond posé sur une story jouait donc sans que rien ne le dise.
-            //
             // Il ne manquait ni composant, ni modèle, ni règle : seulement ce
             // câblage. C'est le motif que le composer répète — une feature
             // « absente » y est presque toujours une feature non branchée.
@@ -578,6 +315,7 @@ extension MeeshyComposerHost {
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
+        .environment(\.sceneAudioChipElapsed, .composerTimeline(viewModel.timelineViewModel))
         .adaptiveOnChange(of: viewModel.textEditingMode.activeTextId) { _, id in
             if id == nil { settleTextSceneAfterEditing() }
         }
@@ -719,7 +457,6 @@ extension MeeshyComposerHost {
             placeholder: ComposerDocumentCopy.placeholder,
             plateauTint: tint.color,
             onDone: { editsPostContent = false },
-            onHeightChange: { sceneDescriptionEditorHeight = $0 },
             languageAccessory: AnyView(documentLanguageCapsule),
             // **La coche ne peut pas s'annoncer « Terminer la description »
             // ici** (#4890) : elle valide le CORPS du post. `common.done`
@@ -906,12 +643,7 @@ extension MeeshyComposerHost {
         // s'ouvre désormais par l'icône de la rangée haute, par-dessus tout
         // (`sceneDescriptionLayer`), et n'occupe l'écran que quand on
         // l'écrit.
-        // `assembles(.publish)` dit que l'ATELIER peint la flèche. Le socle
-        // peint donc les MÊMES trois zones seulement quand l'atelier les a
-        // cédées : deux barres de publication, dont une inerte, seraient
-        // une régression sèche sur la surface de création la plus utilisée.
-        //
-        // `!paintedSocleZones.isEmpty` s'y ajoute depuis le 2026-08-28 : le
+        // `!paintedSocleZones.isEmpty` depuis le 2026-08-28 : le
         // mood a cédé sa SEULE zone (`.publish`) à son propre en-tête
         // (`ComposerMoodSurface.header`), et sans cette garde le socle se
         // peindrait quand même — une `HStack` vide, juste un `Spacer` sous
@@ -925,7 +657,7 @@ extension MeeshyComposerHost {
         // scène se recadre au-dessus de lui par la zone sûre du bas.
         if let effet = activeSceneEffect {
             sceneEffectCarousel(effet)
-        } else if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
+        } else if !paintedSocleZones.isEmpty {
             let servi = sceneSelectionRelay.publicationIsShown(toolOwnsScreen: sceneToolOwnsScreen)
             socleNode
                 .opacity(servi ? 1 : 0)

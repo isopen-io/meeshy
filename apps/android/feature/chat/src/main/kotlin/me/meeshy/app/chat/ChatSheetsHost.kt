@@ -1,11 +1,7 @@
 package me.meeshy.app.chat
 
 import android.widget.Toast
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
@@ -33,7 +29,6 @@ import me.meeshy.app.chat.export.CardExportSheet
 import me.meeshy.app.chat.export.DiscussionCardExportSheet
 import me.meeshy.app.chat.fileviewer.FileViewerHost
 import me.meeshy.app.chat.fileviewer.FileViewerRequest
-import me.meeshy.app.chat.mediahub.ConversationMediaHubContent
 import me.meeshy.app.chat.mediahub.ConversationMediaHubSheet
 import me.meeshy.app.chat.options.ConversationOptionsExit
 import me.meeshy.app.chat.options.rememberConversationOptionsSlots
@@ -57,7 +52,6 @@ import me.meeshy.ui.component.bubble.LocalBubbleFileTransfers
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
-import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.component.bubble.BubbleContent
 
@@ -276,42 +270,19 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                 if (exit != ConversationOptionsExit.BLOCKED) host.navigation.onBack()
             },
         )
-        // Les onglets d'iOS (#13785) : Membres, Médias, Stats (l'analyse en tête, comme le tableau de bord iOS), Options.
-        val analysisEntry = ConversationInfoEntry(
-            MeeshyIcons.Sparkles,
-            stringResource(R.string.conversation_analysis_title),
-            openFrom { sheets.analysis = true },
-        )
-        val tabs = ConversationInfoTabSlots(
-            members = { modifier -> ConversationMembersContent(state.conversationId, accentColor, modifier) },
-            media = { modifier ->
-                ConversationMediaHubContent(
-                    conversationId = state.conversationId,
-                    accentColor = accentColor,
-                    isEndToEnd = state.isEndToEnd,
-                    conversationTitle = state.conversationTitle,
-                    onGoToMessage = { messageId ->
-                        sheets.info = false
-                        actions.scrollToMessage(messageId)
-                    },
-                    onOpenFile = openHubFile,
-                    modifier = modifier,
-                )
+        // Les onglets d'iOS (#13785) : Membres, Médias, Stats (le tableau de bord unifié, analyse comprise), Options.
+        val tabs = conversationInfoTabSlots(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            isEndToEnd = state.isEndToEnd,
+            conversationTitle = state.conversationTitle,
+            clientMessages = rememberClientStatMessages(state.messages),
+            onGoToMessage = { messageId ->
+                sheets.info = false
+                actions.scrollToMessage(messageId)
             },
-            stats = { modifier ->
-                ConversationStatsContent(
-                    conversationId = state.conversationId,
-                    accentColor = accentColor,
-                    clientMessages = rememberClientStatMessages(state.messages),
-                    modifier = modifier,
-                    header = { ConversationInfoEntryRow(analysisEntry, accentColor) },
-                )
-            },
-            options = { modifier ->
-                Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.lg).padding(bottom = MeeshySpacing.xl)) {
-                    options.body()
-                }
-            },
+            onOpenFile = openHubFile,
+            options = options,
         )
         val infoViewModel: ConversationInfoViewModel = hiltViewModel(key = "conversation-info")
         LaunchedEffect(state.conversationId) { if (state.conversationId.isNotBlank()) infoViewModel.start(state.conversationId) }
@@ -340,7 +311,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     if (sheets.encryption) {
         ConversationEncryptionSheet(
             conversationId = state.conversationId,
-            isDirect = !state.isGroup,
+            isDirect = state.isKnownDirect,
             accentColor = accentColor,
             onDismiss = { sheets.encryption = false },
         )
@@ -401,14 +372,6 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         )
     }
 
-    if (sheets.analysis) {
-        ConversationAnalysisSheet(
-            conversationId = state.conversationId,
-            accentColor = accentColor,
-            onDismiss = { sheets.analysis = false },
-        )
-    }
-
     val detailRoute = MessageDetailRoutes.fromChatState(
         reportMessageId = state.reportForm?.messageId,
         languagesMessageId = state.explorerMessageId.takeIf { state.languageExplorer != null },
@@ -434,7 +397,13 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
                     is MessageDetailRoute.Sentiment -> MessageSentimentSheet(target, accentColor, sheetModifier)
                     is MessageDetailRoute.Map -> MessageMapSheet(target, state.accentColorHex, sheetModifier)
                     is MessageDetailRoute.Transcription ->
-                        MessageTranscriptionSheet(route.messageId, actions.attachmentsOf(route.messageId), accentColor, sheetModifier)
+                        MessageTranscriptionSheet(
+                            messageId = route.messageId,
+                            attachments = actions.attachmentsOf(route.messageId),
+                            isProtected = actions.transcriptionPlaybackProtected(route.messageId),
+                            accentColor = accentColor,
+                            modifier = sheetModifier,
+                        )
                     else -> Unit
                 }
             }
@@ -455,13 +424,36 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
         },
         languages = { route ->
             state.languageExplorer?.let { explorer ->
+                val voiceBubble = state.messages.firstOrNull { it.messageId == route.messageId }
+                val audioInput = remember(voiceBubble, explorer, state.encryptionMode, state.isEndToEnd) {
+                    voiceBubble?.let {
+                        AudioTranslationInputs.of(
+                            bubble = it,
+                            attachments = actions.attachmentsOf(route.messageId),
+                            explorerLanguages = explorer.rows.map { row -> row.code },
+                            conversationEncryptionMode = state.encryptionMode,
+                            conversationShownSealed = state.isEndToEnd,
+                        )
+                    }
+                }
+                var audioSheetOpen by rememberSaveable(route.messageId) { mutableStateOf(false) }
                 MessageLanguageExplorerSheet(
                     explorer = explorer,
                     accentColor = accentColor,
-                    onSelectLanguage = { code -> actions.onFlagTap(route.messageId, code) },
+                    onSelectLanguage = { code -> actions.onExplorerRowTap(route.messageId, code) },
                     onRetranslate = { code -> actions.onExplorerRetranslate(route.messageId, code) },
                     onDismiss = actions.dismissLanguageExplorer,
+                    onTranslateAudio = audioInput?.let { { audioSheetOpen = true } },
                 )
+                if (audioSheetOpen && audioInput != null) {
+                    AudioTranslationSheet(
+                        input = audioInput,
+                        accentColor = accentColor,
+                        onPlayTrack = actions.onAudioLanguage,
+                        onOpenConsent = null,
+                        onDismiss = { audioSheetOpen = false },
+                    )
+                }
             }
         },
         report = {
@@ -520,17 +512,7 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
 
     val replyThread = state.replyThreadOverlay
     if (replyThread != null) {
-        ModalBottomSheet(
-            onDismissRequest = actions.closeReplyThread,
-            containerColor = MeeshyTheme.tokens.backgroundPrimary,
-        ) {
-            ReplyThreadSheet(
-                overlay = replyThread,
-                accentColor = accentColor,
-                onReplyTap = actions.onReplyThreadReplyTap,
-                modifier = Modifier.navigationBarsPadding(),
-            )
-        }
+        ReplyThreadHost(state, replyThread.parentId, accentColor, actions.closeReplyThread)
     }
 
     val forward = state.forward

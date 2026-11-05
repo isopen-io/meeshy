@@ -30,6 +30,7 @@ internal class ConversationListObservers(
     private val categorySocketManager: CategorySocketManager,
     private val storyRepository: StoryRepository,
     private val statusBarCache: StatusBarCache,
+    private val sectionExpansion: ConversationSectionExpansionStore = ConversationSectionExpansionStore(),
 ) {
 
     /** Corpus vivant des categories : re-seme par le cache, plie par les evenements socket. */
@@ -42,14 +43,12 @@ internal class ConversationListObservers(
     fun startCategories() {
         scope.launch {
             categoryRepository.categoriesStream().collect { categories ->
-                categoryCatalog = UserCategoryCatalog.of(categories)
-                publishCategories()
+                adopt(UserCategoryCatalog.of(categories))
             }
         }
         scope.launch {
             categorySocketManager.categoryEvents.collect { event ->
-                categoryCatalog = categoryCatalog.apply(event)
-                publishCategories()
+                adopt(categoryCatalog.apply(event))
             }
         }
     }
@@ -61,7 +60,11 @@ internal class ConversationListObservers(
         paintMoodStatusesFromCache()
     }
 
-    private fun publishCategories() {
+    /** Adopte le nouveau catalogue ; un pli changé depuis un autre appareil s'applique à la mémoire de session. */
+    private fun adopt(next: UserCategoryCatalog) {
+        ConversationSectionExpansionStore.remoteChanges(categoryCatalog.sorted, next.sorted)
+            .forEach { (id, expanded) -> sectionExpansion.applyRemote(id, expanded) }
+        categoryCatalog = next
         state.update { it.copy(categories = categoryCatalog.sorted) }
     }
 

@@ -2,9 +2,6 @@ package me.meeshy.app.stories
 
 import android.content.Context
 import android.net.Uri
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,7 +11,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -100,7 +96,7 @@ internal class StorySceneCapture(
      * aucun pinceau, texte ni panneau ouvert.
      */
     fun offeredOn(state: StoryComposerUiState, somethingOpen: Boolean): Boolean = SceneQuickCapture.offers(
-        sceneIsBlank = state.deck.selectedSlide.isBlankScene && !state.isUploadingMedia,
+        sceneIsBlank = state.deck.selectedSlide.isBlankScene && !state.isPreparingMedia,
         armed = armed,
         toolIsOpen = somethingOpen || state.isDrawingActive || state.isEditingTextElement ||
             state.band.activeTool != null || state.selectedSceneObject != null,
@@ -161,9 +157,8 @@ private val SCENE_HINT_SHADOW = Shadow(color = Color.Black.copy(alpha = 0.45f), 
 
 /**
  * La ligne d'aide de la scène vide : une seule, discrète, à l'encre des contrôles posés sur la scène. Comme sur iOS
- * (`ComposerSceneQuickCaptureHint`), elle se pose au MILIEU de la scène, dans la zone libre : la marge latérale laisse la
- * colonne d'outils libre des deux côtés, et le bloc reste centré (#14496). Au bas, elle recouvrait le pied de la colonne
- * (« Texte du post », ⋯) dès que la scène raccourcit.
+ * (`ComposerSceneQuickCaptureHint`), elle se lit au MILIEU de la scène, sous l'invite qui la porte (#16204) — deux textes
+ * centrés au même point se superposaient. La marge latérale de l'invite laisse la colonne d'outils libre (#14496).
  */
 @Composable
 internal fun StorySceneCaptureHint(offer: SceneQuickCapture.Offer, modifier: Modifier = Modifier) {
@@ -171,19 +166,17 @@ internal fun StorySceneCaptureHint(offer: SceneQuickCapture.Offer, modifier: Mod
         SceneQuickCapture.Hint.TAP_OR_HOLD -> R.string.composer_capture_hint_tap_or_hold
         SceneQuickCapture.Hint.HOLD_TO_FILM -> R.string.composer_capture_hint_hold
     }
-    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(label),
-            style = MaterialTheme.typography.labelMedium.copy(shadow = SCENE_HINT_SHADOW),
-            color = Color.White.copy(alpha = 0.85f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = SCENE_HINT_RAIL_CLEARANCE),
-        )
-    }
+    Text(
+        text = stringResource(label),
+        style = MaterialTheme.typography.labelMedium.copy(shadow = SCENE_HINT_SHADOW),
+        color = Color.White.copy(alpha = 0.85f),
+        textAlign = TextAlign.Center,
+        modifier = modifier,
+    )
 }
 
 /** La place de la colonne d'outils au bord de la scène (retrait de 10 dp, cible de 48 dp), libre des deux côtés : iOS `railClearance`. */
-private val SCENE_HINT_RAIL_CLEARANCE = 64.dp
+internal val SCENE_HINT_RAIL_CLEARANCE = 64.dp
 
 /**
  * Suit le doigt qui a armé le viseur en tenant la scène (#13849) : posé sur le PARENT de la scène, ce suivi survit à la

@@ -4,6 +4,8 @@ import androidx.compose.runtime.Stable
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 
 /**
  * La prise que [ReelVideoSurface] tend à son hôte sur son lecteur vivant : de quoi dessiner une
@@ -28,6 +30,19 @@ public class ReelPlayerHandle internal constructor(private val player: Player) {
 
     public fun seekTo(positionMs: Long) {
         player.seekTo(positionMs)
+    }
+
+    /**
+     * Un seek TOLÉRANT, pour parcourir une vidéo en pause au rythme du doigt : un seek exact à chaque mouvement gèlerait
+     * sur la décompression du GOP. [endTolerantSeek] rend au lecteur son seek exact.
+     */
+    public fun seekTolerant(positionMs: Long, toleranceMs: Long) {
+        (player as? ExoPlayer)?.setSeekParameters(SeekParameters(toleranceMs, toleranceMs))
+        player.seekTo(positionMs)
+    }
+
+    public fun endTolerantSeek() {
+        (player as? ExoPlayer)?.setSeekParameters(SeekParameters.DEFAULT)
     }
 
     /** Appelle [onChange] à chaque bascule lecture/pause ; la valeur retournée se désabonne. */

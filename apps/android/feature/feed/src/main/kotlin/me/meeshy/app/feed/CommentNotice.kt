@@ -15,4 +15,9 @@ enum class CommentNotice(@StringRes val messageRes: Int) {
     DELETED(R.string.post_comments_deleted),
     DELETE_FAILED(R.string.post_comments_delete_error),
     MEDIA_FAILED(R.string.feed_composer_media_unusable),
+    EDIT_FAILED(R.string.comment_menu_edit_failed),
+    REPORTED(R.string.comment_menu_reported),
+    REPORT_FAILED(R.string.comment_menu_report_failed),
+    REMOVED(R.string.comment_menu_removed),
+    REMOVE_FAILED(R.string.comment_menu_remove_failed),
 }

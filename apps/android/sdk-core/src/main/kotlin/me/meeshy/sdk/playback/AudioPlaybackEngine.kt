@@ -29,11 +29,18 @@ public interface AudioPlaybackEngine {
     public val events: SharedFlow<AudioEngineEvent>
 
     /**
-     * Joue la piste réseau [url] (cache disque : un second passage hors ligne ne re-télécharge pas).
+     * Joue la piste réseau [url] (cache disque du compte : un second passage hors ligne ne re-télécharge
+     * pas, SAUF un vocal [isProtected], qui ne s'écrit jamais sur le disque). [isProtected] n'a pas de
+     * défaut : l'appelant dit toujours si le vocal est protégé, un oubli ne compile pas.
      * Rend `false` quand la garde d'appel refuse. Jouer B pendant que A joue arrête A et bascule
      * l'identifiant d'un seul geste.
      */
-    public fun play(attachmentId: String, url: String, origin: PlaybackCommandOrigin = PlaybackCommandOrigin.InApp): Boolean
+    public fun play(
+        attachmentId: String,
+        url: String,
+        origin: PlaybackCommandOrigin = PlaybackCommandOrigin.InApp,
+        isProtected: Boolean,
+    ): Boolean
 
     /** Joue un fichier local `file://` (vocal optimiste pas encore envoyé). */
     public fun playLocal(attachmentId: String, fileUri: String, origin: PlaybackCommandOrigin = PlaybackCommandOrigin.InApp): Boolean
@@ -58,4 +65,11 @@ public interface AudioPlaybackEngine {
 
     /** La langue de la piste ou de la transcription sous les yeux, déclarée par la vue. */
     public fun setConsumedLanguageProvider(provider: (() -> String?)?)
+
+    /**
+     * #15969 — le vocal chargé [fromAttachmentId] a été accusé : il s'appelle désormais [toAttachmentId] et se sert depuis
+     * [servedUrl]. La lecture continue telle quelle sous ce nom ; si la source qu'il lisait disparaît (copie locale rangée
+     * dans le cache à l'accusé), il est reciblé UNE fois, au même point, sur [servedUrl]. Une autre pièce : rien ne change.
+     */
+    public fun follow(fromAttachmentId: String, toAttachmentId: String, servedUrl: String, isProtected: Boolean) {}
 }

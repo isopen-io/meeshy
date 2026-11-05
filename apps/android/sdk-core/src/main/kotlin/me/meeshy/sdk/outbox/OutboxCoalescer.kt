@@ -50,6 +50,8 @@ public sealed interface CoalesceDecision {
  *   (each carries the full preference block — an offline toggle burst collapses to one PATCH);
  *   notification and privacy settings coalesce independently (distinct kinds share the settings
  *   lane but never supersede one another);
+ * - a repeated write of the same preference CATEGORY (target = the category's route name) keeps only the latest
+ *   snapshot; two categories never supersede one another;
  * - an edit of a message still queued for sending is folded INTO that send (one request carrying the final text);
  *   a delete of it cancels the send and any edit, a delete after an edit replaces the edit;
  * - « supprimer pour moi » / « restaurer » du même message sont deux états terminaux opposés : ils s'annulent ; un
@@ -87,6 +89,8 @@ public object OutboxCoalescer {
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_AUDIO_SETTINGS)
             OutboxKind.UPDATE_APPLICATION_SETTINGS ->
                 replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_APPLICATION_SETTINGS)
+            OutboxKind.UPDATE_PREFERENCE_CATEGORY ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.UPDATE_PREFERENCE_CATEGORY)
             OutboxKind.REACT_STORY -> replaceSameStoryEmoji(incoming, sameTarget)
             OutboxKind.ADD_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.REMOVE_REACTION)
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
@@ -108,6 +112,9 @@ public object OutboxCoalescer {
             OutboxKind.RESTORE_FOR_ME -> terminalToggle(incoming, sameTarget, OutboxKind.HIDE_FOR_ME, OutboxKind.RESTORE_FOR_ME)
             OutboxKind.MODERATION_DELETE -> replaceSameKind(incoming, sameTarget, OutboxKind.MODERATION_DELETE)
             OutboxKind.MARK_RECEIVED -> replaceSameKind(incoming, sameTarget, OutboxKind.MARK_RECEIVED)
+            OutboxKind.MARK_STORY_VIEWED -> replaceSameKind(incoming, sameTarget, OutboxKind.MARK_STORY_VIEWED)
+            OutboxKind.TOGGLE_LIKE_COMMENT -> toggleCommentLike(incoming, sameTarget)
+            OutboxKind.DELETE_COMMENT -> deleteComment(incoming, sameTarget)
             else -> CoalesceDecision.Enqueue(incoming)
         }
     }
@@ -218,6 +225,27 @@ public object OutboxCoalescer {
         val emoji = parseObject(incoming.payload)?.get("emoji") ?: return CoalesceDecision.Enqueue(incoming)
         val superseded = sameTarget
             .filter { it.kindEnum == OutboxKind.REACT_STORY && parseObject(it.payload)?.get("emoji") == emoji }
+            .map { it.cmid }
+        return if (superseded.isEmpty()) CoalesceDecision.Enqueue(incoming) else CoalesceDecision.Replace(superseded, incoming)
+    }
+
+    /**
+     * Le coeur d'un commentaire est un ÉTAT voulu ([ToggleLikeCommentPayload.liked]) : le geste inverse en file l'annule
+     * (le serveur n'a jamais rien su), le même geste répété ne garde que le dernier.
+     */
+    private fun toggleCommentLike(incoming: OutboxEntity, sameTarget: List<OutboxEntity>): CoalesceDecision {
+        val wanted = parseObject(incoming.payload)?.get("liked") ?: return CoalesceDecision.Enqueue(incoming)
+        val toggles = sameTarget.filter { it.kindEnum == OutboxKind.TOGGLE_LIKE_COMMENT }
+        val opposite = toggles.filter { parseObject(it.payload)?.get("liked") != wanted }.map { it.cmid }
+        if (opposite.isNotEmpty()) return CoalesceDecision.Annihilate(opposite)
+        val same = toggles.map { it.cmid }
+        return if (same.isEmpty()) CoalesceDecision.Enqueue(incoming) else CoalesceDecision.Replace(same, incoming)
+    }
+
+    /** Supprimer un commentaire rend ses coeurs en file sans objet : ils partent avec lui, un second ordre de suppression aussi. */
+    private fun deleteComment(incoming: OutboxEntity, sameTarget: List<OutboxEntity>): CoalesceDecision {
+        val superseded = sameTarget
+            .filter { it.kindEnum == OutboxKind.TOGGLE_LIKE_COMMENT || it.kindEnum == OutboxKind.DELETE_COMMENT }
             .map { it.cmid }
         return if (superseded.isEmpty()) CoalesceDecision.Enqueue(incoming) else CoalesceDecision.Replace(superseded, incoming)
     }

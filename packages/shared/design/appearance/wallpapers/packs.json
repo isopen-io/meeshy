@@ -463,5 +463,579 @@
         "description": "ضباب يتنفس، وفقاعات تصعد، وبتلات تتساقط."
       }
     }
+  },
+  {
+    "slug": "fonds-noel",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 5,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "1dc845ad72f8765d.webp",
+      "bytes": 868,
+      "sha256": "1dc845ad72f8765de86aba13800920a33942fe8850ec155c8a5fd7234394d18e"
+    },
+    "preview": null,
+    "contract": {
+      "src": "d937a1ec3f58d803.json",
+      "bytes": 2819,
+      "sha256": "d937a1ec3f58d8032e56d694896689342d1f56d05b8903bb1b2ab8907789e6e6"
+    },
+    "strings": {
+      "fr": {
+        "src": "3cdf28bb60c7be0e.json",
+        "bytes": 138,
+        "sha256": "3cdf28bb60c7be0ee4108b55fb793503694b8d87d78596f96ee385ce607aa3c5"
+      },
+      "en": {
+        "src": "5e9a2e2163da7d2e.json",
+        "bytes": 129,
+        "sha256": "5e9a2e2163da7d2e57a0b84689779c4eb01acd6db70308ce6f167c71d9b01df6"
+      },
+      "es": {
+        "src": "5c86c8a14a0cec1b.json",
+        "bytes": 132,
+        "sha256": "5c86c8a14a0cec1bb5100b80acd82fcb85a2d184201d94aab5aa6cb2d916e6dd"
+      },
+      "pt": {
+        "src": "da444d0ff6320a45.json",
+        "bytes": 139,
+        "sha256": "da444d0ff6320a451e45f6f234aa052698aa7b424703775f7880e059f1a1deb6"
+      },
+      "de": {
+        "src": "53b8e81e70aa8fc2.json",
+        "bytes": 130,
+        "sha256": "53b8e81e70aa8fc2bb0af7a344255da9c17dfee2b65d7bf3b5761b63000137e0"
+      },
+      "it": {
+        "src": "a55d0dbde042a535.json",
+        "bytes": 136,
+        "sha256": "a55d0dbde042a535aa35cb71c73d799d84aed066f5acbe71c2d7d7db79d1d3ca"
+      },
+      "ar": {
+        "src": "90c5f838279ef941.json",
+        "bytes": 149,
+        "sha256": "90c5f838279ef941336dc257a529c8b742c3731320e6ca7032727a8cf1e7a30a"
+      }
+    },
+    "downloadBytes": {
+      "story": 2819,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Fonds de Noël",
+        "description": "Trois fonds de conversation assortis aux packs de Noël : flocons de cristal, guirlande étoilée et rayures de sucre d’orge, assez discrets pour laisser lire chaque bulle."
+      },
+      "en": {
+        "name": "Christmas backgrounds",
+        "description": "Three chat backgrounds to match the Christmas packs: crystal snowflakes, a starry garland and candy-cane stripes, subtle enough to keep every bubble readable."
+      },
+      "es": {
+        "name": "Fondos de Navidad",
+        "description": "Tres fondos de conversación a juego con los packs de Navidad: copos de cristal, guirnalda estrellada y rayas de bastón de caramelo, discretos para que cada burbuja se lea bien."
+      },
+      "pt": {
+        "name": "Fundos de Natal",
+        "description": "Três fundos de conversa a condizer com os packs de Natal: flocos de cristal, grinalda estrelada e riscas de bastão de doce, discretos para que cada balão se leia bem."
+      },
+      "de": {
+        "name": "Weihnachtshintergründe",
+        "description": "Drei Chat-Hintergründe passend zu den Weihnachtspaketen: Kristallflocken, Sternengirlande und Zuckerstangenstreifen, dezent genug, damit jede Blase lesbar bleibt."
+      },
+      "it": {
+        "name": "Sfondi di Natale",
+        "description": "Tre sfondi di conversazione abbinati ai pacchetti di Natale: fiocchi di cristallo, ghirlanda stellata e strisce di bastoncino di zucchero, discreti perché ogni fumetto resti leggibile."
+      },
+      "ar": {
+        "name": "خلفيات الميلاد",
+        "description": "ثلاث خلفيات للمحادثة تُناسب حزم الميلاد: ندف بلورية وإكليل النجوم وخطوط عصا الحلوى، هادئة بما يكفي لتبقى كل فقاعة مقروءة."
+      }
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "fonds-noel-vivants",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 6,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "43784115e51ea1f9.webp",
+      "bytes": 568,
+      "sha256": "43784115e51ea1f9f806870dcc8ebfab0afd4a5c6671124ab0313f7009537f6f"
+    },
+    "preview": null,
+    "contract": {
+      "src": "824d79a0bb105c16.json",
+      "bytes": 2238,
+      "sha256": "824d79a0bb105c163b317e078a2f294a773995f03e47aa204781aeeca1c4d9fa"
+    },
+    "strings": {
+      "fr": {
+        "src": "2aa411040b4238ac.json",
+        "bytes": 134,
+        "sha256": "2aa411040b4238acc9cb84b8d6aac982a9d3d90de122a9a1779b0addf4a0ca99"
+      },
+      "en": {
+        "src": "754d00175b7e7667.json",
+        "bytes": 121,
+        "sha256": "754d00175b7e7667d374e3c4182c395de0691d313359c44b7319a862741022e0"
+      },
+      "es": {
+        "src": "b9c2fd58f4ba3fba.json",
+        "bytes": 131,
+        "sha256": "b9c2fd58f4ba3fbaab895574617724f4436c9295f709029df34c5da1cd5350d2"
+      },
+      "pt": {
+        "src": "916b0922ce7d623b.json",
+        "bytes": 127,
+        "sha256": "916b0922ce7d623b3362197a817ac91bcbf67cdc33a3d46a5dedfe678de3260b"
+      },
+      "de": {
+        "src": "d42f40809ca44945.json",
+        "bytes": 125,
+        "sha256": "d42f40809ca44945faf593107b86bbbe8a462470f026b1c23b112ef5b88f4fd9"
+      },
+      "it": {
+        "src": "6abe34e6322fcc51.json",
+        "bytes": 135,
+        "sha256": "6abe34e6322fcc513b301c9acd429f59789b1fdc4b1d3eeb12d71c795b424d5e"
+      },
+      "ar": {
+        "src": "d0c2d8c3b9058bdc.json",
+        "bytes": 150,
+        "sha256": "d0c2d8c3b9058bdcd2c73845d19cd3471cb8a19f27d4e29c80f55dad5f91b5a5"
+      }
+    },
+    "downloadBytes": {
+      "story": 2238,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Noël vivant",
+        "description": "Trois fonds animés assortis aux packs de Noël : une neige de cristaux, une guirlande dont les ampoules s’allument tour à tour et les étincelles de l’atelier. Animations réduites : un dégradé fixe."
+      },
+      "en": {
+        "name": "Living Christmas",
+        "description": "Three animated backgrounds to match the Christmas packs: falling crystal snow, a garland whose bulbs light up in turn, and sparks from the workshop. With reduced motion: a still gradient."
+      },
+      "es": {
+        "name": "Navidad viva",
+        "description": "Tres fondos animados a juego con los packs de Navidad: nieve de cristales, una guirnalda cuyas bombillas se encienden por turnos y las chispas del taller. Con movimiento reducido: un degradado fijo."
+      },
+      "pt": {
+        "name": "Natal vivo",
+        "description": "Três fundos animados a condizer com os packs de Natal: neve de cristais, uma grinalda cujas lâmpadas se acendem à vez e as faíscas da oficina. Com movimento reduzido: um degradê fixo."
+      },
+      "de": {
+        "name": "Lebendige Weihnacht",
+        "description": "Drei animierte Hintergründe passend zu den Weihnachtspaketen: fallender Kristallschnee, eine Lichterkette, deren Birnen nacheinander leuchten, und Funken aus der Werkstatt. Bei reduzierter Bewegung: ein ruhiger Verlauf."
+      },
+      "it": {
+        "name": "Natale vivo",
+        "description": "Tre sfondi animati abbinati ai pacchetti di Natale: neve di cristalli, una ghirlanda le cui lampadine si accendono a turno e le scintille del laboratorio. Con movimento ridotto: una sfumatura fissa."
+      },
+      "ar": {
+        "name": "ميلاد حي",
+        "description": "ثلاث خلفيات متحركة تُناسب حزم الميلاد: ثلج من البلورات، وإكليل تضيء مصابيحه بالتناوب، وشرارات الورشة. مع تقليل الحركة: تدرّج ثابت."
+      }
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "meeshy-fonds",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 7,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "a1e27c73681d6fc1.webp",
+      "bytes": 636,
+      "sha256": "a1e27c73681d6fc11ad94959d2f00f648aae794aedfecae9c283b4d09b263672"
+    },
+    "preview": null,
+    "contract": {
+      "src": "6bdebd257c1f8de3.json",
+      "bytes": 4419,
+      "sha256": "6bdebd257c1f8de31e091d19e111d8377cb7249253af6f8c145a6211cfd50f39"
+    },
+    "strings": {
+      "fr": {
+        "src": "7b92888d3f0b804e.json",
+        "bytes": 159,
+        "sha256": "7b92888d3f0b804ec608d663a2c791acf34197abdca385253035b623504e2292"
+      },
+      "en": {
+        "src": "23c289cba13ed778.json",
+        "bytes": 147,
+        "sha256": "23c289cba13ed778d41d2c797842b0c186c72851f19987862578144abe597866"
+      },
+      "es": {
+        "src": "eecb9f6d9fbaa9df.json",
+        "bytes": 154,
+        "sha256": "eecb9f6d9fbaa9dfd80c42916e6204cb545543ef4677db2ca8d29700d8a7fcef"
+      },
+      "pt": {
+        "src": "7fec4b322afb5adf.json",
+        "bytes": 159,
+        "sha256": "7fec4b322afb5adf55cb46b19bb9a091cf9faed35586c2c325a8bafe54db8db1"
+      },
+      "de": {
+        "src": "5114d3ce6b8f2b2a.json",
+        "bytes": 163,
+        "sha256": "5114d3ce6b8f2b2a1a09d494655a09d91f2ef811962049e3eb24061491ea8e96"
+      },
+      "it": {
+        "src": "ccad8da3f24693b5.json",
+        "bytes": 166,
+        "sha256": "ccad8da3f24693b5bf4192f823d2e1326f41ae67c6b70899ac6df153cc808e43"
+      },
+      "ar": {
+        "src": "28ba9930010dbb4d.json",
+        "bytes": 174,
+        "sha256": "28ba9930010dbb4d2f71656d04c78f4fbdf7121dce588a355cdfe2b5c787e030"
+      }
+    },
+    "downloadBytes": {
+      "story": 4419,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Fonds signature",
+        "description": "Six fonds par Meeshy, discrets sous les bulles, en clair comme en sombre : soie, pointillé, vagues fines, cannage, terrazzo et crépuscule."
+      },
+      "en": {
+        "name": "Signature wallpapers",
+        "description": "Six wallpapers by Meeshy that stay quiet under your bubbles, light or dark: silk, dots, fine waves, cane weave, terrazzo and dusk."
+      },
+      "es": {
+        "name": "Fondos de firma",
+        "description": "Seis fondos de Meeshy, discretos bajo las burbujas, en claro y en oscuro: seda, punteado, olas finas, rejilla, terrazo y crepúsculo."
+      },
+      "pt": {
+        "name": "Fundos assinatura",
+        "description": "Seis fundos da Meeshy, discretos sob os balões, no claro e no escuro: seda, pontilhado, ondas finas, palhinha, terrazzo e crepúsculo."
+      },
+      "de": {
+        "name": "Signatur-Hintergründe",
+        "description": "Sechs Hintergründe von Meeshy, zurückhaltend unter den Blasen, hell wie dunkel: Seide, Punkte, feine Wellen, Wiener Geflecht, Terrazzo und Dämmerung."
+      },
+      "it": {
+        "name": "Sfondi firma",
+        "description": "Sei sfondi di Meeshy, discreti sotto le bolle, in chiaro e in scuro: seta, puntinato, onde sottili, paglia di Vienna, terrazzo e crepuscolo."
+      },
+      "ar": {
+        "name": "خلفيات مميّزة",
+        "description": "ست خلفيات من Meeshy، هادئة تحت الفقاعات في الوضعين الفاتح والداكن: حرير، ونقاط، وأمواج رقيقة، وخيزران، وتيرازو، وغسق."
+      }
+    }
+  },
+  {
+    "slug": "meeshy-fonds-vivants",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 8,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "6919996005adff0a.webp",
+      "bytes": 626,
+      "sha256": "6919996005adff0ad0ca4228e499d01afa9b72e398e0341fb9751315910f63c5"
+    },
+    "preview": null,
+    "contract": {
+      "src": "e3d846d9958677cd.json",
+      "bytes": 3051,
+      "sha256": "e3d846d9958677cd2a34e024e24e3f66264861f12ba2b47afbd20ff38e6cfe5d"
+    },
+    "strings": {
+      "fr": {
+        "src": "6de85fc3b4498126.json",
+        "bytes": 115,
+        "sha256": "6de85fc3b4498126f1cd73459855ef9645ba167e6c271d58cd2b28782bb7861c"
+      },
+      "en": {
+        "src": "c818e9c7f85640d1.json",
+        "bytes": 111,
+        "sha256": "c818e9c7f85640d18fa1459bc2f0241a033f2de8e5a49cb546dd49373c735969"
+      },
+      "es": {
+        "src": "fcea58860ad3b2a4.json",
+        "bytes": 117,
+        "sha256": "fcea58860ad3b2a40076a860054b4a49067825c0f926c3665aeef8f60228a60a"
+      },
+      "pt": {
+        "src": "b537bb382297cb1a.json",
+        "bytes": 114,
+        "sha256": "b537bb382297cb1a4f1a8ed434b7874087862d2cce44a9a1702e8b3c28ddebec"
+      },
+      "de": {
+        "src": "8288af01c35e708a.json",
+        "bytes": 132,
+        "sha256": "8288af01c35e708a6c000818daca2b620182ade6e2d38a938f9a960243917eaf"
+      },
+      "it": {
+        "src": "be62b58f7d567364.json",
+        "bytes": 114,
+        "sha256": "be62b58f7d567364c6095a0c70c4161b378f3171ef8d720ae147f1a7c8bcfd58"
+      },
+      "ar": {
+        "src": "1fe42d2760530bd5.json",
+        "bytes": 135,
+        "sha256": "1fe42d2760530bd5d7f6b53abebbf608b78c72c3ba92c8a5a97e32cd773a0a2e"
+      }
+    },
+    "downloadBytes": {
+      "story": 3051,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Fonds vivants",
+        "description": "Quatre fonds animés par Meeshy, tout en douceur derrière vos messages : lucioles, voile d’aurore, neige douce et ondes."
+      },
+      "en": {
+        "name": "Living wallpapers",
+        "description": "Four animated wallpapers by Meeshy, gently moving behind your messages: fireflies, aurora veil, soft snow and ripples."
+      },
+      "es": {
+        "name": "Fondos vivos",
+        "description": "Cuatro fondos animados de Meeshy, que se mueven suavemente detrás de tus mensajes: luciérnagas, velo de aurora, nieve suave y ondas."
+      },
+      "pt": {
+        "name": "Fundos vivos",
+        "description": "Quatro fundos animados da Meeshy, que se movem com suavidade atrás das tuas mensagens: pirilampos, véu de aurora, neve suave e ondas."
+      },
+      "de": {
+        "name": "Lebendige Hintergründe",
+        "description": "Vier animierte Hintergründe von Meeshy, die sich sanft hinter deinen Nachrichten bewegen: Glühwürmchen, Polarlichtschleier, sanfter Schnee und Wellenringe."
+      },
+      "it": {
+        "name": "Sfondi vivi",
+        "description": "Quattro sfondi animati di Meeshy, che si muovono piano dietro i tuoi messaggi: lucciole, velo d’aurora, neve leggera e onde."
+      },
+      "ar": {
+        "name": "خلفيات حيّة",
+        "description": "أربع خلفيات متحركة من Meeshy تتحرك بهدوء خلف رسائلك: يراعات، وستار الشفق، وثلج ناعم، وتموّجات."
+      }
+    }
+  },
+  {
+    "slug": "nouvel-an-fonds",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 9,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "e214f8ada8ee876f.webp",
+      "bytes": 650,
+      "sha256": "e214f8ada8ee876fd6809b8035f17ac96d1323bb345174f8a65646f9cd2aa7a7"
+    },
+    "preview": null,
+    "contract": {
+      "src": "4874e0577e1a68db.json",
+      "bytes": 4720,
+      "sha256": "4874e0577e1a68db77d12b2c3da2bfc9e0d163ea5e27f9b2a245397db95bd7e5"
+    },
+    "strings": {
+      "fr": {
+        "src": "e19a761d2598fbc6.json",
+        "bytes": 146,
+        "sha256": "e19a761d2598fbc64c75621822611e85ba4109c68d6578f9b36d2edf5f0f9399"
+      },
+      "en": {
+        "src": "96171cc96c1fb177.json",
+        "bytes": 138,
+        "sha256": "96171cc96c1fb1779fbb4ec1d62d6caf1415179e0220db67e9e75cb5132b77f4"
+      },
+      "es": {
+        "src": "48df3553e9cf60db.json",
+        "bytes": 147,
+        "sha256": "48df3553e9cf60db2b32ee0a5fb44c48b60cde67e9cbc41b70214c7bc7f9f9e5"
+      },
+      "pt": {
+        "src": "e419c74dc6fe3828.json",
+        "bytes": 150,
+        "sha256": "e419c74dc6fe382890ba612b4c4e9766ce5388c04a995cb245da4ee446bb7f3f"
+      },
+      "de": {
+        "src": "c6fd716afea43afe.json",
+        "bytes": 147,
+        "sha256": "c6fd716afea43afee6ba65462c69b9ef86fcfd1984d8fb4dd3f6515aa091afbd"
+      },
+      "it": {
+        "src": "49977fa79f42395c.json",
+        "bytes": 149,
+        "sha256": "49977fa79f42395c17142367fc701ae9b0b458384634e6d782faa734c62e2f8f"
+      },
+      "ar": {
+        "src": "8a02ef9355a926eb.json",
+        "bytes": 194,
+        "sha256": "8a02ef9355a926ebe55a99b39adc1c8b9996d4b763225ab130510eedd2abfe46"
+      }
+    },
+    "downloadBytes": {
+      "story": 4720,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Fonds du Nouvel An",
+        "description": "Quatre fonds de conversation pour la nouvelle année : ciel d’artifice, confettis, heure de minuit et bulles dorées, assez discrets pour laisser lire chaque bulle."
+      },
+      "en": {
+        "name": "New Year backgrounds",
+        "description": "Four chat backgrounds for the new year: a firework sky, confetti, the midnight hour and golden bubbles, subtle enough to keep every bubble readable."
+      },
+      "es": {
+        "name": "Fondos de Año Nuevo",
+        "description": "Cuatro fondos de conversación para el año nuevo: cielo de fuegos, confeti, hora de medianoche y burbujas doradas, discretos para que cada burbuja se lea bien."
+      },
+      "pt": {
+        "name": "Fundos de Ano Novo",
+        "description": "Quatro fundos de conversa para o novo ano: céu de artifício, confetes, hora da meia-noite e bolhas douradas, discretos para que cada balão se leia bem."
+      },
+      "de": {
+        "name": "Neujahrshintergründe",
+        "description": "Vier Chat-Hintergründe für das neue Jahr: Feuerwerkshimmel, Konfetti, Mitternachtsstunde und goldene Perlen, dezent genug, damit jede Blase lesbar bleibt."
+      },
+      "it": {
+        "name": "Sfondi di Capodanno",
+        "description": "Quattro sfondi di conversazione per il nuovo anno: cielo di fuochi, coriandoli, ora di mezzanotte e bollicine dorate, discreti perché ogni fumetto resti leggibile."
+      },
+      "ar": {
+        "name": "خلفيات رأس السنة",
+        "description": "أربع خلفيات للمحادثة للعام الجديد: سماء الألعاب النارية، وقصاصات، وساعة منتصف الليل، وفقاعات ذهبية، هادئة بما يكفي لتبقى كل فقاعة مقروءة."
+      }
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
+    }
+  },
+  {
+    "slug": "nouvel-an-fonds-vifs",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 10,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "6d685dd02806d9e6.webp",
+      "bytes": 534,
+      "sha256": "6d685dd02806d9e6fa810a1c3afc3b436d4c96941f748dad9650f9b3497afc21"
+    },
+    "preview": null,
+    "contract": {
+      "src": "07333c16a46af2cf.json",
+      "bytes": 2977,
+      "sha256": "07333c16a46af2cfea1f387d6d29f3efa9ba5d0c35ec39e45e284368430939d5"
+    },
+    "strings": {
+      "fr": {
+        "src": "fa2f11dc4845c88c.json",
+        "bytes": 187,
+        "sha256": "fa2f11dc4845c88c0009dee932f9433d4d1b2b568ce977cb8858532175c25d3c"
+      },
+      "en": {
+        "src": "8f755503162b3f23.json",
+        "bytes": 166,
+        "sha256": "8f755503162b3f239ce4cefcb1dec54a0188383c76e18b4fae930a155b632558"
+      },
+      "es": {
+        "src": "fb3e2dc80df92c28.json",
+        "bytes": 178,
+        "sha256": "fb3e2dc80df92c28fd3b2dc1675615f430b8bdb565462f3969d798fd282b34d6"
+      },
+      "pt": {
+        "src": "36ecca1849a83fcc.json",
+        "bytes": 175,
+        "sha256": "36ecca1849a83fcc2e408e64553f8cde3930ecfe639e4df936c08f6db0aaa4cd"
+      },
+      "de": {
+        "src": "47a80e593ec61700.json",
+        "bytes": 180,
+        "sha256": "47a80e593ec6170091f12e188c1596b701a16c0fcf0fa8024cd338ac554b8410"
+      },
+      "it": {
+        "src": "6f9b4a96e230bf07.json",
+        "bytes": 182,
+        "sha256": "6f9b4a96e230bf077897c14cd98fe8656e78096bfd6f85c55ead9586e273c1b8"
+      },
+      "ar": {
+        "src": "316416258671b2b5.json",
+        "bytes": 208,
+        "sha256": "316416258671b2b51b65c4b90267932718f40528e9d9983fd1499a4c27f1ae12"
+      }
+    },
+    "downloadBytes": {
+      "story": 2977,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Nouvel An vivant · fonds",
+        "description": "Quatre fonds animés pour la nouvelle année : des gerbes lointaines, des confettis qui tombent, une nuit étoilée et des bulles qui montent. Animations réduites : un dégradé fixe."
+      },
+      "en": {
+        "name": "Living New Year · backgrounds",
+        "description": "Four animated backgrounds for the new year: distant bursts, falling confetti, a starry night and rising bubbles. With reduced motion: a still gradient."
+      },
+      "es": {
+        "name": "Año Nuevo vivo · fondos",
+        "description": "Cuatro fondos animados para el año nuevo: destellos lejanos, confeti que cae, una noche estrellada y burbujas que suben. Con movimiento reducido: un degradado fijo."
+      },
+      "pt": {
+        "name": "Ano Novo vivo · fundos",
+        "description": "Quatro fundos animados para o novo ano: explosões ao longe, confetes a cair, uma noite estrelada e bolhas a subir. Com movimento reduzido: um degradê fixo."
+      },
+      "de": {
+        "name": "Lebendiges Neujahr · Hintergründe",
+        "description": "Vier animierte Hintergründe für das neue Jahr: ferne Funken, fallendes Konfetti, eine Sternennacht und aufsteigende Perlen. Bei reduzierter Bewegung: ein ruhiger Verlauf."
+      },
+      "it": {
+        "name": "Capodanno vivo · sfondi",
+        "description": "Quattro sfondi animati per il nuovo anno: scoppi lontani, coriandoli che cadono, una notte stellata e bollicine che salgono. Con movimento ridotto: una sfumatura fissa."
+      },
+      "ar": {
+        "name": "رأس السنة الحي · خلفيات",
+        "description": "أربع خلفيات متحركة للعام الجديد: شرارات بعيدة، وقصاصات متساقطة، وليلة مرصعة بالنجوم، وفقاعات صاعدة. مع تقليل الحركة: تدرّج ثابت."
+      }
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
+    }
   }
 ]

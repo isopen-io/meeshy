@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Attachment } from '@/lib/api/types';
+import { mediaDownloadStore } from '@/lib/media/media-download-preferences';
 
 import { VideoFallback, VideoTile } from './video-tile';
 
@@ -103,6 +104,23 @@ describe('VideoTile — une vidéo de moins de 100 Ko arrive avec la bulle (#146
     setOnline(false);
     const el = mount({ ...video, fileSize: 5_000 }, true, () => {});
     expect(el.querySelector('video')?.getAttribute('preload')).toBe('none');
+  });
+  test('#6333 — au-delà de 100 Ko, la politique « toujours » de l’appareil précharge ; « jamais » attend le ▶︎', () => {
+    setOnline(true);
+    mediaDownloadStore().setPolicy('video', 'always');
+    expect(mount({ ...video, fileSize: 4_000_000 }, true, () => {}).querySelector('video')?.getAttribute('preload')).toBe('auto');
+    act(() => root.unmount());
+    container.remove();
+    mediaDownloadStore().setPolicy('video', 'never');
+    expect(mount({ ...video, fileSize: 4_000_000 }, true, () => {}).querySelector('video')?.getAttribute('preload')).toBe('none');
+    mediaDownloadStore().setPolicy('video', 'wifiOnly');
+  });
+
+  test('#6333 — hors ligne, « toujours » ne précharge rien', () => {
+    setOnline(false);
+    mediaDownloadStore().setPolicy('video', 'always');
+    expect(mount({ ...video, fileSize: 4_000_000 }, true, () => {}).querySelector('video')?.getAttribute('preload')).toBe('none');
+    mediaDownloadStore().setPolicy('video', 'wifiOnly');
   });
 });
 

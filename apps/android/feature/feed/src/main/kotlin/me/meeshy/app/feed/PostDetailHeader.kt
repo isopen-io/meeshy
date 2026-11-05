@@ -49,7 +49,7 @@ internal fun PostDetailAuthorChip(post: FeedPostPresentation, onOpenProfile: ((S
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-        modifier = modifier.opensAuthorProfile(post.authorId, onOpenProfile),
+        modifier = modifier.opensAuthorProfile(post.authorProfile()),
     ) {
         MeeshyAvatar(
             name = name,

@@ -3,15 +3,20 @@ package me.meeshy.app.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import me.meeshy.core.common.DefaultDispatcher
 import me.meeshy.sdk.conversation.ConversationStatsRepository
 import me.meeshy.sdk.model.ActivityPeriod
 import me.meeshy.sdk.model.ActivityPoint
 import me.meeshy.sdk.model.ClientStatMessage
+import me.meeshy.sdk.model.ContentTypeCounts
 import me.meeshy.sdk.model.ContentTypeShare
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
 import me.meeshy.sdk.model.ConversationStatsProjection
@@ -40,6 +45,7 @@ data class ConversationStatsUiState(
     val totalMessages: Int = 0,
     val totalWords: Int = 0,
     val totalCharacters: Int = 0,
+    val contentCounts: ContentTypeCounts = ContentTypeCounts(),
     val contentTypes: List<ContentTypeShare> = emptyList(),
     val participants: List<ParticipantShare> = emptyList(),
     val languages: List<LanguageShare> = emptyList(),
@@ -71,6 +77,7 @@ data class ConversationStatsUiState(
 @HiltViewModel
 class ConversationStatsViewModel @Inject constructor(
     private val repository: ConversationStatsRepository,
+    @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationStatsUiState())
@@ -92,19 +99,44 @@ class ConversationStatsViewModel @Inject constructor(
     fun load(conversationId: String, clientMessages: List<ClientStatMessage> = emptyList()) {
         val current = _state.value
         if (current.conversationId == conversationId && current.phase != StatsPhase.Error) return
+        _state.value = ConversationStatsUiState(
+            conversationId = conversationId,
+            phase = StatsPhase.Loading,
+            period = current.period,
+        )
+        viewModelScope.launch {
+            // Le calcul message par message (mots, sentiment) quitte le fil principal.
+            val (sentiment, fallback) = withContext(defaultDispatcher) { clientSnapshot(conversationId, clientMessages) }
+            if (_state.value.conversationId != conversationId) return@launch
+            if (fallback != null) {
+                _state.update { project(it.copy(sentiment = sentiment), fallback) }
+            } else {
+                _state.update { it.copy(sentiment = sentiment) }
+            }
+            fetch(conversationId, hasFallback = fallback != null)
+        }
+    }
+
+    private fun clientSnapshot(
+        conversationId: String,
+        clientMessages: List<ClientStatMessage>,
+    ): Pair<SentimentBreakdown?, ConversationMessageStatsResponse?> {
         val sentiment = SentimentBreakdownProjection
             .breakdown(clientMessages.map { it.content })
             .takeIf { it.hasContent }
         val fallback = clientMessages
             .takeIf { it.isNotEmpty() }
             ?.let { ConversationStatsProjection.clientComputed(conversationId, it) }
-        fetch(conversationId, sentiment, fallback)
+        return sentiment to fallback
     }
 
     /** Re-fetch the current conversation after a failure, keeping the already-scored sentiment. */
     fun retry() {
         val current = _state.value
-        current.conversationId?.let { fetch(it, current.sentiment, fallback = null) }
+        current.conversationId?.let {
+            _state.value = current.copy(phase = StatsPhase.Loading)
+            viewModelScope.launch { fetch(it, hasFallback = false) }
+        }
     }
 
     /** Switch the activity window. Pure — no refetch, the [ConversationStatsUiState.activity] getter reflects it. */
@@ -113,27 +145,12 @@ class ConversationStatsViewModel @Inject constructor(
         _state.update { it.copy(period = period) }
     }
 
-    private fun fetch(
-        conversationId: String,
-        sentiment: SentimentBreakdown?,
-        fallback: ConversationMessageStatsResponse?,
-    ) {
-        val base = ConversationStatsUiState(
-            conversationId = conversationId,
-            phase = StatsPhase.Loading,
-            period = _state.value.period,
-            sentiment = sentiment,
-        )
-        // Cache-first: render the locally-computed page immediately when we have one.
-        _state.value = fallback?.let { project(base, it) } ?: base
-        viewModelScope.launch {
-            when (val result = repository.fetchStats(conversationId)) {
-                is NetworkResult.Success -> _state.update { project(it, result.data) }
-                is NetworkResult.Failure -> _state.update { state ->
-                    // A failed refine leaves the locally-computed snapshot standing;
-                    // only a fetch with nothing local to fall back on surfaces the error.
-                    if (fallback != null) state else state.copy(phase = StatsPhase.Error)
-                }
+    private suspend fun fetch(conversationId: String, hasFallback: Boolean) {
+        when (val result = repository.fetchStats(conversationId)) {
+            is NetworkResult.Success -> _state.update { project(it, result.data) }
+            is NetworkResult.Failure -> _state.update { state ->
+                // Un affinage raté laisse l'instantané local en place ; seule une panne sans rien d'affichable est une erreur.
+                if (hasFallback) state else state.copy(phase = StatsPhase.Error)
             }
         }
     }
@@ -146,6 +163,7 @@ class ConversationStatsViewModel @Inject constructor(
         totalMessages = data.totalMessages,
         totalWords = data.totalWords,
         totalCharacters = data.totalCharacters,
+        contentCounts = data.contentTypes,
         contentTypes = ConversationStatsProjection.contentTypeBreakdown(data.contentTypes),
         participants = ConversationStatsProjection.participantShares(data.participantStats, data.totalMessages),
         languages = ConversationStatsProjection.languageShares(data.languageDistribution),

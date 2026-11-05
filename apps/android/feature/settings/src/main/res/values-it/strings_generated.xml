@@ -314,6 +314,9 @@
     <string name="settings_logout_confirm_title">Esci</string>
     <string name="settings_logout_hint">Esci dal tuo account</string>
     <string name="settings_logout_in_progress">Disconnessione in corso...</string>
+    <string name="settings_media_autosave_header">Galleria</string>
+    <string name="settings_media_autosave_subtitle">Le immagini e i video ricevuti finiscono nell\'album Meeshy, una sola volta. Mai un contenuto effimero, sfocato o visualizzabile una volta.</string>
+    <string name="settings_media_autosave_title">Salva in Foto</string>
     <string name="settings_media_capture_header">Durante lo scatto</string>
     <string name="settings_media_capture_original_subtitle">La foto o il video originale, senza effetti né cornice, viene salvato in Foto a ogni scatto.</string>
     <string name="settings_media_capture_original_title">Salva l\'originale</string>

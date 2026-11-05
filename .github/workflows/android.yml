@@ -194,15 +194,32 @@ jobs:
     runs-on: ubuntu-latest
     # Measured on the first green runs (2026-08-12): ~8-10 min wall clock for
     # the whole job on a cold Gradle cache — of which assembleDebug is the bulk
-    # and testDebugUnitTest is ~2m10 (665 actionable tasks). 30 min is a hang
-    # guard with roughly 3x headroom against GitHub's 6h default, not a target.
+    # and testDebugUnitTest is ~2m10 (665 actionable tasks).
+    # Re-measured 2026-11-04 (run 41770508029): assembleDebug 13m14s
+    # (807 actionable tasks), and testDebugUnitTest had covered ~15 of 22 test
+    # modules after 16 min when the old 30 min ceiling cancelled the job — no
+    # hang (the 900 s jstack showed every executor busy in a different test).
+    # 60 min is a hang guard with ~2x headroom on that budget, not a target.
     # Raise it if the module graph grows, rather than letting a hung job sit.
-    timeout-minutes: 30
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: apps/android
 
     steps:
+      # #15675 — l'image ubuntu-latest n'a qu'environ 14 Go libres, et le build
+      # complet (assemble + tests de tous les modules) l'épuisait : le runner
+      # mourait sur « No space left on device » avant de compiler. On retire ce
+      # que le build Android n'utilise pas ; le SDK Android préinstallé reste.
+      - name: Libérer le disque du runner
+        working-directory: /
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/share/swift /usr/local/share/powershell
+          sudo docker image prune --all --force > /dev/null || true
+          df -h /
+
       - name: Checkout
         uses: actions/checkout@v7
 

@@ -359,16 +359,39 @@ import UIKit
 /// l'auteur a changé d'avis), comme `StoryViewModel.cancelUpload`.
 @MainActor
 enum StoryWaitingCancellation {
+    @discardableResult
     static func run(
         _ item: StoryPublishQueueItem,
         on viewModel: StoryViewModel,
         cancel: (StoryPublishQueueItem) async -> StoryPendingCancellation
-    ) async {
+    ) async -> Bool {
         let verdict = await cancel(item)
         if verdict == .removed {
             viewModel.removeOptimisticStories(tempStoryId: item.tempStoryId)
             if let draftId = item.draftId { viewModel.draftStore.clearPendingPublish(draftId: draftId) }
         }
-        PendingSendNotice.announce(verdict)
+        return PendingSendNotice.announce(verdict)
+    }
+
+    /// Depuis le lecteur (#15198), qui ne connaît que l'id de la story : l'item
+    /// est celui de son id temporaire. Plus dans la file, elle est partie.
+    static func run(
+        storyId: String,
+        queued: [StoryPublishQueueItem],
+        on viewModel: StoryViewModel,
+        cancel: (StoryPublishQueueItem) async -> StoryPendingCancellation
+    ) async -> Bool {
+        guard let tempStoryId = PendingStoryMarker.tempStoryId(of: storyId),
+              let item = queued.first(where: { $0.tempStoryId == tempStoryId }) else {
+            return PendingSendNotice.announce(StoryPendingCancellation.notFound)
+        }
+        return await run(item, on: viewModel, cancel: cancel)
+    }
+
+    /// Le lecteur retire une story en attente : elle n'existe pas pour le
+    /// serveur, son envoi s'annule par la file courante, toast de « File » compris.
+    static func cancelQueued(storyId: String, on viewModel: StoryViewModel) async -> Bool {
+        let queued = await StoryPublishQueue.shared.pendingItems
+        return await run(storyId: storyId, queued: queued, on: viewModel) { await StoryPublishService.shared.cancelPending($0) }
     }
 }

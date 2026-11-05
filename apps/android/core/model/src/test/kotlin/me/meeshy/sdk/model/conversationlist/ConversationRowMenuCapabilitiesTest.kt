@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiParticipant
+import me.meeshy.sdk.model.ConversationViewerCapabilities
 import me.meeshy.sdk.model.ConversationWriteRestriction
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities.Removal
@@ -24,6 +25,7 @@ class ConversationRowMenuCapabilitiesTest {
         peerUserId: String? = null,
         isActive: Boolean = true,
         restriction: ConversationWriteRestriction? = null,
+        capabilities: ConversationViewerCapabilities? = null,
     ) = ApiConversation(
         id = "c1",
         identifier = "c1",
@@ -33,6 +35,7 @@ class ConversationRowMenuCapabilitiesTest {
         currentUserRole = currentUserRole,
         participants = peerUserId?.let { listOf(ApiParticipant(id = "p-peer", userId = it)) }.orEmpty(),
         viewerWriteRestriction = restriction,
+        viewerCapabilities = capabilities,
     )
 
     private fun caps(conversation: ApiConversation, user: MeeshyUser?) =
@@ -357,5 +360,26 @@ class ConversationRowMenuCapabilitiesTest {
         assertThat(viewer.invite).isFalse()
         assertThat(viewer.leave).isFalse()
         assertThat(viewer.manageMembers).isFalse()
+    }
+
+    // ── La capacité servie (#14690) ──
+
+    @Test
+    fun `a served false hides make obsolete from the sender of a pending request, a member of an open direct`() {
+        val served = ConversationViewerCapabilities(canMakeObsolete = false)
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer", capabilities = served), user()).obsolete).isFalse()
+        assertThat(caps(conversation(currentUserRole = "admin", capabilities = served), user()).obsolete).isFalse()
+    }
+
+    @Test
+    fun `a served true opens make obsolete where the local rule refused it`() {
+        val served = ConversationViewerCapabilities(canMakeObsolete = true)
+        assertThat(caps(conversation(currentUserRole = "member", capabilities = served), user()).obsolete).isTrue()
+    }
+
+    @Test
+    fun `an absent capability keeps the local rule, never an implicit false`() {
+        assertThat(caps(conversation(type = "direct", currentUserRole = "member", peerUserId = "peer"), user()).obsolete).isTrue()
+        assertThat(caps(conversation(currentUserRole = "member"), user()).obsolete).isFalse()
     }
 }

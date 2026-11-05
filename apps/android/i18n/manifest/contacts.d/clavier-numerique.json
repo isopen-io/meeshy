@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:contacts": {
+      "resDir": "feature/contacts/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "keypad.input.placeholder",
+          "androidName": "keypad_input_placeholder",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "keypad.input.a11y",
+          "androidName": "keypad_input_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "keypad.delete.a11y",
+          "androidName": "keypad_delete_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "keypad.delete.a11y.hint",
+          "androidName": "keypad_delete_a11y_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "keypad.clear.a11y",
+          "androidName": "keypad_clear_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "keypad.no-match.title",
+          "androidName": "keypad_no_match_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "keypad.no-match.subtitle",
+          "androidName": "keypad_no_match_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "keypad.prompt.title",
+          "androidName": "keypad_prompt_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "keypad.prompt.subtitle",
+          "androidName": "keypad_prompt_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "keypad.result.open-profile.a11y",
+          "androidName": "keypad_result_open_profile_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.call",
+          "androidName": "keypad_call",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.list.online.lower",
+          "androidName": "keypad_online_lower",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.call.audio",
+          "androidName": "keypad_call_audio",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "profile.action.call.video",
+          "androidName": "keypad_call_video",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -2,6 +2,7 @@ package me.meeshy.app.calls
 
 import com.google.common.truth.Truth.assertThat
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -21,8 +22,12 @@ class CallWatchdogsReliabilityTest {
     private val signals: CallSignalManager = mockk(relaxed = true)
     private val budget = MutableSharedFlow<Unit>()
 
-    private class Host(override val scope: CoroutineScope) : CallSessionHost {
-        override var callState: CallState = CallState.Reconnecting(1)
+    private class Host(
+        override val scope: CoroutineScope,
+        override val isGroupCall: Boolean = false,
+        attempt: Int = 1,
+    ) : CallSessionHost {
+        override var callState: CallState = CallState.Reconnecting(attempt)
         override val config: CallConfig = CallConfig.EMPTY
         override val callId = "call-1"
         override val selfId = "me"
@@ -98,5 +103,34 @@ class CallWatchdogsReliabilityTest {
         runCurrent()
 
         assertThat(host.restarts).isEqualTo(0)
+    }
+
+    @Test
+    fun `the reconnect ceiling of a group call leaves it instead of ending it for everyone`() = runTest {
+        val host = Host(backgroundScope, isGroupCall = true, attempt = 99)
+        val controller = controller(CallRestartBackoff.None)
+        controller.attach(host)
+        controller.onTransition(host.callState)
+        runCurrent()
+
+        budget.emit(Unit)
+
+        assertThat(host.callState).isInstanceOf(CallState.Ended::class.java)
+        verify(exactly = 1) { signals.emitLeave("call-1") }
+        verify(exactly = 0) { signals.emitEnd(any(), any()) }
+    }
+
+    @Test
+    fun `the reconnect ceiling of a direct call still ends it`() = runTest {
+        val host = Host(backgroundScope, isGroupCall = false, attempt = 99)
+        val controller = controller(CallRestartBackoff.None)
+        controller.attach(host)
+        controller.onTransition(host.callState)
+        runCurrent()
+
+        budget.emit(Unit)
+
+        verify(exactly = 1) { signals.emitEnd("call-1", any()) }
+        verify(exactly = 0) { signals.emitLeave(any()) }
     }
 }

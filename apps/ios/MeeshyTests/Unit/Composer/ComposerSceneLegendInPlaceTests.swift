@@ -86,36 +86,29 @@ final class ComposerSceneLegendInPlaceTests: XCTestCase {
                       "Le CORPS du post garde sa zone du bas — c'est le contraste que la directive décrit.")
     }
 
-    /// **La légende ne réserve RIEN en bas, et c'est une mesure.**
+    /// **La légende ne réserve RIEN en bas, et c'est une mesure** (#6126) : le
+    /// clavier comprime déjà la colonne du meuble, donc la couche ancrée en bas
+    /// remonte toute seule. La seule réserve basse qui existait,
+    /// `canvasBottomReservation`, n'agissait que sur l'atelier du SDK et a
+    /// quitté le dépôt avec lui (#15629).
     ///
-    /// Le lot avait d'abord câblé `keyboardTransition?.height` ici : la légende
-    /// s'écrivant en place, ce qui menace de la couvrir est le clavier. Le
-    /// raisonnement se tenait et il était faux deux fois — voir le doc-comment
-    /// de `canvasBottomReservation`, qui porte les deux captures :
-    ///
-    /// 1. le clavier comprime déjà la colonne du meuble, donc la couche ancrée
-    ///    en bas remonte toute seule — la légende reste visible, coche comprise ;
-    /// 2. forcée à 260 pt, la réserve ne déplaçait **rien** sur ce chemin.
-    ///
-    /// > Ce témoin garde donc une ABSENCE, et pour une raison précise : une
-    /// > réserve inerte se relit comme une protection. La prochaine session qui
-    /// > verra la légende menacée par le clavier doit d'abord MESURER, pas
-    /// > re-câbler la branche que celle-ci a retirée.
+    /// > Ce témoin garde une ABSENCE : une réserve inerte se relit comme une
+    /// > protection. La prochaine session qui verra la légende menacée par le
+    /// > clavier doit d'abord MESURER, pas re-câbler une réserve.
     func test_laLegendeNeReserveRienEnBas() throws {
         let code = compact(try hostCode())
         XCTAssertFalse(code.contains("ifeditsSceneDescription{return"),
                        "Aucune réserve basse pour la légende : elle remonte avec le clavier (#6126).")
-        XCTAssertTrue(code.contains("ifeditsPostContent{returnsceneDescriptionEditorHeight}"),
-                      "Le CORPS du post garde la sienne, inchangée — sans quoi la garde ci-dessus "
-                        + "serait verte parce que la propriété entière a disparu.")
+        XCTAssertFalse(code.contains("canvasBottomReservation"),
+                       "La réserve basse de l'atelier est revenue, alors qu'aucun atelier n'est plus monté.")
     }
 
     // MARK: - #6126 · Les portes qui mènent à la légende agissent encore
 
     /// **La loi 4 vérifiée sur ce qui MENAIT à ce que le lot a déplacé.**
     ///
-    /// Deux portes ouvrent la légende sans passer par elle — le bouton de
-    /// l'atelier et la porte `.description` du rail. Elles posaient
+    /// Deux portes ouvrent la légende sans passer par elle — la porte
+    /// `.description` du rail et « ⋯ › Légende ». Elles posaient
     /// `editsSceneDescription = true`, ce qui montait une zone ; ce drapeau
     /// CONSTATE désormais, il ne commande plus. Sans le jeton d'ouverture, les
     /// deux portes seraient devenues inertes — et une porte qui s'ouvre sur rien
@@ -127,8 +120,8 @@ final class ComposerSceneLegendInPlaceTests: XCTestCase {
         XCTAssertTrue(code.contains("funcopenSceneDescriptionEditing()"),
                       "Le site unique d'ouverture doit exister.")
         XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "openSceneDescriptionEditing",
-                                                  in: try hostCode()), 4,
-                       "Sa déclaration et ses TROIS portes — l'atelier, le rail et « ⋯ › Légende » (#13839). "
+                                                  in: try hostCode()), 3,
+                       "Sa déclaration et ses DEUX portes — le rail et « ⋯ › Légende » (#13839). "
                        + "Un appelant en moins = une porte inerte.")
     }
 

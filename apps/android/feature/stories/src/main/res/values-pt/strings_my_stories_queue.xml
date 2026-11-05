@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_resume_failed">Não foi possível converter esta story em rascunho. Ela continua na sua fila.</string>
+    <string name="my_stories_draft_open_failed">Não foi possível abrir este rascunho.</string>
+</resources>

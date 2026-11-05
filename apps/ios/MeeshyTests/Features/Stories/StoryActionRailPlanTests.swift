@@ -291,4 +291,22 @@ extension StoryActionRailPlanTests {
             sidebar.contains("storyCommentCountReconciledPulse +="),
             "le rail lit le canal, il ne l'incrémente jamais")
     }
+
+    // MARK: - #15198 — une story en attente
+
+    /// Une story encore dans la file porte un id local, qu'aucune route du
+    /// serveur n'adresse : le rail ne garde que le son, local à la surface.
+    func test_resolve_pendingStory_keepsOnlyTheLocalSoundControl() {
+        let plan = StoryActionRailPlan.resolve(
+            isOwnStory: true, canReply: true, isPublicStory: true,
+            hasAudibleSound: true, commentCount: 3, hasTranslatableContent: true,
+            canCompose: true, isRepublishable: true, isPending: true
+        )
+
+        XCTAssertEqual(plan, StoryActionRailPlan(
+            showsReact: false, showsReply: false, showsForward: false, showsRepost: false,
+            showsViews: false, showsExport: false, showsSound: true, showsComments: false,
+            showsTranslations: false, showsCompose: false
+        ))
+    }
 }

@@ -2,6 +2,7 @@ package me.meeshy.app.navigation
 
 import me.meeshy.app.navigation.graph.BirthDateDestinations
 import me.meeshy.app.navigation.graph.CommunityRoutes
+import me.meeshy.app.navigation.graph.FriendRequestListDestinations
 import me.meeshy.app.navigation.graph.FriendRequestsDestinations
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.LinksRoutes
@@ -142,6 +143,7 @@ internal object NavBackChrome {
         arrow("Routes.CONTACTS_DISCOVER", Routes.CONTACTS_DISCOVER, contacts),
         sheet("Routes.BLOCKED_USERS", Routes.BLOCKED_USERS, IosPresentation.SHEET, contacts),
         arrow("FriendRequestsDestinations.ROUTE", FriendRequestsDestinations.ROUTE, contacts),
+        arrow("FriendRequestListDestinations.ROUTE", FriendRequestListDestinations.ROUTE, "$FEATURE/contacts/src/main/kotlin/me/meeshy/app/contacts/FriendRequestListScreen.kt"),
         arrow("Routes.NOTIFICATIONS", Routes.NOTIFICATIONS, "$FEATURE/notifications/src/main/kotlin/me/meeshy/app/notifications/NotificationsScreen.kt"),
         arrow("ProfileRoutes.OWN", ProfileRoutes.OWN, profile("OwnProfileScreen.kt")),
         sheet("ProfileRoutes.STATS", ProfileRoutes.STATS, IosPresentation.SHEET, profile("UserStatsScreen.kt")),

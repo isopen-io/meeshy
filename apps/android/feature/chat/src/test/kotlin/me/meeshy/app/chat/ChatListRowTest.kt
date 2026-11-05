@@ -79,7 +79,7 @@ class ChatListRowTest {
     fun `the unread boundary draws its pill`() {
         show(ChatListItem.UnreadSeparator())
 
-        compose.onNodeWithText("Unread messages").assertExists()
+        compose.onNodeWithText("Unread Messages").assertExists()
     }
 
     @Test

@@ -115,6 +115,9 @@ internal fun NavGraphBuilder.authNavGraph(
             onOpenPrivacy = {
                 navController.navigate(Routes.legal(LegalDocumentKind.PRIVACY_POLICY))
             },
+            // « Est-ce vous ? » : le code et le lien sont partis, la connexion par e-mail s'ouvre sur son attente.
+            onOpenSignInLink = { navController.navigate(Routes.MAGIC_LINK) },
+            onOpenForgotPassword = { navController.navigate(Routes.FORGOT_PASSWORD) },
         )
     }
     sheetComposable(

@@ -75,6 +75,7 @@ internal fun ZoomableImagePage(
     onDragProgress: (Float) -> Unit,
     onDismiss: () -> Unit,
     secure: Boolean = false,
+    onLongPress: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -99,6 +100,7 @@ internal fun ZoomableImagePage(
     val dragY = remember { Animatable(0f) }
     val latestOnZoomChanged by rememberUpdatedState(onZoomChanged)
     val latestOnTap by rememberUpdatedState(onTap)
+    val latestOnLongPress by rememberUpdatedState(onLongPress)
     val latestOnDragProgress by rememberUpdatedState(onDragProgress)
     val latestOnDismiss by rememberUpdatedState(onDismiss)
     val dragStartPx = with(density) { FullscreenVideoGestures.DRAG_START_DISTANCE.dp.toPx() }
@@ -129,6 +131,7 @@ internal fun ZoomableImagePage(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { latestOnTap() },
+                    onLongPress = { latestOnLongPress?.invoke() },
                     onDoubleTap = {
                         offsetX = 0f
                         offsetY = 0f

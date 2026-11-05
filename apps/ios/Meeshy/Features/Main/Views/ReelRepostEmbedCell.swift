@@ -64,7 +64,7 @@ struct ReelRepostEmbedCell: View {
     /// so no new i18n strings are introduced. Pure; unit-tested.
     static func reelCardAccessibilityLabel(for repost: RepostContent) -> String {
         var parts = [String(localized: "feed.reel.repost.by", defaultValue: "Réel de \(repost.author)", bundle: .main)]
-        if !repost.content.isEmpty { parts.append(repost.content) }
+        if !repost.displayContent.isEmpty { parts.append(repost.displayContent) }
         parts.append(String(localized: "feed.reel.repost.likes", defaultValue: "\(repost.likes) j'aime", bundle: .main))
         return parts.joined(separator: ". ")
     }
@@ -176,13 +176,13 @@ struct ReelRepostEmbedCell: View {
             }
 
             // Reel caption — drives the card height, like a cited post.
-            if !repost.content.isEmpty {
+            if !repost.displayContent.isEmpty {
                 // `validUsernames` vaut `nil` PAR DÉFAUT dans le renderer, et
                 // `nil` veut dire « linkifier tout » : sans les références du
                 // post source, chaque `@handle` du texte cité devenait un lien
                 // mort. Le gateway les sert depuis le 2026-08-19, le SDK les
                 // décode ; il ne restait qu'à les passer ici.
-                MessageTextRenderer.render(repost.content, fontSize: 13, color: theme.textSecondary,
+                MessageTextRenderer.render(repost.displayContent, fontSize: 13, color: theme.textSecondary,
                                            validUsernames: repost.validMentionUsernames)
                     .lineLimit(4)
                     .fixedSize(horizontal: false, vertical: true)

@@ -51,6 +51,8 @@ internal fun StoryViewerShell(
     playing: Boolean,
     lap: Int,
     waiting: Boolean,
+    awaitingStart: Boolean,
+    scrubber: StoryProgressScrubber,
     composing: Boolean,
     railPlan: StoryRailPlan,
     commentThread: PostCommentsViewModel?,
@@ -137,6 +139,7 @@ internal fun StoryViewerShell(
                 onCommitFeedback = haptics::light,
             ),
     ) {
+        StoryGroupCubeNeighbors(cardMotion, previous = viewModel.groupAt(state.groupIndex - 1), next = viewModel.groupAt(state.groupIndex + 1))
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -144,6 +147,24 @@ internal fun StoryViewerShell(
                 .onGloballyPositioned { rail.boxOriginInRoot = it.positionInRoot() },
         ) {
             if (slide != null) {
+                StorySlideChangeAnnouncement(slide.id, state.index, state.slides.size)
+                val spoken = chrome.transcript.text(currentItem?.storyEffects, viewModel.transcriptLanguageChain())
+                val canvasActions = remember(cardMotion, actions, haptics, viewModel) {
+                    StoryCanvasA11yActions(
+                        onNext = { haptics.light(); viewModel.advance() },
+                        onPrevious = { haptics.light(); viewModel.back() },
+                        onTogglePause = viewModel::onCanvasDoubleTap,
+                        onToggleFullscreen = cardMotion.fullscreen::toggle,
+                        onClose = actions.onClose,
+                    )
+                }
+                Box(
+                    Modifier.fillMaxSize().storyCanvasAccessibility(
+                        slide = slide, index = state.index, count = state.slides.size, authorName = state.authorName,
+                        transcript = spoken, paused = state.isPaused, fullscreen = cardMotion.fullscreen.enabled,
+                        actions = canvasActions,
+                    ),
+                ) {
                 StoryViewerReaderScene(
                     slide = slide,
                     item = currentItem,
@@ -158,6 +179,7 @@ internal fun StoryViewerShell(
                     viewModel = viewModel,
                     captionExpanded = chrome.captionExpanded,
                 )
+                }
                 StoryReadingScrims(chromeVisible = chromeShown)
             }
 
@@ -193,7 +215,9 @@ internal fun StoryViewerShell(
                     state = state,
                     slide = slide,
                     accent = accent,
-                    progress = { progress.value },
+                    progress = { scrubber.fraction() },
+                    scrubber = scrubber,
+                    awaitingStart = awaitingStart,
                     chrome = chrome,
                     videoExport = videoExport,
                     actions = actions,

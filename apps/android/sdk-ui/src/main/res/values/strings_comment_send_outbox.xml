@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="comment_unsent_pending">Waiting to send</string>
+    <string name="comment_unsent_cancel_send">Cancel sending</string>
+    <string name="comment_unsent_error">Couldn\'t send the comment</string>
+    <string name="comment_unsent_retry">Retry</string>
+    <string name="comment_unsent_resume">Resume</string>
+    <string name="comment_unsent_delete">Delete</string>
+</resources>

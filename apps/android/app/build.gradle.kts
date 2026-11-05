@@ -130,6 +130,12 @@ android {
             isReturnDefaultValues = true
         }
     }
+    sourceSets {
+        getByName("test") {
+            java.srcDir(rootProject.file("test-support/compose-robolectric/kotlin"))
+            resources.srcDir(rootProject.file("test-support/compose-robolectric/resources"))
+        }
+    }
 }
 
 dependencies {
@@ -175,6 +181,8 @@ dependencies {
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.coil.compose)
     implementation(libs.okhttp)
+    // lot: lecture-moteur-partage-carte-systeme-et-caches — la couture AudioPlaybackSources (MediaSource) se lie ici, au cache AUDIO du compte.
+    implementation(libs.androidx.media3.exoplayer)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 

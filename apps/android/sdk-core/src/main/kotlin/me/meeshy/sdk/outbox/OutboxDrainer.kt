@@ -43,6 +43,12 @@ public sealed interface SendResult {
      * cleanly beyond it.
      */
     public data class Deferred(val reason: String) : SendResult
+
+    /**
+     * L'auteur a supprimé la ligne pendant son vol, et le sender l'a vu avant d'envoyer (audit #15726 ; iOS
+     * `OutboxCancellationError.cancelledByAuthor`) : la ligne part sans livraison, issue [OutboxOutcome.Cancelled].
+     */
+    public data object Cancelled : SendResult
 }
 
 /** Delivers a single [OutboxEntity] over the network; transient vs permanent is in the [SendResult]. */
@@ -211,7 +217,16 @@ public class OutboxDrainer(
                     continue
                 }
             }
-            when (val result = sendUnder(ticket, sender, row) ?: return blocked(delivered, exhausted)) {
+            val sent = sendUnder(ticket, sender, row)
+            val result = when (sent) {
+                Attempt.Closed -> return blocked(delivered, exhausted)
+                Attempt.Claimed -> {
+                    if (!independent) return DrainReport(delivered, exhausted, stoppedOnTransientFailure = false)
+                    continue
+                }
+                is Attempt.Sent -> sent.result
+            }
+            when (result) {
                 SendResult.Success -> {
                     outbox.markSucceeded(row.cmid)
                     delivered++
@@ -223,9 +238,10 @@ public class OutboxDrainer(
                     outbox.markSucceeded(row.cmid)
                     delivered++
                 }
+                SendResult.Cancelled -> outbox.markCancelledByAuthor(row.cmid)
                 SendResult.TransientFailure -> {
                     val attempts = (outbox.row(row.cmid)?.attempts ?: row.attempts) + 1
-                    val backoff = OutboxBackoff.delayMs(attempts)
+                    val backoff = OutboxBackoff.delayMs(kind, attempts)
                     if (outbox.markFailed(row.cmid, "Transient delivery failure", backoff) == OutboxState.EXHAUSTED) {
                         onExhausted(settled(row, "Transient delivery failure"))
                         exhausted++
@@ -286,14 +302,24 @@ public class OutboxDrainer(
         }
     }
 
-    /** The send, under [ticket]'s account when fenced; `null` once that account closed (the send was cancelled, or its outcome is moot). */
-    private suspend fun sendUnder(ticket: AccountTicket?, sender: MutationSender, row: OutboxEntity): SendResult? {
-        val send: suspend () -> SendResult = {
-            outbox.sendingLive(row.cmid) { withMutationId(row.cmid) { sender.send(row) } }
+    /**
+     * The send, under [ticket]'s account when fenced. [Attempt.Closed] once that account closed (the send was cancelled, or
+     * its outcome is moot); [Attempt.Claimed] when an overlapping pass already holds the row (#15677) — nothing left.
+     */
+    private suspend fun sendUnder(ticket: AccountTicket?, sender: MutationSender, row: OutboxEntity): Attempt {
+        val send: suspend () -> Attempt = {
+            outbox.sendingLive(row.cmid, now()) { withMutationId(row.cmid) { sender.send(row) } }
+                ?.let(Attempt::Sent) ?: Attempt.Claimed
         }
         val fence = fence
         if (fence == null || ticket == null) return send()
-        return fence.guard(ticket, send)?.takeIf { fence.isCurrent(ticket) }
+        return fence.guard(ticket, send)?.takeIf { fence.isCurrent(ticket) } ?: Attempt.Closed
+    }
+
+    private sealed interface Attempt {
+        data class Sent(val result: SendResult) : Attempt
+        data object Claimed : Attempt
+        data object Closed : Attempt
     }
 
     private fun blocked(delivered: Int, exhausted: Int) = DrainReport(

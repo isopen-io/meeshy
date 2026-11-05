@@ -71,6 +71,8 @@
     <string name="call_detail_type">النوع</string>
     <string name="call_detail_type_audio">مكالمة صوتية</string>
     <string name="call_detail_type_video">مكالمة فيديو</string>
+    <string name="call_effects_companions_more">%1$d مشاركين آخرين</string>
+    <string name="call_effects_companions_move">النقل إلى الجهة الأخرى</string>
     <string name="call_ended">انتهت المكالمة</string>
     <string name="call_ended_connection_lost">انقطع الاتصال</string>
     <string name="call_ended_declined">مكالمة مرفوضة</string>
@@ -135,6 +137,7 @@
     <string name="call_journal_clear_message">يحتفظ المشاركون الآخرون بسجلاتهم.</string>
     <string name="call_journal_clear_title">مسح سجل المكالمات بالكامل؟</string>
     <string name="call_journal_close">إغلاق</string>
+    <string name="call_journal_empty_title">لا مكالمات حديثة</string>
     <string name="call_journal_erase_failed">تعذّر المسح. حاول مرة أخرى.</string>
     <string name="call_journal_filter_video">فيديو</string>
     <string name="call_journal_hide">مسح</string>
@@ -249,4 +252,23 @@
     <string name="call_zoom_hint">اسحب لأعلى أو لأسفل للتكبير. على الشاشة، اضغط بإصبعين على صورتك؛ انقر مرتين للعودة إلى 1×</string>
     <string name="call_zoom_label">تكبير كاميرتي</string>
     <string name="permission_microphone_denied">تم رفض الميكروفون — اضغط لفتح الإعدادات</string>
+    <string name="video_filter_backgroundBlur">تمويه الخلفية</string>
+    <string name="video_filter_brightness">السطوع</string>
+    <string name="video_filter_contrast">التباين</string>
+    <string name="video_filter_exposure">التعريض</string>
+    <string name="video_filter_naturalComplexion">بشرة طبيعية</string>
+    <string name="video_filter_naturalComplexion_hint">يوحّد البشرة ويضيئها دون تعديل ظاهر</string>
+    <string name="video_filter_performanceDegraded">أداء منخفض — بعض المرشّحات معطّلة</string>
+    <string name="video_filter_preset_cool">بارد</string>
+    <string name="video_filter_preset_muted">ناعم</string>
+    <string name="video_filter_preset_natural">طبيعي</string>
+    <string name="video_filter_preset_vivid">زاهٍ</string>
+    <string name="video_filter_preset_warm">دافئ</string>
+    <string name="video_filter_radius">نصف القطر</string>
+    <string name="video_filter_reinit">إعادة تعيين</string>
+    <string name="video_filter_reset">إعادة تعيين</string>
+    <string name="video_filter_saturation">التشبّع</string>
+    <string name="video_filter_skinSmoothing">تنعيم البشرة</string>
+    <string name="video_filter_temperature">الحرارة</string>
+    <string name="video_filter_title">مرشّحات الفيديو</string>
 </resources>

@@ -70,7 +70,7 @@ class StorySceneSheetLayoutTest {
                         sheet = sheet(),
                         onSheetDismiss = onSheetDismiss,
                         sheetContent = { open ->
-                            ComposerAnchoredSheet(fill = open != StoryComposerSheet.AUDIENCE) {
+                            ComposerAnchoredSheet(fill = open.fillsHeight) {
                                 Box(Modifier.fillMaxWidth().fillMaxSize().testTag(SHEET))
                             }
                         },
@@ -125,7 +125,7 @@ class StorySceneSheetLayoutTest {
         show { StoryComposerSheet.AUDIENCE }
 
         compose.onNodeWithContentDescription(CLOSE).assertDoesNotExist()
-        compose.onNodeWithContentDescription("Text").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Add text").assertDoesNotExist()
         compose.onNodeWithText(PUBLISH).assertDoesNotExist()
     }
 

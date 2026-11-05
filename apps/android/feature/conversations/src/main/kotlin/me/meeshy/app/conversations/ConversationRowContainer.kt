@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +72,8 @@ internal fun ConversationRowContainer(
     val currentTags = prefs?.tags.orEmpty()
     val title = conversation.displayTitle(model.currentUserId)
     var menuExpanded by remember { mutableStateOf(false) }
+    // Un appui long suivi d'un déplacement lève la rangée : le menu s'efface devant le glisser-déposer.
+    LaunchedEffect(model.isDragging) { if (model.isDragging) menuExpanded = false }
 
     val previewLabels = lastMessagePreviewLabels()
     val draftLine = draftPreview(model.draft, previewLabels)
@@ -95,6 +98,8 @@ internal fun ConversationRowContainer(
     val capabilities = remember(conversation, model.currentUserPrefs) {
         ConversationRowMenuCapabilities.make(conversation, model.currentUserPrefs)
     }
+    val avatarGestures = rememberRowAvatarGestures(model, actions, capabilities)
+    MoodImpressionOnAppearance(conversation.id, model.moodEmoji, actions.onMoodShown)
     val palette = conversation.displayPaletteInTheme()
     val accent = hexColor(palette.primary)
     val secondary = hexColor(palette.secondary)
@@ -166,6 +171,7 @@ internal fun ConversationRowContainer(
                 timeLabel = timeLabel,
                 onJoinCall = actions.onJoinCall.takeIf { showsJoin },
                 engagement = engagement,
+                avatarGestures = avatarGestures,
             )
             if (model.isSelected) {
                 Box(
@@ -183,6 +189,8 @@ internal fun ConversationRowContainer(
 
         if (menuExpanded) {
             val peerBlocked = remember { actions.peerBlocked() }
+            val readingModes = rememberConversationReadingModes()
+            val readingModeEntries = remember(conversation.id) { readingModes?.entries(conversation) }
             val menuModel = ConversationMenuModel.make(
                 ConversationMenuInput(
                     capabilities = capabilities,
@@ -195,6 +203,7 @@ internal fun ConversationRowContainer(
                     isArchived = prefs?.isArchived == true,
                     isPeerBlocked = peerBlocked,
                     isCreator = conversation.currentUserRole(model.currentUserId) == MemberRole.CREATOR,
+                    offersReadingModes = readingModeEntries != null,
                     destinations = ConversationMenuDestinations(
                         details = actions.onViewInfo != null,
                         profile = actions.onViewProfile != null,
@@ -215,6 +224,7 @@ internal fun ConversationRowContainer(
                     currentReaction = prefs?.reaction,
                     categories = model.categories,
                     currentCategoryId = prefs?.categoryId,
+                    readingModes = readingModeEntries.orEmpty(),
                 ),
                 accent = accent,
                 previewMessages = model.previewMessages,
@@ -227,6 +237,7 @@ internal fun ConversationRowContainer(
                 currentTags = currentTags,
                 actions = actions,
                 onManageMembers = actions.onManageMembers?.let { open -> { open(accent) } },
+                onSelectReadingMode = { choice -> readingModes?.choose(conversation, choice) },
             )
         }
     }

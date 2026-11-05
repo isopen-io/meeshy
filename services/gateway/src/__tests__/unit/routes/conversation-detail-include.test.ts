@@ -52,6 +52,14 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
     ]);
   });
 
+  it('#15717 — loads the ACCOUNT state (user.isActive) that composes accountClosed, and nothing else of the account lifecycle', () => {
+    const userSelect = participants.select.user.select;
+    expect(userSelect.isActive).toBe(true);
+    for (const field of ['deletedAt', 'deactivatedAt']) {
+      expect(userSelect[field]).toBeUndefined();
+    }
+  });
+
   it('never hydrates sensitive or dead participant fields (stripped from the wire anyway)', () => {
     for (const field of ['sessionTokenHash', 'anonymousSession', 'shareLinkId', 'deletedForMe', 'leftAt', 'bannedAt', 'nickname', 'conversationId', 'language']) {
       expect(participants.select[field]).toBeUndefined();
@@ -65,6 +73,7 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
       'equippedAvatarRing',
       'firstName',
       'id',
+      'isActive',
       'lastName',
       'username'
     ]);

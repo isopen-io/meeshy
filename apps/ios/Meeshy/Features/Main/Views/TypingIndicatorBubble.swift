@@ -27,10 +27,6 @@ struct TypingIndicatorBubble: View {
     /// trois points pulsants accent, SANS capsule ni libellé visible (mêmes
     /// timings 0.5 s / 0.18 s). `false` = capsule historique du mode bulles.
     var isFlat: Bool = false
-    /// Ceux qui ont l'écran de CETTE conversation ouvert (#8892), et ceux qui
-    /// y sont actifs (#9061), lus UNE fois par l'hôte : la pastille du
-    /// frappeur porte alors le point primaire, qui pulse s'il est actif.
-    var here = ConversationHereRoster()
 
     private var names: [String] { participants.displayNames }
 
@@ -50,19 +46,24 @@ struct TypingIndicatorBubble: View {
     /// Pastille de l'auteur — sa VRAIE photo dès qu'elle est connue localement,
     /// ses initiales déterministes sinon. `MeeshyAvatar` porte déjà la cascade
     /// (cache disque → réseau → initiales) : lui passer `avatarURL` suffit.
+    ///
+    /// NI PRÉSENCE NI DÉCOR (#16114, directive porteur) : les
+    /// points qui bougent disent déjà que la personne est là — aucune pastille
+    /// « en ligne » ni « ici » ne s'y ajoute. Et c'est la SEULE surface où le
+    /// contour équipé se pose sans ses films illustrés (`ringWithoutDecor`) :
+    /// partout ailleurs, le décor s'affiche entier.
     @ViewBuilder
     private func leadAvatar(size: CGFloat) -> some View {
         if let lead {
-            LivePresence { MeeshyAvatar(
+            MeeshyAvatar(
                 name: lead.displayName,
                 context: .custom(size),
                 accentColor: accentHex,
                 avatarURL: lead.avatarURL,
-                presenceState: PresenceManager.shared.presenceState(for: lead.id),
-                isHere: here[lead.id],
                 ring: lead.ring,
                 isDark: isDark
-            ) }
+            )
+            .ringWithoutDecor()
         }
     }
 

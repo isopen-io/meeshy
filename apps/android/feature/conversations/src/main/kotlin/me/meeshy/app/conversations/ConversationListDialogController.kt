@@ -9,11 +9,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import me.meeshy.feature.conversations.R
+import me.meeshy.sdk.conversation.ConversationRemoval
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.feedback.HapticKind
 import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities
+import me.meeshy.sdk.model.conversationlist.ObsoleteRefusal
 import me.meeshy.sdk.model.isDirect
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.NetworkResult
@@ -49,6 +51,15 @@ internal class ConversationListDialogController(
 
     /** Un « Rechercher » sur une conversation verrouillée, armé seulement une fois le code franchi. */
     private var searchAfterUnlock: Boolean = false
+
+    init {
+        scope.launch {
+            deps.remover.refusals.collect { refusal ->
+                emit(ConversationListDialogEffect.Haptic(HapticKind.ERROR))
+                toast(refusal.removal.messageRes(), FeedbackKind.Error)
+            }
+        }
+    }
 
     // ── Bloquer / débloquer ──
 
@@ -97,6 +108,32 @@ internal class ConversationListDialogController(
         actions.deleteConversationForMe(target.conversationId)
     }
 
+    fun requestObsolete(conversationId: String) {
+        val conversation = conversationOf(conversationId) ?: return
+        if (!capabilities(conversation).obsolete) return
+        show(ConversationListDialog.Obsolete(conversationId, conversation.displayTitle(state.value.currentUserId)))
+    }
+
+    fun confirmObsolete() {
+        val target = take<ConversationListDialog.Obsolete>() ?: return
+        emit(ConversationListDialogEffect.Haptic(HapticKind.HEAVY))
+        makeObsolete(target.conversationId)
+    }
+
+    /**
+     * Rend obsolète une conversation dont le geste a DÉJÀ été confirmé (le menu porte sa propre confirmation) :
+     * un refus rend la rangée et dit pourquoi — l'expéditeur d'une demande non acceptée lit que seul son
+     * destinataire le peut (#14690).
+     */
+    fun makeObsolete(conversationId: String) {
+        val conversation = conversationOf(conversationId) ?: return
+        if (!capabilities(conversation).obsolete) return
+        actions.makeConversationObsolete(conversationId) { error ->
+            emit(ConversationListDialogEffect.Haptic(HapticKind.ERROR))
+            toast(ObsoleteRefusal.of(conversation.isDirect, error.httpStatus).messageRes(), FeedbackKind.Error)
+        }
+    }
+
     fun requestLeave(conversationId: String) {
         val conversation = conversationOf(conversationId) ?: return
         if (!capabilities(conversation).leave) return
@@ -106,11 +143,7 @@ internal class ConversationListDialogController(
     fun confirmLeave() {
         val target = take<ConversationListDialog.Leave>() ?: return
         emit(ConversationListDialogEffect.Haptic(HapticKind.HEAVY))
-        scope.launch {
-            if (repository.leave(target.conversationId) is NetworkResult.Failure) {
-                toast(R.string.dialogs_leave_error, FeedbackKind.Error)
-            }
-        }
+        actions.leaveConversation(target.conversationId) { toast(R.string.dialogs_leave_error, FeedbackKind.Error) }
     }
 
     fun requestRename(conversationId: String) {
@@ -262,4 +295,14 @@ internal class ConversationListDialogController(
     private fun emit(effect: ConversationListDialogEffect) {
         effectChannel.trySend(effect)
     }
+}
+
+private fun ConversationRemoval.messageRes(): Int = when (this) {
+    ConversationRemoval.LEAVE -> R.string.dialogs_leave_error
+    ConversationRemoval.DELETE_FOR_ME, ConversationRemoval.DELETE_FOR_ALL -> R.string.conversation_removal_refused_delete
+}
+
+private fun ObsoleteRefusal.messageRes(): Int = when (this) {
+    ObsoleteRefusal.PENDING_REQUEST -> R.string.conversations_obsolete_refused_pending_request
+    ObsoleteRefusal.OTHER -> R.string.conversations_obsolete_error
 }

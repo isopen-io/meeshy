@@ -64,6 +64,7 @@ export const conversationParticipantSchema = {
     // directive de présence du 2026-08-25 ne fait aucune exception pour une
     // préférence personnelle sur la seule foi d'une conversation partagée.
     isActive: { type: 'boolean', description: 'Participant is active' },
+    accountClosed: { type: 'boolean', description: 'Present (true) only when the participant account was deleted or deactivated; absent otherwise' },
     createdAt: { type: 'string', format: 'date-time', description: 'User creation timestamp' },
     updatedAt: { type: 'string', format: 'date-time', description: 'User last update timestamp' },
     joinedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Join timestamp' },
@@ -230,6 +231,19 @@ export const messageRequestSchema = {
   description: "Demande de message du lecteur, tant qu'elle n'est pas acceptée ; null = conversation ordinaire"
 } as const;
 
+/**
+ * Ce que le LECTEUR peut faire de la conversation (#14690), calculé pour lui par
+ * la décision qui garde la route correspondante. Absent quand la route ne le
+ * calcule pas. Non déclaré, `fast-json-stringify` le retirerait du fil.
+ */
+export const viewerCapabilitiesSchema = {
+  type: 'object',
+  properties: {
+    canMakeObsolete: { type: 'boolean', description: 'DELETE /conversations/:id/obsolete accepterait cet appelant' }
+  },
+  description: "Capacités du lecteur sur cette conversation ; absent = non calculé (serveur antérieur)"
+} as const;
+
 export const conversationSchema = {
   type: 'object',
   description: 'Conversation with participants, messages, and metadata',
@@ -389,6 +403,7 @@ export const conversationSchema = {
     // #14107 — la DEMANDE de message en attente du LECTEUR (boîte de demandes,
     // MSG-01/02). Non déclaré, `fast-json-stringify` le retirerait du fil.
     messageRequest: messageRequestSchema,
+    viewerCapabilities: viewerCapabilitiesSchema,
     currentUserRole: {
       type: 'string',
       nullable: true,
@@ -453,6 +468,7 @@ export const conversationParticipantMinimalSchema = {
     },
     joinedAt: { type: 'string', format: 'date-time', description: 'Join timestamp' },
     isActive: { type: 'boolean', description: 'Is active member' },
+    accountClosed: { type: 'boolean', description: 'Present (true) only when the member account was deleted or deactivated; absent otherwise' },
     user: {
       type: 'object',
       nullable: true,
@@ -617,6 +633,7 @@ export const conversationMinimalSchema = {
     // #14107 — la DEMANDE de message en attente du LECTEUR (boîte de demandes,
     // MSG-01/02). Non déclaré, `fast-json-stringify` le retirerait du fil.
     messageRequest: messageRequestSchema,
+    viewerCapabilities: viewerCapabilitiesSchema,
     currentUserRole: {
       type: 'string',
       nullable: true,

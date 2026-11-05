@@ -88,6 +88,8 @@ data class UnreadUpdateEvent(
     val conversationId: String,
     val unreadCount: Int,
     val totalUnread: Int = 0,
+    /** Le pont ✦ à trois états : absent = non calculé (on garde), `null` = effacer, objet = remplacer. */
+    val bridge: BridgeAnnouncement = BridgeAnnouncement.NotComputed,
 )
 
 /**
@@ -147,6 +149,9 @@ data class TranscriptionPayload(
     val confidence: Double? = null,
     val durationMs: Long? = null,
     val source: String? = null,
+    /** Les segments servis (`segments[].startMs/endMs` ou secondes) : le karaoké et les locuteurs de la fiche. */
+    val segments: List<TranscriptionSegment>? = null,
+    val speakerCount: Int? = null,
 )
 
 /**
@@ -182,6 +187,8 @@ data class TranslatedAudioPayload(
     val quality: Double? = null,
     val voiceModelId: String? = null,
     val ttsModel: String? = null,
+    val segments: List<TranscriptionSegment>? = null,
+    val speakerCount: Int? = null,
 )
 
 @Serializable
@@ -388,6 +395,16 @@ data class ParticipantRoleUpdatedEvent(
     val conversationId: String,
     val userId: String,
     @SerialName("newRole") val role: String,
+    val updatedBy: String? = null,
+    @Serializable(with = TolerantRoleParticipantSerializer::class)
+    val participant: ParticipantRoleUpdatedParticipantInfo? = null,
+    /**
+     * #15987 — la capacité de la CIBLE recalculée pour son nouveau rang, présente
+     * dans le seul exemplaire remis à sa room personnelle. Absente (serveur
+     * antérieur, autre destinataire) ou illisible : `null`.
+     */
+    @Serializable(with = TolerantViewerCapabilitiesSerializer::class)
+    val viewerCapabilities: ConversationViewerCapabilities? = null,
 )
 
 /**
@@ -439,6 +456,7 @@ data class ConversationClosedSocketEvent(
     val conversationId: String,
     val closedBy: String,
     val closedAt: String? = null,
+    val reason: String? = null,
 )
 
 /**
@@ -575,6 +593,8 @@ data class SocketCommentAddedData(
     val postId: String,
     val comment: ApiPostComment,
     val commentCount: Int = 0,
+    /** La clé d'idempotence de l'auteur : l'écho remplace sa ligne optimiste (id = cmid) au lieu de la doubler. */
+    val clientMutationId: String? = null,
 )
 
 /**
@@ -654,6 +674,8 @@ data class SocketStoryViewedData(
     val storyId: String,
     val viewerId: String,
     val viewedAt: String? = null,
+    /** Total autoritatif de vues porté par l'événement (iOS `SocketStoryViewedData.viewCount`) ; `null` d'une ancienne passerelle. */
+    val viewCount: Int? = null,
 )
 
 @Serializable

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "feed.post.detail.story_unavailable", "androidName": "feed_post_detail_story_unavailable", "status": "adopted" }
+      ]
+    }
+  }
+}

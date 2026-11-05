@@ -455,17 +455,7 @@ struct DetachedWindowView: View {
                 draggedContent = .conversation(id: id)
             }
         }
-        .task(id: authManager.currentUser?.id) {
-            switch DetachedWindowOwnership.verdict(owner: ownerUserId, current: authManager.currentUser?.id) {
-            case .adopt(let userId):
-                ownerUserId = userId
-            case .close:
-                conversation = nil
-                closeWindow()
-            case .keep, .waitForSignIn:
-                break
-            }
-        }
+        .task(id: authManager.currentUser?.id) { applyOwnershipVerdict() }
         // 6. La fenêtre principale tient sockets et synchronisation : fermée (par l'utilisateur ou par le système),
         // la fenêtre détachée propose de la rouvrir plutôt que de rester muette.
         .overlay(alignment: .top) { reopenMainWindowBanner }
@@ -513,10 +503,30 @@ struct DetachedWindowView: View {
             router.onPopRequested = { closeWindow() }
         }
         .onDisappear { router.onPopRequested = nil }
+        .environment(\.meeshyQuoteComposerHost, quoteHost)
         // La portée de CETTE fenêtre, posée le plus à l'extérieur comme dans les
         // racines (#10543) : sans elle ses feuilles s'inscrivaient « de toute
         // fenêtre », et la principale les refermait en ouvrant une conversation.
         .environment(\.presentedSurfaceScope, router.surfaceScope)
+    }
+
+    private func applyOwnershipVerdict() {
+        switch DetachedWindowOwnership.verdict(owner: ownerUserId, current: authManager.currentUser?.id) {
+        case .adopt(let userId):
+            ownerUserId = userId
+        case .close:
+            conversation = nil
+            closeWindow()
+        case .keep, .waitForSignIn:
+            break
+        }
+    }
+
+    /// La porte de citation de toute surface de publication (#15911).
+    private var quoteHost: QuoteComposerHost {
+        QuoteComposerHost(storyViewModel: storyViewModel, router: router,
+                          conversationListViewModel: conversationVMOwner.viewModel,
+                          statusViewModel: statusViewModel)
     }
 
     // MARK: - Bandeau
@@ -592,7 +602,10 @@ struct DetachedWindowView: View {
                             id: userId, startAtFirstUnviewed: true, singleGroup: true))
                     },
                     onOpenDetail: { postId in router.push(.postDetail(postId)) },
-                    authorHasStory: { userId in storyViewModel.storyRingState(forUserId: userId) != .none }
+                    authorHasStory: { userId in storyViewModel.storyRingState(forUserId: userId) != .none },
+                    quoteHost: QuoteComposerHost(storyViewModel: storyViewModel, router: router,
+                                                 conversationListViewModel: conversationVMOwner.viewModel,
+                                                 statusViewModel: statusViewModel)
                 )
                 .ignoresSafeArea()
             }

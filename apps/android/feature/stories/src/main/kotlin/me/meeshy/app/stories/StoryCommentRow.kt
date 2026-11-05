@@ -52,6 +52,9 @@ import me.meeshy.sdk.model.canShowOriginal
 import me.meeshy.sdk.model.displayedText
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.profile.opensProfile
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.ofAuthor
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -113,7 +116,10 @@ internal fun StoryCommentRow(
                 .clip(CircleShape)
                 .background(authorColor),
         )
-        MeeshyAvatar(name = comment.authorName, size = 32.dp, containerColor = authorColor, imageUrl = comment.avatarUrl)
+        val author = remember(comment.authorId, comment.authorName, comment.avatarUrl) {
+            comment.authorId?.let { ProfileSheetUser.ofAuthor(it, displayName = comment.authorName, avatarUrl = comment.avatarUrl) }
+        }
+        MeeshyAvatar(name = comment.authorName, size = 32.dp, containerColor = authorColor, imageUrl = comment.avatarUrl, modifier = Modifier.opensProfile(author))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
             StoryCommentHeader(comment, showOriginal, authorColor, callbacks)
             if (editing) {
@@ -148,7 +154,10 @@ private fun StoryCommentHeader(comment: StoryComment, showOriginal: Boolean, aut
             style = TextStyle(color = legibleAuthorColor(authorColor), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, shadow = LegibleShadow),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 160.dp),
+            modifier = Modifier.widthIn(max = 160.dp).opensProfile(
+                comment.authorId?.let { ProfileSheetUser.ofAuthor(it, displayName = comment.authorName, avatarUrl = comment.avatarUrl) },
+                minTarget = false,
+            ),
         )
         comment.createdAt?.let { iso ->
             Text(

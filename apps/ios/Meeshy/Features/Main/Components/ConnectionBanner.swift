@@ -82,8 +82,10 @@ struct ConnectionBanner: View {
 
     /// Callback invoked when the user taps an entry whose `source` is
     /// non-nil. The mount point (`RootView` / `iPadRootView`) wires this
-    /// to its router to push onto the navigation stack.
-    private let onItemTap: ((OutboxUIItem.Source) -> Void)?
+    /// to `SyncPillDestination` and presents the result. Returns `false` when
+    /// nothing was opened, so the pill advances its rotation instead of
+    /// staying inert.
+    private let onItemTap: ((OutboxUIItem.Source) -> Bool)?
 
     /// Identifiant de la conversation actuellement à l'écran, quand le point de
     /// montage en connaît une. Elle est exclue des entrées de frappe : son
@@ -136,7 +138,7 @@ struct ConnectionBanner: View {
     init(
         conversationListViewModel: ConversationListViewModel?,
         isStoryViewerPresenting: Bool,
-        onItemTap: ((OutboxUIItem.Source) -> Void)? = nil,
+        onItemTap: ((OutboxUIItem.Source) -> Bool)? = nil,
         activeConversationId: (() -> String?)? = nil,
         inAppNotices: NotificationToastManager = .shared
     ) {

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="contacts_list_online">متصل</string>
+    <string name="contacts_list_last_seen_minutes">شوهد منذ %1$d د</string>
+    <string name="contacts_list_last_seen_hours">شوهد منذ %1$d س</string>
+    <string name="contacts_list_last_seen_days">شوهد منذ %1$d ي</string>
+    <string name="contacts_list_offline_lower">غير متصل</string>
+    <string name="contacts_list_row_a11y">%1$s، @%2$s، %3$s</string>
+    <string name="contacts_filter_phonebook">جهات الاتصال</string>
+    <string name="contacts_filter_affiliates">المنتسبون</string>
+    <string name="contacts_filter_a11y">عامل التصفية: %1$s</string>
+    <string name="contacts_search_clear">مسح البحث</string>
+    <string name="contacts_list_mood_a11y">فتح حالة %1$s</string>
+</resources>

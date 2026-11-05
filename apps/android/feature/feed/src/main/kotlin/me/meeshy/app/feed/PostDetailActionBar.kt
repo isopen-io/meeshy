@@ -2,8 +2,6 @@ package me.meeshy.app.feed
 
 import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.background
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.ui.platform.LocalContext
@@ -11,7 +9,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
@@ -40,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -197,8 +193,8 @@ internal fun DetailStat(
 }
 
 /**
- * The repost stat, made interactive: a tap opens a Repost / Quote choice — the Android take on
- * iOS's post-detail repost button + alert (`PostDetailView.toggleDetailRepost`). The icon fills
+ * The repost stat, made interactive: a tap opens [RepostChoiceDialog] — the one choice every Repost button of a
+ * publication offers (iOS `PostDetailView` + `RepostChoiceDialog`, #15911). The icon fills
  * once the reader has reposted (optimistic [active]); the menu items route to the ViewModel,
  * whose tested [RepostCommand] SSOT decides what to send.
  */
@@ -228,20 +224,7 @@ internal fun DetailRepostStat(
             EngagementCount(count = count, color = MeeshyTheme.tokens.textSecondary)
         }
     }
-    if (choosing) {
-        AlertDialog(
-            onDismissRequest = { choosing = false },
-            title = { Text(stringResource(R.string.feed_reposts)) },
-            text = {
-                Column {
-                    TextButton(onClick = { choosing = false; onRepost() }) { Text(stringResource(R.string.feed_action_repost)) }
-                    TextButton(onClick = { choosing = false; onQuote() }) { Text(stringResource(R.string.feed_action_quote)) }
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { choosing = false }) { Text(stringResource(R.string.feed_delete_cancel)) } },
-        )
-    }
+    if (choosing) RepostChoiceDialog(onRepost = onRepost, onQuote = onQuote, onDismiss = { choosing = false })
 }
 
 /** Zone tactile autour du glyphe d'une action d'engagement (iOS `engagementHitArea`, 44 pt ; Android : 48 dp). */

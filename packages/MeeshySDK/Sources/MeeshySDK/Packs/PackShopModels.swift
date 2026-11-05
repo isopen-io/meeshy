@@ -33,6 +33,9 @@ public struct ShopPack: InstallablePack {
     /// Ce qui reste à débloquer, et comment (S21, #11276) : servi pour un pack du registre NON possédé qui
     /// se gagne ou qui a une fenêtre. Absent d'un ancien serveur, d'un pack possédé ou libre ⇒ `nil`.
     public var requirementPreview: PackRequirementPreview?
+    /// Le contrat `<sha16>.json` d'un pack d'apparence non embarqué (#16264) : servi par le DÉTAIL
+    /// (`GET /packs/<domaine>/:slug`) ; absent d'un résumé, d'un pack embarqué ou illisible ⇒ `nil`.
+    public var contract: PackAssetRef?
 
     public var id: String { slug }
     public var isBundled: Bool { isBuiltin || origin == .builtin }
@@ -63,8 +66,9 @@ public struct ShopPack: InstallablePack {
                 isBuiltin: Bool = false, origin: PackOrigin = .official, coverUrl: String? = nil,
                 installed: Bool = false, installCount: Int = 0, price: Int? = nil, owned: Bool? = nil,
                 removable: Bool = true, names: [String: PackLocalizedName] = [:], usage: FrameUsage? = nil,
-                requirementPreview: PackRequirementPreview? = nil) {
+                requirementPreview: PackRequirementPreview? = nil, contract: PackAssetRef? = nil) {
         self.requirementPreview = requirementPreview
+        self.contract = contract
         self.names = names
         self.usage = usage
         self.slug = slug
@@ -83,7 +87,7 @@ public struct ShopPack: InstallablePack {
 
     enum CodingKeys: String, CodingKey {
         case slug, name, description, author, origin, coverUrl, installed, installCount, price, owned, removable
-        case names, usage, requirementPreview
+        case names, usage, requirementPreview, contract
         case isBuiltin = "builtin"
     }
 
@@ -104,6 +108,7 @@ public struct ShopPack: InstallablePack {
         names = Self.lossyNames(c)
         usage = try? c.decodeIfPresent(FrameUsage.self, forKey: .usage)
         requirementPreview = try? c.decodeIfPresent(PackRequirementPreview.self, forKey: .requirementPreview)
+        contract = (try? c.decodeIfPresent(PackAssetRef.self, forKey: .contract)) ?? nil
     }
 
     /// Une langue illisible tombe seule : les autres noms restent.

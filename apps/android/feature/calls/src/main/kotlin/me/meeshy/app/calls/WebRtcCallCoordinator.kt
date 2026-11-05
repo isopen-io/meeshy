@@ -111,6 +111,9 @@ class WebRtcCallCoordinator @Inject constructor(
     /** Ce que la scène d'un appel de groupe lit : registre, principal, vidéo de chaque membre du maillage. */
     val groupMesh: StateFlow<GroupCallMeshUi> get() = mesh.ui
 
+    /** L'appel est prouvé réunir plus de deux personnes (le plafond de reconnexion quitte au lieu de raccrocher). */
+    val isGroupCall: Boolean get() = mesh.isGroup
+
     /** Le principal a quitté un groupe qui continue : sa connexion n'est plus surveillée, l'appel tient par le maillage. */
     var onPrimaryVacated: (() -> Unit)? = null
 

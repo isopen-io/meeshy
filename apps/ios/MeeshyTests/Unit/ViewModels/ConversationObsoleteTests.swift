@@ -62,9 +62,9 @@ final class ConversationObsoleteTests: XCTestCase {
         let sut = makeList(conversationService: service)
         sut.conversations = [makeConversation(id: "c1"), makeConversation(id: "c2")]
 
-        let succeeded = await ConversationObsolescence(list: sut).perform(conversationId: "c1")
+        let outcome = await ConversationObsolescence(list: sut).perform(conversationId: "c1")
 
-        XCTAssertTrue(succeeded)
+        XCTAssertEqual(outcome, .obsoleted)
         XCTAssertEqual(sut.conversations.map(\.id), ["c2"])
         XCTAssertEqual(service.obsoleteCallCount, 1)
         XCTAssertEqual(service.lastObsoleteConversationId, "c1")
@@ -89,9 +89,9 @@ final class ConversationObsoleteTests: XCTestCase {
         let sut = makeList(conversationService: service)
         sut.conversations = [makeConversation(id: "c1"), makeConversation(id: "c2"), makeConversation(id: "c3")]
 
-        let succeeded = await ConversationObsolescence(list: sut).perform(conversationId: "c2")
+        let outcome = await ConversationObsolescence(list: sut).perform(conversationId: "c2")
 
-        XCTAssertFalse(succeeded)
+        XCTAssertEqual(outcome, .refused(.other), "un 403 sur un groupe n'est pas une demande de message")
         XCTAssertEqual(sut.conversations.map(\.id), ["c1", "c2", "c3"])
     }
 
@@ -100,10 +100,132 @@ final class ConversationObsoleteTests: XCTestCase {
         let sut = makeList(conversationService: service)
         sut.conversations = [makeConversation(id: "c1")]
 
-        let succeeded = await ConversationObsolescence(list: sut).perform(conversationId: "ghost")
+        let outcome = await ConversationObsolescence(list: sut).perform(conversationId: "ghost")
 
-        XCTAssertFalse(succeeded)
+        XCTAssertEqual(outcome, .absent)
         XCTAssertEqual(service.obsoleteCallCount, 0)
+    }
+
+    // MARK: - Le refus dit pourquoi (#14690)
+
+    private func makeDirect(id: String) -> Conversation {
+        MeeshyConversation(id: id, identifier: id, type: .direct, title: "Ada", participantUserId: "peer", currentUserRole: "member")
+    }
+
+    func test_perform_directRefusedWith403_putsTheRowBackAndSaysOnlyTheRecipientCan() async {
+        let service = MockConversationService()
+        service.obsoleteResult = .failure(MeeshyError.forbidden(reason: nil, body: nil))
+        let sut = makeList(conversationService: service)
+        sut.conversations = [makeConversation(id: "c1"), makeDirect(id: "d1")]
+
+        let outcome = await ConversationObsolescence(list: sut).perform(conversationId: "d1")
+
+        XCTAssertEqual(outcome, .refused(.pendingRequest))
+        XCTAssertEqual(sut.conversations.map(\.id), ["c1", "d1"])
+    }
+
+    func test_perform_directRefusedForAnotherReason_isTheGenericFailure() async {
+        let service = MockConversationService()
+        service.obsoleteResult = .failure(MeeshyError.server(statusCode: 500, message: "boom"))
+        let sut = makeList(conversationService: service)
+        sut.conversations = [makeDirect(id: "d1")]
+
+        let outcome = await ConversationObsolescence(list: sut).perform(conversationId: "d1")
+
+        XCTAssertEqual(outcome, .refused(.other))
+        XCTAssertEqual(sut.conversations.map(\.id), ["d1"])
+    }
+
+    func test_refusal_pendingRequestMessage_isNotTheGenericFailure() {
+        XCTAssertEqual(ConversationObsolescence.Refusal.other.message, ConversationObsolescence.failureMessage)
+        XCTAssertNotEqual(ConversationObsolescence.Refusal.pendingRequest.message, ConversationObsolescence.failureMessage)
+        XCTAssertFalse(ConversationObsolescence.Refusal.pendingRequest.message.isEmpty)
+    }
+
+    func test_refusal_of_readsA403OnlyOnADirect() {
+        let forbidden = MeeshyError.forbidden(reason: nil, body: nil)
+        XCTAssertEqual(ConversationObsolescence.Refusal.of(isDirect: true, error: forbidden), .pendingRequest)
+        XCTAssertEqual(ConversationObsolescence.Refusal.of(isDirect: false, error: forbidden), .other)
+        XCTAssertEqual(ConversationObsolescence.Refusal.of(isDirect: true, error: URLError(.notConnectedToInternet)), .other)
+    }
+
+    // MARK: - Au balayage de fin (#14645)
+
+    func test_trailingSwipePlan_obsoleteNotGranted_keepsArchiveReadHide() {
+        XCTAssertEqual(
+            ConversationTrailingSwipe.plan(isArchived: false, isArchiveImposed: false, hasUnread: true, obsolete: false),
+            [.archive, .markRead, .hide]
+        )
+    }
+
+    func test_trailingSwipePlan_obsoleteGranted_comesLastAndTheEdgeKeepsThree() {
+        let plan = ConversationTrailingSwipe.plan(isArchived: false, isArchiveImposed: false, hasUnread: false, obsolete: true)
+
+        XCTAssertEqual(plan, [.archive, .hide, .obsolete])
+        XCTAssertLessThanOrEqual(plan.count, SwipeRowRules.maxActionsPerSide)
+    }
+
+    func test_trailingSwipePlan_archiveImposed_obsoleteFitsBesideTheReadToggle() {
+        XCTAssertEqual(
+            ConversationTrailingSwipe.plan(isArchived: true, isArchiveImposed: true, hasUnread: false, obsolete: true),
+            [.markUnread, .hide, .obsolete]
+        )
+    }
+
+    private func makeSwipeActions(
+        list: ConversationListViewModel,
+        currentUser: MeeshyUser?,
+        onObsolete: @escaping (Conversation) -> Void
+    ) -> ConversationSwipeActions {
+        ConversationSwipeActions(
+            viewModel: list,
+            lockManager: ConversationLockManager(
+                vault: InMemoryConversationLockVault(),
+                defaults: UserDefaults(suiteName: "swipe-obsolete-\(UUID().uuidString)")!,
+                biometrics: StubBiometricUnlocker(),
+                iterations: 1_000
+            ),
+            currentUser: currentUser,
+            onLockRequest: { _, _ in },
+            onMasterPinMissing: {},
+            onHide: { _ in },
+            onObsolete: onObsolete
+        )
+    }
+
+    private let reader = MeeshyUser(id: "me", username: "me", displayName: "Me", role: "USER", isAnonymous: false)
+
+    func test_trailingSwipeActions_groupAdmin_lastActionArmsTheMenuConfirmation() {
+        let service = MockConversationService()
+        let list = makeList(conversationService: service)
+        var armed: [String] = []
+        let sut = makeSwipeActions(list: list, currentUser: reader) { armed.append($0.id) }
+
+        let actions = sut.trailingSwipeActions(for: makeConversation(id: "c1"))
+
+        XCTAssertEqual(actions.last?.label, ConversationMenuEntry.obsolete.label)
+        XCTAssertEqual(actions.last?.icon, ConversationMenuEntry.obsolete.symbol)
+        XCTAssertLessThanOrEqual(actions.count, SwipeRowRules.maxActionsPerSide)
+        actions.last?.action()
+        XCTAssertEqual(armed, ["c1"], "le balayage arme la confirmation du menu")
+        XCTAssertEqual(service.obsoleteCallCount, 0, "jamais l'effet sans confirmation")
+    }
+
+    func test_trailingSwipeActions_groupMember_offersNoObsolete() {
+        let list = makeList()
+        let member = MeeshyConversation(id: "c1", identifier: "c1", type: .group, title: "Groupe", currentUserRole: "member")
+        let sut = makeSwipeActions(list: list, currentUser: reader) { _ in }
+
+        let labels = sut.trailingSwipeActions(for: member).map(\.label)
+
+        XCTAssertFalse(labels.contains(ConversationMenuEntry.obsolete.label))
+        XCTAssertEqual(labels.count, 3)
+    }
+
+    func test_trailingSwipeActions_readerNotLoaded_offersNoObsolete() {
+        let sut = makeSwipeActions(list: makeList(), currentUser: nil) { _ in }
+
+        XCTAssertFalse(sut.trailingSwipeActions(for: makeDirect(id: "d1")).map(\.label).contains(ConversationMenuEntry.obsolete.label))
     }
 
     // MARK: - conversation:obsoleted, fil ouvert

@@ -12,6 +12,7 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ConversationEventDeltas
 import me.meeshy.sdk.net.MeeshyApi
 
 /**
@@ -44,10 +45,32 @@ public class MessageColumnBackfill @Inject internal constructor(
         }
     }
 
-    /** Fire-and-forget entry point for the startup hook. */
+    /**
+     * Seals every view-once THIS reader opened whose row still holds content (#15897): rows written before every write
+     * derived the opening column, or before the merge sealed — `consumedByMe` in the payload, content intact. Idempotent:
+     * a sealed row decodes to itself and is not rewritten. Room keeps no per-pass version, so it runs at each launch,
+     * after [run] (which derives the column of the oldest rows first). Returns how many rows were sealed.
+     */
+    public suspend fun sealOpenedViewOnces(): Int = database.withTransaction {
+        val outlived = mutableListOf<String>()
+        val sealed = messageDao.openedViewOnceCandidates().mapNotNull { row ->
+            val message = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(row.payload) }.getOrNull()
+                ?: return@mapNotNull null
+            val next = ConversationEventDeltas.sealedIfOpened(message, openedHere = row.viewOnceOpenedAt != null)
+            if (next == message) return@mapNotNull null
+            if (DedicatedTranslationRows.outlived(message, next)) outlived += DedicatedTranslationRows.keysOf(row, message, next)
+            MessageEntityFactory.refreshed(row, next).bumped()
+        }
+        if (sealed.isNotEmpty()) messageDao.upsertAll(sealed)
+        DedicatedTranslationRows.drop(database, outlived)
+        sealed.size
+    }
+
+    /** Fire-and-forget entry point for the startup hook: the columns first, then the seal of the opened view-onces. */
     public fun launchIn(scope: CoroutineScope): Job = scope.launch {
         try {
             run()
+            sealOpenedViewOnces()
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {

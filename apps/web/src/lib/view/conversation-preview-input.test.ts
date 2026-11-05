@@ -96,7 +96,7 @@ describe('previewInputOf (#7547)', () => {
         attachments: [{ id: 'a1', mimeType: 'image/jpeg', originalName: 'p.jpg', fileName: 'p.jpg', fileSize: 239_616, width: 450, height: 456 }],
       }),
     });
-    expect(line(c)).toBe('Alice : 📷 Photo · 450×456 · 234 Ko');
+    expect(line(c)).toBe('Alice : 📷 Photo · 450\u00a0×\u00a0456 · 234 Ko');
   });
 
   test('sans résumé servi, le résumé se déduit des pièces du message (message:new, envoi)', () => {

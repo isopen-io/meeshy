@@ -70,6 +70,40 @@ public enum class OutboxKind {
 
     /** L'accusé de RÉCEPTION de toute une conversation : informatif, jamais compté dans la pastille de synchronisation. */
     MARK_RECEIVED,
+
+    /** Le repost PRIVÉ d'une story dans une conversation (iOS `repostStory`) : la cible est la story, la charge porte la conversation. */
+    REPOST_STORY,
+
+    /** Le « vu » d'une story : binaire, idempotent, coalescé par story, jamais compté dans la pastille de synchronisation. */
+    MARK_STORY_VIEWED,
+
+    /** Un commentaire supprimé hors ligne : il disparaît à l'instant, la suppression part au retour du réseau. */
+    DELETE_COMMENT,
+
+    /** Le coeur d'un commentaire posé ou retiré : l'état voulu voyage dans la charge, deux gestes opposés s'annulent. */
+    TOGGLE_LIKE_COMMENT,
+
+    /**
+     * Le bloc de préférences d'UNE catégorie (`PATCH /me/preferences/{categorie}`), cliché complet : la catégorie est la
+     * CIBLE de la ligne, donc deux écritures de la même catégorie ne font qu'une ligne et deux catégories ne se
+     * supplantent jamais. Un seul type pour les sept catégories (iOS `updateSettings`).
+     */
+    UPDATE_PREFERENCE_CATEGORY,
+
+    /** Quitter une conversation (#15920) : la ligne tombe à l'instant, la requête part au retour du réseau, jamais fusionnée. */
+    LEAVE_CONVERSATION,
+
+    /** « Supprimer pour moi » une conversation (#15920) : retrait optimiste, rejeu hors ligne, jamais fusionné. */
+    DELETE_CONVERSATION_FOR_ME,
+
+    /** Terminer une conversation pour tous (#15920) : retrait optimiste, rejeu hors ligne, jamais fusionné. */
+    DELETE_CONVERSATION_FOR_ALL,
+
+    /**
+     * La déclaration d'une capture d'un contenu qui disparaît (#9617) : DURABLE, rejouée avec le recul exponentiel tant que la
+     * passerelle l'accepte ; seul un refus FINAL la fait partir. Jamais comptée dans la pastille de synchronisation.
+     */
+    REPORT_CONTENT_CAPTURE,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -116,6 +150,15 @@ public object OutboxLanes {
     public const val COMMENT: String = "comment"
     public const val CONSUMPTION: String = "consumption"
     public const val CONVERSATION: String = "conversation"
+
+    /** Les déclarations de capture : une lane à elles, un rapport coincé ne retient ni un accusé de lecture ni un message. */
+    public const val CAPTURE: String = "capture"
+
+    /** Quitter / supprimer une conversation (#15920) : une lane à elle, un retrait coincé ne retient ni une création ni un renommage. */
+    public const val CONVERSATION_STATE: String = "conversationState"
+
+    /** Les « vus » de story : une lane à eux, pour qu'un rapport coincé ne retienne jamais une publication. */
+    public const val STORY_VIEW: String = "storyView"
 
     /**
      * #13820 — une lane dont les lignes ne s'ordonnent pas entre elles : chaque téléversement est indépendant (l'ordre d'un
@@ -218,6 +261,17 @@ public object OutboxLaneMap {
         OutboxKind.MODERATION_DELETE,
         -> OutboxLaneAssignment.Shared(OutboxChatLanes.CONTENT_REMOVAL)
         OutboxKind.MARK_RECEIVED -> OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT)
+        OutboxKind.REPOST_STORY -> OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL)
+        OutboxKind.MARK_STORY_VIEWED -> OutboxLaneAssignment.Shared(OutboxLanes.STORY_VIEW)
+        OutboxKind.DELETE_COMMENT,
+        OutboxKind.TOGGLE_LIKE_COMMENT,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.COMMENT)
+        OutboxKind.UPDATE_PREFERENCE_CATEGORY -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
+        OutboxKind.LEAVE_CONVERSATION,
+        OutboxKind.DELETE_CONVERSATION_FOR_ME,
+        OutboxKind.DELETE_CONVERSATION_FOR_ALL,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION_STATE)
+        OutboxKind.REPORT_CONTENT_CAPTURE -> OutboxLaneAssignment.Shared(OutboxLanes.CAPTURE)
     }
 
     /**
@@ -331,6 +385,10 @@ public data class CommentPayload(
     val attachmentIds: List<String>? = null,
     val effectFlags: Int? = null,
     val location: me.meeshy.sdk.model.SharedPlace? = null,
+    /** L'ancre du média cité du post commenté (#6578) ; absente sur une ancienne ligne. */
+    val quotedPostMediaId: String? = null,
+    /** Les pièces encore sur le disque et ce qui en est déjà téléversé (#9743) ; absent sans pièce et sur une ancienne ligne. */
+    val media: me.meeshy.sdk.post.CommentMediaPayload? = null,
 )
 
 /**
@@ -340,6 +398,31 @@ public data class CommentPayload(
  */
 @kotlinx.serialization.Serializable
 public data class RepostPayload(val targetType: String, val content: String? = null, val isQuote: Boolean = false)
+
+/**
+ * Payload of a `REPOST_STORY` outbox row (iOS `RepostStoryPayload`). The row's `targetId` is the source story;
+ * [targetConversationId] is the conversation the private repost lands in.
+ */
+@kotlinx.serialization.Serializable
+public data class RepostStoryPayload(val targetConversationId: String)
+
+/**
+ * Payload of a `MARK_STORY_VIEWED` outbox row (iOS `MarkStoryViewedPayload`). The row's `targetId` is the story, so ten
+ * views of the same story are one row. [provenance] and [origin] are raw strings: a value a newer build wrote reads back.
+ */
+@kotlinx.serialization.Serializable
+public data class MarkStoryViewedPayload(val provenance: String? = null, val origin: String? = null)
+
+/** Payload of a `DELETE_COMMENT` outbox row. The row's `targetId` is the comment; the route also needs its [postId]. */
+@kotlinx.serialization.Serializable
+public data class DeleteCommentPayload(val postId: String)
+
+/**
+ * Payload of a `TOGGLE_LIKE_COMMENT` outbox row. The row's `targetId` is the comment; [liked] is the state the author
+ * wants, so a like then an unlike of the same comment cancel each other before any request leaves.
+ */
+@kotlinx.serialization.Serializable
+public data class ToggleLikeCommentPayload(val postId: String, val liked: Boolean)
 
 /**
  * Payload of a `REACT_STORY` outbox row. The row's `targetId` is the story (a server id: the route `POST /posts/:id/like`),
@@ -390,6 +473,19 @@ public data class FriendRequestPayload(val message: String? = null, val targetLe
  */
 @kotlinx.serialization.Serializable
 public data class FriendRespondPayload(val action: String, val userId: String)
+
+/**
+ * Payload of a `READ_RECEIPT` outbox row: what the reader saw and in which language, resolved when the receipt was
+ * COMPOSED (never at send time). Every field is optional — a row queued before this payload (`"{}"`) is a plain
+ * conversation-wide receipt.
+ */
+@kotlinx.serialization.Serializable
+public data class ReadReceiptPayload(
+    val messageIds: List<String>? = null,
+    val language: String? = null,
+    val messageLanguages: Map<String, String>? = null,
+    val caughtUpToMessageId: String? = null,
+)
 
 /**
  * Payload of an `UPDATE_CONVERSATION_PREFS` outbox row — the full desired
@@ -511,6 +607,18 @@ internal fun OutboxMutation.toEntity(now: Long, ownerId: String? = null): Outbox
 )
 
 /** Terminal (or near-terminal) signal for a queued mutation, keyed by [cmid]. */
+/** Ce que « Supprimer » a fait d'une ligne ([OutboxRepository.withdrawUnlessInflight]). */
+public sealed interface OutboxWithdrawal {
+    /** Aucune ligne : elle a déjà été livrée (ou retirée). */
+    public data object Absent : OutboxWithdrawal
+
+    /** Un drainer l'a réservée : la marque d'annulation est posée, la ligne reste. */
+    public data object Marked : OutboxWithdrawal
+
+    /** Retirée avant tout envoi ; [row] est la ligne telle qu'elle était, pour nettoyer ce qui en dépendait. */
+    public data class Removed(val row: OutboxEntity) : OutboxWithdrawal
+}
+
 public sealed interface OutboxOutcome {
     public val cmid: String
 

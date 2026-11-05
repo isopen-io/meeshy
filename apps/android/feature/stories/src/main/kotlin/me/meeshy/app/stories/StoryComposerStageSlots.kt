@@ -65,9 +65,11 @@ internal fun StoryComposerScene(
     val armsCapture = capture?.takeIf { captureOffered }
     val accentHex = viewModel.observedAuthorAccentHex()
     val haptics = rememberMeeshyHaptics()
+    val rootPose = rememberRehearsalPose(viewModel.rehearsals.runs)
     CompositionLocalProvider(LocalComposerLookAuthor provides rememberComposerLookAuthor(viewModel.lookPerson)) {
     Box(modifier.followsSceneHold(capture)) {
             StoryCanvasSurface(
+                rootPose = rootPose,
                 transform = state.selectedSlideTransform,
                 backgroundModel = rememberStoryMediaLookModel(rememberComposerPicture(state.selectedSlideBackdropModel(viewModel.mediaBaseUrl)), state.backgroundMediaLook(comparison.mediaId)),
                 sceneBrush = remember(state.selectedSlideBackground, accentHex) {
@@ -97,12 +99,13 @@ internal fun StoryComposerScene(
                 onElementDragEnd = viewModel::onTextElementDragEnd,
                 onElementTransform = viewModel::onTextElementTransform,
                 onElementTextChange = viewModel::onTextChange,
+                onInlineEditYield = viewModel::onInlineEditSuspended,
                 onStickerTap = viewModel::onSelectSticker,
                 onStickerLongPress = viewModel::onOpenStickerMenu,
                 onStickerDrag = viewModel::onStickerMoved,
                 onStickerDragEnd = viewModel::onStickerDragEnd,
                 onStickerTransform = viewModel::onStickerTransform,
-                placedMedia = remember(state.deck, state.attachments, state.pendingUploads, state.isOffline, state.resendingUploads, state.failedUploads, comparison.mediaId) {
+                placedMedia = remember(state.deck, state.attachments, state.pendingUploads, state.isOffline, state.resendingUploads, state.failedUploads, state.uploadProgress, comparison.mediaId) {
                     state.placedMediaFrames(viewModel.mediaBaseUrl, comparison.mediaId)
                 },
                 placedMediaGestures = remember(viewModel) {
@@ -141,10 +144,13 @@ internal fun StoryComposerScene(
                 ComposerRepositionedBanner(state.repositionedCount, Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
             }
             state.selectedSlideBackdropPendingPhase?.let { phase ->
-                IncomingWaitingBadge(phase, Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP))
+                IncomingWaitingBadge(
+                    phase,
+                    Modifier.align(Alignment.TopCenter).padding(top = WAITING_BADGE_TOP),
+                    state.selectedSlideBackdropMediaId?.let(state::sendingFraction),
+                )
             }
             zoom?.let { ViewportZoomResetButton(it, Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 12.dp)) }
-            armsCapture?.offer?.let { offer -> StorySceneCaptureHint(offer) }
             capture?.takeIf { it.armed }?.let { scene -> scene.viewfinder(scene, Modifier.fillMaxSize()) }
     }
     }
@@ -266,6 +272,7 @@ internal fun sceneNotice(state: StoryComposerUiState): String? = when (val error
     StoryComposerUploadReducer.SLIDES_FULL -> stringResource(R.string.composer_slide_rail_capReached)
     StoryComposerViewModel.MEDIA_FAILED -> stringResource(R.string.story_composer_incoming_failed)
     StoryComposerViewModel.STICKER_IMAGE_FAILED -> stringResource(R.string.story_sticker_image_failed)
+    StoryComposerViewModel.SOUND_FAILED -> stringResource(R.string.story_sound_sheet_upload_failed)
     StoryEditErrors.FAILED -> stringResource(R.string.story_edit_error)
     StoryEditErrors.OFFLINE -> stringResource(R.string.story_edit_offline)
     StoryEditErrors.ONE_SLIDE -> stringResource(R.string.story_edit_one_slide)
@@ -307,7 +314,9 @@ private fun ScenePin(state: StoryComposerUiState, viewModel: StoryComposerViewMo
                 canvasHeightPx = height,
                 onTap = { viewModel.onSceneReduce { s -> StoryComposerSelectionReducer.soundSelected(s, track.id) } },
                 onDrag = { dx, dy -> viewModel.onSoundMoved(track.id, dx, dy) },
+                onTransform = { zoom, rotationDeg -> viewModel.onSoundTransformed(track.id, zoom, rotationDeg) },
                 onDragEnd = viewModel::onStickerDragEnd,
+                clock = LocalComposerLive.current?.soundClock(track.id) ?: AudioChipClock.Still,
             )
         }
         else -> Unit
@@ -329,7 +338,7 @@ internal fun StoryComposerPanel(
                 filterIntensity = state.selectedSlideFilterIntensity,
                 selectedBackground = state.selectedSlideBackground,
                 canAddText = state.deck.selectedCanAddTextElement,
-                isUploadingMedia = state.isUploadingMedia,
+                isPreparingMedia = state.isPreparingMedia,
                 uploadingMedia = state.uploadingMedia,
                 isMediaFull = !state.deck.selectedCanAddMedia,
                 onDismiss = viewModel::onBandDismiss,

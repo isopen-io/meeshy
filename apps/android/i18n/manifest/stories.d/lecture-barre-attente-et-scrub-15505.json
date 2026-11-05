@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:stories": {
+      "resDir": "feature/stories/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "story.viewer.a11y.position", "androidName": "story_viewer_a11y_position", "status": "adopted" },
+        { "catalog": "app", "iosKey": "story.viewer.a11y.percent", "androidName": "story_viewer_a11y_percent", "status": "adopted" }
+      ]
+    }
+  }
+}

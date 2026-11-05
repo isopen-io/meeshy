@@ -16,14 +16,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 
 /** Courbe du commit du cube (iOS `StoryGroupCube.commitAnimation`). */
 internal val CubeCommitEasing = CubicBezierEasing(0.25f, 0.8f, 0.35f, 1f)
-internal const val CUBE_COMMIT_MS = 340
+internal const val CUBE_COMMIT_MS = StoryGroupCubeGeometry.COMMIT_MILLIS
 
 /** Amorti critique (iOS `settleAnimation`, réponse 0,3 s) : jamais de dépassement de l'autre côté. */
 internal val CubeSettleSpring = spring<Float>(dampingRatio = 1f, stiffness = 438.6f)
@@ -52,6 +51,15 @@ internal class StoryCardMotion {
     var dragging by mutableStateOf(false)
     var transitioning = false
     var width = 0f
+
+    /**
+     * Les faces des groupes voisins ne sont montées que le temps d'un glissé horizontal (et de son retour) : hors geste,
+     * aucun backdrop ni carte d'identité n'existe en mémoire.
+     */
+    var cubeNeighborsMounted by mutableStateOf(false)
+
+    /** Un commit au doigt a déjà joué le cube : l'entrée « sans glissé » ne le rejoue pas à l'échange de contenu. */
+    var entryPlayed = false
 
     /** Le suivi du glissé et la session plein écran : l'état que la couche de glissé lit et écrit (iOS `drag`). */
     val tracker = StoryReaderDragTracker()
@@ -85,7 +93,9 @@ internal fun StoryCubeEntryOnAuthorChange(motion: StoryCardMotion, authorKey: St
     LaunchedEffect(authorKey) {
         val before = previous[0]
         previous[0] = groupIndex
-        if (before < 0 || before == groupIndex || motion.transitioning || motion.width <= 0f) return@LaunchedEffect
+        val played = motion.entryPlayed
+        motion.entryPlayed = false
+        if (before < 0 || before == groupIndex || played || motion.transitioning || motion.width <= 0f) return@LaunchedEffect
         val side = if (groupIndex > before) motion.width else -motion.width
         motion.offsetX.snapTo(side)
         motion.offsetX.animateTo(0f, tween(CUBE_COMMIT_MS, easing = CubeCommitEasing))
@@ -98,9 +108,9 @@ internal fun Modifier.storyCardFrame(motion: StoryCardMotion): Modifier = this
     .graphicsLayer {
         val width = size.width
         val offset = motion.offsetX.value
-        translationX = offset
-        rotationY = StoryCubeTransform.faceDegrees(offset, width)
-        transformOrigin = TransformOrigin(StoryCubeTransform.pivotFractionX(offset), 0.5f)
+        val cube = StoryGroupCubeGeometry.face(offset, width)
+        translationX = cube.translationX
+        rotationY = cube.rotationYDegrees
         cameraDistance = StoryCubeTransform.cameraDistance(width)
         val frame = StoryViewerCardTransform.frame(
             appear = motion.appear.value,
@@ -109,10 +119,10 @@ internal fun Modifier.storyCardFrame(motion: StoryCardMotion): Modifier = this
             screenHeight = size.height,
             travelPx = StoryCubeTransform.DISMISS_TRAVEL_DP.dp.toPx(),
         )
-        scaleX = frame.scale
-        scaleY = frame.scale
+        scaleX = frame.scale * cube.scale
+        scaleY = frame.scale * cube.scale
         translationY = frame.offsetY
-        alpha = frame.alpha
+        alpha = if (cube.isFacingViewer) frame.alpha else 0f
         val corner = frame.cornerDp.dp.toPx()
         clip = corner > 0f
         if (clip) shape = RoundedCornerShape(corner)

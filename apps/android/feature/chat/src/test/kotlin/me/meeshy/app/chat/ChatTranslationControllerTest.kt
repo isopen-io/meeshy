@@ -15,10 +15,14 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.model.ApiAttachmentTranscription
+import me.meeshy.sdk.model.ApiAttachmentTranslation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.TranslationEvent
+import me.meeshy.sdk.model.playback.AudioLanguageStripLaw
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.Test
@@ -55,6 +59,7 @@ class ChatTranslationControllerTest {
         val messages: MutableStateFlow<List<LocalMessage>>,
         val repo: MessageRepository,
         val translationReceived: MutableSharedFlow<TranslationEvent>,
+        val edited: MutableSharedFlow<ApiMessage>,
     ) {
         val state: ChatUiState get() = flow.value
         val overrides: Map<String, String> get() = controller.activeLanguageOverride.value
@@ -72,8 +77,10 @@ class ChatTranslationControllerTest {
         val session = mockk<SessionRepository>()
         every { session.currentUser } returns MutableStateFlow(user)
         val translationReceived = MutableSharedFlow<TranslationEvent>()
+        val edited = MutableSharedFlow<ApiMessage>()
         val socket = mockk<MessageSocketManager>()
         every { socket.translationReceived } returns translationReceived
+        every { socket.messageEdited } returns edited
         val controller = ChatTranslationController(
             scope = screenScope(),
             state = ChatStateAccess(flow),
@@ -83,7 +90,7 @@ class ChatTranslationControllerTest {
             messageSocketManager = socket,
             conversationId = "c1",
         )
-        return Rig(controller, flow, messages, repo, translationReceived)
+        return Rig(controller, flow, messages, repo, translationReceived, edited)
     }
 
     // --- flag taps ------------------------------------------------------------------------
@@ -122,6 +129,64 @@ class ChatTranslationControllerTest {
 
         assertThat(r.overrides).isEmpty()
         coVerify(exactly = 0) { r.repo.requestTranslation(any(), any()) }
+    }
+
+    // --- audio flags: the SAME channel as the text flags -------------------------------------
+
+    private fun voiceNote(protected: Boolean = false) = LocalMessage(
+        ApiMessage(
+            id = "v1",
+            conversationId = "c1",
+            senderId = "other",
+            content = "",
+            originalLanguage = "en",
+            isViewOnce = protected,
+            attachments = listOf(
+                ApiMessageAttachment(
+                    id = "a1",
+                    mimeType = "audio/mp4",
+                    fileUrl = "/media/original.m4a",
+                    transcription = ApiAttachmentTranscription(text = "Hello", language = "pt"),
+                    translations = mapOf("es" to ApiAttachmentTranslation(url = "/media/es.mp3", transcription = "Hola")),
+                ),
+            ),
+        ),
+    )
+
+    @Test
+    fun `selecting an audio language writes the override the bubble projection reads`() = runTest {
+        val r = rig(loaded = listOf(voiceNote()))
+
+        r.controller.selectAudioLanguage("v1", "ES")
+
+        assertThat(r.overrides).containsExactly("v1", "es")
+    }
+
+    @Test
+    fun `the original sentinel pins the language of THIS voice note, not the message and not the prism default`() = runTest {
+        val r = rig(loaded = listOf(voiceNote()))
+
+        r.controller.selectAudioLanguage("v1", AudioLanguageStripLaw.ORIGINAL)
+
+        assertThat(r.overrides).containsExactly("v1", "pt")
+    }
+
+    @Test
+    fun `a protected voice note never takes an audio language`() = runTest {
+        val r = rig(loaded = listOf(voiceNote(protected = true)))
+
+        r.controller.selectAudioLanguage("v1", "es")
+
+        assertThat(r.overrides).isEmpty()
+    }
+
+    @Test
+    fun `an audio language on a message that is not loaded is inert`() = runTest {
+        val r = rig(loaded = listOf(voiceNote()))
+
+        r.controller.selectAudioLanguage("ghost", "es")
+
+        assertThat(r.overrides).isEmpty()
     }
 
     // --- on-demand translation ----------------------------------------------------------------
@@ -252,6 +317,20 @@ class ChatTranslationControllerTest {
         assertThat(r.controller.showingOriginal.value).containsExactly("m1", "m2")
 
         r.controller.toggleShowOriginal("m1")
+        assertThat(r.controller.showingOriginal.value).containsExactly("m2")
+    }
+
+    @Test
+    fun `an edit received for a message drops its manual original toggle and flag choice`() = runTest {
+        val r = rig()
+        r.controller.start()
+        runCurrent()
+        r.controller.toggleShowOriginal("m1")
+        r.controller.toggleShowOriginal("m2")
+
+        r.edited.emit(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "Hello!"))
+        runCurrent()
+
         assertThat(r.controller.showingOriginal.value).containsExactly("m2")
     }
 

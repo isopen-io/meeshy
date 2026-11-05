@@ -21,6 +21,10 @@ object MessageTranslationMerge {
      *    stores an empty translation;
      *  - an identical translation already present (same language, same content).
      *
+     * With a non-null [prism], a translation into a language the reader does not read is not
+     * retained (`null`): it would only occupy memory the Prisme never displays. The optional
+     * [translationModel] and [confidenceScore] ride along on the stored entry.
+     *
      * Otherwise the returned copy has its [ApiMessage.translations] upserted: an
      * existing entry for [targetLanguage] (matched case-insensitively) is replaced
      * in place, order preserved; otherwise a new [ApiTextTranslation] is appended.
@@ -29,11 +33,15 @@ object MessageTranslationMerge {
         message: ApiMessage,
         targetLanguage: String,
         translatedContent: String,
+        translationModel: String? = null,
+        confidenceScore: Double? = null,
+        prism: List<String>? = null,
     ): ApiMessage? {
         if (message.deletedAt != null) return null
         val language = targetLanguage.trim()
         if (language.isEmpty()) return null
         if (translatedContent.isBlank()) return null
+        if (prism != null && prism.none { it.trim().equals(language, ignoreCase = true) }) return null
 
         val existing = message.translations
         val index = existing.indexOfFirst { it.targetLanguage.equals(language, ignoreCase = true) }
@@ -44,6 +52,8 @@ object MessageTranslationMerge {
             sourceLanguage = message.originalLanguage?.trim().orEmpty(),
             targetLanguage = language,
             translatedContent = translatedContent,
+            translationModel = translationModel,
+            confidenceScore = confidenceScore,
         )
         val merged = if (index >= 0) {
             existing.mapIndexed { i, current -> if (i == index) entry else current }

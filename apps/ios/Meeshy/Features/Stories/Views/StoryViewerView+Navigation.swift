@@ -121,7 +121,7 @@ extension StoryViewerView {
     /// part écoulée de la slide et sa durée.
     var storyTelemetryPosition: StoryNavigationTelemetry.Position? {
         guard let story = currentStory, let group = currentGroup, !isPreviewMode else { return nil }
-        return StoryNavigationTelemetry.Position(
+        return StoryNavigationTelemetry.position(
             storyId: story.id,
             slideIndex: currentStoryIndex,
             slideCount: group.stories.count,
@@ -147,6 +147,13 @@ nonisolated enum StoryNavigationTelemetry {
 
         var elapsedMs: Int { max(0, Int((fraction * durationSeconds * 1_000).rounded())) }
         var isAtTheEnd: Bool { slideIndex >= slideCount - 1 && fraction >= StoryNavigationTelemetry.autoAdvanceFraction }
+    }
+
+    /// Une story en attente n'existe pas pour le catalogue : sa position ne se
+    /// lit pas, aucun événement ne porte son id local (#15198).
+    static func position(storyId: String, slideIndex: Int, slideCount: Int, fraction: Double, durationSeconds: Double) -> Position? {
+        guard PendingStoryMarker.serverId(of: storyId) != nil else { return nil }
+        return Position(storyId: storyId, slideIndex: slideIndex, slideCount: slideCount, fraction: fraction, durationSeconds: durationSeconds)
     }
 
     /// Au-delà, `goToNext` vient de la minuterie, pas d'un toucher.

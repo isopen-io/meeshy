@@ -1,5 +1,6 @@
 package me.meeshy.sdk.conversation
 
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MessageTombstoning
 import me.meeshy.sdk.model.PendingTombstone
@@ -14,6 +15,7 @@ internal class MessageTombstoneWriter(
     private val updater: CachedMessageUpdater,
     private val revisions: EditRevisionLedger? = null,
     private val events: MessageEventBuffer? = null,
+    private val mediaIndex: ConversationMediaHubIndex? = null,
 ) {
 
     /**
@@ -37,6 +39,7 @@ internal class MessageTombstoneWriter(
             return false
         }
         revisions?.forget(listOf(messageId))
+        mediaIndex?.forgetMessage(updated.conversationId, messageId, ticket)
         if (updated.deletedAt != null) {
             followQuotes(ticket, updated) { reply -> QuotePropagation.sealDeleted(reply, parentIds(updated), deletedAtIso) }
         }

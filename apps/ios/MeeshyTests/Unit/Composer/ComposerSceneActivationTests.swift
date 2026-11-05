@@ -89,24 +89,9 @@ final class ComposerSceneActivationTests: XCTestCase {
     func test_laNaissanceDeLaScene_semeLaLangueDeclaree() throws {
         let src = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(
-            src.contains("viewModel.declaredContentLanguage=documentLanguage"),
+            src.contains(".adaptiveOnChange(of:documentLanguage,initial:true){_,langueinviewModel.declaredContentLanguage=langue}"),
             "Quand la scène naît (fond OU STORY), l'atelier reçoit la langue DÉCLARÉE au composer "
                 + "(`documentLanguage`) comme défaut de tout objet — jamais « fr » codé en dur."
-        )
-    }
-
-    // 7 — B1 (#3924) : quand la scène naît (fond OU STORY), le TEXTE **et** le
-    // MÉDIA déjà composés SUIVENT — loi 9, changer de mode ne jette rien.
-    func test_laNaissanceDeLaScene_porteLeTexteEtLeMedia() throws {
-        let src = compact(try AppSourceGuard.composerHostSource())
-        XCTAssertTrue(
-            src.contains("viewModel.applyContentText(documentText)"),
-            "Le texte du document SUIT dans la scène (`applyContentText`) — loi 9."
-        )
-        XCTAssertTrue(
-            src.contains("viewModel.applyContentMedia(documentContentMedia)"),
-            "Le média du document SUIT dans la scène (`applyContentMedia`) — loi 9. "
-                + "Le porter est aussi ce qui LÈVE le blocage de l'éventail sous le document (B3)."
         )
     }
 

@@ -47,15 +47,23 @@ class Media3AudioPlaybackEngineTest {
     }
 
     private fun Rig.playing(id: String = "a", durationMs: Long = 30_000L) {
-        engine.play(id, "https://cdn/$id.mp3")
+        engine.play(id, "https://cdn/$id.mp3", isProtected = false)
         port.prepare(durationMs)
     }
 
     private fun Rig.playWhenReady(value: Boolean) = port.playWhenReady(value)
 
+    @Test fun `un vocal protege est charge comme protege, un vocal public comme public`() = engineTest { rig ->
+        rig.engine.play("a", "https://cdn/a.mp3", isProtected = true)
+        assertThat(rig.port.loads.last().first).isEqualTo(AudioSource.Remote("https://cdn/a.mp3", isProtected = true))
+
+        rig.engine.play("b", "https://cdn/b.mp3", isProtected = false)
+        assertThat(rig.port.loads.last().first).isEqualTo(AudioSource.Remote("https://cdn/b.mp3", isProtected = false))
+    }
+
     @Test fun `jouer un vocal le charge, puis la preparation lance la lecture`() = engineTest { rig ->
 
-        rig.engine.play("a", "https://cdn/a.mp3")
+        rig.engine.play("a", "https://cdn/a.mp3", isProtected = false)
         assertThat(rig.engine.state.value.isLoading).isTrue()
         assertThat(rig.engine.state.value.attachmentId).isEqualTo("a")
 
@@ -70,7 +78,7 @@ class Media3AudioPlaybackEngineTest {
     @Test fun `jouer B pendant que A joue arrete A et bascule l'identifiant atomiquement`() = engineTest { rig ->
         rig.playing("a")
 
-        rig.engine.play("b", "https://cdn/b.mp3")
+        rig.engine.play("b", "https://cdn/b.mp3", isProtected = false)
 
         assertThat(rig.engine.state.value.attachmentId).isEqualTo("b")
         assertThat(rig.engine.state.value.isPlaying).isFalse()
@@ -79,9 +87,9 @@ class Media3AudioPlaybackEngineTest {
     }
 
     @Test fun `la preparation d'un chargement remplace est ignoree`() = engineTest { rig ->
-        rig.engine.play("a", "https://cdn/a.mp3")
+        rig.engine.play("a", "https://cdn/a.mp3", isProtected = false)
         val staleGeneration = rig.port.lastGeneration
-        rig.engine.play("b", "https://cdn/b.mp3")
+        rig.engine.play("b", "https://cdn/b.mp3", isProtected = false)
 
         rig.port.prepare(9_000L, generation = staleGeneration)
 
@@ -94,7 +102,7 @@ class Media3AudioPlaybackEngineTest {
         rig.playing("a", durationMs = 30_000L)
         rig.port.position = 12_000L
 
-        rig.engine.play("b", "https://cdn/b.mp3")
+        rig.engine.play("b", "https://cdn/b.mp3", isProtected = false)
 
         assertThat(rig.store.map["a"]?.positionMs).isEqualTo(12_000L)
     }
@@ -132,7 +140,7 @@ class Media3AudioPlaybackEngineTest {
         rig.playing("a")
         rig.call = true
 
-        val accepted = rig.engine.play("b", "https://cdn/b.mp3")
+        val accepted = rig.engine.play("b", "https://cdn/b.mp3", isProtected = false)
 
         assertThat(accepted).isFalse()
         assertThat(rig.engine.state.value.attachmentId).isEqualTo("a")
@@ -182,7 +190,7 @@ class Media3AudioPlaybackEngineTest {
         assertThat(rig.engine.state.value.speed).isEqualTo(PlaybackSpeed.X1_25)
         assertThat(rig.port.speed).isEqualTo(1.25f)
 
-        rig.engine.play("b", "https://cdn/b.mp3")
+        rig.engine.play("b", "https://cdn/b.mp3", isProtected = false)
         assertThat(rig.port.loads.last().third).isEqualTo(1.25f)
 
         repeat(PlaybackSpeed.entries.size - 1) { rig.engine.cycleSpeed() }
@@ -200,7 +208,7 @@ class Media3AudioPlaybackEngineTest {
         val finished = mutableListOf<AudioEngineEvent>()
         val collector = backgroundScope.launchCollect(rig.engine.events, finished)
         runCurrent()
-        rig.engine.play("a", "https://cdn/a.mp3")
+        rig.engine.play("a", "https://cdn/a.mp3", isProtected = false)
 
         rig.port.fail()
         runCurrent()
@@ -214,14 +222,14 @@ class Media3AudioPlaybackEngineTest {
     @Test fun `un chargement refuse par le lecteur n'echappe pas`() = engineTest { rig ->
         rig.port.failNextLoad = true
 
-        rig.engine.play("a", "https://cdn/a.mp3")
+        rig.engine.play("a", "https://cdn/a.mp3", isProtected = false)
 
         assertThat(rig.engine.state.value.isLoading).isFalse()
     }
 
     @Test fun `une url vide ne charge rien`() = engineTest { rig ->
 
-        assertThat(rig.engine.play("a", "  ")).isFalse()
+        assertThat(rig.engine.play("a", "  ", isProtected = false)).isFalse()
         assertThat(rig.port.loads).isEmpty()
     }
 
@@ -288,7 +296,7 @@ class Media3AudioPlaybackEngineTest {
         rig.playing("a")
         rig.port.position = 6_000L
 
-        rig.engine.play("b", "https://cdn/b.mp3")
+        rig.engine.play("b", "https://cdn/b.mp3", isProtected = false)
 
         val (id, body) = rig.sink.reports.single()
         assertThat(id).isEqualTo("a")
@@ -300,7 +308,103 @@ class Media3AudioPlaybackEngineTest {
         rig.call = true
 
         PlaybackCommandOrigin.entries.forEach { origin ->
-            assertThat(rig.engine.play("a", "https://cdn/a.mp3", origin)).isFalse()
+            assertThat(rig.engine.play("a", "https://cdn/a.mp3", origin, isProtected = false)).isFalse()
         }
+    }
+
+    // ── #15969 : le vocal joué PENDANT son accusé ────────────────────────────────────────────────
+
+    private val served = "https://gate.meeshy.me/api/v1/static/voice.m4a"
+
+    private fun Rig.listeningToPending() {
+        engine.playLocal("cmid_voice", "file:///data/cache/pending-previews/cmid_voice.voice.m4a")
+        port.prepare(14_000L)
+        port.position = 5_000L
+    }
+
+    @Test fun `le vocal accuse continue sous son id serveur, au meme point, sans rechargement`() = engineTest { rig ->
+        rig.listeningToPending()
+
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = false)
+
+        assertThat(rig.engine.state.value.attachmentId).isEqualTo("att_server")
+        assertThat(rig.engine.state.value.isPlaying).isTrue()
+        assertThat(rig.port.loads).hasSize(1)
+        assertThat(rig.port.playing).isTrue()
+    }
+
+    @Test fun `la copie locale disparue, le vocal reprend au meme point sur l'adresse servie`() = engineTest { rig ->
+        rig.listeningToPending()
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = false)
+
+        rig.port.fail()
+        rig.port.prepare(14_000L)
+
+        assertThat(rig.port.loads.map { it.first })
+            .containsExactly(AudioSource.Local("file:///data/cache/pending-previews/cmid_voice.voice.m4a"), AudioSource.Remote(served, isProtected = false))
+            .inOrder()
+        assertThat(rig.port.seeks.last()).isEqualTo(5_000L)
+        assertThat(rig.port.playing).isTrue()
+        assertThat(rig.engine.state.value.isPlaying).isTrue()
+        assertThat(rig.engine.state.value.attachmentId).isEqualTo("att_server")
+    }
+
+    @Test fun `un vocal en pause pendant son accuse reste en pause apres le reciblage`() = engineTest { rig ->
+        rig.listeningToPending()
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = false)
+        rig.engine.pause()
+
+        rig.port.fail()
+        rig.port.prepare(14_000L)
+
+        assertThat(rig.port.seeks.last()).isEqualTo(5_000L)
+        assertThat(rig.port.playing).isFalse()
+        assertThat(rig.engine.state.value.isPlaying).isFalse()
+        assertThat(rig.engine.state.value.attachmentId).isEqualTo("att_server")
+    }
+
+    @Test fun `une pause pendant le reciblage est respectee a la reprise`() = engineTest { rig ->
+        rig.listeningToPending()
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = false)
+        rig.port.fail()
+
+        rig.engine.pause()
+        rig.port.prepare(14_000L)
+
+        assertThat(rig.port.seeks.last()).isEqualTo(5_000L)
+        assertThat(rig.port.playing).isFalse()
+        assertThat(rig.engine.state.value.isPlaying).isFalse()
+    }
+
+    @Test fun `un vocal protege accuse est recible sans cache disque`() = engineTest { rig ->
+        rig.listeningToPending()
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = true)
+
+        rig.port.fail()
+
+        assertThat(rig.port.loads.last().first).isEqualTo(AudioSource.Remote(served, isProtected = true))
+    }
+
+    @Test fun `une adresse servie qui echoue aussi est un vrai echec, jamais une boucle`() = engineTest { rig ->
+        rig.listeningToPending()
+        rig.engine.follow("cmid_voice", "att_server", served, isProtected = false)
+
+        rig.port.fail()
+        rig.port.fail()
+
+        assertThat(rig.port.loads).hasSize(2)
+        assertThat(rig.engine.state.value.isPlaying).isFalse()
+        assertThat(rig.engine.state.value.isLoading).isFalse()
+    }
+
+    @Test fun `un autre vocal n'est jamais pris pour le vocal accuse`() = engineTest { rig ->
+        rig.listeningToPending()
+
+        rig.engine.follow("cmid_other", "att_server", served, isProtected = false)
+        rig.port.fail()
+
+        assertThat(rig.engine.state.value.attachmentId).isEqualTo("cmid_voice")
+        assertThat(rig.port.loads).hasSize(1)
+        assertThat(rig.engine.state.value.isPlaying).isFalse()
     }
 }

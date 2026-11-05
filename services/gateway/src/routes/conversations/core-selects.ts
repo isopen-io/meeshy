@@ -49,7 +49,10 @@ export const conversationListParticipantSelect = {
       isOnline: true,
       lastActiveAt: true,
       // #10713 — chargé, jamais servi tel quel : composé en `profileDecor`.
-      equippedAvatarRing: true
+      equippedAvatarRing: true,
+      // #15717 — l'état du COMPTE (pas celui du participant) : chargé, jamais
+      // servi tel quel, composé en `accountClosed` par `participantAccountClosure`.
+      isActive: true
     }
   }
 } as const;
@@ -235,7 +238,9 @@ export const conversationDetailInclude = {
           firstName: true,
           lastName: true,
           // #10713 — chargé, jamais servi tel quel : composé en `profileDecor`.
-          equippedAvatarRing: true
+          equippedAvatarRing: true,
+          // #15717 — l'état du COMPTE : composé en `accountClosed`, jamais servi tel quel.
+          isActive: true
         }
       }
     }

@@ -52,6 +52,9 @@ import me.meeshy.ui.theme.MeeshySpacing
 import org.webrtc.VideoTrack
 
 private const val ANSWER_LINGER_MILLIS = 4_000L
+
+/** Les textes du cadre (nom du groupe, date) se revérifient chaque minute ; la surface ne repeint que s'ils ont changé. */
+private const val TEXTS_RECHECK_MILLIS = 60_000L
 private val STATUS_TOP = 68.dp
 
 /**
@@ -81,7 +84,12 @@ class CallLiveFrameOverlay @Inject constructor(
         val state = context.state
         val people = remember(state.peerName, shared.remoteSharedName) { frame.people(state.peerName, shared.remoteSharedName) }
         val call = frame.callContext()
-        val texts by produceState(textsResolver.immediate(call), call) { value = textsResolver.texts(call) }
+        val texts by produceState(textsResolver.immediate(call), call) {
+            while (true) {
+                value = textsResolver.texts(call)
+                delay(TEXTS_RECHECK_MILLIS)
+            }
+        }
         val remote by engine.remoteVideoTracks.collectAsState(initial = null)
         val local = engine.localVideoTrack
         val sources = remember(local, remote, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff) {
@@ -228,7 +236,7 @@ private fun CallLiveFrameButton(label: String, fill: Color, onClick: () -> Unit,
     val haptics = LocalHapticFeedback.current
     Box(
         modifier
-            .height(44.dp)
+            .height(48.dp)
             .clip(CircleShape)
             .background(fill)
             .clickable(role = Role.Button) {

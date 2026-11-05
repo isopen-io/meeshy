@@ -1,17 +1,31 @@
 package me.meeshy.app.chat.export
 
 import android.graphics.Bitmap
+import android.os.Looper
 import com.google.common.truth.Truth.assertThat
 import java.text.DateFormat
+import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /** #14330 — les vignettes des styles peignent la photo du message comme l'aperçu, et se renouvellent quand elle arrive. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class CardThumbnailPicturesTest {
+
+    /**
+     * L'état de l'export écrit un état Compose hors composition, et `GlobalSnapshotManager` en poste l'application
+     * sur la boucle principale. Elle est vidée ici, avant que Robolectric n'efface le message au démontage : sinon
+     * `AndroidUiDispatcher.Main` reste programmé pour toute la JVM, et chaque témoin Compose suivant tombe en
+     * AppNotIdleException (#15815).
+     */
+    @After
+    fun settleMainLooper() {
+        shadowOf(Looper.getMainLooper()).idle()
+    }
 
     private class MemoryStore : CardPreferenceStore {
         private val values = mutableMapOf<String, String>()

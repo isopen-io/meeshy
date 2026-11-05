@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="contacts_requests_filter_received">Recibidas (%1$d)</string>
+    <string name="contacts_requests_filter_sent">Enviadas (%1$d)</string>
+    <string name="contacts_requests_empty_received">Ninguna solicitud recibida</string>
+    <string name="contacts_requests_empty_received_subtitle">Las solicitudes de contacto que recibas aparecerán aquí</string>
+    <string name="contacts_requests_empty_sent">Ninguna solicitud enviada</string>
+    <string name="contacts_requests_empty_sent_subtitle">Las solicitudes que envíes aparecerán aquí</string>
+    <string name="friends_requests_title">Solicitudes de amistad</string>
+</resources>

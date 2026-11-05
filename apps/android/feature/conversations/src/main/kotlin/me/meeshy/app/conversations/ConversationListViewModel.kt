@@ -26,7 +26,12 @@ import me.meeshy.sdk.lock.ConversationLockStore
 import me.meeshy.sdk.lock.ConversationUnlockSessionStore
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ConversationFilter
+import me.meeshy.sdk.model.conversationlist.ChipDropAction
+import me.meeshy.sdk.model.conversationlist.ChipDropResolver
+import me.meeshy.sdk.model.conversationlist.ConversationAvatarRoute
+import me.meeshy.sdk.model.conversationlist.ConversationAvatarTarget
 import me.meeshy.sdk.model.conversationlist.ConversationFilterComposition
+import me.meeshy.sdk.model.conversationlist.avatarTarget
 import me.meeshy.sdk.model.conversationlist.ConversationListLoadState
 import me.meeshy.sdk.model.search.ListMessageSearchState
 import me.meeshy.sdk.search.ListMessageSearchSource
@@ -75,6 +80,7 @@ class ConversationListViewModel @Inject constructor(
     dialogDeps: ConversationListDialogDeps = ConversationListDialogDeps.detached(),
     messageSearchSource: ListMessageSearchSource = NoListMessageSearch,
     entryRequests: ConversationListEntryRequests = ConversationListEntryRequests(),
+    private val sectionExpansion: ConversationSectionExpansionStore = ConversationSectionExpansionStore(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -96,6 +102,10 @@ class ConversationListViewModel @Inject constructor(
     private val openConversationRequests = Channel<String>(Channel.BUFFERED)
     val openConversation: Flow<String> = openConversationRequests.receiveAsFlow()
 
+    /** Le toucher d'avatar d'une ligne (#15989) : profil du pair ou détails, à usage unique. */
+    private val avatarEffectRequests = Channel<ConversationAvatarEffect>(Channel.BUFFERED)
+    val avatarEffects: Flow<ConversationAvatarEffect> = avatarEffectRequests.receiveAsFlow()
+
     /** Liste brute faisant autorite ; [ConversationListUiState.conversations] en est la vue filtree. */
     private var rawConversations: List<ApiConversation> = emptyList()
 
@@ -104,6 +114,7 @@ class ConversationListViewModel @Inject constructor(
         lockStore = lockStore,
         openConversation = { dialogs.onConversationOpened(it); openConversationRequests.trySend(it) },
         unlockSession = unlockSession,
+        openInfo = { avatarEffectRequests.trySend(ConversationAvatarEffect.OpenInfo(it)) },
     )
     private val actions = ConversationListRowActions(
         scope = viewModelScope,
@@ -116,6 +127,7 @@ class ConversationListViewModel @Inject constructor(
         workManager = workManager,
         activeConversationId = { loadingDeps.activeConversation.conversationId.value },
         obsoleter = dialogDeps.obsoleter,
+        remover = dialogDeps.remover,
     )
     /** Les dialogues confirmés de la liste (bloquer, masquer, quitter, renommer, signaler, verrou). */
     internal val dialogs: ConversationListDialogController = ConversationListDialogController(
@@ -145,7 +157,37 @@ class ConversationListViewModel @Inject constructor(
         categorySocketManager = categorySocketManager,
         storyRepository = storyRepository,
         statusBarCache = statusBarCache,
+        sectionExpansion = sectionExpansion,
     )
+    private val sectionController = ConversationSectionController(
+        viewModelScope, sectionExpansion, categoryRepository,
+    ) { _state.value.categories }
+
+    /** Les sections dépliées gardées pour la session (`null` = défauts de première ouverture). */
+    val rememberedSections: StateFlow<Set<String>?> = sectionExpansion.rememberedSections
+
+    /** Replie ou déplie [section] : mémoire de session à l'instant, serveur en silence pour une catégorie. */
+    fun onSectionToggled(section: ConversationSection, expanded: Boolean) =
+        sectionController.onToggled(section, expanded)
+
+    /** Déplie [sectionId] en mémoire de session seulement (la cible d'un dépôt), sans écriture serveur. */
+    fun revealSection(sectionId: String) = sectionController.reveal(sectionId)
+
+    /**
+     * Le dépôt d'une conversation sur un en-tête (iOS `ConversationSectionDropHandler`) : « Épinglées » épingle,
+     * une catégorie déplace, « Mes conversations » efface la catégorie. Rend la décision pour l'haptique.
+     */
+    fun onConversationDropped(conversationId: String, sectionId: String, isAutoScrolling: Boolean): ChipDropAction {
+        val prefs = _state.value.conversations.firstOrNull { it.id == conversationId }?.resolvedPreferences
+        val action = ChipDropResolver.action(sectionId, prefs?.isPinned == true, prefs?.categoryId.orEmpty(), isAutoScrolling)
+        when (action) {
+            ChipDropAction.Pin -> actions.togglePin(conversationId)
+            is ChipDropAction.Move ->
+                if (action.sectionId.isEmpty()) actions.removeCategory(conversationId) else actions.reassignCategory(conversationId, action.sectionId)
+            ChipDropAction.None -> Unit
+        }
+        return action
+    }
 
     private val messageSearcher = ConversationListMessageSearcher(
         scope = viewModelScope,
@@ -268,8 +310,6 @@ class ConversationListViewModel @Inject constructor(
     fun leaveConversation(id: String) = actions.leaveConversation(id)
     fun deleteConversationForMe(id: String) = actions.deleteConversationForMe(id)
     fun deleteConversationForAll(id: String) = actions.deleteConversationForAll(id)
-
-    fun makeConversationObsolete(id: String) = actions.makeConversationObsolete(id)
     fun discardDraft(id: String) = actions.discardDraft(id)
 
     /** Loads (once, cache-only) the hard-press preview card's recent messages. */
@@ -281,6 +321,19 @@ class ConversationListViewModel @Inject constructor(
         loadingDeps.explicitUnreadMarks.clear(id)
         lock.onConversationTap(id)
     }
+    /** Toucher d'avatar : la loi relue AU TOUCHER — un verrou ou un blocage posés depuis le rendu comptent. */
+    fun onAvatarTap(id: String) {
+        val target = conversationFor(id)
+            ?.avatarTarget(_state.value.currentUserId, isPeerBlocked = dialogs.isPeerBlocked(id) == true)
+            ?: ConversationAvatarTarget.ConversationInfo
+        when (val route = ConversationAvatarRoute.route(target, lock.isLocked(id))) {
+            is ConversationAvatarRoute.Profile ->
+                avatarEffectRequests.trySend(ConversationAvatarEffect.OpenProfile(route.userId))
+            ConversationAvatarRoute.Info, ConversationAvatarRoute.UnlockThenInfo -> lock.onAvatarInfo(id)
+        }
+    }
+    /** « Infos de la conversation » du menu d'avatar : les détails, derrière le code si verrouillée. */
+    fun onAvatarInfo(id: String) = lock.onAvatarInfo(id)
     fun onLockToggle(id: String) = lock.onLockToggle(id)
     fun onUnlockAll() = lock.onUnlockAll()
     fun onChangeMasterPin() = lock.onChangeMasterPin()

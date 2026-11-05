@@ -18,6 +18,7 @@ import me.meeshy.sdk.community.CommunityRepository
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CommunityChannelPicker
+import me.meeshy.sdk.model.CommunityPaging
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.theme.displayTitle
@@ -34,9 +35,13 @@ data class CommunityAddChannelUiState(
     val addingId: String? = null,
     val pendingMove: CommunityChannelCandidate? = null,
     val errorMessage: String? = null,
+    val pages: Int = 1,
 ) {
-    val visible: List<CommunityChannelCandidate>
+    private val matching: List<CommunityChannelCandidate>
         get() = query.trim().let { q -> if (q.isEmpty()) candidates else candidates.filter { it.title.contains(q, ignoreCase = true) } }
+
+    val visible: List<CommunityChannelCandidate> get() = matching.let { it.take(CommunityPaging.shownCount(it.size, pages)) }
+    val hasMore: Boolean get() = matching.let { CommunityPaging.hasMore(it.size, pages) }
 }
 
 sealed interface CommunityAddChannelEffect {
@@ -78,7 +83,8 @@ class CommunityAddChannelViewModel @Inject constructor(
         }
     }
 
-    fun onQuery(value: String) = _state.update { it.copy(query = value) }
+    fun onQuery(value: String) = _state.update { it.copy(query = value, pages = 1) }
+    fun loadMore() = _state.update { if (it.hasMore) it.copy(pages = it.pages + 1) else it }
     fun dismissError() = _state.update { it.copy(errorMessage = null) }
     fun cancelMove() = _state.update { it.copy(pendingMove = null) }
 

@@ -59,8 +59,6 @@ data class ChatUiState(
      * from the initial unread count captured before the conversation is marked
      * read (null = nothing unread on open). */
     val firstUnreadMessageId: String? = null,
-    /** Le compte SERVEUR de non-lus capturé à l'ouverture : c'est lui que le séparateur annonce (#7525). */
-    val unreadAtOpening: Int = 0,
     /** Flips true the moment the unread-boundary latch settles — whether it found
      * a boundary or not. The one-shot open scroll waits for this so it never fires
      * against an unresolved (possibly empty) window. */
@@ -186,6 +184,14 @@ data class ChatUiState(
      */
     val isEndToEnd: Boolean
         get() = EndToEndRegime.isEndToEnd(encryptionMode) || messages.any { it.isEndToEndSealed || it.holdsEndToEndSend }
+
+    /**
+     * Un tête-à-tête PROUVÉ : le type servi et le pair sont connus. Tant que la conversation n'est pas
+     * chargée, `isGroup` vaut `false` par défaut ; ce qui en dépend pour la sécurité (le bout en bout ne
+     * se propose qu'en tête-à-tête, #16044) lit ce champ, fermé tant que rien n'est su.
+     */
+    val isKnownDirect: Boolean
+        get() = !isGroup && directPeerUserId != null
 
     /** Whether the reader may write here — what the message law reads before offering « Répondre ». */
     val viewerMayWrite: Boolean

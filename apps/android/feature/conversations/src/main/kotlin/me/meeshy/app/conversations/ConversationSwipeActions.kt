@@ -12,7 +12,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 /**
  * Pose [content] dans le panneau d'actions révélées d'une rangée (iOS `ConversationSwipeActions`):
  * glisser vers le début de lecture révèle épingler / silence / verrou, vers la fin archiver / lu-non lu /
- * masquer. Le panneau reste ouvert, une seule rangée l'est à la fois, chaque action est aussi une action
+ * masquer, rendre obsolète. Le panneau reste ouvert, une seule rangée l'est à la fois, chaque action est aussi une action
  * personnalisée TalkBack et le sens s'inverse en RTL — tout cela vit dans [SwipeableRow]; ici on ne
  * choisit que QUOI révéler et ce que chaque bouton déclenche.
  */
@@ -34,6 +34,7 @@ internal fun ConversationSwipeActions(
         markRead = stringResource(R.string.swipe_mark_read),
         markUnread = stringResource(R.string.swipe_mark_unread),
         hide = stringResource(R.string.swipe_hide),
+        obsolete = stringResource(R.string.conversations_action_make_obsolete),
     )
     val revealed = remember(swipe, labels, actions) {
         swipe.leading.map { it.toAction(labels, actions) } to swipe.trailing.map { it.toAction(labels, actions) }
@@ -53,6 +54,7 @@ private data class SwipeLabels(
     val markRead: String,
     val markUnread: String,
     val hide: String,
+    val obsolete: String,
 )
 
 private fun ConversationSwipeItem.toAction(labels: SwipeLabels, actions: ConversationRowActions): SwipeAction =
@@ -84,5 +86,8 @@ private fun ConversationSwipeItem.toAction(labels: SwipeLabels, actions: Convers
         )
         SwipeKind.REMOVE -> SwipeAction(
             MeeshyIcons.EyeOffFilled, labels.hide, MeeshyPalette.Error, actions.onRemove,
+        )
+        SwipeKind.OBSOLETE -> SwipeAction(
+            MeeshyIcons.DeleteForever, labels.obsolete, MeeshyPalette.Error, actions.onRequestObsolete,
         )
     }

@@ -131,6 +131,146 @@
     "cadres-australs": {
       "name": "Südliche Rahmen",
       "description": "Drei Rahmen nach Punktmalerei und südlichem Himmel: funkelnde Punktkreise, eine Meeresschildkröte, die um deinen Avatar schwimmt, und das leuchtende Kreuz des Südens."
+    },
+    "meeshy-signature": {
+      "name": "Meeshy Signatur",
+      "description": "Sechs Rahmen von Meeshy, schlicht und in jeder Größe lesbar: Goldfaden, Perlmuttperlen, Finsternis, Rosette, Sternennacht und Facetten."
+    },
+    "meeshy-vivants": {
+      "name": "Lebendig von Meeshy",
+      "description": "Sechs animierte Rahmen von Meeshy, die kaum über deinen Avatar hinausragen: eine Umlaufbahn, ein Polarlicht-Halo, ein Puls, Funken, ein Komet und eine Dünung."
+    },
+    "meeshy-fonds": {
+      "name": "Signatur-Hintergründe",
+      "description": "Sechs Hintergründe von Meeshy, zurückhaltend unter den Blasen, hell wie dunkel: Seide, Punkte, feine Wellen, Wiener Geflecht, Terrazzo und Dämmerung."
+    },
+    "meeshy-fonds-vivants": {
+      "name": "Lebendige Hintergründe",
+      "description": "Vier animierte Hintergründe von Meeshy, die sich sanft hinter deinen Nachrichten bewegen: Glühwürmchen, Polarlichtschleier, sanfter Schnee und Wellenringe."
+    },
+    "meeshy-bordures": {
+      "name": "Signatur-Rahmen",
+      "description": "Sechs Bannerrahmen von Meeshy, nur am Rand, damit Level und Zähler sichtbar bleiben: Goldpaspel, Voluten, Perlenschnur, Onyx, Intarsie und Mitternacht."
+    },
+    "meeshy-bordures-vivantes": {
+      "name": "Lebendige Rahmen",
+      "description": "Vier animierte Bannerrahmen von Meeshy: ein Glanz, der über Gold gleitet, schimmernde Perlen, eine funkelnde Nacht und ein Neonlicht."
+    },
+    "noel-enneige": {
+      "name": "Verschneite Weihnacht",
+      "description": "Zwei animierte Rahmen für den Winter: Schneeflocken, die sanft um deinen Avatar fallen, und ein Stechpalmenkranz mit leuchtenden Beeren."
+    },
+    "lumieres-de-noel": {
+      "name": "Weihnachtslichter",
+      "description": "Zwei animierte Rahmen, die zum Fest leuchten: eine Lichterkette, deren Birnen abwechselnd blinken, und der strahlende Stern auf der Tanne."
+    },
+    "atelier-du-pere-noel": {
+      "name": "Werkstatt des Weihnachtsmanns",
+      "description": "Zwei animierte Rahmen frisch aus der Werkstatt: eine rote Mütze mit schaukelndem Bommel und eine kreisende Zuckerstange mit grüner Schleife."
+    },
+    "fonds-noel": {
+      "name": "Weihnachtshintergründe",
+      "description": "Drei Chat-Hintergründe passend zu den Weihnachtspaketen: Kristallflocken, Sternengirlande und Zuckerstangenstreifen, dezent genug, damit jede Blase lesbar bleibt."
+    },
+    "fonds-noel-vivants": {
+      "name": "Lebendige Weihnacht",
+      "description": "Drei animierte Hintergründe passend zu den Weihnachtspaketen: fallender Kristallschnee, eine Lichterkette, deren Birnen nacheinander leuchten, und Funken aus der Werkstatt. Bei reduzierter Bewegung: ein ruhiger Verlauf."
+    },
+    "bannieres-illustrees": {
+      "name": "Illustrierte Rahmen",
+      "description": "Bannerrahmen passend zu „Illustrierte Rahmen“: Katzenmaske, Spinnennetz, Engelsflügel, Runenkreis, Knochenkrallen und Dämonenflügel, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-asiatiques": {
+      "name": "Asiatische Rahmen",
+      "description": "Bannerrahmen passend zu „Asiatische Rahmen“: Jadedrache, Seidenwolken und Papierlaternen, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-africaines": {
+      "name": "Afrikanische Rahmen",
+      "description": "Bannerrahmen passend zu „Afrikanische Rahmen“: Ebenholzmaske, Webbänder und Perlenkette, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-celtes": {
+      "name": "Keltische Rahmen",
+      "description": "Bannerrahmen passend zu „Keltische Rahmen“: Flechtknoten, Dreifachspirale und Smaragdefeu, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-nordiques": {
+      "name": "Nordische Rahmen",
+      "description": "Bannerrahmen passend zu „Nordische Rahmen“: Kreisende Raben, Nordlicht, Gravierter Steinring und Geschnitzter Bug, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-egyptiennes": {
+      "name": "Ägyptische Rahmen",
+      "description": "Bannerrahmen passend zu „Ägyptische Rahmen“: Goldene Kobra, Geflügelter Skarabäus, Wüstensonne und Nil-Lotus, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-mayas": {
+      "name": "Maya-Rahmen",
+      "description": "Bannerrahmen passend zu „Maya-Rahmen“: Jadeschlange, Glyphenkartuschen, Stufenfries und Dschungeljaguar, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-indiennes": {
+      "name": "Indische Rahmen",
+      "description": "Bannerrahmen passend zu „Indische Rahmen“: Blumenmandala, Radschlagender Pfau und Ringelblumengirlande, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-amerindiennes": {
+      "name": "Indigene amerikanische Rahmen",
+      "description": "Bannerrahmen passend zu „Indigene amerikanische Rahmen“: Gewebter Federreif, Perlenrauten und Sonne über den Bergen, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-australes": {
+      "name": "Südliche Rahmen",
+      "description": "Bannerrahmen passend zu „Südliche Rahmen“: Punktkreise, Meeresschildkröte und Kreuz des Südens, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-noel-enneige": {
+      "name": "Verschneite Weihnacht",
+      "description": "Bannerrahmen passend zu „Verschneite Weihnacht“: Fallende Flocken und Stechpalmenkranz, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-lumieres-noel": {
+      "name": "Weihnachtslichter",
+      "description": "Bannerrahmen passend zu „Weihnachtslichter“: Lichterkette und Tannenstern, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "bannieres-atelier-noel": {
+      "name": "Werkstatt des Weihnachtsmanns",
+      "description": "Bannerrahmen passend zu „Werkstatt des Weihnachtsmanns“: Weihnachtsmütze und Zuckerstange, nur am Rand, damit dein Foto sichtbar bleibt."
+    },
+    "noel-bannieres": {
+      "name": "Weihnachtsbanner",
+      "description": "Sechs Bannerbilder passend zu den Weihnachtspaketen: Raureif, Girlande und Geschenkpapier, dann Schneegestöber, funkelnde Lichter und Funken aus der Werkstatt."
+    },
+    "noel-contours-fixes": {
+      "name": "Weihnachten · ruhige Rahmen",
+      "description": "Die sechs Weihnachtsrahmen ohne Animation: Flocken, Stechpalme, Lichterkette, Stern, Mütze und Zuckerstange, für einen ruhigen Avatar."
+    },
+    "noel-cadres-fixes": {
+      "name": "Weihnachten · ruhige Bannerrahmen",
+      "description": "Die sechs Weihnachts-Bannerrahmen ohne Animation, passend zu den ruhigen Rahmen: Flocken, Stechpalme, Lichterkette, Stern, Mütze und Zuckerstange."
+    },
+    "nouvel-an-contours": {
+      "name": "Neujahr",
+      "description": "Vier Rahmen zum Feiern des neuen Jahres: Feuerwerk, Konfettiregen, Mitternachtszifferblatt und eine goldene Sektschale."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Lebendiges Neujahr",
+      "description": "Vier animierte Rahmen für den Jahreswechsel: ein großes Finale, ein Konfettiwirbel, die Uhr, die Mitternacht schlägt, und Sektperlen."
+    },
+    "nouvel-an-images": {
+      "name": "Neujahrsbanner",
+      "description": "Vier Bannerbilder für das neue Jahr: eine Feuerwerksnacht, ein Konfettifest, die zwölf Schläge um Mitternacht und goldener Sekt."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Animierte Neujahrsbanner",
+      "description": "Vier animierte Bannerbilder: aufblühendes Feuerwerk, ein Konfettischauer, der Countdown bis Mitternacht und Sektperlen. Bei reduzierter Bewegung: ein ruhiges Bild."
+    },
+    "nouvel-an-cadres": {
+      "name": "Neujahrsrahmen",
+      "description": "Vier Bannerrahmen passend zu den Neujahrsrahmen fürs Avatar: Feuerwerk, Konfetti, Mitternachtszifferblatt und Sektschalen."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Animierte Neujahrsrahmen",
+      "description": "Vier animierte Bannerrahmen passend zu den lebendigen Rahmen: ein aufblühendes Feuerwerk, fliegendes Konfetti, der kreisende Mitternachtszeiger und anstoßende Schalen."
+    },
+    "nouvel-an-fonds": {
+      "name": "Neujahrshintergründe",
+      "description": "Vier Chat-Hintergründe für das neue Jahr: Feuerwerkshimmel, Konfetti, Mitternachtsstunde und goldene Perlen, dezent genug, damit jede Blase lesbar bleibt."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Lebendiges Neujahr · Hintergründe",
+      "description": "Vier animierte Hintergründe für das neue Jahr: ferne Funken, fallendes Konfetti, eine Sternennacht und aufsteigende Perlen. Bei reduzierter Bewegung: ein ruhiger Verlauf."
     }
   },
   "designs": {
@@ -153,7 +293,45 @@
     "bulles-legeres": "Leichte Blasen",
     "pluie-de-petales": "Blütenregen",
     "maree": "Gezeiten",
-    "braises": "Glut"
+    "braises": "Glut",
+    "soie": "Seide",
+    "pointille": "Punkte",
+    "vagues-fines": "Feine Wellen",
+    "cannage": "Wiener Geflecht",
+    "terrazzo": "Terrazzo",
+    "crepuscule": "Dämmerung",
+    "lucioles": "Glühwürmchen",
+    "voile-aurore": "Polarlichtschleier",
+    "neige-douce": "Sanfter Schnee",
+    "ondes": "Wellenringe",
+    "flocons-cristal": "Kristallflocken",
+    "guirlande-etoilee": "Sternengirlande",
+    "sucre-d-orge-raye": "Zuckerstangenstreifen",
+    "neige-de-noel": "Weihnachtsschnee",
+    "ampoules-de-noel": "Christbaumlichter",
+    "etincelles-atelier": "Werkstattfunken",
+    "banniere-noel-givre": "Raureif",
+    "banniere-noel-guirlande": "Girlande",
+    "banniere-noel-cadeau": "Geschenkpapier",
+    "banniere-noel-neige": "Schneegestöber",
+    "banniere-noel-lumieres": "Funkelnde Lichter",
+    "banniere-noel-etincelles": "Weihnachtsfunken",
+    "banniere-artifice": "Feuerwerksnacht",
+    "banniere-confettis": "Konfettifest",
+    "banniere-minuit": "Zwölf Schläge",
+    "banniere-champagne": "Goldener Sekt",
+    "banniere-artifice-vive": "Lebendiges Feuerwerk",
+    "banniere-confettis-vive": "Konfettischauer",
+    "banniere-minuit-vive": "Countdown",
+    "banniere-champagne-vive": "Sektperlen",
+    "fond-artifice": "Feuerwerkshimmel",
+    "fond-confettis": "Konfetti",
+    "fond-minuit": "Mitternachtsstunde",
+    "fond-champagne": "Goldene Perlen",
+    "fond-artifice-vif": "Ferne Funken",
+    "fond-confettis-vif": "Fallendes Konfetti",
+    "fond-minuit-vif": "Sternenklare Mitternacht",
+    "fond-champagne-vif": "Aufsteigende Perlen"
   },
   "rings": {
     "filet": "Haarlinie",
@@ -214,7 +392,39 @@
     "soleil-montagnes": "Sonne über den Bergen",
     "cercles-points": "Punktkreise",
     "tortue-marine": "Meeresschildkröte",
-    "croix-du-sud": "Kreuz des Südens"
+    "croix-du-sud": "Kreuz des Südens",
+    "fil-d-or": "Goldfaden",
+    "perles-de-nacre": "Perlmuttperlen",
+    "eclipse": "Finsternis",
+    "rosace": "Rosette",
+    "nuit-etoilee": "Sternennacht",
+    "facettes": "Facetten",
+    "orbite": "Umlaufbahn",
+    "halo-aurore": "Polarlicht-Halo",
+    "pulsation": "Puls",
+    "scintillement": "Funkeln",
+    "comete": "Komet",
+    "houle": "Dünung",
+    "flocons-tombants": "Fallende Flocken",
+    "couronne-de-houx": "Stechpalmenkranz",
+    "guirlande-lumineuse": "Lichterkette",
+    "etoile-du-sapin": "Tannenstern",
+    "bonnet-du-pere-noel": "Weihnachtsmütze",
+    "sucre-d-orge": "Zuckerstange",
+    "flocons-tombants-fixe": "Fallende Flocken · ruhig",
+    "couronne-de-houx-fixe": "Stechpalmenkranz · ruhig",
+    "guirlande-lumineuse-fixe": "Lichterkette · ruhig",
+    "etoile-du-sapin-fixe": "Tannenstern · ruhig",
+    "bonnet-du-pere-noel-fixe": "Weihnachtsmütze · ruhig",
+    "sucre-d-orge-fixe": "Zuckerstange · ruhig",
+    "feux-d-artifice": "Feuerwerk",
+    "pluie-de-confettis": "Konfettiregen",
+    "cadran-de-minuit": "Mitternachtszifferblatt",
+    "coupe-de-champagne": "Sektschale",
+    "bouquet-final": "Großes Finale",
+    "envol-de-confettis": "Konfettiwirbel",
+    "minuit-sonne": "Mitternacht schlägt",
+    "champagne-petillant": "Prickelnder Sekt"
   },
   "gamut": {
     "indigo": "Meeshy-Indigo",
@@ -254,6 +464,72 @@
     "rituel": "Afrikanisch, Ritual",
     "rituel-anime": "Afrikanisch, Ritual, animiert",
     "celte": "Keltisch",
-    "celte-anime": "Keltisch, animiert"
+    "celte-anime": "Keltisch, animiert",
+    "liseret-or": "Goldpaspel",
+    "volutes": "Voluten",
+    "rang-de-perles": "Perlenschnur",
+    "onyx": "Onyx",
+    "marqueterie": "Intarsie",
+    "minuit": "Mitternacht",
+    "liseret-lumiere": "Lichtpaspel",
+    "perles-vives": "Schimmerperlen",
+    "nuit-vive": "Funkelnde Nacht",
+    "neon": "Neon",
+    "masque-felin": "Katzenmaske",
+    "toile-araignee": "Spinnennetz",
+    "ailes-ange": "Engelsflügel",
+    "cercle-runique": "Runenkreis",
+    "griffes-os": "Knochenkrallen",
+    "ailes-demon": "Dämonenflügel",
+    "dragon-jade": "Jadedrache",
+    "nuages-soie": "Seidenwolken",
+    "lanternes-papier": "Papierlaternen",
+    "masque-ebene": "Ebenholzmaske",
+    "bandes-tissees": "Webbänder",
+    "collier-perles": "Perlenkette",
+    "noeud-entrelace": "Flechtknoten",
+    "spirale-triple": "Dreifachspirale",
+    "lierre-emeraude": "Smaragdefeu",
+    "corbeaux-tournoyants": "Kreisende Raben",
+    "aurore-boreale": "Nordlicht",
+    "anneau-pierre-gravee": "Gravierter Steinring",
+    "proue-sculptee": "Geschnitzter Bug",
+    "cobra-dore": "Goldene Kobra",
+    "scarabee-aile": "Geflügelter Skarabäus",
+    "soleil-du-desert": "Wüstensonne",
+    "lotus-du-nil": "Nil-Lotus",
+    "serpent-de-jade": "Jadeschlange",
+    "cartouches-de-glyphes": "Glyphenkartuschen",
+    "frise-a-gradins": "Stufenfries",
+    "jaguar-de-jungle": "Dschungeljaguar",
+    "mandala-floral": "Blumenmandala",
+    "paon-roue": "Radschlagender Pfau",
+    "guirlande-soucis": "Ringelblumengirlande",
+    "cercle-tisse": "Gewebter Federreif",
+    "perlage-losanges": "Perlenrauten",
+    "soleil-montagnes": "Sonne über den Bergen",
+    "cercles-points": "Punktkreise",
+    "tortue-marine": "Meeresschildkröte",
+    "croix-du-sud": "Kreuz des Südens",
+    "flocons-tombants": "Fallende Flocken",
+    "couronne-de-houx": "Stechpalmenkranz",
+    "guirlande-lumineuse": "Lichterkette",
+    "etoile-du-sapin": "Tannenstern",
+    "bonnet-du-pere-noel": "Weihnachtsmütze",
+    "sucre-d-orge": "Zuckerstange",
+    "flocons-tombants-fixe": "Fallende Flocken · ruhig",
+    "couronne-de-houx-fixe": "Stechpalmenkranz · ruhig",
+    "guirlande-lumineuse-fixe": "Lichterkette · ruhig",
+    "etoile-du-sapin-fixe": "Tannenstern · ruhig",
+    "bonnet-du-pere-noel-fixe": "Weihnachtsmütze · ruhig",
+    "sucre-d-orge-fixe": "Zuckerstange · ruhig",
+    "feux-d-artifice": "Feuerwerk",
+    "pluie-de-confettis": "Konfettiregen",
+    "cadran-de-minuit": "Mitternachtszifferblatt",
+    "coupe-de-champagne": "Sektschale",
+    "bouquet-final": "Großes Finale",
+    "envol-de-confettis": "Konfettiwirbel",
+    "minuit-sonne": "Mitternacht schlägt",
+    "champagne-petillant": "Prickelnder Sekt"
   }
 }

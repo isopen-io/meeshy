@@ -292,6 +292,20 @@ class MessageSocketManagerChatEventsTest {
     }
 
     @Test
+    fun `rights-updated distinguishes an explicit null grant from an absent key`() = runTest {
+        val cleared = decoded(
+            "participant:rights-updated",
+            """{"conversationId":"c1","participantId":"p9","rights":{},"historyVisibleFrom":null}""",
+        ) as ParticipantRightsUpdatedEvent
+        val silent = decoded(
+            "participant:rights-updated",
+            """{"conversationId":"c1","participantId":"p9","rights":{}}""",
+        ) as ParticipantRightsUpdatedEvent
+        assertThat(cleared.carriesHistoryGrant).isTrue()
+        assertThat(silent.carriesHistoryGrant).isFalse()
+    }
+
+    @Test
     fun `a malformed frame is dropped and the next one still arrives`() = runTest {
         val (transport, manager) = rig()
         manager.events.test {

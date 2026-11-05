@@ -1,12 +1,16 @@
 package me.meeshy.app.notifications
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.BannerHeadline
 import me.meeshy.sdk.model.GameSurfaceTitle
 import me.meeshy.sdk.model.MediaSummary
 import me.meeshy.sdk.model.NotificationMessageDetail
+import me.meeshy.sdk.model.NotificationMilestone
+import me.meeshy.sdk.model.NotificationRowCopy
 import me.meeshy.sdk.model.NotificationBannerPresentation
 
 /**
@@ -100,3 +104,31 @@ internal fun presentationBodyText(presentation: NotificationBannerPresentation):
         )
     }
 }
+
+/**
+ * Les mots de repli d'un palier dont le titre n'est pas servi (ligne d'avant `tierRank`), dans la langue
+ * de l'application. Sans palier lisible (axe ou exploit inconnu de ce module), on retombe sur la headline.
+ */
+@Composable
+internal fun rememberNotificationRowCopy(): NotificationRowCopy {
+    val resources = LocalContext.current.resources
+    return remember(resources) {
+        object : NotificationRowCopy {
+            override fun milestoneName(milestone: NotificationMilestone): String? = when (milestone) {
+                is NotificationMilestone.Level -> milestone.level?.let { resources.getString(R.string.notification_milestone_level_name, it) }
+                is NotificationMilestone.Streak -> milestone.days?.let { resources.getString(R.string.notification_milestone_streak_name, it) }
+                else -> null
+            }
+
+            override fun milestoneReason(milestone: NotificationMilestone, inviteeName: String?): String? {
+                if (milestone !is NotificationMilestone.Badge) return null
+                if (milestone.axis == INVITE_JOINED_AXIS && inviteeName != null) {
+                    return resources.getString(R.string.notification_milestone_invite_joined_reason, inviteeName)
+                }
+                return milestone.threshold?.let { resources.getString(R.string.notification_milestone_badge_reason, it) }
+            }
+        }
+    }
+}
+
+private const val INVITE_JOINED_AXIS = "inviteJoined"

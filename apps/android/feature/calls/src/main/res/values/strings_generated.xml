@@ -71,6 +71,8 @@
     <string name="call_detail_type">Type</string>
     <string name="call_detail_type_audio">Voice call</string>
     <string name="call_detail_type_video">Video call</string>
+    <string name="call_effects_companions_more">%1$d more participants</string>
+    <string name="call_effects_companions_move">Move to the other side</string>
     <string name="call_ended">Call ended</string>
     <string name="call_ended_connection_lost">Connection lost</string>
     <string name="call_ended_declined">Call declined</string>
@@ -135,6 +137,7 @@
     <string name="call_journal_clear_message">Other participants keep theirs.</string>
     <string name="call_journal_clear_title">Clear your whole call log?</string>
     <string name="call_journal_close">Close</string>
+    <string name="call_journal_empty_title">No recent calls</string>
     <string name="call_journal_erase_failed">Couldn\'t delete. Try again.</string>
     <string name="call_journal_filter_video">Video</string>
     <string name="call_journal_hide">Delete</string>
@@ -249,4 +252,23 @@
     <string name="call_zoom_hint">Swipe up or down to zoom. On screen, pinch your image; double-tap to return to 1×</string>
     <string name="call_zoom_label">My camera zoom</string>
     <string name="permission_microphone_denied">Microphone denied — tap to open Settings</string>
+    <string name="video_filter_backgroundBlur">Background blur</string>
+    <string name="video_filter_brightness">Brightness</string>
+    <string name="video_filter_contrast">Contrast</string>
+    <string name="video_filter_exposure">Exposure</string>
+    <string name="video_filter_naturalComplexion">Natural complexion</string>
+    <string name="video_filter_naturalComplexion_hint">Evens and brightens your complexion with no visible retouching</string>
+    <string name="video_filter_performanceDegraded">Reduced performance — some filters disabled</string>
+    <string name="video_filter_preset_cool">Cool</string>
+    <string name="video_filter_preset_muted">Soft</string>
+    <string name="video_filter_preset_natural">Natural</string>
+    <string name="video_filter_preset_vivid">Vivid</string>
+    <string name="video_filter_preset_warm">Warm</string>
+    <string name="video_filter_radius">Radius</string>
+    <string name="video_filter_reinit">Reset</string>
+    <string name="video_filter_reset">Reset</string>
+    <string name="video_filter_saturation">Saturation</string>
+    <string name="video_filter_skinSmoothing">Skin smoothing</string>
+    <string name="video_filter_temperature">Temperature</string>
+    <string name="video_filter_title">Video filters</string>
 </resources>

@@ -1,6 +1,7 @@
 package me.meeshy.app.conversations
 
 import me.meeshy.sdk.conversation.ConversationObsoleting
+import me.meeshy.sdk.conversation.ConversationRemoving
 import me.meeshy.sdk.friend.BlockActionCoordinator
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.model.auth.ServerEnvironmentResolver
@@ -57,6 +58,8 @@ class ConversationListDialogDeps(
     val obsoleter: ConversationObsoleting = ConversationObsoleting.Unavailable,
     /** L'origine web publique (`https://meeshy.me`) de « Ouvrir dans l'administration » ; vide = entrée absente. */
     val webOrigin: String = "",
+    /** Quitter / supprimer une conversation (#15920) : retrait optimiste et file ; [detached] le laisse inerte. */
+    val remover: ConversationRemoving = ConversationRemoving.Unavailable,
 ) {
     @Inject
     constructor(
@@ -65,11 +68,13 @@ class ConversationListDialogDeps(
         reports: ReportRepository,
         obsoleter: ConversationObsoleting,
         config: MeeshyConfig,
+        remover: ConversationRemoving,
     ) : this(
         blocker = CoordinatedPeerBlocker(coordinator, cache),
         reporter = ConversationReporter { id, reason, details -> reports.reportConversation(id, reason, details) },
         obsoleter = obsoleter,
         webOrigin = ServerEnvironmentResolver.webOrigin(ServerEnvironmentResolver.serverOrigin(config.apiBaseUrl)),
+        remover = remover,
     )
 
     companion object {

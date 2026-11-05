@@ -56,7 +56,7 @@ class ProfilePostsViewModelTest {
         coEvery { cache.cached(any()) } returns cached
         coEvery { cache.ticket() } returns null
         coEvery { users.getUserStats(any()) } returns NetworkResult.Failure(ApiError("off"))
-        return ProfilePostsViewModel(posts, cache, users, session, MeeshyConfig(), FeedbackToastCenter())
+        return ProfilePostsViewModel(posts, cache, users, session, MeeshyConfig(), FeedbackToastCenter(), mockk(relaxed = true), FakeProfileSocial().socket, mockk(relaxed = true))
     }
 
     private fun snapshot(vararg p: ApiPost, cursor: String? = "c1", hasMore: Boolean = true) = UserPostsSnapshot(p.toList(), cursor, hasMore)

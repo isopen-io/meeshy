@@ -65,6 +65,13 @@ public object OutboxLocalTargets {
         OutboxKind.REMOVE_ATTACHMENT,
         OutboxKind.MODERATION_DELETE,
         OutboxKind.MARK_RECEIVED,
+        OutboxKind.REPOST_STORY,
+        OutboxKind.MARK_STORY_VIEWED,
+        OutboxKind.DELETE_COMMENT,
+        OutboxKind.TOGGLE_LIKE_COMMENT,
+        OutboxKind.LEAVE_CONVERSATION,
+        OutboxKind.DELETE_CONVERSATION_FOR_ME,
+        OutboxKind.DELETE_CONVERSATION_FOR_ALL,
     ).map { it.name }.toSet()
 
     /** Whether [kind] sends its row's `targetId` to the server as a resource key. */

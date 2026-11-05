@@ -383,8 +383,7 @@ class MessageRepositoryTest {
     private suspend fun streamedMessages(repo: MessageRepository, conversationId: String = "c1") =
         db.messageDao().observeForConversation(conversationId).first()
 
-    private suspend fun cachedApiMessage(id: String): ApiMessage =
-        MeeshyApi.json.decodeFromString<ApiMessage>(db.messageDao().find(id)!!.payload)
+    private suspend fun cachedApiMessage(id: String): ApiMessage = cachedMessage(id)
 
     private suspend fun sentRequest(lane: String): SendMessageRequest =
         MeeshyApi.json.decodeFromString<SendMessageRequest>(outbox.deliverable(lane).last().payload)
@@ -1149,8 +1148,13 @@ class MessageRepositoryTest {
         assertThat(request.storyReplyToId).isEqualTo("story-1")
     }
 
-    private suspend fun cachedMessage(id: String): ApiMessage =
-        MeeshyApi.json.decodeFromString(db.messageDao().find(id)!!.payload)
+    /** Le message tel que l'écran le lit : la charge superposée aux traductions déjà reçues (lignes dédiées). */
+    private suspend fun cachedMessage(id: String): ApiMessage {
+        val stored = MeeshyApi.json.decodeFromString<ApiMessage>(db.messageDao().find(id)!!.payload)
+        val layer = TranslationLayer.of(db)
+        layer.ensureLoaded(listOf(stored.id))
+        return layer.project(LocalMessage(stored)).message
+    }
 
     @Test
     fun `toggleReactionOptimistic add bumps the summary instantly and queues ADD_REACTION`() = runTest {

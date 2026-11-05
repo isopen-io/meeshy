@@ -28,12 +28,14 @@ public object OutboxRowFacts {
         OutboxKind.READ_RECEIPT, OutboxKind.MARK_UNREAD -> other("markAsRead")
         OutboxKind.REPORT_ATTACHMENT_STATUS -> other("reportAttachmentStatus")
         OutboxKind.CONSUME_AFTER_READ, OutboxKind.CONSUME_VIEW_ONCE -> other("consumeAfterRead")
+        OutboxKind.REPORT_CONTENT_CAPTURE -> other("reportContentCapture")
         OutboxKind.UPDATE_CONVERSATION_PREFS, OutboxKind.PIN_MESSAGE, OutboxKind.UNPIN_MESSAGE -> other("updateConversation")
         OutboxKind.UPDATE_PROFILE -> other("updateProfile")
         OutboxKind.UPDATE_SETTINGS,
         OutboxKind.UPDATE_PRIVACY_SETTINGS,
         OutboxKind.UPDATE_AUDIO_SETTINGS,
         OutboxKind.UPDATE_APPLICATION_SETTINGS,
+        OutboxKind.UPDATE_PREFERENCE_CATEGORY,
         -> other("updateSettings")
         OutboxKind.UPLOAD_MEDIA -> other("uploadMedia")
         OutboxKind.BLOCK_USER -> other("blockUser")
@@ -49,6 +51,12 @@ public object OutboxRowFacts {
         OutboxKind.HIDE_FOR_ME, OutboxKind.MODERATION_DELETE -> OutboxPillFacts(OutboxUiKind.DELETE)
         OutboxKind.RESTORE_FOR_ME, OutboxKind.REMOVE_ATTACHMENT -> other("updateConversation")
         OutboxKind.MARK_RECEIVED -> other("markAsRead")
+        OutboxKind.REPOST_STORY -> other("repostPost")
+        OutboxKind.MARK_STORY_VIEWED -> other("markStoryViewed")
+        OutboxKind.DELETE_COMMENT -> other("deleteComment")
+        OutboxKind.TOGGLE_LIKE_COMMENT -> OutboxPillFacts(OutboxUiKind.POST_REACTION)
+        OutboxKind.LEAVE_CONVERSATION -> other("updateConversation")
+        OutboxKind.DELETE_CONVERSATION_FOR_ME, OutboxKind.DELETE_CONVERSATION_FOR_ALL -> OutboxPillFacts(OutboxUiKind.DELETE)
     }
 
     private fun other(key: String) = OutboxPillFacts(OutboxUiKind.OTHER, key)

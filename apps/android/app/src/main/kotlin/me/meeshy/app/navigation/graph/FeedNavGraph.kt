@@ -19,6 +19,10 @@ import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PendingPostDetailScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
+import me.meeshy.app.navigation.FeedArrivalViewModel
+import me.meeshy.app.navigation.FeedOverlayTransition
+import me.meeshy.app.navigation.MeeshyPinnedStoryBand
+import me.meeshy.sdk.model.composer.ComposerOrigin
 import me.meeshy.app.navigation.MeeshyStoryRail
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.app.navigation.Routes
@@ -39,7 +43,16 @@ import me.meeshy.app.stories.StoryViewersSheet
 internal fun NavGraphBuilder.feedNavGraph(
     navController: NavHostController,
 ) {
-    composable(Routes.FEED) {
+    composable(
+        route = Routes.FEED,
+        enterTransition = { FeedOverlayTransition.enter(this) },
+        exitTransition = { FeedOverlayTransition.exit(this) },
+        popExitTransition = { FeedOverlayTransition.popExit(this) },
+    ) {
+        val arrival: FeedArrivalViewModel = hiltViewModel()
+        LaunchedEffect(arrival) {
+            if (arrival.consumeComposerRequest()) Routes.composer(ComposerOrigin.FeedComposer)?.let(navController::navigate)
+        }
         // Une instance pour le rail et le geste « tirer » : tirer le fil recharge aussi les stories (iOS `FeedView`).
         val storiesViewModel: StoriesViewModel = hiltViewModel()
         FeedScreen(
@@ -53,6 +66,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenComposer = { origin -> Routes.composer(origin)?.let(navController::navigate) },
             onRefreshRail = storiesViewModel::refresh,
             storyRail = { MeeshyStoryRail(navController = navController, storiesViewModel = storiesViewModel) },
+            pinnedBand = { reveal -> MeeshyPinnedStoryBand(navController, storiesViewModel, reveal) },
         )
     }
     composable(
@@ -88,6 +102,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
         )
     }
     composable(Routes.NEARBY_DISCOVERY) {
@@ -96,6 +111,7 @@ internal fun NavGraphBuilder.feedNavGraph(
             onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
+            onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
         )
     }
     composable(

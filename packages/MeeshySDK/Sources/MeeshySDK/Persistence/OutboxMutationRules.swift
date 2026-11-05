@@ -24,6 +24,11 @@ enum OutboxMutationRules {
         switch kind {
         case .markAsRead:
             return true
+        case .toggleBookmarkPost:
+            // #15997 — anchor = postId : enregistrer puis retirer hors ligne
+            // ne rejoue que le dernier état. La ligne porte l'état voulu, et
+            // la passerelle le pose sans compter deux fois.
+            return true
         case .markStoryViewed:
             // R6 — anchor = storyId : re-voir la même story remplace le row
             // pendant/failed précédent (le « vu » est binaire et idempotent) ;

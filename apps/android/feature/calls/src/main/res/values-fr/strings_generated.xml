@@ -71,6 +71,8 @@
     <string name="call_detail_type">Type</string>
     <string name="call_detail_type_audio">Appel vocal</string>
     <string name="call_detail_type_video">Appel vidéo</string>
+    <string name="call_effects_companions_more">%1$d autres participants</string>
+    <string name="call_effects_companions_move">Changer de côté</string>
     <string name="call_ended">Appel terminé</string>
     <string name="call_ended_connection_lost">Connexion perdue</string>
     <string name="call_ended_declined">Appel refusé</string>
@@ -135,6 +137,7 @@
     <string name="call_journal_clear_message">Les autres participants gardent le leur.</string>
     <string name="call_journal_clear_title">Effacer tout le journal d\'appels ?</string>
     <string name="call_journal_close">Fermer</string>
+    <string name="call_journal_empty_title">Aucun appel récent</string>
     <string name="call_journal_erase_failed">L\'effacement a échoué. Réessayez.</string>
     <string name="call_journal_filter_video">Vidéo</string>
     <string name="call_journal_hide">Effacer</string>
@@ -249,4 +252,23 @@
     <string name="call_zoom_hint">Balayez vers le haut ou le bas pour zoomer. Sur l\'écran, pincez votre image ; touchez deux fois pour revenir à 1×</string>
     <string name="call_zoom_label">Zoom de ma caméra</string>
     <string name="permission_microphone_denied">Micro refusé — toucher pour ouvrir les Réglages</string>
+    <string name="video_filter_backgroundBlur">Flou d\'arrière-plan</string>
+    <string name="video_filter_brightness">Luminosité</string>
+    <string name="video_filter_contrast">Contraste</string>
+    <string name="video_filter_exposure">Exposition</string>
+    <string name="video_filter_naturalComplexion">Teint naturel</string>
+    <string name="video_filter_naturalComplexion_hint">Unifie et illumine le teint, sans retouche visible</string>
+    <string name="video_filter_performanceDegraded">Performance réduite — certains filtres désactivés</string>
+    <string name="video_filter_preset_cool">Froid</string>
+    <string name="video_filter_preset_muted">Doux</string>
+    <string name="video_filter_preset_natural">Naturel</string>
+    <string name="video_filter_preset_vivid">Vif</string>
+    <string name="video_filter_preset_warm">Chaud</string>
+    <string name="video_filter_radius">Rayon</string>
+    <string name="video_filter_reinit">Réinitialiser</string>
+    <string name="video_filter_reset">Réinitialiser</string>
+    <string name="video_filter_saturation">Saturation</string>
+    <string name="video_filter_skinSmoothing">Lissage de la peau</string>
+    <string name="video_filter_temperature">Température</string>
+    <string name="video_filter_title">Filtres vidéo</string>
 </resources>

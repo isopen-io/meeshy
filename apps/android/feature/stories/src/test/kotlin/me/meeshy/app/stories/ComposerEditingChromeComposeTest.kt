@@ -94,7 +94,7 @@ class ComposerEditingChromeComposeTest {
     }
 
     private val canvas = "Story canvas — pinch to zoom, drag to pan"
-    private val tools = listOf("Text", "Media", "Sticker", "More options")
+    private val tools = listOf("Add text", "Add media", "Add a sticker", "More options")
 
     private fun viewModel(): StoryComposerViewModel {
         val session: SessionRepository = mockk(relaxed = true)
@@ -144,6 +144,7 @@ class ComposerEditingChromeComposeTest {
 
     private fun tapEmptyScene() {
         compose.onNodeWithContentDescription(canvas).performTouchInput { click(Offset(width * 0.15f, height * 0.35f)) }
+        compose.passSceneDoubleTapWindow()
     }
 
     private fun assertRestingChrome() {
@@ -159,7 +160,7 @@ class ComposerEditingChromeComposeTest {
         val vm = viewModel()
         withPlacedPhoto(vm)
         show(vm)
-        val textTool = compose.onNodeWithContentDescription("Text").getUnclippedBoundsInRoot()
+        val textTool = compose.onNodeWithContentDescription("Add text").getUnclippedBoundsInRoot()
 
         compose.onNodeWithContentDescription("Media on the scene").performClick()
 
@@ -223,7 +224,7 @@ class ComposerEditingChromeComposeTest {
     }
 
     @Test
-    fun `talkback hears the editing family on selection and the return to the tools on deselection`() {
+    fun `talkback hears the selected family as iOS names it, then the selection cleared`() {
         val vm = viewModel()
         vm.onAddSticker("😀")
         vm.onSceneBackgroundTap()
@@ -233,10 +234,10 @@ class ComposerEditingChromeComposeTest {
         announcer.assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.ContentDescription))
 
         compose.onNodeWithContentDescription("😀").performClick()
-        announcer.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Editing: Sticker")))
+        announcer.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Sticker selected")))
 
         tapEmptyScene()
-        announcer.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Back to the scene tools")))
+        announcer.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Selection cleared")))
     }
 
     private fun publishCountTwoFramesAfterSelecting(reduceMotion: Boolean): Int {

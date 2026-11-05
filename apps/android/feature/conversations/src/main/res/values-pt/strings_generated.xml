@@ -20,6 +20,8 @@
     <string name="context_report">Denunciar</string>
     <string name="context_search">Buscar</string>
     <string name="conversationCard_expired">Link expirado</string>
+    <string name="conversation_row_avatar_a11y_details">Detalhes de %1$s</string>
+    <string name="conversation_row_avatar_a11y_profile">Ver o perfil de %1$s</string>
     <string name="conversations_action_archive">Arquivar</string>
     <string name="conversations_action_create_category">Criar \"%1$s\"</string>
     <string name="conversations_action_delete_for_all">Excluir para todos</string>
@@ -91,6 +93,7 @@
     <string name="conversations_lock_title_verify_master">Verificar o PIN mestre</string>
     <string name="conversations_logout">Sair</string>
     <string name="conversations_new">Nova conversa</string>
+    <string name="conversations_obsolete_error">Não foi possível tornar a conversa obsoleta.</string>
     <string name="conversations_open_dashboard">Painel</string>
     <string name="conversations_preview_draft_label">Rascunho</string>
     <string name="conversations_preview_draft_prefix">Rascunho:</string>

@@ -53,6 +53,10 @@ data class MessageMergeOutcome(
  *     absent de la charge reçue garde la valeur en cache au lieu de la vider.
  *  3. **L'outbox a le dernier mot** tant qu'elle n'a pas livré : édition, suppression, réaction et
  *     épinglage en file gardent leur valeur locale ([MessageMergeGuards]).
+ *  4. **Une vue unique ouverte par ce lecteur reste scellée** : dès que le fusionné est une vue unique et
+ *     porte `consumedByMe` (gardé du cache ou servi), il sort par [ConversationEventDeltas.sealedIfOpened] — une page partie
+ *     avant l'ouverture ne remet rien du contenu, et un cache rempli avant une ouverture faite ailleurs
+ *     ne survit pas à la page qui la sert (iso iOS `APIMessageUpsert+Merge`, #15897).
  *
  * Restent faisant autorité dans la charge servie, parce qu'ils se vident légitimement : le
  * résumé des réactions et l'épinglage (hors garde).
@@ -73,6 +77,7 @@ object MessageMergePolicy {
         next = mergedPin(next, existing, guards)
         next = mergedLightFields(next, existing, incoming)
         next = next.copy(attachments = mergedAttachments(existing.attachments, incoming.attachments))
+        next = ConversationEventDeltas.sealedIfOpened(next, openedHere = false)
         return MessageMergeOutcome(message = next, changed = next != existing)
     }
 
@@ -202,7 +207,9 @@ object MessageMergePolicy {
     /**
      * Les pièces servies l'emportent ; une charge sans pièce garde celles du cache. Une pièce servie
      * sans adresse (fichier ou vignette) reprend l'adresse locale de sa jumelle en cache — le chemin
-     * du fichier que l'envoi optimiste a posé — par identifiant, sinon par rang à nombre égal.
+     * du fichier que l'envoi optimiste a posé — par identifiant, sinon par rang à nombre égal. Une page servie AVANT
+     * Whisper ne retire jamais la transcription ni les pistes parlées que la jumelle porte déjà
+     * ([AttachmentAudioMetadata.mergedAttachment], le serveur l'emportant quand il re-sert un texte).
      */
     private fun mergedAttachments(
         cached: List<ApiMessageAttachment>,
@@ -216,7 +223,7 @@ object MessageMergePolicy {
             if (twin == null) {
                 attachment
             } else {
-                attachment.copy(
+                AttachmentAudioMetadata.mergedAttachment(twin, attachment, forceOverwrite = true).copy(
                     fileUrl = attachment.fileUrl.takeUnless { it.isNullOrBlank() } ?: twin.fileUrl,
                     thumbnailUrl = attachment.thumbnailUrl.takeUnless { it.isNullOrBlank() } ?: twin.thumbnailUrl,
                 )

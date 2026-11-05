@@ -40,6 +40,7 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.lang.ComposeLanguageDefault
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.lang.LanguageIdentifying
+import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.media.NetworkConditionMonitor
 import me.meeshy.sdk.mention.MentionContacts
@@ -125,7 +126,9 @@ class ChatViewModel @Inject constructor(
     private val endToEnd: EndToEndThreadAccess = EndToEndThreadAccess.None,
     private val openConversations: OpenConversationRegistry,
     reactionRows: me.meeshy.sdk.reaction.ReactionRowStore? = null,
-    pendingPreviews: me.meeshy.sdk.media.PendingMediaPreviewing = me.meeshy.sdk.media.PendingMediaPreviewing.None,
+    private val pendingPreviews: me.meeshy.sdk.media.PendingMediaPreviewing = me.meeshy.sdk.media.PendingMediaPreviewing.None,
+    translationsFetcher: me.meeshy.sdk.conversation.MessageTranslationsFetcher? = null,
+    audioTranslationTracker: me.meeshy.sdk.attachment.AudioTranslationRequestTracker? = null,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -198,12 +201,11 @@ class ChatViewModel @Inject constructor(
     private val windowAnswered = MutableStateFlow(false)
     private var avatarByUserId: Map<String, String?> = emptyMap()
 
-    /**
-     * The conversation's unread count captured from the cache **before** the open
-     * marks it read — the input to the [UnreadMarker] boundary. Null until the
-     * first conversation emission has been read.
-     */
+    /** The unread count captured from the cache **before** the open marks it read — the [UnreadMarker] input. */
     private val initialUnreadCount = MutableStateFlow<Int?>(null)
+
+    /** The SERVER count the unread separator announces (#7525), apart from [state]; `null` until the first emission. */
+    val unreadAtOpening: StateFlow<Int?> = initialUnreadCount.asStateFlow()
     private var openingCursor = UnreadCursor.of(null, null)
 
     private val screenState = ChatStateAccess(_state)
@@ -253,6 +255,9 @@ class ChatViewModel @Inject constructor(
         sessionRepository = sessionRepository,
         messageSocketManager = messageSocketManager,
         conversationId = conversationId,
+        requestAttachmentTranslation = audioTranslationTracker?.asExplorerRequest(),
+        fetchTranslations = translationsFetcher?.asExplorerFetch(),
+        audioPendingKeys = audioTranslationTracker?.pendingKeys ?: kotlinx.coroutines.flow.flowOf(emptySet()),
     )
 
     private val replyJump = ChatReplyJumpController(screenState)
@@ -302,11 +307,11 @@ class ChatViewModel @Inject constructor(
         // count and a non-empty message window are known. A later message arrival
         // never re-derives it (the boundary is stable for the session).
         viewModelScope.launch {
-            val count = initialUnreadCount.filterNotNull().first()
+            initialUnreadCount.filterNotNull().first()
             val bubbles = _state.map { it.messages }.first { it.isNotEmpty() }
             val firstUnread = UnreadMarker.firstUnreadId(bubbles, openingCursor, sessionRepository.currentUser.value?.id)
             _state.update {
-                it.copy(firstUnreadMessageId = firstUnread, unreadAtOpening = count, unreadBoundaryResolved = true)
+                it.copy(firstUnreadMessageId = firstUnread, unreadBoundaryResolved = true)
             }
         }
 
@@ -576,7 +581,9 @@ class ChatViewModel @Inject constructor(
     private suspend fun markConversationRead(arrived: ApiMessage? = null) = quietly {
         val unread = conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
         if (!mayAcknowledge(unread, arrived)) return@quietly
-        if (conversationRepository.markReadOptimistic(conversationId)) workManager.enqueue(OutboxFlushWorker.buildRequest())
+        if (conversationRepository.markReadOptimistic(conversationId, readDeclaration(unread, arrived))) {
+            workManager.enqueue(OutboxFlushWorker.buildRequest())
+        }
     }
 
     /**
@@ -588,13 +595,24 @@ class ChatViewModel @Inject constructor(
      */
     private suspend fun markConversationReadOnOpening(unreadAtOpening: Int) = quietly {
         if (!mayAcknowledge(unreadAtOpening, arrived = null)) return@quietly
+        val declaration = readDeclaration(unreadAtOpening, arrived = null)
         val queued = if (unreadAtOpening > 0) {
-            conversationRepository.acknowledgeRead(conversationId)
+            conversationRepository.acknowledgeRead(conversationId, declaration)
         } else {
-            conversationRepository.markReadOptimistic(conversationId)
+            conversationRepository.markReadOptimistic(conversationId, declaration)
         }
         if (queued) workManager.enqueue(OutboxFlushWorker.buildRequest())
     }
+
+    private fun readDeclaration(unread: Int, arrived: ApiMessage?) = ReadReceiptComposition.declaration(
+        window = latestMessages.value.map { it.message },
+        ownUserId = sessionRepository.currentUser.value?.id,
+        unreadCount = unread,
+        arrived = arrived,
+        prism = sessionRepository.currentUser.value?.let { ReaderPrism.resolve(it, java.util.Locale.getDefault()) }.orEmpty(),
+        overrides = translation.activeLanguageOverride.value,
+        showingOriginal = translation.showingOriginal.value,
+    )
 
     private fun mayAcknowledge(unread: Int, arrived: ApiMessage?): Boolean =
         ReadAcknowledgement.mayAcknowledge(
@@ -744,6 +762,8 @@ class ChatViewModel @Inject constructor(
     /** Tap on a Prisme language-flag chip: switch the bubble's displayed language, or revert. */
     fun onFlagTap(messageId: String, code: String) = translation.onFlagTap(messageId, code)
 
+    fun selectAudioLanguage(messageId: String, code: String) = translation.selectAudioLanguage(messageId, code)
+
     /** Open the per-message language explorer (long-press → "Explore languages"). */
     fun openLanguageExplorer(messageId: String) = translation.openLanguageExplorer(messageId)
 
@@ -752,6 +772,9 @@ class ChatViewModel @Inject constructor(
     /** Retranslate a language from the explorer — force a fresh translation. */
     fun onExplorerRetranslate(messageId: String, code: String) =
         translation.onExplorerRetranslate(messageId, code)
+
+    /** Toucher une ligne de l'explorateur : sélectionner, ou demander la voix par pièce / le texte. */
+    fun onExplorerRowTap(messageId: String, code: String) = translation.onExplorerRowTap(messageId, code)
 
     // --- Reply jump, pins ----------------------------------------------------------------
 
@@ -800,7 +823,7 @@ class ChatViewModel @Inject constructor(
     // --- Media, files ---------------------------------------------------------------------
 
     fun openImageViewer(messageId: String, imageIndex: Int) {
-        val gallery = ConversationMediaGallery.of(_state.value.messages, messageId, imageIndex)
+        val gallery = ConversationMediaGallery.of(_state.value.messages, messageId, imageIndex, pendingPreviews::sharpUrlFor)
         _state.update { it.copy(imageViewer = gallery.takeUnless(ConversationGallery::isEmpty)) }
     }
 
@@ -844,9 +867,9 @@ class ChatViewModel @Inject constructor(
     /** « Réessayer » le transfert en échec, dans le mode demandé (ouvrir, partager, enregistrer). */
     fun retryFileDownload() = fileDownload.retry()
 
-    /** Les pièces d'un message chargé ; vide s'il a quitté la fenêtre du fil. */
-    internal fun attachmentsOf(messageId: String): List<ApiMessageAttachment> =
-        latestMessages.value.firstOrNull { it.message.id == messageId }?.message?.attachments.orEmpty()
+    /** Un message chargé tel que le serveur le sert ; `null` s'il a quitté la fenêtre du fil. */
+    internal fun messageOf(messageId: String): ApiMessage? =
+        latestMessages.value.firstOrNull { it.message.id == messageId }?.message
 
     /** L'aperçu d'UNE pièce pour l'appui long sur une tuile ; `null` ⇒ le message est protégé, le geste vise le message entier. */
     internal fun pieceOverlayFor(messageId: String, attachmentId: String): PieceOverlayModel? =

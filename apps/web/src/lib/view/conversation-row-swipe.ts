@@ -1,7 +1,7 @@
 import type { ConversationFlags } from '@/lib/api/preferences';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
-import { rowMenuItems, type RowActionId, type RowMenuItem } from './row-actions';
+import { rowMenuItems, type RowActionId, type RowConversationActions, type RowMenuItem } from './row-actions';
 import { swipeEngages } from './swipe';
 
 /**
@@ -10,7 +10,10 @@ import { swipeEngages } from './swipe';
  * et des couples que `ConversationListView.swift` lui remet. Aucun DOM ici.
  *
  * - bord de DÉBUT (balayage dans le sens de lecture) : épingler, sourdine ;
- * - bord de FIN : archiver, lu / non lu, supprimer ;
+ * - bord de FIN : archiver, lu / non lu, supprimer, puis « Rendre obsolète »
+ *   en dernier quand le serveur l'accorde (#14645) — miroir de
+ *   `ConversationTrailingSwipe.plan` : quand il remplirait le bord au-delà du
+ *   plafond, la bascule lu / non lu cède sa place (elle reste au menu) ;
  * - `ROW_SWIPE_MAX_ACTIONS` par côté, jamais plus.
  *
  * Les actions SONT celles du menu de la ligne (`rowMenuItems`) : même id, même
@@ -31,11 +34,14 @@ const FLICK_CLOSE_DISTANCE = 10;
 
 export type RowSwipeEdge = 'leading' | 'trailing';
 
-/** Dans l'ordre depuis le BORD : la première est la première révélée. */
+/** Dans l'ordre depuis le BORD : la première est la première révélée. La table peut dépasser le plafond : `ROW_SWIPE_YIELDS` la ramène. */
 export const ROW_SWIPE_EDGES: Readonly<Record<RowSwipeEdge, readonly RowActionId[]>> = {
   leading: ['pin', 'mute'],
-  trailing: ['archive', 'read', 'delete'],
+  trailing: ['archive', 'read', 'delete', 'obsolete'],
 };
+
+/** L'action qui cède sa place quand un bord dépasse `ROW_SWIPE_MAX_ACTIONS` (iOS : `ConversationTrailingSwipe.plan`). */
+export const ROW_SWIPE_YIELDS: RowActionId = 'read';
 
 export type RowSwipeSides = Readonly<Record<RowSwipeEdge, readonly RowMenuItem[]>>;
 
@@ -44,12 +50,15 @@ export function conversationRowSwipeSides(params: {
   readonly unread: boolean;
   readonly language: InterfaceLanguage;
   readonly canDelete: boolean;
+  /** Les verdicts du rôle : seul « Rendre obsolète » en passe au balayage. */
+  readonly actions?: RowConversationActions;
 }): RowSwipeSides {
   const menu = rowMenuItems(params);
-  const side = (edge: RowSwipeEdge): readonly RowMenuItem[] =>
-    ROW_SWIPE_EDGES[edge]
-      .flatMap((id) => menu.filter((item) => item.id === id))
-      .slice(0, ROW_SWIPE_MAX_ACTIONS);
+  const side = (edge: RowSwipeEdge): readonly RowMenuItem[] => {
+    const items = ROW_SWIPE_EDGES[edge].flatMap((id) => menu.filter((item) => item.id === id));
+    if (items.length <= ROW_SWIPE_MAX_ACTIONS) return items;
+    return items.filter((item) => item.id !== ROW_SWIPE_YIELDS).slice(0, ROW_SWIPE_MAX_ACTIONS);
+  };
   return { leading: side('leading'), trailing: side('trailing') };
 }
 

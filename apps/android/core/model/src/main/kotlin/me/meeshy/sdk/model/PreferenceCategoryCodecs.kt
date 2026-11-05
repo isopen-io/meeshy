@@ -40,8 +40,17 @@ public class PreferenceCategoryCodec<T : Any> internal constructor(
     private val serializer: KSerializer<T>,
     private val defaults: T,
     private val extrasOf: (T) -> Map<String, JsonElement>,
+    private val withExtras: (T, Map<String, JsonElement>) -> T,
     private val neverSent: Set<String> = emptySet(),
 ) {
+    /**
+     * Le bloc [served] par le serveur posé sur le bloc [local] : le serveur fait foi champ par champ, et
+     * les clés inconnues des DEUX côtés survivent (celles du serveur l'emportent sur une même clé locale),
+     * si bien qu'un champ d'une version plus récente repart avec le PATCH suivant.
+     */
+    public fun mergeServed(local: T, served: T): T =
+        withExtras(served, extrasOf(local) + extrasOf(served))
+
     /** Le bloc servi (ou persisté) ; tout ce qui n'est pas un objet est les défauts. */
     public fun decode(element: JsonElement?): T =
         decodeTolerantBlock(serializer, element) ?: defaults
@@ -61,16 +70,16 @@ public class PreferenceCategoryCodec<T : Any> internal constructor(
 
 public object PreferenceCategoryCodecs {
     public val audio: PreferenceCategoryCodec<AudioPreferences> = PreferenceCategoryCodec(
-        PreferenceCategory.AUDIO, AudioPreferences.serializer(), AudioPreferences(), { it.extras },
+        PreferenceCategory.AUDIO, AudioPreferences.serializer(), AudioPreferences(), { it.extras }, { block, extras -> block.copy(extras = extras) },
     )
     public val message: PreferenceCategoryCodec<MessagePreferences> = PreferenceCategoryCodec(
-        PreferenceCategory.MESSAGE, MessagePreferences.serializer(), MessagePreferences(), { it.extras },
+        PreferenceCategory.MESSAGE, MessagePreferences.serializer(), MessagePreferences(), { it.extras }, { block, extras -> block.copy(extras = extras) },
     )
     public val video: PreferenceCategoryCodec<VideoPreferences> = PreferenceCategoryCodec(
-        PreferenceCategory.VIDEO, VideoPreferences.serializer(), VideoPreferences(), { it.extras },
+        PreferenceCategory.VIDEO, VideoPreferences.serializer(), VideoPreferences(), { it.extras }, { block, extras -> block.copy(extras = extras) },
     )
     public val document: PreferenceCategoryCodec<DocumentPreferences> = PreferenceCategoryCodec(
-        PreferenceCategory.DOCUMENT, DocumentPreferences.serializer(), DocumentPreferences(), { it.extras },
+        PreferenceCategory.DOCUMENT, DocumentPreferences.serializer(), DocumentPreferences(), { it.extras }, { block, extras -> block.copy(extras = extras) },
     )
 
     /** Les horodatages de consentement se LISENT (ils décorent l'écran) mais ne partent jamais. */
@@ -79,6 +88,7 @@ public object PreferenceCategoryCodecs {
         ApplicationPreferences.serializer(),
         ApplicationPreferences(),
         { it.extras },
+        { block, extras -> block.copy(extras = extras) },
         neverSent = WRITE_FORBIDDEN_APPLICATION_KEYS,
     )
 }

@@ -10,7 +10,7 @@ import { sessionStore } from '@/lib/api/session';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { Conversation, Participant } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import type { DepartureKind } from '@/lib/conversation-departure';
+import { departureStore, markObsoleteRefused, type DepartureKind } from '@/lib/conversation-departure';
 import type { PortailPartage } from '@/lib/view/invitation';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -297,6 +297,19 @@ describe('ConversationDetailsSheet — quitter et supprimer (#7837, #7285)', () 
     ]);
     act(() => departures()[2]?.click());
     expect(asked).toEqual(['obsolete']);
+  });
+
+  test('#14690 — refusé par la passerelle (l’expéditeur d’une demande non acceptée), le tête-à-tête ne propose plus que la suppression, même feuille ouverte', async () => {
+    const direct = conversation({ type: 'direct', title: 'Nour', currentUserRole: 'member' });
+    departureStore.setState({ obsoleteRefused: [] });
+    await monteFeuille({ conversation: direct, replies: { [MEMBERS]: 'pending' }, onRequestDeparture: () => {} });
+    await settle();
+    expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['delete', 'obsolete']);
+
+    act(() => markObsoleteRefused(direct.id));
+
+    expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['delete']);
+    departureStore.setState({ obsoleteRefused: [] });
   });
 
   test('un modérateur ne rend pas obsolète', async () => {

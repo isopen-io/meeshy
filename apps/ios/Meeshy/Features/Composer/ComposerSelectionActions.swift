@@ -162,10 +162,13 @@ nonisolated enum ComposerSelectionActions {
 
 /// **Toucher la scène à vide désélectionne D'ABORD** (#13839, L5). Le même
 /// toucher arme le viseur sur une scène vide : il ne l'arme que si rien n'était
-/// sélectionné. Un carrousel d'effets ouvert se referme avant tout.
+/// sélectionné. Un carrousel d'effets ouvert se referme avant tout. Pendant
+/// l'écriture du texte du post ou de la légende, il termine l'écriture et rien
+/// d'autre (#15674).
 nonisolated enum ComposerSceneEmptyTap {
 
     enum Outcome: Equatable, Sendable {
+        case endWriting
         case deselect
         case closeEffect
         case armViewfinder
@@ -185,7 +188,9 @@ nonisolated enum ComposerSceneEmptyTap {
                         effectIsOpen: Bool,
                         quickCaptureOffered: Bool,
                         backgroundMediaId: String?,
-                        bandIsOpen: Bool = false) -> Outcome {
+                        bandIsOpen: Bool = false,
+                        writesText: Bool = false) -> Outcome {
+        if writesText { return .endWriting }
         if hadSelection { return .deselect }
         if bandIsOpen { return .closeBand }
         if effectIsOpen { return .closeEffect }

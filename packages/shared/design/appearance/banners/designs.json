@@ -562,6 +562,663 @@
           }
         }
       ]
+    },
+    {
+      "slug": "noel-bannieres",
+      "order": 2,
+      "installedByDefault": false,
+      "removable": true,
+      "availability": {
+        "startsAt": "2026-12-01T00:00:00Z",
+        "endsAt": "2027-01-07T00:00:00Z"
+      },
+      "designs": [
+        {
+          "key": "banniere-noel-givre",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#E6EFFA",
+              "ink": "#1E3A8A",
+              "soft": "#D4E2F4"
+            },
+            "dark": {
+              "base": "#0B1730",
+              "ink": "#BFDBFE",
+              "soft": "#13254A"
+            }
+          },
+          "tile": {
+            "width": 80,
+            "height": 60,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M20 20L20 9M17.3 11.36L20 13.62M20 13.62L22.7 11.36M20 20L29.53 14.5M26.14 13.34L25.53 16.81M25.53 16.81L28.83 18.01M20 20L29.53 25.5M28.83 21.99L25.53 23.19M25.53 23.19L26.14 26.66M20 20L20 31M22.7 28.64L20 26.38M20 26.38L17.3 28.64M20 20L10.47 25.5M13.86 26.66L14.47 23.19M14.47 23.19L11.17 21.99M20 20L10.47 14.5M11.17 18.01L14.47 16.81M14.47 16.81L13.86 13.34",
+                "role": "ink",
+                "opacity": 0.28,
+                "width": 0.9
+              },
+              {
+                "d": "M60 42L60 35M58.28 36.5L60 37.94M60 37.94L61.72 36.5M60 42L66.06 38.5M63.91 37.76L63.52 39.97M63.52 39.97L65.62 40.74M60 42L66.06 45.5M65.62 43.26L63.52 44.03M63.52 44.03L63.91 46.24M60 42L60 49M61.72 47.5L60 46.06M60 46.06L58.28 47.5M60 42L53.94 45.5M56.09 46.24L56.48 44.03M56.48 44.03L54.38 43.26M60 42L53.94 38.5M54.38 40.74L56.48 39.97M56.48 39.97L56.09 37.76",
+                "role": "ink",
+                "opacity": 0.22,
+                "width": 0.7
+              },
+              {
+                "d": "M58.8 12A1.2 1.2 0 1 0 61.2 12A1.2 1.2 0 1 0 58.8 12ZM11 48A1 1 0 1 0 13 48A1 1 0 1 0 11 48ZM39.1 30A0.9 0.9 0 1 0 40.9 30A0.9 0.9 0 1 0 39.1 30ZM73.2 56A0.8 0.8 0 1 0 74.8 56A0.8 0.8 0 1 0 73.2 56Z",
+                "role": "ink",
+                "opacity": 0.3
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-noel-guirlande",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#14532D",
+              "ink": "#FDE68A",
+              "soft": "#166534"
+            },
+            "dark": {
+              "base": "#052E16",
+              "ink": "#FDE68A",
+              "soft": "#14532D"
+            }
+          },
+          "tile": {
+            "width": 96,
+            "height": 48,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M0 10C16 26 32 26 48 10C64 26 80 26 96 10",
+                "role": "ink",
+                "opacity": 0.24,
+                "width": 0.9
+              },
+              {
+                "d": "M20.8 25A3.2 3.2 0 1 0 27.2 25A3.2 3.2 0 1 0 20.8 25ZM68.8 25A3.2 3.2 0 1 0 75.2 25A3.2 3.2 0 1 0 68.8 25ZM5.4 18A2.6 2.6 0 1 0 10.6 18A2.6 2.6 0 1 0 5.4 18ZM37.4 18A2.6 2.6 0 1 0 42.6 18A2.6 2.6 0 1 0 37.4 18ZM53.4 18A2.6 2.6 0 1 0 58.6 18A2.6 2.6 0 1 0 53.4 18ZM85.4 18A2.6 2.6 0 1 0 90.6 18A2.6 2.6 0 1 0 85.4 18Z",
+                "role": "ink",
+                "opacity": 0.32
+              },
+              {
+                "d": "M48 34L48.88 37.12L52 38L48.88 38.88L48 42L47.12 38.88L44 38L47.12 37.12ZM0 35.6L0.53 37.47L2.4 38L0.53 38.53L0 40.4L-0.53 38.53L-2.4 38L-0.53 37.47ZM96 35.6L96.53 37.47L98.4 38L96.53 38.53L96 40.4L95.47 38.53L93.6 38L95.47 37.47Z",
+                "role": "ink",
+                "opacity": 0.26
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-noel-cadeau",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#991B1B",
+              "ink": "#FDE68A",
+              "soft": "#B91C1C"
+            },
+            "dark": {
+              "base": "#450A0A",
+              "ink": "#FCD34D",
+              "soft": "#7F1D1D"
+            }
+          },
+          "tile": {
+            "width": 60,
+            "height": 60,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M30 0V60M0 30H60",
+                "role": "ink",
+                "opacity": 0.22,
+                "width": 3
+              },
+              {
+                "d": "M30 30C22 20 14 22 18 28C20 32 26 31 30 30C38 20 46 22 42 28C40 32 34 31 30 30Z",
+                "role": "ink",
+                "opacity": 0.3,
+                "width": 1
+              },
+              {
+                "d": "M12 9.4L12.57 11.43L14.6 12L12.57 12.57L12 14.6L11.43 12.57L9.4 12L11.43 11.43ZM48 45.4L48.57 47.43L50.6 48L48.57 48.57L48 50.6L47.43 48.57L45.4 48L47.43 47.43ZM47 12A1 1 0 1 0 49 12A1 1 0 1 0 47 12ZM11 48A1 1 0 1 0 13 48A1 1 0 1 0 11 48Z",
+                "role": "ink",
+                "opacity": 0.32
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-noel-neige",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#1E3A8A",
+              "ink": "#60A5FA",
+              "soft": "#0F2747"
+            },
+            "dark": {
+              "base": "#0B1730",
+              "ink": "#1D4ED8",
+              "soft": "#020617"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0,
+                "r": 0.8,
+                "role": "ink",
+                "opacity": 0.35
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "e90155e8d1551e1d.json",
+            "bytes": 22554,
+            "sha256": "e90155e8d1551e1d070560d3b15d7ac1c88c39ba5a02168b4c191250ea65cf77"
+          }
+        },
+        {
+          "key": "banniere-noel-lumieres",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#14532D",
+              "ink": "#FDE68A",
+              "soft": "#052E16"
+            },
+            "dark": {
+              "base": "#052E16",
+              "ink": "#CA8A04",
+              "soft": "#022C22"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 0.2,
+                "r": 0.7,
+                "role": "ink",
+                "opacity": 0.18
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "a8d54963a3235afb.json",
+            "bytes": 47864,
+            "sha256": "a8d54963a3235afb05e0d715653980e0dddc829ee2aad7345e9f36380606f4d4"
+          }
+        },
+        {
+          "key": "banniere-noel-etincelles",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#7F1D1D",
+              "ink": "#F59E0B",
+              "soft": "#450A0A"
+            },
+            "dark": {
+              "base": "#450A0A",
+              "ink": "#B45309",
+              "soft": "#1C0606"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 1,
+                "r": 0.8,
+                "role": "ink",
+                "opacity": 0.35
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "d920a02e0923fc46.json",
+            "bytes": 26681,
+            "sha256": "d920a02e0923fc462bae0d376fecc876239aaef660d5873e9d2ff31c498480bd"
+          }
+        }
+      ]
+    },
+    {
+      "slug": "nouvel-an-images",
+      "order": 3,
+      "installedByDefault": false,
+      "removable": true,
+      "availability": {
+        "startsAt": "2026-12-26T00:00:00Z",
+        "endsAt": "2027-01-16T00:00:00Z"
+      },
+      "designs": [
+        {
+          "key": "banniere-artifice",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#1E1B4B",
+              "ink": "#FBBF24",
+              "soft": "#312E81"
+            },
+            "dark": {
+              "base": "#0B1026",
+              "ink": "#FDE68A",
+              "soft": "#1E1B4B"
+            }
+          },
+          "tile": {
+            "width": 90,
+            "height": 60,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M26 22L35 22M25.6 23.74L33.71 27.64M24.49 25.13L30.11 32.16M22.89 25.9L24.89 34.67M21.11 25.9L19.11 34.67M19.51 25.13L13.89 32.16M18.4 23.74L10.29 27.64M18 22L9 22M18.4 20.26L10.29 16.36M19.51 18.87L13.89 11.84M21.11 18.1L19.11 9.33M22.89 18.1L24.89 9.33M24.49 18.87L30.11 11.84M25.6 20.26L33.71 16.36",
+                "role": "ink",
+                "opacity": 0.3,
+                "width": 1
+              },
+              {
+                "d": "M68.85 40.93L73.61 42.47M67.76 42.43L70.7 46.47M66 43L66 48M64.24 42.43L61.3 46.47M63.15 40.93L58.39 42.47M63.15 39.07L58.39 37.53M64.24 37.57L61.3 33.53M66 37L66 32M67.76 37.57L70.7 33.53M68.85 39.07L73.61 37.53",
+                "role": "ink",
+                "opacity": 0.22,
+                "width": 0.8
+              },
+              {
+                "d": "M20.4 22A1.6 1.6 0 1 0 23.6 22A1.6 1.6 0 1 0 20.4 22ZM64.8 40A1.2 1.2 0 1 0 67.2 40A1.2 1.2 0 1 0 64.8 40ZM79.1 8A0.9 0.9 0 1 0 80.9 8A0.9 0.9 0 1 0 79.1 8ZM5.1 52A0.9 0.9 0 1 0 6.9 52A0.9 0.9 0 1 0 5.1 52ZM47.3 10A0.7 0.7 0 1 0 48.7 10A0.7 0.7 0 1 0 47.3 10Z",
+                "role": "ink",
+                "opacity": 0.32
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-confettis",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#FFF1F7",
+              "ink": "#DB2777",
+              "soft": "#FCE7F3"
+            },
+            "dark": {
+              "base": "#2A0B1E",
+              "ink": "#F9A8D4",
+              "soft": "#3B1230"
+            }
+          },
+          "tile": {
+            "width": 70,
+            "height": 50,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M7.46 7.16L13.81 10.12L12.54 12.84L6.19 9.88ZM36.87 8.93L41.46 5.08L43.13 7.07L38.54 10.92ZM28.21 28.2L30.61 34.78L27.79 35.8L25.39 29.22ZM55.44 35.97L61.23 37.52L60.56 40.03L54.77 38.48Z",
+                "role": "ink",
+                "opacity": 0.3
+              },
+              {
+                "d": "M20.2 20A1.8 1.8 0 1 0 23.8 20A1.8 1.8 0 1 0 20.2 20ZM54.5 18A1.5 1.5 0 1 0 57.5 18A1.5 1.5 0 1 0 54.5 18ZM6.2 42A1.8 1.8 0 1 0 9.8 42A1.8 1.8 0 1 0 6.2 42ZM42.8 46A1.2 1.2 0 1 0 45.2 46A1.2 1.2 0 1 0 42.8 46Z",
+                "role": "ink",
+                "opacity": 0.26
+              },
+              {
+                "d": "M2 26C6 21 10 31 14 26C18 21 22 31 26 26M46 28C49 24 52 32 55 28C58 24 61 32 64 28",
+                "role": "ink",
+                "opacity": 0.2,
+                "width": 0.9
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-minuit",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#1E1B4B",
+              "ink": "#E2E8F0",
+              "soft": "#312E81"
+            },
+            "dark": {
+              "base": "#0F172A",
+              "ink": "#E2E8F0",
+              "soft": "#1E1B4B"
+            }
+          },
+          "tile": {
+            "width": 100,
+            "height": 60,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M11 28A15 15 0 1 0 41 28A15 15 0 1 0 11 28Z",
+                "role": "ink",
+                "opacity": 0.28,
+                "width": 1
+              },
+              {
+                "d": "M37.7 28L39.8 28M36.13 33.85L37.95 34.9M31.85 38.13L32.9 39.95M26 39.7L26 41.8M20.15 38.13L19.1 39.95M15.87 33.85L14.05 34.9M14.3 28L12.2 28M15.87 22.15L14.05 21.1M20.15 17.87L19.1 16.05M26 16.3L26 14.2M31.85 17.87L32.9 16.05M36.13 22.15L37.95 21.1M26 28L26 17.2M26 28L22.25 21.5",
+                "role": "ink",
+                "opacity": 0.32,
+                "width": 1
+              },
+              {
+                "d": "M70 14L70.88 17.12L74 18L70.88 18.88L70 22L69.12 18.88L66 18L69.12 17.12ZM86 41.2L86.62 43.38L88.8 44L86.62 44.62L86 46.8L85.38 44.62L83.2 44L85.38 43.38ZM58 46L58.44 47.56L60 48L58.44 48.44L58 50L57.56 48.44L56 48L57.56 47.56ZM92 6.4L92.35 7.65L93.6 8L92.35 8.35L92 9.6L91.65 8.35L90.4 8L91.65 7.65Z",
+                "role": "ink",
+                "opacity": 0.3
+              }
+            ]
+          },
+          "fit": "fill"
+        },
+        {
+          "key": "banniere-champagne",
+          "style": "pattern",
+          "palettes": {
+            "light": {
+              "base": "#F7E7CE",
+              "ink": "#8A5A00",
+              "soft": "#EFD9B0"
+            },
+            "dark": {
+              "base": "#2B1F07",
+              "ink": "#FDE68A",
+              "soft": "#3D2C0B"
+            }
+          },
+          "tile": {
+            "width": 80,
+            "height": 56,
+            "scale": 1,
+            "rotation": 0,
+            "paths": [
+              {
+                "d": "M9 12L31 12Q29.9 21.9 20.88 23L20.88 34L26.6 36.2L13.4 36.2L19.12 34L19.12 23Q10.1 21.9 9 12ZM24 14L44 14Q43 23 34.8 24L34.8 34L40 36L28 36L33.2 34L33.2 24Q25 23 24 14Z",
+                "role": "ink",
+                "opacity": 0.28,
+                "width": 0.9
+              },
+              {
+                "d": "M53.4 12A2.6 2.6 0 1 0 58.6 12A2.6 2.6 0 1 0 53.4 12ZM62.2 26A1.8 1.8 0 1 0 65.8 26A1.8 1.8 0 1 0 62.2 26ZM50.8 36A3.2 3.2 0 1 0 57.2 36A3.2 3.2 0 1 0 50.8 36ZM68 46A2 2 0 1 0 72 46A2 2 0 1 0 68 46ZM42.6 48A1.4 1.4 0 1 0 45.4 48A1.4 1.4 0 1 0 42.6 48Z",
+                "role": "ink",
+                "opacity": 0.24,
+                "width": 0.8
+              },
+              {
+                "d": "M27 3.4L27.57 5.43L29.6 6L27.57 6.57L27 8.6L26.43 6.57L24.4 6L26.43 5.43ZM74 4.2L74.4 5.6L75.8 6L74.4 6.4L74 7.8L73.6 6.4L72.2 6L73.6 5.6ZM6 44.2L6.4 45.6L7.8 46L6.4 46.4L6 47.8L5.6 46.4L4.2 46L5.6 45.6Z",
+                "role": "ink",
+                "opacity": 0.32
+              }
+            ]
+          },
+          "fit": "fill"
+        }
+      ]
+    },
+    {
+      "slug": "nouvel-an-images-vives",
+      "order": 4,
+      "installedByDefault": false,
+      "removable": true,
+      "availability": {
+        "startsAt": "2026-12-26T00:00:00Z",
+        "endsAt": "2027-01-16T00:00:00Z"
+      },
+      "designs": [
+        {
+          "key": "banniere-artifice-vive",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#0B1026",
+              "ink": "#7C3AED",
+              "soft": "#312E81"
+            },
+            "dark": {
+              "base": "#05071A",
+              "ink": "#6D28D9",
+              "soft": "#1E1B4B"
+            }
+          },
+          "gradient": {
+            "angle": 180,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.2,
+                "y": 0.2,
+                "r": 0.5,
+                "role": "ink",
+                "opacity": 0.35
+              },
+              {
+                "x": 0.8,
+                "y": 0.3,
+                "r": 0.45,
+                "role": "ink",
+                "opacity": 0.25
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "66bec08c33669840.json",
+            "bytes": 26738,
+            "sha256": "66bec08c336698405d4abccc9a2230892c8aaa933bb7d65e8a2c7673ce0ea843"
+          }
+        },
+        {
+          "key": "banniere-confettis-vive",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#FDF2F8",
+              "ink": "#FBCFE8",
+              "soft": "#EDE9FE"
+            },
+            "dark": {
+              "base": "#1F0B1A",
+              "ink": "#4C1D95",
+              "soft": "#2E1065"
+            }
+          },
+          "gradient": {
+            "angle": 120,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.1,
+                "y": 0.9,
+                "r": 0.5,
+                "role": "ink",
+                "opacity": 0.5
+              },
+              {
+                "x": 0.9,
+                "y": 0.1,
+                "r": 0.5,
+                "role": "soft",
+                "opacity": 0.5
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "73ac775e6ed0c52a.json",
+            "bytes": 32110,
+            "sha256": "73ac775e6ed0c52acde67e393e1f7e40b8feda592c738febeb7165900df114a4"
+          }
+        },
+        {
+          "key": "banniere-minuit-vive",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#0F172A",
+              "ink": "#4338CA",
+              "soft": "#1E1B4B"
+            },
+            "dark": {
+              "base": "#020617",
+              "ink": "#3730A3",
+              "soft": "#172554"
+            }
+          },
+          "gradient": {
+            "angle": 160,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.82,
+                "y": 0.5,
+                "r": 0.45,
+                "role": "ink",
+                "opacity": 0.4
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "7cecf5480863bd24.json",
+            "bytes": 20552,
+            "sha256": "7cecf5480863bd24e62427441c94400e64cbf40058c273240a3afbdeb355fe7b"
+          }
+        },
+        {
+          "key": "banniere-champagne-vive",
+          "style": "gradient",
+          "palettes": {
+            "light": {
+              "base": "#3B2A05",
+              "ink": "#CA8A04",
+              "soft": "#A16207"
+            },
+            "dark": {
+              "base": "#1C1403",
+              "ink": "#A16207",
+              "soft": "#713F12"
+            }
+          },
+          "gradient": {
+            "angle": 200,
+            "stops": [
+              {
+                "role": "base",
+                "at": 0
+              },
+              {
+                "role": "soft",
+                "at": 1
+              }
+            ],
+            "blobs": [
+              {
+                "x": 0.5,
+                "y": 1,
+                "r": 0.7,
+                "role": "ink",
+                "opacity": 0.45
+              },
+              {
+                "x": 0.15,
+                "y": 0.2,
+                "r": 0.4,
+                "role": "soft",
+                "opacity": 0.35
+              }
+            ]
+          },
+          "fit": "fill",
+          "lottie": {
+            "src": "8de67ccf264aa52e.json",
+            "bytes": 30455,
+            "sha256": "8de67ccf264aa52e03338a3cd058f53a4930a512f1488bc23bf75caaa2b8cd1d"
+          }
+        }
+      ]
     }
   ]
 }

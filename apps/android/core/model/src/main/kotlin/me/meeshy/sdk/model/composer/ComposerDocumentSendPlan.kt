@@ -1,6 +1,11 @@
 package me.meeshy.sdk.model.composer
 
+import me.meeshy.sdk.model.DiscoverabilityPrecision
+import me.meeshy.sdk.model.MobileTranscriptionPayload
+import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.ReelComposition
+import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryVisibility
 
 /** Par où un envoi de document part (miroir d'iOS `ComposerDocumentSendPath`). */
@@ -31,6 +36,37 @@ data class ComposerDocumentDraft(
     val localMedia: List<ComposerDocumentMedia> = emptyList(),
     val hasLocation: Boolean = false,
     val carriesSceneObject: Boolean = false,
+    val originalLanguage: String? = null,
+    val mentions: List<PostMentionInput>? = null,
+    val location: SharedPlace? = null,
+    val discoverabilityPrecision: DiscoverabilityPrecision? = null,
+    val mobileTranscription: MobileTranscriptionPayload? = null,
+    val storyEffects: StoryEffects? = null,
+    val forcePlainPost: Boolean = false,
+    val allowSoundExtraction: Boolean? = null,
+    val mediaCaptions: Map<String, String> = emptyMap(),
+    val mediaAlts: Map<String, String> = emptyMap(),
+    val mediaObjectIds: Map<String, String> = emptyMap(),
+)
+
+/** Le brouillon devient l'intention d'envoi : UNE fabrique, la même pour la porte du fil et la porte sans fil. */
+fun ComposerDocumentDraft.toPublishIntent(): PublishIntent = PublishIntent.document(
+    localMedia = localMedia,
+    declaredType = format.postType,
+    forcePlainPost = forcePlainPost,
+    content = text,
+    visibility = visibility.wire,
+    visibilityUserIds = visibilityUserIds,
+    originalLanguage = originalLanguage,
+    mentions = mentions,
+    location = location,
+    discoverabilityPrecision = discoverabilityPrecision,
+    transcription = mobileTranscription,
+    storyEffects = storyEffects,
+    mediaCaptions = mediaCaptions,
+    mediaAlts = mediaAlts,
+    mediaObjectIds = mediaObjectIds,
+    allowSoundExtraction = allowSoundExtraction,
 )
 
 sealed interface ComposerDocumentSendPlan {

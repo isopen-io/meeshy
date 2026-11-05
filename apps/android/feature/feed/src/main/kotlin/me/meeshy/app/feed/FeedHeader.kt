@@ -16,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.story.PinnedBandReveal
 import me.meeshy.ui.component.chrome.CollapsibleHeader
 import me.meeshy.ui.component.chrome.CollapsibleHeaderActionButton
 import me.meeshy.ui.component.chrome.CollapsibleHeaderDefaults
@@ -33,6 +34,7 @@ internal fun FeedHeader(
     listState: LazyListState,
     onOpenReels: () -> Unit,
     onOpenNearby: () -> Unit,
+    pinnedBand: (@Composable (reveal: Float) -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     val thresholdPx = remember(density) {
@@ -70,10 +72,20 @@ internal fun FeedHeader(
         quietMillis = quietMillis,
     ).actionsVisible
 
+    val pinnedOffsetDp by remember(listState, density) {
+        derivedStateOf {
+            PinnedBandReveal.scrollOffsetDp(
+                listState.firstVisibleItemIndex,
+                with(density) { listState.firstVisibleItemScrollOffset.toDp().value },
+            )
+        }
+    }
     CollapsibleHeader(
         title = stringResource(R.string.feed_title),
         scrollProgress = progress,
         actionsVisible = actionsVisible,
+        scrollOffsetDp = pinnedBand?.let { pinnedOffsetDp },
+        titleAccessory = pinnedBand,
     ) {
         feedHeaderActions().forEach { action ->
             when (action) {

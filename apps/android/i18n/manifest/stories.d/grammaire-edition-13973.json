@@ -9,12 +9,16 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.edit.background.removeConfirm.title",
           "androidName": "composer_edit_remove_background_title",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.edit.replace",
           "androidName": "composer_edit_replace",
-          "status": "android-only"
+          "status": "adopted"
         }
       ]
     }

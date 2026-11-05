@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
+import me.meeshy.sdk.conversation.ConversationRemovalWrite
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
@@ -30,9 +31,14 @@ class ConversationListRowActionsTest {
         val state: MutableStateFlow<ConversationListUiState>,
         val repo: ConversationRepository,
         val workManager: WorkManager,
+        val remover: FakeConversationRemover,
     )
 
-    private fun TestScope.harness(vararg conversations: ApiConversation, active: String? = null): Harness {
+    private fun TestScope.harness(
+        vararg conversations: ApiConversation,
+        active: String? = null,
+        remover: FakeConversationRemover = FakeConversationRemover(),
+    ): Harness {
         val repo = mockk<ConversationRepository>(relaxed = true)
         val workManager = mockk<WorkManager>(relaxed = true)
         val state = MutableStateFlow(ConversationListUiState(conversations = conversations.toList()))
@@ -46,8 +52,9 @@ class ConversationListRowActionsTest {
             draftStore = InMemoryConversationDraftStore(),
             workManager = workManager,
             activeConversationId = { active },
+            remover = remover,
         )
-        return Harness(actions, state, repo, workManager)
+        return Harness(actions, state, repo, workManager, remover)
     }
 
     @Test
@@ -207,7 +214,7 @@ class ConversationListRowActionsTest {
     @Test
     fun `a refused hide brings the row back and says why`() = runTest(StandardTestDispatcher()) {
         val h = harness(ApiConversation(id = "c1"), ApiConversation(id = "c2"))
-        coEvery { h.repo.deleteForMe("c1") } returns NetworkResult.Failure(ApiError(message = "Not a participant"))
+        h.remover.write = ConversationRemovalWrite.Failed("Not a participant")
 
         h.actions.deleteConversationForMe("c1")
         runCurrent()
@@ -219,7 +226,6 @@ class ConversationListRowActionsTest {
     @Test
     fun `an accepted hide keeps the row away while the cache still carries it`() = runTest(StandardTestDispatcher()) {
         val h = harness(ApiConversation(id = "c1"), ApiConversation(id = "c2"))
-        coEvery { h.repo.deleteForMe("c1") } returns NetworkResult.Success(Unit)
 
         h.actions.deleteConversationForMe("c1")
         runCurrent()
@@ -231,7 +237,6 @@ class ConversationListRowActionsTest {
     @Test
     fun `a hidden conversation that comes back after the purge shows again`() = runTest(StandardTestDispatcher()) {
         val h = harness(ApiConversation(id = "c1"), ApiConversation(id = "c2"))
-        coEvery { h.repo.deleteForMe("c1") } returns NetworkResult.Success(Unit)
 
         h.actions.deleteConversationForMe("c1")
         runCurrent()

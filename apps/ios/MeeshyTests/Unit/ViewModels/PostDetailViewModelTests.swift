@@ -438,7 +438,7 @@ final class PostDetailViewModelTests: PostDetailViewModelTestCase {
         XCTAssertEqual(detail.components(separatedBy: "actionsBar(post, renderedItem:").count, 2,
                        "la barre n'est montée qu'à un seul endroit, derrière la garde")
         for geste in ["func toggleDetailBookmark() {\n        guard !isBookmarkInFlight, !isPendingPublication",
-                      "func toggleDetailRepost(quote: Bool) {\n        guard !isRepostInFlight, !isPendingPublication"] {
+                      "func toggleDetailRepost() {\n        guard !isRepostInFlight, !isPendingPublication"] {
             XCTAssertTrue(detail.contains(geste), geste)
         }
         for (unite, garde) in [("Meeshy/Features/Main/Views/PostDetailView+Heart.swift",

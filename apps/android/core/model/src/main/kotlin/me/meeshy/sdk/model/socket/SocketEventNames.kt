@@ -184,6 +184,10 @@ object SocketEventNames {
     const val REACTION_ADDED = "reaction:added"
     const val REACTION_REMOVED = "reaction:removed"
 
+    // friend-request : annulation et refus, signaux temps réel purs (aucune ligne Notification)
+    const val FRIEND_REQUEST_CANCELLED = "friend-request:cancelled"
+    const val FRIEND_REQUEST_REJECTED = "friend-request:rejected"
+
     // read-status
     const val READ_STATUS_UPDATED = "read-status:updated"
 
@@ -398,6 +402,8 @@ object SocketEventNames {
         PROFILE_DECOR_UPDATED,
         REACTION_ADDED,
         REACTION_REMOVED,
+        FRIEND_REQUEST_CANCELLED,
+        FRIEND_REQUEST_REJECTED,
         READ_STATUS_UPDATED,
         RELATION_LEVEL_RAISED,
         RELATION_RITUAL_STARTED,

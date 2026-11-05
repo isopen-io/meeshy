@@ -8,7 +8,6 @@ import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,14 +22,13 @@ import me.meeshy.sdk.model.composer.sound.SoundLanguageChoices
 import me.meeshy.sdk.model.composer.sound.SoundTranscriptions
 import me.meeshy.sdk.model.waveform.WaveformLocation
 import me.meeshy.sdk.model.waveform.WaveformScale
-import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.speech.SoundFileTranscriber
 import me.meeshy.sdk.speech.SoundTranscriptionOutcome
 import me.meeshy.sdk.waveform.WaveformMeasuring
 
 /** Où en est le son que la feuille prépare. */
-enum class SoundTakePhase { TRANSCRIBING, PREVIEW, UPLOADING }
+enum class SoundTakePhase { TRANSCRIBING, PREVIEW, PLACING }
 
 /** Ce que la feuille dit d'une transcription absente. */
 enum class SoundTranscriptionNotice {
@@ -44,7 +42,7 @@ enum class SoundTranscriptionNotice {
     SILENT,
 }
 
-enum class SoundSheetFailure { IMPORT, UPLOAD }
+enum class SoundSheetFailure { IMPORT }
 
 /** Un son enregistré ou importé, pas encore posé : son fichier, sa durée, ce qu'on y a entendu ou écrit. */
 @Immutable
@@ -77,7 +75,6 @@ data class StorySoundSheetState(
 @HiltViewModel
 class StorySoundSheetViewModel internal constructor(
     private val transcriber: SoundFileTranscriber,
-    private val uploader: StoryMediaUploader,
     private val waveforms: WaveformMeasuring,
     private val session: SessionRepository,
     private val deviceLanguage: () -> String?,
@@ -87,10 +84,9 @@ class StorySoundSheetViewModel internal constructor(
     @Inject
     constructor(
         transcriber: SoundFileTranscriber,
-        uploader: StoryMediaUploader,
         waveforms: WaveformMeasuring,
         session: SessionRepository,
-    ) : this(transcriber, uploader, waveforms, session, { Locale.getDefault().language }, { "rec-${UUID.randomUUID()}" })
+    ) : this(transcriber, waveforms, session, { Locale.getDefault().language }, { "rec-${UUID.randomUUID()}" })
 
     private val user get() = session.currentUser.value
 
@@ -148,48 +144,45 @@ class StorySoundSheetViewModel internal constructor(
 
     fun onRole(role: ComposerAudioRole) = _state.update { it.copy(chosenRole = role) }
 
-    /** Le son part : sa langue et sa transcription sont celles qu'« Ajouter » a vues, rien ne les change en route. */
-    private val isUploading: Boolean get() = _state.value.take?.phase == SoundTakePhase.UPLOADING
+    /** Le son se pose : sa langue et sa transcription sont celles qu'« Ajouter » a vues, rien ne les change en route. */
+    private val isUploading: Boolean get() = _state.value.take?.phase == SoundTakePhase.PLACING
 
     fun onRedo() {
         discardTake()
         _state.update { it.copy(take = null, failure = null) }
     }
 
-    /** Téléverse le son puis le remet à [onPlaced] ; un refus garde le son et le dit. */
-    fun onAdd(automatic: ComposerAudioRole, onPlaced: (ComposedStorySound, ComposerAudioRole) -> Unit) {
+    /**
+     * Remet le son prêt sur l'appareil à [onPlaced] — sa langue et sa transcription sont celles qu'« Ajouter » a vues — avec
+     * son fichier : le compositeur le pose aussitôt et l'envoie en arrière-plan (#15598). Seule l'onde se mesure ici.
+     */
+    fun onAdd(automatic: ComposerAudioRole, onPlaced: (ComposedStorySound, ComposerAudioRole, MediaUploadItem) -> Unit) {
         val take = _state.value.take?.takeIf { it.phase == SoundTakePhase.PREVIEW } ?: return
         val role = _state.value.chosenRole ?: automatic
-        _state.update { it.copy(take = take.copy(phase = SoundTakePhase.UPLOADING), failure = null) }
+        _state.update { it.copy(take = take.copy(phase = SoundTakePhase.PLACING), failure = null) }
         viewModelScope.launch {
-            val waveform = async { runCatching { WaveformScale.peakNormalized(waveforms.measure(WaveformLocation.Local(take.path), WAVEFORM_SAMPLES).toList()) }.getOrDefault(emptyList()) }
-            when (val result = uploader.upload(listOf(take.item))) {
-                is NetworkResult.Success -> {
-                    val media = result.data.firstOrNull()
-                    if (media == null) {
-                        refused(take)
-                        return@launch
-                    }
-                    val sound = ComposedStorySound(
-                        trackId = newTrackId(),
-                        postMediaId = media.id,
-                        url = media.url,
-                        durationSeconds = take.durationSeconds ?: media.durationMs?.let { it / 1000f },
-                        waveform = waveform.await(),
-                        language = _state.value.language,
-                        transcription = take.transcription,
-                    )
-                    onPlaced(sound, role)
-                    discardTake()
-                    _state.update { it.copy(take = null, chosenRole = null) }
-                }
-                is NetworkResult.Failure -> refused(take)
-            }
+            val waveform = runCatching { WaveformScale.peakNormalized(waveforms.measure(WaveformLocation.Local(take.path), WAVEFORM_SAMPLES).toList()) }.getOrDefault(emptyList())
+            val sound = ComposedStorySound(
+                trackId = newTrackId(),
+                postMediaId = "",
+                url = LOCAL_FILE + take.path,
+                durationSeconds = take.durationSeconds,
+                waveform = waveform,
+                language = _state.value.language,
+                transcription = take.transcription,
+            )
+            transcription?.cancel()
+            _state.update { it.copy(take = null, chosenRole = null) }
+            onPlaced(sound, role, take.item)
         }
     }
 
-    private fun refused(take: SoundTakeDraft) =
-        _state.update { it.copy(take = take.copy(phase = SoundTakePhase.PREVIEW), failure = SoundSheetFailure.UPLOAD) }
+    /**
+     * « OK » ferme la feuille : un son prêt n'y reste pas en suspens, il se pose comme par « Ajouter » (#16206) — l'auteur
+     * qui a choisi un son et touche OK s'attend à le voir sur la scène. Un son encore en préparation reste dans la feuille.
+     */
+    fun onDone(automatic: ComposerAudioRole, onPlaced: (ComposedStorySound, ComposerAudioRole, MediaUploadItem) -> Unit) =
+        onAdd(automatic, onPlaced)
 
     private fun transcribe() {
         transcription?.cancel()
@@ -230,5 +223,6 @@ class StorySoundSheetViewModel internal constructor(
 
     private companion object {
         const val WAVEFORM_SAMPLES = 80
+        const val LOCAL_FILE = "file://"
     }
 }

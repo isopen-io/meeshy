@@ -34,6 +34,7 @@ class MessageForwardService @Inject constructor(
         conversationId: String,
         sender: MeeshyUser,
         clientMessageId: String? = null,
+        copyAttachmentsFromMessageId: String? = null,
     ): String {
         val internal = isInternal(share)
         return messages.sendOptimistic(
@@ -48,6 +49,7 @@ class MessageForwardService @Inject constructor(
             forwardedAttachmentIds = share.forwardedAttachmentIds?.takeIf { internal },
             effects = MessageEffects(flags = share.effectFlags, ephemeralDuration = share.ephemeralDuration),
             clientMessageId = clientMessageId,
+            copyAttachmentsFromMessageId = copyAttachmentsFromMessageId,
         )
     }
 }

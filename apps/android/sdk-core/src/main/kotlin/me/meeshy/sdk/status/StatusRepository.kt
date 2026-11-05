@@ -10,6 +10,15 @@ import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.PostLikeRequest
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.rawApiCall
+import me.meeshy.sdk.model.PostMentionInput
+import me.meeshy.sdk.model.StatusComposerDraftSnapshot
+import me.meeshy.sdk.model.mood.MoodDoor
+import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.outbox.OutboxIds
+import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.outbox.OutboxRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,6 +42,7 @@ data class StatusPage(
 @Singleton
 class StatusRepository @Inject constructor(
     private val postApi: PostApi,
+    private val outbox: OutboxRepository? = null,
 ) {
     /**
      * A single cursor page of mood statuses for [mode], carrying the
@@ -69,27 +79,76 @@ class StatusRepository @Inject constructor(
         audioUrl: String? = null,
         repostOfId: String? = null,
         viaUsername: String? = null,
-    ): NetworkResult<StatusEntry> =
-        when (
-            val result = apiCall {
-                postApi.create(
-                    CreatePostRequest(
-                        content = content,
-                        type = "STATUS",
-                        visibility = visibility,
-                        moodEmoji = moodEmoji,
-                        audioUrl = audioUrl,
-                        repostOfId = repostOfId,
-                        viaUsername = viaUsername,
-                    ),
-                )
-            }
-        ) {
+        visibilityUserIds: List<String>? = null,
+        mentions: List<PostMentionInput>? = null,
+    ): NetworkResult<StatusEntry> {
+        val request = CreatePostRequest(
+            content = content,
+            type = "STATUS",
+            visibility = visibility,
+            moodEmoji = moodEmoji,
+            audioUrl = audioUrl,
+            repostOfId = repostOfId,
+            viaUsername = viaUsername,
+            visibilityUserIds = visibilityUserIds?.takeIf { it.isNotEmpty() },
+            mentions = mentions?.takeIf { it.isNotEmpty() },
+        )
+        val cmid = OutboxIds.cmid()
+        return when (val result = apiCall { postApi.create(request, cmid) }) {
             is NetworkResult.Success ->
                 result.data.toStatusEntry()?.let { NetworkResult.Success(it) }
                     ?: NetworkResult.Failure(ApiError(message = "Malformed status response", code = "PARSE"))
-            is NetworkResult.Failure -> result
+            is NetworkResult.Failure ->
+                if (MoodDoor.queuesOnFailure(result.error.httpStatus)) queueOffline(request, cmid) ?: result else result
         }
+    }
+
+    /**
+     * Sans réseau, la même ligne `CREATE_POST` (type `STATUS`) que les autres publications part au retour du réseau,
+     * sous le `cmid` déjà envoyé (jamais publiée deux fois). Rend l'échec [QUEUED_OFFLINE] quand elle est en file.
+     */
+    private suspend fun queueOffline(request: CreatePostRequest, cmid: String): NetworkResult.Failure? {
+        val queue = outbox ?: return null
+        val accepted = runCatching {
+            queue.enqueue(
+                OutboxMutation(
+                    kind = OutboxKind.CREATE_POST,
+                    lane = OutboxLanes.POST,
+                    targetId = cmid,
+                    payload = MeeshyApi.json.encodeToString(CreatePostRequest.serializer(), request),
+                    cmid = cmid,
+                ),
+            )
+        }.getOrNull()
+        return accepted?.let { NetworkResult.Failure(ApiError(message = "Mood queued", code = QUEUED_OFFLINE)) }
+    }
+
+    /**
+     * Une humeur restée en file plus de 60 s (réseau absent, passerelle injoignable) revient comme brouillon : sa ligne
+     * quitte la file et le composeur la rouvre — republier la remplace, jamais ne la double. `null` : rien de bloqué.
+     */
+    suspend fun recoverStuckMood(nowMillis: Long): StatusComposerDraftSnapshot? {
+        val queue = outbox ?: return null
+        val rows = runCatching { queue.pendingRows(OutboxKind.CREATE_POST) }.getOrNull().orEmpty()
+        val moods = rows.mapNotNull { row ->
+            val request = runCatching { MeeshyApi.json.decodeFromString(CreatePostRequest.serializer(), row.payload) }.getOrNull()
+            request?.takeIf { it.type == "STATUS" }?.let { row to it }
+        }
+        val stuck = MoodDoor.recovery(moods.map { (row, _) -> row.cmid to row.createdAt }, nowMillis) ?: return null
+        val (_, request) = moods.first { (row, _) -> row.cmid == stuck.cmidToReplace }
+        queue.discard(stuck.cmidToReplace)
+        return StatusComposerDraftSnapshot(
+            emoji = request.moodEmoji,
+            text = request.content.orEmpty(),
+            visibility = request.visibility,
+            updatedAtMillis = nowMillis,
+        )
+    }
+
+    companion object {
+        /** Le code de l'échec rendu par [create] quand l'humeur attend le retour du réseau dans la file. */
+        const val QUEUED_OFFLINE = "STATUS_QUEUED_OFFLINE"
+    }
 
     /** Deletes a mood status (`DELETE /posts/:id`). */
     suspend fun delete(statusId: String): NetworkResult<Unit> =

@@ -77,25 +77,3 @@ extension PostDetailView {
         NotificationToastManager.shared.onPostClosed(postId)
     }
 }
-
-/// Le favori du détail, écrit au serveur puis annoncé à l'auteur — hors du
-/// type `PostDetailView`, qui ne garde que l'état optimiste et son retour.
-enum PostDetailBookmarkWrite {
-    private struct Payload: Decodable { let bookmarked: Bool? }
-
-    static func send(postId: String, wasBookmarked: Bool) async -> Bool {
-        do {
-            let _: APIResponse<Payload> = try await APIClient.shared.request(
-                PostsEndpoint.byPostIdBookmark(postId: postId),
-                method: wasBookmarked ? "DELETE" : "POST"
-            )
-            FeedbackToastManager.shared.showSuccess(wasBookmarked
-                ? String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main)
-                : String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
-            return true
-        } catch {
-            FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
-            return false
-        }
-    }
-}

@@ -430,12 +430,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+Rules.swift",
         "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView+Sentiment.swift",
         "apps/ios/Meeshy/Features/Main/Components/ConversationPreferencesTab.swift",  // 31
-        // #6040 — la feuille est sortie de `FeedView+Attachments.swift` : les
-        // deux moitiés portent des littéraux, les deux restent dans la liste.
         "apps/ios/Meeshy/Features/Main/Views/FeedView+Attachments.swift",  // 6
-        "apps/ios/Meeshy/Features/Main/Views/FeedComposerSheet.swift",  // 26
-        // Cohésion de `FeedComposerSheet` : la clé de retrait d'une pièce a suivi la rangée.
-        "apps/ios/Meeshy/Features/Main/Views/FeedComposerAttachmentsRow.swift",  // 1
+        // #15628 — la citation a quitté la feuille pour le compositeur : ses
+        // mots partent avec elle.
+        "apps/ios/Meeshy/Features/Composer/QuoteComposerDoor.swift",
+        "apps/ios/Meeshy/Features/Composer/ComposerQuotedPublicationCard.swift",
         "apps/ios/Meeshy/Features/Main/Components/MessageMoreSheet.swift",  // 29
         "apps/ios/Meeshy/Features/Settings/Views/PrivacySettingsView.swift",  // 29
         "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileWizardView.swift",  // 29
@@ -507,7 +506,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         // Découpe de la racine : le cliquet suit les CLÉS jusqu'à leurs nouveaux fichiers (leçon 578).
         "apps/ios/Meeshy/Features/Main/Views/RootConversationOpener.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/RootFloatingChrome.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Views/RootPendingBanners.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Views/RootPendingBanners.swift",  // 2
         // #6579 — `CallPresentationLayer` a QUITTÉ l'écran ci-dessus pour son
         // propre fichier (RootView.swift dépassait le plafond dur de 1200
         // lignes). Le cliquet suit le CODE, pas le chemin : sans cette ligne,

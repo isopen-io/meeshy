@@ -58,6 +58,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
+import me.meeshy.ui.component.focal.ElectedMetrics
+import me.meeshy.ui.component.focal.FocalElectedFrame
+import me.meeshy.ui.component.focal.FocalGlassBlock
+import me.meeshy.ui.component.focal.FocalIdentityChip
 import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.R
@@ -66,6 +70,9 @@ import me.meeshy.ui.component.focal.FocalAttachmentBlock
 import me.meeshy.ui.component.focal.FocalIdentityHeader
 import me.meeshy.ui.component.focal.FocalLongMessage
 import me.meeshy.ui.component.focal.FocalProtectedContent
+import me.meeshy.ui.component.focal.FocalSpecialRowView
+import me.meeshy.ui.component.focal.focalSpecialRow
+import me.meeshy.sdk.model.reading.focal.FocalSpecialRow
 import me.meeshy.ui.component.focal.LocalFlatRowExpansion
 import me.meeshy.ui.component.focal.FocalMetaColumn
 import me.meeshy.ui.component.focal.FocalQuotedReply
@@ -124,9 +131,9 @@ public fun FocalFlatRow(
                 // Envoi optimiste : 0,7 tant que le gateway n'a pas accusé (iOS `isOptimistic`).
                 .alpha(if (content.isPending) 0.7f else 1f),
         ) {
+            val special = remember(content.isDeleted, content.isSystem, content.callSummary, content.joinNotice, content.text) { content.focalSpecialRow() }
             when {
-                renderKind.isSystem -> SystemNoticeLine(content = content, callbacks = callbacks)
-                content.isDeleted -> FlatMutedLine(stringResource(R.string.bubble_message_deleted), callbacks.onLongPress)
+                special != FocalSpecialRow.None -> FocalSpecialRowView(special, content, accentColor, callbacks)
                 renderKind.isBurned -> FlatMutedLine(stringResource(R.string.bubble_burned), callbacks.onLongPress)
                 else -> FlatStandardBody(
                     content = content,
@@ -276,13 +283,13 @@ private fun FlatStandardBody(
             ExpandedGlassFrame(visible = glassVisible, modifier = Modifier.weight(1f)) { column() }
         } else {
             FocalElectedFrame(
-                focus = focus,
+                contentScale = focus.contentScale,
                 lift = lift,
                 contentRect = { contentRect },
-                card = { ElectedGlassCard() },
+                card = { FocalGlassBlock() },
                 identityChip = {
                     Box(Modifier.offset(x = -ElectedMetrics.chipInset)) {
-                        ElectedIdentityChip(content, accentColor, callbacks.onSenderTap)
+                        FocalIdentityChip(content, accentColor, callbacks.onSenderTap)
                     }
                 },
                 strip = { ElectedStrip(content, focus, accentColor, callbacks) },
@@ -355,7 +362,7 @@ private fun FlatContentSections(
             MessageStickerArtwork(sticker, side = FlatRowMetrics.stickerSide)
             return@Column
         }
-        if (content.hasRenderedAttachments) FocalAttachmentBlock(content, ink, callbacks, audioPlayback)
+        if (content.hasRenderedAttachments) FocalAttachmentBlock(content, ink, callbacks, audioPlayback, accentColor)
         FlatText(content, accentColor, ink, decor)
         if (!content.isEndToEndSealed) bodyAccessory?.invoke(ink)
     }
@@ -411,7 +418,7 @@ private fun FlatText(content: BubbleContent, accentColor: Color, ink: Color, dec
         Text(text = content.text.trim(), style = largeEmojiTextStyle(emojiFontSize.sp))
         return
     }
-    FocalLongMessage(messageId = content.messageId, text = content.text, accentColor = accentColor) { shown ->
+    FocalLongMessage(messageId = content.messageId, text = content.text, accentColor = accentColor, inkColor = ink) { shown ->
         RichMessageText(
             text = shown,
             color = ink,

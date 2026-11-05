@@ -110,6 +110,7 @@ import androidx.compose.material.icons.filled.GroupOff as FiGroupOff
 import androidx.compose.material.icons.filled.Groups as FiGroups
 import androidx.compose.material.icons.filled.Hearing as FiHearing
 import androidx.compose.material.icons.filled.History as FiHistory
+import androidx.compose.material.icons.filled.Home as FiHome
 import androidx.compose.material.icons.filled.HourglassEmpty as FiHourglassEmpty
 import androidx.compose.material.icons.filled.HowToReg as FiHowToReg
 import androidx.compose.material.icons.filled.Image as FiImage
@@ -172,6 +173,7 @@ import androidx.compose.material.icons.filled.Replay as FiReplay
 import androidx.compose.material.icons.filled.Replay10 as FiReplay10
 import androidx.compose.material.icons.filled.Replay5 as FiReplay5
 import androidx.compose.material.icons.filled.Schedule as FiSchedule
+import androidx.compose.material.icons.filled.School as FiSchool
 import androidx.compose.material.icons.filled.Search as FiSearch
 import androidx.compose.material.icons.filled.Security as FiSecurity
 import androidx.compose.material.icons.filled.SelectAll as FiSelectAll
@@ -179,6 +181,7 @@ import androidx.compose.material.icons.filled.Sensors as FiSensors
 import androidx.compose.material.icons.filled.Settings as FiSettings
 import androidx.compose.material.icons.filled.Shield as FiShield
 import androidx.compose.material.icons.filled.ShoppingBag as FiShoppingBag
+import androidx.compose.material.icons.filled.ShoppingCart as FiShoppingCart
 import androidx.compose.material.icons.filled.Shuffle as FiShuffle
 import androidx.compose.material.icons.filled.SignalCellularAlt as FiSignalCellularAlt
 import androidx.compose.material.icons.filled.SignalWifiConnectedNoInternet4 as FiSignalWifiConnectedNoInternet4
@@ -222,7 +225,9 @@ import androidx.compose.material.icons.filled.VisibilityOff as FiVisibilityOff
 import androidx.compose.material.icons.filled.VpnKey as FiVpnKey
 import androidx.compose.material.icons.filled.Wallpaper as FiWallpaper
 import androidx.compose.material.icons.filled.Warning as FiWarning
+import androidx.compose.material.icons.filled.Wifi as FiWifi
 import androidx.compose.material.icons.filled.WifiOff as FiWifiOff
+import androidx.compose.material.icons.filled.Work as FiWork
 import androidx.compose.material.icons.filled.WorkspacePremium as FiWorkspacePremium
 import androidx.compose.material.icons.filled.ZoomIn as FiZoomIn
 import androidx.compose.material.icons.filled.ZoomOut as FiZoomOut
@@ -334,6 +339,7 @@ public object MeeshyIcons {
     public val Dictionary: ImageVector get() = Icons.AutoMirrored.Filled.AfMenuBook
     public val Forward: ImageVector get() = Icons.AutoMirrored.Filled.AfArrowForward
     public val ForwardMessage: ImageVector get() = Icons.AutoMirrored.Filled.AfForward
+    public val Home: ImageVector get() = Icons.Filled.FiHome
     public val ListChecklist: ImageVector get() = Icons.AutoMirrored.Filled.AfListAlt
     public val MessageFilled: ImageVector get() = Icons.AutoMirrored.Filled.AfMessage
     public val Notes: ImageVector get() = Icons.AutoMirrored.Filled.AfNotes
@@ -343,7 +349,9 @@ public object MeeshyIcons {
     public val Redo: ImageVector get() = Icons.AutoMirrored.Filled.AfRedo
     public val Reply: ImageVector get() = Icons.AutoMirrored.Filled.AfReply
     public val ReturnKey: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardReturn
+    public val School: ImageVector get() = Icons.Filled.FiSchool
     public val Send: ImageVector get() = Icons.AutoMirrored.Filled.AfSend
+    public val ShoppingCart: ImageVector get() = Icons.Filled.FiShoppingCart
     public val SignIn: ImageVector get() = Icons.AutoMirrored.Filled.AfLogin
     public val SignOut: ImageVector get() = Icons.AutoMirrored.Filled.AfLogout
     public val TabletAndroid: ImageVector get() = Icons.Filled.FiTabletAndroid
@@ -583,8 +591,10 @@ public object MeeshyIcons {
     public val Warning: ImageVector get() = Icons.Outlined.OuWarning
     public val WarningFilled: ImageVector get() = Icons.Filled.FiWarning
     public val Waveform: ImageVector get() = Icons.Filled.FiGraphicEq
+    public val Wifi: ImageVector get() = Icons.Filled.FiWifi
     public val WifiOff: ImageVector get() = Icons.Filled.FiWifiOff
     public val WifiProblem: ImageVector get() = Icons.Filled.FiSignalWifiConnectedNoInternet4
+    public val Work: ImageVector get() = Icons.Filled.FiWork
     public val ZoomIn: ImageVector get() = Icons.Filled.FiZoomIn
     public val ZoomOut: ImageVector get() = Icons.Filled.FiZoomOut
     public val AddPhotoAlternateOutlined: ImageVector get() = Icons.Outlined.OuAddPhotoAlternate

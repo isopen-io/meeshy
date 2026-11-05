@@ -1,5 +1,20 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="activation_close">إغلاق</string>
+    <string name="activation_complete">تم تأكيد حسابك. شكرًا!</string>
+    <string name="activation_email_done">تم تأكيد البريد الإلكتروني ✓</string>
+    <string name="activation_email_label">أكّد عنوان بريدك الإلكتروني</string>
+    <string name="activation_email_send">استلام الرمز</string>
+    <string name="activation_email_sending">جارٍ الإرسال…</string>
+    <string name="activation_email_sent">أُرسل الرمز إلى %1$s. أدخله أدناه.</string>
+    <string name="activation_invite_days_left">تبقّى لك %1$d يومًا لتأكيد حسابك. بعد ذلك سيطلب تسجيل الدخول رمزًا.</string>
+    <string name="activation_invite_days_left_one">تبقّى لك يوم واحد لتأكيد حسابك. بعد ذلك سيطلب تسجيل الدخول رمزًا.</string>
+    <string name="activation_invite_lead">أكّد حسابك لمواصلة استخدامه دون انقطاع.</string>
+    <string name="activation_invite_title">أكّد حسابك</string>
+    <string name="activation_later">لاحقًا</string>
+    <string name="activation_phone_add">إضافة رقمي</string>
+    <string name="activation_phone_done">تم تأكيد الرقم ✓</string>
+    <string name="activation_phone_label">أضف رقم هاتف لتأمين حسابك واستعادته</string>
     <string name="ageGate_body">لا يمكن لهذا الحساب استخدام Meeshy بعد. يمكنك الانضمام إلينا عند بلوغك 13 عامًا.</string>
     <string name="arrival_celebration_lead">نُجهّز محادثاتك…</string>
     <string name="arrival_celebration_skip">متابعة</string>
@@ -334,9 +349,20 @@
     <string name="onboarding_story_verify">أكّد بريدك الإلكتروني لنشر قصتك</string>
     <string name="onboarding_story_verify_detail">المس الرابط الذي وصلك بالبريد: ستنطلق قصتك بعده مباشرة.</string>
     <string name="registration_back">رجوع</string>
+    <string name="session_closed_activation_message">لمواصلة استخدام Meeshy، سجّل الدخول مجددًا ثم أدخل الرمز الذي وصلك بالبريد الإلكتروني.</string>
+    <string name="session_closed_activation_title">أكّد عنوان بريدك الإلكتروني</string>
+    <string name="session_closed_admin_message">لحماية حسابك، أغلق فريق Meeshy هذه الجلسة. يمكنك تسجيل الدخول مجددًا. لديك سؤال؟ راسلنا.</string>
+    <string name="session_closed_admin_title">أغلق فريق Meeshy جلستك</string>
+    <string name="session_closed_all_signed_out_message">أُغلقت كل جلسات حسابك. سجّل الدخول مجددًا للمتابعة.</string>
+    <string name="session_closed_contact">راسل فريق Meeshy</string>
     <string name="session_closed_continue">تسجيل الدخول مجددًا</string>
+    <string name="session_closed_expired_message">سجّل الدخول مجددًا للمتابعة.</string>
+    <string name="session_closed_expired_title">انتهت صلاحية جلستك</string>
+    <string name="session_closed_password_title">تم تغيير كلمة المرور</string>
     <string name="session_closed_signed_out_message">أُغلقت هذه الجلسة. سجّل الدخول مجددًا للمتابعة.</string>
     <string name="session_closed_signed_out_title">تم تسجيل خروجك</string>
+    <string name="session_closed_user_revoke_message">أُغلقت الجلسة من جهاز آخر لديك. إن لم تكن أنت، سجّل الدخول مجددًا وغيّر كلمة المرور.</string>
+    <string name="session_closed_user_revoke_title">تم تسجيل خروج هذا الجهاز</string>
     <string name="share_link_join_anonymously">انضمام دون الكشف عن الهوية</string>
     <string name="share_link_resume_anonymously">الاستئناف دون الكشف عن هويتي</string>
     <string name="signup_back">رجوع</string>
@@ -347,8 +373,14 @@
     <string name="signup_close">إغلاق</string>
     <string name="signup_country_search_hint">ابحث عن بلد</string>
     <string name="signup_display_name_label">بماذا نناديك؟</string>
+    <string name="signup_email_forgot_password">نسيت كلمة المرور؟</string>
+    <string name="signup_email_is_it_you">هل هذا أنت؟</string>
+    <string name="signup_email_its_me">هذا أنا — استعادة حسابي</string>
     <string name="signup_email_label">البريد الإلكتروني</string>
+    <string name="signup_email_not_me">ليس أنا</string>
+    <string name="signup_email_not_me_note">سيُطلب الرمز المرسل إلى هذا العنوان للحصول عليه.</string>
     <string name="signup_email_placeholder">you@example.com</string>
+    <string name="signup_email_send_sign_in_link">تلقي رابط تسجيل الدخول</string>
     <string name="signup_email_taken">يوجد حساب بهذا العنوان بالفعل.</string>
     <string name="signup_error_generic">تعذّر إنشاء الحساب. حاول مرة أخرى.</string>
     <string name="signup_error_network">لا يوجد اتصال. تحقق من شبكتك وحاول مرة أخرى.</string>

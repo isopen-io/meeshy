@@ -150,12 +150,19 @@ public data class BubbleContent(
     val replyToIsMe: Boolean = false,
     /** La fiche de l'auteur cité (tap sur son nom dans la citation) ; `null` : soi, supprimé ou sans compte. */
     val replyToAuthor: me.meeshy.sdk.model.profile.ProfileSheetUser? = null,
+    /**
+     * Le vocal CITÉ, jouable depuis la citation (iOS `ConversationViewModel+QuotedAudio`), avec sa piste servie par le Prisme.
+     * Jamais posé pour un cité protégé (vue unique, flouté, chiffré), éphémère ou supprimé : rien de lui ne voyage.
+     */
+    val replyToAudio: BubbleAudio? = null,
     /** True when an outgoing message has been in flight long enough to be called slow. */
     val isSlowSend: Boolean = false,
     /** True when a failed send was refused because a file's location cannot be removed (#13550): told, and removed on tap. */
     val isLocationRefused: Boolean = false,
     /** True when a failed send lost its media on the device (#13554): told, and removed on tap so the author picks it again. */
     val isMediaLost: Boolean = false,
+    /** True when a failed send was refused because this participant may not attach that kind of piece yet (#16053): told, retried by hand. */
+    val isAttachmentRightRefused: Boolean = false,
     /** What this message lets out of Meeshy (forward, copy, save, share…) — read by every exit instead of a raw flag. */
     val exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
     /**
@@ -202,6 +209,10 @@ public data class BubbleContent(
     val isViewOnceSealed: Boolean = false,
     /** Le résumé d'un appel (message système d'appel), décodé de `metadata` ; nul pour tout autre message. */
     val callSummary: CallSummaryMetadata? = null,
+    /** L'appel a été lancé par CE lecteur (initiateur = utilisateur courant) : la notice dit sortant. */
+    val callIsOutgoing: Boolean = false,
+    /** Le consentement vocal manque : un audio du message propose de l'activer (avis discret sous le lecteur). */
+    val voiceConsentMissing: Boolean = false,
     /** Une édition part au serveur : le pied montre des flèches qui tournent à la place du crayon. */
     val isEditSaving: Boolean = false,
     /** La dernière modification est celle d'un modérateur : le pied le dit en mots. */

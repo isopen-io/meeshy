@@ -30,6 +30,9 @@ import me.meeshy.ui.theme.MeeshyTheme
 /** Cible tactile minimale d'un bouton de la carte (iOS : `minHeight: 44`). */
 internal val CardButtonMinHeight = 44.dp
 
+/** Largeur minimale d'un bouton : deux boutons ne se côtoient que si chacun garde au moins cette largeur. */
+internal val CardButtonMinWidth = 64.dp
+
 /**
  * Les boutons de la carte, choisis par la règle pure `ConversationCardActions` (iOS
  * `ConversationLinkCardActionsRow`) : non-membre ⇒ « Rejoindre ? » puis « Anonyme » | le compte
@@ -149,22 +152,16 @@ private fun SideBySideOrStacked(buttons: @Composable (Modifier) -> Unit) {
     val gap = MeeshySpacing.sm
     FitsHorizontally(
         listOf(
-            FitCandidate(
-                probe = { Row(horizontalArrangement = Arrangement.spacedBy(gap)) { buttons(Modifier) } },
-                content = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.fillMaxWidth()) {
-                        buttons(Modifier.weight(1f))
-                    }
-                },
-            ),
-            FitCandidate(
-                probe = { Column { buttons(Modifier) } },
-                content = {
-                    Column(verticalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.fillMaxWidth()) {
-                        buttons(Modifier.fillMaxWidth())
-                    }
-                },
-            ),
+            FitCandidate {
+                Row(horizontalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.fillMaxWidth()) {
+                    buttons(Modifier.weight(1f))
+                }
+            },
+            FitCandidate {
+                Column(verticalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.fillMaxWidth()) {
+                    buttons(Modifier.fillMaxWidth())
+                }
+            },
         ),
         modifier = Modifier.fillMaxWidth(),
     )

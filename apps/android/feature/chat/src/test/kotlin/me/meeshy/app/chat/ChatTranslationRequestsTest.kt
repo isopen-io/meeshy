@@ -15,7 +15,10 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.model.ApiAttachmentTranscription
+import me.meeshy.sdk.model.ApiAttachmentTranslation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.translation.TranslationRequestFailure
@@ -46,6 +49,9 @@ class ChatTranslationRequestsTest {
         val repo: MessageRepository,
         val translationReceived: MutableSharedFlow<TranslationEvent>,
         val audioCalls: MutableList<Pair<String, String>>,
+        val audioSources: MutableList<String?>,
+        val fetched: MutableList<String>,
+        val pending: MutableStateFlow<Set<String>>,
     )
 
     private fun TestScope.rig(
@@ -61,7 +67,11 @@ class ChatTranslationRequestsTest {
         val received = MutableSharedFlow<TranslationEvent>()
         val socket = mockk<MessageSocketManager>()
         every { socket.translationReceived } returns received
+        every { socket.messageEdited } returns MutableSharedFlow()
         val audioCalls = mutableListOf<Pair<String, String>>()
+        val audioSources = mutableListOf<String?>()
+        val fetched = mutableListOf<String>()
+        val pending = MutableStateFlow<Set<String>>(emptySet())
         val controller = ChatTranslationController(
             scope = screenScope(),
             state = ChatStateAccess(flow),
@@ -70,12 +80,15 @@ class ChatTranslationRequestsTest {
             sessionRepository = session,
             messageSocketManager = socket,
             conversationId = "c1",
-            requestAttachmentTranslation = { attachment, language ->
+            requestAttachmentTranslation = { _, attachment, language, source ->
                 audioCalls += attachment to language
+                audioSources += source
                 audioResult()
             },
+            fetchTranslations = { id -> fetched += id },
+            audioPendingKeys = pending,
         )
-        return Rig(controller, flow, repo, received, audioCalls)
+        return Rig(controller, flow, repo, received, audioCalls, audioSources, fetched, pending)
     }
 
     @Test
@@ -174,5 +187,121 @@ class ChatTranslationRequestsTest {
         advanceUntilIdle()
 
         assertThat(r.controller.translationFailures.value).isEmpty()
+    }
+
+    private fun voice() = LocalMessage(
+        ApiMessage(
+            id = "v1",
+            conversationId = "c1",
+            senderId = "other",
+            content = "",
+            originalLanguage = "en",
+            attachments = listOf(
+                ApiMessageAttachment(
+                    id = "a1",
+                    mimeType = "audio/mp4",
+                    transcription = ApiAttachmentTranscription(text = "Hello", language = "pt"),
+                    translations = mapOf("es" to ApiAttachmentTranslation(url = "/media/es.mp3", transcription = "Hola")),
+                ),
+            ),
+        ),
+    )
+
+    @Test
+    fun `opening the explorer reads every translation of a clear message and never of an end-to-end one`() = runTest {
+        val clear = rig()
+        clear.controller.openLanguageExplorer("m1")
+        advanceUntilIdle()
+        assertThat(clear.fetched).containsExactly("m1")
+
+        val sealed = rig(conversationMode = "e2ee")
+        sealed.controller.openLanguageExplorer("m1")
+        advanceUntilIdle()
+        assertThat(sealed.fetched).isEmpty()
+    }
+
+    @Test
+    fun `touching a language of a voice note asks for the voice by attachment in the language of its transcription`() = runTest {
+        val r = rig(loaded = listOf(voice()))
+        r.controller.start()
+        r.controller.openLanguageExplorer("v1")
+        advanceUntilIdle()
+
+        r.controller.onExplorerRowTap("v1", "de")
+        advanceUntilIdle()
+
+        assertThat(r.audioCalls).containsExactly("a1" to "de")
+        assertThat(r.audioSources).containsExactly("pt")
+        coVerify(exactly = 0) { r.repo.requestTranslation(any(), any()) }
+    }
+
+    @Test
+    fun `touching a language of a text message asks for the text`() = runTest {
+        val r = rig()
+        r.controller.start()
+        r.controller.openLanguageExplorer("m1")
+        advanceUntilIdle()
+
+        r.controller.onExplorerRowTap("m1", "de")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { r.repo.requestTranslation("m1", "de") }
+        assertThat(r.audioCalls).isEmpty()
+    }
+
+    @Test
+    fun `touching a language that only has a spoken track selects it and touching it again reverts`() = runTest {
+        val r = rig(loaded = listOf(voice()))
+        r.controller.start()
+        r.controller.openLanguageExplorer("v1")
+        advanceUntilIdle()
+
+        r.controller.onExplorerRowTap("v1", "es")
+        advanceUntilIdle()
+        assertThat(r.controller.activeLanguageOverride.value).containsExactly("v1", "es")
+        assertThat(r.flow.value.languageExplorer?.selected?.text).isEqualTo("Hola")
+
+        r.controller.onExplorerRowTap("v1", "es")
+        advanceUntilIdle()
+        assertThat(r.controller.activeLanguageOverride.value).isEmpty()
+        assertThat(r.audioCalls).isEmpty()
+    }
+
+    @Test
+    fun `an audio translation still awaited marks its row in flight across closing and reopening the sheet`() = runTest {
+        val r = rig(loaded = listOf(voice()))
+        r.controller.start()
+        r.controller.openLanguageExplorer("v1")
+        r.pending.value = setOf("a1|de")
+        advanceUntilIdle()
+        assertThat(r.flow.value.languageExplorer?.rows?.first { it.code == "de" }?.isTranslating).isTrue()
+
+        r.controller.dismissLanguageExplorer()
+        advanceUntilIdle()
+        r.controller.openLanguageExplorer("v1")
+        advanceUntilIdle()
+        assertThat(r.flow.value.languageExplorer?.rows?.first { it.code == "de" }?.isTranslating).isTrue()
+
+        r.controller.onExplorerRowTap("v1", "de")
+        advanceUntilIdle()
+        assertThat(r.audioCalls).isEmpty()
+
+        r.pending.value = emptySet()
+        advanceUntilIdle()
+        assertThat(r.flow.value.languageExplorer?.rows?.first { it.code == "de" }?.isTranslating).isFalse()
+    }
+
+    @Test
+    fun `a voice request the server refuses shows on the row of that language`() = runTest {
+        val r = rig(loaded = listOf(voice()), audioResult = { false })
+        r.controller.start()
+        r.controller.openLanguageExplorer("v1")
+        advanceUntilIdle()
+
+        r.controller.onExplorerRowTap("v1", "de")
+        advanceUntilIdle()
+
+        assertThat(r.flow.value.languageExplorer?.rows?.first { it.code == "de" }?.failure)
+            .isEqualTo(me.meeshy.ui.component.bubble.RowFailure.FAILED)
     }
 }

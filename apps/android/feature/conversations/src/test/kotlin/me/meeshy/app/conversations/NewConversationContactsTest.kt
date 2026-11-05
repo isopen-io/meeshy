@@ -14,6 +14,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.friend.AcceptedContactsSource
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.model.FriendRequest
@@ -51,13 +53,19 @@ class NewConversationContactsTest {
         every { currentUser } returns MutableStateFlow<MeeshyUser?>(null)
     }
 
+    private fun cacheOf(snapshot: List<FriendRequestUser>?) = mockk<FriendListRepository> {
+        coEvery { cachedSnapshot() } returns snapshot
+        coEvery { ticket() } returns null
+        coEvery { persist(any(), any()) } returns Unit
+    }
+
     private fun viewModel(cache: FriendListRepository, network: FriendRepository) =
-        NewConversationViewModel(mockk(relaxed = true), mockk(relaxed = true), session(), cache, network, mockk(relaxed = true), mockk(relaxed = true))
+        NewConversationViewModel(mockk(relaxed = true), mockk(relaxed = true), session(), AcceptedContactsSource(network, cache, session()), mockk(relaxed = true), mockk(relaxed = true), BlockCache())
 
     @Test
     fun `the cached roster paints at once, then the network refreshes it`() = runTest(dispatcher) {
         val answer = CompletableDeferred<NetworkResult<List<FriendRequest>>>()
-        val cache = mockk<FriendListRepository> { coEvery { cachedSnapshot() } returns listOf(friend("ann")) }
+        val cache = cacheOf(listOf(friend("ann")))
         val network = mockk<FriendRepository> { coEvery { acceptedFriendRequests() } coAnswers { answer.await() } }
 
         val vm = viewModel(cache, network)
@@ -76,7 +84,7 @@ class NewConversationContactsTest {
     @Test
     fun `a cold cache shows the loading state, then no contacts when the roster is empty`() = runTest(dispatcher) {
         val answer = CompletableDeferred<NetworkResult<List<FriendRequest>>>()
-        val cache = mockk<FriendListRepository> { coEvery { cachedSnapshot() } returns null }
+        val cache = cacheOf(null)
         val network = mockk<FriendRepository> { coEvery { acceptedFriendRequests() } coAnswers { answer.await() } }
 
         val vm = viewModel(cache, network)
@@ -93,7 +101,7 @@ class NewConversationContactsTest {
 
     @Test
     fun `a failed roster read ends the loading and keeps the cache`() = runTest(dispatcher) {
-        val cache = mockk<FriendListRepository> { coEvery { cachedSnapshot() } returns listOf(friend("ann")) }
+        val cache = cacheOf(listOf(friend("ann")))
         val network = mockk<FriendRepository> {
             coEvery { acceptedFriendRequests() } returns NetworkResult.Failure(ApiError(message = "offline", code = "NETWORK"))
         }
@@ -107,7 +115,7 @@ class NewConversationContactsTest {
 
     @Test
     fun `a contact selects like a search result and the search hides the contacts`() = runTest(dispatcher) {
-        val cache = mockk<FriendListRepository> { coEvery { cachedSnapshot() } returns listOf(friend("ann")) }
+        val cache = cacheOf(listOf(friend("ann")))
         val network = mockk<FriendRepository> {
             coEvery { acceptedFriendRequests() } returns NetworkResult.Success(accepted(friend("ann")))
         }

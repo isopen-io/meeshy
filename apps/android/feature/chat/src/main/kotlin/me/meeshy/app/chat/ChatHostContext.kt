@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.EphemeralChoice
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.MessageTranscriptionFiche
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.call.HeaderCallEntry
 import me.meeshy.sdk.model.composer.PendingAttachment
@@ -61,7 +62,6 @@ internal class ChatSheetVisibility {
     var settings by mutableStateOf(false)
     var members by mutableStateOf(false)
     var stats by mutableStateOf(false)
-    var analysis by mutableStateOf(false)
 
     /** La fiche Conversation, ouverte par l'avatar de l'en-tête (parité iOS `ConversationInfoSheet`). */
     var info by mutableStateOf(false)
@@ -135,6 +135,10 @@ internal class ChatHostContext(
     /** #15269 — ce qui ferme le composeur (bandeau de lecture seule) et ce que le rang du lecteur permet. */
     val composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
     val capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
+    /** [ConversationGovernanceController.viewerRole] : le rôle connu du lecteur, garde du cache de la fiche d'un participant. */
+    val viewerRole: String? = null,
+    /** [ChatViewModel.unreadAtOpening] : le compte serveur que le séparateur des non-lus annonce (#7525). */
+    val unreadAtOpening: Int? = null,
 )
 
 /** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
@@ -186,13 +190,15 @@ internal fun rememberChatHostContext(
     composerClosure: me.meeshy.sdk.model.ComposerClosure? = null,
     capabilities: me.meeshy.sdk.model.conversationlist.ConversationRowMenuCapabilities? = null,
     listGate: ChatListUpdateGate? = null,
+    viewerRole: String? = null,
+    unreadAtOpening: Int? = null,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember(listGate) { ChatChromeState(listGate) }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities, viewerRole, unreadAtOpening)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
@@ -221,6 +227,8 @@ internal class ChatHostActions(
     val pieceOverlayFor: (String, String) -> PieceOverlayModel?,
     /** Les pièces d'un message chargé, telles que le serveur les sert : la fiche Transcription les lit (#13779). */
     val attachmentsOf: (String) -> List<ApiMessageAttachment> = { emptyList() },
+    /** La piste parlée d'une traduction se joue protégée : message protégé, inconnu ou conversation chiffrée. */
+    val transcriptionPlaybackProtected: (String) -> Boolean = { true },
     val onPieceReact: (String, String, String) -> Unit,
     val onPieceDelete: (String, String) -> Unit,
     val openForwardPiece: (String, String) -> Unit,
@@ -270,6 +278,7 @@ internal class ChatHostActions(
     val addReactionFromDetails: (String, String) -> Unit,
     val dismissReport: () -> Unit,
     val onExplorerRetranslate: (String, String) -> Unit,
+    val onExplorerRowTap: (String, String) -> Unit,
     val dismissLanguageExplorer: () -> Unit,
     val dismissEmojiPicker: () -> Unit,
     val closeReactionDetails: () -> Unit,
@@ -319,6 +328,10 @@ internal class ChatHostActions(
     val deleteSelectionForEveryone: (List<String>) -> Unit = {},
     val deleteSelectionForMe: (List<String>) -> Unit = {},
     val toggleStars: (List<String>) -> Unit = {},
+    /** Le drapeau d'une langue de piste d'un vocal : voix, texte et karaoké basculent ensemble. */
+    val onAudioLanguage: (String, String) -> Unit = { _, _ -> },
+    /** Réagir, répondre et transférer depuis le plein écran d'un vocal (#16176). */
+    val audioFullscreenReplies: me.meeshy.app.chat.audio.AudioFullscreenReplyController? = null,
 )
 
 internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
@@ -344,7 +357,10 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     onFileAttachmentTap = this::onFileAttachmentTap,
     onPieceSave = this::onPieceSave,
     pieceOverlayFor = this::pieceOverlayFor,
-    attachmentsOf = this::attachmentsOf,
+    attachmentsOf = { messageId -> messageOf(messageId)?.attachments.orEmpty() },
+    transcriptionPlaybackProtected = { messageId ->
+        MessageTranscriptionFiche.playbackIsProtected(messageOf(messageId), state.value.isEndToEnd)
+    },
     onPieceReact = this::onPieceReact,
     onPieceDelete = this::onPieceDelete,
     openForwardPiece = this::openForwardPiece,
@@ -402,6 +418,7 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     addReactionFromDetails = this::addReactionFromDetails,
     dismissReport = this::dismissReport,
     onExplorerRetranslate = this::onExplorerRetranslate,
+    onExplorerRowTap = this::onExplorerRowTap,
     dismissLanguageExplorer = this::dismissLanguageExplorer,
     dismissEmojiPicker = this::dismissEmojiPicker,
     closeReactionDetails = this::closeReactionDetails,
@@ -432,6 +449,8 @@ internal fun ChatViewModel.hostActions(): ChatHostActions = ChatHostActions(
     deleteSelectionForEveryone = this::deleteSelectionForEveryone,
     deleteSelectionForMe = this::deleteSelectionForMe,
     toggleStars = this::toggleStars,
+    onAudioLanguage = this::selectAudioLanguage,
+    audioFullscreenReplies = controllers.find<me.meeshy.app.chat.audio.AudioFullscreenReplyController>(),
 )
 
 /** Le rendu de l'éditeur audio est un m4a (AAC), comme la prise du micro. */

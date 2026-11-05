@@ -49,12 +49,6 @@ const AvatarRingDecorSchema = z
   .check(z.refine((decor) => decor.back !== undefined || decor.front !== undefined));
 export type AvatarRingDecor = z.infer<typeof AvatarRingDecorSchema>;
 
-/**
- * Le plus petit côté de boîte de contour, en points, où un cadre illustré se lit encore (#15157) :
- * en dessous, l'avatar ne porte que son anneau fixe.
- */
-export const RING_DECOR_MIN_BOX = 44;
-
 export type RingDecorFit = { readonly scale: number; readonly side: number; readonly offset: number };
 
 /**
@@ -63,14 +57,13 @@ export type RingDecorFit = { readonly scale: number; readonly side: number; read
  * déclare libre de chaque côté (aucun nom, aucun avatar voisin n'y vit). Quand le film demande
  * plus (`box × reach`), l'avatar, son contour et ses films se réduisent ENSEMBLE de `scale` —
  * l'illustration reste calée sur l'avatar. `side` est le côté du film, `offset` son décalage
- * depuis le coin de la boîte. `null` : trop petit pour se lire, l'anneau fixe seul.
+ * depuis le coin de la boîte. Le cadre se pose ENTIER à toutes les tailles (#16114) : aucune
+ * boîte n'est trop petite pour lui — liste, bulle, mini-avatar comme profil.
  */
-export const ringDecorFit = ({ box, reach, room = 0 }: { readonly box: number; readonly reach: number; readonly room?: number }): RingDecorFit | null => {
+export const ringDecorFit = ({ box, reach, room = 0 }: { readonly box: number; readonly reach: number; readonly room?: number }): RingDecorFit => {
   const need = box * reach;
   const side = Math.min(need, box + 2 * Math.max(0, room));
-  const scale = side / need;
-  if (box * scale < RING_DECOR_MIN_BOX) return null;
-  return { scale, side, offset: (box - side) / 2 };
+  return { scale: side / need, side, offset: (box - side) / 2 };
 };
 
 const RingOrnamentStrokeSchema = z.object({

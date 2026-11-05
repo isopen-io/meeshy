@@ -41,15 +41,15 @@ internal fun PostOptionsButton(
     isOwn: Boolean,
     isBookmarked: Boolean,
     hasText: Boolean,
-    onShare: () -> Unit,
-    onCopyLink: () -> Unit,
-    onCopyText: () -> Unit,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
-    onBookmarkToggle: () -> Unit,
-    onPin: () -> Unit,
-    onReport: () -> Unit,
-    onDelete: () -> Unit,
+    onShare: (() -> Unit)?,
+    onCopyLink: (() -> Unit)?,
+    onCopyText: (() -> Unit)?,
+    onRepost: (() -> Unit)?,
+    onQuote: (() -> Unit)?,
+    onBookmarkToggle: (() -> Unit)?,
+    onPin: (() -> Unit)?,
+    onReport: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
     tint: androidx.compose.ui.graphics.Color = MeeshyTheme.tokens.textSecondary,
     onImager: (() -> Unit)? = null,
     onOpen: (() -> Unit)? = null,
@@ -57,6 +57,32 @@ internal fun PostOptionsButton(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = rememberMeeshyHaptics()
+    val context = PostActionContext(
+        isOwn = isOwn,
+        isBookmarked = isBookmarked,
+        hasText = hasText,
+        imageable = onImager != null,
+        canOpen = onOpen != null,
+        pendingSend = pendingSend?.let { PendingSendMenu(canRetry = it.canRetry, canReopen = it.canReopen) },
+    )
+    // Sans effet, une entrée n'est pas offerte ; sans entrée, le bouton « ⋯ » n'est pas dessiné (#12234, #13244).
+    val wired: (PostAction) -> Boolean = { action ->
+        when (action) {
+            PostAction.Share -> onShare != null
+            PostAction.CopyLink -> onCopyLink != null
+            PostAction.CopyText -> onCopyText != null
+            PostAction.Repost -> onRepost != null
+            PostAction.Quote -> onQuote != null
+            PostAction.Bookmark, PostAction.Unbookmark -> onBookmarkToggle != null
+            PostAction.Pin -> onPin != null
+            PostAction.Report -> onReport != null
+            PostAction.Delete -> onDelete != null
+            PostAction.SaveMedia, PostAction.ViewViewers, PostAction.Edit, PostAction.NearHere -> false
+            else -> true
+        }
+    }
+    val offered = PostActionMenu.actions(context).filter(wired)
+    if (offered.isEmpty()) return
     Box {
         IconButton(onClick = { expanded = true }) {
             Icon(
@@ -66,28 +92,20 @@ internal fun PostOptionsButton(
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            val context = PostActionContext(
-                isOwn = isOwn,
-                isBookmarked = isBookmarked,
-                hasText = hasText,
-                imageable = onImager != null,
-                canOpen = onOpen != null,
-                pendingSend = pendingSend?.let { PendingSendMenu(canRetry = it.canRetry, canReopen = it.canReopen) },
-            )
-            PostActionMenu.actions(context).forEach { action ->
+            offered.forEach { action ->
                 val (label, handler) = when (action) {
                     PostAction.Open -> stringResource(R.string.feed_post_open) to { haptics.light(); (onOpen ?: {})() }
-                    PostAction.Share -> stringResource(R.string.feed_action_share) to { haptics.light(); onShare() }
-                    PostAction.CopyLink -> stringResource(R.string.feed_action_copy_link) to { haptics.success(); onCopyLink() }
-                    PostAction.CopyText -> stringResource(R.string.feed_action_copy_text) to { haptics.success(); onCopyText() }
-                    PostAction.Repost -> stringResource(R.string.feed_action_repost) to onRepost
-                    PostAction.Quote -> stringResource(R.string.feed_action_quote) to onQuote
-                    PostAction.Bookmark -> stringResource(R.string.feed_action_bookmark) to { haptics.light(); onBookmarkToggle() }
-                    PostAction.Unbookmark -> stringResource(R.string.feed_action_unbookmark) to { haptics.light(); onBookmarkToggle() }
+                    PostAction.Share -> stringResource(R.string.feed_action_share) to { haptics.light(); onShare?.invoke(); Unit }
+                    PostAction.CopyLink -> stringResource(R.string.feed_action_copy_link) to { haptics.success(); onCopyLink?.invoke(); Unit }
+                    PostAction.CopyText -> stringResource(R.string.feed_action_copy_text) to { haptics.success(); onCopyText?.invoke(); Unit }
+                    PostAction.Repost -> stringResource(R.string.feed_action_repost) to { onRepost?.invoke(); Unit }
+                    PostAction.Quote -> stringResource(R.string.feed_action_quote) to { onQuote?.invoke(); Unit }
+                    PostAction.Bookmark -> stringResource(R.string.feed_action_bookmark) to { haptics.light(); onBookmarkToggle?.invoke(); Unit }
+                    PostAction.Unbookmark -> stringResource(R.string.feed_action_unbookmark) to { haptics.light(); onBookmarkToggle?.invoke(); Unit }
                     PostAction.Imager -> stringResource(R.string.feed_comment_imagine) to (onImager ?: {})
-                    PostAction.Pin -> stringResource(R.string.feed_action_pin) to { haptics.light(); onPin() }
-                    PostAction.Report -> stringResource(R.string.feed_action_report) to { haptics.medium(); onReport() }
-                    PostAction.Delete -> stringResource(R.string.feed_action_delete) to { haptics.medium(); onDelete() }
+                    PostAction.Pin -> stringResource(R.string.feed_action_pin) to { haptics.light(); onPin?.invoke(); Unit }
+                    PostAction.Report -> stringResource(R.string.feed_action_report) to { haptics.medium(); onReport?.invoke(); Unit }
+                    PostAction.Delete -> stringResource(R.string.feed_action_delete) to { haptics.medium(); onDelete?.invoke(); Unit }
                     PostAction.RetrySend -> stringResource(R.string.feed_unsent_retry) to { haptics.light(); pendingSend?.onRetry?.invoke(); Unit }
                     PostAction.ReopenSend -> stringResource(R.string.feed_unsent_reopen) to { haptics.light(); pendingSend?.onReopen?.invoke(); Unit }
                     PostAction.CancelSend -> stringResource(R.string.feed_pending_cancel_send) to { haptics.medium(); pendingSend?.onCancel?.invoke(); Unit }
@@ -115,10 +133,11 @@ internal fun PostOptionsButton(
 internal fun ReportPostDialog(
     onDismiss: () -> Unit,
     onReport: (ReportReason) -> Unit,
+    @androidx.annotation.StringRes titleRes: Int = R.string.feed_report_title,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.feed_report_title)) },
+        title = { Text(stringResource(titleRes)) },
         text = {
             Column {
                 ReportReason.entries.filterNot { it == ReportReason.FAKE_PROFILE }.forEach { reason ->

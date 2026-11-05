@@ -131,6 +131,146 @@
     "cadres-australs": {
       "name": "Southern frames",
       "description": "Three frames inspired by dot painting and the southern sky: twinkling circles of dots, a sea turtle swimming around your avatar, and the shining Southern Cross."
+    },
+    "meeshy-signature": {
+      "name": "Meeshy Signature",
+      "description": "Six rings by Meeshy, understated and legible at any size: gold thread, mother-of-pearl beads, eclipse, rosette, starry night and facets."
+    },
+    "meeshy-vivants": {
+      "name": "Alive by Meeshy",
+      "description": "Six animated rings by Meeshy that barely spill past your avatar: an orbit, an aurora halo, a pulse, sparkles, a comet and a swell."
+    },
+    "meeshy-fonds": {
+      "name": "Signature wallpapers",
+      "description": "Six wallpapers by Meeshy that stay quiet under your bubbles, light or dark: silk, dots, fine waves, cane weave, terrazzo and dusk."
+    },
+    "meeshy-fonds-vivants": {
+      "name": "Living wallpapers",
+      "description": "Four animated wallpapers by Meeshy, gently moving behind your messages: fireflies, aurora veil, soft snow and ripples."
+    },
+    "meeshy-bordures": {
+      "name": "Signature borders",
+      "description": "Six banner frames by Meeshy, kept to the edge so your level and counters stay in view: gold piping, scrolls, pearl string, onyx, marquetry and midnight."
+    },
+    "meeshy-bordures-vivantes": {
+      "name": "Living borders",
+      "description": "Four animated banner frames by Meeshy: a glint gliding over gold, shining pearls, a twinkling night and a neon light."
+    },
+    "noel-enneige": {
+      "name": "Snowy Christmas",
+      "description": "Two animated rings for winter: snowflakes drifting gently around your avatar, and a holly wreath with shining berries."
+    },
+    "lumieres-de-noel": {
+      "name": "Christmas lights",
+      "description": "Two animated rings that light up for the holidays: a string of bulbs blinking in turn, and a tree-top star that shines."
+    },
+    "atelier-du-pere-noel": {
+      "name": "Santa’s workshop",
+      "description": "Two animated rings straight from the workshop: a red hat with a swinging pompom, and a spinning candy cane tied with a green ribbon."
+    },
+    "fonds-noel": {
+      "name": "Christmas backgrounds",
+      "description": "Three chat backgrounds to match the Christmas packs: crystal snowflakes, a starry garland and candy-cane stripes, subtle enough to keep every bubble readable."
+    },
+    "fonds-noel-vivants": {
+      "name": "Living Christmas",
+      "description": "Three animated backgrounds to match the Christmas packs: falling crystal snow, a garland whose bulbs light up in turn, and sparks from the workshop. With reduced motion: a still gradient."
+    },
+    "bannieres-illustrees": {
+      "name": "Illustrated frames",
+      "description": "Banner frames to match “Illustrated frames”: Feline mask, Spider web, Angel wings, Runic circle, Bone claws and Demon wings, kept to the edge so your photo stays in view."
+    },
+    "bannieres-asiatiques": {
+      "name": "Asian frames",
+      "description": "Banner frames to match “Asian frames”: Jade dragon, Silk clouds and Paper lanterns, kept to the edge so your photo stays in view."
+    },
+    "bannieres-africaines": {
+      "name": "African frames",
+      "description": "Banner frames to match “African frames”: Ebony mask, Woven bands and Bead necklace, kept to the edge so your photo stays in view."
+    },
+    "bannieres-celtes": {
+      "name": "Celtic frames",
+      "description": "Banner frames to match “Celtic frames”: Interlaced knot, Triple spiral and Emerald ivy, kept to the edge so your photo stays in view."
+    },
+    "bannieres-nordiques": {
+      "name": "Nordic frames",
+      "description": "Banner frames to match “Nordic frames”: Circling ravens, Northern lights, Carved stone ring and Carved prow, kept to the edge so your photo stays in view."
+    },
+    "bannieres-egyptiennes": {
+      "name": "Egyptian frames",
+      "description": "Banner frames to match “Egyptian frames”: Golden cobra, Winged scarab, Desert sun and Nile lotus, kept to the edge so your photo stays in view."
+    },
+    "bannieres-mayas": {
+      "name": "Maya frames",
+      "description": "Banner frames to match “Maya frames”: Jade serpent, Glyph cartouches, Stepped frieze and Jungle jaguar, kept to the edge so your photo stays in view."
+    },
+    "bannieres-indiennes": {
+      "name": "Indian frames",
+      "description": "Banner frames to match “Indian frames”: Floral mandala, Fanning peacock and Marigold garland, kept to the edge so your photo stays in view."
+    },
+    "bannieres-amerindiennes": {
+      "name": "Native American frames",
+      "description": "Banner frames to match “Native American frames”: Feathered woven hoop, Beaded diamonds and Sun over the mountains, kept to the edge so your photo stays in view."
+    },
+    "bannieres-australes": {
+      "name": "Southern frames",
+      "description": "Banner frames to match “Southern frames”: Dot circles, Sea turtle and Southern Cross, kept to the edge so your photo stays in view."
+    },
+    "bannieres-noel-enneige": {
+      "name": "Snowy Christmas",
+      "description": "Banner frames to match “Snowy Christmas”: Falling snowflakes and Holly wreath, kept to the edge so your photo stays in view."
+    },
+    "bannieres-lumieres-noel": {
+      "name": "Christmas lights",
+      "description": "Banner frames to match “Christmas lights”: String lights and Tree-top star, kept to the edge so your photo stays in view."
+    },
+    "bannieres-atelier-noel": {
+      "name": "Santa’s workshop",
+      "description": "Banner frames to match “Santa’s workshop”: Santa hat and Candy cane, kept to the edge so your photo stays in view."
+    },
+    "noel-bannieres": {
+      "name": "Christmas banners",
+      "description": "Six banner images to match the Christmas packs: frost, garland and gift wrap, then a snowstorm, twinkling lights and sparks from the workshop."
+    },
+    "noel-contours-fixes": {
+      "name": "Christmas · still rings",
+      "description": "The six Christmas rings without animation: snowflakes, holly, string lights, star, Santa hat and candy cane, for a calm avatar."
+    },
+    "noel-cadres-fixes": {
+      "name": "Christmas · still frames",
+      "description": "The six Christmas banner frames without animation, to match the still rings: snowflakes, holly, string lights, star, Santa hat and candy cane."
+    },
+    "nouvel-an-contours": {
+      "name": "New Year",
+      "description": "Four rings to celebrate the new year: fireworks, a confetti shower, a midnight dial and a golden champagne coupe."
+    },
+    "nouvel-an-contours-vifs": {
+      "name": "Living New Year",
+      "description": "Four animated rings for the turn of the year: a grand finale, a confetti flurry, a clock striking midnight and champagne bubbles."
+    },
+    "nouvel-an-images": {
+      "name": "New Year banners",
+      "description": "Four banner images for the new year: a firework night, a confetti party, the twelve strokes of midnight and golden champagne."
+    },
+    "nouvel-an-images-vives": {
+      "name": "Animated New Year banners",
+      "description": "Four animated banner images: bursting fireworks, a confetti shower, the midnight countdown and champagne bubbles. With reduced motion: a still image."
+    },
+    "nouvel-an-cadres": {
+      "name": "New Year frames",
+      "description": "Four banner frames to match the New Year rings: fireworks, confetti, a midnight dial and champagne coupes."
+    },
+    "nouvel-an-cadres-vifs": {
+      "name": "Animated New Year frames",
+      "description": "Four animated banner frames to match the living rings: a bursting bouquet, flying confetti, the midnight hand turning and coupes clinking."
+    },
+    "nouvel-an-fonds": {
+      "name": "New Year backgrounds",
+      "description": "Four chat backgrounds for the new year: a firework sky, confetti, the midnight hour and golden bubbles, subtle enough to keep every bubble readable."
+    },
+    "nouvel-an-fonds-vifs": {
+      "name": "Living New Year · backgrounds",
+      "description": "Four animated backgrounds for the new year: distant bursts, falling confetti, a starry night and rising bubbles. With reduced motion: a still gradient."
     }
   },
   "designs": {
@@ -153,7 +293,45 @@
     "bulles-legeres": "Light bubbles",
     "pluie-de-petales": "Petal rain",
     "maree": "Tide",
-    "braises": "Embers"
+    "braises": "Embers",
+    "soie": "Silk",
+    "pointille": "Dots",
+    "vagues-fines": "Fine waves",
+    "cannage": "Cane weave",
+    "terrazzo": "Terrazzo",
+    "crepuscule": "Dusk",
+    "lucioles": "Fireflies",
+    "voile-aurore": "Aurora veil",
+    "neige-douce": "Soft snow",
+    "ondes": "Ripples",
+    "flocons-cristal": "Crystal snowflakes",
+    "guirlande-etoilee": "Starry garland",
+    "sucre-d-orge-raye": "Candy-cane stripes",
+    "neige-de-noel": "Christmas snow",
+    "ampoules-de-noel": "Christmas bulbs",
+    "etincelles-atelier": "Workshop sparks",
+    "banniere-noel-givre": "Frost",
+    "banniere-noel-guirlande": "Garland",
+    "banniere-noel-cadeau": "Gift wrap",
+    "banniere-noel-neige": "Snowstorm",
+    "banniere-noel-lumieres": "Twinkling lights",
+    "banniere-noel-etincelles": "Christmas sparks",
+    "banniere-artifice": "Firework night",
+    "banniere-confettis": "Confetti party",
+    "banniere-minuit": "Twelve strokes",
+    "banniere-champagne": "Golden champagne",
+    "banniere-artifice-vive": "Live fireworks",
+    "banniere-confettis-vive": "Confetti burst",
+    "banniere-minuit-vive": "Countdown",
+    "banniere-champagne-vive": "Champagne bubbles",
+    "fond-artifice": "Firework sky",
+    "fond-confettis": "Confetti",
+    "fond-minuit": "Midnight hour",
+    "fond-champagne": "Golden bubbles",
+    "fond-artifice-vif": "Distant bursts",
+    "fond-confettis-vif": "Falling confetti",
+    "fond-minuit-vif": "Starry midnight",
+    "fond-champagne-vif": "Rising bubbles"
   },
   "rings": {
     "filet": "Hairline",
@@ -214,7 +392,39 @@
     "soleil-montagnes": "Sun over the mountains",
     "cercles-points": "Dot circles",
     "tortue-marine": "Sea turtle",
-    "croix-du-sud": "Southern Cross"
+    "croix-du-sud": "Southern Cross",
+    "fil-d-or": "Gold thread",
+    "perles-de-nacre": "Mother-of-pearl",
+    "eclipse": "Eclipse",
+    "rosace": "Rosette",
+    "nuit-etoilee": "Starry night",
+    "facettes": "Facets",
+    "orbite": "Orbit",
+    "halo-aurore": "Aurora halo",
+    "pulsation": "Pulse",
+    "scintillement": "Twinkle",
+    "comete": "Comet",
+    "houle": "Swell",
+    "flocons-tombants": "Falling snowflakes",
+    "couronne-de-houx": "Holly wreath",
+    "guirlande-lumineuse": "String lights",
+    "etoile-du-sapin": "Tree-top star",
+    "bonnet-du-pere-noel": "Santa hat",
+    "sucre-d-orge": "Candy cane",
+    "flocons-tombants-fixe": "Falling snowflakes · still",
+    "couronne-de-houx-fixe": "Holly wreath · still",
+    "guirlande-lumineuse-fixe": "String lights · still",
+    "etoile-du-sapin-fixe": "Tree-top star · still",
+    "bonnet-du-pere-noel-fixe": "Santa hat · still",
+    "sucre-d-orge-fixe": "Candy cane · still",
+    "feux-d-artifice": "Fireworks",
+    "pluie-de-confettis": "Confetti shower",
+    "cadran-de-minuit": "Midnight dial",
+    "coupe-de-champagne": "Champagne coupe",
+    "bouquet-final": "Grand finale",
+    "envol-de-confettis": "Confetti flurry",
+    "minuit-sonne": "Midnight strikes",
+    "champagne-petillant": "Sparkling champagne"
   },
   "gamut": {
     "indigo": "Meeshy Indigo",
@@ -254,6 +464,72 @@
     "rituel": "African ritual",
     "rituel-anime": "African ritual, animated",
     "celte": "Celtic",
-    "celte-anime": "Celtic, animated"
+    "celte-anime": "Celtic, animated",
+    "liseret-or": "Gold piping",
+    "volutes": "Scrolls",
+    "rang-de-perles": "Pearl string",
+    "onyx": "Onyx",
+    "marqueterie": "Marquetry",
+    "minuit": "Midnight",
+    "liseret-lumiere": "Light piping",
+    "perles-vives": "Shining pearls",
+    "nuit-vive": "Twinkling night",
+    "neon": "Neon",
+    "masque-felin": "Feline mask",
+    "toile-araignee": "Spider web",
+    "ailes-ange": "Angel wings",
+    "cercle-runique": "Runic circle",
+    "griffes-os": "Bone claws",
+    "ailes-demon": "Demon wings",
+    "dragon-jade": "Jade dragon",
+    "nuages-soie": "Silk clouds",
+    "lanternes-papier": "Paper lanterns",
+    "masque-ebene": "Ebony mask",
+    "bandes-tissees": "Woven bands",
+    "collier-perles": "Bead necklace",
+    "noeud-entrelace": "Interlaced knot",
+    "spirale-triple": "Triple spiral",
+    "lierre-emeraude": "Emerald ivy",
+    "corbeaux-tournoyants": "Circling ravens",
+    "aurore-boreale": "Northern lights",
+    "anneau-pierre-gravee": "Carved stone ring",
+    "proue-sculptee": "Carved prow",
+    "cobra-dore": "Golden cobra",
+    "scarabee-aile": "Winged scarab",
+    "soleil-du-desert": "Desert sun",
+    "lotus-du-nil": "Nile lotus",
+    "serpent-de-jade": "Jade serpent",
+    "cartouches-de-glyphes": "Glyph cartouches",
+    "frise-a-gradins": "Stepped frieze",
+    "jaguar-de-jungle": "Jungle jaguar",
+    "mandala-floral": "Floral mandala",
+    "paon-roue": "Fanning peacock",
+    "guirlande-soucis": "Marigold garland",
+    "cercle-tisse": "Feathered woven hoop",
+    "perlage-losanges": "Beaded diamonds",
+    "soleil-montagnes": "Sun over the mountains",
+    "cercles-points": "Dot circles",
+    "tortue-marine": "Sea turtle",
+    "croix-du-sud": "Southern Cross",
+    "flocons-tombants": "Falling snowflakes",
+    "couronne-de-houx": "Holly wreath",
+    "guirlande-lumineuse": "String lights",
+    "etoile-du-sapin": "Tree-top star",
+    "bonnet-du-pere-noel": "Santa hat",
+    "sucre-d-orge": "Candy cane",
+    "flocons-tombants-fixe": "Falling snowflakes · still",
+    "couronne-de-houx-fixe": "Holly wreath · still",
+    "guirlande-lumineuse-fixe": "String lights · still",
+    "etoile-du-sapin-fixe": "Tree-top star · still",
+    "bonnet-du-pere-noel-fixe": "Santa hat · still",
+    "sucre-d-orge-fixe": "Candy cane · still",
+    "feux-d-artifice": "Fireworks",
+    "pluie-de-confettis": "Confetti shower",
+    "cadran-de-minuit": "Midnight dial",
+    "coupe-de-champagne": "Champagne coupe",
+    "bouquet-final": "Grand finale",
+    "envol-de-confettis": "Confetti flurry",
+    "minuit-sonne": "Midnight strikes",
+    "champagne-petillant": "Sparkling champagne"
   }
 }

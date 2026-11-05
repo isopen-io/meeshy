@@ -2,6 +2,7 @@ package me.meeshy.ui.component.focal
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.MessageSourceKind
+import me.meeshy.sdk.model.ServedProfileDecorItem
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
 import org.junit.Test
@@ -11,6 +12,7 @@ private fun content(
     isOutgoing: Boolean = false,
     sourceKind: MessageSourceKind = MessageSourceKind.User,
     isPending: Boolean = false,
+    senderRing: ServedProfileDecorItem? = null,
 ) = BubbleContent(
     messageId = "m1",
     text = text,
@@ -24,6 +26,7 @@ private fun content(
     createdAtIso = "2026-10-01T07:48:00Z",
     sourceKind = sourceKind,
     isPending = isPending,
+    senderRing = senderRing,
 )
 
 class FocalRowInputTest {
@@ -51,6 +54,15 @@ class FocalRowInputTest {
     fun `un message d'agent est marque agent, un autre non`() {
         assertThat(FocalRowInput.of(content(sourceKind = MessageSourceKind.Agent)).isAgentAuthored).isTrue()
         assertThat(FocalRowInput.of(content()).isAgentAuthored).isFalse()
+    }
+
+    @Test
+    fun `l'entree porte le contour equipe de l'expediteur tel que servi`() {
+        val ring = ServedProfileDecorItem(pack = "contours-essentiels", item = "filet")
+
+        assertThat(FocalRowInput.of(content(senderRing = ring)).senderRing).isEqualTo(ring)
+        assertThat(FocalRowInput.of(content()).senderRing).isNull()
+        assertThat(FocalRowInput.of(content(senderRing = ring))).isNotEqualTo(FocalRowInput.of(content()))
     }
 
     @Test

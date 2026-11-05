@@ -1879,5 +1879,821 @@
         "avatar"
       ]
     }
+  },
+  {
+    "slug": "noel-enneige",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 19,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "7dc24ca1a7c3227d.webp",
+      "bytes": 10504,
+      "sha256": "7dc24ca1a7c3227d422540d8d44907ef36819bb3615e29d9618947c633f97531"
+    },
+    "preview": null,
+    "contract": {
+      "src": "763872b25c665cc4.json",
+      "bytes": 3530,
+      "sha256": "763872b25c665cc47a91e6ad01653aa1b66f359a3bdbdd852af16a21590f4708"
+    },
+    "strings": {
+      "fr": {
+        "src": "e784489a2ccce264.json",
+        "bytes": 88,
+        "sha256": "e784489a2ccce264f742f288dc0f8583682e31863afdc8c77f8dc6f66bad33cf"
+      },
+      "en": {
+        "src": "ae5a7fae3df923c2.json",
+        "bytes": 83,
+        "sha256": "ae5a7fae3df923c26e404a1fcecb020d93e4e7433f73231b1b6555c69c27317f"
+      },
+      "es": {
+        "src": "50285d5a947447b5.json",
+        "bytes": 82,
+        "sha256": "50285d5a947447b5ec7e1adba572b285e8cbe0bd0d671a062bfad8d5ecdb28c9"
+      },
+      "pt": {
+        "src": "1ee5b7677a68bec5.json",
+        "bytes": 83,
+        "sha256": "1ee5b7677a68bec52de83e8138e53ef56804bb7919a3df68fb8ea6c93f3ab5f0"
+      },
+      "de": {
+        "src": "7ca2248dc3f2a357.json",
+        "bytes": 85,
+        "sha256": "7ca2248dc3f2a3573d65968dcd31b02cf1096733f2b03d87d7d8ac4f505d317b"
+      },
+      "it": {
+        "src": "a1f46c593851617c.json",
+        "bytes": 91,
+        "sha256": "a1f46c593851617c786ee428e3daa159639e90878f02a6974da8a4bb3c263905"
+      },
+      "ar": {
+        "src": "2130326607fa28f3.json",
+        "bytes": 99,
+        "sha256": "2130326607fa28f3e51bf28edb72b563dcc4b857711a6f1b87413c414715fbdf"
+      }
+    },
+    "downloadBytes": {
+      "story": 3530,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Noël enneigé",
+        "description": "Deux contours animés pour l’hiver : des flocons qui tombent doucement autour de l’avatar, et une couronne de houx aux baies qui brillent."
+      },
+      "en": {
+        "name": "Snowy Christmas",
+        "description": "Two animated rings for winter: snowflakes drifting gently around your avatar, and a holly wreath with shining berries."
+      },
+      "es": {
+        "name": "Navidad nevada",
+        "description": "Dos contornos animados para el invierno: copos que caen suavemente alrededor del avatar y una corona de acebo con bayas que brillan."
+      },
+      "pt": {
+        "name": "Natal com neve",
+        "description": "Dois contornos animados para o inverno: flocos que caem suavemente à volta do avatar e uma coroa de azevinho com bagas que brilham."
+      },
+      "de": {
+        "name": "Verschneite Weihnacht",
+        "description": "Zwei animierte Rahmen für den Winter: Schneeflocken, die sanft um deinen Avatar fallen, und ein Stechpalmenkranz mit leuchtenden Beeren."
+      },
+      "it": {
+        "name": "Natale innevato",
+        "description": "Due contorni animati per l’inverno: fiocchi che cadono piano intorno all’avatar e una corona di agrifoglio con bacche che brillano."
+      },
+      "ar": {
+        "name": "عيد ميلاد مثلج",
+        "description": "إطاران متحركان للشتاء: ندف ثلج تتساقط بهدوء حول صورتك الرمزية، وإكليل من البهشية بتوت يلمع."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "lumieres-de-noel",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 20,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "637486d31af21808.webp",
+      "bytes": 5604,
+      "sha256": "637486d31af218087f50127da6959c7d4e629eec28e301faeca3fe28f37649f5"
+    },
+    "preview": null,
+    "contract": {
+      "src": "ab43ddc68162007b.json",
+      "bytes": 3418,
+      "sha256": "ab43ddc68162007b8df3c5b3d208de72cfa28de3bf625f183a7ae626df913a01"
+    },
+    "strings": {
+      "fr": {
+        "src": "7d52067e8fc981e5.json",
+        "bytes": 90,
+        "sha256": "7d52067e8fc981e5da00e5ddee233183c6ef871c03f1074098750132384a56bc"
+      },
+      "en": {
+        "src": "dd63a85488350531.json",
+        "bytes": 81,
+        "sha256": "dd63a85488350531771c743fbe6ac9620aafa0265e02e7947b144259602d782c"
+      },
+      "es": {
+        "src": "674d995c1d4611a5.json",
+        "bytes": 92,
+        "sha256": "674d995c1d4611a5649924e07e6e7b2a07a5078ee73e6db71da12f4f0f0443cf"
+      },
+      "pt": {
+        "src": "69c9f435cd8b2b3e.json",
+        "bytes": 90,
+        "sha256": "69c9f435cd8b2b3eababe06bcccf7936afe4a85e3da0e41aed66f0e4c423e856"
+      },
+      "de": {
+        "src": "32fd0480937d34ec.json",
+        "bytes": 78,
+        "sha256": "32fd0480937d34ecc2745c53e0539c0894f587aa81b7375aa1c159927e17ff8a"
+      },
+      "it": {
+        "src": "250eb78b899724af.json",
+        "bytes": 93,
+        "sha256": "250eb78b899724af120c27ce01c2f20f0aa0191e9bf3ac5a98f876406e46965c"
+      },
+      "ar": {
+        "src": "8cde1c603c1feff5.json",
+        "bytes": 97,
+        "sha256": "8cde1c603c1feff5830f96882ff8828ec2aafaac0b11633996354c448452d892"
+      }
+    },
+    "downloadBytes": {
+      "story": 3418,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Lumières de Noël",
+        "description": "Deux contours animés qui s’allument pour les fêtes : une guirlande d’ampoules qui clignotent tour à tour, et l’étoile du sapin qui rayonne."
+      },
+      "en": {
+        "name": "Christmas lights",
+        "description": "Two animated rings that light up for the holidays: a string of bulbs blinking in turn, and a tree-top star that shines."
+      },
+      "es": {
+        "name": "Luces de Navidad",
+        "description": "Dos contornos animados que se encienden en las fiestas: una guirnalda de bombillas que parpadean por turnos y la estrella del árbol que resplandece."
+      },
+      "pt": {
+        "name": "Luzes de Natal",
+        "description": "Dois contornos animados que se acendem nas festas: uma grinalda de lâmpadas que piscam à vez e a estrela da árvore que brilha."
+      },
+      "de": {
+        "name": "Weihnachtslichter",
+        "description": "Zwei animierte Rahmen, die zum Fest leuchten: eine Lichterkette, deren Birnen abwechselnd blinken, und der strahlende Stern auf der Tanne."
+      },
+      "it": {
+        "name": "Luci di Natale",
+        "description": "Due contorni animati che si accendono per le feste: una ghirlanda di lampadine che lampeggiano a turno e la stella dell’albero che risplende."
+      },
+      "ar": {
+        "name": "أضواء الميلاد",
+        "description": "إطاران متحركان يضيئان في الأعياد: سلسلة مصابيح تومض بالتناوب، ونجمة الشجرة المتألقة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "atelier-du-pere-noel",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 21,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "100484fd704229d0.webp",
+      "bytes": 8706,
+      "sha256": "100484fd704229d03aa94604e2c00db2df2c0dcef19b349fcc2712a6e1ea94d6"
+    },
+    "preview": null,
+    "contract": {
+      "src": "8982c12588d8256a.json",
+      "bytes": 3129,
+      "sha256": "8982c12588d8256ac88278c230c2fa204a96909e43bd02d4db40c95c164e272a"
+    },
+    "strings": {
+      "fr": {
+        "src": "817c0847244cc5fc.json",
+        "bytes": 87,
+        "sha256": "817c0847244cc5fc553ebeea060b28cc45a582747d7e1507ae1a993413f175e9"
+      },
+      "en": {
+        "src": "4eb48590aa435c3a.json",
+        "bytes": 71,
+        "sha256": "4eb48590aa435c3ac424285621ca0f406dc37e95175523e62d7f419fad6dfcf2"
+      },
+      "es": {
+        "src": "a3efa2627a25f97a.json",
+        "bytes": 90,
+        "sha256": "a3efa2627a25f97a7608359bc4638810ad3dfe9979f073ce67466c7c1d1ff97d"
+      },
+      "pt": {
+        "src": "acbd34dfef19c26b.json",
+        "bytes": 85,
+        "sha256": "acbd34dfef19c26baf3854278543a64771df5b6887a238c650c0e9700e75ce84"
+      },
+      "de": {
+        "src": "7a148e86611b3ba6.json",
+        "bytes": 80,
+        "sha256": "7a148e86611b3ba6cfa2a23da3b3017ddfa2a5dd80d80c86bf0f8c918f8ab2da"
+      },
+      "it": {
+        "src": "6c8b19cb294a4468.json",
+        "bytes": 98,
+        "sha256": "6c8b19cb294a44682eb42ff614c0523d846ae5877a8c3e261ca1b2e0cdb1eaeb"
+      },
+      "ar": {
+        "src": "5a18869b8dfea695.json",
+        "bytes": 97,
+        "sha256": "5a18869b8dfea6954a2f904beb2e241d53073c893eefa1d99e708d165955b688"
+      }
+    },
+    "downloadBytes": {
+      "story": 3129,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Atelier du Père Noël",
+        "description": "Deux contours animés tout droit sortis de l’atelier : un bonnet rouge dont le pompon se balance, et un sucre d’orge qui tourne, noué d’un ruban vert."
+      },
+      "en": {
+        "name": "Santa’s workshop",
+        "description": "Two animated rings straight from the workshop: a red hat with a swinging pompom, and a spinning candy cane tied with a green ribbon."
+      },
+      "es": {
+        "name": "Taller de Papá Noel",
+        "description": "Dos contornos animados recién salidos del taller: un gorro rojo con un pompón que se balancea y un bastón de caramelo que gira, atado con una cinta verde."
+      },
+      "pt": {
+        "name": "Oficina do Pai Natal",
+        "description": "Dois contornos animados acabados de sair da oficina: um gorro vermelho cujo pompom balança e um bastão de doce que gira, atado com uma fita verde."
+      },
+      "de": {
+        "name": "Werkstatt des Weihnachtsmanns",
+        "description": "Zwei animierte Rahmen frisch aus der Werkstatt: eine rote Mütze mit schaukelndem Bommel und eine kreisende Zuckerstange mit grüner Schleife."
+      },
+      "it": {
+        "name": "Laboratorio di Babbo Natale",
+        "description": "Due contorni animati appena usciti dal laboratorio: un berretto rosso con il pompon che dondola e un bastoncino di zucchero che gira, legato da un nastro verde."
+      },
+      "ar": {
+        "name": "ورشة بابا نويل",
+        "description": "إطاران متحركان من الورشة مباشرة: قبعة حمراء تتأرجح كرتها، وعصا حلوى تدور معقودة بشريط أخضر."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "meeshy-signature",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 22,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "03f2cc26b698dc50.webp",
+      "bytes": 13298,
+      "sha256": "03f2cc26b698dc506c6f797d94c9c2120371a32e9fc139442e7f0b78c022c662"
+    },
+    "preview": null,
+    "contract": {
+      "src": "6b22dc5a3faad6a1.json",
+      "bytes": 15059,
+      "sha256": "6b22dc5a3faad6a19b4c6241bd2291abb339e0d86385c2bedf21e9841ef2b6d6"
+    },
+    "strings": {
+      "fr": {
+        "src": "fdff023b52884736.json",
+        "bytes": 174,
+        "sha256": "fdff023b528847367695e129e353a19a9dcfb71a90de8ed82b16410482acd202"
+      },
+      "en": {
+        "src": "3dda7ea6f41e826e.json",
+        "bytes": 171,
+        "sha256": "3dda7ea6f41e826e835e9e8b71fc8aa3e73540b67975f75d2c960437c02e8ce3"
+      },
+      "es": {
+        "src": "ff6ace8281929094.json",
+        "bytes": 178,
+        "sha256": "ff6ace828192909417dca71aa399f3909a7a3e49cc18a404c05dcb490e8526a9"
+      },
+      "pt": {
+        "src": "5f238052c47ad1ac.json",
+        "bytes": 179,
+        "sha256": "5f238052c47ad1ac9de62da85636f67cba65c8d99cbe35ba165eef86aecc7537"
+      },
+      "de": {
+        "src": "506148e4f47769be.json",
+        "bytes": 173,
+        "sha256": "506148e4f47769bea06d982c6b923b155e9770ae346d03c8517ceef096346cee"
+      },
+      "it": {
+        "src": "b5a20df54cc5bf78.json",
+        "bytes": 184,
+        "sha256": "b5a20df54cc5bf78c94fd039fe1b7f67f9cce04cd4029fba4d3d2f3833c2ede0"
+      },
+      "ar": {
+        "src": "a504163dde75d7d4.json",
+        "bytes": 205,
+        "sha256": "a504163dde75d7d4ceb1719f6af5160c1eca90b6f362643be8b7062be2d582f4"
+      }
+    },
+    "downloadBytes": {
+      "story": 15059,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Signature Meeshy",
+        "description": "Six contours par Meeshy, sobres et lisibles à toute taille : fil d’or, perles de nacre, éclipse, rosace, nuit étoilée et facettes."
+      },
+      "en": {
+        "name": "Meeshy Signature",
+        "description": "Six rings by Meeshy, understated and legible at any size: gold thread, mother-of-pearl beads, eclipse, rosette, starry night and facets."
+      },
+      "es": {
+        "name": "Firma Meeshy",
+        "description": "Seis contornos de Meeshy, sobrios y legibles a cualquier tamaño: hilo de oro, perlas de nácar, eclipse, rosetón, noche estrellada y facetas."
+      },
+      "pt": {
+        "name": "Assinatura Meeshy",
+        "description": "Seis contornos da Meeshy, sóbrios e legíveis em qualquer tamanho: fio de ouro, pérolas de nácar, eclipse, rosácea, noite estrelada e facetas."
+      },
+      "de": {
+        "name": "Meeshy Signatur",
+        "description": "Sechs Rahmen von Meeshy, schlicht und in jeder Größe lesbar: Goldfaden, Perlmuttperlen, Finsternis, Rosette, Sternennacht und Facetten."
+      },
+      "it": {
+        "name": "Firma Meeshy",
+        "description": "Sei contorni di Meeshy, sobri e leggibili a ogni dimensione: filo d’oro, perle di madreperla, eclissi, rosone, notte stellata e sfaccettature."
+      },
+      "ar": {
+        "name": "توقيع Meeshy",
+        "description": "ستة أطر من Meeshy، رصينة وواضحة بأي حجم: خيط ذهبي، ولآلئ صدفية، وكسوف، ووردة، وليلة مرصّعة بالنجوم، وأوجه مصقولة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "meeshy-vivants",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 23,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "ef5b41e192cebd09.webp",
+      "bytes": 13392,
+      "sha256": "ef5b41e192cebd096d1e2bb2e9b1897e6f37555a01c05b6f11e1d0ed37a7701c"
+    },
+    "preview": null,
+    "contract": {
+      "src": "5ab08e946849d08f.json",
+      "bytes": 8353,
+      "sha256": "5ab08e946849d08f6e1668ecf9750f703d92a70181af7f97dfcbfb67404d3406"
+    },
+    "strings": {
+      "fr": {
+        "src": "68639ed5bb4aa4f2.json",
+        "bytes": 162,
+        "sha256": "68639ed5bb4aa4f2c5c4975f2cef742155c900e27754c45fb61bf069e3c11b0f"
+      },
+      "en": {
+        "src": "3f7c9df00a927ea3.json",
+        "bytes": 145,
+        "sha256": "3f7c9df00a927ea3c58188b48ca4244874d544c0248a7ee5edd2952c0907726b"
+      },
+      "es": {
+        "src": "bb53f213f1dd8137.json",
+        "bytes": 153,
+        "sha256": "bb53f213f1dd81372cacffeac70333f984eea7ba7911b36be0cce7f5e0718256"
+      },
+      "pt": {
+        "src": "5826cef4dd855fe0.json",
+        "bytes": 167,
+        "sha256": "5826cef4dd855fe0735458265c4f2c69bf4dda4845c0b386d69131f3f4441423"
+      },
+      "de": {
+        "src": "0e1969028f52443b.json",
+        "bytes": 155,
+        "sha256": "0e1969028f52443b49750d8c2e2d322921a3d40c667ff33dfb8c6b3ff20fc767"
+      },
+      "it": {
+        "src": "7437499516e37a15.json",
+        "bytes": 165,
+        "sha256": "7437499516e37a15306dad239b1f1d206869bdc45d7ab8da187a752a5a7ab859"
+      },
+      "ar": {
+        "src": "106b3323ef8ce6b1.json",
+        "bytes": 166,
+        "sha256": "106b3323ef8ce6b14115059211028de2a25fe2c2cf4f413a9087816abdf5924c"
+      }
+    },
+    "downloadBytes": {
+      "story": 8353,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Vivants par Meeshy",
+        "description": "Six contours animés par Meeshy, qui débordent à peine de l’avatar : une orbite, un halo d’aurore, une pulsation, des étincelles, une comète et une houle."
+      },
+      "en": {
+        "name": "Alive by Meeshy",
+        "description": "Six animated rings by Meeshy that barely spill past your avatar: an orbit, an aurora halo, a pulse, sparkles, a comet and a swell."
+      },
+      "es": {
+        "name": "Vivos de Meeshy",
+        "description": "Seis contornos animados de Meeshy que apenas desbordan tu avatar: una órbita, un halo de aurora, un pulso, destellos, un cometa y un oleaje."
+      },
+      "pt": {
+        "name": "Vivos da Meeshy",
+        "description": "Seis contornos animados da Meeshy que mal transbordam do teu avatar: uma órbita, um halo de aurora, uma pulsação, faíscas, um cometa e uma ondulação."
+      },
+      "de": {
+        "name": "Lebendig von Meeshy",
+        "description": "Sechs animierte Rahmen von Meeshy, die kaum über deinen Avatar hinausragen: eine Umlaufbahn, ein Polarlicht-Halo, ein Puls, Funken, ein Komet und eine Dünung."
+      },
+      "it": {
+        "name": "Vivi di Meeshy",
+        "description": "Sei contorni animati di Meeshy che escono appena dal tuo avatar: un’orbita, un alone d’aurora, una pulsazione, scintille, una cometa e un’onda lunga."
+      },
+      "ar": {
+        "name": "نابضة من Meeshy",
+        "description": "ستة أطر متحركة من Meeshy تتجاوز صورتك الرمزية بالكاد: مدار، وهالة شفق، ونبض، وشرارات، ومذنّب، وموج."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "noel-contours-fixes",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 24,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "7dc24ca1a7c3227d.webp",
+      "bytes": 10504,
+      "sha256": "7dc24ca1a7c3227d422540d8d44907ef36819bb3615e29d9618947c633f97531"
+    },
+    "preview": null,
+    "contract": {
+      "src": "833f51582e4b3615.json",
+      "bytes": 7870,
+      "sha256": "833f51582e4b3615af677d0c6e2f4f8602058d9b4e53e73e5deb6fb247a92a10"
+    },
+    "strings": {
+      "fr": {
+        "src": "7f23b1f630c3769e.json",
+        "bytes": 337,
+        "sha256": "7f23b1f630c3769e264c649399b2fcf483a284ac3b727bee9880f7bdb5657e5c"
+      },
+      "en": {
+        "src": "b9f7ff1505dbec07.json",
+        "bytes": 313,
+        "sha256": "b9f7ff1505dbec075548b5a38588fa13a6ecc79f9db92eeb725ee6102a106ea8"
+      },
+      "es": {
+        "src": "cea106485607cfb2.json",
+        "bytes": 336,
+        "sha256": "cea106485607cfb2a25c4c8a99261ac5197556d100c600d67ded1c5c4be4f417"
+      },
+      "pt": {
+        "src": "655e73157ebd8a66.json",
+        "bytes": 330,
+        "sha256": "655e73157ebd8a66616f67133246846e28a9ff9727c7384eb64e17dbbfc5214c"
+      },
+      "de": {
+        "src": "d9688ca8d7797410.json",
+        "bytes": 321,
+        "sha256": "d9688ca8d77974104e59bb4e56fa850f6c83a39e06818cfb259ae6123aacf32e"
+      },
+      "it": {
+        "src": "e1c7f069ff9fa383.json",
+        "bytes": 360,
+        "sha256": "e1c7f069ff9fa38354b1b393a09984884557731958d0e379c7bbe8791fe27f7b"
+      },
+      "ar": {
+        "src": "68cadfc2c7a1042b.json",
+        "bytes": 389,
+        "sha256": "68cadfc2c7a1042bfd70f7b161c8a96891804f3e671d3fc3f76d825dd4874ce5"
+      }
+    },
+    "downloadBytes": {
+      "story": 7870,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Noël · contours fixes",
+        "description": "Les six contours de Noël sans animation : flocons, houx, guirlande, étoile, bonnet et sucre d’orge, pour qui préfère un avatar immobile."
+      },
+      "en": {
+        "name": "Christmas · still rings",
+        "description": "The six Christmas rings without animation: snowflakes, holly, string lights, star, Santa hat and candy cane, for a calm avatar."
+      },
+      "es": {
+        "name": "Navidad · contornos fijos",
+        "description": "Los seis contornos de Navidad sin animación: copos, acebo, guirnalda, estrella, gorro y bastón de caramelo, para un avatar tranquilo."
+      },
+      "pt": {
+        "name": "Natal · contornos fixos",
+        "description": "Os seis contornos de Natal sem animação: flocos, azevinho, grinalda, estrela, gorro e bastão de doce, para um avatar tranquilo."
+      },
+      "de": {
+        "name": "Weihnachten · ruhige Rahmen",
+        "description": "Die sechs Weihnachtsrahmen ohne Animation: Flocken, Stechpalme, Lichterkette, Stern, Mütze und Zuckerstange, für einen ruhigen Avatar."
+      },
+      "it": {
+        "name": "Natale · contorni fissi",
+        "description": "I sei contorni di Natale senza animazione: fiocchi, agrifoglio, ghirlanda, stella, berretto e bastoncino di zucchero, per un avatar tranquillo."
+      },
+      "ar": {
+        "name": "الميلاد · أطر ثابتة",
+        "description": "أطر الميلاد الستة بلا حركة: ندف الثلج، والبهشية، وسلسلة الأضواء، والنجمة، والقبعة، وعصا الحلوى، لصورة رمزية هادئة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-01T00:00:00Z",
+      "endsAt": "2027-01-07T00:00:00Z"
+    }
+  },
+  {
+    "slug": "nouvel-an-contours",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 25,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "45968b703f150e3f.webp",
+      "bytes": 10794,
+      "sha256": "45968b703f150e3f836e27d9f3ccfe2831fe4db9cdba258d8dab5bfb4339ed8c"
+    },
+    "preview": null,
+    "contract": {
+      "src": "df88a6d60fb7f6ac.json",
+      "bytes": 8882,
+      "sha256": "df88a6d60fb7f6ac58f25bd306f93289a4b3ca4ebe6d6519e53cf5d8a911e91c"
+    },
+    "strings": {
+      "fr": {
+        "src": "8dda20166282e6fd.json",
+        "bytes": 175,
+        "sha256": "8dda20166282e6fd9ead094a651505a18a15239dbb7add8dcee2551e389617c5"
+      },
+      "en": {
+        "src": "3024a1d8ee3936fa.json",
+        "bytes": 158,
+        "sha256": "3024a1d8ee3936fade46b0b5a33a2b700708f4bb68b3a2f7554fdea50bb1d141"
+      },
+      "es": {
+        "src": "cc386db421840c17.json",
+        "bytes": 178,
+        "sha256": "cc386db421840c17370f90f37887eaa5ba1b1acab8970bcd4fc2ad988a38ec01"
+      },
+      "pt": {
+        "src": "520b0d5ce3bed271.json",
+        "bytes": 182,
+        "sha256": "520b0d5ce3bed27116f6b2f56af98b2608c8fb75a6308cc03ca57f2e39b3c234"
+      },
+      "de": {
+        "src": "fcdabb736012d7a2.json",
+        "bytes": 161,
+        "sha256": "fcdabb736012d7a29c5f7770f608a78d4cfe18c2eb79e8e5f80d32b701b40724"
+      },
+      "it": {
+        "src": "c0cec2bc2fa583e8.json",
+        "bytes": 188,
+        "sha256": "c0cec2bc2fa583e8807a88911965d6d21372744ebd2ac71fef79b2b903a89a3b"
+      },
+      "ar": {
+        "src": "8f6d42e5fed0b355.json",
+        "bytes": 207,
+        "sha256": "8f6d42e5fed0b355664fe6ed887fa90d4dfb3efa0f011298d7208466c57d0620"
+      }
+    },
+    "downloadBytes": {
+      "story": 8882,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Nouvel An",
+        "description": "Quatre contours pour fêter la nouvelle année : feux d’artifice, pluie de confettis, cadran de minuit et coupe de champagne doré."
+      },
+      "en": {
+        "name": "New Year",
+        "description": "Four rings to celebrate the new year: fireworks, a confetti shower, a midnight dial and a golden champagne coupe."
+      },
+      "es": {
+        "name": "Año Nuevo",
+        "description": "Cuatro contornos para celebrar el año nuevo: fuegos artificiales, lluvia de confeti, esfera de medianoche y copa de champán dorado."
+      },
+      "pt": {
+        "name": "Ano Novo",
+        "description": "Quatro contornos para celebrar o novo ano: fogo de artifício, chuva de confetes, mostrador da meia-noite e taça de champanhe dourado."
+      },
+      "de": {
+        "name": "Neujahr",
+        "description": "Vier Rahmen zum Feiern des neuen Jahres: Feuerwerk, Konfettiregen, Mitternachtszifferblatt und eine goldene Sektschale."
+      },
+      "it": {
+        "name": "Capodanno",
+        "description": "Quattro contorni per festeggiare il nuovo anno: fuochi d’artificio, pioggia di coriandoli, quadrante di mezzanotte e coppa di champagne dorato."
+      },
+      "ar": {
+        "name": "رأس السنة",
+        "description": "أربعة أطر للاحتفال بالعام الجديد: ألعاب نارية، ومطر القصاصات، وميناء منتصف الليل، وكأس شمبانيا ذهبية."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
+    }
+  },
+  {
+    "slug": "nouvel-an-contours-vifs",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 26,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "42d619364a80699a.webp",
+      "bytes": 12044,
+      "sha256": "42d619364a80699a21a7acec192f5653abe822810560d56072bcdb8cc8798de5"
+    },
+    "preview": null,
+    "contract": {
+      "src": "251605b8b56f33ac.json",
+      "bytes": 7330,
+      "sha256": "251605b8b56f33aced6bb0346f094295ab998b8688d59222c258bd981332ebc6"
+    },
+    "strings": {
+      "fr": {
+        "src": "3d777b771dfccd94.json",
+        "bytes": 164,
+        "sha256": "3d777b771dfccd94736ac1a94c91dadee1bfa624b3c8aaf043b37098ab119cd9"
+      },
+      "en": {
+        "src": "2deaba9b854fe776.json",
+        "bytes": 163,
+        "sha256": "2deaba9b854fe776e23fcea891aab81c06d74de1d491a71085ff94d9586ae5b2"
+      },
+      "es": {
+        "src": "05b846d5927284eb.json",
+        "bytes": 162,
+        "sha256": "05b846d5927284eb716d401212df98945c3e0c5e150aae1530a60b89c96075c2"
+      },
+      "pt": {
+        "src": "5af9db88c62d2a2a.json",
+        "bytes": 163,
+        "sha256": "5af9db88c62d2a2a622a81f292272e45cb50630235bd2cc8451be47adf72c014"
+      },
+      "de": {
+        "src": "4aeaa844bbacfebb.json",
+        "bytes": 165,
+        "sha256": "4aeaa844bbacfebbdc046a7df194a22838dfaf58d6906ea8e8932a86090e68df"
+      },
+      "it": {
+        "src": "2128bd9e6c4da21f.json",
+        "bytes": 169,
+        "sha256": "2128bd9e6c4da21fbb0f540cd220dd16193503602864b147824f90508b3041e2"
+      },
+      "ar": {
+        "src": "88aa72fd7aba415d.json",
+        "bytes": 210,
+        "sha256": "88aa72fd7aba415dcdf10796c80f7f6c60db8bb87f85751d356042149d6bae9c"
+      }
+    },
+    "downloadBytes": {
+      "story": 7330,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Nouvel An vivant",
+        "description": "Quatre contours animés pour le passage à la nouvelle année : un bouquet final, un envol de confettis, l’horloge qui sonne minuit et des bulles de champagne."
+      },
+      "en": {
+        "name": "Living New Year",
+        "description": "Four animated rings for the turn of the year: a grand finale, a confetti flurry, a clock striking midnight and champagne bubbles."
+      },
+      "es": {
+        "name": "Año Nuevo vivo",
+        "description": "Cuatro contornos animados para el cambio de año: un gran final, un vuelo de confeti, el reloj que da las doce y burbujas de champán."
+      },
+      "pt": {
+        "name": "Ano Novo vivo",
+        "description": "Quatro contornos animados para a passagem de ano: um grande final, um voo de confetes, o relógio a dar a meia-noite e bolhas de champanhe."
+      },
+      "de": {
+        "name": "Lebendiges Neujahr",
+        "description": "Vier animierte Rahmen für den Jahreswechsel: ein großes Finale, ein Konfettiwirbel, die Uhr, die Mitternacht schlägt, und Sektperlen."
+      },
+      "it": {
+        "name": "Capodanno vivo",
+        "description": "Quattro contorni animati per il passaggio al nuovo anno: un gran finale, un volo di coriandoli, l’orologio che batte la mezzanotte e bollicine di champagne."
+      },
+      "ar": {
+        "name": "رأس السنة الحي",
+        "description": "أربعة أطر متحركة لاستقبال العام الجديد: ختام كبير، وتطاير القصاصات، وساعة تدق منتصف الليل، وفقاعات الشمبانيا."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    },
+    "availability": {
+      "startsAt": "2026-12-26T00:00:00Z",
+      "endsAt": "2027-01-16T00:00:00Z"
+    }
   }
 ]

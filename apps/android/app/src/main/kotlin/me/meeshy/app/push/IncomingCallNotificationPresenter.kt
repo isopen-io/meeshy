@@ -139,6 +139,12 @@ class IncomingCallNotificationPresenter @Inject constructor(
             // DeclineCallReceiver. Sur API < 31, CallStyle dégrade en
             // notification standard avec les deux actions.
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, declinePendingIntent, answerPendingIntent))
+            // « Répondre par message » : saisie directe qui refuse puis écrit dans la conversation.
+            .apply {
+                if (!push.conversationId.isNullOrBlank() || !push.callerUserId.isNullOrBlank()) {
+                    addAction(IncomingCallNotificationFactory.replyAction(context, push))
+                }
+            }
             .build()
 
         manager.notify(push.callId.hashCode(), notification)

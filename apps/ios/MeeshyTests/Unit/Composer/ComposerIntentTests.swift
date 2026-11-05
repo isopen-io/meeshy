@@ -167,13 +167,11 @@ final class ComposerIntentTests: XCTestCase {
     /// que la doctrine de la table autorise en toutes lettres (« le FORMAT qu'une
     /// porte porte fait partie de son identité »).
     ///
-    /// Faire passer `.repost` à `nil` en bloc aurait fait dire à la table que le
-    /// meuble sert aussi les reposts de story, de post et de réel. C'est faux, et
-    /// mesuré : le meuble n'a aucune graine `StoryItem`, son canal de scène ne
-    /// porte pas `repostOfId`, et il ne passe ni `allowedVisibilities` ni
-    /// `initialVisibilityUserIds` à l'atelier — le plafond d'audience du repost
-    /// (`StoryRepostAudience`, loi 10) tomberait EN SILENCE.
-    func test_profile_repost_neQuitteSonComposer_queDansLeFormatQueLeMeubleSaitServir() {
+    /// Chaque format a quitté l'historique quand le meuble a su le servir — sa
+    /// graine, son plafond d'audience (`StoryRepostAudience`, loi 10) et son
+    /// écrivain : le mood d'abord, la story (#5053), puis la citation d'un post
+    /// ou d'un réel (#15628).
+    func test_profile_repost_estServiParLeMeuble_dansChacunDeSesFormats() {
         XCTAssertNil(
             profil(.repost(ofPostId: "s", sourceFormat: .status)).routesToLegacy,
             "Le repost d'un MOOD est servi par le meuble : sa surface existe, son envoi est celui du mood."
@@ -190,15 +188,11 @@ final class ComposerIntentTests: XCTestCase {
             "Le repost d'une STORY est servi par le meuble depuis #5053 : `StoryRepublishComposer` "
             + "l'hydrate par `ComposerHydration.repostingStory`, qui porte AUSSI son plafond d'audience."
         )
-        // `.post` et `.reel` restent déclarés sur l'historique, et c'est une
-        // ABSTENTION, pas un verdict : aucun site du dépôt ne les construit
-        // (mesuré). Les router vers le meuble affirmerait qu'il les sert, ce
-        // que rien ne vérifierait.
         for format: ComposerFormat in [.post, .reel] {
-            XCTAssertEqual(
-                profil(.repost(ofPostId: "s", sourceFormat: format)).routesToLegacy, .repostComposer,
-                "Le repost d'un \(nom(format)) reste DÉCLARÉ sur l'historique : aucune porte du dépôt "
-                + "ne le construit, donc rien ne prouverait que le meuble le sert."
+            XCTAssertNil(
+                profil(.repost(ofPostId: "s", sourceFormat: format)).routesToLegacy,
+                "La citation d'un \(nom(format)) est servie par le meuble depuis #15628 : `QuoteComposerDoor` "
+                + "l'hydrate par `ComposerHydration.quotingPublication`, qui porte sa carte et son plafond d'audience."
             )
         }
     }
@@ -217,14 +211,15 @@ final class ComposerIntentTests: XCTestCase {
     /// lettres (« le FORMAT qu'une porte porte fait partie de son identité »),
     /// et l'inventaire de parité qui gouverne le retrait de la feuille vit dans
     /// `EditParityInventoryTests`.
-    func test_profile_edit_ouvreAuFormatDuDocument_etGardeSonComposerActuel() {
+    ///
+    /// **#9333 — le post et le réel s'éditent dans le MEUBLE**, sur le
+    /// document, clavier sur le texte : la vue qui les crée.
+    func test_profile_edit_ouvreAuFormatDuDocument_dansLeMeuble() {
         let profil = profil(.edit(postId: "post-a-moi", documentFormat: .post))
 
-        XCTAssertEqual(
-            profil.routesToLegacy, .editPostSheet,
-            "Périmètre v1 : l'édition garde son composer actuel — et pour un POST, c'est `EditPostSheet`, "
-            + "jamais l'atelier d'une story."
-        )
+        XCTAssertNil(profil.routesToLegacy,
+                     "Un POST s'édite dans la vue qui l'a créé (#9333), jamais dans une feuille à part.")
+        XCTAssertEqual(profil.opensWith, .keyboardOnContent)
         XCTAssertEqual(profil.initialFormat, .post)
     }
 
@@ -469,10 +464,13 @@ final class ComposerIntentTests: XCTestCase {
     /// Reprendre, c'est retrouver un document déjà constitué : un brouillon, une
     /// publication qu'on retouche. Un partage entrant SÈME une pièce (#13864).
     private func reprendUnDocumentExistant(_ origin: ComposerOrigin) -> Bool {
+        // L'édition d'une publication rouvre un document existant, mais sur le
+        // DOCUMENT, clavier sur le texte (#9333) : ses champs sont semés par
+        // l'hydratation, pas repeuplés par l'adoption d'un brouillon.
         switch origin {
-        case .draft, .edit:
+        case .draft:
             return true
-        case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia, .socialMedia, .share:
+        case .edit, .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia, .socialMedia, .share:
             return false
         }
     }
@@ -510,7 +508,8 @@ final class ComposerIntentTests: XCTestCase {
     func test_clavierSurContenu_seulementLaOuUnTexteSEcritDEmblee() {
         let portesAClavier: [ComposerOrigin] = [
             .feedComposer,
-            .repost(ofPostId: "post-source", sourceFormat: .story)
+            .repost(ofPostId: "post-source", sourceFormat: .story),
+            .edit(postId: "post-a-moi", documentFormat: .post)
         ]
 
         for origin in Self.toutesLesOrigines {
@@ -552,10 +551,9 @@ final class ComposerIntentTests: XCTestCase {
         // **#5053 — les deux cas rejoignent `.statusComposer` dans l'orphelinat.**
         //
         // `.repostComposer` : le repost d'une STORY (le seul du corpus) monte
-        // `StoryRepublishComposer`, donc le meuble. Le repost d'un POST ou d'un
-        // RÉEL y route encore dans la TABLE, mais aucune porte du dépôt ne les
-        // construit — une valeur déclarée pour une origine que personne
-        // n'instancie n'est pas une porte, et ce test compte les PORTES.
+        // `StoryRepublishComposer`, donc le meuble ; la citation d'un POST ou
+        // d'un RÉEL monte `QuoteComposerDoor` depuis #15628. Plus aucun format
+        // n'y route.
         //
         // `.storyEdit` : `storyEditComposerCover` existe toujours, aux mêmes
         // quatre montages, mais il présente `StoryEditComposer` — le meuble.
@@ -566,7 +564,9 @@ final class ComposerIntentTests: XCTestCase {
         // du routage passerait alors sans un mot.
         case .repostComposer: return nil
         case .storyEdit: return nil
-        case .editPostSheet: return .edit(postId: "post-a-moi", documentFormat: .post)
+        // #9333 : le post et le réel s'éditent dans le meuble ; seule l'édition
+        // d'un MOOD, qu'aucun site n'offre, nomme encore la feuille.
+        case .editPostSheet: return .edit(postId: "post-a-moi", documentFormat: .status)
         case .feedComposer: return nil
         // T3.3 : l'overlay inline iPad, désormais NOMMÉ, n'a aucune porte qui y
         // route (comme `.feedComposer` et `.statusComposer`) — il reste déclaré
@@ -593,7 +593,7 @@ final class ComposerIntentTests: XCTestCase {
     /// **Attention à ce que le compte mesure.** Il porte sur le CORPUS, dont le
     /// seul repost est un repost de STORY. Le repost d'un mood, servi par le
     /// meuble depuis le lot 4.7, ne fait donc pas baisser ce compte : c'est
-    /// `test_profile_repost_neQuitteSonComposer_queDansLeFormatQueLeMeubleSaitServir`
+    /// `test_profile_repost_estServiParLeMeuble_dansChacunDeSesFormats`
     /// qui tient cette moitié-là, format par format.
     func test_chaqueComposerHistorique_aExactementUnePorte_saufCeuxQueLeMeubleAAbsorbes() {
         for legacy in Self.composersHistoriques {
@@ -616,13 +616,11 @@ final class ComposerIntentTests: XCTestCase {
         let routes = Self.toutesLesOrigines.compactMap { profil($0).routesToLegacy }
 
         XCTAssertEqual(
-            routes.count, 1,
-            "#5053 : il ne reste QU'UNE porte du corpus sur un composer historique — l'édition d'un "
-            + "DOCUMENT (`.edit(documentFormat: .post)` → `EditPostSheet`, cinq montages de "
-            + "production, la seule surface du dépôt qui bascule POST vers RÉEL). Le repost de story "
-            + "(`StoryRepublishComposer`) et l'édition de STORY (`StoryEditComposer`) montent "
-            + "désormais le meuble. Les valeurs de `LegacyComposer` restent déclarées pour les "
-            + "formats qu'aucun site ne construit : c'est une abstention, pas une porte."
+            routes.count, 0,
+            "#9333 : plus AUCUNE porte du corpus ne route vers un composer historique. L'édition d'un "
+            + "POST ou d'un RÉEL monte le meuble sur le document (`PostEditComposerDoor`) ; `EditPostSheet` "
+            + "ne reste que la dégradation que `PostEditRoute` choisit pour ce que la scène ne montre pas "
+            + "entier. Les valeurs de `LegacyComposer` restent déclarées : c'est une abstention, pas une porte."
         )
     }
 
@@ -634,7 +632,7 @@ final class ComposerIntentTests: XCTestCase {
     /// **Le nom du test a changé avec l'ensemble.** Un nom qui dirait « six » sur
     /// un ensemble de sept est un mensonge silencieux : il passe au vert, et la
     /// session suivante le lit comme la loi.
-    func test_leMeuble_sertLesHuitPortesDeSonPerimetre_dontLeMediaSocial() {
+    func test_leMeuble_sertLesNeufPortesDeSonPerimetre_dontLEdition() {
         let serviesParLeMeuble = Set(
             Self.toutesLesOrigines.filter { profil($0).routesToLegacy == nil }.map(nom(de:))
         )
@@ -642,12 +640,10 @@ final class ComposerIntentTests: XCTestCase {
         XCTAssertEqual(
             serviesParLeMeuble,
             ["storyTray", "feedComposer", "moodChip", "draft", "share", "conversationMedia",
-             "socialMedia", "repost"],
-            "Périmètre après #6085 : le tray, LE FIL, les réels, LE MOOD, le brouillon, le partage, le "
-            + "média de conversation, LE MÉDIA SOCIAL (post / story) — et le REPOST. `edit` n'y figure pas parce "
-            + "que le corpus l'instancie sur un format de DOCUMENT (post/réel), toujours servi par "
-            + "`EditPostSheet` ; l'édition d'une STORY, elle, monte le meuble — c'est "
-            + "`test_lEdition_routeParFORMAT…` qui tient cette moitié, format par format."
+             "socialMedia", "repost", "edit"],
+            "Périmètre après #9333 : le tray, LE FIL, les réels, LE MOOD, le brouillon, le partage, le "
+            + "média de conversation, LE MÉDIA SOCIAL, le REPOST — et L'ÉDITION d'un post ou d'un réel, "
+            + "rouverte dans la vue qui l'a créé."
         )
     }
 
@@ -759,10 +755,6 @@ final class ComposerIntentTests: XCTestCase {
         let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat)
         XCTAssertEqual(surface, .mood, "2e maillon — le meuble monte la surface du mood, pas le document.")
 
-        XCTAssertEqual(
-            ComposerChromeOwnership.owner(for: surface), .host,
-            "3e maillon — le chrome revient au meuble : il n'y a pas d'atelier sous cette surface pour peindre la flèche."
-        )
         // 4e maillon, RÉÉCRIT au 2026-08-28 : le socle du mood ne peint plus la
         // flèche (`socleZones` est vide) — elle vit désormais dans l'en-tête de
         // la surface (`ComposerMoodSurface.header`), et `headerPaintsPublish`
@@ -794,7 +786,6 @@ final class ComposerIntentTests: XCTestCase {
 
         let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat)
         XCTAssertEqual(surface, .mood, "2e maillon — republier un mood ouvre la surface du mood.")
-        XCTAssertEqual(ComposerChromeOwnership.owner(for: surface), .host, "3e maillon — le chrome revient au meuble.")
         // 4e maillon, RÉÉCRIT au 2026-08-28 : voir la même note sur la chaîne de
         // création ci-dessus — la flèche vit dans l'en-tête de la surface, pas
         // dans le socle, pour les DEUX portes du mood.
@@ -833,7 +824,8 @@ final class ComposerIntentTests: XCTestCase {
 
     func test_formatAnnonce_desPortesQuiPortentLeurFormat_estLeFormatPorte() {
         XCTAssertEqual(profil(.repost(ofPostId: "p", sourceFormat: .story)).initialFormat, .story)
-        XCTAssertEqual(profil(.edit(postId: "d", documentFormat: .reel)).initialFormat, .reel)
+        XCTAssertEqual(ComposerProfile.profile(for: .edit(postId: "d", documentFormat: .reel),
+                                               compositionQualifiesAsReel: true).initialFormat, .reel)
     }
 
     /// **Sentinelle LEVÉE le 2026-08-23 (C2), et transformée — pas supprimée.**
@@ -920,8 +912,8 @@ final class ComposerIntentTests: XCTestCase {
             "Le format d'une source n'est pas une graine : il change le composer."
         )
         XCTAssertNotEqual(
-            profil(.edit(postId: "a", documentFormat: .post)),
-            profil(.edit(postId: "a", documentFormat: .reel))
+            ComposerProfile.profile(for: .edit(postId: "a", documentFormat: .post), compositionQualifiesAsReel: true),
+            ComposerProfile.profile(for: .edit(postId: "a", documentFormat: .reel), compositionQualifiesAsReel: true)
         )
     }
 
@@ -1068,7 +1060,8 @@ final class ComposerIntentTests: XCTestCase {
 
     func test_edit_ouvreAuFormatDuDocument() {
         XCTAssertEqual(profil(.edit(postId: "d", documentFormat: .story)).initialFormat, .story)
-        XCTAssertEqual(profil(.edit(postId: "d", documentFormat: .reel)).initialFormat, .reel)
+        XCTAssertEqual(ComposerProfile.profile(for: .edit(postId: "d", documentFormat: .reel),
+                                               compositionQualifiesAsReel: true).initialFormat, .reel)
     }
 
     /// L'édition ne convertit qu'entre POST et RÉEL : `UpdatePostSchema.type`
@@ -1080,7 +1073,9 @@ final class ComposerIntentTests: XCTestCase {
     }
 
     func test_edit_convertitEntrePostEtReel() {
-        XCTAssertEqual(eventail(.edit(postId: "d", documentFormat: .reel)), [.reel, .post])
+        XCTAssertEqual(eventail(.edit(postId: "d", documentFormat: .reel), reel: true), [.reel, .post])
+        XCTAssertEqual(eventail(.edit(postId: "d", documentFormat: .reel), reel: false), [.post],
+                       "Un réel que plus rien ne qualifie repasse en post : le gateway le refuserait (422)")
         XCTAssertEqual(eventail(.edit(postId: "d", documentFormat: .post), reel: true), [.post, .reel])
         XCTAssertEqual(eventail(.edit(postId: "d", documentFormat: .post), reel: false), [.post])
     }
@@ -1300,7 +1295,7 @@ final class ComposerIntentTests: XCTestCase {
          declaration: "private func togglePostRepost(postId: String)",
          lecture: "viewModel.posts.first(where: { $0.id == postId })"),
         (fichier: "PostDetailView.swift",
-         declaration: "private func toggleDetailRepost(quote: Bool)",
+         declaration: "private func toggleDetailRepost()",
          lecture: "displayPost")
     ]
 
@@ -1389,41 +1384,10 @@ final class ComposerIntentTests: XCTestCase {
         XCTAssertEqual(ComposerFormat(postType: nil), .post)
     }
 
-    /// **La CITATION passe par le meuble** (directive porteur 2026-09-06 :
-    /// « dans tous les cas iPad et iOS doivent utiliser le nouveau composer »).
-    ///
-    /// Elle était le dernier chemin de l'iPhone à monter `FeedComposerSheet`,
-    /// l'ancien composer, qui publie avec `storyEffects: nil` : citer un post
-    /// produisait une publication SANS scène — donc sans légende par média,
-    /// sans texte alternatif, et hors de la mosaïque — sur une app où toute
-    /// photo devient une scène.
-    ///
-    /// Garde de SOURCE parce que la question porte sur un arbre de vues : quel
-    /// composer ce `fullScreenCover` présente-t-il ? Aucun appel de fonction
-    /// n'y répond.
-    /// **RETOURNÉ le 2026-09-06 : la citation reste sur l'ancien composer.**
-    ///
-    /// Ce témoin exigeait le MEUBLE, et il est né dans le commit `148ef2dbd7`
-    /// — celui-là même qui a fait la migration. Une garde écrite par le lot
-    /// qu'elle garde ne peut pas le contredire : elle atteste d'une intention,
-    /// pas d'un résultat.
-    ///
-    /// Le résultat, mesuré de bout en bout : une citation pose `repostOfId`,
-    /// donc `ComposerDocumentSendRouting.path(isQuote: true)` rend
-    /// `.quotedRepost`, dont `isDurable` vaut `false`, donc
-    /// `ComposerDocumentSendPlan` rend `.refuse(.nonDurablePath)`, donc
-    /// `publishDocument` appelle `refuse()`. **Citer un post ne publiait plus
-    /// rien** — l'auteur recevait « publication impossible ».
-    ///
-    /// `DocumentComposerDoor` l'écrit dans son propre doc-comment : elle ne sert
-    /// PAS la citation avant la levée 7.5, un écrivain durable du repost, qui
-    /// n'existe pas (`PublishIntent.document` ne porte aucun `repostOfId`).
-    ///
-    /// > Trois témoins antérieurs disaient l'inverse de celui-ci, et c'est le
-    /// > PRODUIT qui les départage, jamais leur nombre. La cible reste le
-    /// > meuble ; ce témoin y reviendra le jour où l'envoi y aboutira — et son
-    /// > message dit quoi vérifier ce jour-là.
-    func test_laCitation_resteSurLAncienComposer_jusquALaLevee_7_5() throws {
+    /// **La CITATION passe par le meuble, et par la porte qui la publie**
+    /// (#15628). Garde de SOURCE parce que la question porte sur un arbre de
+    /// vues : quel composer ce `fullScreenCover` présente-t-il ?
+    func test_laCitation_ouvreLeCompositeur_parLaPorteDeLaCitation() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -1433,16 +1397,12 @@ final class ComposerIntentTests: XCTestCase {
         guard let debut = texte.range(of: ".fullScreenCover(item: $quoteOriginalPost)") else {
             return XCTFail("le cover de citation est introuvable — la garde ne mesurerait rien")
         }
-        let bloc = String(texte[debut.lowerBound...].prefix(900))
+        let bloc = String(texte[debut.lowerBound...].prefix(500))
 
-        XCTAssertTrue(bloc.contains("FeedComposerSheet("),
-                      "citer doit ouvrir le composer qui PUBLIE la citation. Le meuble la refuse "
-                          + "(`.nonDurablePath(.quotedRepost)`) tant que le repost n'a pas de file durable.")
-        XCTAssertTrue(bloc.contains("quotePost: quoted"),
+        XCTAssertTrue(bloc.contains("QuoteComposerDoor("), "citer doit ouvrir le compositeur unifié")
+        XCTAssertTrue(bloc.contains("quoted: quoted"),
                       "et lui passer le post cité — sans quoi la citation part sans son original")
         XCTAssertFalse(bloc.contains("DocumentComposerDoor("),
-                       "le MEUBLE ne doit pas être monté ici avant la levée 7.5 : il se refermerait sur un "
-                           + "refus. Le jour où il le sera, vérifier d'abord que `path(isQuote: true)` rend "
-                           + "un chemin DURABLE — sans quoi citer cesse de publier, en silence pour la garde.")
+                       "la porte du document refuse une citation (`.nonDurablePath(.quotedRepost)`)")
     }
 }

@@ -36,7 +36,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.withContext
+import me.meeshy.app.chat.ChatVoicePlayback
 import me.meeshy.app.chat.ChatHostContext
+import me.meeshy.app.chat.ChatMessageRowActions
 import me.meeshy.app.chat.TypingIndicator
 import me.meeshy.sdk.model.reading.mode.ConversationReadingMode
 import me.meeshy.sdk.model.reading.river.RiverColumnLayout
@@ -44,7 +46,10 @@ import me.meeshy.sdk.model.reading.river.RiverConversationMapping
 import me.meeshy.sdk.model.reading.river.RiverCursor
 import me.meeshy.sdk.model.reading.river.RiverLaneHeaders
 import me.meeshy.sdk.model.reading.river.ResolveRiverLaneHeadersInput
+import me.meeshy.sdk.model.reading.river.RiverGeometry
 import me.meeshy.sdk.model.reading.river.RiverMetrics
+import me.meeshy.sdk.model.reading.river.RiverRenderingMemo
+import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.sdk.model.reading.river.RiverTimeScale
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.StoryRingState
@@ -74,6 +79,9 @@ internal fun RiverScreen(
     topInset: Dp,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
+    /** Les actions de rangée du fil : les pièces, la citation et la story d'une bulle s'ouvrent par les MÊMES. */
+    rowActions: ChatMessageRowActions = ChatMessageRowActions(),
+    audioPlayer: ChatVoicePlayback? = null,
 ) {
     val state = host.state
     val bubbles = state.messages
@@ -94,7 +102,8 @@ internal fun RiverScreen(
         pane.accept(next, geometryKey)
     }
     val geometry = pane.geometry
-    val rendering = remember(geometry, bubbles) {
+    val renderingMemo = remember { RiverRenderingMemo<Pair<RiverGeometry, List<BubbleContent>>, RiverRendering>() }
+    val rendering = renderingMemo.get(geometry to bubbles) {
         RiverRenderingBuilder.build(geometry, bubbles, storyRing = { StoryRingState.None })
     }
     val latestRendering = rememberUpdatedState(rendering)
@@ -105,7 +114,7 @@ internal fun RiverScreen(
     val windowOrigin = remember { floatArrayOf(0f, 0f) }
     val density = LocalDensity.current
     val swipePx = with(density) { SWIPE_THRESHOLD.toPx() }
-    val actions = remember(pane, host, profileOpener, reduceMotion, density) {
+    val actions = remember(pane, host, profileOpener, reduceMotion, density, rowActions, audioPlayer) {
         RiverBubbleActions(
             onTap = { id ->
                 latestRendering.value.contentByMessageId[id]?.bubble?.let { pane.moveTo(RiverCursor(it.laneIndex, it.rank)) }
@@ -117,6 +126,10 @@ internal fun RiverScreen(
             },
             onOpenReply = { target -> pane.landOnMessage(target, animated = !reduceMotion) },
             onOpenProfile = profileOpener::open,
+            onOpenQuotedMedia = rowActions.onQuotedMediaTap,
+            onOpenStory = rowActions.onStoryCitationOpen,
+            attachmentCallbacks = { source -> RiverBubbleCallbacks.attachments(source, rowActions, audioPlayer) },
+            audioPlayer = audioPlayer,
             onOpenInThread = { id ->
                 host.readingMode?.select(ConversationReadingMode.SCRIPT)
                 host.actions.scrollToMessage(id)

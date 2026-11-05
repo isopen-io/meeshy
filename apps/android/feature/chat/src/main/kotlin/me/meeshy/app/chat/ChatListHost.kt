@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -90,7 +91,7 @@ internal fun ChatListHost(
     val listState = rememberLazyListState()
     val expansionHost = rememberLongMessageExpansionHost(listState)
     // La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `selectedProfileUser`).
-    val profileTap = rememberProfileTap(state.conversationId, accentColor)
+    val profileTap = rememberProfileTap(state.conversationId, accentColor, host.viewerRole)
     // L'en-tête efface sa grappe d'actions pendant le défilement (iOS `hiddenWhileScrolling`).
     LaunchedEffect(listState) {
         try {
@@ -118,7 +119,10 @@ internal fun ChatListHost(
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
     // user). Each bubble projects a pure outcome from this collected cache.
     val linkPreviewStore = remember { LinkPreviewStore(scope) }
-    val audioPlayer = rememberChatAudioPlayer(state.conversationTitle, state.conversationId)
+    val audioPlayer = LocalChatVoicePlayback.current
+    androidx.compose.runtime.SideEffect {
+        audioPlayer?.bind(ChatVoiceThread(state.conversationId, state.conversationTitle.orEmpty(), host.header.avatarUrl, accentColor.voiceHex(), state.messages))
+    }
     val linkPreviewCache by linkPreviewStore.cache.collectAsStateWithLifecycle()
     // [ChatListOrientation.BottomUp]: the list is rendered bottom-anchored
     // (`LazyColumn(reverseLayout = true)` below fed the REVERSED item order)
@@ -130,14 +134,14 @@ internal fun ChatListHost(
     // every pure function below that scrolls/indexes into rendered rows.
     val orientation = ChatListOrientation.BottomUp
     val startName = ConversationStartName.of(state.conversationTitle, state.hasMoreOlder, state.showSkeleton)
-    val listItems = remember(state.messages, state.firstUnreadMessageId, state.unreadAtOpening, state.showEncryptionDisclaimer, startName) {
+    val listItems = remember(state.messages, state.firstUnreadMessageId, host.unreadAtOpening, state.showEncryptionDisclaimer, startName) {
         buildChatListItems(
             state.messages,
             ZoneId.systemDefault(),
             state.firstUnreadMessageId,
             showEncryptionNotice = state.showEncryptionDisclaimer,
             conversationStartName = startName,
-            serverUnreadCount = state.unreadAtOpening,
+            serverUnreadCount = host.unreadAtOpening,
         )
     }
     val renderedItems = remember(listItems) { listItems.asReversed() }
@@ -256,6 +260,7 @@ internal fun ChatListHost(
     val metaAlpha = remember(metaAlphaState) { { metaAlphaState.value } }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     val media = rememberChatMediaHost(actions.dismissImageViewer)
+    LaunchedEffect(audioPlayer, media) { audioPlayer?.fullscreenRequests?.collect { id -> media.open(MediaPresentation.Audio(id)) } }
     LaunchedEffect(state.imageViewer == null) { if (state.imageViewer == null) media.onImageViewerClosed() }
     BackHandler(enabled = media.active != null && media.active !is MediaPresentation.Image) { media.close() }
     var pieceOverlay by remember { mutableStateOf<PieceOverlayModel?>(null) }
@@ -300,6 +305,7 @@ internal fun ChatListHost(
             },
             onReplyPreviewClick = { messageId -> actions.onReplyPreviewTap(messageId) },
             onFlagTap = { messageId, code -> actions.onFlagTap(messageId, code) },
+            onAudioLanguage = { messageId, code -> actions.onAudioLanguage(messageId, code) },
             onReplyCountTap = { messageId -> actions.onReplyCountTap(messageId) },
             onReplyCountLongPress = { messageId -> actions.openReplyThread(messageId) },
             onRetry = { messageId -> actions.retryMessage(messageId) },
@@ -307,14 +313,22 @@ internal fun ChatListHost(
             onQuotedAuthorTap = { bubble -> bubble.replyToAuthor?.let(profileTap) },
             onQuotedMediaTap = { messageId, quotedId ->
                 val quoted = currentMessages.firstOrNull { it.messageId == quotedId }
+                val quotedVoice = ChatAudioFullscreenSources.quotedVoiceId(currentMessages.firstOrNull { it.messageId == messageId }, quoted)
+                    ?.takeIf { id -> ChatAudioFullscreenSources.of(id, currentMessages, state.conversationId, state.conversationTitle.orEmpty()) != null }
                 if (quoted?.images?.isNotEmpty() == true && !quoted.isBlurred && quoted.blurReveal == null) {
                     media.open(MediaPresentation.Image(quotedId, 0))
                     actions.openImageViewer(quotedId, 0)
+                } else if (quotedVoice != null) {
+                    media.open(MediaPresentation.Audio(quotedVoice))
                 } else {
                     actions.onReplyPreviewTap(messageId)
                 }
             },
             onOpenJoinProfile = { bubble -> bubble.joinNotice?.toProfileSheetUser()?.let(profileTap) },
+            onCallBack = { bubble ->
+                val isVideo = bubble.callSummary?.callType == me.meeshy.sdk.model.CallSummaryMetadata.MediaType.VIDEO
+                host.navigation.onStartCall(state.conversationTitle.orEmpty(), isVideo)
+            },
             onAddReaction = { messageId ->
                 val quick = state.quickReactions.firstOrNull()
                 if (quick == null) actions.openEmojiPicker(messageId) else actions.toggleReaction(messageId, quick)
@@ -419,6 +433,37 @@ internal fun ChatListHost(
             accentColor = state.accentColorHex ?: DEFAULT_PLACE_ACCENT,
             senderName = state.messages.firstOrNull { it.messageId == presented.messageId }?.senderName,
             onDismiss = media::close,
+        )
+        is MediaPresentation.Audio -> ChatAudioFullscreen(
+            attachmentId = presented.attachmentId,
+            thread = state.messages,
+            conversationId = state.conversationId,
+            conversationName = state.conversationTitle.orEmpty(),
+            voice = audioPlayer,
+            accent = accentColor,
+            onDismiss = media::close,
+            onDismissToMessage = actions.scrollToMessage,
+            conversationIsEndToEnd = state.isEndToEnd,
+            onDownload = { source ->
+                scope.launch {
+                    if (storageAccess.ensure(PermissionNature.PHOTO_LIBRARY_ADD, announcesRefusal = true)) {
+                        actions.onPieceSave(source.carrierId, source.id)
+                    }
+                }
+            },
+            download = state.fileDownload,
+            onDismissDownload = actions.dismissFileDownload,
+            onRetryDownload = actions.retryFileDownload,
+            languages = remember(actions.onAudioLanguage, actions.attachmentsOf, state.encryptionMode) {
+                ChatAudioFullscreenLanguages(actions.onAudioLanguage, actions.attachmentsOf, state.encryptionMode)
+            },
+            actions = me.meeshy.app.chat.audio.rememberChatAudioFullscreenActions(
+                replies = actions.audioFullscreenReplies,
+                actions = actions,
+                state = state,
+                clearance = LocalChatSignalClearance.current,
+                closure = host.composerClosure,
+            ),
         )
         else -> Unit
     }
@@ -548,12 +593,18 @@ internal fun ChatListHost(
         val riverMode = host.readingMode?.state?.let {
             it.mode == ConversationReadingMode.RIVER && RiverModeGate.isSelectable(it.capabilities)
         } == true
+        // Sous un panneau opaque, la liste s'endort : les flux continuent, l'état est rejoué au réveil.
+        val threadVisible = ChatListQuiescence.rendersThread(host.readingMode?.state?.mode, riverOpen = riverMode)
+        DisposableEffect(threadVisible) {
+            host.chrome.listGate?.setAsleep(!threadVisible)
+            onDispose { host.chrome.listGate?.setAsleep(false) }
+        }
         AnimatedVisibility(
             visible = riverMode,
             enter = fadeIn(tween(modeFadeMs)),
             exit = fadeOut(tween(modeFadeMs)),
         ) {
-            RiverScreen(host = host, pane = riverPane, topInset = topInset, bottomInset = bottomInset)
+            RiverScreen(host = host, pane = riverPane, topInset = topInset, bottomInset = bottomInset, rowActions = rowActions, audioPlayer = audioPlayer)
         }
     }
     }

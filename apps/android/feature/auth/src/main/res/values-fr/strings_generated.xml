@@ -1,5 +1,20 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="activation_close">Fermer</string>
+    <string name="activation_complete">Votre compte est validé. Merci !</string>
+    <string name="activation_email_done">Adresse vérifiée ✓</string>
+    <string name="activation_email_label">Confirmez votre adresse e-mail</string>
+    <string name="activation_email_send">Recevoir le code</string>
+    <string name="activation_email_sending">Envoi…</string>
+    <string name="activation_email_sent">Code envoyé à %1$s. Saisissez-le ci-dessous.</string>
+    <string name="activation_invite_days_left">Il vous reste %1$d jours pour valider votre compte. Ensuite, la connexion demandera un code.</string>
+    <string name="activation_invite_days_left_one">Il vous reste 1 jour pour valider votre compte. Ensuite, la connexion demandera un code.</string>
+    <string name="activation_invite_lead">Validez votre compte pour continuer à l’utiliser sans interruption.</string>
+    <string name="activation_invite_title">Validez votre compte</string>
+    <string name="activation_later">Plus tard</string>
+    <string name="activation_phone_add">Ajouter mon numéro</string>
+    <string name="activation_phone_done">Numéro vérifié ✓</string>
+    <string name="activation_phone_label">Ajoutez un numéro pour sécuriser et récupérer votre compte</string>
     <string name="ageGate_body">Ce compte ne peut pas encore utiliser Meeshy. Tu pourras nous rejoindre à tes 13 ans.</string>
     <string name="arrival_celebration_lead">Nous préparons vos conversations…</string>
     <string name="arrival_celebration_skip">Continuer</string>
@@ -319,9 +334,20 @@
     <string name="onboarding_story_verify">Vérifie ton courriel pour publier ta story</string>
     <string name="onboarding_story_verify_detail">Touche le lien reçu par e-mail : ta story pourra partir tout de suite après.</string>
     <string name="registration_back">Retour</string>
+    <string name="session_closed_activation_message">Pour continuer à utiliser Meeshy, reconnectez-vous puis saisissez le code reçu par e-mail.</string>
+    <string name="session_closed_activation_title">Confirmez votre adresse e-mail</string>
+    <string name="session_closed_admin_message">Pour protéger votre compte, l\'équipe Meeshy a fermé cette session. Vous pouvez vous reconnecter. Une question ? Écrivez-nous.</string>
+    <string name="session_closed_admin_title">Votre session a été fermée par l\'équipe Meeshy</string>
+    <string name="session_closed_all_signed_out_message">Toutes les sessions de votre compte ont été fermées. Reconnectez-vous pour continuer.</string>
+    <string name="session_closed_contact">Écrire à l\'équipe Meeshy</string>
     <string name="session_closed_continue">Se reconnecter</string>
+    <string name="session_closed_expired_message">Reconnectez-vous pour continuer.</string>
+    <string name="session_closed_expired_title">Votre session a expiré</string>
+    <string name="session_closed_password_title">Votre mot de passe a changé</string>
     <string name="session_closed_signed_out_message">Cette session a été fermée. Reconnectez-vous pour continuer.</string>
     <string name="session_closed_signed_out_title">Vous avez été déconnecté</string>
+    <string name="session_closed_user_revoke_message">La session a été fermée depuis un autre de vos appareils. Si ce n\'était pas vous, reconnectez-vous et changez votre mot de passe.</string>
+    <string name="session_closed_user_revoke_title">Cet appareil a été déconnecté</string>
     <string name="share_link_join_anonymously">Rejoindre en anonyme</string>
     <string name="share_link_resume_anonymously">Reprendre en anonyme</string>
     <string name="signup_back">Retour</string>
@@ -332,8 +358,14 @@
     <string name="signup_close">Fermer</string>
     <string name="signup_country_search_hint">Rechercher un pays</string>
     <string name="signup_display_name_label">Comment doit-on vous appeler ?</string>
+    <string name="signup_email_forgot_password">Mot de passe oublié ?</string>
+    <string name="signup_email_is_it_you">Est-ce vous ?</string>
+    <string name="signup_email_its_me">C’est moi — récupérer mon compte</string>
     <string name="signup_email_label">E-mail</string>
+    <string name="signup_email_not_me">Ce n’est pas moi</string>
+    <string name="signup_email_not_me_note">Le code envoyé à cette adresse sera demandé pour l’obtenir.</string>
     <string name="signup_email_placeholder">vous@exemple.com</string>
+    <string name="signup_email_send_sign_in_link">Recevoir un lien de connexion</string>
     <string name="signup_email_taken">Un compte existe déjà avec cette adresse.</string>
     <string name="signup_error_generic">La création du compte a échoué. Réessayez.</string>
     <string name="signup_error_network">Pas de connexion. Vérifiez votre réseau et réessayez.</string>

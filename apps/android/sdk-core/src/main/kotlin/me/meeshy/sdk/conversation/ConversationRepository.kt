@@ -23,6 +23,8 @@ import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.HistoryGrantUpdate
+import me.meeshy.sdk.model.ParticipantCapability
+import me.meeshy.sdk.model.ParticipantRightsUpdate
 import me.meeshy.sdk.model.MemberCountResolution
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.MemberRosterPage
@@ -50,6 +52,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.ReadReceiptPayload
 import me.meeshy.core.database.dao.SearchIndexDao
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.commitOrWrite
@@ -594,10 +597,9 @@ class ConversationRepository @Inject constructor(
      * `User`. Les méthodes voisines de cette classe prennent l'autre colonne —
      * la ressemblance des deux chemins est un piège, pas une symétrie.
      *
-     * Pas de cache : la fiche porte des faits que le gateway gate PAR LECTEUR
-     * (`email`, `entryLink`, `historyVisibleFrom`, `canGrantHistory`). Une
-     * copie locale les servirait à un lecteur pour qui ils ont été masqués — la
-     * garde vit côté serveur, et rien ici ne doit lui survivre.
+     * Ce dépôt ne garde RIEN : la copie vit dans `ParticipantProfileCache`, clé par lecteur (ADR-032), parce que la
+     * fiche porte des faits que le gateway gate PAR LECTEUR (`email`, `entryLink`, `historyVisibleFrom`,
+     * `canGrantHistory`).
      */
     suspend fun participantProfile(
         id: String,
@@ -626,6 +628,20 @@ class ConversationRepository @Inject constructor(
                 participantId,
                 HistoryGrantUpdate(historyVisibleFrom),
             )
+        }
+
+    /**
+     * Pose UN droit d'un participant (`PATCH …/rights`, une clé par écriture). La réponse est l'état résolu par le
+     * serveur ; l'appelant la pose telle quelle et défait son geste optimiste sur un échec.
+     */
+    suspend fun updateParticipantRight(
+        id: String,
+        participantId: String,
+        capability: ParticipantCapability,
+        value: Boolean,
+    ): NetworkResult<ParticipantRightsUpdateResult> =
+        apiCall {
+            conversationApi.updateParticipantRight(id, participantId, ParticipantRightsUpdate.single(capability, value))
         }
 
     /**
@@ -673,19 +689,20 @@ class ConversationRepository @Inject constructor(
      * coalescer merges repeats). No-op when the conversation is unknown or
      * already read. Returns whether anything was queued.
      */
-    suspend fun markReadOptimistic(id: String): Boolean {
+    suspend fun markReadOptimistic(id: String, declaration: ReadReceiptPayload? = null): Boolean {
         if (!markReadLocally(id)) return false
-        queueReadReceipt(id)
+        queueReadReceipt(id, declaration)
         return true
     }
 
-    private suspend fun queueReadReceipt(id: String) {
+    /** [declaration] : ce qui a été lu et dans quelle langue, résolu à la composition (jamais à l'envoi de la file). */
+    private suspend fun queueReadReceipt(id: String, declaration: ReadReceiptPayload? = null) {
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.READ_RECEIPT,
                 lane = OutboxLanes.READ_RECEIPT,
                 targetId = id,
-                payload = "{}",
+                payload = declaration?.let { MeeshyApi.json.encodeToString(ReadReceiptPayload.serializer(), it) } ?: "{}",
             ),
         )
     }
@@ -698,9 +715,9 @@ class ConversationRepository @Inject constructor(
      * counting unread). The coalescer keeps a single pending `READ_RECEIPT` per conversation, and
      * the route is idempotent, so a repeated acknowledgement costs nothing.
      */
-    suspend fun acknowledgeRead(id: String): Boolean {
+    suspend fun acknowledgeRead(id: String, declaration: ReadReceiptPayload? = null): Boolean {
         markReadLocally(id)
-        queueReadReceipt(id)
+        queueReadReceipt(id, declaration)
         return true
     }
 

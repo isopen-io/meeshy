@@ -314,6 +314,9 @@
     <string name="settings_logout_confirm_title">Sair</string>
     <string name="settings_logout_hint">Sair da sua conta</string>
     <string name="settings_logout_in_progress">Saindo...</string>
+    <string name="settings_media_autosave_header">Galeria</string>
+    <string name="settings_media_autosave_subtitle">As imagens e vídeos recebidos vão para o álbum Meeshy, uma única vez. Nunca uma mídia efêmera, desfocada ou de visualização única.</string>
+    <string name="settings_media_autosave_title">Salvar em Fotos</string>
     <string name="settings_media_capture_header">Ao capturar</string>
     <string name="settings_media_capture_original_subtitle">A foto ou o vídeo bruto, sem efeito nem moldura, é salvo no Fotos a cada captura.</string>
     <string name="settings_media_capture_original_title">Salvar o original</string>

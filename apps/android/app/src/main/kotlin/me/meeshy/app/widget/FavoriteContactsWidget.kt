@@ -14,13 +14,18 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.actionStartActivity as actionStartActivityIntent
-import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.lazy.GridCells
+import androidx.glance.appwidget.lazy.LazyVerticalGrid
 import androidx.glance.appwidget.lazy.items
+import androidx.glance.LocalSize
+import androidx.glance.semantics.contentDescription
+import androidx.glance.semantics.semantics
+import androidx.glance.text.TextAlign
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
-import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
@@ -32,6 +37,8 @@ import dagger.hilt.android.EntryPointAccessors
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
 import me.meeshy.app.widget.kit.WidgetAvatarBitmap
+import me.meeshy.app.widget.kit.WidgetPresence
+import me.meeshy.sdk.model.PresenceState
 import me.meeshy.app.widget.kit.WidgetTheme
 import me.meeshy.app.widget.kit.widgetSurface
 import androidx.glance.Image
@@ -61,6 +68,9 @@ import androidx.glance.ImageProvider
  * central `meeshyPresenceDotColor` table (offline or unserved: no dot).
  */
 internal class FavoriteContactsWidget : GlanceAppWidget() {
+
+    /** La hauteur réelle décide 4 (moyen) ou 8 (grand) favoris, comme `family` sur iOS. */
+    override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val entryPoint = EntryPointAccessors.fromApplication(context, WidgetEntryPoint::class.java)
@@ -105,9 +115,13 @@ private fun FavoriteContactsWidgetContent(presentation: FavoriteContactsWidgetPr
                 )
             }
         } else {
-            LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                items(presentation.rows, itemId = { it.id.hashCode().toLong() }) { row ->
-                    FavoriteContactRowContent(row)
+            val visible = presentation.visibleRows(LocalSize.current.height.value)
+            LazyVerticalGrid(
+                gridCells = GridCells.Adaptive(GRID_MIN_CELL_DP.dp),
+                modifier = GlanceModifier.fillMaxSize().padding(top = 8.dp),
+            ) {
+                items(visible, itemId = { it.id.hashCode().toLong() }) { row ->
+                    FavoriteContactCell(row)
                 }
             }
         }
@@ -115,14 +129,16 @@ private fun FavoriteContactsWidgetContent(presentation: FavoriteContactsWidgetPr
 }
 
 @Composable
-private fun FavoriteContactRowContent(row: FavoriteContactRow) {
+private fun FavoriteContactCell(row: FavoriteContactRow) {
     val context = LocalContext.current
-    Row(
+    val description = FavoriteContactsWidgetPresentation.accessibilityLabel(row.name, presenceLabel(context, row.presence))
+    Column(
         modifier = GlanceModifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
+            .semantics { contentDescription = description }
             .clickable(actionStartActivityIntent(openConversationIntent(context, row.id))),
-        verticalAlignment = Alignment.Vertical.CenterVertically,
+        horizontalAlignment = Alignment.Horizontal.CenterHorizontally,
     ) {
         Image(
             provider = ImageProvider(WidgetAvatarBitmap.render(context, row.name, row.accentHex, AVATAR_DP, presence = row.presence)),
@@ -131,14 +147,32 @@ private fun FavoriteContactRowContent(row: FavoriteContactRow) {
         )
         Text(
             text = row.name,
-            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = WidgetTheme.textPrimary),
+            style = TextStyle(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = WidgetTheme.textPrimary,
+                textAlign = TextAlign.Center,
+            ),
             maxLines = 1,
-            modifier = GlanceModifier.padding(start = 8.dp).fillMaxWidth(),
+            modifier = GlanceModifier.padding(top = 4.dp),
         )
     }
 }
 
-private const val AVATAR_DP = 30
+/** Le libellé parlé du jeton de présence ; `null` quand rien n'a été servi. */
+private fun presenceLabel(context: Context, token: String?): String? =
+    when (WidgetPresence.parse(token)?.state) {
+        PresenceState.ONLINE -> context.getString(R.string.widget_presence_online)
+        PresenceState.AWAY -> context.getString(R.string.widget_presence_away)
+        PresenceState.IDLE -> context.getString(R.string.widget_presence_idle)
+        PresenceState.OFFLINE -> context.getString(R.string.widget_presence_offline)
+        null -> null
+    }
+
+private const val AVATAR_DP = 50
+
+/** iOS `GridItem(.adaptive(minimum: 65))`. */
+private const val GRID_MIN_CELL_DP = 65
 
 private fun openConversationIntent(context: Context, conversationId: String): Intent =
     Intent(

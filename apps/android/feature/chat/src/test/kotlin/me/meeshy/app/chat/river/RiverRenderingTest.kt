@@ -66,6 +66,14 @@ class RiverRenderingTest {
     }
 
     @Test
+    fun `l'identite d'une voix porte le contour que l'expediteur a equipe, tel que servi`() {
+        val ring = me.meeshy.sdk.model.ServedProfileDecorItem(pack = "contours-essentiels", item = "filet")
+        val rendering = render(riverBubble("a", "alice", 0).copy(senderRing = ring), riverBubble("b", "bob", 1))
+        assertThat(rendering.contentByMessageId["a"]?.identity?.avatarRing).isEqualTo(ring)
+        assertThat(rendering.contentByMessageId["b"]?.identity?.avatarRing).isNull()
+    }
+
+    @Test
     fun `un message chiffre ou brule ne rend jamais son texte`() {
         val rendering = render(
             riverBubble("e", "alice", 0, endToEnd = true),

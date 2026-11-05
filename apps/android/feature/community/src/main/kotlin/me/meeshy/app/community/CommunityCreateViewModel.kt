@@ -18,6 +18,8 @@ import me.meeshy.sdk.community.CommunityAppearanceStore
 import me.meeshy.sdk.community.CommunityCacheRepository
 import me.meeshy.sdk.community.CommunityRepository
 import me.meeshy.sdk.model.CommunityCreateDraft
+import me.meeshy.sdk.model.CommunityCreateForm
+import me.meeshy.sdk.model.IdentifierCheck
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.session.SessionRepository
@@ -34,10 +36,11 @@ data class CommunityCreateUiState(
     val isSearching: Boolean = false,
     val isCreating: Boolean = false,
     val errorMessage: String? = null,
+    val identifierCheck: IdentifierCheck = IdentifierCheck.Idle,
 ) {
     /** La couleur d'accent de l'aperçu : dérivée du nom, « New » tant qu'il est vide (iOS `accentColor`). */
-    val accentHex: String get() = DynamicColorGenerator.colorForName(draft.trimmedName.ifEmpty { "New" })
-    val canSubmit: Boolean get() = draft.isValid && !isCreating
+    val accentHex: String get() = DynamicColorGenerator.colorForName(draft.trimmedName.ifEmpty { CommunityCreateForm.EMPTY_ACCENT_SEED })
+    val canSubmit: Boolean get() = draft.isValid && !isCreating && identifierCheck != IdentifierCheck.Unavailable
 }
 
 sealed interface CommunityCreateEffect {
@@ -65,9 +68,28 @@ class CommunityCreateViewModel @Inject constructor(
     val effects: Flow<CommunityCreateEffect> = _effects.receiveAsFlow()
 
     private var searchJob: Job? = null
+    private var identifierJob: Job? = null
 
     fun onName(value: String) = edit { it.withName(value) }
-    fun onIdentifier(value: String) = edit { it.withIdentifier(value) }
+    fun onIdentifier(value: String) {
+        edit { it.withIdentifier(value) }
+        identifierJob?.cancel()
+        val identifier = _state.value.draft.identifier
+        if (identifier.isEmpty()) {
+            _state.update { it.copy(identifierCheck = IdentifierCheck.Idle) }
+            return
+        }
+        _state.update { it.copy(identifierCheck = IdentifierCheck.Checking) }
+        identifierJob = viewModelScope.launch {
+            delay(CommunityCreateForm.IDENTIFIER_CHECK_DEBOUNCE_MILLIS)
+            val result = repository.checkIdentifier(CommunityCreateDraft.IDENTIFIER_PREFIX + identifier)
+            val verdict = when (result) {
+                is NetworkResult.Success -> if (result.data.available) IdentifierCheck.Available else IdentifierCheck.Unavailable
+                is NetworkResult.Failure -> IdentifierCheck.Idle
+            }
+            _state.update { it.copy(identifierCheck = verdict) }
+        }
+    }
     fun onDescription(value: String) = edit { it.copy(description = value) }
     fun onEmoji(value: String) = edit { it.withEmojiToggled(value) }
     fun onPrivate(value: Boolean) = edit { it.copy(isPrivate = value) }
@@ -75,14 +97,14 @@ class CommunityCreateViewModel @Inject constructor(
     fun onMemberQuery(value: String) {
         _state.update { it.copy(memberQuery = value) }
         searchJob?.cancel()
-        if (value.trim().length < MIN_QUERY) {
+        if (value.trim().length < CommunityCreateForm.MIN_MEMBER_QUERY) {
             _state.update { it.copy(results = emptyList(), isSearching = false) }
             return
         }
         _state.update { it.copy(isSearching = true) }
         searchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MILLIS)
-            val found = (users.searchUsers(value.trim(), limit = RESULT_LIMIT) as? NetworkResult.Success)?.data.orEmpty()
+            val found = (users.searchUsers(value.trim(), limit = CommunityCreateForm.MEMBER_RESULT_LIMIT) as? NetworkResult.Success)?.data.orEmpty()
             val me = session.currentUserId
             _state.update { it.copy(results = found.filter { user -> user.id != me }, isSearching = false) }
         }
@@ -124,8 +146,6 @@ class CommunityCreateViewModel @Inject constructor(
         _state.update { it.copy(draft = transform(it.draft)) }
 
     private companion object {
-        const val MIN_QUERY = 2
-        const val RESULT_LIMIT = 10
         const val SEARCH_DEBOUNCE_MILLIS = 250L
     }
 }

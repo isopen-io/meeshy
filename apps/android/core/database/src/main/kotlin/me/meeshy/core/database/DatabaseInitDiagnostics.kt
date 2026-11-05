@@ -16,6 +16,9 @@ public enum class DatabaseInitStage {
     PENDING_IDS_SALVAGED,
     FELL_BACK_SECONDARY,
     FELL_BACK_MEMORY,
+    COLD_START_PURGE,
+    ENCRYPTION_MIGRATED,
+    DISK_PURGED,
 }
 
 public data class DatabaseInitEvent(val stage: DatabaseInitStage, val detail: String, val atMillis: Long)

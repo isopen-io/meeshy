@@ -44,15 +44,31 @@ final class BookmarkFeedbackLocalizationTests: XCTestCase {
     /// silently falls back to French for the rest.
     private static let shippedLocales = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
 
-    /// The three call sites that drive the bookmark toasts.
-    private static let callSites = [
+    /// The bookmark toasts have ONE producer since #15994: the writer every
+    /// surface goes through. They lived in three views before, each copy
+    /// fixed separately.
+    private static let writer = "Meeshy/Features/Main/Services/PostBookmarkWriter.swift"
+
+    /// The surfaces that used to raise their own toasts, each read as its whole
+    /// UNIT (the declaration file and its `+…` extensions, #15894).
+    private static let formerCallSites = [
         "Meeshy/Features/Main/Views/FeedView.swift",
         "Meeshy/Features/Main/Views/RootViewComponents.swift",
         "Meeshy/Features/Main/Views/PostDetailView.swift"
     ]
 
+    /// `Foo.swift` plus every `Foo+*.swift` beside it.
     private func source(_ relativePath: String) throws -> String {
-        try String(contentsOf: Self.appRoot.appendingPathComponent(relativePath), encoding: .utf8)
+        let declaration = Self.appRoot.appendingPathComponent(relativePath)
+        let directory = declaration.deletingLastPathComponent()
+        let stem = declaration.deletingPathExtension().lastPathComponent
+        let extensions = try FileManager.default
+            .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix(stem + "+") && $0.pathExtension == "swift" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return try ([declaration] + extensions)
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     private func catalog() throws -> [String: Any] {
@@ -109,38 +125,31 @@ final class BookmarkFeedbackLocalizationTests: XCTestCase {
         XCTAssertEqual(french[2], "Erreur lors de l'enregistrement")
     }
 
-    // MARK: - Call sites go through the keys
+    // MARK: - The writer goes through the keys
 
-    func test_bookmarkCallSites_useTheSharedKeys() throws {
-        for path in Self.callSites {
-            let source = try source(path)
+    func test_theBookmarkWriter_usesTheSharedKeys() throws {
+        let source = try source(Self.writer)
 
+        for key in Self.bookmarkKeys {
             XCTAssertTrue(
-                source.contains("String(localized: \"post.bookmark."),
-                "\(path) must raise its bookmark toast through the post.bookmark.* keys."
+                source.contains("String(localized: \"\(key)\""),
+                "PostBookmarkWriter must raise its toasts through \(key)."
             )
-            for raw in ["\"Retire des favoris\"", "\"Ajoute aux favoris\""] {
-                XCTAssertFalse(
-                    source.contains(raw),
-                    "\(path) must not reintroduce \(raw) as a localization key: a raw French " +
-                    "sentence has no catalog entry, so every locale renders French."
-                )
-            }
+        }
+        for raw in ["\"Retire des favoris\"", "\"Ajoute aux favoris\"", "showError(\"Erreur lors de l'enregistrement\")"] {
+            XCTAssertFalse(source.contains(raw), "PostBookmarkWriter must not use \(raw): a raw French sentence has no catalog entry.")
         }
     }
 
-    /// `PostDetailView` raised its failure toast with a bare `String` — not even
-    /// wrapped in `String(localized:)`, so it could never be translated.
-    func test_postDetailView_localizesItsFailureToast() throws {
-        let source = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
-
-        XCTAssertFalse(
-            source.contains("showError(\"Erreur lors de l'enregistrement\")"),
-            "The failure toast must not be raised from a bare String literal."
-        )
-        XCTAssertTrue(
-            source.contains("showError(String(localized: \"post.bookmark.error\""),
-            "The failure toast must go through post.bookmark.error like its two siblings."
-        )
+    /// A surface that raises its own bookmark toast is a second writer.
+    func test_theFormerCallSites_delegateTheirToastsToTheWriter() throws {
+        for path in Self.formerCallSites {
+            let source = try source(path)
+            XCTAssertFalse(
+                source.contains("\"post.bookmark."),
+                "\(path) raises a bookmark toast itself — it must go through PostBookmarkWriter."
+            )
+            XCTAssertTrue(source.contains("PostBookmarkWriter"), "\(path) must write its bookmark through PostBookmarkWriter.")
+        }
     }
 }

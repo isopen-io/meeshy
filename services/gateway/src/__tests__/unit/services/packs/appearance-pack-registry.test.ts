@@ -12,12 +12,51 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { loadPackIndex } from '../../../../services/packs/PackIndex';
+import { appearancePackDetail } from '../../../../services/packs/appearancePackSpec';
 
 const GATEWAY = resolve(__dirname, '../../../../..');
 const DESIGN = resolve(GATEWAY, '../../packages/shared/design');
 const ASSETS = join(GATEWAY, 'assets/packs');
 
 const load = (env: NodeJS.ProcessEnv = {}) => loadPackIndex([DESIGN], env, ASSETS);
+
+/** Les collections Meeshy de #15158 ont leur propre bloc ; les comptes ci-dessous portent sur le catalogue qui les précède. */
+const COLLECTIONS = ['meeshy-signature', 'meeshy-vivants', 'meeshy-fonds', 'meeshy-fonds-vivants', 'meeshy-bordures', 'meeshy-bordures-vivantes'];
+/** Les packs de Noël et les bannières assorties de #15553 ont aussi leur propre bloc. */
+const CHRISTMAS = ['noel-enneige', 'lumieres-de-noel', 'atelier-du-pere-noel'];
+const ASSORTED: readonly (readonly [string, string])[] = [
+  ['cadres-illustres', 'bannieres-illustrees'],
+  ['cadres-asiatiques', 'bannieres-asiatiques'],
+  ['cadres-africains', 'bannieres-africaines'],
+  ['cadres-celtes', 'bannieres-celtes'],
+  ['cadres-nordiques', 'bannieres-nordiques'],
+  ['cadres-egyptiens', 'bannieres-egyptiennes'],
+  ['cadres-mayas', 'bannieres-mayas'],
+  ['cadres-indiens', 'bannieres-indiennes'],
+  ['cadres-amerindiens', 'bannieres-amerindiennes'],
+  ['cadres-australs', 'bannieres-australes'],
+  ['noel-enneige', 'bannieres-noel-enneige'],
+  ['lumieres-de-noel', 'bannieres-lumieres-noel'],
+  ['atelier-du-pere-noel', 'bannieres-atelier-noel'],
+];
+const CHRISTMAS_WALLPAPERS = ['fonds-noel', 'fonds-noel-vivants'];
+/** Les offres saisonnières de #16270 et #16271, posées APRÈS les collections Meeshy, ont leur propre bloc. */
+const SEASONAL_ADDED = [
+  'noel-bannieres',
+  'noel-contours-fixes',
+  'noel-cadres-fixes',
+  'nouvel-an-contours',
+  'nouvel-an-contours-vifs',
+  'nouvel-an-images',
+  'nouvel-an-images-vives',
+  'nouvel-an-cadres',
+  'nouvel-an-cadres-vifs',
+  'nouvel-an-fonds',
+  'nouvel-an-fonds-vifs',
+];
+const LATER = [...COLLECTIONS, ...CHRISTMAS, ...CHRISTMAS_WALLPAPERS, ...ASSORTED.map(([, banner]) => banner), ...SEASONAL_ADDED];
+const beforeSeasonal = <T extends { readonly slug: string }>(entries: readonly T[]): readonly T[] => entries.filter((entry) => !SEASONAL_ADDED.includes(entry.slug));
+const beforeCollections = <T extends { readonly slug: string }>(entries: readonly T[]): readonly T[] => entries.filter((entry) => !LATER.includes(entry.slug));
 
 describe('registres d’apparence générés', () => {
   const index = load();
@@ -27,7 +66,7 @@ describe('registres d’apparence générés', () => {
   });
 
   it('servent les quatre packs de fonds, « Essentiels » installé par défaut et non retirable', () => {
-    const wallpapers = index.entries('wallpaper');
+    const wallpapers = beforeCollections(index.entries('wallpaper'));
 
     expect(wallpapers.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations', 'animes']);
     expect(wallpapers.map((pack) => [pack.installedByDefault, pack.removable])).toEqual([[true, false], [false, true], [false, true], [false, true], [true, true]]);
@@ -35,7 +74,7 @@ describe('registres d’apparence générés', () => {
   });
 
   it('porte 17 modèles de fonds, 9 bannières, 59 contours et 14 cadres de bannière, clés lues dans les contrats vérifiés', () => {
-    const count = (domain: 'wallpaper' | 'banner' | 'avatar-ring' | 'banner-frame') => index.entries(domain).reduce((sum, pack) => sum + index.itemKeys(pack).length, 0);
+    const count = (domain: 'wallpaper' | 'banner' | 'avatar-ring' | 'banner-frame') => beforeCollections(index.entries(domain)).reduce((sum, pack) => sum + index.itemKeys(pack).length, 0);
 
     expect(count('wallpaper')).toBe(17);
     expect(count('banner')).toBe(9);
@@ -57,7 +96,7 @@ describe('registres d’apparence générés', () => {
   it('les 28 cadres photo (#10936) : sept styles, un fixe et un animé chacun, en contour d’avatar et en cadre de bannière, à installer et usage annoncé', () => {
     const styles = ['haussmannien', 'arabe', 'grec', 'ancestral', 'technologique', 'rituel', 'celte'];
     const rings = index.entries('avatar-ring').filter((pack) => pack.slug.startsWith('contours-') && pack.slug !== 'contours-essentiels' && pack.slug !== 'contours-animes');
-    const frames = index.entries('banner-frame');
+    const frames = beforeCollections(index.entries('banner-frame'));
 
     expect(rings.map((pack) => pack.slug)).toEqual(styles.map((style) => `contours-${style}`));
     expect(frames.map((pack) => pack.slug)).toEqual(styles.map((style) => `cadres-${style}`));
@@ -84,7 +123,7 @@ describe('registres d’apparence générés', () => {
   });
 
   it('chaque couche Lottie d’un contrat d’apparence est servie par le magasin (#10638) — sans quoi iOS, qui la télécharge, reste à l’image fixe', () => {
-    const entries = (['wallpaper', 'banner', 'avatar-ring'] as const).flatMap((domain) => index.entries(domain));
+    const entries = (['wallpaper', 'banner', 'avatar-ring'] as const).flatMap((domain) => beforeCollections(index.entries(domain)));
     const lottieRefs = entries.flatMap((entry) => {
       const contract = JSON.parse(readFileSync(join(ASSETS, entry.contract.src), 'utf8')) as {
         readonly designs?: readonly { readonly lottie?: { readonly src: string; readonly sha256: string } }[];
@@ -136,6 +175,28 @@ describe('registres d’apparence générés', () => {
     });
   });
 
+  it('les six collections Meeshy (#15158) sont servies, à ajouter depuis la boutique, signées Meeshy, nommées en sept langues, et chaque film est servi à son empreinte', () => {
+    const domains = [['avatar-ring', 'meeshy-signature', 'meeshy-vivants'], ['wallpaper', 'meeshy-fonds', 'meeshy-fonds-vivants'], ['banner-frame', 'meeshy-bordures', 'meeshy-bordures-vivantes']] as const;
+    const films = domains.flatMap(([domain, ...slugs]) => {
+      const served = beforeSeasonal(index.entries(domain)).slice(-2);
+      expect(served.map((pack) => pack.slug)).toEqual(slugs);
+      return served.flatMap((pack) => {
+        expect({ slug: pack.slug, installed: pack.installedByDefault, removable: pack.removable, origin: pack.origin, price: pack.price, names: Object.keys(pack.names).length }).toEqual({ slug: pack.slug, installed: false, removable: true, origin: 'builtin', price: undefined, names: 7 });
+        expect(appearancePackDetail(pack, false, true, index.itemKeys(pack).length)).toMatchObject({ author: 'Meeshy', builtin: true, price: null });
+        expect(index.itemKeys(pack).length).toBeGreaterThanOrEqual(pack.slug.endsWith('vivants') || pack.slug.endsWith('vivantes') ? (domain === 'avatar-ring' ? 6 : 4) : 6);
+        const contract = JSON.parse(readFileSync(join(ASSETS, pack.contract.src), 'utf8')) as {
+          readonly [key: string]: readonly { readonly lottie?: { readonly src: string; readonly sha256: string }; readonly decor?: { readonly back?: { readonly src: string; readonly sha256: string }; readonly front?: { readonly src: string; readonly sha256: string } } }[];
+        };
+        return [...(contract.rings ?? []), ...(contract.designs ?? []), ...(contract.frames ?? [])].flatMap((item) => [item.lottie, item.decor?.back, item.decor?.front]).flatMap((ref) => (ref ? [ref] : []));
+      });
+    });
+    expect(films).toHaveLength(13);
+    films.forEach((ref) => {
+      expect(createHash('sha256').update(readFileSync(join(ASSETS, ref.src))).digest('hex')).toBe(ref.sha256);
+      expect({ src: ref.src, served: index.isServedAsset(ref.src) }).toEqual({ src: ref.src, served: true });
+    });
+  });
+
   it('les bannières redessinées (#11165) gardent servis le contrat et la couche d’avant : un client qui les a embarqués les lit encore', () => {
     ['d4f06b1f24165674.json', '8d457c88b17f07a9.json', 'cad11fe66d4fc9ec.json', 'c23615594f604150.webp'].forEach((src) => {
       expect(existsSync(join(ASSETS, src))).toBe(true);
@@ -181,5 +242,71 @@ describe('registres d’apparence générés', () => {
     expect(sample).toMatchObject({ origin: 'official', price: 20, installedByDefault: false, removable: true });
     expect(staging.itemKeys(sample as never)).toEqual(['aurore', 'maille']);
     expect(staging.rejected).toBe(0);
+  });
+
+  it('chaque pack de contours illustrés ou de Noël a son pack de cadres de bannière, aux mêmes clés, au même nom, proposé par la boutique (#15553)', () => {
+    const rings = index.entries('avatar-ring');
+    const frames = index.entries('banner-frame');
+    ASSORTED.forEach(([ringSlug, bannerSlug]) => {
+      const ring = rings.find((pack) => pack.slug === ringSlug);
+      const banner = frames.find((pack) => pack.slug === bannerSlug);
+      expect({ bannerSlug, served: banner !== undefined && ring !== undefined }).toEqual({ bannerSlug, served: true });
+      expect(index.itemKeys(banner!)).toEqual(index.itemKeys(ring!));
+      expect(Object.keys(banner!.names)).toHaveLength(7);
+      expect(Object.entries(banner!.names).every(([lang, names]) => names?.name === ring!.names[lang as keyof typeof ring.names]?.name)).toBe(true);
+      expect([banner!.installedByDefault, banner!.removable, banner!.usage]).toEqual([false, true, { kind: 'free', surfaces: ['banner'] }]);
+    });
+    CHRISTMAS.forEach((slug) => {
+      const pack = rings.find((entry) => entry.slug === slug);
+      expect([pack?.installedByDefault, pack?.removable, pack?.usage]).toEqual([false, true, { kind: 'free', surfaces: ['avatar'] }]);
+    });
+  });
+
+  it('les fonds de Noël, fixe et animé, sont proposés par la boutique en sept langues, et chaque film animé est servi par le magasin (#15553)', () => {
+    const wallpapers = index.entries('wallpaper');
+    const packs = CHRISTMAS_WALLPAPERS.map((slug) => wallpapers.find((entry) => entry.slug === slug));
+    expect(packs.map((pack) => pack?.slug)).toEqual(CHRISTMAS_WALLPAPERS);
+    packs.forEach((pack) => {
+      expect([pack!.installedByDefault, pack!.removable]).toEqual([false, true]);
+      expect(index.itemKeys(pack!)).toHaveLength(3);
+      expect(Object.values(pack!.names).filter((names) => (names?.name.length ?? 0) > 0)).toHaveLength(7);
+    });
+    const contract = JSON.parse(readFileSync(join(ASSETS, packs[1]!.contract.src), 'utf8')) as { readonly designs: readonly { readonly lottie?: { readonly src: string; readonly sha256: string } }[] };
+    const films = contract.designs.flatMap((design) => (design.lottie ? [design.lottie] : []));
+    expect(films).toHaveLength(3);
+    films.forEach((ref) => {
+      expect(createHash('sha256').update(readFileSync(join(ASSETS, ref.src))).digest('hex')).toBe(ref.sha256);
+      expect(index.isServedAsset(ref.src)).toBe(true);
+    });
+  });
+
+  it('les offres de Noël et du Nouvel An (#16270, #16271) sont servies gratuites, signées Meeshy, dans leur fenêtre, et chaque film est servi à son empreinte', () => {
+    const CHRISTMAS_WINDOW = { startsAt: '2026-12-01T00:00:00Z', endsAt: '2027-01-07T00:00:00Z' };
+    const NEW_YEAR_WINDOW = { startsAt: '2026-12-26T00:00:00Z', endsAt: '2027-01-16T00:00:00Z' };
+    const entries = (['wallpaper', 'banner', 'avatar-ring', 'banner-frame'] as const).flatMap((domain) => index.entries(domain).map((entry) => ({ domain, entry })));
+    const christmas = [...CHRISTMAS, ...ASSORTED.filter(([ring]) => CHRISTMAS.includes(ring)).map(([, banner]) => banner), ...CHRISTMAS_WALLPAPERS, ...SEASONAL_ADDED.filter((slug) => slug.startsWith('noel-'))];
+    const newYear = SEASONAL_ADDED.filter((slug) => slug.startsWith('nouvel-an-'));
+    expect(newYear).toHaveLength(8);
+    entries.forEach(({ entry }) => {
+      const window = christmas.includes(entry.slug) ? CHRISTMAS_WINDOW : newYear.includes(entry.slug) ? NEW_YEAR_WINDOW : undefined;
+      expect({ slug: entry.slug, availability: entry.availability }).toEqual({ slug: entry.slug, availability: window });
+    });
+    const films = SEASONAL_ADDED.flatMap((slug) => {
+      const found = entries.find(({ entry }) => entry.slug === slug);
+      expect({ slug, served: found !== undefined }).toEqual({ slug, served: true });
+      const { entry } = found!;
+      expect({ slug, installed: entry.installedByDefault, removable: entry.removable, origin: entry.origin, price: entry.price, names: Object.keys(entry.names).length }).toEqual({ slug, installed: false, removable: true, origin: 'builtin', price: undefined, names: 7 });
+      expect(appearancePackDetail(entry, false, true, index.itemKeys(entry).length)).toMatchObject({ author: 'Meeshy', builtin: true, price: null });
+      expect(index.itemKeys(entry).length).toBeGreaterThanOrEqual(4);
+      const contract = JSON.parse(readFileSync(join(ASSETS, entry.contract.src), 'utf8')) as {
+        readonly [key: string]: readonly { readonly lottie?: { readonly src: string; readonly sha256: string }; readonly decor?: { readonly back?: { readonly src: string; readonly sha256: string }; readonly front?: { readonly src: string; readonly sha256: string } } }[];
+      };
+      return [...(contract.rings ?? []), ...(contract.designs ?? []), ...(contract.frames ?? [])].flatMap((item) => [item.lottie, item.decor?.back, item.decor?.front]).flatMap((ref) => (ref ? [ref] : []));
+    });
+    expect(films.length).toBeGreaterThanOrEqual(19);
+    films.forEach((ref) => {
+      expect(createHash('sha256').update(readFileSync(join(ASSETS, ref.src))).digest('hex')).toBe(ref.sha256);
+      expect(index.isServedAsset(ref.src)).toBe(true);
+    });
   });
 });

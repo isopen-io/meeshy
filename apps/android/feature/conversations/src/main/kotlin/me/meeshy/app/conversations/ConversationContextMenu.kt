@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.model.reading.mode.ReadingModeChoice
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.conversationoptions.CategoryReassignment
 import me.meeshy.sdk.model.conversationoptions.ConversationMoveMenu
@@ -76,6 +77,7 @@ internal fun ConversationContextMenu(
     currentTags: List<String>,
     actions: ConversationRowActions,
     onManageMembers: (() -> Unit)?,
+    onSelectReadingMode: (ReadingModeChoice) -> Unit = {},
 ) {
     var showObsoleteConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForAllConfirm by remember(expanded) { mutableStateOf(false) }
@@ -122,6 +124,7 @@ internal fun ConversationContextMenu(
                 onDismiss()
             },
             onCreateCategory = { name -> actions.onCreateCategory(name); onDismiss() },
+            onSelectReadingMode = { choice -> onSelectReadingMode(choice); onDismiss() },
         )
     }
 

@@ -13,10 +13,15 @@ import me.meeshy.ui.profile.LocalProfileSheetOpener
 /**
  * Le toucher d'une personne dans une conversation. Un compte ouvre la fiche utilisateur par l'ouvreur
  * global ; un visiteur sans compte ouvre la fiche de PARTICIPATION de CETTE conversation, jamais une
- * fiche de compte (son `senderId` est un `Participant.id`).
+ * fiche de compte (son `senderId` est un `Participant.id`). [readerRole] — le rôle du LECTEUR dans la conversation —
+ * fait jouer la garde de rôle du cache de la fiche (ADR-032) : sans lui, aucune copie n'est peinte.
  */
 @Composable
-internal fun rememberProfileTap(conversationId: String, accentColor: Color): (ProfileSheetUser) -> Unit {
+internal fun rememberProfileTap(
+    conversationId: String,
+    accentColor: Color,
+    readerRole: String?,
+): (ProfileSheetUser) -> Unit {
     val opener = LocalProfileSheetOpener.current
     var participation by remember(conversationId) { mutableStateOf<ProfileTapRoute.Participation?>(null) }
     participation?.let { route ->
@@ -27,6 +32,7 @@ internal fun rememberProfileTap(conversationId: String, accentColor: Color): (Pr
             accentColor = accentColor,
             onDismiss = { participation = null },
             avatarUrl = route.user.avatarUrl,
+            readerRole = readerRole,
         )
     }
     return remember(opener) {

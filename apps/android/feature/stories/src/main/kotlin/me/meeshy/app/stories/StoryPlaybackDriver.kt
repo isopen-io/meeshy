@@ -9,6 +9,8 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -18,6 +20,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import coil.imageLoader
 import coil.request.ImageRequest
+import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.scene.PrimaryVideoStatus
+import me.meeshy.sdk.model.scene.SceneReadinessKind
+import me.meeshy.sdk.model.scene.SceneContentReadiness
+import me.meeshy.sdk.model.scene.SceneScrubPlan
+import me.meeshy.sdk.model.scene.StoryPlaybackHealth
+import me.meeshy.sdk.model.scene.StoryStallWatchdog
 import me.meeshy.sdk.model.story.StoryPlaybackCauses
 import me.meeshy.sdk.model.story.StoryPlaybackClock
 import me.meeshy.sdk.model.story.StoryPlaybackHold
@@ -37,6 +46,10 @@ internal class StoryPlaybackHandle(
     val playing: Boolean,
     val lap: Int,
     val waiting: Boolean,
+    /** Le contenu de la slide n'est pas encore prêt : le compte à rebours n'a pas démarré (un boucleur le dit). */
+    val awaitingStart: Boolean,
+    /** La barre : sa fraction (seule elle la lit) et les trois temps du parcours au doigt. */
+    val scrubber: StoryProgressScrubber,
 )
 
 /** Les raisons qu'a la story d'être retenue, lues sur ce qui recouvre ou occupe le lecteur (iOS `playbackCauses`). */
@@ -75,26 +88,44 @@ internal fun rememberStoryPlayback(
     val foreground = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
     val signals = viewModel.mediaSignal
     val interruption = viewModel.interruption
-    val causes = storyPlaybackCauses(state, cover, rail, dragging, foreground, interruption.frozen)
+    var scrubbing by remember { mutableStateOf(false) }
+    val causes = storyPlaybackCauses(state, cover, rail, dragging || scrubbing, foreground, interruption.frozen)
     val hold = StoryPlaybackHold.resolve(causes)
     // L'interruption fige l'horloge, pas la vidéo : ExoPlayer reprend seul au retour du focus.
     val mediaPlaying = StoryPlaybackHold.resolve(causes.copy(interrupted = false)) != StoryPlaybackHold.Pause
 
     val progress = remember { Animatable(0f) }
     val clock = remember { StoryPlaybackClock() }
+    val barClock = remember { StoryPlaybackProgressClock() }
+    val watchdog = remember { StoryStallWatchdog() }
+    val contentReadiness = remember { SceneContentReadiness() }
+    var awaitingStart by remember { mutableStateOf(true) }
     var lap by remember { mutableIntStateOf(0) }
     val holdNow by rememberUpdatedState(hold)
     val durationNow by rememberUpdatedState(slideDurationMs)
     val readiness = signals.readiness
-    val readyNow by rememberUpdatedState(state.canAutoAdvance && !readiness.waiting)
-    val stalledNow by rememberUpdatedState(readiness.waiting)
+    val backgroundReadyNow by rememberUpdatedState(state.canAutoAdvance && !readiness.waiting)
+    val foregroundReadyNow by rememberUpdatedState(!readiness.foregroundPending)
+    val waitingNow by rememberUpdatedState(readiness.waiting)
+    val audioPendingNow by rememberUpdatedState(readiness.audioPending)
+    val slideNow by rememberUpdatedState(state.slides.getOrNull(state.index))
     val slideKey = "${state.groupIndex}:${state.index}:${state.currentStoryId}"
     val live = state.slides.isNotEmpty() && !state.isDismissed && !cover.groupIntro
 
     LaunchedEffect(slideKey, live) {
         if (!live) return@LaunchedEffect
         clock.startSlide(durationNow.toLong())
+        watchdog.reset()
+        awaitingStart = true
+        val slide = slideNow
+        val kind = when {
+            slide?.backgroundVideoUrl != null -> SceneReadinessKind.Video
+            slide?.imageUrl != null -> SceneReadinessKind.Image
+            else -> SceneReadinessKind.Flat
+        }
+        contentReadiness.begin(slideKey, kind, foregroundVideosPending = !foregroundReadyNow)
         progress.snapTo(0f)
+        barClock.reset()
         viewModel.markCurrentViewed()
     }
     SideEffect { interruption.bind(isPlaying = { holdNow != StoryPlaybackHold.Pause }, settleAsPause = viewModel::pauseByHold) }
@@ -120,14 +151,33 @@ internal fun rememberStoryPlayback(
             }
             clock.setPaused(holdNow == StoryPlaybackHold.Pause)
             clock.setInterrupted(interruption.frozen)
-            clock.setStalled(stalledNow)
-            if (readyNow) clock.markContentReady()
+            // Le garde-fou ne compte que l'attente qu'un média cause : sous pause, rien ne se bloque.
+            val waitingForMedia = waitingNow && holdNow != StoryPlaybackHold.Pause
+            val watchdogExpired = watchdog.tick(waitingForMedia, delta)
+            clock.setStalled(
+                !StoryPlaybackHealth.isProgressing(
+                    status = if (waitingNow) PrimaryVideoStatus.BUFFERING else null,
+                    isUserPaused = false,
+                    isFailed = false,
+                    watchdogExpired = watchdogExpired,
+                    isAudioPending = audioPendingNow,
+                ),
+            )
+            // Un signal par slide : le fond, puis le premier plan ; un garde-fou dépassé ne retient jamais le départ.
+            val started = (backgroundReadyNow && contentReadiness.onBackgroundReady(slideKey)) ||
+                (foregroundReadyNow && contentReadiness.onForegroundReady(slideKey)) ||
+                (watchdogExpired && (contentReadiness.onBackgroundFailsafe(slideKey) || contentReadiness.onForegroundTimedOut(slideKey)))
+            if (started) clock.markContentReady()
+            val awaiting = !clock.isActive
+            if (awaitingStart != awaiting) awaitingStart = awaiting
             val tick = clock.advance(delta)
             if (progress.value != tick.progress) progress.snapTo(tick.progress)
+            barClock.publish(tick.progress.toDouble())
             if (!tick.completed) continue
             when (StoryPlaybackHold.endAction(holdNow)) {
                 StoryPlaybackHold.EndAction.RestartInPlace -> {
                     progress.snapTo(clock.seekToFraction(0f).progress)
+                    barClock.reset()
                     signals.rewind()
                     lap++
                 }
@@ -138,21 +188,44 @@ internal fun rememberStoryPlayback(
             }
         }
     }
-    return StoryPlaybackHandle(progress, mediaPlaying, lap, waiting = readiness.waiting && live)
+    val scope = rememberCoroutineScope()
+    val scrubber = remember(viewModel) {
+        StoryProgressScrubber(
+            fraction = { barClock.fraction },
+            begin = { scrubbing = true },
+            moveTo = { raw ->
+                val fraction = if (raw.isFinite()) raw.coerceIn(0f, 1f) else 0f
+                // Sous 1 : pointer la fin ne déclenche l'avance qu'au relâcher.
+                clock.seekToFraction(minOf(fraction, SCRUB_LIVE_MAX))
+                barClock.publish(fraction.toDouble())
+                scope.launch { progress.snapTo(clock.progress) }
+                val seconds = SceneScrubPlan.seconds(fraction.toDouble(), durationNow / 1000.0)
+                signals.scrubTo(seconds, loops = slideNow?.backgroundVideoUrl != null)
+            },
+            end = { raw ->
+                val tick = clock.seekToFraction(if (raw.isFinite()) raw.coerceIn(0f, 1f) else 0f)
+                scope.launch { progress.snapTo(clock.progress) }
+                signals.endScrub()
+                scrubbing = false
+                if (tick.completed) viewModel.advance()
+            },
+        )
+    }
+    return StoryPlaybackHandle(
+        progress, mediaPlaying, lap, waiting = readiness.waiting && live,
+        awaitingStart = awaitingStart && live,
+        scrubber = scrubber,
+    )
 }
+
+private const val SCRUB_LIVE_MAX = 0.999f
 
 private const val MAX_FRAME_DELTA_MS = 100L
 
-/** Les images des slides voisines se préchargent ; une pile épuisée ferme le lecteur. */
+/** Le voisinage se prépare (N±2, groupes voisins) ; une pile épuisée ferme le lecteur. */
 @Composable
-internal fun StoryViewerLifecycleEffects(state: StoryViewerUiState, onClose: () -> Unit) {
-    val context = LocalContext.current
-    LaunchedEffect(state.prefetchUrls) {
-        val loader = context.imageLoader
-        state.prefetchUrls.forEach { url ->
-            loader.enqueue(ImageRequest.Builder(context).data(url).build())
-        }
-    }
+internal fun StoryViewerLifecycleEffects(state: StoryViewerUiState, prefetch: StoryPrefetchPlan, onClose: () -> Unit) {
+    StoryNeighborPrefetchEffect(prefetch.images)
     LaunchedEffect(state.isDismissed) {
         if (state.isDismissed) onClose()
     }

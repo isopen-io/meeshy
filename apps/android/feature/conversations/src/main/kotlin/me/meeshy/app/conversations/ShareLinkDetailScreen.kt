@@ -34,8 +34,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -96,21 +94,19 @@ fun ShareLinkDetailScreen(
     onSeeAllArrivals: (linkId: String) -> Unit = {},
     viewModel: ShareLinkDetailViewModel = hiltViewModel(),
     statsViewModel: ShareLinkStatsViewModel = hiltViewModel(),
+    toasts: ShareLinkFeedbackToasts = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(state.isDeleted) {
         if (state.isDeleted) onDeleted()
     }
 
-    val dismissLabel = stringResource(R.string.share_link_detail_dismiss)
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { message ->
-            snackbarHostState.showSnackbar(message = message, actionLabel = dismissLabel)
+            toasts.failure(message)
             viewModel.dismissError()
         }
     }
@@ -123,14 +119,16 @@ fun ShareLinkDetailScreen(
             ShareLinkDetailFeedback.SaveFailed -> saveFailedMessage
             null -> return@LaunchedEffect
         }
-        scope.launch { snackbarHostState.showSnackbar(message = message) }
+        when (state.feedback) {
+            ShareLinkDetailFeedback.SaveFailed -> toasts.failure(message)
+            else -> toasts.success(message)
+        }
         viewModel.feedbackShown()
     }
 
     MeeshyBackground {
         Scaffold(
             containerColor = Color.Transparent,
-            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(

@@ -79,6 +79,7 @@ internal object MessageEntityFactory {
         deliveredCount = message.deliveredCount,
         readCount = message.readCount,
         recipientCount = message.recipientCount ?: 0,
+        viewOnceOpenedAt = row.viewOnceOpenedAt ?: row.cachedAt.takeIf { message.isViewOnceOpenedByMe },
         columnsBackfilled = true,
     )
 }

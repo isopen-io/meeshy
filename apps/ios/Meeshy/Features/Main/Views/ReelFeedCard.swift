@@ -27,6 +27,8 @@ struct ReelFeedCardContainer: View {
     let onLike: (String) -> Void
     let onComment: (String) -> Void
     let onRepost: (String) -> Void
+    /// « Citer » du choix Repost (#15869), comme `FeedPostCard` — `nil` = absent.
+    var onQuote: ((String) -> Void)? = nil
     let onBookmark: (String) -> Void
     let onShare: (String) -> Void
     let onTapAuthor: (String) -> Void
@@ -55,6 +57,7 @@ struct ReelFeedCardContainer: View {
             onLike: onLike,
             onComment: onComment,
             onRepost: onRepost,
+            onQuote: onQuote,
             onBookmark: onBookmark,
             onShare: onShare,
             onTapAuthor: onTapAuthor,
@@ -104,6 +107,7 @@ struct ReelFeedCard: View, Equatable {
     let onLike: (String) -> Void
     let onComment: (String) -> Void
     let onRepost: (String) -> Void
+    var onQuote: ((String) -> Void)? = nil
     let onBookmark: (String) -> Void
     let onShare: (String) -> Void
     let onTapAuthor: (String) -> Void
@@ -143,6 +147,7 @@ struct ReelFeedCard: View, Equatable {
     @State private var reelCardFullscreenPlace: BubbleFullscreenPlace?
     /// La feuille « Vues » de l'auteur — qui a vu, et ce que chacun a fait (#9727).
     @State private var showViewersSheet = false
+    @State private var showRepostOptions = false
     /// Flux « Enregistrer en local » du menu « … » : pour un réel, Enregistrer
     /// télécharge le MÉDIA (image/vidéo) dans Photos — distinct du bouton
     /// favori dédié (bookmark) qui, lui, enregistre le poste dans l'app.
@@ -533,7 +538,12 @@ struct ReelFeedCard: View, Equatable {
                        count: displayRepostCount,
                        label: String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main),
                        hint: String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main),
-                       participated: isReposted) { onRepost(post.id) }
+                       participated: isReposted) { showRepostOptions = true }
+                .modifier(RepostChoiceDialog(
+                    isPresented: $showRepostOptions,
+                    onRepost: { onRepost(post.id) },
+                    onQuote: onQuote.map { quote in { quote(post.id) } }
+                ))
             Spacer()
             reelButton(outline: "bookmark", filled: "bookmark.fill",
                        tint: isBookmarked ? MeeshyColors.warning : .white,

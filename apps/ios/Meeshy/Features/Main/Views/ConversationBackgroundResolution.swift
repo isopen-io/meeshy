@@ -14,13 +14,17 @@ enum ConversationBackgroundResolution: Equatable {
     case solid(hex: String)
     case photo(attachmentId: String, veil: Double, blur: Int)
 
-    static func resolve(_ appearance: ConversationAppearance?, isDark: Bool, catalog: AppearanceCatalog = .shared) -> ConversationBackgroundResolution {
+    /// Un modèle d'un pack NON embarqué se lit dans son contrat servi (#16264), s'il est sur l'appareil.
+    static func resolve(_ appearance: ConversationAppearance?, isDark: Bool, catalog: AppearanceCatalog = .shared,
+                        served: any ServedAppearanceProviding = ServedAppearanceStore.shared) -> ConversationBackgroundResolution {
         guard let appearance else { return .signature }
         switch appearance.background {
         case .signature:
             return .signature
         case .design(let pack, let design):
-            guard let found = catalog.wallpaper(pack: pack, design: design) else { return .signature }
+            guard let found = catalog.wallpaper(pack: pack, design: design) ?? served.wallpaper(pack: pack, design: design) else {
+                return .signature
+            }
             return .design(found)
         case .solid(let color):
             guard let surface = catalog.gamut.surface(color, scheme: isDark ? .dark : .light) else { return .signature }
@@ -28,6 +32,14 @@ enum ConversationBackgroundResolution: Equatable {
         case .photo(let attachmentId, let veil, let blur):
             return .photo(attachmentId: attachmentId, veil: veil, blur: blur)
         }
+    }
+
+    /// Le fond choisi est un modèle d'un pack non embarqué dont le contrat n'est pas encore sur l'appareil :
+    /// le fil le charge (Signature en attendant, jamais un spinner).
+    static func needsServedWallpaper(_ appearance: ConversationAppearance?, catalog: AppearanceCatalog = .shared,
+                                     served: any ServedAppearanceProviding = ServedAppearanceStore.shared) -> Bool {
+        guard case .design(let pack, let design)? = appearance?.background else { return false }
+        return catalog.wallpaperPacks.contains { $0.slug == pack } == false && served.wallpaper(pack: pack, design: design) == nil
     }
 
     /// Quand la couche Lottie d'un fond joue : le réglage « Animer » de la conversation, sauf en mode économie d'énergie.

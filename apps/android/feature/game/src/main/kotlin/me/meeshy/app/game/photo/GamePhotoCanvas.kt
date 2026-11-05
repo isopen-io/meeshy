@@ -52,13 +52,18 @@ import me.meeshy.sdk.model.game.LevelTierKey
 import me.meeshy.sdk.model.game.MeeshCoinFace
 import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.PhotoStepEmblem
+import me.meeshy.sdk.model.game.FlameFormKey
+import me.meeshy.sdk.model.game.photo.GamePhotoAuthorPlate
 import me.meeshy.sdk.model.game.photo.GamePhotoLayout
+import me.meeshy.sdk.model.game.photo.PhotoAuthor
+import me.meeshy.sdk.model.game.photo.PlateSubject
 import me.meeshy.sdk.model.game.photo.GamePhotoMoment
 import me.meeshy.sdk.model.game.photo.PhotoFormat
 import me.meeshy.sdk.model.game.photo.PhotoLayout
 import me.meeshy.sdk.model.game.photo.PhotoRect
 import me.meeshy.sdk.model.game.photo.PhotoTextLine
 import me.meeshy.ui.component.game.GameMaterial
+import me.meeshy.ui.component.game.GameReferralBannerView
 import me.meeshy.ui.component.game.LevelRing
 import me.meeshy.ui.component.game.MeeFilmCatalog
 import me.meeshy.ui.component.game.MeeshCoin
@@ -74,6 +79,18 @@ sealed interface PhotoBackground {
     data class Photo(val image: Bitmap, val mirrored: Boolean) : PhotoBackground
     data object Card : PhotoBackground
 }
+
+/**
+ * Le bandeau de parrainage de la carte (#7742) : le lien de [link] (en carré QR), la Flamme et les phrases, déjà dites
+ * dans la langue de l'interface. Absent ⇒ la carte part sans lien, avec la Signature du bas.
+ */
+data class PhotoReferral(
+    val link: String,
+    val title: String,
+    val qrLabel: String,
+    val flameForm: FlameFormKey? = null,
+    val flameLabel: String? = null,
+)
 
 /** Ce que le cadre écrit : les deux lignes du moment et sa date, déjà dites dans la langue de l'interface. */
 data class PhotoCanvasText(val kicker: String, val title: String, val date: String)
@@ -97,9 +114,12 @@ fun GamePhotoCanvas(
     background: PhotoBackground,
     modifier: Modifier = Modifier,
     strike: Float = 1f,
+    referral: PhotoReferral? = null,
+    author: PhotoAuthor? = null,
+    rightToLeft: Boolean = false,
     onBirdsReady: (Boolean) -> Unit = {},
 ) {
-    val layout = remember(format) { GamePhotoLayout.layout(format) }
+    val layout = remember(format, referral != null, rightToLeft) { GamePhotoLayout.layout(format, referral != null, rightToLeft) }
     CompositionLocalProvider(LocalDensity provides PIXELS, LocalLayoutDirection provides LayoutDirection.Ltr) {
         Box(modifier.requiredSize(layout.width.dp, layout.height.dp).clipToBounds().clearAndSetSemantics {}) {
             BackgroundLayer(background, layout)
@@ -117,13 +137,33 @@ fun GamePhotoCanvas(
             CanvasLine(layout, layout.kicker, text.kicker.uppercase(), FontWeight.SemiBold, MeeshyPalette.Indigo200)
             CanvasLine(layout, layout.title, text.title, FontWeight.Bold, Color.White)
             CanvasLine(layout, layout.date, text.date, FontWeight.Medium, MeeshyPalette.Indigo200)
+            val plate = remember(moment.emblem, author) { GamePhotoAuthorPlate.plate(PlateSubject.of(moment.emblem), author) }
+            if (plate != null) {
+                GameAuthorPlateView(
+                    plate, authorPlateCaption(plate.family), layout.author.width.dp,
+                    Modifier.offset { IntOffset(layout.author.x.roundToInt(), layout.author.y.roundToInt()) },
+                )
+            }
             val mee = bird(MEE_FILM)
             val meo = bird(MEO_FILM)
             val birdsReady = mee != null && meo != null
             SideEffect { onBirdsReady(birdsReady) }
             mee?.let { Bird(it, layout.mee, mirrored = false) }
             meo?.let { Bird(it, layout.meo, mirrored = true) }
-            SignatureMark(color = Color.White, modifier = Modifier.place(layout.signature), style = SignatureStyle.Flat)
+            val banner = layout.banner
+            if (banner != null && referral != null) {
+                GameReferralBannerView(
+                    title = referral.title,
+                    link = referral.link,
+                    qrLabel = referral.qrLabel,
+                    modifier = Modifier.place(banner),
+                    flameForm = referral.flameForm,
+                    flameLabel = referral.flameLabel,
+                    rightToLeft = rightToLeft,
+                )
+            } else {
+                SignatureMark(color = Color.White, modifier = Modifier.place(layout.signature), style = SignatureStyle.Flat)
+            }
         }
     }
 }
@@ -137,6 +177,9 @@ fun ScaledPhotoCanvas(
     background: PhotoBackground,
     modifier: Modifier = Modifier,
     strike: Float = 1f,
+    referral: PhotoReferral? = null,
+    author: PhotoAuthor? = null,
+    rightToLeft: Boolean = false,
 ) {
     BoxWithConstraints(modifier.clipToBounds()) {
         val scale = constraints.maxWidth.toFloat() / format.width
@@ -150,6 +193,9 @@ fun ScaledPhotoCanvas(
                     transformOrigin = TransformOrigin(0f, 0f)
                 },
             strike = strike,
+            referral = referral,
+            author = author,
+            rightToLeft = rightToLeft,
         )
     }
 }

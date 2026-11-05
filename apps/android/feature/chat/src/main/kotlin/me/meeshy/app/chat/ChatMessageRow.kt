@@ -3,7 +3,7 @@ package me.meeshy.app.chat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import me.meeshy.app.chat.conversationcard.LocalConversationLinkCards
 import me.meeshy.feature.chat.R
@@ -30,6 +29,7 @@ import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.FlatRowFocus
 import me.meeshy.ui.format.bubbleClockLabel
 import me.meeshy.sdk.model.BubbleFlagTap
+import me.meeshy.sdk.model.playback.VoiceFlagRoute
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.sdk.model.reading.focal.FocalFocusTimestamp
@@ -37,6 +37,8 @@ import me.meeshy.sdk.model.PlainSignalAdmission
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
+import me.meeshy.sdk.model.AudioPlayerChromeElection
+import me.meeshy.ui.component.bubble.LocalBubbleAudioChrome
 
 /**
  * The callbacks one message row can raise, all keyed by the message id so a single instance
@@ -59,6 +61,8 @@ internal class ChatMessageRowActions(
     val onLocationClick: (messageId: String, location: me.meeshy.ui.component.bubble.BubbleLocation) -> Unit = { _, _ -> },
     val onReplyPreviewClick: (messageId: String) -> Unit = {},
     val onFlagTap: (messageId: String, code: String) -> Unit = { _, _ -> },
+    /** Le drapeau d'une langue de PISTE d'un vocal (jamais un texte à traduire) : voix, texte et karaoké suivent. */
+    val onAudioLanguage: (messageId: String, code: String) -> Unit = { _, _ -> },
     val onReplyCountTap: (messageId: String) -> Unit = {},
     val onReplyCountLongPress: (messageId: String) -> Unit = {},
     val onRetry: (messageId: String) -> Unit = {},
@@ -70,6 +74,8 @@ internal class ChatMessageRowActions(
     val onSenderTap: (bubble: BubbleContent) -> Unit = {},
     /** Double toucher sur un avis d'arrivée : la fiche de participation de l'arrivant. */
     val onOpenJoinProfile: (bubble: BubbleContent) -> Unit = {},
+    /** Double tap sur une notice d'appel de la rangée plate : rappeler (ou rejoindre l'appel en cours). */
+    val onCallBack: (bubble: BubbleContent) -> Unit = {},
     /** Icône de traduction de l'élu Focal : l'explorateur des langues du message. */
     val onTranslationDetail: (messageId: String) -> Unit = {},
     /** Window-space frame of the bubble, captured during layout for the long-press hero. */
@@ -109,7 +115,7 @@ internal fun ChatMessageRow(
     linkPreviewStore: LinkPreviewStore,
     linkPreviewCache: LinkPreviewCache,
     actions: ChatMessageRowActions,
-    audioPlayer: ChatAudioPlayer? = null,
+    audioPlayer: ChatVoicePlayback? = null,
     canWrite: Boolean = true,
     showReplyCountPill: Boolean = false,
     /** Script / Focal : la rangée plate (iOS `FocalRow`) au lieu de la bulle. */
@@ -127,10 +133,7 @@ internal fun ChatMessageRow(
     /** L'overlay d'appui long présente CETTE cellule : elle s'efface en fondu, la copie élevée prend sa place. */
     hiddenForOverlay: Boolean = false,
 ) {
-    val uriHandler = LocalUriHandler.current
-    val audioPlayback by remember(bubble.audios, audioPlayer) {
-        derivedStateOf { audioPlayer?.let { player -> bubble.audios.firstNotNullOfOrNull(player::bubbleFor) } }
-    }
+    val audioPlayback by rememberBubbleVoicePlayback(audioPlayer, bubble.audios)
     val linkContext = LocalContext.current
     val messageId = bubble.messageId
     val offer = remember(bubble, canWrite) { MessageRowOffer.of(bubble, canWrite) }
@@ -142,7 +145,8 @@ internal fun ChatMessageRow(
     // Le panneau secondaire est un état de vue de la bulle (iOS `@State secondaryLangCode`), pas du fil.
     var secondaryCode by remember(messageId) { mutableStateOf<String?>(null) }
     val flagHaptics = rememberMeeshyHaptics()
-    val callbacks = remember(bubble, actions, audioPlayer, uriHandler, offer, replyLabel, forwardLabel, menuLabel, reacts, canWrite, secondaryCode) {
+    val transcriptionRequests = LocalChatTranscriptionRequests.current
+    val callbacks = remember(bubble, actions, audioPlayer, transcriptionRequests, offer, replyLabel, forwardLabel, menuLabel, reacts, canWrite, secondaryCode) {
         BubbleCallbacks(
             onLongPress = { actions.onLongPress(messageId) },
             onReactionClick = { emoji: String -> actions.onReactionClick(messageId, emoji) }.takeIf { reacts },
@@ -153,8 +157,6 @@ internal fun ChatMessageRow(
                 if (attachmentId == null) actions.onLongPress(messageId) else actions.onImageLongPress(messageId, attachmentId)
             },
             onLocationClick = { location -> actions.onLocationClick(messageId, location) },
-            onAudioClick = { audio -> audioPlayer?.toggle(audio, bubble.voiceTrackSource()) },
-            onAudioSeek = { audio, seconds -> audioPlayer?.seek(audio, seconds) },
             onFileClick = { file -> actions.onFileClick(messageId, file.attachmentId) },
             onReplyPreviewClick = { actions.onReplyPreviewClick(messageId) },
             onStoryCitationClick = bubble.storyReply?.postId?.takeIf { bubble.storyReply?.opensTarget == true }
@@ -163,26 +165,32 @@ internal fun ChatMessageRow(
             onQuotedMediaTap = bubble.replyToId?.let { quotedId -> { actions.onQuotedMediaTap(messageId, quotedId) } },
             onFlagTap = { code ->
                 flagHaptics.light()
-                val strip = bubble.languageStrip
-                val active = strip.firstOrNull { it.isActive }?.code
-                val outcome = BubbleFlagTap.handleTap(
-                    code = code,
-                    current = BubbleFlagTap.Context(activeCode = active, secondaryCode = secondaryCode),
-                    originalLanguage = strip.firstOrNull { it.isOriginal }?.code,
-                    preferredCode = bubble.primaryLanguageCode,
-                    contentCodes = strip.filter { !it.isTranslatable }.mapTo(HashSet()) { it.code },
-                )
-                secondaryCode = outcome.secondaryCode
-                when (outcome.action) {
-                    BubbleFlagTap.Action.SwitchPrimary ->
-                        if (outcome.activeCode != active) actions.onFlagTap(messageId, code)
-                    BubbleFlagTap.Action.RequestTranslation -> actions.onFlagTap(messageId, code)
-                    BubbleFlagTap.Action.OpenSecondary, BubbleFlagTap.Action.CloseSecondary, BubbleFlagTap.Action.None -> Unit
+                val voiceTrack = bubble.voiceFlagTrack(code)
+                if (voiceTrack != null) {
+                    actions.onAudioLanguage(messageId, voiceTrack)
+                } else {
+                    val strip = bubble.languageStrip
+                    val active = strip.firstOrNull { it.isActive }?.code
+                    val outcome = BubbleFlagTap.handleTap(
+                        code = code,
+                        current = BubbleFlagTap.Context(activeCode = active, secondaryCode = secondaryCode),
+                        originalLanguage = strip.firstOrNull { it.isOriginal }?.code,
+                        preferredCode = bubble.primaryLanguageCode,
+                        contentCodes = strip.filter { !it.isTranslatable }.mapTo(HashSet()) { it.code },
+                    )
+                    secondaryCode = outcome.secondaryCode
+                    when (outcome.action) {
+                        BubbleFlagTap.Action.SwitchPrimary ->
+                            if (outcome.activeCode != active) actions.onFlagTap(messageId, code)
+                        BubbleFlagTap.Action.RequestTranslation -> actions.onFlagTap(messageId, code)
+                        BubbleFlagTap.Action.OpenSecondary, BubbleFlagTap.Action.CloseSecondary, BubbleFlagTap.Action.None -> Unit
+                    }
                 }
             },
             onTranslate = { actions.onTranslationDetail(messageId) },
             onShowReadStatus = { actions.onLongPress(messageId) },
             onRetry = { actions.onRetry(messageId) },
+            onCallBack = { actions.onCallBack(bubble) }.takeIf { bubble.callSummary != null },
             onSayHi = { actions.onReply(messageId) }.takeIf { canWrite && bubble.isArrivalsNotice },
             onOpenJoinProfile = { _: String -> actions.onOpenJoinProfile(bubble) }.takeIf { bubble.joinNotice?.opensProfile == true },
             onAddReaction = { actions.onAddReaction(messageId) }.takeIf { reacts },
@@ -198,7 +206,7 @@ internal fun ChatMessageRow(
                     MessageRowAction.Forward -> BubbleAccessibilityAction(forwardLabel) { actions.onForward(messageId) }
                 }
             } + BubbleAccessibilityAction(menuLabel) { actions.onLongPress(messageId) },
-        )
+        ).withVoice(audioPlayer, bubble).withTranscriptionRequests(transcriptionRequests, bubble)
     }
     val translatingCodes = remember(translatingLanguages, messageId) {
         translatingLanguages.filter { it.startsWith("$messageId|") }.mapTo(HashSet()) { it.removePrefix("$messageId|") }
@@ -294,6 +302,7 @@ internal fun ChatMessageRow(
             actions.onBubbleFramed(messageId, it.boundsInWindow())
         },
     ) {
+        CompositionLocalProvider(LocalBubbleAudioChrome provides AudioPlayerChromeElection.of(focalElected)) {
         ThreadRow(
             rendering = if (flat) ThreadRowRendering.Flat else ThreadRowRendering.Bubble,
             bubble = shownBubble,
@@ -306,6 +315,7 @@ internal fun ChatMessageRow(
             metaAlpha = metaAlpha,
             focus = if (focalElected) rememberFlatRowFocus(bubble, focalScale, actions) else null,
         )
+        }
     }
     }
     // iOS n'a plus de pastille « N réponses » sous la bulle (le fil s'ouvre par l'appui long →
@@ -369,4 +379,20 @@ internal data class OpenedPlace(val messageId: String, val place: me.meeshy.sdk.
             )
         }
     }
+}
+
+/**
+ * La langue de PISTE qu'un drapeau du pied sélectionne sur un vocal ouvert ([VoiceFlagRoute]) : `null` quand le drapeau est
+ * un drapeau de texte (la loi des drapeaux de la bulle s'applique), inerte, ou que le vocal est protégé.
+ */
+private fun BubbleContent.voiceFlagTrack(code: String): String? {
+    if (audios.isEmpty() || audios.any { it.isProtected }) return null
+    val original = audios.firstNotNullOfOrNull { it.originalLanguage }
+    val route = VoiceFlagRoute.route(
+        code = code,
+        textContentCodes = languageStrip.filter { !it.isTranslatable }.mapTo(HashSet()) { it.code },
+        audioOriginal = original,
+        audioTrackCodes = audios.flatMap { it.translatedLanguages },
+    )
+    return (route as? VoiceFlagRoute.Route.Audio)?.let { it.track ?: original }
 }

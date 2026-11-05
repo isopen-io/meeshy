@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="twofactor_copied_expires">Copiado, se borrará en 30 s</string>
+</resources>

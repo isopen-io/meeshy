@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import me.meeshy.app.feed.QuoteComposerSheet
 import me.meeshy.app.feed.rememberContentShareOut
 import androidx.compose.ui.platform.LocalContext
 import me.meeshy.feature.reels.R
@@ -58,6 +59,10 @@ import me.meeshy.ui.component.chrome.StatusBarIconsOverDark
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.video.rememberVideoWindowShown
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.profile.ofAuthor
+import me.meeshy.ui.profile.LocalProfileSheetOpener
+import me.meeshy.ui.profile.LocalProfileSheetPresented
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.ui.unit.LayoutDirection
 
@@ -133,6 +138,8 @@ fun ReelsScreen(
             onComments = { commentsReelId = it },
             onBookmark = viewModel::toggleBookmark,
             onRepost = viewModel::repost,
+            // « Citer » (#12234) : le compositeur de citation du réel, par-dessus le lecteur figé.
+            onQuote = viewModel::beginQuote,
             // « Envoyer » (#14315) : la feuille Meeshy, qui frappe le lien de l'utilisateur.
             onSend = { id ->
                 reelsNow.firstOrNull { it.id == id }?.let { reel ->
@@ -142,11 +149,22 @@ fun ReelsScreen(
             },
         )
     }
-    val openProfile by rememberUpdatedState(onOpenProfile)
     val openStory by rememberUpdatedState(onOpenStory)
     val hasStory by rememberUpdatedState(authorHasStory)
-    // Un auteur qui a une story non vue : son avatar ouvre cette story (un seul groupe), sinon son profil (iOS).
-    val openAuthor = remember { { id: String -> if (hasStory(id)) openStory(id) else openProfile(id) } }
+    val profileOpener = LocalProfileSheetOpener.current
+    // Un auteur qui a une story non vue : son avatar ouvre cette story (un seul groupe), sinon sa fiche (iOS).
+    val openAuthor: (String) -> Unit = remember(profileOpener) {
+        { id: String ->
+            if (hasStory(id)) {
+                openStory(id)
+            } else {
+                val reel = reelsNow.firstOrNull { it.authorId == id }
+                ProfileSheetUser.ofAuthor(id, reel?.username, reel?.authorName, reel?.authorAvatarUrl)?.let(profileOpener::open)
+            }
+        }
+    }
+    // La fiche ouverte fige le lecteur (même verrou qu'un appel) : il reprend à sa fermeture.
+    val profileSheetOpen = LocalProfileSheetPresented.current.value
 
     ReelsRevealContainer(
         feedButtonStorage = feedButtonStorage,
@@ -175,7 +193,7 @@ fun ReelsScreen(
                     onSoundProbed = { id, hasTrack -> probedAudio[id] = hasTrack },
                     chromeHidden = chromeOff,
                     revealCompleted = revealCompleted,
-                    isCallActive = isCallActive,
+                    isCallActive = isCallActive || profileSheetOpen || state.quoteComposer != null,
                     quickEmojis = quickEmojis,
                     railActions = railActions,
                     onChromeHidden = chrome::setHidden,
@@ -206,6 +224,16 @@ fun ReelsScreen(
         // Hors du contenu qui suit le doigt : une bande qui bouge avec son propre geste en annulerait la mesure.
         ReelEdgeSwipeStrip(state = edgeSwipe, onClose = requestClose, modifier = Modifier.align(Alignment.CenterStart))
         }
+    }
+
+    val quoteComposer = state.quoteComposer
+    if (quoteComposer != null && !inVideoWindow) {
+        QuoteComposerSheet(
+            composer = quoteComposer,
+            onTextChange = viewModel::onQuoteTextChange,
+            onSubmit = viewModel::submitQuote,
+            onDismiss = viewModel::cancelQuote,
+        )
     }
 
     val openCommentsReelId = commentsReelId

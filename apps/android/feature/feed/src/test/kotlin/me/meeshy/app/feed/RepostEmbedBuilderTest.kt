@@ -290,4 +290,72 @@ class RepostEmbedBuilderTest {
         assertThat(gone.repostAttribution).isNull()
         assertThat(feedPostPresentation().repostAttribution).isNull()
     }
+
+    // --- état de langue propre au post cité, likes, +N, expiration ---
+
+    @Test
+    fun build_citedPostCarriesItsOwnLanguageStateFromThePrism() {
+        val translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello"), "es" to ApiPostTranslationEntry(text = "Hola"))
+        val embed = RepostEmbedBuilder.build(repost(translations = translations), Prefs(systemLanguage = "pt", regionalLanguage = "es"), null)!!
+        assertThat(embed.displayedLanguage).isEqualTo("es")
+        assertThat(embed.content).isEqualTo("Hola")
+        assertThat(embed.languageFlags.map { it.code }).containsExactly("fr", "en").inOrder()
+        assertThat(embed.languageTexts).containsEntry("en", "Hello")
+        assertThat(embed.languageTexts).containsEntry("fr", "Bonjour")
+    }
+
+    @Test
+    fun build_noTranslationMeansTheOriginalLanguageIsReadAndNoFlagRepeatsIt() {
+        val embed = RepostEmbedBuilder.build(repost(), Prefs(systemLanguage = "fr"), null)!!
+        assertThat(embed.displayedLanguage).isEqualTo("fr")
+        assertThat(embed.languageFlags).isEmpty()
+    }
+
+    @Test
+    fun build_likesAreClampedAndExtraMediaCountsAfterTheFirst() {
+        val media = List(4) { ApiPostMedia(id = "m$it", mimeType = "image/png", fileUrl = "/u/$it.png") }
+        val embed = RepostEmbedBuilder.build(repost(media = media, likeCount = -3), Prefs(), null)!!
+        assertThat(embed.likeCount).isEqualTo(0)
+        assertThat(embed.extraMediaCount).isEqualTo(3)
+        assertThat(RepostEmbedBuilder.build(repost(likeCount = 12), Prefs(), null)?.likeCount).isEqualTo(12)
+    }
+
+    @Test
+    fun build_coversAudioMentionsExpiryAndOriginalRepost() {
+        val source = repost().copy(
+            audioUrl = "/u/voice.m4a",
+            mentions = listOf(me.meeshy.sdk.model.PostReference(userId = "u1", username = "Alice")),
+            expiresAt = "2999-01-01T00:00:00Z",
+            originalRepostOfId = "root-1",
+        )
+        val embed = RepostEmbedBuilder.build(source, Prefs(), mediaBaseUrl = "https://cdn/")!!
+        assertThat(embed.audioUrl).isEqualTo("https://cdn/u/voice.m4a")
+        assertThat(embed.mentionUsernames).containsExactly("alice")
+        assertThat(embed.expiresAtIso).isEqualTo("2999-01-01T00:00:00Z")
+        assertThat(embed.originalRepostOfId).isEqualTo("root-1")
+        assertThat(embed.isUnavailable).isFalse()
+    }
+
+    @Test
+    fun build_anExpiredNonStoryIsADrawnUnavailableStateButAStoryKeepsItsOwnLifecycle() {
+        val now = 1_800_000_000_000L
+        val expired = repost().copy(expiresAt = "2020-01-01T00:00:00Z")
+        assertThat(RepostEmbedBuilder.build(expired, Prefs(), null, nowEpochMillis = now)?.isUnavailable).isTrue()
+        val story = repost(type = "STORY").copy(expiresAt = "2020-01-01T00:00:00Z")
+        assertThat(RepostEmbedBuilder.build(story, Prefs(), null, nowEpochMillis = now)?.isUnavailable).isFalse()
+    }
+
+    @Test
+    fun reelStrip_prefersVideoThenAudioAndAutoplayKeyIsTheContainingPost() {
+        val video = RepostEmbedBuilder.build(
+            repost(type = "REEL", media = listOf(ApiPostMedia(id = "a", mimeType = "audio/mpeg", fileUrl = "/a.mp3"), ApiPostMedia(id = "v", mimeType = "video/mp4", fileUrl = "/v.mp4"))),
+            Prefs(), null,
+        )!!
+        assertThat(video.reelStripKind()).isEqualTo(me.meeshy.sdk.model.FeedReelKind.VIDEO)
+        assertThat(video.reelStripVideo()?.id).isEqualTo("v")
+        val audio = RepostEmbedBuilder.build(repost(type = "REEL", media = listOf(ApiPostMedia(id = "a", mimeType = "audio/mpeg", fileUrl = "/a.mp3"))), Prefs(), null)!!
+        assertThat(audio.reelStripKind()).isEqualTo(me.meeshy.sdk.model.FeedReelKind.AUDIO)
+        assertThat(audio.reelStripVideo()).isNull()
+        assertThat(RepostEmbedAutoplayKey.of("outer-9")).isEqualTo("outer-9")
+    }
 }

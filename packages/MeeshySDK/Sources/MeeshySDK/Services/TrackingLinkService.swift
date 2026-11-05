@@ -54,7 +54,7 @@ public final class TrackingLinkService: Sendable {
     /// Active ou désactive un lien
     public func setActive(token: String, isActive: Bool) async throws {
         struct SetActiveBody: Encodable { let isActive: Bool }
-        let _: APIResponse<TrackingLink> = try await api.patch(
+        let _: APIResponse<DiscardedResponseBody> = try await api.patch(
             TrackingLinksEndpoint.byToken(token: token),
             body: SetActiveBody(isActive: isActive)
         )

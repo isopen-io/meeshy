@@ -138,6 +138,16 @@ class NotificationsViewModel @Inject constructor(
     }
 
     /**
+     * Tirer pour rafraîchir de marque : suspend jusqu'au retour du réseau, pour que l'indicateur reste armé
+     * pendant la revalidation. Un échec se relance au geste (haptique d'erreur) sans jamais effacer le cache affiché.
+     */
+    suspend fun pullRefresh() {
+        notificationRepository.refresh()
+        val category = _state.value.selectedCategory
+        if (category != NotificationFilterCategory.ALL) fetchCategory(category, append = false)
+    }
+
+    /**
      * Infinite scroll, under EVERY chip (iOS paginates the selected category's own server list):
      * [NotificationFilterCategory.ALL] extends the shared cache, a category extends its own page.
      * Re-entrancy guarded so a fast double-scroll never fires two overlapping fetches; a failed
@@ -175,8 +185,8 @@ class NotificationsViewModel @Inject constructor(
         _state.update {
             it.copy(
                 selectedCategory = category,
-                categoryRows = emptyList(),
-                categoryHasMore = false,
+                categoryRows = notificationRepository.cachedItems(category.scope()).orEmpty(),
+                categoryHasMore = categoryPaging[category]?.hasMore ?: false,
                 isCategoryLoading = false,
                 isLoadingMore = false,
                 loadDidFail = false,
@@ -187,39 +197,44 @@ class NotificationsViewModel @Inject constructor(
 
     private var categoryJob: Job? = null
 
+    /** Le curseur et le « reste-t-il » PROPRES à chaque catégorie : revenir à une puce reprend où elle en était. */
+    private val categoryPaging = HashMap<NotificationFilterCategory, CategoryPaging>()
+
+    private data class CategoryPaging(val nextCursor: String?, val hasMore: Boolean)
+
     private fun fetchCategory(category: NotificationFilterCategory, append: Boolean) {
         categoryJob?.cancel()
-        val query = category.serverQuery
-        val offset = if (append) _state.value.categoryRows.size else 0
+        val scope = category.scope()
+        val paging = categoryPaging[category]
+        val held = _state.value.categoryRows
+        val cursor = if (append) paging?.nextCursor else null
         _state.update { it.copy(isCategoryLoading = !append && it.filteredNotifications.isEmpty(), isLoadingMore = append) }
         categoryJob = viewModelScope.launch {
             val result = try {
-                notificationRepository.list(
-                    offset = offset,
-                    limit = CATEGORY_PAGE_SIZE,
-                    unreadOnly = query.unreadOnly,
-                    types = query.types,
-                    hideReadTypes = query.hideReadTypes,
-                )
+                notificationRepository.listScopePage(scope = scope, cursor = cursor, offset = if (append) held.size else 0)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 null
             }
+            if (_state.value.selectedCategory != category) return@launch
+            val page = (result as? NetworkResult.Success)?.data
+            val rows = page?.let {
+                val known = if (append) _state.value.categoryRows else emptyList()
+                val knownIds = known.mapTo(HashSet()) { row -> row.id }
+                known + it.items.filter { row -> row.id !in knownIds }
+            }
+            if (page != null && rows != null) {
+                categoryPaging[category] = CategoryPaging(page.nextCursor, page.hasMore)
+                notificationRepository.replaceAll(scope, rows, page.hasMore, page.nextCursor)
+            }
             _state.update { current ->
-                if (current.selectedCategory != category) return@update current
                 val settled = current.copy(isCategoryLoading = false, isLoadingMore = false)
-                when (result) {
-                    is NetworkResult.Success -> {
-                        val known = if (append) settled.categoryRows else emptyList()
-                        val knownIds = known.mapTo(HashSet()) { it.id }
-                        settled.copy(
-                            categoryRows = known + result.data.filter { it.id !in knownIds },
-                            categoryHasMore = result.data.size >= CATEGORY_PAGE_SIZE,
-                            loadDidFail = false,
-                        )
-                    }
-                    else -> if (append) settled else settled.copy(loadDidFail = settled.filteredNotifications.isEmpty())
+                when {
+                    page != null && rows != null ->
+                        settled.copy(categoryRows = rows, categoryHasMore = page.hasMore, loadDidFail = false)
+                    append -> settled
+                    else -> settled.copy(loadDidFail = settled.filteredNotifications.isEmpty())
                 }
             }
         }
@@ -296,9 +311,6 @@ class NotificationsViewModel @Inject constructor(
         is NotificationQuickAction.Write -> R.string.notifications_quick_write_failed
     }
 
-    private companion object {
-        const val CATEGORY_PAGE_SIZE = 30
-    }
 }
 
 private fun NotificationsUiState.failed(message: String?): NotificationsUiState =

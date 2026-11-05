@@ -2,6 +2,7 @@ package me.meeshy.core.database.migration
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import me.meeshy.core.database.RetainedTranslationCascade
 import me.meeshy.core.database.search.SearchIndexSchema
 
 /**
@@ -14,6 +15,7 @@ internal object CacheReset {
         CacheTables.all.forEach { db.execSQL("DROP TABLE IF EXISTS `${it.name}`") }
         CacheTables.all.forEach(db::createCacheTable)
         SearchIndexSchema.create(db)
+        RetainedTranslationCascade.ensure(db)
         DurableTables.ensureAdditive(db)
     }
 }

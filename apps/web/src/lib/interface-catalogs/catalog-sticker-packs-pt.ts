@@ -91,6 +91,8 @@ const ptStickerPacks = {
   'packs.frames.yourAtmosphere': "Sua atmosfera",
   'packs.frames.atmosphereKept': "Este pacote traz a sua atmosfera: continua instalado. Mude de atmosfera para removê-lo.",
   'packs.frames.atmosphereQueued': "Offline: a sua escolha será enviada quando a conexão voltar.",
+  'packs.sheet.open': "Ver a ficha do pack {name}",
+  'packs.preview.open': "Ver {name} em tela cheia",
 } satisfies StickerPacksCatalog;
 
 export default ptStickerPacks;

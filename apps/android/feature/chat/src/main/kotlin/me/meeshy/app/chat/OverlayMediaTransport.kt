@@ -118,6 +118,12 @@ class OverlayMediaTransport private constructor(
         )
     }
 
+    /**
+     * The same media now answers to [url] (#15969 — its send was acknowledged, its address went from the device's copy to
+     * the served one): the label changes, nothing reloads, the playhead stays. Inert when nothing is loaded.
+     */
+    fun relabeled(url: String): OverlayMediaTransport = if (currentUrl == null || currentUrl == url) this else copy(currentUrl = url)
+
     /** The item played to the end: rewind to the start and stop (iOS end observer). */
     fun onEnded(): OverlayMediaTransport = copy(isPlaying = false, progress = 0.0, currentSeconds = 0.0)
 

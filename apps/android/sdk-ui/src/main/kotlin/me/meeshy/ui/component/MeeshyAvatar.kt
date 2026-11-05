@@ -63,7 +63,9 @@ import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.avatar.AvatarAccessibilityLabel
+import me.meeshy.sdk.model.ServedProfileDecorItem
 import me.meeshy.sdk.model.appearance.AvatarRingDesign
+import me.meeshy.sdk.model.appearance.AvatarRingChoice
 import me.meeshy.sdk.model.avatar.AvatarContext
 import me.meeshy.sdk.model.avatar.AvatarCornerBadge
 import me.meeshy.sdk.model.avatar.AvatarDotTone
@@ -74,6 +76,7 @@ import me.meeshy.sdk.model.avatar.PresenceHereWave
 import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.appearance.AvatarRingLayer
+import me.meeshy.ui.appearance.rememberAvatarRing
 import me.meeshy.ui.component.avatar.AvatarGestureHost
 import me.meeshy.ui.component.avatar.AvatarGestures
 import me.meeshy.ui.component.avatar.AvatarStoryRing
@@ -135,7 +138,9 @@ public fun MeeshyAvatar(
     moodEmoji: String? = null,
     imageUrl: String? = null,
     here: ConversationHere = ConversationHere.ABSENT,
+    decorRing: ServedProfileDecorItem? = null,
 ) {
+    val equippedRing = rememberAvatarRing(decorRing)
     val density = LocalDensity.current
     val textSize = with(density) { (size * 0.38f).toSp() }
     val fallbackDescription = stringResource(R.string.avatar_fallback)
@@ -151,26 +156,28 @@ public fun MeeshyAvatar(
     val face = remember(name, imageUrl, apiBaseUrl) { AvatarFace.resolve(name, imageUrl, apiBaseUrl) }
 
     Box(modifier = modifier.size(boxSize), contentAlignment = Alignment.Center) {
-        when (storyRing) {
-            StoryRingState.Unread -> Box(
-                Modifier.size(size + ringExtra)
-                    .border(ringWidth * 2, MeeshyPalette.Indigo500, CircleShape),
-            )
-            StoryRingState.Read -> Box(
-                Modifier.size(size + ringExtra)
-                    .border(ringWidth, containerColor.copy(alpha = 0.3f), CircleShape),
-            )
-            StoryRingState.None -> Unit
-        }
+        AvatarRingLayer(equippedRing, footprint = size, storyRingSize = if (hasRing) boxSize else null) {
+            when (storyRing) {
+                StoryRingState.Unread -> Box(
+                    Modifier.size(size + ringExtra)
+                        .border(ringWidth * 2, MeeshyPalette.Indigo500, CircleShape),
+                )
+                StoryRingState.Read -> Box(
+                    Modifier.size(size + ringExtra)
+                        .border(ringWidth, containerColor.copy(alpha = 0.3f), CircleShape),
+                )
+                StoryRingState.None -> Unit
+            }
 
-        AvatarDisc(
-            face = face,
-            size = size,
-            brush = Brush.linearGradient(listOf(containerColor, gradientEnd)),
-            contentColor = contentColor,
-            fontSize = textSize,
-            modifier = Modifier.semantics { contentDescription = name.ifBlank { fallbackDescription } },
-        )
+            AvatarDisc(
+                face = face,
+                size = size,
+                brush = Brush.linearGradient(listOf(containerColor, gradientEnd)),
+                contentColor = contentColor,
+                fontSize = textSize,
+                modifier = Modifier.semantics { contentDescription = name.ifBlank { fallbackDescription } },
+            )
+        }
 
         if (!moodEmoji.isNullOrEmpty()) {
             Text(
@@ -227,6 +234,9 @@ public fun meeshyDotToneColor(tone: AvatarDotTone): Color = when (tone) {
  * [isUser] = faux pour une entite (communaute, groupe) : ni humeur ni anneau de story.
  * [ring] = le contour choisi par son porteur (miroir d'`avatarRingWithin`) : il se pose DANS l'empreinte, l'anneau de
  * story reste concentrique dedans, la pastille de presence se pose par-dessus. `null` = rendu historique.
+ * [decorRing] = la RÉFÉRENCE du contour équipé telle que la passerelle la sert avec la personne (`profileDecor.avatarRing`),
+ * résolue par le catalogue ([rememberAvatarRing]) ; [ring] (déjà résolu) prime, une entité n'en porte jamais ([AvatarRingChoice]).
+ * Le contour est décoratif : ni toucher, ni TalkBack.
  */
 @Composable
 public fun MeeshyAvatar(
@@ -249,8 +259,10 @@ public fun MeeshyAvatar(
     thumbHash: String? = null,
     userId: String? = null,
     gestures: AvatarGestures? = null,
+    decorRing: ServedProfileDecorItem? = null,
 ) {
     val social = LocalSocialChrome.current
+    val posedRing = AvatarRingChoice.effective(ring, rememberAvatarRing(decorRing), isUser)
     val reduceMotion = LocalReduceMotion.current
     val apiBaseUrl = LocalMediaBaseUrl.current
     val face = remember(name, imageUrl, apiBaseUrl) { AvatarFace.resolve(name, imageUrl, apiBaseUrl) }
@@ -299,7 +311,7 @@ public fun MeeshyAvatar(
         modifier = modifier.size(frame),
     ) {
         Box(modifier = Modifier.size(frame), contentAlignment = Alignment.Center) {
-            AvatarRingLayer(ring, footprint = size, storyRingSize = if (hasRing) frame else null) {
+            AvatarRingLayer(posedRing, footprint = size, storyRingSize = if (hasRing) frame else null) {
                 AvatarStoryRing(
                     state = effectiveRing,
                     frame = frame,

@@ -113,7 +113,7 @@ final class CallManagerToggleSpeakerFailureCorrectionSourceTests: XCTestCase {
         guard let fn = body(
             source(for: "CallManager+Speaker.swift"),
             from: "static func override(_ port: AVAudioSession.PortOverride, isSpeaker: Bool) -> Bool {",
-            to: "extension CallManager {"
+            to: "fileprivate extension Logger {"
         ) else { return }
         XCTAssertTrue(fn.contains("try session.overrideOutputAudioPort(port)"))
         XCTAssertTrue(fn.contains("return false"), "a thrown override must surface as a failure the caller can revert")

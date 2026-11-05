@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Chantier #15462 « Android lit les vocaux comme iOS », de bout en bout et SANS S'ARRÊTER : lots du programme de parité (branches claude/android-<clé>) ordonnancés par ready.py --scope, cadrés contre l'arbre vivant, développés en TDD, relus et corrigés, audités s'ils sont sensibles, prouvés par workflow_dispatch d'android.yml (CI des PR gelée), fusionnés dans dev et clos avec leur preuve, en boucle jusqu'à ce que tout le périmètre soit fusionné ou bloqué après deux tentatives — opus cadre, relit, prouve et arbitre ; sonnet développe ; haiku fait le mécanique",
   whenToUse:
-    "Lancer, reprendre ou poursuivre le chantier audio Android (#15462) : lecture qui survit à la conversation et à l'app, enchaînement des non-écoutés, karaoké, forme d'onde, mini-lecteur, plein écran décoré avec Réagir, Répondre et Transférer. Args, tous optionnels : { run, scope, date, attribution, batch (2), maxFix (4), maxRounds (160), maxIdle (40), tentatives (2), parapluie (15462), outillage (15463), milestone (17), base ('dev'), brancheOutillage ('claude/youthful-mayer-an0qgn'), sensibles, lourds }.",
+    "Reprise : l'état fait foi dans les issues de #15462 et le registre de dev — le workflow le relit seul (lots fusionnés sautés, branches du chantier reprises, PR ouvertes prouvées puis fusionnées) ; passer attribution = les lignes Co-Authored-By/Claude-Session de la session qui reprend, et rapprocher=false. Lancer, reprendre ou poursuivre le chantier audio Android (#15462) : lecture qui survit à la conversation et à l'app, enchaînement des non-écoutés, karaoké, forme d'onde, mini-lecteur, plein écran décoré avec Réagir, Répondre et Transférer. Args, tous optionnels : { run, scope, date, attribution, batch (2), maxFix (4), maxRounds (160), maxIdle (40), tentatives (2), rapprocher (true), pleinEcranSansBulle (false), sessionsPrecedentes ([]), parapluie (15462), outillage (15463), milestone (17), base ('dev'), brancheOutillage ('claude/youthful-mayer-an0qgn'), sensibles, lourds }.",
   phases: [
     { title: 'Préparer', detail: "répertoire d'exécution, PR de l'outillage, rouge préalable de dev, rapprochement des issues des lots déjà fusionnés", model: 'opus' },
     { title: 'Ordonnancer', detail: 'ready.py --scope : lots prêts, branches à reprendre, PR du périmètre restées ouvertes', model: 'haiku' },
@@ -33,6 +33,9 @@ const ATTR = typeof A.attribution === 'string' && A.attribution
   ? A.attribution
   : 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01EbRyWaS7aHE8U5jr55RNSY'
 const SESSION_TRAILER = (ATTR.match(/Claude-Session: (\S+)/) || [])[1] || ''
+const SESSIONS_CHANTIER = [...new Set([SESSION_TRAILER, 'https://claude.ai/code/session_01EbRyWaS7aHE8U5jr55RNSY',
+  ...(Array.isArray(A.sessionsPrecedentes) ? A.sessionsPrecedentes : [])].filter(Boolean))]
+const PLEIN_ECRAN_SANS_BULLE = A.pleinEcranSansBulle === true
 const PARAPLUIE = Number.isInteger(A.parapluie) ? A.parapluie : 15462
 const OUTILLAGE = Number.isInteger(A.outillage) ? A.outillage : 15463
 const MILESTONE = Number.isInteger(A.milestone) ? A.milestone : 17
@@ -42,6 +45,7 @@ const MAX_FIX = Number.isInteger(A.maxFix) && A.maxFix > 0 ? A.maxFix : 4
 const MAX_ROUNDS = Number.isInteger(A.maxRounds) && A.maxRounds > 0 ? A.maxRounds : 160
 const MAX_IDLE = Number.isInteger(A.maxIdle) && A.maxIdle > 0 ? A.maxIdle : 40
 const TENTATIVES = Number.isInteger(A.tentatives) && A.tentatives > 0 ? A.tentatives : 2
+const RAPPROCHER = A.rapprocher !== false
 
 const SCOPE = Array.isArray(A.scope) && A.scope.length ? A.scope : [
   // 1-2 · la lecture survit à la conversation et à l'app
@@ -78,7 +82,7 @@ const branche = (key) => `claude/android-${key}`
 // ---------------------------------------------------------------------------
 // SOCLE COMMUN
 // ---------------------------------------------------------------------------
-const JVM_CHECK = `cd "$D/apps/android" && ./meeshy.sh jvm-check -PjvmCheckModelOnly --no-daemon -q -Dorg.gradle.jvmargs=-Xmx6g -Pkotlin.compiler.execution.strategy=in-process`
+const JVM_CHECK = `cd "$D/apps/android" && flock ${RUN}/jvm-check.lock ./meeshy.sh jvm-check -PjvmCheckModelOnly --no-daemon -q -Dorg.gradle.jvmargs=-Xmx4g -Pkotlin.compiler.execution.strategy=in-process`
 
 const clone = (key, existante) => `D=${LOTS}/${key}
 rm -rf "$D" && { git clone -q --shared --no-checkout ${REPO} "$D" || git clone -q --filter=blob:none --no-checkout https://github.com/${REPO_GH} "$D"; } && cd "$D" \\
@@ -105,11 +109,13 @@ FAITS DE CET ENVIRONNEMENT (mesurés le 2026-11-03) :
 - Conteneur sans SDK Android (dl.google.com refusé). Le SEUL compilateur Android est la CI : .github/workflows/android.yml.
 - La CI des PR est GELÉE (vars.PR_CI_GEL) : sur une PR, les jobs d'android.yml sont « skipped » — un skipped ne prouve RIEN.
   La preuve d'un lot est un workflow_dispatch d'android.yml sur SA branche, au SHA de tête, jobs verts.
-- dev est rouge par moments sur « Android (assemble + unit tests) » : une autre session répare dev (branches claude/android-fix-dev-tests*).
-  N'y touche pas ; un rouge identique sur dev est PRÉEXISTANT.
+- dev est rouge par moments sur « Android (assemble + unit tests) » : d'autres sessions le réparent (branches claude/android-fix-dev-tests*).
+  N'y touche pas ; un TEST rouge identique sur dev est PRÉEXISTANT, une erreur de COMPILATION ne l'est jamais (rien n'est alors prouvé).
 - :core:model se prouve en local, sans crypto ni e2ee (libsignal est refusé par le proxy) :
   ${JVM_CHECK}
-  (5 à 15 min ; jamais deux en même temps sur cette machine : si un autre jvm-check tourne — pgrep -f jvm-check — attends qu'il finisse).
+  (5 à 15 min ; le verrou flock n'en laisse tourner qu'UN à la fois sur la machine — deux compilations parallèles ont fait redémarrer
+  le conteneur. N'enlève jamais le flock, ne lance jamais ./gradlew en parallèle, et commit + push AVANT chaque jvm-check : un redémarrage
+  efface tout ce qui n'est pas poussé).
 - GitHub : outils MCP mcp__github__* pour TOUT (issues, PR, checks, actions, fusion), chargés par ToolSearch. La CLI gh ne sert QU'À la
   recherche (gh api -X GET search/issues -f q='repo:${REPO_GH} is:issue …'). GraphQL est refusé. Verdict des checks d'une PR : écris
   { state, head_sha, total_count, check_runs (toutes les pages de pull_request_read get_check_runs), statuses (get_status) } dans un
@@ -223,7 +229,8 @@ MISSION — PRÉPARER LE CHANTIER (mécanique et vérifications, aucune ligne de
 1. Répertoire d'exécution : si ${RUN}/ready.py n'existe pas, cd ${REPO} && apps/android/scripts/parity/setup_run.sh ${RUN} ; sinon
    recopie l'outillage À JOUR depuis ${REPO} (cp apps/android/scripts/parity/{ready.py,lot.py,issue_body.py,pr_body.py} ${RUN}/ ;
    cp apps/android/docs/parite-ios/plan/*.json ${RUN}/plan/ en gardant F0a/F0b ; cp apps/android/docs/parite-ios/CONVENTIONS.md ${RUN}/).
-   Crée ${RUN}/blocked.txt, ${RUN}/satisfied.txt et ${NOTES} s'ils manquent. N'active PAS ${RUN}/rescue-enabled (il reprendrait la
+   Crée ${RUN}/blocked.txt, ${RUN}/satisfied.txt et ${NOTES} s'ils manquent.${PLEIN_ECRAN_SANS_BULLE ? `
+   DÉCISION DE REPRISE : le plein écran audio ne dépend plus de la bulle — python3 -c "import json;p='${RUN}/plan/D.json';L=json.load(open(p));[l.__setitem__('deps',[d for d in l['deps'] if d!='vocal-bulle-branchement-fil']) for l in L if l['key']=='audio-plein-ecran-pager-et-transport'];open(p,'w').write(json.dumps(L,ensure_ascii=False,indent=1))" (l'ouverture depuis la bulle reste câblée par le lot de la bulle).` : ''} N'active PAS ${RUN}/rescue-enabled (il reprendrait la
    branche fraîche d'une autre session) : la reprise passe par --rescue, décidée lot par lot.
 2. Contrôle de l'outillage : cd ${REPO} && node scripts/ci/pr-verte.mjs --self-test ; python3 ${RUN}/ready.py audio --gen 2 --batch 1 --scope ${SCOPE.join(',')}
    doit rendre un JSON avec unknown vide. Un échec ⇒ pret=false et la sortie dans rapport.
@@ -239,7 +246,7 @@ MISSION — PRÉPARER LE CHANTIER (mécanique et vérifications, aucune ligne de
    prends la plus récente. Conclusion failure ⇒ mcp__github__get_job_logs run_id <id> failed_only true return_content true tail_lines 400 :
    relève les tâches Gradle rouges et les FQN des tests rouges (étape « Summarise failing tests »). Écris
    ${RUN}/rouge-prealable.json = { run_id, head_sha, conclusion, echecs: [...] } et rends echecs dans rouge_prealable.
-5. Rapprochement des issues de lots DÉJÀ fusionnés du programme audio qui sont restées ouvertes (les PR vers ${BASE} ne ferment pas les
+5. ${RAPPROCHER ? '' : 'SAUTE CE POINT (déjà fait à un tour précédent) : rends issues_rapprochees vide. '}Rapprochement des issues de lots DÉJÀ fusionnés du programme audio qui sont restées ouvertes (les PR vers ${BASE} ne ferment pas les
    issues : seule la branche par défaut le fait) : #14519, #11823, #14899, #14746, #15088, #14947, #11645, #11835, #13393, #13680, #12109.
    Pour chacune : lis-la (mcp__github__issue_read), confronte son critère au code de origin/${BASE} (lecture seule dans ${REPO} après
    git fetch origin ${BASE} : git show origin/${BASE}:<chemin>, git grep <symbole> origin/${BASE}). Critère TENU ⇒ ferme-la avec la preuve
@@ -249,17 +256,18 @@ Rends dev_head (SHA court de origin/${BASE}), pr_outillage (0 si aucune), outill
 
 const schedPrompt = (blocked, enVol, adoptes) => `${socle(null)}
 MISSION — ORDONNANCER LE TOUR (mécanique).
-1. python3 ${RUN}/ready.py audio --gen 2 --batch ${BATCH} --scope ${SCOPE.join(',')}${blocked.length ? ` --exclude ${blocked.join(',')}` : ''}${enVol.length ? ` --inflight ${enVol.join(',')}` : ''}
+1. python3 ${RUN}/ready.py audio --gen 2 --stale-hours 6 --batch ${BATCH} --scope ${SCOPE.join(',')}${blocked.length ? ` --exclude ${blocked.join(',')}` : ''}${enVol.length ? ` --inflight ${enVol.join(',')}` : ''}
    (sortie JSON : ready, remaining, waiting_on_deps, claimed_unmerged, claimed_without_pr, blocked, scope_closure).
 2. Pour chaque clé de claimed_without_pr (branche poussée, aucune PR) : cd ${REPO} && git fetch -q origin ${branche('<clé>')} &&
-   git log -1 --format='%ct%n%B' FETCH_HEAD. Elle est À REPRENDRE si son dernier commit porte « ${SESSION_TRAILER} » (ce chantier)
+   git log -1 --format='%ct%n%B' FETCH_HEAD. Elle est À REPRENDRE si un de ses 5 derniers commits porte une de ces lignes de session du
+   chantier : ${SESSIONS_CHANTIER.join(' , ')}
    ou date de plus de 6 heures (date -u +%s) ; sinon une autre session la tient : tenus_ailleurs.
    S'il y en a à reprendre, relance la commande du point 1 en ajoutant --rescue <clés,séparées,par,virgules> et rends CETTE sortie, avec rescued.
 3. Les lots ${enVol.length ? enVol.join(', ') : '(aucun)'} sont EN VOL dans ce chantier : ni à reprendre, ni tenus ailleurs.
 4. PR ouvertes du périmètre : mcp__github__list_pull_requests owner isopen-io repo meeshy base ${BASE} state open perPage 100 (pages suivantes
    tant qu'une page est pleine). Garde celles dont head.ref = claude/android-<clé> avec <clé> dans scope_closure${adoptes.length ? `, hors PR déjà suivies : ${adoptes.join(', ')}` : ''}.
    Pour chacune, mcp__github__pull_request_read get_commits (dernier commit) : elle est À REPRENDRE (prs_a_reprendre) si son dernier commit
-   porte « ${SESSION_TRAILER} » ou date de plus de 3 heures ; sinon tenus_ailleurs.
+   porte une des lignes de session du chantier (${SESSIONS_CHANTIER.join(' , ')}) ou date de plus de 3 heures ; sinon tenus_ailleurs.
 Rends les champs du JSON final, plus rescued, prs_a_reprendre, tenus_ailleurs.`
 
 const issuePrompt = (key) => `${socle(key)}
@@ -364,8 +372,12 @@ de production (seul un merge de ${BASE} est permis), tu ne fusionnes pas.
 5. Rouge : get_job_logs run_id <id> failed_only true return_content true tail_lines 500. Relève les erreurs de compilation (« e: file:///…/X.kt:L:C … »)
    et les tests rouges (étape « Summarise failing tests ») dans echecs. Puis le rouge de ${BASE} À CETTE HEURE : dernière exécution terminée
    d'android.yml sur ${BASE} (event push), et la précédente ; leurs tests rouges (get_job_logs failed_only). Un échec du lot est PRÉALABLE s'il
-   est identique (même tâche, même FQN de test, même message) dans l'une de ces deux exécutions de ${BASE} ; une erreur de COMPILATION ne
-   l'est jamais si ${BASE} compile. Tous les échecs préalables ⇒ etat rouge-prealable (prealables : « FQN — run <id> de ${BASE} ») ; sinon rouge.
+   est identique (même tâche, même FQN de test, même message) dans l'une de ces deux exécutions de ${BASE}.
+   Une erreur de COMPILATION n'est JAMAIS préalable : quand assembleDebug échoue, les modules du lot n'ont pas tous été compilés ni testés,
+   donc RIEN n'est prouvé. Si l'erreur est hors des fichiers du lot et identique sur ${BASE} (${BASE} ne compile pas), rends etat en-cours avec
+   detail « ${BASE} ne compile pas : <erreur> » — le script repassera, et tu merges alors ${BASE} dans la branche (point 1) pour relancer quand
+   ${BASE} compile. Sinon c'est etat rouge. Les tests rouges ne peuvent être préalables que si assembleDebug est VERT.
+   Tous les échecs préalables ⇒ etat rouge-prealable (prealables : « FQN — run <id> de ${BASE} ») ; sinon rouge.
 6. Checks de la PR : écris le fichier de charge (voir FAITS) et node ${REPO}/scripts/ci/pr-verte.mjs --rest <fichier> → checks_pr (sortie tronquée).
    Un check rouge de la PR hors android.yml (skipped ne compte pas) ⇒ dis-le dans detail ; s'il vient du lot, etat rouge.
 7. Poste sur la PR UN commentaire (mcp__github__add_issue_comment issue_number ${pr}) : SHA, lien du run, jobs, échecs et préalables,

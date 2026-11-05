@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.composer.StoryRepostAudience
 import me.meeshy.sdk.model.story.StoryReplyRules
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.profile.LocalProfileSheetPresented
 
 /**
  * L'HÔTE du lecteur de stories : il choisit entre chargement, introuvable et lecture, puis assemble les fichiers
@@ -76,6 +77,7 @@ fun StoryViewerScreen(
     val commentThread = rememberStoryCommentThread(state.currentStoryId)
     val currentItem = state.currentStoryId?.let(viewModel::rawItem)
     val commentCount = rememberStoryCommentCount(commentThread, currentItem?.commentCount ?: 0)
+    val soundShown = rememberStorySoundButtonShown(slide, currentItem?.storyEffects)
     val liveRailPlan = StoryRailPlan.resolve(
         isOwnStory = state.isOwnStory,
         hasTranslatableContent = state.availableLanguages.isNotEmpty(),
@@ -83,10 +85,10 @@ fun StoryViewerScreen(
         canCompose = onComposeStory != null && state.canCompose,
         commentCount = commentCount,
         isRepublishable = StoryRepostAudience.isRepublishable(currentItem?.visibility),
-        hasAudibleSound = slide?.hasSound == true,
+        hasAudibleSound = soundShown,
     )
     val railPlan = rememberFrozenRailPlan(
-        StoryRailFreezeInput(state.currentStoryId, liveRailPlan, slide?.hasSound == true, rememberStoryCommentsReconciled(commentThread)),
+        StoryRailFreezeInput(state.currentStoryId, liveRailPlan, soundShown, rememberStoryCommentsReconciled(commentThread)),
     )
     val composing = railPlan.pinsCommentComposer && storyCommentHolds(commentThread)
     val groupIntro = rememberStoryGroupIntro(state, slide?.opening, viewModel)
@@ -98,6 +100,7 @@ fun StoryViewerScreen(
         composing = composing,
         reading = chrome.captionExpanded || chrome.transcript.requested,
         groupIntro = groupIntro.shown,
+        profile = LocalProfileSheetPresented.current.value,
     )
     val actions = rememberStoryViewerActions(
         state = state,
@@ -113,7 +116,7 @@ fun StoryViewerScreen(
     )
 
     val playback = rememberStoryPlayback(state, slideDurationMs, cover, rail, cardMotion.dragging, viewModel)
-    StoryViewerLifecycleEffects(state, onClose)
+    StoryViewerLifecycleEffects(state, viewModel.prefetch.collectAsStateWithLifecycle().value, onClose)
 
     CompositionLocalProvider(LocalStoryAudioGain provides { StoryViewerCardTransform.audioGain(cardMotion.dismissal.value) }) {
     StoryViewerShell(
@@ -125,6 +128,8 @@ fun StoryViewerScreen(
         playing = playback.playing,
         lap = playback.lap,
         waiting = playback.waiting,
+        awaitingStart = playback.awaitingStart,
+        scrubber = playback.scrubber,
         composing = cover.composing,
         railPlan = railPlan,
         commentThread = commentThread,

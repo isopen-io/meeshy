@@ -1,18 +1,17 @@
-import { useState } from 'react';
-
 import { PeerAvatar } from '@/components/peer-avatar';
 import { Field } from '@/components/field';
 import { Glyph } from '@/components/glyph';
 import type { PersonSummary } from '@/lib/api/friend-requests';
-import { GROUP_DESCRIPTION_MAX, GROUP_TITLE_MAX, type GroupDraft, type GroupField } from '@/lib/conversation-new/group';
+import { GROUP_TITLE_MAX, type GroupDraft, type GroupField } from '@/lib/conversation-new/group';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
- * **LE COMPOSEUR D'UN GROUPE** (#6706) — le nom, la description, qui en est, et
- * le geste qui le crée.
+ * **LE COMPOSEUR D'UN GROUPE** (#6706) — le nom, qui en est, et le geste qui
+ * le crée. Aucune description à la création (#14646, comme iOS) : elle se
+ * règle ensuite dans la fiche du groupe.
  *
  * Extrait de `conversation-new.tsx` pour la raison habituelle (budget de
  * taille) et pour une seconde : la liste des personnes sert les DEUX modes,
@@ -39,9 +38,9 @@ export type GroupComposerProps = {
   readonly online: boolean;
   readonly refusedField: GroupField | null;
   readonly refusalMessage: string | null;
-  readonly focused: 'title' | 'description' | null;
-  readonly onEdit: (field: 'title' | 'description', value: string) => void;
-  readonly onFocus: (field: 'title' | 'description' | null) => void;
+  readonly focused: 'title' | null;
+  readonly onEditTitle: (value: string) => void;
+  readonly onFocus: (field: 'title' | null) => void;
   readonly onRemove: (participantId: string) => void;
   readonly onSubmit: () => void;
 };
@@ -54,7 +53,7 @@ export function GroupComposer({
   refusedField,
   refusalMessage,
   focused,
-  onEdit,
+  onEditTitle,
   onFocus,
   onRemove,
   onSubmit,
@@ -63,7 +62,6 @@ export function GroupComposer({
     refusedField === field && refusalMessage !== null ? refusalMessage : undefined;
 
   const disabled = busy || !online;
-  const [describing, setDescribing] = useState(draft.description !== '' || refusedField === 'description');
 
   return (
     <form
@@ -95,7 +93,7 @@ export function GroupComposer({
             maxLength={GROUP_TITLE_MAX}
             value={draft.title}
             placeholder={translate(currentInterfaceLanguage(), 'newConversation.group.name.placeholder')}
-            onInput={(event) => onEdit('title', event.currentTarget.value)}
+            onInput={(event) => onEditTitle(event.currentTarget.value)}
             onFocus={() => onFocus('title')}
             onBlur={() => onFocus(null)}
             className={INPUT_CLASS}
@@ -103,46 +101,6 @@ export function GroupComposer({
           />
         )}
       </Field>
-
-      {describing ? (
-        <Field
-          id="group-description"
-          label={translate(currentInterfaceLanguage(), 'newConversation.group.description')}
-          tint={FIELD_TINT}
-          focused={focused === 'description'}
-          error={errorFor('description')}
-        >
-          {({ id, describedBy }) => (
-            <textarea
-              id={id}
-              name="description"
-              data-group-description
-              aria-describedby={describedBy}
-              aria-invalid={refusedField === 'description'}
-              rows={2}
-              maxLength={GROUP_DESCRIPTION_MAX}
-              value={draft.description}
-              placeholder={translate(currentInterfaceLanguage(), 'newConversation.group.description.placeholder')}
-              onInput={(event) => onEdit('description', event.currentTarget.value)}
-              onFocus={() => onFocus('description')}
-              onBlur={() => onFocus(null)}
-              className="w-0 min-w-0 flex-1 resize-none bg-transparent py-2.5 text-body outline-none"
-              style={{ color: 'var(--color-ios-ink)' }}
-            />
-          )}
-        </Field>
-      ) : (
-        <button
-          type="button"
-          data-group-description-open
-          onClick={() => setDescribing(true)}
-          className="flex items-center gap-2 justify-self-start rounded-chip px-1 text-caption font-semibold"
-          style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
-        >
-          <Glyph name="plus" size={14} />
-          {translate(currentInterfaceLanguage(), 'newConversation.group.description')}
-        </button>
-      )}
 
       <ChosenPeople chosen={chosen} error={errorFor('participants')} onRemove={onRemove} />
 
@@ -171,8 +129,9 @@ export function GroupComposer({
 }
 
 /**
- * QUI EN EST — et le refus de la LISTE se pose ICI, sous les pastilles, parce
- * que c'est là que le geste qui le corrige se trouve.
+ * QUI EN EST — rien tant que personne n'est choisi (l'interrupteur dit déjà
+ * qu'un groupe se crée seul) ; le refus de la LISTE se pose ICI, sous les
+ * pastilles, parce que c'est là que le geste qui le corrige se trouve.
  */
 function ChosenPeople({
   chosen,
@@ -183,19 +142,13 @@ function ChosenPeople({
   readonly error: string | undefined;
   readonly onRemove: (participantId: string) => void;
 }) {
+  if (chosen.length === 0) return error === undefined ? null : <RefusalNote error={error} />;
   return (
     <div className="grid gap-1.5">
       <span className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
-        {chosen.length === 0
-          ? translate(currentInterfaceLanguage(), 'newConversation.group.chosen.none')
-          : translate(currentInterfaceLanguage(), chosen.length > 1 ? 'newConversation.group.chosen.other' : 'newConversation.group.chosen.one', { count: String(chosen.length) })}
+        {translate(currentInterfaceLanguage(), chosen.length > 1 ? 'newConversation.group.chosen.other' : 'newConversation.group.chosen.one', { count: String(chosen.length) })}
       </span>
-      {chosen.length === 0 ? (
-        <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {translate(currentInterfaceLanguage(), 'newConversation.group.chosen.hint')}
-        </p>
-      ) : (
-        <ul data-group-chosen className="flex flex-wrap gap-2">
+      <ul data-group-chosen className="flex flex-wrap gap-2">
           {chosen.map((person) => {
             const name = person.displayName ?? person.username;
             /* LA PHOTO (#6975) — même donnée, même loi que la liste d'où
@@ -227,13 +180,16 @@ function ChosenPeople({
               </li>
             );
           })}
-        </ul>
-      )}
-      {error === undefined ? null : (
-        <p role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
-          {error}
-        </p>
-      )}
+      </ul>
+      {error === undefined ? null : <RefusalNote error={error} />}
     </div>
+  );
+}
+
+function RefusalNote({ error }: { readonly error: string }) {
+  return (
+    <p role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
+      {error}
+    </p>
   );
 }

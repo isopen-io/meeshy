@@ -2,6 +2,20 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+private struct PendingUploadProgressKey: EnvironmentKey {
+    static let defaultValue: MessageUploadProgress? = nil
+}
+
+extension EnvironmentValues {
+    /// La progression de téléversement de LA bulle de cette cellule (#14702), posée par la
+    /// cellule du fil. Une valeur d'environnement : la bulle reste `Equatable` sur ses seules
+    /// entrées, et seule la pastille d'envoi observe l'objet. `nil` ⇒ l'horloge d'envoi.
+    var pendingUploadProgress: MessageUploadProgress? {
+        get { self[PendingUploadProgressKey.self] }
+        set { self[PendingUploadProgressKey.self] = newValue }
+    }
+}
+
 /// The single delivery-status glyph used by every bubble footer. Covers all
 /// `DeliveryStatus` cases plus the offline-pending hourglass. Replaces
 /// `BubbleMediaDeliveryCheckmark` and the per-site re-implementations.
@@ -45,7 +59,7 @@ struct BubbleDeliveryCheck: View, Equatable {
         case .invisible:
             EmptyView()
         case .sending:
-            SendingClockGlyph(sendStartedAt: sendStartedAt, tint: tint)
+            PendingUploadSendingGlyph(sendStartedAt: sendStartedAt, tint: tint)
         case .clock:
             Image(systemName: "clock")
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs))
@@ -174,6 +188,57 @@ struct BubbleDeliveryCheck: View, Equatable {
                 guard !Task.isCancelled else { return }
                 isRevealed = true
             }
+        }
+    }
+}
+
+/// L'envoi d'une bulle : sa progression de téléversement quand la cellule en porte une
+/// (#14702), sinon l'horloge.
+struct PendingUploadSendingGlyph: View {
+    let sendStartedAt: Date?
+    let tint: Color
+    @Environment(\.pendingUploadProgress) private var pendingUpload
+
+    var body: some View {
+        if let pendingUpload {
+            UploadProgressGlyph(progress: pendingUpload, sendStartedAt: sendStartedAt, tint: tint)
+        } else {
+            BubbleDeliveryCheck.SendingClockGlyph(sendStartedAt: sendStartedAt, tint: tint)
+        }
+    }
+}
+
+/// L'horloge d'envoi d'une bulle dont les pièces montent (#14702) : un anneau et le
+/// pourcentage de SA session. Seule vue qui observe la progression — le reste de la bulle
+/// ne se redessine pas à chaque point gagné.
+struct UploadProgressGlyph: View {
+    @ObservedObject var progress: MessageUploadProgress
+    let sendStartedAt: Date?
+    let tint: Color
+
+    var body: some View {
+        if let percent = progress.percent {
+            HStack(spacing: MeeshySpacing.xxs) {
+                ZStack {
+                    Circle()
+                        .stroke(tint.opacity(MeeshyOpacity.light), lineWidth: 1.5)
+                    Circle()
+                        .trim(from: 0, to: CGFloat(percent) / 100)
+                        .stroke(tint, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 0.2), value: percent)
+                }
+                .frame(width: MeeshyIconSize.xxs, height: MeeshyIconSize.xxs)
+                Text(MessageUploadProgress.accessibilityValue(percent: percent))
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(tint)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(BubbleDeliveryCheck.label(.sending))
+            .accessibilityValue(MessageUploadProgress.accessibilityValue(percent: percent))
+            .accessibilityAddTraits(.updatesFrequently)
+        } else {
+            BubbleDeliveryCheck.SendingClockGlyph(sendStartedAt: sendStartedAt, tint: tint)
         }
     }
 }

@@ -56,12 +56,16 @@ internal class VoiceRecordingService : Service() {
             startedAtEpochMs = intent.getLongExtra(EXTRA_STARTED_AT, 0L),
             statusLabel = intent.getStringExtra(EXTRA_LABEL).orEmpty(),
             isFinished = false,
+            title = intent.getStringExtra(EXTRA_TITLE).orEmpty(),
+            level = intent.getIntExtra(EXTRA_LEVEL, 0),
         )
     }
 
     internal companion object {
         private const val EXTRA_STARTED_AT = "me.meeshy.app.voice.STARTED_AT"
         private const val EXTRA_LABEL = "me.meeshy.app.voice.LABEL"
+        private const val EXTRA_TITLE = "me.meeshy.app.voice.TITLE"
+        private const val EXTRA_LEVEL = "me.meeshy.app.voice.LEVEL"
 
         /** Appelé quand le système refuse le premier plan APRÈS que la demande de démarrage a été acceptée. */
         @Volatile
@@ -71,5 +75,7 @@ internal class VoiceRecordingService : Service() {
             Intent(context, VoiceRecordingService::class.java)
                 .putExtra(EXTRA_STARTED_AT, snapshot.startedAtEpochMs)
                 .putExtra(EXTRA_LABEL, snapshot.statusLabel)
+                .putExtra(EXTRA_TITLE, snapshot.title)
+                .putExtra(EXTRA_LEVEL, snapshot.level)
     }
 }

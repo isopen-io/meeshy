@@ -43,6 +43,9 @@ struct ReelsPlayerView: View {
     /// Backed by `StoryViewModel.hasUnviewedStories` / `storyRingState` in
     /// RootView — the single source of truth the feed avatars read.
     var authorHasStory: ((_ userId: String) -> Bool)? = nil
+    /// La porte de citation (#15869) : « Citer » du rail l'ouvre sur le réel
+    /// affiché. `nil` = le choix Repost n'offre que « Repartager ».
+    var quoteHost: QuoteComposerHost? = nil
 
     @Environment(\.layoutDirection) private var layoutDirection
 
@@ -54,6 +57,7 @@ struct ReelsPlayerView: View {
     /// Réel en édition via le menu « … » du rail d'actions — parité avec le
     /// menu de `FeedPostCard`/`ReelFeedCard` (même `EditPostSheet`).
     @State private var editingReel: FeedPost?
+    @State private var quotedReel: FeedPost?
     /// Comment target carried into the comments sheet when it auto-opens from a
     /// notification. Cleared when the user opens comments manually so a later tap
     /// never re-scrolls to the old target.
@@ -187,21 +191,8 @@ struct ReelsPlayerView: View {
         }
         .modifier(ReelShareSheets(outgoing: $shareableLink, sent: $sentReel, onClose: onClose))
         .mediaSaveFlow(mediaSaveCoordinator)
-        .postEditCover(item: $editingReel) { reel in
-            EditPostSheet(
-                originalContent: reel.content,
-                originalLanguage: reel.originalLanguage,
-                originalType: reel.type,
-                media: reel.media.map { EditablePostMedia($0) }, originalStoryEffects: reel.storyEffects,
-                originalLocation: reel.location,
-                originalVisibility: reel.visibility,
-                originalVisibilityUserIds: reel.visibilityUserIds ?? [],
-                isRepost: reel.repost != nil,
-                onSave: { draft in
-                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
-                },
-                onDismiss: { editingReel = nil }
-            )
+        .postEditCover(item: $editingReel) { reel, draft in
+            await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects, additions: draft.additions)
         }
         // Call-aware : un appel entrant pendant un réel ouvert doit le mettre en
         // pause (vidéo + audio) — la session audio appartient alors à l'appel. Le
@@ -325,6 +316,7 @@ struct ReelsPlayerView: View {
                     commentsReel = reel
                 },
                 onSend: { sentReel = ReelSend.open(reel) },
+                onQuote: quoteHost == nil ? nil : { quotedReel = reel },
                 onTapAuthorName: { openProfile(for: reel) },
                 onTapAvatar: { openAvatarDestination(for: reel) },
                 isWithinPreloadWindow: isWithinPreloadWindow(index, activeIndex: activeIndex)
@@ -349,6 +341,7 @@ struct ReelsPlayerView: View {
             if preloadWindow != window { preloadWindow = window }
             await preloader.prepare(reels: reels, activeIndex: activeIndex, window: window)
         }
+        .modifier(QuoteComposerCover(quoted: $quotedReel, host: quoteHost))
     }
 
     /// Applique une élection et ouvre la mesure du passage quand le réel qui
@@ -522,6 +515,7 @@ struct ReelPageView: View {
     var onComment: () -> Void
     /// « Envoyer » du rail (#14310) — l'hôte présente la feuille Meeshy.
     var onSend: () -> Void
+    var onQuote: (() -> Void)? = nil
     /// Author name tap → profile.
     var onTapAuthorName: () -> Void
     /// Avatar tap → story (if active) else profile.
@@ -993,7 +987,7 @@ struct ReelPageView: View {
         ReelActionRail(
             viewModel: viewModel,
             reel: reel,
-            onComment: onComment, onSend: onSend
+            onComment: onComment, onSend: onSend, onQuote: onQuote
         )
     }
 }

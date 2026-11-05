@@ -35,6 +35,7 @@ import me.meeshy.app.navigation.Routes
 import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.game.pages.GamePage
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
+import me.meeshy.sdk.model.game.rules.GameRulesFocus
 
 /** Les routes du jeu : la première page « Progression » et la fiche d'un concept (iOS `Route.progression`, `.progressionConcept`). */
 object GameRoutes {
@@ -69,6 +70,9 @@ object GameRoutes {
 
     /** Le carnet des règles ouvert à une section (iOS `Route.progressionRules`) : « Comprendre les médailles ». */
     fun rules(section: GameRulesSection): String = "$PROGRESSION/rules/${section.wire}"
+
+    /** Le carnet ouvert à une règle (iOS `Route.progressionRules(rule:)`) : elle défile en haut et se teinte un instant. */
+    fun rule(index: Int): String = "$PROGRESSION/rules/${GameRulesFocus.Rule(index).wire}"
 
     /** « Comment ça marche » de la première page (iOS `onOpenRules(nil)`) : le carnet ouvert en haut, sans section visée. */
     const val RULES_TOP: String = "$PROGRESSION/rules/$RULES_TOP_ARG"
@@ -163,9 +167,11 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
             popEnterTransition = { slideInHorizontally(tween(PUSH_MILLIS)) { -it / 6 } + fadeIn(tween(PUSH_MILLIS)) },
             popExitTransition = { slideOutHorizontally(tween(PUSH_MILLIS)) { it / 4 } + fadeOut(tween(FADE_MILLIS)) },
         ) { entry ->
+            val wire = entry.arguments?.getString(GameRoutes.RULES_ARG)
             GameRulesScreen(
                 onBack = { navController.popBackStack() },
-                focused = GameRulesSection.fromWire(entry.arguments?.getString(GameRoutes.RULES_ARG)),
+                focused = GameRulesSection.fromWire(wire),
+                focusedRule = (GameRulesFocus.parse(wire) as? GameRulesFocus.Rule)?.index,
             )
         }
         builder.composable(

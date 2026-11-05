@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "profile_open_of",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

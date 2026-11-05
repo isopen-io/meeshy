@@ -50,8 +50,12 @@ class StoryRepostTrayTest {
     private suspend fun seed(post: ApiPost) =
         db.storyDao().upsertAll(listOf(StoryEntity(post.id, MeeshyApi.json.encodeToString(post), 1L, 1L)))
 
-    private val friendStory = ApiPost(id = "s1", type = "STORY", createdAt = "2026-11-02T09:00:00Z")
-    private val myRepost = ApiPost(id = "rp1", type = "STORY", createdAt = "2026-11-02T10:00:00Z")
+    // Des stories VIVANTES : depuis bebd40fec1 la revalidation purge les stories expirées (20 h), et une date figée
+    // finit toujours par expirer.
+    private fun hoursAgo(hours: Long): String = java.time.Instant.now().minusSeconds(hours * 3_600).toString()
+
+    private val friendStory = ApiPost(id = "s1", type = "STORY", createdAt = hoursAgo(3))
+    private val myRepost = ApiPost(id = "rp1", type = "STORY", createdAt = hoursAgo(2))
 
     @Test
     fun `a story repost joins the tray at once`() = runTest {
@@ -116,7 +120,7 @@ class StoryRepostTrayTest {
         assertThat(repository.cachedStories().map { it.id }).containsExactly("s1")
     }
 
-    private val friendRepost = ApiPost(id = "rp2", type = "STORY", createdAt = "2026-11-02T11:00:00Z")
+    private val friendRepost = ApiPost(id = "rp2", type = "STORY", createdAt = hoursAgo(1))
 
     @Test
     fun `a friend's story repost announced by post-reposted joins the tray at once`() = runTest {

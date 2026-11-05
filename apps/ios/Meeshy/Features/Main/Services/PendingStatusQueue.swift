@@ -59,7 +59,7 @@ actor PendingStatusQueue {
                 ? ConversationsEndpoint.byConversationIdMarkAsRead(conversationId: action.conversationId)
                 : ConversationsEndpoint.byConversationIdMarkAsReceived(conversationId: action.conversationId)
             do {
-                let _: APIResponse<[String: String]> = try await apiClient.request(
+                let _: APIResponse<DiscardedResponseBody> = try await apiClient.request(
                     endpoint, method: "POST"
                 )
             } catch {

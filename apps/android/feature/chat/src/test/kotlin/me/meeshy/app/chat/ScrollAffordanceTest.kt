@@ -295,6 +295,32 @@ class ScrollAffordanceTest {
         assertThat(next.isVisible).isFalse()
         assertThat(next.lastAcknowledgedId).isEqualTo("only")
     }
+
+    @Test
+    fun the_badge_resyncs_to_zero_once_a_programmatic_scroll_lands_at_the_bottom() {
+        val messages = listOf(msg("a"), msg("b"))
+        val away = ScrollAffordance.next(ScrollAffordanceState(), messages, isNearBottom = false)
+        val withUnread = ScrollAffordance.next(away, messages + msg("c") + msg("d"), isNearBottom = false)
+        assertThat(withUnread.unreadCount).isEqualTo(2)
+
+        val landed = ScrollAffordance.next(withUnread, messages + msg("c") + msg("d"), isNearBottom = true)
+
+        assertThat(landed.unreadCount).isEqualTo(0)
+        assertThat(landed.preview).isNull()
+        assertThat(landed.isVisible).isFalse()
+    }
+
+    @Test
+    fun a_programmatic_jump_into_history_keeps_the_count_anchored() {
+        val messages = listOf(msg("a"), msg("b"))
+        val away = ScrollAffordance.next(ScrollAffordanceState(), messages, isNearBottom = false)
+        val grown = messages + msg("c")
+        val first = ScrollAffordance.next(away, grown, isNearBottom = false)
+        val resynced = ScrollAffordance.next(first, grown, isNearBottom = false)
+
+        assertThat(resynced.unreadCount).isEqualTo(1)
+        assertThat(resynced.preview?.messageId).isEqualTo("c")
+    }
 }
 
 /**
@@ -369,31 +395,5 @@ class AffordanceMessageMappingTest {
         ).toAffordanceMessage()
 
         assertThat(mapped.kind).isEqualTo(UnreadPreviewKind.Image)
-    }
-
-    @Test
-    fun the_badge_resyncs_to_zero_once_a_programmatic_scroll_lands_at_the_bottom() {
-        val messages = listOf(msg("a"), msg("b"))
-        val away = ScrollAffordance.next(ScrollAffordanceState(), messages, isNearBottom = false)
-        val withUnread = ScrollAffordance.next(away, messages + msg("c") + msg("d"), isNearBottom = false)
-        assertThat(withUnread.unreadCount).isEqualTo(2)
-
-        val landed = ScrollAffordance.next(withUnread, messages + msg("c") + msg("d"), isNearBottom = true)
-
-        assertThat(landed.unreadCount).isEqualTo(0)
-        assertThat(landed.preview).isNull()
-        assertThat(landed.isVisible).isFalse()
-    }
-
-    @Test
-    fun a_programmatic_jump_into_history_keeps_the_count_anchored() {
-        val messages = listOf(msg("a"), msg("b"))
-        val away = ScrollAffordance.next(ScrollAffordanceState(), messages, isNearBottom = false)
-        val grown = messages + msg("c")
-        val first = ScrollAffordance.next(away, grown, isNearBottom = false)
-        val resynced = ScrollAffordance.next(first, grown, isNearBottom = false)
-
-        assertThat(resynced.unreadCount).isEqualTo(1)
-        assertThat(resynced.preview?.messageId).isEqualTo("c")
     }
 }

@@ -7,7 +7,7 @@ import MeeshySDK
 /// « en un coup » (#8599, #8609) — l'export MP4 et la couverture statique.
 ///
 /// Les mesures sont celles de `AudioForegroundChip` (capsule, icône 18,
-/// contenu 54 ou 92, marges 12 × 8, espacement 8) exprimées pour une scène de
+/// contenu 54 ou 92, chrono 32, marges 12 × 8, espacement 8) exprimées pour une scène de
 /// `StoryAudioChipPainter.referenceCanvasWidth` points de large, puis projetées
 /// à la largeur rendue par `unit` : la puce garde la même part de la scène à
 /// l'écran et dans la vidéo.
@@ -24,10 +24,25 @@ public struct StoryAudioChipPlacement: Equatable {
     /// Secondes écoulées depuis l'apparition de la puce — l'horloge de l'onde
     /// et du défilement du crédit.
     public let elapsed: TimeInterval
+    /// La position que son chrono affiche, dans la passe qui sonne (#16294).
+    public let chrono: TimeInterval
 
     static let padding = CGSize(width: 12, height: 8)
     static let iconSide: CGFloat = 18
     static let gap: CGFloat = 8
+    static let chronoWidth: CGFloat = 32
+
+    public init(audioId: String, center: CGPoint, unit: CGFloat, display: AudioChipDisplay,
+                rotation: Double, muted: Bool, elapsed: TimeInterval, chrono: TimeInterval = 0) {
+        self.audioId = audioId
+        self.center = center
+        self.unit = unit
+        self.display = display
+        self.rotation = rotation
+        self.muted = muted
+        self.elapsed = elapsed
+        self.chrono = chrono
+    }
 
     var contentWidth: CGFloat {
         switch display {
@@ -37,7 +52,7 @@ public struct StoryAudioChipPlacement: Equatable {
     }
 
     public var size: CGSize {
-        CGSize(width: (Self.padding.width * 2 + Self.iconSide + Self.gap + contentWidth) * unit,
+        CGSize(width: (Self.padding.width * 2 + Self.iconSide + Self.gap * 2 + contentWidth + Self.chronoWidth) * unit,
                height: (Self.padding.height * 2 + Self.iconSide) * unit)
     }
 
@@ -53,6 +68,11 @@ public struct StoryAudioChipPlacement: Equatable {
                y: frame.minY + Self.padding.height * unit,
                width: contentWidth * unit,
                height: Self.iconSide * unit)
+    }
+
+    public var chronoFrame: CGRect {
+        CGRect(x: contentFrame.maxX + Self.gap * unit, y: contentFrame.minY,
+               width: Self.chronoWidth * unit, height: Self.iconSide * unit)
     }
 }
 
@@ -98,6 +118,8 @@ public final class StoryAudioChipPainter {
 
     private var templates: [StoryAudioChipTemplate.Key: StoryAudioChipTemplate] = [:]
     private static let templateLimit = 16
+    private var chronos: [StoryAudioChipTemplate.ChronoKey: StoryAudioChipTemplate.Chrono] = [:]
+    private static let chronoLimit = 64
 
     public init() {}
 
@@ -149,7 +171,14 @@ public final class StoryAudioChipPainter {
                 libraryReleasedAt: audio.soundReleaseDate)),
             rotation: audio.rotation ?? 0,
             muted: audio.isMuted,
-            elapsed: max(0, elapsed))
+            elapsed: max(0, elapsed),
+            chrono: chrono(of: audio, elapsed: elapsed))
+    }
+
+    /// Le chrono d'une puce dont la piste sonne depuis `elapsed` secondes.
+    public static func chrono(of audio: StoryAudioPlayerObject, elapsed: TimeInterval) -> TimeInterval {
+        let timing = SceneAudioChipTiming(audio: audio)
+        return timing.positionSeconds(slideElapsed: timing.startTime + max(0, elapsed))
     }
 
     // MARK: - Peinture
@@ -233,6 +262,8 @@ public final class StoryAudioChipPainter {
             }
         }
         context.restoreGState()
+
+        drawChrono(placement, deviceScale: deviceScale, in: context)
     }
 
     /// Degrés → radians, dans le sens horaire d'un contexte en repère UIKit.
@@ -278,6 +309,29 @@ public final class StoryAudioChipPainter {
         context.setLineCap(.round)
         context.setLineJoin(.round)
         context.strokePath()
+    }
+
+    // MARK: - Chrono
+
+    private func drawChrono(_ placement: StoryAudioChipPlacement, deviceScale: CGFloat, in context: CGContext) {
+        let label = SceneAudioChipClock.label(placement.chrono)
+        let key = StoryAudioChipTemplate.ChronoKey(label: label, muted: placement.muted,
+                                                   unitMilli: Int((placement.unit * 1000).rounded()),
+                                                   scaleCenti: Int((deviceScale * 100).rounded()))
+        let rendered: StoryAudioChipTemplate.Chrono
+        if let cached = chronos[key] {
+            rendered = cached
+        } else {
+            if chronos.count >= Self.chronoLimit { chronos.removeAll() }
+            rendered = StoryAudioChipTemplate.chrono(label, unit: placement.unit, muted: placement.muted,
+                                                     deviceScale: deviceScale)
+            chronos[key] = rendered
+        }
+        guard let image = rendered.image else { return }
+        let frame = placement.chronoFrame
+        let target = CGRect(x: frame.maxX - rendered.size.width, y: frame.midY - rendered.size.height / 2,
+                            width: rendered.size.width, height: rendered.size.height)
+        Self.drawUpright(image, in: target, context: context)
     }
 
     // MARK: - Crédit

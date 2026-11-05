@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -72,6 +73,8 @@ class ConversationStatsViewModelTest {
         day = today,
     )
 
+    private fun newVm(repository: ConversationStatsRepository) = ConversationStatsViewModel(repository, dispatcher)
+
     private fun repo(result: NetworkResult<ConversationMessageStatsResponse>): ConversationStatsRepository {
         val repository = mockk<ConversationStatsRepository>()
         coEvery { repository.fetchStats(any()) } returns result
@@ -80,7 +83,7 @@ class ConversationStatsViewModelTest {
 
     @Test
     fun `load projects a successful response into a loaded state`() = runTest {
-        val vm = ConversationStatsViewModel(repo(NetworkResult.Success(stats())))
+        val vm = newVm(repo(NetworkResult.Success(stats())))
 
         vm.load("c1")
         advanceUntilIdle()
@@ -95,7 +98,7 @@ class ConversationStatsViewModelTest {
 
     @Test
     fun `load marks an empty conversation as Empty`() = runTest {
-        val vm = ConversationStatsViewModel(repo(NetworkResult.Success(stats(total = 0, participants = emptyList()))))
+        val vm = newVm(repo(NetworkResult.Success(stats(total = 0, participants = emptyList()))))
 
         vm.load("c1")
         advanceUntilIdle()
@@ -105,7 +108,7 @@ class ConversationStatsViewModelTest {
 
     @Test
     fun `load surfaces a failure as Error`() = runTest {
-        val vm = ConversationStatsViewModel(repo(NetworkResult.Failure(ApiError("boom"))))
+        val vm = newVm(repo(NetworkResult.Failure(ApiError("boom"))))
 
         vm.load("c1")
         advanceUntilIdle()
@@ -116,7 +119,7 @@ class ConversationStatsViewModelTest {
     @Test
     fun `activity reflects the selected period without a refetch`() = runTest {
         val repository = repo(NetworkResult.Success(stats()))
-        val vm = ConversationStatsViewModel(repository)
+        val vm = newVm(repository)
 
         vm.load("c1")
         advanceUntilIdle()
@@ -135,7 +138,7 @@ class ConversationStatsViewModelTest {
     @Test
     fun `a second load for the same loaded conversation does not refetch`() = runTest {
         val repository = repo(NetworkResult.Success(stats()))
-        val vm = ConversationStatsViewModel(repository)
+        val vm = newVm(repository)
 
         vm.load("c1")
         advanceUntilIdle()
@@ -152,7 +155,7 @@ class ConversationStatsViewModelTest {
             NetworkResult.Failure(ApiError("offline")),
             NetworkResult.Success(stats()),
         )
-        val vm = ConversationStatsViewModel(repository)
+        val vm = newVm(repository)
 
         vm.load("c1")
         advanceUntilIdle()
@@ -166,7 +169,7 @@ class ConversationStatsViewModelTest {
 
     @Test
     fun `load scores the message contents into a sentiment split`() = runTest {
-        val vm = ConversationStatsViewModel(repo(NetworkResult.Success(stats())))
+        val vm = newVm(repo(NetworkResult.Success(stats())))
 
         vm.load("c1", listOf(msg("love this"), msg("hate that"), msg("the table")))
         advanceUntilIdle()
@@ -181,7 +184,7 @@ class ConversationStatsViewModelTest {
 
     @Test
     fun `load leaves sentiment null when no message can be scored`() = runTest {
-        val vm = ConversationStatsViewModel(repo(NetworkResult.Success(stats())))
+        val vm = newVm(repo(NetworkResult.Success(stats())))
 
         vm.load("c1", listOf(msg(""), msg("   ")))
         advanceUntilIdle()
@@ -191,13 +194,14 @@ class ConversationStatsViewModelTest {
 
     @Test
     fun `local messages seed the sheet before the network resolves`() = runTest {
-        // The seed is applied synchronously by load(); asserting before advancing the
-        // dispatcher proves the sheet shows the locally computed page rather than a
-        // spinner while the fetch is still pending (cache-first, no dead time).
-        val vm = ConversationStatsViewModel(repo(NetworkResult.Success(stats())))
+        // Le réseau ne répond jamais : l'instantané calculé hors du fil principal doit
+        // s'afficher seul, sans spinner (cache-first).
+        val repository = mockk<ConversationStatsRepository>()
+        coEvery { repository.fetchStats(any()) } coAnswers { CompletableDeferred<NetworkResult<ConversationMessageStatsResponse>>().await() }
+        val vm = newVm(repository)
 
         vm.load("c1", listOf(msg("hello there"), msg("hi", sender = "u2")))
-        // Deliberately do NOT advance the dispatcher — the launched fetch has not run.
+        dispatcher.scheduler.runCurrent()
 
         val s = vm.state.value
         assertThat(s.phase).isEqualTo(StatsPhase.Loaded)
@@ -208,7 +212,7 @@ class ConversationStatsViewModelTest {
 
     @Test
     fun `a fetch failure keeps the locally-computed snapshot instead of erroring`() = runTest {
-        val vm = ConversationStatsViewModel(repo(NetworkResult.Failure(ApiError("offline"))))
+        val vm = newVm(repo(NetworkResult.Failure(ApiError("offline"))))
 
         vm.load("c1", listOf(msg("love it"), msg("plain words", sender = "u2")))
         advanceUntilIdle()
@@ -222,7 +226,7 @@ class ConversationStatsViewModelTest {
 
     @Test
     fun `a fetch failure with no local messages surfaces the error`() = runTest {
-        val vm = ConversationStatsViewModel(repo(NetworkResult.Failure(ApiError("offline"))))
+        val vm = newVm(repo(NetworkResult.Failure(ApiError("offline"))))
 
         vm.load("c1")
         advanceUntilIdle()
@@ -234,7 +238,7 @@ class ConversationStatsViewModelTest {
     fun `a successful fetch refines the locally-computed snapshot`() = runTest {
         // The server aggregation is authoritative over the loaded page: its larger
         // totals (full history) replace the client seed once it lands.
-        val vm = ConversationStatsViewModel(repo(NetworkResult.Success(stats(total = 10))))
+        val vm = newVm(repo(NetworkResult.Success(stats(total = 10))))
 
         vm.load("c1", listOf(msg("only one local message")))
         advanceUntilIdle()
@@ -245,12 +249,22 @@ class ConversationStatsViewModelTest {
 
     @Test
     fun `selecting the current period is inert`() = runTest {
-        val vm = ConversationStatsViewModel(repo(NetworkResult.Success(stats())))
+        val vm = newVm(repo(NetworkResult.Success(stats())))
         vm.load("c1")
         advanceUntilIdle()
 
         vm.selectPeriod(ActivityPeriod.WEEK)
 
         assertThat(vm.state.value.period).isEqualTo(ActivityPeriod.WEEK)
+    }
+
+    @Test
+    fun `the raw content counts reach the state so the rings can be drawn`() = runTest {
+        val vm = newVm(repo(NetworkResult.Success(stats(content = ContentTypeCounts(text = 3, image = 2, file = 1)))))
+
+        vm.load("c1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.contentCounts).isEqualTo(ContentTypeCounts(text = 3, image = 2, file = 1))
     }
 }

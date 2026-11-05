@@ -254,7 +254,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "feed.composer.type.reel",
+          "iosKey": "content.type.reel",
           "androidName": "feed_reel",
           "status": "adopted"
         },

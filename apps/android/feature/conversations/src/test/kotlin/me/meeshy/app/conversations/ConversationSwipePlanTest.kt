@@ -10,10 +10,12 @@ class ConversationSwipePlanTest {
         hasUnread: Boolean = false,
         canToggleArchive: Boolean = true,
         removal: Removal? = Removal.HIDE,
+        obsolete: Boolean = false,
     ) = ConversationSwipePlan.of(
         hasUnread = hasUnread,
         canToggleArchive = canToggleArchive,
         removal = removal,
+        obsolete = obsolete,
     )
 
     @Test
@@ -48,10 +50,29 @@ class ConversationSwipePlanTest {
     }
 
     @Test
-    fun `each side stays within the three actions a row can reveal`() {
-        val full = plan()
+    fun `each side stays within the actions a row can reveal, four at most when the viewer may make it obsolete`() {
+        val full = plan(obsolete = true)
         assertThat(full.leading.size).isAtMost(3)
-        assertThat(full.trailing.size).isAtMost(3)
+        assertThat(full.trailing.size).isAtMost(4)
+        assertThat(plan().trailing.size).isAtMost(3)
+    }
+
+    @Test
+    fun `a conversation the gateway lets the viewer make obsolete offers it last, after the remove swipe`() {
+        assertThat(plan(obsolete = true).trailing).containsExactly(
+            SwipeKind.ARCHIVE, SwipeKind.MARK_UNREAD, SwipeKind.REMOVE, SwipeKind.OBSOLETE,
+        ).inOrder()
+    }
+
+    @Test
+    fun `a conversation the gateway does not let the viewer make obsolete has no obsolete swipe`() {
+        assertThat(plan(obsolete = false).trailing).doesNotContain(SwipeKind.OBSOLETE)
+        assertThat(plan(obsolete = false).leading).doesNotContain(SwipeKind.OBSOLETE)
+    }
+
+    @Test
+    fun `the obsolete swipe stays offered when the viewer may not hide the conversation`() {
+        assertThat(plan(removal = null, obsolete = true).trailing.last()).isEqualTo(SwipeKind.OBSOLETE)
     }
 
     @Test

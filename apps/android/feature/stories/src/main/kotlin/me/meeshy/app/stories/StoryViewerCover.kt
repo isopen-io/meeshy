@@ -16,6 +16,8 @@ data class StoryViewerCover(
     val reading: Boolean = false,
     /** L'interlude d'identité est affiché : la story du nouvel auteur attend, et n'est vue qu'après lui. */
     val groupIntro: Boolean = false,
+    /** La fiche profil d'une personne touchée est ouverte par-dessus le lecteur : il reprend à sa fermeture. */
+    val profile: Boolean = false,
 ) {
-    val freezesPlayback: Boolean get() = sheet || railBar || menu || dialog || composing || groupIntro
+    val freezesPlayback: Boolean get() = sheet || railBar || menu || dialog || composing || groupIntro || profile
 }

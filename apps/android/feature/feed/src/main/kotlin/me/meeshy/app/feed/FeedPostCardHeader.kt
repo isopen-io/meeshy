@@ -40,22 +40,22 @@ import me.meeshy.ui.theme.MeeshyTheme
 internal fun FeedPostCardHeader(
     post: FeedPostPresentation,
     isOwn: Boolean,
-    onShare: () -> Unit,
-    onCopyLink: () -> Unit,
-    onCopyText: () -> Unit,
+    onShare: (() -> Unit)?,
+    onCopyLink: (() -> Unit)?,
+    onCopyText: (() -> Unit)?,
     onOpenProfile: ((String) -> Unit)? = null,
-    onRepost: () -> Unit,
-    onQuote: () -> Unit,
-    onBookmark: () -> Unit,
-    onPin: () -> Unit,
-    onReport: () -> Unit,
-    onDelete: () -> Unit,
+    onRepost: (() -> Unit)?,
+    onQuote: (() -> Unit)?,
+    onBookmark: (() -> Unit)?,
+    onPin: (() -> Unit)?,
+    onReport: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
     onOpen: (() -> Unit)? = null,
     pendingSend: PendingSendActions? = null,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
+        val profileTap = Modifier.opensAuthorProfile(post.authorProfile())
         MeeshyAvatar(
             name = post.authorName ?: unknownAuthor,
             size = 40.dp,

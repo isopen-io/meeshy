@@ -475,6 +475,19 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_duringAnInMemoryLaunchLeavesTheDiskDatabasePurgeDue() = runTest {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val primary = context.getDatabasePath("teardown-memory-launch.db").also { it.parentFile?.mkdirs() }
+        primary.writeText("history of A, still on disk")
+        val leftovers = me.meeshy.core.database.DatabaseLeftovers(primary, java.io.File(context.cacheDir, "absent-memory.db"))
+        leftovers.markInUse(null)
+
+        teardown(perAccountCaches = setOf(DatabaseLeftoversTeardown(leftovers))).wipe()
+
+        assertThat(me.meeshy.core.database.PendingDiskPurge.isDue(primary)).isTrue()
+    }
+
+    @Test
     fun wipe_aCorruptionMarkerLeftOnAFileTheVacuumHealedIsCleared() = runTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         db.close()
@@ -546,5 +559,17 @@ class SessionTeardownTest {
         assertThat(purged).isFalse()
         assertThat(fence.isCurrent(before)).isTrue()
         assertThat(outboxRepository.observeAll().first()).isNotEmpty()
+    }
+
+    @Test
+    fun `la deconnexion vide la copie en memoire des traductions retenues`() = runTest {
+        val layer = me.meeshy.sdk.conversation.TranslationLayer.of(db)
+        layer.saveText("m1", me.meeshy.sdk.model.StoredTextTranslation("m1", "fr", "Bonjour de A"), 1L)
+        check(layer.heldMessageCount() > 0)
+
+        teardown().wipe()
+
+        assertThat(layer.heldMessageCount()).isEqualTo(0)
+        assertThat(db.messageTranslationDao().textsFor(listOf("m1"))).isEmpty()
     }
 }

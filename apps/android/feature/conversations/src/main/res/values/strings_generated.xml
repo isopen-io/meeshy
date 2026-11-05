@@ -20,6 +20,8 @@
     <string name="context_report">Report</string>
     <string name="context_search">Search</string>
     <string name="conversationCard_expired">Link expired</string>
+    <string name="conversation_row_avatar_a11y_details">Details of %1$s</string>
+    <string name="conversation_row_avatar_a11y_profile">View profile of %1$s</string>
     <string name="conversations_action_archive">Archive</string>
     <string name="conversations_action_create_category">Create \"%1$s\"</string>
     <string name="conversations_action_delete_for_all">Delete for everyone</string>
@@ -91,6 +93,7 @@
     <string name="conversations_lock_title_verify_master">Verify master PIN</string>
     <string name="conversations_logout">Log out</string>
     <string name="conversations_new">New conversation</string>
+    <string name="conversations_obsolete_error">Couldn\'t make the conversation obsolete.</string>
     <string name="conversations_open_dashboard">Dashboard</string>
     <string name="conversations_preview_draft_label">Draft</string>
     <string name="conversations_preview_draft_prefix">Draft:</string>

@@ -53,7 +53,16 @@ public sealed interface VoicePlaybackCommand {
 
     /** ±[VoicePlaybackCardRules.SKIP_MS] depuis la position courante. */
     public data class Skip(val offsetMs: Long) : VoicePlaybackCommand
+
+    /** Le vocal suivant de la file (carte du moteur partagé seulement). */
+    public data object Next : VoicePlaybackCommand
+
+    /** Le vocal précédent, ou le même depuis le début ([QueueStepRule]). */
+    public data object Previous : VoicePlaybackCommand
 }
+
+/** Les boutons de file que la carte propose : [previous] relance quand la file n'a pas d'historique. */
+public data class VoicePlaybackQueueActions(val previous: Boolean, val next: Boolean)
 
 public object VoicePlaybackCardRules {
 
@@ -75,6 +84,22 @@ public object VoicePlaybackCardRules {
         val sentAt = card.sentAtLabel.present() ?: return VoicePlaybackCardLabels(place, author, place)
         return VoicePlaybackCardLabels("$place — $sentAt", author, place)
     }
+
+    /**
+     * Un vocal protégé (éphémère, à vue unique, flouté, chiffré) ne livre AUCUNE métadonnée à la session du
+     * système : ni auteur, ni conversation, ni date, ni avatar. Les identifiants de la conversation et du message
+     * restent, car ils ne vivent que dans l'intention du toucher, jamais sur la carte.
+     */
+    public fun shown(card: VoicePlaybackCard): VoicePlaybackCard =
+        if (card.isProtected) card.copy(sender = null, conversation = null, sentAtLabel = null, artworkUrl = null) else card
+
+    /**
+     * « Suivant » et « précédent » de la carte. Un lecteur sans file (écran du fil, audio d'un post) n'en offre
+     * aucun ; une carte de file offre TOUJOURS « précédent » (iOS : sans historique il relance le vocal) et
+     * « suivant » seulement s'il reste un vocal après.
+     */
+    public fun queueActions(controls: VoicePlaybackQueueControls?): VoicePlaybackQueueActions =
+        if (controls == null) VoicePlaybackQueueActions(previous = false, next = false) else VoicePlaybackQueueActions(previous = true, next = controls.hasNext)
 
     /** Où la lecture en est à [nowMillis], d'après le dernier état remis à [anchorMillis]. */
     public fun projected(
@@ -102,6 +127,13 @@ public object VoicePlaybackCardRules {
         val format = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, locale)
         format.timeZone = TimeZone.getTimeZone(zone)
         return format.format(Date.from(instant))
+    }
+
+    /** La date courte d'envoi d'un vocal de la file, depuis son instant d'arrivée en millisecondes. */
+    public fun sentAtLabel(epochMs: Long, locale: Locale, zone: ZoneId): String {
+        val format = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, locale)
+        format.timeZone = TimeZone.getTimeZone(zone)
+        return format.format(Date(epochMs))
     }
 
     /** La carte ne télécharge une image que sur HTTPS, sans identifiants dans l'adresse. */

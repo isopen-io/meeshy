@@ -96,10 +96,14 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
     ///
     /// **#8892 — « est dans la conversation » (`isPeerHere`) s'ajoute aux DEUX
     /// branches, à l'identique**, pour la même raison.
+    ///
+    /// **#15887 — ce qu'ouvre le toucher de l'avatar (`avatarRoute`) s'ajoute
+    /// aux DEUX branches, à l'identique** : la route est résolue une fois par
+    /// la ligne, et les deux rangs l'appliquent au toucher et au menu.
     func test_rowCore_offBranch_buildsThemedConversationRow_withUnchangedArguments() throws {
         let code = normalizedCode(try rowsSource())
         let expectedCall = """
-        } else { ThemedConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, isPeerHere: isPeerHere, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, isContentLocked: isContentLocked, preferredContentLanguages: preferredContentLanguages, deviceText: deviceText, onJoinLiveCall: { joinLiveCall() } ) .equatable() }
+        } else { ThemedConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, isPeerHere: isPeerHere, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, isContentLocked: isContentLocked, avatarRoute: avatarRoute, preferredContentLanguages: preferredContentLanguages, deviceText: deviceText, onJoinLiveCall: { joinLiveCall() } ) .equatable() }
         """
         .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
 
@@ -123,7 +127,7 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
     func test_rowCore_onBranch_buildsLentilleConversationRow_withSameArgumentSet() throws {
         let code = normalizedCode(try rowsSource())
         let expectedCall = """
-        LentilleConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, isPeerHere: isPeerHere, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, isContentLocked: isContentLocked, preferredContentLanguages: preferredContentLanguages, deviceText: deviceText, onJoinLiveCall: { joinLiveCall() }, magnification: context )
+        LentilleConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, isPeerHere: isPeerHere, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, isContentLocked: isContentLocked, avatarRoute: avatarRoute, preferredContentLanguages: preferredContentLanguages, deviceText: deviceText, onJoinLiveCall: { joinLiveCall() }, magnification: context )
         """
         .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
 
@@ -224,6 +228,10 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
         XCTAssertLessThanOrEqual(
             occurrences(of: "SwipeAction(", in: trailingBody), 3,
             "SwipeableRow tronque à trois : une quatrième action déclarée ici ferait disparaître « Masquer » en silence."
+        )
+        XCTAssertTrue(
+            trailingBody.contains("ConversationTrailingSwipe.plan("),
+            "Le bord de fin passe par le plan pur, qui tient le plafond de trois (#10579) même avec « Rendre obsolète » (#14645)."
         )
     }
 }

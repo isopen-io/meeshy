@@ -133,6 +133,9 @@ struct ComposerSceneSurface: View {
     /// meuble (`ComposerSceneQuickCapture`). `nil` ⇒ rien à dire.
     var quickCaptureHint: ComposerSceneQuickCapture.Hint?
 
+    /// **La publication citée**, figée sur la scène — `nil` hors d'une citation.
+    var quotedPublication: ComposerQuotedPublication?
+
     // MARK: - Le mode de l'outil, et ce que la colonne du repos relaie
 
     /// **Ce que la scène outille** — déjà résolu par `ComposerRailMode.resolve`.
@@ -181,7 +184,6 @@ struct ComposerSceneSurface: View {
     /// **La scène est en focus** : un outil ouvert, ou un objet sélectionné
     /// (#13957, R6) — les références et la légende cèdent aux deux.
     private var sceneIsFocused: Bool { toolIsOpen || selectionColumn != nil }
-
 
     /// **Ce que le canvas ENCADRE, et ce qu'il en dit** (vue `1c`).
     ///
@@ -246,7 +248,7 @@ struct ComposerSceneSurface: View {
     /// Résolue par le meuble depuis la taille de sa racine. En rails, le chrome
     /// du repos cède aux deux rails libellés et la scène rend leur couloir.
     var rails = ComposerSceneRailsContext()
-    private var arrangement: ComposerSceneArrangement { rails.arrangement }
+    var arrangement: ComposerSceneArrangement { rails.arrangement }
 
     /// **Le mode Animé** : la frise qui prend le bas tant qu'elle est
     /// ouverte, et le pont qui la laisse piloter le canvas. Sa bascule vit dans
@@ -372,7 +374,6 @@ struct ComposerSceneSurface: View {
     @Binding var description: String
     let descriptionPlaceholder: String
 
-
     /// **Les boutons de CONTRÔLE, à GAUCHE**
     ///
     /// Un outil ouvert y remplace les portes par SES contrôleurs et leur `(x)`,
@@ -385,8 +386,7 @@ struct ComposerSceneSurface: View {
     /// (#13839, L6) : la place libre décide, jamais la classe de taille. Marges
     /// de 24 pt, contrôleurs centrés en hauteur, volet de texte aligné sur la
     /// carte. Sans rails, la disposition du pouce.
-    private var isRoomy: Bool { arrangement == .rails }
-    private var edge: CGFloat { ComposerRailGeometry.edgeMargin(roomy: isRoomy) }
+    var isRoomy: Bool { arrangement == .rails }
 
     /// **Le chrome du repos, posé SUR la scène** (#13839, qui renverse #4561 et #4633). Le rail gauche, la colonne
     /// droite du repos, la barre haute et la rangée basse sont partis : ✕, la
@@ -427,14 +427,6 @@ struct ComposerSceneSurface: View {
     private var backgroundSoundTrace: ComposerSceneOverlayChrome.Sound {
         .init(trace: backgroundSound, onEdit: onEditBackgroundSound,
               onDelete: onDeleteBackgroundSound, onPromote: onPromoteBackgroundSound)
-    }
-
-    private var railLaneLeading: CGFloat {
-        ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: false).leading
-    }
-
-    private var showsRailsSlideRow: Bool {
-        ComposerRestChrome.showsSlideRow(slideCount: slideCount) && slideRailSlot != nil
     }
 
     private var railsLayer: some View {
@@ -522,7 +514,7 @@ struct ComposerSceneSurface: View {
 
     /// Le cadre du DESSIN dans l'écran : le panneau d'options s'y repère pour
     /// laisser voir l'objet qu'il règle.
-    @State private var sceneCardFrame: CGRect = .null
+    @State var sceneCardFrame: CGRect = .null
     @State private var restSceneSideInset: CGFloat = 0
     @State private var restSceneTop: CGFloat = 0
     @State private var restChromeTop: CGFloat = 0
@@ -557,7 +549,7 @@ struct ComposerSceneSurface: View {
 
     /// Les marges verticales du rail droit : du haut de la carte, et au-dessus
     /// de la remontée tant que sa colonne y tient (`trailingRailBand`).
-    private var trailingBand: ComposerRailBand {
+    var trailingBand: ComposerRailBand {
         let pied = [onUndo != nil, onRedo != nil, !toolIsOpen && onTimeButton != nil].filter { $0 }.count
         return ComposerRailGeometry.trailingRailBand(
             freeZone: freeZoneFrame, card: sceneCardFrame,
@@ -568,10 +560,6 @@ struct ComposerSceneSurface: View {
     /// **La hauteur des étages du bas, mesurée** — ce que les propriétés y
     /// occupent : le rail d'édition s'arrête au-dessus d'elles.
     @State private var lowerFloorsHeight: CGFloat = 0
-
-    private var writing: ComposerWriting {
-        ComposerWriting.resolve(editsSceneDescription: writesText, editsPostContent: writesPostBody)
-    }
 
     private var lowZone: ComposerLowZone {
         ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band, properties: propertiesSheet != nil)
@@ -796,9 +784,7 @@ struct ComposerSceneSurface: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .modifier(ComposerIntakeLayer(ghost: intakeGhost, blocks: intakeBlocks, aspectRatio: aspectRatio))
-        .overlay {
-            if let quickCaptureHint { ComposerSceneQuickCaptureHint(hint: quickCaptureHint) }
-        }
+        .overlay { ComposerSceneHints(quickCapture: quickCaptureHint, quoted: quotedPublication, aspectRatio: aspectRatio) }
         // **La surface PUBLIE la place du viseur, elle ne le peint pas.**
         // Le meuble le monte une seule
         // fois ; `Color.clear` + `aspectRatio(.fit)` reproduit exactement le
@@ -921,47 +907,8 @@ struct ComposerSceneSurface: View {
         }
     }
 
-    /// **La scène LIBRE** — le vide du calque de chrome, où la scène se voit et
-    /// se touche. Les deux rails y flottent au bas, à portée du pouce, avec les
-    /// MÊMES marges ; le volet de description s'y pose entre eux.
-    private var freeZone: some View {
-        ZStack(alignment: .bottom) {
-            // **Frise ouverte, la scène se RÈGLE dans le temps** : les
-            // rails et le volet s'effacent, et le canvas ne prend plus de geste.
-            // La frise réécrit la slide à sa fermeture ; une pose ou un
-            // déplacement faits pendant qu'elle est ouverte seraient écrasés.
-            // Seul « Temps » y reste (maquette : le couloir droit ne part pas
-            // avec la frise) — le geste qui la RANGE doit rester là où il l'a
-            // ouverte.
-            if timelinePanel == nil { composingFloors } else { friseRail }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .background {
-            GeometryReader { geo in
-                Color.clear.preference(key: ComposerFreeZoneFrameKey.self, value: geo.frame(in: .global))
-            }
-        }
-        // **Les options du sous-outil ouvert, à droite depuis le haut**
-        // — sur la scène libre, alignées sur le haut de la colonne droite.
-        .overlay {
-            if timelinePanel == nil, let inlinePanel {
-                inlinePanel
-                    // Aligné sur le haut de la colonne droite, donc de la carte
-                    // — la plaque pose elle-même sa gouttière.
-                    .padding(.top, trailingBand.top - ComposerRailGeometry.gutter)
-                    .environment(\.composerSceneCardFrame, sceneCardFrame)
-                    .transition(.opacity)
-            }
-        }
-    }
-
-    private var friseRail: some View {
-        ComposerFriseRail(plateauTint: plateauTint, onTime: onTimeButton, timeIsOpen: timeIsOpen,
-                          reservesUndo: onUndo != nil, reservesRedo: onRedo != nil)
-    }
-
     @ViewBuilder
-    private var composingFloors: some View {
+    var composingFloors: some View {
         ZStack(alignment: .bottom) {
             // Sur grand écran, les rails se CENTRENT en hauteur (maquette
             // iPad : ils ne descendent pas au pouce, qui n'y tient pas l'écran).

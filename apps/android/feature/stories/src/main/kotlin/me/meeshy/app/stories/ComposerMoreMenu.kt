@@ -85,14 +85,14 @@ internal fun ComposerMoreEntry.labelRes(): Int = when (this) {
     ComposerMoreEntry.PICK_BACKGROUND -> R.string.composer_more_pick_background
     ComposerMoreEntry.REMOVE_BACKGROUND -> R.string.composer_more_remove_background
     ComposerMoreEntry.CLEAR_ALL -> R.string.composer_more_clear_all
-    ComposerMoreEntry.ADD_SLIDE -> R.string.stories_composer_add_slide
-    ComposerMoreEntry.SLIDE_DURATION -> R.string.stories_composer_slide_duration
+    ComposerMoreEntry.ADD_SLIDE -> R.string.composer_more_addSlide
+    ComposerMoreEntry.SLIDE_DURATION -> R.string.composer_more_slideDuration
     ComposerMoreEntry.ANIMATION -> R.string.composer_scene_more_animation
     ComposerMoreEntry.TIMING -> R.string.composer_scene_more_timing
-    ComposerMoreEntry.OPENING_EFFECT -> R.string.stories_scene_effect_opening
-    ComposerMoreEntry.VISUAL_EFFECT -> R.string.stories_scene_effect_visual
-    ComposerMoreEntry.CAPTION -> R.string.stories_composer_text_caption
-    ComposerMoreEntry.HASHTAGS -> R.string.story_hashtag_title
+    ComposerMoreEntry.OPENING_EFFECT -> R.string.composer_more_transitions
+    ComposerMoreEntry.VISUAL_EFFECT -> R.string.composer_more_visualEffect
+    ComposerMoreEntry.CAPTION -> R.string.composer_more_legend
+    ComposerMoreEntry.HASHTAGS -> R.string.composer_rail_hashtag
     ComposerMoreEntry.SAVE_TO_PHOTOS -> R.string.stories_scene_overflow_save
-    ComposerMoreEntry.SHARE -> R.string.stories_scene_overflow_share
+    ComposerMoreEntry.SHARE -> R.string.composer_more_share
 }

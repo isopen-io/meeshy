@@ -76,8 +76,9 @@ final class EngagementCountConsolidationGuardTests: XCTestCase {
     /// resterait verte si quelqu'un supprimait purement et simplement les
     /// compteurs, ou les rendait par un troisième mécanisme neuf.
     ///
-    /// Cinq surfaces SwiftUI (240i) + les deux cellules UIKit (source depuis le
-    /// début) = 7 hôtes.
+    /// Les surfaces SwiftUI consolidées en 240i. Les deux cellules UIKit
+    /// (`TextPostCell`, `MediaPostCell`) ont quitté le dépôt avec #15994 :
+    /// jamais instanciées, leurs boutons n'avaient aucune cible.
     private static let consolidatedHosts = [
         // La rangée d'actions a quitté `FeedPostCard.swift` pour son propre type.
         "FeedPostActionsBar.swift",
@@ -85,8 +86,6 @@ final class EngagementCountConsolidationGuardTests: XCTestCase {
         // #6578 — `CommentRowView` et son compteur de réponses ont quitté
         // `FeedCommentsSheet.swift` : l'hôte consolidé est désormais leur fichier.
         "CommentRowView.swift",
-        "TextPostCell.swift",
-        "MediaPostCell.swift",
     ]
 
     private func repoRoot() -> URL {

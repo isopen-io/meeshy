@@ -4,10 +4,13 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationCompat
 import me.meeshy.app.R
 import me.meeshy.app.push.NotificationChannelIds
+import me.meeshy.sdk.model.ongoing.VoiceRecordingActivityLaw
 import me.meeshy.sdk.model.ongoing.VoiceRecordingSnapshot
+import me.meeshy.ui.theme.MeeshyPalette
 
 /**
  * La notification d'un vocal en cours, UNE seule fois composée pour le service de premier plan et pour sa
@@ -21,6 +24,9 @@ internal object VoiceRecordingNotificationFactory {
         NotificationCompat.Builder(context, NotificationChannelIds.CHANNEL_ONGOING)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle(snapshot.statusLabel)
+            .setContentText(snapshot.title.takeIf { it.isNotBlank() })
+            .setColor(MeeshyPalette.Error.toArgb())
+            .setProgress(VoiceRecordingActivityLaw.MAX_LEVEL, snapshot.level, false)
             .setContentIntent(openApp(context))
             .addAction(0, context.getString(R.string.voice_recording_activity_stop), button(context, VoiceRecordingOngoingNotifications.ACTION_STOP, 0))
             .addAction(0, context.getString(R.string.voice_recording_activity_cancel), button(context, VoiceRecordingOngoingNotifications.ACTION_CANCEL, 1))

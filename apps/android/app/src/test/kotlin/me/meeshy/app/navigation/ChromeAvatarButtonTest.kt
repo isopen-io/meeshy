@@ -1,6 +1,9 @@
 package me.meeshy.app.navigation
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ServedProfileDecor
+import me.meeshy.sdk.model.ServedProfileDecorItem
 import me.meeshy.ui.theme.MeeshyPalette
 import org.junit.Test
 
@@ -63,5 +66,15 @@ class ChromeAvatarButtonTest {
         assertThat(feedButtonGradientColors())
             .containsExactly(MeeshyPalette.Error, MeeshyPalette.Indigo300)
             .inOrder()
+    }
+
+    @Test
+    fun `the chrome avatar wears the contour the user equipped, inside the gradient disc like iOS`() {
+        val ring = ServedProfileDecorItem(pack = "contours-essentiels", item = "filet")
+        val user = MeeshyUser(id = "u1", username = "mira", profileDecor = ServedProfileDecor(avatarRing = ring))
+
+        assertThat(chromeAvatarDecorRing(user)).isEqualTo(ring)
+        assertThat(chromeAvatarDecorRing(user.copy(profileDecor = null))).isNull()
+        assertThat(chromeAvatarDecorRing(null)).isNull()
     }
 }

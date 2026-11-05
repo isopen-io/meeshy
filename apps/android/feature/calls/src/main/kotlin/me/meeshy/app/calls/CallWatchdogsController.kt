@@ -5,6 +5,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.model.call.group.CallTeardownSignal
+import me.meeshy.sdk.model.call.group.GroupReconnectCeiling
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -130,10 +132,18 @@ class CallWatchdogsController @Inject constructor(
         host.dispatch(CallEvent.ReconnectFailed)
         val next = host.callState
         if (next is CallState.Ended) {
-            if (host.callId.isNotBlank()) signals.emitEnd(host.callId)
+            if (host.callId.isNotBlank()) emitCeilingTeardown(host)
             host.endMedia()
         } else {
             restartAfterBackoff(host, next)
+        }
+    }
+
+    /** Plafond atteint : un groupe qui continue sans moi se quitte (`call:leave`), un duo se termine (`call:end`). */
+    private fun emitCeilingTeardown(host: CallSessionHost) {
+        when (GroupReconnectCeiling.teardownSignal(host.isGroupCall)) {
+            CallTeardownSignal.Leave -> signals.emitLeave(host.callId)
+            CallTeardownSignal.End -> signals.emitEnd(host.callId)
         }
     }
 

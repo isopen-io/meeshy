@@ -52,6 +52,14 @@ nonisolated enum ComposerReelAutoSwitch {
         }
     }
 
+    /// **Une publication rouverte ne bascule jamais d'elle-même** (#15631) :
+    /// son type est celui que le serveur a accepté, et une modification qui
+    /// le changerait sans que l'auteur l'ait choisi transformerait un post en
+    /// réel à l'enregistrement. Le chevron reste là pour le choisir.
+    static func demandsReel(_ slides: [StorySlide], slideImageIds: Set<String>, editsPublication: Bool) -> Bool {
+        !editsPublication && sceneDemandsReel(slides, slideImageIds: slideImageIds)
+    }
+
     static func carriesSound(_ effects: StoryEffects) -> Bool {
         !(effects.audioPlayerObjects ?? []).isEmpty
             || effects.backgroundAudioId != nil
@@ -101,8 +109,8 @@ extension MeeshyComposerHost {
     /// La demande (toutes slides) et l'offre du menu, relues ensemble.
     var reelAutoSwitchInput: ComposerReelAutoSwitch.Input {
         ComposerReelAutoSwitch.Input(
-            demands: ComposerReelAutoSwitch.sceneDemandsReel(viewModel.slides,
-                                                             slideImageIds: Set(viewModel.slideImages.keys)),
+            demands: ComposerReelAutoSwitch.demandsReel(viewModel.slides, slideImageIds: Set(viewModel.slideImages.keys),
+                                                        editsPublication: hydration?.publicationSeed != nil),
             reelChoosable: publishMenuEntries?.contains { $0.format == .reel && $0.isChoosable } ?? false)
     }
 

@@ -76,6 +76,16 @@ class MediaUploadQueueTest {
     }
 
     @Test
+    fun `enqueueAs keeps the cmid its caller already gave the media, for its bytes and its row`() = runTest {
+        queue.enqueueAs("cmid_given", item(bytes = byteArrayOf(7, 8)), context = TusUploadContext.STORY)
+
+        assertThat(blobStore.get("cmid_given")?.bytes).isEqualTo(byteArrayOf(7, 8))
+        val row = outbox.deliverable(OutboxLanes.MEDIA).single()
+        assertThat(row.cmid).isEqualTo("cmid_given")
+        assertThat(row.targetId).isEqualTo("cmid_given")
+    }
+
+    @Test
     fun `enqueue without a context leaves the row payload blank (legacy MessageAttachment upload)`() = runTest {
         queue.enqueue(item())
 

@@ -30,6 +30,15 @@ class StoryRailMountTest {
     }
 
     @Test
+    fun `le fil et la liste des conversations ne recoivent que le slot d'une ligne de la bande epinglee`() {
+        listOf("FeedNavGraph.kt", "ConversationsNavGraph.kt").forEach { name ->
+            val slot = File(graph, name).readLines().filter { "pinnedBand = " in it }
+            assertThat(slot).hasSize(1)
+            assertThat(slot.single()).contains("MeeshyPinnedStoryBand(")
+        }
+    }
+
+    @Test
     fun `tirer la liste des conversations recharge aussi les humeurs du rail, comme iOS`() {
         val graph = File(graph, "ConversationsNavGraph.kt").readText()
         val refresh = graph.substringAfter("onRefresh = ").substringBefore("rowNavigation")

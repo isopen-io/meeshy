@@ -23,7 +23,10 @@ object AttachmentTranscriptionMerge {
      *    attachment, or (when [attachmentId] is blank) a message with no audio
      *    attachment at all;
      *  - an identical transcription already present on the target (same text, same
-     *    language) — idempotent, a re-emitted event costs nothing.
+     *    language) that [segments] / [speakerCount] do not enrich — idempotent, a re-emitted
+     *    event costs nothing. The SAME text arriving with segments the target lacks is NOT a
+     *    no-op (two subscribers of `transcription:ready` must not make the richer one inert),
+     *    and a call without segments never strips the ones already held.
      *
      * Target selection: a non-blank [attachmentId] matches the attachment with that
      * id; a blank/absent [attachmentId] falls back to the message's first audio
@@ -38,6 +41,8 @@ object AttachmentTranscriptionMerge {
         language: String? = null,
         confidence: Double? = null,
         durationMs: Long? = null,
+        segments: List<TranscriptionSegment>? = null,
+        speakerCount: Int? = null,
     ): ApiMessage? {
         if (message.deletedAt != null) return null
         if (text.isBlank()) return null
@@ -52,18 +57,20 @@ object AttachmentTranscriptionMerge {
 
         val normalizedLanguage = language?.trim()?.ifBlank { null }
         val current = message.attachments[index].transcription
-        if (current != null &&
+        val sameTranscript = current != null &&
             (current.transcribedText ?: current.text) == text &&
             normalizedLanguage.equalsIgnoreCase(current.language?.trim()?.ifBlank { null })
-        ) {
-            return null
-        }
+        val richer = (!segments.isNullOrEmpty() && current?.segments != segments) ||
+            (speakerCount != null && current?.speakerCount != speakerCount)
+        if (sameTranscript && !richer) return null
 
         val transcription = ApiAttachmentTranscription(
             text = text,
             language = normalizedLanguage,
             confidence = confidence,
             durationMs = durationMs?.toInt(),
+            segments = segments?.takeIf { it.isNotEmpty() } ?: current?.segments?.takeIf { sameTranscript },
+            speakerCount = speakerCount ?: current?.speakerCount?.takeIf { sameTranscript },
         )
         val attachments = message.attachments.mapIndexed { i, attachment ->
             if (i == index) attachment.copy(transcription = transcription) else attachment

@@ -1,0 +1,136 @@
+# =============================================================================
+# MEESHY - SQLCipher réel sur émulateur (#15880)
+# =============================================================================
+# La base Room Android est chiffrée par SQLCipher (ADR-013). La bibliothèque est
+# native (AAR, .so liés à bionic) : aucun test JVM de `android.yml` ne l'exécute,
+# ils prouvent l'arbre de décision avec un moteur de substitution. Ce workflow
+# fait tourner le VRAI moteur sur un émulateur x86_64 : migration d'une base en
+# clair dont l'outbox n'est pas vide (ATTACH … KEY ?, sqlcipher_export,
+# vérification, échange), réouverture par Room, clé erronée → SQLITE_NOTADB,
+# migration différée faute de place (phrase vide), base en clair corrompue →
+# export qui lève → recréation chiffrée sans copie en clair.
+#
+# Séparé d'`android.yml` (qui reste le miroir exact de `meeshy.sh check`) : il ne
+# tourne que lorsque la persistance, le coffre de la clé ou les versions bougent.
+# =============================================================================
+
+name: Android SQLCipher sur émulateur
+
+on:
+  push:
+    paths:
+      - 'apps/android/core/database/**'
+      - 'apps/android/core/datastore/**'
+      - 'apps/android/gradle/libs.versions.toml'
+      - '.github/workflows/android-sqlcipher-device.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'apps/android/core/database/**'
+      - 'apps/android/core/datastore/**'
+      - 'apps/android/gradle/libs.versions.toml'
+      - '.github/workflows/android-sqlcipher-device.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: android-sqlcipher-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
+
+env:
+  LANG: C.utf8
+  LC_ALL: C.utf8
+
+jobs:
+  device:
+    name: SQLCipher réel (connectedDebugAndroidTest de core:database)
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    defaults:
+      run:
+        working-directory: apps/android
+
+    steps:
+      - name: Libérer le disque du runner
+        working-directory: /
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/share/swift /usr/local/share/powershell
+          sudo docker image prune --all --force > /dev/null || true
+          df -h /
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      # L'émulateur x86_64 a besoin de KVM, que les runners Linux exposent sans droits.
+      - name: Activer KVM
+        working-directory: /
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # Compiler avant de démarrer l'émulateur : un échec de compilation se lit sans attendre le démarrage.
+      - name: Assemble the instrumented test APK
+        run: ./gradlew :core:database:assembleDebugAndroidTest --no-daemon
+
+      - name: Run on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: default
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          working-directory: apps/android
+          script: ./gradlew :core:database:connectedDebugAndroidTest --no-daemon
+
+      - name: Summarise failing tests
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+
+          total = 0
+          for path in sorted(glob.glob('**/build/outputs/androidTest-results/**/*.xml', recursive=True)):
+              try:
+                  root = ET.parse(path).getroot()
+              except ET.ParseError:
+                  continue
+              for case in root.iter('testcase'):
+                  bad = [c for c in case if c.tag in ('failure', 'error')]
+                  if not bad:
+                      continue
+                  total += 1
+                  print(f"::error title=Test KO::{case.get('classname')}.{case.get('name')}")
+                  for c in bad:
+                      print('  ' + '\n  '.join(((c.get('message') or '') + '\n' + (c.text or '')).strip().splitlines()[:40]))
+
+          print(f"\n{total} failing test case(s)." if total
+                else "\nNo failing test cases found — the failure was not a test assertion.")
+          PY
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-sqlcipher-device-reports
+          path: |
+            apps/android/core/database/build/reports/androidTests/
+            apps/android/core/database/build/outputs/androidTest-results/
+          if-no-files-found: ignore
+          retention-days: 14

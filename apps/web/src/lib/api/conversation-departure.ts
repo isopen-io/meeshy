@@ -21,11 +21,12 @@ import type { Conversation } from './types';
  * ailleurs, ou par un premier envoi dont la réponse s'est perdue : la rangée
  * ne revient pas — sauf pour RENDRE OBSOLÈTE (#14645) : la passerelle n'y
  * répond 404 à personne, et un refus doit ramener la rangée. Réussi, ce geste
- * emporte aussi le cache des messages (`conversationQueryKey` en préfixe).
+ * emporte aussi le cache des messages (`conversationQueryKey` en préfixe) ;
+ * refusé (403), il se dit `refused` — l'hôte le retient et le motive (#14690).
  */
 export type DepartureDeps = ConversationsDeps & { readonly queryClient: QueryClient };
 
-export type DepartureOutcome = 'departed' | 'offline' | 'failed';
+export type DepartureOutcome = 'departed' | 'offline' | 'failed' | 'refused';
 
 const REQUESTS: Readonly<Record<DepartureKind, (conversationId: string) => HttpRequest>> = {
   leave: (id) => ({ method: 'POST', path: conversationsEndpoints.byIdLeave(id) }),
@@ -34,6 +35,9 @@ const REQUESTS: Readonly<Record<DepartureKind, (conversationId: string) => HttpR
 };
 
 const alreadyGone = (kind: DepartureKind, status: number): boolean => kind !== 'obsolete' && status === 404;
+
+/** Rendre obsolète refusé (403) : un REFUS de la porte, pas une panne (#14690). */
+const refused = (kind: DepartureKind, status: number): boolean => kind === 'obsolete' && status === 403;
 
 type Withdrawn = { readonly pageIndex: number; readonly index: number; readonly conversation: Conversation };
 
@@ -91,7 +95,7 @@ export async function performDeparture(params: {
   const result = await deps.transport.request<unknown>(REQUESTS[kind](conversationId)).catch(() => null);
   if (result === null || (!result.ok && !alreadyGone(kind, result.status))) {
     restore(deps.queryClient, withdrawn);
-    return 'failed';
+    return result !== null && !result.ok && refused(kind, result.status) ? 'refused' : 'failed';
   }
 
   withdraw(deps.queryClient, conversationId);

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pack_shop_detail_items">Elemente des Pakets</string>
+    <string name="pack_shop_detail_embedded">In der App enthalten</string>
+    <string name="pack_shop_detail_embedded_size">In der App enthalten · %1$s</string>
+    <string name="pack_shop_detail_price">%1$d Meeshes</string>
+    <string name="pack_shop_state_installed">Installiert</string>
+    <string name="pack_shop_state_embedded">Enthalten</string>
+    <string name="pack_shop_state_to_download">Zum Herunterladen</string>
+    <string name="pack_shop_download_required">Download erforderlich</string>
+    <string name="pack_shop_viewer_position">%1$d / %2$d</string>
+    <string name="pack_shop_viewer_item_a11y">%1$s, Element %2$d von %3$d</string>
+    <string name="pack_shop_viewer_next">Nächstes Element</string>
+    <string name="pack_shop_viewer_previous">Vorheriges Element</string>
+    <string name="pack_shop_close">Schließen</string>
+    <string name="pack_shop_viewer_others">Weitere Vorschläge</string>
+    <string name="pack_shop_equip">Anlegen</string>
+    <string name="pack_shop_equip_a11y">%1$s anlegen</string>
+    <string name="pack_shop_equipped">Angelegt</string>
+    <string name="pack_shop_equip_failed">Das Element konnte nicht angelegt werden.</string>
+    <string name="pack_shop_wallpaper_hint">Wähle diesen Hintergrund im Erscheinungsbild einer Unterhaltung.</string>
+    <string name="pack_shop_open_pack_a11y">Paket %1$s öffnen</string>
+    <string name="pack_shop_open_item_a11y">%1$s im Vollbild anzeigen</string>
+    <string name="pack_shop_preview_bubble_in">Hallo! Hast du diesen Hintergrund gesehen?</string>
+    <string name="pack_shop_preview_bubble_out">Ja, ich liebe ihn 😍</string>
+    <string name="pack_shop_preview_bubble_in_2">Und alles bleibt lesbar!</string>
+</resources>

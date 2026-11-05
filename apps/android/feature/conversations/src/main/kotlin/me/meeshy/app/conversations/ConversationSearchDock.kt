@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.ui.component.chrome.syncPillDock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
@@ -28,6 +29,9 @@ private val EaseOut = CubicBezierEasing(0f, 0f, 0.58f, 1f)
  * vide, communautés non vides) puis la barre. Le masquage glisse de 150 dp et
  * s'estompe en 0,25 s, comme iOS.
  */
+/** La réclamation d'amarrage de la liste : la pastille globale se pose au-dessus du pied entier. */
+private const val SEARCH_DOCK_CLAIM_ID = "conversation-search-dock"
+
 @Composable
 internal fun ConversationSearchDock(
     visible: Boolean,
@@ -49,7 +53,7 @@ internal fun ConversationSearchDock(
         exit = slideOutVertically(tween(HIDE_MILLIS, easing = EaseOut)) { slidePx } +
             fadeOut(tween(HIDE_MILLIS, easing = EaseOut)),
     ) {
-        Column {
+        Column(modifier = Modifier.syncPillDock(SEARCH_DOCK_CLAIM_ID)) {
             Column(modifier = Modifier.testTag(SEARCH_DOCK_SYNC_TAG)) { syncPill() }
             AnimatedVisibility(visible = bandShown) {
                 Column(modifier = Modifier.testTag(SEARCH_DOCK_BAND_TAG)) { communitiesBand() }

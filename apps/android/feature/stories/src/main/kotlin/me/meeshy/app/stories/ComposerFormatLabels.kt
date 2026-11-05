@@ -26,6 +26,11 @@ internal fun ComposerFormatLabel.res(noun: ComposerSceneNoun): Int = when (this)
         post = R.string.stories_composer_canvas_post,
         reel = R.string.stories_composer_canvas_reel,
     )
+    ComposerFormatLabel.COMPOSITION_SUMMARY -> noun.pick(
+        story = R.string.story_composer_a11y_composition,
+        post = R.string.story_composer_a11y_composition_post,
+        reel = R.string.story_composer_a11y_composition_reel,
+    )
     ComposerFormatLabel.SOUND_SHEET_TITLE -> noun.pick(
         story = R.string.story_sound_sheet_title,
         post = R.string.story_sound_sheet_title_post,

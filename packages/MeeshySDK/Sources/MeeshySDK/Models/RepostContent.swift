@@ -25,6 +25,11 @@ public struct RepostContent: Identifiable, Sendable {
     public let storyEffects: StoryEffects?
     public let media: [FeedMedia]
     public let translations: [String: PostTranslation]?
+    /// Le texte que le Prisme du lecteur sert pour la publication citée —
+    /// `nil` = l'original (#16002). Posé par `resolved(preferredLanguages:)`,
+    /// jamais recopié : le fil, le détail et le compositeur lisent la MÊME
+    /// descente que la carte (`PrismTranslationResolver`).
+    public var translatedContent: String? = nil
     public let originalRepostOfId: String?
     public let visibility: String?
     public let expiresAt: Date?
@@ -84,6 +89,7 @@ extension RepostContent: Codable {
         case id, author, authorId, authorUsername, authorAvatarURL, content, timestamp, likes, isQuote
         case type, originalLanguage, audioUrl, moodEmoji, storyEffects, media, translations
         case originalRepostOfId, visibility, expiresAt, location, mentions, authorRing
+        case translatedContent
     }
 
     public init(from decoder: Decoder) throws {
@@ -118,6 +124,7 @@ extension RepostContent: Codable {
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
         authorRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .authorRing)
+        translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -145,6 +152,30 @@ extension RepostContent: Codable {
         try c.encodeIfPresent(location, forKey: .location)
         try c.encodeIfPresent(mentions, forKey: .mentions)
         try c.encodeIfPresent(authorRing, forKey: .authorRing)
+        try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
+    }
+}
+
+// MARK: - Prisme
+
+public extension RepostContent {
+    /// Le texte de la publication citée tel que le lecteur doit le lire.
+    var displayContent: String { translatedContent ?? content }
+
+    /// La descente du Prisme sur la publication citée — la même que
+    /// `FeedPost.resolved(preferredLanguages:)` : les rangs DANS L'ORDRE, la
+    /// langue d'origine concourant à son rang, jamais de repli sur une
+    /// traduction quelconque.
+    func resolved(preferredLanguages: [String]) -> RepostContent {
+        var copy = self
+        copy.translatedContent = translations.flatMap { dict in
+            PrismTranslationResolver.resolve(
+                originalLanguage: originalLanguage,
+                candidates: dict.map { PrismCandidate(language: $0.key, value: $0.value.text) },
+                preferredLanguages: preferredLanguages
+            )?.text
+        }
+        return copy
     }
 }
 

@@ -152,6 +152,7 @@ private fun BubbleIdentityFooter(
                     imageUrl = content.senderAvatarUrl,
                     presence = rememberPresence(content.senderProfile?.userId),
                     here = rememberConversationHere(content.senderProfile?.userId, content.viewingConversationId),
+                    decorRing = content.senderRing,
                     modifier = avatarModifier,
                 )
             }
@@ -235,7 +236,7 @@ private fun BubbleMetaLeading(
                 modifier = Modifier.size(12.dp),
             )
         }
-        val chips = if (content.isDeleted) emptyList() else content.languageStrip
+        val chips = if (content.isDeleted) emptyList() else BubbleVoiceStackFooter.chips(content)
         // iOS `metaLeading` : le bouton traduire vient TOUJOURS en premier (position stable) et ne vit que là où
         // AUCUN drapeau ne dit déjà la traduction ; les drapeaux suivent à sa droite.
         if (chips.isEmpty() && !content.isDeleted && onTranslate != null && offersTranslation(content)) {

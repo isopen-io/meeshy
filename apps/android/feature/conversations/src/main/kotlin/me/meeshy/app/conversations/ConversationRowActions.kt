@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.interlocutor
 import me.meeshy.sdk.model.avatar.ConversationHere
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.theme.otherParticipantUserId
@@ -42,6 +43,8 @@ internal data class ConversationRowActions(
     val onLockToggle: () -> Unit = {},
     /** Glisser « Masquer » / « Supprimer » : ouvre la confirmation de retrait de la rangée. */
     val onRemove: () -> Unit = {},
+    /** Glisser « Rendre obsolète » (#14645) : ouvre sa confirmation ; la rangée ne l'offre que si la loi l'accorde. */
+    val onRequestObsolete: () -> Unit = {},
     /** « Rejoindre » l'appel en cours ; la ligne ne montre le bouton que si un appel est servi. */
     val onJoinCall: () -> Unit = {},
     /** Entrées de menu dont la destination dépend de l'hôte de navigation : `null` = entrée masquée. */
@@ -61,6 +64,19 @@ internal data class ConversationRowActions(
     val onOpenAdmin: () -> Unit = {},
     /** « Appeler » le pair d'un direct ; `null` = l'hôte ne sait pas ouvrir l'appel, l'entrée est absente. */
     val onCall: (() -> Unit)? = null,
+    /**
+     * Le toucher de l'avatar (#15989) : profil du pair ou détails, décidé par le ViewModel au toucher ;
+     * `null` = l'hôte ne sait pas montrer les détails, le toucher reste à la ligne.
+     */
+    val onAvatarTap: (() -> Unit)? = null,
+    /** « Infos de la conversation » du menu de l'avatar : les détails, derrière le code si verrouillée. */
+    val onAvatarInfo: () -> Unit = {},
+    /** L'anneau de story du pair d'un direct ; `null` = l'anneau ne s'ouvre pas. */
+    val onViewStory: (() -> Unit)? = null,
+    /** Le badge d'humeur du pair d'un direct ; `null` = le badge ne réagit pas. */
+    val onMoodBadgeTap: (() -> Unit)? = null,
+    /** L'humeur du pair peinte sur l'avatar : une impression. */
+    val onMoodShown: () -> Unit = {},
     /** L'état de blocage du pair, lu à l'ouverture du menu ; `null` = pas un direct à pair connu. */
     val peerBlocked: () -> Boolean? = { null },
     /** L'administration est-elle joignable d'ici (origine web connue) ? */
@@ -73,7 +89,12 @@ internal data class ConversationRowActions(
         currentUserId: String?,
     ): ConversationRowActions {
         val peerId = if (conversation.type == "direct") conversation.otherParticipantUserId(currentUserId) else null
+        val interlocutorId = conversation.interlocutor(currentUserId)?.userId
         return copy(
+            onAvatarTap = onAvatarTap.takeIf { navigation.onViewConversationInfo != null },
+            onViewStory = interlocutorId?.let { id -> navigation.onViewStory?.let { open -> { open(id) } } },
+            onMoodBadgeTap = interlocutorId?.let { id -> navigation.onMoodBadgeTap?.let { open -> { open(id) } } },
+            onMoodShown = interlocutorId?.let { id -> navigation.onMoodShown?.let { shown -> { shown(id) } } } ?: {},
             onViewInfo = navigation.onViewInfo?.let { open -> { open(conversation.id) } },
             onViewProfile = peerId?.let { id -> navigation.onViewProfile?.let { open -> { open(id) } } },
             onCreateShareLink = navigation.onCreateShareLink?.let { open -> { open(conversation.id) } },
@@ -87,6 +108,8 @@ internal data class ConversationRowActions(
         /** The actions of [conversationId] routed to the list ViewModel. */
         fun forConversation(viewModel: ConversationListViewModel, conversationId: String) = ConversationRowActions(
             onClick = { viewModel.onConversationTap(conversationId) },
+            onAvatarTap = { viewModel.onAvatarTap(conversationId) },
+            onAvatarInfo = { viewModel.onAvatarInfo(conversationId) },
             onTogglePin = { viewModel.togglePin(conversationId) },
             onToggleMute = { viewModel.toggleMute(conversationId) },
             onToggleMentionsOnly = { viewModel.toggleMentionsOnly(conversationId) },
@@ -94,7 +117,7 @@ internal data class ConversationRowActions(
             onLeaveConversation = { viewModel.leaveConversation(conversationId) },
             onDeleteForMe = { viewModel.deleteConversationForMe(conversationId) },
             onDeleteForAll = { viewModel.deleteConversationForAll(conversationId) },
-            onMakeObsolete = { viewModel.makeConversationObsolete(conversationId) },
+            onMakeObsolete = { viewModel.dialogs.makeObsolete(conversationId) },
             onRename = { viewModel.setCustomName(conversationId, it) },
             onSetReaction = { viewModel.setReaction(conversationId, it) },
             onSetTags = { viewModel.setTags(conversationId, it) },
@@ -107,6 +130,7 @@ internal data class ConversationRowActions(
             onLoadPreview = { viewModel.openPreview(conversationId) },
             onLockToggle = { viewModel.dialogs.requestLock(conversationId) },
             onRemove = { viewModel.dialogs.requestRemoval(conversationId) },
+            onRequestObsolete = { viewModel.dialogs.requestObsolete(conversationId) },
             onRequestRename = { viewModel.dialogs.requestRename(conversationId) },
             onRequestLeave = { viewModel.dialogs.requestLeave(conversationId) },
             onSearch = { viewModel.dialogs.openForSearch(conversationId) },

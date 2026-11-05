@@ -11,6 +11,7 @@ import me.meeshy.core.database.dao.EphemeralReceiptDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.MessageKeys
 import me.meeshy.core.database.dao.PendingIdDao
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.outbox.OutboxRepository
 
 /**
@@ -41,8 +42,8 @@ public data class RetentionReport(
 
 /**
  * Supprime les messages périmés, éphémères échus et excédentaires AVEC leurs lignes filles (ponts
- * `pending_ids`, révisions d'édition, reçus éphémères ; traductions, transcriptions et pistes audio vivent
- * dans la charge du message et partent avec elle), sans jamais toucher une ligne optimiste non envoyée.
+ * `pending_ids`, révisions d'édition, reçus éphémères, traductions, transcriptions et pistes audio retenues —
+ * comme `MessageChildRows.delete` iOS), sans jamais toucher une ligne optimiste non envoyée.
  */
 @Singleton
 public class MessageRetentionPurger @Inject internal constructor(
@@ -52,6 +53,7 @@ public class MessageRetentionPurger @Inject internal constructor(
     private val editRevisionDao: EditRevisionDao,
     private val ephemeralReceiptDao: EphemeralReceiptDao,
     private val outbox: OutboxRepository,
+    private val mediaIndex: ConversationMediaHubIndex? = null,
 ) {
 
     public suspend fun run(nowMillis: Long = System.currentTimeMillis()): RetentionReport {
@@ -66,6 +68,7 @@ public class MessageRetentionPurger @Inject internal constructor(
     /** Accès révoqué ou conversation supprimée : tout le fil part, sans orphelin. Rend le nombre de messages retirés. */
     public suspend fun purgeConversation(conversationId: String): Int {
         if (conversationId.isBlank()) return 0
+        mediaIndex?.invalidateConversation(conversationId)
         return database.withTransaction {
             val keys = messageDao.retentionKeysForConversation(conversationId)
             deleteWithChildren(keys)
@@ -96,6 +99,7 @@ public class MessageRetentionPurger @Inject internal constructor(
             editRevisionDao.deleteForMessages(chunk)
             ephemeralReceiptDao.deleteAll(chunk)
         }
+        DedicatedTranslationRows.drop(database, ids)
         keys.map { it.id }.chunked(CHUNK).forEach { messageDao.deleteByIds(it) }
     }
 

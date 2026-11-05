@@ -3,6 +3,7 @@ package me.meeshy.sdk.conversation
 import java.time.Instant
 import kotlinx.serialization.encodeToString
 import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.mediahub.ConversationMediaHubIndex
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MessageEditOrdering
 import me.meeshy.sdk.model.MessageReactionRows
@@ -34,8 +35,10 @@ internal class MessageMutationWriter(
     private val events: MessageEventBuffer? = null,
     /** L'utilisateur courant, clé de MA ligne de réaction ; par défaut le compte du geste. */
     private val selfId: (suspend () -> String?)? = null,
+    /** L'index des médias de la conversation : un message supprimé quitte TOUS les genres. */
+    private val mediaIndex: ConversationMediaHubIndex? = null,
 ) {
-    private val tombstones = MessageTombstoneWriter(updater, revisions, events)
+    private val tombstones = MessageTombstoneWriter(updater, revisions, events, mediaIndex)
 
     /**
      * Optimistic reaction toggle: the cached `reactionSummary` moves instantly
@@ -176,6 +179,7 @@ internal class MessageMutationWriter(
             )
         } ?: return false
         revisions?.forget(listOf(messageId))
+        mediaIndex?.forgetMessage(updated.conversationId, messageId, updater.ticket())
         val deletedAt = updated.deletedAt
         if (deletedAt != null) {
             val parentIds = listOfNotNull(updated.id, updated.clientMessageId)

@@ -124,7 +124,10 @@ private fun SceneFirstFrame(
                 CompositionLocalProvider(LocalPlacedReframe provides placedReframe(edition.placedBand, placed, viewModel)) {
                     Box(modifier) {
                         StoryComposerScene(state, viewModel, comparison, Modifier.fillMaxSize(), capture, captureOffered, zoom)
-                        ComposerSceneInvite(sceneInviteShown(state, armed, panel != null || typing != null || openSheet != null))
+                        ComposerSceneInvite(
+                            shown = sceneInviteShown(state, armed, panel != null || typing != null || openSheet != null),
+                            hint = capture?.offer?.takeIf { captureOffered },
+                        )
                     }
                 }
             },
@@ -161,9 +164,9 @@ private fun SceneFirstFrame(
             sheetContent = { open -> SceneSheetContent(open, state, viewModel, comparison, sheet, edited.background) },
             typing = typing,
             rails = rails,
-            incoming = state.incomingPlaceholder()?.let { placeholder -> { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } },
+            incoming = incomingLayer(state, viewModel),
         )
-        EditingAnnouncer(editing = editedWord(state, editing.editing))
+        EditingAnnouncer(selected = selectedAnnouncement(state, editing.editing))
         edited.background?.let { BackgroundRemoveConfirmation(it) }
     }
 }
@@ -279,10 +282,12 @@ private fun rememberSceneBackground(
 
 /** Le mot de ce qui est en édition, pour TalkBack : la famille de l'objet, ou « Fond » pour le fond média (#13973). */
 @Composable
-private fun editedWord(state: StoryComposerUiState, editing: Boolean): String? {
+private fun selectedAnnouncement(state: StoryComposerUiState, editing: Boolean): String? {
     val ref = state.selectedSceneObject?.takeIf { editing } ?: return null
-    return if (state.selectionSubject == ComposerSelectionSubject.BACKGROUND) stringResource(R.string.stories_composer_background)
-    else familyWord(state.familyOf(ref))
+    return stringResource(
+        if (state.selectionSubject == ComposerSelectionSubject.BACKGROUND) BACKGROUND_SELECTED_ANNOUNCEMENT
+        else state.familyOf(ref).selectedAnnouncementRes(),
+    )
 }
 
 /**
@@ -462,7 +467,7 @@ private fun storySceneRails(
                 onRedo = viewModel::onRedo,
             )
         },
-        socle = { if (chrome) StorySocleNotice(state, viewModel::onRetryMediaPick) },
+        socle = { if (chrome) StorySocleNotice(state, viewModel) },
         below = { if (chrome && editing.publication) StoryPublish(state, viewModel, doors, formatChevron) },
     )
 }
@@ -483,7 +488,7 @@ private fun StoryComposerUiState.activeSceneTool(): ComposerSceneTool? = when (b
 
 /**
  * Texte pose un texte, Média et Son ouvrent leur sélecteur (ou leur panneau s'il y a déjà de quoi), Dessin prend le pinceau,
- * Fond ouvre son panneau, Mention et Lieu leur feuille (#14049), « Texte du post » son champ collé au clavier (#14457).
+ * Fond sélectionne le fond média peint, sinon ouvre son panneau (#15863), Mention et Lieu leur feuille (#14049), « Texte du post » son champ collé au clavier (#14457).
  */
 @Composable
 private fun rememberSceneToolAction(
@@ -495,7 +500,7 @@ private fun rememberSceneToolAction(
     val addText = rememberGuardedAddition(state.deck.selectedCanAddTextElement, R.string.composer_scene_cap_text, viewModel::onAddTextElement)
     val openStickers = rememberGuardedAddition(state.deck.selectedCanAddSticker, R.string.composer_scene_cap_sticker, doors.onOpenStickers)
     val pickMedia = rememberGuardedAddition(state.deck.selectedCanAddMedia, R.string.composer_scene_cap_media, doors.onPickMedia)
-    val hasMedia = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() || state.isUploadingMedia
+    val hasMedia = state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty() || state.isPreparingMedia
     return { tool ->
         more.onMorePanel(null)
         when (tool) {
@@ -504,7 +509,7 @@ private fun rememberSceneToolAction(
             ComposerSceneTool.STICKER -> openStickers()
             ComposerSceneTool.SOUND -> doors.onOpenSoundShelf()
             ComposerSceneTool.DRAWING -> viewModel.onEnterDrawingMode()
-            ComposerSceneTool.BACKGROUND -> viewModel.onBandToolSwipeUp(StoryToolMode.TEXTURE)
+            ComposerSceneTool.BACKGROUND -> viewModel.onBackgroundTool()
             ComposerSceneTool.MENTION -> more.onOpenSheet(StoryComposerSheet.MENTION)
             ComposerSceneTool.PLACE -> more.onOpenSheet(StoryComposerSheet.PLACE)
             ComposerSceneTool.POST_TEXT -> more.onMorePanel(StoryMorePanel.POST_TEXT)
@@ -601,20 +606,27 @@ private fun StorySocle(
             onMentions = { onOpenSheet(StoryComposerSheet.MENTION) },
         )
     }
-    StorySocleNotice(state, viewModel::onRetryMediaPick)
+    StorySocleNotice(state, viewModel)
     EditingChromeVisibility(publication) {
         StoryPublish(state, viewModel, doors, formatChevron)
     }
 }
 
 @Composable
-private fun StorySocleNotice(state: StoryComposerUiState, onRetryMedia: () -> Unit) {
+private fun StorySocleNotice(state: StoryComposerUiState, viewModel: StoryComposerViewModel) {
     val audienceEmpty = !ComposerAudienceSelection.isPublishable(state.draft.visibility, state.draft.visibilityUserIds)
     val block = state.publishBlock?.let { stringResource(it.messageRes()) }
         ?: if (audienceEmpty) stringResource(R.string.composer_socle_blocked_audience) else null
     val notice = block ?: sceneNotice(state) ?: return
-    val retries = block == null && state.canRetryMedia && state.errorMessage == StoryComposerViewModel.MEDIA_FAILED
-    SceneNoticeLine(notice, onRetry = onRetryMedia.takeIf { retries })
+    SceneNoticeLine(notice, onRetry = noticeRetry(state, viewModel).takeIf { block == null })
+}
+
+/** Ce que « Réessayer » relance sous la ligne d'erreur : le média, le sticker (#15597) ou le son (#15598) qui a échoué. */
+private fun noticeRetry(state: StoryComposerUiState, viewModel: StoryComposerViewModel): (() -> Unit)? = when (state.errorMessage) {
+    StoryComposerViewModel.MEDIA_FAILED -> if (state.canRetryMedia) viewModel::onRetryMediaPick else null
+    StoryComposerViewModel.STICKER_IMAGE_FAILED -> if (state.canRetrySticker) viewModel::onRetryStickerIntake else null
+    StoryComposerViewModel.SOUND_FAILED -> if (state.failedSounds.isNotEmpty()) viewModel::onRetrySoundUploads else null
+    else -> null
 }
 
 /**
@@ -661,4 +673,11 @@ private fun StoryPublishBlock.messageRes(): Int = when (this) {
 @Composable
 private fun StaleSheetReleased(stale: Boolean, onRelease: () -> Unit) {
     if (stale) LaunchedEffect(Unit) { onRelease() }
+}
+
+/** Ce qui entre dans la scène et voile le reste (R5 de #13863) : un média qui se prépare, ou un sticker image qui arrive (#15597). */
+private fun incomingLayer(state: StoryComposerUiState, viewModel: StoryComposerViewModel): (@Composable () -> Unit)? {
+    state.incomingPlaceholder()?.let { placeholder -> return { IncomingMediaPlaceholderLayer(placeholder, viewModel::onCancelMediaPick) } }
+    val sticker = state.incomingSticker() ?: return null
+    return { IncomingStickerPlaceholderLayer(sticker, viewModel::onCancelStickerIntake) }
 }

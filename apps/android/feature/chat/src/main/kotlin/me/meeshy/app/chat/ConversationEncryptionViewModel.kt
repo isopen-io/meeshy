@@ -20,7 +20,28 @@ import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject
 
 /** Ce que la feuille dit après un geste ou une lecture qui n'a pas abouti. */
-enum class ConversationEncryptionNotice { READ_FAILED, OFFLINE, REGIME_CHANGED, IRREVERSIBLE, FORBIDDEN, FAILED }
+enum class ConversationEncryptionNotice {
+    READ_FAILED,
+    OFFLINE,
+    REGIME_CHANGED,
+    IRREVERSIBLE,
+
+    /** 403 sans code : dans un groupe, il faut en être modérateur. */
+    FORBIDDEN,
+
+    /** 403 `ENCRYPTION_ACTIVATION_RESTRICTED` : la politique de plateforme réserve le geste à un rôle d'équipe. */
+    RESTRICTED,
+
+    /** `ENCRYPTION_ALREADY_ENABLED` : le mode visé est déjà celui que la passerelle tient. */
+    ALREADY_ENABLED,
+
+    /** 409 `E2EE_DIRECT_ALREADY_END_TO_END` : la paire a déjà son tête-à-tête chiffré de bout en bout. */
+    DIRECT_ALREADY_END_TO_END,
+
+    /** 409 `E2EE_DIRECT_NOT_A_PAIR` : ce tête-à-tête ne réunit pas exactement deux membres inscrits. */
+    DIRECT_NOT_A_PAIR,
+    FAILED,
+}
 
 data class ConversationEncryptionUiState(
     val conversationId: String? = null,
@@ -32,6 +53,8 @@ data class ConversationEncryptionUiState(
     val isSwitching: Boolean = false,
     val selected: ConversationEncryptionModeChoice = ConversationEncryptionModeChoice.SERVER,
     val notice: ConversationEncryptionNotice? = null,
+    /** Le passage au bout en bout attend sa confirmation : on n'en revient jamais (#12949, #16044). */
+    val confirmsEndToEnd: Boolean = false,
 ) {
     /** Ni statut servi ni conversation retenue chiffrée : rien ne permet de dire le régime, la feuille ne devine pas. */
     val readFailed: Boolean get() = !isLoading && status == null && !sealed
@@ -47,6 +70,11 @@ data class ConversationEncryptionUiState(
             return offered && !isSwitching && selected.isOfferedFor(isDirect) &&
                 selected in ConversationEncryptionModeChoice.switchTargets(shown.regime)
         }
+
+    /** L'activation d'une conversation sans chiffrement est prête : le droit servi, et aucune bascule en cours. */
+    val canActivate: Boolean
+        get() = !isSwitching && selected.isOfferedFor(isDirect) &&
+            view().let { it.mayToggle && it.content == ConversationEncryptionContent.Activation }
 
     fun view(): ConversationEncryptionView = ConversationEncryptionView.resolve(
         status = status,
@@ -80,7 +108,14 @@ class ConversationEncryptionViewModel @Inject constructor(
      */
     fun load(conversationId: String, isDirect: Boolean) {
         if (_state.value.conversationId == conversationId) {
-            _state.update { it.copy(isDirect = isDirect, sealed = sealedOf(it, conversationId)) }
+            _state.update {
+                it.copy(
+                    isDirect = isDirect,
+                    sealed = sealedOf(it, conversationId),
+                    selected = it.selected.takeIf { mode -> mode.isOfferedFor(isDirect) } ?: ConversationEncryptionModeChoice.SERVER,
+                    confirmsEndToEnd = false,
+                )
+            }
             read()
             return
         }
@@ -102,16 +137,37 @@ class ConversationEncryptionViewModel @Inject constructor(
     }
 
     fun activate() {
-        val current = _state.value
-        if (current.isSwitching || !current.view().let { it.mayToggle && it.content == ConversationEncryptionContent.Activation }) return
-        switch { id -> encryption.enable(id, current.selected) }
+        if (_state.value.canActivate) requestSwitch()
     }
 
     /** Fait passer un régime au repos au mode choisi (`POST /conversations/:id/encryption`). */
     fun switchMode() {
+        if (_state.value.canSwitchMode) requestSwitch()
+    }
+
+    /**
+     * Le bout en bout confirmé part, si le geste est TOUJOURS permis : une relecture ou un registre
+     * qui a appris le bout en bout entre la question et la réponse ferment la porte (#12949).
+     */
+    fun confirmEndToEnd() {
         val current = _state.value
-        if (!current.canSwitchMode) return
-        switch { id -> encryption.enable(id, current.selected) }
+        _state.update { it.copy(confirmsEndToEnd = false) }
+        val stillAllowed = current.canActivate || current.canSwitchMode
+        if (!current.confirmsEndToEnd || current.selected != ConversationEncryptionModeChoice.E2EE || !stillAllowed) return
+        switch { id -> encryption.enable(id, ConversationEncryptionModeChoice.E2EE) }
+    }
+
+    fun cancelEndToEnd() {
+        _state.update { it.copy(confirmsEndToEnd = false) }
+    }
+
+    private fun requestSwitch() {
+        val mode = _state.value.selected
+        if (mode == ConversationEncryptionModeChoice.E2EE) {
+            _state.update { it.copy(confirmsEndToEnd = true, notice = null) }
+            return
+        }
+        switch { id -> encryption.enable(id, mode) }
     }
 
     fun dismissNotice() {
@@ -146,9 +202,7 @@ class ConversationEncryptionViewModel @Inject constructor(
                 is NetworkResult.Failure -> {
                     val notice = noticeOf(result.error, ConversationEncryptionNotice.FAILED)
                     _state.update { it.copy(isSwitching = false, sealed = sealedOf(it, id), notice = notice) }
-                    if (notice == ConversationEncryptionNotice.REGIME_CHANGED || notice == ConversationEncryptionNotice.IRREVERSIBLE) {
-                        refreshKeepingNotice(id, notice)
-                    }
+                    if (notice in REREAD_AFTER) refreshKeepingNotice(id, notice)
                 }
             }
         }
@@ -164,16 +218,31 @@ class ConversationEncryptionViewModel @Inject constructor(
     /** Le scellé ne recule jamais dans la feuille : un compte momentanément inconnu ne rouvre pas le clair (#12949). */
     private fun sealedOf(current: ConversationEncryptionUiState, id: String): Boolean = current.sealed || ledger.isSealed(id)
 
-    private fun noticeOf(error: ApiError, fallback: ConversationEncryptionNotice): ConversationEncryptionNotice = when {
-        error.code == ConversationEncryptionRepository.REGIME_CHANGED -> ConversationEncryptionNotice.REGIME_CHANGED
-        error.code == ConversationEncryptionRepository.IRREVERSIBLE -> ConversationEncryptionNotice.IRREVERSIBLE
-        error.code == OFFLINE_CODE -> ConversationEncryptionNotice.OFFLINE
-        error.httpStatus == FORBIDDEN -> ConversationEncryptionNotice.FORBIDDEN
-        else -> fallback
-    }
+    private fun noticeOf(error: ApiError, fallback: ConversationEncryptionNotice): ConversationEncryptionNotice =
+        NOTICE_OF_CODE[error.code] ?: if (error.httpStatus == FORBIDDEN) ConversationEncryptionNotice.FORBIDDEN else fallback
 
     private companion object {
-        const val OFFLINE_CODE = "NETWORK"
         const val FORBIDDEN = 403
+
+        /** Chaque refus de la passerelle a ses mots ; un code inconnu retombe sur l'échec générique. */
+        val NOTICE_OF_CODE: Map<String, ConversationEncryptionNotice> = mapOf(
+            ConversationEncryptionRepository.REGIME_CHANGED to ConversationEncryptionNotice.REGIME_CHANGED,
+            ConversationEncryptionRepository.IRREVERSIBLE to ConversationEncryptionNotice.IRREVERSIBLE,
+            ConversationEncryptionRepository.DIRECT_ALREADY_END_TO_END to ConversationEncryptionNotice.DIRECT_ALREADY_END_TO_END,
+            ConversationEncryptionRepository.DIRECT_NOT_A_PAIR to ConversationEncryptionNotice.DIRECT_NOT_A_PAIR,
+            ConversationEncryptionRepository.ACTIVATION_RESTRICTED to ConversationEncryptionNotice.RESTRICTED,
+            ConversationEncryptionRepository.ALREADY_ENABLED to ConversationEncryptionNotice.ALREADY_ENABLED,
+            "NETWORK" to ConversationEncryptionNotice.OFFLINE,
+        )
+
+        /** Ces refus disent que l'état ou le droit servis ont bougé : la feuille les relit, et garde le mot. */
+        val REREAD_AFTER: Set<ConversationEncryptionNotice> = setOf(
+            ConversationEncryptionNotice.REGIME_CHANGED,
+            ConversationEncryptionNotice.IRREVERSIBLE,
+            ConversationEncryptionNotice.FORBIDDEN,
+            ConversationEncryptionNotice.RESTRICTED,
+            ConversationEncryptionNotice.ALREADY_ENABLED,
+            ConversationEncryptionNotice.DIRECT_ALREADY_END_TO_END,
+        )
     }
 }

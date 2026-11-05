@@ -5,16 +5,22 @@
       "resDir": "feature/stories/src/main/res",
       "entries": [
         {
+          "catalog": "app",
+          "iosKey": "composer.publish.as.storyAndPost",
           "androidName": "composer_publish_as_storyAndPost",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.publish.as.postAndReel",
           "androidName": "composer_publish_as_postAndReel",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "composer.publish.as.storyPostAndReel",
           "androidName": "composer_publish_as_storyPostAndReel",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "composer_publish_failed_story",

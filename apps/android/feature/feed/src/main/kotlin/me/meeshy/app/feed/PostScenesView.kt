@@ -49,6 +49,7 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.SceneFraming
+import me.meeshy.sdk.model.SceneMosaicLayout
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.ui.component.media.MosaicArrangement
 import me.meeshy.ui.component.media.MosaicLayout
@@ -129,13 +130,19 @@ private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, muted: Boolean
                         focus = frame?.focus,
                         modifier = Modifier.align(Alignment.Center).aspectRatio((frame?.pageAspect ?: boxAspect).toFloat()),
                     ) {
-                        SceneSurface(item = scenes.items[page], accentHex = scenes.accentHex, live = live && page == current, muted = muted, modifier = Modifier.fillMaxSize())
+                        SceneSurface(
+                            item = scenes.items[page],
+                            accentHex = scenes.accentHex,
+                            live = SceneMosaicLayout.plays(elected = live, page = page, currentPage = current, moves = moves),
+                            muted = muted,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                     scenes.captionAt(page, tileWidth = 1f)?.let { caption ->
                         FeedMediaCaption(text = caption, maxLines = CAPTION_LINES, modifier = Modifier.align(Alignment.BottomStart))
                     }
                     SceneCue(
-                        playing = live && page == current,
+                        playing = SceneMosaicLayout.isReadPage(elected = live, page = page, currentPage = current),
                         mutedSound = host.locksMute && scenes.offersSound,
                         moves = moves,
                         modifier = Modifier.align(Alignment.BottomEnd),
@@ -145,7 +152,7 @@ private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, muted: Boolean
             if (count > 1) {
                 PageCounter(position = current + 1, count = count, modifier = Modifier.align(Alignment.TopEnd))
             }
-            if (current > 0) {
+            if (SceneMosaicLayout.hasPrevious(current)) {
                 PageArrow(
                     icon = MeeshyIcons.ChevronBackward,
                     label = stringResource(R.string.feed_scene_previous),
@@ -153,7 +160,7 @@ private fun PostScenePager(scenes: FeedPostScenes, live: Boolean, muted: Boolean
                     onClick = { scope.launch { pagerState.animateScrollToPage(current - 1) } },
                 )
             }
-            if (current < count - 1) {
+            if (SceneMosaicLayout.hasNext(current, count)) {
                 PageArrow(
                     icon = MeeshyIcons.ChevronForward,
                     label = stringResource(R.string.feed_scene_next),

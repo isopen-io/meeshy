@@ -33,3 +33,33 @@ class ConversationAvatarMenuTest {
         assertThat(ConversationAvatarMenu.rolesFor("mystery", canShare = true)).containsExactly(AvatarMenuRole.CONVERSATION_INFO)
     }
 }
+
+/** #15887 : les rôles suivent ce qu'ouvre l'avatar — un direct sans profil à montrer n'offre pas « Voir le profil ». */
+class ConversationAvatarMenuRolesTest {
+
+    @Test
+    fun `un direct qui ouvre un profil offre infos puis profil`() {
+        assertThat(ConversationAvatarMenu.roles("direct", opensProfile = true, hasShareAction = true))
+            .containsExactly(AvatarMenuRole.CONVERSATION_INFO, AvatarMenuRole.PROFILE).inOrder()
+    }
+
+    @Test
+    fun `un direct sans profil a montrer n'offre que les infos`() {
+        assertThat(ConversationAvatarMenu.roles("direct", opensProfile = false, hasShareAction = true))
+            .containsExactly(AvatarMenuRole.CONVERSATION_INFO)
+        assertThat(ConversationAvatarMenu.roles("dm", opensProfile = false, hasShareAction = false))
+            .containsExactly(AvatarMenuRole.CONVERSATION_INFO)
+    }
+
+    @Test
+    fun `un groupe partageable offre le lien seulement si l'hote sait le fabriquer`() {
+        listOf("group", "public", "global", "broadcast").forEach { type ->
+            assertThat(ConversationAvatarMenu.roles(type, opensProfile = false, hasShareAction = true))
+                .containsExactly(AvatarMenuRole.CONVERSATION_INFO, AvatarMenuRole.SHARE_LINK).inOrder()
+            assertThat(ConversationAvatarMenu.roles(type, opensProfile = false, hasShareAction = false))
+                .containsExactly(AvatarMenuRole.CONVERSATION_INFO)
+        }
+        assertThat(ConversationAvatarMenu.roles("community", opensProfile = true, hasShareAction = true))
+            .containsExactly(AvatarMenuRole.CONVERSATION_INFO)
+    }
+}

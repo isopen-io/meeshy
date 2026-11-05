@@ -246,6 +246,167 @@ key-distribution channels still need defence in depth).
 **Consequences.** At-rest hygiene is correct from the first commit; the hard
 E2EE protocol questions are escalated to dedicated, reviewable ADRs.
 
+**Amendment (2026-11, #15880 — SQLCipher shipped).** `meeshy.db` is a SQLCipher
+database (`net.zetetic:sqlcipher-android`). The key is 32 random bytes held in the
+Keystore-backed `SecureStore` (`@DatabaseKeyVault`, account `meeshy.database`) and handed
+to SQLCipher as a raw key (`x'<hex>'`, no PBKDF2 per open). It is read by
+`DatabaseOpener` before the first open, on the thread that builds the `MeeshyDatabase`
+singleton (see the counter-audit amendment below). An existing plaintext install is migrated then by
+`sqlcipher_export` into `meeshy.db.enc.tmp`, verified (user_version + row counts of
+the durable tables: outbox, media_blob, tus_upload_checkpoint, ...), then swapped in;
+the plaintext copy (`.plain.bak`) is deleted last, and an interrupted run resumes from
+what the disk shows (`PlaintextMigrationPlan`). The FTS projection is dropped before
+the export and rebuilt by `SearchIndexSchema.ensure` on open (superseded below: only
+`message_fts` is dropped, from the copy). Key loss (Keystore invalidated, reinstall,
+biometric change, data cleared) is detected: an encrypted file in front of a new key
+(`KeyLossPolicy`) is purged; a file SQLCipher reports as "not a database" with the key
+it has (`isReadable`) is salvaged then quarantined like any corruption (at most two
+`.corrupted.<ts>` copies, encrypted, removed at logout). A cold start, never a crash.
+
+**Amendment (2026-11, #15880 — adversarial audit of PR #15908).** SQLCipher is pinned
+at **4.6.1 or later**: its native libraries are 16 KB-aligned (`LOAD` 0x4000; 4.5.6 was
+0x1000, refused by Google Play with `targetSdk 36` and an `UnsatisfiedLinkError` on
+16 KB-page devices). A failing encrypted start never crash-loops and never falls back
+to plaintext: `DatabaseOpener` runs the bootstrap first and catches its failure — a
+still-plaintext file that a corruption prevents from exporting is salvaged,
+quarantined and recreated encrypted; any other failure (disk, vault that does not
+return the key, missing native library) opens the database **in memory** for this
+launch, leaves the file untouched, and the next launch retries. A key is created only
+when the vault says it is ABSENT, or after it was recreated with certainty
+(`acknowledgeRecovery` then an absent read); an unreadable or malformed entry is never
+overwritten (`DatabaseKeyUnavailableException`). An unreadable file header is
+`UNAVAILABLE`, never `TRUNCATED`, and is never purged. The salvage reads the encrypted
+primary through SQLCipher with the key (outbox, `pending_ids`,
+`e2ee_plaintext_erasures`). No fallback database is written any more (it would be
+plaintext): a refusing disk leads to the in-memory database; a fallback left by an
+older build is adopted then deleted. `onCorruption` is relayed to Room's callback by
+our own helper (SQLCipher's `SupportHelper` drops it), so the corruption marker is set
+again. The `ATTACH … KEY` of the export binds the path and the key as parameters: the
+key never appears in SQL text. Bootstrap events reach `DatabaseInitDiagnostics`, and a
+purge degrades `StorageHealth` (`key-lost`). Limits: no JVM build of SQLCipher exists
+(the AAR ships bionic `.so` only), so the unit tests use a stand-in engine; the real
+format is proved only by a manual or instrumented run.
+
+**Amendment (2026-11, #15880 — counter-audit).** The key lives in its own vault,
+`meeshy_database_key` (`@DatabaseKeyVault`), whose file is deleted and recreated only
+after a durable failure proven over three consecutive launches carrying a permanent
+signature (`AEADBadTagException`, `KeyPermanentlyInvalidatedException`) —
+`DurableFailureGate`. Before this, one transient `open()` failure of the shared
+`@SecretVault` (a `KeyStoreException` at boot) deleted the vault, the key read back
+absent, and `KeyLossPolicy` purged the database, outbox included. A key the vault does
+not return (malformed, entry that throws) is replaced only when no file depends on it
+(plaintext or absent database, no encrypted copy awaiting verification): the plaintext
+database is then encrypted instead of staying on disk forever; in front of an encrypted
+file it is kept and the launch opens in memory. The salvage never creates nor writes a
+key (`DatabaseKeyProvider.existingOrNull`). A verification that throws deletes the
+encrypted copy, so the next launch restarts from the plaintext backup instead of
+replaying the same failure. **Known limit, not solved here:** the bootstrap (Keystore
+read and, on the first launch after the update, the full `sqlcipher_export` plus its
+verification) runs inside the `@Provides` of `MeeshyDatabase`, on whichever thread first
+injects it — the main thread when `MeeshyApplication` field injection reaches it — so
+the migration of a large plaintext database is an ANR risk. Moving the first
+construction off the main thread, a consented reset for an encrypted database whose key
+is unusable, and an instrumented run of the real engine (raw-key `ATTACH … KEY ?`) are
+tracked as follow-up issues.
+
+**Amendment (2026-11-04, #15880 — second counter-audit).** (1) **The real engine is
+exercised on a device.** `SqlCipherOnDeviceTest` (`core:database` androidTest) runs the
+production opener (`DatabaseModule.encryptedOpener`) against the native SQLCipher 4.6.1:
+a current-version plaintext database with a pending outbox row is exported (`ATTACH …
+KEY ?` with the raw key bound as text, `sqlcipher_export`), verified, swapped, then
+reopened by Room's helper (byte-array key) with an identical outbox; a wrong key yields
+`SQLITE_NOTADB`, classified as a corruption. It runs on an x86_64 emulator in the
+`android-sqlcipher-device.yml` workflow (kept apart from `android.yml`, which stays the
+exact mirror of `meeshy.sh check`). (2) **A nearly full disk no longer costs the
+database.** The export doubles the database's footprint; when the free space is below
+`requiredFreeBytes` (database + WAL + max(10 %, 4 MiB)), the migration is deferred and
+the file, ALREADY plaintext on disk, opens as is through the SQLCipher helper with an
+empty passphrase (no codec) — nothing new is written in plaintext, the cache and the
+outbox stay usable, and the next launch retries (`encryption-deferred:disk-full` in the
+diagnostics). This is the single, narrow exception to "never a plaintext fallback". A
+lone plaintext backup is moved back first, so Room never creates an empty database next
+to it. (3) **No plaintext copy survives a prepare.** Plaintext quarantines (left by a
+build before encryption, or by a corrupt plaintext file the export could not read) are
+deleted with their side files at every bootstrap run; encrypted quarantines stay.
+(4) **The search index of conversations survives the migration.** The plaintext source
+is never modified any more: `sqlcipher_export` copies rows with `INSERT … SELECT`, which
+renumbers the implicit `rowid` of `messages` that the external-content `message_fts` is
+keyed on, so only that index (and its triggers) is dropped, from the encrypted COPY on a
+fresh connection, and rebuilt by `ensure`; `conversation_fts`, standalone, is kept.
+(5) **An in-memory launch shows the pending outbox.** When the encryption cannot be set
+up, the outbox, `pending_ids` and `e2ee_plaintext_erasures` of the file on disk are read
+read-only into the in-memory database: a pending send stays visible and leaves with its
+original `cmid`, which the gateway deduplicates (`conversationId` + `clientMessageId`)
+when the on-disk row is replayed after a later successful migration. (6) **More durable
+vault failures are recognised** by `DurableFailureGate` (still over three consecutive
+launches): a Tink keyset that no longer decodes (`InvalidProtocolBufferException`), a
+key blob the Keystore refuses (`Invalid key blob`, `INVALID_KEY_BLOB`) and a master key
+that "exists but is unusable". (7) **Corrections.** `DatabaseKeyProvider.destroyKey()` has
+no production caller: logout clears the tables and the leftovers, it does not change the
+key. A key written as REGENERATED before its purge, if the process dies in between,
+makes the next launch read it as EXISTING in front of a file encrypted by the old one:
+`isReadable` sees "not a database" and the file is quarantined (encrypted, at most two
+copies) rather than purged as `key-lost` — the outcome (cold start) is the same.
+**Still open:** a vault failure that no signature recognises still leaves an encrypted
+database in memory until the consented reset (follow-up), and the degraded screen does
+not yet name the cause of an in-memory launch.
+
+**Amendment (2026-11-04, #15880 — third counter-audit, emulator run 41818032184).**
+(1) **The migration now runs on the real engine.** `Engine.export` opened the plaintext
+database `OPEN_READWRITE` only; an attached database inherits the connection's flags, so
+`ATTACH … AS encrypted KEY ?` could not create the copy (`unable to open database`) and
+every migration failed into memory (`encryption-unavailable:defect`). The plaintext
+connection now opens `OPEN_READWRITE | CREATE_IF_NECESSARY`, with an inert error handler
+on every maintenance connection (a corruption met there throws, it never deletes the
+file). (2) **No SQLCipher statement swallows its failure.** `rawExecSQL` ignored
+execution errors, so an aborted `ATTACH` or `sqlcipher_export` passed for a success and a
+corrupt plaintext database never reached its encrypted re-creation. Every statement goes
+through `execSQL` or a compiled statement (`simpleQueryForString` for the export), which
+throw; `SqlCipherExportGuardTest` forbids `rawExecSQL` in the module, and the emulator
+bench proves "corrupt plaintext → export throws → quarantine → encrypted re-creation, no
+plaintext copy left". (3) **What an in-memory launch settles is not replayed by the
+disk.** The in-memory database receives a COPY of the on-disk outbox, which the file
+keeps. `DiskOutboxSettlement` watches the in-memory outbox (Room invalidation): a row
+from the disk that leaves it (delivered, withdrawn, discarded) or whose cancellation is
+requested is written to `meeshy.db.outbox-settled` (client `cmid`s only, no content); the
+next on-disk open deletes those rows, then the register; a further in-memory launch does
+not copy them. Known limit: a row settled in the last instants of a killed process,
+before the register is written, stays replayable. (4) **The plaintext deferral is
+bounded and signalled.** A deferred launch WRITES plaintext (cache, new messages,
+outbox). Each deferral is counted next to the database (`meeshy.db.encryption-deferrals`),
+logged (`encryption-deferred:disk-full,launch=n/3`) and degrades `StorageHealth`
+(`encryption-deferred`). Beyond `MAX_DEFERRALS` (3) consecutive launches — or when the
+counter cannot be written — `MigrationDeferralExhaustedException` (an unavailability)
+opens the launch in memory with the on-disk outbox copied, never in plaintext; a
+successful migration resets the counter. A database re-created during a deferral
+(quarantine) is born ENCRYPTED: the deferral holds only while the file on disk is the
+original plaintext database, and `prepare` replays otherwise.
+
+**Amendment (2026-11-04, #15880 — fourth counter-audit).** (1) **A session closed during
+an in-memory launch leaves the disk database purge-due.** The session purge empties the
+OPEN database only — the memory — while `meeshy.db` still holds the leaving account's
+history, and it reopened under the next account. `DatabaseLeftovers.purge` now writes a
+durable marker `meeshy.db.purge-due` (temp file, `fsync`, rename, directory `fsync`; no
+data) when the launch is in memory and a disk file exists. The next `DatabaseOpener.open`
+applies it BEFORE anything else: it reads the plaintext erasures stamped with an account
+(the rows `clearKeepingPlaintextErasures` keeps), deletes every `meeshy.db*` file (WAL,
+SHM, journal, migration temp/backup, settlement register, deferral counter, corruption
+marker, quarantines), opens a fresh database and reinjects those erasures. A marker is
+preferred over an immediate deletion because it keeps the erasures owed to the leaving
+account and holds when the key or the native library is missing at logout time. When the
+file cannot be read for lack of key or disk, or cannot be deleted, the marker stays and
+the disk database is NOT opened: the launch runs in memory (`purge-pending`) and copies
+nothing from it. A corrupt file is deleted without its erasures (no key would read them).
+If the disk refuses even the marker, the files are deleted at once — confidentiality
+before the erasures. Residual: a disk that refuses both the marker and the deletion
+leaves the file in place. (2) **The settlement register reflects the current queue.** A
+row settled on `cancelRequestedAt` and then retried (`resetSchedule` sets it back to
+`NULL`) leaves the register, so the next launch no longer deletes an explicit re-send;
+the register is rewritten atomically. (3) **The export check refuses a failed count.**
+`verify` compared two failed row counts as equal; a table now counts as absent, a number,
+or unreadable (`DurableRowCounts`), and an unreadable count on either side rejects the
+copy, while a table absent on both sides (older schema) still passes.
+
 ---
 
 ## ADR-014 — `kotlinx.serialization` with lenient, forward-compatible decoding
@@ -590,6 +751,23 @@ fait fuiter une vidéo privée entre comptes. Le coût (re-téléchargement de r
 
 **Consequences.** Premier réel du compte suivant à froid ; plus aucune vidéo du compte quitté sur disque.
 
+**Amendement 2026-11-03 (#15486, chantier #15462).** La fin de session vide aussi : (1) le cache des FORMES D'ONDE, mémoire
+et disque (`com.meeshy.waveforms.v2`, `WaveformModule.waveformsOnLogout` → `WaveformCache.clearAll`), car un relevé dérive
+du contenu du compte quitté ; (2) la mémoire des POSITIONS de lecture (`PlaybackModule.positionsOnLogout`, déjà un
+`PerAccountCache`, désormais prouvée par témoin). Le moteur partagé (`ConversationAudioCoordinator`) lit par le cache AUDIO
+de `MeeshyMediaCache` (clôture d'époque, bail contre l'éviction) via la couture `AudioPlaybackSources` liée par `:app` ; son
+cache séparé `cacheDir/audio-playback` (64 Mo, sans clôture de compte) disparaît et le dossier est purgé une fois au
+démarrage (`LegacyAudioPlaybackCache`). Un vocal protégé (éphémère, vue unique, flouté, chiffré) se lit en direct : ni cache,
+ni bail, aucun octet sur le disque.
+
+**Condition de la garde (audit 2026-11-04, #15486).** « Protégé » n'est vrai que si la FILE le dit : la protection naît
+dans `AudioQueueBuilder`, depuis les champs REQUIS `AudioQueueMessage.isProtected` et `AudioQueueAttachment.isProtected`
+(un vocal est protégé si son message OU sa pièce l'est, leçon 275), que le producteur calcule par la loi unique
+`VoiceQueueProtection` (`ofMessage` : vue unique, flou, éphémère — échéance, durée ou bit, flamme comprise —, chiffré ;
+`ofPiece` : la pièce masquée ou scellée, ou son message). Aucun maillon n'a plus de défaut `false` : `QueuedAudio`,
+`AudioPlaybackEngine.play` et `AudioSource.Remote` exigent la valeur, un oubli ne compile pas. Le producteur du fil
+(#14899) DOIT bâtir sa file par ces deux lois ; tant qu'il n'existe pas, aucun appelant ne joue par le coordinateur.
+
 ---
 
 ## ADR-028 — L'app native reprend la fiche Play `me.meeshy.app` ; la coque devient `me.meeshy.webapp`
@@ -715,3 +893,26 @@ du pied et disparaît dès qu'un drapeau existe ; les drapeaux ne sont plus rend
 `LanguageFlagTapResolver.resolve` (fil, commentaires, stories) garde son modèle à texte unique : la divergence n'y reste
 qu'en dehors de la bulle de chat. Le Prisme (rangs 1 à 4, original si rien ne correspond) n'a pas changé : une seule
 fonction, `PrismTranslationResolver`.
+
+## ADR-032 — La fiche d'un participant se garde en mémoire, par lecteur (#15680, renverse la mention « pas de cache » de `ConversationRepository.participantProfile`)
+
+Jusqu'ici la fiche ne se cachait pas : elle porte des faits que la passerelle gate PAR LECTEUR (`email`, `entryLink`,
+`historyVisibleFrom`, `canGrantHistory`), et une copie aurait servi à un lecteur ce qui a été masqué à un autre. iOS
+peint pourtant sa fiche au geste, et un spinner à chaque ouverture viole le cache-first. Le renversement se fait avec
+quatre garde-fous, tenus par `ParticipantProfileCache` (`:sdk-core`, mémoire seule, jamais Room) : (1) la clé est
+lecteur + conversation + participant, un autre lecteur ne lit jamais la copie ; (2) la copie porte le rôle du lecteur
+et est jetée dès qu'il change ; (3) un 404 l'efface (« Cette personne a quitté la conversation ») ; (4) elle est un
+`PerAccountCache`, vidée à la déconnexion. Le chargement n'apparaît que sur cache vide, un échec de synchro ne retire
+pas la fiche. Le droit d'écrire reste le signal du serveur (la présence de `entryLink`), jamais recalculé, et chaque
+écriture ne porte qu'UN droit. `participant:rights-updated` (clé `historyVisibleFrom` présente = pose ou efface, absente
+= rien) et `user:updated` mettent la fiche ouverte et sa copie à jour sans relecture.
+
+Amendement (audit #15733) : un ViewModel PAR fiche (`hiltViewModel(key = conversation/participant)`), et chaque
+coroutine capture sa fiche — une réponse, un 404 ou une écriture qui revient pour une autre fiche que la courante n'est
+ni peint ni mis en cache (l'écriture tardive efface la copie de SA fiche). Sans rôle du lecteur, la copie n'est ni lue
+ni écrite : les deux points d'entrée (`ConversationMembersSheet`, `rememberProfileTap`) le passent. 401 et 403
+effacent la copie comme le 404 ; seul un échec de transport ou un 5xx garde la fiche peinte.
+Le rôle passé est le rôle CONNU (`ApiConversation.knownUserRole` : celui de la passerelle, sinon du roster), jamais le
+repli `MEMBER` de `currentUserRole` : un lecteur dont le rôle est inconnu n'a pas de copie. Le rôle est une clé de
+l'effet de chargement (un lecteur rétrogradé fiche ouverte relit), et la fiche fermée coupe ses écouteurs de la room
+(`ParticipantProfileViewModel.close`).

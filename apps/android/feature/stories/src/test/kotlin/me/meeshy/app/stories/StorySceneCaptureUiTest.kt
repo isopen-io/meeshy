@@ -149,6 +149,7 @@ class StorySceneCaptureUiTest {
         show(viewModel(), capture)
 
         compose.onNodeWithContentDescription(string(R.string.stories_composer_canvas)).performClick()
+        compose.passSceneDoubleTapWindow()
 
         assertThat(capture.armed).isTrue()
         compose.onNodeWithTag("scene-viewfinder").assertExists()
@@ -223,6 +224,7 @@ class StorySceneCaptureUiTest {
         show(viewModel(), capture)
 
         compose.onNodeWithContentDescription(string(R.string.stories_composer_canvas)).performClick()
+        compose.passSceneDoubleTapWindow()
 
         assertThat(capture.armed).isFalse()
         compose.onNodeWithText(string(R.string.composer_capture_hint_tap_or_hold)).assertDoesNotExist()
@@ -233,7 +235,7 @@ class StorySceneCaptureUiTest {
         val capture = capture()
         show(viewModel(), capture)
 
-        compose.onNodeWithContentDescription(string(R.string.story_tool_media)).performTouchInput { longClick() }
+        compose.onNodeWithContentDescription(string(R.string.composer_rail_media)).performTouchInput { longClick() }
         compose.onNodeWithText(string(R.string.composer_media_from_camera)).performClick()
 
         assertThat(capture.armed).isTrue()

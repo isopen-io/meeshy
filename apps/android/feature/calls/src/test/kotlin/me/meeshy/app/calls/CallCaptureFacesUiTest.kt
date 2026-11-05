@@ -104,7 +104,8 @@ class CallCaptureFacesUiTest {
         show(live(), capture)
 
         rule.onNodeWithContentDescription("Each face").performClick()
-        rule.waitForIdle()
+        // La porte des permissions relit son historique hors du fil principal : l'issue arrive après l'inactivité de Compose.
+        rule.waitUntil(timeoutMillis = 5_000) { capture.state.value.status != CallCaptureStatus.Working }
 
         assertThat(capture.state.value.status).isEqualTo(CallCaptureStatus.NoVideo)
         assertThat(capture.state.value.flashCount).isEqualTo(1)

@@ -1,41 +1,44 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import me.meeshy.feature.conversations.R
+import kotlinx.coroutines.delay
+import me.meeshy.ui.theme.LentilleMetrics
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.conversationlist.SectionFoldedUnread
 import me.meeshy.sdk.model.renderFingerprint
 import me.meeshy.sdk.model.search.ListMessageHit
 import me.meeshy.sdk.model.search.ListMessageSearchState
 import me.meeshy.sdk.theme.otherParticipantUserId
-import me.meeshy.ui.component.CollapsibleSection
+import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.component.CollapsibleSection
+import kotlinx.coroutines.flow.first
+import me.meeshy.ui.component.refresh.MeeshyRefreshableBox
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.hexColor
 
 internal const val CONVERSATION_LIST_TAG = "conversation-list"
 
@@ -55,14 +58,11 @@ internal fun ConversationListBody(
     onOpenMessage: (ListMessageHit) -> Unit = {},
 ) {
     val signals by viewModel.rowSignals.collectAsStateWithLifecycle()
-    val haptics = rememberMeeshyHaptics()
-    LaunchedEffect(viewModel) { viewModel.pullRefreshSucceeded.collect { haptics.success() } }
-    PullToRefreshBox(
-        isRefreshing = state.isUserRefreshing,
+    MeeshyRefreshableBox(
         onRefresh = {
-            haptics.light()
             viewModel.refresh()
             onRefresh()
+            viewModel.state.first { !it.isUserRefreshing }
         },
         modifier = Modifier.fillMaxSize(),
     ) {
@@ -70,16 +70,50 @@ internal fun ConversationListBody(
         // pure ConversationSections SSOT, which also omits an empty section. Section bodies
         // compose eagerly (few items on a real account).
         val sections = ConversationSections.of(state.conversations, state.categories)
+        val remembered by viewModel.rememberedSections.collectAsStateWithLifecycle()
+        val baseExpanded = ConversationSectionExpansionStore.effective(remembered, state.categories)
+        val drag = rememberConversationDragState()
+        val expandedSections = drag.collapsedExpanded ?: baseExpanded
+        val haptics = rememberMeeshyHaptics()
+        ConversationDragAutoScroll(drag, listState)
         val nowMillis by rememberMinuteClock()
         val tailHeight = LIST_TAIL_HEIGHT
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag(CONVERSATION_LIST_TAG)) {
+        val stickerSkin = rememberLentilleListSkin()
+        val placementSpec = rememberBumpPlacementSpec(state.conversations.map { it.id }, listState)
+        var enteringSection by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(enteringSection) {
+            if (enteringSection != null) {
+                delay(ENTRY_WINDOW_MILLIS)
+                enteringSection = null
+            }
+        }
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag(CONVERSATION_LIST_TAG)
+                .conversationListDragWatch(
+                    state = drag,
+                    baseExpanded = { baseExpanded },
+                    onFinished = { restored ->
+                        restored?.filterNot { it in baseExpanded }?.forEach(viewModel::revealSection)
+                    },
+                ),
+        ) {
             item(key = "list-story-rail", contentType = "story-rail") { header() }
             conversationListStateItems(
                 content = content,
                 onRetry = viewModel::refresh,
                 onNewConversation = onNewConversation,
             ) {
-                populatedItems(state, sections, viewModel, nowMillis, signals, rowNavigation, tailHeight) {
+                populatedItems(
+                    state, sections, expandedSections, viewModel, nowMillis, signals, rowNavigation, tailHeight,
+                    placementSpec, stickerSkin, enteringSection, drag, haptics,
+                    onSectionToggled = { section, expand ->
+                        if (expand) enteringSection = section.sectionId
+                        viewModel.onSectionToggled(section, expand)
+                    },
+                ) {
                     messageSearchItems(messageSearch, state.currentUserId, viewModel::conversationFor, onOpenMessage)
                 }
             }
@@ -87,45 +121,61 @@ internal fun ConversationListBody(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 private fun LazyListScope.populatedItems(
     state: ConversationListUiState,
     sections: List<ConversationSection>,
+    expandedSections: Set<String>,
     viewModel: ConversationListViewModel,
     nowMillis: Long,
     signals: ConversationRowSignals,
     rowNavigation: ConversationRowNavigation,
     tailHeight: Dp,
+    placementSpec: FiniteAnimationSpec<IntOffset>?,
+    stickerSkin: Boolean,
+    enteringSection: String?,
+    drag: ConversationDragState,
+    haptics: MeeshyHaptics,
+    onSectionToggled: (ConversationSection, Boolean) -> Unit,
     messages: LazyListScope.() -> Unit,
 ) {
-    if (!ConversationSections.showsHeaders(sections)) {
-        sections.forEach { section ->
-            items(section.items, key = { "row-${it.id}" }, contentType = { ROW_CONTENT_TYPE }) { conversation ->
-                ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
+    val showsHeaders = ConversationSections.showsHeaders(sections)
+    sections.forEachIndexed { index, section ->
+        val key = section.categoryId?.let { "section-cat-$it" } ?: "section-${section.kind}"
+        val expanded = !showsHeaders || section.sectionId in expandedSections
+        if (showsHeaders) {
+            if (index > 0) item(key = "gap-$key", contentType = "section-gap") { Spacer(Modifier.height(SECTION_SPACING)) }
+            stickyHeader(key = key, contentType = "section-header") {
+                val foldedUnread = SectionFoldedUnread.count(section.items.map { it.unreadCount }, isExpanded = false)
+                ConversationSectionHeader(
+                    section = section,
+                    expanded = expanded,
+                    foldedUnread = foldedUnread,
+                    stickerSkin = stickerSkin,
+                    onToggle = { onSectionToggled(section, it) },
+                    isDropTarget = drag.hoveredSectionId == section.sectionId,
+                    modifier = Modifier
+                        .sectionDropTarget(drag, section.sectionId, haptics, viewModel::onConversationDropped)
+                        .dragHeaderDecoration(
+                            isOrigin = drag.originSectionId == section.sectionId,
+                            isTarget = drag.hoveredSectionId == section.sectionId,
+                            sectionColor = section.containerColor(),
+                        ),
+                )
             }
         }
-        messages()
-        item(key = "list-tail", contentType = "tail") { Spacer(Modifier.height(tailHeight)) }
-        return
-    }
-    sections.forEach { section ->
-        val key = section.categoryId?.let { "section-cat-$it" } ?: "section-${section.kind}"
-        item(key = key, contentType = "section-header") {
-            CollapsibleSection(
-                title = section.title ?: stringResource(section.kind.titleRes()),
-                count = section.items.size,
-                foldedUnread = SectionFoldedUnread.count(section.items.map { it.unreadCount }, isExpanded = false),
-                iconContainerColor = section.kind.containerColor(),
-                icon = {
-                    Icon(
-                        section.kind.icon(),
-                        contentDescription = null,
-                        tint = MeeshyPalette.White,
-                        modifier = Modifier.size(16.dp),
+        if (expanded) {
+            items(section.items, key = { it.id }, contentType = { ROW_CONTENT_TYPE }) { conversation ->
+                Box(
+                    Modifier
+                        .animateItem(placementSpec = placementSpec)
+                        .sectionRowEntry(animate = section.sectionId == enteringSection)
+                        .conversationDragSource(drag, conversation.id, section.sectionId),
+                ) {
+                    ConversationListRow(
+                        state, conversation, viewModel, nowMillis, signals, rowNavigation,
+                        isDragging = drag.draggedId == conversation.id,
                     )
-                },
-            ) {
-                section.items.forEach { conversation ->
-                    ConversationListRow(state, conversation, viewModel, nowMillis, signals, rowNavigation)
                 }
             }
         }
@@ -134,8 +184,13 @@ private fun LazyListScope.populatedItems(
     item(key = "list-tail", contentType = "tail") { Spacer(Modifier.height(tailHeight)) }
 }
 
+/** Espace entre deux sections (iOS `LentilleMetrics` : 8 pt entre sections). */
+private val SECTION_SPACING = LentilleMetrics.Row.marginVertical
+
 /** Marge de fin de liste (iOS `Color.clear.frame(height: 60)`) : les disques flottants ne réservent rien, comme iOS (#13671). */
 private val LIST_TAIL_HEIGHT = 60.dp
+
+private const val ENTRY_WINDOW_MILLIS = 600L
 
 private const val ROW_CONTENT_TYPE = "conversation-row"
 
@@ -147,6 +202,7 @@ private fun ConversationListRow(
     now: Long,
     signals: ConversationRowSignals,
     rowNavigation: ConversationRowNavigation,
+    isDragging: Boolean = false,
 ) {
     val currentUserId = state.currentUserId
     val actions = remember(viewModel, conversation, currentUserId, rowNavigation) {
@@ -173,27 +229,8 @@ private fun ConversationListRow(
             hasPendingSync = signals.hasPendingSync(conversation.id),
             here = signals.peerHere(conversation, currentUserId).toAvatarHere(),
             callInProgress = signals.hasCallInProgress(conversation.id),
+            isDragging = isDragging,
         ),
         actions = actions,
     )
-}
-
-private fun ConversationSectionKind.titleRes(): Int = when (this) {
-    ConversationSectionKind.PINNED -> R.string.conversations_section_pinned
-    // CATEGORY headers render the category's own name (section.title); this
-    // resource is only the exhaustive-`when` fallback and is never shown.
-    ConversationSectionKind.CATEGORY -> R.string.conversations_section_all
-    ConversationSectionKind.ALL -> R.string.conversations_section_all
-}
-
-private fun ConversationSectionKind.icon() = when (this) {
-    ConversationSectionKind.PINNED -> Icons.Filled.PushPin
-    ConversationSectionKind.CATEGORY -> Icons.Filled.Folder
-    ConversationSectionKind.ALL -> Icons.AutoMirrored.Filled.Chat
-}
-
-private fun ConversationSectionKind.containerColor(): Color = when (this) {
-    ConversationSectionKind.PINNED -> MeeshyPalette.Error
-    ConversationSectionKind.CATEGORY -> MeeshyPalette.Indigo500
-    ConversationSectionKind.ALL -> MeeshyPalette.Indigo500
 }

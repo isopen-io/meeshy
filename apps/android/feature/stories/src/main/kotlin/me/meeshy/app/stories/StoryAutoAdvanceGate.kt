@@ -8,8 +8,13 @@ package me.meeshy.app.stories
 data class StoryMediaReadiness(
     val videoBuffering: Boolean = false,
     val audioPending: Boolean = false,
+    /** Une vidéo de premier plan n'est pas encore prête : elle retient le DÉPART d'une slide sans fond visuel, jamais ne fige la lecture. */
+    val foregroundPending: Boolean = false,
 ) {
     val waiting: Boolean get() = videoBuffering || audioPending
+
+    /** Ce qui retient le DÉPART du compte à rebours : une attente de lecture, ou un premier plan pas prêt. */
+    val holdsStart: Boolean get() = waiting || foregroundPending
 
     companion object {
         val Ready = StoryMediaReadiness()
@@ -42,7 +47,7 @@ object StoryAutoAdvanceGate {
         resolvedImageUrls: Set<String>,
         readiness: StoryMediaReadiness = StoryMediaReadiness.Ready,
     ): Boolean {
-        if (slide == null || readiness.waiting) return false
+        if (slide == null || readiness.holdsStart) return false
         val imageUrl = slide.imageUrl ?: return true
         return imageUrl in resolvedImageUrls
     }

@@ -65,23 +65,22 @@ class StoryComposerLocationRefusalTest {
             vm.onMediaPicked(listOf(MediaUploadItem(byteArrayOf(1), "song.ogg", "audio/ogg")))
 
             assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerUploadReducer.LOCATION_REFUSED)
-            assertThat(vm.state.value.isUploadingMedia).isFalse()
+            assertThat(vm.state.value.isPreparingMedia).isFalse()
             assertThat(vm.state.value.uploadingMedia).isEmpty()
             assertThat(vm.state.value.draft.mediaIds).isEmpty()
         }
-        coVerify(exactly = 0) { queue.enqueue(any(), any()) }
+        coVerify(exactly = 0) { queue.enqueueAs(any(), any(), any(), any()) }
     }
 
     @Test
     fun `another refusal is still kept on the device to be sent later`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns NetworkResult.Failure(ApiError("too large", httpStatus = 413))
-        coEvery { queue.enqueue(any(), any()) } returns "cmid_kept"
-
         vm.onMediaPicked(listOf(MediaUploadItem(byteArrayOf(1), "a.jpg", "image/jpeg")))
 
         assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerViewModel.MEDIA_FAILED)
         assertThat(vm.state.value.canRetryMedia).isTrue()
-        assertThat(vm.state.value.draft.mediaIds).containsExactly("cmid_kept")
+        val kept = vm.state.value.draft.mediaIds.single()
+        coVerify(exactly = 1) { queue.enqueueAs(kept, any(), any(), any()) }
     }
 }

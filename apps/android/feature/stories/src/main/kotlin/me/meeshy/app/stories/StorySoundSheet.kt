@@ -87,7 +87,12 @@ internal fun StorySoundSheet(
     val recorder = rememberStorySoundRecorder(onTake = viewModel::onTake)
     val importFile = rememberStorySoundImport(onTake = viewModel::onTake, onFailed = viewModel::onImportFailed)
     Column(Modifier.fillMaxWidth()) {
-        StorySoundSheetHeader(onDone = onDone)
+        StorySoundSheetHeader(
+            onDone = {
+                viewModel.onDone(ComposerSoundRoles.automatic(state.selectedSlideAudio), composer::onPlaceSendingSound)
+                onDone()
+            },
+        )
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = MeeshySpacing.lg),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
@@ -101,7 +106,7 @@ internal fun StorySoundSheet(
                     take = take,
                     automatic = ComposerSoundRoles.automatic(state.selectedSlideAudio),
                     viewModel = viewModel,
-                    onAdd = { automatic -> viewModel.onAdd(automatic) { sound, role -> composer.onPlaceComposedSound(sound, role) } },
+                    onAdd = { automatic -> viewModel.onAdd(automatic, composer::onPlaceSendingSound) },
                 )
                 state.canBorrowSound -> StorySoundSources(
                     onRecord = recorder.request,
@@ -119,7 +124,6 @@ internal fun StorySoundSheet(
 private val SoundSheetFailure.message: Int
     get() = when (this) {
         SoundSheetFailure.IMPORT -> R.string.story_sound_sheet_import_failed
-        SoundSheetFailure.UPLOAD -> R.string.story_sound_sheet_upload_failed
     }
 
 /** Le titre et OK — la feuille n'a rien à annuler : chaque réglage s'applique à la scène (et se défait par l'historique). */
@@ -264,10 +268,6 @@ private fun rememberStorySoundImport(onTake: (MediaUploadItem, Float?) -> Unit, 
     }
     return { picker.launch(arrayOf("audio/*")) }
 }
-
-/** Le compositeur pose le son que la feuille a préparé — une étape d'historique, comme tout geste de la scène. */
-internal fun StoryComposerViewModel.onPlaceComposedSound(sound: ComposedStorySound, role: ComposerAudioRole) =
-    onSceneReduce { state -> state.withDeckTransform { it.placeComposedSoundOnSelected(sound, role) } }
 
 private const val RECORDINGS = "story-sounds"
 private const val RECORDED_MIME = "audio/mp4"

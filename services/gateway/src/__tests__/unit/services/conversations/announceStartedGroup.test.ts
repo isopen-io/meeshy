@@ -133,3 +133,33 @@ describe('#14644 — un groupe silencieux se démarre AVANT un appel', () => {
     expect(notificationService.createConversationInviteNotification).not.toHaveBeenCalled();
   });
 });
+
+describe('#14690 — conversation:new porte les capacités de SON destinataire', () => {
+  it('un invité administrateur peut rendre le groupe obsolète, un simple membre non', async () => {
+    const roles: Record<string, string> = { [ALICE]: 'admin', [BOB]: 'member' };
+    const prisma = {
+      conversation: { findUnique: jest.fn<any>().mockResolvedValue(conversation('group')) },
+      user: { findMany: jest.fn<any>(async (args: any) => args.where.id.in.map((id: string) => ({ id, role: 'USER' }))) },
+      participant: {
+        findMany: jest.fn<any>(async (args: any) =>
+          args.where.userId.in.map((userId: string) => ({
+            conversationId: CONV, userId, role: roles[userId], type: 'user', leftAt: null, bannedAt: null,
+            conversation: { type: 'group', identifier: 'mshy_equipe' },
+          }))),
+        groupBy: jest.fn<any>().mockResolvedValue([]),
+      },
+    };
+    const emitted: Array<{ room: string; payload: any }> = [];
+    const io = { to: (room: string) => ({ emit: (_event: string, payload: any) => emitted.push({ room, payload }) }) };
+    await announceStartedGroup({ prisma: prisma as never, io, notificationService: null }, CONV);
+    const byRoom = new Map(emitted.map((e) => [e.room, e.payload.viewerCapabilities]));
+    expect(byRoom.get(`user:${ALICE}`)).toEqual({ canMakeObsolete: true });
+    expect(byRoom.get(`user:${BOB}`)).toEqual({ canMakeObsolete: false });
+  });
+
+  it('une lecture impossible laisse le payload antérieur, sans capacité fabriquée', async () => {
+    const { emitted } = await annoncer(conversation('group'));
+    expect(emitted.length).toBeGreaterThan(0);
+    expect(emitted.every((e) => !('viewerCapabilities' in e.payload))).toBe(true);
+  });
+});

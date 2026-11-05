@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.SystemNoticeText
 import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.TranscriptSecondaryTexts
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.piece.MessagePieceTarget
@@ -31,6 +32,7 @@ import me.meeshy.sdk.model.SendLifecycleResolver
 import me.meeshy.sdk.model.exitOffer
 import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.isProtected
+import me.meeshy.sdk.model.VoiceQueueProtection
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.profile.from
 import me.meeshy.sdk.theme.DynamicColorGenerator
@@ -122,6 +124,7 @@ public object BubbleContentBuilder {
             mediaBaseUrl = mediaBaseUrl,
             displayDensity = displayDensity,
             contactScope = ContactCardResolutionScope.of(message),
+            manualLanguage = activeLanguageCode.normalizedCode(),
         )
         val messagePlace = message.location
             ?.takeUnless { isDeleted || isEndToEndSealed || viewOnceSealed }
@@ -130,6 +133,9 @@ public object BubbleContentBuilder {
         // télécharge : sa rangée ne promet rien (#13492) — le même verdict que l'aperçu et le contrôleur.
         val protectedIds = message.attachments.filter { MessagePieceTarget.isProtected(it, message) }.mapTo(HashSet()) { it.id }
         val files = attachments.files.map { if (it.attachmentId in protectedIds) it.copy(isProtected = true) else it }
+        // Un vocal est protégé si son message OU sa pièce l'est (leçon 275) : rien sur le disque, aucune onde, aucun transfert.
+        val protectedVoiceIds = message.attachments.filter { VoiceQueueProtection.ofPiece(it, message) }.mapTo(HashSet()) { it.id }
+        val audios = attachments.audios.map { if (it.attachmentId in protectedVoiceIds) it.copy(isProtected = true) else it }
         // Un avis système (capture, arrivées) se compose CHEZ LE LECTEUR, dans sa langue et son fuseau ;
         // une métadonnée qui ne se lit pas retombe sur le `content` (repli français). Jamais une bulle.
         val noticeText = if (isDeleted || isEndToEndSealed || viewOnceSealed) {
@@ -184,7 +190,7 @@ public object BubbleContentBuilder {
             originalText = if (isTranslated && !isShowingOriginal && !viewOnceSealed) message.content else null,
             languageStrip = languageStrip,
             primaryLanguageCode = preferredCode ?: originalCode,
-            secondaryTexts = secondaryTexts(languageStrip, message.translations),
+            secondaryTexts = voiceSecondaryTexts(visibleAttachments, protectedVoiceIds) + secondaryTexts(languageStrip, message.translations),
             senderName = senderName,
             showSenderName = showSenderName && !isOutgoing,
             senderId = message.senderId,
@@ -219,7 +225,7 @@ public object BubbleContentBuilder {
             images = attachments.images.map { if (it.attachmentId in protectedIds) it.copy(isProtected = true) else it },
             files = files,
             locations = listOfNotNull(messagePlace) + attachments.locations,
-            audios = attachments.audios,
+            audios = audios,
             emojiOnlyCount = if (visibleAttachments.isEmpty()) {
                 EmojiDetector.emojiOnlyCount(text)
             } else {
@@ -269,6 +275,7 @@ public object BubbleContentBuilder {
             replyToIsMe = !replyToDeleted && currentUserId != null &&
                 message.replyTo?.senderId == currentUserId,
             replyToAuthor = quotedAuthorProfile(message.replyTo, quoted?.senderName, currentUserId),
+            replyToAudio = quoted?.audio,
             isSlowSend = isOutgoing && isSlowSend,
             sticker = if (isDeleted || isEndToEndSealed || viewOnceSealed) null else stickerOf(message, visibleAttachments, attachments.images),
             videos = attachments.videos,
@@ -276,6 +283,7 @@ public object BubbleContentBuilder {
             protection = BubbleKindBuilder.protection(message),
             isViewOnceSealed = viewOnceSealed,
             callSummary = message.callSummary?.takeIf { message.isSystemMessage && !isDeleted },
+            callIsOutgoing = message.callSummary?.isOutgoing(currentUserId.orEmpty()) == true,
         )
     }
 
@@ -371,6 +379,19 @@ public object BubbleContentBuilder {
         this == originalCode || message.translations.any {
             it.targetLanguage.normalizedCode() == this && it.translatedContent.isNotBlank()
         }
+
+    /**
+     * Le panneau secondaire s'applique aussi à la transcription : `langue -> texte` des vocaux ouverts (jamais un vocal
+     * protégé), le texte du message l'emportant sur une même langue.
+     */
+    private fun voiceSecondaryTexts(attachments: List<ApiMessageAttachment>, protectedIds: Set<String>): Map<String, String> =
+        attachments
+            .filter { it.mimeType?.startsWith("audio/") == true && !it.isEndToEndBlob && it.id !in protectedIds }
+            .fold(LinkedHashMap<String, String>()) { acc, attachment ->
+                TranscriptSecondaryTexts.of(attachment.transcription, attachment.translations)
+                    .forEach { (code, text) -> acc.putIfAbsent(code, text) }
+                acc
+            }
 
     /** `langue -> texte` des langues du pied qui portent un contenu : la matière du panneau secondaire. */
     private fun secondaryTexts(

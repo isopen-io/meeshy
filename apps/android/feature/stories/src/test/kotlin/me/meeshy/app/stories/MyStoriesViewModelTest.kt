@@ -93,7 +93,8 @@ class MyStoriesViewModelTest {
     private fun viewModel(repo: StoryRepository, drafts: StoryComposerDraftStore = InMemoryStoryComposerDraftStore()): MyStoriesViewModel {
         val session = mockk<SessionRepository>(relaxed = true).also { every { it.currentUserId } returns "me" }
         val socket = mockk<SocialSocketManager>(relaxed = true).also { every { it.storyDeleted } returns deletedFlow }
-        return MyStoriesViewModel(repo, postRepo, session, socket, blocks, drafts) { nowMillis }
+        val library = testDraftLibrary(drafts, dispatcher)
+        return MyStoriesViewModel(repo, postRepo, session, socket, blocks, library, testFailureResume(), { nowMillis })
     }
 
     @Test

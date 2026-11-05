@@ -314,6 +314,9 @@
     <string name="settings_logout_confirm_title">تسجيل الخروج</string>
     <string name="settings_logout_hint">تسجيل الخروج من حسابك</string>
     <string name="settings_logout_in_progress">جارٍ تسجيل الخروج...</string>
+    <string name="settings_media_autosave_header">المعرض</string>
+    <string name="settings_media_autosave_subtitle">تنضم الصور ومقاطع الفيديو المستلمة إلى ألبوم Meeshy مرة واحدة. لا تُحفظ أبدًا الوسائط المؤقتة أو الضبابية أو ذات العرض الواحد.</string>
+    <string name="settings_media_autosave_title">الحفظ في الصور</string>
     <string name="settings_media_capture_header">عند التصوير</string>
     <string name="settings_media_capture_original_subtitle">تُحفظ الصورة أو الفيديو الخام، دون تأثيرات أو إطار، في الصور مع كل لقطة.</string>
     <string name="settings_media_capture_original_title">حفظ الأصل</string>

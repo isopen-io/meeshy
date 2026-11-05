@@ -30,6 +30,7 @@ import me.meeshy.sdk.mention.MentionLookupDriver
 import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.mention.reset
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.composer.SendPlaceTileLaw
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.ConversationDraft
@@ -443,7 +444,7 @@ internal class ChatComposerController(
                 throw e
             } catch (e: Exception) {
                 state.update { it.copy(errorMessage = e.message) }
-                if (_pendingPlace.value == null) _pendingPlace.value = place
+                SendPlaceTileLaw.restoration(place, sent = false, current = _pendingPlace.value)?.let { _pendingPlace.value = it }
             }
         }
     }
@@ -589,12 +590,14 @@ internal class ChatComposerController(
             val mime = MimeTypeResolver.resolve(item.mimeType, name)
             val upload = tray.uploadItem(item, name, mime) ?: return@mapNotNull null
             val cmid = mediaUploadQueue.enqueue(upload, conversationId = conversationId)
+            pendingPreviews.keepSharp(cmid, upload, effects)
             cmid to ApiMessageAttachment(
                 id = cmid,
                 fileName = name,
                 originalName = name,
                 mimeType = mime,
                 fileSize = upload.sizeBytes.toInt(),
+                fileUrl = pendingPreviews.keepPlayable(cmid, upload, effects),
                 thumbnailUrl = pendingPreviews.keep(cmid, item.thumbnailPath, effects),
                 width = item.width,
                 height = item.height,

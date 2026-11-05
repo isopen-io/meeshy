@@ -920,14 +920,14 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts[0].id, "media-1")
     }
 
-    // MARK: - createOfflineMediaPost() — U1b ST2: durable offline media post
+    // MARK: - publish(_:) — U1b ST2: durable media post
 
-    func test_createOfflineMediaPost_enqueuesPostMediaAndInsertsOptimisticPost() async {
+    func test_publishMedia_enqueuesPostMediaAndInsertsOptimisticPost() async {
         let queue = MockOfflineQueue()
         let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
         let urls = [URL(fileURLWithPath: "/tmp/a.jpg"), URL(fileURLWithPath: "/tmp/b.mp4")]
 
-        await sut.createOfflineMediaPost(localMediaURLs: urls, content: "Photo post", originalLanguage: "en", mobileTranscription: nil, storyEffects: nil, mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil, allowSoundExtraction: nil)
+        await sut.publish(mediaIntent(urls, content: "Photo post", originalLanguage: "en"))
 
         // Optimistic post with a local-media preview, keyed by the cmid.
         XCTAssertEqual(sut.posts.count, 1)
@@ -950,21 +950,12 @@ final class FeedViewModelTests: XCTestCase {
             "optimistic post must be keyed by the cmid for ST2 reconcile")
     }
 
-    func test_createOfflineMediaPost_reelType_enqueuesReelAndInsertsReelOptimisticPost() async {
+    func test_publishMedia_reelType_enqueuesReelAndInsertsReelOptimisticPost() async {
         let queue = MockOfflineQueue()
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
         let urls = [URL(fileURLWithPath: "/tmp/clip.mp4")]
 
-        await sut.createOfflineMediaPost(
-            localMediaURLs: urls,
-            content: "My reel",
-            originalLanguage: "en",
-            type: "REEL",
-            mobileTranscription: nil,
-            storyEffects: nil,
-            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
-            allowSoundExtraction: nil
-        )
+        await sut.publish(mediaIntent(urls, content: "My reel", type: .reel, originalLanguage: "en"))
 
         // The optimistic post is a REEL so it surfaces on the reel pager
         // immediately, and the durable row carries the REEL type so the flush
@@ -982,83 +973,44 @@ final class FeedViewModelTests: XCTestCase {
     /// ne satisfait pas une exigence de protocole en Swift). Aucun test ne
     /// traversait le protocole avec une position — d'où le silence. Celui-ci
     /// exerce le chemin complet ViewModel → protocole → file.
-    func test_createOfflineMediaPost_withLocation_propagatesPlaceToOutbox() async {
+    func test_publishMedia_withLocation_propagatesPlaceToOutbox() async {
         let queue = MockOfflineQueue()
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
         let place = SharedPlace(latitude: 48.8566, longitude: 2.3522, name: "Paris")
 
-        await sut.createOfflineMediaPost(
-            localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")],
-            content: "Vue depuis le toit",
-            location: place,
-            mobileTranscription: nil,
-            storyEffects: nil,
-            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
-            allowSoundExtraction: nil
-        )
+        await sut.publish(mediaIntent([URL(fileURLWithPath: "/tmp/a.jpg")], content: "Vue depuis le toit", location: place))
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
         XCTAssertEqual(queue.enqueuePostMediaCalls.first?.location, place,
             "une position attachée à un média posté hors-ligne doit survivre jusqu'au flush")
     }
 
-    func test_createOfflineMediaPost_enqueueRefused_rollsBackOptimisticPost() async {
+    func test_publishMedia_enqueueRefused_rollsBackOptimisticPost() async {
         let queue = MockOfflineQueue()
         queue.enqueuePostMediaError = APIError.networkError(URLError(.timedOut))
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
-        await sut.createOfflineMediaPost(localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed", mobileTranscription: nil, storyEffects: nil, mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil, allowSoundExtraction: nil)
+        await sut.publish(mediaIntent([URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed"))
 
         XCTAssertTrue(sut.posts.isEmpty, "optimistic media post must be removed when the outbox refuses the row")
         XCTAssertNotNil(sut.publishError)
         XCTAssertFalse(sut.publishSuccess)
     }
 
-    func test_createOfflineMediaPost_emptyURLs_fallsBackToTextOnly() async {
-        let queue = MockOfflineQueue()
-        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
-
-        await sut.createOfflineMediaPost(localMediaURLs: [], content: "Just text", mobileTranscription: nil, storyEffects: nil, mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil, allowSoundExtraction: nil)
-
-        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 0, "no media → no media enqueue")
-        XCTAssertEqual(queue.enqueueCalls.count, 1, "falls back to the durable text-only path")
-        XCTAssertEqual(queue.enqueueCalls.first?.kind, .createPost)
-        XCTAssertEqual(sut.posts.count, 1)
-    }
-
-    /// **Le repli « aucun média » perdait la liste NOMMÉE de l'audience.**
-    ///
-    /// `enqueueDurableTextPost` porte un défaut `nil` sur `visibilityUserIds`,
-    /// et le repli ne le passait pas : un post `ONLY`/`EXCEPT` qui retombait là
-    /// partait sans ses destinataires. Le gateway le refuse
-    /// (`CreatePostSchema.refine`), le rejet est PERMANENT — la ligne est
-    /// épuisée, le post est perdu.
-    ///
-    /// C'est le mécanisme même que ce lot documente partout ailleurs : un
-    /// défaut fait disparaître un champ d'un site d'appel sans casser la
-    /// moindre compilation.
-    func test_createOfflineMediaPost_sansMedia_nePerdPasLAudienceNommee() async {
-        let queue = MockOfflineQueue()
-        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
-
-        await sut.createOfflineMediaPost(
-            localMediaURLs: [],
-            content: "Pour vous deux",
-            visibility: "ONLY",
-            visibilityUserIds: ["u1", "u2"],
-            mobileTranscription: nil,
-            storyEffects: nil,
-            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
-            allowSoundExtraction: nil
+    private func mediaIntent(
+        _ urls: [URL], content: String?, type: PostType = .post, originalLanguage: String? = nil,
+        location: SharedPlace? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil
+    ) -> PublishIntent {
+        PublishIntent.document(
+            localMedia: urls.map {
+                ComposerDocumentMedia(url: $0, mimeType: $0.pathExtension == "mp4" ? "video/mp4" : "image/jpeg",
+                                      durationMs: $0.pathExtension == "mp4" ? 8000 : nil)
+            },
+            declaredType: type, forcePlainPost: false, content: content, visibility: "PUBLIC",
+            visibilityUserIds: nil, originalLanguage: originalLanguage, mentions: nil, location: location,
+            discoverabilityPrecision: discoverabilityPrecision, transcription: nil, storyEffects: nil,
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
         )
-
-        let payload = queue.lastPayload as? CreatePostPayload
-        XCTAssertEqual(
-            payload?.visibilityUserIds, ["u1", "u2"],
-            "L'audience nommée est perdue par le repli sans média : le gateway refusera la charge, et le "
-                + "rejet étant permanent, le post ne repartira jamais."
-        )
-        XCTAssertEqual(payload?.visibility, "ONLY")
     }
 
     // MARK: - Offline draft recovery (post / reel)
@@ -1947,101 +1899,6 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.newPostsCount, 0)
 
         sut.unsubscribeFromSocketEvents()
-    }
-
-    // MARK: - bookmarkPost()
-
-    func test_bookmarkPost_callsAPIWithCorrectEndpoint() async {
-        let (sut, api, _, _) = makeSUT()
-        // bookmarkPost guards on `posts.first(where:)`, so the SUT must already
-        // know about the post before the API is hit. Without this preload the
-        // method is a no-op and no /bookmark request is issued.
-        sut.posts = [Self.makeFeedPost(id: "bm-post", content: "Bookmark target")]
-        let bookmarkResponse: APIResponse<[String: Bool]> = JSONStub.decode("""
-        {"success":true,"data":{"bookmarked":true},"error":null}
-        """)
-        api.stub("/posts/bm-post/bookmark", result: bookmarkResponse)
-
-        await sut.bookmarkPost("bm-post")
-
-        XCTAssertTrue(api.requestEndpoints.contains("/posts/bm-post/bookmark"))
-    }
-
-    // MARK: - bookmarkPost — SWR cache shape (Phase 4)
-
-    /// Phase 4 migration: the bookmarks cache read used to call
-    /// `.value` on `CacheResult`, collapsing `.fresh` / `.stale` and missing
-    /// the freshness signal. The new switch arms accept both `.fresh` and
-    /// `.stale` payloads as the optimistic rollback snapshot. This test
-    /// seeds the bookmarks cache with a "stale-style" save (the actor
-    /// transitions to stale once the TTL elapses, but the optimistic-write
-    /// contract is observable independent of freshness) and verifies that
-    /// `bookmarkPost` prepends the post to the existing list.
-    func test_bookmarkPost_withCachedBookmarks_prependsOptimistically() async {
-        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
-        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "bookmarks") } }
-
-        let existing = Self.makeFeedPost(id: "old-bm", content: "previously bookmarked")
-        try? await CacheCoordinator.shared.feed.save([existing], for: "bookmarks")
-
-        let (sut, api, _, _) = makeSUT()
-        sut.posts = [Self.makeFeedPost(id: "new-bm", content: "Bookmark target")]
-        let bookmarkResponse: APIResponse<[String: Bool]> = JSONStub.decode("""
-        {"success":true,"data":{"bookmarked":true},"error":null}
-        """)
-        api.stub("/posts/new-bm/bookmark", result: bookmarkResponse)
-
-        await sut.bookmarkPost("new-bm")
-
-        let result = await CacheCoordinator.shared.feed.load(for: "bookmarks")
-        let cached = result.snapshot() ?? []
-        XCTAssertEqual(cached.count, 2, "Optimistic write must keep existing bookmarks and prepend the new one")
-        XCTAssertEqual(cached.first?.id, "new-bm", "Newest bookmark goes to the head of the list")
-        XCTAssertTrue(cached.contains(where: { $0.id == "old-bm" }), "Existing bookmark must be preserved")
-    }
-
-    /// `.expired` / `.empty` arms must seed a fresh bookmarks list with the
-    /// single optimistic post — without crashing on the missing payload.
-    func test_bookmarkPost_withEmptyCache_seedsBookmarksList() async {
-        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
-        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "bookmarks") } }
-
-        let (sut, api, _, _) = makeSUT()
-        sut.posts = [Self.makeFeedPost(id: "first-bm", content: "First bookmark ever")]
-        let bookmarkResponse: APIResponse<[String: Bool]> = JSONStub.decode("""
-        {"success":true,"data":{"bookmarked":true},"error":null}
-        """)
-        api.stub("/posts/first-bm/bookmark", result: bookmarkResponse)
-
-        await sut.bookmarkPost("first-bm")
-
-        let result = await CacheCoordinator.shared.feed.load(for: "bookmarks")
-        let cached = result.snapshot() ?? []
-        XCTAssertEqual(cached.count, 1)
-        XCTAssertEqual(cached.first?.id, "first-bm")
-    }
-
-    /// On API failure, the optimistic write must be rolled back to the
-    /// pre-call snapshot (the cached bookmarks list before the user tapped
-    /// the bookmark button).
-    func test_bookmarkPost_apiFailure_rollsBackToSnapshot() async {
-        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
-        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "bookmarks") } }
-
-        let existing = Self.makeFeedPost(id: "kept-bm", content: "should survive rollback")
-        try? await CacheCoordinator.shared.feed.save([existing], for: "bookmarks")
-
-        let (sut, api, _, _) = makeSUT()
-        sut.posts = [Self.makeFeedPost(id: "doomed-bm", content: "Will fail")]
-        api.errorToThrow = APIError.networkError(URLError(.notConnectedToInternet))
-
-        await sut.bookmarkPost("doomed-bm")
-
-        let result = await CacheCoordinator.shared.feed.load(for: "bookmarks")
-        let cached = result.snapshot() ?? []
-        XCTAssertEqual(cached.count, 1, "Rollback must restore the pre-call snapshot")
-        XCTAssertEqual(cached.first?.id, "kept-bm")
-        XCTAssertFalse(cached.contains(where: { $0.id == "doomed-bm" }), "Failed bookmark must NOT remain in cache")
     }
 
     // MARK: - pinPost()

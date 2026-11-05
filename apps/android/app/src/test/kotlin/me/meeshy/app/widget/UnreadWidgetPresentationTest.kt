@@ -52,4 +52,27 @@ class UnreadWidgetPresentationTest {
         assertThat(state.count).isEqualTo(3)
         assertThat(state.hasUnread).isTrue()
     }
+
+    @Test
+    fun `les conversations en sourdine ne comptent pas comme dans le badge`() {
+        val state = UnreadWidgetPresentation.fromCounts(
+            counts = mapOf("a" to 3, "muted" to 9),
+            open = emptySet(),
+            muted = setOf("muted"),
+        )
+
+        assertThat(state.count).isEqualTo(3)
+    }
+
+    @Test
+    fun `seules des sourdines non lues donnent l'etat tout est lu`() {
+        val state = UnreadWidgetPresentation.fromCounts(mapOf("m" to 4), open = emptySet(), muted = setOf("m"))
+
+        assertThat(state.hasUnread).isFalse()
+    }
+
+    @Test
+    fun `le nombre suit la borne haute sans etre tronque`() {
+        assertThat(UnreadWidgetPresentation.from(totalUnread = 1_000).count).isEqualTo(1_000)
+    }
 }

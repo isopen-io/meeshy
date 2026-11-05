@@ -101,9 +101,11 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
     /// porte de `DELETE /conversations/:id/obsolete`. L'administrateur d'un type
     /// à autorité ouvert (`deleteForAll`), ou, dans un tête-à-tête ouvert, l'un
     /// OU l'autre membre inscrit et actif (`hide`) — même expression que le web
-    /// (`rowConversationActions`) et Android. L'expéditeur d'une demande non
-    /// acceptée reçoit 403 de la passerelle : iOS ne connaît pas encore l'état
-    /// de la demande (#14690).
+    /// (`rowConversationActions`) et Android. Quand la passerelle sert
+    /// `viewerCapabilities.canMakeObsolete` (#14690), elle décide seule : c'est
+    /// ainsi que l'expéditeur d'une demande non acceptée ne se la voit plus
+    /// proposer. Absente, la règle locale reste, et un 403 rend la ligne avec
+    /// son motif (`ConversationObsolescence.Refusal`).
     let obsolete: Bool
     /// Appeler le pair d'un direct — l'appel du menu compose UN pair, donc
     /// jamais un groupe ni soi-même (`CallPermission.canStartCall`).
@@ -145,7 +147,7 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
             report: actions.report && !talksToSelf,
             adminOpen: actions.adminOpen,
             removal: actions.hide ? (conversation.type == .direct ? .delete : .hide) : nil,
-            obsolete: actions.deleteForAll || directMember,
+            obsolete: conversation.viewerCapabilities?.canMakeObsolete ?? (actions.deleteForAll || directMember),
             call: actions.call && talksToPeer,
             videoCall: actions.videoCall && talksToPeer,
             groupSettings: actions.rename,

@@ -29,7 +29,11 @@ data class CommunityListUiState(
     val isLoadingMore: Boolean = false,
     val hasMore: Boolean = false,
     val failed: Boolean = false,
+    /** Une relecture a échoué alors que des communautés du cache sont affichées : bandeau discret, jamais un écran d'erreur. */
+    val revalidationFailed: Boolean = false,
 ) {
+    val showOfflineBanner: Boolean get() = communities.isNotEmpty() && revalidationFailed
+
     /** Le squelette ne s'affiche qu'à froid : jamais un spinner par-dessus des communautés déjà là. */
     val showSkeleton: Boolean get() = communities.isEmpty() && isLoading
     val showError: Boolean get() = communities.isEmpty() && !isLoading && failed
@@ -68,6 +72,7 @@ class CommunityListViewModel @Inject constructor(
                 val items = result.valueOrNull?.map { it.toCommunity() } ?: return@collect
                 firstPage = items
                 firstPageLoaded = true
+                _state.update { it.copy(revalidationFailed = false) }
                 if (extraPages.isEmpty()) firstPageHasMore = items.size >= PAGE_SIZE
                 publish(failed = false)
             }
@@ -100,6 +105,7 @@ class CommunityListViewModel @Inject constructor(
             } else {
                 extraPages = emptyList()
                 val ok = cache.refreshList()
+                _state.update { it.copy(revalidationFailed = !ok) }
                 publish(failed = !ok && firstPage.isEmpty())
             }
             _state.update { it.copy(isRefreshing = false) }
@@ -154,7 +160,7 @@ class CommunityListViewModel @Inject constructor(
     }
 
     private fun onFirstPageFailure(@Suppress("UNUSED_PARAMETER") error: Throwable) {
-        if (firstPage.isEmpty() && !searching) publish(failed = true)
+        if (firstPage.isEmpty() && !searching) publish(failed = true) else _state.update { it.copy(revalidationFailed = true) }
     }
 
     private fun publish(failed: Boolean? = null, isLoadingMore: Boolean? = null) {

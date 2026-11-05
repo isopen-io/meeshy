@@ -17,22 +17,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -52,6 +46,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.BRIGHTNESS_LIMIT
+import me.meeshy.sdk.model.call.CallEffectsCompanionRule
+import me.meeshy.sdk.model.call.CallEffectsDuoPeer
 import me.meeshy.sdk.model.call.CallFaceEffect
 import me.meeshy.sdk.model.call.SMOOTHING_INTENSITY_MAX
 import me.meeshy.sdk.model.call.SMOOTHING_INTENSITY_MIN
@@ -65,16 +61,16 @@ import me.meeshy.sdk.model.call.montage.CallCaptureSceneRule
 import me.meeshy.sdk.model.call.montage.CallCaptureSubject
 import me.meeshy.sdk.model.call.montage.CallModeGestureRule
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import org.webrtc.EglBase
 import org.webrtc.VideoTrack
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
-private val COMPANION_WIDTH = 96.dp
-private val COMPANION_HEIGHT = 128.dp
 private val SIDE_DIAMETER = 48.dp
+
+/** La bande basse des commandes du mode, que le bloc des compagnons ne couvre jamais. */
+private val BAR_RESERVE = 220.dp
 
 @HiltViewModel
 class CallEffectsViewModel @Inject constructor(val effects: CallVideoEffectsController) : ViewModel()
@@ -99,13 +95,20 @@ internal fun CallEffectsMode(
     val effects = hiltViewModel<CallEffectsViewModel>().effects
     val captureViewModel: CallCaptureViewModel = hiltViewModel()
     val frameViewModel: CallLiveFrameViewModel = hiltViewModel()
-    var mode by remember { mutableStateOf(CallEffectsModeState.opening(effects.config.value)) }
-    LaunchedEffect(mode.current) { effects.apply(mode.current) }
     val haptics = LocalHapticFeedback.current
-    val finish: (Boolean) -> Unit = { validated ->
-        effects.apply(mode.exiting(validated))
-        if (validated) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        onClose()
+    val session = remember(effects) { CallEffectsController(effects) { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } }
+    val mode by session.state.collectAsStateWithLifecycle()
+    val setMode: (CallEffectsModeState) -> Unit = { next -> session.change { next } }
+    val finish: (Boolean) -> Unit = { validated -> if (session.finish(validated)) onClose() }
+    val companions = remember(state.peerName, state.isCameraOn, state.isPeerCameraOff, state.isPeerMuted, state.isMuted) {
+        CallEffectsCompanionRule.layout(
+            CallEffectsCompanionRule.duoTiles(
+                CallEffectsDuoPeer(null, "", null, isVideoOn = state.isCameraOn, isMicMuted = state.isMuted),
+                CallEffectsDuoPeer(null, state.peerName, null, isVideoOn = !state.isPeerCameraOff, isMicMuted = state.isPeerMuted),
+            ),
+            featuredId = null,
+            capacity = CallEffectsCompanionRule.MAX_COMPANIONS,
+        ).companions
     }
     BackHandler { finish(false) }
 
@@ -131,19 +134,13 @@ internal fun CallEffectsMode(
             CallLiveFrameVideo(CallLiveFrameVideoSource(it, isMirrored = state.isFrontCamera), eglContext, Modifier.fillMaxSize())
         }
         CallMontageCaptureLayer(capture, tracks, reduceMotion, Modifier.fillMaxSize())
-        remoteTrack?.takeIf { !state.isPeerCameraOff }?.let {
-            CallLiveFrameVideo(
-                CallLiveFrameVideoSource(it, isMirrored = false),
-                eglContext,
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .systemBarsPadding()
-                    .padding(MeeshySpacing.lg)
-                    .size(COMPANION_WIDTH, COMPANION_HEIGHT)
-                    .clip(RoundedCornerShape(MeeshyRadius.lg))
-                    .semantics { contentDescription = state.peerName },
-            )
-        }
+        CallEffectsCompanionStrip(
+            tiles = companions,
+            trackFor = { tile -> remoteTrack.takeIf { !tile.isLocal && tile.showsVideo } },
+            eglContext = eglContext,
+            reduceMotion = reduceMotion,
+            modifier = Modifier.systemBarsPadding().padding(bottom = BAR_RESERVE),
+        )
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
@@ -160,18 +157,18 @@ internal fun CallEffectsMode(
                 label = "effects-settings",
             ) { settings ->
                 if (settings) {
-                    EffectsSettings(mode, onChange = { mode = it })
+                    EffectsSettings(mode, onChange = setMode)
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-                        CategoryPicker(mode.category) { mode = mode.showing(it) }
-                        EffectsCarousel(mode, reduceMotion, shots, hint, onChange = { mode = it })
+                        CategoryPicker(mode.category) { setMode(mode.showing(it)) }
+                        EffectsCarousel(mode, reduceMotion, shots, hint, onChange = setMode)
                     }
                 }
             }
             EffectsActionBar(
                 showsSettings = mode.showsSettings,
                 onQuit = { finish(false) },
-                onSettings = { mode = mode.togglingSettings() },
+                onSettings = { setMode(mode.togglingSettings()) },
                 onValidate = { finish(true) },
             )
         }

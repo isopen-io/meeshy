@@ -102,4 +102,18 @@ nonisolated enum PendingStoryMarker {
     static func isPending(storyId: String) -> Bool {
         storyId.hasPrefix(prefix)
     }
+
+    /// L'adresse d'une story pour le serveur : `nil` tant qu'elle attend dans
+    /// la file — ni salle, ni session d'engagement, ni route ne la portent.
+    static func serverId(of storyId: String?) -> String? {
+        guard let storyId, !isPending(storyId: storyId) else { return nil }
+        return storyId
+    }
+
+    /// L'item de file qui porte une story en attente se retrouve par son id
+    /// temporaire (`pending_<uuid>`), ce qui précède le numéro de slide.
+    static func tempStoryId(of storyId: String) -> String? {
+        guard isPending(storyId: storyId) else { return nil }
+        return storyId.split(separator: "#", maxSplits: 1).first.map(String.init)
+    }
 }

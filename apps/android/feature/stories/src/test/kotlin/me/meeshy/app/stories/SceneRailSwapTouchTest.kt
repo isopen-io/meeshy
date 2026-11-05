@@ -112,7 +112,7 @@ class SceneRailSwapTouchTest {
         vm.onSceneBackgroundTap()
         var shelves = 0
         show(vm) { shelves++ }
-        val sound = compose.onNodeWithContentDescription("Sound").getUnclippedBoundsInRoot()
+        val sound = compose.onNodeWithContentDescription("Add sound").getUnclippedBoundsInRoot()
         val centre = with(compose.density) { Offset(((sound.left + sound.right) / 2).toPx(), ((sound.top + sound.bottom) / 2).toPx()) }
 
         compose.runOnUiThread { vm.onSelectSticker(vm.state.value.deck.selectedSlide.stickers.single().id) }

@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.RetainedTranslationCascade
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.net.MeeshyApi
@@ -23,7 +24,7 @@ internal class MessageCollaboratorHarness(startMillis: Long = 1_700_000_000_000L
     val database: MeeshyDatabase = Room.inMemoryDatabaseBuilder(
         ApplicationProvider.getApplicationContext(),
         MeeshyDatabase::class.java,
-    ).allowMainThreadQueries().build()
+    ).addCallback(RetainedTranslationCascade.callback).allowMainThreadQueries().build()
     val outbox = OutboxRepository(database, database.outboxDao())
     val clock = MessageTestClock(startMillis)
     val updater = CachedMessageUpdater(database, database.messageDao(), null)

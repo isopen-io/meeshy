@@ -77,13 +77,14 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
     func test_offlineMediaPost_pointsItsCardAtTheCopyTheQueueKeeps() async {
         let (sut, queue, _) = makeSUT()
 
-        await sut.createOfflineMediaPost(
-            localMediaURLs: [URL(fileURLWithPath: NSTemporaryDirectory() + "photo-composee.jpg")],
-            content: "Hors ligne",
-            mobileTranscription: nil, storyEffects: nil,
-            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
-            allowSoundExtraction: nil
-        )
+        await sut.publish(PublishIntent.document(
+            localMedia: [ComposerDocumentMedia(url: URL(fileURLWithPath: NSTemporaryDirectory() + "photo-composee.jpg"),
+                                               mimeType: "image/jpeg", durationMs: nil)],
+            declaredType: .post, forcePlainPost: false, content: "Hors ligne", visibility: "PUBLIC",
+            visibilityUserIds: nil, originalLanguage: nil, mentions: nil, location: nil,
+            discoverabilityPrecision: nil, transcription: nil, storyEffects: nil,
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
+        ))
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
         let expected = URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(forStored: "photo-composee.jpg")).absoluteString
@@ -133,13 +134,12 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
         let rowsBefore = queue.enqueueCalls.count
 
         await sut.likePost(cmid)
-        await sut.bookmarkPost(cmid)
         await sut.repostPost(cmid)
         await sut.repostPost(cmid, content: "cité", isQuote: true)
         let link = await sut.sharePost(cmid, generateLink: true)
 
         XCTAssertEqual(queue.enqueueCalls.count, rowsBefore, "aucun like ni repost ne s'écrit dans la file sous un cmid")
-        XCTAssertEqual(api.requestCount, 0, "ni favori ni partage ne part vers le serveur")
+        XCTAssertEqual(api.requestCount, 0, "aucun partage ne part vers le serveur")
         XCTAssertEqual(postService.repostCallCount, 0)
         XCTAssertNil(link)
         XCTAssertEqual(sut.posts.first?.isLiked, false, "le cœur ne promet rien qui ne partira pas")

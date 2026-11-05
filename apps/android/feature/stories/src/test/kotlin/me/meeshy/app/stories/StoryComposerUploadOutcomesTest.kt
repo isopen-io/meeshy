@@ -50,7 +50,6 @@ class StoryComposerUploadOutcomesTest {
 
     private fun viewModel(network: InMemoryNetworkMonitor = InMemoryNetworkMonitor(initialOnline = true)): StoryComposerViewModel {
         every { session.currentUser } returns MutableStateFlow(MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))
-        coEvery { queue.enqueue(any(), any(), any()) } returns CMID
         return StoryComposerViewModel(
             mockk<StoryRepository>(relaxed = true), session, media, queue,
             mockk<WorkManager>(relaxed = true), InMemoryStoryComposerDraftStore(), mockk<MediaBlobStore>(relaxed = true),
@@ -68,9 +67,13 @@ class StoryComposerUploadOutcomesTest {
         state.value.deck.slides.flatMap { it.mediaIds + listOfNotNull(it.backgroundMediaId) + it.placedMedia.map(StoryPlacedMedia::mediaId) }
 
     private fun pickVideoAndPhoto(vm: StoryComposerViewModel) {
-        coEvery { media.uploadEach(any(), any()) } returns listOf(NetworkResult.Success(listOf(received("pm-video", "video/mp4"))), timedOut)
+        coEvery { media.uploadEach(listOf(video, photo), any()) } returns
+            listOf(NetworkResult.Success(listOf(received("pm-video", "video/mp4"))), timedOut)
         vm.onMediaPicked(listOf(video, photo))
+        cmid = vm.state.value.pendingUploads.single { it.item === photo }.cmid
     }
+
+    private var cmid = ""
 
     @Test
     fun `a received video lands at once though the photo picked with it failed, and only the photo waits`() = runTest {
@@ -80,11 +83,11 @@ class StoryComposerUploadOutcomesTest {
 
         val state = vm.state.value
         assertThat(state.attachments.map { it.id }).containsExactly("pm-video")
-        assertThat(state.pendingUploads.map { it.cmid }).containsExactly(CMID)
-        assertThat(vm.everyMediaId()).containsAtLeast("pm-video", CMID)
-        coVerify(exactly = 1) { queue.enqueue(photo, any(), any()) }
-        coVerify(exactly = 0) { queue.enqueue(video, any(), any()) }
-        assertThat(state.isUploadingMedia).isFalse()
+        assertThat(state.pendingUploads.map { it.cmid }).containsExactly(cmid)
+        assertThat(vm.everyMediaId()).containsAtLeast("pm-video", cmid)
+        coVerify(exactly = 1) { queue.enqueueAs(cmid, photo, any(), any()) }
+        coVerify(exactly = 0) { queue.enqueueAs(any(), video, any(), any()) }
+        assertThat(state.isPreparingMedia).isFalse()
     }
 
     @Test
@@ -93,7 +96,7 @@ class StoryComposerUploadOutcomesTest {
 
         pickVideoAndPhoto(vm)
 
-        assertThat(vm.state.value.pendingPhase(CMID)).isEqualTo(PendingUploadPhase.FAILED)
+        assertThat(vm.state.value.pendingPhase(cmid)).isEqualTo(PendingUploadPhase.FAILED)
         assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerViewModel.MEDIA_FAILED)
         assertThat(vm.state.value.canRetryMedia).isTrue()
     }
@@ -103,7 +106,7 @@ class StoryComposerUploadOutcomesTest {
         val network = InMemoryNetworkMonitor(initialOnline = false)
         val vm = viewModel(network)
         pickVideoAndPhoto(vm)
-        assertThat(vm.state.value.pendingPhase(CMID)).isEqualTo(PendingUploadPhase.OFFLINE)
+        assertThat(vm.state.value.pendingPhase(cmid)).isEqualTo(PendingUploadPhase.OFFLINE)
         assertThat(vm.state.value.errorMessage).isNull()
         coEvery { media.uploadEach(listOf(photo), any()) } returns listOf(NetworkResult.Success(listOf(received("pm-photo", "image/jpeg"))))
 
@@ -112,9 +115,9 @@ class StoryComposerUploadOutcomesTest {
         val state = vm.state.value
         assertThat(state.attachments.map { it.id }).containsExactly("pm-video", "pm-photo").inOrder()
         assertThat(state.pendingUploads).isEmpty()
-        assertThat(vm.everyMediaId()).doesNotContain(CMID)
+        assertThat(vm.everyMediaId()).doesNotContain(cmid)
         assertThat(vm.everyMediaId()).contains("pm-photo")
-        coVerify(exactly = 1) { queue.cancel(CMID) }
+        coVerify(exactly = 1) { queue.cancel(cmid) }
     }
 
     @Test
@@ -124,13 +127,13 @@ class StoryComposerUploadOutcomesTest {
         vm.onAddSticker("🙂")
         coEvery { media.uploadEach(listOf(photo), any()) } returns listOf(NetworkResult.Success(listOf(received("pm-photo", "image/jpeg"))))
 
-        vm.onRetryPendingUpload(CMID)
+        vm.onRetryPendingUpload(cmid)
 
         assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.errorMessage).isNull()
         assertThat(vm.state.value.canRetryMedia).isFalse()
         vm.onUndo()
-        assertThat(vm.everyMediaId()).doesNotContain(CMID)
+        assertThat(vm.everyMediaId()).doesNotContain(cmid)
         assertThat(vm.everyMediaId()).contains("pm-photo")
         assertThat(vm.state.value.attachments.map { it.id }).containsExactly("pm-video", "pm-photo")
     }
@@ -143,9 +146,9 @@ class StoryComposerUploadOutcomesTest {
 
         vm.onRetryMediaPick()
 
-        assertThat(vm.state.value.pendingPhase(CMID)).isEqualTo(PendingUploadPhase.FAILED)
-        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly(CMID)
-        coVerify(exactly = 0) { queue.cancel(CMID) }
+        assertThat(vm.state.value.pendingPhase(cmid)).isEqualTo(PendingUploadPhase.FAILED)
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly(cmid)
+        coVerify(exactly = 0) { queue.cancel(cmid) }
     }
 
     @Test
@@ -155,14 +158,11 @@ class StoryComposerUploadOutcomesTest {
         val gate = kotlinx.coroutines.CompletableDeferred<List<NetworkResult<List<UploadedMedia>>>>()
         coEvery { media.uploadEach(listOf(photo), any()) } coAnswers { gate.await() }
 
-        vm.onRetryPendingUpload(CMID)
+        vm.onRetryPendingUpload(cmid)
 
-        assertThat(vm.state.value.pendingPhase(CMID)).isEqualTo(PendingUploadPhase.SENDING)
+        assertThat(vm.state.value.pendingPhase(cmid)).isEqualTo(PendingUploadPhase.SENDING)
         gate.complete(listOf(NetworkResult.Success(listOf(received("pm-photo", "image/jpeg")))))
         assertThat(vm.state.value.attachments.map { it.id }).contains("pm-photo")
     }
 
-    private companion object {
-        const val CMID = "cmid_photo"
-    }
 }

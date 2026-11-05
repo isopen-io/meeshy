@@ -22,9 +22,11 @@ internal fun FocalNonMediaBlock(
     onColor: Color,
     callbacks: BubbleCallbacks,
     audioPlayback: BubbleAudioPlayback?,
+    accentColor: Color = Color.Unspecified,
 ) {
     content.sealedPieceIds.forEach { _ ->
         BubbleSealedPieceRow(onColor = onColor, modifier = Modifier.padding(bottom = MeeshySpacing.xs))
     }
-    BubbleNonVisualSections(content, onColor, callbacks, audioPlayback)
+    BubbleNonVisualSections(content, onColor, callbacks, audioPlayback, includeAudios = false)
+    FocalAudioBlock(content, onColor, callbacks, audioPlayback, accentColor = accentColor)
 }

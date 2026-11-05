@@ -46,6 +46,7 @@ bold
 bolt.fill
 bookmark
 bookmark.fill
+briefcase
 bubble.left.and.bubble.right
 bubble.left.and.bubble.right.fill
 bubble.left.fill
@@ -53,6 +54,7 @@ bubble.right
 camera.fill
 camera.filters
 captions.bubble
+cart
 cellularbars
 character.book.closed.fill
 character.bubble
@@ -127,6 +129,7 @@ gobackward.10
 gobackward.5
 goforward.10
 goforward.5
+graduationcap
 hand.raised.fill
 hand.raised.slash.fill
 hand.tap
@@ -134,6 +137,7 @@ heart
 heart.fill
 hourglass
 hourglass.circle
+house
 infinity
 info.circle
 info.circle.fill
@@ -318,6 +322,7 @@ waveform
 waveform.and.magnifyingglass
 waveform.and.mic
 waveform.circle.fill
+wifi
 wifi.exclamationmark
 wifi.slash
 xmark

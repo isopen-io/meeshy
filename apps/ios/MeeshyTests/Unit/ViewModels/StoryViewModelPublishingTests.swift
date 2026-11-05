@@ -32,6 +32,42 @@ final class StoryViewModelPublishingTests: StoryViewModelTestCase {
         XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), [pending.id], "elle part : rien ne disparaît")
     }
 
+    // MARK: - #15198 — le lecteur annule une story en attente par la file
+
+    func test_cancelFromViewer_pendingStory_cancelsItsQueueItem_withoutAnyDelete() async {
+        let other = StoryPublishQueueItem(visibility: "FRIENDS", slidesPayload: Data("[]".utf8), mediaReferences: [])
+        let item = StoryPublishQueueItem(visibility: "FRIENDS", slidesPayload: Data("[]".utf8), mediaReferences: [])
+        let pending = makeStoryItem(id: "\(item.tempStoryId)#1")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1"), pending])]
+        var cancelled: [String] = []
+
+        let removed = await StoryWaitingCancellation.run(storyId: pending.id, queued: [other, item], on: sut) {
+            cancelled.append($0.id)
+            return .removed
+        }
+
+        XCTAssertTrue(removed)
+        XCTAssertEqual(cancelled, [item.id], "la file annule l'item de CETTE story")
+        XCTAssertEqual(mockStoryService.deleteCallCount, 0, "aucun DELETE ne porte un id local")
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["s1"])
+    }
+
+    func test_cancelFromViewer_storyNoLongerQueued_callsNothingAndKeepsTheTray() async {
+        let pending = makeStoryItem(id: "\(PendingStoryMarker.prefix)\(UUID().uuidString)#0")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [pending])]
+        var cancelCalls = 0
+
+        let removed = await StoryWaitingCancellation.run(storyId: pending.id, queued: [], on: sut) { _ in
+            cancelCalls += 1
+            return .removed
+        }
+
+        XCTAssertFalse(removed)
+        XCTAssertEqual(cancelCalls, 0)
+        XCTAssertEqual(mockStoryService.deleteCallCount, 0)
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), [pending.id])
+    }
+
     func test_deltaRefresh_purgesStoryReportedDeletedByServer() async {
         let kept = makeStoryItem(id: "s1")
         let deleted = makeStoryItem(id: "s2")

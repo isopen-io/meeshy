@@ -22,4 +22,9 @@ class WidgetDeepLinkTest {
     fun `a reply carries its draft encoded`() {
         assertThat(WidgetDeepLink.reply("c1", "a b&c")).isEqualTo("meeshy://conversation/c1?draft=a+b%26c")
     }
+
+    @Test
+    fun `le lien du compteur ouvre la liste filtree sur les non lus`() {
+        assertThat(WidgetDeepLink.UNREAD).isEqualTo("meeshy://conversations/unread")
+    }
 }

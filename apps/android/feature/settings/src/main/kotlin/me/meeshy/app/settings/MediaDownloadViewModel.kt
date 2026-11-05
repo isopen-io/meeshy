@@ -14,6 +14,8 @@ import me.meeshy.sdk.media.OutgoingPhotoLocationStore
 import me.meeshy.sdk.model.AutoDownloadPolicy
 import me.meeshy.sdk.model.MediaDownloadPreferences
 import me.meeshy.sdk.model.MediaKind
+import me.meeshy.sdk.model.PrivacyPreferences
+import me.meeshy.sdk.model.PrivacyToggle
 import me.meeshy.sdk.model.composer.capture.CaptureRenderedSaveMode
 import me.meeshy.sdk.model.composer.capture.CaptureSavePolicy
 import javax.inject.Inject
@@ -23,6 +25,8 @@ data class MediaDownloadUiState(
     val preferences: MediaDownloadPreferences = MediaDownloadPreferences(),
     val capturePolicy: CaptureSavePolicy = CaptureSavePolicy.Standard,
     val keepsPhotoLocation: Boolean = OutgoingPhotoLocationStore.STANDARD,
+    /** `privacy.saveMediaToGallery` (#14640) : la préférence SERVEUR, la même que Réglages › Confidentialité. */
+    val savesMediaToGallery: Boolean = PrivacyPreferences().saveMediaToGallery,
 )
 
 /**
@@ -38,16 +42,32 @@ class MediaDownloadViewModel @Inject constructor(
     private val store: MediaDownloadPreferencesStore,
     private val captureStore: CaptureSavePolicyStore,
     private val locationStore: OutgoingPhotoLocationStore,
+    private val privacy: PrivacyToggleWriter,
 ) : ViewModel() {
 
     val state: StateFlow<MediaDownloadUiState> =
-        combine(store.preferences, captureStore.policy, locationStore.keepsLocation) { prefs, capture, keepsLocation ->
-            MediaDownloadUiState(preferences = prefs, capturePolicy = capture, keepsPhotoLocation = keepsLocation)
+        combine(
+            store.preferences,
+            captureStore.policy,
+            locationStore.keepsLocation,
+            privacy.preferences,
+        ) { prefs, capture, keepsLocation, privacyPrefs ->
+            MediaDownloadUiState(
+                preferences = prefs,
+                capturePolicy = capture,
+                keepsPhotoLocation = keepsLocation,
+                savesMediaToGallery = privacyPrefs.saveMediaToGallery,
+            )
         }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.Eagerly,
-                initialValue = MediaDownloadUiState(store.preferences.value, captureStore.policy.value, locationStore.keepsLocation.value),
+                initialValue = MediaDownloadUiState(
+                    preferences = store.preferences.value,
+                    capturePolicy = captureStore.policy.value,
+                    keepsPhotoLocation = locationStore.keepsLocation.value,
+                    savesMediaToGallery = privacy.preferences.value.saveMediaToGallery,
+                ),
             )
 
     fun setPolicy(kind: MediaKind, policy: AutoDownloadPolicy) {
@@ -77,6 +97,11 @@ class MediaDownloadViewModel @Inject constructor(
             if (current.renderedMode == mode) return@launch
             captureStore.setPolicy(current.copy(renderedMode = mode))
         }
+    }
+
+    /** Réglages › Médias › « Enregistrer dans la galerie » : la même préférence serveur que Confidentialité (#14640). */
+    fun setSaveMediaToGallery(enabled: Boolean) {
+        viewModelScope.launch { privacy.set(PrivacyToggle.SAVE_MEDIA_TO_GALLERY, enabled) }
     }
 
     /** Réglages › Médias › « Conserver le lieu des photos » : désactivé par défaut, comme iOS (#11247). */

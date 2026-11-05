@@ -2,7 +2,7 @@ import XCTest
 @testable import Meeshy
 
 /// Tests de la logique pure de labellisation VoiceOver des compteurs
-/// like / comment / repost partagés par `TextPostCell` et `MediaPostCell`.
+/// like / comment / reply du fil (`PostStatAccessibility`).
 ///
 /// Contrat : le titre visible du bouton n'affiche que le nombre nu ("5") ;
 /// l'accessibilityLabel doit exposer le SENS du compteur avec accord
@@ -25,10 +25,6 @@ final class PostStatAccessibilityTests: XCTestCase {
 
     func test_commentsLabel_includesCount() {
         XCTAssertTrue(PostStatAccessibility.commentsLabel(7).contains("7"))
-    }
-
-    func test_repostsLabel_includesCount() {
-        XCTAssertTrue(PostStatAccessibility.repostsLabel(3).contains("3"))
     }
 
     func test_repliesLabel_includesCount() {
@@ -89,18 +85,6 @@ final class PostStatAccessibilityTests: XCTestCase {
         XCTAssertEqual(try label(comments, 12, in: "fr"), "12 commentaires")
     }
 
-    func test_repostsLabel_singularForOne() throws {
-        let reposts = PostStatAccessibility.repostsLabel
-        XCTAssertEqual(try label(reposts, 1, in: "en"), "1 repost")
-        XCTAssertEqual(try label(reposts, 1, in: "fr"), "1 repartage")
-    }
-
-    func test_repostsLabel_pluralForMany() throws {
-        let reposts = PostStatAccessibility.repostsLabel
-        XCTAssertEqual(try label(reposts, 4, in: "en"), "4 reposts")
-        XCTAssertEqual(try label(reposts, 4, in: "fr"), "4 repartages")
-    }
-
     // MARK: - `replies` : le nom compté ajouté en 240i
     //
     // Le défaut d'origine était VISIBLE à l'écran : `feed.post.comment.replies_count`
@@ -147,13 +131,9 @@ final class PostStatAccessibilityTests: XCTestCase {
     func test_labels_areDistinctPerStatType() {
         let likes = PostStatAccessibility.likesLabel(2)
         let comments = PostStatAccessibility.commentsLabel(2)
-        let reposts = PostStatAccessibility.repostsLabel(2)
         let replies = PostStatAccessibility.repliesLabel(2)
         XCTAssertNotEqual(likes, comments)
-        XCTAssertNotEqual(comments, reposts)
-        XCTAssertNotEqual(likes, reposts)
         XCTAssertNotEqual(replies, comments)
-        XCTAssertNotEqual(replies, reposts)
         XCTAssertNotEqual(replies, likes)
     }
 }

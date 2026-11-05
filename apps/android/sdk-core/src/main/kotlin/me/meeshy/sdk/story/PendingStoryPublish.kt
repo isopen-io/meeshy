@@ -24,4 +24,6 @@ public data class PendingStoryPublish(
     val originalLanguage: String?,
     val createdAtMillis: Long,
     val mediaIds: List<String> = emptyList(),
+    /** La clé de la ligne d'outbox : la cible de « Réessayer » et d'« Annuler » ; vide pour une publication synthétique. */
+    val cmid: String = "",
 )

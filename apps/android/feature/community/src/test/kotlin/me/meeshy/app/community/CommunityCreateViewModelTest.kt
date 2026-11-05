@@ -18,6 +18,8 @@ import me.meeshy.sdk.community.CommunityCacheRepository
 import me.meeshy.sdk.community.CommunityRepository
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
+import me.meeshy.sdk.model.IdentifierAvailability
+import me.meeshy.sdk.model.IdentifierCheck
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.UserSearchResult
@@ -149,5 +151,49 @@ class CommunityCreateViewModelTest {
         vm.toggleMember(user("u1"))
         assertThat(vm.state.value.selected).isEmpty()
         assertThat(vm.state.value.draft.memberIds).isEmpty()
+    }
+
+    @Test
+    fun `an unavailable identifier is flagged after the debounce and blocks the creation`() = runTest {
+        coEvery { repository.checkIdentifier("mshy_club") } returns NetworkResult.Success(IdentifierAvailability(available = false, identifier = "mshy_club"))
+        val vm = viewModel()
+        vm.onName("Club")
+        vm.onIdentifier("Club")
+
+        assertThat(vm.state.value.identifierCheck).isEqualTo(IdentifierCheck.Checking)
+        coVerify(exactly = 0) { repository.checkIdentifier(any()) }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(vm.state.value.identifierCheck).isEqualTo(IdentifierCheck.Unavailable)
+        assertThat(vm.state.value.canSubmit).isFalse()
+        vm.create()
+        coVerify(exactly = 0) { repository.create(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `an available identifier lets the creation through and clearing it resets the check`() = runTest {
+        coEvery { repository.checkIdentifier(any()) } returns NetworkResult.Success(IdentifierAvailability(available = true))
+        val vm = viewModel()
+        vm.onName("Club")
+        vm.onIdentifier("club")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertThat(vm.state.value.identifierCheck).isEqualTo(IdentifierCheck.Available)
+        assertThat(vm.state.value.canSubmit).isTrue()
+
+        vm.onIdentifier("")
+        assertThat(vm.state.value.identifierCheck).isEqualTo(IdentifierCheck.Idle)
+    }
+
+    @Test
+    fun `a second submission while creating is ignored`() = runTest {
+        coEvery { repository.create(any(), any(), any(), any()) } coAnswers { kotlinx.coroutines.awaitCancellation() }
+        val vm = viewModel()
+        vm.onName("Club")
+
+        vm.create()
+        vm.create()
+
+        coVerify(exactly = 1) { repository.create(any(), any(), any(), any()) }
+        assertThat(vm.state.value.isCreating).isTrue()
     }
 }

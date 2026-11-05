@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import android.content.Context
+import android.net.Uri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -8,12 +9,15 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import me.meeshy.sdk.model.mediacache.MediaCacheCategory
+import me.meeshy.sdk.media.LocalMediaFileResolver
+import me.meeshy.sdk.media.MediaCacheDirs
 import me.meeshy.ui.component.media.MeeshyMediaCache
 
 /**
- * The platform player under [ChatAudioPlayer] and the message menu's [OverlayAudioPreview], reduced
+ * The platform player under the message menu's [OverlayAudioPreview] (the thread plays through the shared coordinator), reduced
  * to what a voice note needs. Audio focus is the caller's business, never the engine's.
  */
 internal interface VoiceNoteEngine {
@@ -50,12 +54,21 @@ internal fun interface VoiceNoteSources {
          * Reads through the AUDIO disk cache (cache-first, #14568): a voice note already heard plays again with
          * no network, in airplane mode too, and while it is loaded its bytes are leased against eviction. A
          * local file is read directly, the cache never duplicates it. The end-of-session wipe (ADR-027) is
-         * the cache's own, unchanged.
+         * the cache's own, unchanged. A voice note adopted WHOLE at the ack of its send (#15428, `MediaAdoption`) is
+         * read from that file: replayed right after, offline, it plays.
          */
         @OptIn(UnstableApi::class)
         fun cached(context: Context): VoiceNoteSources {
             val cache = MeeshyMediaCache.get(context)
+            val typed = LocalMediaFileResolver(MediaCacheDirs(context.cacheDir, context.cacheDir))
             return VoiceNoteSources { url ->
+                val whole = typed.fileFor(MediaCacheCategory.AUDIO, url)
+                if (whole != null) {
+                    return@VoiceNoteSources VoiceNoteSource(
+                        source = DefaultMediaSourceFactory(context).createMediaSource(MediaItem.fromUri(Uri.fromFile(whole))),
+                        release = {},
+                    )
+                }
                 VoiceNoteSource(
                     source = cache.mediaSourceFactory(MediaCacheCategory.AUDIO, url).createMediaSource(MediaItem.fromUri(url)),
                     release = cache.lease(url),

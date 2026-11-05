@@ -55,9 +55,12 @@ nonisolated struct StoryActionRailPlan: Equatable {
         commentCount: Int,
         hasTranslatableContent: Bool,
         canCompose: Bool = false,
-        isRepublishable: Bool = true
+        isRepublishable: Bool = true,
+        isPending: Bool = false
     ) -> StoryActionRailPlan {
-        StoryActionRailPlan(
+        guard !isPending else { return StoryActionRailPlan(showsReact: false, showsReply: false, showsForward: false, showsRepost: false,
+            showsViews: false, showsExport: false, showsSound: hasAudibleSound, showsComments: false, showsTranslations: false, showsCompose: false) }
+        return StoryActionRailPlan(
             showsReact: !isOwnStory,
             showsReply: !isOwnStory && canReply,
             showsForward: true,
@@ -314,15 +317,20 @@ struct StoryActionSidebarView: View {
     /// `storyCommentCount` (compteur vivant, mis à jour en temps réel par
     /// les réconciliations post-gel) — voir `sidebarContent` plus bas.
     private var liveRailPlan: StoryActionRailPlan {
+        resolvedRailPlan(commentCount: currentStory?.commentCount ?? 0, canCompose: composeTarget != nil)
+    }
+
+    private func resolvedRailPlan(commentCount: Int, canCompose: Bool) -> StoryActionRailPlan {
         StoryActionRailPlan.resolve(
             isOwnStory: isOwnStory,
             canReply: onReplyToStory != nil,
             isPublicStory: currentStory?.isPublic == true,
             hasAudibleSound: storyHasAudibleSound,
-            commentCount: currentStory?.commentCount ?? 0,
+            commentCount: commentCount,
             hasTranslatableContent: storyHasTranslatableContent,
-            canCompose: composeTarget != nil,
-            isRepublishable: StoryActionRailPlan.isRepublishable(visibility: currentStory?.visibility)
+            canCompose: canCompose,
+            isRepublishable: StoryActionRailPlan.isRepublishable(visibility: currentStory?.visibility),
+            isPending: currentStory.map { PendingStoryMarker.isPending(storyId: $0.id) } ?? false
         )
     }
 
@@ -588,16 +596,7 @@ struct StoryActionSidebarView: View {
     }
 
     private var railPlanAfterCommentsReconciled: StoryActionRailPlan {
-        StoryActionRailPlan.resolve(
-            isOwnStory: isOwnStory,
-            canReply: onReplyToStory != nil,
-            isPublicStory: currentStory?.isPublic == true,
-            hasAudibleSound: storyHasAudibleSound,
-            commentCount: storyCommentCount,
-            hasTranslatableContent: storyHasTranslatableContent,
-            canCompose: railPlan.showsCompose,
-            isRepublishable: StoryActionRailPlan.isRepublishable(visibility: currentStory?.visibility)
-        )
+        resolvedRailPlan(commentCount: storyCommentCount, canCompose: railPlan.showsCompose)
     }
 
     @ViewBuilder
@@ -764,18 +763,18 @@ struct StoryActionSidebarView: View {
                 .mediaChromeGlyph()
             }
 
-            // Forward (send to someone) — label = count when > 0
-            // (user spec 2026-05-28: « Compteur des react et des commentaires,
-            // envoyer uniquement » pour le non-auteur).
-            StoryActionButton(
-                icon: "paperplane.fill",
-                label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main),
-                outlineTint: outlineTint(.forward)
-            ) {
-                HapticFeedback.light()
-                if let story = currentStory, let group = currentGroup {
-                    EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
-                    sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username, authorId: group.id, isPublic: story.isPublic))
+            // « Envoyer » : le compteur de partages quand il y en a, sinon le libellé.
+            if railPlan.showsForward {
+                StoryActionButton(
+                    icon: "paperplane.fill",
+                    label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main),
+                    outlineTint: outlineTint(.forward)
+                ) {
+                    HapticFeedback.light()
+                    if let story = currentStory, let group = currentGroup {
+                        EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
+                        sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username, authorId: group.id, isPublic: story.isPublic))
+                    }
                 }
             }
 

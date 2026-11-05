@@ -35,8 +35,8 @@ abstract class MediaModule {
     companion object {
         @Provides
         @Singleton
-        fun providesTypedMediaCache(@ApplicationContext context: Context): TypedMediaCache =
-            TypedMediaCache(MediaCacheDirs(context.cacheDir, context.cacheDir)).also { it.sweepStaging() }
+        fun providesTypedMediaCache(@ApplicationContext context: Context, pinStores: MediaPinStores): TypedMediaCache =
+            TypedMediaCache(MediaCacheDirs(context.cacheDir, context.cacheDir), pins = { pinStores.tableOf(it) }).also { it.sweepStaging() }
 
         @Provides
         @Singleton

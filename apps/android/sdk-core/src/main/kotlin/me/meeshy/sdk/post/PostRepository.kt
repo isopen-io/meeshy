@@ -42,6 +42,7 @@ import me.meeshy.sdk.net.api.PostLikeRequest
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.net.api.PostTranslationRequest
 import me.meeshy.sdk.net.api.PostViewRequest
+import me.meeshy.sdk.net.api.QuotedPostMediaAnchor
 import me.meeshy.sdk.net.api.RepostPostRequest
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.UpdatePostRequest
@@ -930,11 +931,12 @@ class PostRepository @Inject constructor(
         originalLanguage: String? = null,
         attachmentIds: List<String>? = null,
         location: SharedPlace? = null,
+        quotedPostMediaId: String? = null,
     ): NetworkResult<ApiPostComment> =
         apiCall {
             postApi.addComment(
                 postId,
-                CreateCommentRequest(content, parentId, effectFlags, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }, location),
+                CreateCommentRequest(content, parentId, effectFlags, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }, location, quotedPostMedia = quotedPostMediaId?.takeIf { it.isNotBlank() }?.let(::QuotedPostMediaAnchor)),
                 clientMutationId,
             )
         }
@@ -953,6 +955,7 @@ class PostRepository @Inject constructor(
         attachmentIds: List<String>? = null,
         effectFlags: Int? = null,
         location: SharedPlace? = null,
+        quotedPostMediaId: String? = null,
     ): String? {
         val ticket = fence?.currentTicket()
         val cmid = outboxRepository.enqueue(
@@ -960,7 +963,7 @@ class PostRepository @Inject constructor(
                 kind = OutboxKind.CREATE_COMMENT,
                 lane = OutboxLanes.COMMENT,
                 targetId = postId,
-                payload = MeeshyApi.json.encodeToString(CommentPayload.serializer(), CommentPayload(content, parentId, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }, effectFlags, location)),
+                payload = MeeshyApi.json.encodeToString(CommentPayload.serializer(), CommentPayload(content, parentId, originalLanguage, attachmentIds?.takeIf { it.isNotEmpty() }, effectFlags, location, quotedPostMediaId?.takeIf { it.isNotBlank() })),
             ),
             ticket,
         ) ?: return null

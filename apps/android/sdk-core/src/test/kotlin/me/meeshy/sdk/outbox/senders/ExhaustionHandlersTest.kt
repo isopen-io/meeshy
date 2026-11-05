@@ -157,7 +157,7 @@ class ExhaustionHandlersTest {
         val outboxRepository = mockk<OutboxRepository>()
         val untouchable: Map<OutboxKind, OutboxKindHandler> = mapOf(
             OutboxKind.EDIT_MESSAGE to EditMessageHandler(messageApi, senderJson),
-            OutboxKind.READ_RECEIPT to ReadReceiptHandler(conversationApi),
+            OutboxKind.READ_RECEIPT to ReadReceiptHandler(conversationApi, senderJson),
             OutboxKind.MARK_UNREAD to MarkUnreadHandler(conversationApi),
             OutboxKind.UPDATE_CONVERSATION_PREFS to UpdateConversationPrefsHandler(conversationApi, senderJson, io.mockk.mockk(relaxed = true), io.mockk.mockk(relaxed = true), me.meeshy.sdk.outbox.UserStateRollbackEvents()),
             OutboxKind.PUBLISH_STORY to PublishStoryHandler(postApi, outboxRepository, senderJson, mockk(relaxed = true), mockk(relaxed = true)),

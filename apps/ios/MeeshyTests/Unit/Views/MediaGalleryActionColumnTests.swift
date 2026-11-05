@@ -215,7 +215,7 @@ final class MediaGalleryActionColumnTests: XCTestCase {
     /// ## La loi d'aujourd'hui est un ORDRE à trois jalons
     ///
     /// ```
-    /// .frame(width: currentStage.frame.width…)   ← le cadre du MÉDIA se referme
+    /// .modifier(OfferedStageFrame(…))      ← le cadre du MÉDIA se referme
     ///     cadreActionColumn                      ← la colonne vient APRÈS
     /// .frame(width: stageChromeWidth)            ← et DANS la pile du plateau
     /// ```
@@ -240,11 +240,10 @@ final class MediaGalleryActionColumnTests: XCTestCase {
         XCTAssertTrue(plat.contains("cadreActionColumn"),
                       "la colonne vit dans la région du cadre — c'est ce qui la fait se poser "
                           + "DESSUS plutôt qu'à côté")
-        XCTAssertTrue(plat.contains("currentStage.frame.width")
-                        && plat.contains("currentStage.frame.height"),
-                      "et cette région reste dimensionnée par le solveur")
+        XCTAssertTrue(plat.contains("OfferedStageFrame(stage:currentStage.frame)"),
+                      "et cette région reste dimensionnée par le solveur, en MAXIMUM (#16290)")
 
-        guard let cadreDuMedia = plat.range(of: ".frame(width:currentStage.frame.width"),
+        guard let cadreDuMedia = plat.range(of: ".modifier(OfferedStageFrame(stage:currentStage.frame))"),
               let colonne = plat.range(of: "cadreActionColumn"),
               let cadreDuPlateau = plat.range(of: ".frame(width:stageChromeWidth)") else {
             return XCTFail(

@@ -33,6 +33,7 @@ import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
+private val CHIP_MIN_HEIGHT = 44.dp
 private val CHIP_ANIMATION = tween<Color>(durationMillis = 200)
 
 /**
@@ -71,9 +72,9 @@ private fun NotificationCategoryChip(
         modifier = Modifier
             .clip(CircleShape)
             .background(container)
-            .clickable(role = Role.Tab) { onSelect(category) }
-            .semantics { this.selected = isSelected; role = Role.Tab }
-            .defaultMinSize(minHeight = 36.dp)
+            .defaultMinSize(minHeight = CHIP_MIN_HEIGHT)
+            .clickable(role = Role.Button) { onSelect(category) }
+            .semantics { this.selected = isSelected }
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),

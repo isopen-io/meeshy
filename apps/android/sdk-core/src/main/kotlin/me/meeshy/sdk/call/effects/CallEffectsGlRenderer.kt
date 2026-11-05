@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.call.VideoFilterPreset
 import me.meeshy.sdk.model.call.effects.CallColorLook
 import me.meeshy.sdk.model.call.effects.CallFrameOrientation
 import me.meeshy.sdk.model.call.effects.CallSkinRetouchPlan
+import me.meeshy.sdk.model.call.effects.CallVideoLowLight
 import me.meeshy.sdk.model.call.effects.CallVideoEffectsPlan
 import me.meeshy.sdk.model.composer.look.CallFaceEffectBudget
 import me.meeshy.sdk.model.composer.look.CallFaceLandmarks
@@ -49,6 +50,8 @@ internal class CallEffectsGlRenderer(private val handler: Handler) {
     private val smallA = GlTextureFrameBuffer(GLES20.GL_RGBA)
     private val smallB = GlTextureFrameBuffer(GLES20.GL_RGBA)
     private val stage = GlTextureFrameBuffer(GLES20.GL_RGBA)
+    private val probe = GlTextureFrameBuffer(GLES20.GL_RGBA)
+    private val probePixels = ByteBuffer.allocateDirect(PROBE_SIZE * PROBE_SIZE * 4)
     private val faceFrame = CallFaceFrame()
     private val faceEffects = CallFaceEffectsGl(quad, quadTc)
     private val stroke = CallFaceStroke()
@@ -162,6 +165,23 @@ internal class CallEffectsGlRenderer(private val handler: Handler) {
         return smallB.textureId
     }
 
+    /**
+     * The average luma (0…255) of [input], read from a [PROBE_SIZE]-texel square the GPU shrinks it to: no
+     * colour, no retouch, and a readback of a few hundred bytes. `null` when the readback is empty.
+     */
+    fun averageLuma(input: VideoFrame.TextureBuffer): Float? {
+        val texMatrix = RendererCommon.convertMatrixFromAndroidGraphicsMatrix(input.transformMatrix)
+        probe.setSize(PROBE_SIZE, PROBE_SIZE)
+        drawGrade(input, texMatrix, probe, PROBE_PLAN, look = null, applyColor = false, retouch = null, rotation = 0, uprightWidth = 1f, uprightHeight = 1f)
+        probePixels.clear()
+        GLES20.glReadPixels(0, 0, PROBE_SIZE, PROBE_SIZE, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, probePixels)
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        GLES20.glUseProgram(0)
+        val bytes = ByteArray(PROBE_SIZE * PROBE_SIZE * 4)
+        probePixels.get(bytes)
+        return CallVideoLowLight.averageOfRgba(bytes)
+    }
+
     /** Forgets the tracked face's layout: the next face is laid out anew. */
     fun forgetFace() = faceFrame.reset()
 
@@ -171,6 +191,7 @@ internal class CallEffectsGlRenderer(private val handler: Handler) {
         smallA.release()
         smallB.release()
         stage.release()
+        probe.release()
         faceEffects.release()
         slots.forEach { it.target.release() }
         if (lutTexture != 0) GLES20.glDeleteTextures(1, intArrayOf(lutTexture), 0)
@@ -262,6 +283,8 @@ internal class CallEffectsGlRenderer(private val handler: Handler) {
 
     private fun bindColor(program: CallGlProgram, plan: CallVideoEffectsPlan, look: VideoFilterPreset?) {
         program.uniform("brightness", plan.brightness)
+        program.uniform("boostEv", plan.lowLight?.exposureEv ?: 0f)
+        program.uniform("boostSat", plan.lowLight?.saturation ?: 1f)
         program.uniform("lutN", CallColorLook.DIMENSION.toFloat())
         if (look != null && lutTexture != 0) {
             bindTexture(3, lutTexture)
@@ -310,6 +333,8 @@ internal class CallEffectsGlRenderer(private val handler: Handler) {
 
     private companion object {
         const val POOL_SIZE = 4
+        const val PROBE_SIZE = 8
+        val PROBE_PLAN = CallVideoEffectsPlan(look = null, brightness = 0f, retouch = null, blur = null, blurRadius = 0.0)
         val WEIGHT_UNIFORMS = Array(CallGaussianWeights.TAPS) { "w$it" }
         val MASK_UNIFORMS = arrayOf("faceE", "eyeL", "eyeR", "browL", "browR", "mouthE", "underL", "underR")
     }

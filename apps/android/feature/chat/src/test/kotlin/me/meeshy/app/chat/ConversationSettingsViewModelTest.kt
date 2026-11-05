@@ -262,4 +262,30 @@ class ConversationSettingsViewModelTest {
 
         io.mockk.coVerify(exactly = 0) { repository.setAppearanceOptimistic(any(), any()) }
     }
+
+    @Test
+    fun `member search is local and starts empty`() = runTest {
+        val vm = viewModel(repo())
+        vm.load("c1")
+        advanceUntilIdle()
+        assertThat(vm.state.value.memberQuery).isEmpty()
+
+        vm.setMemberQuery("ali")
+
+        assertThat(vm.state.value.memberQuery).isEqualTo("ali")
+    }
+
+    @Test
+    fun `the add member button follows the viewer rank`() = runTest {
+        suspend fun mayAdd(role: String): Boolean {
+            val vm = viewModel(repo(ApiConversation(id = "c1", currentUserRole = role)))
+            vm.load("c1")
+            advanceUntilIdle()
+            return vm.state.value.mayAddMember
+        }
+
+        assertThat(mayAdd("member")).isFalse()
+        assertThat(mayAdd("moderator")).isTrue()
+        assertThat(mayAdd("admin")).isTrue()
+    }
 }

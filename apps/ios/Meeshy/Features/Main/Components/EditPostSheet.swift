@@ -36,6 +36,19 @@ struct EditPostDraft {
     /// Non-nil UNIQUEMENT quand l'auteur a changé l'AGENCEMENT d'un post à
     /// plusieurs scènes (#9178) : le canvas d'origine, seul `layout` réécrit.
     var storyEffects: StoryEffects? = nil
+    /// Ce que la SCÈNE du compositeur ajoute à une modification (#15630) — les
+    /// médias neufs rattachés, leurs textes, les références déclarées. Vide
+    /// pour l'éditeur historique, qui ne les rend pas.
+    var additions = PostEditAdditions()
+
+    /// La projection de la modification sur le contrat du PUT — celle que
+    /// chaque ViewModel construit, et que `PostEditPayload.build` filtre par
+    /// `known`.
+    var payload: PostEditDraft {
+        additions.completing(PostEditDraft(content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                                           originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                                           storyEffects: storyEffects, location: location))
+    }
 
     /// Le plus large que cette feuille puisse déclarer. `save()` la RESSERRE
     /// selon ce qui a réellement été peint : le sélecteur de type n'existe pas

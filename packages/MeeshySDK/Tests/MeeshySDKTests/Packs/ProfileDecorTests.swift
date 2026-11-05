@@ -183,7 +183,7 @@ final class ProfileDecorTests: XCTestCase {
     func test_catalog_embedsTheNineRingsAndTheNineBanners() {
         let firstPacks = AvatarRingCatalog.shared.packs.filter { ["contours-essentiels", "contours-animes"].contains($0.slug) }
         XCTAssertEqual(firstPacks.flatMap(\.rings).map(\.key), ["filet", "double-filet", "perle", "aurore", "deco", "laurier", "halo-or", "prisme-vivant", "onde"])
-        XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.flatMap(\.designs).count, 9)
+        XCTAssertEqual(AppearanceCatalog.shared.bannerPacks.filter { ["bannieres-essentielles", "bannieres-animees"].contains($0.slug) }.flatMap(\.designs).count, 9)
         XCTAssertEqual(AvatarRingCatalog.shared.ringName("filet", language: "en") != nil, true)
     }
 
@@ -202,7 +202,7 @@ final class ProfileDecorTests: XCTestCase {
 
     func test_frameCatalog_embedsTheSevenPacks_fixedAndAnimated_named() {
         let catalog = BannerFrameCatalog.shared
-        XCTAssertEqual(catalog.framePacks.map(\.slug), Self.styles.map { "cadres-" + $0 })
+        XCTAssertEqual(catalog.framePacks.map(\.slug).filter { $0.hasPrefix("cadres-") }, Self.styles.map { "cadres-" + $0 })
         for style in Self.styles {
             XCTAssertEqual(catalog.framePacks.first { $0.slug == "cadres-" + style }?.frames.map(\.key), [style, style + "-anime"])
             XCTAssertNotNil(catalog.frameName(style + "-anime", language: "ar"))
@@ -232,7 +232,7 @@ final class ProfileDecorTests: XCTestCase {
         XCTAssertEqual(ProfileDecorResolver.bannerFrame(item("cadres-celte", "celte-anime"))?.key, "celte-anime")
         XCTAssertNil(ProfileDecorResolver.bannerFrame(item("cadres-celte", "inconnu")))
         let official = ServedProfileDecorItem(pack: "cadres-celte", item: "celte", origin: .official, contract: "0123456789abcdef.json")
-        XCTAssertNil(ProfileDecorResolver.bannerFrame(official), "un contrat adressé n'est pas encore chargé : aucun cadre, jamais une erreur")
+        XCTAssertEqual(ProfileDecorResolver.bannerFrame(official)?.key, "celte", "contrat pas encore sur l'appareil : la copie embarquée peint, jamais une erreur (#16264)")
     }
 
     func test_options_frames_listOnlyInstalledAndOwnedPacks_twoByDefault() {

@@ -4,7 +4,9 @@
     <string name="encryption_irreversible_refused">Die Ende-zu-Ende-Verschlüsselung lässt sich nicht deaktivieren. Um ohne sie zu chatten, starte eine neue Unterhaltung.</string>
     <string name="encryption_action_failed">Die Änderung konnte nicht vorgenommen werden. Versuche es erneut.</string>
     <string name="encryption_offline">Du bist offline: Verbinde dich erneut, um die Verschlüsselung zu lesen oder zu ändern.</string>
-    <string name="encryption_toggle_forbidden">Deine Rolle erlaubt es nicht, die Verschlüsselung hier ein- oder auszuschalten. Der Server entscheidet.</string>
+    <string name="encryption_toggle_forbidden">Du darfst den Verschlüsselungsmodus dieser Unterhaltung nicht ändern: In einer Gruppe musst du zu ihren Moderatoren gehören.</string>
+    <string name="encryption_activation_restricted">Während der Testphase kann nur ein Mitglied mit einer Meeshy-Teamrolle (Analyst oder höher) den Verschlüsselungsmodus ändern.</string>
+    <string name="encryption_already_enabled">Dieser Verschlüsselungsmodus ist bereits der dieser Unterhaltung: Der Status wurde aktualisiert.</string>
     <string name="encryption_read_failed">Der Verschlüsselungsstatus konnte nicht gelesen werden. Versuche es erneut.</string>
     <string name="encryption_retry">Erneut versuchen</string>
     <string name="security_verify_description">Nachrichten mit %1$s sind Ende-zu-Ende-verschlüsselt.</string>

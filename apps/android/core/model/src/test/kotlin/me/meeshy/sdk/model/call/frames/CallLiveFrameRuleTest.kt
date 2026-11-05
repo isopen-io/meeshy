@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.call.frames
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.call.ThermalState
 import org.junit.Test
 
 class CallLiveFrameRuleTest {
@@ -99,7 +100,10 @@ class CallLiveFrameDisplayTest {
     @Test
     fun `les couches se peignent a la taille de l ecran, bornee sur le plus long cote`() {
         assertThat(CallLiveFrameRule.paintSize(540, 960)).isEqualTo(540 to 960)
-        assertThat(CallLiveFrameRule.paintSize(1080, 2220)).isEqualTo(623 to CallLiveFrameRule.PAINT_LONGEST_SIDE)
+        assertThat(CallLiveFrameRule.PAINT_LONGEST_SIDE).isEqualTo(2048)
+        assertThat(CallLiveFrameRule.paintSize(1080, 2000)).isEqualTo(1080 to 2000)
+        assertThat(CallLiveFrameRule.paintSize(1440, 3200)).isEqualTo(922 to 2048)
+        assertThat(CallLiveFrameRule.paintSize(4096, 1024)).isEqualTo(2048 to 512)
         assertThat(CallLiveFrameRule.paintSize(0, 960)).isEqualTo(0 to 0)
     }
 
@@ -109,5 +113,33 @@ class CallLiveFrameDisplayTest {
         assertThat(CallLiveFrameRule.showsHeldFrame(isVideoConnected = true, activeMode = me.meeshy.sdk.model.call.CallScreenMode.Montage)).isFalse()
         assertThat(CallLiveFrameRule.showsHeldFrame(isVideoConnected = true, activeMode = me.meeshy.sdk.model.call.CallScreenMode.Effects)).isFalse()
         assertThat(CallLiveFrameRule.showsHeldFrame(isVideoConnected = false, activeMode = null)).isFalse()
+    }
+
+    @Test
+    fun `les bandes de controles couvrent l'en-tete de 52 et la pilule de 84 en plus des encarts`() {
+        val reserve = CallLiveFrameRule.chromeReserve(viewHeight = 800.0, topInset = 28.0, bottomInset = 16.0)
+        assertThat(reserve).isEqualTo(CallFrameChromeReserve.covering(80.0, 100.0, 800.0))
+        assertThat(CallLiveFrameRule.chromeReserve(0.0, 10.0, 10.0)).isEqualTo(CallFrameChromeReserve.NONE)
+    }
+
+    @Test
+    fun `on ne repeint que si le cadre, les personnes, les textes ou la taille changent`() {
+        val people = listOf(CallFramePerson("me", "Moi", null, true), CallFramePerson("you", "Toi", null, false))
+        val base = CallLiveFrameRule.LayerInputs("a.b", people, CallFrameTexts(null, false, "4 nov. 2026", null), 540, 960, CallFrameChromeReserve.NONE, false)
+        assertThat(CallLiveFrameRule.needsRepaint(null, base)).isTrue()
+        assertThat(CallLiveFrameRule.needsRepaint(base, base.copy())).isFalse()
+        assertThat(CallLiveFrameRule.needsRepaint(base, base.copy(frameId = "c.d"))).isTrue()
+        assertThat(CallLiveFrameRule.needsRepaint(base, base.copy(people = people.reversed()))).isTrue()
+        assertThat(CallLiveFrameRule.needsRepaint(base, base.copy(texts = CallFrameTexts("Famille", true, "4 nov. 2026", null)))).isTrue()
+        assertThat(CallLiveFrameRule.needsRepaint(base, base.copy(width = 541))).isTrue()
+    }
+
+    @Test
+    fun `l'appareil se protege des la chaleur serieuse ou l'economie d'energie`() {
+        assertThat(CallLiveFrameRule.isDeviceConstrained(ThermalState.NOMINAL, powerSave = false)).isFalse()
+        assertThat(CallLiveFrameRule.isDeviceConstrained(ThermalState.FAIR, powerSave = false)).isFalse()
+        assertThat(CallLiveFrameRule.isDeviceConstrained(ThermalState.SERIOUS, powerSave = false)).isTrue()
+        assertThat(CallLiveFrameRule.isDeviceConstrained(ThermalState.CRITICAL, powerSave = false)).isTrue()
+        assertThat(CallLiveFrameRule.isDeviceConstrained(ThermalState.NOMINAL, powerSave = true)).isTrue()
     }
 }

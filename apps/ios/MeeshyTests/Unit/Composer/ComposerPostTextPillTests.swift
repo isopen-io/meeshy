@@ -6,15 +6,49 @@ import MeeshySDK
 /// jamais en story ; il se pose depuis une OPTION du rail, au pied des outils,
 /// et non plus depuis le socle : cocher Post ne change ni la scène ni le socle.
 /// Le titre dit ce qui est écrit, ou son nom tant que rien ne l'est ; la porte
-/// du fil l'ouvre d'emblée ; le ⋯ ne la double pas.
+/// du fil ouvre la scène au repos, comme la story (#16207) ; le ⋯ ne la double pas.
 final class ComposerPostTextPillTests: XCTestCase {
 
-    func test_opensOnAppear_laPorteDuFil_ouvreLeTexteDuPost() {
-        XCTAssertTrue(ComposerPostTextPill.opensOnAppear(opening: .keyboardOnContent, format: .post))
-        XCTAssertTrue(ComposerPostTextPill.opensOnAppear(opening: .keyboardOnContent, format: .reel))
+    /// **La porte du fil ouvre la MÊME scène au repos que la story** (#16207,
+    /// jumelle d'Android #16203) : un clavier levé sur « Texte du post » au
+    /// montage réduisait la scène et retirait ses outils et Publier.
+    func test_opensOnAppear_laPorteDuFil_ouvreLaSceneAuRepos_sansClavier() {
+        XCTAssertFalse(ComposerPostTextPill.opensOnAppear(opening: .keyboardOnContent, format: .post),
+                       "le post du fil s'ouvre au repos ; son texte s'écrit depuis l'option de la colonne")
+        XCTAssertFalse(ComposerPostTextPill.opensOnAppear(opening: .keyboardOnContent, format: .reel),
+                       "le réel aussi se compose sur la scène, au repos")
         XCTAssertFalse(ComposerPostTextPill.opensOnAppear(opening: .keyboardOnContent, format: .story))
         XCTAssertFalse(ComposerPostTextPill.opensOnAppear(opening: .mediaSeeded, format: .post))
         XCTAssertFalse(ComposerPostTextPill.opensOnAppear(opening: .resume, format: .post))
+    }
+
+    /// Aucune porte, aucun format composé sur la scène : le texte du post ne
+    /// s'ouvre jamais au montage.
+    func test_opensOnAppear_aucuneOuverture_neLeveLeClavierSurUneScene() {
+        let formats: [ComposerFormat] = [.story, .post, .reel, .status]
+        let scenes = formats.filter { ComposerFormatVariant.of($0).composesOnScene }
+        XCTAssertEqual(scenes, [.story, .post, .reel], "les trois formats de la scène")
+        for ouverture in ComposerOpening.allCases {
+            for format in scenes {
+                XCTAssertFalse(ComposerPostTextPill.opensOnAppear(opening: ouverture, format: format),
+                               "\(format) ouvert par \(ouverture) : la scène s'ouvre au repos")
+            }
+        }
+    }
+
+    /// **Seule une surface SANS scène peut lever un clavier à l'ouverture**
+    /// (miroir d'Android `ComposerProfile.raisesKeyboardOnOpen`, #16203).
+    func test_raisesKeyboardOnOpen_seuleUneSurfaceSansScene() {
+        for ouverture in ComposerOpening.allCases {
+            for format in [ComposerFormat.story, .post, .reel] {
+                XCTAssertFalse(ComposerSurfaceRouting.raisesKeyboardOnOpen(opening: ouverture, format: format),
+                               "\(format) ouvert par \(ouverture) : la scène s'ouvre au repos")
+            }
+        }
+        XCTAssertTrue(ComposerSurfaceRouting.raisesKeyboardOnOpen(opening: .keyboardOnContent, format: .status),
+                      "l'humeur n'a pas de scène : sa porte du clavier peut le lever")
+        XCTAssertFalse(ComposerSurfaceRouting.raisesKeyboardOnOpen(opening: .moodGrid, format: .status),
+                       "la grille d'humeurs passe avant le clavier")
     }
 
     func test_opensOnAppear_laPhotothequeDOffice_passeAvantLeTexte() {

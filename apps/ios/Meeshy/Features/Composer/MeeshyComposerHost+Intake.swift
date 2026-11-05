@@ -227,17 +227,6 @@ extension MeeshyComposerHost {
         )
     }
 
-    func carryContentIntoSceneIfNeeded() {
-        // E1 — la scène prend la langue DÉCLARÉE au composer comme défaut de
-        // tout objet posé.
-        viewModel.declaredContentLanguage = documentLanguage
-        // B1 — le texte ET le média déjà composés SUIVENT dans la scène.
-        viewModel.applyContentText(documentText)
-        documentMediaObjectIdBySource.merge(
-            viewModel.applyContentMedia(documentContentMedia)
-        ) { _, neuf in neuf }
-    }
-
     /// **Le SECOND opt-in n'est offert que sous la MÊME garde que le composer
     /// inline** — `FeedNearbyDiscoverability.offers(hasPlace:visibility:)`,
     /// APPELÉE et jamais recopiée (`hasPlace && visibility == .public`) : une
@@ -759,7 +748,7 @@ extension MeeshyComposerHost {
     /// parce que `documentLocalMedia` déclenche `syncPostMediaIntoSlides` par
     /// `adaptiveOnChange` — écrire la liste d'abord ferait courir la mécanique
     /// sur des cartes vides.
-    /// La porte du fil ouvre « Texte du post », clavier levé (#13864).
+    /// « Texte du post » ne s'ouvre au montage que hors scène : une scène s'ouvre au repos (#16207).
     func openPostTextAtDoorIfDue() {
         guard !postTextOpenedAtDoor,
               ComposerPostTextPill.opensOnAppear(

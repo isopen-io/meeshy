@@ -28,7 +28,11 @@ import MeeshyUI
 nonisolated enum PostEditRoute: Equatable {
     /// Le meuble (`MeeshyComposerHost`), hydraté sur la story publiée.
     case meuble
-    /// L'éditeur historique — POST, RÉEL, et toute dégradation.
+    /// Le meuble sur le DOCUMENT, hydraté sur le post ou le réel publié
+    /// (#9333) — la même vue que celle qui l'a créé.
+    case composer
+    /// L'éditeur historique — publication portant un média qu'aucune scène ne
+    /// montre (un document), et toute dégradation (#15631).
     case legacySheet
 
     /// **La décision, PURE.** Elle ne connaît ni vue ni présentation : c'est ce
@@ -46,64 +50,67 @@ nonisolated enum PostEditRoute: Equatable {
     /// lectures du même champ divergeraient au premier serveur qui sert
     /// « story » en minuscules.
     static func resolve(for post: FeedPost?, hasStoryComposer: Bool) -> PostEditRoute {
-        guard let post, post.isStory, hasStoryComposer else { return .legacySheet }
-        return .meuble
+        guard let post, hasStoryComposer else { return .legacySheet }
+        if post.isStory { return .meuble }
+        return PostEditComposerEligibility.opensInComposer(post) ? .composer : .legacySheet
     }
 }
+
+/// Ce que « Modifier » enregistre — le CONTRAT de l'hôte, inchangé : la
+/// requête de modification de son ViewModel. Le compositeur et l'éditeur
+/// historique la reçoivent tous deux ; aucun n'en écrit une seconde.
+typealias PostEditSave = @MainActor (FeedPost, EditPostDraft) async -> Void
 
 extension View {
     /// **La porte d'édition d'un post, quel que soit son format.**
     ///
-    /// L'hôte remet la feuille HISTORIQUE dans `legacy` — c'est lui qui sait
-    /// quoi faire d'un `onSave`, et ce contrat-là ne bouge pas. Ce qu'il cesse
-    /// de décider, c'est SI cette feuille est la bonne.
-    ///
-    /// Le `StoryViewModel` est lu dans l'ENVIRONNEMENT (`\.meeshyStoryComposer`,
-    /// posé par les deux racines via `meeshySocialChrome`) et non reçu en
-    /// paramètre : trois des cinq hôtes ne le déclarent pas, et deux d'entre eux
-    /// sont hors budget — l'exiger aurait coûté une ligne là où aucune n'est
-    /// permise.
-    func postEditCover<Legacy: View>(
-        post: FeedPost?,
-        isPresented: Binding<Bool>,
-        @ViewBuilder legacy: @escaping () -> Legacy
-    ) -> some View {
-        modifier(PostEditCoverModifier(post: post, isPresented: isPresented, legacy: legacy))
+    /// L'hôte remet ce qu'il fait d'une modification (`onSave`) ; la porte
+    /// décide QUELLE surface la recueille. Le `StoryViewModel` est lu dans
+    /// l'ENVIRONNEMENT (`\.meeshyStoryComposer`, posé par les deux racines via
+    /// `meeshySocialChrome`) et non reçu en paramètre : trois des cinq hôtes ne
+    /// le déclarent pas.
+    func postEditCover(post: FeedPost?, isPresented: Binding<Bool>, onSave: @escaping PostEditSave) -> some View {
+        modifier(PostEditCoverModifier(post: post, isPresented: isPresented, onSave: onSave))
     }
 
-    /// La même porte, pour les quatre hôtes qui présentent par ITEM — c'est
-    /// l'item qui porte le post, donc la route se résout sur lui.
-    ///
-    /// L'item est remis à `nil` par la porte elle-même à la fermeture : c'est le
-    /// contrat que `.sheet(item:)` offrait, et le perdre laisserait l'hôte avec
-    /// un post encore « en édition » après le retour.
-    func postEditCover<Legacy: View>(
-        item: Binding<FeedPost?>,
-        @ViewBuilder legacy: @escaping (FeedPost) -> Legacy
-    ) -> some View {
-        let porte = item.wrappedValue
-        return postEditCover(
-            post: porte,
+    /// La même porte, pour les hôtes qui présentent par ITEM. L'item est remis
+    /// à `nil` à la fermeture — le contrat que `.sheet(item:)` offrait.
+    func postEditCover(item: Binding<FeedPost?>, onSave: @escaping PostEditSave) -> some View {
+        postEditCover(
+            post: item.wrappedValue,
             isPresented: Binding(
                 get: { item.wrappedValue != nil },
                 set: { if !$0 { item.wrappedValue = nil } }
             ),
-            legacy: { if let porte { legacy(porte) } }
+            onSave: onSave
         )
     }
 }
 
-private struct PostEditCoverModifier<Legacy: View>: ViewModifier {
+extension EditPostSheet {
+    /// L'éditeur historique ouvert sur une publication — les dix champs que
+    /// les cinq hôtes recopiaient chacun.
+    init(post: FeedPost, onSave: @escaping @MainActor (EditPostDraft) async -> Void, onDismiss: @escaping () -> Void) {
+        self.init(originalContent: post.content, originalLanguage: post.originalLanguage, originalType: post.type,
+                  media: post.media.map { EditablePostMedia($0) }, originalStoryEffects: post.storyEffects,
+                  originalLocation: post.location, originalVisibility: post.visibility,
+                  originalVisibilityUserIds: post.visibilityUserIds ?? [], isRepost: post.repost != nil,
+                  onSave: onSave, onDismiss: onDismiss)
+    }
+}
+
+private struct PostEditCoverModifier: ViewModifier {
     let post: FeedPost?
     @Binding var isPresented: Bool
-    @ViewBuilder let legacy: () -> Legacy
+    let onSave: PostEditSave
 
     @Environment(\.meeshyStoryComposer) private var storyComposer
 
-    /// La session du meuble, construite à l'OUVERTURE et pas au rendu : le
-    /// `StoryComposerViewModel(editing:)` hydrate, et le reconstruire à chaque
-    /// passe rejouerait l'hydratation sous les doigts de l'auteur.
+    /// Les sessions sont construites à l'OUVERTURE et pas au rendu : le
+    /// ViewModel du composer hydrate, et le reconstruire à chaque passe
+    /// rejouerait l'hydratation sous les doigts de l'auteur.
     @State private var session: StoryEditSession?
+    @State private var publication: PostEditComposerSession?
 
     private var route: PostEditRoute {
         PostEditRoute.resolve(for: post, hasStoryComposer: storyComposer != nil)
@@ -116,37 +123,51 @@ private struct PostEditCoverModifier<Legacy: View>: ViewModifier {
             .sheet(isPresented: Binding(
                 get: { isPresented && route == .legacySheet },
                 set: { if !$0 { isPresented = false } }
-            )) { legacy() }
+            )) {
+                if let post {
+                    EditPostSheet(post: post, onSave: { await onSave(post, $0) }, onDismiss: { isPresented = false })
+                }
+            }
             .adaptiveOnChange(of: isPresented) { _, ouvert in
-                guard ouvert, route == .meuble, let post else { return }
-                let story = StoryItem(feedPost: post)
-                session = StoryEditSession(story: story,
-                                           composer: StoryComposerViewModel(editing: story))
+                guard ouvert, let post else { return }
+                switch route {
+                case .meuble:
+                    let story = StoryItem(feedPost: post)
+                    session = StoryEditSession(story: story, composer: StoryComposerViewModel(editing: story))
+                case .composer:
+                    publication = PostEditComposerSession(post: post)
+                case .legacySheet:
+                    break
+                }
             }
 
-        // Le cover du meuble n'est monté que si le compositeur EXISTE : un
+        // Les covers du meuble ne sont montés que si le compositeur EXISTE : un
         // `?? StoryViewModel()` de politesse en construirait un à chaque passe
-        // de rendu, pour une surface jamais atteinte — un coût permanent au
-        // service d'un cas impossible (la route `.meuble` exige ce même objet).
+        // de rendu, pour une surface jamais atteinte.
         return Group {
             if let storyComposer {
-                base.storyEditComposerCover(
-                    session: Binding(
-                        get: { session },
-                        set: { nouvelle in
-                            session = nouvelle
-                            // Le meuble refermé rend la main à l'hôte : sans ça,
-                            // son booléen resterait vrai et « Modifier » ne
-                            // rouvrirait plus rien (loi 4 — un contrôle sans
-                            // effet).
-                            if nouvelle == nil { isPresented = false }
-                        }
-                    ),
-                    viewModel: storyComposer
-                )
+                base
+                    .storyEditComposerCover(session: closing($session), viewModel: storyComposer)
+                    .fullScreenCover(item: closing($publication)) { courante in
+                        PostEditComposerDoor(session: courante, storyViewModel: storyComposer,
+                                             onSave: { await onSave(courante.post, $0) },
+                                             onFinish: { publication = nil })
+                    }
             } else {
                 base
             }
         }
+    }
+
+    /// Le meuble refermé rend la main à l'hôte : sans ça, son booléen
+    /// resterait vrai et « Modifier » ne rouvrirait plus rien (loi 4).
+    private func closing<Session>(_ binding: Binding<Session?>) -> Binding<Session?> {
+        Binding(
+            get: { binding.wrappedValue },
+            set: { nouvelle in
+                binding.wrappedValue = nouvelle
+                if nouvelle == nil { isPresented = false }
+            }
+        )
     }
 }

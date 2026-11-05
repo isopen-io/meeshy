@@ -21,7 +21,7 @@ final class ReelCaptionRichTextGuardTests: XCTestCase {
 
     func test_reelRepostEmbedCell_usesMessageTextRenderer_notPlainText() throws {
         let source = try sourceWithoutComments("Meeshy/Features/Main/Views/ReelRepostEmbedCell.swift")
-        XCTAssertTrue(source.contains("MessageTextRenderer.render(repost.content"),
-            "ReelRepostEmbedCell doit rendre repost.content via MessageTextRenderer, pas Text() brut")
+        XCTAssertTrue(source.contains("MessageTextRenderer.render(repost.displayContent"),
+            "ReelRepostEmbedCell doit rendre le texte servi par le Prisme (repost.displayContent, #16002) via MessageTextRenderer, pas Text() brut")
     }
 }

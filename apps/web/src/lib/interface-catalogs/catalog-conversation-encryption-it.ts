@@ -63,6 +63,7 @@ const it = {
   'conversationEncryption.switch.held': 'Un messaggio di questa conversazione usa una crittografia che questo browser non riconosce: la modalità non può essere cambiata da qui.',
   'conversationEncryption.switch.regimeChanged': 'Un altro membro ha appena modificato la crittografia: lo stato è stato aggiornato.',
   'conversationEncryption.switch.restricted': 'Durante la fase di test, solo un membro con un ruolo del team Meeshy (analista o superiore) può cambiare la modalità di crittografia.',
+  'conversationEncryption.switch.forbidden': 'Non hai il permesso di cambiare la modalità di crittografia di questa conversazione: in un gruppo bisogna esserne moderatore.',
   'conversationEncryption.switch.unavailable': 'La crittografia sui nostri server è momentaneamente non disponibile. Riprova più tardi.',
   'conversationEncryption.switch.failed': 'Non è stato possibile cambiare la modalità. Riprova.',
   'conversationEncryption.switch.offline': 'Offline: riconnettiti per cambiare la modalità di crittografia.',

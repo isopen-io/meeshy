@@ -52,6 +52,10 @@ internal class MessageCacheSource(
     private val events: MessageEventBuffer? = null,
     /** #14655 — un message chiffré que la page dit parti, ou qu'elle ne sert plus, inscrit son effacement. */
     private val erasures: PlaintextErasureLedger? = null,
+    /** Les traductions déjà reçues, superposées aux messages servis. */
+    private val translations: TranslationLayer? = null,
+    /** #16012 — mon envoi servi par la page avant son accusé : ses fichiers locaux suivent la ligne servie. */
+    private val media: AcknowledgedBubbleMedia? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
@@ -84,7 +88,8 @@ internal class MessageCacheSource(
                 if (rows.isEmpty() && syncedAt == null) {
                     null
                 } else {
-                    rows.asReversed().map { it.toLocalMessage() }
+                    translations?.ensureLoaded(rows.map { it.serverId ?: it.id })
+                    rows.asReversed().map { row -> row.toLocalMessage().let { translations?.project(it) ?: it } }
                 }
             }
         }
@@ -229,8 +234,9 @@ internal class MessageCacheSource(
     private suspend fun persist(messages: List<ApiMessage>, newEtag: String?) {
         val now = clock.nowMillis()
         val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
+        val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
-            ingestion.mergeInTransaction(messages, now, conversationId)
+            ingestion.mergeInTransaction(messages, now, conversationId, settlements)
             erasures?.recordRemovedRows(pruned(messages, rows))
             if (rows.isEmpty()) {
                 messageDao.deleteMissing(conversationId, emptyList())
@@ -243,6 +249,7 @@ internal class MessageCacheSource(
             }
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, newEtag, null))
         }
+        settlements?.forEach { media?.settle(it.previous, it.written) }
     }
 
     /**
@@ -268,10 +275,12 @@ internal class MessageCacheSource(
     private suspend fun persistAfterBackfill(messages: List<ApiMessage>) {
         val now = clock.nowMillis()
         val currentEtag = syncMetaDao.etag(resourceKey)
+        val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
-            ingestion.mergeInTransaction(messages, now, conversationId)
+            ingestion.mergeInTransaction(messages, now, conversationId, settlements)
             syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, currentEtag, null))
         }
+        settlements?.forEach { media?.settle(it.previous, it.written) }
     }
 
     private companion object {

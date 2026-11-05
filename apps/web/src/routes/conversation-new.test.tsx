@@ -88,8 +88,7 @@ async function click(element: Element | null | undefined) {
   await settle();
 }
 
-const modeButton = (el: HTMLElement, mode: 'direct' | 'group') =>
-  el.querySelector<HTMLButtonElement>(`[data-new-mode="${mode}"]`);
+const groupToggle = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[data-new-group-toggle]');
 const composer = (el: HTMLElement) => el.querySelector<HTMLFormElement>('[data-group-composer]');
 const titleField = (el: HTMLElement) => el.querySelector<HTMLInputElement>('[data-group-title]');
 const submit = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[data-group-submit]');
@@ -113,11 +112,14 @@ describe('l’écran s’ouvre en DIRECT', () => {
     expect(el.querySelector('input[aria-label="Rechercher un contact"]')).not.toBeNull();
   });
 
-  test('aucun composeur de groupe n’est offert, et « Direct » est pressé', async () => {
+  test('aucun composeur de groupe n’est offert : l’interrupteur « Nouveau groupe » est éteint, plus de sélecteur Direct/Groupe (#14646)', async () => {
     const el = await mount();
     expect(composer(el)).toBeNull();
-    expect(modeButton(el, 'direct')?.getAttribute('aria-pressed')).toBe('true');
-    expect(modeButton(el, 'group')?.getAttribute('aria-pressed')).toBe('false');
+    expect(groupToggle(el)?.getAttribute('role')).toBe('switch');
+    expect(groupToggle(el)?.getAttribute('aria-checked')).toBe('false');
+    expect(text(groupToggle(el))).toContain('Nouveau groupe');
+    expect(el.querySelector('[data-new-mode]')).toBeNull();
+    expect(text(el.querySelector('h1'))).toBe('Nouvelle conversation');
   });
 
   /* En direct, une rangée OUVRE une conversation : elle ne se déclare pas
@@ -165,7 +167,7 @@ describe('le choix du chiffrement', () => {
     const el = await mount();
     await waitForEncryption(el);
     await click(encryptionRadio(el, 'hybrid'));
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
     await waitForEncryption(el);
     expect(encryptionRadio(el, 'hybrid')?.checked).toBe(true);
     expect(encryptionRadio(el, 'server')?.checked).toBe(false);
@@ -173,31 +175,39 @@ describe('le choix du chiffrement', () => {
 });
 
 describe('passer en GROUPE change ce qu’un tap produit', () => {
-  test('le composeur paraît, le titre de l’écran suit', async () => {
+  test('le composeur paraît, l’interrupteur s’allume, le titre de la feuille reste celui d’iOS', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
     expect(composer(el)).not.toBeNull();
-    expect(text(el.querySelector('h1'))).toBe('Nouveau groupe');
-    expect(modeButton(el, 'group')?.getAttribute('aria-pressed')).toBe('true');
+    expect(groupToggle(el)?.getAttribute('aria-checked')).toBe('true');
+    expect(text(el.querySelector('h1'))).toBe('Nouvelle conversation');
   });
 
-  test('la description est REPLIÉE : un toucher la déplie (#14646)', async () => {
+  test('personne choisie : l’interrupteur dit qu’un groupe se crée seul (#14646)', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
+    expect(text(groupToggle(el))).toContain('Vous pouvez le créer seul');
+    await click(firstPerson(el));
+    expect(text(groupToggle(el))).not.toContain('Vous pouvez le créer seul');
+  });
+
+  test('aucun champ de description à la création (#14646)', async () => {
+    const el = await mount();
+    await click(groupToggle(el));
     expect(el.querySelector('[data-group-description]')).toBeNull();
-    await click(el.querySelector('[data-group-description-open]'));
-    expect(el.querySelector('[data-group-description]')).not.toBeNull();
+    expect(el.querySelector('[data-group-description-open]')).toBeNull();
+    expect(el.querySelector('textarea')).toBeNull();
   });
 
   test('chaque rangée devient une case à cocher, et le DIT', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
     expect(firstPerson(el)?.getAttribute('aria-pressed')).toBe('false');
   });
 
   test('toucher quelqu’un le coche, le retoucher le décoche', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
 
     await click(firstPerson(el));
     expect(firstPerson(el)?.getAttribute('aria-pressed')).toBe('true');
@@ -212,7 +222,7 @@ describe('passer en GROUPE change ce qu’un tap produit', () => {
      remonter la liste pour retrouver la ligne. */
   test('une personne choisie se retire depuis sa pastille', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
     await click(firstPerson(el));
 
     const retrait = el.querySelector<HTMLButtonElement>('[data-group-remove]');
@@ -223,13 +233,13 @@ describe('passer en GROUPE change ce qu’un tap produit', () => {
     expect(firstPerson(el)?.getAttribute('aria-pressed')).toBe('false');
   });
 
-  test('revenir en direct puis au groupe ne perd pas ce qui était choisi', async () => {
+  test('éteindre puis rallumer l’interrupteur ne perd pas ce qui était choisi', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
     await click(firstPerson(el));
 
-    await click(modeButton(el, 'direct'));
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
+    await click(groupToggle(el));
 
     expect(firstPerson(el)?.getAttribute('aria-pressed')).toBe('true');
   });
@@ -238,7 +248,7 @@ describe('passer en GROUPE change ce qu’un tap produit', () => {
 describe('un refus se pose sous son champ, et RIEN ne part', () => {
   test('sans titre : le champ est visé et se déclare invalide', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
     await click(firstPerson(el));
     await submitGroup(el);
 
@@ -250,7 +260,7 @@ describe('un refus se pose sous son champ, et RIEN ne part', () => {
 
   test('sans personne mais avec un titre (#14646) : rien n’est refusé, le groupe de moi seul part', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
     typeInto(titleField(el), 'Mes notes');
     await settle();
     await submitGroup(el);
@@ -261,7 +271,7 @@ describe('un refus se pose sous son champ, et RIEN ne part', () => {
 
   test('sans personne ni titre : c’est le TITRE qui est blâmé', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
     await submitGroup(el);
 
     expect(titleField(el)?.getAttribute('aria-invalid')).toBe('true');
@@ -269,7 +279,7 @@ describe('un refus se pose sous son champ, et RIEN ne part', () => {
 
   test('corriger le champ visé efface son refus', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
     await click(firstPerson(el));
     await submitGroup(el);
     expect(titleField(el)?.getAttribute('aria-invalid')).toBe('true');
@@ -281,7 +291,7 @@ describe('un refus se pose sous son champ, et RIEN ne part', () => {
 
   test('le bouton nomme le geste, et reste actionnable après un refus', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
     await submitGroup(el);
 
     expect(text(submit(el))).toBe('Créer le groupe');
@@ -312,7 +322,7 @@ describe('la photo des personnes (#6975)', () => {
 
   test('la chip d’un membre choisi porte la même photo que sa ligne', async () => {
     const el = await mount();
-    await click(modeButton(el, 'group'));
+    await click(groupToggle(el));
     const porteurDePhoto = people(el).find((row) => row.querySelector('.avatar-root img') !== null);
     expect(porteurDePhoto).toBeDefined();
     await click(porteurDePhoto);

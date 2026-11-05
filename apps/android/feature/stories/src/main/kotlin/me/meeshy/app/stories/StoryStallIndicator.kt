@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.sdk.model.scene.SceneScrubPlan
 import me.meeshy.sdk.model.story.StoryStallIndicatorLaw
 import me.meeshy.ui.component.video.ReelPlayerHandle
 
@@ -55,6 +56,23 @@ internal class StoryMediaReadinessSignal {
     /** Un tour de boucle : la vidéo de fond repart de son début avec la barre. */
     fun rewind() {
         handle?.seekTo(0)
+    }
+
+    /** Le doigt parcourt la barre : la vidéo de fond (en pause) se cale par seek tolérant sur l'instant pointé. */
+    fun scrubTo(playheadSeconds: Double, loops: Boolean) {
+        val handle = handle ?: return
+        val target = SceneScrubPlan.backgroundSeekMs(playheadSeconds, handle.durationMs(), loops) ?: return
+        handle.seekTolerant(target, SceneScrubPlan.SEEK_TOLERANCE_MS)
+    }
+
+    /** Le doigt se lève : le seek redevient exact, la lecture repart de là. */
+    fun endScrub() {
+        handle?.endTolerantSeek()
+    }
+
+    /** Couture : les vidéos de premier plan disent ici qu'elles ne sont pas prêtes (retient le départ d'une slide sans fond visuel). */
+    fun setForegroundPending(pending: Boolean) {
+        readiness = readiness.copy(foregroundPending = pending)
     }
 
     /** Couture : la piste sonore dira ici qu'elle n'est pas prête dès que son lecteur le rapportera. */
@@ -95,5 +113,26 @@ internal fun StoryStallIndicator(waiting: Boolean, modifier: Modifier = Modifier
         ) {
             CircularProgressIndicator(color = MeeshyPalette.White, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
         }
+    }
+}
+
+/**
+ * Le petit boucleur de l'en-tête pendant l'attente du contenu (iOS : dans l'anneau de la flèche) : il tourne tant que le
+ * compte à rebours n'a pas démarré, puis s'efface pour lui laisser la place. Il n'occupe aucune place une fois parti.
+ */
+@Composable
+internal fun StoryAwaitingSpinner(awaiting: Boolean, modifier: Modifier = Modifier) {
+    val label = stringResource(R.string.story_reader_buffering)
+    AnimatedVisibility(
+        visible = awaiting,
+        enter = fadeIn(tween(StoryStallIndicatorLaw.FADE_OUT_MS.toInt())),
+        exit = fadeOut(tween(StoryStallIndicatorLaw.FADE_OUT_MS.toInt())),
+        modifier = modifier,
+    ) {
+        CircularProgressIndicator(
+            color = MeeshyPalette.White,
+            strokeWidth = 2.dp,
+            modifier = Modifier.size(18.dp).semantics { contentDescription = label },
+        )
     }
 }

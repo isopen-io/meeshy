@@ -13,6 +13,7 @@ import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadProgressLedger
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.media.TusUploadRepository
+import me.meeshy.sdk.media.UploadedAttachmentIds
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.ConversationModeReader
@@ -42,6 +43,11 @@ import javax.inject.Inject
  * a conversation the GATEWAY does not find (404 [ConversationModeReader.GATEWAY_NOT_FOUND_CODE]) fails at once too. A raw
  * 404 from a proxy (Traefik while the gateway restarts) is retried, its bytes kept. A chat upload exhausted because its
  * conversation's mode could not be read ([OutboxPlaintextAdmission.isModeUnconfirmed]) keeps its bytes for « Réessayer ».
+ *
+ * A piece that lands is bridged from its upload's `cmid` to the server id the gateway gave it ([UploadedAttachmentIds],
+ * #15969): what follows the piece across its acknowledgement — the voice-note player — finds it under its new name.
+ * The bridge is written BEFORE the piece leaves the progress ledger (#16133): a bubble of several pieces reads the
+ * landed ones there, and would otherwise fall back to zero for an instant at the end of each.
  */
 public class UploadMediaHandler @Inject constructor(
     private val mediaBlobStore: MediaBlobStore,
@@ -50,6 +56,7 @@ public class UploadMediaHandler @Inject constructor(
     private val json: Json,
     private val progressLedger: MediaUploadProgressLedger,
     private val regimes: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    private val acknowledged: UploadedAttachmentIds = UploadedAttachmentIds(),
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult {
@@ -57,16 +64,18 @@ public class UploadMediaHandler @Inject constructor(
         val payload = payloadOf(row)
         val context = contextOf(payload)
         val result = try {
-            if (context != null) {
+            val outcome = if (context != null) {
                 MediaUploadSender.send(item) {
                     tusUploadRepository.upload(it, context) { sent, total -> progressLedger.report(row.cmid, sent, total) }
                 }
             } else {
                 val destination = payload?.conversationId?.takeIf { it.isNotBlank() }
                 MediaUploadSender.send(item, refusal = { destinationRefusal(it, destination) }) {
-                    mediaRepository.upload(listOf(it), destination)
+                    mediaRepository.upload(listOf(it), destination) { sent, total -> progressLedger.report(row.cmid, sent, total) }
                 }
             }
+            if (outcome is SendResult.SuccessWithId) acknowledged.record(row.cmid, outcome.producedId)
+            outcome
         } finally {
             progressLedger.clear(row.cmid)
         }
@@ -89,7 +98,7 @@ public class UploadMediaHandler @Inject constructor(
     }
 
     private fun SendResult.dropsBytes(context: TusUploadContext?): Boolean = when (this) {
-        is SendResult.Success, is SendResult.SuccessWithId -> true
+        is SendResult.Success, is SendResult.SuccessWithId, is SendResult.Cancelled -> true
         is SendResult.TransientFailure, is SendResult.TransportFailure, is SendResult.Deferred -> false
         is SendResult.PermanentFailure -> context !in PUBLICATION_CONTEXTS
     }

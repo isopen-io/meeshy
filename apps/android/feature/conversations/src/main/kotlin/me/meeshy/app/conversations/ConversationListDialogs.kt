@@ -78,6 +78,13 @@ internal fun ConversationListDialogHost(
             onConfirm = controller::confirmRemoval,
             onDismiss = controller::dismiss,
         )
+        is ConversationListDialog.Obsolete -> ConfirmDialog(
+            title = stringResource(R.string.conversations_obsolete_confirm_title),
+            message = stringResource(R.string.conversations_obsolete_confirm_message, current.conversationName),
+            confirmLabel = stringResource(R.string.conversations_obsolete_confirm_button),
+            onConfirm = controller::confirmObsolete,
+            onDismiss = controller::dismiss,
+        )
         is ConversationListDialog.Leave -> ConfirmDialog(
             title = stringResource(R.string.dialogs_leave_title),
             message = stringResource(R.string.dialogs_leave_message),

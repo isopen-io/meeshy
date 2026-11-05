@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.AttachmentProtection
 import me.meeshy.sdk.model.AttachmentProtectionVerdict
 import me.meeshy.sdk.model.ImageVariantPicker
 import me.meeshy.sdk.model.MeeshyImageVariant
+import me.meeshy.sdk.model.VoiceQueueProtection
 import me.meeshy.sdk.model.deeplink.ConversationLinkTarget
 import me.meeshy.sdk.model.isEndToEndBlob
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
@@ -27,6 +28,11 @@ data class MediaHubAttachment(
     val alt: String?,
     val width: Int? = null,
     val variants: List<MeeshyImageVariant> = emptyList(),
+    /**
+     * La pièce OU son message est protégé (éphémère, flouté, à vue unique, chiffré — [VoiceQueueProtection.ofPiece]) :
+     * listée, elle se lit sans cache disque, sans onde, et sa carte d'écran verrouillé reste muette.
+     */
+    val isProtected: Boolean = false,
 ) {
     /**
      * L'URL de vignette à charger pour une tuile de [targetWidthPx] pixels : la PLUS PETITE variante suffisante
@@ -149,7 +155,7 @@ object ConversationMediaHubRules {
             .filter { !isMaskedPiece(it) && kindOf(it) == kind }
             .mapNotNull { piece ->
                 val url = piece.fileUrl ?: return@mapNotNull null
-                item(message, kind, piece.id, MediaHubPayload.Attachment(piece.toHubAttachment(url)))
+                item(message, kind, piece.id, MediaHubPayload.Attachment(piece.toHubAttachment(url, message)))
             }
 
     private fun linkItems(message: ApiMessage, kind: ConversationMediaKind, webOrigin: String): List<MediaHubItem> =
@@ -191,7 +197,7 @@ object ConversationMediaHubRules {
     private fun isMaskedPiece(piece: ApiMessageAttachment): Boolean =
         AttachmentProtection.verdict(piece.isViewOnce, piece.isBlurred, piece.effectFlags) == AttachmentProtectionVerdict.Masked
 
-    private fun ApiMessageAttachment.toHubAttachment(url: String) = MediaHubAttachment(
+    private fun ApiMessageAttachment.toHubAttachment(url: String, carrier: ApiMessage) = MediaHubAttachment(
         id = id,
         url = url,
         thumbnailUrl = thumbnailUrl,
@@ -204,6 +210,7 @@ object ConversationMediaHubRules {
         alt = alt,
         width = width,
         variants = imageVariants.orEmpty(),
+        isProtected = VoiceQueueProtection.ofPiece(this, carrier),
     )
 
     private fun senderNameOf(message: ApiMessage): String {

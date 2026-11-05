@@ -258,6 +258,9 @@ public struct MeeshyAvatar: View {
     /// La place libre (pt) que l'hôte garantit autour de l'empreinte : le cadre illustré s'y montre
     /// sans réduire l'avatar (#15157). `0` ⇒ le cadre tient dans l'empreinte.
     public private(set) var ringDecorRoom: CGFloat = 0
+    /// `false` : le contour sans ses films illustrés, l'anneau fixe seul — la SEULE surface qui le
+    /// retire est la bulle de frappe (#16114) ; partout ailleurs, le décor s'affiche entier.
+    public private(set) var ringShowsDecor: Bool = true
 
     // Primary init (AvatarContext)
     public init(name: String, context: AvatarContext, kind: AvatarKind = .user, accentColor: String = "",
@@ -311,6 +314,8 @@ public struct MeeshyAvatar: View {
     /// Le dessin du contour, résolu UNE fois à l'init (le catalogue embarqué
     /// est en mémoire) : le défilement d'une liste ne relit rien.
     let ringDesign: AvatarRingDesign?
+    /// Le contour d'un pack NON embarqué dont le contrat est arrivé après l'init (#16264).
+    @State private var servedRing: AvatarRingDesign?
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var effectiveStoryState: StoryRingState {
@@ -431,45 +436,12 @@ public struct MeeshyAvatar: View {
             avatarBody
         }
         .avatarRingWithin(
-            ringDesign,
+            ringDesign ?? servedRing,
             footprint: context.size,
-            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize, decorRoom: ringDecorRoom
+            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize, decorRoom: ringDecorRoom,
+            decor: ringShowsDecor
         )
-        .overlay(alignment: .bottomTrailing) {
-            if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
-                // Le mood vit les transitions du point (#9065) : il grossit en
-                // ressort à l'arrivée « ici » avec son gros pulse, se rétracte
-                // au départ puis revient cerné de vert.
-                moodBadge(emoji: emoji)
-                    .overlay {
-                        if shownPresence == .here && presenceChanged && !reduceMotion {
-                            PresenceArrivalRipple(color: PresenceStyle.hereDotColor, diameter: context.badgeSize)
-                        }
-                    }
-                    .id("mood.\(shownPresence?.transitionKey ?? "none")")
-                    .transition(presenceTransition)
-                    .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
-            } else if let presence = shownPresence {
-                let diameter = presence.diameter(avatarSize: context.size)
-                onlineDot(for: presence, diameter: diameter)
-                    .overlay {
-                        if presence == .here, !reduceMotion, let wave = PresenceHereWave.for(isHere) {
-                            PresenceHereWaveView(color: presence.color, diameter: diameter, wave: wave)
-                                .id(wave.duration)
-                        }
-                        if presence.arrivesWithRipple && presenceChanged && !reduceMotion {
-                            PresenceArrivalRipple(color: presence.color, diameter: diameter)
-                        }
-                    }
-                    .id(presence.transitionKey)
-                    .transition(presenceTransition)
-                    .offset(AvatarPresenceDot.centerOffset(
-                        avatarSize: context.size,
-                        frameSize: effectiveStoryState == .none ? context.size : context.ringSize,
-                        dotDiameter: diameter
-                    ))
-            }
-        }
+        .overlay(alignment: .bottomTrailing) { presenceBadge }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.5),
                    value: shownPresence?.transitionKey)
         .adaptiveOnChange(of: shownPresence?.transitionKey) { _, _ in presenceChanged = true }
@@ -485,8 +457,14 @@ public struct MeeshyAvatar: View {
             } else { visual }
         }
 
+        let loaded = Group {
+            if let src = pendingRingContract {
+                tappable.task(id: src) { await loadServedRing(src) }
+            } else { tappable }
+        }
+
         if showContextMenu {
-            tappable
+            loaded
                 .contextMenu {
                     ForEach(resolvedMenuItems) { item in
                         Button(role: item.role) {
@@ -498,8 +476,57 @@ public struct MeeshyAvatar: View {
                 }
                 .accessibilityLabel(accessibilityName)
         } else {
-            tappable
+            loaded
                 .accessibilityLabel(accessibilityName)
+        }
+    }
+
+    /// Le contrat du contour équipé que l'appareil n'a pas encore : seul l'avatar qui en a besoin
+    /// se charge, une fois ; tous les autres ne portent aucune tâche.
+    private var pendingRingContract: String? {
+        guard kind == .user, ringDesign == nil, servedRing == nil, let ring, ring.origin != .builtin else { return nil }
+        return ring.contract
+    }
+
+    private func loadServedRing(_ src: String) async {
+        guard await ServedAppearanceStore.shared.load(src: src) != nil else { return }
+        servedRing = ProfileDecorResolver.ring(ring)
+    }
+
+    @ViewBuilder
+    private var presenceBadge: some View {
+        if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
+            // Le mood vit les transitions du point (#9065) : il grossit en
+            // ressort à l'arrivée « ici » avec son gros pulse, se rétracte
+            // au départ puis revient cerné de vert.
+            moodBadge(emoji: emoji)
+                .overlay {
+                    if shownPresence == .here && presenceChanged && !reduceMotion {
+                        PresenceArrivalRipple(color: PresenceStyle.hereDotColor, diameter: context.badgeSize)
+                    }
+                }
+                .id("mood.\(shownPresence?.transitionKey ?? "none")")
+                .transition(presenceTransition)
+                .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
+        } else if let presence = shownPresence {
+            let diameter = presence.diameter(avatarSize: context.size)
+            onlineDot(for: presence, diameter: diameter)
+                .overlay {
+                    if presence == .here, !reduceMotion, let wave = PresenceHereWave.for(isHere) {
+                        PresenceHereWaveView(color: presence.color, diameter: diameter, wave: wave)
+                            .id(wave.duration)
+                    }
+                    if presence.arrivesWithRipple && presenceChanged && !reduceMotion {
+                        PresenceArrivalRipple(color: presence.color, diameter: diameter)
+                    }
+                }
+                .id(presence.transitionKey)
+                .transition(presenceTransition)
+                .offset(AvatarPresenceDot.centerOffset(
+                    avatarSize: context.size,
+                    frameSize: effectiveStoryState == .none ? context.size : context.ringSize,
+                    dotDiameter: diameter
+                ))
         }
     }
 
@@ -507,6 +534,13 @@ public struct MeeshyAvatar: View {
     public func ringDecorRoom(_ room: CGFloat) -> MeeshyAvatar {
         var copy = self
         copy.ringDecorRoom = room
+        return copy
+    }
+
+    /// Retire les films illustrés du contour : l'anneau fixe seul (#16114, la bulle de frappe).
+    public func ringWithoutDecor() -> MeeshyAvatar {
+        var copy = self
+        copy.ringShowsDecor = false
         return copy
     }
 

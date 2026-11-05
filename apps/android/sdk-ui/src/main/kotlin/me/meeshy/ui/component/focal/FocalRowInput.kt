@@ -2,6 +2,7 @@ package me.meeshy.ui.component.focal
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.MessageSourceKind
+import me.meeshy.sdk.model.ServedProfileDecorItem
 import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.ui.component.bubble.DeliveryStatus
 
@@ -29,6 +30,8 @@ public data class FocalRowInput(
     val isSlowSend: Boolean,
     val isEdited: Boolean,
     val isOptimistic: Boolean,
+    /** Le contour équipé de l'expéditeur, tel que servi : l'avatar le résout par le catalogue. */
+    val senderRing: ServedProfileDecorItem? = null,
 ) {
     public companion object {
         public fun of(content: BubbleContent): FocalRowInput = FocalRowInput(
@@ -48,6 +51,7 @@ public data class FocalRowInput(
             isSlowSend = content.isSlowSend,
             isEdited = content.isEdited,
             isOptimistic = content.isPending,
+            senderRing = content.senderRing,
         )
     }
 }

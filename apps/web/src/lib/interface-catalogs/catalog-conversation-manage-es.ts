@@ -71,6 +71,7 @@ const es = {
   'conversationManage.obsolete.title': '¿Hacer obsoleta la conversación?',
   'conversationManage.obsolete.message': 'Desaparecerá para todos los participantes. Su contenido dejará de ser legible y se borrará en 48 horas.',
   'conversationManage.obsolete.error': 'No se pudo hacer obsoleta la conversación.',
+  'conversationManage.obsolete.requestSender': 'Solo el destinatario de la solicitud puede eliminar esta conversación.',
   'conversationManage.header.created_on': 'Creado el {date}',
   'conversationManage.header.muted': 'Notificaciones desactivadas',
 } satisfies ConversationManageCatalog;

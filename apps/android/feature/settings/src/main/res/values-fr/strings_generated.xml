@@ -314,6 +314,9 @@
     <string name="settings_logout_confirm_title">Déconnexion</string>
     <string name="settings_logout_hint">Vous déconnecter de votre compte</string>
     <string name="settings_logout_in_progress">Déconnexion en cours...</string>
+    <string name="settings_media_autosave_header">Galerie</string>
+    <string name="settings_media_autosave_subtitle">Les images et vidéos reçues rejoignent l\'album Meeshy, une seule fois. Jamais un média éphémère, flouté ou à vue unique.</string>
+    <string name="settings_media_autosave_title">Enregistrer dans Photos</string>
     <string name="settings_media_capture_header">À la prise de vue</string>
     <string name="settings_media_capture_original_subtitle">La photo ou la vidéo brute, sans effet ni cadre, rejoint Photos à chaque prise.</string>
     <string name="settings_media_capture_original_title">Enregistrer l\'original</string>

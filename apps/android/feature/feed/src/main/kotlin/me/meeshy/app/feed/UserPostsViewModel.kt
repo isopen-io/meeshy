@@ -16,7 +16,9 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import javax.inject.Inject
 
 /**
@@ -26,8 +28,8 @@ import javax.inject.Inject
  * pages in more as the reader nears the tail.
  *
  * The list is the pure [PostPageListState]; this ViewModel is the orchestration layer (when
- * to fetch, when the cold skeleton stands down). Read-only: the profile posts screen has no
- * un-bookmark affordance, so no optimistic mutation lives here.
+ * to fetch, when the cold skeleton stands down). The gestures of each card are the feed's own,
+ * shared with the other listed screens through [ListedPostActions] (#13244).
  */
 data class UserPostsUiState(
     val posts: List<FeedPostPresentation> = emptyList(),
@@ -37,14 +39,20 @@ data class UserPostsUiState(
     val showSkeleton: Boolean = false,
     val hasMore: Boolean = true,
     val errorMessage: String? = null,
+    /** Le compositeur de citation ouvert par « Citer » ; `null` quand il est fermé. */
+    val quoteComposer: QuoteComposerState? = null,
+    /** L'issue d'un geste d'une carte, dite une fois puis consommée. */
+    val notice: FeedNotice? = null,
 )
 
 @HiltViewModel
 class UserPostsViewModel @Inject constructor(
     private val postRepository: PostRepository,
+    reports: ReportRepository,
     private val sessionRepository: SessionRepository,
     private val config: MeeshyConfig,
     savedStateHandle: SavedStateHandle,
+    socialSocket: SocialSocketManager,
 ) : ViewModel() {
 
     private val userId: String = savedStateHandle[USER_ID_ARG] ?: ""
@@ -55,10 +63,16 @@ class UserPostsViewModel @Inject constructor(
     private val _state = MutableStateFlow(UserPostsUiState())
     val state: StateFlow<UserPostsUiState> = _state.asStateFlow()
 
+    /** Les gestes du fil sur les publications de l'auteur (#13244 ; iOS `ProfileUserPostsList` monte `FeedPostCard`). */
+    private val actions = ListedPostActions(viewModelScope, postRepository, reports, listState, socialSocket.listedPostTranslations()) { sessionRepository.currentUser.value }
+
+    /** Ce que font les cartes de la liste : les gestes du fil, chacun câblé ([ListedPostCardActions]). */
+    val cards: ListedPostCardActions get() = actions
+
     init {
         viewModelScope.launch {
-            combine(listState, sessionRepository.currentUser, status) { list, user, st ->
-                project(list, user, st)
+            combine(listState, sessionRepository.currentUser, status, actions.state) { list, user, st, gestures ->
+                project(list, user, st, gestures)
             }.collect { projected -> _state.value = projected }
         }
         loadInitial()
@@ -137,9 +151,12 @@ class UserPostsViewModel @Inject constructor(
         list: PostPageListState,
         user: MeeshyUser?,
         st: UserPostsStatus,
+        gestures: ListedPostCardsState,
     ): UserPostsUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
-        val projected = list.posts.map { FeedPostBuilder.build(it, prefs, config.apiBaseUrl) }
+        val projected = list.posts.map {
+            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, gestures.languageOverrides[it.id], currentUserId = user?.id)
+        }
         val showSkeleton = st.isLoading && !list.hasLoaded && projected.isEmpty() && st.error == null
         return UserPostsUiState(
             posts = projected,
@@ -149,6 +166,8 @@ class UserPostsViewModel @Inject constructor(
             showSkeleton = showSkeleton,
             hasMore = list.hasMore,
             errorMessage = st.error,
+            quoteComposer = gestures.quoteComposer,
+            notice = gestures.notice,
         )
     }
 

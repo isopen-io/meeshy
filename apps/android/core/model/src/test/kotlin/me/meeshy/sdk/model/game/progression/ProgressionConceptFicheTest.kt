@@ -152,4 +152,16 @@ class ProgressionConceptFicheTest {
         assertThat(level.head).isEqualTo(FicheHead.Piece)
         assertThat(level.hasWhere).isFalse()
     }
+
+    @Test
+    fun `la tete est generique ou Etincelles ou la piece de jeu, jamais deux`() {
+        val block = game()
+        val generic = fiche(ProgressionConcept.Defis, block)
+        val piece = ProgressionConceptFiches.make(ProgressionConcept.Level, progress(block), block, now, moment, pieceIsHero = true)
+        val sparks = ProgressionConceptFiches.make(ProgressionConcept.Points, progress(block), block, now, moment, pieceIsHero = true)
+
+        assertThat(generic.head).isEqualTo(FicheHead.Generic)
+        assertThat(piece.head).isEqualTo(FicheHead.Piece)
+        assertThat(sparks.head).isInstanceOf(FicheHead.Sparks::class.java)
+    }
 }

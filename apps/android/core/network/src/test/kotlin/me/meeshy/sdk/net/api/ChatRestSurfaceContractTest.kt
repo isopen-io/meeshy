@@ -32,6 +32,19 @@ class ChatRestSurfaceContractTest {
     }
 
     @Test
+    fun `the translations of a message are read from its address and nested under translations`() = runTest {
+        val (probe, api) = messages(
+            """{"success":true,"data":{"messageId":"m1","translations":[{"targetLanguage":"fr","translatedContent":"Bonjour"}]}}""",
+        )
+
+        val payload = api.translations("m1").data
+
+        assertThat(probe.call.method).isEqualTo("GET")
+        assertThat(probe.call.path).isEqualTo("/api/v1/messages/m1/translations")
+        assertThat(payload?.usable()).containsExactly("fr" to "Bonjour")
+    }
+
+    @Test
     fun `hiding a message for me is a DELETE on its address and restoring it a POST`() = runTest {
         val (probe, api) = messages()
 

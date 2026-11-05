@@ -46,7 +46,7 @@ class FeedAudioPlaybackViewModel @Inject constructor(
         get() = ReaderPrism.resolve(session.currentUser.value ?: EmptyContentPreferences)
 
     fun toggle(attachmentId: String, url: String) {
-        if (engine.state.value.attachmentId == attachmentId) engine.togglePlayPause() else engine.play(attachmentId, url)
+        if (engine.state.value.attachmentId == attachmentId) engine.togglePlayPause() else engine.play(attachmentId, url, isProtected = false)
     }
 
     fun seek(attachmentId: String, fraction: Double) {

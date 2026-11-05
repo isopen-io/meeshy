@@ -26,11 +26,13 @@ nonisolated enum ComposerPostTextPill {
         firstLine(of: text) ?? ""
     }
 
-    /// La porte du fil promet qu'on écrit d'emblée : elle ouvre le texte du post
-    /// une fois, clavier levé — jamais en story, où le texte se pose sur la scène,
-    /// ni quand la photothèque s'ouvre d'office (#13839) : elle passe d'abord.
+    /// Le texte du post ne s'ouvre au montage que là où le clavier peut se lever
+    /// à l'ouverture — jamais sur la scène (#16207) : le post et le réel
+    /// s'ouvrent au repos, comme la story, et leur texte s'écrit depuis l'option
+    /// de la colonne. Ni quand la photothèque s'ouvre d'office (#13839) : elle
+    /// passe d'abord.
     static func opensOnAppear(opening: ComposerOpening, format: ComposerFormat, picksFirst: Bool = false) -> Bool {
-        ComposerSurfaceRouting.focusesContentOnAppear(opening: opening)
+        ComposerSurfaceRouting.raisesKeyboardOnOpen(opening: opening, format: format)
             && ComposerFormatVariant.of(format).writesPostText
             && !picksFirst
     }

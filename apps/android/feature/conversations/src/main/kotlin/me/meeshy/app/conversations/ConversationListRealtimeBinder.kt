@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.chat.StarredMessagesStore
+import me.meeshy.sdk.conversation.ConversationEventApplier
 import me.meeshy.sdk.conversation.ConversationLivePatcher
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -34,6 +35,7 @@ internal class ConversationListRealtimeBinder(
     private val currentUserId: () -> String?,
     private val patcher: ConversationLivePatcher,
     private val connectionState: Flow<SocketConnectionState> = emptyFlow(),
+    private val events: ConversationEventApplier = ConversationEventApplier(patcher),
 ) {
 
     private val lane = Channel<suspend () -> Unit>(Channel.UNLIMITED)
@@ -55,12 +57,12 @@ internal class ConversationListRealtimeBinder(
         scope.launch { messageSocketManager.messageReceived.collect { enqueue { patcher.applyMessage(it) } } }
         scope.launch { messageSocketManager.messageEdited.collect { enqueue { patcher.applyEdited(it) } } }
         scope.launch { messageSocketManager.messageDeleted.collect { enqueue { patcher.applyDeleted(it) } } }
-        scope.launch { messageSocketManager.conversationUpdated.collect { enqueue { patcher.applyUpdated(it) } } }
+        scope.launch { messageSocketManager.conversationUpdated.collect { enqueue { events.applyUpdated(it) } } }
         scope.launch {
-            messageSocketManager.unreadUpdated.collect { enqueue { patcher.applyUnread(it.conversationId, it.unreadCount) } }
+            messageSocketManager.unreadUpdated.collect { enqueue { patcher.applyUnread(it.conversationId, it.unreadCount, it.bridge) } }
         }
         // La montante du couple (#4389) : conversation restauree ailleurs - on la RAMENE par id.
-        scope.launch { messageSocketManager.conversationRestored.collect { enqueue { patcher.discover(it.conversationId) } } }
+        scope.launch { messageSocketManager.conversationRestored.collect { enqueue { events.applyRestored(it) } } }
         scope.launch {
             messageSocketManager.conversationDeleted.collect { event ->
                 ConversationPurge.onConversationDeleted(event)?.let(::purge)

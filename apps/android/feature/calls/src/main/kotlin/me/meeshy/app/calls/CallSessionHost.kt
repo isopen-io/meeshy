@@ -55,6 +55,9 @@ interface CallSessionHost {
      * primary's indicators must then ignore it (#13740). A duo never routes one.
      */
     fun routesGroupMediaToggle(toggle: CallMediaTogglePayload): Boolean = false
+
+    /** `true` once the call is proven to gather more than two people (a duo never is). */
+    val isGroupCall: Boolean get() = false
 }
 
 /** What an extension point needs to key its work to the call in flight. */

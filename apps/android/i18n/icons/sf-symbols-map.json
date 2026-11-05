@@ -293,6 +293,12 @@
    "reason": "Icons.Filled.Bookmark; variante .fill rendue en Filled"
   },
   {
+   "symbol": "briefcase",
+   "status": "mapped",
+   "role": "Work",
+   "reason": "Icons.Filled.Work ; nom d'icône de catégorie servi par la passerelle (CategoryIconMapping), hors du motif littéral de l'extracteur"
+  },
+  {
    "symbol": "bubble.left.and.bubble.right",
    "status": "mapped",
    "role": "Forum",
@@ -336,6 +342,12 @@
    "status": "mapped",
    "role": "Subtitles",
    "reason": "Icons.Filled.Subtitles (outil Transcrire de l'éditeur audio, #13462)"
+  },
+  {
+   "symbol": "cart",
+   "status": "mapped",
+   "role": "ShoppingCart",
+   "reason": "Icons.Filled.ShoppingCart ; nom d'icône de catégorie servi par la passerelle (CategoryIconMapping), hors du motif littéral de l'extracteur"
   },
   {
    "symbol": "cellularbars",
@@ -816,6 +828,12 @@
    "reason": "Icons.Filled.Forward5"
   },
   {
+   "symbol": "graduationcap",
+   "status": "mapped",
+   "role": "School",
+   "reason": "Icons.Filled.School ; nom d'icône de catégorie servi par la passerelle (CategoryIconMapping), hors du motif littéral de l'extracteur"
+  },
+  {
    "symbol": "hand.raised.fill",
    "status": "mapped",
    "role": "Hand",
@@ -859,6 +877,12 @@
    "status": "mapped",
    "role": "Hourglass",
    "reason": "Icons.Filled.HourglassEmpty; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "house",
+   "status": "mapped",
+   "role": "Home",
+   "reason": "Icons.Filled.Home ; nom d'icône de catégorie servi par la passerelle (CategoryIconMapping), hors du motif littéral de l'extracteur"
   },
   {
    "symbol": "infinity",
@@ -2040,6 +2064,12 @@
    "status": "mapped",
    "role": "Waveform",
    "reason": "Icons.Filled.GraphicEq; variante .fill rendue en Filled; variante .circle repliée sur l'icône de base"
+  },
+  {
+   "symbol": "wifi",
+   "status": "mapped",
+   "role": "Wifi",
+   "reason": "Icons.Filled.Wifi ; iOS le pose par iconName (ConnectionBanner, « En ligne »), hors du motif littéral de l'extracteur"
   },
   {
    "symbol": "wifi.exclamationmark",
@@ -3316,6 +3346,26 @@
    "directional": false
   },
   "TabletAndroid": {
+   "origin": "material",
+   "directional": false
+  },
+  "Wifi": {
+   "origin": "material",
+   "directional": false
+  },
+  "Work": {
+   "origin": "material",
+   "directional": false
+  },
+  "Home": {
+   "origin": "material",
+   "directional": false
+  },
+  "ShoppingCart": {
+   "origin": "material",
+   "directional": false
+  },
+  "School": {
    "origin": "material",
    "directional": false
   }

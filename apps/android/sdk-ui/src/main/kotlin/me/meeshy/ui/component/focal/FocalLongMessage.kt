@@ -9,6 +9,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,9 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
@@ -30,6 +31,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
@@ -38,9 +42,6 @@ import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.model.reading.focal.LongMessageExpansionLaw
 import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
-import me.meeshy.ui.component.bubble.ElectedGlassCard
-import me.meeshy.ui.theme.MeeshyRadius
-import me.meeshy.ui.theme.MeeshySpacing
 import kotlin.math.roundToInt
 
 /**
@@ -83,6 +84,7 @@ internal fun FocalLongMessage(
     accentColor: Color,
     modifier: Modifier = Modifier,
     expansion: FlatRowExpansion? = LocalFlatRowExpansion.current,
+    inkColor: Color? = null,
     body: @Composable (shown: String) -> Unit,
 ) {
     val excerpt = remember(text) { LongMessageExcerpt.of(text) }
@@ -92,19 +94,34 @@ internal fun FocalLongMessage(
     Column(modifier = modifier.animateContentSize(rememberExpansionSpec())) {
         body(if (excerpt.truncated && !expanded) excerpt.excerpt + "…" else text)
         if (excerpt.truncated) {
-            Text(
-                text = stringResource(if (expanded) R.string.message_long_collapse else R.string.message_long_read_more),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = accentColor,
+            val label = stringResource(if (expanded) R.string.message_long_collapse else R.string.message_long_read_more)
+            val state = stringResource(if (expanded) R.string.focal_long_message_expanded else R.string.focal_long_message_collapsed)
+            Box(
+                contentAlignment = Alignment.CenterEnd,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .fillMaxWidth()
+                    .heightIn(min = TOGGLE_MIN_TARGET)
                     .clickable(role = Role.Button, onClick = toggle)
-                    .padding(vertical = MeeshySpacing.xxs),
-            )
+                    .semantics { stateDescription = state }
+                    .padding(end = TOGGLE_END_CLEARANCE),
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textDecoration = TextDecoration.Underline,
+                    color = inkColor ?: accentColor,
+                )
+            }
         }
     }
 }
+
+/** Cible tactile minimale du lien (48 dp), alignée en bas à droite. */
+private val TOGGLE_MIN_TARGET = 48.dp
+
+/** Marge de fin qui dégage le bouton de réaction posé sur le coin de la bulle. */
+private val TOGGLE_END_CLEARANCE = 48.dp
 
 /**
  * Le bloc de verre du message déplié (iOS `FocalGlassBlock` sous `focusCardBackground`) : il
@@ -124,7 +141,7 @@ internal fun ExpandedGlassFrame(
         label = "expanded-glass",
     )
     val card: @Composable () -> Unit = {
-        if (fade > 0f) Box(Modifier.graphicsLayer { alpha = fade }) { ElectedGlassCard() }
+        if (fade > 0f) Box(Modifier.graphicsLayer { alpha = fade }) { FocalGlassBlock() }
     }
     Layout(contents = listOf(content, card), modifier = modifier) { measurables, constraints ->
         val (contentM, cardM) = measurables

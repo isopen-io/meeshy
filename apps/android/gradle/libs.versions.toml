@@ -76,6 +76,12 @@ tracing = "1.2.0"
 # lot: about-and-support-pages-iso (#14771)
 playReview = "2.0.1"
 
+# lot: persist-sqlcipher-base-chiffree (#15880) — SQLCipher (ADR-013) : base Room chiffrée au repos. 4.6.1 au moins : ses
+# bibliothèques natives sont alignées sur 16 Ko (LOAD 0x4000), exigé par Google Play avec targetSdk 36 (4.5.6 : 0x1000).
+sqlcipher = "4.6.1"
+# Le banc instrumenté du vrai SQLCipher (connectedDebugAndroidTest de :core:database, émulateur).
+androidxTestRunner = "1.6.2"
+
 [libraries]
 play-services-auth-blockstore = { module = "com.google.android.gms:play-services-auth-blockstore", version.ref = "playServicesAuthBlockstore" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -200,6 +206,10 @@ androidx-tracing-ktx = { module = "androidx.tracing:tracing-ktx", version.ref = 
 
 # lot: about-and-support-pages-iso (#14771) — avis intégré Google Play de « Noter l'app » ; absent sans services Play (repli : fiche Play).
 play-review-ktx = { module = "com.google.android.play:review-ktx", version.ref = "playReview" }
+
+# lot: persist-sqlcipher-base-chiffree (#15880)
+sqlcipher-android = { module = "net.zetetic:sqlcipher-android", version.ref = "sqlcipher" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 
 [bundles]
 compose = ["compose-ui", "compose-ui-graphics", "compose-ui-tooling-preview", "compose-material3", "compose-material-icons"]

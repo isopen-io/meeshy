@@ -27,15 +27,15 @@ class AppearanceCatalogDecodeTest {
     // --- Le vrai fichier embarqué ------------------------------------------
 
     @Test
-    fun `the embedded file decodes in full — version 1, sixteen colours, five wallpaper packs, two banner packs, 19 ring packs, seven frame packs`() {
+    fun `the embedded file decodes in full — version 1, sixteen colours, nine wallpaper packs, two banner packs, 24 ring packs, 22 frame packs`() {
         val catalog = AppearanceCatalog.decode(AppearanceFixtures.embeddedCatalogText())
 
         assertThat(catalog.version).isEqualTo(1)
         assertThat(catalog.gamut.entries).hasSize(16)
-        assertThat(catalog.wallpaperPacks).hasSize(5)
-        assertThat(catalog.bannerPacks).hasSize(2)
-        assertThat(catalog.ringPacks).hasSize(19)
-        assertThat(catalog.bannerFramePacks).hasSize(7)
+        assertThat(catalog.wallpaperPacks).hasSize(11)
+        assertThat(catalog.bannerPacks).hasSize(5)
+        assertThat(catalog.ringPacks).hasSize(27)
+        assertThat(catalog.bannerFramePacks).hasSize(25)
         assertThat(catalog.isEmpty).isFalse()
     }
 
@@ -51,10 +51,10 @@ class AppearanceCatalogDecodeTest {
         assertThat(catalog.bannerPacks.map { it.designs.size }).isEqualTo(declared("banners", "designs"))
         assertThat(catalog.ringPacks.map { it.rings.size }).isEqualTo(declared("rings", "rings"))
         assertThat(catalog.bannerFramePacks.map { it.frames.size }).isEqualTo(declared("bannerFrames", "frames"))
-        assertThat(catalog.wallpaperPacks.sumOf { it.designs.size }).isEqualTo(17)
-        assertThat(catalog.bannerPacks.sumOf { it.designs.size }).isEqualTo(9)
-        assertThat(catalog.ringPacks.sumOf { it.rings.size }).isEqualTo(59)
-        assertThat(catalog.bannerFramePacks.sumOf { it.frames.size }).isEqualTo(14)
+        assertThat(catalog.wallpaperPacks.sumOf { it.designs.size }).isEqualTo(41)
+        assertThat(catalog.bannerPacks.sumOf { it.designs.size }).isEqualTo(23)
+        assertThat(catalog.ringPacks.sumOf { it.rings.size }).isEqualTo(91)
+        assertThat(catalog.bannerFramePacks.sumOf { it.frames.size }).isEqualTo(80)
     }
 
     @Test
@@ -82,7 +82,7 @@ class AppearanceCatalogDecodeTest {
         val catalog = AppearanceCatalog.decode(AppearanceFixtures.embeddedCatalogText())
 
         assertThat(catalog.wallpaperPacks.map { it.slug })
-            .containsExactly("essentiels", "heritages", "nature-et-ciel", "illustrations", "animes").inOrder()
+            .containsExactly("essentiels", "heritages", "nature-et-ciel", "illustrations", "animes", "fonds-noel", "fonds-noel-vivants", "meeshy-fonds", "meeshy-fonds-vivants", "nouvel-an-fonds", "nouvel-an-fonds-vifs").inOrder()
         assertThat(catalog.wallpaperPacks.map { it.order }).isInStrictOrder()
     }
 

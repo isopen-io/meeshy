@@ -28,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
@@ -88,6 +90,7 @@ private fun StorySoundTrackCard(
     val deckOp: ((StorySlideDeck) -> StorySlideDeck) -> Unit = { op -> composer.onSceneReduce { s -> s.withDeckTransform(op) } }
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         SoundTraceRow(sound = track, onToggleMute = { composer.onToggleSoundMute(track.id) }, onRemove = { composer.onRemoveSound(track.id) })
+        SoundSendingLine(state, track.id, composer::onRetrySoundUploads)
         SoundRoleChips(ComposerSoundRoles.role(track)) { role -> deckOp { it.withSelectedSoundRole(track.id, role) } }
         val volumeLabel = stringResource(R.string.story_sound_sheet_volume)
         Slider(
@@ -113,6 +116,24 @@ private fun StorySoundTrackCard(
     }
 }
 
+/** Un son posé qui s'envoie en arrière-plan dit « Envoi N % » ; un envoi manqué le dit et propose « Réessayer » (#15598). */
+@Composable
+private fun SoundSendingLine(state: StoryComposerUiState, trackId: String, onRetry: () -> Unit) {
+    if (trackId in state.failedSounds) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.story_sound_sheet_upload_failed), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+            TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.story_composer_incoming_retry)) }
+        }
+        return
+    }
+    if (trackId !in state.uploadProgress) return
+    val fraction = state.sendingFraction(trackId)
+    val label = fraction?.let { stringResource(R.string.story_composer_incoming_sending, (it * PERCENT).toInt()) }
+        ?: stringResource(R.string.story_composer_upload_resending)
+    Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+    if (fraction == null) LinearProgressIndicator(Modifier.fillMaxWidth()) else LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+}
+
 /** Le son préparé : son rôle, sa langue, sa transcription, puis Refaire / Ajouter. */
 @Composable
 internal fun StorySoundTakeCard(
@@ -128,7 +149,7 @@ internal fun StorySoundTakeCard(
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.semantics { heading() },
         )
-        val uploading = take.phase == SoundTakePhase.UPLOADING
+        val uploading = take.phase == SoundTakePhase.PLACING
         SoundRoleChips(sheet.chosenRole ?: automatic, viewModel::onRole)
         SoundLanguageRow(sheet.language, sheet.suggestions, enabled = !uploading, onPick = viewModel::onLanguage)
         if (take.phase == SoundTakePhase.TRANSCRIBING) {
@@ -160,3 +181,5 @@ private val SoundTranscriptionNotice.message: Int
         SoundTranscriptionNotice.FAILED -> R.string.story_sound_sheet_transcription_failed
         SoundTranscriptionNotice.SILENT -> R.string.story_sound_sheet_transcription_silent
     }
+
+private const val PERCENT = 100

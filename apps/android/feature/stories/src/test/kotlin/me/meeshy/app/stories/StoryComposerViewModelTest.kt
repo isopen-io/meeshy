@@ -82,8 +82,19 @@ class StoryComposerViewModelTest {
         every { session.currentUser } returns MutableStateFlow(user)
         return StoryComposerViewModel(
             repo, session, media, uploadQueue, workManager, draftStore, blobStore, confirmation, accountFence = fence, network = network,
+            mediaIds = ComposerMediaIds(::nextMediaId),
         )
     }
+
+    /** Les `cmid` que les médias posés reçoivent, dans l'ordre ; au-delà, chacun en reçoit un neuf. */
+    private var minted: List<String> = emptyList()
+
+    private fun ids(vararg next: String) {
+        minted = next.toList()
+    }
+
+    private fun nextMediaId(): String =
+        minted.firstOrNull()?.also { minted = minted.drop(1) } ?: me.meeshy.sdk.outbox.OutboxIds.cmid()
 
     private fun offlineViewModel(): StoryComposerViewModel = viewModel(network = InMemoryNetworkMonitor(initialOnline = false))
 
@@ -295,7 +306,7 @@ class StoryComposerViewModelTest {
         vm.onMediaPicked(emptyList())
 
         coVerify(exactly = 0) { media.upload(any(), any()) }
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.attachments).isEmpty()
     }
 
@@ -309,7 +320,7 @@ class StoryComposerViewModelTest {
         coVerify(exactly = 1) { media.upload(any(), any()) }
         assertThat(vm.state.value.attachments.map { it.id }).containsExactly("m1")
         assertThat(vm.state.value.draft.mediaIds).containsExactly("m1")
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.canPublish).isTrue()
     }
 
@@ -327,57 +338,67 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `onMediaPicked marks uploading in flight and blocks publish until it resolves`() = runTest {
+    fun `a media still sending is on the scene at once, says its share sent, and leaves the screen free`() = runTest {
         val vm = viewModel()
         vm.onTextChange("hi")
         val gate = CompletableDeferred<NetworkResult<List<UploadedMedia>>>()
-        coEvery { media.upload(any(), any()) } coAnswers { gate.await() }
+        coEvery { media.upload(any(), any()) } coAnswers {
+            secondArg<(Int, Long, Long) -> Unit>()(0, 1, 2)
+            gate.await()
+        }
+        ids("up-1")
 
         vm.onMediaPicked(listOf(item()))
 
-        assertThat(vm.state.value.isUploadingMedia).isTrue()
-        assertThat(vm.state.value.canPublish).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
+        assertThat(vm.state.value.intakeBlocks).isFalse()
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
+        assertThat(vm.state.value.sendingFraction("up-1")).isWithin(0.001f).of(0.5f)
+        assertThat(vm.state.value.canPublish).isTrue()
 
         gate.complete(NetworkResult.Success(listOf(uploaded("m1"))))
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
-        assertThat(vm.state.value.canPublish).isTrue()
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("m1")
+        assertThat(vm.state.value.uploadProgress).isEmpty()
     }
 
     @Test
-    fun `onMediaPicked is re-entrancy guarded while an upload is in flight`() = runTest {
+    fun `a second pick while the first is still sending lands and sends too`() = runTest {
         val vm = viewModel()
         val gate = CompletableDeferred<NetworkResult<List<UploadedMedia>>>()
         coEvery { media.upload(any(), any()) } coAnswers { gate.await() }
+        ids("up-1", "up-2")
 
         vm.onMediaPicked(listOf(item()))
         vm.onMediaPicked(listOf(item("two.jpg")))
-        gate.complete(NetworkResult.Success(listOf(uploaded("m1"))))
 
-        coVerify(exactly = 1) { media.upload(any(), any()) }
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1", "up-2").inOrder()
+        coVerify(exactly = 2) { media.upload(any(), any()) }
     }
 
     @Test
     fun `onMediaPicked keeps a refused media on the device instead of dropping it`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns NetworkResult.Failure(ApiError("too large", httpStatus = 413))
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "cmid_refused"
+        ids("cmid_refused")
 
         vm.onMediaPicked(listOf(item()))
 
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.draft.mediaIds).containsExactly("cmid_refused")
     }
 
     @Test
-    fun `onMediaPicked surfaces an error when the upload throws`() = runTest {
+    fun `onMediaPicked keeps a media whose upload throws in the durable queue and offers to retry`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } throws IllegalStateException("no network")
+        ids("up-1")
 
         vm.onMediaPicked(listOf(item()))
 
-        assertThat(vm.state.value.errorMessage).isNotNull()
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
-        assertThat(vm.state.value.draft.mediaIds).isEmpty()
+        assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerViewModel.MEDIA_FAILED)
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
+        assertThat(vm.state.value.canRetryMedia).isTrue()
     }
 
     @Test
@@ -388,7 +409,7 @@ class StoryComposerViewModelTest {
         vm.onMediaPicked(listOf(item()))
 
         assertThat(vm.state.value.errorMessage).isNotNull()
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
     }
 
@@ -396,7 +417,7 @@ class StoryComposerViewModelTest {
     fun `onRemoveMedia drops the attachment and its id from the draft`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
-        vm.onMediaPicked(listOf(item()))
+        vm.onMediaPicked(listOf(item(), item("two.jpg")))
 
         vm.onRemoveMedia("m1")
 
@@ -408,7 +429,7 @@ class StoryComposerViewModelTest {
     fun `onToggleSlideBackgroundMedia designates attached media as the slide background`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
-        vm.onMediaPicked(listOf(item()))
+        vm.onMediaPicked(listOf(item(), item("two.jpg")))
 
         vm.onToggleSlideBackgroundMedia("m2")
 
@@ -493,7 +514,7 @@ class StoryComposerViewModelTest {
         coEvery { media.upload(any(), any()) } returns NetworkResult.Success(
             listOf(uploaded("m1"), uploadedVideo("v1", durationMs = 5000)),
         )
-        vm.onMediaPicked(listOf(item()))
+        vm.onMediaPicked(listOf(item(), item("clip.mp4")))
 
         assertThat(vm.state.value.selectedSlideBackgroundIsVideo).isFalse() // none designated
 
@@ -546,7 +567,7 @@ class StoryComposerViewModelTest {
     fun `le cadrage suit le fond designe, celui que le plateau peint et que le geste cadre`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
-        vm.onMediaPicked(listOf(item()))
+        vm.onMediaPicked(listOf(item(), item("two.jpg")))
         vm.onToggleSlideBackgroundMedia("m2")
         vm.onCanvasTransform(panX = 200f, panY = 0f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
         val request = slot<CreateStoryRequest>()
@@ -564,7 +585,7 @@ class StoryComposerViewModelTest {
     fun `un fond designe encore en attente publie son objet avec son cadrage et sa boucle sous le cmid`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
         vm.onToggleSlideBackgroundMedia("up-1")
         vm.onCanvasTransform(panX = 200f, panY = 0f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
@@ -645,19 +666,16 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `onMediaPicked only uploads as many items as there are free media slots`() = runTest {
+    fun `onMediaPicked only uploads as many items as there are free slides`() = runTest {
         val vm = viewModel()
-        val seedCount = StoryComposerDraft.MAX_MEDIA - 1
-        coEvery { media.upload(any(), any()) } returns
-            NetworkResult.Success((1..seedCount).map { uploaded("m$it") })
-        vm.onMediaPicked(List(seedCount) { item("seed$it.jpg") })
-
+        repeat(StorySlideDeck.MAX_SLIDES - 2) { vm.onAddSlide() }
         val captured = slot<List<MediaUploadItem>>()
-        coEvery { media.upload(capture(captured), any()) } returns NetworkResult.Success(listOf(uploaded("last")))
+        coEvery { media.upload(capture(captured), any()) } returns NetworkResult.Success(listOf(uploaded("a"), uploaded("b")))
+
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg"), item("c.jpg")))
 
-        assertThat(captured.captured).hasSize(1)
-        assertThat(vm.state.value.attachments).hasSize(StoryComposerDraft.MAX_MEDIA)
+        assertThat(captured.captured).hasSize(2)
+        assertThat(vm.state.value.attachments.map { it.id }).containsExactly("a", "b").inOrder()
     }
 
     @Test
@@ -677,14 +695,14 @@ class StoryComposerViewModelTest {
     fun `a single offline pick is durably queued and staged as a pending attachment`() = runTest {
         val vm = offlineViewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
 
         vm.onMediaPicked(listOf(item()))
 
-        coVerify(exactly = 1) { uploadQueue.enqueue(any(), any()) }
+        coVerify(exactly = 1) { uploadQueue.enqueueAs(any(), any(), any(), any()) }
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
         assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.errorMessage).isNull()
         assertThat(vm.state.value.canPublish).isTrue()
     }
@@ -695,7 +713,7 @@ class StoryComposerViewModelTest {
             val vm = offlineViewModel()
             val picked = item("clip.jpg")
             coEvery { media.upload(any(), any()) } returns offline()
-            coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+            ids("up-1")
 
             vm.onMediaPicked(listOf(picked))
 
@@ -704,7 +722,7 @@ class StoryComposerViewModelTest {
             // the same way the eager `mediaUploader.upload` path already does, not the
             // `MediaRepository`/`MessageAttachment` path chat attachments still use
             // (which the gateway can never claim into a story's `mediaIds`).
-            coVerify(exactly = 1) { uploadQueue.enqueue(picked, TusUploadContext.STORY) }
+            coVerify(exactly = 1) { uploadQueue.enqueueAs(any(), picked, TusUploadContext.STORY, any()) }
         }
 
     @Test
@@ -713,11 +731,11 @@ class StoryComposerViewModelTest {
             val vm = viewModel()
             val picked = item("photo.heic")
             coEvery { media.upload(any(), any()) } returns offline(status = 415)
-            coEvery { uploadQueue.enqueue(any(), any()) } returns "cmid_heic"
+            ids("cmid_heic")
 
             vm.onMediaPicked(listOf(picked))
 
-            coVerify(exactly = 1) { uploadQueue.enqueue(picked, TusUploadContext.STORY) }
+            coVerify(exactly = 1) { uploadQueue.enqueueAs(any(), picked, TusUploadContext.STORY, any()) }
             assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("cmid_heic")
             assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerViewModel.MEDIA_FAILED)
             assertThat(vm.state.value.canRetryMedia).isTrue()
@@ -727,11 +745,11 @@ class StoryComposerViewModelTest {
     fun `a multi-item offline pick durably queues every item as its own pending upload`() = runTest {
         val vm = offlineViewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
+        ids("up-1", "up-2")
 
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
 
-        coVerify(exactly = 2) { uploadQueue.enqueue(any(), any()) }
+        coVerify(exactly = 2) { uploadQueue.enqueueAs(any(), any(), any(), any()) }
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1", "up-2").inOrder()
         assertThat(vm.state.value.deck.slides.map { it.mediaIds }).containsExactly(listOf("up-1"), listOf("up-2")).inOrder()
         assertThat(vm.state.value.errorMessage).isNull()
@@ -742,12 +760,12 @@ class StoryComposerViewModelTest {
     fun `a second offline pick is appended as a second pending upload`() = runTest {
         val vm = offlineViewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
+        ids("up-1", "up-2")
         vm.onMediaPicked(listOf(item("first.jpg")))
 
         vm.onMediaPicked(listOf(item("second.jpg")))
 
-        coVerify(exactly = 2) { uploadQueue.enqueue(any(), any()) }
+        coVerify(exactly = 2) { uploadQueue.enqueueAs(any(), any(), any(), any()) }
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1", "up-2").inOrder()
         assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1", "up-2").inOrder()
         assertThat(vm.state.value.errorMessage).isNull()
@@ -758,11 +776,11 @@ class StoryComposerViewModelTest {
         val vm = offlineViewModel()
         repeat(StorySlideDeck.MAX_SLIDES - 2) { vm.onAddSlide() }
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2", "up-3")
+        ids("up-1", "up-2", "up-3")
 
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg"), item("c.jpg")))
 
-        coVerify(exactly = 2) { uploadQueue.enqueue(any(), any()) }
+        coVerify(exactly = 2) { uploadQueue.enqueueAs(any(), any(), any(), any()) }
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1", "up-2").inOrder()
         assertThat(vm.state.value.deck.size).isEqualTo(StorySlideDeck.MAX_SLIDES)
         assertThat(vm.state.value.errorMessage).isEqualTo(StoryComposerUploadReducer.SLIDES_FULL)
@@ -772,7 +790,7 @@ class StoryComposerViewModelTest {
     fun `publish gates the story on the pending upload and carries its placeholder id`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
         val request = slot<CreateStoryRequest>()
         val dependsOn = slot<List<String>>()
@@ -791,7 +809,7 @@ class StoryComposerViewModelTest {
     fun `publish gates each story on its own pending upload, one slide per media of the pick`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
+        ids("up-1", "up-2")
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
         val requests = mutableListOf<CreateStoryRequest>()
         val dependsOn = mutableListOf<List<String>>()
@@ -820,7 +838,7 @@ class StoryComposerViewModelTest {
     fun `removing the pending upload clears it and its placeholder media id`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
 
         vm.onRemoveMedia("up-1")
@@ -834,7 +852,7 @@ class StoryComposerViewModelTest {
     fun `removing the pending upload holds its durable row while undo can bring it back, then cancels it on leaving`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
 
         vm.onRemoveMedia("up-1")
@@ -848,7 +866,7 @@ class StoryComposerViewModelTest {
     fun `undoing the removal of a pending media gives it back, enqueued once and never cancelled`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
         vm.onRemoveMedia("up-1")
 
@@ -856,7 +874,7 @@ class StoryComposerViewModelTest {
 
         assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
-        coVerify(exactly = 1) { uploadQueue.enqueue(any(), any()) }
+        coVerify(exactly = 1) { uploadQueue.enqueueAs(any(), any(), any(), any()) }
         coVerify(exactly = 0) { uploadQueue.cancel(any()) }
     }
 
@@ -864,7 +882,7 @@ class StoryComposerViewModelTest {
     fun `redoing the removal of a pending media sets it aside again and undo finds it once more`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
         vm.onRemoveMedia("up-1")
         vm.onUndo()
@@ -881,7 +899,7 @@ class StoryComposerViewModelTest {
     fun `a removed pending media is cancelled once no reachable history step shows it`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
         vm.onRemoveMedia("up-1")
 
@@ -894,7 +912,7 @@ class StoryComposerViewModelTest {
     fun `removing one of several pending uploads keeps the rest and, on leaving, cancels only that durable row`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returnsMany listOf("up-1", "up-2")
+        ids("up-1", "up-2")
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
 
         vm.onRemoveMedia("up-1")
@@ -921,7 +939,7 @@ class StoryComposerViewModelTest {
     fun `removing a non-pending id while an upload is pending does not cancel it`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
 
         vm.onRemoveMedia("not-the-pending-id")
@@ -934,7 +952,7 @@ class StoryComposerViewModelTest {
     fun `removing the pending upload clears state even when the durable cancel fails`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         coEvery { uploadQueue.cancel(any()) } throws IllegalStateException("disk busy")
         vm.onMediaPicked(listOf(item()))
 
@@ -950,7 +968,7 @@ class StoryComposerViewModelTest {
         coEvery { media.upload(any(), any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item("online.jpg")))
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
 
         vm.onMediaPicked(listOf(item("offline.jpg")))
 
@@ -963,7 +981,7 @@ class StoryComposerViewModelTest {
         val vm = viewModel()
         vm.seedSelectedSlide((1 until StoryComposerDraft.MAX_MEDIA).map { uploaded("m$it") })
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-last"
+        ids("up-last")
         vm.onMediaPicked(listOf(item("offline.jpg")))
 
         assertThat(vm.state.value.draft.mediaIds).hasSize(StoryComposerDraft.MAX_MEDIA)
@@ -974,13 +992,13 @@ class StoryComposerViewModelTest {
     fun `a failure while durably queuing surfaces an error and stages nothing`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } throws IllegalStateException("disk full")
+        coEvery { uploadQueue.enqueueAs(any(), any(), any(), any()) } throws IllegalStateException("disk full")
 
         vm.onMediaPicked(listOf(item()))
 
         assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.errorMessage).isNotNull()
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
     }
 
@@ -988,21 +1006,22 @@ class StoryComposerViewModelTest {
     fun `the first staged item survives when a later durable enqueue fails mid-batch`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1" andThenThrows IllegalStateException("disk full")
+        ids("up-1")
+        coEvery { uploadQueue.enqueueAs(any(), any(), any(), any()) } returns Unit andThenThrows IllegalStateException("disk full")
 
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
 
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
-        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
+        assertThat(vm.state.value.deck.slides.flatMap { it.mediaIds }).containsExactly("up-1")
         assertThat(vm.state.value.errorMessage).isNotNull()
-        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.isPreparingMedia).isFalse()
     }
 
     @Test
     fun `publish clears the pending upload on success`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
         coEvery { repo.enqueuePublish(any(), any()) } returns "story-cmid"
 
@@ -1226,7 +1245,7 @@ class StoryComposerViewModelTest {
     fun `multi-slide publish carries media and prerequisites only on the first story`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
         vm.onTextChange("one")
         vm.onAddSlide()
@@ -1302,7 +1321,7 @@ class StoryComposerViewModelTest {
         vm.onAddSlide()
         vm.onTextChange("two")
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-2"
+        ids("up-2")
         vm.onMediaPicked(listOf(item()))
         val requests = mutableListOf<CreateStoryRequest>()
         val deps = mutableListOf<List<String>>()
@@ -1397,7 +1416,7 @@ class StoryComposerViewModelTest {
         vm.onTextChange("keep")
         vm.onAddSlide()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
         return vm to vm.state.value.deck.slides[1].id
     }
@@ -1423,7 +1442,7 @@ class StoryComposerViewModelTest {
         assertThat(vm.state.value.deck.size).isEqualTo(2)
         assertThat(vm.state.value.deck.slides[1].mediaIds).containsExactly("up-1")
         assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
-        coVerify(exactly = 1) { uploadQueue.enqueue(any(), any()) }
+        coVerify(exactly = 1) { uploadQueue.enqueueAs(any(), any(), any(), any()) }
         coVerify(exactly = 0) { uploadQueue.cancel(any()) }
     }
 
@@ -1444,7 +1463,7 @@ class StoryComposerViewModelTest {
     @Test
     fun `leaving the composer cancels the uploads of a removed slide, never those the draft still shows`() = runTest {
         val (vm, secondSlideId) = vmWithPendingSecondSlide()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-2"
+        ids("up-2")
         vm.onSelectSlide(vm.state.value.deck.slides[0].id)
         vm.onMediaPicked(listOf(item()))
         vm.onRemoveSlide(secondSlideId)
@@ -1491,7 +1510,7 @@ class StoryComposerViewModelTest {
     fun `removing a duplicated slide never cancels an upload its original still carries`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any(), any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any(), any()) } returns "up-1"
+        ids("up-1")
         vm.onMediaPicked(listOf(item()))
         vm.onDuplicateSelectedSlide()
         val duplicateId = vm.state.value.deck.slides[1].id
@@ -1544,6 +1563,53 @@ class StoryComposerViewModelTest {
         assertThat(state.draft.text).isEqualTo("")
         assertThat(state.deck.selectedSlide.text).isEqualTo("")
         assertThat(state.canPublish).isTrue()
+    }
+
+    @Test
+    fun `la saisie en place cede au doigt sans quitter le texte puis un toucher la reprend`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Salut")
+        val id = vm.state.value.selectedTextElement!!.id
+        val before = vm.state.value.selectedTextElement!!
+
+        vm.onInlineEditSuspended()
+
+        val suspended = vm.state.value
+        assertThat(suspended.isEditingTextElement).isFalse()
+        assertThat(suspended.selectedTextElement?.id).isEqualTo(id)
+        assertThat(suspended.selectedTextElement?.x).isEqualTo(before.x)
+        assertThat(suspended.selectedTextElement?.y).isEqualTo(before.y)
+
+        vm.onTapTextElement(id)
+
+        assertThat(vm.state.value.isEditingTextElement).isTrue()
+        assertThat(vm.state.value.selectedTextElement?.text).isEqualTo("Salut")
+    }
+
+    @Test
+    fun `ceder la saisie sans texte en cours est inerte`() = runTest {
+        val vm = viewModel()
+        val before = vm.state.value
+
+        vm.onInlineEditSuspended()
+
+        assertThat(vm.state.value.framedTextElementId).isEqualTo(before.framedTextElementId)
+        assertThat(vm.state.value.isEditingTextElement).isFalse()
+    }
+
+    @Test
+    fun `la frappe en direct reecrit le texte et la fin d'edition rend le champ a la legende`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextChange("Bon")
+        vm.onTextChange("Bonjour")
+        assertThat(vm.state.value.selectedTextElement?.text).isEqualTo("Bonjour")
+
+        vm.onDeselectTextElement()
+        assertThat(vm.state.value.isEditingTextElement).isFalse()
+        assertThat(vm.state.value.selectedSlideTextElements.single().text).isEqualTo("Bonjour")
     }
 
     @Test

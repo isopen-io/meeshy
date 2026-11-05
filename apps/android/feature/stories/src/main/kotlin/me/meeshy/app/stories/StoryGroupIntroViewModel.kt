@@ -30,6 +30,9 @@ class StoryGroupIntroViewModel @Inject constructor(
     fun immediate(group: StoryGroupSlides): StoryGroupIntro =
         resolved[group.userId] ?: StoryGroupIntro.placeholder(group.userId, group.authorName)
 
+    /** L'identité du voisin SEULEMENT si elle est déjà résolue : la face de cube n'invente jamais un visage vide. */
+    fun resolvedOrNull(group: StoryGroupSlides): StoryGroupIntro? = resolved[group.userId]
+
     suspend fun resolve(group: StoryGroupSlides): StoryGroupIntro =
         resolved[group.userId] ?: resolver.resolve(group.userId, group.authorName).also { resolved[group.userId] = it }
 

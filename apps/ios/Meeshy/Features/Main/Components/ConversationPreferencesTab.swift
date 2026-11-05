@@ -389,9 +389,13 @@ struct ConversationPreferencesTab: View {
         HapticFeedback.heavy()
         let conversationId = conversation.id
         Task {
-            if await ConversationObsolescence(list: conversationList).perform(conversationId: conversationId) {
+            switch await ConversationObsolescence(list: conversationList).perform(conversationId: conversationId) {
+            case .obsoleted:
                 dismiss()
-            } else {
+            case .refused(let refusal):
+                HapticFeedback.error()
+                FeedbackToastManager.shared.showError(refusal.message)
+            case .absent:
                 FeedbackToastManager.shared.showError(ConversationObsolescence.failureMessage)
             }
         }

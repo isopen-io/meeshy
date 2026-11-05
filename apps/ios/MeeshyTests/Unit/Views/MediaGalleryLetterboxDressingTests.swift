@@ -1,5 +1,7 @@
 import XCTest
 import CoreGraphics
+import SwiftUI
+import UIKit
 import MeeshySDK
 @testable import Meeshy
 
@@ -165,5 +167,74 @@ final class MediaGalleryLetterboxDressingTests: XCTestCase {
 
         XCTAssertTrue(code.contains("StoryLetterboxFill.fillOpacity"),
                       "l'opacité de la bande est celle du SDK")
+    }
+
+    // MARK: - Le hors-champ ne donne jamais sa taille au cadre (#16290)
+
+    /// **Une vidéo 16:9 ouverte en plein écran figeait l'app.** Le ThumbHash
+    /// étiré en `.scaledToFill` débordait du cadre (1 528 pt de large pour une
+    /// page de 440 pt sur l'iPhone 16 Pro Max) et, posé dans une pile, il
+    /// donnait cette largeur à la page entière : la couche vidéo était peinte à
+    /// 3,5 fois l'écran et le plateau se remettait en page sans fin jusqu'au
+    /// chien de garde. L'habillage doit tenir EXACTEMENT la place proposée.
+    func test_dressedBackdrop_takesTheProposedFrame_neverItsFilledImage() throws {
+        let hash = "1QcSHQRnh493V4dIh4eXh1h4kJUI"
+        let image = try XCTUnwrap(UIImage.fromThumbHash(hash), "le hachage témoin doit se décoder")
+        XCTAssertNotEqual(image.size.width / image.size.height, 440 / 860, accuracy: 0.05,
+                          "le hachage témoin doit avoir un autre format que la page")
+
+        let host = UIHostingController(rootView: MediaStageBackdrop(source: .thumbHash(hash)))
+        let page = CGSize(width: 440, height: 860)
+
+        XCTAssertEqual(host.sizeThatFits(in: page), page,
+                       "l'habillage étiré ne doit jamais élargir le cadre qu'il habille")
+    }
+
+    /// Même loi, vue de la PAGE : une pile qui pose l'habillage sous un média
+    /// garde la taille de son cadre, et la couche vidéo qu'elle porte aussi.
+    func test_stackOverTheBackdrop_keepsThePageSize() {
+        let page = CGSize(width: 440, height: 860)
+        let stack = ZStack {
+            MediaStageBackdrop(source: .thumbHash("1QcSHQRnh493V4dIh4eXh1h4kJUI"))
+            Color.clear
+        }
+        let host = UIHostingController(rootView: stack)
+
+        XCTAssertEqual(host.sizeThatFits(in: page), page,
+                       "la page doit garder la taille de son cadre")
+    }
+
+    /// **Le chrome d'une vidéo en lecture figeait la galerie** (#16290). En plein
+    /// écran, le cadre du média vaut l'écran ; le play/pause central, posé dans la
+    /// région du plateau ENTRE les couloirs, le recevait comme taille FIXE. La pile
+    /// du chrome dépassait l'écran de la hauteur des couloirs, la mesure du viewport
+    /// suivait, et chaque passe ajoutait 292 pt. La région reçoit moins que le
+    /// cadre : elle doit le dire, pas l'exiger.
+    func test_chromeBetweenCorridors_neverOutgrowsTheScreen_whenTheStageIsTheScreen() {
+        let screen = CGSize(width: 440, height: 860)
+        let chrome = VStack(spacing: 0) {
+            Color.clear.frame(height: 100)
+            Circle().frame(width: 64, height: 64).modifier(OfferedStageFrame(stage: screen))
+            Color.clear.frame(height: 192)
+        }
+        let host = UIHostingController(rootView: chrome)
+
+        XCTAssertEqual(host.sizeThatFits(in: screen).height, screen.height,
+                       "le chrome posé entre les couloirs ne doit jamais agrandir la galerie")
+    }
+
+    /// Et c'est bien le play/pause du plateau qui suit cette loi : un retour au
+    /// cadre fixe rouvrirait la boucle sans qu'aucune règle de cadrage ne bouge.
+    func test_cadreRegion_offersTheStageFrame_neverImposesIt() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
+        guard let start = code.range(of: "var cadreRegion: some View") else {
+            return XCTFail("la région du plateau est introuvable")
+        }
+        let region = String(code[start.lowerBound...].prefix(600))
+
+        XCTAssertTrue(region.contains(".modifier(OfferedStageFrame(stage: currentStage.frame))"),
+                      "le play/pause central se borne au cadre sans l'exiger")
+        XCTAssertFalse(region.contains(".frame(width: currentStage.frame.width, height: currentStage.frame.height)"),
+                       "un cadre fixe à la taille du média fait grandir la galerie à chaque passe")
     }
 }

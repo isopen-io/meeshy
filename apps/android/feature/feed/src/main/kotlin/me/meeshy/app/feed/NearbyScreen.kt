@@ -1,7 +1,6 @@
 package me.meeshy.app.feed
 
 import me.meeshy.ui.icons.MeeshyIcons
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,9 +34,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
@@ -48,7 +47,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -58,10 +56,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.location.awaitFreshLocationFix
-import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.chrome.MeeshyBackground
-import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.openAppSettings
 import me.meeshy.ui.component.permission.rememberPermissionFlow
@@ -84,6 +80,7 @@ fun NearbyScreen(
     onPostClick: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
     onOpenProfile: ((String) -> Unit)? = null,
+    onOpenHashtag: (String) -> Unit = {},
     viewModel: NearbyViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -95,6 +92,16 @@ fun NearbyScreen(
     LaunchedEffect(state.errorMessage) {
         state.errorMessage?.let { snackbar.showSnackbar(it) }
     }
+    val sheets = rememberListedPostSheets()
+    val share = rememberListedPostShare(snackbar)
+    ListedPostOverlays(
+        sheets = sheets,
+        actions = viewModel.cards,
+        quoteComposer = state.quoteComposer,
+        notice = state.notice,
+        commentCount = { id -> state.posts.firstOrNull { it.id == id }?.commentCount ?: 0 },
+        snackbar = snackbar,
+    )
 
     val permissions = rememberPermissionFlow()
     val access = remember(permissions) {
@@ -223,14 +230,19 @@ fun NearbyScreen(
                             LaunchedEffect(post.id, state.posts.size) {
                                 viewModel.loadMoreIfNeeded(post.id)
                             }
-                            NearbyPostCard(
-                                modifier = Modifier.animateItem(),
-                                onOpenProfile = onOpenProfile,
-                                post = post,
-                                onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
-                                onOpenPost = onOpenPost,
-                                onOpenReel = onPostClick,
-                            )
+                            Column(Modifier.animateItem()) {
+                                ListedPostCard(
+                                    post = post,
+                                    actions = viewModel.cards,
+                                    sheets = sheets,
+                                    share = share,
+                                    onOpenPost = onOpenPost,
+                                    onOpenReel = onPostClick,
+                                    onOpenProfile = onOpenProfile,
+                                    onOpenHashtag = onOpenHashtag,
+                                )
+                                post.distanceMeters?.let { NearbyDistanceLine(it) }
+                            }
                         }
                         if (state.isLoadingMore) {
                             item(key = "nearby_load_more") {
@@ -293,85 +305,28 @@ private fun NearbyStatusCard(
     }
 }
 
+/** La distance SERVIE par le serveur sous la carte d'un post d'à côté (iOS `NearbyPostRow` : `NearbyDistanceLabel`). */
 @Composable
-internal fun NearbyPostCard(
-    modifier: Modifier = Modifier,
-    onOpenProfile: ((String) -> Unit)? = null,
-    post: FeedPostPresentation,
-    onClick: () -> Unit,
-    onOpenPost: (String) -> Unit = {},
-    onOpenReel: (String) -> Unit = onOpenPost,
-) {
-    post.reelCover?.takeIf { post.showsReelCard }?.let { cover ->
-        ReelPostCard(
-            post = post,
-            cover = cover,
-            onOpenReel = onOpenReel,
-            modifier = modifier,
-            onOpenProfile = onOpenProfile,
-        )
-        return
-    }
-    val unknownAuthor = stringResource(R.string.feed_unknown_author)
-    MeeshyGlassSurface(
-        shape = RoundedCornerShape(MeeshyRadius.xl),
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+private fun NearbyDistanceLine(meters: Double) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(start = MeeshySpacing.lg, top = MeeshySpacing.xs),
     ) {
-        Column(Modifier.padding(MeeshySpacing.lg)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val profileTap = Modifier.opensAuthorProfile(post.authorId, onOpenProfile)
-                MeeshyAvatar(
-                    name = post.authorName ?: unknownAuthor,
-                    size = 40.dp,
-                    imageUrl = post.authorAvatarUrl,
-                    modifier = profileTap,
-                )
-                Spacer(Modifier.width(MeeshySpacing.md))
-                Text(
-                    text = post.authorName ?: unknownAuthor,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MeeshyTheme.tokens.textPrimary,
-                    modifier = Modifier.weight(1f).then(profileTap),
-                )
-            }
-
-            if (post.content.isNotBlank()) {
-                Spacer(Modifier.height(MeeshySpacing.sm))
-                Text(
-                    text = post.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MeeshyTheme.tokens.textPrimary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            FeedPostQuoteAndReel(post = post, onOpenPost = onOpenPost, onOpenReel = onOpenReel)
-
-            post.distanceMeters?.let { meters ->
-                Spacer(Modifier.height(MeeshySpacing.sm))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Filled.NearMe,
-                        contentDescription = null,
-                        tint = MeeshyTheme.tokens.textSecondary,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(Modifier.width(MeeshySpacing.xs))
-                    Text(
-                        text = when (val label = NearbyDistanceFormat.label(meters)) {
-                            is NearbyDistanceLabel.Meters -> stringResource(R.string.nearby_distance_meters, label.meters)
-                            is NearbyDistanceLabel.Kilometers -> stringResource(R.string.nearby_distance_km, label.km)
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                }
-            }
-        }
+        Icon(
+            imageVector = Icons.Filled.NearMe,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(14.dp),
+        )
+        Spacer(Modifier.width(MeeshySpacing.xs))
+        Text(
+            text = when (val label = NearbyDistanceFormat.label(meters)) {
+                is NearbyDistanceLabel.Meters -> stringResource(R.string.nearby_distance_meters, label.meters)
+                is NearbyDistanceLabel.Kilometers -> stringResource(R.string.nearby_distance_km, label.km)
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
     }
 }
 

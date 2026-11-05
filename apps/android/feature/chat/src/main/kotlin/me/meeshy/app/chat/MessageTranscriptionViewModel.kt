@@ -4,75 +4,60 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
-import me.meeshy.sdk.conversation.MessageRepository
-import me.meeshy.sdk.lang.AttachmentTranscriptPrism
+import me.meeshy.sdk.attachment.TranscriptionRequestTracker
 import me.meeshy.sdk.lang.LanguageResolver
-import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.model.MessageTranscriptionFiche.Request
-import me.meeshy.sdk.model.TranscriptionFailedEvent
-import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.playback.AudioPlaybackEngine
 import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.socket.ConversationSocketEventsManager
+import me.meeshy.sdk.util.resolveMediaUrl
 
 /**
- * La demande de transcription de la fiche (#13779) : au repos, en cours, en échec. Une transcription lancée arrive par
- * la socket et le cache du fil, une transcription qui existait déjà revient de la requête et entre dans le cache ;
- * `audio:transcription-failed` pour ce message met la demande en échec, réessayable.
+ * La demande de transcription de la fiche (#13779) : au repos, en cours, en échec. L'état n'est plus local : il vient du
+ * [TranscriptionRequestTracker], le MÊME que celui de la bulle — « Transcription… » reste tant que la tâche tourne
+ * (jusqu'au plafond de 90 s de silence, puis « Transcrire » revient), `audio:transcription-failed` met la demande en
+ * échec, réessayable. Le résultat, lui, arrive par le cache du fil.
  */
 @HiltViewModel
 class MessageTranscriptionViewModel @Inject constructor(
-    private val mediaRepository: MediaRepository,
-    private val messageRepository: MessageRepository,
-    private val socketEvents: ConversationSocketEventsManager,
+    private val tracker: TranscriptionRequestTracker,
+    private val playback: AudioPlaybackEngine,
     sessionRepository: SessionRepository,
+    private val config: MeeshyConfig,
 ) : ViewModel() {
-
-    private val _request = MutableStateFlow(Request.IDLE)
-    val request: StateFlow<Request> = _request.asStateFlow()
 
     private val user = sessionRepository.currentUser
 
     val preferences: LanguageResolver.ContentLanguagePreferences
         get() = user.value ?: EmptyContentPreferences
 
-    private var boundMessageId: String? = null
-    private var failures: Job? = null
-
-    /** Idempotent pour le même message ; un autre message repart d'une demande au repos. */
-    fun bind(messageId: String) {
-        if (boundMessageId == messageId && failures?.isActive == true) return
-        if (boundMessageId != messageId) _request.value = Request.IDLE
-        boundMessageId = messageId
-        failures?.cancel()
-        failures = viewModelScope.launch {
-            socketEvents.events.filterIsInstance<TranscriptionFailedEvent>().collect { event ->
-                if (event.messageId == messageId && _request.value == Request.IN_FLIGHT) _request.value = Request.FAILED
-            }
-        }
-    }
-
-    fun unbind() {
-        failures?.cancel()
-        failures = null
-    }
+    /** L'état de la demande de la pièce [attachmentId] du message [messageId], tenu à jour. */
+    fun requestState(messageId: String, attachmentId: String): Flow<Request> = tracker.observe(messageId, attachmentId)
 
     fun transcribe(messageId: String, attachmentId: String) {
-        if (_request.value == Request.IN_FLIGHT) return
-        _request.value = Request.IN_FLIGHT
-        viewModelScope.launch {
-            when (val result = mediaRepository.requestTranscription(attachmentId)) {
-                is NetworkResult.Failure -> _request.value = Request.FAILED
-                is NetworkResult.Success -> result.data?.let { done ->
-                    val text = AttachmentTranscriptPrism.originalText(done) ?: return@let
-                    messageRepository.applyTranscription(messageId, attachmentId, text, done.language, done.confidence, done.durationMs?.toLong())
-                }
-            }
-        }
+        viewModelScope.launch { tracker.request(messageId, attachmentId) }
+    }
+
+    /**
+     * Joue la piste parlée d'une traduction au toucher ; une autre piste en cours s'arrête (le moteur est unique).
+     * [isProtected] est la protection RÉELLE du message ([me.meeshy.sdk.model.MessageTranscriptionFiche.playbackIsProtected]) :
+     * protégée, la piste ne s'écrit jamais sur le disque. [url] est celle que la passerelle sert, souvent RELATIVE
+     * (`/api/v1/attachments/file/translated/…`) : elle se résout comme celle de la bulle ([resolveMediaUrl]).
+     */
+    fun playTranslation(messageId: String, language: String, url: String, isProtected: Boolean) {
+        val played = playback.play(
+            attachmentId = "$messageId:tts:$language",
+            url = resolveMediaUrl(url, config.apiBaseUrl),
+            isProtected = isProtected,
+        )
+        startedPlayback = played || startedPlayback
+    }
+
+    private var startedPlayback = false
+
+    override fun onCleared() {
+        if (startedPlayback) playback.stop()
     }
 }

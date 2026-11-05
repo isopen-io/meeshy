@@ -1,15 +1,23 @@
 package me.meeshy.app.calls
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.ColorMatrix
 import android.os.Build
 import android.os.PowerManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -38,7 +46,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -46,7 +53,6 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.frames.CallFrameLivePainter
 import me.meeshy.sdk.call.frames.CallFrameLiveScene
 import me.meeshy.sdk.call.frames.CallFrameStage
-import me.meeshy.sdk.model.call.frames.CallFrameChromeReserve
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFramePathOp
 import me.meeshy.sdk.model.call.frames.CallFramePerson
@@ -59,10 +65,8 @@ import me.meeshy.sdk.model.call.frames.CallFrameToneRecipe
 import me.meeshy.sdk.model.call.frames.CallLiveFrameGeometry
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
 import me.meeshy.sdk.model.call.frames.CallLiveFrameSlotPlacement
+import me.meeshy.sdk.model.call.ThermalState
 import org.webrtc.EglBase
-
-private val HEADER_RESERVE = 72.dp
-private val PILL_RESERVE = 200.dp
 
 /** Une scène peinte et la toile qui l'a produite : les cases des vidéos se lisent sur la MÊME toile que les couches. */
 private class CallLiveFramePainted(val stage: CallFrameStage, val scene: CallFrameLiveScene)
@@ -89,8 +93,13 @@ internal fun CallLiveFrameSurface(
         val widthPx = with(density) { maxWidth.roundToPx() }
         val heightPx = with(density) { maxHeight.roundToPx() }
         val (paintW, paintH) = CallLiveFrameRule.paintSize(widthPx, heightPx)
+        val insets = WindowInsets.systemBars
         val reserve = with(density) {
-            CallFrameChromeReserve.covering(HEADER_RESERVE.toPx().toDouble(), PILL_RESERVE.toPx().toDouble(), heightPx.toDouble())
+            CallLiveFrameRule.chromeReserve(
+                viewHeight = maxHeight.value.toDouble(),
+                topInset = insets.getTop(density).toDp().value.toDouble(),
+                bottomInset = insets.getBottom(density).toDp().value.toDouble(),
+            )
         }
         val painted by produceState<CallLiveFramePainted?>(null, design, people, texts, paintW, paintH, reserve, playsMotion) {
             if (paintW < 1 || paintH < 1) return@produceState
@@ -223,13 +232,42 @@ internal class CallLiveFrameSlotShape(private val ops: List<CallFramePathOp>, pr
     }
 }
 
-/** L'appareil se protège-t-il ? Économie d'énergie, ou chaleur sévère : le cadre se met en pause (iOS `isDeviceConstrained`). */
+/**
+ * L'appareil se protège-t-il ? Économie d'énergie, ou chaleur sévère : le cadre se met en pause (iOS
+ * `isDeviceConstrained`). La valeur SUIT l'appareil : le cadre revient seul quand il a refroidi.
+ */
 @Composable
 internal fun rememberCallDeviceConstrained(): Boolean {
     val context = LocalContext.current
-    return remember(context) {
-        val power = context.getSystemService(PowerManager::class.java) ?: return@remember false
-        val hot = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && power.currentThermalStatus >= PowerManager.THERMAL_STATUS_SEVERE
-        power.isPowerSaveMode || hot
+    val constrained = remember(context) { mutableStateOf(false) }
+    DisposableEffect(context) {
+        val power = context.getSystemService(PowerManager::class.java)
+        var thermal = ThermalState.NOMINAL
+        fun refresh() {
+            constrained.value = CallLiveFrameRule.isDeviceConstrained(thermal, powerSave = power?.isPowerSaveMode == true)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && power != null) {
+            thermal = ThermalState.fromAndroidThermalStatus(power.currentThermalStatus)
+        }
+        refresh()
+        val thermalListener = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && power != null) {
+            PowerManager.OnThermalStatusChangedListener { status ->
+                thermal = ThermalState.fromAndroidThermalStatus(status)
+                refresh()
+            }.also { power.addThermalStatusListener(it) }
+        } else {
+            null
+        }
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) = refresh()
+        }
+        context.registerReceiver(receiver, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED))
+        onDispose {
+            runCatching { context.unregisterReceiver(receiver) }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && power != null && thermalListener != null) {
+                power.removeThermalStatusListener(thermalListener)
+            }
+        }
     }
+    return constrained.value
 }

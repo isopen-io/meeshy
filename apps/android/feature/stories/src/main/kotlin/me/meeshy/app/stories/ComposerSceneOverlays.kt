@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -31,10 +32,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
@@ -130,7 +133,7 @@ internal fun SceneTopBar(
         modifier = Modifier.fillMaxWidth().then(if (keepsHeight) Modifier.heightIn(min = SCENE_TARGET) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        EditingChromeVisibility(showsClose) { SceneRoundButton(MeeshyIcons.Close, stringResource(R.string.composer_scene_close), onClose) }
+        EditingChromeVisibility(showsClose) { SceneRoundButton(MeeshyIcons.Close, stringResource(SceneChromeName.CLOSE.label), onClose) }
         Spacer(Modifier.weight(1f))
         history?.let { SceneHistoryButtons(it, onUndo, onRedo) }
     }
@@ -142,9 +145,14 @@ internal fun SceneTopBar(
  */
 @Composable
 internal fun SceneHistoryButtons(history: SceneHistory, onUndo: () -> Unit, onRedo: () -> Unit) {
-    if (history.canUndo) SceneRoundButton(MeeshyIcons.Undo, stringResource(R.string.story_composer_undo), onUndo)
-    if (history.canRedo) SceneRoundButton(MeeshyIcons.Redo, stringResource(R.string.story_composer_redo), onRedo)
+    if (history.canUndo) SceneRoundButton(MeeshyIcons.Undo, stringResource(SceneChromeName.UNDO.label), onUndo)
+    if (history.canRedo) SceneRoundButton(MeeshyIcons.Redo, stringResource(SceneChromeName.REDO.label), onRedo)
 }
+
+internal const val SCENE_TOOL_COLUMN_TAG = "composer-scene-tool-column"
+
+/** Le nom du conteneur, celui qu'iOS lui donne (`ComposerRestChromeCopy.column`, #15863) : « Outils de la scène ». */
+internal val SCENE_TOOL_COLUMN_LABEL: Int get() = R.string.composer_rest_column
 
 /**
  * La colonne des outils, posée à droite de la scène : chaque outil un bouton rond, le « ⋯ » rendu par [more], et l'appui
@@ -175,7 +183,9 @@ internal fun SceneToolColumn(
         }
     }
     val gap = LocalComposerRailSize.current.gap
+    val name = stringResource(SCENE_TOOL_COLUMN_LABEL)
     Column(
+        modifier = Modifier.testTag(SCENE_TOOL_COLUMN_TAG).semantics { contentDescription = name; isTraversalGroup = true },
         verticalArrangement = Arrangement.spacedBy(gap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -299,23 +309,51 @@ internal fun ComposerSceneTool.glyph(): ImageVector = when (this) {
     ComposerSceneTool.MORE -> MeeshyIcons.MoreHorizontal
 }
 
-private fun ComposerSceneTool.labelRes(): Int? = when (this) {
-    ComposerSceneTool.TEXT -> R.string.story_tool_text
-    ComposerSceneTool.MEDIA -> R.string.story_tool_media
-    ComposerSceneTool.STICKER -> R.string.stories_composer_add_sticker
-    ComposerSceneTool.SOUND -> R.string.story_tool_audio
-    ComposerSceneTool.DRAWING -> R.string.story_tool_drawing
-    ComposerSceneTool.BACKGROUND -> R.string.story_tool_texture
-    ComposerSceneTool.MENTION -> R.string.composer_more_mention
-    ComposerSceneTool.PLACE -> R.string.story_place_title
+/** Le nom qu'iOS donne à chaque outil (`ComposerRailCopy`, #15599) : TalkBack dit le VERBE, comme VoiceOver. */
+internal fun ComposerSceneTool.labelRes(): Int? = when (this) {
+    ComposerSceneTool.TEXT -> R.string.composer_rail_text
+    ComposerSceneTool.MEDIA -> R.string.composer_rail_media
+    ComposerSceneTool.STICKER -> R.string.composer_rail_sticker
+    ComposerSceneTool.SOUND -> R.string.composer_rail_sound
+    ComposerSceneTool.DRAWING -> R.string.stories_composer_draw
+    ComposerSceneTool.BACKGROUND -> R.string.composer_rail_background
+    ComposerSceneTool.MENTION -> R.string.composer_rail_mention
+    ComposerSceneTool.PLACE -> R.string.composer_rail_place
     ComposerSceneTool.POST_TEXT -> null
     ComposerSceneTool.MORE -> R.string.stories_scene_overflow_menu
+}
+
+/** Le mot court qu'un rail libellé AFFICHE (`ComposerLabeledRailCopy.title` iOS) ; TalkBack garde la phrase de [labelRes]. */
+internal fun ComposerSceneTool.railTitleRes(): Int? = when (this) {
+    ComposerSceneTool.TEXT -> R.string.composer_rail_title_text
+    ComposerSceneTool.MEDIA -> R.string.composer_rail_title_media
+    ComposerSceneTool.STICKER -> R.string.composer_rail_title_sticker
+    ComposerSceneTool.SOUND -> R.string.composer_rail_title_sound
+    ComposerSceneTool.DRAWING -> R.string.composer_rail_title_drawing
+    ComposerSceneTool.BACKGROUND -> R.string.composer_rail_title_background
+    ComposerSceneTool.MENTION -> R.string.composer_rail_title_mention
+    ComposerSceneTool.PLACE -> R.string.composer_rail_title_place
+    ComposerSceneTool.POST_TEXT, ComposerSceneTool.MORE -> labelRes()
+}
+
+/** Les contrôles du haut de la scène et les titres des rails, aux noms d'iOS (#15599). */
+internal enum class SceneChromeName(@StringRes val label: Int) {
+    CLOSE(R.string.composer_scene_close),
+    UNDO(R.string.composer_history_undo),
+    REDO(R.string.composer_history_redo),
+    RAIL_MORE(R.string.composer_rail_more),
+    RAIL_SELECTION(R.string.composer_rail_selection),
 }
 
 /** Le nom d'un outil ; « Texte du post » se dit « Texte du réel » sur la scène d'un réel (#13913). */
 @Composable
 internal fun ComposerSceneTool.label(): String =
     labelRes()?.let { stringResource(it) } ?: formatLabel(ComposerFormatLabel.POST_TEXT)
+
+/** Le mot qu'un rail libellé affiche pour l'outil. */
+@Composable
+internal fun ComposerSceneTool.railTitle(): String =
+    railTitleRes()?.let { stringResource(it) } ?: formatLabel(ComposerFormatLabel.POST_TEXT)
 
 /** Le point discret d'une option qui porte déjà quelque chose (#14457) : la couleur de la marque, 8 dp. */
 @Composable

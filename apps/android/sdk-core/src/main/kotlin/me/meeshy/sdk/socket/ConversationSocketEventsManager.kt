@@ -39,6 +39,7 @@ import me.meeshy.sdk.model.MessageRestoredForMeEvent
 import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.MessageViewOncePurgedEvent
 import me.meeshy.sdk.model.ParticipantRightsUpdatedEvent
+import me.meeshy.sdk.model.ParticipantRightsUpdatedEventSerializer
 import me.meeshy.sdk.model.SharedTranslationArrived
 import me.meeshy.sdk.model.PendingMessagesDeliveredEvent
 import me.meeshy.sdk.model.TranscriptionFailedEvent
@@ -168,7 +169,7 @@ class ConversationSocketEventsManager internal constructor(
         route<ConversationJoinErrorEvent>(SocketEventNames.CONVERSATION_JOIN_ERROR) { it },
         route<ConversationStatsEvent>(SocketEventNames.CONVERSATION_STATS) { it },
         route<ConversationEngagementSnapshot>(SocketEventNames.ENGAGEMENT_CONVERSATION_UPDATED) { it },
-        route<ParticipantRightsUpdatedEvent>(SocketEventNames.PARTICIPANT_RIGHTS_UPDATED) { it },
+        decode(SocketEventNames.PARTICIPANT_RIGHTS_UPDATED, ParticipantRightsUpdatedEventSerializer) { it },
     )
 
     private inline fun <reified T> route(

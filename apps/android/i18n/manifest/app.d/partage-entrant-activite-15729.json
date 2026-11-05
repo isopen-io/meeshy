@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":app": {
+      "resDir": "app/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.sign-in.title",
+          "androidName": "share_sheet_sign_in_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.sign-in.body",
+          "androidName": "share_sheet_sign_in_body",
+          "status": "disabled"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.sign-in.open",
+          "androidName": "share_sheet_sign_in_open",
+          "status": "adopted"
+        },
+        {
+          "androidName": "share_sheet_sign_in_body_reshare",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

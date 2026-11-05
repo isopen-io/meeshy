@@ -66,11 +66,14 @@ internal fun FeedImageViewerHost(
             }
         },
         canCommentMedia = { page -> postId != null && page.postMediaId != null },
-        onCommentMedia = if (quote == null || postId == null) {
+        onCommentMedia = if (postId == null) {
             null
         } else {
             { page: GalleryPage ->
-                page.postMediaId?.let { quote(postId, it) }
+                page.postMediaId?.let {
+                    viewModel.quoteMedia(gallery, postId, it)
+                    quote?.invoke(postId, it)
+                }
                 onDismiss()
             }
         },

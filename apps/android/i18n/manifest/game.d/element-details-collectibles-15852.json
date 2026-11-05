@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.fact.rebirths",
+          "androidName": "game_fact_rebirths",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
