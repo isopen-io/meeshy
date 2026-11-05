@@ -1,6 +1,6 @@
 import * as z from 'zod/mini';
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
-import { isConsentPurpose, type ConsentPurpose } from '@meeshy/shared/types/consents';
+import { CONSENT_PARENT, isConsentPurpose, type ConsentPurpose } from '@meeshy/shared/types/consents';
 
 import { unwrap } from './client';
 import type { ApiResult, HttpTransport } from './http';
@@ -53,3 +53,21 @@ export function consentsQueryOptions(deps: ConsentsDeps) {
     queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadGrantedConsents({ ...deps, ...withSignal(signal) })),
   };
 }
+
+/**
+ * **UN CONSENTEMENT VAUT CE QUE VAUT SA CHAÎNE** (#16419) — accordé ET chacun
+ * de ses ancêtres accordé (`CONSENT_PARENT`), exactement ce que
+ * `ConsentValidationService` exige côté passerelle : retirer « voice-data »
+ * laisse la colonne du clonage posée, mais le clonage ne s'exerce plus.
+ */
+export function effectiveConsent(granted: GrantedConsents, purpose: ConsentPurpose): boolean {
+  const parent = CONSENT_PARENT[purpose];
+  return granted.includes(purpose) && (parent === null || effectiveConsent(granted, parent));
+}
+
+/**
+ * **LA NOTE SOUS MON VOCAL** (#16419) — miroir `VoiceConsentGate` (iOS) : le
+ * consentement vocal manque tant que le PROFIL VOCAL n'est pas effectif
+ * (`voiceRecordingConsentAt` du statut voice-profile = `voiceProfileConsentAt`).
+ */
+export const voiceConsentMissing = (granted: GrantedConsents): boolean => !effectiveConsent(granted, 'voice-profile');
