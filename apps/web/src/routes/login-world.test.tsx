@@ -91,7 +91,7 @@ describe('/login ne propose plus World Wide (#10784)', () => {
 describe('l’en-tête public change la langue d’interface (#10007)', () => {
   test('la connexion porte le sélecteur des sept langues, chacune dans sa propre langue — et pas l’icône d’application', async () => {
     const el = await mount(<LoginDoors method="lien" />);
-    const header = el.querySelector('[data-public-header]');
+    const header = el.querySelector('[data-auth-header]');
     expect(header).not.toBeNull();
     expect(el.innerHTML).not.toContain('/brand/logo.png');
 
@@ -147,17 +147,17 @@ describe('l’en-tête public change la langue d’interface (#10007)', () => {
     expect(text(el)).not.toContain('Mot de passe oublié');
   });
 
-  test('l’inscription porte le même en-tête — sa croix vers la connexion, la marque vers l’accueil et la langue', async () => {
+  test('l’inscription porte le même en-tête (#16452) — son retour vers la connexion, la marque vers l’accueil et la langue', async () => {
     const el = await mount(
       <SignupScreen referralDeps={{ validate: async () => ({ ok: false, status: 0, error: 'hors sujet' }) }} />,
     );
-    const header = el.querySelector('[data-public-header]');
+    const header = el.querySelector('[data-auth-header]');
     expect(header).not.toBeNull();
     expect(header?.querySelector('select[data-interface-language]')).not.toBeNull();
-    const home = header?.querySelector('a[data-public-home]');
+    const home = header?.querySelector('a[data-auth-home]');
     expect(home?.getAttribute('href')).toBe('/');
     expect(home?.querySelectorAll('line')).toHaveLength(3);
-    expect(header?.querySelector('a[aria-label="Fermer"]')?.getAttribute('href')).toBe(href('login'));
+    expect(header?.querySelector('a[aria-label="Retour"]')?.getAttribute('href')).toBe(href('login'));
   });
 });
 

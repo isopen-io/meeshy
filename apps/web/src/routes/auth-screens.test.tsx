@@ -34,8 +34,9 @@ describe('LoginScreen — la marque et la version', () => {
   // témoins dans `login-doors.test.tsx`.
   const html = renderToStaticMarkup(<LoginDoors method="password" />);
 
-  test('rend le GLYPHE des trois traits, jamais l’icône d’application', () => {
-    expect(html.match(/<line/g)).toHaveLength(3);
+  test('rend le GLYPHE des trois traits, jamais l’icône d’application — dans l’en-tête (#16452) et dans la colonne', () => {
+    expect(html.match(/<line/g)).toHaveLength(6);
+    expect(html).toContain('data-auth-home');
     expect(html).not.toContain('/brand/logo.png');
   });
 
@@ -95,8 +96,9 @@ describe('LoginScreen — les deux portes', () => {
 describe('WelcomeScreen', () => {
   const html = renderToStaticMarkup(<WelcomeScreen />);
 
-  test('rend le GLYPHE des trois traits, jamais l’icône d’application', () => {
-    expect(html.match(/<line/g)).toHaveLength(3);
+  test('rend le GLYPHE des trois traits, jamais l’icône d’application — dans l’en-tête (#16452) et dans la colonne', () => {
+    expect(html.match(/<line/g)).toHaveLength(6);
+    expect(html).toContain('data-auth-home');
     expect(html).not.toContain('/brand/logo.png');
   });
 
@@ -296,7 +298,7 @@ function withMountedDom() {
   });
 }
 
-describe('Les pages d’accès tiennent dans UNE colonne, la puce « Fermer » comprise (#6643)', () => {
+describe('Les pages d’accès tiennent dans UNE colonne, le retour « < » compris (#6643)', () => {
   withMountedDom();
 
   test('l’accueil : ses deux portes vivent dans la colonne', () => {
@@ -305,22 +307,22 @@ describe('Les pages d’accès tiennent dans UNE colonne, la puce « Fermer » c
     expect(strayFromAuthColumn(el)).toEqual([]);
   });
 
-  test('l’inscription : la puce « Fermer » vit DANS la colonne, jamais au bord de l’écran', () => {
+  test('l’inscription : le retour « < » vit DANS la colonne, jamais au bord de l’écran', () => {
     const el = mount(<SignupScreen />);
     const column = authColumnIn(el);
-    expect(column?.querySelector('a[aria-label="Fermer"]')?.getAttribute('href')).toBe('/login');
+    expect(column?.querySelector('a[aria-label="Retour"]')?.getAttribute('href')).toBe('/login');
     expect(column?.querySelector('#signup-phone')).not.toBeNull();
     expect(strayFromAuthColumn(el)).toEqual([]);
   });
 
-  test('la puce se nomme dans la langue de l’interface, jamais « Fermer » en anglais (#10748)', async () => {
+  test('le retour se nomme dans la langue de l’interface, jamais « Retour » en anglais (#10748)', async () => {
     await loadInterfaceCatalog('en');
     const previous = document.documentElement.lang;
     document.documentElement.lang = 'en';
     try {
       const el = mount(<SignupScreen />);
-      expect(authColumnIn(el)?.querySelector('a[aria-label="Close"]')?.getAttribute('href')).toBe('/login');
-      expect(el.querySelector('a[aria-label="Fermer"]')).toBeNull();
+      expect(authColumnIn(el)?.querySelector('a[aria-label="Back"]')?.getAttribute('href')).toBe('/login');
+      expect(el.querySelector('a[aria-label="Retour"]')).toBeNull();
     } finally {
       document.documentElement.lang = previous;
     }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 
 import { EmailCodeForm, withStrongEmail } from '@/components/email-code-form';
+import { SpamFolderHint } from '@/components/email-sent-notice';
 import { Glyph } from '@/components/glyph';
 import type { auth } from '@/lib/api/auth';
 import { translate } from '@/lib/i18n-catalog';
@@ -106,6 +107,7 @@ export function SignupIdentityCard({
               <p className="text-caption" style={{ color: 'var(--color-ios-ink)' }}>
                 {withStrongEmail(translate(language, 'signup.card.code.lead', { email: verification.email }), verification.email)}
               </p>
+              <SpamFolderHint language={language} />
               <EmailCodeForm
                 email={verification.email}
                 next={null}

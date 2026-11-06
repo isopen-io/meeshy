@@ -37,6 +37,7 @@ import deQuote from './catalog-de-quote';
 import deCommentRow from './catalog-de-comment-row';
 import deContactDiscovery from './catalog-de-contact-discovery';
 import deDownload from './catalog-de-download';
+import deAuthFooter from './catalog-de-auth-footer';
 import dePhonePrompt from './catalog-de-phone-prompt';
 import deUserProfile from './catalog-de-user-profile';
 import deContentRefused from './catalog-de-content-refused';
@@ -986,6 +987,7 @@ const de = {
   'message-detail.retry': 'Erneut versuchen',
 
   ...deDownload,
+  ...deAuthFooter,
   ...dePhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */

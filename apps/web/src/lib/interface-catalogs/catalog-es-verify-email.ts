@@ -29,8 +29,7 @@ const esVerifyEmail = {
   'signInLink.switchAccount.leave': 'Volver al inicio',
   'emailSent.title': 'Correo enviado',
   'emailSent.openLink': 'Abre el enlace enviado a {email}',
-  'emailSent.nothingReceived': '¿No has recibido nada?',
-  'emailSent.nothingReceived.text': 'Revisa tu carpeta de spam: el mensaje puede haber llegado allí.',
+  'emailSent.checkSpam': '¿No te ha llegado? Revisa también tu carpeta de spam o de correo no deseado.',
 };
 
 export default esVerifyEmail;

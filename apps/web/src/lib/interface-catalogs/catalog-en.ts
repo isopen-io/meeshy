@@ -37,6 +37,7 @@ import enQuote from './catalog-en-quote';
 import enCommentRow from './catalog-en-comment-row';
 import enContactDiscovery from './catalog-en-contact-discovery';
 import enDownload from './catalog-en-download';
+import enAuthFooter from './catalog-en-auth-footer';
 import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
 import enContentRefused from './catalog-en-content-refused';
@@ -986,6 +987,7 @@ const en = {
   'message-detail.retry': 'Retry',
 
   ...enDownload,
+  ...enAuthFooter,
   ...enPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */

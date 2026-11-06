@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore, type ChangeEvent, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type ChangeEvent } from 'react';
 
 import { LANGUAGE_AUTONYMS } from '@/landing/landing-languages';
 import { translate } from '@/lib/i18n-catalog';
@@ -10,26 +10,14 @@ import {
   subscribeInterfaceLanguage,
   type InterfaceLanguage,
 } from '@/lib/interface-language';
-import { Link } from '@/routes/route-table';
-
-import { BrandMark } from './brand-mark';
 import { GlobeGlyph } from './globe-glyph';
 
 /**
- * L'EN-TÊTE DES PAGES PUBLIQUES DE L'APPLICATION (#10007, planche « Login ») —
- * la marque qui ramène à l'accueil et le sélecteur des sept langues
- * d'interface. La landing prérendue porte le même en-tête
- * (`landing/landing-page.tsx`), rendu sans script applicatif, et y ajoute
- * « Se connecter » ; les deux lisent les mêmes noms de langue
+ * LE SÉLECTEUR DES SEPT LANGUES D'INTERFACE ET SA LECTURE (#10007). L'en-tête
+ * qui le porte est celui des pages d'accès (`auth-header.tsx`, #16452) ; la
+ * landing prérendue rend le sien sans script applicatif
+ * (`landing/landing-page.tsx`). Les deux lisent les mêmes noms de langue
  * (`LANGUAGE_AUTONYMS`) et la même liste (`SUPPORTED_INTERFACE_LANGUAGES`).
- *
- * « Se connecter » n'est pas répété ici : la connexion est l'écran lui-même, et
- * l'inscription en porte déjà DEUX sorties — sa croix et « Déjà un compte ? »
- * (`auth-screens.test.tsx` les compte).
- *
- * La marque est celle des pages d'accès — les TROIS TRAITS (`BrandMark`), jamais
- * l'icône d'application (revue de #5555). La connexion la tait : elle porte déjà
- * la sienne dans sa colonne (planche « Login » : l'en-tête n'y a que la langue).
  *
  * Choisir une langue la RETIENT et l'APPLIQUE sans rechargement
  * (`setInterfaceLanguage` : catalogue chargé, `lang`/`dir` posés, choix
@@ -87,44 +75,5 @@ export function InterfaceLanguageSelect({ language }: { readonly language: Inter
         ))}
       </select>
     </label>
-  );
-}
-
-export function PublicHeader({
-  language,
-  brand = true,
-  leading,
-  languageChoice = !__SHELL__,
-}: {
-  readonly language: InterfaceLanguage;
-  /** La marque vers l'accueil — tue sur la connexion, qui porte la sienne. */
-  readonly brand?: boolean;
-  /** Ce que l'écran pose AVANT la marque — la croix qui referme l'inscription (D-72). */
-  readonly leading?: ReactNode;
-  /**
-   * Le sélecteur des langues d'interface — celui du SITE. Une coque installée
-   * suit la langue de l'appareil (`inline-interface-language-bootstrap`) : le
-   * porteur l'a jugé inutile sur Android (2026-10-14), il n'y paraît donc pas.
-   */
-  readonly languageChoice?: boolean;
-}) {
-  if (!languageChoice && !brand && leading === undefined) return null;
-  return (
-    <header data-public-header className="flex w-full shrink-0 items-center gap-1 px-2 pt-1">
-      {leading}
-      {brand ? (
-        <Link
-          to="home"
-          data-public-home
-          aria-label={translate(language, 'publicHeader.home')}
-          className="grid place-items-center rounded-chip"
-          style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink)' }}
-        >
-          <BrandMark size={32} lineWidth={3} />
-        </Link>
-      ) : null}
-      <span className="flex-1" />
-      {languageChoice ? <InterfaceLanguageSelect language={language} /> : null}
-    </header>
   );
 }

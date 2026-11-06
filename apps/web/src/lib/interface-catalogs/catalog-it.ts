@@ -37,6 +37,7 @@ import itQuote from './catalog-it-quote';
 import itCommentRow from './catalog-it-comment-row';
 import itContactDiscovery from './catalog-it-contact-discovery';
 import itDownload from './catalog-it-download';
+import itAuthFooter from './catalog-it-auth-footer';
 import itPhonePrompt from './catalog-it-phone-prompt';
 import itUserProfile from './catalog-it-user-profile';
 import itContentRefused from './catalog-it-content-refused';
@@ -986,6 +987,7 @@ const it = {
   'message-detail.retry': 'Riprova',
 
   ...itDownload,
+  ...itAuthFooter,
   ...itPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */

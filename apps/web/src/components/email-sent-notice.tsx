@@ -4,8 +4,6 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 import { Glyph } from './glyph';
-import { AUTH_GLYPHS } from './glyphs-auth';
-import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from './info-hint';
 
 /**
  * « E-MAIL ENVOYÉ » — UN écran pour les deux liens que Meeshy envoie par e-mail
@@ -17,24 +15,27 @@ import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from './info
  * mot de passe oublié disait « Si un compte existe avec …, un lien de
  * réinitialisation vient d’être envoyé » quand la connexion disait « Ouvrez le
  * lien reçu à … » : deux phrases pour le même fait, et la première parlait de
- * réinitialiser à qui n'a jamais eu de mot de passe (#6642). #6583 avait déjà
- * rendu leur (i) « Rien reçu ? » commun ; les deux écrans montent désormais
- * celui-ci en entier. Ce qui diffère entre par `status` (le compte à rebours de
+ * réinitialiser à qui n'a jamais eu de mot de passe (#6642). Les deux écrans
+ * montent désormais celui-ci en entier, conseil sur les indésirables compris. Ce qui diffère entre par `status` (le compte à rebours de
  * la connexion) et `children` (le renvoi, ou le retour à la connexion).
  */
 
 /**
- * CE QUE LA PASSERELLE NE DIT PAS, ET QUE L'ÉCRAN DOIT DIRE (#6404) — la
- * première cause d'un e-mail « jamais reçu », repliée derrière un (i) dont la
- * question reste LUE à côté du glyphe (#6626) : posé seul sous l'adresse, un
- * (i) muet ne dirait pas de quoi il parle. Texte et libellé PARTAGÉS par les
- * deux hôtes (#6583), dans la langue d'interface (`emailSent.*`, #10823).
+ * LES INDÉSIRABLES, DITS EN CLAIR (#16452) — la première cause d'un e-mail
+ * « jamais reçu ». La passerelle rend 200 même pour une adresse inconnue
+ * (anti-énumération) : l'écran ne peut ni promettre l'envoi ni le démentir,
+ * mais il peut dire où regarder. Replié derrière un (i) « Rien reçu ? »
+ * depuis #6626, le conseil revient visible sur demande du porteur
+ * (2026-11-06) : PARTOUT où un e-mail part — lien, code, vérification,
+ * réinitialisation — la même phrase, depuis ce seul composant.
  */
-const nothingReceivedHint = (language: InterfaceLanguage): InfoHint => ({
-  label: translate(language, 'emailSent.nothingReceived'),
-  text: translate(language, 'emailSent.nothingReceived.text'),
-  glyph: AUTH_GLYPHS.info,
-});
+export function SpamFolderHint({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <p data-spam-hint className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+      {translate(language, 'emailSent.checkSpam')}
+    </p>
+  );
+}
 
 /** L'adresse se met en valeur DANS la phrase traduite : l'ordre des mots est
  * celui de la langue, jamais celui du français. */
@@ -64,9 +65,7 @@ export function EmailSentNotice({
   readonly status?: ReactNode;
   readonly children?: ReactNode;
 }) {
-  const nothingReceived = useInfoHint();
   const language = currentInterfaceLanguage();
-  const hint = nothingReceivedHint(language);
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center">
       <div
@@ -84,10 +83,7 @@ export function EmailSentNotice({
 
       {status}
 
-      <div className="grid justify-items-center">
-        <InfoHintButton hint={hint} state={nothingReceived} showsLabel />
-        <InfoHintText hint={hint} state={nothingReceived} />
-      </div>
+      <SpamFolderHint language={language} />
 
       {children}
     </div>
