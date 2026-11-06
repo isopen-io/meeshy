@@ -386,7 +386,7 @@ internal struct _FullscreenOverlayControls: View {
     /// dans le renderer, sous sa propre règle d'effacement.
     var body: some View {
         ZStack {
-            FullscreenScrims(topInset: SceneWindowSize.resolveInsets(sceneSafeAreaInsets, fallback: WindowMetrics.safeAreaEdgeInsets).top, chromeVisible: true)
+            FullscreenScrims(topInset: SceneWindowSize.resolveInsets(sceneSafeAreaInsets).top, chromeVisible: true)
             VStack(spacing: 0) {
                 topBar
                     .padding(.top, FullscreenChromeMetrics.topInset)

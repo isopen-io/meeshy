@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Meeshy
 
 /// Stage Manager / Split View / fenêtre détachée (cycle 7). `DeviceLayout.windowSize` lit la fenêtre CLÉ de la scène
@@ -98,10 +99,54 @@ final class SceneWindowSizeWiringGuardTests: XCTestCase {
             XCTAssertTrue(code.contains("WindowInsets(published: sceneSafeAreaInsets)") || code.contains("galleryInsets."),
                           "\(path) doit lire SA fenêtre")
         }
-        // Le repli ne lit que le bord DEMANDÉ : un repli qui lisait les deux bords figeait le rendu de la bande du
-        // haut (la marge basse lue pendant `body`, #10566) — mesuré au simulateur, TopChromeBandRenderTests.
+        // #12470 : le repli ne lit plus JAMAIS la fenêtre. Un `fullScreenCover` (composeur, réels, bande du haut) ne
+        // reçoit pas la publication ; lire `UIWindow.safeAreaInsets` pendant son `body` rappelait le contrôleur hôte
+        // (`statusBarHidden`) — cycle du graphe, gel de 83 s, 0x8BADF00D sur iPhone.
         let layout = AppSourceGuard.stripComments(try source("Meeshy/Core/DeviceLayout.swift"))
-        XCTAssertTrue(layout.contains("var top: CGFloat { published?.top ?? DeviceLayout.safeAreaTop }"))
-        XCTAssertTrue(layout.contains("var bottom: CGFloat { published?.bottom ?? DeviceLayout.safeAreaBottom }"))
+        let windowInsets = try XCTUnwrap(Self.declaration(of: "struct WindowInsets", in: layout),
+                                         "WindowInsets doit rester dans DeviceLayout.swift, sinon la garde ne garde rien")
+        for windowRead in ["DeviceLayout.safeArea", "safeAreaInsets", "measurementWindow", "UIWindow", "keyWindow", "WindowMetrics"] {
+            XCTAssertFalse(windowInsets.contains(windowRead),
+                           "le repli de WindowInsets lit encore la fenêtre (\(windowRead)) pendant body")
+        }
+    }
+
+    func test_theInsetsGuard_seesAWindowReadSmuggledIntoTheFallback() throws {
+        let smuggled = """
+        struct WindowInsets {
+            let published: EdgeInsets?
+            var top: CGFloat { published?.top ?? measurementWindow?.safeAreaInsets.top ?? 0 }
+        }
+        struct Other {}
+        """
+        let declaration = try XCTUnwrap(Self.declaration(of: "struct WindowInsets", in: smuggled))
+        XCTAssertTrue(declaration.contains("safeAreaInsets"))
+        XCTAssertFalse(declaration.contains("struct Other"), "la déclaration s'arrête à sa propre accolade")
+        XCTAssertNil(Self.declaration(of: "struct WindowInsets", in: "struct Renamed {}"))
+    }
+
+    private static func declaration(of header: String, in code: String) -> String? {
+        guard let start = code.range(of: header + " {") else { return nil }
+        var depth = 1
+        var index = start.upperBound
+        while index < code.endIndex, depth > 0 {
+            if code[index] == "{" { depth += 1 }
+            if code[index] == "}" { depth -= 1 }
+            index = code.index(after: index)
+        }
+        return depth == 0 ? String(code[start.lowerBound..<index]) : nil
+    }
+
+    @MainActor
+    func test_windowInsets_withoutPublication_servesTheRememberedInsets_neverTheKeyWindow() {
+        let remembered = EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
+        let published = EdgeInsets(top: 47, leading: 0, bottom: 21, trailing: 0)
+        let served = WindowInsets(published: published, remembered: remembered)
+        let cover = WindowInsets(published: nil, remembered: remembered)
+        let firstPass = WindowInsets(published: nil, remembered: nil)
+
+        XCTAssertEqual(served.top, 47, "la publication prime")
+        XCTAssertEqual([cover.top, cover.bottom], [59, 34], "couverture : la mesure de la racine")
+        XCTAssertEqual([firstPass.top, firstPass.bottom], [0, 0], "aucune mesure : zéro le temps d'une passe")
     }
 }

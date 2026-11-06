@@ -78,11 +78,11 @@ public struct MeeshyImageEditorView: View {
     /// VRAIS safe-area insets de la fenêtre. `.statusBarHidden(true)` (plus bas)
     /// remet `safeAreaInsets = 0` dans l'environnement SwiftUI ; le chrome
     /// (top bar, FABs, panneau) passerait alors sous la Dynamic Island / home
-    /// indicator. La fenêtre expose toujours les insets physiques réels — on les
-    /// applique au chrome, en laissant le canvas immersif. Même pattern que
-    /// `MeeshyVideoEditorView` et `StoryComposerView.safeAreaBottomInset`.
+    /// indicator. La racine de la fenêtre les a mesurées hors de `body` — on les
+    /// applique au chrome, en laissant le canvas immersif, sans jamais lire la
+    /// fenêtre pendant le rendu (#12470).
     private var deviceSafeAreaInsets: UIEdgeInsets {
-        let insets = SceneWindowSize.resolveInsets(sceneSafeAreaInsets, fallback: WindowMetrics.safeAreaEdgeInsets)
+        let insets = SceneWindowSize.resolveInsets(sceneSafeAreaInsets)
         return UIEdgeInsets(top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing)
     }
 
