@@ -42,8 +42,8 @@ struct AttachmentUploadSession {
 
 struct AttachmentSendCallbacks {
     let restorePlace: @MainActor (SharedPlace?, Bool) -> Void
-    /// La fraction téléversée d'UNE bulle, par son tempId (#14702).
-    let setProgress: @MainActor (_ tempId: String, _ fraction: Double) -> Void
+    /// Les octets téléversés d'UNE bulle, par son tempId (#14702, #16275).
+    let setProgress: @MainActor (_ tempId: String, _ sent: Int64, _ total: Int64) -> Void
     let abortUpload: @MainActor () -> Void
 }
 
@@ -126,7 +126,7 @@ final class AttachmentSendRunner: AttachmentSendRunning {
         let setProgress = callbacks.setProgress
         return session.progress
             .receive(on: DispatchQueue.main)
-            .sink { progress in setProgress(tempId, progress.globalPercentage / 100) }
+            .sink { progress in setProgress(tempId, progress.uploadedBytes, progress.totalBytes) }
     }
 
     private func sendGroup(

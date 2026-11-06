@@ -107,6 +107,7 @@ extension OutboxDispatcher {
     /// finissait par voir. Un report (`OutboxDeferralError`) et une annulation
     /// ne sont pas des échecs d'envoi : la ligne n'est pas touchée.
     func dispatchSendMessageRecordingFailure(_ record: OutboxRecord) async throws {
+        defer { Task { @MainActor in ReplayUploadProgressRelay.shared.stop(record.clientMessageId) } }
         do {
             try await dispatchSendMessage(record)
         } catch {
@@ -170,7 +171,7 @@ extension OutboxDispatcher {
                     )
                 }
 
-                let uploader = TusUploadManager(baseURL: baseURL)
+                let uploader = await ReplayUploadProgressRelay.shared.uploader(baseURL: baseURL, for: item.clientMessageId, stored: pendingAudioPaths)
                 var uploadedIds: [String] = []
                 var firstUploadErrorAudio: Error?
 
@@ -227,7 +228,7 @@ extension OutboxDispatcher {
                     )
                 }
 
-                let uploader = TusUploadManager(baseURL: baseURL)
+                let uploader = await ReplayUploadProgressRelay.shared.uploader(baseURL: baseURL, for: item.clientMessageId, stored: pendingMediaPaths)
                 var uploadedIds: [String] = []
                 var firstUploadErrorMedia: Error?
 
