@@ -46,6 +46,54 @@ final class ViewThatFitsAsyncRenderGuardTests: XCTestCase {
                       "une transformation non `@Sendable` hériterait du main actor de l'appelant")
     }
 
+    // MARK: - Les scènes de l'App (#11167)
+
+    /// Sous iOS 27, le rendu asynchrone redemande le contenu d'une fenêtre hors du fil principal
+    /// (`Meeshy-2026-10-20-154647.ips` : SIGTRAP dans `closure #1 in MeeshyApp.body.getter`).
+    func test_leContenuDeLaFenetrePrincipaleSeRelitHorsDuFilPrincipal() {
+        let relu = expectation(description: "contenu de scène relu sur une file de fond")
+        DispatchQueue.global(qos: .userInteractive).async {
+            let scene = PrebuiltSceneContent(42)
+            XCTAssertFalse(Thread.isMainThread)
+            XCTAssertEqual(scene.make(), 42)
+            relu.fulfill()
+        }
+        wait(for: [relu], timeout: 2.0)
+    }
+
+    @MainActor
+    func test_leContenuDUneFenetreDetacheeSeConstruitHorsDuFilPrincipal() {
+        let scene = DetachedWindowScene(decoration: DetachedWindowDecoration(
+            reduceMotion: false, deepLinkRouter: DeepLinkRouter.shared, theme: ThemeManager.shared))
+        let construit = expectation(description: "fenêtre détachée construite sur une file de fond")
+        DispatchQueue.global(qos: .userInteractive).async {
+            XCTAssertFalse(Thread.isMainThread)
+            let vue = scene.make(.constant(.reels(startId: "r1")))
+            XCTAssertEqual(vue.content.content, .reels(startId: "r1"))
+            construit.fulfill()
+        }
+        wait(for: [construit], timeout: 2.0)
+    }
+
+    func test_aucuneSceneDeLAppNeRecoitDeFermetureIsolee() throws {
+        let source = AppSourceGuard.stripComments(try String(contentsOf: Self.repoRoot()
+            .appendingPathComponent("apps/ios/Meeshy/MeeshyApp.swift"), encoding: .utf8))
+        let scenes = source.components(separatedBy: "WindowGroup(").count - 1
+        XCTAssertGreaterThanOrEqual(scenes, 2, "la garde ne voit plus les scènes de MeeshyApp")
+        XCTAssertNil(source.range(of: #"WindowGroup\s*\{"#, options: .regularExpression),
+                     "une scène reçoit une fermeture de contenu : la passer par PrebuiltSceneContent(…).make")
+        XCTAssertNil(source.range(of: #"WindowGroup\([^)]*\)\s*\{"#, options: .regularExpression),
+                     "une scène reçoit une fermeture de contenu en fin d'appel : lui passer une fonction non isolée")
+        XCTAssertNil(source.range(of: #"\.commands\s*\{"#, options: .regularExpression),
+                     "les commandes de la scène reçoivent une fermeture : la passer par PrebuiltSceneContent(…).make")
+        XCTAssertTrue(source.contains("nonisolated struct DetachedWindowScene"))
+        XCTAssertTrue(source.contains("nonisolated struct DetachedWindowSlot"))
+        let primitive = AppSourceGuard.stripComments(try String(contentsOf: Self.repoRoot()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Primitives/AsyncRenderSafeContent.swift"),
+                                                               encoding: .utf8))
+        XCTAssertTrue(primitive.contains("public nonisolated struct PrebuiltSceneContent<"))
+    }
+
     // MARK: - La garde elle-même
 
     func test_laGardeVoitUnForEachAtteintParUneSousPropriete() {
