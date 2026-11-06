@@ -86,15 +86,19 @@ nonisolated enum CameraPhotoTuning {
         return reglages
     }
 
-    /// **Sur la file de la session, après le commit qui a installé `device`** :
-    /// ce n'est qu'alors que la sortie dit ce qu'elle sert. Une seconde
-    /// transaction n'est ouverte que si le plan change quelque chose — la
-    /// bascule vers un objectif qui sert la même chose ne reconfigure rien.
-    /// Les réglages préparés font naître les ressources de la première prise
-    /// avant le premier toucher.
-    static func tune(_ output: AVCapturePhotoOutput, in session: AVCaptureSession, for device: AVCaptureDevice) {
-        let cible = Self.plan(for: output.photoCapabilities(of: device))
-        if !output.hasAdopted(cible) {
+    /// **Dans la transaction qui installe `device`** (#16504) : le plan naît avec
+    /// la configuration, sans seconde transaction à l'ouverture.
+    static func adopt(for device: AVCaptureDevice, on output: AVCapturePhotoOutput) {
+        output.adopt(plan(for: output.photoCapabilities(of: device)))
+    }
+
+    /// **Après le commit** : une sortie qui n'a su répondre qu'une fois la
+    /// configuration validée reçoit son plan en UNE transaction ; sinon rien ne
+    /// s'ouvre. Les réglages préparés font naître les ressources de la première
+    /// prise avant le premier toucher.
+    static func confirm(_ output: AVCapturePhotoOutput, in session: AVCaptureSession, for device: AVCaptureDevice) {
+        let cible = plan(for: output.photoCapabilities(of: device))
+        confirm(adopted: output.hasAdopted(cible)) {
             session.beginConfiguration()
             output.adopt(cible)
             session.commitConfiguration()
@@ -102,6 +106,11 @@ nonisolated enum CameraPhotoTuning {
         let prepares = settings(flash: .off, supportedFlashModes: output.supportedFlashModes,
                                 outputMaxPhotoDimensions: CameraPhotoDimensions(output.maxPhotoDimensions))
         output.setPreparedPhotoSettingsArray([prepares], completionHandler: nil)
+    }
+
+    static func confirm(adopted: Bool, adopt: () -> Void) {
+        guard !adopted else { return }
+        adopt()
     }
 
     private static func dimensions(_ capabilities: CameraPhotoCapabilities,

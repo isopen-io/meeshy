@@ -12,8 +12,13 @@ import AVFoundation
 /// session audio de l'app en enregistrement, ce qui interrompt une autre app
 /// qui joue : quand une musique tourne, le micro attend donc la prise — comme
 /// l'appareil photo, qui ne la coupe qu'en filmant.
+///
+/// **Une ouverture en photo n'arme pas le micro** (#16504) : ni entrée audio à
+/// démarrer, ni session audio à basculer, ni voyant orange. Le prix est assumé :
+/// un appui long depuis une ouverture en photo branche le micro sur la session
+/// lancée, la seule reconfiguration que #9328 évitait.
 nonisolated enum CameraAudioArming {
-    static func armsAtSetup(microphone: AVAuthorizationStatus, otherAudioPlaying: Bool) -> Bool {
-        microphone == .authorized && !otherAudioPlaying
+    static func armsAtSetup(microphone: AVAuthorizationStatus, otherAudioPlaying: Bool, filming: Bool) -> Bool {
+        filming && microphone == .authorized && !otherAudioPlaying
     }
 }

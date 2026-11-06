@@ -315,7 +315,7 @@ struct MeeshyComposerHost: View {
     /// `ComposerCaptureSession`. `@StateObject` et non `.shared` : une session
     /// de capture appartient à CETTE composition, et le modèle de caméra est
     /// construit MUET tant que l'auteur n'a pas armé.
-    @StateObject var sceneCapture = ComposerCaptureSession()
+    @StateObject var sceneCapture = ComposerWarmCapture.session()
 
     /// La taille du viseur — propre à la scène, le plein écran n'en a qu'une.
     /// REPOSÉE à chaque armement : un plein écran qui survivrait ferait naître

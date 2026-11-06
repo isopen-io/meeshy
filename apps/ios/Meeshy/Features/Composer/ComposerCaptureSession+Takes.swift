@@ -237,8 +237,7 @@ extension ComposerCaptureSession {
     func saveRenderedPhoto(_ image: UIImage, data: Data?) {
         let repli = data == nil ? image : nil
         let regard = look
-        let auteur = lookPerson
-        let date = lookDate
+        let (auteur, date) = (lookPerson, lookDate)
         let cache = scenes
         let galerie = gallery
         let brut = camera.librarySave
