@@ -194,6 +194,7 @@
 		09762B70F5F8E776DE8CE033 /* StoryViewModelRedrawIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0D7308A6113FE156A2B086 /* StoryViewModelRedrawIsolationTests.swift */; };
 		09897C6B14B9ADACC14BEC80 /* ShareConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB04FED5D59B6F0B6FF8EE80 /* ShareConversationStore.swift */; };
 		098BAE8F42F0A6B975052B29 /* ConversationMediaGalleryFullscreenSharpTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2752E5B72A42AF037E7770 /* ConversationMediaGalleryFullscreenSharpTests.swift */; };
+		099AD22E69C2B258075C4E94 /* ProfilePackShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AEB856CBDAE5FFEFF2729C9 /* ProfilePackShortcuts.swift */; };
 		09B4735F745C590FA6EB3AB3 /* FocusCardElectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1ECF6DA093839177F75EC8 /* FocusCardElectionTests.swift */; };
 		09B65FA9338777735D2B5146 /* QuotedMediaOpeningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D7DBBBDD0C1C88B17DF5A24 /* QuotedMediaOpeningTests.swift */; };
 		09D88E244B77C745B850F5B7 /* CommunityAddChannelViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2721529D88EA123AD1FDD05B /* CommunityAddChannelViewModelTests.swift */; };
@@ -458,6 +459,7 @@
 		192C5B393ACD05F2EF61552D /* ReelDoor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C33B6077CCB260B9BF6870 /* ReelDoor.swift */; };
 		192D01F2B7D738DF3746B5DC /* CallLensStages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EBFC15B9C086F08CBED8EC2 /* CallLensStages.swift */; };
 		194233CC35269327D8A597C0 /* ReadingDirectionGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC04B8137BFE23D653DB2C5D /* ReadingDirectionGuardTests.swift */; };
+		19462154C8AEA41C85731584 /* GameFramePackElementDesigns.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EC6DBB371D461D160FF302A /* GameFramePackElementDesigns.swift */; };
 		195C0FE2DB8938BD046D6304 /* SyncPillLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3A304EECE672DE9CF71432C /* SyncPillLabels.swift */; };
 		1971703EF6A7C64C0263B8D2 /* ComposerCropCancelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBFA636D161284F4671106D6 /* ComposerCropCancelTests.swift */; };
 		1975795E5AFA644D994C8DA4 /* BackgroundSoundBadgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD21078898CE3087A9642A79 /* BackgroundSoundBadgeTests.swift */; };
@@ -4696,6 +4698,7 @@
 		0EB6E1272633BAA36A73A8FD /* RiverCoordinateSpace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiverCoordinateSpace.swift; sourceTree = "<group>"; };
 		0EBFC15B9C086F08CBED8EC2 /* CallLensStages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLensStages.swift; sourceTree = "<group>"; };
 		0EC3FAD45407DC10E529A5B6 /* TranscriptionPermission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionPermission.swift; sourceTree = "<group>"; };
+		0EC6DBB371D461D160FF302A /* GameFramePackElementDesigns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameFramePackElementDesigns.swift; sourceTree = "<group>"; };
 		0ECAC9711B431A54D6B97478 /* QuoteComposerDoorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuoteComposerDoorTests.swift; sourceTree = "<group>"; };
 		0ECD8F04ECA852C002F936C6 /* GameMissionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameMissionsView.swift; sourceTree = "<group>"; };
 		0EE428F91779FFD50431EF7D /* ListingViewabilityWindowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingViewabilityWindowTests.swift; sourceTree = "<group>"; };
@@ -5989,6 +5992,7 @@
 		5AA244A532FCF3C1C3BA404C /* ForwardPreviewStickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardPreviewStickerTests.swift; sourceTree = "<group>"; };
 		5AB2B1C90CCB0D5C0623DA28 /* CallManager+Controls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Controls.swift"; sourceTree = "<group>"; };
 		5ADA177DD05ECE6E3D4A1DB6 /* ComposerSoundPromotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSoundPromotion.swift; sourceTree = "<group>"; };
+		5AEB856CBDAE5FFEFF2729C9 /* ProfilePackShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePackShortcuts.swift; sourceTree = "<group>"; };
 		5B088BC426560C73EB80F084 /* ComposerSceneArrangementRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneArrangementRelay.swift; sourceTree = "<group>"; };
 		5B0E572518B85B56D055F46A /* LocalizedNumber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedNumber.swift; sourceTree = "<group>"; };
 		5B1ED56E33CD433CF96DC3F3 /* CameraRecordingReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraRecordingReadiness.swift; sourceTree = "<group>"; };
@@ -9704,6 +9708,7 @@
 				6FF9DA0196659C917A0C118F /* ParticipantProfileSheet.swift */,
 				85CCA3223BA1AB7968E54568 /* ProfileDecorSheet.swift */,
 				287B33D5B5F5FE197571532D /* ProfileOwnAvatar.swift */,
+				5AEB856CBDAE5FFEFF2729C9 /* ProfilePackShortcuts.swift */,
 				D69A84067C656AE2FC5F3724 /* ProfilePostOpening.swift */,
 				3CE7AF2F40DA167807CFEFBC /* ProfileProgressionEntry.swift */,
 				7BBD7A76FCEA15B7B3F53E1C /* ProfileUserPostsList.swift */,
@@ -13032,6 +13037,7 @@
 				355BD6930F5550EE76E1FABD /* FeedbackToastManager.swift */,
 				FDB09A64F09C9725B14D216B /* FeedbackToastSurfacing.swift */,
 				29EB40F4B8F008A5CDD3C1B8 /* FramePackShelfLoader.swift */,
+				0EC6DBB371D461D160FF302A /* GameFramePackElementDesigns.swift */,
 				0608CD244F9911968CE79E39 /* GroupSignalRouting.swift */,
 				705D69AE8E3107A2C4A44BDA /* HapticSurfacing.swift */,
 				890162C628438564D1A416BE /* ImpressionBatcher.swift */,
@@ -14586,6 +14592,7 @@
 				};
 			};
 			buildConfigurationList = 147F4A57130170E66816D782 /* Build configuration list for PBXProject "Meeshy" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -14607,18 +14614,17 @@
 				F7615CB1707FC23CDBA090B5 /* XCLocalSwiftPackageReference "../../packages/MeeshySDK" */,
 			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = F121C0AAA9428DB850C5DC59 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				9999AD8C50CACBF85DF613CF /* Meeshy */,
-				A81DD135F37B0F4BDF5F33A8 /* MeeshyWidgets */,
-				C6F2A095796E3C29A7107470 /* MeeshyNotificationExtension */,
-				895156DABDB29B613686535B /* MeeshyNotificationContentExtension */,
-				E92CA5A0623E606BD619670E /* MeeshyShareExtension */,
 				E7C89FACA2B11B7B4A7A8C67 /* MeeshyBroadcastExtension */,
-				8C761E7D124D94A95E1F411E /* MeeshyUIDeviceTests */,
+				895156DABDB29B613686535B /* MeeshyNotificationContentExtension */,
+				C6F2A095796E3C29A7107470 /* MeeshyNotificationExtension */,
+				E92CA5A0623E606BD619670E /* MeeshyShareExtension */,
 				0D382A685B3389715FC2687F /* MeeshyTests */,
+				8C761E7D124D94A95E1F411E /* MeeshyUIDeviceTests */,
+				A81DD135F37B0F4BDF5F33A8 /* MeeshyWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -16057,6 +16063,7 @@
 				A2D3C2F1F1B18BE671571320 /* GameFicheCopy.swift in Sources */,
 				8E3642286C70107173D3F0EF /* GameFicheHeads.swift in Sources */,
 				ADA61FC2FDE71B26164CF629 /* GameFlamePanelView.swift in Sources */,
+				19462154C8AEA41C85731584 /* GameFramePackElementDesigns.swift in Sources */,
 				9DFB5DB8DFFCFBA08F013A04 /* GameGaugesView.swift in Sources */,
 				42BF78C3B3D129900604F696 /* GameGuideCard.swift in Sources */,
 				0AF51F7E89A45DF8FFD7958E /* GameGuideCardView.swift in Sources */,
@@ -16626,6 +16633,7 @@
 				E171C68AEA1060564894ECB0 /* ProfileCircleViewModel.swift in Sources */,
 				AF3B2AE1F85FCEF4BAD9313A /* ProfileDecorSheet.swift in Sources */,
 				8F8F64CC76B3799E98352ED5 /* ProfileOwnAvatar.swift in Sources */,
+				099AD22E69C2B258075C4E94 /* ProfilePackShortcuts.swift in Sources */,
 				E448FC67BFDE6C07D7654481 /* ProfilePostOpening.swift in Sources */,
 				402EA7509679011BF6F1C099 /* ProfileProgressionEntry.swift in Sources */,
 				021E07068F611F771F46AA7F /* ProfileUserPostsList.swift in Sources */,

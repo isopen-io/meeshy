@@ -221,6 +221,9 @@ struct ProfileView: View {
                         .transition(.opacity)
                 } else {
                     bannerAndAvatarSection
+                    if ProfilePackShortcuts.isShown(viewerId: authManager.currentUser?.id, profileUserId: user?.id) {
+                        ProfilePackShortcuts(onShop: { router.openPackShop(domain: nil) }, onMine: { router.openMyPacks() })
+                    }
                     identitySection
                     contactSection
                     languagesSection
