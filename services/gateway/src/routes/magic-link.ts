@@ -25,7 +25,6 @@ import { countLegacyLinkLogin, getLegacyLinkLoginCounter, linkLoginConsent } fro
 import { provenChallengeAdoption } from '../services/auth/pending-two-factor';
 import { provenSessionAdoption, servedSession } from '../services/auth/session-adoption';
 import { pendingSessionTokenFor } from '../services/auth/email-verification-watch';
-import { sendEmailDomainNotAllowed } from '../services/auth/email-domain-guard';
 import { AuthService } from '../services/AuthService';
 import { LOGIN_CODE_TTL_MINUTES } from '../services/auth/email-code';
 import { getJwtSecret } from '../utils/secrets';
@@ -168,21 +167,12 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
        * AVANT toute lecture du compte (`startAccountFromEmail`, porte
        * `email-only`), donc il parle de l'APPELANT.
        *
-       * Tout autre cas — compte créé, compte existant, compte supprimé — rend
-       * la MÊME réponse : c'est la garde anti-énumération.
+       * Tout autre cas — compte créé, compte existant, compte supprimé, adresse
+       * réservée ou jetable sans compte (#16491 : rien n'est créé ni envoyé) —
+       * rend la MÊME réponse : c'est la garde anti-énumération.
        */
       if (issue.kind === 'rate-limited') {
         return sendError(reply, 429, 'Too many requests. Please try again in about an hour.', { code: 'RATE_LIMITED' });
-      }
-
-      /**
-       * #16491 — une adresse réservée ou jetable SANS compte n'en ouvre pas un,
-       * et le refus se dit. Il apprend qu'aucun compte ne porte cette adresse,
-       * mais seulement pour ces domaines, où un compte ne désigne personne ;
-       * un compte existant y reçoit son code comme ailleurs.
-       */
-      if (issue.kind === 'email-domain-not-allowed') {
-        return sendEmailDomainNotAllowed(reply);
       }
 
       // #8083 — le jeton d'attente de CET appareil, dans TOUS les cas servis :

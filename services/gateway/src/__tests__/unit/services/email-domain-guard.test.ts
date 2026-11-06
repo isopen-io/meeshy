@@ -43,7 +43,11 @@ jest.mock('../../../utils/password-hash', () => ({
   hashPassword: mockHashPassword,
 }));
 
+import crypto from 'crypto';
+
 import { AuthService } from '../../../services/AuthService';
+import { proveEmailClaim } from '../../../services/auth/email-claim';
+import { emailClaimStore } from '../../helpers/email-claim-store';
 
 type Row = Record<string, unknown>;
 
@@ -206,5 +210,48 @@ describe('un compte EXISTANT sur un domaine réservé se connecte toujours', () 
     const { issue } = await demarrer({ email: 'ancien@example.com', door: 'password-login', existant: compteExampleVerifie() });
 
     expect(issue).toEqual({ kind: 'existing-account' });
+  });
+});
+
+describe("une revendication en attente sur une adresse réservée n'est jamais activée", () => {
+  const sha256 = (v: string) => crypto.createHash('sha256').update(v).digest('hex');
+  const ADRESSE = 'marie@example.com';
+
+  const store = () =>
+    emailClaimStore([
+      {
+        id: 'detenteur',
+        username: 'mariette',
+        displayName: 'Mariette',
+        email: ADRESSE,
+        password: 'hash',
+        phoneNumber: null,
+        isActive: true,
+        emailVerifiedAt: null,
+      },
+      {
+        id: 'revendiquant',
+        createdAt: new Date(0),
+        username: 'marie_vraie',
+        displayName: 'Marie',
+        email: 'claim-1@claiming.meeshy.invalid',
+        claimedEmail: ADRESSE,
+        password: null,
+        phoneNumber: null,
+        isActive: false,
+        emailVerifiedAt: null,
+        emailVerificationToken: sha256('lien'),
+        emailVerificationCode: sha256('123456'),
+        emailVerificationExpiry: new Date(Date.now() + 3_600_000),
+      },
+    ]);
+
+  it('le code juste ne transfère pas l’adresse : le revendiquant reste inactif, le détenteur la garde', async () => {
+    const base = store();
+    const issue = await proveEmailClaim(base.prisma as never, { email: ADRESSE, code: '123456' });
+
+    expect(issue.kind).not.toBe('proven');
+    expect(base.state.users.find((u) => u.id === 'revendiquant')).toMatchObject({ isActive: false, claimedEmail: ADRESSE });
+    expect(base.state.users.find((u) => u.id === 'detenteur')).toMatchObject({ email: ADRESSE, isActive: true });
   });
 });

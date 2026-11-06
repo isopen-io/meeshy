@@ -231,16 +231,18 @@ describe('MagicLink Routes', () => {
       expect(response.json()).toMatchObject({ success: false, code: 'RATE_LIMITED' });
     });
 
-    // #16491 — une adresse réservée ou jetable n'ouvre pas de compte : le refus
-    // se DIT, avec un code que les clients peuvent lire.
-    it('returns 400 with code EMAIL_DOMAIN_NOT_ALLOWED when the address may not open an account', async () => {
+    // #16491 — une adresse réservée ou jetable SANS compte n'en ouvre pas un,
+    // mais cette porte ne le DIT pas : la réponse est celle de tout autre cas,
+    // sans quoi elle apprendrait qu'aucun compte ne porte l'adresse.
+    it('answers an address that may not open an account exactly like an existing account (no enumeration)', async () => {
+      mockStartAccountFromEmail.mockResolvedValue({ kind: 'existing-account' });
+      const existant = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@mailinator.com' } });
       mockStartAccountFromEmail.mockResolvedValue({ kind: 'email-domain-not-allowed' });
+      const refuse = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@mailinator.com' } });
 
-      const response = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@mailinator.com' } });
-
-      expect(response.statusCode).toBe(400);
-      expect(response.json()).toMatchObject({ success: false, code: 'EMAIL_DOMAIN_NOT_ALLOWED' });
-      expect(response.json().error).toMatch(/adresse/);
+      expect(refuse.statusCode).toBe(200);
+      expect(refuse.json()).toEqual(existant.json());
+      expect(JSON.stringify(refuse.json())).not.toContain('EMAIL_DOMAIN_NOT_ALLOWED');
     });
 
     it('returns 500 and logs error when the service throws', async () => {

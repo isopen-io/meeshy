@@ -49,6 +49,10 @@ describe('classifyEmailDomain — domaines réservés', () => {
     'a@imprimante.local',
     'a@demo.example',
     'a@FOO.TEST.',
+    'a@routeur.home.arpa',
+    'a@service.internal',
+    'a@nom.alt',
+    'a@abcdefghijklmnop.onion',
   ])('%s est réservé', (email) => {
     expect(classifyEmailDomain(email)).toBe('reserved');
   });
@@ -94,6 +98,10 @@ describe('classifyEmailDomain — domaines réels', () => {
     'a@example.co.uk',
     'a@local.fr',
     'a@bücher.de',
+    'a@arpanet.org',
+    'a@internal.fr',
+    'a@alt.com',
+    'a@onion.com',
   ])('%s est distribuable', (email) => {
     expect(classifyEmailDomain(email)).toBe('deliverable');
     expect(isEmailDomainAllowed(email)).toBe(true);

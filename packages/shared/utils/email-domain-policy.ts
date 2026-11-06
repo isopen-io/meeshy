@@ -4,8 +4,10 @@
  *
  * - `reserved` : les domaines que les RFC 2606, 6761 et 6762 réservent à la
  *   documentation, aux tests et au réseau local (`example.com/.net/.org`, les
- *   TLD `.example`, `.test`, `.invalid`, `.localhost`, `.local`), sous-domaines
- *   compris. Aucune boîte n'y est joignable.
+ *   TLD `.example`, `.test`, `.invalid`, `.localhost`, `.local`), plus les TLD
+ *   d'infrastructure ou hors DNS public (`.arpa` — RFC 8375 `home.arpa` —,
+ *   `.internal`, `.alt` — RFC 9476 —, `.onion` — RFC 7686), sous-domaines
+ *   compris. Aucune boîte n'y est joignable depuis l'Internet public.
  * - `disposable` : les messageries JETABLES les plus répandues. Une liste
  *   curée, pas exhaustive : elle ferme la porte au geste banal, pas à un
  *   adversaire qui achète un domaine.
@@ -23,7 +25,17 @@ export type EmailDomainClass = 'reserved' | 'disposable' | 'deliverable';
 
 export const RESERVED_EMAIL_DOMAINS: readonly string[] = ['example.com', 'example.net', 'example.org'];
 
-export const RESERVED_EMAIL_TLDS: readonly string[] = ['example', 'test', 'invalid', 'localhost', 'local'];
+export const RESERVED_EMAIL_TLDS: readonly string[] = [
+  'example',
+  'test',
+  'invalid',
+  'localhost',
+  'local',
+  'arpa',
+  'internal',
+  'alt',
+  'onion',
+];
 
 export const DISPOSABLE_EMAIL_DOMAINS: readonly string[] = [
   'mailinator.com',
