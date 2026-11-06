@@ -44,15 +44,18 @@ struct ConversationListMessageSearchSection: View {
         }
     }
 
-    /// Paraître au bas de la section demande la page suivante. La tâche est
-    /// liée au curseur : une page courte qui laisse le témoin à l'écran
-    /// enchaîne d'elle-même, et un échec attend le prochain défilement.
+    /// Paraître au bas de la section demande la page suivante. Chaque curseur
+    /// fait naître un NOUVEAU témoin, sans quoi `.task(id:)` partirait pour le
+    /// témoin qu'une page pleine vient de pousser hors de l'écran : requête
+    /// annulée aussitôt, mesuré au simulateur. Né à l'écran après une page
+    /// courte, il enchaîne ; un échec attend le prochain défilement.
     private var nextPageSentinel: some View {
         ZStack {
             if model.isLoadingMore { ProgressView() }
         }
         .frame(maxWidth: .infinity, minHeight: MeeshySpacing.xxl)
-        .task(id: model.nextCursor) { await model.loadMore() }
+        .task { await model.loadMore() }
+        .id(model.nextCursor)
     }
 
     private func open(_ result: GlobalSearchMessageResult) {
