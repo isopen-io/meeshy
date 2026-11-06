@@ -64,6 +64,7 @@ export * from './socketio-events/audio.js';
 export * from './socketio-events/translation.js';
 export * from './socketio-events/location.js';
 export * from './socketio-events/pack.js';
+export * from './socketio-events/sticker.js';
 export * from './socketio-events/preferences.js';
 export * from './socketio-events/category.js';
 export * from './socketio-events/link.js';

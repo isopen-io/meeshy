@@ -34,7 +34,31 @@ import { join } from 'path';
 
 const SRC_ROOT = join(__dirname, '..');
 
-const PREFERENCE_MODELS = ['userConversationPreferences', 'userCommunityPreferences', 'userStickerPack'] as const;
+/**
+ * **L'énumération porte DEUX affirmations** (leçon 261) : « ces sites appliquent
+ * la règle » — vérifiable — et « ce sont les tables où la règle s'applique »,
+ * qui ne l'avait jamais été. Elle en a manqué deux jusqu'à #16515 :
+ *
+ * - `userSticker` — « Mes stickers » (#7938), la bibliothèque du COMPTE. Ses
+ *   quatre chemins d'écriture ne diffusaient RIEN, pendant que sa voisine
+ *   `userStickerPack` — l'étagère de packs, dans la même feuille — diffusait
+ *   depuis LP0. Défaut de production, fermé par #16515 ;
+ * - `userConversationCategory` — les dossiers de conversation. Ses quatre
+ *   verbes diffusaient déjà, chacun le sien ; rien n'était cassé, et un
+ *   cinquième écrivain muet n'aurait fait rougir personne.
+ *
+ * La question à poser à cette liste n'est donc pas « les sites gelés
+ * diffusent-ils ? » mais **« quelle autre table est par UTILISATEUR ? »** —
+ * et elle se répond en relisant `schema.prisma`, jamais en relisant cette
+ * constante.
+ */
+const PREFERENCE_MODELS = [
+  'userConversationPreferences',
+  'userCommunityPreferences',
+  'userStickerPack',
+  'userSticker',
+  'userConversationCategory',
+] as const;
 
 const WRITE_METHODS = ['upsert', 'update', 'updateMany', 'create', 'createMany', 'delete', 'deleteMany'] as const;
 
@@ -75,7 +99,10 @@ export function sweepPreferenceWriteSites(root: string = SRC_ROOT): PreferenceWr
 
     for (const model of PREFERENCE_MODELS) {
       for (const method of WRITE_METHODS) {
-        const pattern = new RegExp(`\\.${model}\\s*\\.\\s*${method}\\s*\\(`, 'g');
+        // `\b` après le nom : sans lui, `userSticker` ne matcherait de toute
+        // façon pas `userStickerPack.create` (le `.` suivant diffère), mais
+        // l'inverse — un modèle futur préfixe d'un autre — est un piège armé.
+        const pattern = new RegExp(`\\.${model}\\b\\s*\\.\\s*${method}\\s*\\(`, 'g');
         for (let count = source.match(pattern)?.length ?? 0; count > 0; count -= 1) {
           sites.push({ file, model, method });
         }
