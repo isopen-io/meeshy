@@ -6,6 +6,10 @@
  *
  * La fenêtre est faite de deux INSTANTS (le schéma partagé n'a pas de récurrence annuelle) : celles de la saison
  * 2026-2027, à reporter chaque année. `startsAt` inclus, `endsAt` exclu, en UTC.
+ *
+ * Ce sont des dates ÉCRITES : elles priment sur la règle de #16447 (`utils/decoration-event-window.ts`, de deux mois
+ * avant l'événement à un mois après), qui ne sert qu'un pack d'événement sans date. Retirer une borne ici la ferait
+ * dériver de l'événement que le pack déclare (`event`).
  */
 import type { PackAvailability } from '../../types/pack-availability.js';
 
