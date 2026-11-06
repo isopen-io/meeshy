@@ -429,11 +429,7 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // `MeeshyAvatar(accentColor:)`), pour le fond de repli de l'avatar et de la bannière et la bulle « moi » de la
 // conversation factice. Hors de tout contexte de conversation, même règle que `ProfileDecorSheet.swift` ci-dessus.
 // #16437 en posait trois ; ramenés à une. Valeur MESURÉE le 2026-11-06 en local.
-// 473 -> 474 (2026-11-06, #16487, « Dis-lui salut » en gras à la couleur de la conversation) : `ArrivalGreeting.swift` (1)
-// peint l'invite de salut à l'accent de la conversation, reçu de la bulle sous le nom ÉTABLI `accentHex` (la CHAÎNE, par
-// opposition à la COULEUR, même vocabulaire que #6793, #7945, #8099) : c'est exactement ce que la règle exige. Aucun littéral
-// ne bouge (178). Valeur MESURÉE en CI le 2026-11-06 (run 42287424738).
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 474;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 473;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
