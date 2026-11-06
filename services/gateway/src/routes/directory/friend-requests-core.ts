@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { withMutationLog } from '../../utils/withMutationLog';
+import { withMutationVerdict } from '../../utils/withMutationLog';
 import { validatePagination } from '../../utils/pagination';
 import {
   cursorPage,
@@ -120,7 +120,12 @@ export async function envoyerDemande(
     return { refus: { code: 409, message: 'Cette demande n\'est pas possible maintenant', codeMetier: jugement.code } };
   }
 
-  const demande = await withMutationLog({
+  // #9623 — le VERDICT, pas seulement le résultat : l'annonce ci-dessous
+  // (`Notification` + push + `friend-request:new`) n'a aucune déduplication en
+  // aval, et `emitFriendRequestNew` est un « c'est arrivé » qu'un client ne
+  // peut pas appliquer deux fois sans dommage. Le 410 d'un résultat disparu
+  // reste rendu par le `catch` de la route (`friend-requests.ts`).
+  const { result: demande, replayed } = await withMutationVerdict({
     request,
     fastify,
     userId: emetteurId,
@@ -144,7 +149,7 @@ export async function envoyerDemande(
   });
 
   const notifications = fastify.notificationService;
-  if (notifications) {
+  if (notifications && !replayed) {
     await notifications.createFriendRequestNotification({
       recipientUserId: receveurId,
       requesterId: emetteurId,

@@ -41,8 +41,6 @@ const ECHO = 'rediffuse un état ABSOLU à chaque rejeu — écho sans crédit n
 const INVENTORY: Readonly<Record<string, Declaration>> = {
   'routes/posts/interactions.ts': { calls: 1, replay: `${NO_EFFECT} : retirer un like rejoué ne sait plus quelle réaction est partie et n'annonce rien` },
   'routes/posts/comments.ts': { calls: 2, replay: `édition et suppression : ${ECHO}` },
-  'routes/directory/friend-requests-core.ts': { calls: 1, replay: 'renotifie et repousse la demande à chaque rejeu — suivi #9623' },
-  'routes/directory/friend-request-answer.ts': { calls: 1, replay: 'renotifie et repousse la réponse à chaque rejeu — suivi #9623 ; le crédit social.friendship est protégé par son quota par cible' },
   'routes/directory/blocks.ts': { calls: 2, replay: `${NO_EFFECT} : seule l'invalidation du cache de blocage repart` },
   'routes/me/preferences/preference-router-factory.ts': { calls: 2, replay: ECHO },
   'routes/me/preferences/unified-routes.ts': { calls: 1, replay: ECHO },
@@ -75,6 +73,26 @@ describe('les appelants de withMutationLog déclarent ce que leur rejeu refait (
     expect(comments).toMatch(/withMutationVerdict<CommentResult>\(/);
     expect(core).toMatch(/withMutationVerdict<CreatedPost>\(/);
     expect(INVENTORY['routes/posts/core.ts']).toBeUndefined();
+  });
+
+  /**
+   * #9623 — les DEUX routes de demande d'ami lisent le verdict. C'étaient les
+   * seules entrées de l'inventaire dont le rejeu posait une seconde ligne
+   * `Notification` et une seconde bannière push : `createNotification` n'a ni
+   * clé d'idempotence ni déduplication en aval. Le refus portait pire qu'un
+   * doublon — `startCooldown` ÉCRASE la fin du cool-down depuis l'horloge de
+   * l'appel, donc un rejeu tardif rallongeait les 30 jours.
+   *
+   * Témoin de comportement : `friend-request-replay-announce.test.ts`.
+   */
+  it('les deux routes de demande d’ami lisent le verdict — elles ne sont plus dans l’inventaire', () => {
+    const envoi = stripComments(readFileSync(join(SRC_DIR, 'routes/directory/friend-requests-core.ts'), 'utf8'));
+    const reponse = stripComments(readFileSync(join(SRC_DIR, 'routes/directory/friend-request-answer.ts'), 'utf8'));
+
+    expect(envoi).toMatch(/withMutationVerdict\(/);
+    expect(reponse).toMatch(/withMutationVerdict\(/);
+    expect(INVENTORY['routes/directory/friend-requests-core.ts']).toBeUndefined();
+    expect(INVENTORY['routes/directory/friend-request-answer.ts']).toBeUndefined();
   });
 
   it('chaque entrée dit ce que son rejeu refait', () => {

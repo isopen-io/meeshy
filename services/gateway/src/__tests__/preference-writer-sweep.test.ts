@@ -38,11 +38,14 @@ import { sweepPreferenceWriteSites, formatSite } from './preference-writer-sweep
  * | `conversationPreferencesSync.detachConversationsFromCategory` | `USER_PREFERENCES_UPDATED`, une par conversation détachée — ajouté au cycle 129 |
  * | `services/packs/PackCatalog.settle` (bascule conditionnelle, contact d'`updatedAt`, création) | `PACK_INSTALLATION_UPDATED` après chaque écriture — #10148 (LP0), témoin `packs-engine.test.ts` |
  * | `services/packs/LensPacks.restore` (remise à zéro des installations d'une lens rétablie, #12321) | `PACK_INSTALLATION_UPDATED` (`installed: false`) à chaque compte remis à zéro — témoin `lens-packs.test.ts` |
+ * | `services/stickers/StickerLibrary` (création, remontée ×2, retrait) | `STICKER_LIBRARY_UPDATED` après chaque écriture — #16515, témoins `StickerLibrary.announce.test.ts` (l'écrivain annonce) et `sticker-library-broadcast.test.ts` (la route le câble) |
+ * | `routes/me/preferences/categories.ts` (create · update · delete · reorder) | `CATEGORY_CREATED` · `CATEGORY_UPDATED` · `CATEGORY_DELETED` · `CATEGORIES_REORDERED` — un verbe, une diffusion ; entré dans ce cliquet par #16515, qui a élargi l'énumération des tables |
  *
  * Les trois écrivains de `user-deletions.ts` n'y figurent PAS : ils passent par
  * `writeConversationPreferences`, ce qui est précisément la forme voulue — un
  * écrivain consolidé ne crée pas de site de plus.
  *
+ * | `services/packs/PackPrivacy` (`userSticker.deleteMany`) | aucune — purge RGPD d'un compte supprimé (#10151), aucun appareil à prévenir : même motif que sa jumelle `userStickerPack` une ligne plus bas. |
  * | `routes/communities/settings.ts` (DELETE, `userCommunityPreferences.deleteMany`) | aucune — #9508 : suppression TERMINALE de la communauté, dans la MÊME transaction que `community.delete` ; il n'existe plus d'écran « préférences de cette communauté » à resynchroniser puisque la communauté elle-même disparaît. Même motif de consolidation que `user-deletions.ts` ci-dessus. |
  */
 const FROZEN_WRITE_SITES = [
@@ -57,6 +60,18 @@ const FROZEN_WRITE_SITES = [
   'services/packs/PackCatalog.ts|userStickerPack|updateMany',
   // La purge RGPD d'un compte supprimé (#10151) : aucun appareil à prévenir, le compte n'existe plus.
   'services/packs/PackPrivacy.ts|userStickerPack|deleteMany',
+  // Même purge, même ligne de code (#10151) : la bibliothèque part avec le compte.
+  'services/packs/PackPrivacy.ts|userSticker|deleteMany',
+  // « Mes stickers » (#7938) : l'écrivain UNIQUE, qui diffuse depuis #16515.
+  'services/stickers/StickerLibrary.ts|userSticker|create',
+  'services/stickers/StickerLibrary.ts|userSticker|delete',
+  'services/stickers/StickerLibrary.ts|userSticker|update',
+  'services/stickers/StickerLibrary.ts|userSticker|update',
+  // Les dossiers de conversation : quatre verbes, quatre diffusions.
+  'routes/me/preferences/categories.ts|userConversationCategory|create',
+  'routes/me/preferences/categories.ts|userConversationCategory|delete',
+  'routes/me/preferences/categories.ts|userConversationCategory|update',
+  'routes/me/preferences/categories.ts|userConversationCategory|updateMany',
   'services/conversationPreferencesSync.ts|userConversationPreferences|updateMany',
   'services/conversationPreferencesSync.ts|userConversationPreferences|upsert',
   'services/conversationPreferencesSync.ts|userConversationPreferences|upsert',
@@ -74,9 +89,44 @@ describe('préférences par utilisateur — inventaire des écrivains', () => {
    * donc qu'il voit bien des sites, et que le dépouillement des commentaires ne
    * les a pas tous emportés avec eux.
    */
-  it('voit réellement les trois tables', () => {
+  it('voit réellement les cinq tables', () => {
     const models = new Set(sweepPreferenceWriteSites().map((site) => site.model));
-    expect([...models].sort()).toEqual(['userCommunityPreferences', 'userConversationPreferences', 'userStickerPack']);
+    expect([...models].sort()).toEqual([
+      'userCommunityPreferences',
+      'userConversationCategory',
+      'userConversationPreferences',
+      'userSticker',
+      'userStickerPack',
+    ]);
+  });
+
+  /**
+   * `userSticker` est un PRÉFIXE de `userStickerPack`. Les deux tables sont
+   * dans ce cliquet, et les confondre ferait d'un site de packs un site de
+   * stickers — un inventaire juste par accident, puis faux au premier
+   * déplacement.
+   */
+  it('ne confond pas userSticker avec userStickerPack', () => {
+    const sites = sweepPreferenceWriteSites();
+    expect(sites.filter((site) => site.model === 'userSticker').map(formatSite).sort()).toEqual([
+      'services/packs/PackPrivacy.ts|userSticker|deleteMany',
+      'services/stickers/StickerLibrary.ts|userSticker|create',
+      'services/stickers/StickerLibrary.ts|userSticker|delete',
+      'services/stickers/StickerLibrary.ts|userSticker|update',
+      'services/stickers/StickerLibrary.ts|userSticker|update',
+    ]);
+    expect(sites.filter((site) => site.model === 'userStickerPack' && site.file.includes('stickers/'))).toEqual([]);
+  });
+
+  /** Seul `StickerLibrary` écrit la bibliothèque — hors la purge d'un compte supprimé (#16515). */
+  it('n’écrit userSticker que depuis l’écrivain unique, ou la purge de compte', () => {
+    const outside = sweepPreferenceWriteSites().filter(
+      (site) =>
+        site.model === 'userSticker' &&
+        site.file !== 'services/stickers/StickerLibrary.ts' &&
+        site.file !== 'services/packs/PackPrivacy.ts',
+    );
+    expect(outside).toEqual([]);
   });
 
   /** Seul le moteur des packs écrit l'installation d'un pack (#10148) : un second écrivain contournerait le compteur atomique et la diffusion. */

@@ -22,6 +22,7 @@ import { STICKER_LIMITS, STICKER_MIME_TYPES, STICKER_ORIGINS } from '@meeshy/sha
 
 import { isRegisteredUser, type UnifiedAuthRequest } from '../../middleware/auth';
 import { StickerLibrary, type StickerFileStore } from '../../services/stickers/StickerLibrary';
+import { stickerLibraryAnnouncer } from '../../services/stickers/stickerLibraryAnnounce';
 import { logError } from '../../utils/logger';
 import {
   sendBadRequest,
@@ -132,6 +133,9 @@ export async function meStickersRoutes(fastify: FastifyInstance, options: MeStic
     new StickerLibrary({
       prisma: fastify.prisma,
       files: diskStickerFileStore(process.env.UPLOAD_PATH || '/app/uploads'),
+      // `UserSticker` est par COMPTE : chaque écriture doit atteindre les
+      // autres appareils, qui tiennent la grille en cache (#16515).
+      announce: stickerLibraryAnnouncer(fastify),
     });
 
   fastify.get(
