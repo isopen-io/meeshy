@@ -4,24 +4,24 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-/** Loi de dépliage d'un long message dans le fil — miroir de `LongMessageExpansionLaw` (iOS). */
+/**
+ * Loi de dépliage d'un long message dans le fil — miroir de `LongMessageExpansionLaw` (iOS, #16463). Le déplié est un
+ * message ORDINAIRE du mode courant : aucune mise en avant, aucun « Réduire ». Il reste déplié tant que la conversation
+ * est ouverte (l'état vit chez l'hôte du fil, recréé à chaque ouverture), et plusieurs messages peuvent l'être.
+ */
 object LongMessageExpansionLaw {
 
     enum class Anchor { Top, Bottom }
     enum class Pin { Origin, End }
 
-    /** Fenêtre pendant laquelle l'état de dépliage est maintenu : durée de hauteur + 0.35 s (0.65 s). */
+    /** Fenêtre pendant laquelle le bord ancré est tenu : durée de hauteur + 0.35 s (0.65 s). */
     const val HOLD_WINDOW_SECONDS: Double = 0.3 + 0.35
 
-    /** Alpha des autres rangées tant qu'un message déplié est visible. */
-    val NEIGHBOR_ALPHA: Float = FocalMetrics.Glass.NEIGHBOR_OPACITY.toFloat()
+    /** Le bord qui ne bouge pas : le HAUT — l'extrait reste en place, la suite se déroule dessous. */
+    val ANCHOR: Anchor = Anchor.Top
 
-    /** Un seul message déplié à la fois : retoucher le déplié le replie, un autre le remplace. */
-    fun nextExpanded(current: String?, toggled: String): String? =
-        if (current == toggled) null else toggled
-
-    /** Ancre haut à l'ouverture, bas au repli. */
-    fun anchor(isExpanding: Boolean): Anchor = if (isExpanding) Anchor.Top else Anchor.Bottom
+    /** Les dépliés après un toucher sur [tapped] : il s'y ajoute, et rien ne se replie. */
+    fun expanded(current: Set<String>, tapped: String): Set<String> = current + tapped
 
     fun anchoredOffset(
         current: Float,
@@ -32,18 +32,6 @@ object LongMessageExpansionLaw {
     ): Float {
         val target = current + (edgeBefore - edgeAfter)
         return min(max(target, minOffset), max(minOffset, maxOffset))
-    }
-
-    data class Rect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
-        val isEmpty: Boolean get() = right <= left || bottom <= top
-        fun inset(dx: Float, dy: Float): Rect = Rect(left + dx, top + dy, right - dx, bottom - dy)
-    }
-
-    private const val FOCUS_CARD_HORIZONTAL_INSET = 6f
-
-    fun glassFrame(bubble: Rect?, row: Rect): Rect {
-        if (bubble == null || bubble.isEmpty) return row.inset(FOCUS_CARD_HORIZONTAL_INSET, 0f)
-        return bubble.inset(-FOCUS_CARD_HORIZONTAL_INSET, -FocalMetrics.Row.PADDING_VERTICAL.toFloat())
     }
 
     data class HeightTiming(val durationSeconds: Double, val controlPoints: List<Double>)
@@ -76,7 +64,4 @@ object LongMessageExpansionLaw {
 
     fun regionShift(beyondEnd: Boolean, expandedBefore: Span, expandedAfter: Span): Float =
         if (beyondEnd) expandedAfter.end - expandedBefore.end else expandedAfter.origin - expandedBefore.origin
-
-    fun alpha(isExpandedCell: Boolean, expansionVisible: Boolean): Float =
-        if (!expansionVisible || isExpandedCell) 1f else NEIGHBOR_ALPHA
 }

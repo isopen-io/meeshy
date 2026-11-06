@@ -65,7 +65,6 @@ import me.meeshy.ui.component.focal.FocalIdentityChip
 import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.R
-import me.meeshy.ui.component.focal.ExpandedGlassFrame
 import me.meeshy.ui.component.focal.FocalAttachmentBlock
 import me.meeshy.ui.component.focal.FocalIdentityHeader
 import me.meeshy.ui.component.focal.FocalLongMessage
@@ -207,12 +206,9 @@ private fun FlatStandardBody(
     val expansionLabel = expansion?.takeIf { isLong }?.let {
         stringResource(if (it.isExpanded) R.string.focal_long_message_expanded else R.string.focal_long_message_collapsed)
     }
-    val expansionAction = expansion?.takeIf { isLong }?.let {
-        CustomAccessibilityAction(
-            stringResource(if (it.isExpanded) R.string.message_long_collapse else R.string.message_long_read_more),
-        ) { it.onToggle(); true }
+    val expansionAction = expansion?.takeIf { isLong && !it.isExpanded }?.let {
+        CustomAccessibilityAction(stringResource(R.string.message_long_read_more)) { it.onToggle(); true }
     }
-    val glassVisible = expansion?.isExpanded == true && isLong && !focused
     Row(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(FlatRowMetrics.metaSpacing),
@@ -280,7 +276,7 @@ private fun FlatStandardBody(
             }
         } }
         if (focus == null) {
-            ExpandedGlassFrame(visible = glassVisible, modifier = Modifier.weight(1f)) { column() }
+            Box(Modifier.weight(1f)) { column() }
         } else {
             FocalElectedFrame(
                 contentScale = focus.contentScale,
