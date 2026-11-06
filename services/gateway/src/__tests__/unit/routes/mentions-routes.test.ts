@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { MESSAGE_PROTECTION_SELECT } from '../../../routes/conversations/messageProtectionProjection';
 
 const VALID_MESSAGE_ID = '507f1f77bcf86cd799439011';
 const VALID_CONV_ID = '507f1f77bcf86cd799439022';
@@ -359,6 +360,37 @@ describe('GET /mentions/me', () => {
 
     const res = await app.inject({ method: 'GET', url: '/mentions/me', headers: AUTH_HEADER });
     expect(res.statusCode).toBe(500);
+  });
+
+  // #16558 — cette porte sert `Message.content`, elle doit donc le bloc de
+  // protection (#4885 critère 4). Sans lui, un message à VUE UNIQUE ou FLOUTÉ
+  // qui mentionne quelqu'un lui arrivait en clair et sans un seul drapeau : la
+  // garde cliente lit `isViewOnce`, qui était absent de la réponse, donc la
+  // bulle n'était ni voilée ni protégée du transfert.
+  //
+  // Le témoin traverse `app.inject` — donc la sérialisation — et lit les clés
+  // attendues DEPUIS la constante partagée, pour qu'une famille de protection
+  // ajoutée demain le fasse tomber plutôt que de passer en silence.
+  it('sert les drapeaux de protection d’un message mentionnant', async () => {
+    const mention = makeMention();
+    Object.assign((mention as any).message, {
+      isViewOnce: true,
+      maxViewOnceCount: 1,
+      viewOnceCount: 0,
+      isBlurred: false,
+      effectFlags: 0,
+      ephemeralDuration: null,
+      expiresAt: null,
+    });
+    mockGetRecentMentionsForUser.mockResolvedValue([mention]);
+
+    const res = await app.inject({ method: 'GET', url: '/mentions/me', headers: AUTH_HEADER });
+    const body = JSON.parse(res.body) as { data: any[] };
+
+    for (const field of Object.keys(MESSAGE_PROTECTION_SELECT)) {
+      expect(body.data[0].message).toHaveProperty(field);
+    }
+    expect(body.data[0].message.isViewOnce).toBe(true);
   });
 });
 

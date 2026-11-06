@@ -6,6 +6,7 @@ import { SuggestionsQuerySchema, MessageIdParamSchema, MyMentionsQuerySchema } f
 import type { MentionSuggestion } from '../services/MentionService.js';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
 import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../services/historyFloor.js';
+import { mapMessageProtectionFields } from './conversations/messageProtectionProjection.js';
 import { logError } from '../utils/logger.js';
 import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility';
 
@@ -216,6 +217,12 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
           conversationId: mention.message.conversationId,
           senderId: mention.message.senderId,
           createdAt: mention.message.createdAt,
+          // #16558 — les drapeaux que le client lit pour VOILER la bulle et
+          // refuser son transfert. Sans échéances de lecteur résolues,
+          // `mapMessageProtectionFields` sert `expiresAt: null` pour un
+          // éphémère plutôt que la colonne interne : une porte de service
+          // échoue en montrant MOINS, jamais le décompte de quelqu'un d'autre.
+          ...mapMessageProtectionFields(mention.message),
           sender: mention.message.sender ? {
             id: mention.message.sender.id,
             username: mention.message.sender.user?.username,
