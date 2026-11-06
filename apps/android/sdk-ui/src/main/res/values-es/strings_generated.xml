@@ -7,7 +7,7 @@
     <string name="a11y_media_download_action">Descargar</string>
     <string name="a11y_media_download_cancel">Cancelar descarga</string>
     <string name="a11y_message_actions_forward">Reenviar</string>
-    <string name="audio_consent_notice_action">Activar en Ajustes</string>
+    <string name="audio_consent_notice_action">Configurar mi voz</string>
     <string name="audio_consent_notice_message">Activa el consentimiento de voz para que tus mensajes de audio sean transcritos y traducidos.</string>
     <string name="audio_editor_a11y_playhead">Posición de reproducción</string>
     <string name="audio_editor_apply">Aplicar los cambios</string>
