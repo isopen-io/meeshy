@@ -22,6 +22,13 @@ export type CameraEffectsPort = {
   readonly refresh: (sent: MediaStreamTrack) => Promise<MediaStreamTrack>;
   readonly release: (sent: MediaStreamTrack) => void;
   readonly used: () => readonly string[];
+  /**
+   * Le traitement d'une piste envoyée est MORT en cours d'appel (#9187) :
+   * `handler` reçoit la caméra BRUTE à envoyer à sa place — l'appelant la
+   * remplace sur chaque lien (`replaceTrack`, sans renégociation). Le
+   * traitement mort est déjà arrêté avant l'appel.
+   */
+  readonly onFailure: (handler: (camera: MediaStreamTrack) => void) => void;
 };
 
 export type PipelineFactory = (camera: MediaStreamTrack, settings: FrameSettings) => Promise<EffectsPipeline>;
@@ -41,6 +48,7 @@ export const PASSTHROUGH_EFFECTS: CameraEffectsPort = {
   refresh: async (sent) => sent,
   release: (sent) => sent.stop(),
   used: () => [],
+  onFailure: () => undefined,
 };
 
 type BlurConstraint = MediaTrackConstraintSet & { readonly backgroundBlur?: boolean };
@@ -48,6 +56,7 @@ type BlurConstraint = MediaTrackConstraintSet & { readonly backgroundBlur?: bool
 export function createCameraEffects(deps: CameraEffectsDeps): CameraEffectsPort {
   const pipelines = new WeakMap<MediaStreamTrack, EffectsPipeline>();
   const building = new WeakMap<MediaStreamTrack, Promise<MediaStreamTrack>>();
+  let onFailure: ((camera: MediaStreamTrack) => void) | null = null;
 
   const settingsFor = (camera: MediaStreamTrack): FrameSettings => frameSettings(deps.effects(), { nativeBlur: cameraBlur(camera), zoom: deps.zoom?.() ?? 1 }, deps.lens?.());
 
@@ -64,6 +73,13 @@ export function createCameraEffects(deps: CameraEffectsDeps): CameraEffectsPort 
     if (pipeline === null) return camera;
     pipelines.set(pipeline.output, pipeline);
     registerCameraSource(pipeline.output, camera);
+    pipeline.onFailed?.(() => {
+      // Déjà remplacé ou relâché entre la panne et sa remontée (#9187) : ne
+      // rien défaire deux fois.
+      if (pipelines.get(pipeline.output) !== pipeline) return;
+      dismantle(pipeline.output, pipeline);
+      onFailure?.(camera);
+    });
     return pipeline.output;
   };
 
@@ -109,5 +125,6 @@ export function createCameraEffects(deps: CameraEffectsDeps): CameraEffectsPort 
       sent.stop();
     },
     used: () => effectsUsedOf(deps.effects()),
+    onFailure: (handler) => void (onFailure = handler),
   };
 }

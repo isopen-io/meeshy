@@ -36,6 +36,13 @@ export type EffectsPipeline = {
   readonly output: MediaStreamTrack;
   readonly update: (settings: FrameSettings) => void;
   readonly stop: () => void;
+  /**
+   * Un worker qui tombe APRÈS le premier mot (`worker.onerror`, WebAssembly,
+   * contexte WebGL perdu — #9187) : au plus un `handler` à la fois, rappelé
+   * une fois, jamais pour `framesPipeline`/`canvasPipeline`, qui n'ont aucun
+   * second procédé à qui le signaler.
+   */
+  readonly onFailed?: (handler: () => void) => void;
 };
 
 export type WorkerPort = {
@@ -104,7 +111,7 @@ const withoutRepeatedFiles = (settings: FrameSettings, sent: LensFiles | undefin
   return { ...settings, lens: { lens: lens.lens, languages: lens.languages, level: lens.level } };
 };
 
-function workerPipeline(output: MediaStreamTrack, worker: WorkerPort, unwatch: () => void, initial: FrameSettings): EffectsPipeline {
+function workerPipeline(output: MediaStreamTrack, worker: WorkerPort, unwatch: () => void, initial: FrameSettings, onLateFailure: (handler: () => void) => void): EffectsPipeline {
   let sent = initial.lens?.files;
   return {
     output,
@@ -118,6 +125,7 @@ function workerPipeline(output: MediaStreamTrack, worker: WorkerPort, unwatch: (
       worker.terminate();
       output.stop();
     },
+    onFailed: onLateFailure,
   };
 }
 
@@ -142,7 +150,17 @@ async function inWorker(handoff: Handoff, env: PipelineEnv & { readonly worker: 
     return null;
   }
   const unwatch = env.motion?.watch((reduced) => worker.post({ kind: 'motion', reduced }, [])) ?? (() => undefined);
-  return workerPipeline(output, worker, unwatch, handoff.settings);
+  // Remplace le handler de `firstWord` (dont la promesse est déjà résolue) :
+  // au-delà du premier mot, seuls `timings` et un `failed` TARDIF comptent.
+  let lateFailure: (() => void) | null = null;
+  worker.listen((reply) => {
+    if (reply.kind === 'timings') {
+      env.mark?.(reply.timings);
+      return;
+    }
+    if (reply.kind === 'failed') lateFailure?.();
+  });
+  return workerPipeline(output, worker, unwatch, handoff.settings, (handler) => void (lateFailure = handler));
 }
 
 function streamsHandoff(camera: MediaStreamTrack, settings: FrameSettings, frames: FramesEnv): Handoff {
