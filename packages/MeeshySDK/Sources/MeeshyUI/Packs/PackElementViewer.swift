@@ -28,8 +28,13 @@ struct PackElementViewer: View {
 
     private var target: PackViewerTarget? { model.viewer }
 
+    private var resolution: PackElementsResolution {
+        guard let target else { return .downloadRequired }
+        return model.elements(domain: target.domain, pack: target.slug)
+    }
+
     private var elements: [PackElement] {
-        guard let target, case .ready(let elements) = model.elements(domain: target.domain, pack: target.slug) else { return [] }
+        guard case .ready(let elements) = resolution else { return [] }
         return elements
     }
 
@@ -56,15 +61,27 @@ struct PackElementViewer: View {
         }
         .accessibilityAction(.escape) { onClose() }
         .adaptiveOnChange(of: target?.slug) { _, _ in resetZoom() }
+        .task(id: target?.slug) {
+            guard let target else { return }
+            await model.prepare(domain: target.domain, pack: target.slug)
+        }
     }
 
     // MARK: Pages
 
     @ViewBuilder
     private var pages: some View {
-        if elements.isEmpty {
+        if case .loading = resolution {
+            PackLoadingView()
+                .padding(MeeshySpacing.xl)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .simultaneousGesture(dismissGesture)
+        } else if elements.isEmpty {
             PackDownloadRequiredView()
                 .padding(MeeshySpacing.xl)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
                 .simultaneousGesture(dismissGesture)
         } else {
             TabView(selection: selection) {
@@ -88,7 +105,7 @@ struct PackElementViewer: View {
 
     private func page(_ element: PackElement, isCurrent: Bool) -> some View {
         PackElementStage(element: element, wearer: context.wearer, animates: isCurrent)
-            .padding(.vertical, isWallpaper(element) ? 0 : 140)
+            .padding(.vertical, verticalInset(element))
             .scaleEffect(isCurrent ? zoom.scale : 1)
             .offset(isCurrent ? pan : .zero)
             .contentShape(Rectangle())
@@ -112,9 +129,13 @@ struct PackElementViewer: View {
             .accessibilityIdentifier("shop.viewer.page.\(element.item)")
     }
 
-    private func isWallpaper(_ element: PackElement) -> Bool {
-        if case .wallpaper = element.art { return true }
-        return false
+    /// Une scène 9:16 se pose entre la barre et le pied ; le reste garde sa marge.
+    private func verticalInset(_ element: PackElement) -> CGFloat {
+        switch element.art {
+        case .wallpaper: 0
+        case .gloryFrame: 96
+        default: 140
+        }
     }
 
     private var positionBadge: some View {

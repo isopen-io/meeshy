@@ -114,12 +114,18 @@ public struct PackDecorEquipment {
     let service: any ProfileDecorProviding
     let currentDecor: () -> ServedProfileDecor?
     let publish: (ServedProfileDecor) -> Void
+    /// Ce que porte le choix optimiste : l'adresse du contrat d'un pack servi, pour qu'il se peigne au toucher.
+    let item: (ProfileDecorRef, ProfileDecorSide) -> ServedProfileDecorItem
 
     public init(service: any ProfileDecorProviding, currentDecor: @escaping () -> ServedProfileDecor?,
-                publish: @escaping (ServedProfileDecor) -> Void) {
+                publish: @escaping (ServedProfileDecor) -> Void,
+                item: @escaping (ProfileDecorRef, ProfileDecorSide) -> ServedProfileDecorItem = {
+                    ServedAppearanceStore.shared.servedItem($0, side: $1)
+                }) {
         self.service = service
         self.currentDecor = currentDecor
         self.publish = publish
+        self.item = item
     }
 
     /// Le compte connecté : le même chemin que la feuille « Contour et bannière » du profil.
@@ -145,6 +151,9 @@ public final class PackShowcaseModel: ObservableObject {
     @Published public var viewer: PackViewerTarget?
     @Published public private(set) var decor: ProfileDecorState
     @Published public private(set) var equipFailed = false
+    /// Les packs déjà demandés et ceux en route : avant et pendant, un pack se dit EN CHARGEMENT.
+    @Published private var attempted: Set<String> = []
+    @Published private var inFlight: Set<String> = []
 
     private let designs: any PackElementDesignProviding
     private let equipment: PackDecorEquipment
@@ -154,9 +163,9 @@ public final class PackShowcaseModel: ObservableObject {
     private var latestChoice: [ProfileDecorSide: Int] = [:]
     private var choices = 0
 
-    public init(designs: any PackElementDesignProviding = EmbeddedPackElementDesigns(),
+    public init(designs: (any PackElementDesignProviding)? = nil,
                 equipment: PackDecorEquipment = .live, language: String = "fr") {
-        self.designs = designs
+        self.designs = designs ?? ServedPackElementDesigns()
         self.equipment = equipment
         self.language = language
         let worn = equipment.currentDecor() ?? .empty
@@ -165,7 +174,29 @@ public final class PackShowcaseModel: ObservableObject {
     }
 
     public func elements(domain: PackDomain, pack: String) -> PackElementsResolution {
-        designs.elements(domain: domain, pack: pack, language: language)
+        let resolution = designs.elements(domain: domain, pack: pack, language: language)
+        let key = Self.key(domain, pack)
+        guard case .downloadRequired = resolution, !attempted.contains(key) || inFlight.contains(key) else { return resolution }
+        return .loading
+    }
+
+    /// Fait venir un pack que l'appareil ne sait pas encore peindre — une fois par pack.
+    public func prepare(domain: PackDomain, pack: String) async {
+        let key = Self.key(domain, pack)
+        guard !attempted.contains(key) else { return }
+        attempted.insert(key)
+        guard case .downloadRequired = designs.elements(domain: domain, pack: pack, language: language) else { return }
+        inFlight.insert(key)
+        await designs.prepare(domain: domain, pack: pack)
+        inFlight.remove(key)
+    }
+
+    public func seed(stickerPacks: [StickerPack]) {
+        designs.seed(stickerPacks: stickerPacks)
+    }
+
+    private static func key(_ domain: PackDomain, _ pack: String) -> String {
+        domain.rawValue + "/" + pack
     }
 
     public func openDetail(domain: PackDomain, slug: String) {
@@ -202,7 +233,7 @@ public final class PackShowcaseModel: ObservableObject {
         choices += 1
         let choice = choices
         latestChoice[side] = choice
-        decor.equip(ServedProfileDecorItem(pack: element.pack, item: element.item, origin: .builtin), side: side)
+        decor.equip(equipment.item(element.ref, side), side: side)
         equipment.publish(decor.decor)
         do {
             let served = try await equipment.service.update(ProfileDecorWrite(side: side, choice: element.ref))

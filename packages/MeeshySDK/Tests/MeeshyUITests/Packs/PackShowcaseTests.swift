@@ -64,6 +64,7 @@ final class EmbeddedPackElementDesignsTests: XCTestCase {
     }
 }
 
+@MainActor
 final class PackZoomTests: XCTestCase {
     func test_aFreshZoom_fitsAndAllowsPaging() {
         let zoom = PackZoom()
@@ -95,6 +96,7 @@ final class PackZoomTests: XCTestCase {
     }
 }
 
+@MainActor
 final class PackViewerPagerTests: XCTestCase {
     func test_position_readsNOverN() {
         XCTAssertEqual(PackViewerPager(index: 1, count: 5).position, "2 / 5")
@@ -113,6 +115,7 @@ final class PackViewerPagerTests: XCTestCase {
     }
 }
 
+@MainActor
 final class PackDetailFactsTests: XCTestCase {
     func test_availability_saysBundledInstalledOrToDownload() {
         XCTAssertEqual(PackDetailFacts.availability(PackRow(slug: "a", name: "A", installed: true, bundled: true)), .bundled)

@@ -10,6 +10,10 @@ public enum PackElementArt: Hashable, Sendable {
     case bannerFrame(BannerFrameDesign)
     case wallpaper(AppearanceDesign)
     case sticker(MeeSticker)
+    /// Un sticker de tiers : son image servie.
+    case stickerImage(StickerPackItem)
+    /// Un cadre du jeu, posé sur une scène 9:16 : sa vignette lue sur l'appareil.
+    case gloryFrame(FrameTile)
 }
 
 /// **Un élément d'un pack**, tel que la fiche et le plein écran le montrent.
@@ -36,21 +40,32 @@ public struct PackElement: Identifiable, Hashable, Sendable {
         case .avatarRing: .avatarRing
         case .banner: .banner
         case .bannerFrame: .bannerFrame
-        case .wallpaper, .sticker: nil
+        case .wallpaper, .sticker, .stickerImage, .gloryFrame: nil
         }
     }
 }
 
-/// Ce que l'appareil sait peindre d'un pack : ses éléments, ou rien tant qu'il n'est pas téléchargé.
+/// Ce que l'appareil sait peindre d'un pack : ses éléments, en route, ou rien tant qu'il n'est pas téléchargé.
 public enum PackElementsResolution: Hashable, Sendable {
     case ready([PackElement])
+    case loading
     case downloadRequired
 }
 
-/// **Résout le design des éléments d'un pack.** Aujourd'hui l'embarqué ; demain aussi le contrat servi
-/// d'un pack téléchargé (#16264) — la vitrine ne change pas, seul le fournisseur s'enrichit.
+/// **Résout le design des éléments d'un pack** : l'embarqué, le contrat servi d'un pack
+/// téléchargé (#16264), le détail d'un pack de stickers — la vitrine ne change pas, seul le
+/// fournisseur s'enrichit. `elements` ne touche jamais le réseau ; `prepare` fait venir le pack.
+@MainActor
 public protocol PackElementDesignProviding {
     func elements(domain: PackDomain, pack: String, language: String) -> PackElementsResolution
+    func prepare(domain: PackDomain, pack: String) async
+    /// Les packs de stickers déjà lus ailleurs (la feuille) : rien à relire pour les montrer.
+    func seed(stickerPacks: [StickerPack])
+}
+
+extension PackElementDesignProviding {
+    public func prepare(domain: PackDomain, pack: String) async {}
+    public func seed(stickerPacks: [StickerPack]) {}
 }
 
 /// Les éléments que l'app porte déjà : les catalogues embarqués et les films de Mee et Meo.

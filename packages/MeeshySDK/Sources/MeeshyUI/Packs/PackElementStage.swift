@@ -75,7 +75,30 @@ struct PackElementStage: View {
             MeeStickerFilmView(sticker: sticker, side: min(size.width, size.height) * (compact ? 0.8 : 0.6),
                                animates: animates,
                                pixelCap: compact ? MeeStickerFilmView.gridPixelCap : 720)
+        case .stickerImage(let item):
+            let side = min(size.width, size.height) * (compact ? 0.8 : 0.6)
+            CachedAsyncImage(url: item.fileUrl, targetSize: CGSize(width: side, height: side),
+                             showsStatusOverlays: false, autoLoad: true) {
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(Color.primary.opacity(0.06))
+            }
+            .scaledToFit()
+            .frame(width: side, height: side)
+        case .gloryFrame(let tile):
+            sceneFrame(tile, in: size)
         }
+    }
+
+    /// Un cadre du jeu se juge sur la scène qu'il entoure : une story 9:16 aux couleurs du profil.
+    private func sceneFrame(_ tile: FrameTile, in size: CGSize) -> some View {
+        let height = min(size.height, size.width / SceneShape.aspect)
+        let width = height * SceneShape.aspect
+        return ZStack {
+            LinearGradient(colors: [Color(hex: wearer.accentHex).opacity(0.55), MeeshyColors.indigo300.opacity(0.35)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            StoredPackImage(file: tile.thumb, maxPixelSize: compact ? 540 : 1440)
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: compact ? MeeshyRadius.sm : MeeshyRadius.md))
     }
 
     /// Une bannière 3:1 et, sous elle, l'avatar qui la chevauche — comme la fiche de profil.
@@ -145,6 +168,27 @@ struct PackSampleConversation: View {
                 }
             if !mine { Spacer(minLength: 60) }
         }
+    }
+}
+
+/// Un pack en route : le dire, dessiné, le temps qu'il arrive.
+struct PackLoadingView: View {
+    static var title: String {
+        String(localized: "shop.viewer.loading", defaultValue: "Le pack arrive…", bundle: .module)
+    }
+
+    var body: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            ProgressView()
+                .controlSize(.large)
+            Text(Self.title)
+                .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .padding(MeeshySpacing.lg)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.title)
+        .accessibilityIdentifier("shop.loading")
     }
 }
 

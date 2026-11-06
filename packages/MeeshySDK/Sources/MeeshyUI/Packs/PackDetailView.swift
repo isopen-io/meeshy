@@ -32,6 +32,7 @@ struct PackDetailView: View {
                 }
             }
         }
+        .task(id: target) { await model.prepare(domain: target.domain, pack: target.slug) }
         .fullScreenCover(item: viewerBinding) { _ in
             PackElementViewer(model: model, context: context) { model.viewer = nil }
         }
@@ -119,6 +120,18 @@ struct PackDetailView: View {
                     tile(element, index: index)
                 }
             }
+        case .loading:
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tileMinimum(target.domain)), spacing: MeeshySpacing.md)],
+                      spacing: MeeshySpacing.md) {
+                ForEach(0..<6, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(Color.primary.opacity(0.06))
+                        .aspectRatio(Self.tileAspect(target.domain), contentMode: .fit)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(PackLoadingView.title)
+            .accessibilityIdentifier("shop.detail.loading")
         case .downloadRequired:
             PackDownloadRequiredView()
         }
@@ -158,6 +171,7 @@ struct PackDetailView: View {
         switch domain {
         case .banner, .bannerFrame: 3
         case .wallpaper: 0.75
+        case .gloryFrame: 9.0 / 16.0
         default: 1
         }
     }

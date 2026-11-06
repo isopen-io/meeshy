@@ -120,14 +120,16 @@ public struct UnifiedShopView: View {
     /// `language` nomme les packs dans la langue du lecteur ; `usageText` traduit la loi d'usage
     /// d'un cadre (« Rang Ambassadeur uniquement ») — l'app la possède, la vitrine l'affiche (#10711).
     /// `rankName` nomme un rang du jeu pour « ce qui reste à débloquer » (#11306) ; sans lui, la ligne dit
-    /// la Gloire manquante sans le rang.
+    /// la Gloire manquante sans le rang. `designs` peint les éléments d'un pack dans sa fiche et son plein
+    /// écran — l'app y ajoute ce que le SDK ne sait pas lire seul (les cadres du jeu).
     @MainActor
     public init(initialDomain: PackDomain? = nil, domains: [PackDomain] = PackDomain.allCases,
                 focusedSlug: String? = nil, language: String = "fr",
                 usageText: ((FrameUsage) -> String)? = nil, rankName: ((GloryRank) -> String)? = nil,
-                store: PackShopStore? = nil, wearer: PackStageWearer? = nil, showcase: PackShowcaseModel? = nil) {
+                store: PackShopStore? = nil, wearer: PackStageWearer? = nil,
+                designs: (any PackElementDesignProviding)? = nil) {
         self.wearer = wearer
-        _showcase = StateObject(wrappedValue: showcase ?? PackShowcaseModel(language: language))
+        _showcase = StateObject(wrappedValue: PackShowcaseModel(designs: designs, language: language))
         self.focusedSlug = focusedSlug
         self.language = language
         self.usageText = usageText
@@ -145,18 +147,7 @@ public struct UnifiedShopView: View {
             shelf
         }
         .task { await store.load(domains: domains) }
-        .sheet(item: $showcase.detail, onDismiss: { showcase.viewer = nil }) { target in
-            PackDetailView(model: showcase, target: target, context: context(for: target.domain))
-        }
-        .fullScreenCover(item: shopViewerBinding) { target in
-            PackElementViewer(model: showcase, context: context(for: target.domain)) { showcase.viewer = nil }
-        }
-    }
-
-    /// Le plein écran ouvert depuis la couverture d'une rangée ; ouvert depuis la fiche, c'est elle qui le présente.
-    private var shopViewerBinding: Binding<PackViewerTarget?> {
-        Binding(get: { showcase.detail == nil ? showcase.viewer : nil },
-                set: { if showcase.detail == nil { showcase.viewer = $0 } })
+        .packShowcase(showcase) { context(for: $0) }
     }
 
     private func rows(in domain: PackDomain) -> [PackRow]? {
