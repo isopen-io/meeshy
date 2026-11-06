@@ -294,10 +294,27 @@ final class ProgressionMeeshEntryTests: XCTestCase {
             ecran.node("progression.meesh.minting"),
             "Aucun indicateur d'activité pendant la frappe. Identifiants vus : \(ecran.identifiers)"
         )
-        let dit = ecran.labels.joined(separator: " | ")
+        let offre = ProgressionCopy.meeshMintAction(meesh.mintCost)
+        let dit = libellesStabilises(de: ecran) { !$0.contains(offre) }
         XCTAssertTrue(dit.contains(frappeEnCours), "La frappe en cours n'est pas dite : « \(dit) »")
-        XCTAssertFalse(dit.contains(ProgressionCopy.meeshMintAction(meesh.mintCost)),
-                       "La conversion reste offerte pendant la frappe : « \(dit) »")
+        XCTAssertFalse(dit.contains(offre), "La conversion reste offerte pendant la frappe : « \(dit) »")
+    }
+
+    /// Les libellés de l'arbre une fois POSÉ. La vue est construite avec
+    /// `isMinting: true` et ne rend jamais le libellé d'offre ; sur un runner
+    /// chargé, l'arbre d'accessibilité lu au premier tour a pourtant rendu un
+    /// nœud composite transitoire (« Convertir …, Dernière frappe », run de dev
+    /// 42116853798) que le rendu ne contient pas. Le témoin juge l'arbre posé,
+    /// sous une borne : un défaut réel (l'offre rendue) le garde rouge.
+    private func libellesStabilises(de ecran: RenderedScreen, borne: TimeInterval = 5,
+                                    jusqua: (String) -> Bool) -> String {
+        let echeance = Date().addingTimeInterval(borne)
+        var dit = ecran.labels.joined(separator: " | ")
+        while !jusqua(dit), Date() < echeance {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            dit = ecran.labels.joined(separator: " | ")
+        }
+        return dit
     }
 
     /// Un échec se lit DANS le détail, sous l'action qu'on peut retenter.
