@@ -1,6 +1,7 @@
 import Foundation
 
-// Extrait de `MessageSocketManager.swift`, hors budget de taille : le lot #10898 ajoute `game:updated` (#10900).
+// Extrait de `MessageSocketManager.swift`, hors budget de taille : le lot #10898 ajoute `game:updated` (#10900), le lot
+// #16425 `game:missions-updated`.
 // Responsabilité tenue ici : l'état du Jeu changé AILLEURS — une frappe, un gain, une reprise, un prestige ou une dépense
 // faits sur un autre appareil ou par la passerelle.
 
@@ -54,14 +55,16 @@ public extension Notification.Name {
     static let gameMissionsUpdated = Notification.Name("me.meeshy.gameMissionsUpdated")
 }
 
-extension MessageSocketManager {
+/// Les routes du Jeu tiennent dans la TABLE, pas dans le gestionnaire : elles ne livrent qu'à `NotificationCenter` et
+/// ne lisent rien de lui — comme `relations(_:)`.
+extension MessageSocketRoutes {
 
-    var gameStateRoutes: [SocketInboundRoute] {
+    static func game(_ m: MessageSocketManager) -> [SocketInboundRoute] {
         [
-            route(.gameUpdated, GameUpdatedEvent.self) { _, event in
+            m.route(.gameUpdated, GameUpdatedEvent.self) { _, event in
                 NotificationCenter.default.post(name: .gameStateUpdated, object: event)
             },
-            route(.gameMissionsUpdated, GameMissionsUpdatedEvent.self) { _, event in
+            m.route(.gameMissionsUpdated, GameMissionsUpdatedEvent.self) { _, event in
                 NotificationCenter.default.post(name: .gameMissionsUpdated, object: event)
             },
         ]

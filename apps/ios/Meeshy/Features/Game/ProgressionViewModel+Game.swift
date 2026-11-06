@@ -5,6 +5,7 @@ import UIKit
 /// Ce qui fait relire les défis du jour et les succès en direct (#16425) : `game:missions-updated` (une mission a avancé,
 /// ici ou ailleurs) et le retour de l'app au premier plan (des défis ont pu avancer, ou le jour changer, pendant
 /// l'absence). `game:updated` a son propre chemin (`ProgressionViewModel.receive`), qui pose le bloc servi.
+@MainActor
 enum GameLiveRefresh {
     static func triggers(center: NotificationCenter = .default) -> AnyPublisher<Void, Never> {
         Publishers.Merge(
