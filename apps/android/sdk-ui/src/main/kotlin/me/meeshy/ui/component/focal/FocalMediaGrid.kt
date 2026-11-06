@@ -26,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import me.meeshy.ui.component.bubble.BlurVeil
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -220,7 +222,11 @@ private fun FocalGridCell(
             FocalCellMediaLayer.Clear -> FocalCellMedia(visual, Modifier.fillMaxSize())
             is FocalCellMediaLayer.Blurred -> FocalCellMedia(
                 visual,
-                Modifier.fillMaxSize().blur(layer.radiusDp.dp).clearAndSetSemantics {},
+                Modifier
+                    .fillMaxSize()
+                    .blur(layer.radiusDp.dp)
+                    .graphicsLayer { alpha = BlurVeil.contentAlpha(android.os.Build.VERSION.SDK_INT, concealed = true) }
+                    .clearAndSetSemantics {},
             )
             FocalCellMediaLayer.Absent -> Unit
         }

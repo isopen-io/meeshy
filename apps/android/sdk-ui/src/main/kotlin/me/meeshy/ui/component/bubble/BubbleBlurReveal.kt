@@ -34,6 +34,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -151,7 +152,8 @@ public fun BubbleBlurReveal(
 
     // Scrim opacity: near-opaque at rest, clears as the content reveals, and follows
     // the transient fog spike during the re-conceal.
-    val restingScrim = RESTING_CONCEAL_ALPHA * (1f - reveal.value)
+    val sdkInt = android.os.Build.VERSION.SDK_INT
+    val restingScrim = BlurVeil.restingScrimAlpha(sdkInt) * (1f - reveal.value)
     val scrimAlpha = maxOf(restingScrim, fog.value)
     val concealed = reveal.value < 0.5f
 
@@ -168,6 +170,7 @@ public fun BubbleBlurReveal(
                     // aussi de l'arbre d'accessibilité, sinon TalkBack le lirait en clair.
                     Modifier
                         .blur(CONCEAL_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded)
+                        .graphicsLayer { alpha = BlurVeil.contentAlpha(sdkInt, concealed = true) }
                         .clearAndSetSemantics {}
                 } else {
                     Modifier
@@ -243,7 +246,19 @@ private fun RevealHint(isViewOnce: Boolean) {
     }
 }
 
+/**
+ * #14662 — le voile d'un contenu flouté selon ce que l'appareil sait flouter. `Modifier.blur` ne fait rien sous l'API
+ * 31 : le contenu masqué ne s'y dessine pas, et le voile au repos y est plein, sinon le texte transparaît (Android 9–11).
+ */
+internal object BlurVeil {
+    private const val BLUR_MIN_SDK = 31
+    private const val TRANSLUCENT_RESTING_ALPHA = 0.94f
+
+    fun restingScrimAlpha(sdkInt: Int): Float = if (sdkInt >= BLUR_MIN_SDK) TRANSLUCENT_RESTING_ALPHA else 1f
+
+    fun contentAlpha(sdkInt: Int, concealed: Boolean): Float = if (!concealed || sdkInt >= BLUR_MIN_SDK) 1f else 0f
+}
+
 private const val REVEAL_MILLIS = 300
 private val CONCEAL_BLUR_RADIUS = 18.dp
-private const val RESTING_CONCEAL_ALPHA = 0.94f
 private val FOG_COLOR = Color(0xFF1E1B4B) // indigo950 — the fog reads as a Meeshy-brand veil
