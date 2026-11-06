@@ -26,6 +26,6 @@ extension ThemedMessageBubble {
     private func greeting(_ content: BubbleContent) -> ArrivalGreetingInvite? {
         guard let onGreetArrivals, let invite = content.arrivalsInvite else { return nil }
         let messageId = message.id
-        return ArrivalGreetingInvite(text: invite, accentHex: contactColor) { onGreetArrivals(messageId) }
+        return ArrivalGreetingInvite(text: invite, accentColor: contactColor) { onGreetArrivals(messageId) }
     }
 }

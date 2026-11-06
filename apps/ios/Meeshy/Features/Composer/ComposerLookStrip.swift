@@ -289,6 +289,7 @@ struct ComposerLookStrip: View {
         .frame(width: cellule.width, height: cellule.height)
         .modifier(ComposerTriggerOutlineStyle(recording: recording))
         .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
+        .modifier(ComposerShutterPulse(tick: session.camera.shutterPresses))
         .contentShape(Rectangle())
         .gesture(triggerGestures(zone: .shutter))
         .accessibilityElement()
@@ -316,6 +317,7 @@ struct ComposerLookStrip: View {
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
         // Le cadre AUTOUR du flux (#10309) : rouge et battant pendant la prise.
         .modifier(ComposerTriggerOutlineStyle(recording: recording))
+        .modifier(ComposerShutterPulse(tick: session.camera.shutterPresses))
         .contentShape(Rectangle())
         .gesture(chosenGestures)
         .accessibilityElement()
@@ -454,6 +456,7 @@ struct ComposerLookStrip: View {
             .strokeBorder(Color.white.opacity(chosen ? 0 : 0.25), lineWidth: 1)
             .frame(width: cellule.width, height: cellule.height)
             .modifier(ComposerTriggerOutlineStyle(recording: recording, shown: chosen))
+            .modifier(ComposerShutterPulse(tick: chosen ? session.camera.shutterPresses : 0))
             .contentShape(Rectangle())
             .gesture(chosen ? AnyGesture(chosenGestures.map { _ in () }) : AnyGesture(TapGesture().onEnded {
                 perform(.otherThumbnail, .tap, item: item)

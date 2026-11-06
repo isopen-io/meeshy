@@ -23,7 +23,7 @@ extension ComposerCaptureSession {
         openFamily = nil
         activeEditTools = ComposerEditTools.initial(.photo)
         editChromeShown = true
-        editAspect = ComposerEditScene.clampedAspect(canvasAspect)
+        editAspect = ComposerEditScene.clampedAspect(ComposerTakeAspect.aspect(canvas: canvasAspect, take: CGSize(width: debout.width, height: debout.height)))
         phase = .editing(.photo)
         camera.pauseRunning()
     }
@@ -53,7 +53,7 @@ extension ComposerCaptureSession {
         editChromeShown = true
         takeSound = ComposerTakeSound()
         editPaused = false
-        editAspect = ComposerEditScene.clampedAspect(canvasAspect)
+        editAspect = ComposerEditScene.clampedAspect(ComposerTakeAspect.aspect(canvas: canvasAspect, take: lecteur.uprightSize))
         phase = .editing(.video(url))
         camera.pauseRunning()
         lecteur.configure(fps: ComposerCaptureSurfaceRule.editFPS(thermalBudget),
