@@ -188,6 +188,8 @@ const INVISIBLE_OR_CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 const OFFICIAL_LINK_ACTION = 'PACK_PUBLISHER_OFFICIAL_LINK';
 
 const ROW_SELECT = { id: true, userId: true, slug: true, displayName: true, nameKey: true, nameDisputedAt: true, nameOffListAt: true, verifiedAt: true, createdAt: true } as const;
+/** La page lit le sceau et le site dans la MÊME lecture : un site changé entre deux lectures partirait sous un sceau déjà retiré. */
+const PAGE_SELECT = { ...ROW_SELECT, website: true, ownerShownAt: true } as const;
 
 type PublisherRow = {
   readonly id: string;
@@ -201,6 +203,8 @@ type PublisherRow = {
   readonly verifiedAt: Date | null;
   readonly createdAt?: Date | null;
 };
+
+type PageRow = PublisherRow & { readonly website: string | null; readonly ownerShownAt?: Date | null };
 
 /** Le rattrapage seul pose la marque « nom hors liste » ; une marque déjà posée ne bouge pas. */
 type LegacyMark = { readonly offList?: boolean };
@@ -371,9 +375,14 @@ export class PackPublishers {
    * officiel, dont les packs sont ceux du dépôt, en est dispensé) ; la loi « ne pas être
    * trouvé » (#8104) ne le cache pas à ce lecteur ; et ni lui ni le lecteur ne se sont bloqués
    * (`isBlockedBetween`) — le compte officiel compris. Sinon la page reste, sans lien.
-   * Le site ne part que d'un éditeur VÉRIFIÉ dont le compte est servi : un lien que personne
-   * n'a revu ne se pose jamais à côté de l'identité, et un site personnel ne ré-identifie pas
-   * celui que le blocage ou « ne pas être trouvé » taisent (audit du 2026-11-06, N1 et N2).
+   * Et, sur tout cela, le compte n'est nommé que si l'éditeur l'a CHOISI (`ownerShownAt`,
+   * #16440) — masqué par défaut, lu dans la même lecture que le sceau et le site ; le compte
+   * officiel en est dispensé. Ce choix ne lève aucune des gardes ci-dessus.
+   * Le site ne part que d'un éditeur VÉRIFIÉ : un lien que personne n'a revu ne se pose
+   * jamais à côté de l'identité. Compte affiché, il suit le compte — un site personnel ne
+   * ré-identifie pas celui que le blocage ou « ne pas être trouvé » taisent (audit du
+   * 2026-11-06, N1 et N2). Compte masqué, il ne suit que ce que le lecteur ne contrôle pas
+   * (`maskedSiteTravels`).
    */
   async page(slug: string, viewerId: string): Promise<PublisherPage | null> {
     const row = await this.pageRow(slug);
@@ -382,27 +391,54 @@ export class PackPublishers {
     if (publisher === null) return null;
     const neutralized = row.profile !== null && !publisher.official && publisher.name !== row.profile.displayName;
     if (neutralized) return { publisher, owner: null, website: null };
-    const owner = row.soleHolder ? await this.ownerCard(row.ownerId, viewerId) : null;
-    const website = publisher.verified && owner !== null ? row.profile?.website ?? null : null;
-    return { publisher, owner, website };
+    if (!row.soleHolder || row.ownerId === null) return { publisher, owner: null, website: null };
+    const site = publisher.verified ? row.profile?.website ?? null : null;
+    const chosen = this.isOfficial(row.ownerId) || (row.profile?.ownerShownAt ?? null) !== null;
+    if (chosen) {
+      const owner = await this.ownerCard(row.ownerId, viewerId);
+      return { publisher, owner, website: owner === null ? null : site };
+    }
+    const siteTravels = site !== null && (await this.maskedSiteTravels(row.ownerId, viewerId));
+    return { publisher, owner: null, website: siteTravels ? site : null };
   }
 
-  private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly soleHolder: boolean; readonly profile: (PublisherRow & { readonly website?: string | null }) | null } | null> {
+  /**
+   * Le site d'un éditeur dont le compte est MASQUÉ (#16440) : il ne dépend que de ce que le
+   * LECTEUR ne contrôle pas — compte actif, pack approuvé, et le blocage posé par le TITULAIRE
+   * (jamais celui du lecteur). Un critère que le lecteur bascule (bloquer un suspect, la loi
+   * « ne pas être trouvé ») ferait de la présence du site un oracle qui démasque le compte
+   * (audit du 2026-11-06).
+   */
+  private async maskedSiteTravels(ownerId: string, viewerId: string): Promise<boolean> {
+    const visibility = this.ownerVisibility;
+    if (visibility === null) return false;
+    const account = await this.prisma.user.findUnique({ where: { id: ownerId }, select: ACCOUNT_SELECT });
+    if (!isLive(account)) return false;
+    if (!this.isOfficial(ownerId) && !(await visibility.hasPublished(ownerId))) return false;
+    if (ownerId === viewerId) return true;
+    const ownerBlockedViewer = await this.prisma.user.findFirst({ where: { id: ownerId, blockedUserIds: { has: viewerId } }, select: { id: true } });
+    return ownerBlockedViewer === null;
+  }
+
+  private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly soleHolder: boolean; readonly profile: PageRow | null } | null> {
     if (slug === MEESHY_PUBLISHER_SLUG) {
-      const profile = this.official === null ? null : (await this.rowsOf([this.official]))[0] ?? null;
-      return { ownerId: this.official, soleHolder: true, profile: profile === null ? null : { ...profile, website: await this.websiteOf(profile.id) } };
+      const profile = this.official === null ? null : (await this.pageRowsWhere({ userId: this.official }))[0] ?? null;
+      return { ownerId: this.official, soleHolder: true, profile };
     }
     if (!isThirdPartySlug(slug)) return null;
-    const rows: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { slug }, select: ROW_SELECT });
+    const rows = await this.prisma.partnerProfile.findMany({ where: { slug }, select: PAGE_SELECT });
     const profile = [...rows].sort(byAge)[0];
     if (profile === undefined) return null;
     const holders = new Set(rows.map((holder) => holder.userId));
-    return { ownerId: profile.userId, soleHolder: holders.size === 1, profile: { ...profile, website: await this.websiteOf(profile.id) } };
+    return { ownerId: profile.userId, soleHolder: holders.size === 1, profile };
   }
 
-  private async websiteOf(id: string): Promise<string | null> {
-    const found = await this.prisma.partnerProfile.findUnique({ where: { id }, select: { website: true } });
-    return typeof found?.website === 'string' ? found.website : null;
+  private async pageRowsWhere(where: { readonly userId: string }): Promise<readonly PageRow[]> {
+    try {
+      return await this.prisma.partnerProfile.findMany({ where, select: PAGE_SELECT });
+    } catch {
+      return [];
+    }
   }
 
   private async ownerCard(userId: string | null, viewerId: string): Promise<PublisherOwnerCard | null> {

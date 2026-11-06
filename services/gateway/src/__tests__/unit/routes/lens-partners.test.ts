@@ -240,13 +240,44 @@ describe('l’identité d’un partenaire est VÉRIFIÉE par BIGBOSS/ADMIN', () 
     expect((await credits(h))[0].partner).toBeNull();
   });
 
-  it('changer seulement son site garde la vérification', async () => {
+  it('changer seulement son SITE après vérification la RETIRE : un lien que personne n’a revu ne part pas sous le sceau (porteur, 2026-11-06)', async () => {
     const h = await harness();
     await saveProfile(h);
     await verifyAs(h);
 
     const moved = await saveProfile(h, { displayName: 'Studio Lumière', website: 'https://autre.example' });
-    expect(moved.json().data).toMatchObject({ website: 'https://autre.example', verified: true });
+    expect(moved.json().data).toMatchObject({ website: 'https://autre.example', verified: false, verifiedAt: null });
+    expect(h.prisma.partnerProfile.rows[0]).toMatchObject({ verifiedAt: null, verifiedBy: null });
+    expect((await credits(h))[0].partner).toBeNull();
+    expect(await pendingOf(h)).toMatchObject({ website: 'https://autre.example' });
+  });
+
+  it('retirer son site après vérification la retire aussi : le site vérifié n’est plus celui du profil', async () => {
+    const h = await harness();
+    await saveProfile(h);
+    await verifyAs(h);
+
+    const cleared = await saveProfile(h, { displayName: 'Studio Lumière', website: null });
+    expect(cleared.json().data).toMatchObject({ website: null, verified: false });
+  });
+
+  it('remettre le MÊME site, le même nom et le même logo ne retire rien', async () => {
+    const h = await harness();
+    await saveProfile(h);
+    await verifyAs(h);
+    const verifiedAt = h.prisma.partnerProfile.rows[0]!.verifiedAt;
+
+    const same = await saveProfile(h, { displayName: 'Studio Lumière', website: 'https://lumiere.example' });
+    expect(same.json().data).toMatchObject({ website: 'https://lumiere.example', verified: true });
+    expect(h.prisma.partnerProfile.rows[0]).toMatchObject({ verifiedAt, verifiedBy: ADMIN });
+    expect((await credits(h))[0].partner).toMatchObject({ name: 'Studio Lumière' });
+  });
+
+  it('le compte officiel garde sa vérification en changeant son site, comme pour son logo', async () => {
+    const h = await harness({ official: ALICE });
+    h.prisma.partnerProfile.rows.push({ id: 'p-off', userId: ALICE, slug: 'meeshy', displayName: 'Meeshy', nameKey: null, website: null, logoSrc: null, logoSha256: null, verifiedAt: new Date(START), verifiedBy: null, updatedAt: new Date(START), createdAt: new Date(START) });
+    const res = await saveProfile(h, { displayName: 'Meeshy', website: 'https://meeshy.me' });
+    expect(res.json().data).toMatchObject({ website: 'https://meeshy.me', verified: true });
   });
 
   it('un ADMIN retire une vérification, journalisé ; le crédit s’éteint', async () => {
@@ -275,6 +306,78 @@ describe('l’identité d’un partenaire est VÉRIFIÉE par BIGBOSS/ADMIN', () 
     expect((await saveProfile(h, { displayName: 'Studio', logo: Buffer.from('pas une image').toString('base64') })).json()).toMatchObject({ code: 'PARTNER_LOGO_REFUSED', reason: 'not-an-image' });
     expect((await saveProfile(h, { displayName: 'Studio', logo: Buffer.alloc(300_000, 1).toString('base64') })).statusCode).toBe(413);
     expect(h.prisma.partnerProfile.rows).toEqual([]);
+  });
+});
+
+describe('#16440 — l’éditeur CHOISIT de nommer son compte Meeshy sur sa page éditeur, masqué par défaut', () => {
+  const own = async (h: H) => (await call(h, 'GET', '/partners/me')).json().data;
+  const shownAt = (h: H) => h.prisma.partnerProfile.rows.find((row) => row.userId === ALICE)?.ownerShownAt ?? null;
+
+  it('un profil créé sans rien dire est MASQUÉ : `showOwnerProfile` vaut false, et rien n’est posé', async () => {
+    const h = await harness();
+    const saved = await saveProfile(h);
+    expect(saved.json().data).toMatchObject({ showOwnerProfile: false });
+    expect(await own(h)).toMatchObject({ showOwnerProfile: false });
+    expect(shownAt(h)).toBeNull();
+  });
+
+  it('true pose la date, un second true la GARDE, un envoi sans le champ ne change rien, false la remet à null', async () => {
+    const h = await harness();
+    const created = await saveProfile(h, { displayName: 'Studio Lumière', showOwnerProfile: true });
+    expect(created.json().data).toMatchObject({ showOwnerProfile: true });
+    const first = shownAt(h);
+    expect(first).toBeInstanceOf(Date);
+
+    await saveProfile(h, { displayName: 'Studio Lumière', showOwnerProfile: true });
+    expect(shownAt(h)).toEqual(first);
+
+    const silent = await saveProfile(h, { displayName: 'Studio Lumière' });
+    expect(silent.json().data).toMatchObject({ showOwnerProfile: true });
+    expect(shownAt(h)).toEqual(first);
+
+    const hidden = await saveProfile(h, { displayName: 'Studio Lumière', showOwnerProfile: false });
+    expect(hidden.json().data).toMatchObject({ showOwnerProfile: false });
+    expect(shownAt(h)).toBeNull();
+    expect(await own(h)).toMatchObject({ showOwnerProfile: false });
+  });
+
+  it('afficher ou masquer son compte NE RETIRE PAS la vérification : ce n’est pas l’identité de l’éditeur', async () => {
+    const h = await harness();
+    await saveProfile(h);
+    await verifyAs(h);
+
+    const shown = await saveProfile(h, { displayName: 'Studio Lumière', website: 'https://lumiere.example', showOwnerProfile: true });
+    expect(shown.json().data).toMatchObject({ verified: true, showOwnerProfile: true });
+    const hidden = await saveProfile(h, { displayName: 'Studio Lumière', website: 'https://lumiere.example', showOwnerProfile: false });
+    expect(hidden.json().data).toMatchObject({ verified: true, showOwnerProfile: false });
+  });
+
+  it('un `showOwnerProfile` qui n’est pas un booléen rend 400 et n’écrit rien — la route ne le COERCE pas (audit 2026-11-06)', async () => {
+    const h = await harness();
+    await saveProfile(h);
+    for (const showOwnerProfile of ['oui', 'true', 1, 0, null]) {
+      const res = await saveProfile(h, { displayName: 'Studio Lumière', showOwnerProfile });
+      expect([showOwnerProfile, res.statusCode]).toEqual([showOwnerProfile, 400]);
+    }
+    expect(shownAt(h)).toBeNull();
+  });
+
+  it('une course au nom perdue rend 409 ET défait le choix d’afficher écrit avec elle (audit 2026-11-06)', async () => {
+    const h = await harness();
+    await saveProfile(h, { displayName: 'Aurore Studio' });
+    const rows = h.prisma.partnerProfile.rows;
+    const updateMany = h.prisma.partnerProfile.updateMany;
+    h.prisma.partnerProfile.updateMany = async (args) => {
+      const result = await updateMany(args);
+      if ('displayName' in args.data && args.data.displayName === 'Studio Lumière' && !rows.some((row) => row.userId === BOB)) {
+        rows.push({ id: 'p-bob', userId: BOB, displayName: 'Studio Lumière', nameKey: 'studioiumiere', website: null, logoSrc: null, logoSha256: null, verifiedAt: null, updatedAt: new Date(START - 5_000), createdAt: new Date(START - 5_000) });
+      }
+      return result;
+    };
+    const res = await saveProfile(h, { displayName: 'Studio Lumière', showOwnerProfile: true });
+    expect(res.statusCode).toBe(409);
+    expect(rows.find((row) => row.userId === ALICE)).toMatchObject({ displayName: 'Aurore Studio' });
+    expect(shownAt(h)).toBeNull();
   });
 });
 
@@ -315,6 +418,18 @@ describe('B1 — l’ADMIN vérifie l’état qu’il a VU, jamais celui qui est
     const res = await call(h, 'POST', `/partners/${ALICE}/verify`, ADMIN, { expected: { version: seen!.version } });
     expect(res.statusCode).toBe(409);
     expect(h.prisma.partnerProfile.rows[0]!.verifiedAt).toBeNull();
+  });
+
+  it('un site remplacé entre la file et le clic ⇒ 409, même nom, même logo : l’ADMIN ne scelle pas un lien qu’il n’a pas vu', async () => {
+    const h = await harness();
+    await saveProfile(h);
+    const seen = await pendingOf(h);
+    await saveProfile(h, { displayName: 'Studio Lumière', website: 'https://autre.example' });
+
+    const res = await call(h, 'POST', `/partners/${ALICE}/verify`, ADMIN, { expected: { version: seen!.version } });
+    expect(res.statusCode).toBe(409);
+    expect(h.prisma.partnerProfile.rows[0]!.verifiedAt).toBeNull();
+    expect(h.audit).toEqual([]);
   });
 
   it('N6 — un renommage qui tombe ENTRE la relecture et l’écriture : 409, et le journal n’écrit pas un VERIFY qui n’a pas eu lieu', async () => {
@@ -494,7 +609,7 @@ describe('le nom d’un partenaire passe par la loi des éditeurs (#16274, revue
     const h = await harness();
     const verifiedAt = new Date(START);
     h.prisma.partnerProfile.rows.push({ id: 'p-legacy', userId: ALICE, displayName: 'Studio Студия', website: null, logoSrc: null, logoSha256: null, verifiedAt, verifiedBy: null, updatedAt: new Date(START), createdAt: new Date(START) });
-    const res = await saveProfile(h, { displayName: 'Studio Студия', website: 'https://studio.example' });
+    const res = await saveProfile(h, { displayName: 'Studio Студия', website: null });
     expect(res.statusCode).toBe(200);
     expect(h.prisma.partnerProfile.rows.find((row) => row.userId === ALICE)).toMatchObject({ displayName: 'Studio Студия', verifiedAt });
     expect((await saveProfile(h, { displayName: 'Autre Студия' })).statusCode).toBe(400);
