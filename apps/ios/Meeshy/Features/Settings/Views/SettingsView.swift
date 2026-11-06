@@ -664,7 +664,7 @@ struct SettingsView: View {
                 settingsRow(icon: "square.stack.3d.up.fill", title: String(localized: "settings.packs.mine", defaultValue: "Mes packs", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.packs.mine", defaultValue: "Mes packs", bundle: .main))

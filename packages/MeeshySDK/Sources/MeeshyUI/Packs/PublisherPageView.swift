@@ -3,23 +3,33 @@ import MeeshySDK
 
 // MARK: - La page d'un éditeur : son identité et tout son catalogue (#16433)
 
-/// Ce que l'app montre quand on touche le profil qui édite : le SDK ne connaît ni le routeur ni les
-/// dépendances du profil, l'app lui remet la feuille à présenter.
+/// De quoi ouvrir le profil qui édite : le SDK ne connaît ni le routeur ni les dépendances du
+/// profil, l'app les lui remet et la boutique présente `UserProfileSheet`.
+public struct PackOwnerProfileContext {
+    public let presence: (String) -> PresenceState?
+    public let dependencies: UserProfileDependencies
+
+    public init(presence: @escaping (String) -> PresenceState?, dependencies: UserProfileDependencies) {
+        self.presence = presence
+        self.dependencies = dependencies
+    }
+}
+
 public struct PackOwnerProfileKey: EnvironmentKey {
-    public static let defaultValue: ((PackPublisherOwner) -> AnyView)? = nil
+    public static let defaultValue: PackOwnerProfileContext? = nil
 }
 
 extension EnvironmentValues {
-    public var packOwnerProfile: ((PackPublisherOwner) -> AnyView)? {
+    public var packOwnerProfile: PackOwnerProfileContext? {
         get { self[PackOwnerProfileKey.self] }
         set { self[PackOwnerProfileKey.self] = newValue }
     }
 }
 
 extension View {
-    /// La feuille de profil qu'ouvre « Édité par @x » dans la boutique.
-    public func packOwnerProfile(_ sheet: @escaping (PackPublisherOwner) -> AnyView) -> some View {
-        environment(\.packOwnerProfile, sheet)
+    /// Le profil qu'ouvre « Édité par @x » dans la boutique.
+    public func packOwnerProfile(_ context: PackOwnerProfileContext) -> some View {
+        environment(\.packOwnerProfile, context)
     }
 }
 
@@ -56,8 +66,19 @@ struct PublisherPageView: View {
             loaded = true
         }
         .sheet(item: $shownOwner) { owner in
-            if let ownerProfile { ownerProfile(owner) }
+            if let ownerProfile { ownerSheet(owner, context: ownerProfile) }
         }
+    }
+
+    private func ownerSheet(_ owner: PackPublisherOwner, context: PackOwnerProfileContext) -> some View {
+        UserProfileSheet(
+            user: ProfileSheetUser(userId: owner.id, username: owner.username,
+                                   displayName: owner.displayName, avatarURL: owner.avatar),
+            presenceProvider: context.presence,
+            dependencies: context.dependencies
+        )
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     private var identity: some View {

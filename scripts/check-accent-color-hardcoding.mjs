@@ -424,7 +424,12 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // 479 -> 472 (2026-11-05, #15629, l'atelier du compositeur quitte le dépôt, bef867501b) : la reprise d'un brouillon et
 // l'édition d'une story ouvrent la scène du meuble, et les sept couleurs que peignait l'atelier partent avec lui.
 // Valeur MESURÉE le 2026-11-05 en local sur ed51365e27.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 472;
+// 472 -> 473 (2026-11-06, #16268, la fiche d'un pack posé sur son support) : `PackElementStage.swift` (1) lit UNE fois
+// l'accent du PROFIL de l'essayeur (`PackStageWearer.accent`, depuis `accentHex`, déjà remis à
+// `MeeshyAvatar(accentColor:)`), pour le fond de repli de l'avatar et de la bannière et la bulle « moi » de la
+// conversation factice. Hors de tout contexte de conversation, même règle que `ProfileDecorSheet.swift` ci-dessus.
+// #16437 en posait trois ; ramenés à une. Valeur MESURÉE le 2026-11-06 en local.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 473;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

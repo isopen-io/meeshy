@@ -74,7 +74,10 @@ struct PacksSettingsView: View {
                 content: { content }
             )
         }
-        .packOwnerProfile { owner in AnyView(PackOwnerProfileSheet(owner: owner)) }
+        .packOwnerProfile(PackOwnerProfileContext(
+            presence: { PresenceManager.shared.knownPresenceState(for: $0) },
+            dependencies: .live
+        ))
     }
 
     private var content: some View {
@@ -112,22 +115,6 @@ struct PacksSettingsView: View {
 
             PackShopScreen(domain: domain, focusedPack: focusedPack)
         }
-    }
-}
-
-/// Le profil Meeshy qui édite un pack, ouvert depuis la page éditeur (#16433).
-struct PackOwnerProfileSheet: View {
-    let owner: PackPublisherOwner
-
-    var body: some View {
-        UserProfileSheet(
-            user: ProfileSheetUser(userId: owner.id, username: owner.username,
-                                   displayName: owner.displayName, avatarURL: owner.avatar),
-            presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-            dependencies: .live
-        )
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
     }
 }
 

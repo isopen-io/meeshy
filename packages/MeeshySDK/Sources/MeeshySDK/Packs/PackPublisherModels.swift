@@ -54,7 +54,7 @@ public protocol PackPublisherProviding: Sendable {
     func page(slug: String) async throws -> PackPublisherPage
 }
 
-public final class PackPublisherService: PackPublisherProviding, @unchecked Sendable {
+public final class PackPublisherService: PackPublisherProviding, Sendable {
     public static let shared = PackPublisherService()
 
     private let api: APIClientProviding

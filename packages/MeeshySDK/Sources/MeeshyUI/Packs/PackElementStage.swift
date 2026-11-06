@@ -8,6 +8,8 @@ public struct PackStageWearer: Equatable, Sendable {
     public let name: String
     public let avatarURL: String?
     public let accentHex: String
+    /// La couleur de profil de l'essayeur, lue une fois : fonds de repli et bulle « moi ».
+    public let accent: Color
     public let bannerURL: String?
     public let bannerThumbHash: String?
     public let decor: ServedProfileDecor?
@@ -17,6 +19,7 @@ public struct PackStageWearer: Equatable, Sendable {
         self.name = name
         self.avatarURL = avatarURL
         self.accentHex = accentHex
+        self.accent = Color(hex: accentHex)
         self.bannerURL = bannerURL
         self.bannerThumbHash = bannerThumbHash
         self.decor = decor
@@ -70,7 +73,7 @@ struct PackElementStage: View {
         case .wallpaper(let design):
             BannerDesignView(design: design, isDark: isDark, accentHex: wearer.accentHex, animates: animates)
                 .frame(width: size.width, height: size.height)
-                .overlay { if !compact { PackSampleConversation(accentHex: wearer.accentHex) } }
+                .overlay { if !compact { PackSampleConversation(accent: wearer.accent) } }
         case .sticker(let sticker):
             MeeStickerFilmView(sticker: sticker, side: min(size.width, size.height) * (compact ? 0.8 : 0.6),
                                animates: animates,
@@ -93,7 +96,7 @@ struct PackElementStage: View {
         let height = min(size.height, size.width / SceneShape.aspect)
         let width = height * SceneShape.aspect
         return ZStack {
-            LinearGradient(colors: [Color(hex: wearer.accentHex).opacity(0.55), MeeshyColors.indigo300.opacity(0.35)],
+            LinearGradient(colors: [wearer.accent.opacity(0.55), MeeshyColors.indigo300.opacity(0.35)],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
             StoredPackImage(file: tile.thumb, maxPixelSize: compact ? 540 : 1440)
         }
@@ -132,7 +135,7 @@ struct PackElementStage: View {
         case .design(let design):
             BannerDesignView(design: design, isDark: isDark, accentHex: wearer.accentHex, animates: animates)
         case .plain:
-            LinearGradient(colors: [Color(hex: wearer.accentHex).opacity(0.3), MeeshyColors.indigo300.opacity(0.2)],
+            LinearGradient(colors: [wearer.accent.opacity(0.3), MeeshyColors.indigo300.opacity(0.2)],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
         }
     }
@@ -140,7 +143,7 @@ struct PackElementStage: View {
 
 /// Trois bulles factices : un fond se juge derrière une conversation, pas seul.
 struct PackSampleConversation: View {
-    let accentHex: String
+    let accent: Color
 
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
@@ -164,7 +167,7 @@ struct PackSampleConversation: View {
                 .padding(.vertical, MeeshySpacing.sm)
                 .background {
                     RoundedRectangle(cornerRadius: 18)
-                        .fill(mine ? AnyShapeStyle(Color(hex: accentHex)) : AnyShapeStyle(.regularMaterial))
+                        .fill(mine ? AnyShapeStyle(accent) : AnyShapeStyle(.regularMaterial))
                 }
             if !mine { Spacer(minLength: 60) }
         }

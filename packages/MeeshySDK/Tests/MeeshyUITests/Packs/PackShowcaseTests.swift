@@ -1,4 +1,5 @@
 import XCTest
+import os
 @testable import MeeshyUI
 import MeeshySDK
 
@@ -153,16 +154,18 @@ final class PackDetailFactsTests: XCTestCase {
 
 // MARK: - Le modèle de la vitrine : ouvrir, parcourir, équiper
 
-private final class StubDecorService: ProfileDecorProviding, @unchecked Sendable {
-    var result: Result<ServedProfileDecor, Error>
-    private(set) var writes: [ProfileDecorWrite] = []
+private final class StubDecorService: ProfileDecorProviding, Sendable {
+    let result: Result<ServedProfileDecor, Error>
+    private let recorded = OSAllocatedUnfairLock<[ProfileDecorWrite]>(initialState: [])
+
+    var writes: [ProfileDecorWrite] { recorded.withLock { $0 } }
 
     init(result: Result<ServedProfileDecor, Error>) {
         self.result = result
     }
 
     func update(_ write: ProfileDecorWrite) async throws -> ServedProfileDecor {
-        writes.append(write)
+        recorded.withLock { $0.append(write) }
         return try result.get()
     }
 }

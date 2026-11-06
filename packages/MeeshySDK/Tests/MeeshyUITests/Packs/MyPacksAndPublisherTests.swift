@@ -1,4 +1,5 @@
 import XCTest
+import os
 @testable import MeeshyUI
 import MeeshySDK
 
@@ -65,14 +66,16 @@ final class MyPacksTests: XCTestCase {
     }
 }
 
-private final class MemoryRecency: PackInstallRecording, @unchecked Sendable {
-    private(set) var installs: [String: Date] = [:]
-    func recordInstall(domain: PackDomain, slug: String, at date: Date) { installs[domain.rawValue + "/" + slug] = date }
-    func forget(domain: PackDomain, slug: String) { installs[domain.rawValue + "/" + slug] = nil }
-    func installDates() -> [String: Date] { installs }
+private final class MemoryRecency: PackInstallRecording, Sendable {
+    private let installs = OSAllocatedUnfairLock<[String: Date]>(initialState: [:])
+    func recordInstall(domain: PackDomain, slug: String, at date: Date) {
+        installs.withLock { $0[domain.rawValue + "/" + slug] = date }
+    }
+    func forget(domain: PackDomain, slug: String) { installs.withLock { $0[domain.rawValue + "/" + slug] = nil } }
+    func installDates() -> [String: Date] { installs.withLock { $0 } }
 }
 
-private final class InstallingShop: PackShopProviding, @unchecked Sendable {
+private final class InstallingShop: PackShopProviding, Sendable {
     let response: PackShopResponse
     init(_ response: PackShopResponse) { self.response = response }
     func shop(domains: [PackDomain]?) async throws -> PackShopResponse { response }

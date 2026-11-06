@@ -8,6 +8,8 @@ import MeeshySDK
 /// La lecture reste sur l'appareil ; `prepare` fait venir le contrat ou le détail, une fois.
 @MainActor
 public final class ServedPackElementDesigns: PackElementDesignProviding {
+    nonisolated deinit {}
+
     public typealias StickerDetail = @Sendable (String) async throws -> StickerPack
 
     private let embedded: EmbeddedPackElementDesigns
