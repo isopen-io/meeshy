@@ -522,12 +522,15 @@ export class MetadataManager {
       }
 
       let metadata: AudioMetadata | null = null;
+      let embeddedPictureBytes = 0;
 
       // Tenter d'extraire avec music-metadata d'abord
       try {
         const parseFile = await resolveParseFile();
         const parsedMetadata = await parseFile(fullPath);
         const format = parsedMetadata.format;
+        embeddedPictureBytes = (parsedMetadata.common?.picture ?? [])
+          .reduce((total, picture) => total + picture.data.length, 0);
 
         metadata = {
           duration: Math.round((format.duration || 0) * 1000), // Convertir secondes -> millisecondes
@@ -586,11 +589,13 @@ export class MetadataManager {
         };
       }
 
-      // Valider la cohérence durée/taille
-      if (mimeType && metadata.duration > 0 && fileSize > 0) {
+      // Valider la cohérence durée/taille : le débit se mesure sur le son, la pochette
+      // d'un morceau court le ferait passer pour un en-tête faux (#16510).
+      const audioBytes = fileSize - embeddedPictureBytes;
+      if (mimeType && metadata.duration > 0 && audioBytes > 0) {
         const validation = this.validateAudioCoherence(
           metadata.duration,
-          fileSize,
+          audioBytes,
           mimeType
         );
 

@@ -14,8 +14,9 @@ const TOLERANCE_MS = 100;
 const GATEWAY_ROOT = path.resolve(__dirname, '../../../..');
 const PARSE_WITH_THE_REAL_PARSER =
   'const { parseFile } = await import("music-metadata");' +
-  'const { format } = await parseFile(process.argv[1]);' +
-  'process.stdout.write(JSON.stringify({ format }));';
+  'const { format, common } = await parseFile(process.argv[1]);' +
+  'const picture = (common.picture ?? []).map(({ data }) => ({ data: { length: data.length } }));' +
+  'process.stdout.write(JSON.stringify({ format, common: { picture } }));';
 
 /**
  * music-metadata est ESM-only et Jest (CommonJS) ne sait pas l'importer : le vrai
@@ -54,6 +55,15 @@ describe('La durée servie d’un vocal est sa durée réelle, quel que soit son
     const metadata = await manager.extractAudioMetadata(file, undefined, mimeType);
 
     expect(Math.abs(metadata.duration - REAL_DURATION_MS)).toBeLessThanOrEqual(TOLERANCE_MS);
+  });
+
+  it.each([
+    { file: 'audio-duration/mp3-cover-1500ms.mp3', mimeType: 'audio/mpeg' },
+    { file: 'audio-duration/aac-cover-1500ms.m4a', mimeType: 'audio/mp4' },
+  ])('$file garde ses 1,5 s : sa pochette ne compte pas dans le débit (#16510)', async ({ file, mimeType }) => {
+    const metadata = await manager.extractAudioMetadata(file, undefined, mimeType);
+
+    expect(Math.abs(metadata.duration - 1500)).toBeLessThanOrEqual(TOLERANCE_MS);
   });
 
   it('un débit faible ne raccourcit pas une durée que le conteneur déclare', () => {
