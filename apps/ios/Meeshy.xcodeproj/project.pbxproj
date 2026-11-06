@@ -3894,6 +3894,7 @@
 		E43ACDC43934678BAB5341F9 /* GameSeasonViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 936B6A1D29460930F92F33C7 /* GameSeasonViews.swift */; };
 		E444F01890BF87919DF01EE8 /* MockUserDirectorySearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A5F625C4594441D10FA4D1 /* MockUserDirectorySearch.swift */; };
 		E448FC67BFDE6C07D7654481 /* ProfilePostOpening.swift in Sources */ = {isa = PBXBuildFile; fileRef = D69A84067C656AE2FC5F3724 /* ProfilePostOpening.swift */; };
+		E47EC7F356CEA5B7BB61FE16 /* SettingsSessionButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E780A9A85D32A41AA6094B0 /* SettingsSessionButtons.swift */; };
 		E483EF90D4EAD401ACE709EF /* NSEEnrichmentPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68967C75D79BA3B0CA676B0 /* NSEEnrichmentPlan.swift */; };
 		E499C72CCE59ABAD99E35ED1 /* ComposerPreUploadCopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE31338D9DA9CB55FCB90E5C /* ComposerPreUploadCopyTests.swift */; };
 		E4A4724D86933186E23940FE /* MeeshyCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7DA959E4E2C4C58002F2CFBB /* MeeshyCore */; };
@@ -6869,6 +6870,7 @@
 		8E07625F36EA60113A2052A3 /* signature_bulle_front.webp */ = {isa = PBXFileReference; path = signature_bulle_front.webp; sourceTree = "<group>"; };
 		8E2B08FB75D9F444CB47634E /* NSEDecryptorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDecryptorTests.swift; sourceTree = "<group>"; };
 		8E60CEDD2F7DA080BEA6FCE8 /* ConversationViewModelContentRemovalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelContentRemovalTests.swift; sourceTree = "<group>"; };
+		8E780A9A85D32A41AA6094B0 /* SettingsSessionButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSessionButtons.swift; sourceTree = "<group>"; };
 		8E8BD9CDB04F041A2E1FB17A /* LentilleRowBehaviourAnchorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleRowBehaviourAnchorTests.swift; sourceTree = "<group>"; };
 		8E9411F76DBA2E4C627A6F3E /* CanvasMediaAdoption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasMediaAdoption.swift; sourceTree = "<group>"; };
 		8EBECE7FB7206EE2340ED013 /* ComposerCallbackWiringGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCallbackWiringGuardTests.swift; sourceTree = "<group>"; };
@@ -13281,6 +13283,7 @@
 				77AD4A39B962F96F7DA53074 /* SecurityView.swift */,
 				C35381B5279645BF152DA527 /* SettingsFocus.swift */,
 				520A3402898E98A6780AF1FD /* SettingsSectionCard.swift */,
+				8E780A9A85D32A41AA6094B0 /* SettingsSessionButtons.swift */,
 				3031AB3B7C2FE3250BE771F3 /* SettingsView.swift */,
 				D8B3DDF7C9F9B0FBBC3AA3D5 /* SupportView.swift */,
 				646FE8DD58BA92CB11D8FC9C /* TermsOfServiceView.swift */,
@@ -14580,6 +14583,7 @@
 				};
 			};
 			buildConfigurationList = 147F4A57130170E66816D782 /* Build configuration list for PBXProject "Meeshy" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -14601,18 +14605,17 @@
 				F7615CB1707FC23CDBA090B5 /* XCLocalSwiftPackageReference "../../packages/MeeshySDK" */,
 			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = F121C0AAA9428DB850C5DC59 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				9999AD8C50CACBF85DF613CF /* Meeshy */,
-				A81DD135F37B0F4BDF5F33A8 /* MeeshyWidgets */,
-				C6F2A095796E3C29A7107470 /* MeeshyNotificationExtension */,
-				895156DABDB29B613686535B /* MeeshyNotificationContentExtension */,
-				E92CA5A0623E606BD619670E /* MeeshyShareExtension */,
 				E7C89FACA2B11B7B4A7A8C67 /* MeeshyBroadcastExtension */,
-				8C761E7D124D94A95E1F411E /* MeeshyUIDeviceTests */,
+				895156DABDB29B613686535B /* MeeshyNotificationContentExtension */,
+				C6F2A095796E3C29A7107470 /* MeeshyNotificationExtension */,
+				E92CA5A0623E606BD619670E /* MeeshyShareExtension */,
 				0D382A685B3389715FC2687F /* MeeshyTests */,
+				8C761E7D124D94A95E1F411E /* MeeshyUIDeviceTests */,
+				A81DD135F37B0F4BDF5F33A8 /* MeeshyWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -16793,6 +16796,7 @@
 				1C831AA82900A745A44D476F /* SessionTransitionPlan.swift in Sources */,
 				76BAA74CA7B2168E531BA079 /* SettingsFocus.swift in Sources */,
 				1C6EEEE0AFFEAD171ADB8CF6 /* SettingsSectionCard.swift in Sources */,
+				E47EC7F356CEA5B7BB61FE16 /* SettingsSessionButtons.swift in Sources */,
 				42248CD6C48CC089F813D1E6 /* SettingsView.swift in Sources */,
 				F1579FC4FE3C6B6A2EBA8B98 /* ShareComposeDoor.swift in Sources */,
 				17E7A3DFE81A4F284D6D38B4 /* ShareComposeHandoffConsumer.swift in Sources */,
