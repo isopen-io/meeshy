@@ -33,10 +33,12 @@ class GlobalSearchRepositoryTest {
         val conversations: List<ApiConversation> = emptyList(),
         val users: List<UserSearchResult> = emptyList(),
         val messages: List<MessageSearchHit> = emptyList(),
+        val cached: List<ApiConversation> = emptyList(),
     ) : LocalSearchSource {
         override suspend fun conversations(query: String) = conversations
         override suspend fun users(query: String) = users
         override suspend fun messages(query: String) = messages
+        override suspend fun cachedConversations(ids: Collection<String>) = cached.filter { it.id in ids }
     }
 
     private fun hit(id: String, conversationId: String = "c1", createdAt: String = "2026-01-01T00:00:00Z") =
@@ -257,5 +259,39 @@ class GlobalSearchRepositoryTest {
 
         assertThat(emissions.first().messages.items.map { it.message.id }).containsExactly("l-open")
         assertThat(emissions.last().messages.items.map { it.message.id }).containsExactly("m-open", "l-open")
+    }
+
+    @Test
+    fun `a unified hit for a message the device already found keeps the conversation the device knows`() = runTest {
+        val cachedDirect = conversation("c5").copy(title = "Ada Lovelace", avatar = "2026/09/ada.png")
+        val remote = Remote().apply {
+            serving()
+            servingUnified(
+                GlobalMessageSearchHit(
+                    id = "m5",
+                    conversationId = "c5",
+                    content = "Bonjour",
+                    conversation = GlobalMessageSearchConversation(id = "c5", title = "legacy", avatar = null),
+                ),
+            )
+        }
+        val local = FakeLocal(messages = listOf(MessageSearchHit(ApiMessage(id = "m5", conversationId = "c5"), "Ada Lovelace", cachedDirect)))
+
+        val found = repository(remote, local).search("bonjour").toList().last().messages.items.single()
+
+        assertThat(found.conversation).isEqualTo(cachedDirect)
+    }
+
+    @Test
+    fun `a unified hit in a conversation cached on the device carries it even when its name does not match`() = runTest {
+        val cachedGroup = conversation("c7").copy(title = "Famille", avatar = "2026/09/famille.png")
+        val remote = Remote().apply {
+            serving()
+            servingUnified(GlobalMessageSearchHit(id = "m7", conversationId = "c7", content = "Bonjour"))
+        }
+
+        val found = repository(remote, FakeLocal(cached = listOf(cachedGroup))).search("bonjour").toList().last().messages.items.single()
+
+        assertThat(found.conversation).isEqualTo(cachedGroup)
     }
 }

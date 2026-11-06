@@ -146,7 +146,7 @@ public class GlobalSearchRepository @Inject constructor(
                 remote = conversationsResult.orEmpty(),
             )
             val titles = conversations.associate { it.id to titleOf(it) }
-            val remoteMessages = unified(remoteUnified!!.await(), conversations) ?: fanOut(
+            val remoteMessages = unified(remoteUnified!!.await(), conversations, firstPaint.messages.items) ?: fanOut(
                 conversations.take(maxMessageConversations),
                 query,
                 messagesPerConversation,
@@ -180,16 +180,28 @@ public class GlobalSearchRepository @Inject constructor(
      * repond a la requete (parite iOS `ConversationMessageSearchService.remoteMessages`). `null` quand la
      * passerelle ne sert pas encore la route (`404`) : l'eventail par conversation prend le relais.
      */
-    private fun unified(
+    private suspend fun unified(
         result: NetworkResult<List<GlobalMessageSearchHit>>,
-        known: List<ApiConversation>,
+        found: List<ApiConversation>,
+        localHits: List<MessageSearchHit>,
     ): SearchPane<MessageSearchHit>? = when (result) {
         is NetworkResult.Success -> {
-            val byId = known.associateBy { it.id }
+            val byId = knownConversations(result.data.map { it.conversationId }.toSet(), found + localHits.mapNotNull { it.conversation })
             SearchPane(result.data.mapNotNull { it.asMessageSearchHit(byId[it.conversationId]) })
         }
         is NetworkResult.Failure ->
             if (result.error.httpStatus == HTTP_NOT_FOUND) null else SearchPane(emptyList(), SearchPaneFailure.Unreachable)
+    }
+
+    /**
+     * La conversation que l'appareil connait gagne sur la carte servie : son titre et sa photo sont elus
+     * contre le lecteur (#12569, `customName` compris), la carte de la passerelle ne l'est pas (#16485).
+     */
+    private suspend fun knownConversations(ids: Set<String>, inHand: List<ApiConversation>): Map<String, ApiConversation> {
+        val held = inHand.filter { it.id in ids }.associateBy { it.id }
+        val missing = ids - held.keys
+        val cached = if (missing.isEmpty()) emptyList() else local.cachedConversations(missing)
+        return held + cached.associateBy { it.id }
     }
 
     /** Une conversation verrouillee ne laisse rien paraitre de ses messages, comme dans la liste. */
