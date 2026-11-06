@@ -5,6 +5,7 @@ import me.meeshy.sdk.media.MediaUploadProgressLedger
 import me.meeshy.sdk.media.UploadedAttachmentIds
 import me.meeshy.sdk.model.media.MediaUploadProgress
 import org.junit.Test
+import javax.inject.Singleton
 
 class ChatUploadProgressViewModelTest {
 
@@ -34,5 +35,11 @@ class ChatUploadProgressViewModelTest {
 
         assertThat(reopened.progress.value).containsExactly("cmid-video", MediaUploadProgress.Uploading(40L, 100L))
         assertThat(reopened.landed("cmid-photo")).isTrue()
+    }
+
+    @Test
+    fun `le registre et le pont sont ceux de l'application, pas de l'ecran - sans quoi rouvrir la conversation les recreerait vides`() {
+        assertThat(MediaUploadProgressLedger::class.java.isAnnotationPresent(Singleton::class.java)).isTrue()
+        assertThat(UploadedAttachmentIds::class.java.isAnnotationPresent(Singleton::class.java)).isTrue()
     }
 }
