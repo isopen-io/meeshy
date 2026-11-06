@@ -282,6 +282,14 @@ final class ProgressionMeeshEntryTests: XCTestCase {
     /// Pendant la frappe, le détail MONTRE qu'il travaille : un indicateur
     /// d'activité, le mot, et plus d'offre. Une opacité de 0,6 sur un aller-retour
     /// court ne se voyait pas (retour porteur, 2026-09-14).
+    ///
+    /// Pourquoi le témoin lit l'ACTION et non tous les libellés : la descente
+    /// du harnais visite aussi les SOUS-VUES UIKit, et celles du `ProgressView`
+    /// — recyclées d'un écran monté plus tôt — gardaient le libellé composite
+    /// de ce premier écran (« Convertir …, 19 août 2026, Première frappe, … »,
+    /// run de dev 42116853798, reproduit en local selon l'ordre des classes).
+    /// VoiceOver n'annonce pas ces sous-vues : il annonce l'élément du bouton,
+    /// que porte l'identifiant `progression.meesh.minting`.
     func test_duringAMint_theDetailShowsActivity_andNoLongerOffersTheAction() {
         let meesh = EngagementProgressResolver.resolve(payload(debitablePoints: 1300)).meesh!
         let ecran = monter(
@@ -294,10 +302,12 @@ final class ProgressionMeeshEntryTests: XCTestCase {
             ecran.node("progression.meesh.minting"),
             "Aucun indicateur d'activité pendant la frappe. Identifiants vus : \(ecran.identifiers)"
         )
-        let dit = ecran.labels.joined(separator: " | ")
-        XCTAssertTrue(dit.contains(frappeEnCours), "La frappe en cours n'est pas dite : « \(dit) »")
-        XCTAssertFalse(dit.contains(ProgressionCopy.meeshMintAction(meesh.mintCost)),
-                       "La conversion reste offerte pendant la frappe : « \(dit) »")
+        let offre = ProgressionCopy.meeshMintAction(meesh.mintCost)
+        let action = ecran.node("progression.meesh.minting")?.label ?? ""
+        XCTAssertTrue(action.contains(frappeEnCours), "La frappe en cours n'est pas dite par l'action : « \(action) »")
+        XCTAssertFalse(action.contains(offre), "La conversion reste offerte pendant la frappe : « \(action) »")
+        XCTAssertNil(ecran.node("progression.meesh.mint"),
+                     "L'action de conversion reste montée pendant la frappe. Identifiants vus : \(ecran.identifiers)")
     }
 
     /// Un échec se lit DANS le détail, sous l'action qu'on peut retenter.
