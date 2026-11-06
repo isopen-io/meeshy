@@ -15,8 +15,7 @@ import { focusFrame, inkRuns, type FocusFrame, type FocusFrameMeasure } from '@/
  * contenu seul), descendre la bande basse et le tampon, et allonger le verre.
  * La rangée elle-même ne porte jamais de `transform`.
  *
- * Même discipline que la loupe du message déplié (`use-focal-loupe.ts`) : des
- * écritures DISCRÈTES, une fois par CHANGEMENT d'élection et à chaque
+ * La discipline : des écritures DISCRÈTES, une fois par CHANGEMENT d'élection et à chaque
  * redimensionnement RÉEL de la rangée (`ResizeObserver`), jamais un calcul
  * par image de défilement ; et AUCUNE transition CSS sur le `transform` du
  * contenu (une transition active sur un transform non identité faisait
