@@ -89,14 +89,14 @@ extension ArrivalGreeting {
 struct ArrivalGreetingInvite: View {
     let text: String
     /// La couleur de la conversation : l'invite se lit comme un geste offert.
-    let accentHex: String
+    let accentColor: String
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
-                .foregroundColor(Color(hex: accentHex))
+                .foregroundColor(Color(hex: accentColor))
                 .multilineTextAlignment(.center)
         }
         .buttonStyle(.plain)

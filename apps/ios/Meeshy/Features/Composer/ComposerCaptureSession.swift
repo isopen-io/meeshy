@@ -183,6 +183,7 @@ final class ComposerCaptureSession: ObservableObject {
     var lastViewfinderTap: ComposerCaptureLastTap?
     private let defaults: UserDefaults
     private var relais: AnyCancellable?
+    var cameraLease: AnyObject?
 
     init(stage: ComposerSceneCameraStage = .off,
          mode: ComposerSceneCameraMode? = nil,
@@ -255,7 +256,7 @@ final class ComposerCaptureSession: ObservableObject {
         stage = .armed
         armedAt = Date()
         watchThermalState()
-        camera.configure()
+        camera.configure(filming: mode != .photo)
     }
 
     /// La bande ouverte à l'armement, et le look qu'elle montre choisi.
@@ -334,7 +335,6 @@ final class ComposerCaptureSession: ObservableObject {
         guard stage == .armed, !camera.isTakingPhoto, !photoIsRamping, !controls.isSwitchingCamera else { return }
         photoInFlightIntent = intent
         mode = .photo
-        HapticFeedback.medium()
         let flashDeLaPrise = flash
         guard screenIsTheFlash else {
             controls.takePhoto(flash: flashDeLaPrise)

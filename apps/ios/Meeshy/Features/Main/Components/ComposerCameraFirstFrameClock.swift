@@ -14,6 +14,7 @@ nonisolated final class ComposerCameraFirstFrameClock: Sendable {
     private nonisolated struct Armed: Sendable {
         let startedAt: CFTimeInterval
         let prewarmed: Bool
+        let interval: OSSignpostIntervalState
     }
 
     private let armed = Locked<Armed?>(nil)
@@ -23,7 +24,8 @@ nonisolated final class ComposerCameraFirstFrameClock: Sendable {
     init() {}
 
     func start(prewarmed: Bool, at instant: CFTimeInterval = CACurrentMediaTime()) {
-        armed.mutate { $0 = Armed(startedAt: instant, prewarmed: prewarmed) }
+        let intervalle = CameraSignposts.signposter.beginInterval(CameraSignposts.open)
+        armed.mutate { $0 = Armed(startedAt: instant, prewarmed: prewarmed, interval: intervalle) }
     }
 
     /// La première trame depuis `start` : sa durée, en millisecondes, une fois ;
@@ -34,8 +36,9 @@ nonisolated final class ComposerCameraFirstFrameClock: Sendable {
             defer { state = nil }
             return state
         }) else { return nil }
+        CameraSignposts.signposter.endInterval(CameraSignposts.open, started.interval)
         let elapsedMs = Int(((instant - started.startedAt) * 1000).rounded())
-        Logger.media.info("camera first frame: \(elapsedMs, privacy: .public) ms (\(started.prewarmed ? "prewarmed" : "cold", privacy: .public))")
+        Logger.media.notice("camera first frame: \(elapsedMs, privacy: .public) ms (\(started.prewarmed ? "prewarmed" : "cold", privacy: .public))")
         return elapsedMs
     }
 }

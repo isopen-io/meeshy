@@ -1,3 +1,4 @@
+import Combine
 import AVFoundation
 import CoreGraphics
 import UIKit
@@ -57,6 +58,12 @@ nonisolated enum ComposerCaptureHorizonRule {
         }
     }
 
+    /// La tenue qui ne désigne aucun horizon garde l'angle de la dernière qui en
+    /// désignait un : l'appareil posé à plat reste tenu comme il l'était.
+    static func heldAngle(_ orientation: UIDeviceOrientation, last: CGFloat) -> CGFloat {
+        angle(for: orientation) ?? last
+    }
+
     /// L'équivalent d'avant iOS 17 (`videoOrientation`).
     static func videoOrientation(for angle: CGFloat) -> AVCaptureVideoOrientation {
         switch Int(angle.rounded()) {
@@ -73,11 +80,15 @@ nonisolated enum ComposerCaptureHorizonRule {
 @MainActor
 final class ComposerCaptureHorizon {
 
-    nonisolated deinit {}
+    nonisolated deinit {
+        guard readsDeviceOrientation else { return }
+        Task { @MainActor in UIDevice.current.endGeneratingDeviceOrientationNotifications() }
+    }
 
     private var coordinator: AnyObject?
     private var lastAngle: CGFloat = ComposerCaptureMirrorRule.portraitAngle
     private var readsDeviceOrientation = false
+    private var holds: AnyCancellable?
 
     func follow(_ device: AVCaptureDevice) {
         if #available(iOS 17.0, *) {
@@ -85,6 +96,10 @@ final class ComposerCaptureHorizon {
         } else if !readsDeviceOrientation {
             readsDeviceOrientation = true
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            hold(UIDevice.current.orientation)
+            holds = NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in MainActor.assumeIsolated { self?.hold(UIDevice.current.orientation) } }
         }
     }
 
@@ -92,10 +107,12 @@ final class ComposerCaptureHorizon {
         if #available(iOS 17.0, *), let coordinator = coordinator as? AVCaptureDevice.RotationCoordinator {
             return coordinator.videoRotationAngleForHorizonLevelCapture
         }
-        if let angle = ComposerCaptureHorizonRule.angle(for: UIDevice.current.orientation) {
-            lastAngle = angle
-        }
+        hold(UIDevice.current.orientation)
         return lastAngle
+    }
+
+    private func hold(_ orientation: UIDeviceOrientation) {
+        lastAngle = ComposerCaptureHorizonRule.heldAngle(orientation, last: lastAngle)
     }
 
     func level(_ connection: AVCaptureConnection?) {

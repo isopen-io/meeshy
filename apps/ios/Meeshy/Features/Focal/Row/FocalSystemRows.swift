@@ -59,7 +59,7 @@ struct FocalSystemNoticeRow: View, Equatable {
 
     static func == (lhs: FocalSystemNoticeRow, rhs: FocalSystemNoticeRow) -> Bool {
         lhs.text == rhs.text && lhs.isDark == rhs.isDark && lhs.timeString == rhs.timeString
-            && lhs.greeting?.text == rhs.greeting?.text && lhs.greeting?.accentHex == rhs.greeting?.accentHex
+            && lhs.greeting?.text == rhs.greeting?.text && lhs.greeting?.accentColor == rhs.greeting?.accentColor
     }
 
     var body: some View {
@@ -129,7 +129,7 @@ enum FocalSystemRows {
         onGreetArrivals: (() -> Void)? = nil
     ) -> some View {
         let greeting = content.arrivalsInvite.flatMap { invite in
-            onGreetArrivals.map { ArrivalGreetingInvite(text: invite, accentHex: accentHex, action: $0) }
+            onGreetArrivals.map { ArrivalGreetingInvite(text: invite, accentColor: accentHex, action: $0) }
         }
         switch content.kind {
         case .deleted:
