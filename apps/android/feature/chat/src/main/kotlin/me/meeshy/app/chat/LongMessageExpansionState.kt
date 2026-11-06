@@ -4,48 +4,29 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.reading.focal.LongMessageExpansionLaw
 
 /**
- * Le dépliage d'un long message dans le fil (iOS `LongMessageExpansionLaw`, miroir de la loi de
- * `:core:model`) : un SEUL message déplié à la fois, et une fenêtre de maintien de 0,65 s qui
- * garde les autres rangées atténuées le temps que la hauteur s'anime (0,3 s) — sans elle, les
- * voisines reviendraient à pleine opacité avant la fin du repli.
+ * Le dépliage des longs messages du fil (iOS `LongMessageExpansionState`, #16463, miroir de la loi de `:core:model`) :
+ * plusieurs messages peuvent être dépliés, aucun ne se replie, et l'état vit chez l'hôte du fil — une nouvelle
+ * ouverture de la conversation repart repliée.
  */
 @Immutable
 internal data class LongMessageExpansionState(
-    val expandedId: String? = null,
-    /** Horloge (ms) jusqu'à laquelle l'atténuation tient, même sans message déplié visible. */
-    val holdUntilMs: Long = 0L,
+    val expandedIds: Set<String> = emptySet(),
 ) {
 
-    /** Le résultat d'une bascule : le nouvel état, le sens du mouvement et le bord à retenir. */
-    internal data class Toggle(
+    /** Le résultat d'un dépliage : le nouvel état et le bord à retenir pendant que la hauteur s'anime. */
+    internal data class Expansion(
         val state: LongMessageExpansionState,
-        val isExpanding: Boolean,
         val anchor: LongMessageExpansionLaw.Anchor,
     )
 
-    fun isExpanded(messageId: String): Boolean = expandedId == messageId
+    fun isExpanded(messageId: String): Boolean = messageId in expandedIds
 
-    fun toggled(messageId: String, nowMs: Long): Toggle {
-        val next = LongMessageExpansionLaw.nextExpanded(expandedId, messageId)
-        val isExpanding = next != null
-        return Toggle(
-            state = LongMessageExpansionState(next, nowMs + HOLD_WINDOW_MS),
-            isExpanding = isExpanding,
-            anchor = LongMessageExpansionLaw.anchor(isExpanding),
+    /** `null` si le message est déjà déplié : un second toucher ne change rien. */
+    fun expanding(messageId: String): Expansion? {
+        if (isExpanded(messageId)) return null
+        return Expansion(
+            state = LongMessageExpansionState(LongMessageExpansionLaw.expanded(expandedIds, messageId)),
+            anchor = LongMessageExpansionLaw.ANCHOR,
         )
-    }
-
-    /** Vrai tant que le déplié est à l'écran, ou que la fenêtre de maintien court encore. */
-    fun expansionVisible(expandedRowOnScreen: Boolean, nowMs: Long): Boolean =
-        (expandedId != null && expandedRowOnScreen) || nowMs < holdUntilMs
-
-    fun alphaFor(messageId: String, expandedRowOnScreen: Boolean, nowMs: Long): Float =
-        LongMessageExpansionLaw.alpha(
-            isExpandedCell = isExpanded(messageId),
-            expansionVisible = expansionVisible(expandedRowOnScreen, nowMs),
-        )
-
-    private companion object {
-        val HOLD_WINDOW_MS: Long = Math.round(LongMessageExpansionLaw.HOLD_WINDOW_SECONDS * 1000.0)
     }
 }

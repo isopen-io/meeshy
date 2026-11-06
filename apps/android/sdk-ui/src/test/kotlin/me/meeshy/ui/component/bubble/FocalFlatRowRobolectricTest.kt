@@ -80,11 +80,13 @@ class FocalFlatRowRobolectricTest {
     }
 
     @Test
-    fun `a long message opens on an excerpt that unfolds in place`() {
+    fun `#16465 a long message opens on an excerpt that unfolds in place for good, with no collapse control`() {
         val long = (1..140).joinToString(" ") { "mot$it" }
         show(content(text = long))
         compose.onNodeWithText("Read more", useUnmergedTree = true).performClick()
-        compose.onNodeWithText("Show less", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText(long, useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Show less", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Read more", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test

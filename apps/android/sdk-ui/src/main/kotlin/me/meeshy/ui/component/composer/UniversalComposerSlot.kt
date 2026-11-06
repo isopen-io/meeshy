@@ -47,6 +47,8 @@ public data class UniversalComposerSpec(
     /** Le lieu qui attend l'envoi, posé en pastille au-dessus de la saisie ; [onRemovePlace] la retire. */
     val pendingPlace: SharedPlace? = null,
     val onRemovePlace: () -> Unit = {},
+    /** #14661 — un panneau du composeur (pièces, emojis, effets, caméra, stickers, lieu) ou un vocal est ouvert : l'hôte se retient. */
+    val onPanelOpenChange: (Boolean) -> Unit = {},
 ) {
     /** Le réglage effectif : celui de la surface, sans les portes qu'elle ne sait pas servir. */
     val effectiveConfiguration: ComposerConfiguration

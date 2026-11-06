@@ -4,15 +4,12 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -20,18 +17,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.reading.focal.LongMessageExpansionLaw
 import me.meeshy.ui.component.focal.FlatRowExpansion
 import me.meeshy.ui.component.focal.LocalFlatRowExpansion
 
 /**
- * L'hôte du dépliage des longs messages du fil (iOS `LongMessageExpansionLaw` côté contrôleur) : il
- * tient l'état ([LongMessageExpansionState], un seul message déplié), retient immobile le bord
- * ancré du message qui change de hauteur — le haut à l'ouverture, le bas au repli — en
- * compensant le défilement image par image (borné à la hauteur du viewport), et atténue les
- * autres rangées tant que le déplié est visible.
+ * L'hôte du dépliage des longs messages du fil (iOS `MessageListViewController+LongMessage`, #16463) : il tient
+ * l'état ([LongMessageExpansionState], plusieurs dépliés, aucun repli) et retient immobile le HAUT du message qui
+ * grandit, en compensant le défilement image par image (borné à la hauteur du viewport). Aucune mise en avant : les
+ * autres rangées restent telles quelles.
  */
 @Stable
 internal class LongMessageExpansionHost(
@@ -41,37 +36,17 @@ internal class LongMessageExpansionHost(
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private var state by mutableStateOf(LongMessageExpansionState())
-    private var expandedVisible by mutableStateOf(false)
-    /** Incrémenté à la fin de la fenêtre de maintien : relance la lecture de l'atténuation au dessin. */
-    private var holdTick by mutableLongStateOf(0L)
     private var anchorJob: Job? = null
-    private var holdJob: Job? = null
 
     fun isExpanded(messageId: String): Boolean = state.isExpanded(messageId)
 
-    /** Lu au dessin (`graphicsLayer`) : aucune recomposition de rangée. */
-    fun alphaFor(messageId: String): Float {
-        if (holdTick < 0L) return 1f
-        return state.alphaFor(messageId, expandedVisible, clock())
-    }
-
-    fun setExpandedOnScreen(onScreen: Boolean) {
-        expandedVisible = onScreen
-    }
-
-    fun toggle(messageId: String, row: LayoutCoordinates?) {
-        val now = clock()
-        val toggle = state.toggled(messageId, now)
-        val edgeBefore = row?.takeIf { it.isAttached }?.let { edge(it, toggle.anchor) }
-        state = toggle.state
-        holdJob?.cancel()
-        holdJob = scope.launch {
-            delay(toggle.state.holdUntilMs - now + 16L)
-            holdTick++
-        }
+    fun expand(messageId: String, row: LayoutCoordinates?) {
+        val expansion = state.expanding(messageId) ?: return
+        val edgeBefore = row?.takeIf { it.isAttached }?.let { edge(it, expansion.anchor) }
+        state = expansion.state
         if (row == null || edgeBefore == null) return
         anchorJob?.cancel()
-        anchorJob = scope.launch { holdEdge(row, toggle.anchor, edgeBefore, now) }
+        anchorJob = scope.launch { holdEdge(row, expansion.anchor, edgeBefore, clock()) }
     }
 
     private suspend fun holdEdge(row: LayoutCoordinates, anchor: LongMessageExpansionLaw.Anchor, edgeBefore: Float, startMs: Long) {
@@ -102,10 +77,7 @@ internal fun rememberLongMessageExpansionHost(listState: LazyListState): LongMes
     return remember(listState) { LongMessageExpansionHost(listState, scope) }
 }
 
-/**
- * La cellule d'un message du fil : fournit à la rangée plate son [FlatRowExpansion] et lui applique
- * l'atténuation des voisines (0,62), lue au dessin.
- */
+/** La cellule d'un message du fil : fournit à la rangée plate son [FlatRowExpansion]. */
 @Composable
 internal fun LongMessageExpansionRow(
     messageId: String,
@@ -115,19 +87,9 @@ internal fun LongMessageExpansionRow(
     val holder = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val expanded = host.isExpanded(messageId)
     val expansion = remember(messageId, expanded, host) {
-        FlatRowExpansion(isExpanded = expanded, onToggle = { host.toggle(messageId, holder[0]) })
+        FlatRowExpansion(isExpanded = expanded, onToggle = { host.expand(messageId, holder[0]) })
     }
-    if (expanded) {
-        DisposableEffect(messageId) {
-            host.setExpandedOnScreen(true)
-            onDispose { host.setExpandedOnScreen(false) }
-        }
-    }
-    Box(
-        modifier = Modifier
-            .onGloballyPositioned { holder[0] = it }
-            .graphicsLayer { alpha = host.alphaFor(messageId) },
-    ) {
+    Box(modifier = Modifier.onGloballyPositioned { holder[0] = it }) {
         CompositionLocalProvider(LocalFlatRowExpansion provides expansion, content = content)
     }
 }

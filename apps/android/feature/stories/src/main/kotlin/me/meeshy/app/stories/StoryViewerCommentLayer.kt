@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,20 +51,55 @@ internal fun rememberStoryCommentThread(storyId: String?): PostCommentsViewModel
 
 /**
  * Un commentaire en cours d'écriture retient la story (iOS `StoryComposerHold`) : le clavier ouvert, un texte posé,
- * une pièce jointe ou un envoi en vol.
+ * une pièce jointe ou un lieu en attente, un envoi en vol, ou un panneau du composeur ouvert (pièces, emojis, effets,
+ * caméra, stickers, lieu, vocal) — que [StoryComposerPanels] reçoit du composeur épinglé.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun storyCommentHolds(thread: PostCommentsViewModel?): Boolean {
+internal fun storyCommentHolds(thread: PostCommentsViewModel?, panels: StoryComposerPanels): Boolean {
     if (thread == null) return false
     val state by thread.state.collectAsStateWithLifecycle()
-    return WindowInsets.isImeVisible || StoryCommentHold.holds(state.draft, state.attachments.hasMedia, state.isSubmitting)
+    return WindowInsets.isImeVisible || StoryCommentHold.holds(
+        draft = state.draft,
+        hasMedia = state.attachments.hasMedia,
+        isSubmitting = state.isSubmitting,
+        hasPlace = state.place != null,
+        panelOpen = panels.open,
+    )
 }
 
-/** La règle de [storyCommentHolds] hors clavier : ce que le composeur garde retient la lecture. */
+/** La règle de [storyCommentHolds] hors clavier : ce que le composeur garde ou montre retient la lecture. */
 internal object StoryCommentHold {
-    fun holds(draft: String, hasMedia: Boolean, isSubmitting: Boolean): Boolean = draft.isNotBlank() || hasMedia || isSubmitting
+    fun holds(
+        draft: String,
+        hasMedia: Boolean,
+        isSubmitting: Boolean,
+        hasPlace: Boolean = false,
+        panelOpen: Boolean = false,
+    ): Boolean = draft.isNotBlank() || hasMedia || isSubmitting || hasPlace || panelOpen
 }
+
+/**
+ * #14661 — un panneau du composeur épinglé est ouvert ET visible : la story ouverte le lit, le composeur l'écrit. La
+ * plaque repliée garde le panneau monté à hauteur nulle : caché, il ne retient pas la story.
+ */
+@Stable
+internal class StoryComposerPanels {
+    private var reported: Boolean by mutableStateOf(false)
+    private var folded: Boolean by mutableStateOf(false)
+
+    val open: Boolean get() = reported && !folded
+
+    fun report(open: Boolean) {
+        reported = open
+    }
+
+    fun fold(folded: Boolean) {
+        this.folded = folded
+    }
+}
+
+internal val LocalStoryComposerPanels = compositionLocalOf { StoryComposerPanels() }
 
 /**
  * Le composeur universel épinglé sous la story d'autrui (iOS `composerLayer` + `StoryComposerFold`). Un toucher sur la
@@ -81,6 +118,8 @@ internal fun StoryPinnedCommentComposer(
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val haptics = rememberMeeshyHaptics()
+    val panels = LocalStoryComposerPanels.current
+    LaunchedEffect(panels, folded) { panels.fold(folded) }
     val apply: (StoryComposerFold.Tap) -> Unit = { tap ->
         if (tap.resignsKeyboard) {
             keyboard?.hide()
@@ -108,7 +147,7 @@ internal fun StoryPinnedCommentComposer(
                         modifier = Modifier.align(Alignment.End),
                     )
                 }
-                PostCommentsComposerBar(viewModel = thread)
+                PostCommentsComposerBar(viewModel = thread, onPanelOpenChange = panels::report)
             }
         }
     }

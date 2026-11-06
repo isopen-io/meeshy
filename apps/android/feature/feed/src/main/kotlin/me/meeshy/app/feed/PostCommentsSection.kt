@@ -209,6 +209,7 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
 fun PostCommentsComposerBar(
     viewModel: PostCommentsViewModel = hiltViewModel(),
     modifier: Modifier = Modifier,
+    onPanelOpenChange: (Boolean) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val editPiece = rememberCommentPieceRetouch(onReplace = viewModel::replaceMedia)
@@ -249,6 +250,7 @@ fun PostCommentsComposerBar(
             place = CommentPlaceDoor(state.place, viewModel::attachPlace, viewModel::removePlace),
             quotation = quotation,
             onRemoveQuotation = viewModel::removeQuotation,
+            onPanelOpenChange = onPanelOpenChange,
         )
     }
 }
@@ -606,6 +608,7 @@ private fun CommentComposer(
     place: CommentPlaceDoor,
     quotation: CommentQuotedMedia?,
     onRemoveQuotation: () -> Unit,
+    onPanelOpenChange: (Boolean) -> Unit,
 ) {
     val composer = LocalUniversalComposer.current ?: return
     val intake = rememberComposerMediaIntake(onAttach)
@@ -635,6 +638,7 @@ private fun CommentComposer(
             onPickPlace = place.onPick,
             pendingPlace = place.pending,
             onRemovePlace = place.onRemove,
+            onPanelOpenChange = onPanelOpenChange,
             topSlot = {
                 MeeshyMentionSuggestions(mention = mention, onSelect = onMentionSelected)
                 if (editing != null) CommentEditBanner(target = editing, onCancel = onCancelEdit)

@@ -3,7 +3,6 @@ package me.meeshy.ui.component.focal
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -25,8 +24,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -35,18 +32,16 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.reading.focal.LongMessageExcerpt
 import me.meeshy.sdk.model.reading.focal.LongMessageExpansionLaw
 import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
-import kotlin.math.roundToInt
 
 /**
- * Le dépliage d'un long message tel que l'hôte du fil le tient (iOS `LongMessageExpansion`) : un
- * SEUL message déplié à la fois, c'est l'hôte qui le sait. [onToggle] bascule ce message-ci.
+ * Le dépliage d'un long message tel que l'hôte du fil le tient (iOS `LongMessageExpansionState`, #16463) : plusieurs
+ * messages peuvent être dépliés, aucun ne se replie. [onToggle] déplie ce message-ci.
  */
 @Immutable
 public class FlatRowExpansion(
@@ -73,9 +68,10 @@ internal fun rememberExpansionSpec(): FiniteAnimationSpec<IntSize> {
 }
 
 /**
- * Le texte d'un message qui peut être long : au-delà du seuil de la loi (`LongMessageExcerpt`) il
- * s'ouvre sur son extrait suivi de « Lire la suite », et se replie par « Réduire ». La hauteur
- * s'anime sur place. L'état vient de [expansion] (l'hôte du fil) ou, sans hôte, d'un état local.
+ * Le texte d'un message qui peut être long : au-delà du seuil de la loi (`LongMessageExcerpt`) il s'ouvre sur son
+ * extrait suivi de « Lire la suite ». Un toucher l'affiche EN ENTIER, comme un message ordinaire du mode courant, et le
+ * bouton disparaît : aucun « Réduire » (#16465, iOS #16463). La suite se déroule sous l'extrait. L'état vient de
+ * [expansion] (l'hôte du fil) ou, sans hôte, d'un état local qui ne revient pas en arrière.
  */
 @Composable
 internal fun FocalLongMessage(
@@ -90,23 +86,22 @@ internal fun FocalLongMessage(
     val excerpt = remember(text) { LongMessageExcerpt.of(text) }
     var localExpanded by rememberSaveable(messageId) { mutableStateOf(false) }
     val expanded = expansion?.isExpanded ?: localExpanded
-    val toggle: () -> Unit = expansion?.onToggle ?: { localExpanded = !localExpanded }
+    val expand: () -> Unit = expansion?.onToggle ?: { localExpanded = true }
     Column(modifier = modifier.animateContentSize(rememberExpansionSpec())) {
         body(if (excerpt.truncated && !expanded) excerpt.excerpt + "…" else text)
-        if (excerpt.truncated) {
-            val label = stringResource(if (expanded) R.string.message_long_collapse else R.string.message_long_read_more)
-            val state = stringResource(if (expanded) R.string.focal_long_message_expanded else R.string.focal_long_message_collapsed)
+        if (excerpt.truncated && !expanded) {
+            val state = stringResource(R.string.focal_long_message_collapsed)
             Box(
                 contentAlignment = Alignment.CenterEnd,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = TOGGLE_MIN_TARGET)
-                    .clickable(role = Role.Button, onClick = toggle)
+                    .clickable(role = Role.Button, onClick = expand)
                     .semantics { stateDescription = state }
                     .padding(end = TOGGLE_END_CLEARANCE),
             ) {
                 Text(
-                    text = label,
+                    text = stringResource(R.string.message_long_read_more),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     textDecoration = TextDecoration.Underline,
@@ -122,44 +117,3 @@ private val TOGGLE_MIN_TARGET = 48.dp
 
 /** Marge de fin qui dégage le bouton de réaction posé sur le coin de la bulle. */
 private val TOGGLE_END_CLEARANCE = 48.dp
-
-/**
- * Le bloc de verre du message déplié (iOS `FocalGlassBlock` sous `focusCardBackground`) : il
- * épouse le contenu (+6 en horizontal, +3 en vertical, `LongMessageExpansionLaw.glassFrame`) sans
- * changer sa taille, et suit sa hauteur pendant l'animation. Il se fond à l'apparition et au repli.
- */
-@Composable
-internal fun ExpandedGlassFrame(
-    visible: Boolean,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val reduce = LocalReduceMotion.current
-    val fade by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = if (reduce) snap<Float>() else tween<Float>(durationMillis = FADE_MS),
-        label = "expanded-glass",
-    )
-    val card: @Composable () -> Unit = {
-        if (fade > 0f) Box(Modifier.graphicsLayer { alpha = fade }) { FocalGlassBlock() }
-    }
-    Layout(contents = listOf(content, card), modifier = modifier) { measurables, constraints ->
-        val (contentM, cardM) = measurables
-        val contentP = contentM.first().measure(constraints)
-        val w = contentP.width.toFloat()
-        val h = contentP.height.toFloat()
-        val frame = LongMessageExpansionLaw.glassFrame(
-            bubble = LongMessageExpansionLaw.Rect(0f, 0f, w, h),
-            row = LongMessageExpansionLaw.Rect(0f, 0f, w, h),
-        )
-        val cardP = cardM.firstOrNull()?.measure(
-            Constraints.fixed((frame.right - frame.left).roundToInt(), (frame.bottom - frame.top).roundToInt()),
-        )
-        layout(contentP.width, contentP.height) {
-            cardP?.place(frame.left.roundToInt(), frame.top.roundToInt())
-            contentP.place(0, 0)
-        }
-    }
-}
-
-private const val FADE_MS = 150

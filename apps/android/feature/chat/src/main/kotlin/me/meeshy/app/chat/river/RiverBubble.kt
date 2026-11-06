@@ -35,6 +35,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -383,7 +385,10 @@ private fun MutedLine(text: String) {
     Text(text, style = BubbleTextStyle, fontStyle = FontStyle.Italic, color = MeeshyTheme.tokens.textMuted)
 }
 
-/** Le texte PRISME servi par le fil ; un message très long se replie sur son extrait. */
+/**
+ * Le texte PRISME servi par le fil ; un message très long s'ouvre sur son extrait, et « Lire la suite » l'affiche en
+ * entier pour toute la durée d'ouverture du fil — aucun « Réduire » (#16465, iOS #16463).
+ */
 @Composable
 private fun RiverText(content: RiverBubbleContent, laneColor: Color) {
     val excerpt = remember(content.text) { LongMessageExcerpt.of(content.text) }
@@ -394,15 +399,16 @@ private fun RiverText(content: RiverBubbleContent, laneColor: Color) {
         style = BubbleTextStyle,
         linkColor = laneColor,
     )
-    if (excerpt.truncated) {
+    if (excerpt.truncated && !expanded) {
         Text(
-            text = stringResource(if (expanded) UiR.string.message_long_collapse else UiR.string.message_long_read_more),
+            text = stringResource(UiR.string.message_long_read_more),
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             color = laneColor,
             modifier = Modifier
+                .minimumInteractiveComponentSize()
                 .clip(RoundedCornerShape(MeeshyRadius.sm))
-                .clickable { expanded = !expanded }
+                .clickable(role = Role.Button) { expanded = true }
                 .padding(vertical = MeeshySpacing.xxs),
         )
     }
