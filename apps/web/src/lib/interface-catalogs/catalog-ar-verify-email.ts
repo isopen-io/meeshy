@@ -29,8 +29,7 @@ const arVerifyEmail = {
   'signInLink.switchAccount.leave': 'العودة إلى الصفحة الرئيسية',
   'emailSent.title': 'تم إرسال البريد الإلكتروني',
   'emailSent.openLink': 'افتح الرابط المُرسَل إلى {email}',
-  'emailSent.nothingReceived': 'لم يصلك شيء؟',
-  'emailSent.nothingReceived.text': 'تحقّق من مجلد الرسائل غير المرغوب فيها (spam): قد تكون الرسالة وصلت إليه.',
+  'emailSent.checkSpam': 'لم يصلك شيء؟ تحقّق أيضًا من مجلد الرسائل غير المرغوب فيها أو البريد العشوائي.',
 };
 
 export default arVerifyEmail;

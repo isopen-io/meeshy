@@ -316,6 +316,9 @@ const dropWebOnlyAssets = (): Plugin => ({
        déplient un lien `https://meeshy.me/…` (sept landings, ~75 Ko chacune,
        et l'invitation de la passerelle) : la coque ne les affiche jamais. */
     rmSync(join(options.dir, 'og'), { recursive: true, force: true });
+    /* LES BADGES DES BOUTIQUES (#16452) — le pied des pages d'accès ne les
+       montre que sur le WEB (`components/auth-site-footer.tsx`). */
+    rmSync(join(options.dir, 'store-badges'), { recursive: true, force: true });
   },
 });
 

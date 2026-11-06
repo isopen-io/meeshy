@@ -22,7 +22,7 @@ import { controlledBy, perceivableText } from '@/test-support/perceivable-text';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-const NOTHING_RECEIVED_TEXT = 'Regardez vos indésirables (spam) : le message peut y être tombé.';
+const SPAM_HINT_TEXT = 'Rien reçu ? Regardez aussi dans vos spams ou courriers indésirables.';
 
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/forgot-password' });
@@ -187,8 +187,8 @@ describe('« Mot de passe oublié » sert aussi à créer un premier mot de pass
 
 /**
  * L'ÉCRAN D'ENVOI EST CELUI DE LA CONNEXION PAR E-MAIL (#6583, #6643) — même
- * attente, mêmes mots : « E-mail envoyé », l'adresse, et le (i) « Rien reçu ? »
- * dont le TEXTE est partagé (`emailSent.*`, catalogue d'interface). Il disait « un lien de
+ * attente, mêmes mots : « E-mail envoyé », l'adresse, et le conseil sur les indésirables,
+ * dit en clair (#16452), dont le TEXTE est partagé (`emailSent.*`, catalogue d'interface). Il disait « un lien de
  * réinitialisation vient d'être envoyé » : une seconde phrase pour le même
  * fait, et un mot faux pour qui n'a jamais eu de mot de passe.
  */
@@ -201,10 +201,8 @@ describe('l’écran d’envoi est celui de la connexion par e-mail', () => {
     expect(request.calls).toEqual([EMAIL]);
     expect(el.querySelector('h2')?.textContent).toBe('E-mail envoyé');
     expect(text(el)).toContain(`Ouvrez le lien reçu à ${EMAIL}`);
-    // Le (i) de #6626 : la note est dans le DOM, repliée en `sr-only`, et le
-    // libellé de son bouton est LU à côté du glyphe (§ `InfoHintButton`).
-    expect(el.querySelector('button[aria-label="Rien reçu ?"]')).not.toBeNull();
-    expect(text(el)).toContain(NOTHING_RECEIVED_TEXT);
+    // Dit EN CLAIR (#16452), plus derrière le (i) de #6626.
+    expect(el.querySelector('[data-spam-hint]')?.textContent).toBe(SPAM_HINT_TEXT);
     const retour = [...el.querySelectorAll('a')].find((a) => text(a).trim() === 'Retour à la connexion');
     expect(retour?.getAttribute('href')).toBe('/login');
     expect(strayFromAuthColumn(el)).toEqual([]);
@@ -226,13 +224,13 @@ describe('/forgot-password parle la langue d’interface', () => {
     expect(text(el)).not.toMatch(/Recevez|Jamais eu|Recevoir le lien|Retour à la connexion/u);
   });
 
-  test('interface en : l’écran d’envoi dit « Email sent » et « Nothing received? »', async () => {
+  test('interface en : l’écran d’envoi dit « Email sent » et où chercher l’e-mail', async () => {
     document.documentElement.lang = 'en';
     const el = mount(acceptedRequest().deps);
     await sendFrom(el);
     expect(el.querySelector('h2')?.textContent).toBe('Email sent');
     expect(text(el)).toContain(`Open the link sent to ${EMAIL}`);
-    expect(el.querySelector('button[aria-label="Nothing received?"]')).not.toBeNull();
+    expect(el.querySelector('[data-spam-hint]')?.textContent).toBe('Nothing yet? Also check your spam or junk folder.');
     expect(text(el)).not.toMatch(/E-mail envoyé|Ouvrez|Rien reçu/u);
   });
 

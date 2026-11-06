@@ -119,6 +119,9 @@ describe('/login — la porte PAR DÉFAUT est la connexion par e-mail (#6626)', 
  * La porte du MOT DE PASSE garde son blason : elle n'a pas de baguette, et un
  * écran sans en-tête d'aucune sorte n'aurait plus rien pour se nommer.
  */
+/** Les traits HORS de l'en-tête partagé (#16452), qui porte toujours les siens. */
+const columnLines = (el: Element) => [...el.querySelectorAll('line')].filter((line) => line.closest('[data-auth-header]') === null);
+
 describe('/login — la porte par défaut n’a plus de blason', () => {
   test('ni le blason « Meeshy », ni l’ancien titre de #6404', () => {
     const el = mountAt('/login');
@@ -131,7 +134,7 @@ describe('/login — la porte par défaut n’a plus de blason', () => {
     // La baguette est le SEUL tracé d'en-tête restant : le blason de marque
     // rendait trois `<line>`, elle n'en rend aucune.
     expect(el.querySelector('svg')).not.toBeNull();
-    expect(el.querySelectorAll('line')).toHaveLength(0);
+    expect(columnLines(el)).toHaveLength(0);
     expect(text(el)).toContain('Votre adresse e-mail');
     expect(el.querySelector('#magic-link-email')).not.toBeNull();
     expect(text(el)).toContain('Recevoir le lien');
@@ -139,7 +142,7 @@ describe('/login — la porte par défaut n’a plus de blason', () => {
 
   test('la porte du mot de passe GARDE son blason', () => {
     const el = mountAt('/login?methode=password');
-    expect(el.querySelectorAll('line')).toHaveLength(3);
+    expect(columnLines(el)).toHaveLength(3);
   });
 });
 

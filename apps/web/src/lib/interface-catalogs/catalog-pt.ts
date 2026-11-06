@@ -37,6 +37,7 @@ import ptQuote from './catalog-pt-quote';
 import ptCommentRow from './catalog-pt-comment-row';
 import ptContactDiscovery from './catalog-pt-contact-discovery';
 import ptDownload from './catalog-pt-download';
+import ptAuthFooter from './catalog-pt-auth-footer';
 import ptPhonePrompt from './catalog-pt-phone-prompt';
 import ptUserProfile from './catalog-pt-user-profile';
 import ptContentRefused from './catalog-pt-content-refused';
@@ -990,6 +991,7 @@ const pt = {
   'message-detail.retry': 'Tentar novamente',
 
   ...ptDownload,
+  ...ptAuthFooter,
   ...ptPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */

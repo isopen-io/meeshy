@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
-import { AuthCloseChip, AuthColumn } from '@/components/auth-column';
-import { PublicHeader, useInterfaceLanguage } from '@/components/public-header';
+import { AuthColumn } from '@/components/auth-column';
+import { AuthHeader } from '@/components/auth-header';
+import { AuthSiteFooter } from '@/components/auth-site-footer';
+import { useInterfaceLanguage } from '@/components/public-header';
 import { CountrySheet } from '@/components/country-sheet';
 import { DerivedIdentity } from '@/components/derived-identity';
 import { EmailTakenActions } from '@/components/email-taken-actions';
@@ -330,7 +332,7 @@ export default function SignupScreen({
   if (signInLinkEmail !== null) {
     return (
       <AuthColumn className="min-h-0">
-        <PublicHeader language={interfaceLanguage} leading={<AuthCloseChip to="login" search={loginSearch} />} />
+        <AuthHeader back="login" backSearch={loginSearch} />
         <MagicLinkPanel
           {...(magicLinkDeps === undefined ? {} : { deps: magicLinkDeps })}
           next={next}
@@ -344,7 +346,7 @@ export default function SignupScreen({
 
   return (
     <AuthColumn className="min-h-0">
-      <PublicHeader language={interfaceLanguage} leading={<AuthCloseChip to="login" search={loginSearch} />} />
+      <AuthHeader back="login" backSearch={loginSearch} />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6" data-signup-phase={phase}>
         <SignupInviterHero language={interfaceLanguage} hero={referral.hero} />
@@ -567,6 +569,7 @@ export default function SignupScreen({
             {translate(interfaceLanguage, 'signup.haveAccount')}&nbsp;<span className={INDIGO_LINK}>{translate(interfaceLanguage, 'signup.signIn')}</span>
           </Link>
         </div>
+        <AuthSiteFooter />
       </div>
 
       {isShowingCountrySheet ? (

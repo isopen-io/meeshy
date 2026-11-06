@@ -48,6 +48,7 @@ import frQuote from './catalog-fr-quote';
 import frCommentRow from './catalog-fr-comment-row';
 import frContactDiscovery from './catalog-fr-contact-discovery';
 import frDownload from './catalog-fr-download';
+import frAuthFooter from './catalog-fr-auth-footer';
 import frPhonePrompt from './catalog-fr-phone-prompt';
 import frUserProfile from './catalog-fr-user-profile';
 import frContentRefused from './catalog-fr-content-refused';
@@ -1025,6 +1026,7 @@ const fr = {
      que meeshy.me sert aujourd'hui. Aucune mention du Play Store tant que la
      coque Android n'est pas publiée. */
   ...frDownload,
+  ...frAuthFooter,
   ...frPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — le panneau de pièces jointes du fil.

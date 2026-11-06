@@ -29,8 +29,7 @@ const ptVerifyEmail = {
   'signInLink.switchAccount.leave': 'Voltar ao início',
   'emailSent.title': 'E-mail enviado',
   'emailSent.openLink': 'Abra o link enviado para {email}',
-  'emailSent.nothingReceived': 'Não recebeu nada?',
-  'emailSent.nothingReceived.text': 'Verifique sua pasta de spam: a mensagem pode ter ido parar lá.',
+  'emailSent.checkSpam': 'Não chegou? Confira também sua pasta de spam ou lixo eletrônico.',
 };
 
 export default ptVerifyEmail;

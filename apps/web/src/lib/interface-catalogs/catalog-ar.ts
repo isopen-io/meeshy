@@ -37,6 +37,7 @@ import arQuote from './catalog-ar-quote';
 import arCommentRow from './catalog-ar-comment-row';
 import arContactDiscovery from './catalog-ar-contact-discovery';
 import arDownload from './catalog-ar-download';
+import arAuthFooter from './catalog-ar-auth-footer';
 import arPhonePrompt from './catalog-ar-phone-prompt';
 import arUserProfile from './catalog-ar-user-profile';
 import arContentRefused from './catalog-ar-content-refused';
@@ -983,6 +984,7 @@ const ar = {
   'message-detail.retry': 'إعادة المحاولة',
 
   ...arDownload,
+  ...arAuthFooter,
   ...arPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
