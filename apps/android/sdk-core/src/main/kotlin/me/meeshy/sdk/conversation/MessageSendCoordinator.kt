@@ -9,6 +9,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
+import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaAdoption
@@ -316,9 +317,29 @@ internal class MessageSendCoordinator(
             messageDao.recordSendAttempt(cid, LocalSendState.FAILED.name, retryCount, MediaLoss.REASON)
             return
         }
+        if (!queueBehind(cid, uploads)) markSendFailed(cid)
+    }
+
+    /**
+     * Au démarrage (#16168) : la bulle de pièces [cid], toujours à l'envoi mais sans ligne de message, repart derrière les
+     * téléversements qui lui survivent. Rend `false` — la bulle reste à marquer en échec — s'il ne lui en reste aucun, si elle
+     * a une ligne, ou si elle n'attend pas de pièce.
+     */
+    suspend fun resumeOrphanedUploads(cid: String): Boolean {
+        val row = messageDao.find(cid) ?: return false
+        if (outboxRepository.row(cid) != null) return false
+        val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
+        if (!message.expectsUploadedPiece(SendTrace.read(message))) return false
+        val uploads = outboxRepository.uploadsOfMessage(cid)
+        if (uploads.isEmpty()) return false
+        return queueBehind(cid, uploads)
+    }
+
+    /** Les téléversements épuisés de la bulle repartent avec un budget neuf, et son message est mis en file derrière eux. */
+    private suspend fun queueBehind(cid: String, uploads: List<OutboxEntity>): Boolean {
         uploads.filter { it.stateEnum == OutboxState.EXHAUSTED }.forEach { outboxRepository.retry(it.cmid) }
         val cmids = uploads.map { it.cmid }
-        if (!sendPostedBubble(cid, cmids, cmids.toSet())) markSendFailed(cid)
+        return sendPostedBubble(cid, cmids, cmids.toSet())
     }
 
     private fun ApiMessage.expectsUploadedPiece(trace: SendTrace): Boolean =
