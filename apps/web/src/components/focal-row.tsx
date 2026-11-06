@@ -10,6 +10,7 @@ import { badgesOf, editedByModeratorOf, editedOf, systemRowOf } from '@/lib/view
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { usePresence } from '@/lib/view/use-presence';
+import { threadRowKeyOf } from '@/lib/view/use-arrival-motion';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
@@ -604,7 +605,7 @@ export const FocalRow = memo(function FocalRow({
            reste juste), soit le DOM le rend pour cet état — jamais les deux,
            jamais aucun. */
         <LongMessageText
-          messageId={message.id}
+          messageId={threadRowKeyOf(message)}
           text={rendered.text}
           lang={rendered.language}
           className="text-bubble leading-[1.35] whitespace-pre-wrap"

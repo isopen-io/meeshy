@@ -89,7 +89,7 @@ internal fun ChatListHost(
     val accentColor = host.accentColor
     val bubbleFrames = host.bubbleFrames
     val listState = rememberLazyListState()
-    val expansionHost = rememberLongMessageExpansionHost(listState)
+    val expansionHost = rememberLongMessageExpansionHost(listState) { host.expandedLongMessages += it }
     // La fiche de l'auteur ouverte depuis l'avatar du pied d'identité (iOS `selectedProfileUser`).
     val profileTap = rememberProfileTap(state.conversationId, accentColor, host.viewerRole)
     // L'en-tête efface sa grappe d'actions pendant le défilement (iOS `hiddenWhileScrolling`).
