@@ -379,7 +379,8 @@ final class MessageUploadProgressReplayTests: XCTestCase {
         let text = try String(contentsOf: source, encoding: .utf8)
 
         XCTAssertFalse(text.contains("TusUploadManager(baseURL:"))
-        XCTAssertEqual(text.components(separatedBy: "ReplayUploadProgressRelay.shared.uploader(").count - 1, 2)
+        XCTAssertEqual(text.components(separatedBy: "ReplayUploadProgressRelay.shared.uploader(").count - 1, 1)
+        XCTAssertEqual(text.components(separatedBy: "await replayUploader(").count - 1, 2)
     }
 
     /// Reprise en échec comme reprise réussie : la bulle ne garde pas un anneau sans envoi derrière.

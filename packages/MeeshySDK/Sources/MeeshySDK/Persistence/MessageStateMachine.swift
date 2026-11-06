@@ -68,6 +68,10 @@ public struct MessageStateMachine: Sendable {
             readAt = at
             state = .read
 
+        case (.sending, .replayFailed(let error)):
+            lastError = error.localizedDescription
+            state = .queued
+
         case (.sending, .sendFailed(let error)):
             lastError = error.localizedDescription
             if retryCount < Self.maxRetries {
