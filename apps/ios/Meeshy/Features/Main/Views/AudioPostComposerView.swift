@@ -586,9 +586,7 @@ struct AudioPostComposerView: View {
     private func importAudioFile(from pickedURL: URL) {
         let accessing = pickedURL.startAccessingSecurityScopedResource()
         defer { if accessing { pickedURL.stopAccessingSecurityScopedResource() } }
-        let ext = pickedURL.pathExtension.isEmpty ? "m4a" : pickedURL.pathExtension
-        let localURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + "." + ext)
+        let localURL = Self.importedCopyURL(of: pickedURL)
         do {
             try? FileManager.default.removeItem(at: localURL)
             try FileManager.default.copyItem(at: pickedURL, to: localURL)
@@ -597,7 +595,16 @@ struct AudioPostComposerView: View {
             phase = .preview
             return
         }
-        acceptRecording(url: localURL, mimeType: Self.mimeType(forExtension: ext))
+        acceptRecording(url: localURL, mimeType: Self.mimeType(forExtension: localURL.pathExtension))
+    }
+
+    /// La copie porte le nom choisi : c'est lui que la file relit pour le
+    /// serveur (#11166). Sans extension, le fichier passe pour un m4a.
+    static func importedCopyURL(of pickedURL: URL) -> URL {
+        let name = pickedURL.lastPathComponent
+        let chosenName = pickedURL.pathExtension.isEmpty ? name + ".m4a" : name
+        return FileManager.default.temporaryDirectory
+            .appendingPathComponent(ImportedCopyName.copyName(of: chosenName, through: .composerSound))
     }
 
     private static func mimeType(forExtension ext: String) -> String {

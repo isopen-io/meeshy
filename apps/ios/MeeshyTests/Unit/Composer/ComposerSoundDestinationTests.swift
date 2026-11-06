@@ -184,6 +184,19 @@ final class ComposerSoundDestinationWiringGuardTests: XCTestCase {
     /// ses feuilles** — sans toucher au thème de l'app. Elle lisait le thème
     /// global : sur un téléphone en clair, elle montait claire au-dessus d'une
     /// scène sombre.
+    func test_unSonImporteParLaFeuille_garde_leNomChoisiDansSaCopie() {
+        let copie = AudioPostComposerView.importedCopyURL(of: URL(fileURLWithPath: "/tmp/On fait comme ça.m4a"))
+
+        XCTAssertEqual(ImportedCopyName.chosenName(in: copie.lastPathComponent), "On fait comme ça.m4a")
+    }
+
+    func test_unSonImporteSansExtension_devientUnM4aNomme() {
+        let copie = AudioPostComposerView.importedCopyURL(of: URL(fileURLWithPath: "/tmp/Mémo"))
+
+        XCTAssertEqual(copie.pathExtension, "m4a")
+        XCTAssertEqual(ImportedCopyName.chosenName(in: copie.lastPathComponent), "Mémo.m4a")
+    }
+
     @MainActor
     func test_laFeuilleSon_duCompositeur_estSombre_dansUneAppClaire() throws {
         let modeAvant = ThemeManager.shared.mode
