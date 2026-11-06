@@ -276,6 +276,24 @@ final class TusUploadManagerTests: XCTestCase {
         })
     }
 
+    // MARK: - Le nom annoncé au serveur (#11166)
+
+    func test_announcedName_withoutDeclaredName_neverCarriesTheTechnicalCopyPrefix() {
+        let copy = URL(fileURLWithPath: "/tmp/composer_file_058F7FEA-B7A2-4CF3-876F-763EDA90E946_Devis.pdf")
+
+        XCTAssertEqual(TusUploadManager.announcedName(declared: nil, fileURL: copy), "Devis.pdf")
+    }
+
+    func test_announcedName_declaredCopyName_isCleanedToo() {
+        let declared = "file_058F7FEA-B7A2-4CF3-876F-763EDA90E946_Devis.pdf"
+
+        XCTAssertEqual(TusUploadManager.announcedName(declared: declared, fileURL: URL(fileURLWithPath: "/tmp/0.pdf")), "Devis.pdf")
+    }
+
+    func test_announcedName_ordinaryFile_keepsItsName() {
+        XCTAssertEqual(TusUploadManager.announcedName(declared: nil, fileURL: URL(fileURLWithPath: "/tmp/IMG_0001.jpg")), "IMG_0001.jpg")
+    }
+
     func test_creationMetadata_capture_declaresCapturedInAppTrue() {
         let header = TusUploadManager.creationMetadata(
             fileName: "prise.jpg", mimeType: "image/jpeg", uploadContext: nil,

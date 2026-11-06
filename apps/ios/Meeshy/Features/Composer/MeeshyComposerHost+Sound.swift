@@ -676,7 +676,7 @@ extension MeeshyComposerHost {
             let scoped = sourceURL.startAccessingSecurityScopedResource()
             defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
             let destination = FileManager.default.temporaryDirectory
-                .appendingPathComponent("composer_sound_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
+                .appendingPathComponent(ImportedCopyName.copyName(of: sourceURL.lastPathComponent, through: .composerSound))
             guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
             switch placement ?? chosenSoundPlacement {
             case .background:

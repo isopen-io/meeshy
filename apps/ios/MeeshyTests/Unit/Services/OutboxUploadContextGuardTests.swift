@@ -277,4 +277,47 @@ final class OutboxUploadContextGuardTests: XCTestCase {
                 + "Trouvés — \(sansContexte)."
         )
     }
+
+    // MARK: - Le nom choisi suit le fichier jusqu'au serveur (#11166)
+
+    private func argumentsDesAppels(de ancre: String, dans code: String) throws -> [String] {
+        var appels: [String] = []
+        var curseur = code.startIndex
+        while let trouve = code.range(of: ancre, range: curseur..<code.endIndex) {
+            let ouvrante = code.index(before: trouve.upperBound)
+            appels.append(try XCTUnwrap(argumentsDeLAppel(dans: code, ouvranteA: ouvrante)))
+            curseur = trouve.upperBound
+        }
+        return appels
+    }
+
+    /// En file, un fichier s'appelle `pending-media/<cmid>/0.pdf`. Le rejeu qui
+    /// ne remet pas le nom choisi au téléverseur grave ce nom en `originalName`.
+    /// Même raison que plus haut pour une garde de source : le maillon est un
+    /// argument d'appel, et le dispatcher n'a pas de téléverseur injecté.
+    func test_chaqueRejeuDeLaFile_remetLeNomChoisiAuTeleverseur() throws {
+        let sources = try sourcesDeProduction()
+        let dispatchers = ["OutboxDispatcher+Messages.swift", "OutboxDispatcher+Publications.swift"]
+
+        for fichier in dispatchers {
+            let code = try XCTUnwrap(sources.first { $0.fichier == fichier }?.code, "\(fichier) introuvable")
+            let appels = try ["uploadFile(", "uploadMessageAttachment("].flatMap { ancre in
+                try argumentsDesAppels(de: ancre, dans: code)
+            }
+            XCTAssertFalse(appels.isEmpty, "\(fichier) ne téléverse plus rien : la garde ne mesurerait RIEN")
+            for appel in appels {
+                XCTAssertTrue(appel.contains("fileName:"), "\(fichier) téléverse sans le nom choisi : \(appel)")
+            }
+        }
+    }
+
+    /// Le nom d'une copie temporaire s'écrit à UN endroit, celui qui sait le
+    /// relire : un préfixe écrit à la main repartirait en `originalName`.
+    func test_aucuneCopieImporteeNeFabriqueSonNomALaMain() throws {
+        let fautifs = try sourcesDeProduction()
+            .filter { $0.code.contains(#"_\(UUID().uuidString)_\("#) }
+            .map(\.fichier)
+
+        XCTAssertEqual(fautifs, [], "Passer par ImportedCopyName.copyName(of:through:)")
+    }
 }

@@ -27,22 +27,23 @@ struct AttachmentGroupOutbox {
     /// vide la file au cycle suivant. Rend `true` si le groupe est en file.
     func enqueueOffline(_ send: OutgoingMediaGroup, mediaFiles: [String: URL]) async -> Bool {
         if send.group.kind == .audio {
-            let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
+            let tracks = mediaSources(of: send, mediaFiles: mediaFiles)
             // Offline: NEVER fall through to the TUS path (it would just
             // fail).
-            guard !urls.isEmpty else {
+            guard !tracks.isEmpty else {
                 Logger.messages.warning("Audio group offline but no source URLs — skipping \(send.tempId)")
                 return false
             }
             do {
                 let queued = try await OfflineQueue.shared.enqueueAudios(
-                    sourceAudioURLs: urls,
+                    sourceAudioURLs: tracks.map { $0.url },
                     conversationId: conversationId,
                     content: send.group.text,
                     clientMessageId: send.tempId,
                     originalLanguage: originalLanguage,
                     replyToId: send.group.carriesReply ? replyToId : nil,
-                    protection: protection
+                    protection: protection,
+                    originalNames: tracks.map { $0.name }
                 )
                 await relocator.relocate(tempId: send.tempId, attachments: send.locals, toStoredPaths: queued.localAudioPaths)
                 Logger.messages.info("Audio group queued offline for \(send.tempId)")
@@ -93,16 +94,17 @@ struct AttachmentGroupOutbox {
     /// sources disparus, disque plein, encodage) : état terminal, retry manuel.
     func requeueAfterOnlineFailure(_ send: OutgoingMediaGroup, mediaFiles: [String: URL]) async -> Bool {
         if send.group.kind == .audio {
-            let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
-            guard !urls.isEmpty else { return false }
+            let tracks = mediaSources(of: send, mediaFiles: mediaFiles)
+            guard !tracks.isEmpty else { return false }
             guard let queued = try? await OfflineQueue.shared.enqueueAudios(
-                sourceAudioURLs: urls,
+                sourceAudioURLs: tracks.map { $0.url },
                 conversationId: conversationId,
                 content: send.group.text,
                 clientMessageId: send.tempId,
                 originalLanguage: originalLanguage,
                 replyToId: send.group.carriesReply ? replyToId : nil,
-                protection: protection
+                protection: protection,
+                originalNames: tracks.map { $0.name }
             ) else { return false }
             await relocator.relocate(tempId: send.tempId, attachments: send.locals, toStoredPaths: queued.localAudioPaths)
             return true

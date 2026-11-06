@@ -215,7 +215,7 @@ extension MeeshyComposerHost {
             defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
             let declaredType = try? sourceURL.resourceValues(forKeys: [.contentTypeKey]).contentType
             let destination = FileManager.default.temporaryDirectory
-                .appendingPathComponent("composer_file_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
+                .appendingPathComponent(ImportedCopyName.copyName(of: sourceURL.lastPathComponent, through: .composerDocument))
             guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
             let mime = ComposerMediaProbe.mime(forURL: destination, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: destination, mime: mime)

@@ -39,7 +39,7 @@ enum ComposerFileImporter {
             // of the send pipeline with no diagnosable cause. Skip this
             // file and surface the failure instead of adding a phantom
             // attachment.
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("file_\(UUID().uuidString)_\(fileName)")
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(ImportedCopyName.copyName(of: fileName, through: .conversationFile))
             do {
                 try FileManager.default.copyItem(at: url, to: tempURL)
             } catch {

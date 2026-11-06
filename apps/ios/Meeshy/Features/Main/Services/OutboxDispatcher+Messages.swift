@@ -174,7 +174,7 @@ extension OutboxDispatcher {
                 var uploadedIds: [String] = []
                 var firstUploadErrorAudio: Error?
 
-                for stored in pendingAudioPaths {
+                for (index, stored) in pendingAudioPaths.enumerated() {
                     let absolutePath = OfflineQueue.absoluteAudioPath(forStored: stored)
                     guard FileManager.default.fileExists(atPath: absolutePath) else {
                         logger.error("Audio file missing on dispatch, path=\(stored, privacy: .public)")
@@ -184,7 +184,8 @@ extension OutboxDispatcher {
                         let tusResult = try await uploader.uploadFile(
                             fileURL: URL(fileURLWithPath: absolutePath),
                             mimeType: "audio/mp4",
-                            credential: credential
+                            credential: credential,
+                            fileName: item.originalMediaName(at: index)
                         )
                         uploadedIds.append(tusResult.id)
                     } catch {

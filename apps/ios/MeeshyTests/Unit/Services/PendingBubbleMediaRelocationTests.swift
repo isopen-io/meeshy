@@ -100,6 +100,37 @@ final class PendingBubbleMediaRelocationTests: XCTestCase {
         XCTAssertEqual(names, [["Devis.pdf"]])
     }
 
+    func test_enqueueOffline_importedAudio_keepsItsChosenNameForTheReplay() async throws {
+        let saved = await OfflineQueue.shared.outboxPool
+        let base = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: base)
+        await OfflineQueue.shared.configure(pool: base)
+        defer { if let saved { Task { await OfflineQueue.shared.configure(pool: saved) } } }
+        let copy = FileManager.default.temporaryDirectory.appendingPathComponent(
+            ImportedCopyName.copyName(of: "On fait comme ça.m4a", through: .conversationFile))
+        try Data("octets".utf8).write(to: copy)
+        let song = MeeshyMessageAttachment(id: "att-son", fileName: "On fait comme ça.m4a",
+                                           originalName: "On fait comme ça.m4a", mimeType: "audio/mp4",
+                                           fileUrl: copy.absoluteString)
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+        let send = OutgoingMediaGroup(
+            group: MultiAttachmentSendPlanner.PlannedMessage(kind: .audio, attachments: [song], text: nil, carriesReply: false),
+            tempId: cid, locals: [song])
+        let sut = AttachmentGroupOutbox(conversationId: Self.conversationId, originalLanguage: "fr", replyToId: nil,
+                                        protection: .none, relocator: RelocatorSpy())
+
+        let queued = await sut.enqueueOffline(send, mediaFiles: ["att-son": copy])
+
+        XCTAssertTrue(queued)
+        let record = try await base.read { db in
+            try OutboxRecord.filter(Column("clientMessageId") == cid).fetchOne(db)
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let item = try decoder.decode(OfflineQueueItem.self, from: try XCTUnwrap(record).payload)
+        XCTAssertEqual(item.originalMediaName(at: 0), "On fait comme ça.m4a")
+    }
+
     func test_enqueueOffline_queueFails_leavesTheBubbleAlone() async {
         let video = makeAttachment(id: "att-vid", mimeType: "video/mp4", source: URL(fileURLWithPath: "/tmp/src/clip.mp4"))
         let queue = FakeOfflineMessageQueue()

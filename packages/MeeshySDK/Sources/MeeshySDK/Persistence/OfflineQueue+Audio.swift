@@ -111,7 +111,8 @@ extension OfflineQueue {
         replyToId: String? = nil,
         forwardedFromId: String? = nil,
         forwardedFromConversationId: String? = nil,
-        protection: MessageProtectionIntent = .none
+        protection: MessageProtectionIntent = .none,
+        originalNames: [String?]? = nil
     ) async throws -> EnqueueAudiosResult {
         guard let pool = outboxPool else { throw EnqueueAudioError.poolNotConfigured }
 
@@ -134,6 +135,7 @@ extension OfflineQueue {
             attachmentKinds: Array(repeating: AttachmentKind.audio.rawValue, count: sourceAudioURLs.count),
             localAudioPath: nil,
             localAudioPaths: relativePaths,
+            localMediaOriginalNames: originalNames,
             protectionFlags: protection.persistedFlags,
             ephemeralDuration: protection.ephemeralDurationSeconds,
             createdAt: now
@@ -476,6 +478,7 @@ extension OfflineQueue {
             try Self.pendingMediaRelativePath(
                 for: cmid, index: index, ext: sourceMediaURLs[index].pathExtension)
         }
+        let chosenNames = sourceMediaURLs.map { ImportedCopyName.chosenName(in: $0.lastPathComponent) }
         let payload = CreatePostPayload(
             clientMutationId: cmid,
             content: content ?? "",
@@ -490,6 +493,7 @@ extension OfflineQueue {
             discoverabilityPrecision: discoverabilityPrecision,
             mobileTranscription: mobileTranscription,
             localMediaMimeTypes: sourceMediaMimeTypes,
+            localMediaOriginalNames: chosenNames.contains { $0 != nil } ? chosenNames : nil,
             storyEffects: storyEffects,
             mediaCaptions: mediaCaptions,
             mediaAlts: mediaAlts,

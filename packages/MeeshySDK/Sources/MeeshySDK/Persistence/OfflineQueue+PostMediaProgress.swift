@@ -94,6 +94,7 @@ extension CreatePostPayload {
             repostOfId: repostOfId,
             mobileTranscription: mobileTranscription,
             localMediaMimeTypes: localMediaMimeTypes,
+            localMediaOriginalNames: localMediaOriginalNames,
             storyEffects: storyEffects,
             mediaCaptions: mediaCaptions,
             mediaAlts: mediaAlts,
