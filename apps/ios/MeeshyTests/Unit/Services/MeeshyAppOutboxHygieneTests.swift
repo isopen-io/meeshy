@@ -24,6 +24,14 @@ final class MeeshyAppOutboxHygieneTests: XCTestCase {
         return String(source[start.upperBound..<end.lowerBound])
     }
 
+    /// Le démarrage à froid est le seul moment où une grâce de dix minutes tuée avec
+    /// l'application se rattrape (#16129).
+    func test_coldStart_sweepsOrphanPendingCopies() throws {
+        let launch = try meeshyAppSource()
+        XCTAssertTrue(launch.contains("sweepOrphanPendingCopies(session: bootSession)"))
+        XCTAssertTrue(launch.contains("PendingCopySweep.sweepAtColdStart("))
+    }
+
     // MARK: - SettingsActionQueue flush handler (P1 — MeeshyApp:281 4xx replay loop)
 
     private func settingsFlushHandlerBody(from source: String) -> String? {
