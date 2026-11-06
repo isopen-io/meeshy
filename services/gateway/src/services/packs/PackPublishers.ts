@@ -398,26 +398,23 @@ export class PackPublishers {
       const owner = await this.ownerCard(row.ownerId, viewerId);
       return { publisher, owner, website: owner === null ? null : site };
     }
-    const siteTravels = site !== null && (await this.maskedSiteTravels(row.ownerId, viewerId));
+    const siteTravels = site !== null && (await this.maskedSiteTravels(row.ownerId));
     return { publisher, owner: null, website: siteTravels ? site : null };
   }
 
   /**
-   * Le site d'un éditeur dont le compte est MASQUÉ (#16440) : il ne dépend que de ce que le
-   * LECTEUR ne contrôle pas — compte actif, pack approuvé, et le blocage posé par le TITULAIRE
-   * (jamais celui du lecteur). Un critère que le lecteur bascule (bloquer un suspect, la loi
-   * « ne pas être trouvé ») ferait de la présence du site un oracle qui démasque le compte
-   * (audit du 2026-11-06).
+   * Le site d'un éditeur dont le compte est MASQUÉ (#16440) : il ne dépend que de l'état PROPRE
+   * au titulaire — compte actif, pack approuvé —, jamais d'une relation avec le lecteur. Un
+   * critère relatif au lecteur, dans un sens (bloquer un suspect) comme dans l'autre (avoir été
+   * bloqué par lui), ferait de la présence du site un oracle qui démasque le compte (audits du
+   * 2026-11-06).
    */
-  private async maskedSiteTravels(ownerId: string, viewerId: string): Promise<boolean> {
+  private async maskedSiteTravels(ownerId: string): Promise<boolean> {
     const visibility = this.ownerVisibility;
     if (visibility === null) return false;
     const account = await this.prisma.user.findUnique({ where: { id: ownerId }, select: ACCOUNT_SELECT });
     if (!isLive(account)) return false;
-    if (!this.isOfficial(ownerId) && !(await visibility.hasPublished(ownerId))) return false;
-    if (ownerId === viewerId) return true;
-    const ownerBlockedViewer = await this.prisma.user.findFirst({ where: { id: ownerId, blockedUserIds: { has: viewerId } }, select: { id: true } });
-    return ownerBlockedViewer === null;
+    return this.isOfficial(ownerId) || (await visibility.hasPublished(ownerId));
   }
 
   private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly soleHolder: boolean; readonly profile: PageRow | null } | null> {
