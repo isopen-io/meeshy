@@ -61,8 +61,7 @@ extension OutboxDispatcher {
                     fileURL: fileURL,
                     mimeType: mimeType,
                     credential: .bearer(token),
-                    uploadContext: "post",
-                    fileName: payload.originalMediaName(forSentFile: fileURL)
+                    uploadContext: "post", fileName: payload.originalMediaName(forSentFile: fileURL)
                 )
             }
             resolvedMediaIds = montes.ids + payload.attachmentIds

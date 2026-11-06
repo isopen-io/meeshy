@@ -31,6 +31,12 @@ public nonisolated enum ImportedCopyName {
         return chosenName(in: peeled) ?? peeled
     }
 
+    /// Les noms choisis alignés sur `urls`, ou `nil` si aucune n'est une copie.
+    public static func chosenNames(of urls: [URL]) -> [String?]? {
+        let names = urls.map { chosenName(in: $0.lastPathComponent) }
+        return names.contains { $0 != nil } ? names : nil
+    }
+
     private static func chosenName(in copyName: String, after door: Door) -> String? {
         guard copyName.hasPrefix("\(door.rawValue)_") else { return nil }
         let afterDoor = copyName.dropFirst(door.rawValue.count + 1)

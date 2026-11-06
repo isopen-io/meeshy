@@ -28,6 +28,16 @@ struct ImportedCopyNameTests {
         #expect(ImportedCopyName.chosenName(in: ImportedCopyName.copyName(of: legacy, through: .composerDocument)) == "On fait comme ça.m4a")
     }
 
+    @Test func chosenNames_ofFilesThatAreNotCopies_isNil() {
+        #expect(ImportedCopyName.chosenNames(of: [URL(fileURLWithPath: "/tmp/IMG_0001.jpg")]) == nil)
+    }
+
+    @Test func chosenNames_stayAlignedWithTheirFiles() {
+        let copy = URL(fileURLWithPath: "/tmp/\(ImportedCopyName.copyName(of: "Devis.pdf", through: .composerDocument))")
+
+        #expect(ImportedCopyName.chosenNames(of: [URL(fileURLWithPath: "/tmp/clip.mp4"), copy]) == [nil, "Devis.pdf"])
+    }
+
     @Test func chosenName_withNothingAfterThePrefix_isNil() {
         #expect(ImportedCopyName.chosenName(in: "file_\(uuid)_") == nil)
     }

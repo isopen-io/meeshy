@@ -184,8 +184,7 @@ extension OutboxDispatcher {
                         let tusResult = try await uploader.uploadFile(
                             fileURL: URL(fileURLWithPath: absolutePath),
                             mimeType: "audio/mp4",
-                            credential: credential,
-                            fileName: item.originalMediaName(at: index)
+                            credential: credential, fileName: item.originalMediaName(at: index)
                         )
                         uploadedIds.append(tusResult.id)
                     } catch {
