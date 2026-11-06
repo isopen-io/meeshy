@@ -29,10 +29,11 @@ Le site ne part que d'un éditeur **vérifié** dont le compte est servi au lect
 - un site nouveau, ou retiré, remet `verifiedAt` et `verifiedBy` à `null` ; remettre le MÊME site (même chaîne), le même nom et le même logo ne retire rien ;
 - la comparaison porte sur la chaîne stockée telle que `parsePartnerProfileInput` la rend : `https://a.example` et `https://a.example/` sont deux sites, ce qui retire la vérification par excès, jamais par défaut ;
 - le compte officiel Meeshy garde sa vérification, comme pour son logo (#16274) ;
+- la page éditeur lit le sceau et le site dans la MÊME lecture (`PAGE_SELECT` de `PackPublishers`) : un site changé entre deux lectures ne part jamais sous un sceau déjà retiré (audit adversarial du 2026-11-06) ;
 - l'ADMIN scelle le site qu'il a VU : un site remplacé entre la file et le clic rend `409 PARTNER_PROFILE_CHANGED` (la version opaque et l'écriture conditionnelle de `verify` portent déjà le site).
 L'option « figer à la vérification le site validé » est écartée : elle aurait gardé deux sites par profil, et servi un lien que l'éditeur ne revendique plus.
 
-Témoins : `lens-partners.test.ts` (« changer seulement son SITE après vérification la RETIRE », « retirer son site après vérification la retire aussi », « remettre le MÊME site … ne retire rien », « le compte officiel garde sa vérification en changeant son site », « un site remplacé entre la file et le clic ⇒ 409 »).
+Témoins : `lens-partners.test.ts` (« changer seulement son SITE après vérification la RETIRE », « retirer son site après vérification la retire aussi », « remettre le MÊME site … ne retire rien », « le compte officiel garde sa vérification en changeant son site », « un site remplacé entre la file et le clic ⇒ 409 ») et `pack-publishers.test.ts` (« GET /:slug/page lit le sceau et le site ENSEMBLE »).
 
 ## Les éditeurs déjà publiés sont nommés dès la production (porteur, 2026-11-06)
 
