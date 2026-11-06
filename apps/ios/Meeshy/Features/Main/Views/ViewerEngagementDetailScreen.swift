@@ -72,7 +72,7 @@ struct ViewerEngagementDetailScreen: View {
             HapticFeedback.light()
             onBack()
         } label: {
-            Image(systemName: "chevron.left")
+            Image(systemName: "chevron.backward")
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                 .foregroundStyle(accentColor)
                 .frame(width: 44, height: 44)
