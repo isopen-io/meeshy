@@ -23,7 +23,6 @@ import { place } from '@/lib/grouping';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { paginationStateOf } from '@/lib/lens/pagination';
 import { useThreadScene } from '@/lib/reading-mode/scene';
-import { keepReadingInPlace } from '@/lib/view/thread-resize-compensation';
 import { THREAD_ROW_ESTIMATE, useHeadAnchor, useOlderMessages } from '@/lib/view/use-older-messages';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { ThreadModes } from '@/routes/thread-modes';
@@ -86,8 +85,8 @@ import { AdminConversationReadingMedia } from './admin-conversation-reading-medi
  * Comme le fil du produit : la lecture s'ouvre EN BAS, sur les messages les plus
  * récents, et remonter charge les plus anciens AU-DESSUS — la prise de tête
  * (`useOlderMessages`), l'ancre du virtualiseur (`useHeadAnchor`,
- * `keepReadingInPlace`) et l'atterrissage en bas (`useThreadOpenScroll`) sont ceux
- * de `routes/thread.tsx`, jamais une copie. Les pages, servies par offset en
+ * `keepReadingInPlace`, que pose `ThreadModes`) et l'atterrissage en bas
+ * (`useThreadOpenScroll`) sont ceux de `routes/thread.tsx`, jamais une copie. Les pages, servies par offset en
  * `createdAt DESC`, vivent dans UNE requête infinie et se recousent par
  * `mergeAdminThreadPages`. L'onglet « Médias » lit sa PROPRE route au curseur
  * (`GET /admin/conversations/:id/attachments`, #11510), sous le même motif —
@@ -272,7 +271,6 @@ export function AdminConversationReading({
     getItemKey: (index) => placed[index]?.message.id ?? index,
     anchorTo,
   });
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = keepReadingInPlace;
 
   const scene = useThreadScene(scroller, { mode: MODE_DE_LECTURE, ready: placed.length > 0 });
   const noteProgrammaticScroll = scene.noteProgrammaticScroll;

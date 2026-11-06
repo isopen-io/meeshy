@@ -6,6 +6,7 @@ import { badgesOf, editedByModeratorOf, editedOf, systemRowOf } from '@/lib/view
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { usePresence } from '@/lib/view/use-presence';
+import { threadRowKeyOf } from '@/lib/view/use-arrival-motion';
 import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { prismFor, served } from '@/lib/api/prism';
@@ -440,7 +441,7 @@ export function Bubble({
             (violation `aria-hidden-focus`, pire qu'un texte nu). Les liens
             restent atteignables, nommés et au clavier. */
         <LongMessageText
-          messageId={message.id}
+          messageId={threadRowKeyOf(message)}
           text={rendered.text}
           lang={rendered.language}
           className="text-bubble leading-[1.35] whitespace-pre-wrap"

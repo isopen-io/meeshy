@@ -107,8 +107,7 @@ main[data-scene='idle'] .focus-stamp {
    `z-index: -1` dans la colonne ISOLÉE (`focal-row.tsx`, `isolate`) : le
    verre est presque opaque, et une superposition positionnée se peint
    au-dessus du texte en flux — il doit passer DESSOUS. */
-.focus-card,
-.unfold-glass {
+.focus-card {
   position: absolute;
   pointer-events: none;
   border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
@@ -161,7 +160,7 @@ main[data-scene='idle'] .focus-stamp {
    hauteur — zéro relayout, rien à remesurer. Au-dessus : les rangées
    précédentes ET ce qui précède l'élue dans son propre `li` (pilule de jour,
    séparateur « non lus »). Sans transition, comme la loupe
-   (`use-focal-loupe.ts`). */
+   (`use-focus-frame.ts`). */
 ol > li:has(~ li [data-elected='true']),
 ol > li:has([data-elected='true']) > :not(:has([data-elected='true'])) {
   translate: 0 calc(-1 * var(--focus-push-up, 0px));
@@ -177,42 +176,6 @@ ol > li:has([data-elected='true']) ~ li {
    loupe du contenu est bornée par la largeur du cadre (`focus-frame.ts`) et
    `lib/check-focal-elected.mjs` garde les deux faits : aucun défilement
    horizontal, et chaque contrôle atteignable sur toute sa surface. */
-
-/* LE MESSAGE LONG DÉPLIÉ (#8147, `unfold-stage.tsx`) reçoit le même verre ;
-   le contenu, positionné APRÈS lui, se peint dessus. Les voisins
-   s'atténuent (`--unfold-dim`, `FOCAL_METRICS.neighborOpacity`) tant qu'une
-   rangée du fil est dépliée — `:has`, pour que l'hôte n'ait pas à redessiner
-   toute la liste à chaque bascule. Le verre de l'élue ne se double pas sur
-   une rangée dépliée. */
-.unfold-stage,
-.unfold-content {
-  position: relative;
-}
-.unfold-stage {
-  transition: opacity var(--unfold-enter-ms, 250ms) ease-out;
-}
-.unfold-glass {
-  animation: unfold-glass-in var(--unfold-enter-ms, 250ms) ease-out;
-}
-ol:has([data-unfolded]) .unfold-stage:not([data-unfolded]) {
-  opacity: var(--unfold-dim, 0.62);
-}
-.unfold-stage[data-unfolded] .focus-card {
-  display: none;
-}
-@keyframes unfold-glass-in {
-  from {
-    opacity: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .unfold-stage {
-    transition: none;
-  }
-  .unfold-glass {
-    animation: none;
-  }
-}
 
 /* SEUL LE DERNIER MESSAGE ARRIVÉ S'ANIME (#11223, `use-arrival-motion.ts`) —
    une rangée, jamais un lot : premier rendu, pagination et rattrapage
