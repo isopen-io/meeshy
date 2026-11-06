@@ -1718,6 +1718,24 @@ describe('PostService', () => {
       expect(prisma.post.update).toHaveBeenCalled();
     });
 
+    it('writes commentsDisabled when the author closes comments on edit (#16541)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [] }));
+      prisma.post.update.mockResolvedValue(makePost({ commentsDisabled: true }));
+
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { commentsDisabled: true });
+
+      expect(prisma.post.update.mock.calls[0][0].data.commentsDisabled).toBe(true);
+    });
+
+    it('leaves commentsDisabled untouched when the edit omits it (#16541)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [] }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { content: 'x' });
+
+      expect(prisma.post.update.mock.calls[0][0].data.commentsDisabled).toBeUndefined();
+    });
+
     it('does not delete media when removeMediaIds is omitted', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [{ id: 'm1' }] }));
       prisma.post.update.mockResolvedValue(makePost());

@@ -458,6 +458,9 @@ export const UpdatePostSchema = z.object({
   // Opt-in extraction bande-son vidéo — même contrat que CreatePostSchema.
   // Basculer à false libère l'usage vidéo à la prochaine passe de capture.
   allowSoundExtraction: z.boolean().optional(),
+  // #16541 — l'auteur ferme / rouvre les commentaires depuis l'édition. Absent =
+  // inchangé. Un tiers modérateur passe par `PATCH /posts/:postId/comment-settings`.
+  commentsDisabled: z.boolean().optional(),
   moodEmoji: z.string().max(10).optional(),
   // ISO 639-1 (or BCP-47) source language. Changing it re-runs the Prisme
   // translation pipeline from the new source and discards stale translations.

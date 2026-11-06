@@ -5,6 +5,7 @@ import { registerPostMediaRoutes } from './media';
 import { registerPostMediaExportRoutes } from './media-export';
 import { registerFeedRoutes } from './feed';
 import { registerCommentRoutes } from './comments';
+import { registerCommentSettingsRoutes } from './commentSettings';
 import { registerInteractionRoutes } from './interactions';
 import { registerStoryAudioRoutes } from './audio';
 import { registerSoundRoutes } from './sounds';
@@ -41,6 +42,7 @@ export async function postRoutes(fastify: FastifyInstance) {
   registerPostMediaExportRoutes(fastify, prisma, requiredAuth);
   registerFeedRoutes(fastify, prisma, requiredAuth, optionalAuth);
   registerCommentRoutes(fastify, prisma, requiredAuth);
+  registerCommentSettingsRoutes(fastify, prisma, requiredAuth);
   registerInteractionRoutes(fastify, prisma, requiredAuth, orphanCleanup);
   registerStoryAudioRoutes(fastify, prisma, requiredAuth);
   registerSoundRoutes(fastify, prisma, requiredAuth);

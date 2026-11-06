@@ -21,6 +21,7 @@ public object ApiRoutesPosts {
     public const val BY_POST_ID_COMMENTS_BY_COMMENT_ID_LIKE: String = "posts/{postId}/comments/{commentId}/like"
     public const val BY_POST_ID_COMMENTS_BY_COMMENT_ID_REPLIES: String = "posts/{postId}/comments/{commentId}/replies"
     public const val BY_POST_ID_COMMENTS_BY_COMMENT_ID_TRANSLATE: String = "posts/{postId}/comments/{commentId}/translate"
+    public const val BY_POST_ID_COMMENT_SETTINGS: String = "posts/{postId}/comment-settings"
     public const val BY_POST_ID_DOWNLOADS: String = "posts/{postId}/downloads"
     public const val BY_POST_ID_IMPRESSION: String = "posts/{postId}/impression"
     public const val BY_POST_ID_INTERACTIONS: String = "posts/{postId}/interactions"
