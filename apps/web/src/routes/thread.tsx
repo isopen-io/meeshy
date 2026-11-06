@@ -76,7 +76,6 @@ import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useHeadAnchor, useOlderMessages } from '@/lib/view/use-older-messages';
 import { threadRowKeyOf } from '@/lib/view/use-arrival-motion';
-import { keepReadingInPlace } from '@/lib/view/thread-resize-compensation';
 import { useNewerMessages } from '@/lib/view/use-newer-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
@@ -381,7 +380,6 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     getItemKey: (index) => (placed[index] === undefined ? index : threadRowKeyOf(placed[index].message)),
     anchorTo,
   });
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = keepReadingInPlace;
 
   /**
    * LA SCÈNE DU FIL (#5648) — l'ÉLECTION d'une rangée au défilement soutenu

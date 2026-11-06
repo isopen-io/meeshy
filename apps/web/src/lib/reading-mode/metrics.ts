@@ -14,8 +14,6 @@
  */
 import type { CSSProperties } from 'react';
 
-import { FOCAL_METRICS } from '@meeshy/shared/utils/focal-metrics';
-
 /** `FocalMetrics.Row.paddingVertical` / `.paddingHorizontal` — `3/16`. */
 export const ROW_PADDING_VERTICAL = 3;
 export const ROW_PADDING_HORIZONTAL = 16;
@@ -129,9 +127,9 @@ export const FOCUS_CARD_HORIZONTAL_INSET = 6;
  * (`FOCAL_METRICS.loupeGain`, `metrics.test.ts`).
  *
  * #8506 (directive porteur 2026-09-28, « agrandis tout le contenu intérieur
- * par ×1,2 encore ») : 0,05 → 0,26 (1,05 × 1,2 ≈ 1,26). La marge verticale
- * n'écrête plus que le message DÉPLIÉ (`unfold-stage.tsx`, verre fixe) : le
- * cadre de l'élu grandit avec son contenu (`focus-frame.ts`).
+ * par ×1,2 encore ») : 0,05 → 0,26 (1,05 × 1,2 ≈ 1,26). Le cadre de l'élu
+ * grandit avec son contenu (`focus-frame.ts`) ; la marge verticale écrêtait
+ * le verre fixe du message long déplié, retiré par #16464.
  */
 export const FOCUS_CARD_MARGIN_VERTICAL = 8;
 export const FOCUS_LOUPE_GAIN = 0.26;
@@ -328,10 +326,6 @@ export function sceneStyleVars(): CSSProperties {
     '--focus-text-indent': `${TEXT_INDENT}px`,
     '--focus-identity-h': `${IDENTITY_CHIP_HEIGHT}px`,
     '--focus-identity-gap': `${FOCUS_IDENTITY_GAP}px`,
-    /* Le dépliage d'un message long (#8147) — cotes PARTAGÉES avec iOS
-       (`@meeshy/shared/utils/focal-metrics`), lues par `thread-scene.css`. */
-    '--unfold-dim': String(FOCAL_METRICS.neighborOpacity),
-    '--unfold-enter-ms': `${FOCAL_METRICS.enterDurationMs}ms`,
   } as CSSProperties;
 }
 

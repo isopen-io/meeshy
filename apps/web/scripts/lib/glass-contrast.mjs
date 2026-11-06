@@ -292,14 +292,15 @@ export const GLASS_CONTRAST_INVENTORY = [
     kind: 'non-text',
   },
   {
-    /* #8147 — LE BLOC DE VERRE DU FOCAL : le message élu (`FocusCard`) et le
-       message long déplié (`UnfoldStage`) se posent sur `glass glass-card`.
+    /* #8147 — LE BLOC DE VERRE DU FOCAL : le message élu (`FocusCard`) se
+       pose sur `glass glass-card` (le message long déplié ne s'y pose plus
+       depuis #16464 : il se rend comme un message ordinaire).
        Le verre est un FRÈRE du texte, jamais son ancêtre : la couverture
        fichier par fichier ne le voit donc pas, d'où l'entrée écrite ici.
-       « Réduire » (`long-message-text.tsx`) s'y pose aussi, à la même encre :
+       « Lire la suite » (`long-message-text.tsx`) s'y pose aussi, à la même encre :
        la teinte de marque mesurait 2,62:1 en clair et 2,26:1 en sombre au
        pire cas — la marque ne tient qu'en soulignement, jamais en encre. */
-    site: 'src/components/unfold-stage.tsx + focal-focus-overlays.tsx + long-message-text.tsx — le texte du message et « Réduire » sur le verre Focal (#8147)',
+    site: 'src/components/focal-focus-overlays.tsx + long-message-text.tsx — le texte du message et « Lire la suite » sur le verre Focal (#8147)',
     tone: '--ios-surface-card',
     ink: '--ios-ink',
     density: 'glass',

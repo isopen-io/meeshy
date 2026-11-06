@@ -962,7 +962,6 @@ const it = {
   'thread.unread-separator.one': '{count} messaggio non letto',
   'thread.unread-separator.other': '{count} messaggi non letti',
   'thread.long-message.read-more': 'Continua a leggere',
-  'thread.long-message.collapse': 'Mostra meno',
   'message-detail.info.title': 'Informazioni sul messaggio',
   'message-detail.received-by': 'Ricevuto da',
   'message-detail.read-by': 'Letto da',
