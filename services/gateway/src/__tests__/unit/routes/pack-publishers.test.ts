@@ -24,7 +24,9 @@ const verified = (username: string) => ({ username, emailVerifiedAt: new Date('2
 
 type OwnerFacts = { published: Set<string>; hidden: Set<string> };
 
-async function build(options: { readonly officialAccountId?: string | null; readonly ownerVisibility?: false } = {}) {
+const SHOWN_AT = new Date('2026-11-06T08:00:00Z');
+
+async function build(options: { readonly officialAccountId?: string | null; readonly ownerVisibility?: false; readonly ownerShown?: false } = {}) {
   const db = memoryPublisherDb({ [AWA]: verified('awa_secret'), [OFFICIAL]: verified('meeshy_off'), [ADMIN]: verified('root'), [MODO]: verified('modo') });
   const facts: OwnerFacts = { published: new Set([AWA]), hidden: new Set() };
   const publishers = new PackPublishers({
@@ -46,6 +48,7 @@ async function build(options: { readonly officialAccountId?: string | null; read
   await app.register(packPublisherRoutes, { publishers });
   await app.ready();
   await publishers.authorizePublication(AWA, { author: 'Studio Lumière', claimed: null });
+  if (options.ownerShown !== false) db.profiles.find((row) => row.userId === AWA)!.ownerShownAt = SHOWN_AT;
   const as = (userId: string, role = 'USER', anonymous = false) => {
     who = { userId, role, anonymous };
   };
@@ -103,6 +106,101 @@ describe('/publishers — la boutique, le propriétaire, l’administration (#16
       owner: { id: AWA, username: 'awa_secret', displayName: 'Awa D.', avatar: '/u/awa.webp' },
       website: null,
     });
+  });
+
+  it('#16440 — GET /:slug/page MASQUE le compte par défaut : un éditeur qui n’a pas choisi de l’afficher ne le nomme pas', async () => {
+    const { app, as, db } = await build({ ownerShown: false });
+    expect(db.profiles.find((row) => row.userId === AWA)!.ownerShownAt ?? null).toBeNull();
+    as(MODO);
+    const res = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual({ publisher: { slug: 'studio-lumiere', name: 'Studio Lumière', verified: false, official: false }, owner: null, website: null });
+    expect(res.body).not.toContain(AWA);
+    expect(res.body).not.toContain('awa_secret');
+  });
+
+  it('#16440 — le choix d’afficher ne lève AUCUNE garde : bloqué, caché ou sans pack publié, le compte reste tu', async () => {
+    const { app, as, db, facts } = await build();
+    as(MODO);
+    db.users.get(AWA)!.blockedUserIds = [MODO];
+    expect((await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data.owner).toBeNull();
+    db.users.get(AWA)!.blockedUserIds = [];
+    facts.hidden.add(AWA);
+    expect((await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data.owner).toBeNull();
+    facts.hidden.clear();
+    facts.published.clear();
+    expect((await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data.owner).toBeNull();
+    facts.published.add(AWA);
+    expect((await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data.owner).toMatchObject({ id: AWA });
+  });
+
+  it('#16440 — le compte officiel est exempté du choix : /meeshy/page le nomme sans rien avoir coché', async () => {
+    const { app, as, db } = await build({ ownerShown: false });
+    db.profiles.filter((row) => row.userId === OFFICIAL).forEach((row) => { row.ownerShownAt = null; });
+    as(MODO);
+    expect((await app.inject({ method: 'GET', url: '/meeshy/page' })).json().data.owner).toMatchObject({ id: OFFICIAL, username: 'meeshy_off' });
+  });
+
+  it('#16440 — le choix se lit dans la MÊME lecture que le reste de la page : aucune relecture séparée', async () => {
+    const { app, as, db } = await build();
+    const profile = db.profiles.find((row) => row.userId === AWA)!;
+    const partnerProfile = db.prisma.partnerProfile as unknown as { findMany: (args: { where?: { slug?: unknown } }) => Promise<unknown>; findUnique: (args: unknown) => Promise<unknown>; findFirst: (args: unknown) => Promise<unknown> };
+    const findMany = partnerProfile.findMany;
+    let reads = 0;
+    partnerProfile.findMany = async (args) => {
+      reads += 1;
+      const rows = await findMany(args);
+      if (args.where?.slug === 'studio-lumiere') profile.ownerShownAt = null;
+      return rows;
+    };
+    const findUnique = partnerProfile.findUnique;
+    partnerProfile.findUnique = async (args) => {
+      reads += 1;
+      return findUnique(args);
+    };
+    const findFirst = partnerProfile.findFirst;
+    partnerProfile.findFirst = async (args) => {
+      reads += 1;
+      return findFirst(args);
+    };
+    as(MODO);
+    const res = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(res.json().data.owner).toMatchObject({ id: AWA });
+    expect(reads).toBe(1);
+  });
+
+  it('#16440 — un compte masqué n’emporte pas le site : vérifié et servable, le site part sans le compte', async () => {
+    const { app, as, db } = await build({ ownerShown: false });
+    const profile = db.profiles.find((row) => row.userId === AWA)!;
+    profile.website = 'https://studio.example';
+    profile.verifiedAt = new Date('2026-02-01T00:00:00Z');
+    as(MODO);
+    const res = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(res.json().data).toMatchObject({ owner: null, website: 'https://studio.example' });
+    expect(res.body).not.toContain('awa_secret');
+
+    db.users.get(AWA)!.blockedUserIds = [MODO];
+    const blocked = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(blocked.json().data).toMatchObject({ owner: null, website: null });
+  });
+
+  it('#16440 — compte MASQUÉ : rien de ce que le LECTEUR contrôle ne fait varier la page, sans quoi bloquer un suspect le démasquerait (audit 2026-11-06)', async () => {
+    const { app, as, db, facts } = await build({ ownerShown: false });
+    const profile = db.profiles.find((row) => row.userId === AWA)!;
+    profile.website = 'https://studio.example';
+    profile.verifiedAt = new Date('2026-02-01T00:00:00Z');
+    as(MODO);
+    const read = async () => (await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data;
+    const baseline = await read();
+    expect(baseline).toMatchObject({ owner: null, website: 'https://studio.example' });
+
+    db.users.get(MODO)!.blockedUserIds = [ADMIN];
+    expect(await read()).toEqual(baseline);
+    db.users.get(MODO)!.blockedUserIds = [AWA];
+    expect(await read()).toEqual(baseline);
+    db.users.get(MODO)!.blockedUserIds = [];
+    facts.hidden.add(AWA);
+    expect(await read()).toEqual(baseline);
   });
 
   it('GET /meeshy/page nomme le compte officiel ; un éditeur inconnu rend 404', async () => {

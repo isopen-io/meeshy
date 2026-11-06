@@ -141,7 +141,7 @@ export async function packPublisherRoutes(fastify: FastifyInstance, options: Pac
       onRequest: [fastify.authenticate],
       config: { rateLimit: pageRateLimit },
       schema: {
-        description: 'La page d’un éditeur (#16433) : son identité de boutique, son site et le profil Meeshy qui l’édite — `owner` nul si ce compte n’est plus actif, ou si lui et le lecteur se sont bloqués.',
+        description: 'La page d’un éditeur (#16433) : son identité de boutique, son site et le profil Meeshy qui l’édite — `owner` nul tant que l’éditeur n’a pas choisi de l’afficher (#16440, masqué par défaut, compte officiel exempté), si ce compte n’est plus actif, ou si lui et le lecteur se sont bloqués.',
         tags,
         summary: 'Get a pack publisher page',
         params: slugParamsJsonSchema,

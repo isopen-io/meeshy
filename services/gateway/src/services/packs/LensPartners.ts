@@ -60,6 +60,8 @@ export type PartnerProfileView = {
   readonly logo: string | null;
   readonly verified: boolean;
   readonly verifiedAt: string | null;
+  /** Le choix de nommer son compte Meeshy sur sa page éditeur (#16440) — `false` par défaut. */
+  readonly showOwnerProfile: boolean;
   /** L'empreinte de l'état servi : ce que `verify` exige pour vérifier ce qui a été VU. */
   readonly version: string;
 };
@@ -108,7 +110,7 @@ export type LensPartnersDeps = {
 };
 
 const PROFILE_SELECT = {
-  id: true, userId: true, displayName: true, nameKey: true, nameOffListAt: true, website: true, logoSrc: true, logoSha256: true, verifiedAt: true, createdAt: true, updatedAt: true,
+  id: true, userId: true, displayName: true, nameKey: true, nameOffListAt: true, website: true, logoSrc: true, logoSha256: true, verifiedAt: true, ownerShownAt: true, createdAt: true, updatedAt: true,
 } as const;
 
 type ProfileRow = {
@@ -121,6 +123,7 @@ type ProfileRow = {
   readonly logoSrc: string | null;
   readonly logoSha256: string | null;
   readonly verifiedAt: Date | null;
+  readonly ownerShownAt?: Date | null;
   readonly createdAt: Date | null;
   readonly updatedAt: Date;
 };
@@ -156,8 +159,20 @@ const viewOf = (row: ProfileRow): PartnerProfileView => ({
   logo: row.logoSrc,
   verified: row.verifiedAt !== null,
   verifiedAt: row.verifiedAt?.toISOString() ?? null,
+  showOwnerProfile: (row.ownerShownAt ?? null) !== null,
   version: profileVersion(row),
 });
+
+/**
+ * La colonne du choix #16440 : `true` pose la date si elle manquait (et garde
+ * la première), `false` la remet à `null`, absent ne l'écrit pas. Jamais lu par
+ * la vérification : nommer son compte n'est pas l'identité de l'éditeur.
+ */
+const ownerShownColumn = (choice: boolean | undefined, current: Date | null, now: Date): { readonly ownerShownAt?: Date | null } => {
+  if (choice === undefined) return {};
+  if (!choice) return { ownerShownAt: null };
+  return { ownerShownAt: current ?? now };
+};
 
 type LogoColumns = { readonly logoSrc: string | null; readonly logoSha256: string | null; readonly logoMime: string | null; readonly logoBytes: Uint8Array<ArrayBuffer> | null; readonly logoSize: number | null };
 
@@ -221,7 +236,16 @@ export class LensPartners {
     const named = unchanged ? {} : { displayName: claim.displayName, nameKey: claim.nameKey };
     try {
       if (current === null) {
-        const data = { displayName: claim.displayName, nameKey: claim.nameKey, website: input.profile.website, ...(logo.columns ?? NO_LOGO), verifiedAt: null, verifiedBy: null, updatedAt: now };
+        const data = {
+          displayName: claim.displayName,
+          nameKey: claim.nameKey,
+          website: input.profile.website,
+          ...(logo.columns ?? NO_LOGO),
+          verifiedAt: null,
+          verifiedBy: null,
+          ownerShownAt: input.profile.showOwnerProfile === true ? now : null,
+          updatedAt: now,
+        };
         await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, createdAt: now, ...data }, update: data });
       } else {
         const nextLogoSha = logo.columns === undefined ? current.logoSha256 : logo.columns.logoSha256;
@@ -234,6 +258,7 @@ export class LensPartners {
             website: input.profile.website,
             ...(logo.columns ?? {}),
             ...(identityChanged ? { verifiedAt: null, verifiedBy: null } : {}),
+            ...ownerShownColumn(input.profile.showOwnerProfile, current.ownerShownAt ?? null, now),
             updatedAt: now,
           },
         });
@@ -260,7 +285,7 @@ export class LensPartners {
     }
     await this.prisma.partnerProfile.updateMany({
       where: { id: saved.id, updatedAt: writtenAt },
-      data: { displayName: previous.displayName, nameKey: previous.nameKey, updatedAt: this.now() },
+      data: { displayName: previous.displayName, nameKey: previous.nameKey, ownerShownAt: previous.ownerShownAt ?? null, updatedAt: this.now() },
     });
   }
 
