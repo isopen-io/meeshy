@@ -15,7 +15,6 @@ extension MessageListViewController: UICollectionViewDelegate {
     ) {
         arrivalMotion.play(on: cell, item: dataSource.itemIdentifier(for: indexPath))
         applyFocalPerspectiveOnCellDisplay()
-        applyLongMessageExpansionPresentation(animated: false)
         guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }
         let now = Self.nowMs()
         lastSeenActivityMs = now
@@ -27,7 +26,6 @@ extension MessageListViewController: UICollectionViewDelegate {
         didEndDisplaying cell: UICollectionViewCell,
         forItemAt indexPath: IndexPath
     ) {
-        applyLongMessageExpansionPresentation(animated: true, excluding: cell)
         guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }
         let now = Self.nowMs()
         lastSeenActivityMs = now

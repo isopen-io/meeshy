@@ -64752,53 +64752,6 @@
         }
       }
     },
-    "message.long.collapse.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يطوي الرسالة إلى مقتطفها"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Klappt die Nachricht auf ihren Auszug zusammen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Collapses the message back to its excerpt"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Contrae el mensaje a su extracto"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Replie le message sur son extrait"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Riduce il messaggio al suo estratto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recolhe a mensagem ao seu trecho"
-          }
-        }
-      }
-    },
     "message.long.expanded": {
       "extractionState": "manual",
       "localizations": {

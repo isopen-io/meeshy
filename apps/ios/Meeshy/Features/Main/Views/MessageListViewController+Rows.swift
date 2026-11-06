@@ -151,7 +151,7 @@ extension MessageListViewController {
             )
         }
         let bubble = EquatableMessageBubble(bubble: makeThemedBubble(false))
-        let isFocusedCell = (self.readingMode.usesFlatRow && focalDetailedLocalId == localId) || expandedLongMessageLocalId == localId
+        let isFocusedCell = self.readingMode.usesFlatRow && focalDetailedLocalId == localId
         cell.clipsToBounds = false
         cell.contentView.clipsToBounds = false
         cell.layer.zPosition = isFocusedCell ? 1 : 0
@@ -261,7 +261,7 @@ extension MessageListViewController {
             effects: message.effects,
             isLastReceivedMessage: inputs.isLastReceived,
             isFocused: focalDetailedLocalId == localId,
-            isExpanded: expandedLongMessageLocalId == localId,
+            isExpanded: expandedLongMessageLocalIds.contains(localId),
             sentAt: message.createdAt,
             focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil,
             availableWidth: rowAvailableWidth
@@ -298,7 +298,7 @@ extension MessageListViewController {
         focalActions.onReactToAttachment = { attId, emoji in callbacks.attachmentReaction?(attId, messageId, emoji) }
         focalActions.onRequestTranslation = callbacks.requestTranslation
         focalActions.onShowTranslationDetail = callbacks.showTranslation
-        focalActions.onToggleExpanded = { [weak self] in self?.toggleLongMessageExpansion(localId) }
+        focalActions.onToggleExpanded = { [weak self] in self?.expandLongMessage(localId) }
         focalActions.onTapLocation = { place in tapLocationHandler?(place, messageId) }
         focalActions.onShareFile = callbacks.shareFile
         focalActions.onSetActiveDisplayLanguage = { [weak self] msgId, code in
@@ -385,7 +385,7 @@ extension MessageListViewController {
                 if let focalRow {
                     focalRow.equatable().modifier(unencryptedMarking)
                 } else {
-                    messageBubble.longMessageFocus(longMessageExpansion).modifier(unencryptedMarking)
+                    messageBubble.longMessageExpansion(longMessageExpansion).modifier(unencryptedMarking)
                 }
             }
             .environmentObject(host)

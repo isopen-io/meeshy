@@ -154,16 +154,6 @@ struct FocalFocusChrome {
         .accessibilityLabel("\(reaction.emoji) \(reaction.count)")
     }
 
-    /// Le FOND du message long DÉPLIÉ (#8147), dessiné dans le repère du
-    /// CONTENU. Mêmes cotes que `focusCardInsets` : il dépasse le bloc de
-    /// `focusCardInnerMargin` en haut et en bas, et s'arrête à
-    /// `focusCardHorizontalInset` du bord de la cellule.
-    var focusCardBackground: some View {
-        FocalGlassBlock()
-            .padding(.horizontal, -(FocalMetrics.Row.paddingHorizontal - FocalScrollPerspective.focusCardHorizontalInset))
-            .padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)
-    }
-
     /// Le CADRE de l'élu Focal (#8506), fond de la colonne du message : il
     /// englobe l'identité posée au-dessus du contenu descendu, le contenu
     /// GROSSI (#8537) et la bande posée dessous, à `electedCardMargin` de

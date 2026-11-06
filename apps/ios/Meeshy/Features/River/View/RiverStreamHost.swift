@@ -144,11 +144,9 @@ struct RiverStreamHost: View {
     /// au repos (`RiverTimeHandleMetrics.restDelay`).
     @State private var isTimeHandleVisible = false
     @State private var timeHandleRest: Task<Void, Never>?
-    /// #8147 — le message long DÉPLIÉ en place (un seul à la fois), et s'il
-    /// est dans la fenêtre de la pile : ses voisins ne s'atténuent que tant
-    /// qu'on le lit.
-    @State private var expandedMessageId: String?
-    @State private var isExpandedMessageOnScreen = false
+    /// #8147 — les messages longs DÉPLIÉS en place : ils le restent tant que
+    /// la conversation est ouverte, sans mise en avant (#16463).
+    @State private var expandedMessageIds: Set<String> = []
 
 
     private var laneCount: Int { max(1, geometry.laneCount) }
@@ -597,23 +595,13 @@ struct RiverStreamHost: View {
                 onMediaTap: onMediaTap
             )
                 .equatable()
-                .longMessageFocus(expansion(for: bubble.messageId))
-                .longMessageLoupe(isActive: expandedMessageId == bubble.messageId && !reduceMotion)
-                .opacity(LongMessageExpansionLaw.alpha(
-                    isExpandedCell: expandedMessageId == bubble.messageId,
-                    expansionVisible: isExpandedMessageOnScreen
-                ))
-                .zIndex(expandedMessageId == bubble.messageId ? 1 : 0)
+                .longMessageExpansion(expansion(for: bubble.messageId))
                 .padding(.horizontal, RiverMetrics.Lane.gutter)
                 .onTapGesture {
                     navigation.moveTo(RiverLaneResolver.RiverCursor(laneIndex: laneIndex, rank: rank))
                 }
                 .onAppear {
                     completeLanding(rank: rank, laneIndex: laneIndex)
-                    if expandedMessageId == bubble.messageId { isExpandedMessageOnScreen = true }
-                }
-                .onDisappear {
-                    if expandedMessageId == bubble.messageId { isExpandedMessageOnScreen = false }
                 }
         } else {
             // Cellule VIDE — préserve l'alignement de colonne pour que
@@ -635,16 +623,14 @@ struct RiverStreamHost: View {
             paneInWindow: paneAnchor.frame, bubbleWidth: columns.bubbleContentWidth))
     }
 
-    /// #8147 — « Lire la suite » / « Réduire » : la même loi que le fil
+    /// #8147 — « Lire la suite » : la même loi que le fil
     /// (`LongMessageExpansionLaw`), la hauteur animée par la pile elle-même,
-    /// au tempo et sur la courbe du web (#8232).
+    /// au tempo et sur la courbe du web (#8232). Rien ne replie (#16463).
     private func expansion(for messageId: String) -> LongMessageExpansion {
-        LongMessageExpansion(messageId: messageId, isExpanded: expandedMessageId == messageId) {
-            let next = LongMessageExpansionLaw.nextExpanded(current: expandedMessageId, toggled: messageId)
-            let apply = {
-                expandedMessageId = next
-                isExpandedMessageOnScreen = next != nil
-            }
+        LongMessageExpansion(messageId: messageId, isExpanded: expandedMessageIds.contains(messageId)) {
+            let next = LongMessageExpansionLaw.expanded(after: expandedMessageIds, tapping: messageId)
+            guard next != expandedMessageIds else { return }
+            let apply = { expandedMessageIds = next }
             guard let timing = LongMessageExpansionLaw.heightTiming(reduceMotion: reduceMotion) else { return apply() }
             withAnimation(timing.animation, apply)
         }

@@ -4,7 +4,7 @@ import MeeshySDK
 
 /// #8147 — le texte d'un message long se replie sur son EXTRAIT (un quart,
 /// coupé au mot, loi `LongMessageExcerpt`) suivi de « … », et se déplie EN
-/// PLACE ; « Réduire » le replie.
+/// PLACE. Déplié, il est un texte ordinaire : aucun « Réduire » (#16463).
 @MainActor
 final class BubbleExpandableTextStateTests: XCTestCase {
 
@@ -16,7 +16,6 @@ final class BubbleExpandableTextStateTests: XCTestCase {
         let state = BubbleExpandableText.State(content: "Bonjour", isExpanded: false)
         XCTAssertEqual(state.displayedText, "Bonjour")
         XCTAssertFalse(state.showsReadMore)
-        XCTAssertFalse(state.showsCollapse)
     }
 
     func test_displayedText_longCollapsed_isTheExcerptFollowedByAnEllipsis() throws {
@@ -25,7 +24,6 @@ final class BubbleExpandableTextStateTests: XCTestCase {
         let state = BubbleExpandableText.State(content: text, isExpanded: false)
         XCTAssertEqual(state.displayedText, excerpt + "…")
         XCTAssertTrue(state.showsReadMore)
-        XCTAssertFalse(state.showsCollapse)
     }
 
     func test_displayedText_longCollapsed_showsLessThanHalf() {
@@ -34,22 +32,21 @@ final class BubbleExpandableTextStateTests: XCTestCase {
         XCTAssertLessThan(state.displayedText.count * 2, text.count)
     }
 
-    func test_displayedText_longExpanded_isTheWholeTextWithACollapseToggle() {
+    func test_displayedText_longExpanded_isTheWholeText_withoutAnyToggle() {
         let text = longText()
         let state = BubbleExpandableText.State(content: text, isExpanded: true)
         XCTAssertEqual(state.displayedText, text)
-        XCTAssertFalse(state.showsReadMore)
-        XCTAssertTrue(state.showsCollapse)
+        XCTAssertFalse(state.showsReadMore, "déplié, le message n'a plus aucun contrôle : il se lit comme un message ordinaire")
     }
 
     func test_expansion_equality_readsTheMessageAndTheState_notTheClosure() {
         XCTAssertEqual(
-            LongMessageExpansion(messageId: "m1", isExpanded: true, toggle: {}),
-            LongMessageExpansion(messageId: "m1", isExpanded: true, toggle: { _ = 1 })
+            LongMessageExpansion(messageId: "m1", isExpanded: true, expand: {}),
+            LongMessageExpansion(messageId: "m1", isExpanded: true, expand: { _ = 1 })
         )
         XCTAssertNotEqual(
-            LongMessageExpansion(messageId: "m1", isExpanded: true, toggle: {}),
-            LongMessageExpansion(messageId: "m1", isExpanded: false, toggle: {})
+            LongMessageExpansion(messageId: "m1", isExpanded: true, expand: {}),
+            LongMessageExpansion(messageId: "m1", isExpanded: false, expand: {})
         )
     }
 
@@ -59,8 +56,8 @@ final class BubbleExpandableTextStateTests: XCTestCase {
     /// l'ancien occupant de la cellule, et le texte affiché ne bougeait pas.
     func test_expansion_equality_twoMessagesInTheSameState_areDistinct() {
         XCTAssertNotEqual(
-            LongMessageExpansion(messageId: "m1", isExpanded: false, toggle: {}),
-            LongMessageExpansion(messageId: "m2", isExpanded: false, toggle: {})
+            LongMessageExpansion(messageId: "m1", isExpanded: false, expand: {}),
+            LongMessageExpansion(messageId: "m2", isExpanded: false, expand: {})
         )
     }
 }
