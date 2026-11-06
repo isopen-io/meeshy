@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.JoinNoticePresentation
@@ -33,8 +34,12 @@ class ArrivalGreetingInviteTest {
         greetHandle = greetHandle,
     )
 
+    private val accent = Color(0xFF10B981)
+
     private fun show(join: JoinNoticePresentation, onSayHi: (() -> Unit)?) = compose.setContent {
-        MeeshyTheme { JoinNoticeCard(join = join, createdAtIso = null, onOpenProfile = null, onSayHi = onSayHi) }
+        MeeshyTheme {
+            JoinNoticeCard(join = join, createdAtIso = null, onOpenProfile = null, accentColor = accent, onSayHi = onSayHi)
+        }
     }
 
     @Test
@@ -60,14 +65,27 @@ class ArrivalGreetingInviteTest {
 
     @Test
     fun `la phrase des arrivees groupees met son invite en gras`() {
-        val line = arrivalsLine("Tom et Awa ont rejoint la conversation — dis-leur salut")
+        val line = arrivalsLine("Tom et Awa ont rejoint la conversation — dis-leur salut", accent)
         assertThat(line.text).isEqualTo("Tom et Awa ont rejoint la conversation — dis-leur salut")
         val bold = line.spanStyles.single { it.item.fontWeight == FontWeight.Bold }
         assertThat(line.text.substring(bold.start, bold.end)).isEqualTo("dis-leur salut")
     }
 
     @Test
+    fun `l invite des arrivees groupees prend la couleur de la conversation`() {
+        val line = arrivalsLine("Tom et Awa ont rejoint la conversation — dis-leur salut", accent)
+        val invite = line.spanStyles.single { it.item.fontWeight == FontWeight.Bold }
+        assertThat(invite.item.color).isEqualTo(accent)
+    }
+
+    @Test
+    fun `l invite d une arrivee prend la couleur de la conversation`() {
+        assertThat(arrivalGreetingInviteStyle(accent).color).isEqualTo(accent)
+        assertThat(arrivalGreetingInviteStyle(accent).fontWeight).isEqualTo(FontWeight.Bold)
+    }
+
+    @Test
     fun `une phrase sans invite reste sans gras`() {
-        assertThat(arrivalsLine("Tom a rejoint la conversation").spanStyles).isEmpty()
+        assertThat(arrivalsLine("Tom a rejoint la conversation", accent).spanStyles).isEmpty()
     }
 }
