@@ -53,6 +53,7 @@ import {
   type PackPublisherRef,
 } from '@meeshy/shared/types/pack-publisher';
 import { PARTNER_PROFILE_LIMITS } from '@meeshy/shared/types/lens-partner';
+import { isBlockedBetween } from '../../utils/blocking';
 import { isUniqueViolation } from './PackCatalog';
 import { NEUTRAL_PUBLISHER_NAME, byAge, byPrecedence, claimPublisherName, isNameKeyViolation, lostNameRace } from './PublisherNames';
 
@@ -349,15 +350,17 @@ export class PackPublishers {
 
   /**
    * La page d'un éditeur (#16433, directive porteur du 2026-11-06) : la boutique y nomme le
-   * compte qui l'édite pour qu'on ouvre son profil. Un compte désactivé ou supprimé n'est
-   * jamais nommé : la page reste, sans lien. L'adresse neutre ne désigne personne.
+   * compte qui l'édite pour qu'on ouvre son profil. Ce compte n'est jamais nommé s'il est
+   * désactivé ou supprimé, ni si lui et le lecteur se sont bloqués, dans un sens ou dans
+   * l'autre (`isBlockedBetween`, la loi du blocage) — le compte officiel compris : aucune
+   * exemption. La page reste, sans lien. L'adresse neutre ne désigne personne.
    */
-  async page(slug: string): Promise<PublisherPage | null> {
+  async page(slug: string, viewerId: string): Promise<PublisherPage | null> {
     const row = await this.pageRow(slug);
     if (row === null) return null;
     const publisher = this.servable(row.profile) ?? (slug === MEESHY_PUBLISHER_SLUG ? MEESHY_PUBLISHER : null);
     if (publisher === null) return null;
-    return { publisher, owner: await this.ownerCard(row.ownerId), website: row.profile?.website ?? null };
+    return { publisher, owner: await this.ownerCard(row.ownerId, viewerId), website: row.profile?.website ?? null };
   }
 
   private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly profile: (PublisherRow & { readonly website?: string | null }) | null } | null> {
@@ -377,8 +380,8 @@ export class PackPublishers {
     return typeof found?.website === 'string' ? found.website : null;
   }
 
-  private async ownerCard(userId: string | null): Promise<PublisherOwnerCard | null> {
-    if (userId === null) return null;
+  private async ownerCard(userId: string | null, viewerId: string): Promise<PublisherOwnerCard | null> {
+    if (userId === null || (await isBlockedBetween(this.prisma, viewerId, userId))) return null;
     const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { ...ACCOUNT_SELECT, id: true, username: true, displayName: true, avatar: true } });
     if (account === null || !isLive(account) || typeof account.username !== 'string') return null;
     return { id: account.id, username: account.username, displayName: account.displayName ?? null, avatar: account.avatar ?? null };

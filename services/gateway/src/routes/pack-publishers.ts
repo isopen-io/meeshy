@@ -126,15 +126,15 @@ export async function packPublisherRoutes(fastify: FastifyInstance, options: Pac
     {
       onRequest: [fastify.authenticate],
       schema: {
-        description: 'La page d’un éditeur (#16433) : son identité de boutique, son site et le profil Meeshy qui l’édite — `owner` nul si ce compte n’est plus actif.',
+        description: 'La page d’un éditeur (#16433) : son identité de boutique, son site et le profil Meeshy qui l’édite — `owner` nul si ce compte n’est plus actif, ou si lui et le lecteur se sont bloqués.',
         tags,
         summary: 'Get a pack publisher page',
         params: slugParamsJsonSchema,
         response: { 200: packEnvelope(publisherPageJsonSchema), ...PACK_ERRORS },
       },
     },
-    guard('[GET /publishers/:slug/page]', async (request, reply) => {
-      const page = await publishers.page((request.params as { slug: string }).slug);
+    guard('[GET /publishers/:slug/page]', async (request, reply, viewer) => {
+      const page = await publishers.page((request.params as { slug: string }).slug, viewer.userId);
       if (page === null) return sendNotFound(reply, 'No publisher under this address', { code: PACK_PUBLISHER_NOT_FOUND });
       return sendSuccess(reply, page);
     }),

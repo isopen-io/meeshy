@@ -14,6 +14,7 @@ export type PublisherUserSeed = {
   readonly username: string;
   readonly displayName?: string | null;
   readonly avatar?: string | null;
+  readonly blockedUserIds?: readonly string[];
   readonly isActive?: boolean;
   readonly deactivatedAt?: Date | null;
   readonly deletedAt?: Date | null;
@@ -50,7 +51,12 @@ const project = (row: Record<string, unknown> | undefined, select: Record<string
   return Object.fromEntries(Object.keys(select).map((key) => [key, row[key] ?? null]));
 };
 
-const accountOf = (id: string, seed: PublisherUserSeed) => ({ id, isActive: true, deactivatedAt: null, deletedAt: null, emailVerifiedAt: null, phoneVerifiedAt: null, ...seed });
+const accountOf = (id: string, seed: PublisherUserSeed) => ({ id, isActive: true, deactivatedAt: null, deletedAt: null, emailVerifiedAt: null, phoneVerifiedAt: null, blockedUserIds: [] as readonly string[], ...seed });
+
+type UserWhere = { readonly id?: string; readonly blockedUserIds?: { readonly has: string } };
+
+const userMatches = (account: { readonly id: string; readonly blockedUserIds?: readonly string[] }, where: UserWhere): boolean =>
+  (where.id === undefined || account.id === where.id) && (where.blockedUserIds === undefined || (account.blockedUserIds ?? []).includes(where.blockedUserIds.has));
 
 /** Un compte inscrit, actif et à l'adresse vérifiée : le compte ordinaire d'une suite qui ne teste pas la vérification. */
 export const verifiedAccount = (id: string): PublisherUserSeed => ({ username: `user_${id.slice(-4)}`, emailVerifiedAt: new Date('2026-01-01T00:00:00Z') });
@@ -102,6 +108,11 @@ export function publisherModels(seedUsers: Readonly<Record<string, PublisherUser
   };
 
   const user = {
+    findFirst: async ({ where, select }: { where: UserWhere & { readonly OR?: readonly UserWhere[] }; select?: Record<string, unknown> }) => {
+      const branches = where.OR ?? [where];
+      const hit = [...users.values()].find((account) => branches.some((branch) => userMatches(account, branch)));
+      return project(hit, select);
+    },
     findUnique: async ({ where, select }: { where: { id: string }; select?: Record<string, unknown> }) => project(accountFor(where.id), select),
     findMany: async ({ where, select }: { where: { id: { in: readonly string[] } }; select?: Record<string, unknown> }) =>
       where.id.in.flatMap((id) => {

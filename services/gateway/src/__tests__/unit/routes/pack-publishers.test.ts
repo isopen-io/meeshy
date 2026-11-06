@@ -112,6 +112,38 @@ describe('/publishers — la boutique, le propriétaire, l’administration (#16
     expect(res.body).not.toContain('awa_secret');
   });
 
+  it('GET /:slug/page tait le propriétaire à un lecteur qu’il a bloqué, et à celui qui l’a bloqué', async () => {
+    const { app, as, db } = await build();
+    db.users.get(AWA)!.blockedUserIds = [MODO];
+    as(MODO);
+    const blockedByOwner = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(blockedByOwner.statusCode).toBe(200);
+    expect(blockedByOwner.json().data.owner).toBeNull();
+    expect(blockedByOwner.body).not.toContain('awa_secret');
+
+    db.users.get(AWA)!.blockedUserIds = [];
+    db.users.get(MODO)!.blockedUserIds = [AWA];
+    const blockingOwner = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(blockingOwner.json().data.owner).toBeNull();
+    expect(blockingOwner.json().data.publisher).toMatchObject({ slug: 'studio-lumiere' });
+  });
+
+  it('GET /:slug/page tait aussi le compte officiel à qui l’a bloqué : aucune exemption', async () => {
+    const { app, as, db } = await build();
+    db.users.get(MODO)!.blockedUserIds = [OFFICIAL];
+    as(MODO);
+    expect((await app.inject({ method: 'GET', url: '/meeshy/page' })).json().data.owner).toBeNull();
+  });
+
+  it('GET /:slug/page refuse un invité de lien : 403 REGISTERED_USER_REQUIRED, sans rien du propriétaire', async () => {
+    const { app, as } = await build();
+    as('p1', 'USER', true);
+    const res = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('REGISTERED_USER_REQUIRED');
+    expect(res.body).not.toContain(AWA);
+  });
+
   it('refuse un invité de lien : 403 REGISTERED_USER_REQUIRED', async () => {
     const { app, as } = await build();
     as('p1', 'USER', true);
