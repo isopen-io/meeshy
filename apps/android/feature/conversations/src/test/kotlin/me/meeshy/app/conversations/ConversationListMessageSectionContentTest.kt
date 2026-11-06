@@ -45,4 +45,21 @@ class ConversationListMessageSectionContentTest {
         assertThat(shown.message.sender?.name).isEqualTo("Ada")
         assertThat(shown.conversation).isNull()
     }
+
+    @Test
+    fun a_found_message_outside_the_cached_list_keeps_the_title_and_photo_the_server_served() {
+        val hit = ListMessageHit(
+            messageId = "m9",
+            conversationId = "c9",
+            createdAtMillis = 0L,
+            text = "Bonjour",
+            senderName = "Ada",
+            conversationTitle = "Ada",
+            conversationAvatar = "2026/11/ada.png",
+        )
+
+        val shown = hit.asSearchHit(conversation = null)
+
+        assertThat(shown.identity("u-me")).isEqualTo(MessageHitIdentity(title = "Ada", avatarUrl = "2026/11/ada.png"))
+    }
 }

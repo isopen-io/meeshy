@@ -175,7 +175,7 @@ class ListMessageSearchTest {
             servedLanguage = "fr",
             originalContent = "Hello",
             sender = GlobalMessageSearchSender(displayName = "", username = "ada"),
-            conversation = GlobalMessageSearchConversation(title = "Ada"),
+            conversation = GlobalMessageSearchConversation(title = "Ada", avatar = "2026/11/ada.png"),
         )
 
         val hit = ListMessageSearch.hitOf(served)
@@ -183,6 +183,7 @@ class ListMessageSearchTest {
         assertThat(hit?.text).isEqualTo("Bonjour")
         assertThat(hit?.senderName).isEqualTo("ada")
         assertThat(hit?.conversationTitle).isEqualTo("Ada")
+        assertThat(hit?.conversationAvatar).isEqualTo("2026/11/ada.png")
         assertThat(ListMessageSearch.hitOf(served.copy(content = " ", originalContent = ""))).isNull()
     }
 

@@ -98,4 +98,5 @@ internal fun ListMessageHit.asSearchHit(conversation: ApiConversation?): Message
     ),
     conversationTitle = conversationTitle.ifBlank { conversation?.title.orEmpty() },
     conversation = conversation,
+    conversationAvatar = conversationAvatar,
 )
