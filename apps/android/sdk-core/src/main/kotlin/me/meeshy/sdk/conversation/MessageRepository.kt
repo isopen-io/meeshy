@@ -49,7 +49,7 @@ class MessageRepository internal constructor(
     private val receipts: MessageReceiptWriter,
     private val erasures: PlaintextErasureLedger? = null,
     private val searches: MessageSearchReader? = null,
-) {
+) : OrphanedUploadResumer {
     @Inject
     constructor(
         messageApi: MessageApi,
@@ -240,6 +240,8 @@ class MessageRepository internal constructor(
 
     /** User-initiated retry of a failed bubble: back to `SENDING`, its outbox row revived. */
     suspend fun retrySend(cmid: String) = sends.retrySend(cmid)
+
+    override suspend fun resume(cid: String): Boolean = sends.resumeOrphanedUploads(cid)
 
     /**
      * Optimistic reaction toggle on a server-acked message: the cached `reactionSummary` moves
