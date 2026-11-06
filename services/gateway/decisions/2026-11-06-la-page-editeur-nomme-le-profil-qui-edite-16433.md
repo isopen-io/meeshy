@@ -20,3 +20,11 @@
 **À trancher par le porteur** : un compte qui a publié AVANT ce lot l'a fait sous la promesse « jamais le compte » (#16274, point 7). Ce lot le nomme dès lors qu'il a un pack approuvé et qu'il ne se cache pas de la recherche. L'avis de `conformite-juridique` (information des intéressés, RGPD) et la décision du porteur sont requis avant la promotion en production.
 
 **Conséquences** : publier un pack rend désormais son compte joignable depuis la boutique — c'est l'intention du porteur (un éditeur est un vrai compte). Comptes INSCRITS seulement, comme toute la famille `/publishers`. Le web et Android portent la page éditeur par leurs issues jumelles (`publishers.bySlugPage` déclarée en attente dans `scripts/check-ts-catalog-dead-entries.mjs`, plafond `TO_PORT_CEILING` relevé à 129).
+
+## Le site de l'éditeur (contre-audit du 2026-11-06)
+
+Le site ne part que d'un éditeur **vérifié** dont le compte est servi au lecteur. Un éditeur non vérifié ne pose aucun lien à côté de son nom. Un lecteur bloqué, ou à qui le compte se cache, ne reçoit pas non plus le site, qui pourrait le ré-identifier.
+
+**Reste à trancher par le porteur avant la production :** la loi de `LensPartners` garde la vérification quand seul le site change (témoin `lens-partners.test.ts`, « changer seulement son site garde la vérification »). Un éditeur vérifié peut donc remplacer son site par un lien que personne n'a revu, et ce lien est servi sous le sceau. Deux options :
+- le changement de site retire la vérification, comme le nom et le logo ;
+- on fige à la vérification le site validé.

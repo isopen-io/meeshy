@@ -371,6 +371,9 @@ export class PackPublishers {
    * officiel, dont les packs sont ceux du dépôt, en est dispensé) ; la loi « ne pas être
    * trouvé » (#8104) ne le cache pas à ce lecteur ; et ni lui ni le lecteur ne se sont bloqués
    * (`isBlockedBetween`) — le compte officiel compris. Sinon la page reste, sans lien.
+   * Le site ne part que d'un éditeur VÉRIFIÉ dont le compte est servi : un lien que personne
+   * n'a revu ne se pose jamais à côté de l'identité, et un site personnel ne ré-identifie pas
+   * celui que le blocage ou « ne pas être trouvé » taisent (audit du 2026-11-06, N1 et N2).
    */
   async page(slug: string, viewerId: string): Promise<PublisherPage | null> {
     const row = await this.pageRow(slug);
@@ -380,7 +383,8 @@ export class PackPublishers {
     const neutralized = row.profile !== null && !publisher.official && publisher.name !== row.profile.displayName;
     if (neutralized) return { publisher, owner: null, website: null };
     const owner = row.soleHolder ? await this.ownerCard(row.ownerId, viewerId) : null;
-    return { publisher, owner, website: row.profile?.website ?? null };
+    const website = publisher.verified && owner !== null ? row.profile?.website ?? null : null;
+    return { publisher, owner, website };
   }
 
   private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly soleHolder: boolean; readonly profile: (PublisherRow & { readonly website?: string | null }) | null } | null> {

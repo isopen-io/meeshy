@@ -177,13 +177,28 @@ describe('/publishers — la boutique, le propriétaire, l’administration (#16
     expect((await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data.owner).toBeNull();
   });
 
-  it('GET /:slug/page sert le site d’un éditeur, et le tait avec le compte quand le nom est neutralisé (imitation de Meeshy)', async () => {
+  it('GET /:slug/page ne sert le site que d’un éditeur VÉRIFIÉ dont le compte est servi (audit 2026-11-06, N1 et N2)', async () => {
     const { app, as, db } = await build();
-    db.profiles.find((row) => row.userId === AWA)!.website = 'https://studio.example';
+    const profile = db.profiles.find((row) => row.userId === AWA)!;
+    profile.website = 'https://studio.example';
     as(MODO);
+    expect((await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data.website).toBeNull();
+
+    profile.verifiedAt = new Date('2026-02-01T00:00:00Z');
     expect((await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data.website).toBe('https://studio.example');
 
-    db.profiles.push({ id: '68e0000000000000000099aa', userId: ADMIN, slug: 'support-xyz', displayName: 'Meeshy Support', nameKey: null, verifiedAt: null, website: 'https://meeshy-support.example/login', createdAt: new Date('2026-01-01T00:00:00Z') });
+    db.users.get(AWA)!.blockedUserIds = [MODO];
+    const blocked = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(blocked.json().data).toMatchObject({ owner: null, website: null });
+    expect(blocked.body).not.toContain('studio.example');
+  });
+
+  it('GET /:slug/page tait le site avec le compte quand le nom est neutralisé (imitation de Meeshy)', async () => {
+    const { app, as, db, facts } = await build();
+    facts.published.add(ADMIN);
+    as(MODO);
+
+    db.profiles.push({ id: '68e0000000000000000099aa', userId: ADMIN, slug: 'support-xyz', displayName: 'Meeshy Support', nameKey: null, verifiedAt: new Date('2026-02-01T00:00:00Z'), website: 'https://meeshy-support.example/login', createdAt: new Date('2026-01-01T00:00:00Z') });
     const imitation = await app.inject({ method: 'GET', url: '/support-xyz/page' });
     expect(imitation.statusCode).toBe(200);
     expect(imitation.json().data).toEqual({ publisher: { slug: 'support-xyz', name: 'Éditeur', verified: false, official: false }, owner: null, website: null });
