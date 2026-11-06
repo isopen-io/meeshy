@@ -632,7 +632,7 @@ extension CallView {
             // is replaced by the live feed. When it fires, the peer is
             // shown with its camera off: nothing is loading any more.
             .task(id: callManager.currentCallId) {
-                try? await Task.sleep(nanoseconds: videoConnectWatchdogSeconds * 1_000_000_000)
+                try? await Task.sleep(for: .seconds(Double(videoConnectWatchdogSeconds)))
                 if !Task.isCancelled {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         remoteVideoWaitElapsedCallId = callManager.currentCallId

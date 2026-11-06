@@ -249,6 +249,53 @@ final class CallViewLayoutGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    private func callViewStatesSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Call/Views/CallView+States.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    // MARK: - Les commandes du bas suivent chromeBottomInset, comme la pilule (#16517)
+
+    /// La rangée de boutons de la sonnerie sortante et celle de la connexion
+    /// portaient un padding bas en dur (`80`) sans rapport avec la safe area
+    /// réelle de l'appareil, alors que la pilule de l'appel établi
+    /// (`CallView+Connected.swift`) retrouve déjà son encart bas depuis la
+    /// fenêtre via `chromeBottomInset`. Une seule constante, partout.
+    func test_outgoingAndConnecting_bottomControlRows_useChromeBottomInset() throws {
+        let states = try callViewStatesSource()
+        XCTAssertEqual(
+            states.components(separatedBy: ".padding(.bottom, Self.chromeBottomInset)").count - 1, 2,
+            "La rangée de boutons de la sonnerie sortante ET celle de la " +
+            "connexion doivent porter le même encart bas que la pilule de " +
+            "l'appel établi."
+        )
+        XCTAssertFalse(
+            states.contains(".padding(.bottom, 80)"),
+            "Un padding bas en dur est revenu sur l'écran d'appel — il doit " +
+            "suivre `Self.chromeBottomInset`, comme la pilule."
+        )
+    }
+
+    /// Même règle pour l'appel entrant : le bouton « Décliner avec un
+    /// message », tout en bas de l'écran, suivait un padding de `40` en dur.
+    func test_incomingCall_declineWithMessage_usesChromeBottomInset() throws {
+        let incoming = try incomingCallViewSource()
+        XCTAssertTrue(
+            incoming.contains(".padding(.bottom, CallView.chromeBottomInset)"),
+            "Le bouton « Décliner avec un message » doit porter le même " +
+            "encart bas que le reste de l'écran d'appel."
+        )
+        XCTAssertFalse(
+            incoming.contains(".padding(.bottom, 40)"),
+            "Un padding bas en dur est revenu sur l'appel entrant."
+        )
+    }
+
     // MARK: - Bord a bord du fullScreenCover
 
     /// Les lignes de code, commentaires retires.
