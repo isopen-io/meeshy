@@ -1,23 +1,20 @@
 /**
  * Les OFFRES SAISONNIÈRES de la boutique (#16270, #16271) : quels packs d'apparence appartiennent à l'offre de
- * Noël et à celle du Nouvel An, et la FENÊTRE (`availability`, #11274) où la boutique les offre. Un module sans
- * dépendance : les compositeurs de Noël (#15553) et des collections Meeshy (#15158) le lisent pour ranger leurs
- * packs sans déplacer ceux que l'offre ajoute en fin de source.
+ * Noël et à celle du Nouvel An, et l'ÉVÉNEMENT que chacun sert. Un module sans dépendance : les compositeurs de
+ * Noël (#15553) et des collections Meeshy (#15158) le lisent pour ranger leurs packs sans déplacer ceux que l'offre
+ * ajoute en fin de source.
  *
- * La fenêtre est faite de deux INSTANTS (le schéma partagé n'a pas de récurrence annuelle) : celles de la saison
- * 2026-2027, à reporter chaque année. `startsAt` inclus, `endsAt` exclu, en UTC.
- *
- * Ce sont des dates ÉCRITES : elles priment sur la règle de #16447 (`utils/decoration-event-window.ts`, de deux mois
- * avant l'événement à un mois après), qui ne sert qu'un pack d'événement sans date. Retirer une borne ici la ferait
- * dériver de l'événement que le pack déclare (`event`).
+ * Aucune date n'est écrite (décision porteur du 2026-11-06, #16447) : le pack déclare son `event`, et la loi
+ * partagée (`utils/decoration-event-window.ts`, de deux mois avant l'événement à un mois après) calcule sa fenêtre
+ * à la génération. Chaque année, seule l'année de l'occurrence change.
  */
-import type { PackAvailability } from '../../types/pack-availability.js';
+import type { PackEventDeclaration } from '../../utils/decoration-event-window.js';
 
-/** Du 1er décembre au 6 janvier inclus. */
-export const CHRISTMAS_WINDOW = { startsAt: '2026-12-01T00:00:00Z', endsAt: '2027-01-07T00:00:00Z' } as const satisfies PackAvailability;
+/** Noël 2026 : du 25 octobre 2026 au 24 janvier 2027 inclus. */
+export const CHRISTMAS_EVENT = { id: 'noel', year: 2026 } as const satisfies PackEventDeclaration;
 
-/** Du 26 décembre au 15 janvier inclus. */
-export const NEW_YEAR_WINDOW = { startsAt: '2026-12-26T00:00:00Z', endsAt: '2027-01-16T00:00:00Z' } as const satisfies PackAvailability;
+/** Nouvel An 2027 : du 1er novembre 2026 au 31 janvier 2027 inclus. */
+export const NEW_YEAR_EVENT = { id: 'nouvel-an', year: 2027 } as const satisfies PackEventDeclaration;
 
 /** Les cadres de bannière assortis aux trois contours de Noël (`assorted-banners/packs.ts`). */
 export const CHRISTMAS_FRAME_SLUGS: readonly string[] = ['bannieres-noel-enneige', 'bannieres-lumieres-noel', 'bannieres-atelier-noel'];
@@ -51,9 +48,9 @@ export const SEASONAL_ADDED_SLUGS: readonly string[] = [...CHRISTMAS_ADDED_SLUGS
 
 export const SEASONAL_SLUGS: readonly string[] = [...CHRISTMAS_OFFER_SLUGS, ...NEW_YEAR_OFFER_SLUGS];
 
-/** La fenêtre d'un pack de l'offre ; `undefined` hors offre. */
-export const availabilityOf = (slug: string): PackAvailability | undefined => {
-  if (CHRISTMAS_OFFER_SLUGS.includes(slug)) return CHRISTMAS_WINDOW;
-  if (NEW_YEAR_OFFER_SLUGS.includes(slug)) return NEW_YEAR_WINDOW;
+/** L'événement d'un pack de l'offre ; `undefined` hors offre. */
+export const eventOf = (slug: string): PackEventDeclaration | undefined => {
+  if (CHRISTMAS_OFFER_SLUGS.includes(slug)) return CHRISTMAS_EVENT;
+  if (NEW_YEAR_OFFER_SLUGS.includes(slug)) return NEW_YEAR_EVENT;
   return undefined;
 };

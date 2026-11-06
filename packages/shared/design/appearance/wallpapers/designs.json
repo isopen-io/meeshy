@@ -1091,9 +1091,9 @@
       "order": 5,
       "installedByDefault": false,
       "removable": true,
-      "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+      "event": {
+        "id": "noel",
+        "year": 2026
       },
       "designs": [
         {
@@ -1223,9 +1223,9 @@
       "order": 6,
       "installedByDefault": false,
       "removable": true,
-      "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+      "event": {
+        "id": "noel",
+        "year": 2026
       },
       "designs": [
         {
@@ -1826,9 +1826,9 @@
       "order": 9,
       "installedByDefault": false,
       "removable": true,
-      "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+      "event": {
+        "id": "nouvel-an",
+        "year": 2027
       },
       "designs": [
         {
@@ -2005,9 +2005,9 @@
       "order": 10,
       "installedByDefault": false,
       "removable": true,
-      "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+      "event": {
+        "id": "nouvel-an",
+        "year": 2027
       },
       "designs": [
         {

@@ -10174,9 +10174,9 @@
           "banner"
         ]
       },
-      "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+      "event": {
+        "id": "noel",
+        "year": 2026
       },
       "frames": [
         {
@@ -10558,9 +10558,9 @@
           "banner"
         ]
       },
-      "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+      "event": {
+        "id": "noel",
+        "year": 2026
       },
       "frames": [
         {
@@ -10970,9 +10970,9 @@
           "banner"
         ]
       },
-      "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+      "event": {
+        "id": "noel",
+        "year": 2026
       },
       "frames": [
         {
@@ -12654,9 +12654,9 @@
           "banner"
         ]
       },
-      "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+      "event": {
+        "id": "noel",
+        "year": 2026
       },
       "frames": [
         {
@@ -13647,9 +13647,9 @@
           "banner"
         ]
       },
-      "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+      "event": {
+        "id": "nouvel-an",
+        "year": 2027
       },
       "frames": [
         {
@@ -14405,9 +14405,9 @@
           "banner"
         ]
       },
-      "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+      "event": {
+        "id": "nouvel-an",
+        "year": 2027
       },
       "frames": [
         {
