@@ -144,6 +144,11 @@ internal class ChatHostContext(
     val viewerRole: String? = null,
     /** [ChatViewModel.unreadAtOpening] : le compte serveur que le séparateur des non-lus annonce (#7525). */
     val unreadAtOpening: Int? = null,
+    /**
+     * #16465 — les longs messages dépliés pendant cette ouverture du fil, comme [bubbleFrames] : écrit par la liste,
+     * lu seulement quand l'aperçu de l'appui long s'ouvre. Recréé à chaque ouverture : tout repart replié.
+     */
+    val expandedLongMessages: MutableSet<String> = mutableSetOf(),
 )
 
 /** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
@@ -203,7 +208,8 @@ internal fun rememberChatHostContext(
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember(listGate) { ChatChromeState(listGate) }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities, viewerRole, unreadAtOpening)
+    val expandedLongMessages = remember { mutableSetOf<String>() }
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities, viewerRole, unreadAtOpening, expandedLongMessages)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */

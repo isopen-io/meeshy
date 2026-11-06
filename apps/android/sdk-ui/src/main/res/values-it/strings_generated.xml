@@ -363,7 +363,6 @@
     <string name="media_video_unavailable_retry">Video non disponibile. Riprova.</string>
     <string name="media_voice_message">Messaggio vocale</string>
     <string name="media_voice_recording">Messaggio vocale (%1$s)</string>
-    <string name="message_long_collapse">Mostra meno</string>
     <string name="message_long_read_more">Continua a leggere</string>
     <string name="mini_player_a11y_now_playing">Audio di %1$s, %2$s</string>
     <string name="mini_player_a11y_open_hint">Apri la conversazione</string>

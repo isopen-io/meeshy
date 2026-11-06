@@ -44,6 +44,8 @@ import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.contacts.ContactCardResolutionScope
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.component.focal.FlatRowExpansion
+import me.meeshy.ui.component.focal.LocalFlatRowExpansion
 import me.meeshy.ui.component.viewer.GalleryImageSaver
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionRegime
@@ -130,7 +132,13 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             val fileTransfers = remember(state.fileDownload, host.downloadedFileIds) {
                 bubbleFileTransfersOf(state.fileDownload, host.downloadedFileIds)
             }
-            CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers) {
+            val heroExpansion = remember(actionTarget.messageId) {
+                FlatRowExpansion(isExpanded = actionTarget.messageId in host.expandedLongMessages) {}
+            }
+            CompositionLocalProvider(
+                LocalBubbleFileTransfers provides fileTransfers,
+                LocalFlatRowExpansion provides heroExpansion,
+            ) {
                 MessageOverlayPreviewHero(
                     frame = frame,
                     content = actionTarget,
