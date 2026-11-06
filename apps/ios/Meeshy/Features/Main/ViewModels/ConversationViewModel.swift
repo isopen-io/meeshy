@@ -416,6 +416,7 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     /// Actor for optimistic inserts and state-machine transitions.
     private(set) var messagePersistence: MessagePersistenceActor
     var lastOlderPaginationTime: Date = .distantPast
+    let olderHistory = OlderHistoryFlight()
     static let paginationDebounceInterval: TimeInterval = 0.3
 
     let authManager: AuthManaging
