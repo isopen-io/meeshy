@@ -37,7 +37,8 @@ type Outcome =
   | { kind: 'verification-required'; accountCreated: boolean; email: string }
   | { kind: 'existing-account' }
   | { kind: 'unavailable' }
-  | { kind: 'rate-limited' };
+  | { kind: 'rate-limited' }
+  | { kind: 'email-domain-not-allowed' };
 
 const construire = async (options: { authenticate?: () => Promise<unknown>; outcome?: Outcome }) => {
   const startAccountFromEmail = jest.fn(async () => options.outcome ?? { kind: 'existing-account' });
@@ -102,6 +103,18 @@ describe('adresse valide sans compte', () => {
 
     expect(res.statusCode).toBe(429);
     expect(res.json().success).toBe(false);
+    await app.close();
+  });
+});
+
+describe('adresse réservée ou jetable sans compte (#16491)', () => {
+  it('rend 400 EMAIL_DOMAIN_NOT_ALLOWED, sans jeton ni session', async () => {
+    const { app } = await construire({ outcome: { kind: 'email-domain-not-allowed' } });
+    const res = await connecter(app, 'testuser@example.com');
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, code: 'EMAIL_DOMAIN_NOT_ALLOWED' });
+    expect(JSON.stringify(res.json())).not.toContain('token');
     await app.close();
   });
 });

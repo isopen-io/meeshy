@@ -25,6 +25,7 @@ import { countLegacyLinkLogin, getLegacyLinkLoginCounter, linkLoginConsent } fro
 import { provenChallengeAdoption } from '../services/auth/pending-two-factor';
 import { provenSessionAdoption, servedSession } from '../services/auth/session-adoption';
 import { pendingSessionTokenFor } from '../services/auth/email-verification-watch';
+import { sendEmailDomainNotAllowed } from '../services/auth/email-domain-guard';
 import { AuthService } from '../services/AuthService';
 import { LOGIN_CODE_TTL_MINUTES } from '../services/auth/email-code';
 import { getJwtSecret } from '../utils/secrets';
@@ -172,6 +173,16 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
        */
       if (issue.kind === 'rate-limited') {
         return sendError(reply, 429, 'Too many requests. Please try again in about an hour.', { code: 'RATE_LIMITED' });
+      }
+
+      /**
+       * #16491 — une adresse réservée ou jetable SANS compte n'en ouvre pas un,
+       * et le refus se dit. Il apprend qu'aucun compte ne porte cette adresse,
+       * mais seulement pour ces domaines, où un compte ne désigne personne ;
+       * un compte existant y reçoit son code comme ailleurs.
+       */
+      if (issue.kind === 'email-domain-not-allowed') {
+        return sendEmailDomainNotAllowed(reply);
       }
 
       // #8083 — le jeton d'attente de CET appareil, dans TOUS les cas servis :

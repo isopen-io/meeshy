@@ -62,6 +62,7 @@ import { registrationLanguages } from './registration-languages';
 import { derivedNames, displayNameDepuisEmail, generateUsername } from './registration-identity';
 import { passwordSettingsUrl, profileEditUrl } from '../email/account-identity-block';
 import { RegistrationRefusal } from './registration-refusal';
+import { EMAIL_DOMAIN_NOT_ALLOWED_MESSAGE, isEmailDomainRefused } from './email-domain-guard';
 import { claimPlaceholderEmail, maskedEmailOwner, retireEarlierClaims } from './email-claim';
 import { hashEmailCode, verificationTtlMinutes } from './email-code';
 import { EMAIL_LINK_PATHS, emailSecretLink } from '../../utils/email-secret-link';
@@ -337,6 +338,12 @@ export async function registerAccount(
     throw new Error(
       `Email invalide: ${parsed.error.issues[0]?.message ?? "Format d'email invalide"}`,
     );
+  }
+
+  // #16491 — une adresse réservée ou jetable n'ouvre pas de compte. Le site
+  // UNIQUE de création la refuse, quelle que soit la porte qui l'y amène.
+  if (isEmailDomainRefused(data.email)) {
+    throw new RegistrationRefusal('EMAIL_DOMAIN_NOT_ALLOWED', EMAIL_DOMAIN_NOT_ALLOWED_MESSAGE);
   }
 
   // Le numéro se lit AVANT toute requête : c'est le seul refus qui se décide

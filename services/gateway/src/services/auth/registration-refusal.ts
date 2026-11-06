@@ -44,7 +44,7 @@
  */
 
 /** Les motifs de refus qu'une inscription peut opposer à un formulaire. */
-export type RegistrationRefusalCode = 'USERNAME_TAKEN' | 'EMAIL_TAKEN' | 'PHONE_INVALID';
+export type RegistrationRefusalCode = 'USERNAME_TAKEN' | 'EMAIL_TAKEN' | 'PHONE_INVALID' | 'EMAIL_DOMAIN_NOT_ALLOWED';
 
 /** Le champ du formulaire que le refus désigne. */
 export type RegistrationRefusalField = 'username' | 'email' | 'phoneNumber';
@@ -55,12 +55,15 @@ const STATUT_PAR_CODE: Readonly<Record<RegistrationRefusalCode, 400 | 409>> = {
   EMAIL_TAKEN: 409,
   // Une saisie malformée : rien n'est pris, la valeur n'est pas un numéro.
   PHONE_INVALID: 400,
+  // #16491 — une adresse réservée ou jetable : rien n'est pris, elle ne désigne personne.
+  EMAIL_DOMAIN_NOT_ALLOWED: 400,
 };
 
 const CHAMP_PAR_CODE: Readonly<Record<RegistrationRefusalCode, RegistrationRefusalField>> = {
   USERNAME_TAKEN: 'username',
   EMAIL_TAKEN: 'email',
   PHONE_INVALID: 'phoneNumber',
+  EMAIL_DOMAIN_NOT_ALLOWED: 'email',
 };
 
 /** L'identité masquée du détenteur d'une adresse (#8214) — jamais l'adresse. */

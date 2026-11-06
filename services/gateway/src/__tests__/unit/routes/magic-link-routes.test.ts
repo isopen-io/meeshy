@@ -231,6 +231,18 @@ describe('MagicLink Routes', () => {
       expect(response.json()).toMatchObject({ success: false, code: 'RATE_LIMITED' });
     });
 
+    // #16491 — une adresse réservée ou jetable n'ouvre pas de compte : le refus
+    // se DIT, avec un code que les clients peuvent lire.
+    it('returns 400 with code EMAIL_DOMAIN_NOT_ALLOWED when the address may not open an account', async () => {
+      mockStartAccountFromEmail.mockResolvedValue({ kind: 'email-domain-not-allowed' });
+
+      const response = await app.inject({ method: 'POST', url: '/magic-link/request', payload: { email: 'x@mailinator.com' } });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ success: false, code: 'EMAIL_DOMAIN_NOT_ALLOWED' });
+      expect(response.json().error).toMatch(/adresse/);
+    });
+
     it('returns 500 and logs error when the service throws', async () => {
       mockStartAccountFromEmail.mockRejectedValue(new Error('Mongo down'));
 

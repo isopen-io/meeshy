@@ -8,6 +8,10 @@ process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = 'file:./test.db';
 process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.GRPC_SERVER_URL = 'localhost:50051';
+// #16491 — les fixtures inscrivent des adresses `@example.com` : l'échappatoire
+// de la garde de domaine est ouverte pour toute la suite. Les témoins de la
+// garde la referment en doublant `services/auth/email-domain-escape`.
+process.env.ALLOW_RESERVED_EMAIL_DOMAINS = 'true';
 // `routes/uploads/tus-handler.ts` lit UPLOAD_PATH une seule fois au chargement
 // du module (constante top-level) et y crée un sous-dossier au démarrage des
 // routes (`fs.mkdir(UPLOAD_PATH/.tus-resumable)`). Sans ceci, tout test qui
