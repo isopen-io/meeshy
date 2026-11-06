@@ -31,7 +31,7 @@ import { renderFilm, ringsOf } from './compose-illustrated-ring-lotties.js';
 import { LANGUAGES } from './illustrated-rings/packs.js';
 import { MEESHY_COLLECTION_SLUGS } from './compose-meeshy-collections.js';
 import { upsertPacks } from './meeshy-collections/source-packs.js';
-import { availabilityOf, CHRISTMAS_WINDOW, SEASONAL_ADDED_SLUGS } from './seasonal/slugs.js';
+import { CHRISTMAS_EVENT, eventOf, SEASONAL_ADDED_SLUGS } from './seasonal/slugs.js';
 
 type SourcePack = { readonly slug: string; readonly order: number };
 type Write = (src: string, bytes: Buffer) => void;
@@ -44,10 +44,10 @@ export const CHRISTMAS_WALLPAPER_SLUGS: readonly string[] = CHRISTMAS_WALLPAPER_
 const after = (existing: readonly SourcePack[], own: readonly string[]): number =>
   Math.max(...existing.filter((pack) => !MEESHY_COLLECTION_SLUGS.includes(pack.slug) && !SEASONAL_ADDED_SLUGS.includes(pack.slug) && !own.includes(pack.slug)).map((pack) => pack.order));
 
-/** La fenêtre de l'offre saisonnière (#16270), posée sur les seuls packs qui en sont. */
-const windowOf = (slug: string) => {
-  const availability = availabilityOf(slug);
-  return availability === undefined ? {} : { availability };
+/** L'événement de l'offre saisonnière (#16270, #16447), posé sur les seuls packs qui en sont. */
+const eventDeclarationOf = (slug: string) => {
+  const event = eventOf(slug);
+  return event === undefined ? {} : { event };
 };
 
 export function assortedBannerPacks(existing: readonly SourcePack[]) {
@@ -58,7 +58,7 @@ export function assortedBannerPacks(existing: readonly SourcePack[]) {
     installedByDefault: false,
     removable: true,
     usage: { kind: 'free', surfaces: ['banner'] },
-    ...windowOf(pack.slug),
+    ...eventDeclarationOf(pack.slug),
     frames: pack.frames.map((frame) => {
       if (parseBannerFrameDesign(frame) === null) throw new Error(`${pack.slug}/${frame.key} : le cadre ne passe pas le schéma partagé`);
       return frame;
@@ -74,7 +74,7 @@ export function christmasRingPacks(existing: readonly SourcePack[], write: Write
     installedByDefault: false,
     removable: true,
     usage: { kind: 'free', surfaces: ['avatar'] },
-    availability: CHRISTMAS_WINDOW,
+    event: CHRISTMAS_EVENT,
     rings: ringsOf(pack, write),
   }));
 }
@@ -86,7 +86,7 @@ export function christmasWallpaperPacks(existing: readonly SourcePack[], write: 
     order: first + index,
     installedByDefault: false,
     removable: true,
-    availability: CHRISTMAS_WINDOW,
+    event: CHRISTMAS_EVENT,
     designs: pack.items.map(({ design, film }) => {
       const served = film === undefined ? design : { ...design, lottie: filmRef(film, design.key, write) };
       if (parseAppearanceDesign(served, 'wallpaper') === null) throw new Error(`${pack.slug}/${design.key} : le fond ne passe pas le contrat de fond`);

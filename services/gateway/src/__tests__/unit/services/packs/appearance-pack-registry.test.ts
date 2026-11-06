@@ -280,9 +280,9 @@ describe('registres d’apparence générés', () => {
     });
   });
 
-  it('les offres de Noël et du Nouvel An (#16270, #16271) sont servies gratuites, signées Meeshy, dans leur fenêtre, et chaque film est servi à son empreinte', () => {
-    const CHRISTMAS_WINDOW = { startsAt: '2026-12-01T00:00:00Z', endsAt: '2027-01-07T00:00:00Z' };
-    const NEW_YEAR_WINDOW = { startsAt: '2026-12-26T00:00:00Z', endsAt: '2027-01-16T00:00:00Z' };
+  it('les offres de Noël et du Nouvel An (#16270, #16271) sont servies gratuites, signées Meeshy, dans la fenêtre que la règle de #16447 calcule (deux mois avant, un mois après), et chaque film est servi à son empreinte', () => {
+    const CHRISTMAS_WINDOW = { startsAt: '2026-10-25T00:00:00Z', endsAt: '2027-01-25T00:00:00Z' };
+    const NEW_YEAR_WINDOW = { startsAt: '2026-11-01T00:00:00Z', endsAt: '2027-02-01T00:00:00Z' };
     const entries = (['wallpaper', 'banner', 'avatar-ring', 'banner-frame'] as const).flatMap((domain) => index.entries(domain).map((entry) => ({ domain, entry })));
     const christmas = [...CHRISTMAS, ...ASSORTED.filter(([ring]) => CHRISTMAS.includes(ring)).map(([, banner]) => banner), ...CHRISTMAS_WALLPAPERS, ...SEASONAL_ADDED.filter((slug) => slug.startsWith('noel-'))];
     const newYear = SEASONAL_ADDED.filter((slug) => slug.startsWith('nouvel-an-'));

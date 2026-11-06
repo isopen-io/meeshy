@@ -76,6 +76,14 @@ describe('la génération matérialise la fenêtre pour les clients qui ne lisen
     });
   });
 
+  it('la fenêtre prend la PLACE de la déclaration : un catalogue régénéré ne déplace aucune clé', () => {
+    const served = materializePackWindow({ slug: 'x', event: { id: 'noel', year: 2026 }, rings: [] });
+    expect(Object.keys(served)).toEqual(['slug', 'availability', 'rings']);
+    const halfDated = materializePackWindow({ slug: 'y', availability: { endsAt: '2027-01-07T00:00:00Z' }, event: { id: 'noel', year: 2026 }, rings: [] });
+    expect(Object.keys(halfDated)).toEqual(['slug', 'availability', 'rings']);
+    expect(halfDated).toEqual({ slug: 'y', availability: { startsAt: '2026-10-25T00:00:00Z', endsAt: '2027-01-07T00:00:00Z' }, rings: [] });
+  });
+
   it('un pack daté ou hors événement ressort identique, à l’octet près', () => {
     const dated = { slug: 'noel-enneige', order: 2, availability: { startsAt: '2026-12-01T00:00:00Z', endsAt: '2027-01-07T00:00:00Z' } };
     const plain = { slug: 'essentiels', order: 1 };

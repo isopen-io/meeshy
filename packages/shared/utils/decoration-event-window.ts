@@ -69,9 +69,12 @@ export function effectiveEventWindow(pack: { readonly event?: PackEventDeclarati
   };
 }
 
-/** Le pack tel que les clients le lisent : la fenêtre effective posée dans `availability`, la déclaration retirée. */
+/** Le pack tel que les clients le lisent : la fenêtre effective posée dans `availability`, à la place de la déclaration retirée. */
 export function materializePackWindow<P extends { readonly event?: PackEventDeclaration; readonly availability?: PackAvailability }>(pack: P): Omit<P, 'event'> {
   if (pack.event === undefined) return pack;
-  const { event: _event, ...rest } = pack;
-  return { ...rest, availability: effectiveEventWindow(pack) };
+  const availability = effectiveEventWindow(pack);
+  const entries = Object.entries(pack)
+    .filter(([key]) => key !== 'availability')
+    .map(([key, value]) => (key === 'event' ? ['availability', availability] : [key, value]));
+  return Object.fromEntries(entries) as Omit<P, 'event'>;
 }

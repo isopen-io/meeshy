@@ -1293,8 +1293,8 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
       },
       "designs": [
         {
@@ -1425,8 +1425,8 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
       },
       "designs": [
         {
@@ -2028,8 +2028,8 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
       },
       "designs": [
         {
@@ -2207,8 +2207,8 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
       },
       "designs": [
         {
@@ -2959,8 +2959,8 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
       },
       "designs": [
         {
@@ -3228,8 +3228,8 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
       },
       "designs": [
         {
@@ -3407,8 +3407,8 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
       },
       "designs": [
         {
@@ -8853,8 +8853,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
       },
       "rings": [
         {
@@ -9017,8 +9017,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
       },
       "rings": [
         {
@@ -9164,8 +9164,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
       },
       "rings": [
         {
@@ -10130,8 +10130,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
       },
       "rings": [
         {
@@ -10470,8 +10470,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
       },
       "rings": [
         {
@@ -10726,8 +10726,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
       },
       "rings": [
         {
@@ -21203,8 +21203,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
       },
       "frames": [
         {
@@ -21587,8 +21587,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
       },
       "frames": [
         {
@@ -21999,8 +21999,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
       },
       "frames": [
         {
@@ -23683,8 +23683,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
       },
       "frames": [
         {
@@ -24676,8 +24676,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
       },
       "frames": [
         {
@@ -25434,8 +25434,8 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
       },
       "frames": [
         {
