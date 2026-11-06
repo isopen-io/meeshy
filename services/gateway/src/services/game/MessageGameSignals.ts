@@ -14,7 +14,7 @@
  *  - l'ATLAS des langues (#9388) : la langue du message est ENVOYÉE pour l'expéditeur, REÇUE pour ses
  *    destinataires — voir `AtlasService` ;
  *  - **+3 points à l'auteur répondu**, une fois par message d'origine, si la réponse tombe dans l'heure, d'un
- *    autre compte de plus de 24 h et non bloqué, et au plus `REPLY_RECEIVED_DAILY_CAP` fois par jour civil.
+ *    autre compte (plus de 24 h ou contact vérifié, #16425) non bloqué, et au plus `REPLY_RECEIVED_DAILY_CAP` fois par jour civil.
  *
  * Les faits de l'expéditeur ne partent que s'il les attend aujourd'hui (une lecture indexée de ses missions du
  * jour et de son duo actif) : un message ordinaire ne paie ni détection de langue ni lecture de pair.
@@ -122,7 +122,7 @@ export class MessageGameSignals {
 
   /**
    * Une conversation créée vide vient d'être DÉMARRÉE par ce message (#9635). La MÊME garde que le message :
-   * rien seul, face à un compte de moins de 24 h ou bloqué. La clé est l'ENSEMBLE des personnes, pas la
+   * rien seul, face à un nouveau venu non prouvé (moins de 24 h, aucun contact vérifié) ou bloqué. La clé est l'ENSEMBLE des personnes, pas la
    * conversation : rouvrir dix conversations jetables avec la même personne ne démarre qu'une conversation.
    */
   async recordConversationStarted(input: { readonly senderUserId: string; readonly conversationId: string; readonly now?: Date }): Promise<void> {

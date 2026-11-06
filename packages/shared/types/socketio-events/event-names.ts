@@ -162,6 +162,12 @@ export const SERVER_EVENTS = {
    * émis dans la room `user:<id>` du seul compte concerné, jamais ailleurs.
    */
   GAME_UPDATED: 'game:updated',
+  /**
+   * Une mission du jour du joueur a AVANCÉ ou s'est TERMINÉE, ou son coffre s'est ouvert (#16425) —
+   * `GameMissionsUpdatedEventData` (`types/game-sync.ts`) : `{ dayKey }`, invalidation pure, émise dans la room
+   * `user:<id>` du seul compte concerné. Le client relit ses défis du jour.
+   */
+  GAME_MISSIONS_UPDATED: 'game:missions-updated',
   USER_STATUS: 'user:status',
   /**
    * Snapshot émis à l'authentification socket : liste des userIds actuellement
