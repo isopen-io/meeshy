@@ -764,6 +764,7 @@ describe('les effets de ma vidéo partent sur la piste ENVOYÉE (#8442)', () => 
     const released: FakeTrack[] = [];
     const wrapped: FakeTrack[] = [];
     let used: readonly string[] = [];
+    let failureHandler: ((camera: MediaStreamTrack) => void) | null = null;
     const port: CameraEffectsPort = {
       wrap: async (camera) => {
         wrapped.push(camera as unknown as FakeTrack);
@@ -772,8 +773,9 @@ describe('les effets de ma vidéo partent sur la piste ENVOYÉE (#8442)', () => 
       refresh: async () => track('video') as unknown as MediaStreamTrack,
       release: (sent) => void released.push(sent as unknown as FakeTrack),
       used: () => used,
+      onFailure: (handler) => void (failureHandler = handler),
     };
-    return { port, released, wrapped, use: (names: readonly string[]) => void (used = names) };
+    return { port, released, wrapped, use: (names: readonly string[]) => void (used = names), fail: (camera: MediaStreamTrack) => failureHandler?.(camera) };
   }
 
   const inVideoCall = async (fx: ReturnType<typeof effectsPort>) => {
@@ -802,6 +804,19 @@ describe('les effets de ma vidéo partent sur la piste ENVOYÉE (#8442)', () => 
     expect(after).not.toBe(before as MediaStreamTrack);
     expect(h.links[0]?.sent.at(-1)).toBe(after);
     expect(fx.released).toEqual([]);
+  });
+
+  test('un traitement d’effets qui meurt remplace la piste sur chaque lien, sans renégociation (#9187)', async () => {
+    const fx = effectsPort();
+    const h = await inVideoCall(fx);
+    const before = h.call()?.localStream?.getVideoTracks()[0];
+    const raw = track('video') as unknown as MediaStreamTrack;
+    fx.fail(raw);
+    await flush();
+    const after = h.call()?.localStream?.getVideoTracks()[0];
+    expect(after).toBe(raw);
+    expect(after).not.toBe(before as MediaStreamTrack);
+    expect(h.links[0]?.sent.at(-1)).toBe(raw);
   });
 
   test('éteindre la caméra relâche la piste traitée par les effets', async () => {
