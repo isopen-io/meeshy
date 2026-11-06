@@ -193,6 +193,27 @@ describe('/publishers — la boutique, le propriétaire, l’administration (#16
     expect(blocked.body).not.toContain('studio.example');
   });
 
+  it('GET /:slug/page lit le sceau et le site ENSEMBLE : un site changé entre deux lectures ne part pas sous le sceau (audit 2026-11-06)', async () => {
+    const { app, as, db } = await build();
+    const profile = db.profiles.find((row) => row.userId === AWA)!;
+    profile.website = 'https://revu.example';
+    profile.verifiedAt = new Date('2026-02-01T00:00:00Z');
+    const partnerProfile = db.prisma.partnerProfile as unknown as { findMany: (args: { where?: { slug?: unknown } }) => Promise<unknown>; findUnique: (args: unknown) => Promise<unknown> };
+    const findMany = partnerProfile.findMany;
+    partnerProfile.findMany = async (args) => {
+      const rows = await findMany(args);
+      if (args.where?.slug === 'studio-lumiere') {
+        profile.website = 'https://non-revu.example';
+        profile.verifiedAt = null;
+      }
+      return rows;
+    };
+    as(MODO);
+    const res = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(res.json().data).toMatchObject({ publisher: { verified: true }, website: 'https://revu.example' });
+    expect(res.body).not.toContain('non-revu.example');
+  });
+
   it('GET /:slug/page tait le site avec le compte quand le nom est neutralisé (imitation de Meeshy)', async () => {
     const { app, as, db, facts } = await build();
     facts.published.add(ADMIN);

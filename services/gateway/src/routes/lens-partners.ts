@@ -162,7 +162,7 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
       schema: {
         description:
           'Écrit le profil partenaire (#11327) : `displayName`, `website` (https), `logo` en base64 (absent : gardé ; `null` : retiré). ' +
-          'Le logo est ré-encodé et renommé par son empreinte. Changer le nom ou le logo RETIRE la vérification. 422 PARTNER_LOGO_REFUSED ; ' +
+          'Le logo est ré-encodé et renommé par son empreinte. Changer le nom, le logo ou le site RETIRE la vérification ; les remettre à l’identique ne retire rien. 422 PARTNER_LOGO_REFUSED ; ' +
           '409 PARTNER_PROFILE_CHANGED quand une autre écriture est passée entre la relecture et l’écriture (relire, puis réécrire) ; ' +
           '409 PUBLISHER_NAME_TAKEN quand un autre éditeur porte déjà ce nom (#16274), 403 PUBLISHER_RESERVED pour un nom réservé.',
         tags,

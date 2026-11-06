@@ -188,6 +188,8 @@ const INVISIBLE_OR_CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 const OFFICIAL_LINK_ACTION = 'PACK_PUBLISHER_OFFICIAL_LINK';
 
 const ROW_SELECT = { id: true, userId: true, slug: true, displayName: true, nameKey: true, nameDisputedAt: true, nameOffListAt: true, verifiedAt: true, createdAt: true } as const;
+/** La page lit le sceau et le site dans la MÊME lecture : un site changé entre deux lectures partirait sous un sceau déjà retiré. */
+const PAGE_SELECT = { ...ROW_SELECT, website: true } as const;
 
 type PublisherRow = {
   readonly id: string;
@@ -201,6 +203,8 @@ type PublisherRow = {
   readonly verifiedAt: Date | null;
   readonly createdAt?: Date | null;
 };
+
+type PageRow = PublisherRow & { readonly website: string | null };
 
 /** Le rattrapage seul pose la marque « nom hors liste » ; une marque déjà posée ne bouge pas. */
 type LegacyMark = { readonly offList?: boolean };
@@ -387,22 +391,25 @@ export class PackPublishers {
     return { publisher, owner, website };
   }
 
-  private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly soleHolder: boolean; readonly profile: (PublisherRow & { readonly website?: string | null }) | null } | null> {
+  private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly soleHolder: boolean; readonly profile: PageRow | null } | null> {
     if (slug === MEESHY_PUBLISHER_SLUG) {
-      const profile = this.official === null ? null : (await this.rowsOf([this.official]))[0] ?? null;
-      return { ownerId: this.official, soleHolder: true, profile: profile === null ? null : { ...profile, website: await this.websiteOf(profile.id) } };
+      const profile = this.official === null ? null : (await this.pageRowsWhere({ userId: this.official }))[0] ?? null;
+      return { ownerId: this.official, soleHolder: true, profile };
     }
     if (!isThirdPartySlug(slug)) return null;
-    const rows: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { slug }, select: ROW_SELECT });
+    const rows = await this.prisma.partnerProfile.findMany({ where: { slug }, select: PAGE_SELECT });
     const profile = [...rows].sort(byAge)[0];
     if (profile === undefined) return null;
     const holders = new Set(rows.map((holder) => holder.userId));
-    return { ownerId: profile.userId, soleHolder: holders.size === 1, profile: { ...profile, website: await this.websiteOf(profile.id) } };
+    return { ownerId: profile.userId, soleHolder: holders.size === 1, profile };
   }
 
-  private async websiteOf(id: string): Promise<string | null> {
-    const found = await this.prisma.partnerProfile.findUnique({ where: { id }, select: { website: true } });
-    return typeof found?.website === 'string' ? found.website : null;
+  private async pageRowsWhere(where: { readonly userId: string }): Promise<readonly PageRow[]> {
+    try {
+      return await this.prisma.partnerProfile.findMany({ where, select: PAGE_SELECT });
+    } catch {
+      return [];
+    }
   }
 
   private async ownerCard(userId: string | null, viewerId: string): Promise<PublisherOwnerCard | null> {
