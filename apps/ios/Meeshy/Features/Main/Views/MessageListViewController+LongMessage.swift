@@ -5,32 +5,29 @@ import SwiftUI
 
 //
 // Le dépliage EN PLACE d'un message long (#8147), dans les modes que ce fil
-// rend (Bulles, Script, Focal). Il remplace la feuille « Lire plus » : le
-// message se déplie DANS le fil, sans saut de défilement, et reçoit l'effet
-// Focal — bloc de verre (posé par la rangée), loupe et voisins atténués
-// (posés ici, sur les layers). Loi : `LongMessageExpansionLaw`.
+// rend (Bulles, Script, Focal). Le message se déplie DANS le fil, sans saut
+// de défilement, et devient un message ORDINAIRE du mode courant (#16463) :
+// aucune mise en avant, aucun repli. Loi : `LongMessageExpansionLaw`.
 //
 
 extension MessageListViewController {
 
-    /// Le message long déplié — un seul à la fois.
-    var expandedLongMessageLocalId: String? {
-        get { longMessageExpansionState.localId }
-        set { longMessageExpansionState.localId = newValue }
+    /// Les messages longs dépliés — ils le restent tant que le fil vit.
+    var expandedLongMessageLocalIds: Set<String> {
+        longMessageExpansionState.expandedIds
     }
 
     /// L'état de dépliage d'UNE cellule, remis à la bulle par l'environnement
     /// (la rangée plate le reçoit par `FocalRowInput.isExpanded`).
     func longMessageExpansion(for localId: String) -> LongMessageExpansion {
-        LongMessageExpansion(messageId: localId, isExpanded: expandedLongMessageLocalId == localId) { [weak self] in
-            self?.toggleLongMessageExpansion(localId)
+        LongMessageExpansion(messageId: localId, isExpanded: expandedLongMessageLocalIds.contains(localId)) { [weak self] in
+            self?.expandLongMessage(localId)
         }
     }
 
-    /// « Lire la suite » / « Réduire ». Replie le précédent déplié, pose la
-    /// nouvelle hauteur de la cellule en tenant immobile le bord ancré
-    /// (`LongMessageExpansionLaw.anchor`) — aucun saut de défilement — puis
-    /// pose l'effet Focal (animé, sauf sous Réduire le mouvement).
+    /// « Lire la suite ». Pose la nouvelle hauteur de la cellule en tenant
+    /// immobile son HAUT (`LongMessageExpansionLaw.anchor`) — aucun saut de
+    /// défilement. Un message déjà déplié ne bouge pas : rien ne le replie.
     ///
     /// La hauteur s'ANIME comme sur le web (#8232) : 300 ms, la courbe
     /// partagée (`FOCAL_METRICS.expandCurve`). Le LAYOUT, lui, se pose d'un
@@ -38,29 +35,18 @@ extension MessageListViewController {
     /// en Release (#8162), l'enveloppe coûtait 27–84 ms de fil principal et 2
     /// à 6 images perdues par bascule. L'écart est rejoué ENSUITE sur le
     /// serveur de rendu (`playHeightMotion`) : chaque cellule part de son
-    /// ordonnée d'avant et le déplié se déroule depuis son bord tenu, sans
+    /// ordonnée d'avant et le déplié se déroule depuis son haut tenu, sans
     /// travail du fil principal pendant les 300 ms.
-    func toggleLongMessageExpansion(_ localId: String) {
-        guard isViewLoaded, dataSource != nil else { return }
-        let previous = expandedLongMessageLocalId
-        let next = LongMessageExpansionLaw.nextExpanded(current: previous, toggled: localId)
-        expandedLongMessageLocalId = next
-        // Le déplié devient LE message mis en avant : l'élu du mode Focal
-        // rend sa carte, une seule mise en avant à la fois.
-        if next != nil, focalFocusedLocalId != nil {
-            focalFocusedLocalId = nil
-            syncFocalFocusDetails()
-        }
+    func expandLongMessage(_ localId: String) {
+        guard isViewLoaded, dataSource != nil, !expandedLongMessageLocalIds.contains(localId) else { return }
+        longMessageExpansionState.expandedIds = LongMessageExpansionLaw.expanded(after: expandedLongMessageLocalIds, tapping: localId)
 
         var snapshot = dataSource.snapshot()
-        let present = Set(snapshot.itemIdentifiers)
-        let items = Array(Set([previous, localId].compactMap { $0 }))
-            .map { MessageListItem.message(localId: $0) }
-            .filter { present.contains($0) }
-        guard !items.isEmpty else { return }
-        snapshot.reconfigureItems(items)
+        let item = MessageListItem.message(localId: localId)
+        guard snapshot.indexOfItem(item) != nil else { return }
+        snapshot.reconfigureItems([item])
 
-        let anchor = LongMessageExpansionLaw.anchor(isExpanding: next == localId)
+        let anchor = LongMessageExpansionLaw.anchor
         if visibleCell(forLocalId: localId) != nil, let edge = visualEdge(ofLocalId: localId, anchor: anchor) {
             beginAnchorHold(.init(localId: localId, anchor: anchor, edge: edge))
         }
@@ -84,23 +70,22 @@ extension MessageListViewController {
         // un toucher qui suit un défilement dans le même tour le trouvait déjà
         // consommé — correction avalée, jamais ré-émise (mesuré : 242 pt au lieu
         // de 707 après 500 ms, alors que le contenu hébergé mesurait 707). Le
-        // geste rouvre le budget et redemande explicitement la taille des
-        // rangées reconfigurées.
+        // geste rouvre le budget et redemande explicitement la taille de la
+        // rangée reconfigurée.
         let timing = LongMessageExpansionLaw.heightTiming(reduceMotion: UIAccessibility.isReduceMotionEnabled)
         let before = timing.map { _ in captureHeightMotion() }
         UIView.performWithoutAnimation {
             (collectionView.collectionViewLayout as? MessageListLayout)?.admitDeliberateResize()
             applyToDataSource(snapshot) {}
-            items.compactMap { dataSource.indexPath(for: $0) }
-                .compactMap { collectionView.cellForItem(at: $0) }
-                .forEach { $0.invalidateIntrinsicContentSize() }
+            dataSource.indexPath(for: item)
+                .flatMap { collectionView.cellForItem(at: $0) }?
+                .invalidateIntrinsicContentSize()
             collectionView.layoutIfNeeded()
             holdAnchoredEdge()
         }
         if let timing, let before {
-            playHeightMotion(from: before, toggled: localId, anchor: anchor, timing: timing)
+            playHeightMotion(from: before, expanded: localId, anchor: anchor, timing: timing)
         }
-        applyLongMessageExpansionPresentation(animated: timing != nil)
     }
 
     // MARK: - La hauteur s'anime (#8232)
@@ -133,14 +118,14 @@ extension MessageListViewController {
     /// de l'écran glisse avec sa région avant de s'effacer.
     private func playHeightMotion(
         from before: HeightMotionCapture,
-        toggled localId: String,
+        expanded localId: String,
         anchor: LongMessageExpansionLaw.Anchor,
         timing: LongMessageExpansionLaw.HeightTiming
     ) {
-        let toggled = MessageListItem.message(localId: localId)
-        guard let expandedBefore = before.spans[toggled], let expandedAfter = onScreenSpan(of: toggled) else { return }
+        let expanding = MessageListItem.message(localId: localId)
+        guard let expandedBefore = before.spans[expanding], let expandedAfter = onScreenSpan(of: expanding) else { return }
         let inverted = collectionView.transform.d < 0
-        let togglePin = LongMessageExpansionLaw.pin(for: anchor, listIsInverted: inverted)
+        let expandingPin = LongMessageExpansionLaw.pin(for: anchor, listIsInverted: inverted)
         let otherPin = LongMessageExpansionLaw.pin(for: .bottom, listIsInverted: inverted)
         var landed = Set<MessageListItem>()
 
@@ -150,7 +135,7 @@ extension MessageListViewController {
             let spanBefore = before.spans[item] ?? Self.shifted(after, by: -LongMessageExpansionLaw.regionShift(
                 beyondEnd: after.origin >= expandedAfter.end - 0.5, expandedBefore: expandedBefore, expandedAfter: expandedAfter
             ))
-            let pin = item == toggled ? togglePin : otherPin
+            let pin = item == expanding ? expandingPin : otherPin
             guard let motion = LongMessageExpansionLaw.heightMotion(before: spanBefore, after: after, pin: pin) else { continue }
             Self.play(motion, on: cell.layer, pin: pin, timing: timing)
         }
@@ -191,8 +176,8 @@ extension MessageListViewController {
         }
         guard let reveal = motion.revealFrom else { return }
         // Le masque ne coupe que le bord qui se DÉROULE : il déborde de la
-        // cellule sur les côtés et au bord tenu, où la loupe du déplié et
-        // son verre peuvent dépasser.
+        // cellule sur les côtés et au bord tenu, où les ombres et les
+        // réactions de la rangée peuvent dépasser.
         let overhang = layer.bounds.width * 0.1
         let final = CGRect(
             x: -overhang,
@@ -294,55 +279,6 @@ extension MessageListViewController {
         collectionView.contentOffset.y = target
         isIntentionalProgrammaticScroll = wasIntentional
         captureSceneLockAnchor()
-    }
-
-    /// L'effet Focal du déplié : loupe sur lui, voisins atténués — tant qu'il
-    /// est VISIBLE. Sans déplié à l'écran, le fil redevient uniforme, sauf
-    /// pendant la scène Focal, qui possède alors les layers.
-    ///
-    /// - Parameter excluding: la cellule qui QUITTE l'écran
-    ///   (`didEndDisplaying`), encore listée parmi les visibles.
-    func applyLongMessageExpansionPresentation(animated: Bool, excluding: UICollectionViewCell? = nil) {
-        guard isViewLoaded else { return }
-        let cells = collectionView.visibleCells.filter { $0 !== excluding }
-        let expandedCell = expandedLongMessageLocalId.flatMap { id in cells.first { localId(of: $0) == id } }
-        guard expandedCell != nil || !(readingMode == .focal && focalSceneActive) else { return }
-        for cell in cells {
-            let layer = cell.contentView.layer
-            let isExpanded = cell === expandedCell
-            guard expandedCell != nil else {
-                FocalScrollPerspective.reset(layer)
-                continue
-            }
-            cell.layer.zPosition = isExpanded ? 1 : 0
-            guard !isExpanded else {
-                FocalScrollPerspective.magnify(layer, isFocused: true, animated: animated)
-                continue
-            }
-            let alpha = Float(LongMessageExpansionLaw.alpha(isExpandedCell: false, expansionVisible: true))
-            guard layer.opacity != alpha || !CATransform3DIsIdentity(layer.transform) else { continue }
-            let pose = {
-                layer.transform = CATransform3DIdentity
-                layer.opacity = alpha
-            }
-            guard animated else {
-                pose()
-                continue
-            }
-            UIView.animate(withDuration: FocalMetrics.Focus.expandDuration, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction], animations: pose)
-        }
-    }
-
-    /// Le déplié est-il à l'écran ? La scène Focal lui cède alors les layers.
-    var isLongMessageExpansionVisible: Bool {
-        guard let id = expandedLongMessageLocalId, isViewLoaded else { return false }
-        return collectionView.visibleCells.contains { localId(of: $0) == id }
-    }
-
-    private func localId(of cell: UICollectionViewCell) -> String? {
-        guard let indexPath = collectionView.indexPath(for: cell),
-              case .message(let localId) = dataSource?.itemIdentifier(for: indexPath) else { return nil }
-        return localId
     }
 
     private func visibleCell(forLocalId localId: String) -> UICollectionViewCell? {

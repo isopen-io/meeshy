@@ -118,14 +118,13 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // vue UIKit bornée à la cellule qui dérivait avant la pose.
         // #7953 : la carte s'allonge, en RENDU, sous le contenu d'une suite
         // descendu et sous la bande basse — jamais une hauteur de rangée.
-        // #8147 : le message long DÉPLIÉ reçoit un bloc de verre, à ses marges.
         // #8506 : le cadre de l'élu est le fond de la COLONNE du message et
         // englobe identité et bande, à `electedCardMargin`.
         // #8537 : il se pose sur la mesure du contenu GROSSI, lue par préférence.
         XCTAssertTrue(row.contains(".backgroundPreferenceValue(FocalElectedContentKey.self) { elected in if input.isFocused { focusChrome.electedCardBackground(elected) } }"), "cadre de l'élu = fond SwiftUI de la colonne")
-        XCTAssertTrue(row.contains(".background { if input.isExpanded && !input.isFocused { focusChrome.focusCardBackground } }"), "le déplié garde son verre")
+        // #16463 : le message long DÉPLIÉ est une rangée ordinaire, sans verre.
+        XCTAssertFalse(row.contains("focusCardBackground"), "le déplié n'a pas de verre")
         XCTAssertTrue(row.contains(".offset(y: focusLift)"), "une suite magnifiée descend par offset, pas par hauteur")
-        XCTAssertTrue(row.contains(".padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)"), "mêmes cotes que focusCardInsets")
         XCTAssertTrue(row.contains(".padding(.bottom, -(span.stripTop + FocalMetrics.FocusStrip.chipHeight + margin - proxy.size.height))"), "le cadre descend sous la bande, à sa marge")
         // #8506 : plus aucune réserve de hauteur sous le texte d'un élu (#5718) —
         // la bande se pose sous le contenu, la rangée ne change pas de taille.
