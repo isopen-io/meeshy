@@ -296,6 +296,20 @@ final class CallViewLayoutGuardTests: XCTestCase {
         )
     }
 
+    /// Filet plus large que les deux gardes ci-dessus : sur TOUTE l'unité de
+    /// l'écran d'appel (CallView + ses extensions), le total des sites qui
+    /// portent `chromeBottomInset` ne doit pas chuter — une régression locale
+    /// dans un fichier non couvert par un test dédié y resterait sinon invisible.
+    func test_chromeBottomInset_usageCount_doesNotRegress() throws {
+        let unit = try callViewSource()
+        XCTAssertGreaterThanOrEqual(
+            unit.components(separatedBy: "chromeBottomInset").count - 1, 8,
+            "La déclaration, la pilule (duo + groupe), la vignette perso, la " +
+            "sonnerie et la connexion portent toutes cette constante — un " +
+            "total qui chute signale qu'un site est revenu à une valeur en dur."
+        )
+    }
+
     // MARK: - Bord a bord du fullScreenCover
 
     /// Les lignes de code, commentaires retires.
