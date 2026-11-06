@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { logError } from '../../utils/logger';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
-import { withMutationLog } from '../../utils/withMutationLog';
+import { withMutationVerdict } from '../../utils/withMutationLog';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { recordLevel, startCooldown, cooldownEnd, type RelationWriteOutcome } from '../../services/relations/userRelationWriter';
@@ -37,14 +37,27 @@ const lireAvecParties = (fastify: FastifyInstance, id: string) =>
 
 type LigneAvecParties = NonNullable<Awaited<ReturnType<typeof lireAvecParties>>>;
 
-/** Une réponse passe par le journal des mutations ; une demande tranchée entre-temps rend `null`. */
+/**
+ * Une réponse passe par le journal des mutations ; une demande tranchée
+ * entre-temps rend `null`.
+ *
+ * #9623 — elle rend le VERDICT avec la ligne, parce que ce qui suit n'est pas
+ * convergent : l'acceptation crée une `Notification` (sans clé d'idempotence ni
+ * déduplication en aval) et pousse une bannière ; le refus ÉCRASE la date de
+ * fin du cool-down depuis l'horloge de l'appel. Le verdict appartient aux
+ * APPELANTS — `accepterAuNiveau` et `refuserEnSilence` — jamais à ce
+ * journal-ci, qui ne porte aucun effet.
+ *
+ * `null` dit « la demande n'est plus à trancher » et ne porte pas de verdict :
+ * il n'y a alors rien à annoncer, rejeu ou pas.
+ */
 async function journaliserReponse(
   fastify: FastifyInstance,
   request: FastifyRequest,
   acteurId: string,
   op: () => Promise<LigneAvecParties>
-) {
-  return withMutationLog({
+): Promise<{ readonly ligne: LigneAvecParties; readonly replayed: boolean } | null> {
+  return withMutationVerdict({
     request,
     fastify,
     userId: acteurId,
@@ -52,10 +65,12 @@ async function journaliserReponse(
     replayCost: 'converges',
     op,
     onDuplicate: (resultId) => lireAvecParties(fastify, resultId),
-  }).catch((error: unknown) => {
-    if (isRecordNotFound(error)) return null;
-    throw error;
-  });
+  })
+    .then(({ result, replayed }) => ({ ligne: result as LigneAvecParties, replayed }))
+    .catch((error: unknown) => {
+      if (isRecordNotFound(error)) return null;
+      throw error;
+    });
 }
 
 /** L'écriture CONDITIONNELLE d'une réponse : une demande tranchée entre-temps dans l'AUTRE sens ne se réécrit pas. */
@@ -132,8 +147,9 @@ export async function refuserEnSilence(
   acteurId: string,
   options: { readonly retirerNotification: boolean }
 ) {
-  const refusee = await ecrireReponse(fastify, request, demande, acteurId, 'rejected');
-  if (!refusee) return null;
+  const tranche = await ecrireReponse(fastify, request, demande, acteurId, 'rejected');
+  if (!tranche) return null;
+  const { ligne: refusee, replayed } = tranche;
 
   const notifications = fastify.notificationService;
   if (notifications) {
@@ -145,13 +161,20 @@ export async function refuserEnSilence(
     }
   }
 
-  try {
-    const now = new Date();
-    await startCooldown(fastify.prisma, {
-      userId: demande.senderId, otherId: demande.receiverId, at: now, until: cooldownEnd(now, thresholdsNow().cooldownDays),
-    });
-  } catch (error) {
-    logError(fastify.log, 'Error starting the friend request cool-down:', error);
+  // #9623 — `startCooldown` écrit `until` en ÉCRASANT, calculé depuis
+  // l'horloge de CET appel. Un rejeu qui arrive N heures après le refus
+  // repousserait donc de N heures la fin des 30 jours : une punition rallongée
+  // par l'aléa du réseau, pas par un geste. Le refus est déjà écrit et son
+  // cool-down déjà ouvert — il n'y a rien à refaire.
+  if (!replayed) {
+    try {
+      const now = new Date();
+      await startCooldown(fastify.prisma, {
+        userId: demande.senderId, otherId: demande.receiverId, at: now, until: cooldownEnd(now, thresholdsNow().cooldownDays),
+      });
+    } catch (error) {
+      logError(fastify.log, 'Error starting the friend request cool-down:', error);
+    }
   }
 
   return refusee;
@@ -233,10 +256,11 @@ async function accepterAuNiveau(
     return { refus: { code: 409, message: 'La demande ne tient plus', codeMetier: jugement.code } };
   }
 
-  const misAJour = niveau === 'ACQUAINTANCE'
+  const tranche = niveau === 'ACQUAINTANCE'
     ? await consommerConnaissance(fastify, request, demande, acteurId)
     : await ecrireReponse(fastify, request, demande, acteurId, 'accepted');
-  if (!misAJour) return { refus: { code: 404, message: 'Demande d\'ami non trouvee ou deja traitee' } };
+  if (!tranche) return { refus: { code: 404, message: 'Demande d\'ami non trouvee ou deja traitee' } };
+  const { ligne: misAJour, replayed } = tranche;
 
   const notifications = fastify.notificationService;
   if (notifications) {
@@ -256,7 +280,13 @@ async function accepterAuNiveau(
   }
   if (niveau !== 'ACQUAINTANCE') crediterAmitie(fastify, demande);
 
-  if (notifications) {
+  // #9623 — l'annonce est le seul effet non convergent de ce chemin :
+  // `createNotification` n'a ni clé d'idempotence ni déduplication, donc un
+  // rejeu posait une SECONDE ligne, un second toast et une seconde bannière
+  // push pour une acceptation unique ; `friend-request:accepted` est un
+  // « c'est arrivé ». La conversation, elle, se relit dans les DEUX cas : le
+  // rejeu doit resservir la même charge utile.
+  if (notifications && !replayed) {
     await notifications.createFriendAcceptedNotification({
       recipientUserId: misAJour.senderId,
       accepterUserId: acteurId,
@@ -266,12 +296,14 @@ async function accepterAuNiveau(
 
   const conversation = await conversationDirecte(fastify, demande.senderId, demande.receiverId);
 
-  notifications?.emitFriendRequestAccepted({
-    senderId: misAJour.senderId,
-    friendRequestId: demande.id,
-    accepterId: acteurId,
-    conversationId: conversation?.id,
-  });
+  if (!replayed) {
+    notifications?.emitFriendRequestAccepted({
+      senderId: misAJour.senderId,
+      friendRequestId: demande.id,
+      accepterId: acteurId,
+      conversationId: conversation?.id,
+    });
+  }
 
   // Servie APRÈS l'écriture du statut : la loi lit une amitié désormais ACCEPTÉE
   // et rend la présence du nouvel ami, sans cas particulier ici. `conversation`
