@@ -22,7 +22,7 @@ public struct PackPublisherRef: Codable, Hashable, Sendable {
 }
 
 /// Le compte Meeshy qui édite : de quoi ouvrir son profil, rien d'autre.
-public struct PackPublisherOwner: Codable, Hashable, Sendable {
+public struct PackPublisherOwner: Codable, Hashable, Sendable, Identifiable {
     public let id: String
     public let username: String
     public let displayName: String?

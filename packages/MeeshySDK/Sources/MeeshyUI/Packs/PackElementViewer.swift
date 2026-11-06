@@ -10,6 +10,9 @@ struct PackShowcaseContext {
     let pending: Set<String>
     let wearer: PackStageWearer
     let onToggle: (String) -> Void
+    /// Toute la vitrine lue : « Du même éditeur » et la page de l'éditeur y puisent (#16433).
+    var catalogue = PackShopState()
+    var language = "fr"
 
     func row(_ slug: String) -> PackRow? { rows.first { $0.slug == slug } }
 }
@@ -241,6 +244,9 @@ struct PackViewerFooter: View {
                         Text(row.name)
                             .font(MeeshyFont.relative(13))
                             .foregroundStyle(.secondary)
+                    }
+                    if let publisher = row?.publisher {
+                        PackPublisherLabel(publisher: publisher, size: 12)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

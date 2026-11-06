@@ -124,6 +124,9 @@ public struct UnifiedShopView: View {
     @State private var selected: PackDomain
     private let wearer: PackStageWearer?
     private let domains: [PackDomain]
+    /// Les domaines que la vitrine LIT : ceux qu'elle montre, ou tous (`nil`) quand la fiche doit
+    /// pouvoir dire « Du même éditeur » dans les autres catégories (#16433).
+    private let readDomains: [PackDomain]?
     private let focusedSlug: String?
     private let language: String
     private let usageText: ((FrameUsage) -> String)?
@@ -139,7 +142,7 @@ public struct UnifiedShopView: View {
                 focusedSlug: String? = nil, language: String = "fr",
                 usageText: ((FrameUsage) -> String)? = nil, rankName: ((GloryRank) -> String)? = nil,
                 store: PackShopStore? = nil, wearer: PackStageWearer? = nil,
-                designs: (any PackElementDesignProviding)? = nil) {
+                designs: (any PackElementDesignProviding)? = nil, readsAllDomains: Bool = false) {
         self.wearer = wearer
         _showcase = StateObject(wrappedValue: PackShowcaseModel(designs: designs, language: language))
         self.focusedSlug = focusedSlug
@@ -148,6 +151,7 @@ public struct UnifiedShopView: View {
         self.rankName = rankName
         let offered = domains.filter { $0 != .unknown }
         self.domains = offered
+        self.readDomains = readsAllDomains ? nil : offered
         _store = StateObject(wrappedValue: store ?? PackShopStore())
         _selected = State(initialValue: initialDomain.flatMap { offered.contains($0) ? $0 : nil } ?? offered.first ?? .wallpaper)
     }
@@ -158,7 +162,7 @@ public struct UnifiedShopView: View {
             if domains.count > 1 { domainChips }
             shelf
         }
-        .task { await store.load(domains: domains) }
+        .task { await store.load(domains: readDomains) }
         .packShowcase(showcase) { context(for: $0) }
     }
 
@@ -168,9 +172,9 @@ public struct UnifiedShopView: View {
 
     private func context(for domain: PackDomain) -> PackShowcaseContext {
         PackShowcaseContext(rows: rows(in: domain) ?? [], pending: pendingSlugs(in: domain),
-                            wearer: wearer ?? .current) { slug in
-            Task { await store.tap(domain: domain, slug: slug) }
-        }
+                            wearer: wearer ?? .current,
+                            onToggle: { slug in Task { await store.tap(domain: domain, slug: slug) } },
+                            catalogue: store.state, language: language)
     }
 
     private var failureText: String? {
@@ -239,7 +243,7 @@ public struct UnifiedShopView: View {
                     .foregroundStyle(MeeshyColors.error)
                 Button {
                     HapticFeedback.light()
-                    Task { await store.load(domains: domains) }
+                    Task { await store.load(domains: readDomains) }
                 } label: {
                     Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
                         .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))

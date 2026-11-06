@@ -10,37 +10,69 @@ struct PackDetailView: View {
     @ObservedObject var model: PackShowcaseModel
     let target: PackDetailTarget
     let context: PackShowcaseContext
-
-    @Environment(\.dismiss) private var dismiss
+    /// Ouvre une page de la pile : l'éditeur, un autre de ses packs (#16433).
+    let onRoute: (PackShowcaseRoute) -> Void
 
     private var row: PackRow? { context.row(target.slug) }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
-                    if let row { header(row) }
-                    elementsSection
-                }
-                .padding(MeeshySpacing.lg)
+        ScrollView {
+            VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
+                if let row { header(row) }
+                elementsSection
+                if let publisher = row?.publisher { samePublisher(publisher) }
             }
-            .navigationTitle(row?.name ?? "")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "shop.detail.done", defaultValue: "Terminé", bundle: .module)) { dismiss() }
-                }
-            }
+            .padding(MeeshySpacing.lg)
         }
+        .navigationTitle(row?.name ?? "")
+        .navigationBarTitleDisplayMode(.inline)
         .task(id: target) { await model.prepare(domain: target.domain, pack: target.slug) }
-        .fullScreenCover(item: viewerBinding) { _ in
-            PackElementViewer(model: model, context: context) { model.viewer = nil }
-        }
     }
 
-    /// La fiche porte SON plein écran : une feuille ouverte ne laisse pas la boutique en présenter un.
-    private var viewerBinding: Binding<PackViewerTarget?> {
-        Binding(get: { model.viewer }, set: { model.viewer = $0 })
+    // MARK: L'éditeur (#16315, #16433)
+
+    private func publisherLink(_ publisher: PackPublisherRef) -> some View {
+        Button {
+            HapticFeedback.light()
+            onRoute(.publisher(publisher))
+        } label: {
+            HStack(spacing: MeeshySpacing.xs) {
+                PackPublisherLabel(publisher: publisher, size: 13)
+                Image(systemName: "chevron.forward")
+                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(String(localized: "shop.publisher.open.hint", defaultValue: "Ouvre la page de l’éditeur", bundle: .module))
+        .accessibilityIdentifier("shop.detail.publisher")
+    }
+
+    @ViewBuilder
+    private func samePublisher(_ publisher: PackPublisherRef) -> some View {
+        let entries = PublisherCatalogue.entries(of: publisher.slug, in: context.catalogue,
+                                                 excluding: PackCatalogueEntry(domain: target.domain, slug: target.slug))
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                Text(String(localized: "shop.detail.samePublisher", defaultValue: "Du même éditeur", bundle: .module))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: MeeshySpacing.md) {
+                        ForEach(entries) { entry in
+                            if let pack = context.catalogue.pack(entry.domain, entry.slug) {
+                                PackCatalogueTile(row: UnifiedShopView.row(pack, language: context.language)) {
+                                    onRoute(.pack(PackDetailTarget(domain: entry.domain, slug: entry.slug)))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // MARK: En-tête
@@ -55,7 +87,14 @@ struct PackDetailView: View {
                     Text(row.name)
                         .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
                         .accessibilityAddTraits(.isHeader)
-                    if !row.author.isEmpty {
+                    if let publisher = row.publisher {
+                        publisherLink(publisher)
+                        if !row.author.isEmpty, row.author != publisher.name {
+                            Text(String(format: String(localized: "shop.detail.author", defaultValue: "Auteur : %@", bundle: .module), row.author))
+                                .font(MeeshyFont.relative(12))
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if !row.author.isEmpty {
                         Text(String(format: String(localized: "sticker.sheet.pack.by", defaultValue: "par %@", bundle: .module), row.author))
                             .font(MeeshyFont.relative(13))
                             .foregroundStyle(.secondary)
