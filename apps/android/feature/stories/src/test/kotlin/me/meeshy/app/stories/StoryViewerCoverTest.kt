@@ -35,4 +35,11 @@ class StoryViewerCoverTest {
         assertThat(StoryCommentHold.holds(draft = "", hasMedia = true, isSubmitting = false)).isTrue()
         assertThat(StoryCommentHold.holds(draft = "", hasMedia = false, isSubmitting = true)).isTrue()
     }
+
+    @Test
+    fun `#14661 a pending place or an open composer panel holds the story, like iOS zoneHasPieces and attachmentPanelOpen`() {
+        assertThat(StoryCommentHold.holds(draft = "", hasMedia = false, isSubmitting = false, hasPlace = true)).isTrue()
+        assertThat(StoryCommentHold.holds(draft = "", hasMedia = false, isSubmitting = false, panelOpen = true)).isTrue()
+        assertThat(StoryCommentHold.holds(draft = "", hasMedia = false, isSubmitting = false, hasPlace = false, panelOpen = false)).isFalse()
+    }
 }

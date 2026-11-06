@@ -128,6 +128,8 @@ internal fun ChatComposer(
     /** #16341 — la barre s'ouvre repliée si on l'a laissée ainsi dans cette conversation ; chaque repli ou dépliage est remonté. */
     startsMinimized: Boolean = false,
     onMinimizedChange: (Boolean) -> Unit = {},
+    /** #14661 — un panneau du verre ou un vocal est ouvert (iOS `attachmentPanelOpen`) ; remonté à chaque bascule. */
+    onPanelOpenChange: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     var guestSheetOpen by rememberSaveable { mutableStateOf(false) }
@@ -334,6 +336,10 @@ internal fun ChatComposer(
             { stickerSheetOpen = false },
         )
     }
+    val panelOpen = attachmentTrayOpen || emojiPickerOpen || effectsPanelOpen || cameraChooserOpen ||
+        stickerSheetOpen || ephemeralRailOpen || voice.isRecording
+    val reportPanelOpen by rememberUpdatedState(onPanelOpenChange)
+    LaunchedEffect(panelOpen) { reportPanelOpen(panelOpen) }
     // Le ⌄ (iOS `CommentComposerFoldModifier.fold`) : ferme le clavier et ce qui est ouvert dans le
     // verre, haptique légère, puis replie. Brouillon, réponse et pièces jointes vivent au-dessus.
     val fold: () -> Unit = {

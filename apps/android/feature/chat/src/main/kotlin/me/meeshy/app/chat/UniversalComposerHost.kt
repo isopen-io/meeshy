@@ -3,10 +3,12 @@ package me.meeshy.app.chat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -30,6 +32,11 @@ public fun UniversalComposerHost(
     val revision = remember { ExternalDraftRevision() }
     val draftRevision = revision.of(spec.draft)
     var placePickerOpen by rememberSaveable { mutableStateOf(false) }
+    var composerPanelOpen by remember { mutableStateOf(false) }
+    val reportPanelOpen by rememberUpdatedState(spec.onPanelOpenChange)
+    val panelOpen = composerPanelOpen || placePickerOpen
+    LaunchedEffect(panelOpen) { reportPanelOpen(panelOpen) }
+    DisposableEffect(Unit) { onDispose { reportPanelOpen(false) } }
     Box(modifier) {
         ChatComposer(
             draft = spec.draft,
@@ -65,6 +72,7 @@ public fun UniversalComposerHost(
             onToggleEffect = spec.onToggleEffect ?: {},
             onClearEffects = spec.onClearEffects,
             onLocationRequest = spec.onPickPlace?.let { { placePickerOpen = true } },
+            onPanelOpenChange = { composerPanelOpen = it },
         )
     }
     val onPickPlace = spec.onPickPlace

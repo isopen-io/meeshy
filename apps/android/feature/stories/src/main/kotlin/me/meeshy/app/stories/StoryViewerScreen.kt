@@ -91,7 +91,8 @@ fun StoryViewerScreen(
     val railPlan = rememberFrozenRailPlan(
         StoryRailFreezeInput(state.currentStoryId, liveRailPlan, soundShown, rememberStoryCommentsReconciled(commentThread)),
     )
-    val composing = railPlan.pinsCommentComposer && storyCommentHolds(commentThread)
+    val composerPanels = remember(state.currentStoryId) { StoryComposerPanels() }
+    val composing = railPlan.pinsCommentComposer && storyCommentHolds(commentThread, composerPanels)
     val groupIntro = rememberStoryGroupIntro(state, slide?.opening, viewModel)
     val cover = StoryViewerCover(
         sheet = chrome.sheetOpen || state.languageExplorer != null,
@@ -122,7 +123,10 @@ fun StoryViewerScreen(
     val playback = rememberStoryPlayback(state, slideDurationMs, cover, rail, cardMotion.dragging, viewModel)
     StoryViewerLifecycleEffects(state, viewModel.prefetch.collectAsStateWithLifecycle().value, onClose)
 
-    CompositionLocalProvider(LocalStoryAudioGain provides { StoryViewerCardTransform.audioGain(cardMotion.dismissal.value) }) {
+    CompositionLocalProvider(
+        LocalStoryAudioGain provides { StoryViewerCardTransform.audioGain(cardMotion.dismissal.value) },
+        LocalStoryComposerPanels provides composerPanels,
+    ) {
     StoryViewerShell(
         state = state,
         slide = slide,

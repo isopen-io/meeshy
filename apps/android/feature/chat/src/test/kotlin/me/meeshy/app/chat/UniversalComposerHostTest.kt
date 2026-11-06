@@ -178,6 +178,25 @@ class UniversalComposerHostTest {
         assertThat(pill.right.value).isLessThan(camera.left.value)
     }
 
+    @Test fun `#14661 ouvrir le plateau des pièces le dit à l'hôte, le refermer aussi — la story se fige dessous`() {
+        val reports = mutableListOf<Boolean>()
+        show(spec(ComposerConfiguration.COMMENT).served().copy(onPickPlace = {}, onPanelOpenChange = { reports += it }))
+        compose.onNodeWithContentDescription(string(R.string.chat_attach_open)).performClick()
+        compose.waitForIdle()
+        assertThat(reports.lastOrNull()).isTrue()
+        compose.onNodeWithContentDescription(string(R.string.composer_show_keyboard)).performClick()
+        compose.waitForIdle()
+        assertThat(reports.last()).isFalse()
+    }
+
+    @Test fun `#14661 le panneau des effets ouvert retient aussi l'hôte`() {
+        val reports = mutableListOf<Boolean>()
+        show(spec(ComposerConfiguration.COMMENT).served().copy(onToggleEffect = {}, onPanelOpenChange = { reports += it }))
+        compose.onNodeWithContentDescription(string(R.string.chat_effects_open)).performClick()
+        compose.waitForIdle()
+        assertThat(reports.lastOrNull()).isTrue()
+    }
+
     @Test fun `un commentaire écrit part par l'envoi`() {
         var sent = 0
         show(spec(ComposerConfiguration.COMMENT, draft = "Bravo", onSend = { sent += 1 }))
