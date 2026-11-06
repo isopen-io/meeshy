@@ -210,7 +210,7 @@ struct PackDetailView: View {
         switch domain {
         case .banner, .bannerFrame: 3
         case .wallpaper: 0.75
-        case .gloryFrame: 9.0 / 16.0
+        case .gloryFrame: SceneShape.aspect
         default: 1
         }
     }
