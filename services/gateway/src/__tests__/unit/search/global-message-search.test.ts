@@ -33,7 +33,7 @@ const CONV_E2EE = '650000000000000000000013';
 const CONV_LEFT = '650000000000000000000014';
 
 let clock = 0;
-const msgId = () => `6600000000000000000000${String(++clock).padStart(2, '0')}`;
+const msgId = () => `660000000000000000${String(++clock).padStart(6, '0')}`;
 
 const sender = { id: 'p-author', userId: STRANGER, displayName: 'Ada', avatar: null, user: { username: 'ada', displayName: 'Ada L.', avatar: null } };
 
@@ -248,5 +248,26 @@ describe('GET /messages/search — pagination par curseur', () => {
     const third = await search({ messages }, 'plage', `&limit=2&cursor=${second.body.pagination.nextCursor}`);
     expect(contents(third.body.data)).toEqual(['plage 0']);
     expect(third.body.pagination).toEqual({ limit: 2, hasMore: false, nextCursor: null });
+  });
+
+  it("trouve dès la première page un message plus ancien que les deux cents derniers messages traduits", async () => {
+    const old = message(CONV_MINE, 'rendez-vous à la plage');
+    const recent = Array.from({ length: 450 }, (_, index) => message(CONV_MINE, `bavardage ${index}`, { translations: { fr: { text: `causerie ${index}` } } }));
+    const { status, body } = await search({ messages: [old, ...recent] }, 'plage');
+    expect(status).toBe(200);
+    expect(contents(body.data)).toEqual(['rendez-vous à la plage']);
+    expect(body.pagination).toEqual({ limit: 20, hasMore: false, nextCursor: null });
+  });
+
+  it('poursuit la page suivante sans doublon quand la page se remplit au-delà de la première fenêtre traduite', async () => {
+    const olds = Array.from({ length: 3 }, (_, index) => message(CONV_MINE, `plage ancienne ${index}`));
+    const recent = Array.from({ length: 250 }, (_, index) => message(CONV_MINE, `bavardage ${index}`, { translations: { fr: { text: `causerie ${index}` } } }));
+    const fresh = message(CONV_MINE, 'plage récente');
+    const messages = [...olds, ...recent, fresh];
+    const first = await search({ messages }, 'plage', '&limit=2');
+    expect(contents(first.body.data)).toEqual(['plage récente', 'plage ancienne 2']);
+    expect(first.body.pagination.hasMore).toBe(true);
+    const second = await search({ messages }, 'plage', `&limit=2&cursor=${first.body.pagination.nextCursor}`);
+    expect(contents(second.body.data)).toEqual(['plage ancienne 1', 'plage ancienne 0']);
   });
 });

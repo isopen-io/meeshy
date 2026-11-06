@@ -47,6 +47,7 @@ export type GlobalMessageSearchPage = {
 };
 
 const TRANSLATION_SCAN_SIZE = 200;
+const MAX_SCAN_ROUNDS = 5;
 const TITLE_MEMBER_SAMPLE = 5;
 
 type Scope = {
@@ -220,6 +221,21 @@ async function servableForReader(prisma: PrismaClient, scope: Scope, rows: reado
   return readable.filter((row) => kept.has(row.id));
 }
 
+async function collectServable(
+  prisma: PrismaClient,
+  scope: Scope,
+  needle: string,
+  limit: number,
+  cursor: CursorData | null,
+  round = 1,
+  gathered: readonly HitRow[] = []
+): Promise<{ servable: HitRow[]; bound: CursorData | null }> {
+  const { merged, bound } = await scanCandidates(prisma, scope, needle, limit, cursor);
+  const servable = [...gathered, ...(await servableForReader(prisma, scope, merged))];
+  const settled = servable.length > limit || bound === null || round >= MAX_SCAN_ROUNDS;
+  return settled ? { servable, bound } : collectServable(prisma, scope, needle, limit, bound, round + 1, servable);
+}
+
 type ConversationCard = MessageSearchHit['conversation'];
 
 async function conversationCards(prisma: PrismaClient, userId: string, ids: readonly string[]): Promise<Map<string, ConversationCard>> {
@@ -294,8 +310,7 @@ export async function searchMessagesForReader(prisma: PrismaClient, params: Glob
   if (!scope) return EMPTY_PAGE(limit);
 
   const cursor = params.cursor ? decodeCursor(params.cursor) : null;
-  const { merged, bound } = await scanCandidates(prisma, scope, needle, limit, cursor);
-  const servable = await servableForReader(prisma, scope, merged);
+  const { servable, bound } = await collectServable(prisma, scope, needle, limit, cursor);
   const pageFull = servable.length > limit;
   const rows = servable.slice(0, limit);
   const last = rows[rows.length - 1];
