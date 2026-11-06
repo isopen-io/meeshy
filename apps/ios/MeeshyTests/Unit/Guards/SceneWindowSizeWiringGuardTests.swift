@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Meeshy
 
 /// Stage Manager / Split View / fenêtre détachée (cycle 7). `DeviceLayout.windowSize` lit la fenêtre CLÉ de la scène
@@ -98,10 +99,25 @@ final class SceneWindowSizeWiringGuardTests: XCTestCase {
             XCTAssertTrue(code.contains("WindowInsets(published: sceneSafeAreaInsets)") || code.contains("galleryInsets."),
                           "\(path) doit lire SA fenêtre")
         }
-        // Le repli ne lit que le bord DEMANDÉ : un repli qui lisait les deux bords figeait le rendu de la bande du
-        // haut (la marge basse lue pendant `body`, #10566) — mesuré au simulateur, TopChromeBandRenderTests.
+        // #12470 : le repli ne lit plus JAMAIS la fenêtre. Un `fullScreenCover` (composeur, réels, bande du haut) ne
+        // reçoit pas la publication ; lire `UIWindow.safeAreaInsets` pendant son `body` rappelait le contrôleur hôte
+        // (`statusBarHidden`) — cycle du graphe, gel de 83 s, 0x8BADF00D sur iPhone.
         let layout = AppSourceGuard.stripComments(try source("Meeshy/Core/DeviceLayout.swift"))
-        XCTAssertTrue(layout.contains("var top: CGFloat { published?.top ?? DeviceLayout.safeAreaTop }"))
-        XCTAssertTrue(layout.contains("var bottom: CGFloat { published?.bottom ?? DeviceLayout.safeAreaBottom }"))
+        let windowInsets = layout.components(separatedBy: "struct WindowInsets").last ?? ""
+        XCTAssertFalse(windowInsets.prefix(400).contains("DeviceLayout.safeArea"),
+                       "le repli de WindowInsets lit encore la fenêtre clé pendant body")
+    }
+
+    @MainActor
+    func test_windowInsets_withoutPublication_servesTheRememberedInsets_neverTheKeyWindow() {
+        let remembered = EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
+        let published = EdgeInsets(top: 47, leading: 0, bottom: 21, trailing: 0)
+        let served = WindowInsets(published: published, remembered: remembered)
+        let cover = WindowInsets(published: nil, remembered: remembered)
+        let firstPass = WindowInsets(published: nil, remembered: nil)
+
+        XCTAssertEqual(served.top, 47, "la publication prime")
+        XCTAssertEqual([cover.top, cover.bottom], [59, 34], "couverture : la mesure de la racine")
+        XCTAssertEqual([firstPass.top, firstPass.bottom], [0, 0], "aucune mesure : zéro le temps d'une passe")
     }
 }

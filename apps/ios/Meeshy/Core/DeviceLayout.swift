@@ -196,14 +196,16 @@ extension View {
 
 // MARK: - Les marges de la fenêtre qui porte la vue
 
-/// Les marges sûres PUBLIÉES par la racine de la fenêtre (`\.sceneSafeAreaInsets`, mesurées hors de `body`), chaque
-/// bord se repliant SEUL sur la fenêtre clé tant qu'aucune mesure n'existe. Un repli qui lirait les deux bords d'un
-/// coup demanderait à UIKit la marge basse pendant le rendu d'une vue qui ne voulait que la haute — l'aller-retour
-/// qui réentre la mise à jour en cours et fige le rendu (#10566, #8772, #9048 ; vécu sur la bande du haut).
+/// Les marges sûres PUBLIÉES par la racine de la fenêtre (`\.sceneSafeAreaInsets`, mesurées hors de `body`), sinon
+/// celles que cette racine a RETENUES (`RememberedSceneInsets`), sinon zéro le temps d'une passe. **Jamais la fenêtre
+/// clé** : un `fullScreenCover` (composeur, réels, bande du haut) ne reçoit pas la publication, et lire
+/// `UIWindow.safeAreaInsets` pendant son `body` rappelle le contrôleur hôte (`statusBarHidden`) — l'aller-retour qui
+/// réentre la mise à jour en cours et fige le rendu (#12470, #12422, #10566, #8772, #9048).
 struct WindowInsets {
     let published: EdgeInsets?
-    var top: CGFloat { published?.top ?? DeviceLayout.safeAreaTop }
-    var bottom: CGFloat { published?.bottom ?? DeviceLayout.safeAreaBottom }
+    var remembered: EdgeInsets? = RememberedSceneInsets.last
+    var top: CGFloat { published?.top ?? remembered?.top ?? 0 }
+    var bottom: CGFloat { published?.bottom ?? remembered?.bottom ?? 0 }
 }
 
 // MARK: - La largeur de la liste qui porte la bulle
