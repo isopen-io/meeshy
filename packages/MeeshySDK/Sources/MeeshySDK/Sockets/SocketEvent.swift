@@ -109,6 +109,7 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case feedUnsubscribe = "feed:unsubscribe"
     case friendRequestCancelled = "friend-request:cancelled"
     case friendRequestRejected = "friend-request:rejected"
+    case gameMissionsUpdated = "game:missions-updated"
     case gameUpdated = "game:updated"
     case heartbeatAck = "heartbeat:ack"
     case locationLiveStart = "location:live-start"

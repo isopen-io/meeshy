@@ -30,6 +30,7 @@ final class ProgressionViewModel: ObservableObject {
     // le motif de `ConversationListViewModel`. Garde : MainActorDeinitSourceGuardTests.
     nonisolated deinit {
         revalidationTask?.cancel()
+        liveRead?.cancel()
     }
 
     @Published private(set) var progress: EngagementProgress?
@@ -74,6 +75,13 @@ final class ProgressionViewModel: ObservableObject {
     private var connectivity: AnyCancellable?
     /// `game:updated` (#10900) — l'état du Jeu changé ailleurs.
     private var gameUpdates: AnyCancellable?
+    /// `game:missions-updated` et le retour au premier plan (#16425) : les défis et les succès se relisent en silence.
+    private var liveRefreshes: AnyCancellable?
+    /// La relecture en direct EN VOL ; une rafale reçue pendant ce temps n'en relance qu'une, à son atterrissage.
+    private var liveRead: Task<Void, Never>?
+    private var liveReadQueued = false
+    /// L'écran s'est déjà montré une fois : chaque retour relit le réseau, même sur un cache frais.
+    private var hasAppeared = false
 
     /// La charge servie, telle que le cache la garde : c'est sur elle que les
     /// mises à jour optimistes travaillent, `progress` et `game` en sont dérivés.
@@ -135,7 +143,8 @@ final class ProgressionViewModel: ObservableObject {
         gameService: GameServiceProviding = GameService.shared,
         networkMonitor: any NetworkMonitorProviding = NetworkMonitor.shared,
         currentUserId: String = AuthManager.shared.currentUser?.id ?? "",
-        notebook: GamePhotoNotebooking? = nil
+        notebook: GamePhotoNotebooking? = nil,
+        liveRefresh: AnyPublisher<Void, Never>? = nil
     ) {
         self.service = service
         self.gameService = gameService
@@ -151,6 +160,9 @@ final class ProgressionViewModel: ObservableObject {
             .compactMap { $0.object as? GameUpdatedEvent }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.receive(event) }
+        self.liveRefreshes = (liveRefresh ?? GameLiveRefresh.triggers())
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.refreshLive() }
         if let known = Self.lastKnown[cacheKey] { _ = adopt(known) }
     }
 
@@ -208,6 +220,38 @@ final class ProgressionViewModel: ObservableObject {
             return
         }
         revalidationTask = await loader.load(fetch: fetch, setLoadState: setLoadState, apply: apply)
+    }
+
+    /// L'écran du Jeu se montre (#16425). La PREMIÈRE fois, cache d'abord ; chaque RETOUR (d'une fiche, d'un autre
+    /// onglet) relit le réseau en silence — un défi avancé pendant l'absence ne doit pas attendre la fin du TTL du cache.
+    func appear() async {
+        guard hasAppeared else {
+            hasAppeared = true
+            await load()
+            return
+        }
+        await load(forceNetwork: true)
+    }
+
+    /// Un défi a avancé, ou l'app revient au premier plan (#16425) : la progression se relit en silence — aucun
+    /// squelette sur un écran peint. Une rafale (plusieurs actes d'affilée) pendant une lecture en vol n'en relance
+    /// qu'UNE, à son atterrissage : la dernière lecture dit l'état, les intermédiaires ne servent à rien.
+    func refreshLive() {
+        guard liveRead == nil else {
+            liveReadQueued = true
+            return
+        }
+        liveRead = Task { [weak self] in
+            await self?.drainLiveReads()
+        }
+    }
+
+    private func drainLiveReads() async {
+        repeat {
+            liveReadQueued = false
+            await load(forceNetwork: true)
+        } while liveReadQueued && !Task.isCancelled
+        liveRead = nil
     }
 
     /// Frappe une Meesh, puis RELIT depuis le réseau.

@@ -33,14 +33,70 @@ struct FeedPostActionsBar: View, Equatable {
     let onQuote: ((String) -> Void)?
     let onBookmark: ((String) -> Void)?
     let sendSubject: ShareSubject
-    var onImager: (() -> Void)? = nil
-    var onImagerQuick: (() -> Void)? = nil
+    let onImager: (() -> Void)?
+    let onImagerQuick: (() -> Void)?
+    private let offersImager: Bool
+    private let offersImagerQuick: Bool
 
     // Lecture directe sans @ObservedObject — même règle que la carte hôte.
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var showRepostOptions = false
     @State private var likeAnimating = false
     @State private var sent: SharedContentWrapper?
+
+    init(
+        postId: String,
+        accentColor: String,
+        isDark: Bool,
+        isLikedByMe: Bool,
+        likeCount: Int,
+        isHeartInFlight: Bool,
+        commentCount: Int,
+        isCommentsSheetPresented: Bool,
+        repostCount: Int,
+        isReposted: Bool,
+        isRepostInFlight: Bool,
+        bookmarkCount: Int,
+        isBookmarked: Bool,
+        isBookmarkInFlight: Bool,
+        shareCount: Int,
+        isShareInFlight: Bool,
+        onLike: ((String) -> Void)?,
+        onOpenCommentsTap: @escaping () -> Void,
+        onRepost: ((String) -> Void)?,
+        onQuote: ((String) -> Void)?,
+        onBookmark: ((String) -> Void)?,
+        sendSubject: ShareSubject,
+        onImager: (() -> Void)? = nil,
+        onImagerQuick: (() -> Void)? = nil
+    ) {
+        self.postId = postId
+        self.accentColor = accentColor
+        self.isDark = isDark
+        self.isLikedByMe = isLikedByMe
+        self.likeCount = likeCount
+        self.isHeartInFlight = isHeartInFlight
+        self.commentCount = commentCount
+        self.isCommentsSheetPresented = isCommentsSheetPresented
+        self.repostCount = repostCount
+        self.isReposted = isReposted
+        self.isRepostInFlight = isRepostInFlight
+        self.bookmarkCount = bookmarkCount
+        self.isBookmarked = isBookmarked
+        self.isBookmarkInFlight = isBookmarkInFlight
+        self.shareCount = shareCount
+        self.isShareInFlight = isShareInFlight
+        self.onLike = onLike
+        self.onOpenCommentsTap = onOpenCommentsTap
+        self.onRepost = onRepost
+        self.onQuote = onQuote
+        self.onBookmark = onBookmark
+        self.sendSubject = sendSubject
+        self.onImager = onImager
+        self.onImagerQuick = onImagerQuick
+        self.offersImager = onImager != nil
+        self.offersImagerQuick = onImagerQuick != nil
+    }
 
     nonisolated static func == (lhs: FeedPostActionsBar, rhs: FeedPostActionsBar) -> Bool {
         lhs.postId == rhs.postId
@@ -59,8 +115,8 @@ struct FeedPostActionsBar: View, Equatable {
             && lhs.isBookmarkInFlight == rhs.isBookmarkInFlight
             && lhs.shareCount == rhs.shareCount
             && lhs.isShareInFlight == rhs.isShareInFlight
-            && (lhs.onImager == nil) == (rhs.onImager == nil)
-            && (lhs.onImagerQuick == nil) == (rhs.onImagerQuick == nil)
+            && lhs.offersImager == rhs.offersImager
+            && lhs.offersImagerQuick == rhs.offersImagerQuick
     }
 
     var body: some View {

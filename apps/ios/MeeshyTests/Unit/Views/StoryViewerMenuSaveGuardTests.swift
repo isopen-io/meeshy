@@ -159,8 +159,6 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
                        "Menu ouvert : la story repart à son début, elle ne passe pas à la suivante.")
     }
 
-    /// « Imager » ouvre l'atelier de carte, jamais un enregistrement direct
-    /// (#14325, #16332) : un seul atelier, `MessageCardExportPresenter`.
     func test_everyEntry_keepsItsEffect() throws {
         let effects: [(String, String)] = [
             ("case .fullscreen:", "isFullscreenStorySession.toggle()"),
@@ -168,7 +166,7 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
             ("case .share:", "shareOutsideButton(story: story, group: group)"),
             ("case .compose:", "demanderComposer(cible)"),
             ("case .exportVideo:", "showExportShareSheet = true"),
-            ("case .imager:", "MessageCardExportPresenter.present(ImagerCardRequest.story(story"),
+            ("case .imager:", "MessageCardExportPresenter.present(ImagerCardRequest.story("),
             ("case .report:", "showReportSheet = true"),
             ("case .remove:", "ContentRemovalPresenter.present(.story) { deleteCurrentStory($0) }"),
             ("case .delete:", "deleteCurrentStory(nil)"),

@@ -46,3 +46,16 @@ export const gameUpdatedEventSchema = z.object({
   reason: z.enum(GAME_UPDATE_REASONS),
   game: gameBlockSchema.nullable(),
 });
+
+/**
+ * La charge de `game:missions-updated` (#16425) : une mission du joueur vient d'AVANCER ou de se TERMINER, ou le
+ * coffre du jour vient de s'ouvrir. Une invalidation pure, émise dans la room `user:<id>` du seul compte concerné :
+ * le client relit ses défis de la journée `dayKey` (la journée de jeu du compte, `AAAA-MM-JJ`).
+ */
+export type GameMissionsUpdatedEventData = {
+  readonly dayKey: string;
+};
+
+export const gameMissionsUpdatedEventSchema = z.object({
+  dayKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});

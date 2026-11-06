@@ -12,8 +12,9 @@ import MeeshyUI
 // L'EN-TÊTE vit chez lui depuis #4084 : `StoryViewerView+Header.swift`. Ce
 // fichier portait les deux vues pour 1 368 lignes, hors du budget 800–1100 ;
 // une garde qui cherchait l'en-tête ici doit désormais nommer l'autre fichier.
-// Le PLAN du rail (`StoryActionRailPlan`, `StoryExportRailButtons`) — des
-// règles pures, sans vue — vit dans `StoryActionRailPlan.swift`.
+// Le PLAN du rail (`StoryActionRailPlan`) vit dans `StoryActionRailPlan.swift`,
+// et `StoryExportRailButtons` dans `StoryExportRailButtons.swift` — des règles
+// pures, sans vue.
 
 // MARK: - Republier une story d'un tap (#9953)
 

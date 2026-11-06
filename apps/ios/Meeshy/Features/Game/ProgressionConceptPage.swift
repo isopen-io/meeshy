@@ -103,7 +103,7 @@ struct ProgressionConceptPage: View {
         // « Comprendre les badges » (#9640) : l'étagère et la feuille d'un badge mènent à la section badges du carnet.
         .environment(\.gameOpenBadgesGuide, { router.openGame(at: GameNavigationMap.badgesGuide) })
         .task {
-            await viewModel.load()
+            await viewModel.appear()
             #if DEBUG
             if viewModel.progress != nil { VitrineRendu.shared.signaler(.fiche(concept)) }
             #endif
