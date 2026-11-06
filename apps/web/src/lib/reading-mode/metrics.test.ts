@@ -47,8 +47,6 @@ describe('sceneStyleVars', () => {
       '--focus-text-indent': '41px',
       '--focus-identity-h': '34px',
       '--focus-identity-gap': '4px',
-      '--unfold-dim': '0.62',
-      '--unfold-enter-ms': '250ms',
     });
   });
 

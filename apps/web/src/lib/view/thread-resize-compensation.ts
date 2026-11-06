@@ -1,5 +1,7 @@
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual';
 
+import type { UnfoldStore } from './unfold-store';
+
 /**
  * **UNE RANGÉE QUI COMMENCE AU-DESSUS DE L'ÉCRAN ET CHANGE DE TAILLE NE
  * DÉPLACE PAS LES RANGÉES QU'ON LIT** (#9216, #9219) — la loi du critère 4 de
@@ -34,4 +36,14 @@ export function compensatesResize(params: { readonly start: number; readonly vie
 /** Le prédicat posé sur `virtualizer.shouldAdjustScrollPositionOnItemSizeChange`. */
 export function keepReadingInPlace(item: VirtualItem, _delta: number, instance: Virtualizer<HTMLElement, Element>): boolean {
   return compensatesResize({ start: item.start, viewportTop: (instance.scrollOffset ?? 0) + instance.scrollAdjustments });
+}
+
+/**
+ * La même loi, sauf pour la mesure qui suit le DÉPLIAGE d'un message long
+ * (#16464) : la suite se déroule sous l'extrait, dont le haut ne bouge pas.
+ */
+export function keepReadingInPlaceExceptUnfolding(
+  unfolds: Pick<UnfoldStore, 'releasesTopHold'>,
+): (item: VirtualItem, delta: number, instance: Virtualizer<HTMLElement, Element>) => boolean {
+  return (item, delta, instance) => !unfolds.releasesTopHold(String(item.key)) && keepReadingInPlace(item, delta, instance);
 }

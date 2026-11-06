@@ -34,6 +34,8 @@ internal class LongMessageExpansionHost(
     private val scope: CoroutineScope,
     private val orientation: ChatListOrientation = ChatListOrientation.BottomUp,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Annoncé une fois par message déplié : l'aperçu de l'appui long, composé hors de la liste, le rend déplié. */
+    private val onExpanded: (String) -> Unit = {},
 ) {
     private var state by mutableStateOf(LongMessageExpansionState())
     private var anchorJob: Job? = null
@@ -44,6 +46,7 @@ internal class LongMessageExpansionHost(
         val expansion = state.expanding(messageId) ?: return
         val edgeBefore = row?.takeIf { it.isAttached }?.let { edge(it, expansion.anchor) }
         state = expansion.state
+        onExpanded(messageId)
         if (row == null || edgeBefore == null) return
         anchorJob?.cancel()
         anchorJob = scope.launch { holdEdge(row, expansion.anchor, edgeBefore, clock()) }
@@ -72,9 +75,13 @@ internal class LongMessageExpansionHost(
 }
 
 @Composable
-internal fun rememberLongMessageExpansionHost(listState: LazyListState): LongMessageExpansionHost {
+internal fun rememberLongMessageExpansionHost(
+    listState: LazyListState,
+    onExpanded: (String) -> Unit = {},
+): LongMessageExpansionHost {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    return remember(listState) { LongMessageExpansionHost(listState, scope) }
+    val latest by androidx.compose.runtime.rememberUpdatedState(onExpanded)
+    return remember(listState) { LongMessageExpansionHost(listState, scope, onExpanded = { latest(it) }) }
 }
 
 /** La cellule d'un message du fil : fournit à la rangée plate son [FlatRowExpansion]. */
