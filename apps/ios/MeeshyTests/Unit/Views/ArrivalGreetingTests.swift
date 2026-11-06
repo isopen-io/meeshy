@@ -87,4 +87,36 @@ final class ArrivalGreetingTests: XCTestCase {
     func test_draft_noticeGone_returnsNil() {
         XCTAssertNil(ArrivalGreeting.draft(greeting: "absent", in: [], ownHandle: nil, draft: "x"))
     }
+    // MARK: - L'invite que l'avis porte, pour tous les modes de lecture
+
+    private func content(of message: Message) -> BubbleContent {
+        BubbleContent(message: message, translations: [], preferredTranslation: nil, currentUserId: "reader")
+    }
+
+    func test_content_arrivalsLine_carriesItsInvite_soFocalAndScriptRowsCanRenderIt() {
+        var line = arrivalsLine([.init(participantId: "p1", displayName: "Testuser", username: "testuser")])
+        line.messageSource = .system
+        XCTAssertNotNil(content(of: line).arrivalsInvite, "la ligne d'arrivées porte son invite dans le modèle partagé par Bulles, Focal et Script")
+    }
+
+    func test_content_joinOfAnotherAccount_carriesItsInvite() {
+        var join = Message(id: "notice", conversationId: "c1", senderId: "p1", content: "",
+                           joinNotice: JoinNoticeMetadata(participantId: "p1", displayName: "Aïcha",
+                                                          isAnonymous: false, viaShareLink: false, username: "aicha"))
+        join.messageSource = .system
+        XCTAssertNotNil(content(of: join).arrivalsInvite)
+    }
+
+    func test_content_anonymousJoin_hasNoInvite() {
+        var join = Message(id: "notice", conversationId: "c1", senderId: "p1", content: "",
+                           joinNotice: JoinNoticeMetadata(participantId: "p1", displayName: "Visiteur",
+                                                          isAnonymous: true, viaShareLink: true, username: nil))
+        join.messageSource = .system
+        XCTAssertNil(content(of: join).arrivalsInvite)
+    }
+
+    func test_content_ordinaryMessage_hasNoInvite() {
+        let message = Message(id: "m", conversationId: "c1", senderId: "p1", content: "Bonjour — à demain")
+        XCTAssertNil(content(of: message).arrivalsInvite)
+    }
 }

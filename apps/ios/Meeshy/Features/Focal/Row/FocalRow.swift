@@ -143,7 +143,8 @@ struct FocalRow: View {
             isDark: input.isDark,
             onCallBack: { _ in actions.onCallBack?(input.localId) },
             onLongPress: { actions.onLongPressCallDetail?(input.localId) },
-            onOpenParticipantProfile: actions.onOpenParticipantProfile
+            onOpenParticipantProfile: actions.onOpenParticipantProfile,
+            onGreetArrivals: actions.onGreetArrivals
         )
     }
 

@@ -54,6 +54,13 @@ struct FocalSystemNoticeRow: View, Equatable {
     /// que les stickers de date et `BubbleJoinNoticeView` : un message système
     /// est un jalon du fil, pas une parole.
     var timeString: String? = nil
+    /// « dis-leur salut » (#16338) — l'invite d'une ligne d'arrivées, touchable.
+    var greeting: ArrivalGreetingInvite? = nil
+
+    static func == (lhs: FocalSystemNoticeRow, rhs: FocalSystemNoticeRow) -> Bool {
+        lhs.text == rhs.text && lhs.isDark == rhs.isDark && lhs.timeString == rhs.timeString
+            && lhs.greeting?.text == rhs.greeting?.text && lhs.greeting?.accentHex == rhs.greeting?.accentHex
+    }
 
     var body: some View {
         VStack(spacing: MeeshySpacing.xxs) {
@@ -67,10 +74,12 @@ struct FocalSystemNoticeRow: View, Equatable {
                 .font(MeeshyFont.relative(12.5, weight: .medium))
                 .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
                 .multilineTextAlignment(.center)
+            greeting
         }
         .frame(maxWidth: .infinity, alignment: .center)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: greeting == nil ? .combine : .contain)
         .accessibilityLabel(text)
+        .modifier(ArrivalGreetingAccessibility(greeting: greeting))
     }
 }
 
@@ -115,8 +124,13 @@ enum FocalSystemRows {
         /// son `Participant.id`. La fiche de PARTICIPATION vaut pour les quatre
         /// portes : un arrivant qui a un compte y a son identité comme les
         /// autres, simplement sans conditions d'entrée.
-        onOpenParticipantProfile: ((String) -> Void)? = nil
+        onOpenParticipantProfile: ((String) -> Void)? = nil,
+        /// Toucher l'invite « dis-lui salut » d'un avis d'arrivée (#16338).
+        onGreetArrivals: (() -> Void)? = nil
     ) -> some View {
+        let greeting = content.arrivalsInvite.flatMap { invite in
+            onGreetArrivals.map { ArrivalGreetingInvite(text: invite, accentHex: accentHex, action: $0) }
+        }
         switch content.kind {
         case .deleted:
             FocalDeletedRow(isDark: isDark)
@@ -129,9 +143,11 @@ enum FocalSystemRows {
                 // gateway (français), sans marquer que l'arrivant n'a pas de
                 // compte. La vue Bulles porte la même branche — les deux modes
                 // de lecture disent la même chose.
-                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, onOpenProfile: onOpenParticipantProfile, timeString: content.meta.timeString)
+                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, onOpenProfile: onOpenParticipantProfile,
+                                     timeString: content.meta.timeString, greeting: greeting)
             } else if let text = content.text?.raw, !text.isEmpty {
-                FocalSystemNoticeRow(text: text, isDark: isDark, timeString: content.meta.timeString)
+                let sentence = greeting == nil ? text : ArrivalGreeting.split(text).sentence
+                FocalSystemNoticeRow(text: sentence, isDark: isDark, timeString: content.meta.timeString, greeting: greeting)
             } else {
                 EmptyView()
             }

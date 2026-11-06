@@ -326,6 +326,7 @@ extension MessageListViewController {
             callbacks.callBack?(summary)
         }
         focalActions.onLongPressCallDetail = { _ in callbacks.callDetail?(messageId) }
+        focalActions.onGreetArrivals = callbacks.greetArrivals.map { greet in { greet(messageId) } }
         return focalActions
     }
 
