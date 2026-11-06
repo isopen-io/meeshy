@@ -277,7 +277,7 @@ public actor TusUploadManager {
     public func uploadFile(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false, fileName: String? = nil) async throws -> TusUploadResult {
         let fileId = UUID().uuidString
         let declaredName = fileName
-        let fileName = fileName ?? fileURL.lastPathComponent
+        let fileName = Self.announcedName(declared: fileName, fileURL: fileURL)
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         let fileSize = (attrs[.size] as? Int64) ?? 0
 
@@ -444,7 +444,7 @@ public actor TusUploadManager {
     /// `uploadFile`'s queue/background-task ceremony.
     func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false, progressFileId: String? = nil, fileName declaredName: String? = nil) async throws -> TusUploadResult {
         var credential = credential
-        let fileName = declaredName ?? fileURL.lastPathComponent
+        let fileName = Self.announcedName(declared: declaredName, fileURL: fileURL)
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         let fileSize = (attrs[.size] as? Int64) ?? 0
         // La ligne de progression de CET envoi, remise par la file. Chercher par nom de fichier tombait sur
@@ -731,6 +731,13 @@ public actor TusUploadManager {
             throw URLError(.badServerResponse)
         }
         return location
+    }
+
+    /// Le nom que le serveur garde en `originalName` : jamais celui d'une copie
+    /// temporaire, quelle que soit la porte d'envoi (#11166).
+    static func announcedName(declared: String?, fileURL: URL) -> String {
+        let name = declared ?? fileURL.lastPathComponent
+        return ImportedCopyName.chosenName(in: name) ?? name
     }
 
     /// La valeur d'`Upload-Metadata` à la CRÉATION d'une session : des paires

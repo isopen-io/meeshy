@@ -249,7 +249,7 @@ enum CommentComposerStaging {
             let didAccess = url.startAccessingSecurityScopedResource()
             defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
             let dest = FileManager.default.temporaryDirectory
-                .appendingPathComponent("comment_\(UUID().uuidString)_\(url.lastPathComponent)")
+                .appendingPathComponent(ImportedCopyName.copyName(of: url.lastPathComponent, through: .commentFile))
             try? FileManager.default.copyItem(at: url, to: dest)
             let size = (try? FileManager.default.attributesOfItem(atPath: dest.path))?[.size] as? Int
             result.append(ComposerAttachment.file(url: dest, name: url.lastPathComponent, size: size))

@@ -40,6 +40,15 @@ final class OfflineQueueOriginalNameTests: XCTestCase {
         return try decoder.decode(OfflineQueueItem.self, from: try XCTUnwrap(record).payload)
     }
 
+    private func postPayload(cmid: String) async throws -> CreatePostPayload {
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let record = try await pool.read { db in
+            try OutboxRecord.filter(Column("id") == "ofqm_\(cmid)").fetchOne(db)
+        }
+        return try JSONDecoder().decode(CreatePostPayload.self, from: try XCTUnwrap(record).payload)
+    }
+
     func test_enqueueMedia_withOriginalNames_persistsThemAlignedWithTheUnchangedPaths() async throws {
         let cid = "cid_\(UUID().uuidString.lowercased())"
         let result = try await queue.enqueueMedia(
@@ -63,6 +72,54 @@ final class OfflineQueueOriginalNameTests: XCTestCase {
 
         let stored = try await item(for: cid)
         XCTAssertNil(stored.localMediaOriginalNames)
+    }
+
+    func test_enqueueAudios_withOriginalNames_persistsThemForTheReplay() async throws {
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+        let result = try await queue.enqueueAudios(
+            sourceAudioURLs: [try tempFile(ext: "m4a")], conversationId: "conv-1", content: nil,
+            clientMessageId: cid, originalNames: ["On fait comme ça.m4a"])
+
+        let stored = try await item(for: cid)
+        XCTAssertEqual(result.localAudioPaths.count, 1)
+        XCTAssertEqual(stored.originalMediaName(at: 0), "On fait comme ça.m4a")
+    }
+
+    func test_enqueuePostMedia_importedCopy_keepsTheChosenNameBesideItsPendingPath() async throws {
+        let copy = FileManager.default.temporaryDirectory
+            .appendingPathComponent(ImportedCopyName.copyName(of: "Devis final.pdf", through: .composerDocument))
+        try Data(repeating: 0xAB, count: 16).write(to: copy)
+        let camera = try tempFile(ext: "mp4")
+        let cmid = "cmid_\(UUID().uuidString.lowercased())"
+
+        let result = try await queue.enqueuePostMedia(
+            sourceMediaURLs: [copy, camera], sourceMediaMimeTypes: ["application/pdf", "video/mp4"],
+            clientMutationId: cmid, content: nil, visibility: "PUBLIC",
+            mobileTranscription: nil, storyEffects: nil, mediaCaptions: nil, mediaAlts: nil,
+            mediaObjectIds: nil, allowSoundExtraction: nil)
+
+        let payload = try await postPayload(cmid: cmid)
+        let sent = result.localMediaPaths.map { URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(forStored: $0)) }
+        XCTAssertEqual(payload.originalMediaName(forSentFile: sent[0]), "Devis final.pdf")
+        XCTAssertNil(payload.originalMediaName(forSentFile: sent[1]), "un fichier sans nom choisi garde le sien")
+    }
+
+    func test_postMediaProgress_keepsTheChosenNames() {
+        let payload = CreatePostPayload(
+            clientMutationId: "m", content: "", attachmentIds: [], visibility: "PUBLIC",
+            localMediaPaths: ["pending-media/m/0.pdf"], localMediaOriginalNames: ["Devis.pdf"])
+
+        let relu = payload.withUploadedMedia([UploadedPostMedia(sourceIndex: 0, id: "id", url: "u")])
+
+        XCTAssertEqual(relu.localMediaOriginalNames, ["Devis.pdf"])
+    }
+
+    func test_postPayload_withoutNames_namesNoFile() {
+        let payload = CreatePostPayload(
+            clientMutationId: "m", content: "", attachmentIds: [], visibility: "PUBLIC",
+            localMediaPaths: ["pending-media/m/0.pdf"])
+
+        XCTAssertNil(payload.originalMediaName(forSentFile: URL(fileURLWithPath: "/x/pending-media/m/0.pdf")))
     }
 
     func test_item_writtenBeforeTheNames_decodesWithoutThem() throws {
