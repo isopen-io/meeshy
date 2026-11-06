@@ -540,6 +540,8 @@ const PENDING_CLIENT_ENTRIES = {
   'publishers.bySlug': { issue: 16274, reason: 'GET /publishers/:slug — la fiche publique de l’éditeur, lue par la boutique web' },
   'publishers.me': { issue: 16274, reason: 'GET|PUT /publishers/me — l’espace de l’éditeur connecté' },
   'publishers.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web' },
+  // La page éditeur (#16433) : iOS la lit d'abord ; la boutique web la lira avec sa page éditeur.
+  'publishers.bySlugPage': { issue: 16433, reason: 'GET /publishers/:slug/page — l’identité de l’éditeur et le profil qui l’édite, page éditeur web' },
 };
 
 const BASELINE_DEAD_ENTRIES = 276;

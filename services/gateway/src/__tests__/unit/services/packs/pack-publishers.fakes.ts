@@ -12,6 +12,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 export type PublisherUserSeed = {
   readonly username: string;
+  readonly displayName?: string | null;
+  readonly avatar?: string | null;
   readonly isActive?: boolean;
   readonly deactivatedAt?: Date | null;
   readonly deletedAt?: Date | null;
@@ -122,5 +124,5 @@ export function publisherModels(seedUsers: Readonly<Record<string, PublisherUser
 export function memoryPublisherDb(seedUsers: Readonly<Record<string, PublisherUserSeed>>) {
   const models = publisherModels(seedUsers);
   const prisma = { partnerProfile: models.partnerProfile, user: models.user, adminAuditLog: models.adminAuditLog } as unknown as PrismaClient;
-  return { prisma, profiles: models.profiles, audit: models.audit, auditState: models.auditState, partnerProfile: models.partnerProfile };
+  return { prisma, profiles: models.profiles, users: models.users, audit: models.audit, auditState: models.auditState, partnerProfile: models.partnerProfile };
 }

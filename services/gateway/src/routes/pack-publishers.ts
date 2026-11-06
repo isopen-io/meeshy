@@ -3,7 +3,8 @@
  *
  *   - `GET /publishers/me`     l'éditeur du compte connecté (`null` s'il n'en a pas encore) ;
  *   - `GET /publishers/admin`  tous les éditeurs AVEC leur compte propriétaire (BIGBOSS/ADMIN seulement) ;
- *   - `GET /publishers/:slug`  un éditeur tel que la boutique le montre : nom de boutique, jamais le compte.
+ *   - `GET /publishers/:slug`  un éditeur tel que la boutique le montre : nom de boutique, jamais le compte ;
+ *   - `GET /publishers/:slug/page`  la page éditeur (#16433) : l'identité de boutique ET le profil Meeshy qui l'édite.
  *
  * Le nom, le site et le logo s'écrivent toujours par `PUT /lens/partners/me`
  * (#11327), chemin gardé pour les clients publiés. Au montage, l'éditeur
@@ -38,6 +39,23 @@ const adminViewJsonSchema = {
     createdAt: nullableString,
     nameDisputedAt: nullableString,
     owner: { type: 'object', additionalProperties: false, properties: { id: { type: 'string' }, username: nullableString } },
+  },
+} as const;
+
+const publisherPageJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['publisher', 'owner', 'website'],
+  properties: {
+    publisher: packPublisherJsonSchema,
+    owner: {
+      type: 'object',
+      nullable: true,
+      additionalProperties: false,
+      required: ['id', 'username', 'displayName', 'avatar'],
+      properties: { id: { type: 'string' }, username: { type: 'string' }, displayName: nullableString, avatar: nullableString },
+    },
+    website: nullableString,
   },
 } as const;
 
@@ -100,6 +118,25 @@ export async function packPublisherRoutes(fastify: FastifyInstance, options: Pac
       const publisher = await publishers.bySlug((request.params as { slug: string }).slug);
       if (publisher === null) return sendNotFound(reply, 'No publisher under this address', { code: PACK_PUBLISHER_NOT_FOUND });
       return sendSuccess(reply, publisher);
+    }),
+  );
+
+  fastify.get<{ Params: { slug: string } }>(
+    '/:slug/page',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: 'La page d’un éditeur (#16433) : son identité de boutique, son site et le profil Meeshy qui l’édite — `owner` nul si ce compte n’est plus actif.',
+        tags,
+        summary: 'Get a pack publisher page',
+        params: slugParamsJsonSchema,
+        response: { 200: packEnvelope(publisherPageJsonSchema), ...PACK_ERRORS },
+      },
+    },
+    guard('[GET /publishers/:slug/page]', async (request, reply) => {
+      const page = await publishers.page((request.params as { slug: string }).slug);
+      if (page === null) return sendNotFound(reply, 'No publisher under this address', { code: PACK_PUBLISHER_NOT_FOUND });
+      return sendSuccess(reply, page);
     }),
   );
 }

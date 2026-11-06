@@ -81,6 +81,21 @@ export type PublicationClaim = { readonly author: string; readonly claimed: stri
 /** Un pack tel que la boutique le relit : son proposant et l'auteur qu'il déclarait. */
 export type PublishedBy = { readonly submitterId: string; readonly author: string };
 
+/** Le compte Meeshy qui édite, tel que la page éditeur le montre (#16433) : de quoi ouvrir son profil, rien d'autre. */
+export type PublisherOwnerCard = {
+  readonly id: string;
+  readonly username: string;
+  readonly displayName: string | null;
+  readonly avatar: string | null;
+};
+
+/** La page d'un éditeur (#16433) : son identité de boutique, son site, et le profil qui l'édite — `null` s'il n'est plus actif. */
+export type PublisherPage = {
+  readonly publisher: PackPublisherRef;
+  readonly owner: PublisherOwnerCard | null;
+  readonly website: string | null;
+};
+
 export type PublisherAdminView = {
   readonly id: string;
   readonly slug: string | null;
@@ -330,6 +345,43 @@ export class PackPublishers {
     if (!isThirdPartySlug(slug)) return null;
     const rows: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { slug }, select: ROW_SELECT });
     return this.servable([...rows].sort(byAge)[0]);
+  }
+
+  /**
+   * La page d'un éditeur (#16433, directive porteur du 2026-11-06) : la boutique y nomme le
+   * compte qui l'édite pour qu'on ouvre son profil. Un compte désactivé ou supprimé n'est
+   * jamais nommé : la page reste, sans lien. L'adresse neutre ne désigne personne.
+   */
+  async page(slug: string): Promise<PublisherPage | null> {
+    const row = await this.pageRow(slug);
+    if (row === null) return null;
+    const publisher = this.servable(row.profile) ?? (slug === MEESHY_PUBLISHER_SLUG ? MEESHY_PUBLISHER : null);
+    if (publisher === null) return null;
+    return { publisher, owner: await this.ownerCard(row.ownerId), website: row.profile?.website ?? null };
+  }
+
+  private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly profile: (PublisherRow & { readonly website?: string | null }) | null } | null> {
+    if (slug === MEESHY_PUBLISHER_SLUG) {
+      const profile = this.official === null ? null : (await this.rowsOf([this.official]))[0] ?? null;
+      return { ownerId: this.official, profile: profile === null ? null : { ...profile, website: await this.websiteOf(profile.id) } };
+    }
+    if (!isThirdPartySlug(slug)) return null;
+    const rows: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { slug }, select: ROW_SELECT });
+    const profile = [...rows].sort(byAge)[0];
+    if (profile === undefined) return null;
+    return { ownerId: profile.userId, profile: { ...profile, website: await this.websiteOf(profile.id) } };
+  }
+
+  private async websiteOf(id: string): Promise<string | null> {
+    const found = await this.prisma.partnerProfile.findUnique({ where: { id }, select: { website: true } });
+    return typeof found?.website === 'string' ? found.website : null;
+  }
+
+  private async ownerCard(userId: string | null): Promise<PublisherOwnerCard | null> {
+    if (userId === null) return null;
+    const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { ...ACCOUNT_SELECT, id: true, username: true, displayName: true, avatar: true } });
+    if (account === null || !isLive(account) || typeof account.username !== 'string') return null;
+    return { id: account.id, username: account.username, displayName: account.displayName ?? null, avatar: account.avatar ?? null };
   }
 
   /** L'éditeur du compte connecté, s'il en a un — une lecture. */

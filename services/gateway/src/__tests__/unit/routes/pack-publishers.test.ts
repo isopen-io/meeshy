@@ -81,6 +81,37 @@ describe('/publishers — la boutique, le propriétaire, l’administration (#16
     expect(res.json().data).toEqual([expect.objectContaining({ slug: 'studio-lumiere', displayName: 'Studio Lumière', nameDisputedAt: null, owner: { id: AWA, username: 'awa_secret' } })]);
   });
 
+  it('GET /:slug/page sert la page éditeur : son identité ET le profil Meeshy qui l’édite (#16433)', async () => {
+    const { app, as, db } = await build();
+    db.users.get(AWA)!.displayName = 'Awa D.';
+    db.users.get(AWA)!.avatar = '/u/awa.webp';
+    as(MODO);
+    const res = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual({
+      publisher: { slug: 'studio-lumiere', name: 'Studio Lumière', verified: false, official: false },
+      owner: { id: AWA, username: 'awa_secret', displayName: 'Awa D.', avatar: '/u/awa.webp' },
+      website: null,
+    });
+  });
+
+  it('GET /meeshy/page nomme le compte officiel ; un éditeur inconnu rend 404', async () => {
+    const { app } = await build();
+    const res = await app.inject({ method: 'GET', url: '/meeshy/page' });
+    expect(res.json().data).toMatchObject({ publisher: { slug: 'meeshy', official: true }, owner: { id: OFFICIAL, username: 'meeshy_off' } });
+    expect((await app.inject({ method: 'GET', url: '/inconnu/page' })).statusCode).toBe(404);
+  });
+
+  it('GET /:slug/page tait un propriétaire désactivé ou supprimé : la page reste, sans lien de profil', async () => {
+    const { app, db } = await build();
+    db.users.get(AWA)!.deactivatedAt = new Date('2026-10-01T00:00:00Z');
+    const res = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.owner).toBeNull();
+    expect(res.body).not.toContain(AWA);
+    expect(res.body).not.toContain('awa_secret');
+  });
+
   it('refuse un invité de lien : 403 REGISTERED_USER_REQUIRED', async () => {
     const { app, as } = await build();
     as('p1', 'USER', true);

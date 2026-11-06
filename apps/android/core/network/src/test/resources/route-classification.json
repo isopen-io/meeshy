@@ -305,6 +305,7 @@
     "GET /api/v1/packs/lens/:slug/document",
     "GET /api/v1/packs/wallpaper/:slug/contract",
     "GET /api/v1/publishers/:slug",
+    "GET /api/v1/publishers/:slug/page",
     "GET /api/v1/publishers/me",
     "GET /api/v1/posts/:postId/media/:mediaId/export",
     "GET /api/v1/posts/:postId/objects/:objectId/responses",
