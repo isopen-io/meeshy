@@ -13,6 +13,9 @@ final class ConversationListCatchUp {
     private(set) var isPending = true
     private var isRunning = false
     private var edgeDuringRun = false
+    private var edgeTask: Task<Void, Never>?
+
+    nonisolated deinit {}
 
     init(sync: @escaping @MainActor () async -> Bool) {
         self.sync = sync
@@ -40,7 +43,7 @@ final class ConversationListCatchUp {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self, self.isPending || self.isRunning else { return }
-                Task { @MainActor [weak self] in await self?.run() }
+                self.edgeTask = Task { @MainActor [weak self] in await self?.run() }
             }
     }
 }
