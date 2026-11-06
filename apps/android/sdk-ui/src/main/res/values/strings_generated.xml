@@ -361,7 +361,6 @@
     <string name="media_video_unavailable_retry">Video unavailable. Retry.</string>
     <string name="media_voice_message">Voice message</string>
     <string name="media_voice_recording">Voice message (%1$s)</string>
-    <string name="message_long_collapse">Show less</string>
     <string name="message_long_read_more">Read more</string>
     <string name="mini_player_a11y_now_playing">Audio from %1$s, %2$s</string>
     <string name="mini_player_a11y_open_hint">Open the conversation</string>

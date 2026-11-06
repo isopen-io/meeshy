@@ -361,7 +361,6 @@
     <string name="media_video_unavailable_retry">Video nicht verfügbar. Erneut versuchen.</string>
     <string name="media_voice_message">Sprachnachricht</string>
     <string name="media_voice_recording">Sprachnachricht (%1$s)</string>
-    <string name="message_long_collapse">Weniger anzeigen</string>
     <string name="message_long_read_more">Weiterlesen</string>
     <string name="mini_player_a11y_now_playing">Audio von %1$s, %2$s</string>
     <string name="mini_player_a11y_open_hint">Unterhaltung öffnen</string>
