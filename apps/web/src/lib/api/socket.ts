@@ -47,6 +47,7 @@ import {
   applyServedBookmark,
   applyServedLike,
   applyServedRepost,
+  applyStoryChanged,
 } from './feed-realtime';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
@@ -91,7 +92,6 @@ import {
 import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp } from './realtime-thread-catch-up';
 import { viewerRoleUpdatedListener } from './realtime-viewer-role';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
-import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
 
 /**
@@ -672,17 +672,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onStoryUnreacted = onStoryReactionChanged('remove');
 
   /**
-   * `story:*` (#5652, bloc E ; #6080) — LE RAIL SUIT LE FIL EN DIRECT :
-   * `story:created`/`story:updated`/`story:deleted`/`story:viewed` invalident
-   * `STORY_TRAY_QUERY_KEY`. Miroir du motif `onAuthenticated` ci-dessous : UNE
-   * invalidation par famille, jamais une reconstruction locale du corpus
-   * depuis la charge de l'événement — `groupStoriesByAuthor`
-   * (`lib/view/story-tray.ts`) reste le SEUL site qui sait regrouper des
-   * stories par auteur (D-14), un événement isolé ne porte qu'UNE story,
-   * jamais le groupe entier.
+   * `story:*`/`status:updated` (#5652, #6080, #16541) — LE RAIL SUIT LE FIL EN DIRECT : une
+   * invalidation du plateau par famille, jamais une reconstruction locale du corpus
+   * (`groupStoriesByAuthor` reste le SEUL site qui regroupe, D-14) ; seul le
+   * réglage des commentaires se pose (`feed-realtime.ts#applyStoryChanged`).
    */
-  const onStoryChanged = (): void => {
-    void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
+  const onStoryChanged = (payload?: unknown): void => {
+    applyStoryChanged(deps.queryClient, payload);
   };
   /* `story:viewed` (#7116, revue) — le plateau comme ci-dessus, ET le compte
      des vues de l'auteur + sa feuille ouverte (`publication-views-realtime.ts`,
@@ -1065,6 +1061,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
+  socket.on<unknown>(SERVER_EVENTS.STATUS_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryViewed);
   socket.on<unknown>(SERVER_EVENTS.STORY_REACTED, onStoryReacted);
@@ -1166,6 +1163,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);
       socket.off<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
+      socket.off<unknown>(SERVER_EVENTS.STATUS_UPDATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryViewed);
       socket.off<unknown>(SERVER_EVENTS.STORY_REACTED, onStoryReacted);

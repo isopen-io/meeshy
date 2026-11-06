@@ -38,6 +38,7 @@ import { StoryBottomBar, StoryTopBar } from './story-chrome';
 import { CUBE_FACE_STYLE, StoryCubeFace, StoryCubeShade, storyBackgroundCss, storyCubeNeighbours } from './story-cube-face';
 import { storyViewerIdentity } from './story-identity';
 import { ProgressBars, StoryMediaLayer } from './story-parts';
+import { useStoryCommentSettings } from './story-comment-settings';
 import { useStoryRemoval } from './story-removal';
 import { useStoryScrub } from './use-story-scrub';
 import {
@@ -598,6 +599,7 @@ export default function StoryScreen() {
      mi-phrase). Seule la pause demandée la fige. */
   const [optionsOpen, setOptionsOpen] = useState(false);
   const removal = useStoryRemoval({ storyId: currentStory?.id, isMine: group?.isMine === true, announce, onRemoved: dismissByUser });
+  const commentSettings = useStoryCommentSettings({ storyId: currentStory?.id, isMine: group?.isMine === true, announce });
   const engaged = layerOpen || optionsOpen || removal.open;
   const hold = resolveStoryPlaybackHold({ paused, engaged });
   holdRef.current = hold;
@@ -853,6 +855,8 @@ export default function StoryScreen() {
             onSave={ownerRail.handlers.save}
             onShare={ownerRail.handlers.share}
             onImager={ownerRail.imager}
+            onToggleComments={commentSettings.onToggle}
+            commentsDisabled={commentSettings.disabled}
             onRemove={removal.onRemove}
             onOptionsOpenChange={setOptionsOpen}
             /* LE CRÉDIT DU SON (#9678, vue `2f`) — lu sur la scène QUI JOUE : celle

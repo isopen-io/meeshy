@@ -54,6 +54,8 @@ export function StoryTopBar({
   onSave,
   onShare,
   onImager,
+  onToggleComments,
+  commentsDisabled = false,
   onRemove,
   onOptionsOpenChange,
   prism,
@@ -74,6 +76,10 @@ export function StoryTopBar({
   readonly onShare?: (() => void) | undefined;
   /** « Imager » — la même composition, longueur au choix au-delà d'une minute (#13881). */
   readonly onImager?: (() => void) | undefined;
+  /** « Désactiver / Réactiver les commentaires » (#16541) — l'auteur ou la modération ; absent ⇒ aucune entrée. */
+  readonly onToggleComments?: (() => void) | undefined;
+  /** Le réglage propre de la story — décide du libellé de l'entrée ci-dessus. */
+  readonly commentsDisabled?: boolean;
   /** « Retirer » (#11150) — la modération, sur la story d'un autre ; absent ⇒ aucune entrée. */
   readonly onRemove?: (() => void) | undefined;
   readonly onOptionsOpenChange?: ((open: boolean) => void) | undefined;
@@ -105,6 +111,12 @@ export function StoryTopBar({
               { key: 'save', label: translate(language, 'story.action.save'), glyph: <GlyphSvg glyph={GLYPHS.downloadSimple} size={18} />, onSelect: onSave },
               { key: 'share', label: translate(language, 'story.action.share'), glyph: <GlyphSvg glyph={FEED_GLYPHS.shareNetwork} size={18} />, onSelect: onShare },
               { key: 'imager', label: translate(language, 'media.viewer.imager'), glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.imageSquare} size={18} />, onSelect: onImager },
+              {
+                key: 'comments',
+                label: translate(language, commentsDisabled ? 'feed.post.menu.comments_on' : 'feed.post.menu.comments_off'),
+                glyph: <GlyphSvg glyph={FEED_GLYPHS.chatCircle} size={18} />,
+                onSelect: onToggleComments,
+              },
               { key: 'remove', label: translate(language, 'moderation.remove.action'), glyph: <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={18} />, onSelect: onRemove, destructive: true },
             ]}
           />

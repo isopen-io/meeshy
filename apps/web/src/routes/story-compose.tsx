@@ -44,6 +44,7 @@ import {
   withAnimated,
   withStatic,
   withAudience,
+  withCommentsDisabled,
   withPlacedWhileAnimated,
   withPostText,
   withText,
@@ -600,6 +601,7 @@ function StoryStudio({
       postText: current.postText,
       promotedFromPost: promoted || reelAuto.autoArmed,
       alsoAsReel: armedPublishChoice(chosen, companionReelOffered({ draft: current, editing: false })).alsoAsReel === true,
+      commentsDisabled: current.commentsDisabled === true,
       signal: send.signal,
       requestSignal: cancelSignal,
       keyring: pending.keyring,
@@ -1125,6 +1127,8 @@ function StoryStudio({
             value={audienceValue}
             source={audienceSource}
             onChoose={chooseAudience}
+            commentsDisabled={draft.commentsDisabled === true}
+            onCommentsDisabledChange={(disabled) => setDraft((current) => withCommentsDisabled(current, disabled))}
             onClose={() => setAudienceOpen(false)}
           />
         </Suspense>

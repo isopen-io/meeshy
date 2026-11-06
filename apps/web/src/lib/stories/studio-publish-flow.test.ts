@@ -175,6 +175,19 @@ describe('publishStudioPlan — annulable en vol, idempotent au rejeu (#10316)',
     expect(gateway.calls[1]!.mutationId).toBe(gateway.calls[0]!.mutationId);
   });
 
+  test('« Désactiver les commentaires » (#16541) part dans le corps ; sinon la clé est absente', async () => {
+    const bodies: unknown[] = [];
+    const fetchImpl = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return Promise.resolve(new Response(JSON.stringify({ success: true, data: { id: `post-${bodies.length}` } }), { status: 201 }));
+    }) as typeof fetch;
+    const api = { source: 'gateway' as const, transport: createHttpTransport({ base: '', fetchImpl }) };
+    await publishStudioPlan({ plan, api, kind: 'POST', visibility: null, language: 'fr', commentsDisabled: true });
+    await publishStudioPlan({ plan, api, kind: 'POST', visibility: null, language: 'fr' });
+    expect((bodies[0] as { commentsDisabled?: boolean }).commentsDisabled).toBe(true);
+    expect('commentsDisabled' in (bodies[1] as object)).toBe(false);
+  });
+
   test('un contenu retouché part sous une clé neuve', async () => {
     const gateway = heldGateway();
     const keyring = createPublicationKeyring();

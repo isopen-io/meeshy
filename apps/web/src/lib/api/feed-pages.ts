@@ -110,6 +110,8 @@ export type FeedRepostOf = {
   readonly moodEmoji?: string | null;
   readonly createdAt?: string | Date;
   readonly likeCount?: number | null;
+  /** LES COMMENTAIRES DE L'ORIGINAL SONT FERMÉS (#16541) — ils le sont alors aussi sur ses republications. */
+  readonly commentsDisabled?: boolean | null;
   /** `id` OPTIONNEL, à la différence de `FeedPost.author` — le seul champ que
    * l'ANCIENNE forme de `FeedRepostOf` exposait (`repostOfHandle`, avant
    * #6278 c) ne le portait pas, et les fixtures qui la peuplaient n'en
@@ -165,6 +167,12 @@ export type FeedPost = {
   /** L'ÉCHÉANCE d'une story ou d'un statut (`Post.expiresAt`, servie par `postScalarSelect`) — absente : le post ne s'éteint pas. */
   readonly expiresAt?: string | Date | null;
   readonly repostOf?: FeedRepostOf | null;
+  /**
+   * LES COMMENTAIRES FERMÉS (#16541) — `Post.commentsDisabled`, servi sur
+   * toute publication ; absent ⇒ ouverts. Lu par `commentsClosed`
+   * (`lib/feed/comments-closed.ts`), jamais ailleurs.
+   */
+  readonly commentsDisabled?: boolean | null;
   /**
    * LES PERSONNES QUE LE SERVEUR A RÉSOLUES (#7032) — `PostReference[]` aplati
    * par `withMentions` (`services/gateway/src/services/posts/postReferences.ts`),

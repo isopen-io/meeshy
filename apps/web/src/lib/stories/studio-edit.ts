@@ -43,6 +43,8 @@ export type StudioEditOrigin = {
   readonly content: string;
   readonly originalLanguage: string | null;
   readonly visibility: PostVisibility | null;
+  /** Le réglage des commentaires tel que servi (#16541) — l'enregistrement ne le renvoie que changé. */
+  readonly commentsDisabled?: boolean;
 };
 
 export type StudioEditRefusal = 'kind' | 'repost' | 'not-author' | 'text-only' | 'object';
@@ -339,7 +341,11 @@ export function studioEditHydration(params: {
   const layout = isRecord(post.storyEffects) && isLayout(post.storyEffects.layout) ? post.storyEffects.layout : null;
   return {
     kind: 'studio',
-    draft: { ...draft, visibility: isRememberableAudience(post.visibility) ? post.visibility : null },
+    draft: {
+      ...draft,
+      visibility: isRememberableAudience(post.visibility) ? post.visibility : null,
+      ...(post.commentsDisabled === true ? { commentsDisabled: true as const } : {}),
+    },
     origin: {
       postId: post.id,
       kind: post.type,
@@ -348,6 +354,7 @@ export function studioEditHydration(params: {
       content,
       originalLanguage: stringOf(post.originalLanguage) ?? null,
       visibility: post.visibility ?? null,
+      ...(post.commentsDisabled === true ? { commentsDisabled: true } : {}),
     },
   };
 }

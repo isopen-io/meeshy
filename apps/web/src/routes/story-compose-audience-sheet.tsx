@@ -1,4 +1,5 @@
 import { Glyph, type GlyphShape } from '@/components/glyph';
+import { IosSwitch } from '@/components/ios-switch';
 import { STORY_AUDIENCE_PEOPLE_GLYPHS } from '@/components/glyphs-story-audience-people';
 import { Sheet } from '@/components/sheet';
 import { translate } from '@/lib/i18n-catalog';
@@ -71,6 +72,8 @@ export function AudienceSheet({
   value,
   source,
   onChoose,
+  commentsDisabled = false,
+  onCommentsDisabledChange,
   onClose,
 }: {
   readonly lang: InterfaceLanguage;
@@ -84,6 +87,10 @@ export function AudienceSheet({
   /** Ne reçoit JAMAIS un mode refusé : le type le dit (`ChoosableAudience`),
    * la rangée grisée n'a aucun effet. */
   readonly onChoose: (audience: ChoosableAudience) => void;
+  /** **« DÉSACTIVER LES COMMENTAIRES »** (#16541) — une option de publication,
+   * à côté de l'audience ; absent ⇒ aucune rangée (loi 4). */
+  readonly commentsDisabled?: boolean;
+  readonly onCommentsDisabledChange?: (disabled: boolean) => void;
   readonly onClose: () => void;
 }) {
   const defaultMark = translate(lang, 'story.studio.audience.defaultMark');
@@ -119,6 +126,27 @@ export function AudienceSheet({
           </li>
         );
       })}
+      {onCommentsDisabledChange === undefined ? null : (
+        <li>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={commentsDisabled}
+            data-publish-comments-disabled=""
+            onClick={() => onCommentsDisabledChange(!commentsDisabled)}
+            className="flex w-full items-center gap-3 px-4 text-start"
+            style={{ minHeight: 60, color: 'var(--color-ios-ink)' }}
+          >
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-body font-medium">{translate(lang, 'feed.post.menu.comments_off')}</span>
+              <span className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
+                {translate(lang, 'story.studio.comments_off.hint')}
+              </span>
+            </span>
+            <IosSwitch checked={commentsDisabled} tint="var(--accent)" />
+          </button>
+        </li>
+      )}
       <li data-audience-scope className="px-4 py-3 text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
         {translate(lang, 'story.studio.audience.scope')}
       </li>

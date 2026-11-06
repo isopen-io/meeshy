@@ -68,8 +68,8 @@ describe('la feuille des commentaires d’une story', () => {
       );
     });
     await settle();
-    await act(async () => container?.querySelector<HTMLButtonElement>('[data-comment-row="cm-r2-3"] [data-comment-gesture="more"]')?.click());
-    await act(async () => document.querySelector<HTMLButtonElement>('[data-comment-menu] [data-comment-gesture="image"]')?.click());
+    /* « Imager » vit dans le rail de la rangée, en icône (#16541). */
+    await act(async () => container?.querySelector<HTMLButtonElement>('[data-comment-row="cm-r2-3"] [data-comment-rail-image]')?.click());
     for (let attempt = 0; attempt < 20 && document.querySelector('[data-export-compose-mode]') === null; attempt += 1) await settle();
     expect(document.querySelector('[data-export-compose-mode="postAndComment"]')?.getAttribute('aria-pressed')).toBe('true');
   });

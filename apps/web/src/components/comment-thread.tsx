@@ -34,6 +34,7 @@ import { moderatesPlatformContent } from '@/lib/view/content-removal';
 import { useMentionSource } from '@/lib/view/mention-source';
 import { useMinute } from '@/lib/view/use-minute';
 import { useServedGlobalRole } from '@/lib/view/use-admin-access';
+import { useCommentsClosed } from '@/lib/view/use-comments-closed';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useViewer } from '@/lib/view/use-viewer';
 import type { CommentImageRequest } from '@/routes/comment-image-sheet';
@@ -102,6 +103,15 @@ export function CommentThread({
   const minute = useMinute();
   const viewer = useViewer();
   const query = useComments(postId, { enabled });
+  /**
+   * **LES COMMENTAIRES FERMÉS** (#16541) — ce que les caisses en savent (servi,
+   * réglé, diffusé), ou ce qu'un envoi vient d'apprendre (`403
+   * COMMENTS_DISABLED`) pour une publication qu'aucune caisse ne tient. Le fil
+   * reste LISIBLE ; seule l'écriture se retire, et la surface le DIT.
+   */
+  const servedClosed = useCommentsClosed(postId);
+  const [refusedFor, setRefusedFor] = useState<string | null>(null);
+  const closed = servedClosed || refusedFor === postId;
 
   /**
    * CE QUI ATTEND SON ENVOI (#9743) — les commentaires de CE lecteur dont la
@@ -284,6 +294,7 @@ export function CommentThread({
       /* CONFIRMÉ seulement (#10502) : un avis (hors ligne, non confirmé) n'a pas encore abouti. */
       if (result.ok && result.notice === undefined) readingTelemetry.recordV2(interactionOf(postId, 'comment_submit'));
       if (result.ok && target !== null) setReplyTarget((current) => (current === target ? null : current));
+      if (!result.ok && result.message === 'comments.closed') setRefusedFor(postId);
       return result.ok
         ? { ok: true, ...(result.notice === undefined ? {} : { message: result.notice }) }
         : { ok: false, message: result.message };
@@ -381,7 +392,7 @@ export function CommentThread({
   const moderates = moderatesPlatformContent(useServedGlobalRole());
   const viewerId = viewer.id ?? '';
   const [composerFolded, setComposerFolded] = useState(false);
-  const presence: CommentsComposerPresence = !canWrite ? 'absent' : composerFolded ? 'folded' : 'open';
+  const presence: CommentsComposerPresence = !canWrite || closed ? 'absent' : composerFolded ? 'folded' : 'open';
   const reportPresence = useRef(onComposerChange);
   reportPresence.current = onComposerChange;
   useEffect(() => {
@@ -412,7 +423,7 @@ export function CommentThread({
                 originalLanguage: language,
                 ...(parentId === undefined ? {} : { parentId }),
               }),
-            onReply: setReplyTarget,
+            ...(closed ? {} : { onReply: setReplyTarget }),
             onImage: (comment, servedText, options) => {
               const post = composingPost;
               const showsOriginal = options.showsOriginal === true;
@@ -439,7 +450,7 @@ export function CommentThread({
           }
         : undefined,
     /* `comments` et le prisme du lecteur : « Imager » cite la racine et lit ses réponses dans CE texte-là, jamais celui d’un rendu passé. */
-    [canWrite, moderates, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages, viewer.displayName, composingPost, waiting, replay],
+    [canWrite, closed, moderates, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages, viewer.displayName, composingPost, waiting, replay],
   );
 
   const renderReplies = useCallback(
@@ -505,21 +516,27 @@ export function CommentThread({
       {/* UN VISITEUR ANONYME NE COMMENTE PAS — la passerelle exige un
           `registeredUser` (`comments.ts:184-186`). Offrir le champ puis
           refuser en 401 serait un contrôle qui ment (loi 4). */}
-      <CommentComposer
-        key={`${scope ?? ''}:${postId}`}
-        {...(draft === undefined ? {} : { draft })}
-        onDraftChange={keepDraft}
-        language={language}
-        onSend={onSend}
-        onSendSticker={onSendSticker}
-        canWrite={canWrite}
-        mentionSource={mentionSource}
-        replyTo={replyTarget}
-        onCancelReply={() => setReplyTarget(null)}
-        {...(onWritingChange === undefined ? {} : { onWritingChange })}
-        onFoldChange={setComposerFolded}
-        foldOnSend={foldOnSend}
-      />
+      {closed ? (
+        <p data-comment-composer="closed" role="note" className="text-caption px-3 py-3 text-center" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translate(language, 'comments.closed')}
+        </p>
+      ) : (
+        <CommentComposer
+          key={`${scope ?? ''}:${postId}`}
+          {...(draft === undefined ? {} : { draft })}
+          onDraftChange={keepDraft}
+          language={language}
+          onSend={onSend}
+          onSendSticker={onSendSticker}
+          canWrite={canWrite}
+          mentionSource={mentionSource}
+          replyTo={replyTarget}
+          onCancelReply={() => setReplyTarget(null)}
+          {...(onWritingChange === undefined ? {} : { onWritingChange })}
+          onFoldChange={setComposerFolded}
+          foldOnSend={foldOnSend}
+        />
+      )}
       <p role="status" aria-live="polite" className="sr-only" data-comment-thread-notice="">
         {notice}
       </p>

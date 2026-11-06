@@ -38,6 +38,8 @@ export type StudioPostUpdateBody = {
   readonly content?: string;
   readonly originalLanguage?: string;
   readonly visibility?: ChoosableAudience;
+  /** Ne part que CHANGÉ (#16541). */
+  readonly commentsDisabled?: boolean;
   readonly mediaIds?: readonly string[];
   readonly removeMediaIds?: readonly string[];
   readonly mediaCaption?: Record<string, string>;
@@ -84,11 +86,14 @@ function updateBody(params: {
   const visibility = draft.visibility !== null && draft.visibility !== origin.visibility ? draft.visibility : undefined;
   const mediaCaption = restricted(publication.mediaCaption, attached);
   const mediaAlt = restricted(publication.mediaAlt, attached);
+  const commentsDisabled = draft.commentsDisabled === true;
+  const commentsChanged = commentsDisabled !== (origin.commentsDisabled === true);
   return {
     storyEffects: publication.storyEffects,
     ...(content !== undefined ? { content } : {}),
     ...(declaresLanguage ? { originalLanguage: params.language } : {}),
     ...(visibility !== undefined ? { visibility } : {}),
+    ...(commentsChanged ? { commentsDisabled } : {}),
     ...(attached.length > 0 ? { mediaIds: attached } : {}),
     ...(removed.length > 0 ? { removeMediaIds: removed } : {}),
     ...(mediaCaption !== undefined ? { mediaCaption } : {}),
