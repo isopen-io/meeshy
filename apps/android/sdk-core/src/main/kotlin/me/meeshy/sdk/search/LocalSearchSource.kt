@@ -25,6 +25,9 @@ public interface LocalSearchSource {
     public suspend fun conversations(query: String): List<ApiConversation>
     public suspend fun users(query: String): List<UserSearchResult>
     public suspend fun messages(query: String): List<MessageSearchHit>
+
+    /** Les conversations du cache parmi [ids], pour nommer un message trouve hors de celles qui repondent a la requete. */
+    public suspend fun cachedConversations(ids: Collection<String>): List<ApiConversation> = emptyList()
 }
 
 /**
@@ -72,6 +75,8 @@ public class RoomLocalSearchSource @Inject constructor(
             )
         }
     }
+
+    override suspend fun cachedConversations(ids: Collection<String>): List<ApiConversation> = hydrated(ids.toList())
 
     private suspend fun hydrated(ids: List<String>): List<ApiConversation> =
         ids.mapNotNull { id ->

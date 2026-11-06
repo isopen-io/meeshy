@@ -4,6 +4,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.model.ApiMessageSender
+import me.meeshy.sdk.model.search.GlobalMessageSearchHit
+import me.meeshy.sdk.model.search.ListMessageSearch
 import me.meeshy.sdk.model.search.SearchPane
 import me.meeshy.sdk.model.search.SearchPaneFailure
 import me.meeshy.sdk.network.NetworkMonitor
@@ -28,7 +32,31 @@ public data class MessageSearchHit(
     val message: ApiMessage,
     val conversationTitle: String,
     val conversation: ApiConversation? = null,
+    /** La photo servie avec [conversationTitle] par la recherche unifiee, quand [conversation] est inconnue. */
+    val conversationAvatar: String? = null,
 )
+
+/**
+ * Un resultat de `GET /messages/search` (#14619) : le texte servi par le Prisme du serveur, l'auteur,
+ * et le titre et la photo que la passerelle elit ensemble. `null` pour un texte blanc
+ * ([ListMessageSearch.hitOf], la loi de la section de la liste).
+ */
+internal fun GlobalMessageSearchHit.asMessageSearchHit(known: ApiConversation?): MessageSearchHit? {
+    val served = ListMessageSearch.hitOf(this) ?: return null
+    return MessageSearchHit(
+        message = ApiMessage(
+            id = id,
+            conversationId = conversationId,
+            content = served.text,
+            createdAt = createdAt,
+            messageType = messageType,
+            sender = sender?.let { ApiMessageSender(id = it.id, userId = it.userId, displayName = it.displayName, username = it.username, avatar = it.avatar) },
+        ),
+        conversationTitle = served.conversationTitle,
+        conversation = known,
+        conversationAvatar = served.conversationAvatar,
+    )
+}
 
 /** Le resultat des volets de la recherche globale, chacun degradable a vide. */
 public data class GlobalSearchResults(
@@ -73,6 +101,7 @@ public class GlobalSearchRepository @Inject constructor(
     private val network: NetworkMonitor,
     private val posts: PostSearchSource = NoPostSearch,
     private val userSearchCache: UserSearchCacheSource? = null,
+    private val locks: ConversationLockStore? = null,
 ) {
     public fun search(
         query: String,
@@ -90,6 +119,9 @@ public class GlobalSearchRepository @Inject constructor(
                 apiCall { userApi.search(query, limit = userLimit, offset = 0) }
             }
             val remotePosts = if (offline) null else async { posts.search(query) }
+            val remoteUnified = if (offline) null else async {
+                apiCall { messageApi.searchAll(query, limit = ListMessageSearch.LIMIT) }
+            }
             val localConversations = async { local.conversations(query) }
             val localUsers = async { local.users(query) }
             val replayedUsers = userSearchCache?.cached(query).orEmpty()
@@ -99,7 +131,7 @@ public class GlobalSearchRepository @Inject constructor(
             val firstPaint = GlobalSearchSnapshot(
                 conversations = SearchPane(localConversations.await()),
                 users = SearchPane(SearchResultMerger.users(localUserItems, replayedUsers)),
-                messages = SearchPane(localMessages.await()),
+                messages = SearchPane(visible(localMessages.await())),
                 remoteSettled = offline,
                 offline = offline,
             )
@@ -114,7 +146,7 @@ public class GlobalSearchRepository @Inject constructor(
                 remote = conversationsResult.orEmpty(),
             )
             val titles = conversations.associate { it.id to titleOf(it) }
-            val remoteMessages = fanOut(
+            val remoteMessages = unified(remoteUnified!!.await(), conversations, firstPaint.messages.items) ?: fanOut(
                 conversations.take(maxMessageConversations),
                 query,
                 messagesPerConversation,
@@ -133,7 +165,7 @@ public class GlobalSearchRepository @Inject constructor(
                     ),
                     posts = remotePosts!!.await(),
                     messages = SearchPane(
-                        SearchResultMerger.messages(firstPaint.messages.items, remoteMessages.items),
+                        SearchResultMerger.messages(firstPaint.messages.items, visible(remoteMessages.items)),
                         remoteMessages.failure.takeIf { firstPaint.messages.items.isEmpty() && remoteMessages.items.isEmpty() },
                     ),
                     remoteSettled = true,
@@ -142,6 +174,39 @@ public class GlobalSearchRepository @Inject constructor(
             )
         }
     }
+
+    /**
+     * La recherche unifiee couvre TOUTES les conversations du lecteur, pas seulement celles dont le nom
+     * repond a la requete (parite iOS `ConversationMessageSearchService.remoteMessages`). `null` quand la
+     * passerelle ne sert pas encore la route (`404`) : l'eventail par conversation prend le relais.
+     */
+    private suspend fun unified(
+        result: NetworkResult<List<GlobalMessageSearchHit>>,
+        found: List<ApiConversation>,
+        localHits: List<MessageSearchHit>,
+    ): SearchPane<MessageSearchHit>? = when (result) {
+        is NetworkResult.Success -> {
+            val byId = knownConversations(result.data.map { it.conversationId }.toSet(), found + localHits.mapNotNull { it.conversation })
+            SearchPane(result.data.mapNotNull { it.asMessageSearchHit(byId[it.conversationId]) })
+        }
+        is NetworkResult.Failure ->
+            if (result.error.httpStatus == HTTP_NOT_FOUND) null else SearchPane(emptyList(), SearchPaneFailure.Unreachable)
+    }
+
+    /**
+     * La conversation que l'appareil connait gagne sur la carte servie : son titre et sa photo sont elus
+     * contre le lecteur (#12569, `customName` compris), la carte de la passerelle ne l'est pas (#16485).
+     */
+    private suspend fun knownConversations(ids: Set<String>, inHand: List<ApiConversation>): Map<String, ApiConversation> {
+        val held = inHand.filter { it.id in ids }.associateBy { it.id }
+        val missing = ids - held.keys
+        val cached = if (missing.isEmpty()) emptyList() else local.cachedConversations(missing)
+        return held + cached.associateBy { it.id }
+    }
+
+    /** Une conversation verrouillee ne laisse rien paraitre de ses messages, comme dans la liste. */
+    private fun visible(hits: List<MessageSearchHit>): List<MessageSearchHit> =
+        locks?.let { store -> hits.filterNot { store.isLocked(it.message.conversationId) } } ?: hits
 
     private suspend fun fanOut(
         conversations: List<ApiConversation>,
@@ -166,6 +231,10 @@ public class GlobalSearchRepository @Inject constructor(
 
     private fun titleOf(conversation: ApiConversation): String =
         conversation.resolvedPreferences?.customName?.takeIf { it.isNotBlank() } ?: conversation.title.orEmpty()
+
+    private companion object {
+        const val HTTP_NOT_FOUND = 404
+    }
 }
 
 private fun <T> NetworkResult<List<T>>.orEmpty(): List<T> = when (this) {

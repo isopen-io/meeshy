@@ -107,11 +107,13 @@ class UserSearchCacheSourceTest {
         fun serving(users: List<UserSearchResult>) {
             coEvery { conversationApi.search(any()) } returns ApiResponse(success = true, data = emptyList())
             coEvery { userApi.search(any(), any(), any()) } returns ApiResponse(success = true, data = users)
+            coEvery { messageApi.searchAll(any(), any(), any()) } returns ApiResponse(success = true, data = emptyList())
         }
 
         fun failing() {
             coEvery { conversationApi.search(any()) } throws java.io.IOException("down")
             coEvery { userApi.search(any(), any(), any()) } throws java.io.IOException("down")
+            coEvery { messageApi.searchAll(any(), any(), any()) } throws java.io.IOException("down")
         }
 
         fun repository(cache: UserSearchCacheSource, monitor: InMemoryNetworkMonitor) =

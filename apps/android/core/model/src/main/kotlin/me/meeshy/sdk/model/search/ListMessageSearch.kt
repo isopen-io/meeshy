@@ -18,6 +18,8 @@ public data class ListMessageHit(
     val senderName: String,
     /** Le titre affichable servi avec le message, quand sa conversation n'est pas dans le cache. */
     val conversationTitle: String = "",
+    /** La photo servie avec ce titre (élue par la passerelle avec lui), quand la conversation n'est pas dans le cache. */
+    val conversationAvatar: String? = null,
 )
 
 /**
@@ -63,6 +65,7 @@ public object ListMessageSearch {
             text = text,
             senderName = served.sender?.displayName?.takeIf { it.isNotBlank() } ?: served.sender?.username.orEmpty(),
             conversationTitle = served.conversation?.title.orEmpty(),
+            conversationAvatar = served.conversation?.avatar?.takeIf { it.isNotBlank() },
         )
     }
 
