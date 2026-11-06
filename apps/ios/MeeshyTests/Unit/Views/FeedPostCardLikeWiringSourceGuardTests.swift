@@ -175,9 +175,12 @@ final class FeedPostCardLikeWiringSourceGuardTests: XCTestCase {
     ]
 
     /// Les rappels optionnels que la carte n'affiche QUE s'ils sont fournis
-    /// (« Citer » dans le choix du repartage, « Épingler », « Modifier »).
+    /// (« Citer » dans le choix du repartage, « Épingler », « Modifier », la
+    /// baguette « Imager » et son « Export rapide », #16163 : sans `onImager`
+    /// `FeedPostActionsBar.imagerButton` ne rend rien, sans `onImagerQuick`
+    /// `ImagerWandButton` n'offre pas d'appui long).
     /// Leur absence retire le contrôle : elle ne peut pas le rendre inerte.
-    private static let conditionalActions: Set<String> = ["onQuote", "onPin", "onEdit"]
+    private static let conditionalActions: Set<String> = ["onQuote", "onPin", "onEdit", "onImager", "onImagerQuick"]
 
     /// Montages délibérément muets, chacun justifié par une MESURE.
     private static let deliberatelyUnwired: [String: Set<String>] = [:]
