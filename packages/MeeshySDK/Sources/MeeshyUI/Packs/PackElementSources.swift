@@ -31,6 +31,8 @@ public final class ServedPackElementDesigns: PackElementDesignProviding {
         self.frames = frames
     }
 
+    nonisolated deinit {}
+
     public func elements(domain: PackDomain, pack: String, language: String) -> PackElementsResolution {
         let local = embedded.elements(domain: domain, pack: pack, language: language)
         if case .ready = local { return local }
