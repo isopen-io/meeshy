@@ -98,8 +98,48 @@ final class SceneWindowSizeTests: XCTestCase {
     }
 
     func test_resolveInsets_keepsAMeasuredZero() {
-        let fallback = EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
-        XCTAssertEqual(SceneWindowSize.resolveInsets(EdgeInsets(), fallback: fallback), EdgeInsets(), "une marge nulle est une mesure")
-        XCTAssertEqual(SceneWindowSize.resolveInsets(nil, fallback: fallback), fallback)
+        let remembered = EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
+        XCTAssertEqual(SceneWindowSize.resolveInsets(EdgeInsets(), remembered: remembered), EdgeInsets(), "une marge nulle est une mesure")
+    }
+
+    // MARK: - Les écrans qui ne reçoivent pas la publication (#12470)
+
+    /// Un `fullScreenCover` ne reçoit pas `\.sceneSafeAreaInsets` : son repli lisait `UIWindow.safeAreaInsets` PENDANT
+    /// `body`, UIKit rappelait le contrôleur hôte (`statusBarHidden`) et le graphe bouclait jusqu'au chien de garde. Le
+    /// repli sert désormais les marges que la racine a déjà mesurées hors de `body`, sinon zéro le temps d'une passe.
+    func test_resolveInsets_withoutPublication_servesTheRememberedInsets_neverTheWindow() {
+        let remembered = EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
+        let published = EdgeInsets(top: 47, leading: 0, bottom: 21, trailing: 0)
+        XCTAssertEqual(SceneWindowSize.resolveInsets(published, remembered: remembered), published, "la publication prime")
+        XCTAssertEqual(SceneWindowSize.resolveInsets(nil, remembered: remembered), remembered, "sans publication : la dernière mesure")
+        XCTAssertEqual(SceneWindowSize.resolveInsets(nil, remembered: nil), EdgeInsets(), "sans mesure : zéro, jamais la fenêtre")
+    }
+
+    func test_aRootRemembersTheInsetsItMeasured_forTheCoversItPresents() {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 600))
+        let host = UIHostingController(rootView: Color.clear.publishingSceneWindowSize())
+        host.additionalSafeAreaInsets = UIEdgeInsets(top: 44, left: 0, bottom: 26, right: 0)
+        window.rootViewController = host
+        window.isHidden = false
+        window.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        defer { window.isHidden = true }
+
+        let truth = host.view.safeAreaInsets
+        XCTAssertGreaterThanOrEqual(truth.top, 44, "précondition : la marge ajoutée est prise en compte")
+        XCTAssertEqual(RememberedSceneInsets.last?.top ?? -1, truth.top, accuracy: 0.5)
+        XCTAssertEqual(RememberedSceneInsets.last?.bottom ?? -1, truth.bottom, accuracy: 0.5)
+    }
+
+    /// Les deux écrans plein écran du SDK (lecteur vidéo, éditeur d'image) sont présentés en `fullScreenCover`.
+    func test_theSDKFullscreenScreens_neverReadTheWindowInsetsDuringBody() throws {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI")
+        for path in ["Media/MeeshyVideoPlayer+Controls.swift", "Media/MeeshyImageEditorView.swift", "Utilities/SceneWindowSize.swift"] {
+            let code = try String(contentsOf: sources.appendingPathComponent(path), encoding: .utf8)
+            XCTAssertFalse(code.contains("safeAreaEdgeInsets"), "\(path) replie encore sur la fenêtre clé")
+            XCTAssertFalse(code.contains("WindowMetrics.safeAreaInsets"), "\(path) lit encore la fenêtre clé")
+        }
     }
 }
