@@ -127,9 +127,29 @@ enum VideoPosterResolver {
     /// SEULEMENT si un profilage sur device montre ce site en cause dans un
     /// jank au premier rendu — pas de changement préventif sans mesure.
     nonisolated static func persistedPoster(for attachment: MessageAttachment) -> UIImage? {
-        guard let key = posterKey(for: attachment),
-              let image = CacheCoordinator.warmedThumbnail(for: key)
-        else { return nil }
+        guard let key = posterKey(for: attachment) else { return nil }
+        return fullscreenGrade(CacheCoordinator.warmedThumbnail(for: key), for: attachment)
+    }
+
+    /// **La MÉMOIRE seule** (#16470) — pour la page VOISINE de la galerie, que
+    /// le pager construit pendant le glissement : une lecture disque y tomberait
+    /// sur le fil principal sous le doigt (leçon #10354). Le disque remonte en
+    /// mémoire par `warmPersistedPoster`, hors du fil, avant que la page monte.
+    nonisolated static func residentPoster(for attachment: MessageAttachment) -> UIImage? {
+        guard let key = posterKey(for: attachment) else { return nil }
+        return fullscreenGrade(DiskCacheStore.cachedImage(for: key), for: attachment)
+    }
+
+    /// Remonte le poster persisté du disque vers la mémoire, décodé hors du fil
+    /// principal, au plafond d'extraction — le slot que lit `residentPoster`.
+    static func warmPersistedPoster(for attachment: MessageAttachment) async {
+        guard let key = posterKey(for: attachment), residentPoster(for: attachment) == nil else { return }
+        _ = await CacheCoordinator.shared.thumbnails.image(for: key,
+                                                           maxPixelSize: VideoPosterGrade.extractionMaxDimension)
+    }
+
+    nonisolated private static func fullscreenGrade(_ image: UIImage?, for attachment: MessageAttachment) -> UIImage? {
+        guard let image else { return nil }
         let posterMax = max(image.size.width, image.size.height) * image.scale
         guard VideoPosterGrade.isFullscreenSharp(
             posterMaxDimension: posterMax,
@@ -174,14 +194,19 @@ enum VideoPosterResolver {
         return nil
     }
 
-    /// Préchauffage : extrait le poster SEULEMENT si le fichier vidéo est déjà
-    /// sur l'appareil — jamais de réseau pour une page que personne ne regarde
-    /// encore. Fire-and-forget.
+    /// Préchauffage : remonte d'abord le poster persisté en mémoire, puis
+    /// l'extrait SEULEMENT si le fichier vidéo est déjà sur l'appareil — jamais
+    /// de réseau pour une page que personne ne regarde encore. Fire-and-forget,
+    /// et aucune sonde disque sur le fil appelant.
     static func warmIfLocal(_ attachment: MessageAttachment) {
-        guard localVideoFileURL(for: attachment) != nil,
-              persistedPoster(for: attachment) == nil
-        else { return }
-        Task { _ = await resolve(attachment: attachment, allowsNetwork: false, intent: .ambientPrewarm) }
+        guard residentPoster(for: attachment) == nil else { return }
+        Task {
+            await warmPersistedPoster(for: attachment)
+            guard residentPoster(for: attachment) == nil,
+                  localVideoFileURL(for: attachment) != nil
+            else { return }
+            _ = await resolve(attachment: attachment, allowsNetwork: false, intent: .ambientPrewarm)
+        }
     }
 
     /// Le poster tel que le renderer plein écran du SDK le consomme : lecture
