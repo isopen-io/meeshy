@@ -1,8 +1,8 @@
-# Chaque écriture de « Mes stickers » atteint les autres appareils du compte
+## Chaque écriture de « Mes stickers » atteint les autres appareils du compte
 
 **Date** : 2026-11-06 · **Issue** : #16515 (suite LIVE de #4720) · **Milestone** : « Les stickers d'un compte le suivent d'un appareil à l'autre »
 
-## Contexte
+### Contexte
 
 `UserSticker` (#7938) est une table **par utilisateur**. Son écrivain unique,
 `services/stickers/StickerLibrary.ts`, a quatre chemins d'écriture : création,
@@ -26,7 +26,7 @@ Deux voisines immédiates portaient déjà l'obligation : l'étagère de packs
 (`profile:decor-updated`, #10632). Le défaut n'était pas caché — il était
 voisin, et il n'appartenait pas à la phrase du lot qui avait fermé les autres.
 
-## Décision
+### Décision
 
 **1. Un événement NEUF, `sticker:library-updated`, sur `user:<id>`.** Pas un
 élargissement d'un événement existant : un décodeur client strict fait échouer
@@ -68,7 +68,7 @@ si elle existe déjà : sans liste en cache il n'y a rien à réconcilier, et la
 poser depuis un seul événement servirait une bibliothèque d'un sticker à un
 écran qui n'a jamais lu la vraie.
 
-## Alternatives rejetées
+### Alternatives rejetées
 
 - **Un `sticker:library-invalidated` sans charge.** Un aller-retour réseau par
   geste, et un clignotement — alors que la charge suffit, ce qu'Android écrit
@@ -80,7 +80,7 @@ poser depuis un seul événement servirait une bibliothèque d'un sticker à un
 - **Diffuser depuis la route plutôt que depuis le service.** C'est exactement
   ce qui laisse un écrivain futur n'honorer que la moitié du contrat.
 
-## Conséquences
+### Conséquences
 
 - Le cliquet `preference-writer-sweep` énumérait TROIS tables par utilisateur ;
   il en manquait deux. `userSticker` — le défaut ci-dessus — et
@@ -91,7 +91,7 @@ poser depuis un seul événement servirait une bibliothèque d'un sticker à un
   suite : l'événement existe, la dimension 13 (complétude) ne sera mûre qu'une
   fois les trois clients branchés.
 
-## Preuve
+### Preuve
 
 `StickerLibrary.announce.test.ts` (l'écrivain annonce sur les quatre chemins,
 se tait sur les non-écritures, et une annonce qui lève ne fait pas échouer

@@ -1,8 +1,8 @@
-# Une énumération de tables « par utilisateur » ne se relit pas dans la constante qui la porte
+## Une énumération de tables « par utilisateur » ne se relit pas dans la constante qui la porte
 
 **Date** : 2026-11-06 · **Issue** : #16515 · **Trouvé en** : audit de synchronisation temps réel (routine d'amélioration continue)
 
-## Le constat
+### Le constat
 
 `services/gateway/src/__tests__/preference-writer-sweep.ts` est un cliquet
 exemplaire. Son doc-comment énonce la règle (« toute écriture d'une ligne par
@@ -23,7 +23,7 @@ d'écriture, **zéro diffusion** — n'y était pas. Sa voisine `userStickerPack
 l'étagère de packs, y était : même feuille, même écran, une ligne de différence
 dans le nom.
 
-## Pourquoi la vérification ne tombait pas dessus
+### Pourquoi la vérification ne tombait pas dessus
 
 C'est la **leçon 261 appliquée à un cliquet au lieu d'une prose** : une
 énumération porte DEUX affirmations, et une seule est jamais vérifiée.
@@ -39,7 +39,7 @@ est par utilisateur ? ». Ce que le cliquet ne balaie pas, il le déclare
 implicitement hors sujet — et il le déclare dans le silence, qui ne rougit
 jamais.
 
-## La forme générale
+### La forme générale
 
 > **Un cliquet garde ce qu'il BALAIE. Son périmètre de balayage est une
 > affirmation de plus, et c'est celle qu'il ne peut pas tenir lui-même.**
@@ -62,14 +62,14 @@ Trois corollaires, tous mesurés sur ce cas :
    entrent dans le même lot, et le journal dit laquelle est laquelle — sans
    quoi on annonce une panne qu'on n'a pas mesurée (règle du cycle 103).
 
-## Piège de mise en œuvre, trouvé en élargissant
+### Piège de mise en œuvre, trouvé en élargissant
 
 `userSticker` est un **préfixe** de `userStickerPack`. La regex du balayage
 exigeait un `.` immédiatement après le nom du modèle, ce qui suffisait par
 accident ; un `\b` a été ajouté, non pour ce couple-ci mais pour le prochain —
 un inventaire juste par accident est faux au premier déplacement.
 
-## Ce qu'il faut faire la prochaine fois
+### Ce qu'il faut faire la prochaine fois
 
 Devant tout cliquet d'inventaire dont le collecteur prend une LISTE de noms
 (modèles, événements, routes, fichiers), avant de se fier à son vert :
@@ -82,7 +82,7 @@ Devant tout cliquet d'inventaire dont le collecteur prend une LISTE de noms
    parte de là et non de la liste
 ```
 
-## Voir aussi
+### Voir aussi
 
 - `tasks/lessons.md` § Leçon 261 — « une énumération de sites porte DEUX affirmations »
 - `services/gateway/decisions/2026-11-06-chaque-ecriture-de-mes-stickers-atteint-les-autres-appareils-16515.md`
