@@ -16,6 +16,7 @@ import type { FrameUsage } from '@meeshy/shared/types/frame-usage';
 import type { PackAssetRef, PackDomain, PackLanguage, PackSummary } from '@meeshy/shared/types/content-pack';
 import type { PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
 import type { PackAvailability } from '@meeshy/shared/types/pack-availability';
+import { packOfferWindow } from '@meeshy/shared/utils/decoration-event-window';
 import { STICKER_PACK_AUTHOR_MEESHY } from '@meeshy/shared/types/sticker-pack';
 import { MEESHY_PUBLISHER, type PackPublisherRef } from '@meeshy/shared/types/pack-publisher';
 import type { CommunityPackStore, PackDomainSpec, RegistryPack } from './PackCatalog';
@@ -44,8 +45,16 @@ export type AppearancePackDetail = AppearancePackSummary & {
 /** Les domaines dont un pack annonce sa loi d'usage : ce sont des CADRES. */
 const FRAMED_DOMAINS: ReadonlySet<PackDomain> = new Set<PackDomain>(['avatar-ring', 'banner-frame']);
 
-export function appearancePackDetail(entry: PackIndexEntry, installed: boolean, owned: boolean, itemCount = 0, publisher: PackPublisherRef = MEESHY_PUBLISHER): AppearancePackDetail {
+export function appearancePackDetail(
+  entry: PackIndexEntry,
+  installed: boolean,
+  owned: boolean,
+  itemCount = 0,
+  publisher: PackPublisherRef = MEESHY_PUBLISHER,
+  now: Date = new Date(),
+): AppearancePackDetail {
   const fr = entry.names.fr;
+  const availability = packOfferWindow(entry, now);
   return {
     slug: entry.slug,
     name: fr?.name ?? entry.slug,
@@ -67,7 +76,7 @@ export function appearancePackDetail(entry: PackIndexEntry, installed: boolean, 
     price: entry.price ?? null,
     owned,
     preview: entry.preview,
-    ...(entry.availability === undefined ? {} : { availability: entry.availability }),
+    ...(availability === undefined ? {} : { availability }),
     ...(FRAMED_DOMAINS.has(entry.domain) ? { usage: entry.usage ?? null } : {}),
     contractSchema: entry.contractSchema,
     contract: entry.contract,
@@ -77,7 +86,7 @@ export function appearancePackDetail(entry: PackIndexEntry, installed: boolean, 
 
 export const appearancePackSummary = ({ contractSchema: _schema, contract: _contract, strings: _strings, ...summary }: AppearancePackDetail): AppearancePackSummary => summary;
 
-const registryOf = (index: PackIndex, domain: AppearancePackDomain): readonly RegistryPack<AppearancePackDetail>[] =>
+const registryOf = (index: PackIndex, domain: AppearancePackDomain, now: () => Date): readonly RegistryPack<AppearancePackDetail>[] =>
   index.entries(domain).map((entry) => ({
     slug: entry.slug,
     installedByDefault: entry.installedByDefault,
@@ -87,8 +96,9 @@ const registryOf = (index: PackIndex, domain: AppearancePackDomain): readonly Re
     reward: entry.reward,
     version: entry.version,
     availability: entry.availability,
+    event: entry.event,
     targeting: entry.targeting,
-    project: (installed: boolean, owned: boolean) => appearancePackDetail(entry, installed, owned, index.itemCount(entry), index.publisherOf(entry)),
+    project: (installed: boolean, owned: boolean) => appearancePackDetail(entry, installed, owned, index.itemCount(entry), index.publisherOf(entry), now()),
   }));
 
 export function appearancePackSpec(options: {
@@ -96,12 +106,14 @@ export function appearancePackSpec(options: {
   readonly domain: AppearancePackDomain;
   /** Les packs de vendeurs tiers publiés (#10709) ; absent = catalogue officiel seul. */
   readonly community?: CommunityPackStore<AppearancePackDetail>;
+  /** L'horloge de la fenêtre servie d'un pack annuel (#16450) ; la même que celle du catalogue. */
+  readonly now?: () => Date;
 }): PackDomainSpec<AppearancePackSummary, AppearancePackDetail> {
   // Le registre se RELIT à chaque accès : une surcharge d'administration (#11275) s'applique sans redémarrer.
   return {
     domain: options.domain,
     get registry() {
-      return registryOf(options.index, options.domain);
+      return registryOf(options.index, options.domain, options.now ?? (() => new Date()));
     },
     community: options.community ?? null,
     removalGuard: null,

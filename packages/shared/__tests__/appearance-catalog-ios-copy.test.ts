@@ -28,7 +28,7 @@ describe('la copie iOS du catalogue d’apparence (#10631, § 8.2)', () => {
     expect(Object.keys(catalog.strings).sort()).toEqual(['ar', 'de', 'en', 'es', 'fr', 'it', 'pt']);
   });
 
-  it('chaque pack porte sa fenêtre EFFECTIVE (#16447) — date écrite gardée, borne absente d’un pack d’événement dérivée — et la déclaration `event` ne voyage pas', () => {
+  it('chaque pack porte sa fenêtre EFFECTIVE (#16447) — date écrite gardée, borne absente dérivée, occurrence en cours ou prochaine d’un pack annuel à la date de référence (#16450) — et la déclaration `event` voyage avec elle', () => {
     type Source = { readonly slug: string; readonly event?: PackEventDeclaration; readonly availability?: { readonly startsAt?: string; readonly endsAt?: string } };
     const source = (relative: string): readonly Source[] => (JSON.parse(readFileSync(resolve(__dirname, '../design/appearance', relative), 'utf8')) as { packs: readonly Source[] }).packs;
     const catalog = buildAppearanceCatalog();
@@ -41,7 +41,7 @@ describe('la copie iOS du catalogue d’apparence (#10631, § 8.2)', () => {
     pairs.forEach(([packs, served]) =>
       packs.forEach((pack, index) => {
         const out = served[index] as Source;
-        expect({ slug: out.slug, event: 'event' in out, availability: out.availability }).toEqual({ slug: pack.slug, event: false, availability: effectiveEventWindow(pack) });
+        expect({ slug: out.slug, event: out.event, availability: out.availability }).toEqual({ slug: pack.slug, event: pack.event, availability: effectiveEventWindow(pack) });
       }),
     );
   });

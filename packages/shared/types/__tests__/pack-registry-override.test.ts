@@ -53,3 +53,14 @@ describe('mergePackOverrides', () => {
     expect(mergePackOverrides({ hidden: true, price: 30 }, { price: null, order: 2 })).toEqual({ hidden: true, price: null, order: 2 });
   });
 });
+
+describe('une fenêtre surchargée prime sur l’événement annuel (#16450)', () => {
+  it('l’administration qui date un pack récurrent retire sa récurrence : la date écrite gagne', () => {
+    const recurring = entryOf({ availability: { startsAt: '2026-10-25T00:00:00Z', endsAt: '2027-01-25T00:00:00Z' }, event: { id: 'christmas', recurrence: 'yearly' } });
+    expect(recurring.event).toEqual({ id: 'christmas', recurrence: 'yearly' });
+    const dated = applyPackOverride(recurring, { availability: { startsAt: '2026-12-01T00:00:00Z', endsAt: '2026-12-31T00:00:00Z' } });
+    expect({ event: dated?.event, availability: dated?.availability }).toEqual({ event: undefined, availability: { startsAt: '2026-12-01T00:00:00Z', endsAt: '2026-12-31T00:00:00Z' } });
+    expect(applyPackOverride(recurring, { order: 9 })?.event).toEqual({ id: 'christmas', recurrence: 'yearly' });
+  });
+});
+

@@ -40,9 +40,10 @@ export const mergePackOverrides = (current: PackRegistryOverride, patch: PackReg
 const withoutNulls = (entry: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(entry).filter(([, value]) => value !== null && value !== undefined));
 
-/** L'entrée telle que la surcharge la rend, ou `null` si la fusion viole une loi du registre (la surcharge est alors refusée). */
+/** L'entrée telle que la surcharge la rend — une fenêtre surchargée est ÉCRITE, elle retire l'événement annuel (#16450) —, ou `null` si la fusion viole une loi du registre (la surcharge est alors refusée). */
 export function applyPackOverride(entry: PackIndexEntry, override: PackRegistryOverride): PackIndexEntry | null {
-  const merged = withoutNulls({ ...entry, ...override, preview: undefined });
+  const dated = override.availability !== undefined;
+  const merged = withoutNulls({ ...entry, ...override, ...(dated ? { event: undefined } : {}), preview: undefined });
   const parsed = PackIndexEntrySchema.safeParse({ ...merged, preview: entry.preview });
   return parsed.success ? parsed.data : null;
 }

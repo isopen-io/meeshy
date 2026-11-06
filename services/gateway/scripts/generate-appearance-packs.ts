@@ -45,7 +45,7 @@ type SourcePack<T> = {
   readonly usage?: unknown;
   /** La fenêtre de l'offre (#11274, #16270) : la boutique ne propose le pack qu'entre ces deux instants. */
   readonly availability?: { readonly startsAt?: string; readonly endsAt?: string };
-  /** L'événement servi (#16447) : sans date écrite, la fenêtre vient de la règle partagée, une date écrite primant. */
+  /** L'événement servi (#16447, #16450) : la fenêtre en vient (date écrite primant) ; transmis au registre pour qu'un pack annuel se recalcule. */
   readonly event?: PackEventDeclaration;
   readonly designs?: readonly T[];
   readonly rings?: readonly T[];
@@ -162,6 +162,7 @@ async function buildEntry(kind: Kind, pack: SourcePack<unknown>, over: Record<st
     names: names ?? Object.fromEntries(PACK_LANGUAGES.map((language) => [language, strings[language].packs[pack.slug]])),
     ...(pack.usage === undefined ? {} : { usage: pack.usage }),
     ...(availability === undefined ? {} : { availability }),
+    ...(pack.event === undefined ? {} : { event: pack.event }),
     ...over,
   };
 }

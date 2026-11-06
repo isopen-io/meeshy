@@ -5242,8 +5242,8 @@
         ]
       },
       "event": {
-        "id": "noel",
-        "year": 2026
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -5406,8 +5406,8 @@
         ]
       },
       "event": {
-        "id": "noel",
-        "year": 2026
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -5553,8 +5553,8 @@
         ]
       },
       "event": {
-        "id": "noel",
-        "year": 2026
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -6519,8 +6519,8 @@
         ]
       },
       "event": {
-        "id": "noel",
-        "year": 2026
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -6859,8 +6859,8 @@
         ]
       },
       "event": {
-        "id": "nouvel-an",
-        "year": 2027
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -7115,8 +7115,8 @@
         ]
       },
       "event": {
-        "id": "nouvel-an",
-        "year": 2027
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "rings": [
         {

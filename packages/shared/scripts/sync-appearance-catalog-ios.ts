@@ -26,10 +26,10 @@ type PackFile<Item extends 'designs' | 'rings' | 'frames'> = { readonly packs: r
 const readJson = <T>(relative: string): T => JSON.parse(readFileSync(join(SOURCE_DIR, relative), 'utf8')) as T;
 
 export function buildAppearanceCatalog() {
-  const wallpapers = readJson<PackFile<'designs'>>('wallpapers/designs.json').packs.map(materializePackWindow);
-  const banners = readJson<PackFile<'designs'>>('banners/designs.json').packs.map(materializePackWindow);
-  const rings = readJson<PackFile<'rings'>>('avatar-rings/rings.json').packs.map(materializePackWindow);
-  const bannerFrames = readJson<PackFile<'frames'>>('banner-frames/frames.json').packs.map(materializePackWindow);
+  const wallpapers = readJson<PackFile<'designs'>>('wallpapers/designs.json').packs.map((pack) => materializePackWindow(pack));
+  const banners = readJson<PackFile<'designs'>>('banners/designs.json').packs.map((pack) => materializePackWindow(pack));
+  const rings = readJson<PackFile<'rings'>>('avatar-rings/rings.json').packs.map((pack) => materializePackWindow(pack));
+  const bannerFrames = readJson<PackFile<'frames'>>('banner-frames/frames.json').packs.map((pack) => materializePackWindow(pack));
   return {
     version: 1,
     gamut: GAMUT_KEYS.map((key) => ({ key, ...APPEARANCE_GAMUT[key] })),

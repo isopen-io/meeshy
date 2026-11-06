@@ -569,8 +569,8 @@
       "installedByDefault": false,
       "removable": true,
       "event": {
-        "id": "noel",
-        "year": 2026
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -838,8 +838,8 @@
       "installedByDefault": false,
       "removable": true,
       "event": {
-        "id": "nouvel-an",
-        "year": 2027
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -1017,8 +1017,8 @@
       "installedByDefault": false,
       "removable": true,
       "event": {
-        "id": "nouvel-an",
-        "year": 2027
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "designs": [
         {

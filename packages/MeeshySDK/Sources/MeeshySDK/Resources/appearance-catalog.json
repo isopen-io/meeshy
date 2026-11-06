@@ -1289,6 +1289,10 @@
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "designs": [
         {
           "key": "flocons-cristal",
@@ -1420,6 +1424,10 @@
       "availability": {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -2024,6 +2032,10 @@
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
       },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
+      },
       "designs": [
         {
           "key": "fond-artifice",
@@ -2202,6 +2214,10 @@
       "availability": {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -2955,6 +2971,10 @@
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "designs": [
         {
           "key": "banniere-noel-givre",
@@ -3224,6 +3244,10 @@
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
       },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
+      },
       "designs": [
         {
           "key": "banniere-artifice",
@@ -3402,6 +3426,10 @@
       "availability": {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -8849,6 +8877,10 @@
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "rings": [
         {
           "key": "flocons-tombants",
@@ -9013,6 +9045,10 @@
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "rings": [
         {
           "key": "guirlande-lumineuse",
@@ -9159,6 +9195,10 @@
       "availability": {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -10126,6 +10166,10 @@
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "rings": [
         {
           "key": "flocons-tombants-fixe",
@@ -10466,6 +10510,10 @@
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
       },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
+      },
       "rings": [
         {
           "key": "feux-d-artifice",
@@ -10721,6 +10769,10 @@
       "availability": {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -21199,6 +21251,10 @@
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "frames": [
         {
           "key": "flocons-tombants",
@@ -21582,6 +21638,10 @@
       "availability": {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "frames": [
         {
@@ -21994,6 +22054,10 @@
       "availability": {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "frames": [
         {
@@ -23679,6 +23743,10 @@
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "frames": [
         {
           "key": "flocons-tombants-fixe",
@@ -24672,6 +24740,10 @@
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
       },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
+      },
       "frames": [
         {
           "key": "feux-d-artifice",
@@ -25429,6 +25501,10 @@
       "availability": {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "frames": [
         {
