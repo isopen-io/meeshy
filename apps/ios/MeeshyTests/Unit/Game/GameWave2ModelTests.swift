@@ -94,6 +94,33 @@ final class GameWave2ModelTests: XCTestCase {
         XCTAssertEqual(schedule.loads, 1)
     }
 
+    // MARK: - Tirer pour rafraîchir (#16425)
+
+    func test_refresh_rereadsTheProgressionTheSettingsAndTheCalendar_withoutOpeningALeagueNeverAsked() async {
+        let schedule = FakeSeasonSchedule(served: .default)
+        let rig = makeSUT(seasonSchedule: schedule)
+
+        await rig.sut.refresh()
+
+        XCTAssertNotNil(rig.sut.progression.game, "la progression est relue")
+        XCTAssertEqual(rig.integration.settingsCallCount, 1)
+        XCTAssertEqual(schedule.loads, 1)
+        XCTAssertEqual(rig.service.weekCallCount, 0, "une lecture jamais demandée ne part pas")
+    }
+
+    func test_refresh_rereadsTheLeagueWeekAlreadyShown_andKeepsItWhileReading() async {
+        let rig = makeSUT(seasonSchedule: FakeSeasonSchedule(served: .default))
+        rig.service.weekResult = .success(week(rank: 3))
+        await rig.sut.loadWeek()
+        rig.service.weekResult = .success(week(rank: 1))
+
+        await rig.sut.refresh()
+
+        XCTAssertEqual(rig.service.weekCallCount, 2)
+        XCTAssertEqual(rig.sut.week.value?.entries.first?.rank, 1)
+        XCTAssertFalse(rig.sut.week.showsSkeleton)
+    }
+
     // MARK: - La saison
 
     func test_claim_sendsTheStepOnce_andLeavesNoErrorBehind() async {

@@ -1,5 +1,19 @@
-import Foundation
+import Combine
 import MeeshySDK
+import UIKit
+
+/// Ce qui fait relire les défis du jour et les succès en direct (#16425) : `game:missions-updated` (une mission a avancé,
+/// ici ou ailleurs) et le retour de l'app au premier plan (des défis ont pu avancer, ou le jour changer, pendant
+/// l'absence). `game:updated` a son propre chemin (`ProgressionViewModel.receive`), qui pose le bloc servi.
+enum GameLiveRefresh {
+    static func triggers(center: NotificationCenter = .default) -> AnyPublisher<Void, Never> {
+        Publishers.Merge(
+            center.publisher(for: .gameMissionsUpdated).map { _ in () },
+            center.publisher(for: UIApplication.willEnterForegroundNotification).map { _ in () }
+        )
+        .eraseToAnyPublisher()
+    }
+}
 
 /// Les gestes du jeu EN VOL, un par intention (#9383).
 struct GamePending: Equatable {

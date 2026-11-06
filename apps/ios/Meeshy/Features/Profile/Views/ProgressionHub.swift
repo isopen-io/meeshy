@@ -492,7 +492,8 @@ struct ProgressionSectionPage: View {
         )
         // « Comprendre les badges » (#9640) : le lien de la page et la feuille d'un badge mènent à la section badges du carnet.
         .environment(\.gameOpenBadgesGuide, { router.openGame(at: GameNavigationMap.badgesGuide) })
-        .task { await viewModel.load() }
+        // Revenir sur la page relit en silence (#16425) : un défi avancé pendant l'absence s'y montre.
+        .task { await viewModel.appear() }
         .fullScreenCover(item: $reveal) { palier in
             AchievementRevealView(
                 reveal: palier.reveal,
