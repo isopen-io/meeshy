@@ -140,7 +140,7 @@ final class AttachmentSendRunnerTests: XCTestCase {
             host: host,
             callbacks: AttachmentSendCallbacks(
                 restorePlace: { _, sent in journal.add("restorePlace:\(sent)") },
-                setProgress: { _, _ in },
+                setProgress: { _, _, _ in },
                 abortUpload: { journal.add("abort") }
             ),
             network: network,
@@ -461,7 +461,7 @@ extension AttachmentSendRunnerTests {
             host: MockAttachmentSendHost(journal: journal),
             callbacks: AttachmentSendCallbacks(
                 restorePlace: { _, _ in },
-                setProgress: { tempId, fraction in store.report(fraction, for: tempId) },
+                setProgress: { tempId, sent, total in store.report(sent: sent, total: total, for: tempId) },
                 abortUpload: {}
             ),
             network: FakeNetworkMonitor(isOnline: true),
@@ -525,7 +525,7 @@ extension AttachmentSendRunnerTests {
             host: MockAttachmentSendHost(journal: journal),
             callbacks: AttachmentSendCallbacks(
                 restorePlace: { _, _ in },
-                setProgress: { tempId, fraction in store.report(fraction, for: tempId) },
+                setProgress: { tempId, sent, total in store.report(sent: sent, total: total, for: tempId) },
                 abortUpload: {}
             ),
             network: FakeNetworkMonitor(isOnline: true),
@@ -558,7 +558,7 @@ extension AttachmentSendRunnerTests {
             host: MockAttachmentSendHost(journal: journal),
             callbacks: AttachmentSendCallbacks(
                 restorePlace: { _, _ in },
-                setProgress: { tempId, fraction in store.report(fraction, for: tempId) },
+                setProgress: { tempId, sent, total in store.report(sent: sent, total: total, for: tempId) },
                 abortUpload: {}
             ),
             network: FakeNetworkMonitor(isOnline: false),

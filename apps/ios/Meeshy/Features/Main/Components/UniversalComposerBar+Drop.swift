@@ -255,7 +255,7 @@ nonisolated enum PastedFileCopier {
             }
             let name = url.lastPathComponent
             let destination = fm.temporaryDirectory
-                .appendingPathComponent("paste_\(UUID().uuidString)_\(name)")
+                .appendingPathComponent(ImportedCopyName.copyName(of: name, through: .paste))
             try fm.copyItem(at: url, to: destination)
             return .file(
                 url: destination,

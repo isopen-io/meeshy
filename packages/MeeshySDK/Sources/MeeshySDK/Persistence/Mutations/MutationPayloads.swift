@@ -497,6 +497,12 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// laisse derrière.
     public let localMediaMimeTypes: [String]?
 
+    /// Le nom choisi de chaque fichier, aligné par index sur `localMediaPaths`
+    /// (#11166). Le fichier en file s'appelle `pending-media/<cmid>/0.pdf` : sans
+    /// ce champ, le serveur garderait `0.pdf` en `originalName`. `nil` : aucune
+    /// copie importée dans cette publication, ou ligne écrite avant ce champ.
+    public let localMediaOriginalNames: [String?]?
+
     /// **LE CANVAS composé sur la scène.**
     ///
     /// Porté ici pour la même raison que `location` et `mentions`, et c'est ici
@@ -571,6 +577,16 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         return mimes[index]
     }
 
+    /// Le nom choisi du fichier en file `fileURL`, ou `nil` s'il n'en a pas : le
+    /// téléverseur prend alors le nom du fichier. La lecture se fait par nom de
+    /// fichier parce qu'une variante réencodée n'est pas le fichier choisi.
+    public func originalMediaName(forSentFile fileURL: URL) -> String? {
+        guard let paths = localMediaPaths, let names = localMediaOriginalNames,
+              let index = paths.firstIndex(where: { URL(fileURLWithPath: $0).lastPathComponent == fileURL.lastPathComponent }),
+              names.indices.contains(index) else { return nil }
+        return names[index]
+    }
+
     /// **Ce qu'une tentative PRÉCÉDENTE a déjà monté.**
     ///
     /// Sans ce champ, `OutboxDispatcher.dispatchCreatePost` reparcourrait
@@ -608,6 +624,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         repostOfId: String? = nil,
         mobileTranscription: MobileTranscriptionPayload? = nil,
         localMediaMimeTypes: [String]? = nil,
+        localMediaOriginalNames: [String?]? = nil,
         storyEffects: StoryEffects? = nil,
         mediaCaptions: [String?]? = nil,
         mediaAlts: [String?]? = nil,
@@ -632,6 +649,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.repostOfId = repostOfId
         self.mobileTranscription = mobileTranscription
         self.localMediaMimeTypes = localMediaMimeTypes
+        self.localMediaOriginalNames = localMediaOriginalNames
         self.storyEffects = storyEffects
         self.mediaCaptions = mediaCaptions
         self.mediaAlts = mediaAlts
