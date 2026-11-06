@@ -30,7 +30,7 @@ public enum StoryStickerKind: String, Sendable {
 
 // MARK: - Story Sticker
 
-public struct StorySticker: Codable, Identifiable, Sendable {
+public struct StorySticker: Codable, Identifiable, Sendable, Equatable {
 
     /// **L'échelle à laquelle un sticker se POSE** (directive porteur
     /// 2026-08-30 : « les stickers doivent être posés en grand sur le canvas »).

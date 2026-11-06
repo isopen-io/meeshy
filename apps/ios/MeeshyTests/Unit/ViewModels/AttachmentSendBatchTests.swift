@@ -123,6 +123,41 @@ final class AttachmentSendBatchTests: XCTestCase {
         XCTAssertEqual(items.map(\.attachmentId), ["a", "c"])
     }
 
+    func test_items_importedFile_carriesTheChosenNameNotTheTemporaryCopyName() {
+        let chosen = MeeshyMessageAttachment(id: "doc", fileName: "On fait comme ça.m4a",
+                                             originalName: "On fait comme ça.m4a", mimeType: "audio/mp4")
+        let copy = URL(fileURLWithPath: "/tmp/file_058F7FEA-B7A2-4CF3-876F-763EDA90E946_On fait comme ça.m4a")
+
+        let items = MediaGroupUploadItem.items(
+            for: group(.audio, [chosen]), mediaFiles: ["doc": copy], thumbnails: [:], transcriptions: [:]
+        )
+
+        XCTAssertEqual(items.map(\.fileName), ["On fait comme ça.m4a"])
+    }
+
+    func test_items_originalNameOfAnotherFormat_letsTheUploaderUseTheFileName() {
+        let reencoded = MeeshyMessageAttachment(id: "photo", fileName: "IMG_0001.HEIC",
+                                                originalName: "IMG_0001.HEIC", mimeType: "image/jpeg")
+
+        let items = MediaGroupUploadItem.items(
+            for: group(.visual, [reencoded]), mediaFiles: ["photo": URL(fileURLWithPath: "/tmp/photo.jpg")],
+            thumbnails: [:], transcriptions: [:]
+        )
+
+        XCTAssertEqual(items.map(\.fileName), [nil])
+    }
+
+    func test_items_withoutOriginalName_letsTheUploaderUseTheFileName() {
+        let voice = attachment("voice", mimeType: "audio/mp4")
+
+        let items = MediaGroupUploadItem.items(
+            for: group(.audio, [voice]), mediaFiles: ["voice": URL(fileURLWithPath: "/tmp/voice.m4a")],
+            thumbnails: [:], transcriptions: [:]
+        )
+
+        XCTAssertEqual(items.map(\.fileName), [nil])
+    }
+
     func test_items_carriesTheLocalTranscriptionAndCaptureProvenance() {
         let voice = attachment("voice", mimeType: "audio/mp4", capturedInApp: true)
         let transcription = MessageTranscription(attachmentId: "voice", text: "Bonjour", language: "fr")

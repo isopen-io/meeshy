@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - Background Transform
 
-public struct StoryBackgroundTransform: Codable, Sendable {
+public struct StoryBackgroundTransform: Codable, Sendable, Equatable {
     public var scale: CGFloat?
     public var offsetX: CGFloat?
     public var offsetY: CGFloat?

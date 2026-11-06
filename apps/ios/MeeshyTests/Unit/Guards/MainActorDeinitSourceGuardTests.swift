@@ -73,9 +73,7 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
         let hasBareDeinit: Bool
     }
 
-    static let pendingBareDeinits: Set<String> = [
-        "Features/Main/Components/RecentMediaStrip.swift: RecentMediaStripModel"
-    ]
+    static let pendingBareDeinits: Set<String> = []
 
     /// Toutes les déclarations `class` de `apps/ios/Meeshy/**`, commentaires et
     /// littéraux ET chaînes neutralisés (`DeclarationBodyScanner.mask`), avec les faits

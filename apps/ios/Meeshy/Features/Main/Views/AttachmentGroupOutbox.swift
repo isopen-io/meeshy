@@ -71,7 +71,8 @@ struct AttachmentGroupOutbox {
                 clientMessageId: send.tempId,
                 originalLanguage: originalLanguage,
                 replyToId: send.group.carriesReply ? replyToId : nil,
-                protection: protection
+                protection: protection,
+                originalNames: pairs.map { $0.name }
             )
             await relocator.relocate(tempId: send.tempId, attachments: send.locals, toStoredPaths: queued.localMediaPaths)
             Logger.messages.info("Visual group queued offline for \(send.tempId)")
@@ -116,17 +117,18 @@ struct AttachmentGroupOutbox {
             clientMessageId: send.tempId,
             originalLanguage: originalLanguage,
             replyToId: send.group.carriesReply ? replyToId : nil,
-            protection: protection
+            protection: protection,
+            originalNames: pairs.map { $0.name }
         ) else { return false }
         await relocator.relocate(tempId: send.tempId, attachments: send.locals, toStoredPaths: queued.localMediaPaths)
         return true
     }
 
-    private func mediaSources(of send: OutgoingMediaGroup, mediaFiles: [String: URL]) -> [(url: URL, kind: String)] {
+    private func mediaSources(of send: OutgoingMediaGroup, mediaFiles: [String: URL]) -> [(url: URL, kind: String, name: String?)] {
         send.group.attachments.compactMap { att in
             guard let url = mediaFiles[att.id] else { return nil }
             let kind = AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)).rawValue
-            return (url, kind)
+            return (url, kind, MediaGroupUploadItem.chosenName(of: att, sentAs: url))
         }
     }
 }
@@ -140,7 +142,8 @@ private extension OfflineMessageQueueing {
         clientMessageId: String,
         originalLanguage: String?,
         replyToId: String?,
-        protection: MessageProtectionIntent
+        protection: MessageProtectionIntent,
+        originalNames: [String?]
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         try await enqueueMedia(
             sourceMediaURLs: sourceMediaURLs,
@@ -157,7 +160,7 @@ private extension OfflineMessageQueueing {
             deletesSourceFiles: true,
             createdAt: nil,
             protection: protection,
-            originalNames: nil
+            originalNames: originalNames
         )
     }
 }

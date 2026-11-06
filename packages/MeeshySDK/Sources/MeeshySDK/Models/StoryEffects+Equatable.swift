@@ -1,62 +1,92 @@
 import Foundation
 
-/// **`StoryEffects` s'égale par son ENCODAGE, et c'est un choix** (#4756).
+/// **`StoryEffects` s'égale par les champs de son `runtimeSnapshot`, un à un** (#4756, #11168).
 ///
-/// ## Pourquoi une conformance, et pourquoi celle-ci
+/// ## Pourquoi une conformance
 ///
-/// Trois charges du dépôt sont `Equatable` et transportent désormais le canvas :
+/// Trois charges du dépôt sont `Equatable` et transportent le canvas :
 /// `PublishIntent`, `ComposerDocumentDraft` et `CreatePostPayload`. Sans
-/// `StoryEffects: Equatable`, elles perdent toutes les trois leur synthèse — et
-/// avec elle les témoins qui comparent une charge composée à celle qu'on
-/// attend, c'est-à-dire la façon dont ce dépôt garde ses payloads.
+/// `StoryEffects: Equatable`, elles perdent leur synthèse, et avec elle les
+/// témoins qui comparent une charge composée à celle qu'on attend.
 ///
-/// La synthèse ordinaire aurait exigé de conformer une dizaine de types du
-/// modèle de story (`StoryMediaObject`, `StoryAudioPlayerObject`,
-/// `StoryKeyframe`, `StoryClipTransition`, …) : beaucoup de surface publique
-/// ouverte pour un besoin qui n'est pas le leur.
+/// ## Pourquoi plus par ENCODAGE (#11168)
 ///
-/// ## L'égalité par encodage ne peut pas se PÉRIMER
+/// AttributeGraph appelle `==` à chaque mise à jour d'une vue qui reçoit des
+/// effets. L'égalité d'avant encodait les DEUX côtés en JSON trié : chaque
+/// rendu d'une story sérialisait deux documents complets sur le fil principal,
+/// jusqu'au chien de garde (0x8BADF00D, 10 s, iPhone 18 / iOS 27). Comparer
+/// champ à champ ne coûte presque rien, s'arrête au premier écart, et deux
+/// tableaux qui partagent leur tampon s'égalent sans être parcourus.
 ///
-/// Un `==` écrit à la main sur une structure à vingt champs est un INVENTAIRE :
-/// il paraît juste, il compile, et le jour où un champ s'ajoute il continue de
-/// rendre `true` sur deux valeurs qui diffèrent — sans que rien ne rougisse.
-/// C'est le mode de panne que ce fichier existe pour rendre impossible : la
-/// comparaison porte sur la charge ENTIÈRE, telle qu'elle part sur le fil, et
-/// un champ neuf y entre sans qu'on ait à y penser.
+/// ## Le verdict reste celui de l'encodage
 ///
-/// > `StoryEffects` EST son encodage : c'est le blob que `CreatePostSchema`
-/// > accepte et que le lecteur rejoue. Deux canvas qui s'encodent à l'identique
-/// > sont, pour tout consommateur du dépôt, le même canvas.
+/// `identityFields` nomme exactement ce que `runtimeSnapshot` encode — la
+/// forme v1 COMPLÈTE, l'empreinte dont l'écran dépend. Les mémos du fil et
+/// `canvasV3` (`outsideIdentity`) n'en font pas partie, ni les champs
+/// dépréciés. Les types imbriqués s'égalent par synthèse : un champ neuf y
+/// entre sans qu'on y pense.
 ///
-/// ## `runtimeSnapshot`, et surtout PAS `encode(to:)`
+/// ## Un inventaire qui ne peut pas se périmer en silence
 ///
-/// `StoryEffects.encode(to:)` ne sérialise pas la structure : il rend
-/// `CanvasV3(migrating: self)` — la forme du FIL, une projection. Deux valeurs
-/// qui diffèrent sur ce que le canvas v3 absorbe ou n'exprime pas s'y
-/// encoderaient à l'identique, et `==` les déclarerait égales. Une égalité
-/// LARGE est le pire des deux défauts possibles ici : elle fait taire un
-/// témoin qui compare deux charges réellement différentes.
-///
-/// `runtimeSnapshot` est la forme v1 COMPLÈTE, et son doc-comment le dit :
-/// « l'empreinte LOCALE dont l'écran dépend ». C'est celle qu'il faut pour une
-/// identité, et son existence n'est pas un hasard — le composer s'en sert déjà
-/// pour savoir quand repeindre.
-///
-/// `.sortedKeys` rend l'ordre des clés déterministe — sans lui, deux
-/// dictionnaires identiques pourraient s'encoder différemment et deux canvas
-/// égaux se déclareraient distincts.
-///
-/// **Deux échecs d'encodage ne valent PAS une égalité.** `try?` rendrait `nil`
-/// des deux côtés et `nil == nil` dirait `true` : deux valeurs dont on ne sait
-/// RIEN seraient déclarées identiques. Le `guard` l'interdit — on ne répond
-/// `true` que sur deux encodages réels.
+/// Un `==` écrit à la main continuerait de rendre `true` le jour où un champ
+/// s'ajoute. `StoryEffectsEqualityTests` confronte ces deux listes aux champs
+/// stockés que `Mirror` voit : un champ neuf qui n'est dans aucune fait
+/// rougir le test, et chaque champ comparé a son témoin de parité contre
+/// l'ancienne égalité par encodage.
 extension StoryEffects: Equatable {
 
     public static func == (lhs: StoryEffects, rhs: StoryEffects) -> Bool {
-        let encodeur = JSONEncoder()
-        encodeur.outputFormatting = [.sortedKeys]
-        guard let gauche = try? encodeur.encode(lhs.runtimeSnapshot),
-              let droite = try? encodeur.encode(rhs.runtimeSnapshot) else { return false }
-        return gauche == droite
+        identityFields.allSatisfy { $0.same(lhs, rhs) }
     }
+}
+
+extension StoryEffects {
+
+    struct IdentityField: Sendable {
+        let name: String
+        let same: @Sendable (StoryEffects, StoryEffects) -> Bool
+    }
+
+    static let identityFields: [IdentityField] = [
+        IdentityField(name: "background") { $0.background == $1.background },
+        IdentityField(name: "textStyle") { $0.textStyle == $1.textStyle },
+        IdentityField(name: "textColor") { $0.textColor == $1.textColor },
+        IdentityField(name: "textPosition") { $0.textPosition == $1.textPosition },
+        IdentityField(name: "filter") { $0.filter == $1.filter },
+        IdentityField(name: "filterIntensity") { $0.filterIntensity == $1.filterIntensity },
+        IdentityField(name: "stickers") { $0.stickers == $1.stickers },
+        IdentityField(name: "textAlign") { $0.textAlign == $1.textAlign },
+        IdentityField(name: "textSize") { $0.textSize == $1.textSize },
+        IdentityField(name: "textBg") { $0.textBg == $1.textBg },
+        IdentityField(name: "textOffsetY") { $0.textOffsetY == $1.textOffsetY },
+        IdentityField(name: "textPositionPoint") { $0.textPositionPoint == $1.textPositionPoint },
+        IdentityField(name: "backgroundAudioId") { $0.backgroundAudioId == $1.backgroundAudioId },
+        IdentityField(name: "backgroundAudioVolume") { $0.backgroundAudioVolume == $1.backgroundAudioVolume },
+        IdentityField(name: "backgroundAudioStart") { $0.backgroundAudioStart == $1.backgroundAudioStart },
+        IdentityField(name: "backgroundAudioEnd") { $0.backgroundAudioEnd == $1.backgroundAudioEnd },
+        IdentityField(name: "voiceAttachmentId") { $0.voiceAttachmentId == $1.voiceAttachmentId },
+        IdentityField(name: "opening") { $0.opening == $1.opening },
+        IdentityField(name: "closing") { $0.closing == $1.closing },
+        IdentityField(name: "thumbHash") { $0.thumbHash == $1.thumbHash },
+        IdentityField(name: "backgroundTransform") { $0.backgroundTransform == $1.backgroundTransform },
+        IdentityField(name: "slideDuration") { $0.slideDuration == $1.slideDuration },
+        IdentityField(name: "timelineDuration") { $0.timelineDuration == $1.timelineDuration },
+        IdentityField(name: "canvasAspectRatio") { $0.canvasAspectRatio == $1.canvasAspectRatio },
+        IdentityField(name: "voiceTranscriptions") { $0.voiceTranscriptions == $1.voiceTranscriptions },
+        IdentityField(name: "backgroundAudioVariants") { $0.backgroundAudioVariants == $1.backgroundAudioVariants },
+        IdentityField(name: "clipTransitions") { $0.clipTransitions == $1.clipTransitions },
+        IdentityField(name: "stickerObjects") { $0.stickerObjects == $1.stickerObjects },
+        IdentityField(name: "locationObjects") { $0.locationObjects == $1.locationObjects },
+        IdentityField(name: "textObjects") { $0.textObjects == $1.textObjects },
+        IdentityField(name: "audioPlayerObjects") { $0.audioPlayerObjects == $1.audioPlayerObjects },
+        IdentityField(name: "mediaObjects") { $0.mediaObjects == $1.mediaObjects },
+        IdentityField(name: "drawingStrokes") { $0.drawingStrokes == $1.drawingStrokes },
+        IdentityField(name: "drawingData") { $0.drawingData == $1.drawingData },
+    ]
+
+    static let outsideIdentity: Set<String> = [
+        "openingWire", "closingWire", "wireBandEdge", "wireTimingEnd", "wireAnchorPoint",
+        "wireRepaintMemo", "wireMissingZIndex", "canvasV3",
+        "musicTrackId", "musicStartTime", "musicEndTime",
+    ]
 }

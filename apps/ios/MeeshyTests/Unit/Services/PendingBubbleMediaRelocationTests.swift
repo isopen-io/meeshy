@@ -82,6 +82,24 @@ final class PendingBubbleMediaRelocationTests: XCTestCase {
         XCTAssertEqual(relocator.calls.map(\.storedPaths), [["pending-media/cid_requeued/0.mp4"]])
     }
 
+    func test_requeueAfterOnlineFailure_importedFile_keepsItsChosenNameForTheReplay() async {
+        let copy = URL(fileURLWithPath: "/tmp/file_27E4A5BD-0000-0000-0000-000000000000_Devis.pdf")
+        let document = MeeshyMessageAttachment(id: "att-doc", fileName: "Devis.pdf", originalName: "Devis.pdf",
+                                               mimeType: "application/pdf", fileSize: 42, fileUrl: copy.absoluteString)
+        let queue = FakeOfflineMessageQueue()
+        let sut = AttachmentGroupOutbox(
+            conversationId: Self.conversationId, originalLanguage: "fr", replyToId: nil, protection: .none,
+            mediaQueue: queue, relocator: RelocatorSpy()
+        )
+
+        let requeued = await sut.requeueAfterOnlineFailure(
+            makeVisualGroup(tempId: "cid_doc", attachments: [document]), mediaFiles: ["att-doc": copy])
+
+        XCTAssertTrue(requeued)
+        let names = await queue.enqueuedMediaCalls.map(\.originalNames)
+        XCTAssertEqual(names, [["Devis.pdf"]])
+    }
+
     func test_enqueueOffline_queueFails_leavesTheBubbleAlone() async {
         let video = makeAttachment(id: "att-vid", mimeType: "video/mp4", source: URL(fileURLWithPath: "/tmp/src/clip.mp4"))
         let queue = FakeOfflineMessageQueue()

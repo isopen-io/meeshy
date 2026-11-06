@@ -5,7 +5,7 @@ import Foundation
 
 /// Transition between two adjacent clips of the same slide (intra-slide).
 /// Distinct from `StoryTransitionEffect` which is the inter-slide opening/closing animation.
-public struct StoryClipTransition: Codable, Identifiable, Sendable {
+public struct StoryClipTransition: Codable, Identifiable, Sendable, Equatable {
     public let id: String
     public let fromClipId: String
     public let toClipId: String

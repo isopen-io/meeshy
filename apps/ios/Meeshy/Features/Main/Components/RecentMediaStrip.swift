@@ -108,9 +108,9 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     /// True once a fetch attempt has run, so the view never re-prompts.
     private var didLoad = false
     private var fetchLimit = RecentMediaStrip.headSampleCount
-    private var isObservingLibrary = false
+    private nonisolated(unsafe) var isObservingLibrary = false
 
-    deinit {
+    nonisolated deinit {
         if isObservingLibrary {
             PHPhotoLibrary.shared().unregisterChangeObserver(self)
         }

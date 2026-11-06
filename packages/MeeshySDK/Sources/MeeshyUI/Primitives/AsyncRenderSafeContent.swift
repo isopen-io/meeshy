@@ -66,3 +66,25 @@ public nonisolated struct FramePreferenceProbe<Key: PreferenceKey> {
         Color.clear.preference(key: Key.self, value: value(proxy.frame(in: space)))
     }
 }
+
+/// Le contenu d'une SCÈNE (`WindowGroup`) CONSTRUIT par le `body` de l'`App` —
+/// sur le fil principal — et seulement RELU par la scène (#11167) :
+///
+/// ```swift
+/// WindowGroup(content: PrebuiltSceneContent(mainWindow).make)
+/// ```
+///
+/// Sous iOS 27, le rendu asynchrone peut redemander le contenu d'une fenêtre
+/// depuis `com.apple.SwiftUI.AsyncRenderer` ; une fermeture écrite dans le
+/// `body` d'une `App` hérite du main actor et y trappait à son entrée.
+public nonisolated struct PrebuiltSceneContent<Content> {
+    private let content: Content
+
+    public init(_ content: Content) {
+        self.content = content
+    }
+
+    public func make() -> Content {
+        content
+    }
+}

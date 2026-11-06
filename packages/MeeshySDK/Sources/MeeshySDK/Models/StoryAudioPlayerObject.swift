@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - Story Audio Player Object (player waveform sur canvas)
 
-public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
+public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable, Equatable {
     public var id: String
     public var postMediaId: String      // référence PostMedia en DB
     /// URL de l'asset — miroir de `StoryMediaObject.mediaURL`.

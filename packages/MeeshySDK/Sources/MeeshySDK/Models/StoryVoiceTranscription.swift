@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - Story Voice Transcription
 
-public struct StoryVoiceTranscription: Codable, Sendable {
+public struct StoryVoiceTranscription: Codable, Sendable, Equatable {
     public let language: String
     public let content: String
 
