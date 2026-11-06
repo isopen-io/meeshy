@@ -41,6 +41,7 @@ import { disconnectSession } from '../../socketio/disconnectSession';
 import { notifyIfLoginFromNewDevice } from './notify-new-device';
 import { currentSessionOf } from '../../services/auth/current-session';
 import { pendingSessionTokenFor } from '../../services/auth/email-verification-watch';
+import { sendEmailDomainNotAllowed } from '../../services/auth/email-domain-guard';
 import {
   rememberPendingDeviceTrust,
   consumePendingDeviceTrust
@@ -101,6 +102,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       sendError(reply, 429, 'Trop de demandes pour cette adresse. Réessayez dans une heure.', { code: 'RATE_LIMITED' });
       return true;
     }
+    if (issue.kind === 'email-domain-not-allowed') {
+      sendEmailDomainNotAllowed(reply);
+      return true;
+    }
     return false;
   }
 
@@ -159,6 +164,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
               }
             }
           }
+        },
+        400: {
+          description: 'Unknown address on a reserved or disposable domain (#16491): no account is created — code EMAIL_DOMAIN_NOT_ALLOWED',
+          ...errorResponseSchema
         },
         401: errorResponseSchema,
         429: {

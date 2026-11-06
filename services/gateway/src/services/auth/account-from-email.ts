@@ -16,6 +16,7 @@
  * | compte actif, sans mot de passe, non vérifié | code renvoyé              | code envoyé                |
  * | compte actif, autre état                   | `existing-account`        | code de CONNEXION envoyé   |
  * | compte supprimé (`isActive: false`)        | `unavailable`             | `unavailable`              |
+ * | aucun compte, adresse réservée ou jetable  | `email-domain-not-allowed` | `email-domain-not-allowed` |
  *
  * La troisième porte, `proven-password` (#8055), n'est ouverte que par
  * `POST /login` APRÈS que `authenticate` a vérifié le mot de passe d'un compte
@@ -53,6 +54,7 @@ import { normalizeEmail } from '../../utils/normalize';
 import type { AfterResponse } from '../../utils/after-response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { isRegistrationRefusal } from './registration-refusal';
+import { isEmailDomainRefused } from './email-domain-guard';
 import type { RegisterData, RegisterResult } from './registration.service';
 import {
   LOGIN_CODE_TTL_MINUTES,
@@ -78,7 +80,8 @@ export type AccountFromEmailOutcome =
   | { readonly kind: 'verification-required'; readonly accountCreated: boolean; readonly email: string }
   | { readonly kind: 'existing-account' }
   | { readonly kind: 'unavailable' }
-  | { readonly kind: 'rate-limited' };
+  | { readonly kind: 'rate-limited' }
+  | { readonly kind: 'email-domain-not-allowed' };
 
 export type AccountFromEmailInput = {
   readonly email: string;
@@ -268,6 +271,13 @@ export async function startAccountFromEmail(
     return { kind: 'existing-account' };
   }
 
+  // #16491 — seule la CRÉATION est gardée : un compte existant sur un domaine
+  // réservé reçoit toujours son code. Le refus précède le débit de la porte du
+  // mot de passe, qu'il ne doit pas consommer.
+  if (!account && isEmailDomainRefused(email)) {
+    return { kind: 'email-domain-not-allowed' };
+  }
+
   if (input.door !== 'email-only' && !(await consumeSend(deps.throttle, email, ip))) {
     // Un compte en attente garde son code en cours : on ne le régénère pas, on
     // ne renvoie rien, et l'écran de saisie du code reste la bonne suite.
@@ -291,6 +301,9 @@ export async function startAccountFromEmail(
     // un code est parti — la réponse est la même, sans second envoi.
     if (isRegistrationRefusal(error) && error.code === 'EMAIL_TAKEN') {
       return { kind: 'verification-required', accountCreated: false, email };
+    }
+    if (isRegistrationRefusal(error) && error.code === 'EMAIL_DOMAIN_NOT_ALLOWED') {
+      return { kind: 'email-domain-not-allowed' };
     }
     throw error;
   }

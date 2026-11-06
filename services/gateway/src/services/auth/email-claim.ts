@@ -60,6 +60,7 @@ import { hashPassword } from '../../utils/password-hash';
 import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { emailCodeMatches, emailTokenMatches } from './email-code';
+import { isEmailDomainRefused } from './email-domain-guard';
 import { markEmailVerificationWatchesProven } from './email-verification-watch';
 import { linkConfirmation, linkDeviceVerdict, type LinkConfirmation } from './link-device-binding';
 import type { EmailOwner } from './registration-refusal';
@@ -314,6 +315,13 @@ export async function proveEmailClaim(store: EmailClaimStore, proof: EmailClaimP
     byCode ? emailCodeMatches(c.emailVerificationCode, presented) : emailTokenMatches(c.emailVerificationToken, presented),
   );
   if (!claimant) return { kind: 'none' };
+
+  // #16491 — une revendication ouverte avant la garde n'active pas une adresse
+  // réservée ou jetable : le compte revendiquant reste inactif, sans elle.
+  if (isEmailDomainRefused(email)) {
+    logger.info('revendication d’une adresse réservée ou jetable — non activée');
+    return { kind: 'none' };
+  }
 
   const now = new Date();
   if (!claimant.emailVerificationExpiry || claimant.emailVerificationExpiry.getTime() <= now.getTime()) {

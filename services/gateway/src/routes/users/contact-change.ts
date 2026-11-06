@@ -17,6 +17,7 @@ import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
 import { creditContactProof } from '../../services/auth/contact-proof-engagement';
+import { isEmailDomainRefused, sendEmailDomainNotAllowed } from '../../services/auth/email-domain-guard';
 import { emailSecretLink } from '../../utils/email-secret-link';
 
 const logger = enhancedLogger.child({ module: 'contact-change' });
@@ -308,6 +309,10 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'New email must be different from current email');
       }
 
+      if (isEmailDomainRefused(newEmail)) {
+        return sendEmailDomainNotAllowed(reply);
+      }
+
       // Check if new email is already in use by another user
       const existingUser = await fastify.prisma.user.findFirst({
         where: {
@@ -459,6 +464,10 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
       // Check expiry
       if (user.pendingEmailVerificationExpiry && user.pendingEmailVerificationExpiry < new Date()) {
         return sendBadRequest(reply, 'Verification token has expired');
+      }
+
+      if (isEmailDomainRefused(user.pendingEmail)) {
+        return sendEmailDomainNotAllowed(reply);
       }
 
       // Check if the pending email is still available (in case it was taken by another user since)
