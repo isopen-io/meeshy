@@ -54,6 +54,7 @@ import {
 } from '@meeshy/shared/types/pack-publisher';
 import { PARTNER_PROFILE_LIMITS } from '@meeshy/shared/types/lens-partner';
 import { isBlockedBetween } from '../../utils/blocking';
+import { undiscoverableAmong } from '../profile-discoverability';
 import { isUniqueViolation } from './PackCatalog';
 import { NEUTRAL_PUBLISHER_NAME, byAge, byPrecedence, claimPublisherName, isNameKeyViolation, lostNameRace } from './PublisherNames';
 
@@ -152,6 +153,17 @@ export type PackPublishersDeps = {
   readonly officialAccountId: string | null;
   readonly now?: () => Date;
   readonly suffix?: () => string;
+  /**
+   * Ce qui permet à la page éditeur de NOMMER le compte qui édite (#16433) ; absent, elle ne
+   * nomme personne (fermé par défaut). `hasPublished` : le compte a au moins un pack approuvé ;
+   * `hiddenFrom` : la loi « ne pas être trouvé » (#8104) le cache à ce lecteur.
+   */
+  readonly ownerVisibility?: PublisherOwnerVisibility;
+};
+
+export type PublisherOwnerVisibility = {
+  readonly hasPublished: (userId: string) => Promise<boolean>;
+  readonly hiddenFrom: (viewerId: string, ownerId: string) => Promise<boolean>;
 };
 
 const OBJECT_ID = /^[0-9a-f]{24}$/;
@@ -246,8 +258,10 @@ export class PackPublishers {
   private readonly official: string | null;
   private readonly now: () => Date;
   private readonly suffix: () => string;
+  private readonly ownerVisibility: PublisherOwnerVisibility | null;
 
   constructor(deps: PackPublishersDeps) {
+    this.ownerVisibility = deps.ownerVisibility ?? null;
     this.prisma = deps.prisma;
     this.official = deps.officialAccountId;
     this.now = deps.now ?? (() => new Date());
@@ -350,29 +364,36 @@ export class PackPublishers {
 
   /**
    * La page d'un éditeur (#16433, directive porteur du 2026-11-06) : la boutique y nomme le
-   * compte qui l'édite pour qu'on ouvre son profil. Ce compte n'est jamais nommé s'il est
-   * désactivé ou supprimé, ni si lui et le lecteur se sont bloqués, dans un sens ou dans
-   * l'autre (`isBlockedBetween`, la loi du blocage) — le compte officiel compris : aucune
-   * exemption. La page reste, sans lien. L'adresse neutre ne désigne personne.
+   * compte qui l'édite pour qu'on ouvre son profil. Ce compte n'est nommé QUE si tout tient :
+   * l'adresse n'a qu'un titulaire ; le nom n'a pas été neutralisé (`servable`, imitation de
+   * Meeshy — son site part avec lui) ; le compte est actif ; il a publié au moins un pack
+   * approuvé (un profil de lens sans pack, d'avant cette page, reste anonyme — le compte
+   * officiel, dont les packs sont ceux du dépôt, en est dispensé) ; la loi « ne pas être
+   * trouvé » (#8104) ne le cache pas à ce lecteur ; et ni lui ni le lecteur ne se sont bloqués
+   * (`isBlockedBetween`) — le compte officiel compris. Sinon la page reste, sans lien.
    */
   async page(slug: string, viewerId: string): Promise<PublisherPage | null> {
     const row = await this.pageRow(slug);
     if (row === null) return null;
     const publisher = this.servable(row.profile) ?? (slug === MEESHY_PUBLISHER_SLUG ? MEESHY_PUBLISHER : null);
     if (publisher === null) return null;
-    return { publisher, owner: await this.ownerCard(row.ownerId, viewerId), website: row.profile?.website ?? null };
+    const neutralized = row.profile !== null && !publisher.official && publisher.name !== row.profile.displayName;
+    if (neutralized) return { publisher, owner: null, website: null };
+    const owner = row.soleHolder ? await this.ownerCard(row.ownerId, viewerId) : null;
+    return { publisher, owner, website: row.profile?.website ?? null };
   }
 
-  private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly profile: (PublisherRow & { readonly website?: string | null }) | null } | null> {
+  private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly soleHolder: boolean; readonly profile: (PublisherRow & { readonly website?: string | null }) | null } | null> {
     if (slug === MEESHY_PUBLISHER_SLUG) {
       const profile = this.official === null ? null : (await this.rowsOf([this.official]))[0] ?? null;
-      return { ownerId: this.official, profile: profile === null ? null : { ...profile, website: await this.websiteOf(profile.id) } };
+      return { ownerId: this.official, soleHolder: true, profile: profile === null ? null : { ...profile, website: await this.websiteOf(profile.id) } };
     }
     if (!isThirdPartySlug(slug)) return null;
     const rows: readonly PublisherRow[] = await this.prisma.partnerProfile.findMany({ where: { slug }, select: ROW_SELECT });
     const profile = [...rows].sort(byAge)[0];
     if (profile === undefined) return null;
-    return { ownerId: profile.userId, profile: { ...profile, website: await this.websiteOf(profile.id) } };
+    const holders = new Set(rows.map((holder) => holder.userId));
+    return { ownerId: profile.userId, soleHolder: holders.size === 1, profile: { ...profile, website: await this.websiteOf(profile.id) } };
   }
 
   private async websiteOf(id: string): Promise<string | null> {
@@ -381,9 +402,13 @@ export class PackPublishers {
   }
 
   private async ownerCard(userId: string | null, viewerId: string): Promise<PublisherOwnerCard | null> {
-    if (userId === null || (await isBlockedBetween(this.prisma, viewerId, userId))) return null;
+    const visibility = this.ownerVisibility;
+    if (userId === null || visibility === null) return null;
+    if (await isBlockedBetween(this.prisma, viewerId, userId)) return null;
     const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { ...ACCOUNT_SELECT, id: true, username: true, displayName: true, avatar: true } });
     if (account === null || !isLive(account) || typeof account.username !== 'string') return null;
+    if (!this.isOfficial(userId) && !(await visibility.hasPublished(userId))) return null;
+    if (await visibility.hiddenFrom(viewerId, userId)) return null;
     return { id: account.id, username: account.username, displayName: account.displayName ?? null, avatar: account.avatar ?? null };
   }
 
@@ -678,8 +703,28 @@ export class PackPublishers {
 }
 
 /** Les éditeurs de la passerelle : la base, et le compte officiel lu dans l'environnement. */
+/** Un pack APPROUVÉ, dans l'un des trois circuits de proposition : stickers, apparence, lens. */
+const APPROVED = { status: 'approved' } as const;
+
+export const publisherOwnerVisibility = (prisma: PrismaClient): PublisherOwnerVisibility => ({
+  hasPublished: async (userId) => {
+    const where = { ...APPROVED, submitterId: userId };
+    const counts = await Promise.all([
+      prisma.stickerPack.count({ where }),
+      prisma.communityAppearancePack.count({ where }),
+      prisma.lensPack.count({ where }),
+    ]);
+    return counts.some((count) => count > 0);
+  },
+  hiddenFrom: async (viewerId, ownerId) => (await undiscoverableAmong(prisma, viewerId, [ownerId])).has(ownerId),
+});
+
 export const defaultPackPublishers = (prisma: PackPublishersDb): PackPublishers =>
   new PackPublishers({ prisma, officialAccountId: officialPublisherAccountFrom(process.env) });
+
+/** Les éditeurs tels que `/publishers` les sert : seule cette famille de routes nomme le compte qui édite. */
+export const publisherPagePublishers = (prisma: PrismaClient): PackPublishers =>
+  new PackPublishers({ prisma, officialAccountId: officialPublisherAccountFrom(process.env), ownerVisibility: publisherOwnerVisibility(prisma) });
 
 /**
  * L'auteur SERVI aux anciens clients, qui n'affichent que lui : le nom de

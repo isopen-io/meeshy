@@ -11,11 +11,12 @@
  * « Meeshy » est lié au compte officiel configuré (`MEESHY_OFFICIAL_ACCOUNT_ID`).
  * La loi vit dans `services/packs/PackPublishers.ts`. Comptes INSCRITS seulement.
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { PACK_PUBLISHER_LIMITS } from '@meeshy/shared/types/pack-publisher';
 
+import { type UnifiedAuthRequest } from '../middleware/auth';
 import { requireAdminRank } from '../middleware/authorize';
-import { defaultPackPublishers, type PackPublishers } from '../services/packs/PackPublishers';
+import { publisherPagePublishers, type PackPublishers } from '../services/packs/PackPublishers';
 import { logError, logWarn } from '../utils/logger';
 import { sendNotFound, sendSuccess } from '../utils/response.js';
 import { PACK_ERRORS, packEnvelope, packPublisherJsonSchema, packRouteGuard } from './pack-routes';
@@ -59,6 +60,19 @@ const publisherPageJsonSchema = {
   },
 } as const;
 
+/** La page nomme un compte : 30 lectures par minute et par lecteur, de quoi parcourir une boutique, pas la moissonner. */
+const pageRateLimit = {
+  max: 30,
+  timeWindow: '1 minute',
+  hook: 'preHandler' as const,
+  skipOnError: false,
+  keyGenerator: (request: FastifyRequest) => {
+    const viewer = (request as UnifiedAuthRequest).authContext?.userId ?? `ip:${request.ip}`;
+    return `publishers:page:${viewer}`;
+  },
+  errorResponseBuilder: () => ({ success: false, error: 'Trop de pages éditeur demandées. Patientez avant de réessayer.', code: 'RATE_LIMITED', statusCode: 429 }),
+};
+
 const slugParamsJsonSchema = {
   type: 'object',
   required: ['slug'],
@@ -66,7 +80,7 @@ const slugParamsJsonSchema = {
 } as const;
 
 export async function packPublisherRoutes(fastify: FastifyInstance, options: PackPublisherRoutesOptions = {}) {
-  const publishers = options.publishers ?? defaultPackPublishers(fastify.prisma);
+  const publishers = options.publishers ?? publisherPagePublishers(fastify.prisma);
   const guard = packRouteGuard(fastify, { internalErrorMessage: 'Error handling pack publishers' });
   const tags = ['packs'];
 
@@ -125,6 +139,7 @@ export async function packPublisherRoutes(fastify: FastifyInstance, options: Pac
     '/:slug/page',
     {
       onRequest: [fastify.authenticate],
+      config: { rateLimit: pageRateLimit },
       schema: {
         description: 'La page d’un éditeur (#16433) : son identité de boutique, son site et le profil Meeshy qui l’édite — `owner` nul si ce compte n’est plus actif, ou si lui et le lecteur se sont bloqués.',
         tags,

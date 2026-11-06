@@ -22,9 +22,19 @@ const ADMIN = '68d0000000000000000000ad';
 const MODO = '68d0000000000000000000a3';
 const verified = (username: string) => ({ username, emailVerifiedAt: new Date('2026-01-01T00:00:00Z') });
 
-async function build() {
+type OwnerFacts = { published: Set<string>; hidden: Set<string> };
+
+async function build(options: { readonly officialAccountId?: string | null; readonly ownerVisibility?: false } = {}) {
   const db = memoryPublisherDb({ [AWA]: verified('awa_secret'), [OFFICIAL]: verified('meeshy_off'), [ADMIN]: verified('root'), [MODO]: verified('modo') });
-  const publishers = new PackPublishers({ prisma: db.prisma, officialAccountId: OFFICIAL });
+  const facts: OwnerFacts = { published: new Set([AWA]), hidden: new Set() };
+  const publishers = new PackPublishers({
+    prisma: db.prisma,
+    officialAccountId: options.officialAccountId === undefined ? OFFICIAL : options.officialAccountId,
+    ownerVisibility: options.ownerVisibility === false ? undefined : {
+      hasPublished: async (userId: string) => facts.published.has(userId),
+      hiddenFrom: async (_viewerId: string, ownerId: string) => facts.hidden.has(ownerId),
+    },
+  });
   let who = { userId: AWA, role: 'USER', anonymous: false };
   const app: FastifyInstance = Fastify({ logger: false });
   app.decorate('authenticate', async (request: FastifyRequest) => {
@@ -39,7 +49,7 @@ async function build() {
   const as = (userId: string, role = 'USER', anonymous = false) => {
     who = { userId, role, anonymous };
   };
-  return { app, as, db };
+  return { app, as, db, facts, publishers };
 }
 
 describe('/publishers — la boutique, le propriétaire, l’administration (#16274)', () => {
@@ -142,6 +152,58 @@ describe('/publishers — la boutique, le propriétaire, l’administration (#16
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('REGISTERED_USER_REQUIRED');
     expect(res.body).not.toContain(AWA);
+  });
+
+  it('GET /:slug/page tait un propriétaire caché de la recherche (#8104) : la page reste, sans lien', async () => {
+    const { app, as, facts } = await build();
+    facts.hidden.add(AWA);
+    as(MODO);
+    const res = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.owner).toBeNull();
+    expect(res.body).not.toContain('awa_secret');
+  });
+
+  it('GET /:slug/page ne nomme que le compte d’un éditeur qui a publié : un profil sans pack publié reste anonyme', async () => {
+    const { app, as, facts } = await build();
+    facts.published.delete(AWA);
+    as(MODO);
+    expect((await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data.owner).toBeNull();
+  });
+
+  it('GET /:slug/page sans loi de visibilité injectée ne nomme personne (fermé par défaut)', async () => {
+    const { app, as } = await build({ ownerVisibility: false });
+    as(MODO);
+    expect((await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data.owner).toBeNull();
+  });
+
+  it('GET /:slug/page sert le site d’un éditeur, et le tait avec le compte quand le nom est neutralisé (imitation de Meeshy)', async () => {
+    const { app, as, db } = await build();
+    db.profiles.find((row) => row.userId === AWA)!.website = 'https://studio.example';
+    as(MODO);
+    expect((await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data.website).toBe('https://studio.example');
+
+    db.profiles.push({ id: '68e0000000000000000099aa', userId: ADMIN, slug: 'support-xyz', displayName: 'Meeshy Support', nameKey: null, verifiedAt: null, website: 'https://meeshy-support.example/login', createdAt: new Date('2026-01-01T00:00:00Z') });
+    const imitation = await app.inject({ method: 'GET', url: '/support-xyz/page' });
+    expect(imitation.statusCode).toBe(200);
+    expect(imitation.json().data).toEqual({ publisher: { slug: 'support-xyz', name: 'Éditeur', verified: false, official: false }, owner: null, website: null });
+  });
+
+  it('GET /:slug/page ne nomme personne quand deux profils portent la même adresse', async () => {
+    const { app, as, db } = await build();
+    db.profiles.push({ id: '68e0000000000000000099ab', userId: ADMIN, slug: 'studio-lumiere', displayName: 'Studio Lumière', nameKey: null, verifiedAt: null, createdAt: new Date('2030-01-01T00:00:00Z') });
+    as(MODO);
+    const res = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
+    expect(res.json().data.owner).toBeNull();
+    expect(res.body).not.toContain('root');
+  });
+
+  it('GET /editeur/page, une adresse réservée et /meeshy/page sans compte officiel', async () => {
+    const { app } = await build({ officialAccountId: null });
+    expect((await app.inject({ method: 'GET', url: '/editeur/page' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/meeshy-support/page' })).statusCode).toBe(404);
+    const meeshy = await app.inject({ method: 'GET', url: '/meeshy/page' });
+    expect(meeshy.json().data).toEqual({ publisher: { slug: 'meeshy', name: 'Meeshy', verified: true, official: true }, owner: null, website: null });
   });
 
   it('refuse un invité de lien : 403 REGISTERED_USER_REQUIRED', async () => {
