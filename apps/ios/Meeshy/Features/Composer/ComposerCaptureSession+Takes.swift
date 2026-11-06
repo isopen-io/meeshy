@@ -242,7 +242,7 @@ extension ComposerCaptureSession {
         let galerie = gallery
         let brut = camera.librarySave
         let precedent = galleryChain
-        let proportions = canvasAspect
+        let proportions = ComposerTakeAspect.aspect(canvas: canvasAspect, take: image.size)
         beginGallerySave()
         galleryChain = Task { @MainActor [weak self] in
             defer { self?.endGallerySave() }
@@ -302,7 +302,7 @@ extension ComposerCaptureSession {
             }
             await precedent?.value
             guard await brut?.value ?? true else { return }
-            let rendue = await ComposerLookVideoExporter.export(url, look: regard, aspect: proportions,
+            let rendue = await ComposerLookVideoExporter.export(url, look: regard, aspect: await ComposerTakeAspect.aspect(canvas: proportions, video: url),
                                                                  person: auteur, date: date,
                                                                  declaredSpaceName: espace)
             guard let rendue = rendue?.gallery else { return }

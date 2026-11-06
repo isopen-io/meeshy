@@ -14,7 +14,7 @@ nonisolated enum CameraSignposts {
 /// **Du toucher à l'obturateur, mesuré** (#16504) : démarré au toucher sur le fil
 /// principal, relevé quand `willCapturePhotoFor` part. Une mesure par toucher.
 nonisolated final class ComposerShutterClock: Sendable {
-    private nonisolated struct Touch: @unchecked Sendable {
+    private nonisolated struct Touch: Sendable {
         let startedAt: CFTimeInterval
         let interval: OSSignpostIntervalState
     }

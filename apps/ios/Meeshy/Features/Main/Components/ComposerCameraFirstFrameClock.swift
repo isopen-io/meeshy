@@ -11,7 +11,7 @@ import MeeshySDK
 ///
 /// Thread-safe : démarré sur le fil principal, arrêté sur la file des trames.
 nonisolated final class ComposerCameraFirstFrameClock: Sendable {
-    private nonisolated struct Armed: @unchecked Sendable {
+    private nonisolated struct Armed: Sendable {
         let startedAt: CFTimeInterval
         let prewarmed: Bool
         let interval: OSSignpostIntervalState

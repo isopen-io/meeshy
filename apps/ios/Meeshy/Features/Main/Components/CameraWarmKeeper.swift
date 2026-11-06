@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import UIKit
 
@@ -38,20 +39,16 @@ final class CameraWarmLease<Camera: CameraWarmable> {
 final class CameraWarmKeeper<Camera: CameraWarmable> {
     private let make: () -> Camera
     private var idle: Camera?
-    nonisolated(unsafe) private var memoryWarning: NSObjectProtocol?
+    private var memoryWarning: AnyCancellable?
 
     init(make: @escaping () -> Camera) {
         self.make = make
-        memoryWarning = NotificationCenter.default.addObserver(
-            forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.dropWarmCamera() }
-        }
+        memoryWarning = NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.dropWarmCamera() } }
     }
 
-    nonisolated deinit {
-        if let memoryWarning { NotificationCenter.default.removeObserver(memoryWarning) }
-    }
+    nonisolated deinit {}
 
     var hasWarmCamera: Bool { idle != nil }
 

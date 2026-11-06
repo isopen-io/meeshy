@@ -7,7 +7,7 @@ import MeeshySDK
 import MeeshyUI
 
 @MainActor
-final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProviding {
+final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProviding, CameraWarmable {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
@@ -818,6 +818,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("video_\(UUID().uuidString).mov")
         segmentTokens[tempURL] = recordingId
+        horizon.level(videoOutput.connection(with: .video))
         videoOutput.startRecording(to: tempURL, recordingDelegate: self)
         isRecordingVideo = true
         setSmoothFocus(true)

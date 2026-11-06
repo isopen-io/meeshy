@@ -1,6 +1,6 @@
 import Foundation
 
-extension CameraModel: CameraWarmable {
+extension CameraModel {
     /// La caméra gardée au chaud entre deux viseurs (#16504).
     static let warmKeeper = CameraWarmKeeper<CameraModel> { CameraModel() }
 

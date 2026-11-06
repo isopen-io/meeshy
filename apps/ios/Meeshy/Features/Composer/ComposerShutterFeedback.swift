@@ -1,7 +1,7 @@
 import SwiftUI
 import MeeshySDK
 
-/// **La prise se SENT au moment où elle part** (#16482, porteur 2026-11-06 :
+/// **La prise se SENT au moment où elle part** (#16482, porteur :
 /// « lorsqu'on prend la photo il faut une animation sur le cadre, un flash, ou
 /// sur le bouton de prise de photo »).
 ///
