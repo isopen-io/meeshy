@@ -191,7 +191,9 @@ export class LensPartners {
   /**
    * Le partenaire écrit son profil. `logo` : `undefined` garde l'actuel, `null`
    * le retire, des octets le remplacent (ré-encodés, renommés par l'empreinte).
-   * Un nom ou un logo qui change retire la vérification.
+   * Un nom, un logo ou un site qui change retire la vérification (le site :
+   * décision porteur du 2026-11-06, #16433) ; les remettre à l'identique ne
+   * retire rien.
    *
    * L'écriture est conditionnelle sur l'état relu (`updatedAt`) : une écriture
    * concurrente — un autre appareil, ou une vérification — rend `conflict`
@@ -223,7 +225,8 @@ export class LensPartners {
         await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, createdAt: now, ...data }, update: data });
       } else {
         const nextLogoSha = logo.columns === undefined ? current.logoSha256 : logo.columns.logoSha256;
-        const identityChanged = !official && (current.displayName !== claim.displayName || current.logoSha256 !== nextLogoSha);
+        const identityChanged =
+          !official && (current.displayName !== claim.displayName || current.logoSha256 !== nextLogoSha || current.website !== input.profile.website);
         const written = await this.prisma.partnerProfile.updateMany({
           where: { userId, updatedAt: current.updatedAt },
           data: {
