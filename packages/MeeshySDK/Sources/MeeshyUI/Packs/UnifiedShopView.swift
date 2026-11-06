@@ -18,12 +18,18 @@ public final class PackShopStore: ObservableObject {
     private let service: any PackShopProviding
     private let makeRequestId: () -> String
     private let snapshots: any PackShopSnapshotStoring
+    private let recency: any PackInstallRecording
+    private let now: () -> Date
     /// Les domaines de la dernière lecture : un refus relit la MÊME vitrine.
     private var shownDomains: [PackDomain]?
 
     public init(service: any PackShopProviding = PackShopService.shared,
                 snapshots: any PackShopSnapshotStoring = PackShopSnapshotStore.shared,
+                recency: any PackInstallRecording = PackInstallRecency.shared,
+                now: @escaping () -> Date = Date.init,
                 makeRequestId: @escaping () -> String = { UUID().uuidString }) {
+        self.recency = recency
+        self.now = now
         self.service = service
         self.snapshots = snapshots
         self.makeRequestId = makeRequestId
@@ -75,6 +81,7 @@ public final class PackShopStore: ObservableObject {
         do {
             let bought = try await service.purchase(domain: domain, slug: slug, requestId: requestId)
             state = state.purchaseSettled(domain, slug, bought)
+            if state.pack(domain, slug)?.installed == true { recency.recordInstall(domain: domain, slug: slug, at: now()) }
             snapshots.write(state, domains: shownDomains)
         } catch {
             let insufficient = PackHTTPStatus.isInsufficientMeeshes(error)
@@ -93,6 +100,11 @@ public final class PackShopStore: ObservableObject {
         do {
             let confirmed = try await service.setInstalled(wantsInstalled, domain: domain, slug: slug)
             state = state.installSettled(domain, slug, confirmed: confirmed)
+            if confirmed.installed {
+                recency.recordInstall(domain: domain, slug: slug, at: now())
+            } else {
+                recency.forget(domain: domain, slug: slug)
+            }
             snapshots.write(state, domains: shownDomains)
         } catch {
             state = state.installRefused(domain, slug, restoring: previous)
@@ -282,7 +294,7 @@ public struct UnifiedShopView: View {
                        unlockText: pack.requirementPreview.flatMap {
                            PackUnlockCopy.line($0, language: language, rankName: rankName)
                        },
-                       bundled: pack.isBundled)
+                       bundled: pack.isBundled, publisher: pack.publisher)
     }
 
     /// Le nom d'un domaine, tel que les puces et les réglages le disent.

@@ -42,6 +42,8 @@ public struct PackRow: Identifiable, Hashable, Sendable {
     public let bundled: Bool
     /// Le poids du téléchargement, en octets ; `nil` = inconnu, la fiche se tait.
     public let downloadBytes: Int?
+    /// L'éditeur du pack (#16315) ; `nil` sur un ancien serveur.
+    public let publisher: PackPublisherRef?
 
     public var id: String { slug }
 
@@ -51,7 +53,8 @@ public struct PackRow: Identifiable, Hashable, Sendable {
     public init(slug: String, name: String, author: String = "", description: String = "",
                 installed: Bool, removable: Bool = true, cover: PackCover = .none, usageText: String? = nil,
                 price: Int? = nil, owned: Bool = true, locked: Bool = false, unlockText: String? = nil,
-                bundled: Bool = false, downloadBytes: Int? = nil) {
+                bundled: Bool = false, downloadBytes: Int? = nil, publisher: PackPublisherRef? = nil) {
+        self.publisher = publisher
         self.bundled = bundled
         self.downloadBytes = downloadBytes
         self.slug = slug
