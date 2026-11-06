@@ -42,7 +42,10 @@
  * et, pour la connexion (porte par défaut ET porte du mot de passe), à
  * 375 × 667 (iPhone SE, le plus petit téléphone courant) :
  *
- *   4. rien ne défile : l'écran tient entier dans la vue.
+ *   4. rien ne défile : l'écran tient entier dans la vue — SAUF le pied du
+ *      site (`[data-auth-site-footer]`, #16452 : badges des boutiques et pages
+ *      institutionnelles), posé SOUS le formulaire par dessein, qu'on atteint
+ *      en défilant ; le formulaire, lui, tient toujours en entier.
  *
  * et, pour « PROGRESSION » (#9563, amendement n° 3 du porteur : « la vue
  * Progression ne doit pas défiler horizontalement »), avec le jeu aux VALEURS
@@ -236,8 +239,11 @@ const releve = () => {
     (el) => visible(el) && ([...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? '').trim() !== '') || el.matches('input, button, a, img, svg, video, canvas')),
   );
 
+  const piedDuSite = document.querySelector('[data-auth-site-footer]');
+
   return {
     chemin: location.pathname + location.search,
+    piedSite: piedDuSite === null ? 0 : piedDuSite.getBoundingClientRect().height,
     documentX: document.documentElement.scrollWidth - vw,
     colonnes,
     bandes,
@@ -394,8 +400,8 @@ const connexion = async (constate) => {
       continue;
     }
     constate(m.champs > 0, `${tag} : aucun champ mesuré — ce n'est pas l'écran de connexion (${m.chemin})`);
-    for (const y of m.defileEnY) {
-      constate(false, `${tag} : l'écran de connexion ne tient pas dans la vue — ${y.conteneur} défile de ${y.debord} px`);
+    for (const y of m.defileEnY.filter((y) => y.debord - m.piedSite > 1)) {
+      constate(false, `${tag} : l'écran de connexion ne tient pas dans la vue — ${y.conteneur} défile de ${y.debord} px (pied du site : ${Math.round(m.piedSite)} px)`);
     }
   }
   await context.close();
