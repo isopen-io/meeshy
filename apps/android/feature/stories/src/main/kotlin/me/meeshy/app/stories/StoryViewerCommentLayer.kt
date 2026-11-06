@@ -79,10 +79,24 @@ internal object StoryCommentHold {
     ): Boolean = draft.isNotBlank() || hasMedia || isSubmitting || hasPlace || panelOpen
 }
 
-/** #14661 — un panneau du composeur épinglé est ouvert : la story ouverte le lit, le composeur l'écrit. */
+/**
+ * #14661 — un panneau du composeur épinglé est ouvert ET visible : la story ouverte le lit, le composeur l'écrit. La
+ * plaque repliée garde le panneau monté à hauteur nulle : caché, il ne retient pas la story.
+ */
 @Stable
 internal class StoryComposerPanels {
-    var open: Boolean by mutableStateOf(false)
+    private var reported: Boolean by mutableStateOf(false)
+    private var folded: Boolean by mutableStateOf(false)
+
+    val open: Boolean get() = reported && !folded
+
+    fun report(open: Boolean) {
+        reported = open
+    }
+
+    fun fold(folded: Boolean) {
+        this.folded = folded
+    }
 }
 
 internal val LocalStoryComposerPanels = compositionLocalOf { StoryComposerPanels() }
@@ -104,6 +118,8 @@ internal fun StoryPinnedCommentComposer(
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val haptics = rememberMeeshyHaptics()
+    val panels = LocalStoryComposerPanels.current
+    LaunchedEffect(panels, folded) { panels.fold(folded) }
     val apply: (StoryComposerFold.Tap) -> Unit = { tap ->
         if (tap.resignsKeyboard) {
             keyboard?.hide()
@@ -131,8 +147,7 @@ internal fun StoryPinnedCommentComposer(
                         modifier = Modifier.align(Alignment.End),
                     )
                 }
-                val panels = LocalStoryComposerPanels.current
-                PostCommentsComposerBar(viewModel = thread, onPanelOpenChange = { panels.open = it })
+                PostCommentsComposerBar(viewModel = thread, onPanelOpenChange = panels::report)
             }
         }
     }

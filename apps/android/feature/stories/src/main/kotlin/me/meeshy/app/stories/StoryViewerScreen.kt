@@ -91,7 +91,7 @@ fun StoryViewerScreen(
     val railPlan = rememberFrozenRailPlan(
         StoryRailFreezeInput(state.currentStoryId, liveRailPlan, soundShown, rememberStoryCommentsReconciled(commentThread)),
     )
-    val composerPanels = remember(state.currentStoryId) { StoryComposerPanels() }
+    val composerPanels = remember { StoryComposerPanels() }
     val composing = railPlan.pinsCommentComposer && storyCommentHolds(commentThread, composerPanels)
     val groupIntro = rememberStoryGroupIntro(state, slide?.opening, viewModel)
     val cover = StoryViewerCover(
