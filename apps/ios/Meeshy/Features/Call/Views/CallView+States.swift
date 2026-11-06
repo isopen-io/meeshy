@@ -70,9 +70,6 @@ extension CallView {
                 }
                 endCallButton
             }
-            // Comme la pilule de l'appel établi : le même encart bas que
-            // CallView+Connected.swift, pas une valeur en dur sans rapport
-            // avec la safe area réelle de l'appareil.
             .padding(.bottom, Self.chromeBottomInset)
         }
         .task {
@@ -128,7 +125,6 @@ extension CallView {
                 }
                 endCallButton
             }
-            // Comme la pilule de l'appel établi — voir outgoingRingingView.
             .padding(.bottom, Self.chromeBottomInset)
         }
         // L'écran entier : l'aperçu de l'appelant posé derrière (`CallView`,
