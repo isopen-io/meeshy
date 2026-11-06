@@ -92,6 +92,8 @@ public final class PackInstallRecency: PackInstallRecording, Sendable {
         self.defaults = OSAllocatedUnfairLock(uncheckedState: defaults)
     }
 
+    nonisolated deinit {}
+
     public func recordInstall(domain: PackDomain, slug: String, at date: Date) {
         update { $0[MyPacks.key(domain, slug)] = date.timeIntervalSince1970 }
     }
