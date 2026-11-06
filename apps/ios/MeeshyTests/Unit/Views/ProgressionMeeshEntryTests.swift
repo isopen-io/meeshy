@@ -282,6 +282,14 @@ final class ProgressionMeeshEntryTests: XCTestCase {
     /// Pendant la frappe, le détail MONTRE qu'il travaille : un indicateur
     /// d'activité, le mot, et plus d'offre. Une opacité de 0,6 sur un aller-retour
     /// court ne se voyait pas (retour porteur, 2026-09-14).
+    ///
+    /// Pourquoi le témoin lit l'ACTION et non tous les libellés : la descente
+    /// du harnais visite aussi les SOUS-VUES UIKit, et celles du `ProgressView`
+    /// — recyclées d'un écran monté plus tôt — gardaient le libellé composite
+    /// de ce premier écran (« Convertir …, 19 août 2026, Première frappe, … »,
+    /// run de dev 42116853798, reproduit en local selon l'ordre des classes).
+    /// VoiceOver n'annonce pas ces sous-vues : il annonce l'élément du bouton,
+    /// que porte l'identifiant `progression.meesh.minting`.
     func test_duringAMint_theDetailShowsActivity_andNoLongerOffersTheAction() {
         let meesh = EngagementProgressResolver.resolve(payload(debitablePoints: 1300)).meesh!
         let ecran = monter(
@@ -295,26 +303,11 @@ final class ProgressionMeeshEntryTests: XCTestCase {
             "Aucun indicateur d'activité pendant la frappe. Identifiants vus : \(ecran.identifiers)"
         )
         let offre = ProgressionCopy.meeshMintAction(meesh.mintCost)
-        let dit = libellesStabilises(de: ecran) { !$0.contains(offre) }
-        XCTAssertTrue(dit.contains(frappeEnCours), "La frappe en cours n'est pas dite : « \(dit) »")
-        XCTAssertFalse(dit.contains(offre), "La conversion reste offerte pendant la frappe : « \(dit) »")
-    }
-
-    /// Les libellés de l'arbre une fois POSÉ. La vue est construite avec
-    /// `isMinting: true` et ne rend jamais le libellé d'offre ; sur un runner
-    /// chargé, l'arbre d'accessibilité lu au premier tour a pourtant rendu un
-    /// nœud composite transitoire (« Convertir …, Dernière frappe », run de dev
-    /// 42116853798) que le rendu ne contient pas. Le témoin juge l'arbre posé,
-    /// sous une borne : un défaut réel (l'offre rendue) le garde rouge.
-    private func libellesStabilises(de ecran: RenderedScreen, borne: TimeInterval = 5,
-                                    jusqua: (String) -> Bool) -> String {
-        let echeance = Date().addingTimeInterval(borne)
-        var dit = ecran.labels.joined(separator: " | ")
-        while !jusqua(dit), Date() < echeance {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-            dit = ecran.labels.joined(separator: " | ")
-        }
-        return dit
+        let action = ecran.node("progression.meesh.minting")?.label ?? ""
+        XCTAssertTrue(action.contains(frappeEnCours), "La frappe en cours n'est pas dite par l'action : « \(action) »")
+        XCTAssertFalse(action.contains(offre), "La conversion reste offerte pendant la frappe : « \(action) »")
+        XCTAssertNil(ecran.node("progression.meesh.mint"),
+                     "L'action de conversion reste montée pendant la frappe. Identifiants vus : \(ecran.identifiers)")
     }
 
     /// Un échec se lit DANS le détail, sous l'action qu'on peut retenter.
