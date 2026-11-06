@@ -9,7 +9,7 @@ et du milestone #6, pas une liste dans ce dossier.
 ## Cycle 1 — 2026-11-06
 
 - **Base** : `origin/dev` @ `782fca69a`.
-- **Branche** : `claude/fervent-wozniak-7fylor`.
+- **Branche** : `claude/fervent-wozniak-7fylor`, PR #16549 vers `dev`.
 - **Objectif** : #16548, sous-issue de #3722 (« sous-titres traduits affichés en < 2 s »).
   Le critère de #3722 n'était mesurable par rien.
 - **Livré** :
