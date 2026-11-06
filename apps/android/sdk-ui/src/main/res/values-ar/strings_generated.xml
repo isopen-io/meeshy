@@ -7,7 +7,7 @@
     <string name="a11y_media_download_action">تنزيل</string>
     <string name="a11y_media_download_cancel">إلغاء التنزيل</string>
     <string name="a11y_message_actions_forward">إعادة توجيه</string>
-    <string name="audio_consent_notice_action">التفعيل في الإعدادات</string>
+    <string name="audio_consent_notice_action">إعداد صوتي</string>
     <string name="audio_consent_notice_message">فعّل الموافقة الصوتية لتُنسَخ رسائلك الصوتية نصًّا وتُترجَم.</string>
     <string name="audio_editor_a11y_playhead">موضع التشغيل</string>
     <string name="audio_editor_apply">تطبيق التعديلات</string>
