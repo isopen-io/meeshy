@@ -11,6 +11,7 @@ import { GLORY_ATMOSPHERES } from './glory-atmospheres.js';
 import { type PackEligibilityRule } from './pack-ownership.js';
 import { PACK_TARGETING_LIMITS, type PackAvailability, type PackTargeting } from './pack-availability.js';
 import { GLORY_RANKS, type GloryRankKey } from '../utils/game/glory.js';
+import { PackEventDeclarationSchema } from '../utils/decoration-event-window.js';
 import { PACK_DOMAINS, PACK_PRICE_MAX, PACK_LANGUAGES, PACK_LIMITS, PACK_SLUG_PATTERN, type PackAssetRef, type PackDefault, type PackDomain } from './content-pack.js';
 
 // ── Les fichiers adressés par contenu ───────────────────────────────────
@@ -180,6 +181,8 @@ export const PackIndexEntrySchema = z
     atmosphere: z.optional(z.enum(GLORY_ATMOSPHERES)),
     /** Quand le pack est OFFERT (#11274) ; la possession n'en dépend jamais. */
     availability: z.optional(PackAvailabilitySchema),
+    /** L'événement servi (#16447, #16450) : annuel, la fenêtre d'offre se recalcule à la date du jour (`packOfferWindow`). */
+    event: z.optional(PackEventDeclarationSchema),
     /** À qui il est offert (#11274) : communautés, pays, langues. */
     targeting: z.optional(PackTargetingSchema),
   })

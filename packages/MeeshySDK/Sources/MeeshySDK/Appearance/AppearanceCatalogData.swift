@@ -1296,6 +1296,10 @@ enum AppearanceCatalogData {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "designs": [
         {
           "key": "flocons-cristal",
@@ -1427,6 +1431,10 @@ enum AppearanceCatalogData {
       "availability": {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -2031,6 +2039,10 @@ enum AppearanceCatalogData {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
       },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
+      },
       "designs": [
         {
           "key": "fond-artifice",
@@ -2209,6 +2221,10 @@ enum AppearanceCatalogData {
       "availability": {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -2962,6 +2978,10 @@ enum AppearanceCatalogData {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "designs": [
         {
           "key": "banniere-noel-givre",
@@ -3231,6 +3251,10 @@ enum AppearanceCatalogData {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
       },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
+      },
       "designs": [
         {
           "key": "banniere-artifice",
@@ -3409,6 +3433,10 @@ enum AppearanceCatalogData {
       "availability": {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -8856,6 +8884,10 @@ enum AppearanceCatalogData {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "rings": [
         {
           "key": "flocons-tombants",
@@ -9020,6 +9052,10 @@ enum AppearanceCatalogData {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "rings": [
         {
           "key": "guirlande-lumineuse",
@@ -9166,6 +9202,10 @@ enum AppearanceCatalogData {
       "availability": {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -10133,6 +10173,10 @@ enum AppearanceCatalogData {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "rings": [
         {
           "key": "flocons-tombants-fixe",
@@ -10473,6 +10517,10 @@ enum AppearanceCatalogData {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
       },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
+      },
       "rings": [
         {
           "key": "feux-d-artifice",
@@ -10728,6 +10776,10 @@ enum AppearanceCatalogData {
       "availability": {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -21206,6 +21258,10 @@ enum AppearanceCatalogData {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "frames": [
         {
           "key": "flocons-tombants",
@@ -21589,6 +21645,10 @@ enum AppearanceCatalogData {
       "availability": {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "frames": [
         {
@@ -22001,6 +22061,10 @@ enum AppearanceCatalogData {
       "availability": {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "frames": [
         {
@@ -23686,6 +23750,10 @@ enum AppearanceCatalogData {
         "startsAt": "2026-10-25T00:00:00Z",
         "endsAt": "2027-01-25T00:00:00Z"
       },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
+      },
       "frames": [
         {
           "key": "flocons-tombants-fixe",
@@ -24679,6 +24747,10 @@ enum AppearanceCatalogData {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
       },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
+      },
       "frames": [
         {
           "key": "feux-d-artifice",
@@ -25436,6 +25508,10 @@ enum AppearanceCatalogData {
       "availability": {
         "startsAt": "2026-11-01T00:00:00Z",
         "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "frames": [
         {

@@ -4,17 +4,18 @@
  * Noël (#15553) et des collections Meeshy (#15158) le lisent pour ranger leurs packs sans déplacer ceux que l'offre
  * ajoute en fin de source.
  *
- * Aucune date n'est écrite (décision porteur du 2026-11-06, #16447) : le pack déclare son `event`, et la loi
- * partagée (`utils/decoration-event-window.ts`, de deux mois avant l'événement à un mois après) calcule sa fenêtre
- * à la génération. Chaque année, seule l'année de l'occurrence change.
+ * Aucune date n'est écrite (décisions porteur du 2026-11-06, #16447 et #16450) : le pack déclare son `event`, ANNUEL,
+ * et la loi partagée (`utils/decoration-event-window.ts`, de deux mois avant l'événement à un mois après) calcule
+ * l'occurrence en cours ou prochaine — à la génération pour l'instantané `availability`, puis à la date du jour
+ * chez la passerelle et les clients. Aucune date n'est à reporter d'une année sur l'autre.
  */
-import type { PackEventDeclaration } from '../../utils/decoration-event-window.js';
+import type { YearlyEventDeclaration } from '../../utils/decoration-event-window.js';
 
-/** Noël 2026 : du 25 octobre 2026 au 24 janvier 2027 inclus. */
-export const CHRISTMAS_EVENT = { id: 'noel', year: 2026 } as const satisfies PackEventDeclaration;
+/** Noël, chaque année : du 25 octobre au 24 janvier inclus. */
+export const CHRISTMAS_EVENT = { id: 'christmas', recurrence: 'yearly' } as const satisfies YearlyEventDeclaration;
 
-/** Nouvel An 2027 : du 1er novembre 2026 au 31 janvier 2027 inclus. */
-export const NEW_YEAR_EVENT = { id: 'nouvel-an', year: 2027 } as const satisfies PackEventDeclaration;
+/** Le Nouvel An, chaque année : du 1er novembre au 31 janvier inclus. */
+export const NEW_YEAR_EVENT = { id: 'new-year', recurrence: 'yearly' } as const satisfies YearlyEventDeclaration;
 
 /** Les cadres de bannière assortis aux trois contours de Noël (`assorted-banners/packs.ts`). */
 export const CHRISTMAS_FRAME_SLUGS: readonly string[] = ['bannieres-noel-enneige', 'bannieres-lumieres-noel', 'bannieres-atelier-noel'];
@@ -49,7 +50,7 @@ export const SEASONAL_ADDED_SLUGS: readonly string[] = [...CHRISTMAS_ADDED_SLUGS
 export const SEASONAL_SLUGS: readonly string[] = [...CHRISTMAS_OFFER_SLUGS, ...NEW_YEAR_OFFER_SLUGS];
 
 /** L'événement d'un pack de l'offre ; `undefined` hors offre. */
-export const eventOf = (slug: string): PackEventDeclaration | undefined => {
+export const eventOf = (slug: string): YearlyEventDeclaration | undefined => {
   if (CHRISTMAS_OFFER_SLUGS.includes(slug)) return CHRISTMAS_EVENT;
   if (NEW_YEAR_OFFER_SLUGS.includes(slug)) return NEW_YEAR_EVENT;
   return undefined;

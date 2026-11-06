@@ -152,3 +152,26 @@ describe('une saison peut nommer son pack récompense', () => {
     expect(verdict).toEqual({ ok: false, reason: 'invalid-reward-pack' });
   });
 });
+
+describe('un pack d’événement ANNUEL (#16450) : la fenêtre se recalcule à la date du jour', () => {
+  const CHRISTMAS = { id: 'christmas', recurrence: 'yearly' } as const;
+  const SNAPSHOT = { startsAt: '2026-10-25T00:00:00Z', endsAt: '2027-01-25T00:00:00Z' };
+
+  it('le registre garde la déclaration `event`, et refuse une déclaration illisible', () => {
+    const [kept] = parsePackIndex([entry({ availability: SNAPSHOT, event: CHRISTMAS })]).entries;
+    expect(kept?.event).toEqual(CHRISTMAS);
+    expect(parsePackIndex([entry({ event: { id: 'christmas', recurrence: 'monthly' } })]).rejected).toBe(1);
+  });
+
+  it('offert pendant l’occurrence en cours, retiré après, offert de nouveau l’année suivante sans réécrire de date', () => {
+    const pack = { availability: SNAPSHOT, event: CHRISTMAS };
+    const offered = (iso: string) => isPackOffered(pack, { now: at(iso), audience: audience() });
+    expect(['2026-11-06T00:00:00Z', '2027-01-25T00:00:00Z', '2027-10-25T00:00:00Z', '2028-01-24T00:00:00Z'].map(offered)).toEqual([true, false, true, true]);
+  });
+
+  it('un pack déjà tenu reste en rayon hors de l’occurrence', () => {
+    const pack = { availability: SNAPSHOT, event: CHRISTMAS };
+    expect(isPackShelved(pack, { now: at('2027-06-01T00:00:00Z'), audience: audience() }, { ownedByRow: false, installed: true })).toBe(true);
+    expect(isPackShelved(pack, { now: at('2027-06-01T00:00:00Z'), audience: audience() }, { ownedByRow: false, installed: false })).toBe(false);
+  });
+});

@@ -1783,6 +1783,10 @@
     "availability": {
       "startsAt": "2026-10-25T00:00:00Z",
       "endsAt": "2027-01-25T00:00:00Z"
+    },
+    "event": {
+      "id": "christmas",
+      "recurrence": "yearly"
     }
   },
   {
@@ -1886,6 +1890,10 @@
     "availability": {
       "startsAt": "2026-10-25T00:00:00Z",
       "endsAt": "2027-01-25T00:00:00Z"
+    },
+    "event": {
+      "id": "christmas",
+      "recurrence": "yearly"
     }
   },
   {
@@ -1989,6 +1997,10 @@
     "availability": {
       "startsAt": "2026-10-25T00:00:00Z",
       "endsAt": "2027-01-25T00:00:00Z"
+    },
+    "event": {
+      "id": "christmas",
+      "recurrence": "yearly"
     }
   },
   {
@@ -2290,6 +2302,10 @@
     "availability": {
       "startsAt": "2026-10-25T00:00:00Z",
       "endsAt": "2027-01-25T00:00:00Z"
+    },
+    "event": {
+      "id": "christmas",
+      "recurrence": "yearly"
     }
   },
   {
@@ -2393,6 +2409,10 @@
     "availability": {
       "startsAt": "2026-11-01T00:00:00Z",
       "endsAt": "2027-02-01T00:00:00Z"
+    },
+    "event": {
+      "id": "new-year",
+      "recurrence": "yearly"
     }
   },
   {
@@ -2496,6 +2516,10 @@
     "availability": {
       "startsAt": "2026-11-01T00:00:00Z",
       "endsAt": "2027-02-01T00:00:00Z"
+    },
+    "event": {
+      "id": "new-year",
+      "recurrence": "yearly"
     }
   }
 ]

@@ -55,3 +55,16 @@ describe('packRequirementPreview', () => {
     expect(packRequirementPreview({}, { facts: facts(), now })).toBeNull();
   });
 });
+
+describe('packRequirementPreview d’un pack ANNUEL (#16450)', () => {
+  const facts: PackUnlockFacts = { rank: 'murmure', glory: 0, trophyKeys: new Set(), seasonNumbers: new Set() };
+
+  it('montre l’occurrence à venir, recalculée, et non l’instantané du générateur', () => {
+    const pack = { availability: { startsAt: '2026-10-25T00:00:00Z', endsAt: '2027-01-25T00:00:00Z' }, event: { id: 'christmas', recurrence: 'yearly' } as const };
+    expect(packRequirementPreview(pack, { facts, now: new Date('2027-03-01T00:00:00Z') })).toEqual({
+      met: false,
+      reward: null,
+      window: { state: 'upcoming', startsAt: '2027-10-25T00:00:00Z', endsAt: '2028-01-25T00:00:00Z' },
+    });
+  });
+});

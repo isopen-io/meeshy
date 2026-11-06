@@ -17,8 +17,8 @@ import { CHRISTMAS_EVENT, CHRISTMAS_FRAME_SLUGS, CHRISTMAS_OFFER_SLUGS, NEW_YEAR
 
 /**
  * #16270 et #16271 — les offres Meeshy de NOËL et du NOUVEL AN : gratuites, signées Meeshy, offertes par la
- * boutique dans leur FENÊTRE, calculée par la règle de #16447 (Noël 2026 du 25 octobre au 24 janvier, Nouvel An 2027
- * du 1er novembre au 31 janvier), dans
+ * boutique dans leur FENÊTRE, calculée par la règle de #16447 chaque année (#16450) — Noël du 25 octobre au 24 janvier,
+ * Nouvel An du 1er novembre au 31 janvier, dans
  * les quatre catégories — contours d'avatar, images de bannière, cadres de bannière, fonds de conversation —
  * chacune statique ET animée. Les nouveaux packs s'ajoutent EN FIN de source : rien de ce qui les précède ne
  * bouge, sinon la fenêtre que les packs de Noël existants reçoivent.
@@ -44,7 +44,7 @@ type Pack = {
   readonly removable: boolean;
   readonly usage?: unknown;
   readonly availability?: { readonly startsAt?: string; readonly endsAt?: string };
-  readonly event?: { readonly id: string; readonly year: number };
+  readonly event?: { readonly id: string; readonly recurrence?: string; readonly year?: number };
   readonly designs?: readonly Item[];
   readonly rings?: readonly Item[];
   readonly frames?: readonly Item[];
@@ -83,13 +83,13 @@ const isAnimated = (domain: Domain, item: Item): boolean => (domain === 'banner-
 const CHRISTMAS_WINDOW = { startsAt: '2026-10-25T00:00:00Z', endsAt: '2027-01-25T00:00:00Z' } as const;
 const NEW_YEAR_WINDOW = { startsAt: '2026-11-01T00:00:00Z', endsAt: '2027-02-01T00:00:00Z' } as const;
 
-describe('les fenêtres de Noël et du Nouvel An (#16270, #16271), calculées par la règle (#16447)', () => {
-  it('Noël 2026 et Nouvel An 2027 sont déclarés par leur ÉVÉNEMENT, sans date écrite', () => {
-    expect(CHRISTMAS_EVENT).toEqual({ id: 'noel', year: 2026 });
-    expect(NEW_YEAR_EVENT).toEqual({ id: 'nouvel-an', year: 2027 });
+describe('les fenêtres de Noël et du Nouvel An (#16270, #16271), calculées par la règle (#16447) chaque année (#16450)', () => {
+  it('Noël et le Nouvel An sont déclarés par leur ÉVÉNEMENT ANNUEL (#16450), sans date écrite ni année', () => {
+    expect(CHRISTMAS_EVENT).toEqual({ id: 'christmas', recurrence: 'yearly' });
+    expect(NEW_YEAR_EVENT).toEqual({ id: 'new-year', recurrence: 'yearly' });
   });
 
-  it('chaque pack de Noël — existants compris — déclare Noël 2026, chaque pack du Nouvel An le Nouvel An 2027, aucun n’écrit de date, et aucun autre pack ne déclare d’événement', () => {
+  it('chaque pack de Noël — existants compris — déclare Noël, chaque pack du Nouvel An le Nouvel An, chaque année, aucun n’écrit de date, et aucun autre pack ne déclare d’événement', () => {
     expect([...CHRISTMAS_SLUGS, ...CHRISTMAS_FRAME_SLUGS, ...CHRISTMAS_WALLPAPER_SLUGS].every((slug) => CHRISTMAS_OFFER_SLUGS.includes(slug))).toBe(true);
     expect(CHRISTMAS_OFFER_SLUGS).toHaveLength(11);
     expect(NEW_YEAR_OFFER_SLUGS).toHaveLength(8);
