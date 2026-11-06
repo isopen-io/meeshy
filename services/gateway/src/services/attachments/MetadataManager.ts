@@ -35,6 +35,9 @@ async function resolveParseFile(): Promise<MusicMetadataModule['parseFile']> {
 }
 
 
+/** En dessous de 1 kbit/s, aucun vocal réel : la durée annoncée est fausse. */
+const MIN_PLAUSIBLE_AUDIO_BITRATE = 1_000;
+
 export interface AudioMetadata {
   duration: number;      // En millisecondes
   bitrate: number;       // En bits/sec
@@ -453,8 +456,11 @@ export class MetadataManager {
 
     const expected = expectedBitrates[mimeType] || { min: 8_000, max: 5_000_000 };
 
-    // Vérifier si le bitrate réel est cohérent
-    if (actualBitrate < expected.min * 0.5) {
+    // Un débit FAIBLE n'est pas une incohérence : la voix, le silence, un Vorbis ou un
+    // Opus de basse qualité descendent légitimement sous le débit « typique » du format,
+    // et la durée que le conteneur déclare reste exacte (#11549 : un ogg vorbis de 3,5 s
+    // servi à 1,7 s). Seul un débit physiquement impossible trahit un en-tête faux.
+    if (actualBitrate < MIN_PLAUSIBLE_AUDIO_BITRATE) {
       // Bitrate trop faible: durée probablement trop longue
       const estimatedDurationSeconds = (fileSize * 8) / expected.min;
       const estimatedDuration = Math.round(estimatedDurationSeconds * 1000); // Convertir en ms
