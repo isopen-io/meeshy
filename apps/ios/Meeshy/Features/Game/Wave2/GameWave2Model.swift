@@ -146,6 +146,17 @@ final class GameWave2Model: ObservableObject {
         if schedule != seasonSchedule { seasonSchedule = schedule }
     }
 
+    /// TIRER POUR RAFRAÎCHIR (#16425) : la progression (défis, succès, bloc du jeu) depuis le réseau, les réglages, le
+    /// calendrier, et ce que la page a DÉJÀ ouvert de la ligue — une lecture jamais demandée ne part pas. Rien ne
+    /// s'efface pendant ce temps : chaque lecture garde sa valeur jusqu'à la réponse.
+    func refresh() async {
+        await progression.load(forceNetwork: true)
+        await loadSettings()
+        await loadSeasonSchedule()
+        if week.value != nil { await loadWeek() }
+        if friendsLeague.value != nil { await loadFriendsLeague() }
+    }
+
     /// Le classement de MA ligue cette semaine : le cache d'abord, le réseau en silence derrière.
     func loadWeek() async {
         if week.value == nil, let cached = await cache.load(LeagueWeekResponse.self, name: GameWave2CacheName.leagueWeek) {
