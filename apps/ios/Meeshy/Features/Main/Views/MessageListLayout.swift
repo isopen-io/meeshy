@@ -31,7 +31,7 @@ import MeeshySDK
 ///   récentes vivent près du bas ; compenser les ferait sauter à leur tour —
 ///   le pire échange possible. L'ancre reste le bas visuel, comme
 ///   aujourd'hui.
-/// - près du bas (`offset < seuil`) pour les insertions → 0. La poussée
+/// - près du bas (`offset + contentInset.top < seuil`) pour les insertions → 0. La poussée
 ///   naturelle (le message entrant apparaît, l'auto-scroll RC2.1 suit) est
 ///   le comportement historique voulu.
 ///
@@ -61,11 +61,23 @@ nonisolated enum MessageListOffsetCompensationLaw {
     /// supprimées (−) SOUS la fenêtre visible.
     static func batchUpdateAdjustment(
         headDelta: CGFloat,
-        contentOffsetY: CGFloat,
+        distanceFromVisualBottom: CGFloat,
         nearBottomThreshold: CGFloat
     ) -> CGFloat {
-        guard contentOffsetY >= nearBottomThreshold else { return 0 }
+        guard !isNearVisualBottom(distanceFromVisualBottom: distanceFromVisualBottom, threshold: nearBottomThreshold) else { return 0 }
         return headDelta
+    }
+
+    /// #16458 — la liste est retournée : tout en bas, `contentOffset.y` vaut
+    /// `-contentInset.top` (composeur + zone sûre). Comparer l'offset BRUT au
+    /// seuil élargissait « près du bas » de toute la marge (≈ 320 pt), et un
+    /// lecteur remonté de deux bulles était ramené en bas par un message entrant.
+    static func distanceFromVisualBottom(contentOffsetY: CGFloat, bottomInset: CGFloat) -> CGFloat {
+        contentOffsetY + bottomInset
+    }
+
+    static func isNearVisualBottom(distanceFromVisualBottom: CGFloat, threshold: CGFloat) -> Bool {
+        distanceFromVisualBottom < threshold
     }
 }
 
@@ -495,7 +507,10 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         stashedDeletionHeight = 0
         pendingBatchAdjustment = MessageListOffsetCompensationLaw.batchUpdateAdjustment(
             headDelta: headDelta,
-            contentOffsetY: offsetY,
+            distanceFromVisualBottom: MessageListOffsetCompensationLaw.distanceFromVisualBottom(
+                contentOffsetY: offsetY,
+                bottomInset: collectionView.contentInset.top
+            ),
             nearBottomThreshold: nearBottomThreshold
         )
     }

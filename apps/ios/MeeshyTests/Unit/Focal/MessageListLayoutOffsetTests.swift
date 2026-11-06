@@ -82,7 +82,7 @@ final class MessageListLayoutOffsetTests: XCTestCase {
         XCTAssertEqual(
             MessageListOffsetCompensationLaw.batchUpdateAdjustment(
                 headDelta: 150,
-                contentOffsetY: 600,
+                distanceFromVisualBottom: 600,
                 nearBottomThreshold: 200
             ),
             150,
@@ -94,7 +94,7 @@ final class MessageListLayoutOffsetTests: XCTestCase {
         XCTAssertEqual(
             MessageListOffsetCompensationLaw.batchUpdateAdjustment(
                 headDelta: 150,
-                contentOffsetY: 40,
+                distanceFromVisualBottom: 40,
                 nearBottomThreshold: 200
             ),
             0,
@@ -106,11 +106,49 @@ final class MessageListLayoutOffsetTests: XCTestCase {
         XCTAssertEqual(
             MessageListOffsetCompensationLaw.batchUpdateAdjustment(
                 headDelta: -52,
-                contentOffsetY: 600,
+                distanceFromVisualBottom: 600,
                 nearBottomThreshold: 200
             ),
             -52,
             "le typing indicator qui disparaît (delta négatif) tire les cellules visibles vers le bas — l'offset doit suivre pour que la scène reste immobile."
+        )
+    }
+
+    // MARK: - #16458 — « près du bas » se mesure depuis le bas VISUEL
+
+    func test_distanceFromVisualBottom_addsTheComposerInset() {
+        XCTAssertEqual(
+            MessageListOffsetCompensationLaw.distanceFromVisualBottom(contentOffsetY: 150, bottomInset: 140),
+            290,
+            "liste retournée : tout en bas, l'offset vaut -contentInset.top ; la distance au bas visuel est offset + marge."
+        )
+        XCTAssertEqual(
+            MessageListOffsetCompensationLaw.distanceFromVisualBottom(contentOffsetY: -140, bottomInset: 140),
+            0
+        )
+    }
+
+    func test_isNearVisualBottom_aReaderAFewBubblesUp_isNotNearTheBottom() {
+        let distance = MessageListOffsetCompensationLaw.distanceFromVisualBottom(contentOffsetY: 150, bottomInset: 140)
+
+        XCTAssertFalse(
+            MessageListOffsetCompensationLaw.isNearVisualBottom(distanceFromVisualBottom: distance, threshold: 200),
+            "290 pt au-dessus du bas : le lecteur relit, un message entrant ne doit pas le ramener en bas."
+        )
+        XCTAssertTrue(
+            MessageListOffsetCompensationLaw.isNearVisualBottom(distanceFromVisualBottom: 0, threshold: 200)
+        )
+    }
+
+    func test_batchUpdate_withAComposerInset_compensatesAReaderAFewBubblesUp() {
+        XCTAssertEqual(
+            MessageListOffsetCompensationLaw.batchUpdateAdjustment(
+                headDelta: 80,
+                distanceFromVisualBottom: MessageListOffsetCompensationLaw.distanceFromVisualBottom(contentOffsetY: 150, bottomInset: 140),
+                nearBottomThreshold: 200
+            ),
+            80,
+            "l'offset brut (150) passait pour « près du bas » : l'insertion n'était pas compensée et la lecture sautait."
         )
     }
 
