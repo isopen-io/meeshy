@@ -21,7 +21,7 @@
 
 **Conséquences** : publier un pack rend désormais son compte joignable depuis la boutique — c'est l'intention du porteur (un éditeur est un vrai compte). Comptes INSCRITS seulement, comme toute la famille `/publishers`. Le web et Android portent la page éditeur par leurs issues jumelles (`publishers.bySlugPage` déclarée en attente dans `scripts/check-ts-catalog-dead-entries.mjs`, plafond `TO_PORT_CEILING` relevé à 129).
 
-## Le site de l'éditeur (contre-audit du 2026-11-06)
+### Le site de l'éditeur (contre-audit du 2026-11-06)
 
 Le site ne part que d'un éditeur **vérifié** dont le compte est servi au lecteur. Un éditeur non vérifié ne pose aucun lien à côté de son nom. Un lecteur bloqué, ou à qui le compte se cache, ne reçoit pas non plus le site, qui pourrait le ré-identifier.
 
@@ -35,13 +35,13 @@ L'option « figer à la vérification le site validé » est écartée : elle au
 
 Témoins : `lens-partners.test.ts` (« changer seulement son SITE après vérification la RETIRE », « retirer son site après vérification la retire aussi », « remettre le MÊME site … ne retire rien », « le compte officiel garde sa vérification en changeant son site », « un site remplacé entre la file et le clic ⇒ 409 ») et `pack-publishers.test.ts` (« GET /:slug/page lit le sceau et le site ENSEMBLE »).
 
-## Les éditeurs déjà publiés sont nommés dès la production (porteur, 2026-11-06)
+### Les éditeurs déjà publiés sont nommés dès la production (porteur, 2026-11-06)
 
 **Tranché par le porteur le 2026-11-06 : tous les éditeurs qui ont un pack approuvé sont nommés sur leur page éditeur dès la production**, sous les conditions du point 2 ci-dessus, y compris ceux qui ont publié avant ce lot sous la promesse du point 7 de #16274. Cela clôt le « À trancher » de la section Décision.
 
 L'avis de `conformite-juridique` du 2026-11-06 a compté **0 éditeur concerné en production** : à cette date, la décision ne nomme rétroactivement personne. Il recommande une **mention d'information avant la première proposition de pack**, qui dit à l'éditeur que son profil Meeshy sera visible sur sa page éditeur. Elle est suivie par #16440 (trois circuits de proposition et politique de confidentialité, destinataires : comptes inscrits) ; la possibilité pour un éditeur de cacher son compte de sa page éditeur, par #16441.
 
-## Nommer son compte est un CHOIX de l'éditeur, masqué par défaut (porteur, 2026-11-06, #16440)
+### Nommer son compte est un CHOIX de l'éditeur, masqué par défaut (porteur, 2026-11-06, #16440)
 
 **Tranché par le porteur le 2026-11-06 : la carte `owner` de `GET /publishers/:slug/page` est OPTIONNELLE.** Elle n'est servie que si l'éditeur a choisi de nommer son compte Meeshy ; par défaut, elle est masquée. Ce choix **remplace la mention d'information** recommandée par `conformite-juridique` (section précédente) : on ne prévient plus qu'un compte sera montré, on ne le montre que s'il l'a demandé. Il absorbe aussi #16441.
 
