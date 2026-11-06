@@ -309,6 +309,58 @@ describe('l’identité d’un partenaire est VÉRIFIÉE par BIGBOSS/ADMIN', () 
   });
 });
 
+describe('#16440 — l’éditeur CHOISIT de nommer son compte Meeshy sur sa page éditeur, masqué par défaut', () => {
+  const own = async (h: H) => (await call(h, 'GET', '/partners/me')).json().data;
+  const shownAt = (h: H) => h.prisma.partnerProfile.rows.find((row) => row.userId === ALICE)?.ownerShownAt ?? null;
+
+  it('un profil créé sans rien dire est MASQUÉ : `showOwnerProfile` vaut false, et rien n’est posé', async () => {
+    const h = await harness();
+    const saved = await saveProfile(h);
+    expect(saved.json().data).toMatchObject({ showOwnerProfile: false });
+    expect(await own(h)).toMatchObject({ showOwnerProfile: false });
+    expect(shownAt(h)).toBeNull();
+  });
+
+  it('true pose la date, un second true la GARDE, un envoi sans le champ ne change rien, false la remet à null', async () => {
+    const h = await harness();
+    const created = await saveProfile(h, { displayName: 'Studio Lumière', showOwnerProfile: true });
+    expect(created.json().data).toMatchObject({ showOwnerProfile: true });
+    const first = shownAt(h);
+    expect(first).toBeInstanceOf(Date);
+
+    await saveProfile(h, { displayName: 'Studio Lumière', showOwnerProfile: true });
+    expect(shownAt(h)).toEqual(first);
+
+    const silent = await saveProfile(h, { displayName: 'Studio Lumière' });
+    expect(silent.json().data).toMatchObject({ showOwnerProfile: true });
+    expect(shownAt(h)).toEqual(first);
+
+    const hidden = await saveProfile(h, { displayName: 'Studio Lumière', showOwnerProfile: false });
+    expect(hidden.json().data).toMatchObject({ showOwnerProfile: false });
+    expect(shownAt(h)).toBeNull();
+    expect(await own(h)).toMatchObject({ showOwnerProfile: false });
+  });
+
+  it('afficher ou masquer son compte NE RETIRE PAS la vérification : ce n’est pas l’identité de l’éditeur', async () => {
+    const h = await harness();
+    await saveProfile(h);
+    await verifyAs(h);
+
+    const shown = await saveProfile(h, { displayName: 'Studio Lumière', website: 'https://lumiere.example', showOwnerProfile: true });
+    expect(shown.json().data).toMatchObject({ verified: true, showOwnerProfile: true });
+    const hidden = await saveProfile(h, { displayName: 'Studio Lumière', website: 'https://lumiere.example', showOwnerProfile: false });
+    expect(hidden.json().data).toMatchObject({ verified: true, showOwnerProfile: false });
+  });
+
+  it('un `showOwnerProfile` qui n’est pas un booléen rend 400 et n’écrit rien', async () => {
+    const h = await harness();
+    await saveProfile(h);
+    const res = await saveProfile(h, { displayName: 'Studio Lumière', showOwnerProfile: 'oui' });
+    expect(res.statusCode).toBe(400);
+    expect(shownAt(h)).toBeNull();
+  });
+});
+
 describe('B1 — l’ADMIN vérifie l’état qu’il a VU, jamais celui qui est là au clic', () => {
   it('la file sert une version opaque de chaque profil, et vérifier sans elle est refusé (400)', async () => {
     const h = await harness();

@@ -189,7 +189,7 @@ const OFFICIAL_LINK_ACTION = 'PACK_PUBLISHER_OFFICIAL_LINK';
 
 const ROW_SELECT = { id: true, userId: true, slug: true, displayName: true, nameKey: true, nameDisputedAt: true, nameOffListAt: true, verifiedAt: true, createdAt: true } as const;
 /** La page lit le sceau et le site dans la MÊME lecture : un site changé entre deux lectures partirait sous un sceau déjà retiré. */
-const PAGE_SELECT = { ...ROW_SELECT, website: true } as const;
+const PAGE_SELECT = { ...ROW_SELECT, website: true, ownerShownAt: true } as const;
 
 type PublisherRow = {
   readonly id: string;
@@ -204,7 +204,7 @@ type PublisherRow = {
   readonly createdAt?: Date | null;
 };
 
-type PageRow = PublisherRow & { readonly website: string | null };
+type PageRow = PublisherRow & { readonly website: string | null; readonly ownerShownAt?: Date | null };
 
 /** Le rattrapage seul pose la marque « nom hors liste » ; une marque déjà posée ne bouge pas. */
 type LegacyMark = { readonly offList?: boolean };
@@ -375,9 +375,13 @@ export class PackPublishers {
    * officiel, dont les packs sont ceux du dépôt, en est dispensé) ; la loi « ne pas être
    * trouvé » (#8104) ne le cache pas à ce lecteur ; et ni lui ni le lecteur ne se sont bloqués
    * (`isBlockedBetween`) — le compte officiel compris. Sinon la page reste, sans lien.
-   * Le site ne part que d'un éditeur VÉRIFIÉ dont le compte est servi : un lien que personne
-   * n'a revu ne se pose jamais à côté de l'identité, et un site personnel ne ré-identifie pas
-   * celui que le blocage ou « ne pas être trouvé » taisent (audit du 2026-11-06, N1 et N2).
+   * Et, sur tout cela, le compte n'est nommé que si l'éditeur l'a CHOISI (`ownerShownAt`,
+   * #16440) — masqué par défaut, lu dans la même lecture que le sceau et le site ; le compte
+   * officiel en est dispensé. Ce choix ne lève aucune des gardes ci-dessus.
+   * Le site ne part que d'un éditeur VÉRIFIÉ dont le compte PASSE ces gardes : un lien que
+   * personne n'a revu ne se pose jamais à côté de l'identité, et un site personnel ne
+   * ré-identifie pas celui que le blocage ou « ne pas être trouvé » taisent (audit du
+   * 2026-11-06, N1 et N2). Masquer son compte, en revanche, ne retire pas son site.
    */
   async page(slug: string, viewerId: string): Promise<PublisherPage | null> {
     const row = await this.pageRow(slug);
@@ -386,9 +390,10 @@ export class PackPublishers {
     if (publisher === null) return null;
     const neutralized = row.profile !== null && !publisher.official && publisher.name !== row.profile.displayName;
     if (neutralized) return { publisher, owner: null, website: null };
-    const owner = row.soleHolder ? await this.ownerCard(row.ownerId, viewerId) : null;
-    const website = publisher.verified && owner !== null ? row.profile?.website ?? null : null;
-    return { publisher, owner, website };
+    const servable = row.soleHolder ? await this.ownerCard(row.ownerId, viewerId) : null;
+    const chosen = (row.ownerId !== null && this.isOfficial(row.ownerId)) || (row.profile?.ownerShownAt ?? null) !== null;
+    const website = publisher.verified && servable !== null ? row.profile?.website ?? null : null;
+    return { publisher, owner: chosen ? servable : null, website };
   }
 
   private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly soleHolder: boolean; readonly profile: PageRow | null } | null> {

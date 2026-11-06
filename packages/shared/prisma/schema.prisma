@@ -6686,6 +6686,12 @@ model PartnerProfile {
   /// `null` = non vérifié. Posé par BIGBOSS/ADMIN, journalisé avant d'agir.
   verifiedAt  DateTime?
   verifiedBy  String?   @db.ObjectId
+  /// Le CHOIX de l'éditeur de nommer son compte Meeshy sur sa page éditeur
+  /// (`GET /publishers/:slug/page`, #16440) : posée quand il l'affiche, `null`
+  /// (ou absente, sur un profil d'avant) = masqué, le défaut. Écrite par
+  /// `LensPartners.saveOwnProfile` seulement ; le compte officiel en est dispensé.
+  /// Ne touche ni à la vérification ni aux autres gardes de la page.
+  ownerShownAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

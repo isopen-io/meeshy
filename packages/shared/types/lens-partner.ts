@@ -48,9 +48,16 @@ export function declaredLensSlug(raw: unknown): string | null {
   return raw.length <= LENS_LIMITS.maxIdLength && LENS_PATTERNS.id.test(raw) ? raw : null;
 }
 
-export type PartnerProfileInput = { readonly displayName: string; readonly website: string | null };
+/**
+ * `showOwnerProfile` (#16440) : le choix de nommer son compte Meeshy sur sa page
+ * éditeur — `true` l'affiche, `false` le masque, ABSENT ne change rien. Masqué
+ * par défaut : un profil qui n'a jamais rien dit ne nomme personne.
+ */
+export type PartnerProfileInput = { readonly displayName: string; readonly website: string | null; readonly showOwnerProfile?: boolean };
 
-export type PartnerProfileParse = { readonly ok: true; readonly profile: PartnerProfileInput } | { readonly ok: false; readonly reason: 'display-name' | 'website' };
+export type PartnerProfileParse =
+  | { readonly ok: true; readonly profile: PartnerProfileInput }
+  | { readonly ok: false; readonly reason: 'display-name' | 'website' | 'show-owner-profile' };
 
 /**
  * Contrôle (Cc), format (Cf : invisibles, jointures, marques bidi, BOM) et
@@ -96,7 +103,10 @@ export function parsePartnerProfileInput(raw: unknown, author: PartnerProfileAut
   if (displayName === null) return { ok: false, reason: 'display-name' };
   const website = cleanWebsite(input.website);
   if (website === undefined) return { ok: false, reason: 'website' };
-  return { ok: true, profile: { displayName, website } };
+  const showOwnerProfile = input.showOwnerProfile;
+  if (showOwnerProfile === undefined) return { ok: true, profile: { displayName, website } };
+  if (typeof showOwnerProfile !== 'boolean') return { ok: false, reason: 'show-owner-profile' };
+  return { ok: true, profile: { displayName, website, showOwnerProfile } };
 }
 
 /** Le crédit qu'un média porte : « Lens par X », et ce que le filigrane compose. */

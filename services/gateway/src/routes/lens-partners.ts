@@ -59,6 +59,7 @@ const profileJsonSchema = {
     logo: nullableString,
     verified: { type: 'boolean' },
     verifiedAt: nullableString,
+    showOwnerProfile: { type: 'boolean' },
     version: { type: 'string' },
   },
 } as const;
@@ -162,12 +163,13 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
       schema: {
         description:
           'Écrit le profil partenaire (#11327) : `displayName`, `website` (https), `logo` en base64 (absent : gardé ; `null` : retiré). ' +
-          'Le logo est ré-encodé et renommé par son empreinte. Changer le nom, le logo ou le site RETIRE la vérification ; les remettre à l’identique ne retire rien. 422 PARTNER_LOGO_REFUSED ; ' +
+          'Le logo est ré-encodé et renommé par son empreinte. Changer le nom, le logo ou le site RETIRE la vérification ; les remettre à l’identique ne retire rien. ' +
+          '`showOwnerProfile` (#16440) : `true` nomme le compte Meeshy sur la page éditeur, `false` le masque (le défaut), absent ne change rien — sans toucher à la vérification. 422 PARTNER_LOGO_REFUSED ; ' +
           '409 PARTNER_PROFILE_CHANGED quand une autre écriture est passée entre la relecture et l’écriture (relire, puis réécrire) ; ' +
           '409 PUBLISHER_NAME_TAKEN quand un autre éditeur porte déjà ce nom (#16274), 403 PUBLISHER_RESERVED pour un nom réservé.',
         tags,
         summary: 'Save my partner profile',
-        body: { type: 'object', required: ['displayName'], properties: { displayName: { type: 'string' }, website: { type: 'string', nullable: true }, logo: { type: 'string', nullable: true } } },
+        body: { type: 'object', required: ['displayName'], properties: { displayName: { type: 'string' }, website: { type: 'string', nullable: true }, logo: { type: 'string', nullable: true }, showOwnerProfile: { type: 'boolean' } } },
         response: { 200: packEnvelope(profileJsonSchema), 409: errorResponseSchema, 422: { type: 'object', properties: { success: { type: 'boolean' }, error: { type: 'string' }, message: { type: 'string' }, code: { type: 'string' }, reason: { type: 'string' } } }, ...PACK_ERRORS },
       },
     },
