@@ -94,7 +94,7 @@ public final class StoryTimelineEngine {
         restoreIOBufferDuration()
     }
 
-    deinit {
+    nonisolated deinit {
         // We CANNOT call MainActor-isolated tearDown() from deinit safely —
         // ARC may release the engine from any thread. The owner must call
         // shutdown() explicitly to release AVPlayer + observers + audio mixer.
