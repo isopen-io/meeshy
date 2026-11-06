@@ -11,7 +11,7 @@ import Foundation
 /// `let`, car `MoveKeyframeCommand` (Task 19) doit pouvoir muter ce champ pour
 /// l'undo/redo. `id` reste `let`. Aucune propagation visible côté consumer car
 /// `StoryKeyframe` reste un value type (les copies sont indépendantes).
-public struct StoryKeyframe: Codable, Identifiable, Sendable {
+public struct StoryKeyframe: Codable, Identifiable, Sendable, Equatable {
     public let id: String
     public var time: Float
     public var x: CGFloat?

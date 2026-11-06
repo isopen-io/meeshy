@@ -91,7 +91,7 @@ public enum StoryTextFrameShape: String, Codable, CaseIterable, Sendable {
 
 // MARK: - Story Text Object (texte sur canvas)
 
-public struct StoryTextObject: Codable, Identifiable, Sendable {
+public struct StoryTextObject: Codable, Identifiable, Sendable, Equatable {
     public var id: String
     public var text: String              // was: content (RENAMED; legacy "content" accepted by decoder)
     public var x: Double                 // normalisé 0–1

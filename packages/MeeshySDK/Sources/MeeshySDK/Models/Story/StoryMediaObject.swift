@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - Story Media Object (image/vidéo sur canvas)
 
-public struct StoryMediaObject: Codable, Identifiable, Sendable {
+public struct StoryMediaObject: Codable, Identifiable, Sendable, Equatable {
     public var id: String
     public var postMediaId: String         // référence PostMedia en DB (kept)
     public var mediaURL: String?           // optional URL (e.g. "fixture://media")
