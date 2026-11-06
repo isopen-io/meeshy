@@ -181,7 +181,8 @@ describe('/publishers — la boutique, le propriétaire, l’administration (#16
 
     db.users.get(AWA)!.blockedUserIds = [MODO];
     const blocked = await app.inject({ method: 'GET', url: '/studio-lumiere/page' });
-    expect(blocked.json().data).toMatchObject({ owner: null, website: null });
+    expect(blocked.json().data).toMatchObject({ owner: null, website: 'https://studio.example' });
+    expect(blocked.body).not.toContain(AWA);
   });
 
   it('#16440 — compte MASQUÉ : rien de ce que le LECTEUR contrôle ne fait varier la page, sans quoi bloquer un suspect le démasquerait (audit 2026-11-06)', async () => {
@@ -200,6 +201,9 @@ describe('/publishers — la boutique, le propriétaire, l’administration (#16
     expect(await read()).toEqual(baseline);
     db.users.get(MODO)!.blockedUserIds = [];
     facts.hidden.add(AWA);
+    expect(await read()).toEqual(baseline);
+    facts.hidden.delete(AWA);
+    db.users.get(AWA)!.blockedUserIds = [MODO];
     expect(await read()).toEqual(baseline);
   });
 
