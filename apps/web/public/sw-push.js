@@ -93,6 +93,8 @@ const EPHEMERAL_ONLY_TYPES = [
 const MOOD_TYPES = ['friend_new_mood'];
 const REQUEST_TYPES = ['friend_request', 'contact_request'];
 const PROFILE_TYPES = ['contact_joined', 'contact_recently_active'];
+/** JUMEAU de `MISSED_CALL_TYPES` (#9177) : repli d'un appel manqué sans `conversationId`. */
+const MISSED_CALL_TYPES = ['missed_call', 'CALL_MISSED', 'call_declined'];
 const PROGRESSION_TYPES = [
   'achievement_unlocked',
   'ACHIEVEMENT_UNLOCKED',
@@ -335,6 +337,7 @@ function resolvePushTarget(data) {
 
   const pseudo = texte(data.senderUsername);
   if (PROFILE_TYPES.indexOf(type) >= 0 && pseudo !== '') return { route: 'userProfile', params: { username: pseudo }, search: {} };
+  if (MISSED_CALL_TYPES.indexOf(type) >= 0 && pseudo !== '') return { route: 'userProfile', params: { username: pseudo }, search: {} };
 
   if (GAME_LEAGUE_TYPES.indexOf(type) >= 0) return { route: 'progressionLigue', params: {}, search: {} };
   if (GAME_SEASON_TYPES.indexOf(type) >= 0) return { route: 'progressionSaison', params: {}, search: {} };
@@ -1057,6 +1060,7 @@ self.meeshyPushTarget = {
   MOOD_TYPES: MOOD_TYPES,
   REQUEST_TYPES: REQUEST_TYPES,
   PROFILE_TYPES: PROFILE_TYPES,
+  MISSED_CALL_TYPES: MISSED_CALL_TYPES,
   GAME_LEAGUE_TYPES: GAME_LEAGUE_TYPES,
   GAME_SEASON_TYPES: GAME_SEASON_TYPES,
   GAME_PHOTO_TYPES: GAME_PHOTO_TYPES,
