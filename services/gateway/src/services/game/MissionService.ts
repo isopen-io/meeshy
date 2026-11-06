@@ -17,7 +17,11 @@
  *  - **récompense** — avec le Bonus de Flamme (fixé au tirage) et l'Heure du
  *    Prisme (le paiement double si le geste tombe dans l'heure du jour) ;
  *  - **idempotence** — l'achèvement est un `updateMany` conditionnel sur
- *    `completedAt: null` : la mission ne paie qu'une fois, quoi qu'il arrive.
+ *    `completedAt: null` : la mission ne paie qu'une fois, quoi qu'il arrive ;
+ *  - **temps réel** (#16425) — une mission qui avance ou se termine, un coffre
+ *    qui s'ouvre : `game:missions-updated` `{ dayKey }` part dans la room
+ *    `user:<id>` du seul joueur, au mieux — une émission qui tombe ne coûte
+ *    jamais le geste.
  */
 
 import type { DailyMission, PrismaClient } from '@meeshy/shared/prisma/client';
@@ -52,6 +56,8 @@ import { MISSION_PROFILE_USER_SELECT, missionProfileOf } from './MissionHabits';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { starFragmentsOf } from './StarFragments';
 import { stampGameRevisionAfterWrite } from './GameRevision';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const log = enhancedLogger.child({ module: 'MissionService' });
@@ -98,6 +104,11 @@ export type MissionServiceDeps = {
    * échec ne rend jamais la mission.
    */
   readonly onMissionCompleted?: (event: { readonly userId: string; readonly difficulty: MissionDifficulty; readonly now: Date }) => Promise<void>;
+  /**
+   * Le serveur temps réel, lu au moment d'émettre (#16425) : `game:missions-updated` en part après chaque progression
+   * ou ouverture du coffre. Absent (lectures, tests, scripts) : rien ne part.
+   */
+  readonly emitIO?: () => ServerEmitIO | null | undefined;
 };
 
 export type MissionDay = {
@@ -424,7 +435,18 @@ export class MissionService {
     }
     // La progression d'une mission est servie dans le bloc : la révision de l'état du jeu monte (#10912), après toutes
     // les écritures du geste.
-    if (advanced) await stampGameRevisionAfterWrite(this.prisma, userId);
+    if (!advanced) return;
+    await stampGameRevisionAfterWrite(this.prisma, userId);
+    this.announceMissions(userId, dayKey);
+  }
+
+  /** Les défis du jour du joueur ont bougé : ses appareils les relisent. Au mieux, ne lève jamais. */
+  private announceMissions(userId: string, dayKey: string): void {
+    try {
+      this.deps.emitIO?.()?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.GAME_MISSIONS_UPDATED, { dayKey });
+    } catch (error) {
+      log.warn('game:missions-updated not emitted', { userId, error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   private async advanceCounted(row: DailyMission, amount: number): Promise<number> {
@@ -659,6 +681,7 @@ export class MissionService {
         log.warn('chest freeze not granted', { userId, error: error instanceof Error ? error.message : String(error) }),
       );
     }
+    this.announceMissions(userId, dayKey);
     return {
       status: 'claimed',
       reward: {
