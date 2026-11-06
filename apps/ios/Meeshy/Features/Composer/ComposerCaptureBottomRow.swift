@@ -29,6 +29,8 @@ struct ComposerCaptureBottomRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Le cadenas qui se ferme, élastique, avant de partir (#9753).
     @State private var lockSeal = ComposerLockSeal()
+    /// La phrase du geste a servi : une prise a été faite (#16482).
+    @AppStorage(ComposerShutterFeedback.hintSeenKey) private var hintSeen = false
 
     private var capture: ComposerSceneCameraBar.Capture { session.barCapture }
 
@@ -59,7 +61,9 @@ struct ComposerCaptureBottomRow: View {
     /// cadre, dont le bas porte sa propre écriture (#9557) — et bande ouverte,
     /// où le nom du choix prend sa place (#9566).
     private var showsHint: Bool {
-        !recording && !editing && session.look.frame == ComposerPhotoFrame.none && session.openFamily == nil
+        ComposerShutterFeedback.showsHint(
+            base: !recording && !editing && session.look.frame == ComposerPhotoFrame.none && session.openFamily == nil,
+            hasTakenAPhoto: hintSeen)
     }
 
     var body: some View {
@@ -79,6 +83,8 @@ struct ComposerCaptureBottomRow: View {
             guard !Task.isCancelled else { return }
             lockSeal.finish(scellement)
         }
+        .adaptiveOnChange(of: session.camera.shutterPresses) { _, _ in hintSeen = true }
+        .adaptiveOnChange(of: recording) { _, enregistre in if enregistre { hintSeen = true } }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: recording)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: editing)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ComposerCaptureGesture.offersRail(context))

@@ -7,7 +7,7 @@ import MeeshyUI
 /// par un effet de morphe […] pour dynamiser l'attente »).
 ///
 /// Pendant la bascule, les pastilles de l'ancien objectif se resserrent en UNE
-/// capsule où tourne le glyphe de la bascule ; le nouvel objectif en place, la
+/// capsule qui porte le glyphe de la bascule ; le nouvel objectif en place, la
 /// capsule se rouvre sur SES pastilles — ou s'efface s'il n'en a pas.
 nonisolated enum ComposerZoomBarMorph {
     nonisolated enum Phase: Equatable, Sendable {
@@ -119,22 +119,17 @@ struct ComposerCaptureZoomBar: View {
     }
 }
 
-/// La capsule de l'attente : le glyphe de la bascule y tourne.
+/// La capsule de l'attente : le glyphe de la bascule, immobile — aucune
+/// rotation qui ne dit rien de plus que la capsule (#16482).
 private struct ComposerCaptureZoomMorphPill: View {
     let reduceMotion: Bool
-    @State private var turned = false
 
     var body: some View {
         Image(systemName: "arrow.triangle.2.circlepath.camera")
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             .foregroundStyle(.white)
-            .rotationEffect(.degrees(turned ? 180 : 0))
             .frame(width: MeeshyControlSize.tapTarget + MeeshySpacing.md, height: MeeshyControlSize.tapTarget)
             .adaptiveLiquidGlass(in: Capsule())
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.45).repeatForever(autoreverses: false)) { turned = true }
-            }
             .accessibilityLabel(ComposerSceneCameraCopy.flipLabel)
             .accessibilityAddTraits(.updatesFrequently)
     }

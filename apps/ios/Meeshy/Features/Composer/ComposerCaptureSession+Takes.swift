@@ -113,6 +113,7 @@ extension ComposerCaptureSession {
 
     /// L'intention voyage avec la demande ; l'obturateur la fige en partant.
     func shootPhoto(intent: ComposerTakeIntent) {
+        camera.noteShutterPress()
         photographWhenReady(intent: intent)
     }
 

@@ -54,6 +54,14 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     @Published var isTakingPhoto = false
     @Published var isRecordingVideo = false
     @Published var recordingDuration: TimeInterval = 0
+    /// Un tic par obturateur PARTI (`willCapturePhotoFor`) : le cadre blanchit
+    /// à cet instant, jamais à la fin du traitement (#16482).
+    @Published private(set) var shutterCount = 0
+    /// Un tic par toucher qui photographie : le déclencheur se contracte tout
+    /// de suite, avant même que l'objectif ne prenne (#16482).
+    @Published private(set) var shutterPresses = 0
+    /// Le toucher qui a demandé la prise en vol — mesure toucher → obturateur.
+    private var shutterRequestedAt: CFTimeInterval?
     /// État de l'autorisation caméra. `.denied`/`.restricted` fait rendre à la
     /// vue un panneau « Ouvrir les Réglages » au lieu d'un preview noir muet.
     @Published private(set) var permission: MediaPermissionState = .notDetermined
@@ -250,6 +258,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                                                   prepared: self.preparedInputs,
                                                   previewWanted: self.previewMirroring.isWanted)
             self.session.commitConfiguration()
+            if let device = installe?.device { CameraPhotoTuning.tune(self.photoOutput, in: self.session, for: device) }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let installe { self.adopt(installe) }
@@ -443,6 +452,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             let installe = CameraInputInstaller.installVideoInput(in: self.session, position: position, outputs: self.orientedOutputs,
                                                   prepared: self.preparedInputs,
                                                   previewWanted: self.previewMirroring.isWanted)
+            if let device = installe?.device { CameraPhotoTuning.tune(self.photoOutput, in: self.session, for: device) }
             let posee = CACurrentMediaTime()
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -495,7 +505,10 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     func takePhoto(flash: AVCaptureDevice.FlashMode) {
         #if DEBUG
         if let fixture {
-            if !isSwitchingCamera { deliverFixturePhoto(fixture) }
+            guard !isSwitchingCamera else { return }
+            shutterRequestedAt = CACurrentMediaTime()
+            noteShutterFired()
+            deliverFixturePhoto(fixture)
             return
         }
         #endif
@@ -508,12 +521,12 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             connectionIsActive: connection?.isActive ?? false,
             connectionIsEnabled: connection?.isEnabled ?? false
         ) else { return }
-        let settings = AVCapturePhotoSettings()
-        if photoOutput.supportedFlashModes.contains(flash) {
-            settings.flashMode = flash
-        }
+        let settings = CameraPhotoTuning.settings(
+            flash: flash, supportedFlashModes: photoOutput.supportedFlashModes,
+            outputMaxPhotoDimensions: CameraPhotoDimensions(photoOutput.maxPhotoDimensions))
         horizon.level(connection)
         isTakingPhoto = true
+        shutterRequestedAt = CACurrentMediaTime()
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
 
@@ -898,6 +911,28 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 // MARK: - Photo Delegate
 
 extension CameraModel: AVCapturePhotoCaptureDelegate {
+    /// **L'obturateur part** : le retour visuel suit cet instant, pas la photo
+    /// traitée qui arrive ensuite (#16482).
+    nonisolated func photoOutput(_ output: AVCapturePhotoOutput, willCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.noteShutterFired() } }
+    }
+
+    /// **Le toucher est entendu** : le bouton se contracte et une haptique
+    /// LÉGÈRE répond au doigt, avant l'attente de l'objectif.
+    func noteShutterPress() {
+        shutterPresses += 1
+        HapticFeedback.light()
+    }
+
+    /// Le tic du cadre, et le délai toucher → obturateur dans la console.
+    func noteShutterFired() {
+        shutterCount += 1
+        guard let demande = shutterRequestedAt else { return }
+        shutterRequestedAt = nil
+        let ms = Int(((CACurrentMediaTime() - demande) * 1000).rounded())
+        Logger.media.info("camera shutter: \(ms, privacy: .public) ms after the touch")
+    }
+
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         guard let original = photo.fileDataRepresentation() else {
             Task { @MainActor in self.isTakingPhoto = false }

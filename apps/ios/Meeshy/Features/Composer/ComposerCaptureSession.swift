@@ -334,7 +334,6 @@ final class ComposerCaptureSession: ObservableObject {
         guard stage == .armed, !camera.isTakingPhoto, !photoIsRamping, !controls.isSwitchingCamera else { return }
         photoInFlightIntent = intent
         mode = .photo
-        HapticFeedback.medium()
         let flashDeLaPrise = flash
         guard screenIsTheFlash else {
             controls.takePhoto(flash: flashDeLaPrise)
