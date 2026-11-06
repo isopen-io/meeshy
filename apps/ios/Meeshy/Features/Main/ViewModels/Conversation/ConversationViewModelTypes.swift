@@ -7,6 +7,8 @@ struct ConversationTranslationRequestFailure: Equatable {
     let language: String
     let kind: Kind
     let message: String
+    /// Un refus de CONSENTEMENT : la vue Langue le rend touchable (#16418).
+    var consentGap: VoiceSetupGap? = nil
 }
 
 extension ConversationTranslationRequestFailure {
@@ -14,6 +16,17 @@ extension ConversationTranslationRequestFailure {
     /// son état « en cours » et dit pourquoi.
     static func serverRefused(messageId: String, language: String, kind: Kind) -> Self {
         Self(messageId: messageId, language: language, kind: kind, message: ServerTranslationAdmission.refusalMessage)
+    }
+
+    /// L'échec d'une traduction AUDIO à la demande : un refus de consentement
+    /// garde le texte de la passerelle et dit ce qui manque.
+    static func audio(messageId: String, language: String, error: Error) -> Self {
+        let consent = error as? AttachmentConsentError
+        return Self(
+            messageId: messageId, language: language, kind: .audio,
+            message: consent?.message ?? error.localizedDescription,
+            consentGap: consent.map { VoiceSetupGap(consentCode: $0.code) }
+        )
     }
 }
 

@@ -69,7 +69,8 @@ struct ConversationBodySheets<Anchor: View, Picker: View>: ViewModifier {
             .modifier(ConversationVoiceConsentAlert(
                 isPresented: $composerState.showVoiceAutoTranslateConsent,
                 onAccept: onVoiceConsentAccept,
-                onLater: onVoiceConsentLater))
+                onLater: onVoiceConsentLater,
+                onConfigure: { VoiceSetupLauncher.open(.voice) { router.push(.settings) } }))
             .overlay { deleteAnchor() }
             .modifier(ConversationForwardSheet(composerState: $composerState, picker: forwardPicker))
     }
