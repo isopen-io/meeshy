@@ -5,6 +5,9 @@ import MeeshyUI
 
 struct VoiceProfileManageView: View {
     let accentColor: String
+    /// Ouverte par un indicateur de consentement (#16418) : sans profil,
+    /// l'assistant s'ouvre directement au lieu de l'état vide.
+    var opensWizardWhenEmpty: Bool = false
 
     /// La teinte d'accent, convertie UNE fois : chaque site la répétait en
     /// `Color(hex:)`, et le cliquet des couleurs en dur le comptait autant de fois
@@ -36,6 +39,7 @@ struct VoiceProfileManageView: View {
         }
         .task {
             await viewModel.loadProfile()
+            if Self.opensWizard(requested: opensWizardWhenEmpty, profile: viewModel.profile, loadError: viewModel.error) { showWizard = true }
         }
         .alert(String(localized: "voice.profile.deleteAlert.title", defaultValue: "Supprimer le profil vocal", bundle: .main), isPresented: $showDeleteConfirmation) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
@@ -51,6 +55,12 @@ struct VoiceProfileManageView: View {
         .sheet(isPresented: $showWizard) {
             VoiceProfileWizardView(accentColor: accentColor)
         }
+    }
+
+    /// L'assistant suit une demande d'indicateur seulement quand la lecture a
+    /// RÉUSSI sans profil : un échec réseau garde l'écran et son erreur.
+    nonisolated static func opensWizard(requested: Bool, profile: VoiceProfile?, loadError: String?) -> Bool {
+        requested && profile == nil && loadError == nil
     }
 
     // MARK: - Header

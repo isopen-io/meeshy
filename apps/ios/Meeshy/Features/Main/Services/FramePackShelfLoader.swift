@@ -51,33 +51,43 @@ final class FramePackShelfLoader: ObservableObject {
 
     /// Les cadres du pack `pack`, chargés une fois par version.
     func load(_ pack: FramePack) async {
-        let key = "\(pack.slug)@\(pack.version)"
-        guard !loaded.contains(key) else { return }
-        if contents[pack.slug] == nil { contents[pack.slug] = .loading }
+        await load(slug: pack.slug, key: "\(pack.slug)@\(pack.version)")
+    }
+
+    /// Les cadres d'un pack connu par son seul nom — la fiche d'un pack de la vitrine, installé
+    /// ou non (#16268) : relus seulement s'ils ne sont pas déjà là.
+    func load(slug: String) async {
+        if case .frames? = contents[slug] { return }
+        await load(slug: slug, key: nil)
+    }
+
+    private func load(slug: String, key: String?) async {
+        if let key, loaded.contains(key) { return }
+        if contents[slug] == nil { contents[slug] = .loading }
         do {
-            let detail = try await service.detail(slug: pack.slug)
+            let detail = try await service.detail(slug: slug)
             guard detail.contractSchema.map({ $0 == GloryFramePackContract.schema }) ?? true else {
-                contents[pack.slug] = .needsUpdate
+                contents[slug] = .needsUpdate
                 return
             }
             guard let contractRef = detail.contract else {
-                contents[pack.slug] = .unavailable
+                contents[slug] = .unavailable
                 return
             }
             let contractData = try await assets.data(for: contractRef.file)
             guard let parsed = GloryFramePackContract.parse(contractData) else {
-                contents[pack.slug] = .needsUpdate
+                contents[slug] = .needsUpdate
                 return
             }
             let stringsRef = detail.stringsRef(language: language())
             let strings = await readStrings(stringsRef)
-            contents[pack.slug] = .frames(Self.tiles(parsed.contract, strings: strings, usageText: usageText))
-            loaded.insert(key)
+            contents[slug] = .frames(Self.tiles(parsed.contract, strings: strings, usageText: usageText))
+            loaded.insert(key ?? "\(detail.slug)@\(detail.version)")
             await index.record(Self.manifest(of: detail, contract: parsed.contract, strings: stringsRef))
         } catch {
             logger.error("Frame pack shelf failed: \(error.localizedDescription, privacy: .public)")
-            if case .frames? = contents[pack.slug] { return }
-            contents[pack.slug] = .unavailable
+            if case .frames? = contents[slug] { return }
+            contents[slug] = .unavailable
         }
     }
 

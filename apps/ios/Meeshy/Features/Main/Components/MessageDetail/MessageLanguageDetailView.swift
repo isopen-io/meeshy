@@ -37,7 +37,9 @@ struct MessageLanguageDetailView: View {
     @State private var translations: [String: String] = [:]
     @State private var selectedLanguageCode: String? = nil
     @State private var isLoadingTranslations = false
-    @State private var translationError: String? = nil
+    @State private var translationError: LanguageDetailError? = nil
+    /// #16418 — la configuration de la voix, ouverte depuis un refus de consentement.
+    @State private var voiceSetup: VoiceSetupDestination? = nil
     @State private var mergedTranslatedAudios: [MessageTranslatedAudio] = []
 
     /// Fallback in-flight tracking for callers that don't supply
@@ -60,8 +62,38 @@ struct MessageLanguageDetailView: View {
                     .filter { $0.messageId == message.id }
                     .receive(on: DispatchQueue.main)
             ) { failure in
-                translationError = failure.message
+                translationError = LanguageDetailError(text: failure.message, consentGap: failure.consentGap)
             }
+            .sheet(item: $voiceSetup) { VoiceSetupSheet(destination: $0) }
+    }
+
+    /// Un refus de CONSENTEMENT se touche (#16418) : il ouvre la configuration
+    /// de la voix ; tout autre échec reste un texte.
+    @ViewBuilder
+    private func errorView(_ error: LanguageDetailError) -> some View {
+        if let gap = error.consentGap {
+            Button {
+                HapticFeedback.light()
+                voiceSetup = VoiceSetupDestination.resolve(gap, state: .current())
+            } label: {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(error.text).font(.caption2).foregroundStyle(MeeshyColors.error)
+                    HStack(spacing: MeeshySpacing.xs) {
+                        Text(String(localized: "voice.setup.configure", defaultValue: "Configurer ma voix", bundle: .main))
+                        Image(systemName: "chevron.forward").accessibilityHidden(true)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(MeeshyColors.brandPrimary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityHint(String(localized: "voice.setup.hint", defaultValue: "Ouvre la configuration de votre voix", bundle: .main))
+        } else {
+            Text(error.text).font(.caption2).foregroundStyle(MeeshyColors.error)
+        }
     }
 
     // MARK: - Language Tab Content
@@ -177,9 +209,7 @@ struct MessageLanguageDetailView: View {
             }
 
             if let translationError {
-                Text(translationError)
-                    .font(.caption2)
-                    .foregroundStyle(MeeshyColors.error)
+                errorView(translationError)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.top, MeeshySpacing.xs)
                     .transition(.opacity)
@@ -368,7 +398,7 @@ struct MessageLanguageDetailView: View {
 
     /// Le refus se DIT : un toucher sans effet ni message serait un contrôle inerte.
     private func refuseServerTranslation() {
-        translationError = ServerTranslationAdmission.refusalMessage
+        translationError = LanguageDetailError(text: ServerTranslationAdmission.refusalMessage)
         HapticFeedback.error()
     }
 
@@ -403,10 +433,10 @@ struct MessageLanguageDetailView: View {
             onSelectTranslation?(mt)
             HapticFeedback.success()
         } catch {
-            translationError = String(
+            translationError = LanguageDetailError(text: String(
                 localized: "translation.error",
                 defaultValue: "La traduction a échoué. Réessayez."
-            )
+            ))
             HapticFeedback.error()
         }
     }
@@ -432,11 +462,11 @@ struct MessageLanguageDetailView: View {
             onSelectAudioLanguage?(targetLang)
             HapticFeedback.success()
         } catch let consent as AttachmentConsentError {
-            translationError = consent.message
+            translationError = LanguageDetailError(text: consent.message, consentGap: VoiceSetupGap(consentCode: consent.code))
             HapticFeedback.error()
         } catch {
-            translationError = String(localized: "translation.audio.error",
-                defaultValue: "La traduction audio a échoué. Réessayez.")
+            translationError = LanguageDetailError(text: String(localized: "translation.audio.error",
+                defaultValue: "La traduction audio a échoué. Réessayez."))
             HapticFeedback.error()
         }
     }
@@ -530,4 +560,10 @@ struct MessageLanguageDetailView: View {
         cachedTranscriptionAttachmentId
             ?? attachments.first { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack }?.id
     }
+}
+
+/// L'échec affiché sous la liste des langues ; `consentGap` le rend touchable.
+struct LanguageDetailError: Equatable {
+    let text: String
+    var consentGap: VoiceSetupGap? = nil
 }

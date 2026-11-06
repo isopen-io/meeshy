@@ -1,0 +1,19 @@
+// GÉNÉRÉ — ne pas éditer à la main.
+//
+// Source : services/gateway/route-manifest.json, via la MÊME dérivation que le
+// catalogue TypeScript (packages/shared/api/build-catalog.ts). Régénérer après
+// tout changement de route :
+//
+//   cd packages/shared && npm run android-endpoints:generate
+//
+// Les chemins sont relatifs au préfixe d'API (/api/v1/) ; les emplacements {nom}
+// sont résolus par @Path. Les routes hors /api/v1 gardent leur chemin complet.
+
+package me.meeshy.sdk.net.routes
+
+public object ApiRoutesPublishers {
+    public const val ADMIN: String = "publishers/admin"
+    public const val BY_SLUG: String = "publishers/{slug}"
+    public const val BY_SLUG_PAGE: String = "publishers/{slug}/page"
+    public const val ME: String = "publishers/me"
+}

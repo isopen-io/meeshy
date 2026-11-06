@@ -65,6 +65,10 @@ final class RouterCommands {
     func openPackShop(domain: PackDomain?) {
         router?.openPackShop(domain: domain)
     }
+
+    func openMyPacks() {
+        router?.openMyPacks()
+    }
 }
 
 private struct RouterCommandsKey: EnvironmentKey {

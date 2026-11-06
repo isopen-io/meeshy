@@ -37,6 +37,7 @@ import itQuote from './catalog-it-quote';
 import itCommentRow from './catalog-it-comment-row';
 import itContactDiscovery from './catalog-it-contact-discovery';
 import itDownload from './catalog-it-download';
+import itAuthFooter from './catalog-it-auth-footer';
 import itPhonePrompt from './catalog-it-phone-prompt';
 import itUserProfile from './catalog-it-user-profile';
 import itContentRefused from './catalog-it-content-refused';
@@ -986,6 +987,7 @@ const it = {
   'message-detail.retry': 'Riprova',
 
   ...itDownload,
+  ...itAuthFooter,
   ...itPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
@@ -993,6 +995,8 @@ const it = {
   'composer.viewOnce.activate': 'Attiva la modalità visione unica',
   'composer.viewOnce.active': 'Modalità visione unica attiva',
   'composer.viewOnce.label': 'Visione unica',
+  'conversation.composer.fold': 'Riduci la barra dei messaggi',
+  'conversation.composer.unfold': 'Mostra la barra dei messaggi',
   'composer.protection.ephemeral.state': 'Modalità effimera attiva',
   'composer.protection.blur.state': 'Modalità sfocatura attiva',
   'message.location.shared': 'Posizione condivisa',
@@ -1048,6 +1052,8 @@ const it = {
   'media.reactions.badge.a11y': 'Reazioni',
   'media.reactions.badge.mine.a11y': 'compresa la tua',
   'message.join.noAccount': 'senza account',
+  'message.join.greet.one': 'Fai un saluto',
+  'message.join.greet.many': 'Salutali',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',

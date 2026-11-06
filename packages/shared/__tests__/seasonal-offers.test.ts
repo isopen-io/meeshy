@@ -13,11 +13,12 @@ import { MEESHY_COLLECTION_SLUGS } from '../scripts/compose-meeshy-collections';
 import { CHRISTMAS_SLUGS, CHRISTMAS_WALLPAPER_SLUGS } from '../scripts/compose-assorted-banners';
 import { SEASONAL_SOURCES, seasonalPacks } from '../scripts/compose-seasonal-offers';
 import { upsertPacks } from '../scripts/meeshy-collections/source-packs';
-import { CHRISTMAS_FRAME_SLUGS, CHRISTMAS_OFFER_SLUGS, CHRISTMAS_WINDOW, NEW_YEAR_OFFER_SLUGS, NEW_YEAR_WINDOW, SEASONAL_SLUGS } from '../scripts/seasonal/slugs';
+import { CHRISTMAS_EVENT, CHRISTMAS_FRAME_SLUGS, CHRISTMAS_OFFER_SLUGS, NEW_YEAR_EVENT, NEW_YEAR_OFFER_SLUGS, SEASONAL_SLUGS } from '../scripts/seasonal/slugs';
 
 /**
  * #16270 et #16271 — les offres Meeshy de NOËL et du NOUVEL AN : gratuites, signées Meeshy, offertes par la
- * boutique dans leur FENÊTRE (Noël du 1er décembre au 6 janvier, Nouvel An du 26 décembre au 15 janvier), dans
+ * boutique dans leur FENÊTRE, calculée par la règle de #16447 chaque année (#16450) — Noël du 25 octobre au 24 janvier,
+ * Nouvel An du 1er novembre au 31 janvier, dans
  * les quatre catégories — contours d'avatar, images de bannière, cadres de bannière, fonds de conversation —
  * chacune statique ET animée. Les nouveaux packs s'ajoutent EN FIN de source : rien de ce qui les précède ne
  * bouge, sinon la fenêtre que les packs de Noël existants reçoivent.
@@ -43,6 +44,7 @@ type Pack = {
   readonly removable: boolean;
   readonly usage?: unknown;
   readonly availability?: { readonly startsAt?: string; readonly endsAt?: string };
+  readonly event?: { readonly id: string; readonly recurrence?: string; readonly year?: number };
   readonly designs?: readonly Item[];
   readonly rings?: readonly Item[];
   readonly frames?: readonly Item[];
@@ -78,27 +80,30 @@ const luminance = (hex: string): number => {
 const filmsOf = (item: Item): readonly Ref[] => [item.lottie, item.decor?.back, item.decor?.front].flatMap((ref) => (ref === undefined ? [] : [ref]));
 const isAnimated = (domain: Domain, item: Item): boolean => (domain === 'banner-frame' ? (item.motion?.length ?? 0) > 0 : filmsOf(item).length > 0);
 
-describe('les fenêtres de Noël et du Nouvel An (#16270, #16271)', () => {
-  it('Noël : du 1er décembre au 6 janvier inclus ; Nouvel An : du 26 décembre au 15 janvier inclus (fin EXCLUE le lendemain, en UTC)', () => {
-    expect(CHRISTMAS_WINDOW).toEqual({ startsAt: '2026-12-01T00:00:00Z', endsAt: '2027-01-07T00:00:00Z' });
-    expect(NEW_YEAR_WINDOW).toEqual({ startsAt: '2026-12-26T00:00:00Z', endsAt: '2027-01-16T00:00:00Z' });
-    [CHRISTMAS_WINDOW, NEW_YEAR_WINDOW].forEach((window) => expect(PackAvailabilitySchema.safeParse(window).success).toBe(true));
-    const state = (window: typeof CHRISTMAS_WINDOW, iso: string) => packWindowState(window, new Date(iso));
-    expect(['2026-11-30T23:59:00Z', '2026-12-01T00:00:00Z', '2027-01-06T23:59:00Z', '2027-01-07T00:00:00Z'].map((iso) => state(CHRISTMAS_WINDOW, iso))).toEqual(['upcoming', 'open', 'open', 'closed']);
-    expect(['2026-12-25T23:59:00Z', '2026-12-26T00:00:00Z', '2027-01-15T23:59:00Z', '2027-01-16T00:00:00Z'].map((iso) => state(NEW_YEAR_WINDOW, iso))).toEqual(['upcoming', 'open', 'open', 'closed']);
+const CHRISTMAS_WINDOW = { startsAt: '2026-10-25T00:00:00Z', endsAt: '2027-01-25T00:00:00Z' } as const;
+const NEW_YEAR_WINDOW = { startsAt: '2026-11-01T00:00:00Z', endsAt: '2027-02-01T00:00:00Z' } as const;
+
+describe('les fenêtres de Noël et du Nouvel An (#16270, #16271), calculées par la règle (#16447) chaque année (#16450)', () => {
+  it('Noël et le Nouvel An sont déclarés par leur ÉVÉNEMENT ANNUEL (#16450), sans date écrite ni année', () => {
+    expect(CHRISTMAS_EVENT).toEqual({ id: 'christmas', recurrence: 'yearly' });
+    expect(NEW_YEAR_EVENT).toEqual({ id: 'new-year', recurrence: 'yearly' });
   });
 
-  it('chaque pack de Noël — existants compris — porte la fenêtre de Noël, chaque pack du Nouvel An la sienne, et aucun autre pack n’en porte', () => {
+  it('chaque pack de Noël — existants compris — déclare Noël, chaque pack du Nouvel An le Nouvel An, chaque année, aucun n’écrit de date, et aucun autre pack ne déclare d’événement', () => {
     expect([...CHRISTMAS_SLUGS, ...CHRISTMAS_FRAME_SLUGS, ...CHRISTMAS_WALLPAPER_SLUGS].every((slug) => CHRISTMAS_OFFER_SLUGS.includes(slug))).toBe(true);
     expect(CHRISTMAS_OFFER_SLUGS).toHaveLength(11);
     expect(NEW_YEAR_OFFER_SLUGS).toHaveLength(8);
     allPacks.forEach(({ pack }) => {
-      const expected = CHRISTMAS_OFFER_SLUGS.includes(pack.slug) ? CHRISTMAS_WINDOW : NEW_YEAR_OFFER_SLUGS.includes(pack.slug) ? NEW_YEAR_WINDOW : undefined;
-      expect({ slug: pack.slug, availability: pack.availability }).toEqual({ slug: pack.slug, availability: expected });
+      const expected = CHRISTMAS_OFFER_SLUGS.includes(pack.slug) ? CHRISTMAS_EVENT : NEW_YEAR_OFFER_SLUGS.includes(pack.slug) ? NEW_YEAR_EVENT : undefined;
+      expect({ slug: pack.slug, event: pack.event, availability: pack.availability }).toEqual({ slug: pack.slug, event: expected, availability: undefined });
     });
   });
 
-  it('les registres servis portent la même fenêtre, gratuits, intégrés, à ajouter depuis la boutique, et l’index des packs les accepte', () => {
+  it('les registres servis portent la fenêtre CALCULÉE — Noël du 25 octobre au 25 janvier exclu, Nouvel An du 1er novembre au 1er février exclu —, gratuits, intégrés, à ajouter depuis la boutique, et l’index des packs les accepte', () => {
+    [CHRISTMAS_WINDOW, NEW_YEAR_WINDOW].forEach((window) => expect(PackAvailabilitySchema.safeParse(window).success).toBe(true));
+    const state = (window: typeof CHRISTMAS_WINDOW, iso: string) => packWindowState(window, new Date(iso));
+    expect(['2026-10-24T23:59:00Z', '2026-11-06T12:00:00Z', '2027-01-24T23:59:00Z', '2027-01-25T00:00:00Z'].map((iso) => state(CHRISTMAS_WINDOW, iso))).toEqual(['upcoming', 'open', 'open', 'closed']);
+    expect(['2026-10-31T23:59:00Z', '2026-11-01T00:00:00Z', '2027-01-31T23:59:00Z', '2027-02-01T00:00:00Z'].map((iso) => state(NEW_YEAR_WINDOW, iso))).toEqual(['upcoming', 'open', 'open', 'closed']);
     DOMAINS.forEach((domain) => {
       const registry = read(SOURCES[domain].registry) as readonly Entry[];
       const seasonal = registry.filter((entry) => SEASONAL_SLUGS.includes(entry.slug));
@@ -107,6 +112,7 @@ describe('les fenêtres de Noël et du Nouvel An (#16270, #16271)', () => {
         const window = CHRISTMAS_OFFER_SLUGS.includes(entry.slug) ? CHRISTMAS_WINDOW : NEW_YEAR_WINDOW;
         expect({ slug: entry.slug, origin: entry.origin, price: entry.price, installed: entry.installedByDefault, availability: entry.availability }).toEqual({ slug: entry.slug, origin: 'builtin', price: undefined, installed: false, availability: window });
       });
+      expect(seasonal).toHaveLength(packsOf(domain).filter((pack) => pack.event !== undefined).length);
     });
   });
 });

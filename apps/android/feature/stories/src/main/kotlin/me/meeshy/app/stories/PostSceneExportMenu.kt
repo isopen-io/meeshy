@@ -15,18 +15,16 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeSymbol
 import me.meeshy.sdk.model.scene.export.StoryExportMode
+import java.io.File
 import me.meeshy.ui.component.fullscreen.FullscreenChromeButton
 import me.meeshy.ui.component.fullscreen.icon
 
-/**
- * Le menu « … » du plein écran d'un post à scène (#13896) : Enregistrer, Partager et Imager rendent le post ENTIER, ses
- * [scenes] bout à bout, par le moteur de la story. Imager propose la longueur au-delà d'une minute ; les deux autres rendent tout.
- */
 @Composable
 fun PostSceneExportMenu(
     scenes: List<StoryItem>,
     accentHex: String?,
     modifier: Modifier = Modifier,
+    onImager: (() -> Unit)? = null,
     viewModel: RepostSceneViewModel = hiltViewModel(),
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -42,10 +40,13 @@ fun PostSceneExportMenu(
             isActive = expanded,
         )
         SceneOverflowMenu(expanded = expanded && !export.busy, onDismissRequest = { expanded = false }) {
-            StoryVideoExportMenuEntries(onPick = { mode ->
-                expanded = false
-                export.start(mode)
-            })
+            StoryVideoExportMenuEntries(
+                onPick = { mode ->
+                    expanded = false
+                    export.start(mode)
+                },
+                onImager = onImager?.let { imager -> { expanded = false; imager() } },
+            )
         }
     }
 }
@@ -66,19 +67,15 @@ fun rememberStoryItemExport(key: String, accentHex: String? = null): (StoryItem,
 }
 
 
-/**
- * La vue Imager des menus ⋯ du fil (#14329) — carte de post, carte de réel, détail d'un post : montée UNE fois par
- * l'application, elle reçoit au geste les scènes d'une œuvre composée et la couleur de son auteur, puis ouvre la vue Imager.
- */
 @Composable
-fun rememberSceneImager(key: String): (scenes: List<StoryItem>, accentHex: String?) -> Unit {
+fun rememberSceneCardRender(key: String): (scenes: List<StoryItem>, accentHex: String?, onRendered: (File?) -> Unit) -> Unit {
     val projector: RepostSceneViewModel = hiltViewModel()
     val export = rememberSceneVideoExport(key) { emptyList() }
     val current by rememberUpdatedState(export)
     return remember(projector) {
-        { items, accentHex ->
+        { items, accentHex, onRendered ->
             val accent = accentHex ?: EXPORT_FALLBACK_ACCENT
-            current.start(StoryExportMode.IMAGER, items.map { it to projector.slideOf(it, accentHex = accent) })
+            current.renderCard(items.map { it to projector.slideOf(it, accentHex = accent) }, onRendered)
         }
     }
 }

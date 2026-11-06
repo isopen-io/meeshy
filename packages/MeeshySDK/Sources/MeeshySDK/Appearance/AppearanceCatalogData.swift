@@ -1293,8 +1293,12 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -1425,8 +1429,12 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -2028,8 +2036,12 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -2207,8 +2219,12 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -2959,8 +2975,12 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -3228,8 +3248,12 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -3407,8 +3431,12 @@ enum AppearanceCatalogData {
       "installedByDefault": false,
       "removable": true,
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "designs": [
         {
@@ -8853,8 +8881,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -9017,8 +9049,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -9164,8 +9200,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -10130,8 +10170,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -10470,8 +10514,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -10726,8 +10774,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "rings": [
         {
@@ -21203,8 +21255,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "frames": [
         {
@@ -21587,8 +21643,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "frames": [
         {
@@ -21999,8 +22059,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "frames": [
         {
@@ -23683,8 +23747,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-01T00:00:00Z",
-        "endsAt": "2027-01-07T00:00:00Z"
+        "startsAt": "2026-10-25T00:00:00Z",
+        "endsAt": "2027-01-25T00:00:00Z"
+      },
+      "event": {
+        "id": "christmas",
+        "recurrence": "yearly"
       },
       "frames": [
         {
@@ -24676,8 +24744,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "frames": [
         {
@@ -25434,8 +25506,12 @@ enum AppearanceCatalogData {
         ]
       },
       "availability": {
-        "startsAt": "2026-12-26T00:00:00Z",
-        "endsAt": "2027-01-16T00:00:00Z"
+        "startsAt": "2026-11-01T00:00:00Z",
+        "endsAt": "2027-02-01T00:00:00Z"
+      },
+      "event": {
+        "id": "new-year",
+        "recurrence": "yearly"
       },
       "frames": [
         {

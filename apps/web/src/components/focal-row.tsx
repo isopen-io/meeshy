@@ -122,6 +122,7 @@ export const FocalRow = memo(function FocalRow({
   viewerId,
   localDelivery,
   sendStartedAt,
+  sendProgressKey,
   sendFailureReason,
   onRetry,
   onDiscard,
@@ -193,6 +194,7 @@ export const FocalRow = memo(function FocalRow({
    * (§5 étape 9 de la spécification #5813), transmise à la fois à la
    * colonne méta ordinaire et à `FocusStamp` (rangée élue). */
   sendStartedAt?: number;
+  sendProgressKey?: string;
   /** LA CAUSE de l'échec, en clair (`sendFailureReason`) — portée par la
    * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
   sendFailureReason?: string;
@@ -947,7 +949,7 @@ export const FocalRow = memo(function FocalRow({
               {time(message.createdAt)}
             </time>
             {delivery === null ? null : (
-              <Check status={delivery} isMine={isMine} {...(sendStartedAt === undefined ? {} : { sendStartedAt })} />
+              <Check status={delivery} isMine={isMine} {...(sendStartedAt === undefined ? {} : { sendStartedAt })} {...(sendProgressKey === undefined ? {} : { progressKey: sendProgressKey })} />
             )}
           </div>
 
@@ -988,6 +990,7 @@ export const FocalRow = memo(function FocalRow({
                 delivery={delivery}
                 isMine={isMine}
                 {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                {...(sendProgressKey === undefined ? {} : { sendProgressKey })}
                 {...(onOpenDetail === undefined || selected !== undefined ? {} : { onOpen: () => onOpenDetail(message.id) })}
               />
             </>

@@ -9,6 +9,7 @@ import { GLORY_RANKS, type GloryRankKey, type GloryRankOrMythic } from '../utils
 import { requirementPreview, type RequirementPreview } from '../utils/game/spend.js';
 import { packWindowState, type PackAvailability, type PackWindowState } from './pack-availability.js';
 import { isPackEligible, type PackEligibilityFacts, type PackEligibilityRule } from './pack-ownership.js';
+import { packOfferWindow, type PackEventDeclaration } from '../utils/decoration-event-window.js';
 
 /** Les faits d'éligibilité, plus la Gloire actuelle — ce qu'un rang demande pour dire « encore 3 500 ». */
 export type PackUnlockFacts = PackEligibilityFacts & { readonly glory: number };
@@ -27,7 +28,7 @@ export type PackRequirementPreview = {
   readonly window: PackWindowPreview | null;
 };
 
-export type PackUnlockable = { readonly reward?: PackEligibilityRule; readonly availability?: PackAvailability };
+export type PackUnlockable = { readonly reward?: PackEligibilityRule; readonly availability?: PackAvailability; readonly event?: PackEventDeclaration };
 
 const minGloryOf = (rank: GloryRankKey): number => GLORY_RANKS.find((candidate) => candidate.key === rank)?.minGlory ?? 0;
 
@@ -50,9 +51,10 @@ const rewardMet = (preview: PackRewardPreview): boolean => (preview.kind === 'ra
 
 /** `null` : rien à débloquer (ni récompense ni fenêtre). */
 export function packRequirementPreview(pack: PackUnlockable, context: { readonly facts: PackUnlockFacts; readonly now: Date }): PackRequirementPreview | null {
-  if (pack.reward === undefined && pack.availability === undefined) return null;
+  const availability = packOfferWindow(pack, context.now);
+  if (pack.reward === undefined && availability === undefined) return null;
   const reward = pack.reward === undefined ? null : rewardPreview(pack.reward, context.facts);
-  const window = pack.availability === undefined ? null : { state: packWindowState(pack.availability, context.now), ...pack.availability };
+  const window = availability === undefined ? null : { state: packWindowState(availability, context.now), ...availability };
   return { met: (reward === null || rewardMet(reward)) && (window === null || window.state === 'open'), reward, window };
 }
 

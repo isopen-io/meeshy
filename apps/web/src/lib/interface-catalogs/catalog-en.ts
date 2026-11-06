@@ -37,6 +37,7 @@ import enQuote from './catalog-en-quote';
 import enCommentRow from './catalog-en-comment-row';
 import enContactDiscovery from './catalog-en-contact-discovery';
 import enDownload from './catalog-en-download';
+import enAuthFooter from './catalog-en-auth-footer';
 import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
 import enContentRefused from './catalog-en-content-refused';
@@ -986,6 +987,7 @@ const en = {
   'message-detail.retry': 'Retry',
 
   ...enDownload,
+  ...enAuthFooter,
   ...enPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
@@ -993,6 +995,8 @@ const en = {
   'composer.viewOnce.activate': 'Enable view-once mode',
   'composer.viewOnce.active': 'View-once mode active',
   'composer.viewOnce.label': 'View once',
+  'conversation.composer.fold': 'Collapse the message bar',
+  'conversation.composer.unfold': 'Show the message bar',
   'composer.protection.ephemeral.state': 'Ephemeral mode active',
   'composer.protection.blur.state': 'Blur mode active',
   'message.location.shared': 'Shared location',
@@ -1048,6 +1052,8 @@ const en = {
   'media.reactions.badge.a11y': 'Reactions',
   'media.reactions.badge.mine.a11y': 'including yours',
   'message.join.noAccount': 'no account',
+  'message.join.greet.one': 'Say hi',
+  'message.join.greet.many': 'Say hi to them',
   'attachment.kind.image': 'Photo',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',

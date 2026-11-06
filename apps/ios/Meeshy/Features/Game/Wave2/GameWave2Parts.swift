@@ -16,13 +16,42 @@ struct GamePageShell<Content: View>: View {
     let identifier: String
     @ViewBuilder let content: () -> Content
 
+    /// Le cadre porte le défilement, l'hôte porte le modèle : l'hôte inscrit ici sa relecture (#16425).
+    @State private var refresh = GameRefreshRelay()
+
     var body: some View {
         // L'en-tête dynamique de toutes les pages de Progression (#9564) : grand titre, barre compacte au défilement.
-        GamePageScaffold(title: title, identifier: identifier) {
+        GamePageScaffold(title: title, identifier: identifier, onRefresh: { [refresh] in await refresh.run() }) {
             VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                 content()
             }
+            .environment(\.gameRefreshRelay, refresh)
         }
+    }
+}
+
+/// TIRER POUR RAFRAÎCHIR une page de la vague 2 (#16425). `.refreshable` se pose sur le défilement, que le cadre tient ;
+/// la relecture appartient au modèle, que l'hôte tient PLUS BAS. Le cadre remet donc ce relais à l'hôte par
+/// l'environnement, et l'hôte y inscrit sa relecture. Une référence stable, jamais observée : rien ne se re-rend.
+@MainActor
+final class GameRefreshRelay {
+    nonisolated deinit {}
+
+    var action: (@MainActor () async -> Void)?
+
+    func run() async {
+        await action?()
+    }
+}
+
+private struct GameRefreshRelayKey: EnvironmentKey {
+    static let defaultValue: GameRefreshRelay? = nil
+}
+
+extension EnvironmentValues {
+    var gameRefreshRelay: GameRefreshRelay? {
+        get { self[GameRefreshRelayKey.self] }
+        set { self[GameRefreshRelayKey.self] = newValue }
     }
 }
 
@@ -50,6 +79,7 @@ private struct GameWave2Frame<Content: View>: View {
     @ObservedObject var progression: ProgressionViewModel
     let content: (GameWave2Model, GameBlock) -> Content
 
+    @Environment(\.gameRefreshRelay) private var refresh
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
@@ -72,7 +102,8 @@ private struct GameWave2Frame<Content: View>: View {
                     .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.backgroundSecondary))
             }
         }
-        .task { await progression.load() }
+        .onAppear { refresh?.action = { [weak model] in await model?.refresh() } }
+        .task { await progression.appear() }
         .task { await model.loadSettings() }
         // Le calendrier des saisons servi (#10232) : chargé à l'ouverture du Jeu, sans rien bloquer.
         .task { await model.loadSeasonSchedule() }

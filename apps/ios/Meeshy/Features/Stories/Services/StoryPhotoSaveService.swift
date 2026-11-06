@@ -85,11 +85,6 @@ final class StoryPhotoSaveService: ObservableObject {
     /// @atabeth sortait signé « @atabeth ».
     private let watermark: @MainActor (String?) -> StoryExportWatermark?
 
-    /// La vue « Imager » (#14325) : c'est elle qui montre l'œuvre, offre la
-    /// longueur (#13871), puis enregistre ou partage — jamais l'entrée du menu.
-    typealias ImagerPresent = @MainActor (ImagerWork, StoryPhotoSaveService) -> Void
-    private let presentImager: ImagerPresent
-
     /// L'image tirée du MP4 d'une scène fixe et muette (#13871) — `StoryExportStill`.
     typealias StillFrame = @MainActor (URL) async -> URL?
     private let stillFrame: StillFrame
@@ -104,10 +99,8 @@ final class StoryPhotoSaveService: ObservableObject {
         authorIntro: StoryExportDressingResolver.AuthorIntro? = nil,
         concatenate: (@MainActor ([URL], URL) async -> Bool)? = nil,
         watermark: (@MainActor (String?) -> StoryExportWatermark?)? = nil,
-        presentImager: ImagerPresent? = nil,
         stillFrame: StillFrame? = nil
     ) {
-        self.presentImager = presentImager ?? { ImagerPresenter.present($0, service: $1) }
         self.stillFrame = stillFrame ?? { @MainActor video in await StoryExportStill.frame(ofVideoAt: video) }
         // `StoryVideoExportService.shared` et `FeedbackToastManager.shared`
         // sont `@MainActor`-isolés : impossible en expression de valeur par
@@ -221,74 +214,6 @@ final class StoryPhotoSaveService: ObservableObject {
                      dressing: .bareWork(author: post.savedWorkAuthorUsername))
     }
 
-    // MARK: - Imager (#13871)
-
-    /// **« Imager » OUVRE LA VUE IMAGER** (#14325) : elle montre l'œuvre, offre
-    /// au-delà d'une minute 1/4 · 2/4 · 3/4 · 4/4 depuis le début, puis
-    /// « Sauvegarder » ou « Partager » rendent la MÊME composition
-    /// qu'« Enregistrer » — calques, son, habillage —, coupée à la part choisie.
-    /// Rien ne se rend ni ne s'enregistre avant ce geste. « Enregistrer » et
-    /// « Partager » hors de la vue ne coupent jamais.
-    func image(story: StoryItem, author: StoryExportAuthor?) {
-        let languages = exportLanguages(of: story)
-        image(jobKey: story.id,
-              slides: [story.toRenderableSlide(preferredLanguages: languages)],
-              languages: languages,
-              stickerMedia: story.media,
-              dressing: .forStory(of: author, viewer: .current))
-    }
-
-    /// Un réel ou un post composé, l'œuvre seule — comme `save(post:)`.
-    func image(post: FeedPost) {
-        let languages = preferredLanguages()
-        image(jobKey: post.id,
-              slides: Self.renderableSlides(of: post, preferredLanguages: languages),
-              languages: languages,
-              stickerMedia: post.media,
-              dressing: .bareWork(author: post.savedWorkAuthorUsername))
-    }
-
-    /// La scène ouverte dans la galerie d'une conversation — comme `save(scene:)`.
-    func image(scene: GallerySceneItem) {
-        let languages = preferredLanguages()
-        image(jobKey: scene.id,
-              slides: [scene.renderableSlide(preferredLanguages: languages)],
-              languages: languages,
-              stickerMedia: scene.carrier.media,
-              dressing: .bareWork(author: scene.authorUsername))
-    }
-
-    /// Une image n'a pas de longueur : une scène fixe et muette ne propose aucun quart.
-    private func image(jobKey: String, slides: [StorySlide], languages: [String],
-                       stickerMedia: [FeedMedia], dressing: StoryExportDressing) {
-        let isStill = StoryExportStill.isStill(slides)
-        let work = ImagerWork(
-            id: jobKey, slides: slides, languages: languages, stickerMedia: stickerMedia, dressing: dressing,
-            isStill: isStill,
-            choices: isStill ? [] : StoryExportMode.imager.lengthChoices(total: ImagerLength.total(of: slides)))
-        presentImager(work, self)
-    }
-
-    /// « Sauvegarder » depuis la vue : la part choisie, par le MÊME corps
-    /// qu'« Enregistrer » — anneau, annulation, Photos, toast.
-    func saveImaged(_ work: ImagerWork, quarter: ImagerQuarter?) {
-        bakeThenSave(jobKey: work.id, slides: work.slides(for: quarter), languages: work.languages,
-                     stickerMedia: work.stickerMedia, dressing: work.dressing)
-    }
-
-    /// « Partager » depuis la vue : le fichier de la part choisie, que la feuille
-    /// du système emporte. L'appelant le rend par `discardImaged(_:)`.
-    func renderImaged(_ work: ImagerWork, quarter: ImagerQuarter?,
-                      onProgress: ((Double) -> Void)? = nil) async -> URL? {
-        let plan = await dressings.plan(for: work.dressing)
-        return await render(slides: work.slides(for: quarter), languages: work.languages,
-                            stickerMedia: work.stickerMedia, plan: plan, onProgress: onProgress)?.url
-    }
-
-    func discardImaged(_ url: URL) {
-        exporter.cleanupExport(at: url)
-    }
-
     // MARK: - Une scène fixe sort en image (#13871)
 
     /// Ce que la feuille de partage annonce AVANT le rendu : une image ou une vidéo.
@@ -348,6 +273,20 @@ final class StoryPhotoSaveService: ObservableObject {
         return await render(slides: Self.renderableSlides(of: post, preferredLanguages: languages),
                             languages: languages, stickerMedia: post.media,
                             plan: await dressings.plan(for: .bareWork(author: post.savedWorkAuthorUsername)))?.url
+    }
+
+    func renderSceneFile(of scene: GallerySceneItem) async -> URL? {
+        let languages = preferredLanguages()
+        return await render(slides: [scene.renderableSlide(preferredLanguages: languages)],
+                            languages: languages, stickerMedia: scene.carrier.media,
+                            plan: await dressings.plan(for: .bareWork(author: scene.authorUsername)))?.url
+    }
+
+    func renderStoryWorkFile(of story: StoryItem, author: StoryExportAuthor?) async -> URL? {
+        let languages = exportLanguages(of: story)
+        return await render(slides: [story.toRenderableSlide(preferredLanguages: languages)],
+                            languages: languages, stickerMedia: story.media,
+                            plan: await dressings.plan(for: .bareWork(author: author?.name)))?.url
     }
 
     /// Le MP4 d'une story pour la feuille de partage (#9682) — le MÊME

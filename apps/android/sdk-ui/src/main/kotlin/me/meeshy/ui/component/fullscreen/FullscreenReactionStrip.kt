@@ -166,3 +166,24 @@ public fun FullscreenComposeAction(
         caption = caption,
     )
 }
+
+/** « Imager » — la baguette du rail : fait de l'élément affiché une carte image (#16334). */
+@Composable
+public fun FullscreenImagerAction(
+    onClick: () -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    hint: String? = null,
+    style: FullscreenActionStyle = FullscreenActionStyle.Floating(),
+    caption: String? = null,
+) {
+    FullscreenActionButton(
+        icon = FullscreenChromeSymbol.Imager.icon,
+        label = label,
+        onClick = onClick,
+        modifier = modifier,
+        hint = hint,
+        style = style,
+        caption = caption,
+    )
+}

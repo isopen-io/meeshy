@@ -48,6 +48,7 @@ import frQuote from './catalog-fr-quote';
 import frCommentRow from './catalog-fr-comment-row';
 import frContactDiscovery from './catalog-fr-contact-discovery';
 import frDownload from './catalog-fr-download';
+import frAuthFooter from './catalog-fr-auth-footer';
 import frPhonePrompt from './catalog-fr-phone-prompt';
 import frUserProfile from './catalog-fr-user-profile';
 import frContentRefused from './catalog-fr-content-refused';
@@ -1025,6 +1026,7 @@ const fr = {
      que meeshy.me sert aujourd'hui. Aucune mention du Play Store tant que la
      coque Android n'est pas publiée. */
   ...frDownload,
+  ...frAuthFooter,
   ...frPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — le panneau de pièces jointes du fil.
@@ -1043,6 +1045,8 @@ const fr = {
   'composer.viewOnce.activate': 'Activer le mode vue unique',
   'composer.viewOnce.active': 'Mode vue unique actif',
   'composer.viewOnce.label': 'Vue unique',
+  'conversation.composer.fold': 'Réduire la barre de message',
+  'conversation.composer.unfold': 'Afficher la barre de message',
   'composer.protection.ephemeral.state': 'Mode éphémère actif',
   'composer.protection.blur.state': 'Mode flou actif',
 

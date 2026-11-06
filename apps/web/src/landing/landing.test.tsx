@@ -116,11 +116,12 @@ describe('le document prérendu, par langue (#10002)', () => {
         expect(body).toContain('data-world-return');
       });
 
-      test('l’en-tête mène directement à « Mes conversations », pour tous, sans « Se connecter » (#12500)', () => {
+      test('l’en-tête mène directement à « Mes conversations », pour tous, sans « Se connecter » — et à /download (#12500, #16407)', () => {
         const header = /<header class="ld-header">([\s\S]*?)<\/header>/.exec(body)?.[1] ?? '';
         const buttons = [...header.matchAll(/<a [^>]*class="ld-btn[^"]*"[^>]*>([\s\S]*?)<\/a>/g)];
-        expect(buttons.map((m) => m[1])).toEqual([copy.myConversations]);
-        expect(buttons[0]?.[0]).toContain('href="/chats"');
+        expect(buttons.map((m) => m[1])).toEqual([copy.navDownload, copy.myConversations]);
+        expect(buttons[0]?.[0]).toContain('href="/download"');
+        expect(buttons[1]?.[0]).toContain('href="/chats"');
         expect(header).not.toContain('href="/login"');
         expect(header).not.toContain('data-session-');
       });

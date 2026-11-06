@@ -1,6 +1,6 @@
 {
   "rules": {
-    "anyview": 86,
+    "anyview": 81,
     "app-grdb-import": 0,
     "async-after": 74,
     "autocapitalization": 0,
@@ -10,10 +10,10 @@
     "disable-autocorrection": 0,
     "environment-router": 12,
     "fixed-font": 712,
-    "foreground-color": 2311,
+    "foreground-color": 2300,
     "idiom": 0,
     "logger-subsystem": 0,
-    "narrative-comment": 2341,
+    "narrative-comment": 2339,
     "nonisolated-unsafe": 107,
     "nse-full-sdk-import": 2,
     "nslock": 34,

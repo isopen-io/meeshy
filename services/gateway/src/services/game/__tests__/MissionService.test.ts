@@ -453,10 +453,11 @@ describe('MissionService.claimChest — le coffre du jour', () => {
 
     const rows = db.dailyMission.rows.map((r) => ({ templateKey: String(r.templateKey), difficulty: String(r.difficulty), target: Number(r.target) }));
     // Aucune Meesh frappée : la prime se tire au cours de la 1re, 1 221 points — ce compte tire un cinquième.
-    const drawn = dailyChest({ userId: USER, dayKey: DAY, effort: dayEffort(rows), nextMeeshPrice: 1221 });
+    // 10 h UTC, minuit UTC : la dixième heure du jour de jeu.
+    const drawn = dailyChest({ userId: USER, dayKey: DAY, effort: dayEffort(rows), nextMeeshPrice: 1221, elapsedHours: 10 });
     expect(issue.status).toBe('claimed');
     expect(issue.reward).toEqual(drawn);
-    expect(drawn).toMatchObject({ points: 760 + 244, glory: 76, bonus: 'fifth', bonusPoints: 244 });
+    expect(drawn).toMatchObject({ points: 760 + 244, glory: 1298 + 1583, earlyGlory: 1583, bonus: 'fifth', bonusPoints: 244 });
     expect(creditPoints).toHaveBeenCalledWith(USER, drawn.points, expect.any(String));
   });
 
@@ -473,7 +474,52 @@ describe('MissionService.claimChest — le coffre du jour', () => {
 
     expect(heavyIssue.reward.points).toBeGreaterThan(lightIssue.reward.points);
     expect(heavyIssue.reward.points - (heavyIssue.reward.bonusPoints ?? 0)).toBe(10_000);
-    expect(heavyIssue.reward.glory).toBe(1000);
+    expect(heavyIssue.reward.glory).toBe(3000 + 1583);
+  });
+
+  it('grave la Gloire à l’heure SERVEUR de la réclamation : 2 800 de précocité dans la première heure (#16414)', async () => {
+    const { db, service } = setup();
+    allDone(db);
+
+    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-tot-1', now: new Date('2026-10-05T00:30:00Z') });
+    const replay = await service.claimChest({ userId: USER, requestId: 'coffre-tot-2', now: new Date('2026-10-05T23:30:00Z') });
+
+    expect(issue.reward).toMatchObject({ glory: 1298 + 2800, earlyGlory: 2800 });
+    expect(db.gameDay.rows[0]).toMatchObject({ chestGlory: 1298 + 2800, chestEarlyGlory: 2800 });
+    expect(replay).toMatchObject({ status: 'already-claimed', reward: { glory: 1298 + 2800, earlyGlory: 2800 } });
+    expect(db.gloryLedger.rows.filter((r) => r.reason === 'chest')).toEqual([expect.objectContaining({ delta: 1298 + 2800 })]);
+  });
+
+  it('ne paie aucune précocité dans la dernière heure du jour de jeu', async () => {
+    const { db, service } = setup();
+    allDone(db);
+
+    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-tard-1', now: new Date('2026-10-05T23:30:00Z') });
+
+    expect(issue.reward).toMatchObject({ glory: 1298, earlyGlory: 0 });
+  });
+
+  it('compte les heures depuis minuit du fuseau du compte', async () => {
+    const { db, service } = setup({ timezone: 'Asia/Tokyo' });
+    allDone(db);
+
+    // 10 h UTC = 19 h à Tokyo, le 5 : la dix-neuvième heure du jour de jeu.
+    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-tokyo-1', now: NOW });
+
+    expect(issue.reward).toMatchObject({ earlyGlory: 487 });
+  });
+
+  it('un fuseau changé vers l’ouest ne rajeunit pas la journée : l’ouverture des missions fait foi', async () => {
+    const { db, service } = setup({ timezone: 'America/Los_Angeles' });
+    const opened = new Date('2026-10-05T00:10:00Z');
+    insertMission(db, { completedAt: NOW, createdAt: opened });
+    insertMission(db, { completedAt: NOW, difficulty: 'medium', createdAt: opened });
+    insertMission(db, { completedAt: NOW, difficulty: 'hard', createdAt: opened });
+
+    // Minuit à Los Angeles le 5 = 7 h UTC, APRÈS le tirage : la journée a commencé à 0 h 10 UTC, neuf heures avant.
+    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-ouest-1', now: NOW });
+
+    expect(issue.reward).toMatchObject({ earlyGlory: 1704 });
   });
 
   it('grave la Gloire du coffre UNE fois, sous la clé du jour, et la garde sur la journée', async () => {
@@ -493,7 +539,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup();
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 500, fragment: true, freeze: false, glory: 50, bonus: 'none', bonusPoints: 0 }),
+      chest: () => ({ points: 500, fragment: true, freeze: false, glory: 50, earlyGlory: 0, bonus: 'none', bonusPoints: 0 }),
     });
     db.gameDay.rows.push({ id: 'veille', userId: USER, dayKey: '2026-10-01', rerollCount: 0, chestClaimedAt: NOW, chestFragment: true });
     db.gameDay.rows.push({ id: 'avant-veille', userId: USER, dayKey: '2026-09-30', rerollCount: 0, chestClaimedAt: NOW, chestFragment: false });
@@ -515,7 +561,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
       creditPoints,
       chest: (params) => {
         seen.push(params.nextMeeshPrice);
-        return { points: 500 + params.nextMeeshPrice, fragment: false, freeze: false, glory: 50, bonus: 'whole', bonusPoints: params.nextMeeshPrice };
+        return { points: 500 + params.nextMeeshPrice, fragment: false, freeze: false, glory: 50, earlyGlory: 0, bonus: 'whole', bonusPoints: params.nextMeeshPrice };
       },
     });
     for (let n = 0; n < 10; n += 1) db.meeshLedger.rows.push({ id: `m${n}`, userId: USER, delta: 1, reason: 'mint', requestId: `frappe-${n}`, createdAt: new Date('2026-10-04T12:00:00Z') });
@@ -539,7 +585,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     allDone(db);
 
     await service.claimChest({ userId: USER, requestId: 'coffre-panne-1', now: NOW }).catch(() => undefined);
-    expect(db.gameDay.rows[0]).toMatchObject({ chestClaimedAt: null, chestBonus: null, chestBonusPoints: null, chestGlory: null });
+    expect(db.gameDay.rows[0]).toMatchObject({ chestClaimedAt: null, chestBonus: null, chestBonusPoints: null, chestGlory: null, chestEarlyGlory: null });
     const retry = await service.claimChest({ userId: USER, requestId: 'coffre-panne-2', now: NOW });
 
     expect(retry.status).toBe('claimed');
@@ -574,13 +620,13 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 2 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: true, freeze: true, glory: 0, bonus: 'none', bonusPoints: 0 }),
+      chest: () => ({ points: 100, fragment: true, freeze: true, glory: 0, earlyGlory: 0, bonus: 'none', bonusPoints: 0 }),
     });
     allDone(db);
 
     const issue = await service.claimChest({ userId: USER, requestId: 'coffre-0004', now: NOW });
 
-    expect(issue.reward).toEqual({ points: 100, fragment: true, freeze: true, glory: 0, bonus: 'none', bonusPoints: 0 });
+    expect(issue.reward).toEqual({ points: 100, fragment: true, freeze: true, glory: 0, earlyGlory: 0, bonus: 'none', bonusPoints: 0 });
     expect(db.user.rows[0]?.flameFreezes).toBe(2);
   });
 
@@ -599,7 +645,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 1 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, bonus: 'none', bonusPoints: 0 }),
+      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, earlyGlory: 0, bonus: 'none', bonusPoints: 0 }),
     });
     allDone(db);
     const update = db.user.update.bind(db.user);
@@ -622,7 +668,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 0 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, bonus: 'none', bonusPoints: 0 }),
+      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, earlyGlory: 0, bonus: 'none', bonusPoints: 0 }),
     });
     allDone(db);
     const findUnique = db.user.findUnique.bind(db.user);
@@ -645,7 +691,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 1 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, bonus: 'none', bonusPoints: 0 }),
+      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, earlyGlory: 0, bonus: 'none', bonusPoints: 0 }),
     });
     allDone(db);
 
@@ -678,7 +724,7 @@ describe('MissionService.claimChest — la prime au cours du début du jour (#10
       creditPoints,
       chest: (params) => {
         seen.push(params.nextMeeshPrice);
-        return { points: 500 + params.nextMeeshPrice, fragment: false, freeze: false, glory: 50, bonus: 'whole', bonusPoints: params.nextMeeshPrice };
+        return { points: 500 + params.nextMeeshPrice, fragment: false, freeze: false, glory: 50, earlyGlory: 0, bonus: 'whole', bonusPoints: params.nextMeeshPrice };
       },
     });
     return { service, seen };

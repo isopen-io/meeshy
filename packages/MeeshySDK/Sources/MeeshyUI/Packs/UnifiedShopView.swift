@@ -18,12 +18,18 @@ public final class PackShopStore: ObservableObject {
     private let service: any PackShopProviding
     private let makeRequestId: () -> String
     private let snapshots: any PackShopSnapshotStoring
+    private let recency: any PackInstallRecording
+    private let now: () -> Date
     /// Les domaines de la dernière lecture : un refus relit la MÊME vitrine.
     private var shownDomains: [PackDomain]?
 
     public init(service: any PackShopProviding = PackShopService.shared,
                 snapshots: any PackShopSnapshotStoring = PackShopSnapshotStore.shared,
+                recency: any PackInstallRecording = PackInstallRecency.shared,
+                now: @escaping () -> Date = Date.init,
                 makeRequestId: @escaping () -> String = { UUID().uuidString }) {
+        self.recency = recency
+        self.now = now
         self.service = service
         self.snapshots = snapshots
         self.makeRequestId = makeRequestId
@@ -75,6 +81,7 @@ public final class PackShopStore: ObservableObject {
         do {
             let bought = try await service.purchase(domain: domain, slug: slug, requestId: requestId)
             state = state.purchaseSettled(domain, slug, bought)
+            if state.pack(domain, slug)?.installed == true { recency.recordInstall(domain: domain, slug: slug, at: now()) }
             snapshots.write(state, domains: shownDomains)
         } catch {
             let insufficient = PackHTTPStatus.isInsufficientMeeshes(error)
@@ -93,6 +100,11 @@ public final class PackShopStore: ObservableObject {
         do {
             let confirmed = try await service.setInstalled(wantsInstalled, domain: domain, slug: slug)
             state = state.installSettled(domain, slug, confirmed: confirmed)
+            if confirmed.installed {
+                recency.recordInstall(domain: domain, slug: slug, at: now())
+            } else {
+                recency.forget(domain: domain, slug: slug)
+            }
             snapshots.write(state, domains: shownDomains)
         } catch {
             state = state.installRefused(domain, slug, restoring: previous)
@@ -107,8 +119,14 @@ public final class PackShopStore: ObservableObject {
 /// ouvre la vitrine filtrée (lien profond, « Plus dans la boutique »).
 public struct UnifiedShopView: View {
     @StateObject private var store: PackShopStore
+    /// La fiche et le plein écran d'un pack (#16268).
+    @StateObject private var showcase: PackShowcaseModel
     @State private var selected: PackDomain
+    private let wearer: PackStageWearer?
     private let domains: [PackDomain]
+    /// Les domaines que la vitrine LIT : ceux qu'elle montre, ou tous (`nil`) quand la fiche doit
+    /// pouvoir dire « Du même éditeur » dans les autres catégories (#16433).
+    private let readDomains: [PackDomain]?
     private let focusedSlug: String?
     private let language: String
     private let usageText: ((FrameUsage) -> String)?
@@ -117,18 +135,23 @@ public struct UnifiedShopView: View {
     /// `language` nomme les packs dans la langue du lecteur ; `usageText` traduit la loi d'usage
     /// d'un cadre (« Rang Ambassadeur uniquement ») — l'app la possède, la vitrine l'affiche (#10711).
     /// `rankName` nomme un rang du jeu pour « ce qui reste à débloquer » (#11306) ; sans lui, la ligne dit
-    /// la Gloire manquante sans le rang.
+    /// la Gloire manquante sans le rang. `designs` peint les éléments d'un pack dans sa fiche et son plein
+    /// écran — l'app y ajoute ce que le SDK ne sait pas lire seul (les cadres du jeu).
     @MainActor
     public init(initialDomain: PackDomain? = nil, domains: [PackDomain] = PackDomain.allCases,
                 focusedSlug: String? = nil, language: String = "fr",
                 usageText: ((FrameUsage) -> String)? = nil, rankName: ((GloryRank) -> String)? = nil,
-                store: PackShopStore? = nil) {
+                store: PackShopStore? = nil, wearer: PackStageWearer? = nil,
+                designs: (any PackElementDesignProviding)? = nil, readsAllDomains: Bool = false) {
+        self.wearer = wearer
+        _showcase = StateObject(wrappedValue: PackShowcaseModel(designs: designs, language: language))
         self.focusedSlug = focusedSlug
         self.language = language
         self.usageText = usageText
         self.rankName = rankName
         let offered = domains.filter { $0 != .unknown }
         self.domains = offered
+        self.readDomains = readsAllDomains ? nil : offered
         _store = StateObject(wrappedValue: store ?? PackShopStore())
         _selected = State(initialValue: initialDomain.flatMap { offered.contains($0) ? $0 : nil } ?? offered.first ?? .wallpaper)
     }
@@ -139,7 +162,19 @@ public struct UnifiedShopView: View {
             if domains.count > 1 { domainChips }
             shelf
         }
-        .task { await store.load(domains: domains) }
+        .task { await store.load(domains: readDomains) }
+        .packShowcase(showcase) { context(for: $0) }
+    }
+
+    private func rows(in domain: PackDomain) -> [PackRow]? {
+        store.state.packs(in: domain)?.map { Self.row($0, language: language, usageText: usageText, rankName: rankName) }
+    }
+
+    private func context(for domain: PackDomain) -> PackShowcaseContext {
+        PackShowcaseContext(rows: rows(in: domain) ?? [], pending: pendingSlugs(in: domain),
+                            wearer: wearer ?? .current,
+                            onToggle: { slug in Task { await store.tap(domain: domain, slug: slug) } },
+                            catalogue: store.state, language: language)
     }
 
     private var failureText: String? {
@@ -208,7 +243,7 @@ public struct UnifiedShopView: View {
                     .foregroundStyle(MeeshyColors.error)
                 Button {
                     HapticFeedback.light()
-                    Task { await store.load(domains: domains) }
+                    Task { await store.load(domains: readDomains) }
                 } label: {
                     Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
                         .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
@@ -225,11 +260,13 @@ public struct UnifiedShopView: View {
                 .foregroundStyle(.secondary)
         } else {
             let domain = selected
-            PackShopView(rows: store.state.packs(in: domain)?.map { Self.row($0, language: language, usageText: usageText, rankName: rankName) },
+            PackShopView(rows: rows(in: domain),
                          pending: pendingSlugs(in: domain),
                          showsFailure: store.state.failure != nil,
                          failureText: failureText,
-                         focusedSlug: focusedSlug) { slug in
+                         focusedSlug: focusedSlug,
+                         onOpen: { showcase.openDetail(domain: domain, slug: $0) },
+                         onOpenCover: { showcase.openViewer(domain: domain, slug: $0) }) { slug in
                 Task { await store.tap(domain: domain, slug: slug) }
             }
         }
@@ -260,7 +297,8 @@ public struct UnifiedShopView: View {
                        price: pack.price, owned: pack.isOwned, locked: pack.isLocked,
                        unlockText: pack.requirementPreview.flatMap {
                            PackUnlockCopy.line($0, language: language, rankName: rankName)
-                       })
+                       },
+                       bundled: pack.isBundled, publisher: pack.publisher)
     }
 
     /// Le nom d'un domaine, tel que les puces et les réglages le disent.

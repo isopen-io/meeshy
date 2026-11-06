@@ -19,6 +19,8 @@ import me.meeshy.sdk.model.SentimentLevel
 data class ComposerTextState(
     val text: String = "",
     val revision: Int = 0,
+    /** Monte quand une invite demande le champ (« dis-lui salut », #16338) : la barre se déplie et prend le focus. */
+    val focusRequest: Int = 0,
 ) {
     val hasText: Boolean get() = text.isNotBlank()
 
@@ -49,4 +51,9 @@ internal class ComposerTextHolder(initial: String = "") {
     }
 
     fun clear() = replace("")
+
+    /** Le champ est demandé : la barre de composition se déplie et prend le focus. */
+    fun requestFocus() {
+        source.update { it.copy(focusRequest = it.focusRequest + 1) }
+    }
 }

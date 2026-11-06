@@ -50,6 +50,7 @@ import {
   type PackOfferContext,
   type PackTargeting,
 } from '@meeshy/shared/types/pack-availability';
+import type { PackEventDeclaration } from '@meeshy/shared/utils/decoration-event-window';
 import type { PackInstallationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { GameRefusal } from '../game/GameRefusal';
 import { MeeshSpend, type SpendTx } from '../game/MeeshSpend';
@@ -74,6 +75,8 @@ export type RegistryPack<D> = {
   readonly version?: number;
   /** Quand il est OFFERT (#11274) ; la possession n'en dépend jamais. */
   readonly availability?: PackAvailability;
+  /** L'événement servi (#16450) : annuel, la fenêtre d'offre se recalcule à `now` (`packOfferWindow`). */
+  readonly event?: PackEventDeclaration;
   /** À qui il est offert (#11274) ; jamais servi au client. */
   readonly targeting?: PackTargeting;
   /** `owned` : la loi de possession (`isPackOwned`) pour ce lecteur ; les domaines sans prix l'ignorent. */
@@ -390,7 +393,7 @@ export class PackCatalog<S, D extends S> {
    * ciblage ne lit rien de plus.
    */
   private async shelvedOf(userId: string, installedOf: (slug: string) => boolean): Promise<(pack: RegistryPack<D>) => boolean> {
-    const restricted = this.spec.registry.filter((pack) => pack.availability !== undefined || pack.targeting !== undefined);
+    const restricted = this.spec.registry.filter((pack) => pack.availability !== undefined || pack.event !== undefined || pack.targeting !== undefined);
     if (restricted.length === 0) return () => true;
     const [context, keys] = await Promise.all([
       this.offerContext(userId, ...restricted),

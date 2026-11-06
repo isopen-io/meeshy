@@ -223,13 +223,10 @@ extension ConversationMediaGalleryView {
         }
     }
 
-    /// **« Imager » une scène** (#13871) : la même œuvre qu'« Enregistrer », et au-delà
-    /// d'une minute la longueur se choisit d'abord. Une pièce transmise n'a pas de
-    /// composition à rendre, donc pas d'« Imager ».
     func imageCurrent(_ scene: GallerySceneItem) {
         guard saveCoordinator.mayLeave(currentExitContentId) else { return }
         HapticFeedback.light()
-        StoryPhotoSaveService.shared.image(scene: scene)
+        MessageCardExportPresenter.present(ImagerCardRequest.scene(scene, accentColor: accentColor))
     }
 
     /// Va DROIT à la share sheet système : c'est tout ce que « Partager » promet.

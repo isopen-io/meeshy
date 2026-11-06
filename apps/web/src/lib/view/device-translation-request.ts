@@ -6,6 +6,8 @@ import { opusMtSupports } from '@/lib/device-translation/opus-mt-routes';
 import { offeredMessageTarget } from '@/lib/device-translation/target';
 import { navigate } from '@/lib/router';
 
+import { settingFocusPath } from './setting-focus';
+
 type OfferParams = {
   readonly messages: readonly Message[];
   readonly viewerId: string;
@@ -29,7 +31,7 @@ export type DeviceTranslationPorts = {
 export const deviceTranslationPorts: DeviceTranslationPorts = {
   granted: async () => (await import('@/lib/device-translation/consent')).deviceTranslationConsent().granted(),
   offer: async (queryClient, params) => (await import('@/lib/device-translation/runtime')).offerToDevice(queryClient, params),
-  openSettings: () => navigate('/settings'),
+  openSettings: () => navigate(settingFocusPath('deviceTranslation')),
 };
 
 export type DeviceTranslationOutcome = 'queued' | 'consent-needed';

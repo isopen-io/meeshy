@@ -90,4 +90,26 @@ final class PackShopDeepLinkTests: XCTestCase {
         XCTAssertNil(StickerSheetLinks.senderLine("   "))
         XCTAssertTrue(StickerSheetLinks.senderLine(" Amina Diallo ")?.contains("Amina Diallo") == true)
     }
+
+    // MARK: - #16433 — Mes packs, en accès direct
+
+    func test_launcher_opensMyPacks_whenAsked_andTheShopOtherwise() {
+        let launcher = PackShopLauncher()
+
+        launcher.request(domain: nil, page: .mine)
+        XCTAssertEqual(launcher.consume()?.page, .mine)
+
+        launcher.request(domain: .banner)
+        XCTAssertEqual(launcher.consume()?.page, .shop)
+    }
+
+    func test_packsSettingsView_opensOnMyPacks() {
+        _ = PacksSettingsView(initialPage: .mine)
+    }
+
+    func test_theShopShortcuts_areOnlyOnMyOwnProfile() {
+        XCTAssertTrue(ProfilePackShortcuts.isShown(viewerId: "u1", profileUserId: "u1"))
+        XCTAssertFalse(ProfilePackShortcuts.isShown(viewerId: "u1", profileUserId: "u2"))
+        XCTAssertFalse(ProfilePackShortcuts.isShown(viewerId: nil, profileUserId: "u1"))
+    }
 }

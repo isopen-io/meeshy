@@ -29,6 +29,7 @@ import { GameWeekPointsRecorder } from './GameWeekPoints';
 import type { StreakPlan } from './FlameService';
 import { getPhotoMomentMarks, type PhotoMomentMarks } from './PhotoMomentMarks';
 import { isGamePhotoPushOn } from './photoPushFlag';
+import type { ServerEmitIO } from '../../socketio/serverEmit';
 
 const log = enhancedLogger.child({ module: 'EngagementGameHooks' });
 
@@ -83,7 +84,12 @@ export class EngagementGameHooks {
     prisma: PrismaClient,
     creditPoints: (userId: string, points: number, axisKey: EngagementAxisKey) => Promise<void>,
     /** Les comptes « à évaluer » des étapes franchies app fermée (#10175) ; remplaçables en test. */
-    deps: { readonly photoMarks?: PhotoMomentMarks; readonly photoPushOn?: () => boolean } = {},
+    deps: {
+      readonly photoMarks?: PhotoMomentMarks;
+      readonly photoPushOn?: () => boolean;
+      /** Le serveur temps réel, lu au moment d'émettre : les défis du jour se propagent (#16425). */
+      readonly emitIO?: () => ServerEmitIO | null | undefined;
+    } = {},
   ) {
     this.photo = { marks: () => deps.photoMarks ?? getPhotoMomentMarks(), on: deps.photoPushOn ?? (() => isGamePhotoPushOn()) };
     this.glory = new GloryService(prisma);
@@ -92,6 +98,7 @@ export class EngagementGameHooks {
       creditPoints,
       glory: this.glory,
       onMissionCompleted: (event) => this.seasons.addStars(event.userId, event.difficulty, event.now),
+      ...(deps.emitIO ? { emitIO: deps.emitIO } : {}),
     });
     // Une notification de jeu par jour au plus (#9490) : UN notifieur pour la saison et le duo.
     const notifier = new GameNotifier(prisma);

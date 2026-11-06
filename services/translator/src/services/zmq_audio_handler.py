@@ -545,7 +545,8 @@ class AudioHandler:
                     'durationMs': t.duration_ms,
                     'voiceCloned': t.voice_cloned,
                     'voiceQuality': t.voice_quality,
-                    'audioMimeType': t.audio_mime_type or 'audio/mp3'
+                    'audioMimeType': t.audio_mime_type or 'audio/mp3',
+                    'textOnly': bool(getattr(t, 'text_only', False)),
                     # Pas de audioDataBase64 - données dans binaryFrames
                 }
 
@@ -829,7 +830,8 @@ class AudioHandler:
                 'durationMs': translation.duration_ms,
                 'voiceCloned': translation.voice_cloned,
                 'voiceQuality': translation.voice_quality,
-                'audioMimeType': translation.audio_mime_type or 'audio/mp3'
+                'audioMimeType': translation.audio_mime_type or 'audio/mp3',
+                'textOnly': bool(getattr(translation, 'text_only', False)),
             }
 
             # Ajouter les segments si disponibles (convertir en dicts)

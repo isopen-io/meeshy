@@ -1678,6 +1678,8 @@ UN seul menu (CommentMoreMenu, #8709) pour les commentaires de post et de story,
 
 Rendu : Bouton ... discret à droite de la ligne, entrées avec icônes (copie, imager, crayon, drapeau, corbeille), destructif en rouge.
 
+État au 2026-11-05 (#16165) : la rangée d'un commentaire porte la baguette « Imager » juste avant le ⋯, gouvernée par la même loi que l'entrée du menu (`CommentMenuPolicy`). Un post ou un réel s'image désormais dans le même atelier de carte, y compris un post texte ou un réel simple (#16166).
+
 Transposition Android : Menu SwiftUI -> DropdownMenu ; actions VoiceOver -> semantics customActions.
 
 <details><summary>Sources iOS (2)</summary>

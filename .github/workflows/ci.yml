@@ -1797,8 +1797,20 @@ jobs:
       - name: Install ffmpeg, jpegtran, avifenc and heif-convert (gateway)
         if: ${{ matrix.package.path == 'services/gateway' && (matrix.package.zone == 'toujours' || needs.changes.outputs[matrix.package.zone] == 'true') }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265
+          # Un miroir apt qui CALE (2026-11-05, run 42104330831 : 19 min sur
+          # 97 paquets, tranche 1/3 tuée par le délai du job, couverture
+          # fusionnée privée d'un tiers) doit échouer VITE et se retenter, pas
+          # consommer le budget des tests : délai réseau court, reprises, et
+          # chaque tentative bornée.
+          APT_OPTS=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
+          for i in 1 2 3; do
+            sudo timeout 240 apt-get "${APT_OPTS[@]}" update \
+              && sudo timeout 300 apt-get "${APT_OPTS[@]}" install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265 \
+              && break
+            [ "$i" = 3 ] && exit 1
+            echo "apt : tentative $i en échec, nouvelle tentative dans 10 s"
+            sleep 10
+          done
           ffprobe -version | head -1
           jpegtran -version 2>&1 | head -1
           command -v heif-convert
@@ -1934,8 +1946,20 @@ jobs:
 
       - name: Install ffmpeg, jpegtran, avifenc and heif-convert (gateway)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265
+          # Un miroir apt qui CALE (2026-11-05, run 42104330831 : 19 min sur
+          # 97 paquets, tranche 1/3 tuée par le délai du job, couverture
+          # fusionnée privée d'un tiers) doit échouer VITE et se retenter, pas
+          # consommer le budget des tests : délai réseau court, reprises, et
+          # chaque tentative bornée.
+          APT_OPTS=(-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
+          for i in 1 2 3; do
+            sudo timeout 240 apt-get "${APT_OPTS[@]}" update \
+              && sudo timeout 300 apt-get "${APT_OPTS[@]}" install -y --no-install-recommends ffmpeg libjpeg-turbo-progs libavif-bin libheif-examples libheif-plugin-libde265 \
+              && break
+            [ "$i" = 3 ] && exit 1
+            echo "apt : tentative $i en échec, nouvelle tentative dans 10 s"
+            sleep 10
+          done
 
       - name: Parity lane self-test
         run: node scripts/ci/voie-parite.mjs --self-test

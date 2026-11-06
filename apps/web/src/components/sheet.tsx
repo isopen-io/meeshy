@@ -47,6 +47,7 @@ export function Sheet({
   presentation = 'fullscreen',
   accessory,
   closeLabel,
+  backLabel,
   backEntry = true,
   restoreFocusTo,
   dialogData,
@@ -61,6 +62,13 @@ export function Sheet({
    * le lecteur d'écran annonçait « Fermer » en français sur une feuille anglaise.
    */
   closeLabel?: string;
+  /**
+   * Une feuille DÉTAIL ouverte depuis une autre (#16386) : l'en-tête porte un
+   * chevron (<) — ce libellé est son nom accessible — au lieu de la croix. Le
+   * geste est le même (la feuille se ferme et rend la précédente), le glyphe
+   * dit qu'on REVIENT, pas qu'on quitte.
+   */
+  backLabel?: string;
   searchLabel?: string;
   searchPlaceholder?: string;
   search?: string;
@@ -199,16 +207,29 @@ export function Sheet({
     >
       <div className={centree ? 'flex max-h-[min(90dvh,calc(100dvh-2rem))] flex-col' : 'flex h-full flex-col'}>
         <div className={`flex shrink-0 items-center gap-3 px-4 pb-2 ${centree ? 'pt-2' : 'pt-safe md:pt-2'}`}>
-          <button
-            type="button"
-            onClick={() => ref.current?.close()}
-            data-sheet-close=""
-            className="grid place-items-center rounded-chip"
-            style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-            aria-label={closeLabel ?? translate(currentInterfaceLanguage(), 'common.close')}
-          >
-            <Glyph name="x" size={20} />
-          </button>
+          {backLabel === undefined ? (
+            <button
+              type="button"
+              onClick={() => ref.current?.close()}
+              data-sheet-close=""
+              className="grid place-items-center rounded-chip"
+              style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
+              aria-label={closeLabel ?? translate(currentInterfaceLanguage(), 'common.close')}
+            >
+              <Glyph name="x" size={20} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => ref.current?.close()}
+              data-sheet-back=""
+              className="grid place-items-center rounded-chip"
+              style={{ minHeight: 44, minWidth: 44, color: 'var(--color-primary)' }}
+              aria-label={backLabel}
+            >
+              <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
+            </button>
+          )}
           <h2 id={titleId} data-sheet-title="" className="flex-1 text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
             {title}
           </h2>

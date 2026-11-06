@@ -4,6 +4,7 @@ import type { StoryActionRailHandlers } from '@/components/story-action-rail';
 import type { GallerySaver } from '@/lib/gallery/gallery-saver';
 import { storyDownloadableMedia } from '@/lib/api/story-export';
 import type { StoryBrandingContext } from '@/lib/export/scene/scene-export-branding-author';
+import { openPublicationImage } from '@/lib/export/publication-image-store';
 import { gestureAudioContext, storyExportSubject, storyMediaExportSubject, type SceneExportSubject } from '@/lib/export/scene/scene-export-subject';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -80,7 +81,7 @@ export type StoryOwnerRail = {
   readonly viewers: CommentsSheetHost;
   /** Ce que le lecteur SAIT faire pour le plan auteur ; la loi figée
    * (`showsViews`/`showsExport`) décide, elle, de l'appartenance. */
-  readonly handlers: Pick<StoryActionRailHandlers, 'views' | 'share' | 'save'>;
+  readonly handlers: Pick<StoryActionRailHandlers, 'views' | 'imager' | 'share' | 'save'>;
   /** « Imager » (#13881) — le menu « … » du lecteur l'offre ; absent ⇒ rien à composer, ou aucune porte de fichier. */
   readonly imager?: () => void;
   /** L'export en cours de LA story affichée — l'instantané du store. */
@@ -89,15 +90,15 @@ export type StoryOwnerRail = {
 };
 
 /**
- * **« PARTAGER » ET « IMAGER » D'UNE STORY** (#13881) — la composition passe
- * par le bandeau GLOBAL des exports (`launchSceneExport`) : sa progression,
- * le choix de longueur d'« Imager » au-delà d'une minute, et le toucher
+ * **« PARTAGER » UNE STORY** (#13881) — la composition passe par le bandeau
+ * GLOBAL des exports (`launchSceneExport`) : sa progression, et le toucher
  * « Partager » quand le rendu a fait expirer l'activation du geste. Le moteur
  * se charge au geste ; le contexte audio, lui, naît DANS le geste et voyage.
+ * « Imager » n'y passe plus (#16393) : il ouvre l'atelier de carte.
  */
 export type StoryExportLauncher = (input: {
   readonly subject: SceneExportSubject;
-  readonly mode: 'share' | 'imager';
+  readonly mode: 'share';
   readonly audioContext: AudioContext | null;
 }) => Promise<unknown>;
 
@@ -165,7 +166,7 @@ export function useStoryOwnerRail(params: {
   );
 
   const launch = useCallback(
-    (subject: SceneExportSubject, mode: 'share' | 'imager') => () => {
+    (subject: SceneExportSubject, mode: 'share') => () => {
       /* Le contexte audio naît DANS le geste, avant tout `await` (Safari). */
       const audioContext = gestureAudioContext();
       void exportLauncher({ subject, mode, audioContext }).catch(() => {
@@ -225,9 +226,15 @@ export function useStoryOwnerRail(params: {
       }).then((key) => announce(translate(language, key)));
     };
     if (composedSubject === null) return { handlers: { views, save } };
+    /* La baguette du rail (#16333) et l'entrée « Imager » du menu « … » : UN geste, l'atelier de carte (#16393). */
+    const imager = () =>
+      void import('@/lib/export/publication-image').then(({ storyImageRequestOf }) => {
+        const request = storyImageRequestOf(story, preferredLanguages ?? [language]);
+        if (request !== null) openPublicationImage(request);
+      });
     return {
-      handlers: { views, share: launch(composedSubject, 'share'), save },
-      imager: launch(composedSubject, 'imager'),
+      handlers: { views, imager, share: launch(composedSubject, 'share'), save },
+      imager,
     };
   }, [story, exportMedia, sceneSubject, composedSubject, sceneExporter, launch, preferredLanguages, host, gallerySaver, online, language, announce, viewers.open]);
 

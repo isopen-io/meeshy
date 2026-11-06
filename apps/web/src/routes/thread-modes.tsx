@@ -588,6 +588,7 @@ export function ThreadModes({
                     ...(rowPermanent || retry === undefined || retryableOf?.(p.message.id) !== true ? {} : { onRetry: () => retry(p.message.id) }),
                     ...(rowDelivery !== 'failed' || discard === undefined || discardableOf?.(p.message.id) !== true ? {} : { onDiscard: () => discard(p.message.id) }),
                     ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
+                    ...(rowDelivery === 'pending' ? { sendProgressKey: p.message.id } : {}),
                     ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
                   };
             /* LE MENU DU MESSAGE (#5814) — trois lectures par rangée, motif

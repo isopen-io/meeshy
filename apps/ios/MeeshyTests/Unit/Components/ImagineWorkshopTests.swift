@@ -313,8 +313,7 @@ final class ImagineWorkshopTests: XCTestCase {
     }
 
     func test_theWorkshopAndTheImagerView_neverFallBackToTheOldWords() throws {
-        for file in ["Meeshy/Features/Export/ImagerSheet.swift",
-                     "Meeshy/Features/Export/MessageCardExportSheet.swift",
+        for file in ["Meeshy/Features/Export/MessageCardExportSheet.swift",
                      "Meeshy/Features/Export/MessageCardExportSheet+Output.swift"] {
             let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(file))
             XCTAssertFalse(source.contains("\"Imagine\")"), "\(file) : le titre est « Imager »")

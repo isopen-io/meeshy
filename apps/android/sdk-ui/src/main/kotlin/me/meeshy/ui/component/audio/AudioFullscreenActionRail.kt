@@ -40,6 +40,7 @@ import me.meeshy.ui.component.fullscreen.FullscreenActionStyle
 import me.meeshy.ui.component.fullscreen.FullscreenChromeTone
 import me.meeshy.ui.component.fullscreen.FullscreenComposeAction
 import me.meeshy.ui.component.fullscreen.FullscreenForwardAction
+import me.meeshy.ui.component.fullscreen.FullscreenImagerAction
 import me.meeshy.ui.component.fullscreen.FullscreenReactAction
 import me.meeshy.ui.component.fullscreen.FullscreenReactionStrip
 import me.meeshy.ui.component.fullscreen.FullscreenReplyAction
@@ -55,7 +56,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 /**
  * **Le rail d'actions du plein écran audio** (iOS `AudioFullscreenPage.actionRail`) : des disques de verre adaptatifs,
  * dans l'ordre de la charte § 6 — Réagir, Répondre, Transférer, Créer — et SEULEMENT ceux que l'[offer] permet. Une offre
- * vide ne pose rien. Chaque bouton a une cible de 48 dp, un libellé et un verbe TalkBack, une haptique au toucher.
+ * vide ne pose rien. La baguette « Imager » (#16334) se pose avant Créer. Chaque bouton a une cible de 48 dp, un libellé et un verbe TalkBack, une haptique au toucher.
  */
 @Composable
 public fun AudioFullscreenActionRail(
@@ -67,6 +68,7 @@ public fun AudioFullscreenActionRail(
     onForward: () -> Unit,
     onCompose: () -> Unit,
     modifier: Modifier = Modifier,
+    onImager: () -> Unit = {},
 ) {
     if (offer.isEmpty) return
     val style = FullscreenActionStyle.Disc(FullscreenChromeTone.Adaptive)
@@ -93,6 +95,12 @@ public fun AudioFullscreenActionRail(
                     onClick = onForward,
                     label = stringResource(R.string.a11y_message_actions_forward),
                     hint = stringResource(R.string.media_forward_rail_hint),
+                    style = style,
+                )
+
+                AudioFullscreenAction.IMAGER -> FullscreenImagerAction(
+                    onClick = onImager,
+                    label = stringResource(R.string.media_imager_title),
                     style = style,
                 )
 
@@ -132,6 +140,10 @@ internal fun AudioFullscreenActionRailSlot(
             onClose()
         },
         modifier = Modifier.padding(bottom = lift),
+        onImager = {
+            actions.imager(source)
+            onClose()
+        },
     )
 }
 

@@ -29,8 +29,7 @@ const itVerifyEmail = {
   'signInLink.switchAccount.leave': 'Torna alla home',
   'emailSent.title': 'Email inviata',
   'emailSent.openLink': 'Apri il link inviato a {email}',
-  'emailSent.nothingReceived': 'Non hai ricevuto nulla?',
-  'emailSent.nothingReceived.text': 'Controlla la cartella spam: il messaggio potrebbe essere finito lì.',
+  'emailSent.checkSpam': 'Non è arrivata? Controlla anche la cartella spam o della posta indesiderata.',
 };
 
 export default itVerifyEmail;

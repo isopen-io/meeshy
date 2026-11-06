@@ -7,7 +7,7 @@
     <string name="a11y_media_download_action">Herunterladen</string>
     <string name="a11y_media_download_cancel">Download abbrechen</string>
     <string name="a11y_message_actions_forward">Weiterleiten</string>
-    <string name="audio_consent_notice_action">In Einstellungen aktivieren</string>
+    <string name="audio_consent_notice_action">Meine Stimme einrichten</string>
     <string name="audio_consent_notice_message">Aktiviere die Sprach-Einwilligung, damit deine Sprachnachrichten transkribiert und übersetzt werden.</string>
     <string name="audio_editor_a11y_playhead">Wiedergabeposition</string>
     <string name="audio_editor_apply">Änderungen anwenden</string>
@@ -324,6 +324,7 @@
     <string name="media_crop_a11y_size">Breite %1$s, Höhe %2$s</string>
     <string name="media_download">Laden</string>
     <string name="media_forward_rail_hint">Sendet dieses Medium in eine andere Unterhaltung.</string>
+    <string name="media_imager_title">Als Bild</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">Datei</string>
     <string name="media_label_location">Standort</string>

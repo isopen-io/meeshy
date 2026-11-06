@@ -29,8 +29,7 @@ const deVerifyEmail = {
   'signInLink.switchAccount.leave': 'Zurück zur Startseite',
   'emailSent.title': 'E-Mail gesendet',
   'emailSent.openLink': 'Öffne den Link, gesendet an {email}',
-  'emailSent.nothingReceived': 'Nichts erhalten?',
-  'emailSent.nothingReceived.text': 'Sieh in deinem Spam-Ordner nach: Die Nachricht könnte dort gelandet sein.',
+  'emailSent.checkSpam': 'Nichts angekommen? Sieh auch in deinem Spam- oder Junk-Ordner nach.',
 };
 
 export default deVerifyEmail;

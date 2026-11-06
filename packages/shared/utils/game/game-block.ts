@@ -10,7 +10,7 @@
  * Pur : `today` (clé de jour dans le fuseau de l'utilisateur) est un paramètre.
  */
 
-import { CHEST_ODDS, chestContentForEffort, dayEffort } from './chest.js';
+import { CHEST_EARLY_LAST_HOUR, CHEST_ODDS, chestContentForEffort, dayEffort } from './chest.js';
 import { prismHourWindow, PRISM_HOUR_MULTIPLIER, sparksTailwindFactor, tailwindFactor } from './boosts.js';
 import {
   FLAME_FREEZE_MAX,
@@ -80,6 +80,11 @@ export type GameBlockFacts = {
    * cours de la prime du coffre. Absent ou `null` : `mintedLifetime`, le calcul d'avant.
    */
   readonly chestMintBase?: number | null;
+  /**
+   * Les heures entières écoulées du jour de jeu à cet instant (`chestElapsedHours`, #16414) : la précocité de la Gloire
+   * du coffre « si on l'ouvre maintenant ». Absent : aucune précocité annoncée.
+   */
+  readonly chestElapsedHours?: number;
   /** Missions du jour accomplies à vie, comptées jusqu'à `LEVEL_STEP_MISSIONS_COUNTED` (#9706). */
   readonly missionsDone: number;
   /** La plus longue Flamme, en jours — le record que jugent les étapes 40 et 90 (#9706). */
@@ -242,9 +247,16 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       odds: { ...CHEST_ODDS },
       reward: chestStatus === 'claimed' ? facts.chestReward : null,
       // Le contenu CERTAIN et les primes possibles, dits avant l'ouverture (#10011) : l'effort des missions du
-      // jour tirées, et le cours de la prochaine Meesh du compte, figé au début du jour de jeu (#10219).
+      // jour tirées, le cours de la prochaine Meesh du compte, figé au début du jour de jeu (#10219), et l'heure du jour
+      // de jeu pour la précocité de la Gloire (#16414).
       today:
-        facts.missions.length === 0 ? null : chestContentForEffort(dayEffort(facts.missions), meeshPrice((facts.chestMintBase ?? facts.mintedLifetime) + 1)),
+        facts.missions.length === 0
+          ? null
+          : chestContentForEffort(
+              dayEffort(facts.missions),
+              meeshPrice((facts.chestMintBase ?? facts.mintedLifetime) + 1),
+              facts.chestElapsedHours ?? CHEST_EARLY_LAST_HOUR,
+            ),
     },
     flame: {
       days,

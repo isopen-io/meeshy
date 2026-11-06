@@ -37,6 +37,7 @@ import deQuote from './catalog-de-quote';
 import deCommentRow from './catalog-de-comment-row';
 import deContactDiscovery from './catalog-de-contact-discovery';
 import deDownload from './catalog-de-download';
+import deAuthFooter from './catalog-de-auth-footer';
 import dePhonePrompt from './catalog-de-phone-prompt';
 import deUserProfile from './catalog-de-user-profile';
 import deContentRefused from './catalog-de-content-refused';
@@ -986,6 +987,7 @@ const de = {
   'message-detail.retry': 'Erneut versuchen',
 
   ...deDownload,
+  ...deAuthFooter,
   ...dePhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
@@ -993,6 +995,8 @@ const de = {
   'composer.viewOnce.activate': 'Einmalansicht aktivieren',
   'composer.viewOnce.active': 'Einmalansicht aktiv',
   'composer.viewOnce.label': 'Einmalansicht',
+  'conversation.composer.fold': 'Nachrichtenleiste einklappen',
+  'conversation.composer.unfold': 'Nachrichtenleiste anzeigen',
   'composer.protection.ephemeral.state': 'Ephemerer Modus aktiv',
   'composer.protection.blur.state': 'Unschärfemodus aktiv',
   'message.location.shared': 'Geteilter Standort',
@@ -1048,6 +1052,8 @@ const de = {
   'media.reactions.badge.a11y': 'Reaktionen',
   'media.reactions.badge.mine.a11y': 'darunter Ihre',
   'message.join.noAccount': 'kein Konto',
+  'message.join.greet.one': 'Sag hallo',
+  'message.join.greet.many': 'Sagt hallo',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',

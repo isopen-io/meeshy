@@ -4,7 +4,8 @@
  * échoue (disque, verrou de scellement) ne publie jamais, en base ni en temps
  * réel, une adresse vers un fichier absent. La traduction garde son texte.
  * Sans binaire, l'adresse attendue reste annoncée comme avant (le binaire suit
- * par un autre chemin).
+ * par un autre chemin) — sauf pour une traduction TEXTE SEULE (#16340) : sa
+ * TTS a échoué, aucune piste ne suivra, rien n'est annoncé.
  */
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -46,8 +47,10 @@ export async function saveTranslatedTrack(
     readonly language: string;
     readonly binary?: Buffer | null;
     readonly base64?: string | null;
+    readonly textOnly?: boolean;
   }
 ): Promise<TrackLocation> {
+  if (track.textOnly) return {};
   const localPath = path.resolve(track.translatedDir, track.filename);
   const location = { path: localPath, url: `/api/v1/attachments/file/translated/${track.filename}` };
   if (!track.binary && !track.base64) {

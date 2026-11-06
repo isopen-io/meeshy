@@ -350,6 +350,10 @@ const THREAD_MENU = [
   'push-pin',
   'prohibit',
   'lock-simple',
+  // L'icône de POST (#16333) : « Composer » ouvre la composition par un carré
+  // et un crayon, miroir de `square.and.pencil` d'iOS. La baguette reste
+  // celle d'« Imager » sur les rails d'actions.
+  'note-pencil',
 ];
 
 emit({
@@ -1109,14 +1113,14 @@ emit({
 
 /**
  * LE JEU DU COMPOSER D'EXPORT EN IMAGE (#8667) — les onglets du plateau
- * (Styles, Frame, Fond, Police, Liaison, Détails, Médias — #8693), « Au hasard », « Format par
+ * (Contenu — #16393, Styles, Frame, Fond, Police, Liaison, Détails, Médias — #8693), « Au hasard », « Format par
  * défaut » et « Partager ». Chargé avec la feuille d'export, elle-même montée
  * à la demande depuis le menu du message : jamais dans le socle. `translate`
  * (Langue), `download-simple` (Sauvegarder), `magnifying-glass` et `x`
  * restent au socle, où ils vivent déjà.
  */
 emit({
-  ids: ['squares-four', 'palette', 'text-aa', 'arrow-elbow-down-right', 'sliders-horizontal', 'shuffle', 'bookmark-simple', 'export', 'frame-corners', 'images'],
+  ids: ['squares-four', 'palette', 'text-aa', 'arrow-elbow-down-right', 'sliders-horizontal', 'shuffle', 'bookmark-simple', 'export', 'frame-corners', 'images', 'list-checks'],
   output: join(HERE, '../src/components/glyphs-export-card.ts'),
   constant: 'EXPORT_CARD_GLYPHS',
   type: 'ExportCardGlyphName',

@@ -65,6 +65,8 @@ import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.profile.LocalProfileSheetPresented
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.ui.unit.LayoutDirection
+import me.meeshy.app.stories.rememberSceneVideoExport
+import me.meeshy.app.feed.LocalPostCardImager
 
 /** How many reels from the end of the thread trigger the next cursor page. */
 private const val LOAD_MORE_THRESHOLD = 3
@@ -131,7 +133,10 @@ fun ReelsScreen(
     val shareOutNow by rememberUpdatedState(shareOut)
     val launcherNow by rememberUpdatedState(shareLauncher)
     val reelsNow by rememberUpdatedState(state.reels)
-    val railActions = remember(viewModel) {
+    val railRender = rememberSceneVideoExport(key = REEL_RAIL_IMAGER_KEY) { emptyList() }
+    val railRenderNow by rememberUpdatedState(railRender)
+    val cardImager = LocalPostCardImager.current
+    val railActions = remember(viewModel, cardImager) {
         ReelRailActions(
             onLike = viewModel::toggleLike,
             onReact = viewModel::react,
@@ -146,6 +151,9 @@ fun ReelsScreen(
                     val card = reel.shareCard(context)
                     launcherNow?.open(ShareSubject.Card(card)) ?: shareOutNow(card)
                 }
+            },
+            onImager = cardImager?.let { imager ->
+                { id: String -> reelsNow.firstOrNull { it.id == id }?.imagerRequest(railRenderNow)?.let(imager) }
             },
         )
     }
@@ -355,3 +363,5 @@ private fun ReelPresentation.prepTarget(): ReelPrepTarget = ReelPrepTarget(
     posterUrl = posterUrl ?: imageUrls.firstOrNull(),
     audioUrls = listOfNotNull(audioUrl, scene?.backgroundAudioUrl, scene?.foregroundAudioUrl).distinct(),
 )
+
+private const val REEL_RAIL_IMAGER_KEY = "reel-rail-imager"

@@ -21,6 +21,7 @@ import { resolveSyncMembership } from './membership';
 import { trimToByteBudget, SYNC_MAX_PAGE_BYTES } from './budget';
 import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
 import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
+import { withNoticeUsernames } from '../../services/messaging/noticeUsernames';
 import { selectForFields, restrictFields, isFieldServed, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 import { loadReaderReactionsByMessage } from '../conversations/messages-reader-reactions';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
@@ -654,7 +655,9 @@ export async function syncMessages(opts: {
   // added = créé après `since` ; modified = pré-existant mais modifié.
   // #11381, #12822 — un message `server`/`hybrid` et ses traductions sortent en
   // clair pour le membre, ou SCELLÉS ; jamais leur chiffré présenté comme du texte.
-  const opened = await revealAtRestRows(visible, gatewayKeyring(prisma));
+  // #16421 — une ligne d'arrivées écrite avant que le pseudo y voyage reçoit
+  // celui du compte de chaque arrivant (une requête pour la page).
+  const opened = await withNoticeUsernames(prisma, await revealAtRestRows(visible, gatewayKeyring(prisma)));
   const added = opened.filter((m) => m.createdAt > sinceDate).map(serialize);
   const modified = opened.filter((m) => m.createdAt <= sinceDate).map(serialize);
 

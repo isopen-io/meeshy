@@ -1,11 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { Link } from '@/routes/route-table';
-
 import { AuthAmbient } from './auth-chrome';
-import { Glyph } from './glyph';
 
 /* L'écran des moins de 13 ans (#9928) voyage avec la géométrie des pages
    d'accès : seules ces pages le montrent, et passer par ce module le range
@@ -52,68 +47,5 @@ export function AuthColumn({ children, className }: { readonly children: ReactNo
         {children}
       </div>
     </div>
-  );
-}
-
-/**
- * LA BARRE DE FERMETURE — DANS la colonne, jamais au bord de l'écran (D-72).
- *
- * iOS pose sa croix au bord de l'écran (`safeAreaInset(edge: .top)`) au-dessus
- * d'un formulaire que `iPadFormWidth()` borne. Sur un écran de 1 440 px, la même
- * pose mettrait la croix à plus de 500 px de ce qu'elle ferme, seule dans un
- * coin. Dans la colonne, elle se lit avec le titre qu'elle accompagne, et la
- * page entière tient au centre — ce que la directive demande. Sur téléphone,
- * la colonne occupe l'écran : la croix reste où elle était.
- *
- * FERMER REFERME (`replace`) et mène là où l'écran le dit — la connexion, sauf
- * la vérification d'e-mail d'une session déjà ouverte, qui rend la liste.
- * `window.history.back()` supposait qu'on venait de `/login` : sur un lien
- * profond, un démarrage de PWA ou un lancement de coque, il n'y a AUCUNE entrée
- * d'historique de l'application, et le geste sortait de l'app (revue de #5555,
- * défaut 3).
- */
-export function AuthColumnBar({
-  to,
-  title,
-  search,
-}: {
-  readonly to: 'login' | 'list';
-  readonly title?: string;
-  /** Ce que la fermeture TRANSMET à l'écran qu'elle rouvre — l'invitation,
-   * l'adresse déjà tapée (#8216). */
-  readonly search?: Readonly<Record<string, string | undefined>>;
-}) {
-  return (
-    <div className="flex shrink-0 items-center px-2 pt-1">
-      <AuthCloseChip to={to} {...(search === undefined ? {} : { search })} />
-      {title === undefined ? null : (
-        <h1 className="flex-1 text-center text-title font-semibold" style={{ color: 'var(--color-ios-ink)', marginRight: 44 }}>
-          {title}
-        </h1>
-      )}
-    </div>
-  );
-}
-
-/** LA CROIX QUI REFERME (D-72) — celle de la barre, aussi posée en tête de
- * l'en-tête public de l'inscription (#10007). */
-export function AuthCloseChip({
-  to,
-  search,
-}: {
-  readonly to: 'login' | 'list';
-  readonly search?: Readonly<Record<string, string | undefined>>;
-}) {
-  return (
-    <Link
-      to={to}
-      {...(search === undefined ? {} : { search })}
-      replace
-      className="grid place-items-center rounded-chip"
-      style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-      aria-label={translate(currentInterfaceLanguage(), 'common.close')}
-    >
-      <Glyph name="x" size={20} />
-    </Link>
   );
 }

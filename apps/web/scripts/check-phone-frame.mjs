@@ -42,7 +42,10 @@
  * et, pour la connexion (porte par défaut ET porte du mot de passe), à
  * 375 × 667 (iPhone SE, le plus petit téléphone courant) :
  *
- *   4. rien ne défile : l'écran tient entier dans la vue.
+ *   4. rien ne défile : l'écran tient entier dans la vue — SAUF le pied du
+ *      site (`[data-auth-site-footer]`, #16452 : badges des boutiques et pages
+ *      institutionnelles), posé SOUS le formulaire par dessein, qu'on atteint
+ *      en défilant ; le formulaire, lui, tient toujours en entier.
  *
  * et, pour « PROGRESSION » (#9563, amendement n° 3 du porteur : « la vue
  * Progression ne doit pas défiler horizontalement »), avec le jeu aux VALEURS
@@ -59,9 +62,10 @@
  *
  * et, dans les SEPT langues, à 320, 375 et 390 px (#10124) :
  *
- *   6. sur chaque landing, la porte de l'en-tête (« Mes conversations »,
+ *   6. sur chaque landing, les portes de l'en-tête (« Mes conversations »,
  *      seule depuis #12500 — « Entrer sans compte » a quitté la page, #10784,
- *      « Se connecter » aussi) tient sur UNE ligne, sans rien rogner. (La carte World Wide de `/login`, qu'on mesurait aussi, est
+ *      « Se connecter » aussi — et « Télécharger » vers /download, #16407)
+ *      tiennent chacune sur UNE ligne, sans rien rogner. (La carte World Wide de `/login`, qu'on mesurait aussi, est
  *      retirée — #10784.)
  *
  * La démonstration ordinaire est confortable : la mesure de 1. et 2. était verte
@@ -162,7 +166,7 @@ const releveTextes = (selecteurs) =>
     return { selecteur, absent: false, lignes, rogne: el.scrollWidth > el.clientWidth + 1, texte: (el.textContent ?? '').trim() };
   });
 
-const PORTES_LANDING = ['.ld-bar > a[href="/chats"]'];
+const PORTES_LANDING = ['.ld-bar > a[href="/download"]', '.ld-bar > a[href="/chats"]'];
 
 /** Le relevé, dans la page — voir le doc-comment de tête. */
 const releve = () => {
@@ -235,8 +239,11 @@ const releve = () => {
     (el) => visible(el) && ([...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? '').trim() !== '') || el.matches('input, button, a, img, svg, video, canvas')),
   );
 
+  const piedDuSite = document.querySelector('[data-auth-site-footer]');
+
   return {
     chemin: location.pathname + location.search,
+    piedSite: piedDuSite === null ? 0 : piedDuSite.getBoundingClientRect().height,
     documentX: document.documentElement.scrollWidth - vw,
     colonnes,
     bandes,
@@ -393,8 +400,8 @@ const connexion = async (constate) => {
       continue;
     }
     constate(m.champs > 0, `${tag} : aucun champ mesuré — ce n'est pas l'écran de connexion (${m.chemin})`);
-    for (const y of m.defileEnY) {
-      constate(false, `${tag} : l'écran de connexion ne tient pas dans la vue — ${y.conteneur} défile de ${y.debord} px`);
+    for (const y of m.defileEnY.filter((y) => y.debord - m.piedSite > 1)) {
+      constate(false, `${tag} : l'écran de connexion ne tient pas dans la vue — ${y.conteneur} défile de ${y.debord} px (pied du site : ${Math.round(m.piedSite)} px)`);
     }
   }
   await context.close();

@@ -11,7 +11,7 @@
  * Chaque film est adressé par contenu dans `design/appearance/lottie/<sha16>.json` (`validateLottie`,
  * `MAX_FILM_BYTES`, 30 i/s) ; chaque objet passe le schéma de sa surface. Les packs se posent À LA FIN de leur
  * source, après les collections Meeshy, remplacés à leur place s'ils y sont déjà : rien de ce qui les précède ne
- * bouge d'un octet. Ils portent la fenêtre de leur offre (`seasonal/slugs.ts`), ne s'installent pas d'office et se
+ * bouge d'un octet. Ils déclarent l'événement de leur offre (`seasonal/slugs.ts`, fenêtre calculée par #16447), ne s'installent pas d'office et se
  * retirent. Les packs de Noël antérieurs reçoivent la leur de leur propre compositeur (`compose-assorted-banners.ts`).
  * Ensuite : la passerelle (`services/gateway/scripts/generate-appearance-packs.ts`) et les copies iOS et Android
  * (`sync-appearance-catalog-{ios,android}.ts`). Idempotent.
@@ -26,7 +26,7 @@ import { renderFilm } from './compose-illustrated-ring-lotties.js';
 import { REACH } from './illustrated-rings/kit.js';
 import { upsertPacks } from './meeshy-collections/source-packs.js';
 import { CHRISTMAS_SOURCES, LANGUAGES, NEW_YEAR_SOURCES, type SeasonalSource } from './seasonal/packs.js';
-import { SEASONAL_ADDED_SLUGS, availabilityOf } from './seasonal/slugs.js';
+import { SEASONAL_ADDED_SLUGS, eventOf } from './seasonal/slugs.js';
 
 type Write = (src: string, bytes: Buffer) => void;
 type Ref = { readonly src: string; readonly bytes: number; readonly sha256: string };
@@ -92,7 +92,7 @@ export function seasonalPacks(domain: SeasonalDomain, existing: readonly SourceP
       installedByDefault: false,
       removable: true,
       ...(usage === undefined ? {} : { usage }),
-      availability: availabilityOf(source.slug),
+      event: eventOf(source.slug),
       [field]: items,
     };
   });

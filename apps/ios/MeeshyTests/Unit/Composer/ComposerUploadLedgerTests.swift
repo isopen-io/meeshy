@@ -98,14 +98,19 @@ final class ComposerUploadLedgerTests: XCTestCase {
     }
 
     /// #14702 — la progression ne vit plus au-dessus du compositeur : chaque
-    /// bulle porte la sienne. Aucune barre globale ne se monte sur le plateau.
-    func test_pendingAttachmentsRow_mountsNoGlobalUploadBar() throws {
-        let src = try String(contentsOf: URL(fileURLWithPath: #filePath)
+    /// bulle porte la sienne. L'ancienne barre globale n'existe plus nulle part
+    /// dans l'app (ni déclarée, ni montée), et le plateau n'en lit plus l'état.
+    func test_noGlobalUploadBar_isDeclaredOrMountedAnywhereInTheApp() throws {
+        let appRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift"))
-        XCTAssertFalse(src.contains("UploadProgressBar("))
-        XCTAssertFalse(src.contains("composerState.uploadProgress"))
+            .deletingLastPathComponent().appendingPathComponent("Meeshy")
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil))
+            .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(files.count, 100)
+        let offenders = try files.filter { try String(contentsOf: $0).contains("UploadProgressBar") }
+        XCTAssertEqual(offenders.map(\.lastPathComponent), [])
+        let banners = try String(contentsOf: appRoot.appendingPathComponent("Features/Main/Views/ConversationView+ComposerBanners.swift"))
+        XCTAssertFalse(banners.contains("composerState.uploadProgress"))
     }
 }
 
@@ -179,6 +184,16 @@ final class MessageUploadProgressStoreTests: XCTestCase {
         store.begin(["video"])
         XCTAssertTrue(first === store.progress(for: "video"))
         XCTAssertEqual(store.progress(for: "video")?.percent, 30)
+    }
+
+    /// Le pied de bulle réserve la largeur du plus large pourcentage : 9 % → 10 % → 100 %
+    /// ne déplace plus l'heure ni les coches voisines.
+    func test_reservedLabel_isTheWidestPercent() {
+        let locale = Locale(identifier: "fr_FR")
+        XCTAssertEqual(
+            MessageUploadProgress.reservedLabel(locale: locale),
+            MessageUploadProgress.accessibilityValue(percent: 100, locale: locale)
+        )
     }
 
     func test_accessibilityValue_spellsThePercent() {

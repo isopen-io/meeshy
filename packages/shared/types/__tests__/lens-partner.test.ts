@@ -59,6 +59,18 @@ describe('parsePartnerProfileInput — ce qu’un partenaire déclare de lui', (
     );
   });
 
+  it('#16440 — `showOwnerProfile` porte le choix d’afficher son profil Meeshy ; absent, il ne dit rien', () => {
+    expect(parsePartnerProfileInput({ displayName: 'Studio', showOwnerProfile: true })).toEqual({ ok: true, profile: { displayName: 'Studio', website: null, showOwnerProfile: true } });
+    expect(parsePartnerProfileInput({ displayName: 'Studio', showOwnerProfile: false })).toEqual({ ok: true, profile: { displayName: 'Studio', website: null, showOwnerProfile: false } });
+    expect(parsePartnerProfileInput({ displayName: 'Studio' })).toEqual({ ok: true, profile: { displayName: 'Studio', website: null } });
+  });
+
+  it('#16440 — refuse un `showOwnerProfile` qui n’est pas un booléen : un choix douteux ne se devine pas', () => {
+    ['true', 1, null, {}].forEach((showOwnerProfile) =>
+      expect(parsePartnerProfileInput({ displayName: 'Studio', showOwnerProfile })).toEqual({ ok: false, reason: 'show-owner-profile' }),
+    );
+  });
+
   it('refuse un site qui n’est pas https (javascript:, http:, texte libre)', () => {
     ['javascript:alert(1)', 'http://lumiere.example', 'lumiere', 'https://'].forEach((website) =>
       expect(parsePartnerProfileInput({ displayName: 'Studio', website }).ok).toBe(false),

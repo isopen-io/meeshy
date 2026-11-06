@@ -7,7 +7,7 @@
     <string name="a11y_media_download_action">Télécharger</string>
     <string name="a11y_media_download_cancel">Annuler le téléchargement</string>
     <string name="a11y_message_actions_forward">Transférer</string>
-    <string name="audio_consent_notice_action">Activer dans les Réglages</string>
+    <string name="audio_consent_notice_action">Configurer ma voix</string>
     <string name="audio_consent_notice_message">Active le consentement vocal pour que tes messages audio soient transcrits et traduits.</string>
     <string name="audio_editor_a11y_playhead">Position de lecture</string>
     <string name="audio_editor_apply">Appliquer les modifications</string>
@@ -326,6 +326,7 @@
     <string name="media_crop_a11y_size">Largeur %1$s, hauteur %2$s</string>
     <string name="media_download">Télécharger</string>
     <string name="media_forward_rail_hint">Envoie ce média dans une autre conversation.</string>
+    <string name="media_imager_title">Imager</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">Fichier</string>
     <string name="media_label_location">Position</string>

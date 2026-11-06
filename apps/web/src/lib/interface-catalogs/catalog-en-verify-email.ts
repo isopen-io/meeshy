@@ -29,8 +29,7 @@ const enVerifyEmail = {
   'signInLink.switchAccount.leave': 'Back to home',
   'emailSent.title': 'Email sent',
   'emailSent.openLink': 'Open the link sent to {email}',
-  'emailSent.nothingReceived': 'Nothing received?',
-  'emailSent.nothingReceived.text': 'Check your spam folder: the message may have landed there.',
+  'emailSent.checkSpam': 'Nothing yet? Also check your spam or junk folder.',
 };
 
 export default enVerifyEmail;

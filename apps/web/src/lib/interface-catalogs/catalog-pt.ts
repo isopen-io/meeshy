@@ -37,6 +37,7 @@ import ptQuote from './catalog-pt-quote';
 import ptCommentRow from './catalog-pt-comment-row';
 import ptContactDiscovery from './catalog-pt-contact-discovery';
 import ptDownload from './catalog-pt-download';
+import ptAuthFooter from './catalog-pt-auth-footer';
 import ptPhonePrompt from './catalog-pt-phone-prompt';
 import ptUserProfile from './catalog-pt-user-profile';
 import ptContentRefused from './catalog-pt-content-refused';
@@ -990,6 +991,7 @@ const pt = {
   'message-detail.retry': 'Tentar novamente',
 
   ...ptDownload,
+  ...ptAuthFooter,
   ...ptPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
@@ -997,6 +999,8 @@ const pt = {
   'composer.viewOnce.activate': 'Ativar o modo de visualização única',
   'composer.viewOnce.active': 'Modo de visualização única ativo',
   'composer.viewOnce.label': 'Visualização única',
+  'conversation.composer.fold': 'Recolher a barra de mensagem',
+  'conversation.composer.unfold': 'Mostrar a barra de mensagem',
   'composer.protection.ephemeral.state': 'Modo efêmero ativo',
   'composer.protection.blur.state': 'Modo desfoque ativo',
   'message.location.shared': 'Localização compartilhada',
@@ -1052,6 +1056,8 @@ const pt = {
   'media.reactions.badge.a11y': 'Reações',
   'media.reactions.badge.mine.a11y': 'incluindo a sua',
   'message.join.noAccount': 'sem conta',
+  'message.join.greet.one': 'Diz olá',
+  'message.join.greet.many': 'Diz-lhes olá',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Vídeo',
   'attachment.kind.audio': 'Áudio',

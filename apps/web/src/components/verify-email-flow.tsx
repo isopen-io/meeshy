@@ -26,7 +26,9 @@ import { href, Link, navigate } from '@/routes/route-table';
 import { AccountReplacementPrompt } from './account-replacement-prompt';
 import { ArrivalCelebration } from './arrival-celebration';
 import { AuthBrandFooter } from './auth-chrome';
-import { AuthColumn, AuthColumnBar } from './auth-column';
+import { AuthColumn } from './auth-column';
+import { AuthHeader } from './auth-header';
+import { SpamFolderHint } from './email-sent-notice';
 import { awaitsSecondFactor, EmailCodeForm, goToSecondFactor, verifyEmailErrorText, withStrongEmail } from './email-code-form';
 import { Glyph } from './glyph';
 import { LinkSignInConfirmation } from './link-sign-in-confirmation';
@@ -229,7 +231,7 @@ export function VerifyEmailFlow({
   if (email === null) {
     return (
       <AuthColumn>
-        <AuthColumnBar to={closeTarget} title={translateSignInLink(language, 'verifyEmail.bar.title')} />
+        <AuthHeader back={closeTarget} title={translateSignInLink(language, 'verifyEmail.bar.title')} />
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
           <Glyph name="warningCircle" size={48} style={{ color: 'var(--ios-error)' }} />
           <p style={{ color: 'var(--color-ios-ink-2)' }}>{translateSignInLink(language, 'verifyEmail.noAddress')}</p>
@@ -256,7 +258,7 @@ export function VerifyEmailFlow({
 
   return (
     <AuthColumn>
-      <AuthColumnBar to={closeTarget} title={translateSignInLink(language, 'verifyEmail.bar.title')} />
+      <AuthHeader back={closeTarget} title={translateSignInLink(language, 'verifyEmail.bar.title')} />
 
       {linkPhase === 'ask' && asked !== null && token !== null ? (
         <div className="flex flex-1 flex-col justify-center px-8">
@@ -344,7 +346,9 @@ export function VerifyEmailFlow({
             <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
               {translateSignInLink(language, 'verifyEmail.subtitle.pending.inbox')}
             </p>
-          ) : null}
+          ) : (
+            <SpamFolderHint language={language} />
+          )}
 
           <EmailCodeForm
             email={email}

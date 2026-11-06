@@ -198,19 +198,15 @@ private struct MessageCardScaleAccessibility: ViewModifier {
 
 extension MessageCardExportSheet {
 
-    /// Au-dessus de l'aperçu : les modes, « Post en tête », et les cases du fil
-    /// sous « Choisir les réponses ». Rien quand il n'y a rien à choisir.
-    @ViewBuilder
-    var compositionBar: some View {
-        if let composition = request.composition, composition.showsBar {
-            MessageCardCompositionBar(
-                composition: composition,
-                mode: $compositionMode,
-                showsPost: $showsPost,
-                chosen: $chosenReplies,
-                headMediaID: $headMediaID
-            )
-        }
+    var contentPanel: MessageCardCompositionBar? {
+        guard let composition = request.composition, composition.showsBar else { return nil }
+        return MessageCardCompositionBar(
+            composition: composition,
+            mode: $compositionMode,
+            showsPost: $showsPost,
+            chosen: $chosenReplies,
+            headMediaID: $headMediaID
+        )
     }
 }
 

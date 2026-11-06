@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { GameAbuseGuard, MESSAGES_PER_PAIR_PER_DAY, REPLY_BONUS_WINDOW_MS } from '../GameAbuseGuard';
+import { GameAbuseGuard, MESSAGES_PER_PAIR_PER_DAY, REPLY_BONUS_WINDOW_MS, isUnprovenNewcomer } from '../GameAbuseGuard';
 import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from './fakeGameDb';
 
 const NOW = new Date('2026-10-05T12:00:00Z');
@@ -156,5 +156,68 @@ describe('GameAbuseGuard.assessReply — une réponse reçue', () => {
 
     expect(await new GameAbuseGuard(fresh.prisma).assessReply(base)).toMatchObject({ eligible: false });
     expect(await new GameAbuseGuard(blocked.prisma).assessReply(base)).toMatchObject({ eligible: false });
+  });
+});
+
+describe('un nouvel inscrit VÉRIFIÉ compte comme un pair (#16425)', () => {
+  const FRESH = new Date('2026-10-05T03:00:00Z');
+
+  it('un compte de moins de 24 h au téléphone vérifié compte : le message rapporte en entier', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    seedUser(db, { createdAt: FRESH, phoneVerifiedAt: new Date('2026-10-05T03:05:00Z'), emailVerifiedAt: null }, OTHER);
+    members(db, [USER, OTHER]);
+    const read = jest.spyOn(db.user, 'findMany');
+
+    expect(await assess(db)).toBe('full');
+    expect(read).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ phoneVerifiedAt: true, emailVerifiedAt: true }) }),
+    );
+  });
+
+  it('un compte de moins de 24 h à l’e-mail vérifié compte aussi', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    seedUser(db, { createdAt: FRESH, phoneVerifiedAt: null, emailVerifiedAt: new Date('2026-10-05T03:05:00Z') }, OTHER);
+    members(db, [USER, OTHER]);
+
+    expect(await assess(db)).toBe('full');
+  });
+
+  it('un compte de moins de 24 h sans contact vérifié ne compte toujours pas', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    seedUser(db, { createdAt: FRESH, phoneVerifiedAt: null, emailVerifiedAt: null }, OTHER);
+    members(db, [USER, OTHER]);
+
+    expect(await assess(db)).toBe('none');
+  });
+
+  it('un compte vérifié mais bloqué ne compte pas', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { blockedUserIds: [OTHER] });
+    seedUser(db, { createdAt: FRESH, phoneVerifiedAt: FRESH }, OTHER);
+    members(db, [USER, OTHER]);
+
+    expect(await assess(db)).toBe('none');
+  });
+
+  it('une réponse d’un nouvel inscrit vérifié est éligible ; soi-même ne l’est jamais', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { phoneVerifiedAt: FRESH });
+    seedUser(db, { createdAt: FRESH, emailVerifiedAt: FRESH }, OTHER);
+    const guard = new GameAbuseGuard(db.prisma);
+    const base = { replierId: OTHER, authorId: USER, originalCreatedAt: new Date('2026-10-05T11:30:00Z'), now: NOW };
+
+    expect(await guard.assessReply(base)).toEqual({ eligible: true, withinWindow: true });
+    expect(await guard.assessReply({ ...base, replierId: USER })).toMatchObject({ eligible: false });
+  });
+
+  it('la loi est une fonction : frais ET sans contact vérifié', () => {
+    expect(isUnprovenNewcomer({ createdAt: FRESH, phoneVerifiedAt: null, emailVerifiedAt: null }, NOW)).toBe(true);
+    expect(isUnprovenNewcomer({ createdAt: FRESH, phoneVerifiedAt: FRESH, emailVerifiedAt: null }, NOW)).toBe(false);
+    expect(isUnprovenNewcomer({ createdAt: FRESH, phoneVerifiedAt: null, emailVerifiedAt: FRESH }, NOW)).toBe(false);
+    expect(isUnprovenNewcomer({ createdAt: new Date('2026-10-04T11:00:00Z'), phoneVerifiedAt: null, emailVerifiedAt: null }, NOW)).toBe(false);
+    expect(isUnprovenNewcomer(undefined, NOW)).toBe(false);
   });
 });

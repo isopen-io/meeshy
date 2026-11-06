@@ -463,7 +463,8 @@ final class ReelsViewModel: ObservableObject {
             EngagementTracker.shared.recordAction(.bookmarked, surface: .reels)
         }
         HapticFeedback.light()
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             await bookmarker.write(bookmarked: !wasBookmarked, postId: id, post: post, onRejected: { [weak self] in
                 guard let self else { return }
                 if wasBookmarked {

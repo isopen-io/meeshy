@@ -469,6 +469,7 @@ class ConversationListViewModel: ObservableObject {
     }
 
     var lastFetchedAt: Date? = nil
+    lazy var listCatchUp = ConversationListCatchUp(sync: { [weak self] in await self?.syncEngine.syncSinceLastCheckpoint() ?? false })
     let cacheTTL: TimeInterval = 30
 
     var isCacheValid: Bool {

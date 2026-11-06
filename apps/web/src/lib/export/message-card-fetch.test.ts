@@ -36,6 +36,14 @@ describe('le média d’une carte, en blob (#8901)', () => {
     expect(calls[0]?.headers.Authorization).toBeUndefined();
   });
 
+  test('le rendu local d’une œuvre composée (`blob:`) se relit tel quel, sans jeton ni passerelle (#16393)', async () => {
+    const { calls, fetchImpl } = recorder();
+    const fetchBlob = cardMediaBlobFetcher({ fetchImpl, credential: () => token, apiBase: 'https://meeshy.me', documentBase: 'https://meeshy.me' });
+    const blob = await fetchBlob('blob:https://meeshy.me/4f0c', 'scene-p1');
+    expect(blob).not.toBeNull();
+    expect(calls).toEqual([{ url: 'blob:https://meeshy.me/4f0c', headers: {} }]);
+  });
+
   test('derrière le proxy de développement, une adresse relative reste chez la passerelle', async () => {
     const { calls, fetchImpl } = recorder();
     const fetchBlob = cardMediaBlobFetcher({ fetchImpl, credential: () => token, apiBase: '', documentBase: 'http://localhost:5173', resolve: (url) => url });

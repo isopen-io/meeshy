@@ -38,7 +38,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "conversation:participant-banned", "conversation:participant-joined", "conversation:participant-left",
         "conversation:participant-unbanned", "conversation:restored", "conversation:stats",
         "conversation:unread-updated", "conversation:updated", "e2ee:envelope", "engagement:conversation-updated",
-        "engagement:post-updated", "friend-request:cancelled", "friend-request:rejected", "game:updated",
+        "engagement:post-updated", "friend-request:cancelled", "friend-request:rejected", "game:missions-updated", "game:updated",
         "heartbeat:ack", "location:live-started", "location:live-stopped", "location:live-updated",
         "mention:created", "message:attachment-updated", "message:cited-post-withdrawn", "message:consumed",
         "message:countdown-started", "message:deleted", "message:edited", "message:expired", "message:hidden-for-me",

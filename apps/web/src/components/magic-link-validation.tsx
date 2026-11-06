@@ -14,6 +14,7 @@ import { href, Link, navigate } from '@/routes/route-table';
 
 import { AccountReplacementPrompt, deviceProvenSessions } from './account-replacement-prompt';
 import { AgeBlocked, AuthColumn, isAgeBelowMinimum } from './auth-column';
+import { AuthHeader } from './auth-header';
 import { LinkSignInConfirmation } from './link-sign-in-confirmation';
 import { AUTH_GLYPHS } from './glyphs-auth';
 import { Glyph, GlyphSvg } from './glyph';
@@ -121,93 +122,96 @@ export function MagicLinkValidation({
   }
 
   return (
-    <AuthColumn className="justify-center gap-6 px-8 text-center">
-      {state === 'validating' ? (
-        <>
-          <span aria-hidden="true" className="mx-auto" style={{ color: 'var(--ios-indigo-500)' }}>
-            <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={56} />
-          </span>
-          <p aria-busy="true" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {translate(language, 'magicLink.validating')}
-          </p>
-        </>
-      ) : null}
+    <AuthColumn>
+      <AuthHeader back="login" />
+      <div className="flex flex-1 flex-col justify-center gap-6 px-8 text-center">
+        {state === 'validating' ? (
+          <>
+            <span aria-hidden="true" className="mx-auto" style={{ color: 'var(--ios-indigo-500)' }}>
+              <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={56} />
+            </span>
+            <p aria-busy="true" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {translate(language, 'magicLink.validating')}
+            </p>
+          </>
+        ) : null}
 
-      {state === 'invalid' ? (
-        <>
-          <Glyph name="warningCircle" size={48} className="mx-auto" style={{ color: 'var(--ios-error)' }} />
-          <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            {translate(language, 'magicLink.invalid.title')}
-          </h1>
-          <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(language, 'magicLink.invalid.body')}</p>
-          <div className="grid gap-3">
-            <Link
-              to="magicLink"
-              replace
-              search={{ next: returnUrl ?? undefined }}
-              className="grid place-items-center rounded-field font-bold text-ios-on-brand"
-              style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }}
+        {state === 'invalid' ? (
+          <>
+            <Glyph name="warningCircle" size={48} className="mx-auto" style={{ color: 'var(--ios-error)' }} />
+            <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+              {translate(language, 'magicLink.invalid.title')}
+            </h1>
+            <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(language, 'magicLink.invalid.body')}</p>
+            <div className="grid gap-3">
+              <Link
+                to="magicLink"
+                replace
+                search={{ next: returnUrl ?? undefined }}
+                className="grid place-items-center rounded-field font-bold text-ios-on-brand"
+                style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }}
+              >
+                {translate(language, 'magicLink.requestNew')}
+              </Link>
+              <Link
+                to="login"
+                search={{ next: returnUrl ?? undefined }}
+                replace
+                className="grid place-items-center rounded-field font-semibold"
+                style={{
+                  minHeight: 52,
+                  border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)',
+                  color: 'var(--color-ios-ink)',
+                }}
+              >
+                {translate(language, 'magicLink.backToLogin')}
+              </Link>
+            </div>
+          </>
+        ) : null}
+
+        {state === 'ask' && asked !== null ? (
+          <LinkSignInConfirmation
+            language={language}
+            question={asked}
+            current={heldAccountOf(sessionStore.getState().session)?.user ?? null}
+            onConfirm={() => {
+              setConfirmed(true);
+              void run(true);
+            }}
+            onCancel={decline}
+          />
+        ) : null}
+
+        {state === 'confirm' && replacement !== null ? (
+          <AccountReplacementPrompt
+            language={language}
+            replacement={replacement}
+            gestures={gestures}
+            alreadyConfirmed={confirmed}
+            onAdopted={() => go(replacement.proven.kind === 'second-factor' ? href('login') : landingAfterSession(returnUrl, href('list')), true)}
+            onDiscarded={() => go(href('list'), true)}
+          />
+        ) : null}
+
+        {state === 'age-blocked' ? <AgeBlocked language={language} onConfirm={() => go(href('login'), true)} /> : null}
+
+        {state === 'offline' ? (
+          <>
+            <p role="alert" style={{ color: 'var(--ios-error)' }}>
+              {message}
+            </p>
+            <button
+              type="button"
+              onClick={retry}
+              className="mx-auto grid place-items-center rounded-field px-6 font-semibold text-ios-on-brand"
+              style={{ minHeight: 44, background: 'var(--color-ios-brand)' }}
             >
-              {translate(language, 'magicLink.requestNew')}
-            </Link>
-            <Link
-              to="login"
-              search={{ next: returnUrl ?? undefined }}
-              replace
-              className="grid place-items-center rounded-field font-semibold"
-              style={{
-                minHeight: 52,
-                border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)',
-                color: 'var(--color-ios-ink)',
-              }}
-            >
-              {translate(language, 'magicLink.backToLogin')}
-            </Link>
-          </div>
-        </>
-      ) : null}
-
-      {state === 'ask' && asked !== null ? (
-        <LinkSignInConfirmation
-          language={language}
-          question={asked}
-          current={heldAccountOf(sessionStore.getState().session)?.user ?? null}
-          onConfirm={() => {
-            setConfirmed(true);
-            void run(true);
-          }}
-          onCancel={decline}
-        />
-      ) : null}
-
-      {state === 'confirm' && replacement !== null ? (
-        <AccountReplacementPrompt
-          language={language}
-          replacement={replacement}
-          gestures={gestures}
-          alreadyConfirmed={confirmed}
-          onAdopted={() => go(replacement.proven.kind === 'second-factor' ? href('login') : landingAfterSession(returnUrl, href('list')), true)}
-          onDiscarded={() => go(href('list'), true)}
-        />
-      ) : null}
-
-      {state === 'age-blocked' ? <AgeBlocked language={language} onConfirm={() => go(href('login'), true)} /> : null}
-
-      {state === 'offline' ? (
-        <>
-          <p role="alert" style={{ color: 'var(--ios-error)' }}>
-            {message}
-          </p>
-          <button
-            type="button"
-            onClick={retry}
-            className="mx-auto grid place-items-center rounded-field px-6 font-semibold text-ios-on-brand"
-            style={{ minHeight: 44, background: 'var(--color-ios-brand)' }}
-          >
-            {translate(language, 'magicLink.retry')}
-          </button>
-        </>
-      ) : null}
+              {translate(language, 'magicLink.retry')}
+            </button>
+          </>
+        ) : null}
+      </div>
     </AuthColumn>
   );
 }

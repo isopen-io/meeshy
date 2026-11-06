@@ -367,9 +367,17 @@ public data class ReactionPayload(val emoji: String, val conversationId: String?
  * `EndToEndOutboxAdmission` before the bytes leave: an upload drained before its message
  * row exists is still withheld from an end-to-end encrypted conversation. `null` for a
  * story/post/profile upload, and for every row enqueued before this field existed.
+ *
+ * [messageCid] is the bubble a chat piece belongs to (#16168): when the message row is lost between the uploads and its
+ * enqueue (process death), the manual retry finds the surviving uploads by it instead of posting the bubble without its
+ * piece. `null` for every other upload and for rows enqueued before this field existed.
  */
 @kotlinx.serialization.Serializable
-public data class MediaUploadPayload(val uploadContext: String? = null, val conversationId: String? = null)
+public data class MediaUploadPayload(
+    val uploadContext: String? = null,
+    val conversationId: String? = null,
+    val messageCid: String? = null,
+)
 
 /**
  * Payload of a `CREATE_COMMENT` outbox row. The row's `targetId` is the post commented (a server id: the route

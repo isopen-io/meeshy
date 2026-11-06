@@ -108,8 +108,8 @@ function lensTables() {
 
 type Harness = { app: FastifyInstance; tables: ReturnType<typeof lensTables>; normalizedAs: { assets: string[]; luts: string[] }; packs: LensPacks; broadcasts: Array<{ userId: string; event: PackInstallationUpdatedEventData }> };
 
-async function harness(options: { now?: string; communities?: readonly string[]; log?: { error: (line: string) => void } } = {}): Promise<Harness> {
-  const db = appearancePrisma();
+async function harness(options: { now?: string; communities?: readonly string[]; log?: { error: (line: string) => void }; accounts?: Parameters<typeof appearancePrisma>[0] } = {}): Promise<Harness> {
+  const db = appearancePrisma(options.accounts);
   const tables = lensTables();
   const prisma = Object.assign(Object.create(db.prisma as object) as PrismaClient, {
     lensPack: tables.lensPack,
@@ -195,6 +195,33 @@ describe('proposer une lens (#11271)', () => {
     const h = await harness();
     await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) });
     expect((await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) }, BOB)).statusCode).toBe(409);
+  });
+});
+
+describe('l’éditeur d’une lens (#16274)', () => {
+  it('une lens proposée porte l’éditeur du compte, jamais son nom d’utilisateur', async () => {
+    const h = await harness();
+    const res = await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.publisher).toMatchObject({ verified: false, official: false });
+  });
+
+  it('un compte sans adresse ni numéro vérifié ne propose rien : 403 PUBLISHER_ACCOUNT_UNVERIFIED', async () => {
+    const h = await harness({ accounts: { [ALICE]: { username: 'alice' } } });
+    const res = await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS) });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PUBLISHER_ACCOUNT_UNVERIFIED');
+    expect(h.tables.packs).toEqual([]);
+  });
+
+  it('nommer un éditeur que le compte ne possède pas, Meeshy compris, est refusé : 403 PUBLISHER_NOT_OWNER', async () => {
+    const h = await harness();
+    for (const publisher of ['meeshy', 'studio-de-bob']) {
+      const res = await submit(h, { document: lensDocument(), assets: assetsOf(ALL_ASSETS), publisher });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().code).toBe('PUBLISHER_NOT_OWNER');
+    }
+    expect(h.tables.packs).toEqual([]);
   });
 });
 

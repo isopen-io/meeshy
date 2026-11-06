@@ -9,6 +9,7 @@
  * pays de l'appareil ou de l'inscription, prisme des langues) : un fait
  * inconnu ne satisfait aucune dimension déclarée (fail-closed sur l'offre).
  */
+import { packOfferWindow, type PackEventDeclaration } from '../utils/decoration-event-window.js';
 
 /** Instants ISO 8601 ; `startsAt` inclus, `endsAt` exclu. Une borne absente est ouverte. */
 export type PackAvailability = { readonly startsAt?: string; readonly endsAt?: string };
@@ -33,7 +34,8 @@ export type PackWindowState = 'upcoming' | 'open' | 'closed';
 
 export type PackOfferContext = { readonly now: Date; readonly audience: PackAudience };
 
-export type PackOfferable = { readonly availability?: PackAvailability; readonly targeting?: PackTargeting };
+/** `event` annuel (#16450) : la fenêtre d'offre se recalcule à `now`, `availability` n'étant que l'instantané des anciens clients. */
+export type PackOfferable = { readonly availability?: PackAvailability; readonly event?: PackEventDeclaration; readonly targeting?: PackTargeting };
 
 export const PACK_TARGETING_LIMITS = { communities: 50, countries: 60, languages: 20 } as const;
 
@@ -70,7 +72,7 @@ export function isPackTargeted(targeting: PackTargeting | undefined, audience: P
 
 /** Le pack est OFFERT à ce lecteur, maintenant : fenêtre ouverte ET ciblage satisfait. */
 export const isPackOffered = (pack: PackOfferable, context: PackOfferContext): boolean =>
-  packWindowState(pack.availability, context.now) === 'open' && isPackTargeted(pack.targeting, context.audience);
+  packWindowState(packOfferWindow(pack, context.now), context.now) === 'open' && isPackTargeted(pack.targeting, context.audience);
 
 /** Ce que le lecteur a déjà d'un pack : une ligne de possession (achat, jeu, octroi, événement) ou une installation. */
 export type PackHolding = { readonly ownedByRow: boolean; readonly installed: boolean };

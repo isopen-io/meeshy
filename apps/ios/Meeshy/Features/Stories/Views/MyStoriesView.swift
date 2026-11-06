@@ -27,8 +27,8 @@ struct MyStoriesView: View {
     let onCreateStory: () -> Void
     /// Édition d'une story publiée, gérée par le tray (même raison : le
     /// composer se présente en fullScreenCover APRÈS fermeture de la sheet).
-    /// L'édition remet vues/réactions à zéro côté serveur — la story
-    /// « recommence » pour tous, seule la date de publication ne bouge pas.
+    /// L'édition met l'existant à jour et GARDE vues, réactions et
+    /// impressions (#16386) ; la date de publication ne bouge pas.
     let onEditStory: (StoryItem) -> Void
     /// Reprise d'un brouillon dans le composer, gérée par le tray — même
     /// raison que `onCreateStory` : un `fullScreenCover` posé sur une sheet
@@ -245,14 +245,11 @@ struct MyStoriesView: View {
                 }
             }
         }
-        .sheet(item: $viewersStory) { story in
-            StoryViewersSheet(
-                story: story,
-                accentColor: accentColor,
-                statusViewModel: statusViewModel,
-                onOpenProfile: { _ in }
-            )
-        }
+        .modifier(MyStoriesViewersPresentation(
+            story: $viewersStory,
+            accentColor: accentColor,
+            statusViewModel: statusViewModel
+        ))
         // `onDismiss` aligné sur le lecteur (`StoryViewerView`, sheet
         // « Partager ») : sans lui, swiper la sheet depuis la liste laissait le
         // bake tourner jusqu'au bout et orphelinait le MP4 temporaire. Pas de
@@ -385,9 +382,9 @@ struct MyStoriesView: View {
 
     private func handlePublishedGlyph(_ glyph: MyStoryGlyph, for story: StoryItem) {
         switch glyph {
-        case .viewsAndReactions: viewersStory = story
-        case .comments:          openComments(for: story)
-        case .reactions, .more, .publish: break
+        case .viewsAndReactions, .reactions: viewersStory = story
+        case .comments:                      openComments(for: story)
+        case .more, .publish:                break
         }
     }
 

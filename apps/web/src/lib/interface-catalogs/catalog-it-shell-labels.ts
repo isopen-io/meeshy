@@ -47,6 +47,8 @@ const itShellLabels = {
   'readingMode.river.thresholdToday': 'Si aprirà con {threshold} persone attive — {current} oggi',
 
   'message.status.pending': 'invio in corso',
+
+  'message.status.sending': 'Invio in corso',
   'message.status.sent': 'inviato',
   'message.status.delivered': 'consegnato',
   'message.status.read': 'letto',

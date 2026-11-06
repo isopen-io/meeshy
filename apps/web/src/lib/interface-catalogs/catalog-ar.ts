@@ -37,6 +37,7 @@ import arQuote from './catalog-ar-quote';
 import arCommentRow from './catalog-ar-comment-row';
 import arContactDiscovery from './catalog-ar-contact-discovery';
 import arDownload from './catalog-ar-download';
+import arAuthFooter from './catalog-ar-auth-footer';
 import arPhonePrompt from './catalog-ar-phone-prompt';
 import arUserProfile from './catalog-ar-user-profile';
 import arContentRefused from './catalog-ar-content-refused';
@@ -983,6 +984,7 @@ const ar = {
   'message-detail.retry': 'إعادة المحاولة',
 
   ...arDownload,
+  ...arAuthFooter,
   ...arPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
@@ -990,6 +992,8 @@ const ar = {
   'composer.viewOnce.activate': 'تفعيل وضع المشاهدة لمرة واحدة',
   'composer.viewOnce.active': 'وضع المشاهدة لمرة واحدة نشط',
   'composer.viewOnce.label': 'مشاهدة لمرة واحدة',
+  'conversation.composer.fold': 'طيّ شريط الرسائل',
+  'conversation.composer.unfold': 'إظهار شريط الرسائل',
   'composer.protection.ephemeral.state': 'الوضع المؤقت مفعّل',
   'composer.protection.blur.state': 'وضع التمويه مفعّل',
   'message.location.shared': 'موقع مشترك',
@@ -1045,6 +1049,8 @@ const ar = {
   'media.reactions.badge.a11y': 'التفاعلات',
   'media.reactions.badge.mine.a11y': 'بما في ذلك تفاعلك',
   'message.join.noAccount': 'بدون حساب',
+  'message.join.greet.one': 'قل مرحبًا',
+  'message.join.greet.many': 'قل لهم مرحبًا',
   'attachment.kind.image': 'صورة',
   'attachment.kind.video': 'فيديو',
   'attachment.kind.audio': 'مقطع صوتي',

@@ -6,6 +6,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { resolveStoryActionRailPlan, type StoryActionRailInputs } from '@/lib/stories/action-rail';
 import { GLYPHS } from '@/components/glyphs';
+import { THREAD_MENU_GLYPHS } from '@/components/glyphs-thread-menu';
 
 import { StoryActionRail, type StoryActionRailHandlers } from './story-action-rail';
 
@@ -491,5 +492,33 @@ describe('les effets du rail', () => {
     });
     const ringed = actions(host).filter((action) => disc(host, action)?.querySelector('[data-viewer-contour]') !== null);
     expect(ringed).toEqual(['forward', 'comments']);
+  });
+});
+
+describe('#16333 — la baguette du rail IMAGE la story', () => {
+  const traceOf = (body: string): string | undefined => /d="([^"]+)"/.exec(body)?.[1];
+
+  test('un gestionnaire « Imager » remis ⇒ un bouton « Imager » à la baguette, après Vues, avant Partager', async () => {
+    const host = await monter({
+      plan: resolveStoryActionRailPlan(inputs({ isOwnStory: true })),
+      language: 'fr',
+      handlers: { ...TOUS, imager: () => {} },
+    });
+    expect(actions(host)).toEqual(['sound', 'forward', 'views', 'imager', 'share', 'save', 'comments', 'translations']);
+    const bouton = host.querySelector('[data-story-action="imager"]');
+    expect(bouton?.getAttribute('aria-label')).toBe('Imager');
+    expect(bouton?.querySelector('svg path')?.getAttribute('d')).toBe(traceOf(THREAD_MENU_GLYPHS.magicWand.body));
+  });
+
+  test('la story d’AUTRUI s’image aussi, et le toucher lance l’Imager de l’hôte', async () => {
+    const imaged: string[] = [];
+    const host = await monter({ plan: resolveStoryActionRailPlan(inputs()), language: 'fr', handlers: { ...TOUS, imager: () => imaged.push('st-1') } });
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-story-action="imager"]')?.click());
+    expect(imaged).toEqual(['st-1']);
+  });
+
+  test('sans gestionnaire « Imager », aucune baguette (loi 4)', async () => {
+    const host = await monter({ plan: resolveStoryActionRailPlan(inputs()), language: 'fr', handlers: TOUS });
+    expect(host.querySelector('[data-story-action="imager"]')).toBeNull();
   });
 });

@@ -16,14 +16,15 @@ import me.meeshy.app.feed.CommentCardExporter
 import me.meeshy.app.feed.LocalCommentCardExporter
 import me.meeshy.app.feed.LocalPostSceneCardRenderer
 import me.meeshy.app.feed.LocalPostSceneExportRenderer
-import me.meeshy.app.feed.LocalPostSceneImager
+import me.meeshy.app.feed.LocalPostCardImager
 import me.meeshy.app.feed.LocalPostSceneReaderRenderer
 import me.meeshy.app.feed.LocalReelSceneRenderer
 import me.meeshy.app.feed.LocalRepostSceneRenderer
 import me.meeshy.app.feed.LocalSceneItemExportHost
 import me.meeshy.app.feed.LocalStoryOpener
 import me.meeshy.app.feed.PostSceneExportRenderer
-import me.meeshy.app.feed.PostSceneImager
+import me.meeshy.app.feed.PostCardImager
+import me.meeshy.app.feed.PostImagerRequest
 import me.meeshy.app.feed.PostSceneReaderRenderer
 import me.meeshy.app.feed.ReelSceneRenderer
 import me.meeshy.app.feed.RepostSceneRenderer
@@ -33,7 +34,12 @@ import me.meeshy.app.stories.PostSceneExportMenu
 import me.meeshy.app.stories.PostSceneReaderScene
 import me.meeshy.app.stories.ReelCardScene
 import me.meeshy.app.stories.RepostSceneCard
-import me.meeshy.app.stories.rememberSceneImager
+import me.meeshy.app.stories.rememberSceneCardRender
+import me.meeshy.app.chat.export.SceneCardExportSheet
+import me.meeshy.app.chat.export.SceneCardRender
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import java.io.File
 import me.meeshy.app.stories.rememberStoryItemExport
 import me.meeshy.sdk.model.share.ShareSubject
 import me.meeshy.ui.component.composer.LocalUniversalComposer
@@ -47,7 +53,7 @@ import me.meeshy.ui.component.export.LocalExportAnnouncer
 import me.meeshy.ui.share.LocalShareLauncher
 import me.meeshy.ui.share.ShareLauncher
 
-private const val POST_SCENE_IMAGER_KEY = "post-scene-imager"
+private const val POST_CARD_RENDER_KEY = "post-card-render"
 
 /**
  * **La racine de la feuille de partage unique** (#13474) : fournit [LocalShareLauncher] à toute l'application
@@ -78,12 +84,25 @@ fun ShareLaunchHost(
     // Une scène de post touchée s'ouvre en plein écran, entière et sonore (iOS `PostSceneCardContainer`).
     val postSceneReader: PostSceneReaderRenderer = remember { { item, accent, playing, modifier -> PostSceneReaderScene(item, accent, playing, modifier) } }
     // Son menu « … » exporte le post entier, toutes ses scènes, par le moteur d'export des stories (#13896).
-    val postSceneExport: PostSceneExportRenderer = remember { { scenes, accent, modifier -> PostSceneExportMenu(scenes, accent, modifier) } }
+    val postSceneExport: PostSceneExportRenderer = remember { { scenes, accent, modifier, onImager -> PostSceneExportMenu(scenes, accent, modifier, onImager) } }
     // Le média d'un commentaire, ouvert en plein écran, s'image et sort entier par ce même moteur (#13915).
     val sceneItemExport: SceneItemExportHost = remember { { key -> rememberStoryItemExport(key) } }
-    // « Imager » une œuvre composée depuis un menu ⋯ du fil ouvre la vue Imager, montée ici une fois pour tout le fil (#14329).
-    val sceneImager = rememberSceneImager(POST_SCENE_IMAGER_KEY)
-    val postSceneImager: PostSceneImager = remember(sceneImager) { { scenes -> sceneImager(scenes.items, scenes.accentHex) } }
+    // Tout « Imager » d'un post, d'un réel ou d'une story ouvre l'atelier de carte ; une œuvre composée y arrive rendue (#16393).
+    val sceneRender = rememberSceneCardRender(POST_CARD_RENDER_KEY)
+    var imaging by remember { mutableStateOf<PostImagerRequest?>(null) }
+    var sceneCard by remember { mutableStateOf<SceneCardRender?>(null) }
+    val postCardImager: PostCardImager = remember(sceneRender) {
+        { request ->
+            imaging = request
+            sceneCard = if (request.rendersScene) SceneCardRender.Pending else null
+            val rendered: (File?) -> Unit = { file ->
+                if (imaging?.key == request.key) sceneCard = file?.let { SceneCardRender.Ready(it.path) } ?: SceneCardRender.Failed
+            }
+            val own = request.render
+            val scenes = request.scenes
+            if (own != null) own(rendered) else if (scenes != null) sceneRender(scenes.items, scenes.accentHex, rendered)
+        }
+    }
     // « Imager » un commentaire peint sa carte par l'atelier des conversations, que le fil ne connaît pas (#13922).
     val commentCardExport: CommentCardExporter = remember { { key, card, onDismiss -> CommentCardExportSheet(key, card, onDismiss) } }
     // Les commentaires s'écrivent dans le composeur des conversations, réglé pour un commentaire (#14265).
@@ -102,13 +121,21 @@ fun ShareLaunchHost(
         LocalPostSceneReaderRenderer provides postSceneReader,
         LocalPostSceneExportRenderer provides postSceneExport,
         LocalSceneItemExportHost provides sceneItemExport,
-        LocalPostSceneImager provides postSceneImager,
+        LocalPostCardImager provides postCardImager,
         LocalCommentCardExporter provides commentCardExport,
         LocalStoryOpener provides openStory,
         LocalUniversalComposer provides universalComposer,
         LocalComposerStickerSheet provides composerStickerSheet,
         LocalExportAnnouncer provides exportAnnouncer,
-    ) { content() }
+    ) {
+        content()
+        imaging?.let { request ->
+            SceneCardExportSheet(request.key, request.card, sceneCard, onDismiss = {
+                imaging = null
+                sceneCard = null
+            })
+        }
+    }
     ExportAnnouncerHost(exportAnnouncer)
     pending?.let { share ->
         AppShareSheetHost(

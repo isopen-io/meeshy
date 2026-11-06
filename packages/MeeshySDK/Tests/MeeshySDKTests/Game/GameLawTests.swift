@@ -463,15 +463,17 @@ struct GameLawTests {
     func chestBounds() {
         for day in 1...28 {
             for effort in [0, 300, 1000, 4500, 90_000] {
-                let chest = GameChest.daily(userId: "u1", dayKey: String(format: "2026-10-%02d", day), effort: effort, nextMeeshPrice: 1221)
+                let chest = GameChest.daily(userId: "u1", dayKey: String(format: "2026-10-%02d", day), effort: effort, nextMeeshPrice: 1221,
+                                            elapsedHours: day - 1)
                 let base = chest.points - chest.bonusPoints
                 #expect((500...10_000).contains(base))
-                #expect(chest.glory == base / 10)
+                #expect((1250...5800).contains(chest.glory))
+                #expect(chest.glory == GameChest.baseGlory(forEffort: effort) + (chest.earlyGlory ?? -1))
                 #expect([0, 244, 1221].contains(chest.bonusPoints))
             }
         }
         #expect(GameChest.odds == ChestOdds(minPoints: 500, maxPoints: 10_000, fragment: 1.0 / 6.0, freeze: 1.0 / 20.0,
-                                             minGlory: 50, maxGlory: 1000, bonusWhole: 1.0 / 20.0, bonusFifth: 1.0 / 6.0))
+                                             minGlory: 1250, maxGlory: 5800, bonusWhole: 1.0 / 20.0, bonusFifth: 1.0 / 6.0))
     }
 
     @Test("les points du coffre suivent l'effort sur une droite, de 500 à 10 000 (#10011)")
@@ -491,7 +493,24 @@ struct GameLawTests {
         #expect(GameChest.bonusAmounts(nextMeeshPrice: 1221) == (1221, 244))
         #expect(GameChest.bonusAmounts(nextMeeshPrice: 16_556) == (16_556, 3311))
         #expect(GameChest.bonusAmounts(nextMeeshPrice: -3) == (0, 0))
-        #expect(GameChest.content(forEffort: 300, nextMeeshPrice: 1587) == ChestContent(points: 500, glory: 50, bonusWhole: 1587, bonusFifth: 317))
+        #expect(GameChest.content(forEffort: 300, nextMeeshPrice: 1587, elapsedHours: 23)
+                == ChestContent(points: 500, glory: 1250, earlyGlory: 0, bonusWhole: 1587, bonusFifth: 317))
+    }
+
+    @Test("la Gloire du coffre : une base de 1 250 à 3 000 sur l'effort, et 2 800 à 0 de précocité selon l'heure (#16414)")
+    func chestGloryFollowsEffortAndHour() {
+        #expect(GameChest.baseGlory(forEffort: 0) == 1250)
+        #expect(GameChest.baseGlory(forEffort: 1000) == 1542)
+        #expect(GameChest.baseGlory(forEffort: 2400) == 2125)
+        #expect(GameChest.baseGlory(forEffort: Int.max) == 3000)
+        #expect(GameChest.earlyGlory(elapsedHours: 0) == 2800)
+        #expect(GameChest.earlyGlory(elapsedHours: 1) == 2678)
+        #expect(GameChest.earlyGlory(elapsedHours: 11) == 1461)
+        #expect(GameChest.earlyGlory(elapsedHours: 22) == 122)
+        #expect(GameChest.earlyGlory(elapsedHours: 23) == 0)
+        #expect(GameChest.earlyGlory(elapsedHours: 40) == 0)
+        #expect(GameChest.earlyGlory(elapsedHours: -3) == 2800)
+        #expect(GameChest.content(forEffort: 4500, nextMeeshPrice: 1221, elapsedHours: 0).glory == 5800)
     }
 
     @Test("les fragments d'étoile : un par étape 5, 15, 25, 35, une fois chacune, plus les coffres")
@@ -506,8 +525,9 @@ struct GameLawTests {
         let legacy = Data(#"{"points":140,"fragment":true,"freeze":false}"#.utf8)
         let chest = try JSONDecoder().decode(DailyChest.self, from: legacy)
         #expect(chest == DailyChest(points: 140, fragment: true, freeze: false, glory: 0, bonus: nil, bonusPoints: 0))
-        let current = Data(#"{"points":2327,"fragment":true,"freeze":false,"glory":208,"bonus":"fifth","bonusPoints":244}"#.utf8)
+        let current = Data(#"{"points":2327,"fragment":true,"freeze":false,"glory":4125,"earlyGlory":2800,"bonus":"fifth","bonusPoints":244}"#.utf8)
         let decoded = try JSONDecoder().decode(DailyChest.self, from: current)
+        #expect(decoded.earlyGlory == 2800)
         #expect(decoded.bonus == .fifth)
         #expect(decoded.bonusPoints == 244)
         let unknown = Data(#"{"points":500,"fragment":false,"freeze":false,"bonus":"triple"}"#.utf8)

@@ -4,6 +4,7 @@ import { GlyphSvg, type GlyphShape } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
 import { GLYPHS } from '@/components/glyphs';
+import { THREAD_MENU_GLYPHS } from '@/components/glyphs-thread-menu';
 import { THREAD_STATES_GLYPHS } from '@/components/glyphs-thread-states';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -111,6 +112,7 @@ const GLYPH_OF: Partial<Readonly<Record<StoryActionRailButton, RailGlyphs>>> = {
   forward: { idle: THREAD_STATES_GLYPHS.arrowBendUpRight },
   repost: { idle: FEED_GLYPHS.arrowsClockwise },
   views: { idle: GLYPHS.eye },
+  imager: { idle: THREAD_MENU_GLYPHS.magicWand },
   share: { idle: FEED_GLYPHS.shareNetwork },
   save: { idle: GLYPHS.downloadSimple },
   comments: { idle: FEED_GLYPHS.chatCircle },
@@ -132,6 +134,7 @@ type StoryActionLabelKey = Extract<
   | 'story.action.forward'
   | 'story.action.repost'
   | 'story.action.views'
+  | 'media.viewer.imager'
   | 'story.action.share'
   | 'story.action.save'
   | 'story.action.comments'
@@ -149,6 +152,7 @@ const LABEL_OF: Readonly<Record<StoryActionRailButton, StoryActionLabelKey>> = {
   forward: 'story.action.forward',
   repost: 'story.action.repost',
   views: 'story.action.views',
+  imager: 'media.viewer.imager',
   share: 'story.action.share',
   save: 'story.action.save',
   comments: 'story.action.comments',

@@ -75,7 +75,7 @@ class SceneOverflowMenuTest {
                 Box(Modifier.fillMaxSize()) {
                     Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(44.dp)) {
                         SceneOverflowMenu(expanded = true, onDismissRequest = {}, position = { gap -> Recording(gap).also { recording = it } }) {
-                            StoryVideoExportMenuEntries(onPick = {})
+                            StoryVideoExportMenuEntries(onPick = {}, onImager = {})
                         }
                     }
                 }

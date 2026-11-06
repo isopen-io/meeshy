@@ -1,5 +1,6 @@
 import { AuthBrandFooter, AuthTitle } from '@/components/auth-chrome';
 import { AuthColumn } from '@/components/auth-column';
+import { AuthHeader } from '@/components/auth-header';
 import { welcomeStore } from '@/lib/welcome';
 import { Link } from '@/routes/route-table';
 
@@ -20,7 +21,8 @@ const CREATE_ACCOUNT_GRADIENT = 'linear-gradient(135deg, var(--ios-indigo-500), 
 
 export default function WelcomeScreen() {
   return (
-    <AuthColumn className="items-center px-6 py-10">
+    <AuthColumn className="items-center px-6 pb-10">
+      <AuthHeader back="home" />
       <div className="flex flex-1 flex-col items-center justify-center gap-4">
         <AuthTitle gradient="brand" />
         <p className="mt-3 px-8 text-center text-body" style={{ color: 'var(--color-ios-ink-2)' }}>

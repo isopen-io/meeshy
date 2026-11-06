@@ -368,11 +368,7 @@ struct StoryHeaderView: View {
                 moodEmoji: moodEmojiResolver?(user.userId ?? ""),
                 onMoodTap: moodTapResolver?(user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                postsContent: { uid in AnyView(ProfileUserPostsList(
-                    userId: uid,
-                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
-                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }, dependencies: .live
+                postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
@@ -494,7 +490,7 @@ struct StoryHeaderView: View {
                     demanderComposer(cible)
                 } label: {
                     Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main),
-                          systemImage: "wand.and.stars")
+                          systemImage: FullscreenChromeSymbol.compose)
                 }
             }
         case .share:
@@ -514,7 +510,7 @@ struct StoryHeaderView: View {
             if let story = currentStory {
                 Button {
                     HapticFeedback.light()
-                    StoryPhotoSaveService.shared.image(story: story, author: currentGroup.map { StoryExportAuthor.served(from: $0) })
+                    MessageCardExportPresenter.present(ImagerCardRequest.story(story, author: currentGroup.map { StoryExportAuthor.served(from: $0) }, accentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex))
                 } label: {
                     Label(MessageCardExportMenu.imageLabel, systemImage: MessageCardExportMenu.imageSymbol)
                 }

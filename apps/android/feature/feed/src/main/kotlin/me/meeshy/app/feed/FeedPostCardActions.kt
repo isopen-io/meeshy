@@ -56,6 +56,7 @@ internal fun PostStatsRow(
     modifier: Modifier = Modifier,
     overMedia: Boolean = false,
     onSend: (() -> Unit)? = null,
+    onImager: (() -> Unit)? = rememberPostImager(post),
 ) {
     val neutral = if (overMedia) MeeshyPalette.White else MeeshyTheme.tokens.textSecondary
     val accent = if (overMedia) null else post.accentHex?.let { hexColor(it) }?.takeIf { it != Color.Unspecified }
@@ -127,6 +128,7 @@ internal fun PostStatsRow(
                 onClick = send,
             )
         }
+        onImager?.let { ImagerWand(onClick = it, tint = neutral) }
     }
 }
 

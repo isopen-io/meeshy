@@ -325,6 +325,7 @@ internal fun ChatListHost(
                 }
             },
             onOpenJoinProfile = { bubble -> bubble.joinNotice?.toProfileSheetUser()?.let(profileTap) },
+            onGreetArrivals = actions.greetArrivals,
             onCallBack = { bubble ->
                 val isVideo = bubble.callSummary?.callType == me.meeshy.sdk.model.CallSummaryMetadata.MediaType.VIDEO
                 host.navigation.onStartCall(state.conversationTitle.orEmpty(), isVideo)
@@ -463,6 +464,7 @@ internal fun ChatListHost(
                 state = state,
                 clearance = LocalChatSignalClearance.current,
                 closure = host.composerClosure,
+                openCard = host.sheets.openExportCard,
             ),
         )
         else -> Unit

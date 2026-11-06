@@ -1,6 +1,9 @@
 package me.meeshy.app.chat.export
 
+import androidx.compose.runtime.State
+import java.io.File
 import me.meeshy.sdk.model.card.PostCommentCardMedia
+import me.meeshy.sdk.model.composer.scene.SceneExportPlan
 import me.meeshy.sdk.model.card.PostCommentCardMediaKind
 import me.meeshy.sdk.model.card.PostCommentCardPart
 import me.meeshy.sdk.model.card.PostCommentCardSubject
@@ -19,6 +22,8 @@ internal interface CardSource {
 
     /** Le contenu a-t-il encore le droit de partir ? Faux : l'atelier se ferme au lieu de peindre l'instantané. */
     fun stillAllowed(nowMillis: Long): Boolean
+
+    val preparing: Boolean get() = false
 }
 
 /** Un message de la conversation : sa garde se relit à chaque peinture (supprimé, rendu éphémère, protégé). */
@@ -39,6 +44,34 @@ internal class ComposedCardSource(override val key: String, private val card: Ca
     override fun subject(language: String?): CardSubject = card
     override fun stillAllowed(nowMillis: Long): Boolean = true
 }
+
+sealed interface SceneCardRender {
+    data object Pending : SceneCardRender
+    data class Ready(val path: String) : SceneCardRender
+    data object Failed : SceneCardRender
+}
+
+internal class RenderingCardSource(
+    override val key: String,
+    private val card: CardSubject,
+    private val render: State<SceneCardRender?>,
+) : CardSource {
+    override val languages: List<CardLanguage> = emptyList()
+    override fun subject(language: String?): CardSubject = when (val current = render.value) {
+        is SceneCardRender.Ready -> card.copy(hero = sceneMedia(key, current.path))
+        else -> card
+    }
+    override fun stillAllowed(nowMillis: Long): Boolean = true
+    override val preparing: Boolean get() = render.value == SceneCardRender.Pending
+}
+
+internal fun sceneMedia(key: String, path: String): CardMedia {
+    val kind = if (SceneExportPlan.mimeType(path).startsWith("video/")) CardMediaKind.VIDEO else CardMediaKind.IMAGE
+    return CardMedia(id = "scene:$key", kind = kind, url = File(path).toURI().toString(), aspect = CardMediaPicking.aspectOf(SCENE_WIDTH, SCENE_HEIGHT))
+}
+
+private const val SCENE_WIDTH = 9
+private const val SCENE_HEIGHT = 16
 
 /**
  * La carte d'un commentaire, composée par `PostCommentCardComposition`, telle que le moteur de carte la peint : le visuel
