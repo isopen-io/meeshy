@@ -42,9 +42,7 @@ struct SettingsView: View {
     /// Ouverte par un indicateur (#16418) : sans profil, l'assistant suit.
     @State private var voiceManageOpensWizard = false
     @State private var showMediaDownload = false
-    @State private var showPacks = false
-    @State private var packsInitialDomain: PackDomain?
-    @State private var packsFocusedPack: String?
+    @State private var packsRequest: PackShopLauncher.Request?
     @ObservedObject private var packShopLauncher: PackShopLauncher
     init(prefs: UserPreferencesManager = .shared, packShopLauncher: PackShopLauncher = .shared) {
         self.prefs = prefs
@@ -177,13 +175,10 @@ struct SettingsView: View {
             .sheet(isPresented: $showSupport) { SupportView() }
             .sheet(isPresented: $showDataStorage) { DataStorageView() }
             .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
-            .sheet(isPresented: $showPacks) { PacksSettingsView(initialDomain: packsInitialDomain, focusedPack: packsFocusedPack) }
+            .sheet(item: $packsRequest) { PacksSettingsView(initialDomain: $0.domain, focusedPack: $0.pack, initialPage: $0.page) }
             .onReceive(SettingsFocusRequest.shared.$pending.compactMap { $0 }, perform: receiveFocus)
             .onReceive(packShopLauncher.$pending.compactMap { $0 }) { _ in
-                let request = packShopLauncher.consume()
-                packsInitialDomain = request?.domain
-                packsFocusedPack = request?.pack
-                showPacks = true
+                packsRequest = packShopLauncher.consume()
             }
             .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
     }
@@ -651,9 +646,7 @@ struct SettingsView: View {
 
             Button {
                 HapticFeedback.light()
-                packsInitialDomain = nil
-                packsFocusedPack = nil
-                showPacks = true
+                packsRequest = PackShopLauncher.Request(domain: nil, pack: nil)
             } label: {
                 settingsRow(icon: "shippingbox.fill", title: String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
@@ -663,6 +656,20 @@ struct SettingsView: View {
             }
             .accessibilityLabel(String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main))
             .accessibilityHint(String(localized: "settings.packs.hint", defaultValue: "Installe ou retire des packs de stickers et de cadres du jeu", bundle: .main))
+
+            Button {
+                HapticFeedback.light()
+                packsRequest = PackShopLauncher.Request(domain: nil, pack: nil, page: .mine)
+            } label: {
+                settingsRow(icon: "square.stack.3d.up.fill", title: String(localized: "settings.packs.mine", defaultValue: "Mes packs", bundle: .main), color: MeeshyColors.warningHex) {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel(String(localized: "settings.packs.mine", defaultValue: "Mes packs", bundle: .main))
+            .accessibilityHint(String(localized: "settings.packs.mine.hint", defaultValue: "Les packs que tu as installés, rangés par catégorie", bundle: .main))
+            .accessibilityIdentifier("settings.packs.mine")
 
             Button {
                 HapticFeedback.light()

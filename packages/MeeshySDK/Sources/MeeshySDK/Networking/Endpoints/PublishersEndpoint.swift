@@ -14,12 +14,14 @@ import Foundation
 public enum PublishersEndpoint: MeeshyEndpoint, Sendable {
     case admin
     case bySlug(slug: String)
+    case bySlugPage(slug: String)
     case me
 
     public var path: String {
         switch self {
         case .admin: return "/api/v1/publishers/admin"
         case .bySlug(let slug): return "/api/v1/publishers/\(slug)"
+        case .bySlugPage(let slug): return "/api/v1/publishers/\(slug)/page"
         case .me: return "/api/v1/publishers/me"
         }
     }

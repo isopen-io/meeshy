@@ -121,8 +121,10 @@ class RouteManifestRatchetTest {
          * que porte `MessageChatRestApi.translations`.
          * 128 : plus `GET /publishers/:slug` et `GET /publishers/me` (#16378 : un éditeur de packs est un compte Meeshy
          * vérifié), servies par la passerelle ; la boutique d'Android les portera. `GET /publishers/admin` est console.
+         * 129 : plus `GET /publishers/:slug/page` (#16433 : la page éditeur nomme le profil qui édite) ; iOS la porte,
+         * Android la portera avec sa page éditeur.
          */
-        const val TO_PORT_CEILING = 128
+        const val TO_PORT_CEILING = 129
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

@@ -747,6 +747,12 @@ final class Router: ObservableObject {
         replaceStack(with: .settings)
     }
 
+    /// Ouvre Réglages puis « Mes packs » (#16433).
+    func openMyPacks() {
+        PackShopLauncher.shared.request(domain: nil, page: .mine)
+        replaceStack(with: .settings)
+    }
+
     // MARK: - Conversation Deep Link
 
     /// Ouvre une conversation via deep link et dépose un brouillon si fourni.

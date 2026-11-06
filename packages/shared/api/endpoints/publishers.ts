@@ -18,5 +18,8 @@ export const admin = '/api/v1/publishers/admin';
 /** GET /api/v1/publishers/:slug */
 export const bySlug = (slug: string): string => `/api/v1/publishers/${encodeURIComponent(slug)}`;
 
+/** GET /api/v1/publishers/:slug/page */
+export const bySlugPage = (slug: string): string => `/api/v1/publishers/${encodeURIComponent(slug)}/page`;
+
 /** GET /api/v1/publishers/me */
 export const me = '/api/v1/publishers/me';
