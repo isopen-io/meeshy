@@ -48,7 +48,7 @@ struct ComposerViewfinder: View {
          onCapture: @escaping (CameraResult) -> Void) {
         self.initialMode = initialMode
         self.onCapture = onCapture
-        _capture = StateObject(wrappedValue: ComposerCaptureSession(
+        _capture = StateObject(wrappedValue: ComposerWarmCapture.session(
             stage: .armed, mode: ComposerViewfinderRules.sceneMode(for: initialMode)))
     }
 
@@ -68,7 +68,7 @@ struct ComposerViewfinder: View {
             if life.attach(), !life.settled {
                 ComposerCaptureCoverLife.reattach(capture, mode: ComposerViewfinderRules.sceneMode(for: initialMode))
             }
-            camera.configure()
+            camera.configure(filming: initialMode == .video)
             capture.watchThermalState()
             // La porte qui promet la vidéo arme le micro À L'OUVERTURE : le
             // prompt n'arrive pas sous le doigt qui veut déjà filmer.

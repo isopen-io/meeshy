@@ -7,7 +7,7 @@ import MeeshySDK
 import MeeshyUI
 
 @MainActor
-final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProviding {
+final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProviding, CameraWarmable {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
@@ -54,6 +54,12 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     @Published var isTakingPhoto = false
     @Published var isRecordingVideo = false
     @Published var recordingDuration: TimeInterval = 0
+    /// Un tic par obturateur PARTI (`willCapturePhotoFor`) : le cadre blanchit
+    /// à cet instant, jamais à la fin du traitement (#16482).
+    @Published private(set) var shutterCount = 0
+    /// Un tic par toucher qui photographie : le déclencheur se contracte tout
+    /// de suite, avant même que l'objectif ne prenne (#16482).
+    @Published private(set) var shutterPresses = 0
     /// État de l'autorisation caméra. `.denied`/`.restricted` fait rendre à la
     /// vue un panneau « Ouvrir les Réglages » au lieu d'un preview noir muet.
     @Published private(set) var permission: MediaPermissionState = .notDetermined
@@ -106,6 +112,12 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// La session audio d'un enregistrement : posée par la loi, plus
     /// par la capture elle-même.
     let recordingSession: MeeshyRecordingSession = .shared
+    /// La dernière ouverture demandée : fermer l'annule, sinon la réponse de la
+    /// permission allumerait l'objectif d'une caméra gardée, sans viseur.
+    var openingGeneration = 0
+    /// La caméra sort de la garde : un appel a pu écrire format et zoom sur
+    /// l'appareil partagé depuis sa remise.
+    private var lensWasHandedBack = false
     /// La dernière remise de session demandée : un viseur qui revient avant
     /// qu'elle ne s'exécute l'annule.
     private var sessionHandBackGeneration = 0
@@ -128,6 +140,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         super.init()
     }
     #endif
+    /// Du toucher à l'obturateur, relevé pour la recette sur appareil (#16504).
+    nonisolated let shutterClock = ComposerShutterClock()
+    private(set) var lastShutterDelay: Int?
     /// Publiée : le sol blanc du flash avant suit l'objectif actif.
     @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
     /// Une bascule d'objectif est en cours : le bouton se tait.
@@ -182,7 +197,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// noir permanent sans le moindre indice.
     ///
     /// Le micro n'est PAS demandé ici — voir `enableAudioCaptureIfNeeded()`.
-    func configure() {
+    func configure(filming: Bool = false) {
         forgetStaleRecording()
         #if DEBUG
         if let fixture {
@@ -191,14 +206,16 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             return
         }
         #endif
+        firstFrameClock.start(prewarmed: sessionIsPrepared)
+        let ouverture = beginOpening()
         Task { @MainActor [weak self] in
             let state = await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false)
                 ? MediaPermissionState.granted
                 : MediaPermissionState.camera
             guard let self else { return }
             self.permission = state
-            guard state.isUsable else { return }
-            self.setupSession()
+            guard state.isUsable, self.openingIsCurrent(ouverture) else { return }
+            self.setupSession(filming: filming)
         }
     }
 
@@ -211,23 +228,38 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     func prewarm() {
         guard !runsFixture, AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
         prepareSession()
+        prepareFrontLens()
     }
 
     /// Arme, puis lance : la configuration n'est faite qu'UNE fois par modèle —
     /// un ré-armement ne retire ni ne repose rien, il garde l'objectif
     /// choisi et démarre. Le micro déjà autorisé entre avant le lancement.
-    private func setupSession() {
+    private func setupSession(filming: Bool) {
+        let micro = microphoneArmsAtSetup(filming: filming)
         let prechauffee = sessionIsPrepared
-        prepareSession()
+        prepareSession(withMicrophone: micro)
+        if lensWasHandedBack {
+            lensWasHandedBack = false
+            reclaimLensAfterHandBack()
+        }
         reclaimRecordingSessionIfArmed()
-        armMicrophoneAtSetup()
-        firstFrameClock.start(prewarmed: prechauffee)
+        armMicrophoneAtSetup(micro, inPreparedSession: prechauffee)
+        if let activeVideoDevice { watchSubjectArea(of: activeVideoDevice) }
         sessionQueue.setRunning(true, session)
+        prepareFrontLens()
+    }
+
+    /// L'autre objectif attend le lancement : bâtir son entrée retarderait la
+    /// première trame du viseur (#16504).
+    private func prepareFrontLens() {
+        sessionQueue.perform { [weak self] in
+            self?.preparedInputs.prepare(.front) { CameraInputInstaller.videoInput(position: .front) }
+        }
     }
 
     /// La configuration se fait sur la file de la session ; l'objectif installé
     /// revient au fil principal, dans l'ordre de la file.
-    private func prepareSession() {
+    private func prepareSession(withMicrophone micro: Bool = false) {
         observeSessionHealth()
         guard !sessionIsPrepared else { return }
         sessionIsPrepared = true
@@ -248,32 +280,111 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             if self.session.canAddOutput(self.frameOutput) { self.session.addOutput(self.frameOutput) }
             let installe = CameraInputInstaller.installVideoInput(in: self.session, position: .back, outputs: self.orientedOutputs,
                                                   prepared: self.preparedInputs,
-                                                  previewWanted: self.previewMirroring.isWanted)
+                                                  previewWanted: self.previewMirroring.isWanted,
+                                                  photoPlan: { CameraPhotoTuning.adopt(for: $0, on: self.photoOutput) })
+            let audio = micro && Self.addAudioInput(to: self.session)
             self.session.commitConfiguration()
+            if let device = installe?.device { CameraPhotoTuning.confirm(self.photoOutput, in: self.session, for: device) }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let installe { self.adopt(installe) }
+                    if audio { self.hasAudioInput = true }
                     self.inputEpoch += 1
                 }
             }
-            self.preparedInputs.prepare(.front) { CameraInputInstaller.videoInput(position: .front) }
         }
     }
 
     /// Le micro déjà autorisé entre dans la session ARRÊTÉE, jamais
     /// pendant qu'une musique joue ; décidé à l'armement, pas à la préparation.
-    private func armMicrophoneAtSetup() {
-        guard !hasAudioInput, CameraAudioArming.armsAtSetup(
+    /// Une ouverture en photo le retire s'il reste de la prise précédente.
+    private func microphoneArmsAtSetup(filming: Bool) -> Bool {
+        guard filming else {
+            disarmMicrophoneForPhoto()
+            return false
+        }
+        guard !hasAudioInput else { return false }
+        return CameraAudioArming.armsAtSetup(
             microphone: AVCaptureDevice.authorizationStatus(for: .audio),
-            otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying) else { return }
+            otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying, filming: filming)
+    }
+
+    /// Une session neuve a reçu son micro dans sa transaction initiale ; une
+    /// session déjà préparée le reçoit à part, toujours avant son lancement.
+    private func armMicrophoneAtSetup(_ micro: Bool, inPreparedSession prechauffee: Bool) {
+        guard micro else { return }
         recordingSession.prepare(.video)
+        guard prechauffee else { return }
         sessionQueue.perform { [weak self] in
             guard let self else { return }
             self.session.beginConfiguration()
-            let micro = Self.addAudioInput(to: self.session)
+            let audio = Self.addAudioInput(to: self.session)
             self.session.commitConfiguration()
-            guard micro else { return }
+            guard audio else { return }
             DispatchQueue.main.async { MainActor.assumeIsolated { self.hasAudioInput = true } }
+        }
+    }
+
+    private func disarmMicrophoneForPhoto() {
+        guard hasAudioInput else { return }
+        hasAudioInput = false
+        sessionQueue.perform { [weak self] in
+            guard let self else { return }
+            self.session.beginConfiguration()
+            self.session.inputs.compactMap { $0 as? AVCaptureDeviceInput }
+                .filter { $0.device.hasMediaType(.audio) }
+                .forEach(self.session.removeInput)
+            self.session.commitConfiguration()
+        }
+    }
+
+    /// **La caméra revient comme neuve pour le viseur suivant** (#16504) : aucune
+    /// prise du précédent, pas de micro, objectif arrière à ×1. La session reste
+    /// arrêtée et le travail se fait sur sa file, hors du chemin de l'ouverture.
+    func rewindForNewHolder() {
+        cancelOpening()
+        lensWasHandedBack = true
+        capturedPhoto = nil
+        capturedPhotoData = nil
+        capturedVideoURL = nil
+        capturedPhotoId = nil
+        capturedVideoId = nil
+        abandonedRecordingId = nil
+        librarySave = nil
+        disarmMicrophoneForPhoto()
+        #if DEBUG
+        guard fixture == nil else {
+            currentPosition = .back
+            liveFeed.setPosition(.back)
+            return
+        }
+        #endif
+        guard sessionIsPrepared else { return }
+        zoomFactor = 1
+        let derriere = currentPosition == .back
+        sessionQueue.perform { [weak self] in
+            guard let self else { return }
+            guard !derriere else { return CameraInputInstaller.reopenLens(in: self.session) }
+            let installe = self.swapLens(to: .back)
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.publishLens(installe) } }
+        }
+    }
+
+    /// **La caméra gardée reprend son objectif** (#16504). Un appel sur le même
+    /// appareil écrit `activeFormat` et `videoZoomFactor` : la session passe en
+    /// `.inputPriority` et garderait son format, et l'affichage dirait ×1 sur un
+    /// autre cadrage. Sur la file de la session, avant le lancement.
+    func reclaimLensAfterHandBack() {
+        sessionQueue.perform { [weak self] in
+            guard let self else { return }
+            if self.session.sessionPreset != .high, self.session.canSetSessionPreset(.high) {
+                self.session.beginConfiguration()
+                self.session.sessionPreset = .high
+                self.session.commitConfiguration()
+                let entree = self.session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
+                if let device = entree?.device { CameraPhotoTuning.confirm(self.photoOutput, in: self.session, for: device) }
+            }
+            CameraInputInstaller.reopenLens(in: self.session)
         }
     }
 
@@ -421,6 +532,21 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
     }
 
+    /// Sur la file de la session : l'objectif change, son plan de photo avec lui.
+    nonisolated private func swapLens(to position: AVCaptureDevice.Position) -> CameraInputInstaller.InstalledCamera? {
+        let installe = CameraInputInstaller.installVideoInput(in: session, position: position, outputs: orientedOutputs,
+                                                  prepared: preparedInputs,
+                                                  previewWanted: previewMirroring.isWanted,
+                                                  photoPlan: { CameraPhotoTuning.adopt(for: $0, on: self.photoOutput) })
+        if let device = installe?.device { CameraPhotoTuning.confirm(photoOutput, in: session, for: device) }
+        return installe
+    }
+
+    private func publishLens(_ installe: CameraInputInstaller.InstalledCamera?) {
+        if let installe { adopt(installe) }
+        self.inputEpoch += 1
+    }
+
     /// La bascule se fait sur la file ; `then` passe sur le fil principal une
     /// fois l'objectif publié. La trame de couverture est celle déjà retenue,
     /// et son flou se peint À CÔTÉ de la bascule, jamais devant elle.
@@ -440,14 +566,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             if let trame {
                 self.paintCover(ComposerCameraSwitchRule.Frame(image: trame), generation: generation, leaving: quitte)
             }
-            let installe = CameraInputInstaller.installVideoInput(in: self.session, position: position, outputs: self.orientedOutputs,
-                                                  prepared: self.preparedInputs,
-                                                  previewWanted: self.previewMirroring.isWanted)
+            let installe = self.swapLens(to: position)
             let posee = CACurrentMediaTime()
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    if let installe { self.adopt(installe) }
-                    self.inputEpoch += 1
+                    self.publishLens(installe)
                     func ms(_ a: CFTimeInterval, _ b: CFTimeInterval) -> Int {
                         ComposerCameraSwitchTiming.milliseconds(from: a, to: b)
                     }
@@ -495,7 +618,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     func takePhoto(flash: AVCaptureDevice.FlashMode) {
         #if DEBUG
         if let fixture {
-            if !isSwitchingCamera { deliverFixturePhoto(fixture) }
+            guard !isSwitchingCamera else { return }
+            noteShutterFired()
+            deliverFixturePhoto(fixture)
             return
         }
         #endif
@@ -508,10 +633,10 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             connectionIsActive: connection?.isActive ?? false,
             connectionIsEnabled: connection?.isEnabled ?? false
         ) else { return }
-        let settings = AVCapturePhotoSettings()
-        if photoOutput.supportedFlashModes.contains(flash) {
-            settings.flashMode = flash
-        }
+        let settings = CameraPhotoTuning.settings(
+            flash: flash, supportedFlashModes: photoOutput.supportedFlashModes,
+            outputMaxPhotoDimensions: CameraPhotoDimensions(photoOutput.maxPhotoDimensions),
+            formatMaxPhotoDimensions: photoOutput.sourceMaxPhotoDimensions)
         horizon.level(connection)
         isTakingPhoto = true
         photoOutput.capturePhoto(with: settings, delegate: self)
@@ -725,6 +850,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("video_\(UUID().uuidString).mov")
         segmentTokens[tempURL] = recordingId
+        horizon.level(videoOutput.connection(with: .video))
         videoOutput.startRecording(to: tempURL, recordingDelegate: self)
         isRecordingVideo = true
         setSmoothFocus(true)
@@ -780,6 +906,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     }
 
     func stop() {
+        cancelOpening()
         #if DEBUG
         fixture?.stop()
         #endif
@@ -898,6 +1025,26 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 // MARK: - Photo Delegate
 
 extension CameraModel: AVCapturePhotoCaptureDelegate {
+    /// **L'obturateur part** : le retour visuel suit cet instant, pas la photo
+    /// traitée qui arrive ensuite (#16482).
+    nonisolated func photoOutput(_ output: AVCapturePhotoOutput, willCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.noteShutterFired() } }
+    }
+
+    /// **Le toucher est entendu** : le bouton se contracte et une haptique
+    /// LÉGÈRE répond au doigt, avant l'attente de l'objectif.
+    func noteShutterPress() {
+        shutterPresses += 1
+        shutterClock.start()
+        HapticFeedback.light()
+    }
+
+    /// Le tic du cadre, et le délai toucher → obturateur, signpost et console.
+    func noteShutterFired() {
+        shutterCount += 1
+        lastShutterDelay = shutterClock.report()
+    }
+
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         guard let original = photo.fileDataRepresentation() else {
             Task { @MainActor in self.isTakingPhoto = false }

@@ -46,12 +46,12 @@ final class ComposerCameraOpeningTests: XCTestCase {
     func test_prewarm_neverPrompts_andTheSessionIsConfiguredOnce() throws {
         let modele = AppSourceGuard.stripComments(try Self.code("Meeshy/Features/Main/Components/CameraModel.swift"))
         let debut = try XCTUnwrap(modele.range(of: "func prewarm()"))
-        let fin = try XCTUnwrap(modele.range(of: "private func setupSession()", range: debut.upperBound..<modele.endIndex))
+        let fin = try XCTUnwrap(modele.range(of: "private func setupSession(", range: debut.upperBound..<modele.endIndex))
         let prechauffe = String(modele[debut.upperBound..<fin.lowerBound])
         XCTAssertTrue(prechauffe.contains("AVCaptureDevice.authorizationStatus(for: .video) == .authorized"),
                       "préparer ne demande jamais l'accès")
         XCTAssertFalse(prechauffe.contains("setRunning"), "préparer ne lance pas : aucun voyant caméra")
-        let preparation = try XCTUnwrap(modele.range(of: "private func prepareSession()"))
+        let preparation = try XCTUnwrap(modele.range(of: "private func prepareSession("))
         let garde = try XCTUnwrap(modele.range(of: "guard !sessionIsPrepared else { return }",
                                                range: preparation.upperBound..<modele.endIndex))
         let configuration = try XCTUnwrap(modele.range(of: "self.session.beginConfiguration()",

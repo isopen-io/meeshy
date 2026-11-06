@@ -30,7 +30,8 @@ nonisolated enum CameraInputInstaller {
         in session: AVCaptureSession, position: AVCaptureDevice.Position,
         outputs: [(AVCaptureOutput, ComposerCaptureMirrorRule.Output)],
         prepared: ComposerCameraPreparedInputs<AVCaptureDeviceInput>,
-        previewWanted: Bool
+        previewWanted: Bool,
+        photoPlan: (AVCaptureDevice) -> Void = { _ in }
     ) -> InstalledCamera? {
         let ancienne = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
         let nouvelle = prepared.take(position) ?? videoInput(position: position)
@@ -43,6 +44,7 @@ nonisolated enum CameraInputInstaller {
             ComposerPreviewMirroring.align(session.connections, wanted: previewWanted)
             guard issue == .swapped, let device = nouvelle?.device, let echelle else { return }
             openLens(device, opening: echelle.opening)
+            photoPlan(device)
         }
         let validee = CACurrentMediaTime()
         prepared.keep(after: resultat, removed: ancienne, at: ancienne?.device.position)
@@ -66,6 +68,14 @@ nonisolated enum CameraInputInstaller {
         } catch {
             Logger.media.error("Lens opening failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// L'objectif en place rouvre comme neuf pour le viseur suivant (#16504) :
+    /// ×1, lumière neutre, netteté continue. Sur la file de la session.
+    static func reopenLens(in session: AVCaptureSession) {
+        let entree = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
+        guard let device = entree?.device else { return }
+        openLens(device, opening: zoomScale(of: device).opening)
     }
 
     private static func openingZoom(of device: AVCaptureDevice, _ opening: CGFloat) -> CGFloat {

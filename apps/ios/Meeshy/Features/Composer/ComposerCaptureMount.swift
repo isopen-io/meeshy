@@ -127,6 +127,10 @@ struct ComposerCaptureMount<Content: View>: View {
         ComposerCaptureStage(session: session, layer: .image, size: taille,
                              onDisarm: onDisarm, onDeliver: onDeliver)
             .frame(width: rect.width, height: rect.height)
+            // Le cadre blanchit quand l'obturateur part (#16482) : sur le CADRE,
+            // car l'image qui se charge n'a pas encore de taille, et sous les
+            // commandes, qui restent lisibles.
+            .overlay { ComposerShutterFlash(tick: session.camera.shutterCount) }
             .position(x: rect.midX, y: rect.midY)
     }
 

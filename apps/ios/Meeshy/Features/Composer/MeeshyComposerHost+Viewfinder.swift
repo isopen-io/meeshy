@@ -144,7 +144,10 @@ extension MeeshyComposerHost {
         }
         sceneCapture.finishCapture()
         HapticFeedback.success()
-        Task { await ingestCameraCapture(result) }
+        Task {
+            if sceneIntakeAllowsAnother, let cadrage = await ComposerTakeAspect.sceneFit(of: result) { applySceneFitMode(cadrage) }
+            await ingestCameraCapture(result)
+        }
     }
 
     /// **Désarmer REND la scène**, et la machine ferme la session et emporte

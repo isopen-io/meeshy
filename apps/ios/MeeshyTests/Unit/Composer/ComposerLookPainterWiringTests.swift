@@ -90,8 +90,10 @@ final class ComposerLookPainterWiringTests: XCTestCase {
     /// Ce qui part a les proportions de ce qu'on voyait : photo, vidéo, galerie.
     func test_everyOutput_isRenderedAtTheViewfinderProportions() throws {
         let prises = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Takes.swift")
-        XCTAssertEqual(prises.components(separatedBy: "aspect: proportions").count - 1, 2,
-                       "la photo et la vidéo de la galerie partent aux proportions du viseur")
+        XCTAssertEqual(prises.components(separatedBy: "aspect: proportions").count - 1, 1,
+                       "la photo de la galerie part aux proportions du viseur")
+        XCTAssertTrue(prises.contains("ComposerTakeAspect.aspect(canvas: proportions, video: url)"),
+                      "la vidéo de la galerie aussi, tournées si elle a été tenue en paysage")
         let edition = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertTrue(edition.contains("renderPhoto(photo, look: regard, framing: cadrage, aspect: proportions"),
                       "la photo retouchée part aux proportions du viseur")

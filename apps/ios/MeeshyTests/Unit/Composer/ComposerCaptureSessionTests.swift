@@ -158,19 +158,19 @@ final class ComposerCaptureSessionTests: XCTestCase {
     // MARK: - L'image reste à l'écran au déclenchement (#9328)
 
     func test_micro_dejaAutorise_entreDansLaSessionALOuverture() {
-        XCTAssertTrue(CameraAudioArming.armsAtSetup(microphone: .authorized, otherAudioPlaying: false),
+        XCTAssertTrue(CameraAudioArming.armsAtSetup(microphone: .authorized, otherAudioPlaying: false, filming: true),
                       "brancher le micro sur la session lancée la reconfigure et noircit l'aperçu au déclenchement")
     }
 
     func test_micro_jamaisDemande_attendQueLeSonServe() {
-        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .notDetermined, otherAudioPlaying: false),
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .notDetermined, otherAudioPlaying: false, filming: true),
                        "aucun prompt micro à l'ouverture d'un viseur photo")
-        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .denied, otherAudioPlaying: false))
-        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .restricted, otherAudioPlaying: false))
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .denied, otherAudioPlaying: false, filming: true))
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .restricted, otherAudioPlaying: false, filming: true))
     }
 
     func test_micro_uneMusiqueJoue_ouvrirLeViseurNeLaCoupePas() {
-        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .authorized, otherAudioPlaying: true),
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .authorized, otherAudioPlaying: true, filming: true),
                        "le micro bascule la session audio : il attend la prise, comme l'appareil photo")
     }
 
@@ -180,15 +180,15 @@ final class ComposerCaptureSessionTests: XCTestCase {
         // Depuis #10307 la configuration de l'objectif n'est faite qu'une fois par modèle
         // (prepareSession) ; le micro autorisé entre à l'ARMEMENT, dans la session encore
         // arrêtée — avant le lancement, jamais après.
-        let debut = try XCTUnwrap(camera.range(of: "private func setupSession()"))
-        let fin = try XCTUnwrap(camera.range(of: "private func prepareSession()", range: debut.upperBound..<camera.endIndex))
+        let debut = try XCTUnwrap(camera.range(of: "private func setupSession("))
+        let fin = try XCTUnwrap(camera.range(of: "private func prepareSession(", range: debut.upperBound..<camera.endIndex))
         let armement = String(camera[debut.upperBound..<fin.lowerBound])
-        let micro = try XCTUnwrap(armement.range(of: "armMicrophoneAtSetup()"),
+        let micro = try XCTUnwrap(armement.range(of: "armMicrophoneAtSetup("),
                                   "l'armement branche le micro autorisé")
         let lancement = try XCTUnwrap(armement.range(of: "setRunning(true"), "l'armement lance la session")
         XCTAssertLessThan(micro.lowerBound, lancement.lowerBound,
                           "le micro autorisé entre dans la session ARRÊTÉE, avant son lancement")
-        let regle = try XCTUnwrap(camera.range(of: "private func armMicrophoneAtSetup()"))
+        let regle = try XCTUnwrap(camera.range(of: "private func microphoneArmsAtSetup("))
         XCTAssertTrue(camera[regle.upperBound...].prefix(400).contains("CameraAudioArming.armsAtSetup("),
                       "seul un micro déjà autorisé entre à l'armement (#9328)")
     }

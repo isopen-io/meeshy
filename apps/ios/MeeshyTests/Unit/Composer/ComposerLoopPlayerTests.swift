@@ -196,7 +196,7 @@ final class ComposerLoopPlayerTestsDoor {
 @MainActor
 final class MockComposerLoopPlayer: ComposerLoopPlayerProviding, @unchecked Sendable {
     let duration: TimeInterval
-    let uprightSize = CGSize(width: 1080, height: 1920)
+    let uprightSize: CGSize
     nonisolated var declaredSpace: CGColorSpace? { nil }
     private(set) var configuredFPS: Int?
     private(set) var playCount = 0
@@ -212,9 +212,10 @@ final class MockComposerLoopPlayer: ComposerLoopPlayerProviding, @unchecked Send
 
     nonisolated deinit {}
 
-    init(duration: TimeInterval, hasAudio: Bool = true) {
+    init(duration: TimeInterval, hasAudio: Bool = true, uprightSize: CGSize = CGSize(width: 1080, height: 1920)) {
         self.duration = duration
         self.hasAudio = hasAudio
+        self.uprightSize = uprightSize
     }
 
     nonisolated func latestImage() -> CIImage? {
