@@ -149,8 +149,12 @@ nonisolated enum MessageListHeightEstimationLaw {
     ///     égales à l'estimation courante pour les autres — ce qui STABILISE
     ///     la loi au lieu de la biaiser).
     ///   - current: l'estimation actuellement servie au layout.
-    static func proposal(visibleHeights: [CGFloat], current: CGFloat) -> CGFloat? {
-        guard visibleHeights.count >= minimumSamples else { return nil }
+    ///   - alreadyLearned: le fil a déjà appris une estimation (#16459). La
+    ///     médiane de la FENÊTRE suit ce qu'on regarde — photos, puis texte — et
+    ///     chaque adoption repositionne tout le contenu : mesuré sur iPhone,
+    ///     dix adoptions en 70 s, chacune un saut. On apprend une fois.
+    static func proposal(visibleHeights: [CGFloat], current: CGFloat, alreadyLearned: Bool = false) -> CGFloat? {
+        guard !alreadyLearned, visibleHeights.count >= minimumSamples else { return nil }
         let candidate = min(maximumEstimate, max(minimumEstimate, median(of: visibleHeights)))
         guard abs(candidate - current) >= adoptionThreshold else { return nil }
         return candidate

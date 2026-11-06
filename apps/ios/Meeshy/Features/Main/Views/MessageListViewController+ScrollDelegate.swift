@@ -179,7 +179,8 @@ extension MessageListViewController: UICollectionViewDelegate {
         }
         guard let adopted = MessageListHeightEstimationLaw.proposal(
             visibleHeights: visibleHeights,
-            current: currentRowHeightEstimate
+            current: currentRowHeightEstimate,
+            alreadyLearned: (readingMode.usesFlatRow ? learnedFlatRowHeight : learnedBubbleRowHeight) != nil
         ) else { return }
         if readingMode.usesFlatRow {
             learnedFlatRowHeight = adopted
