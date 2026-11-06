@@ -97,9 +97,9 @@ public enum PendingCopySweep {
             arguments: [Data("pending-".utf8)]
         )
         return bubbles + rows.flatMap { row -> [Data] in
-            let clientMessageId: String = row["clientMessageId"]
+            let clientMessageId: String? = row["clientMessageId"]
             let payload: Data = row["payload"]
-            return [Data(clientMessageId.utf8), payload]
+            return [Data((clientMessageId ?? "").utf8), payload]
         }
     }
 }

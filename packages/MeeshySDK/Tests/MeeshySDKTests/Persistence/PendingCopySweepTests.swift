@@ -228,6 +228,31 @@ final class PendingCopySweepTests: XCTestCase {
     }
 
     /// Si une base ne se lit pas, on ne sait pas ce qu'elle désigne : on n'efface RIEN.
+    /// La colonne est nullable au schéma : une ligne ancienne ne fait pas tomber le démarrage,
+    /// et sa charge désigne encore sa copie.
+    func test_sweep_rowWithoutClientMessageId_stillJudgedByItsPayload() async throws {
+        let stage = try makeStage()
+        let cmid = ClientMessageId.generate()
+        let kept = try stage.copy(in: stage.media, named: cmid)
+        let orphan = try stage.copy(in: stage.media, named: ClientMessageId.generate())
+        let now = Date()
+        try await stage.active.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO outbox (id, kind, conversationId, payload, status, createdAt, updatedAt, nextAttemptAt)
+                    VALUES ('ofq_ancien', 'sendMessage', 'conv', ?, 'pending', ?, ?, ?)
+                    """,
+                arguments: [Data("pending-media/\(cmid)/0.mp4".utf8), now, now, now]
+            )
+        }
+
+        let removed = await stage.sweep()
+
+        XCTAssertEqual(removed, 1)
+        XCTAssertTrue(exists(kept))
+        XCTAssertFalse(exists(orphan))
+    }
+
     func test_sweep_anotherAccountBaseUnreadable_removesNothing() async throws {
         let stage = try makeStage()
         let folder = try stage.copy(in: stage.media, named: ClientMessageId.generate())
