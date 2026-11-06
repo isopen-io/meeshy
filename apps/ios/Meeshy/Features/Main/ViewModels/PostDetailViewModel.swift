@@ -51,6 +51,9 @@ class PostDetailViewModel: ObservableObject {
     /// Commentaire en cours d'ÉDITION (auteur uniquement). Non-nil ⇒ le
     /// composer soumet un PATCH (contenu + effets) au lieu d'une création.
     @Published var editingComment: FeedComment?
+    /// Un envoi refusé par `COMMENTS_DISABLED` (#16541) ferme le composeur sans
+    /// attendre l'écho `post:updated`.
+    @Published var commentsRefusedLocally = false
 
     let postService: PostServiceProviding
     private let socialSocket: any SocialSocketProviding
@@ -732,6 +735,18 @@ class PostDetailViewModel: ObservableObject {
                     actorUserId: event.userId
                 )
             }
+            .store(in: &socketCancellables)
+
+        subscribeToPostUpdates(postId)
+    }
+
+    /// Le post lui-même : ses commentaires fermés ou rouverts (#16541) et ses
+    /// traductions.
+    private func subscribeToPostUpdates(_ postId: String) {
+        socialSocket.postUpdated
+            .receive(on: DispatchQueue.main)
+            .filter { $0.id == postId }
+            .sink { [weak self] served in self?.applyServedCommentClosure(served) }
             .store(in: &socketCancellables)
 
         socialSocket.postTranslationUpdated

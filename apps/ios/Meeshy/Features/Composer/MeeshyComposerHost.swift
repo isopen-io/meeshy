@@ -665,7 +665,7 @@ struct MeeshyComposerHost: View {
     /// La reprise du son des vidéos (#4756) : `nil` tant que l'auteur n'a rien touché.
     @State var soundExtractionChoice: Bool?
     @State var sceneLayout = ComposerSceneLayoutState()
-
+    @State var commentsDisabledChoice = false
 
     /// La sauvegarde automatique de la création en cours.
     @StateObject var autosave = ComposerAutosaveController()

@@ -952,6 +952,6 @@ extension FeedPostCard: Equatable {
             && Self.translatableSignature(of: lhs.post) == Self.translatableSignature(of: rhs.post)
             && lhs.authorMoodEmoji == rhs.authorMoodEmoji
             && lhs.authorStoryRing == rhs.authorStoryRing
-            && lhs.post.authorRing == rhs.post.authorRing
+            && lhs.post.authorRing == rhs.post.authorRing && lhs.post.commentsDisabled == rhs.post.commentsDisabled
     }
 }

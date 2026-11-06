@@ -21,7 +21,7 @@ extension MeeshyComposerHost {
             backgroundMedia: sceneEffectBackground,
             offeredDoors: sceneDoors,
             overflow: documentOverflowEntries,
-            offersSoundReuse: ComposerSoundReuse.isOffered(slides: viewModel.slides)))
+            offersSoundReuse: ComposerSoundReuse.isOffered(slides: viewModel.slides), offersCommentSettings: ComposerCommentSettings.isOffered(format: selectedFormat, origin: intent.origin)))
     }
 
     var sceneMoreMenu: AnyView {
@@ -34,7 +34,7 @@ extension MeeshyComposerHost {
                     onEntry: { performMore($0) },
                     onAnimation: { toggleSceneAnimation() },
                     onTimeline: { toggleSceneFrise() },
-                    soundReuseAllowed: ComposerSoundReuse.isAllowed(soundExtractionChoice))
+                    soundReuseAllowed: ComposerSoundReuse.isAllowed(soundExtractionChoice), commentsDisabled: commentsDisabledChoice)
             }
         )
     }
@@ -55,6 +55,7 @@ extension MeeshyComposerHost {
         case .clearAll: sceneClearAllAsked = true
         case .slideDuration: presentedPortal = .slideDuration
         case .soundReuse: soundExtractionChoice = ComposerSoundReuse.toggled(soundExtractionChoice)
+        case .commentsOff: commentsDisabledChoice.toggle()
         case .animation, .hashtags: break
         }
     }

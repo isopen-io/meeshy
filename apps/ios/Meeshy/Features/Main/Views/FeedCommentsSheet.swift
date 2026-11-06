@@ -59,6 +59,9 @@ struct CommentsSheetView: View {
     /// fermeture — l'ordre onDismiss/onDisappear devient indifférent.
     @State private var claimedActivePost: Bool = false
     @State private var didConsumeInitialReplyTarget = false
+    /// Commentaires fermés (#16541) : la barre cède la place à la ligne
+    /// « Les commentaires sont désactivés ». Relue à chaque `post:updated`.
+    @State private var closure: CommentsClosureState
     /// Le fil — racines, réponses, dépliage, pagination et compteur — tenu
     /// par le view model partagé avec le détail et la story (#13133).
     @StateObject var thread: CommentThreadViewModel
@@ -142,6 +145,7 @@ struct CommentsSheetView: View {
             context: .post(id: post.id)
         ))
         _thread = StateObject(wrappedValue: CommentThreadViewModel(entity: entity ?? .post(post.id), embedded: post.comments))
+        _closure = State(initialValue: CommentsClosureState(served: post.commentsClosed))
     }
 
     private var comments: [FeedComment] { thread.roots }
@@ -317,7 +321,7 @@ struct CommentsSheetView: View {
                             )
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        commentComposer.foldableComment(isReplying: replyingTo != nil)
+                        commentComposer.foldableComment(isReplying: replyingTo != nil).replacedWhenCommentsClosed(closure.isClosed)
                     }
                     .keepsComposerBelowSheetHeader(detent: $sheetDetent)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
@@ -378,6 +382,10 @@ struct CommentsSheetView: View {
             }
         }
         .unsentComments(restore: { await restoreUnsentComments() }, discard: { discardUnsentComment($0) }, draft: $composerText)
+        .onReceive(SocialSocketManager.shared.postUpdated.receive(on: DispatchQueue.main)) { updated in
+            guard updated.id == post.id else { return }
+            closure.serve(updated.commentsClosed)
+        }
         .onDisappear {
             delays.cancelAll()
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
@@ -747,7 +755,7 @@ struct CommentsSheetView: View {
                 onCommentSent?(post.id)
             case .refused(let cause):
                 liveCommentCount = max((liveCommentCount ?? post.commentCount) - 1, 0)
-                if !DailyGestureLimitNotice.surface(cause) { showSendError() }
+                surfaceRefusal(cause)
                 CommentSendTrace.log("direct : refus permanent — rendu au composeur, non enfilé")
                 restoreRefusedComment(text: trimmed, attachments: staged, place: place)
             case .unqueued:
@@ -757,6 +765,13 @@ struct CommentsSheetView: View {
                 restoreRefusedComment(text: trimmed, attachments: staged, place: place)
             }
         }
+    }
+
+    /// Un refus permanent se DIT : la publication fermée entre-temps (#16541)
+    /// ferme la feuille, la limite du jour donne son heure, le reste l'erreur.
+    private func surfaceRefusal(_ cause: Error) {
+        if closure.noteRefusal(cause) { return FeedbackToastManager.shared.showError(CommentsClosedNotice.text) }
+        if !DailyGestureLimitNotice.surface(cause) { showSendError() }
     }
 
     private func showSendError() {

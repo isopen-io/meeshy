@@ -291,7 +291,10 @@ final class StoryCommentSession: ObservableObject {
     /// Sends a staged comment through the shared thread. `false`: nothing
     /// carried it — its row and its count are gone, and the reader gives it
     /// back to the composer.
-    func deliver(_ payload: CreateCommentPayload, media: [PendingCommentMedia]) async -> Bool {
+    /// `onCommentsClosed` : la story a été fermée entre-temps (`COMMENTS_DISABLED`,
+    /// #16541) — le lecteur ferme son composeur sans attendre `story:updated`.
+    func deliver(_ payload: CreateCommentPayload, media: [PendingCommentMedia],
+                 onCommentsClosed: () -> Void = {}) async -> Bool {
         switch await thread.deliver(payload, media: media, for: .story(payload.postId)) {
         case .delivered:
             return true
@@ -300,7 +303,12 @@ final class StoryCommentSession: ObservableObject {
             return true
         case .refused(let cause):
             uncountRefused(storyId: payload.postId)
-            _ = DailyGestureLimitNotice.surface(cause)
+            if CommentsClosure.isRefusal(cause) {
+                onCommentsClosed()
+                FeedbackToastManager.shared.showError(CommentsClosedNotice.text)
+            } else {
+                _ = DailyGestureLimitNotice.surface(cause)
+            }
             return false
         case .unqueued:
             uncountRefused(storyId: payload.postId)

@@ -248,6 +248,8 @@ struct FeedPostOnlineMenuItems: View {
     var onBookmark: ((String) -> Void)?
     var onPin: ((String) -> Void)?
     var onEdit: ((FeedPost) -> Void)?
+    /// #16541 — l'hôte la remet par l'environnement quand l'entrée s'offre.
+    @Environment(\.commentSettingsAction) private var onToggleComments
 
     var body: some View {
         Button {
@@ -286,6 +288,9 @@ struct FeedPostOnlineMenuItems: View {
             } label: {
                 Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
             }
+        }
+        if let onToggleComments {
+            CommentSettingsMenuItem(commentsDisabled: post.commentsDisabled) { onToggleComments(post.id) }
         }
     }
 }

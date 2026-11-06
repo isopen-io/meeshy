@@ -579,6 +579,22 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// mode de panne que ce champ vient corriger sur la voie DOCUMENT.
     let allowSoundExtraction: Bool?
 
+    /// **« Désactiver les commentaires »** (#16541), le choix de ⋯. Défaut
+    /// `false` — et c'est une exception assumée à la discipline du type :
+    /// l'absence vaut « ouvert » côté passerelle, aucun site ne peut donc la
+    /// perdre en publiant ouvert ce qu'on voulait ouvert. Le meuble la pose sur
+    /// le brouillon qu'il compose (`documentDraft(for:)`).
+    var commentsDisabled = false
+
+    /// Le brouillon fermé aux commentaires quand l'auteur l'a choisi et que
+    /// son format le porte (`ComposerCommentSettings`) — un mood ne l'est jamais.
+    func closingComments(_ chosen: Bool) -> ComposerDocumentDraft {
+        guard chosen, format == .post || format == .reel else { return self }
+        var closed = self
+        closed.commentsDisabled = true
+        return closed
+    }
+
     /// Le brouillon d'un MOOD.
     ///
     /// `repostOfId` et `audioUrl` sont les deux graines d'une republication (lot

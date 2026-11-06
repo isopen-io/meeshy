@@ -57,6 +57,8 @@ nonisolated enum StoryOptionsMenuEntry: Hashable {
     case makePrivate
     /// #11151 — la modération retire la story d'un autre, avec un motif.
     case remove
+    /// #16541 — l'auteur ou la modération ferme / rouvre les commentaires.
+    case commentSettings
     case delete
     /// #15198 — « Supprimer » une story en attente : annuler son envoi par la file.
     case cancelSend
@@ -77,7 +79,8 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
         hasAudioTranscript: Bool,
         canCompose: Bool,
         canRemove: Bool = false,
-        isPending: Bool = false
+        isPending: Bool = false,
+        canToggleComments: Bool = false
     ) -> StoryOptionsMenuPlan {
         let reading: [StoryOptionsMenuEntry] = hasAudioTranscript ? [.fullscreen, .transcript] : [.fullscreen]
         guard hasStory else {
@@ -87,7 +90,8 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
             return StoryOptionsMenuPlan(sections: [reading, [.cancelSend], [.close]])
         }
         let making: [StoryOptionsMenuEntry] = canCompose ? [.share, .compose, .exportVideo, .imager] : [.share, .exportVideo, .imager]
-        let acting: [StoryOptionsMenuEntry] = isOwnStory ? [.delete] : (canRemove ? [.report, .makePrivate, .remove] : [.report])
+        let moderation: [StoryOptionsMenuEntry] = isOwnStory ? [.delete] : (canRemove ? [.report, .makePrivate, .remove] : [.report])
+        let acting = (canToggleComments ? [StoryOptionsMenuEntry.commentSettings] : []) + moderation
         return StoryOptionsMenuPlan(sections: [reading, making, acting, [.close]])
     }
 }
@@ -157,6 +161,8 @@ struct StoryHeaderView: View {
     let deleteCurrentStory: (_ reason: String?) -> Void
     /// #11535 — la modération rend la story d'un autre privée, avec un motif.
     let makeCurrentStoryPrivate: (_ reason: String) -> Void
+    /// #16541 — « Désactiver / Réactiver les commentaires », `nil` = absente.
+    var toggleComments: (() -> Void)? = nil
     let pauseTimer: () -> Void
     let dismissViewer: () -> Void
     let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
@@ -427,7 +433,8 @@ struct StoryHeaderView: View {
             hasAudioTranscript: hasAudioTranscript,
             canCompose: composableSlide != nil && demanderComposer != nil,
             canRemove: ContentRemovalPolicy.mayRemovePublication(authoredByViewer: isOwnStory, platformRole: AuthManager.shared.currentUser?.role),
-            isPending: StoryHeaderTime.showsPendingClock(for: currentStory)
+            isPending: StoryHeaderTime.showsPendingClock(for: currentStory),
+            canToggleComments: toggleComments != nil
         )
     }
 
@@ -515,7 +522,7 @@ struct StoryHeaderView: View {
                     Label(MessageCardExportMenu.imageLabel, systemImage: MessageCardExportMenu.imageSymbol)
                 }
             }
-        case .report, .makePrivate, .remove, .delete, .cancelSend:
+        case .report, .makePrivate, .remove, .delete, .cancelSend, .commentSettings:
             actingMenuItem(entry)
         case .close:
             Button {
@@ -532,6 +539,10 @@ struct StoryHeaderView: View {
     @ViewBuilder
     private func actingMenuItem(_ entry: StoryOptionsMenuEntry) -> some View {
         switch entry {
+        case .commentSettings:
+            if let toggleComments {
+                CommentSettingsMenuItem(commentsDisabled: currentStory?.commentsDisabled ?? false, onToggle: toggleComments)
+            }
         case .makePrivate:
             Button {
                 HapticFeedback.medium()

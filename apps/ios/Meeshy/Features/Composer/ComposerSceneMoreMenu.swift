@@ -65,6 +65,7 @@ struct ComposerSceneMoreMenuItems: View {
     let onAnimation: () -> Void
     let onTimeline: () -> Void
     var soundReuseAllowed = true
+    var commentsDisabled = false
 
     var body: some View {
         ForEach(entries, id: \.self) { entree in item(entree) }
@@ -79,6 +80,9 @@ struct ComposerSceneMoreMenuItems: View {
         case .soundReuse:
             Toggle(isOn: Binding(get: { soundReuseAllowed }, set: { _ in onEntry(entree) })) { libelle }
                 .accessibilityHint(ComposerMoreMenuCopy.soundReuseHint)
+        case .commentsOff:
+            Toggle(isOn: Binding(get: { commentsDisabled }, set: { _ in onEntry(entree) })) { libelle }
+                .accessibilityHint(ComposerMoreMenuCopy.commentsOffHint)
         default:
             Button(role: entree.isDestructive ? .destructive : nil) { onEntry(entree) } label: { libelle }
         }

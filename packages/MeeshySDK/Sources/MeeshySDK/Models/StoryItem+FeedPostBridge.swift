@@ -46,5 +46,7 @@ public extension StoryItem {
             isViewed: false,
             trackingLinks: feedPost.trackedLinkMap.map { TrackedLink(url: $0.key, token: $0.value) }
         )
+        commentsDisabled = feedPost.commentsDisabled
+        sourceCommentsDisabled = feedPost.repost?.commentsDisabled
     }
 }

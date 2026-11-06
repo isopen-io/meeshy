@@ -727,7 +727,7 @@ extension MeeshyComposerHost {
         }
         isPublishingDocument = true
         Task {
-            let accepted = await onPublishDocument(await ComposerDocumentLookBake.baked(draft))
+            let accepted = await onPublishDocument(await ComposerDocumentLookBake.baked(draft.closingComments(commentsDisabledChoice)))
             isPublishingDocument = false
             if let settled { return settled(accepted) }
             if accepted { handOverAutosavedDraft(); onDismiss() }
