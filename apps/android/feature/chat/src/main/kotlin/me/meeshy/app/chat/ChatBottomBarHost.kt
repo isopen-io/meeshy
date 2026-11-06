@@ -141,6 +141,7 @@ private fun ChatComposerDock(host: ChatHostContext) {
         ChatComposer(
             draft = composerText.text,
             draftRevision = composerText.revision,
+            focusTrigger = composerText.focusRequest,
             canSend = composerText.hasText || state.clipboardContent != null || host.pendingPlace != null ||
                 (!pending.isEmpty && !pending.hasPreparing),
             hasPendingAttachments = !pending.isEmpty || host.pendingPlace != null,
@@ -196,6 +197,8 @@ private fun ChatComposerDock(host: ChatHostContext) {
             onRemoveClipboard = actions.removeClipboardContent,
             onPickFile = actions.pickFile,
             onSendSticker = actions.sendSticker,
+            startsMinimized = actions.composerMinimized?.value ?: false,
+            onMinimizedChange = actions.setComposerMinimized,
         )
     }
     if (pickerOpen) {

@@ -257,7 +257,10 @@ const chestRewardSchema = z.object({
   points: nonNegativeInt,
   fragment: z.boolean(),
   freeze: z.boolean(),
+  /** La Gloire TOTALE gravée : la base de l'effort et la précocité (#16414). */
   glory: nonNegativeInt.optional(),
+  /** La part de précocité de `glory`, gravée avec elle (#16414) ; absente d'un coffre ouvert avant elle. */
+  earlyGlory: nonNegativeInt.optional().catch(undefined),
   /** La prime tombée, en points au cours de la Meesh du compte — déjà comprise dans `points`. */
   bonus: z.enum(['none', 'fifth', 'whole']).optional().catch(undefined),
   bonusPoints: nonNegativeInt.optional().catch(undefined),
@@ -266,7 +269,10 @@ const chestRewardSchema = z.object({
 /** Le contenu CERTAIN du coffre du jour et ses deux primes possibles, en points, dits avant l'ouverture. */
 const chestContentSchema = z.object({
   points: nonNegativeInt,
+  /** La Gloire TOTALE si le coffre s'ouvre maintenant : la base de l'effort et la précocité de l'heure (#16414). */
   glory: nonNegativeInt,
+  /** La part de précocité de `glory` (#16414). Absente devant un serveur antérieur. */
+  earlyGlory: nonNegativeInt.optional(),
   bonusWhole: nonNegativeInt.optional(),
   bonusFifth: nonNegativeInt.optional(),
 });

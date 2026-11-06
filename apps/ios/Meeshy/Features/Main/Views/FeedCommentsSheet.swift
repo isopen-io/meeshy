@@ -220,7 +220,7 @@ struct CommentsSheetView: View {
         let topLevel = topLevelComments   // filtré UNE fois par rendu (3 lectures avant)
         sheetBody(topLevel)
             // Les médias de TOUS les commentaires du post (racines + réponses chargées) se feuillettent ensemble en plein écran.
-            .commentMediaGallery(topLevel: topLevel, replies: repliesMap).closesForConversationOpening(.sheet)
+            .commentMediaGallery(topLevel: topLevel, replies: repliesMap, post: post).closesForConversationOpening(.sheet)
     }
 
     private func sheetBody(_ topLevel: [FeedComment]) -> some View {
@@ -404,11 +404,7 @@ struct CommentsSheetView: View {
                 moodEmoji: moodEmojiResolver?(user.userId ?? ""),
                 onMoodTap: moodTapResolver?(user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                postsContent: { uid in AnyView(ProfileUserPostsList(
-                    userId: uid,
-                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
-                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }, dependencies: .live
+                postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)

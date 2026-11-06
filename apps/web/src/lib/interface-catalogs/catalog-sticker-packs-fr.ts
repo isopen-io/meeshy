@@ -94,6 +94,8 @@ const frStickerPacks = {
   'packs.frames.yourAtmosphere': "Votre atmosphère",
   'packs.frames.atmosphereKept': "Ce pack porte votre atmosphère : il reste installé. Changez d’atmosphère pour le retirer.",
   'packs.frames.atmosphereQueued': "Hors ligne : votre choix partira avec la connexion.",
+  'packs.sheet.open': "Voir la fiche du pack {name}",
+  'packs.preview.open': "Voir {name} en plein écran",
 } as const;
 
 export default frStickerPacks;

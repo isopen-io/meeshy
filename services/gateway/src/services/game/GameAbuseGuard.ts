@@ -2,11 +2,15 @@
  * LES GARDE-FOUS CONTRE L'ENTRE-SOI (#9377) — le jeu ne doit pas pousser au
  * spam : il récompense l'échange réel.
  *
- *  - **rien** pour un message à soi, à un compte de moins de 24 h, ou bloqué ;
+ *  - **rien** pour un message à soi, à un NOUVEAU VENU NON PROUVÉ, ou bloqué ;
+ *    un nouveau venu non prouvé est un compte de moins de 24 h qui n'a vérifié
+ *    ni son téléphone ni son e-mail (`isUnprovenNewcomer`, #16425) — un nouvel
+ *    inscrit vérifié compte dès sa première minute : « Dis-lui salut » pousse
+ *    justement à écrire aux nouveaux arrivants ;
  *  - **points ÷ 4** au-delà de 50 messages par jour entre deux mêmes comptes
  *    seuls (une conversation à deux, ni plus ni moins) ;
- *  - une réponse reçue ne rapporte rien non plus venant de soi, d'un compte de
- *    moins de 24 h ou bloqué.
+ *  - une réponse reçue ne rapporte rien non plus venant de soi, d'un nouveau
+ *    venu non prouvé ou d'un compte bloqué.
  *
  * Deux propriétés d'exploitation :
  *  - **fail-open** — une panne de lecture ne coûte JAMAIS de points : le jeu
@@ -37,6 +41,24 @@ export const quarterPoints = (points: number): number => Math.max(1, Math.round(
 /** `none` : rien ; `quarter` : points ÷ 4 ; `full` : points entiers. */
 export type MessageVerdict = 'none' | 'quarter' | 'full';
 
+/** Ce que la loi de fraîcheur lit d'un compte — le `select` de chaque lecteur la porte telle quelle. */
+export const NEWCOMER_PROOF_SELECT = { createdAt: true, phoneVerifiedAt: true, emailVerifiedAt: true } as const;
+
+export type NewcomerProof = {
+  readonly createdAt?: Date | null;
+  readonly phoneVerifiedAt?: Date | null;
+  readonly emailVerifiedAt?: Date | null;
+};
+
+/**
+ * Un compte de moins de 24 h SANS contact vérifié : le jeu ne le compte pas comme un pair.
+ * Un compte introuvable garde la lecture historique (date nulle ⇒ ancien), le jeu restant fail-open.
+ */
+export const isUnprovenNewcomer = (account: NewcomerProof | undefined, now: Date): boolean => {
+  const fresh = now.getTime() - (account?.createdAt?.getTime() ?? 0) < MIN_ACCOUNT_AGE_MS;
+  return fresh && !account?.phoneVerifiedAt && !account?.emailVerifiedAt;
+};
+
 type Shape = { readonly kind: 'self' | 'blocked-or-fresh' | 'pair' | 'group'; readonly expiresAt: number };
 
 export class GameAbuseGuard {
@@ -47,12 +69,12 @@ export class GameAbuseGuard {
   private async accountsAllowed(a: string, b: string, now: Date): Promise<{ readonly fresh: boolean; readonly blocked: boolean }> {
     const accounts = await this.prisma.user.findMany({
       where: { id: { in: [a, b] } },
-      select: { id: true, createdAt: true, blockedUserIds: true },
+      select: { id: true, blockedUserIds: true, ...NEWCOMER_PROOF_SELECT },
     });
     const left = accounts.find((u) => u.id === a);
     const right = accounts.find((u) => u.id === b);
     return {
-      fresh: now.getTime() - (right?.createdAt?.getTime() ?? 0) < MIN_ACCOUNT_AGE_MS,
+      fresh: isUnprovenNewcomer(right, now),
       blocked: Boolean(left?.blockedUserIds?.includes(b) || right?.blockedUserIds?.includes(a)),
     };
   }
@@ -112,7 +134,7 @@ export class GameAbuseGuard {
 
   /**
    * Une réponse reçue par `authorId` de `replierId` : éligible aux missions si
-   * c'est une autre personne, un compte de plus de 24 h, aucun blocage ;
+   * c'est une autre personne, un compte de plus de 24 h ou au contact vérifié, aucun blocage ;
    * `withinWindow` dit si elle tombe dans l'heure du message d'origine (+3 points).
    */
   async assessReply(params: {
@@ -123,7 +145,7 @@ export class GameAbuseGuard {
   }): Promise<{ readonly eligible: boolean; readonly withinWindow: boolean }> {
     const now = params.now ?? new Date();
     if (params.replierId === params.authorId) return { eligible: false, withinWindow: false };
-    // Les comptes se lisent côté répondant : c'est lui dont l'ancienneté compte
+    // Les comptes se lisent côté répondant : c'est lui dont l'ancienneté (ou la vérification) compte
     // (un faux compte qui répond pour faire gagner son auteur).
     const verdict = await this.accountsAllowed(params.authorId, params.replierId, now);
     if (verdict.fresh || verdict.blocked) return { eligible: false, withinWindow: false };

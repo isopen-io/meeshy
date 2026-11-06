@@ -2,7 +2,6 @@ package me.meeshy.app.stories
 
 import java.io.File
 import java.io.IOException
-import kotlinx.coroutines.CancellationException
 import me.meeshy.sdk.media.scene.SceneExportBranding
 import me.meeshy.sdk.media.scene.SceneExportHold
 import me.meeshy.sdk.media.scene.SceneExportLog
@@ -12,9 +11,6 @@ import me.meeshy.sdk.media.scene.SceneExportSlideFill
 import me.meeshy.sdk.media.scene.SceneExportSoundFile
 import me.meeshy.sdk.media.scene.SceneExportVideoLook
 import me.meeshy.sdk.model.StoryEffects
-import me.meeshy.sdk.model.scene.export.ImagerDecision
-import me.meeshy.sdk.model.scene.export.ImagerLength
-import me.meeshy.sdk.model.scene.export.ImagerOffer
 import me.meeshy.sdk.model.scene.export.StoryExportClipLoop
 import me.meeshy.sdk.model.scene.export.StoryExportIdentity
 import me.meeshy.sdk.model.scene.export.StoryExportMode
@@ -43,14 +39,13 @@ data class StoryExportPaintRequest(
 /**
  * Prépare l'export vidéo d'une story, ou des scènes d'un post ou d'un réel, telle qu'elle se JOUE : chaque son à sa place et à son niveau, la vidéo de fond en
  * tours entiers de la fenêtre taillée, les objets peints à leurs instants. Enregistrer et Partager rendent TOUT ;
- * Imager attend la décision de sa vue (#14326) — la part rendue depuis le début au-delà d'une minute, puis où elle part.
+ * la carte de l'atelier n'en rend que le début, son image (#16393).
  */
 class StoryVideoExportPreparer(
     private val fetch: suspend (url: String, target: File) -> Unit,
     private val probeMillis: (File) -> Long?,
     private val blankPicture: (File) -> Unit,
     private val lastFrame: (video: File, atMillis: Long, target: File) -> Boolean = { _, _, _ -> false },
-    private val decideImager: suspend (ImagerOffer) -> ImagerDecision?,
     private val paint: suspend (StoryExportPaintRequest) -> List<File>?,
     private val format: StoryExportVideoFormat = StoryExportVideoFormat.of(),
     /** Peint les cartes de marque d'un export de story ; `null` : aucun emballage, même si une identité est remise. */
@@ -84,8 +79,7 @@ class StoryVideoExportPreparer(
             slides = scenes.map { reachable(it.subject.source, files) },
             mediaDurationsSeconds = durations.mapNotNull { (src, millis) -> millis?.let { src to it / MILLIS_PER_SECOND } }.toMap(),
         )
-        val decision = imagerDecision(mode, whole.totalMillis)
-        val plan = whole.cut(ImagerLength.renderedMillis(whole.totalMillis, decision?.quarter))
+        val plan = whole.cut(mode.renderedMillis(whole.totalMillis))
         val branding = identity?.let { brand?.assemble(it, format, work) }
         val delay = branding?.plan?.storyStartMillis ?: 0L
         val still = plan.still && scenes.all { it.subject.backgroundVideo == null && StoryExportPlacedVideos.videosOf(it.slide).isEmpty() } && branding == null
@@ -121,7 +115,6 @@ class StoryVideoExportPreparer(
             still = overlays.singleOrNull()?.file?.takeIf { still },
             branding = branding,
             placedVideos = placedVideos,
-            destination = decision?.destination,
         )
     }
 
@@ -166,12 +159,6 @@ class StoryVideoExportPreparer(
                 null
             }
         }.toMap()
-    }
-
-    /** `null` hors d'Imager ; fermer la vue arrête l'export. */
-    private suspend fun imagerDecision(mode: StoryExportMode, totalMillis: Long): ImagerDecision? {
-        if (!mode.opensImagerView) return null
-        return decideImager(ImagerOffer.of(totalMillis)) ?: throw CancellationException("vue Imager fermée")
     }
 
     private fun fill(

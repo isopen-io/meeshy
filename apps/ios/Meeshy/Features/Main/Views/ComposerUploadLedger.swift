@@ -10,16 +10,9 @@ import MeeshySDK
 struct ComposerUploadLedger {
     private var order: [UUID] = []
     private var owned: [UUID: Set<String>] = [:]
-    private var progress: [UUID: UploadQueueProgress] = [:]
 
     var isUploading: Bool { !order.isEmpty }
     var inFlightCount: Int { order.count }
-
-    /// La progression du plus ancien lot qui en a publié une : c'est celui qui
-    /// part en premier, donc celui que l'utilisateur attend.
-    var displayedProgress: UploadQueueProgress? {
-        order.lazy.compactMap { progress[$0] }.first
-    }
 
     mutating func begin(_ batch: UUID, mediaIds: Set<String>) {
         guard owned[batch] == nil else { return }
@@ -27,17 +20,11 @@ struct ComposerUploadLedger {
         owned[batch] = mediaIds
     }
 
-    mutating func report(_ update: UploadQueueProgress, for batch: UUID) {
-        guard owned[batch] != nil else { return }
-        progress[batch] = update
-    }
-
     /// Rend les identifiants des pièces que ce lot possédait ; un lot inconnu
     /// ou déjà terminé ne rend rien.
     mutating func finish(_ batch: UUID) -> Set<String> {
         guard let released = owned.removeValue(forKey: batch) else { return [] }
         order.removeAll { $0 == batch }
-        progress.removeValue(forKey: batch)
         return released
     }
 
@@ -63,5 +50,59 @@ extension ConversationComposerState {
             pendingAttachmentCount: pendingAttachments.count,
             preparingCount: preparingAttachments.count
         )
+    }
+}
+
+/// La progression de téléversement d'UNE bulle optimiste (#14702), observée par la seule
+/// pastille de cette bulle : un tick ne redessine ni la liste, ni la bulle, ni ses voisines.
+/// Elle ne republie qu'au point de pourcentage gagné, jamais à chaque tronçon TUS.
+@MainActor
+final class MessageUploadProgress: ObservableObject {
+    nonisolated deinit {}
+
+    @Published private(set) var percent: Int?
+
+    fileprivate func report(_ fraction: Double) {
+        let next = Self.percent(of: fraction)
+        guard next != percent else { return }
+        percent = next
+    }
+
+    nonisolated static func percent(of fraction: Double) -> Int {
+        Int((min(max(fraction, 0), 1) * 100 + 1e-9).rounded(.down))
+    }
+
+    /// Le plus large libellé possible : le pied de bulle en réserve la largeur.
+    nonisolated static func reservedLabel(locale: Locale = .current) -> String {
+        accessibilityValue(percent: 100, locale: locale)
+    }
+
+    nonisolated static func accessibilityValue(percent: Int, locale: Locale = .current) -> String {
+        (Double(percent) / 100).formatted(.percent.precision(.fractionLength(0)).locale(locale))
+    }
+}
+
+/// Le tempId d'une bulle optimiste → sa progression. Une bulle s'inscrit AVANT d'être posée
+/// dans le fil : la cellule qui la configure trouve déjà son objet, et n'en observe aucun autre.
+@MainActor
+final class MessageUploadProgressStore {
+    nonisolated deinit {}
+
+    private var entries: [String: MessageUploadProgress] = [:]
+
+    func begin(_ tempIds: [String]) {
+        tempIds.filter { entries[$0] == nil }.forEach { entries[$0] = MessageUploadProgress() }
+    }
+
+    func progress(for tempId: String) -> MessageUploadProgress? {
+        entries[tempId]
+    }
+
+    func report(_ fraction: Double, for tempId: String) {
+        entries[tempId]?.report(fraction)
+    }
+
+    func end(_ tempIds: [String]) {
+        tempIds.forEach { entries[$0] = nil }
     }
 }

@@ -1,3 +1,5 @@
+import Combine
+import UIKit
 import XCTest
 @testable import Meeshy
 import MeeshySDK
@@ -10,7 +12,8 @@ final class ProgressionViewModelGameTests: XCTestCase {
 
     private func makeSUT(
         snapshot: APIEngagementProgress? = GameFixture.snapshot(),
-        isOnline: Bool = true
+        isOnline: Bool = true,
+        liveRefresh: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher()
     ) -> (sut: ProgressionViewModel, engagement: MockEngagementProgressService, game: MockGameService) {
         let engagement = MockEngagementProgressService()
         if let snapshot { engagement.fetchProgressResult = .success(snapshot) }
@@ -20,7 +23,8 @@ final class ProgressionViewModelGameTests: XCTestCase {
             gameService: game,
             networkMonitor: FakeNetworkMonitor(isOnline: isOnline),
             currentUserId: "me-\(UUID().uuidString)",
-            notebook: MockGamePhotoNotebook()
+            notebook: MockGamePhotoNotebook(),
+            liveRefresh: liveRefresh
         )
         return (sut, engagement, game)
     }
@@ -561,5 +565,102 @@ final class ProgressionViewModelGameTests: XCTestCase {
         }
         XCTAssertEqual(cached?.game?.missions.rerollAvailable, true, "le cache ne garde pas le changement refusé")
         XCTAssertEqual(cached?.meesh?.balance, 5)
+    }
+
+    // MARK: - Les défis en direct (#16425)
+
+    private func waitUntil(_ condition: @MainActor () -> Bool) async {
+        for _ in 0..<60 where !condition() {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+    }
+
+    private func advanced() -> APIEngagementProgress {
+        GameFixture.snapshot(GameFixture.game(missions: [
+            GameFixture.mission(id: "m1", target: 5, progress: 1),
+            GameFixture.mission(id: "m2", templateKey: "reply-conversations", difficulty: .medium, target: 3, reward: 60),
+            GameFixture.mission(id: "m3", templateKey: "publish-post", difficulty: .hard, target: 2, reward: 120),
+        ]))
+    }
+
+    func test_missionsUpdated_rereadsTheProgressInSilence_andShowsTheAdvancedMission() async {
+        let live = PassthroughSubject<Void, Never>()
+        let (sut, engagement, _) = makeSUT(liveRefresh: live.eraseToAnyPublisher())
+        await sut.load(forceNetwork: true)
+        let reads = engagement.fetchProgressCallCount
+        engagement.fetchProgressResult = .success(advanced())
+
+        live.send(())
+        await waitUntil { sut.game?.missions.items.first?.progress == 1 }
+
+        XCTAssertEqual(engagement.fetchProgressCallCount, reads + 1)
+        XCTAssertEqual(sut.game?.missions.items.first?.progress, 1, "le défi avancé ailleurs se montre sans rouvrir l'écran")
+        XCTAssertFalse(sut.showsSkeleton, "jamais de squelette sur un écran déjà peint")
+    }
+
+    func test_missionsUpdated_aBurstWhileAReadIsInFlight_isCoalescedIntoOneMoreRead() async {
+        let live = PassthroughSubject<Void, Never>()
+        let (sut, engagement, _) = makeSUT(liveRefresh: live.eraseToAnyPublisher())
+        await sut.load(forceNetwork: true)
+        let reads = engagement.fetchProgressCallCount
+        let gate = AsyncGate()
+        engagement.fetchSuspension = { call in if call == reads + 1 { await gate.wait() } }
+
+        live.send(())
+        await waitUntil { engagement.fetchProgressCallCount == reads + 1 }
+        live.send(())
+        live.send(())
+        live.send(())
+        await gate.open()
+        await waitUntil { engagement.fetchProgressCallCount == reads + 2 }
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(engagement.fetchProgressCallCount, reads + 2, "une rafale pendant une lecture en vol n'en relance qu'UNE")
+    }
+
+    func test_appear_theFirstTimeServesTheCache_andRereadsTheNetworkOnEachReturn() async {
+        let (sut, engagement, _) = makeSUT()
+        await sut.appear()
+        let afterFirst = engagement.fetchProgressCallCount
+        engagement.fetchProgressResult = .success(advanced())
+
+        await sut.appear()
+
+        XCTAssertEqual(engagement.fetchProgressCallCount, afterFirst + 1, "revenir sur le Jeu relit, même sur un cache frais")
+        XCTAssertEqual(sut.game?.missions.items.first?.progress, 1)
+    }
+
+    func test_liveRefreshTriggers_areTheMissionsEventAndTheReturnToTheForeground() {
+        let center = NotificationCenter()
+        let received = Counter()
+        let subscription = GameLiveRefresh.triggers(center: center).sink { received.value += 1 }
+
+        center.post(name: .gameMissionsUpdated, object: GameMissionsUpdatedEvent(dayKey: "2026-11-06"))
+        center.post(name: UIApplication.willEnterForegroundNotification, object: nil)
+        center.post(name: .gameStateUpdated, object: nil)
+
+        XCTAssertEqual(received.value, 2, "game:updated a son propre chemin ; seuls les défis et le retour au premier plan relisent ici")
+        subscription.cancel()
+    }
+}
+
+private final class Counter {
+    var value = 0
+}
+
+/// Une porte que le témoin ouvre : la lecture en vol attend derrière.
+private actor AsyncGate {
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        if isOpen { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func open() {
+        isOpen = true
+        waiters.forEach { $0.resume() }
+        waiters = []
     }
 }

@@ -13,13 +13,6 @@ import XCTest
 @MainActor
 final class ComposerUploadLedgerTests: XCTestCase {
 
-    private func progress(_ percent: Double) -> UploadQueueProgress {
-        UploadQueueProgress(
-            files: [], totalFiles: 1, completedFiles: 0,
-            totalBytes: 100, uploadedBytes: Int64(percent), globalPercentage: percent
-        )
-    }
-
     private func file(_ name: String) -> URL {
         URL(fileURLWithPath: "/tmp/\(name)")
     }
@@ -27,7 +20,6 @@ final class ComposerUploadLedgerTests: XCTestCase {
     func test_aucunLot_rienNeSeTeleverse() {
         let ledger = ComposerUploadLedger()
         XCTAssertFalse(ledger.isUploading)
-        XCTAssertNil(ledger.displayedProgress)
     }
 
     func test_unSecondLot_commencePendantQueLePremierSeTeleverse() {
@@ -71,28 +63,6 @@ final class ComposerUploadLedgerTests: XCTestCase {
         XCTAssertFalse(ledger.isUploading)
     }
 
-    func test_laProgressionAffichee_estCelleDuPlusAncienLotEnVol() {
-        var ledger = ComposerUploadLedger()
-        let video = UUID(), photo = UUID()
-        ledger.begin(video, mediaIds: ["video"])
-        ledger.begin(photo, mediaIds: ["photo"])
-        ledger.report(progress(80), for: photo)
-        XCTAssertEqual(ledger.displayedProgress?.globalPercentage, 80)
-        ledger.report(progress(30), for: video)
-        XCTAssertEqual(ledger.displayedProgress?.globalPercentage, 30)
-        _ = ledger.finish(video)
-        XCTAssertEqual(ledger.displayedProgress?.globalPercentage, 80)
-    }
-
-    func test_uneProgressionDUnLotTermine_estIgnoree() {
-        var ledger = ComposerUploadLedger()
-        let video = UUID()
-        ledger.begin(video, mediaIds: ["video"])
-        _ = ledger.finish(video)
-        ledger.report(progress(50), for: video)
-        XCTAssertNil(ledger.displayedProgress)
-    }
-
     /// Le brouillon durable ne se purge que si le compositeur n'a plus rien à
     /// garder : une pièce jointe ajoutée pendant le téléversement y vit.
     func test_leBrouillon_seGardeTantQueLeCompositeurPorteDesPieces() {
@@ -125,5 +95,110 @@ final class ComposerUploadLedgerTests: XCTestCase {
             .appendingPathComponent("Meeshy/Features/Main/Views/ConversationView+AttachmentHandlers.swift"))
         XCTAssertFalse(src.contains("guard !composerState.isUploading"))
         XCTAssertFalse(src.contains("pendingMediaFiles.removeAll()\n                    composerState.uploadProgress"))
+    }
+
+    /// #14702 — la progression ne vit plus au-dessus du compositeur : chaque
+    /// bulle porte la sienne. L'ancienne barre globale n'existe plus nulle part
+    /// dans l'app (ni déclarée, ni montée), et le plateau n'en lit plus l'état.
+    func test_noGlobalUploadBar_isDeclaredOrMountedAnywhereInTheApp() throws {
+        let appRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Meeshy")
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil))
+            .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(files.count, 100)
+        let offenders = try files.filter { try String(contentsOf: $0).contains("UploadProgressBar") }
+        XCTAssertEqual(offenders.map(\.lastPathComponent), [])
+        let banners = try String(contentsOf: appRoot.appendingPathComponent("Features/Main/Views/ConversationView+ComposerBanners.swift"))
+        XCTAssertFalse(banners.contains("composerState.uploadProgress"))
+    }
+}
+
+/// **Chaque bulle de pièce jointe en cours d'envoi montre sa propre
+/// progression** (#14702). Le registre associe un tempId de bulle optimiste à
+/// un petit objet observé par la seule pastille de cette bulle : la liste ne
+/// se redessine pas à chaque octet, et une bulle ne lit jamais la fraction
+/// d'une autre.
+@MainActor
+final class MessageUploadProgressStoreTests: XCTestCase {
+
+    func test_report_twoBubbles_eachKeepsItsOwnPercent() {
+        let store = MessageUploadProgressStore()
+        store.begin(["video", "photo"])
+        store.report(0.12, for: "video")
+        store.report(0.87, for: "photo")
+        XCTAssertEqual(store.progress(for: "video")?.percent, 12)
+        XCTAssertEqual(store.progress(for: "photo")?.percent, 87)
+    }
+
+    func test_begin_beforeAnyReport_hasNoPercentYet() {
+        let store = MessageUploadProgressStore()
+        store.begin(["video"])
+        XCTAssertNotNil(store.progress(for: "video"))
+        XCTAssertNil(store.progress(for: "video")?.percent)
+    }
+
+    func test_report_unknownTempId_isIgnored() {
+        let store = MessageUploadProgressStore()
+        store.report(0.5, for: "inconnu")
+        XCTAssertNil(store.progress(for: "inconnu"))
+    }
+
+    func test_end_removesOnlyThatBubble() {
+        let store = MessageUploadProgressStore()
+        store.begin(["video", "photo"])
+        store.report(0.4, for: "photo")
+        store.end(["video"])
+        XCTAssertNil(store.progress(for: "video"))
+        XCTAssertEqual(store.progress(for: "photo")?.percent, 40)
+    }
+
+    /// La fréquence est bornée : une bulle ne republie qu'à chaque point de
+    /// pourcentage gagné, jamais à chaque paquet TUS.
+    func test_report_subPercentSteps_publishOncePerPercent() {
+        let store = MessageUploadProgressStore()
+        store.begin(["video"])
+        guard let progress = store.progress(for: "video") else { return XCTFail("bulle non inscrite") }
+        var publishes = 0
+        let watch = progress.objectWillChange.sink { publishes += 1 }
+        [0.101, 0.103, 0.105, 0.109, 0.110, 0.115].forEach { store.report($0, for: "video") }
+        watch.cancel()
+        XCTAssertEqual(publishes, 2)
+        XCTAssertEqual(progress.percent, 11)
+    }
+
+    func test_report_outOfRangeFraction_isClamped() {
+        let store = MessageUploadProgressStore()
+        store.begin(["a", "b"])
+        store.report(1.7, for: "a")
+        store.report(-0.2, for: "b")
+        XCTAssertEqual(store.progress(for: "a")?.percent, 100)
+        XCTAssertEqual(store.progress(for: "b")?.percent, 0)
+    }
+
+    func test_begin_twice_keepsTheSameObservedObject() {
+        let store = MessageUploadProgressStore()
+        store.begin(["video"])
+        let first = store.progress(for: "video")
+        store.report(0.3, for: "video")
+        store.begin(["video"])
+        XCTAssertTrue(first === store.progress(for: "video"))
+        XCTAssertEqual(store.progress(for: "video")?.percent, 30)
+    }
+
+    /// Le pied de bulle réserve la largeur du plus large pourcentage : 9 % → 10 % → 100 %
+    /// ne déplace plus l'heure ni les coches voisines.
+    func test_reservedLabel_isTheWidestPercent() {
+        let locale = Locale(identifier: "fr_FR")
+        XCTAssertEqual(
+            MessageUploadProgress.reservedLabel(locale: locale),
+            MessageUploadProgress.accessibilityValue(percent: 100, locale: locale)
+        )
+    }
+
+    func test_accessibilityValue_spellsThePercent() {
+        let spoken = MessageUploadProgress.accessibilityValue(percent: 42, locale: Locale(identifier: "fr_FR"))
+        XCTAssertTrue(spoken.hasPrefix("42"))
+        XCTAssertTrue(spoken.hasSuffix("%"))
     }
 }

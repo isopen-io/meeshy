@@ -239,15 +239,16 @@ enum PostSaveAction {
         return true
     }
 
-    /// « Imager » (#13871) : seule une œuvre COMPOSÉE se rend — un réel de
-    /// médias simple n'a que son fichier. `nil` ⇒ aucune entrée (loi 4).
     static func imagerAction(for post: FeedPost,
                              coordinator: MediaSaveCoordinator,
-                             service: StoryPhotoSaveService = .shared) -> (() -> Void)? {
-        guard route(for: post, coordinator: coordinator) == .renderScene else { return nil }
+                             quick: Bool = false,
+                             service: StoryPhotoSaveService = .shared,
+                             present: @escaping @MainActor (MessageCardExportRequest) -> Void = { MessageCardExportPresenter.present($0) }) -> (() -> Void)? {
+        guard coordinator.mayLeave(nil),
+              let request = ImagerCardRequest.post(post, quick: quick, service: service) else { return nil }
         return {
             HapticFeedback.light()
-            service.image(post: post)
+            present(request)
         }
     }
 }

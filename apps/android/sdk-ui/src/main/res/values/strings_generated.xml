@@ -7,7 +7,7 @@
     <string name="a11y_media_download_action">Download</string>
     <string name="a11y_media_download_cancel">Cancel download</string>
     <string name="a11y_message_actions_forward">Forward</string>
-    <string name="audio_consent_notice_action">Enable in Settings</string>
+    <string name="audio_consent_notice_action">Set up my voice</string>
     <string name="audio_consent_notice_message">Enable voice consent so your audio messages are transcribed and translated.</string>
     <string name="audio_editor_a11y_playhead">Playback position</string>
     <string name="audio_editor_apply">Apply changes</string>
@@ -51,6 +51,11 @@
     <string name="audio_editor_volume_normal">Normal</string>
     <string name="audio_fullscreen_airplay">Stream to a device</string>
     <string name="audio_fullscreen_dial">Position in the voice message</string>
+    <string name="audio_fullscreen_language_choose">Translate audio</string>
+    <string name="audio_fullscreen_transcription_action">Transcribe</string>
+    <string name="audio_fullscreen_transcription_empty">No transcript</string>
+    <string name="audio_fullscreen_transcription_local">Transcribe on device</string>
+    <string name="audio_fullscreen_transcription_server">Transcribe via the server</string>
     <string name="audio_recorder_micDenied">Microphone permission denied</string>
     <string name="audio_recorder_micDeniedSettings">Microphone denied — allow it in Settings</string>
     <string name="audio_recorder_record">Record</string>
@@ -319,6 +324,7 @@
     <string name="media_crop_a11y_size">Width %1$s, height %2$s</string>
     <string name="media_download">Download</string>
     <string name="media_forward_rail_hint">Sends this media to another conversation.</string>
+    <string name="media_imager_title">Picture it</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">File</string>
     <string name="media_label_location">Location</string>

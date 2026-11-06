@@ -25,6 +25,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -91,6 +92,20 @@ fun CommentCardExportSheet(
     CardExportSheet(source, viewModel.viewer, conversationTitle = null, onDismiss = onDismiss)
 }
 
+@Composable
+fun SceneCardExportSheet(
+    key: String,
+    card: PostCommentCardSubject,
+    render: SceneCardRender?,
+    onDismiss: () -> Unit,
+    viewModel: CardExportViewModel = hiltViewModel(),
+) {
+    val mediaBaseUrl = LocalMediaBaseUrl.current
+    val current = rememberUpdatedState(render)
+    val source = remember(key, card, mediaBaseUrl) { RenderingCardSource(key, CardSubjects.of(card, mediaBaseUrl), current) }
+    CardExportSheet(source, viewModel.viewer, conversationTitle = null, onDismiss = onDismiss)
+}
+
 /**
  * « Imager la discussion » (#14331, iOS `MessageCardDiscussion.request`) : la discussion chargée jusqu'au message choisi,
  * dans les mots que le lecteur lit, passe par le MÊME atelier qu'un message. Rien à peindre : l'atelier se ferme.
@@ -135,7 +150,8 @@ private fun CardExportSheet(
     state.anonymousLabel = stringResource(R.string.export_card_anonymous)
     LaunchedEffect(state.renderKey) { state.renderPreview() }
     val context = LocalContext.current
-    LaunchedEffect(source.key) { state.pictures = CardPictureLoader.load(context, subject.pictured) }
+    val pictured = subject.pictured
+    LaunchedEffect(source.key, pictured) { state.pictures = CardPictureLoader.load(context, pictured) }
     val thumbnails = remember { CardThumbnailStore() }
     DisposableEffect(thumbnails) { onDispose { thumbnails.clear() } }
     val permissions = rememberPermissionFlow()
@@ -234,6 +250,7 @@ private fun Notice(state: CardExportState) {
     val text = when {
         outcome == CardOutcome.DENIED -> R.string.export_announce_photosDenied
         outcome == CardOutcome.FAILED -> R.string.export_announce_failed
+        state.preparing -> R.string.export_card_rendering
         state.ready && state.rendered?.truncated == true -> R.string.export_card_truncated
         else -> null
     } ?: return
@@ -273,7 +290,7 @@ private fun ActionRow(
         val input = state.inputFor(state.format, subject)
         scope.launch { finish(if (output(input).isSuccess) done else CardOutcome.FAILED) }
     }
-    val enabled = state.ready && !state.busy
+    val enabled = state.ready && !state.busy && !state.preparing
     Row(Modifier.fillMaxWidth().padding(bottom = MeeshySpacing.md), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus)) {
         Button(
             onClick = {

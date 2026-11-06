@@ -31,7 +31,8 @@ extension ConversationView {
             animationKeys: composerAnimationKeys,
             bar: { composerBar(textBinding: $0, isRecording: $1, recordingDuration: $2, audioLevels: $3) },
             onReplyRoute: { viewModel.armReplyContagion(quoting: $0) },
-            onFold: { closeComposerEmojiPanel() }
+            onFold: { closeComposerEmojiPanel() },
+            foldMemoryKey: viewModel.conversationId
         )
         .modifier(ConversationComposerPickers(
             composerState: $composerState, accentColor: accentColor,

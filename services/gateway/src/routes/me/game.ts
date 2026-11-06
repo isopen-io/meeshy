@@ -20,6 +20,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../services/engagement/EngagementService';
+import { getEngagementEmitIO } from '../../services/engagement/engagement-emit-registry';
 import { FlameService } from '../../services/game/FlameService';
 import { GameBlockService } from '../../services/game/GameBlockService';
 import { MissionService } from '../../services/game/MissionService';
@@ -52,7 +53,7 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
   const engagement = options.engagement ?? new EngagementService(fastify.prisma);
   const creditPoints = (userId: string, points: number, axisKey: EngagementAxisKey) =>
     engagement.creditGamePoints(userId, points, axisKey);
-  const missions = new MissionService(fastify.prisma, { creditPoints });
+  const missions = new MissionService(fastify.prisma, { creditPoints, emitIO: getEngagementEmitIO });
   const flame = new FlameService(fastify.prisma);
   const blocks = new GameBlockService(fastify.prisma, { missions, personal: new PersonalMissionService(fastify.prisma, { missions }) });
 

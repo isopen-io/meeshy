@@ -118,6 +118,7 @@ internal object NavBackChrome {
         modal("Routes.COMPOSER", Routes.COMPOSER, IosPresentation.COVER, "app/src/main/kotlin/me/meeshy/app/composer/host/ComposerHostScreen.kt"),
         // Réglages.
         arrow("Routes.SETTINGS", Routes.SETTINGS, settings("SettingsScreen.kt")),
+        arrow("Routes.SETTINGS_FOCUS", Routes.SETTINGS_FOCUS, settings("SettingsScreen.kt")),
         sheet("Routes.NOTIFICATION_SETTINGS", Routes.NOTIFICATION_SETTINGS, IosPresentation.SHEET, settings("NotificationSettingsScreen.kt")),
         sheet("Routes.CHANGE_PASSWORD", Routes.CHANGE_PASSWORD, IosPresentation.SHEET, settings("ChangePasswordScreen.kt")),
         sheet("Routes.TWO_FACTOR", "${Routes.TWO_FACTOR}?step={step}", IosPresentation.SHEET, settings("TwoFactorScreen.kt")),

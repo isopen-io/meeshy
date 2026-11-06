@@ -3,10 +3,6 @@ import type { SceneExportCatalog } from '@/lib/i18n-scene-export-catalog';
 const it = {
   'sceneExport.menu.save': 'Salva',
   'sceneExport.menu.imager': 'Crea immagine',
-  'sceneExport.length.title': 'Quanta durata generare?',
-  'sceneExport.length.subtitle': 'Dall’inizio della pubblicazione',
-  'sceneExport.length.option': '{part}/4 · {duration}',
-  'sceneExport.length.cancel': 'Annulla',
   'sceneExport.tray.preparing': 'Preparazione dell’esportazione…',
   'sceneExport.tray.progress': 'Esportazione · {percent} %',
   'sceneExport.tray.delivering': 'Salvataggio del file…',

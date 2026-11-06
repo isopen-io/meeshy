@@ -46,6 +46,8 @@ import javax.inject.Inject
  *
  * A piece that lands is bridged from its upload's `cmid` to the server id the gateway gave it ([UploadedAttachmentIds],
  * #15969): what follows the piece across its acknowledgement — the voice-note player — finds it under its new name.
+ * The bridge is written BEFORE the piece leaves the progress ledger (#16133): a bubble of several pieces reads the
+ * landed ones there, and would otherwise fall back to zero for an instant at the end of each.
  */
 public class UploadMediaHandler @Inject constructor(
     private val mediaBlobStore: MediaBlobStore,
@@ -62,23 +64,24 @@ public class UploadMediaHandler @Inject constructor(
         val payload = payloadOf(row)
         val context = contextOf(payload)
         val result = try {
-            if (context != null) {
+            val outcome = if (context != null) {
                 MediaUploadSender.send(item) {
                     tusUploadRepository.upload(it, context) { sent, total -> progressLedger.report(row.cmid, sent, total) }
                 }
             } else {
                 val destination = payload?.conversationId?.takeIf { it.isNotBlank() }
                 MediaUploadSender.send(item, refusal = { destinationRefusal(it, destination) }) {
-                    mediaRepository.upload(listOf(it), destination)
+                    mediaRepository.upload(listOf(it), destination) { sent, total -> progressLedger.report(row.cmid, sent, total) }
                 }
             }
+            if (outcome is SendResult.SuccessWithId) acknowledged.record(row.cmid, outcome.producedId)
+            outcome
         } finally {
             progressLedger.clear(row.cmid)
         }
         if (result.dropsBytes(context)) {
             mediaBlobStore.remove(row.cmid)
         }
-        if (result is SendResult.SuccessWithId) acknowledged.record(row.cmid, result.producedId)
         return result
     }
 

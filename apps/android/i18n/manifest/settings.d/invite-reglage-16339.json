@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "settings.section.voice", "androidName": "settings_section_voice", "status": "adopted" },
+        { "catalog": "app", "iosKey": "settings.voice.create", "androidName": "settings_voice_create", "status": "adopted" }
+      ]
+    }
+  }
+}

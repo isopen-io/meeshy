@@ -39,6 +39,8 @@ struct SettingsView: View {
     @State private var showAffiliate = false
     @State private var showVoiceProfileWizard = false
     @State private var showVoiceProfileManage = false
+    /// Ouverte par un indicateur (#16418) : sans profil, l'assistant suit.
+    @State private var voiceManageOpensWizard = false
     @State private var showMediaDownload = false
     @State private var showPacks = false
     @State private var packsInitialDomain: PackDomain?
@@ -49,6 +51,8 @@ struct SettingsView: View {
         self.packShopLauncher = packShopLauncher
     }
     @State private var scrollRelay = ScrollOffsetRelay()
+    /// Le réglage qu'une invite a désigné (#16339) — défilé et allumé.
+    @State private var focusedSetting: SettingsFocus?
     /// Miroirs des trois interrupteurs d'interface (#6482), lus UNE fois au
     /// montage comme `interfaceLanguageChoice` : chaque bascule écrit le miroir
     /// ET `LentilleFeatureFlag.setEnabled` — le drapeau reste la seule source.
@@ -174,6 +178,7 @@ struct SettingsView: View {
             .sheet(isPresented: $showDataStorage) { DataStorageView() }
             .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
             .sheet(isPresented: $showPacks) { PacksSettingsView(initialDomain: packsInitialDomain, focusedPack: packsFocusedPack) }
+            .onReceive(SettingsFocusRequest.shared.$pending.compactMap { $0 }, perform: receiveFocus)
             .onReceive(packShopLauncher.$pending.compactMap { $0 }) { _ in
                 let request = packShopLauncher.consume()
                 packsInitialDomain = request?.domain
@@ -202,7 +207,29 @@ struct SettingsView: View {
 
     // MARK: - Scroll Content
 
+    /// #16339 — le réglage désigné par une invite ; le master PIN vit dans
+    /// Sécurité, qui consomme la demande à son tour.
+    private func receiveFocus(_ focus: SettingsFocus) {
+        if !focus.opensSecurity { _ = SettingsFocusRequest.shared.consume() }
+        focusedSetting = focus
+        if let sheet = focus.opensSheet {
+            Task { await DelayedUI.perform(after: .milliseconds(500)) { present(sheet) } }
+        }
+        guard focus.opensSecurity else { return }
+        Task { await DelayedUI.perform(after: .milliseconds(900)) { showSecurity = true } }
+    }
+
+    /// #16418 — la configuration de la voix s'ouvre d'elle-même, une fois la
+    /// poussée des Réglages achevée.
+    private func present(_ sheet: SettingsFocus.Sheet) {
+        switch sheet {
+        case .voiceProfileManage: voiceManageOpensWizard = true; showVoiceProfileManage = true
+        case .voiceProfileWizard: showVoiceProfileWizard = true
+        }
+    }
+
     private var scrollContent: some View {
+        ScrollViewReader { proxy in
         ScrollView(showsIndicators: false) {
             GeometryReader { geo in
                 Color.clear.preference(
@@ -218,9 +245,15 @@ struct SettingsView: View {
                 VStack(spacing: MeeshySpacing.xl) {
                     profileCard
                     accountSection
+                        .id(SettingsFocus.masterPin.settingsAnchor)
+                        .modifier(SettingsFocusHighlight(isActive: focusedSetting == .masterPin))
                     appearanceSection
                     voiceProfileSection
+                        .id(SettingsFocus.voiceProfile.settingsAnchor)
+                        .modifier(SettingsFocusHighlight(isActive: focusedSetting?.settingsAnchor == SettingsFocus.voiceProfile.settingsAnchor))
                     transcriptionSection
+                        .id(SettingsFocus.transcription.settingsAnchor)
+                        .modifier(SettingsFocusHighlight(isActive: focusedSetting == .transcription))
                     notificationsSection
                     dataSection
                     meeshyToolsSection
@@ -238,6 +271,13 @@ struct SettingsView: View {
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
+        .adaptiveOnChange(of: focusedSetting, initial: true) { _, focus in
+            guard let focus else { return }
+            Task { await DelayedUI.perform(after: .milliseconds(350)) {
+                withAnimation(.easeInOut(duration: 0.4)) { proxy.scrollTo(focus.settingsAnchor, anchor: .center) }
+            } }
+        }
+        }
     }
 
     // MARK: - Account Section
@@ -645,6 +685,7 @@ struct SettingsView: View {
         settingsSection(title: String(localized: "settings.section.voice", bundle: .main), icon: "waveform.and.mic", color: MeeshyColors.trackingAccentHex) {
             Button {
                 HapticFeedback.light()
+                voiceManageOpensWizard = false
                 showVoiceProfileManage = true
             } label: {
                 settingsRow(icon: "waveform.circle.fill", title: String(localized: "settings.voice.manage", bundle: .main), color: MeeshyColors.trackingAccentHex) {
@@ -673,7 +714,7 @@ struct SettingsView: View {
             VoiceProfileWizardView(accentColor: MeeshyColors.trackingAccentHex)
         }
         .sheet(isPresented: $showVoiceProfileManage) {
-            VoiceProfileManageView(accentColor: MeeshyColors.trackingAccentHex)
+            VoiceProfileManageView(accentColor: MeeshyColors.trackingAccentHex, opensWizardWhenEmpty: voiceManageOpensWizard)
         }
     }
 
@@ -681,6 +722,17 @@ struct SettingsView: View {
 
     private var transcriptionSection: some View {
         settingsSection(title: String(localized: "settings.section.transcription", bundle: .main), icon: "text.quote", color: MeeshyColors.indigo300Hex) {
+            settingsRow(icon: "mic.fill", title: String(localized: "settings.transcription.mine", defaultValue: "Transcrire mes messages vocaux", bundle: .main), color: MeeshyColors.indigo300Hex) {
+                Toggle("", isOn: Binding(
+                    get: { prefs.audio.transcriptionEnabled },
+                    set: { val in prefs.updateAudio { $0.transcriptionEnabled = val } }
+                ))
+                    .labelsHidden()
+                    .tint(Color(hex: accentColor))
+                    .accessibilityLabel(String(localized: "settings.transcription.mine", defaultValue: "Transcrire mes messages vocaux", bundle: .main))
+                    .accessibilityValue(prefs.audio.transcriptionEnabled ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
+            }
+
             settingsRow(icon: "waveform", title: String(localized: "settings.transcription.auto", bundle: .main), color: MeeshyColors.indigo300Hex) {
                 Toggle("", isOn: Binding(
                     get: { prefs.audio.autoTranscribeIncoming },

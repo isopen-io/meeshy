@@ -166,7 +166,7 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
             ("case .share:", "shareOutsideButton(story: story, group: group)"),
             ("case .compose:", "demanderComposer(cible)"),
             ("case .exportVideo:", "showExportShareSheet = true"),
-            ("case .imager:", "StoryPhotoSaveService.shared.image("),
+            ("case .imager:", "MessageCardExportPresenter.present(ImagerCardRequest.story("),
             ("case .report:", "showReportSheet = true"),
             ("case .remove:", "ContentRemovalPresenter.present(.story) { deleteCurrentStory($0) }"),
             ("case .delete:", "deleteCurrentStory(nil)"),

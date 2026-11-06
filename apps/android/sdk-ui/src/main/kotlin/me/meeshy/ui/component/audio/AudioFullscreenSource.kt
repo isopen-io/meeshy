@@ -40,6 +40,10 @@ public data class AudioFullscreenSource(
     val transcriptionSegments: List<MessageTranscriptionSegment> = emptyList(),
     val trackLanguage: String? = null,
     val isTranslatedTrack: Boolean = false,
+    /** La langue de la voix d'origine (la pastille « Original ») ; inconnue ⇒ `null`. */
+    val originalLanguage: String? = null,
+    /** Les langues des pistes traduites déjà prêtes, dans l'ordre servi : les pastilles du bandeau, jamais dédoublonnées ici ([me.meeshy.sdk.model.playback.AudioLanguageStripLaw.pills] s'en charge). */
+    val translatedLanguages: List<String> = emptyList(),
     val authorRing: ServedProfileDecorItem? = null,
     /** La présence SERVIE de l'auteur ; absente ⇒ aucun point (le client ne la fabrique pas). */
     val authorPresence: PresenceState? = null,
@@ -102,6 +106,8 @@ public data class AudioFullscreenSource(
                 transcriptionSegments = audio.transcriptionSegments,
                 trackLanguage = audio.playedLanguage,
                 isTranslatedTrack = audio.isAudioTranslated,
+                originalLanguage = audio.originalLanguage,
+                translatedLanguages = audio.translatedLanguages,
                 authorRing = bubble.senderRing,
                 servedConsumption = MediaConsumptionSeed.of(audio.lastPlayPositionMs, audio.listenedComplete),
                 exitOffer = bubble.exitOffer,

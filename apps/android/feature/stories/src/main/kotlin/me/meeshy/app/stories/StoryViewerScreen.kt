@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.composer.StoryRepostAudience
 import me.meeshy.sdk.model.story.StoryReplyRules
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.profile.LocalProfileSheetPresented
+import me.meeshy.app.feed.LocalPostCardImager
 
 /**
  * L'HÔTE du lecteur de stories : il choisit entre chargement, introuvable et lecture, puis assemble les fichiers
@@ -102,7 +103,10 @@ fun StoryViewerScreen(
         groupIntro = groupIntro.shown,
         profile = LocalProfileSheetPresented.current.value,
     )
+    val cardImager = LocalPostCardImager.current
+    val imager: (() -> Unit)? = cardImager?.let { open -> { storyImagerRequest(currentItem, slide, state, videoExport)?.let(open) } }
     val actions = rememberStoryViewerActions(
+        imager = imager,
         state = state,
         currentItem = currentItem,
         chrome = chrome,
@@ -140,6 +144,7 @@ fun StoryViewerScreen(
         rail = rail,
         chrome = chrome,
         videoExport = videoExport,
+        imager = imager,
         actions = actions,
         haptics = meeshyHaptics,
         viewModel = viewModel,

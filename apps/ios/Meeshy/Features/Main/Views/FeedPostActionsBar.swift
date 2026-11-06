@@ -33,12 +33,70 @@ struct FeedPostActionsBar: View, Equatable {
     let onQuote: ((String) -> Void)?
     let onBookmark: ((String) -> Void)?
     let sendSubject: ShareSubject
+    let onImager: (() -> Void)?
+    let onImagerQuick: (() -> Void)?
+    private let offersImager: Bool
+    private let offersImagerQuick: Bool
 
     // Lecture directe sans @ObservedObject — même règle que la carte hôte.
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var showRepostOptions = false
     @State private var likeAnimating = false
     @State private var sent: SharedContentWrapper?
+
+    init(
+        postId: String,
+        accentColor: String,
+        isDark: Bool,
+        isLikedByMe: Bool,
+        likeCount: Int,
+        isHeartInFlight: Bool,
+        commentCount: Int,
+        isCommentsSheetPresented: Bool,
+        repostCount: Int,
+        isReposted: Bool,
+        isRepostInFlight: Bool,
+        bookmarkCount: Int,
+        isBookmarked: Bool,
+        isBookmarkInFlight: Bool,
+        shareCount: Int,
+        isShareInFlight: Bool,
+        onLike: ((String) -> Void)?,
+        onOpenCommentsTap: @escaping () -> Void,
+        onRepost: ((String) -> Void)?,
+        onQuote: ((String) -> Void)?,
+        onBookmark: ((String) -> Void)?,
+        sendSubject: ShareSubject,
+        onImager: (() -> Void)? = nil,
+        onImagerQuick: (() -> Void)? = nil
+    ) {
+        self.postId = postId
+        self.accentColor = accentColor
+        self.isDark = isDark
+        self.isLikedByMe = isLikedByMe
+        self.likeCount = likeCount
+        self.isHeartInFlight = isHeartInFlight
+        self.commentCount = commentCount
+        self.isCommentsSheetPresented = isCommentsSheetPresented
+        self.repostCount = repostCount
+        self.isReposted = isReposted
+        self.isRepostInFlight = isRepostInFlight
+        self.bookmarkCount = bookmarkCount
+        self.isBookmarked = isBookmarked
+        self.isBookmarkInFlight = isBookmarkInFlight
+        self.shareCount = shareCount
+        self.isShareInFlight = isShareInFlight
+        self.onLike = onLike
+        self.onOpenCommentsTap = onOpenCommentsTap
+        self.onRepost = onRepost
+        self.onQuote = onQuote
+        self.onBookmark = onBookmark
+        self.sendSubject = sendSubject
+        self.onImager = onImager
+        self.onImagerQuick = onImagerQuick
+        self.offersImager = onImager != nil
+        self.offersImagerQuick = onImagerQuick != nil
+    }
 
     nonisolated static func == (lhs: FeedPostActionsBar, rhs: FeedPostActionsBar) -> Bool {
         lhs.postId == rhs.postId
@@ -57,6 +115,8 @@ struct FeedPostActionsBar: View, Equatable {
             && lhs.isBookmarkInFlight == rhs.isBookmarkInFlight
             && lhs.shareCount == rhs.shareCount
             && lhs.isShareInFlight == rhs.isShareInFlight
+            && lhs.offersImager == rhs.offersImager
+            && lhs.offersImagerQuick == rhs.offersImagerQuick
     }
 
     var body: some View {
@@ -105,8 +165,6 @@ struct FeedPostActionsBar: View, Equatable {
                         .contentTransition(.numericText())
                 }
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isHeartInFlight)
@@ -133,8 +191,6 @@ struct FeedPostActionsBar: View, Equatable {
                 }
                 .foregroundColor(isCommentsSheetPresented ? theme.accentText(accentColor) : theme.textSecondary)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .accessibilityLabel(String(localized: "feed.post.comments_count", defaultValue: "\(commentCount) commentaires", bundle: .main))
@@ -177,8 +233,6 @@ struct FeedPostActionsBar: View, Equatable {
                 .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isBookmarkInFlight)
@@ -215,14 +269,14 @@ struct FeedPostActionsBar: View, Equatable {
                 .foregroundColor(theme.textSecondary)
                 .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
             }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone de hit se
-            // limitait au tracé — le marque-page ratait un tap sur deux a l'usage.
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
             .disabled(isShareInFlight)
             .accessibilityLabel(String(localized: "feed.post.send", defaultValue: "Envoyer", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), shareCount))
             .accessibilityHint(String(localized: "a11y.feed.post.send.hint", defaultValue: "Envoie cette publication dans une conversation Meeshy", bundle: .main))
+
+            imagerButton
 
             // Pas de bouton muet ici en E2 (correctif revue DoD, constat
             // majeur #2) : la carte n'embarque encore AUCUN lecteur local
@@ -235,6 +289,19 @@ struct FeedPostActionsBar: View, Equatable {
         }
         .padding(.top, MeeshySpacing.xs)
         .modifier(MeeshySendSheet(sent: $sent))
+    }
+
+    @ViewBuilder
+    private var imagerButton: some View {
+        if let onImager {
+            Spacer()
+            ImagerWandButton(
+                hint: String(localized: "feed.post.imager.hint", defaultValue: "Fait de cette publication une carte image.", bundle: .main),
+                tint: theme.textSecondary,
+                action: onImager,
+                quick: onImagerQuick
+            )
+        }
     }
 
     private var repostButton: some View {

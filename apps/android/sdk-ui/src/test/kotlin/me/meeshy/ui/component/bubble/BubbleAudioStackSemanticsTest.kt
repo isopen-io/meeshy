@@ -1,15 +1,22 @@
 package me.meeshy.ui.component.bubble
 
 import android.content.Context
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.settings.SettingsInvite
 import androidx.test.core.app.ApplicationProvider
 import me.meeshy.ui.R
 import me.meeshy.ui.component.audio.AUDIO_CONSENT_NOTICE_TAG
+import me.meeshy.ui.settings.LocalSettingsInviteOpener
+import me.meeshy.ui.settings.SettingsInviteOpener
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -25,16 +32,18 @@ class BubbleAudioStackSemanticsTest {
     @get:Rule val compose = createComposeRule()
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
-    private fun show(content: BubbleContent) {
+    private fun show(content: BubbleContent, opener: SettingsInviteOpener? = null) {
         compose.setContent {
-            MeeshyTheme {
-                BubbleAudioStack(
-                    content = content,
-                    playback = null,
-                    onColor = Color.Black,
-                    accent = Color(0xFF6366F1),
-                    callbacks = BubbleCallbacks(onAudioClick = {}),
-                )
+            CompositionLocalProvider(LocalSettingsInviteOpener provides opener) {
+                MeeshyTheme {
+                    BubbleAudioStack(
+                        content = content,
+                        playback = null,
+                        onColor = Color.Black,
+                        accent = Color(0xFF6366F1),
+                        callbacks = BubbleCallbacks(onAudioClick = {}),
+                    )
+                }
             }
         }
         compose.waitForIdle()
@@ -76,5 +85,15 @@ class BubbleAudioStackSemanticsTest {
         show(voiceBubble(listOf(voiceNote("a")), voiceConsentMissing = true, isOutgoing = false))
 
         compose.onAllNodesWithTag(AUDIO_CONSENT_NOTICE_TAG).assertCountEquals(0)
+    }
+
+    @Test
+    fun `toucher l'avis de consentement ouvre les reglages sur le profil vocal`() {
+        val opened = mutableListOf<SettingsInvite>()
+        show(voiceBubble(listOf(voiceNote("a")), voiceConsentMissing = true, isOutgoing = true)) { opened += it }
+
+        compose.onNodeWithTag(AUDIO_CONSENT_NOTICE_TAG).performClick()
+
+        assertThat(opened).containsExactly(SettingsInvite.VOICE_CONSENT)
     }
 }

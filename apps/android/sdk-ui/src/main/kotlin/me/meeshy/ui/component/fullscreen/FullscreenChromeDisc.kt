@@ -11,7 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -99,7 +98,8 @@ public val FullscreenChromeSymbol.icon: ImageVector
         FullscreenChromeSymbol.Save -> Icons.Filled.SaveAlt
         FullscreenChromeSymbol.Saved -> Icons.Filled.Check
         FullscreenChromeSymbol.Repost -> Icons.Filled.Repeat
-        FullscreenChromeSymbol.Compose -> Icons.Filled.AutoAwesome
+        FullscreenChromeSymbol.Compose -> MeeshyIcons.ComposeNew
+        FullscreenChromeSymbol.Imager -> MeeshyIcons.MagicWand
         FullscreenChromeSymbol.AudioOutput -> Icons.Filled.Cast
         FullscreenChromeSymbol.Play -> Icons.Filled.PlayArrow
         FullscreenChromeSymbol.Pause -> Icons.Filled.Pause

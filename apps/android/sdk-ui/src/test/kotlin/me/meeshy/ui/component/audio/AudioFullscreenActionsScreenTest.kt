@@ -40,6 +40,7 @@ class AudioFullscreenActionsScreenTest {
         val reacted = mutableListOf<Pair<String, String>>()
         val forwarded = mutableListOf<String>()
         val composed = mutableListOf<String>()
+        val imaged = mutableListOf<String>()
         val replyBars = mutableListOf<String>()
 
         override fun offer(source: AudioFullscreenSource): AudioFullscreenOffer = offer
@@ -56,6 +57,10 @@ class AudioFullscreenActionsScreenTest {
             composed += source.id
         }
 
+        override fun imager(source: AudioFullscreenSource) {
+            imaged += source.id
+        }
+
         @Composable
         override fun ReplyBar(source: AudioFullscreenSource, accent: Color, onClose: () -> Unit) {
             replyBars += source.id
@@ -64,6 +69,8 @@ class AudioFullscreenActionsScreenTest {
     }
 
     private val everything = AudioFullscreenOffer(react = true, reply = true, forward = true, compose = true)
+
+    private var dismissed = 0
 
     private fun show(player: FakeAudioFullscreenPlayer, port: AudioFullscreenActionPort?) {
         compose.mainClock.autoAdvance = false
@@ -74,7 +81,7 @@ class AudioFullscreenActionsScreenTest {
                     startAttachmentId = "a",
                     player = player,
                     accent = Color.Magenta,
-                    onDismiss = {},
+                    onDismiss = { dismissed++ },
                     actions = port,
                 )
             }
@@ -96,6 +103,7 @@ class AudioFullscreenActionsScreenTest {
     private val react get() = context.getString(R.string.media_react_title)
     private val reply get() = context.getString(R.string.media_reply_title)
     private val forward get() = context.getString(R.string.a11y_message_actions_forward)
+    private val imager get() = context.getString(R.string.media_imager_title)
 
     @Test
     fun `sans port, le plein ecran n'a aucun rail`() {
@@ -179,5 +187,23 @@ class AudioFullscreenActionsScreenTest {
         show(FakeAudioFullscreenPlayer(), RecordingPort(AudioFullscreenOffer.None))
 
         compose.onAllNodesWithContentDescription(react).assertCountEquals(0)
+    }
+
+    @Test
+    fun `la baguette du rail image le message porteur de la page posee, puis ferme le plein ecran (#16334)`() {
+        val port = RecordingPort(everything.copy(imager = true))
+        show(FakeAudioFullscreenPlayer(), port)
+
+        tap(imager)
+
+        assertThat(port.imaged).containsExactly("a")
+        assertThat(dismissed).isEqualTo(1)
+    }
+
+    @Test
+    fun `sans verdict de la carte, le rail ne pose pas la baguette (#16334)`() {
+        show(FakeAudioFullscreenPlayer(), RecordingPort(everything))
+
+        compose.onAllNodesWithContentDescription(imager).assertCountEquals(0)
     }
 }

@@ -51,11 +51,10 @@ typealias PostSceneReaderRenderer = @Composable (item: StoryItem, accentHex: Str
 val LocalPostSceneReaderRenderer = staticCompositionLocalOf<PostSceneReaderRenderer?> { null }
 
 /**
- * Le menu d'export du plein écran d'un post à scène (#13896) : Enregistrer, Partager et Imager rendent le post ENTIER, toutes
- * ses scènes bout à bout, par le moteur d'export que l'application fournit. Arguments : les scènes du post, la couleur de
- * son auteur, la place du bouton.
+ * Le menu d'export du plein écran d'un post à scène (#13896) : Enregistrer et Partager rendent le post ENTIER, toutes ses
+ * scènes bout à bout, par le moteur d'export que l'application fournit ; Imager ouvre l'atelier de carte (#16393).
  */
-typealias PostSceneExportRenderer = @Composable (scenes: List<StoryItem>, accentHex: String?, modifier: Modifier) -> Unit
+typealias PostSceneExportRenderer = @Composable (scenes: List<StoryItem>, accentHex: String?, modifier: Modifier, onImager: (() -> Unit)?) -> Unit
 
 /** `null` hors de l'application (tests, aperçus) : le plein écran n'offre alors aucun export. */
 val LocalPostSceneExportRenderer = staticCompositionLocalOf<PostSceneExportRenderer?> { null }

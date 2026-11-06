@@ -1,10 +1,12 @@
 import { lazy, Suspense, useState } from 'react';
 
 import type { EditPostOutcome } from '@/lib/api/publication-actions';
+import type { PublicationImageRequest } from '@/lib/export/publication-image-store';
 import type { FeedCardModel } from '@/lib/feed/card-model';
 import type { ReportReason } from '@/lib/api/reports';
 import type { DraftStore } from '@/lib/send/draft-store';
 import type { PostToggleKind } from '@/lib/feed/interactions';
+import type { PostImagingInput } from '@/lib/feed/publication-imaging';
 import { postMenuEntries } from '@/lib/feed/publication-menu';
 import { translate } from '@/lib/i18n-catalog';
 import { isSceneExportCatalogLoaded, loadSceneExportCatalog } from '@/lib/i18n-scene-export-catalog';
@@ -21,8 +23,11 @@ import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
  */
 const PostMenuPanel = lazy(() => import('./publication-menu-panel').then((m) => ({ default: m.PostMenuPanel })));
 
-/** Ce que « Sauvegarder » et « Imager » rendent (#13873) — la scène de la carte et son auteur, sans rien charger tant que le menu n'est pas ouvert. */
+/** Ce que « Sauvegarder » rend (#13873) — la scène de la carte et son auteur, sans rien charger tant que le menu n'est pas ouvert. */
 export type PostMenuSceneExport = Pick<FeedCardModel, 'id' | 'isReel' | 'scene' | 'author'>;
+
+/** Ce qu'« Imager » remet à l'atelier de carte (#16166, #16393) — la loi ne se charge qu'à l'ouverture du menu. */
+export type PostMenuImaging = PostImagingInput & Pick<FeedCardModel, 'isReel'>;
 
 /**
  * **LE MENU « ⋯ » D'UNE CARTE DU FIL** (#7533, directive porteur du
@@ -83,6 +88,7 @@ export function FeedPostMenu({
   bookmarked,
   studioEditable = false,
   sceneExport,
+  imaging,
   isDetail,
   tone,
   menu,
@@ -105,8 +111,10 @@ export function FeedPostMenu({
    * média, et n'est pas une republication : sa modification se fait dans le
    * studio (`/posts/:id/edit`). Sinon, la feuille de texte (#7534). */
   readonly studioEditable?: boolean;
-  /** LA SCÈNE À EXPORTER (#13873) — absente, ni « Sauvegarder » ni « Imager ». */
+  /** LA SCÈNE À EXPORTER (#13873) — absente, pas de « Sauvegarder ». */
   readonly sceneExport?: PostMenuSceneExport | undefined;
+  /** CE QU'« IMAGER » COMPOSE (#16166) — absent, ou rien qui s'image : pas d'« Imager ». */
+  readonly imaging?: PostMenuImaging | undefined;
   readonly isDetail: boolean;
   /** `card` sur le fond de la carte, `overlay` sur un média (le réel). */
   readonly tone: 'card' | 'overlay';
@@ -119,9 +127,11 @@ export function FeedPostMenu({
   const [viewing, setViewing] = useState(false);
   const [removing, setRemoving] = useState(false);
   /* Les libellés de l'export vivent dans un catalogue chargé à l'ouverture du
-     menu, avec le panneau : les deux entrées s'offrent dès qu'il est là. */
+     menu, avec le panneau et la loi d'« Imager » : les entrées s'offrent dès
+     qu'ils sont là. */
   const [, setExportLabelsReady] = useState(false);
-  const exportable = sceneExport?.scene !== undefined && isSceneExportCatalogLoaded(currentInterfaceLanguage());
+  const [imageRequest, setImageRequest] = useState<PublicationImageRequest | null>(null);
+  const labelsLoaded = isSceneExportCatalogLoaded(currentInterfaceLanguage());
   const entries = postMenuEntries({
     viewerId: menu.viewerId,
     authorId,
@@ -131,7 +141,8 @@ export function FeedPostMenu({
     canSave: onGesture !== undefined,
     viewerIsAdministrator: menu.viewerIsAdministrator === true,
     viewerModerates: menu.viewerModerates === true && menu.onRemove !== undefined,
-    canExportScene: exportable,
+    canSaveScene: sceneExport?.scene !== undefined && labelsLoaded,
+    canImage: imageRequest !== null && labelsLoaded,
   });
 
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
@@ -174,9 +185,12 @@ export function FeedPostMenu({
           event.preventDefault();
           event.stopPropagation();
           if (!open) measure();
-          if (!open && sceneExport?.scene !== undefined) {
-            void loadSceneExportCatalog(currentInterfaceLanguage()).then(
-              () => setExportLabelsReady(true),
+          if (!open && (sceneExport?.scene !== undefined || imaging !== undefined)) {
+            void Promise.all([loadSceneExportCatalog(currentInterfaceLanguage()), imaging === undefined ? null : import('@/lib/export/publication-image')]).then(
+              ([, module]) => {
+                setImageRequest(module === null || imaging === undefined ? null : module.postImageRequestOf(imaging));
+                setExportLabelsReady(true);
+              },
               () => undefined,
             );
           }
@@ -214,6 +228,7 @@ export function FeedPostMenu({
             bookmarked={bookmarked}
             studioEditable={studioEditable}
             sceneExport={sceneExport}
+            imageRequest={imageRequest}
             menu={menu}
             onShare={onShare}
             onGesture={onGesture}
@@ -271,6 +286,7 @@ export function ModelPostMenu({
       bookmarked={model.viewer.bookmarked}
       studioEditable={model.repostOf === undefined && (model.scene !== undefined || model.media.length > 0)}
       sceneExport={model.scene === undefined ? undefined : model}
+      imaging={model}
       isDetail={isDetail}
       tone={tone}
       menu={menu}

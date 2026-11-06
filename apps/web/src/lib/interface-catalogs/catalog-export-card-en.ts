@@ -70,6 +70,7 @@ const en = {
   'export.card.typeface.pairs': 'The font dresses both the quote and the reply',
   'export.card.tab.frame': 'Frame',
   'export.card.tab.media': 'Media',
+  'export.card.tab.content': 'Content',
   'export.card.part.media': 'Media',
   'export.card.part.replies': 'Replies',
   'export.card.aspect': 'Image format',

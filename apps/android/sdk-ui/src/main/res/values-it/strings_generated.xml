@@ -7,7 +7,7 @@
     <string name="a11y_media_download_action">Scarica</string>
     <string name="a11y_media_download_cancel">Annulla il download</string>
     <string name="a11y_message_actions_forward">Inoltra</string>
-    <string name="audio_consent_notice_action">Attiva nelle Impostazioni</string>
+    <string name="audio_consent_notice_action">Configura la mia voce</string>
     <string name="audio_consent_notice_message">Attiva il consenso vocale affinché i tuoi messaggi audio siano trascritti e tradotti.</string>
     <string name="audio_editor_a11y_playhead">Posizione di riproduzione</string>
     <string name="audio_editor_apply">Applica le modifiche</string>
@@ -51,6 +51,11 @@
     <string name="audio_editor_volume_normal">Normale</string>
     <string name="audio_fullscreen_airplay">Trasmetti a un dispositivo</string>
     <string name="audio_fullscreen_dial">Posizione nel messaggio vocale</string>
+    <string name="audio_fullscreen_language_choose">Traduci l\'audio</string>
+    <string name="audio_fullscreen_transcription_action">Trascrivi</string>
+    <string name="audio_fullscreen_transcription_empty">Nessuna trascrizione</string>
+    <string name="audio_fullscreen_transcription_local">Trascrivi sul dispositivo</string>
+    <string name="audio_fullscreen_transcription_server">Trascrivi tramite il server</string>
     <string name="audio_recorder_micDenied">Permesso microfono negato</string>
     <string name="audio_recorder_micDeniedSettings">Microfono negato — consentilo in Impostazioni</string>
     <string name="audio_recorder_record">Registra</string>
@@ -321,6 +326,7 @@
     <string name="media_crop_a11y_size">Larghezza %1$s, altezza %2$s</string>
     <string name="media_download">Scarica</string>
     <string name="media_forward_rail_hint">Invia questo contenuto in un\'altra conversazione.</string>
+    <string name="media_imager_title">Crea immagine</string>
     <string name="media_label_audio">Audio</string>
     <string name="media_label_file">File</string>
     <string name="media_label_location">Posizione</string>

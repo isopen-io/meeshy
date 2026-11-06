@@ -231,17 +231,25 @@ describe('le bloc game', () => {
 
   it('dit le contenu certain du coffre et ses primes avant l\'ouverture : l\'effort du jour, le cours de la Meesh (#10011)', () => {
     const missions = missionRecords(34);
-    expect(block({ missions }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13)));
+    expect(block({ missions }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13), 23));
     expect(block({ missions, mintedLifetime: 100 }).chest.today).toMatchObject({ bonusWhole: 16_556, bonusFifth: 3311 });
     expect(block({ missions: [] }).chest.today).toBeNull();
+  });
+
+  it('dit la Gloire du coffre « si on l\'ouvre maintenant » : la précocité de l\'heure servie, aucune sans heure (#16414)', () => {
+    const missions = missionRecords(34);
+    const base = chestContentForEffort(dayEffort(missions), meeshPrice(13), 23).glory;
+    expect(block({ missions, chestElapsedHours: 0 }).chest.today).toMatchObject({ glory: base + 2800, earlyGlory: 2800 });
+    expect(block({ missions, chestElapsedHours: 11 }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13), 11));
+    expect(block({ missions }).chest.today).toMatchObject({ glory: base, earlyGlory: 0 });
   });
 
   it('dit la prime au cours FIGÉ au début du jour quand la passerelle le sert, et au cours d\'avant sinon (#10219)', () => {
     const missions = missionRecords(34);
     // 12 frappées à vie, 9 avant le jour : le prix de la 10e (1 221), pas celui de la 13e.
     expect(block({ missions, mintedLifetime: 12, chestMintBase: 9 }).chest.today).toMatchObject({ bonusWhole: 1221 });
-    expect(block({ missions, mintedLifetime: 12 }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13)));
-    expect(block({ missions, mintedLifetime: 12, chestMintBase: null }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13)));
+    expect(block({ missions, mintedLifetime: 12 }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13), 23));
+    expect(block({ missions, mintedLifetime: 12, chestMintBase: null }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13), 23));
   });
 
   it('sert les fragments d\'étoile collectés quand la passerelle les connaît, et pas sinon — aucune frappe par fragments', () => {

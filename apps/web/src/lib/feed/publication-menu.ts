@@ -65,11 +65,16 @@ export function postMenuEntries(params: {
   readonly viewerModerates?: boolean;
   /**
    * LA PUBLICATION PORTE UNE SCÈNE (#13873) — « Sauvegarder » l'exporte en
-   * vidéo complète, son compris, « Imager » en rend tout ou partie (miroir
-   * `feed.reel.save_media` / `PostSaveRoute.renderScene` iOS). Ouvert à tout
-   * lecteur, comme iOS : ce qu'on voit, on peut le garder. Absent ⇒ non.
+   * vidéo complète, son compris (miroir `feed.reel.save_media` iOS). Ouvert
+   * à tout lecteur, comme iOS : ce qu'on voit, on peut le garder. Absent ⇒ non.
    */
-  readonly canExportScene?: boolean;
+  readonly canSaveScene?: boolean;
+  /**
+   * LA PUBLICATION S'IMAGE (#16166, #16393) — scène, texte ou médias simples,
+   * dans l'atelier de carte d'un message ; la loi de sortie décide
+   * (`postImagingOf`). Absent ⇒ non.
+   */
+  readonly canImage?: boolean;
 }): readonly PostMenuEntry[] {
   const { viewerId, authorId, isDetail, hasText, canShare, canSave, viewerIsAdministrator } = params;
   const signedIn = viewerId !== null && viewerId !== '';
@@ -79,7 +84,8 @@ export function postMenuEntries(params: {
     ...(isDetail ? [] : (['open'] as const)),
     ...(hasText ? (['copyText'] as const) : []),
     ...(canShare ? (['share'] as const) : []),
-    ...(params.canExportScene === true ? (['saveMedia', 'imager'] as const) : []),
+    ...(params.canSaveScene === true ? (['saveMedia'] as const) : []),
+    ...(params.canImage === true ? (['imager'] as const) : []),
     ...(canSave && signedIn ? (['save'] as const) : []),
     ...(signedIn && viewerIsAdministrator ? (['views'] as const) : []),
     ...(isOwn ? (['pin', 'edit', 'delete'] as const) : []),

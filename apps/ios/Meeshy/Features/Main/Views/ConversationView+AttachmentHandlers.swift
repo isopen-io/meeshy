@@ -162,6 +162,7 @@ extension ConversationView {
             currentUserId: currentUser?.id ?? "",
             senderColor: DynamicColorGenerator.colorForName(currentUser?.displayName ?? "?")
         )
+        viewModel.collaborators.uploadProgress.begin(mediaGroupSends.map(\.tempId))
         insertOptimisticMediaBubbles(mediaGroupSends, intent: intent)
         let textGroup = intent.plan.first(where: { $0.kind == .text })
         let textTempId = AttachmentSendBatch.textTempId(textGroup: textGroup, place: intent.place, generate: ClientMessageId.generate)
@@ -221,23 +222,26 @@ extension ConversationView {
         )
     }
 
-    /// Plusieurs lots se téléversent ensemble (#14696) : chacun s'inscrit au registre du
-    /// compositeur et, en finissant, ne rend que ce qui lui appartient.
+    /// Plusieurs lots se téléversent ensemble (#14696) ; chaque bulle reçoit la progression de
+    /// SA session (#14702).
     private func launchAttachmentSend(_ batch: AttachmentSendBatch) {
         let upload = UUID()
+        let bubbles = batch.mediaGroupSends.map(\.tempId)
+        let progress = viewModel.collaborators.uploadProgress
         composerState.uploads.begin(upload, mediaIds: Set(batch.mediaFiles.keys))
         let runner = AttachmentSendRunner(host: viewModel, callbacks: AttachmentSendCallbacks(
             restorePlace: { place, sent in restorePlaceTile(place, sent: sent) },
-            setProgress: { progress in composerState.uploads.report(progress, for: upload) },
-            abortUpload: { settleUpload(upload) }
+            setProgress: { tempId, fraction in progress.report(fraction, for: tempId) },
+            abortUpload: { settleUpload(upload, bubbles: bubbles) }
         ))
         Task {
-            defer { Task { @MainActor in settleUpload(upload) } }
+            defer { Task { @MainActor in settleUpload(upload, bubbles: bubbles) } }
             await runner.run(batch)
         }
     }
 
-    private func settleUpload(_ upload: UUID) {
+    private func settleUpload(_ upload: UUID, bubbles: [String]) {
+        viewModel.collaborators.uploadProgress.end(bubbles)
         if composerState.settleUpload(upload) { purgeDraftAttachmentMedia() }
     }
 

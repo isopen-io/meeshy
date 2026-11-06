@@ -100,6 +100,7 @@ internal fun DetailStatsRow(
     quickEmojis: List<String>,
     onReact: (PostReactionPick) -> Unit,
     onBookmark: () -> Unit,
+    onImager: (() -> Unit)? = null,
 ) {
     var palette by remember { mutableStateOf(PostReactionPaletteState()) }
     Row(
@@ -161,6 +162,7 @@ internal fun DetailStatsRow(
             active = post.isBookmarked,
             onClick = onBookmark,
         )
+        onImager?.let { ImagerWand(onClick = it, tint = MeeshyTheme.tokens.textSecondary, glyph = 20.dp) }
     }
 }
 

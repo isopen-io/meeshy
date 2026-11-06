@@ -11,6 +11,10 @@
         {
           "androidName": "story_audio_chip_muted",
           "status": "android-only"
+        },
+        {
+          "androidName": "story_audio_chip_a11y",
+          "status": "android-only"
         }
       ]
     }

@@ -72,6 +72,12 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
     val localRoute = rememberLocalDetailRoute()
     var exportMessageId by rememberSaveable { mutableStateOf<String?>(null) }
     var discussionEndingAt by rememberSaveable { mutableStateOf<String?>(null) }
+    sheets.exportCardRequest?.let { requested ->
+        LaunchedEffect(requested) {
+            exportMessageId = requested
+            sheets.exportCardRequest = null
+        }
+    }
     if (gallery != null) {
         val relativeStrings = rememberRelativeTimeStrings()
         val galleryNow = remember(gallery) { System.currentTimeMillis() }

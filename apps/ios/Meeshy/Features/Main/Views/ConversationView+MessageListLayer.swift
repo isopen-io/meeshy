@@ -28,6 +28,8 @@ struct ConversationMessageListActions {
     let openMedia: (MessageAttachment) -> Void
     let openViewOnce: (String) -> Bool
     let focalPlace: (SharedPlace, String) -> FocalFullscreenPlace
+    /// « dis-lui salut » (#16338) : l'id de l'avis d'arrivée touché.
+    let greetArrivals: (String) -> Void
 }
 
 /// **La couche de la liste de messages, SORTIE du cadre de la scène** (#6213 bis).
@@ -243,15 +245,14 @@ struct ConversationMessageListLayer: View {
                       let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                 actions.presentMenu(msg, cellFrame, pieceId)
             },
-            // iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) des
-            // bulles — mêmes actions que l'overlay custom (SSOT). `nil`
-            // renvoyé pour les messages système / résumés d'appel (pas de
-            // menu). Le builder est appelé une fois par config de cellule.
+            // iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) des bulles —
+            // mêmes actions que l'overlay custom (SSOT) ; `nil` pour les avis système.
             overlaidMessageId: overlayState.showOverlayMenu ? overlayState.overlayMessage?.id : nil,
             onCallDetailRequest: { messageId in
                 guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                 overlayState.callDetailMessage = msg
             },
+            onGreetArrivals: actions.greetArrivals,
             isSelectionModeActive: overlayState.isSelectionModeActive,
             selectedMessageIds: overlayState.selectedMessageIds,
             onToggleSelection: { messageId in actions.toggleSelection(messageId) },

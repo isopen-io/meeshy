@@ -10,7 +10,10 @@ import MeeshySDK
 
 @MainActor
 final class ProfileSheetLoader: ObservableObject {
-    @Published private(set) var profile: MeeshyUser?
+    /// Un décor d'un pack non embarqué charge son contrat servi : la fiche se repeint à son arrivée (#16264).
+    @Published private(set) var profile: MeeshyUser? {
+        didSet { loadServedDecor(profile?.profileDecor) }
+    }
     @Published private(set) var stats: UserStats?
     @Published private(set) var isLoadingProfile = false
     @Published private(set) var isLoadingStats = false
@@ -20,7 +23,26 @@ final class ProfileSheetLoader: ObservableObject {
     /// recouvert d'une erreur, et un refus (403) n'en est pas une.
     @Published private(set) var profileLoadFailed = false
 
-    init() {}
+    private let served: any ServedAppearanceProviding
+    private var servedSubscription: AnyCancellable?
+    private var servedDecorLoad: Task<Void, Never>?
+
+    init(served: any ServedAppearanceProviding = ServedAppearanceRefresh.store) {
+        self.served = served
+        servedSubscription = served.changes
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in MainActor.assumeIsolated { self?.objectWillChange.send() } }
+    }
+
+    private func loadServedDecor(_ decor: ServedProfileDecor?) {
+        let missing = ProfileDecorResolver.missingContracts(decor, served: served)
+        guard !missing.isEmpty else { return }
+        let served = self.served
+        servedDecorLoad?.cancel()
+        servedDecorLoad = Task {
+            for src in missing { await served.load(src: src) }
+        }
+    }
 
     /// Une deinit isolée au MainActor tue xctest au démontage sur iOS 18.4+/26 (#9694).
     nonisolated deinit {}

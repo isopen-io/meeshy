@@ -4,8 +4,8 @@ import MeeshySDK
 
 /// **Écrire le texte du post ou la légende n'ouvre jamais la caméra** (#15674).
 ///
-/// La porte du fil ouvre le compositeur clavier levé sur « Texte du post »
-/// (#13864), et le bouton du document y ramène en modification. La scène vide
+/// L'option « Texte du post » de la colonne lève le clavier sur le texte du
+/// post (#13864), et le bouton du document y ramène en modification. La scène vide
 /// restait pourtant une porte de la caméra : son indication se lisait sous le
 /// champ, et le toucher qui voulait quitter l'écriture — ou que le clavier,
 /// en bougeant, faisait tomber sur la scène à la place d'un contrôle — armait

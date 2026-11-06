@@ -12,24 +12,17 @@ import MeeshyUI
 extension ConversationView {
 
     // MARK: - Pending Attachments Row (custom preview for UCB)
+    /// La progression d'un envoi vit sur SA bulle (#14702) : le plateau ne porte que les
+    /// pièces du message suivant.
     var pendingAttachmentsRow: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                pendingAttachmentsPreview
-                if composerState.isLoadingMedia {
-                    ProgressView()
-                        .tint(Color(hex: accentColor))
-                        .padding(.horizontal, MeeshySpacing.md)
-                }
-            }
-            if composerState.isUploading, let progress = composerState.uploadProgress {
-                UploadProgressBar(progress: progress, accentColor: accentColor)
-                    .padding(.horizontal, MeeshySpacing.sm)
-                    .padding(.bottom, MeeshySpacing.xs)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+        HStack(spacing: 0) {
+            pendingAttachmentsPreview
+            if composerState.isLoadingMedia {
+                ProgressView()
+                    .tint(Color(hex: accentColor))
+                    .padding(.horizontal, MeeshySpacing.md)
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: composerState.isUploading)
     }
 
     // MARK: - Composer Reply Banner

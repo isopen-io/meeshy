@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.meeshy.core.common.IoDispatcher
 import me.meeshy.sdk.model.appearance.AppearanceCatalog
+import me.meeshy.sdk.model.appearance.ServedAppearanceContracts
 
 /** Où le catalogue embarqué s'ouvre : les assets en production, un texte en test. Appelé HORS du fil principal. */
 public fun interface AppearanceCatalogAsset {
@@ -52,10 +53,31 @@ public class AppearanceCatalogLoader @Inject constructor(
     /** Le catalogue s'il est déjà chargé, sans jamais bloquer ni lire — pour un rendu qui ne doit pas attendre. */
     public val current: AppearanceCatalog? get() = loaded.value
 
+    private val guard = Any()
+    private var embedded: AppearanceCatalog? = null
+    private var served: ServedAppearanceContracts = ServedAppearanceContracts.EMPTY
+
     public suspend fun catalog(): AppearanceCatalog {
         loaded.value?.let { return it }
         return gate.withLock {
-            loaded.value ?: withContext(ioDispatcher) { read() }.also { loaded.value = it }
+            loaded.value ?: withContext(ioDispatcher) { read() }.let { read ->
+                synchronized(guard) {
+                    embedded = read
+                    read.withServed(served).also { loaded.value = it }
+                }
+            }
+        }
+    }
+
+    /**
+     * Les contrats servis des packs non embarqués (#16265) complètent le catalogue que TOUS les écrans lisent : la feuille
+     * « Contour et bannière », le fond d'une conversation, le décor d'autrui se repeignent sans rien changer à leur rendu.
+     * Avant la première lecture de l'APK, ils attendent et s'appliqueront avec elle.
+     */
+    public fun serve(contracts: ServedAppearanceContracts) {
+        synchronized(guard) {
+            served = contracts
+            embedded?.let { loaded.value = it.withServed(contracts) }
         }
     }
 

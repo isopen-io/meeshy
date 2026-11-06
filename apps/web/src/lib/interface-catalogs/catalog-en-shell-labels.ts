@@ -47,6 +47,8 @@ const enShellLabels = {
   'readingMode.river.thresholdToday': 'Opens at {threshold} active people — {current} today',
 
   'message.status.pending': 'sending',
+
+  'message.status.sending': 'Sending',
   'message.status.sent': 'sent',
   'message.status.delivered': 'delivered',
   'message.status.read': 'read',

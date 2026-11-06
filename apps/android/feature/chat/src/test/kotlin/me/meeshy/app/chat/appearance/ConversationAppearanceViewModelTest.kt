@@ -46,7 +46,12 @@ class ConversationAppearanceViewModelTest {
 
     private class Fixture(val stream: MutableStateFlow<ApiConversation?>, val repository: ConversationRepository, val photos: ConversationBackgroundPhotos, val vm: ConversationAppearanceViewModel, val installations: MutableSharedFlow<PackInstallationUpdatedEvent>, val packs: WallpaperPackRepository)
 
-    private fun fixture(appearanceJson: String? = null, writes: Boolean = true): Fixture {
+    private fun fixture(
+        appearanceJson: String? = null,
+        writes: Boolean = true,
+        current: () -> AppearanceCatalog = { AppearanceCatalog.EMPTY },
+        installed: List<me.meeshy.sdk.model.appearance.InstalledPackSummary>? = null,
+    ): Fixture {
         val conversation = ApiConversation(
             id = "c1",
             type = "direct",
@@ -57,11 +62,11 @@ class ConversationAppearanceViewModelTest {
         every { repository.conversationStream("c1") } returns stream
         coEvery { repository.setAppearanceOptimistic("c1", any()) } returns writes
         val loader = mockk<AppearanceCatalogLoader>()
-        every { loader.current } returns AppearanceCatalog.EMPTY
+        every { loader.current } answers { current() }
         coEvery { loader.catalog() } returns AppearanceCatalog.EMPTY
         val packs = mockk<WallpaperPackRepository>()
         every { packs.cached } returns null
-        coEvery { packs.refresh() } returns null
+        coEvery { packs.refresh() } returns installed
         val installations = MutableSharedFlow<PackInstallationUpdatedEvent>(extraBufferCapacity = 4)
         val shop = mockk<PackShopRepository>()
         every { shop.installations } returns installations
@@ -196,5 +201,37 @@ class ConversationAppearanceViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { f.packs.refresh() }
+    }
+
+    @Test
+    fun `un pack de fonds servi non embarque se propose et se peint des que la relecture a charge son contrat`() = runTest(dispatcher) {
+        val catalogText = generateSequence(java.io.File(".").absoluteFile) { it.parentFile }.take(8)
+            .flatMap { sequenceOf(java.io.File(it, "sdk-core/src/main/assets/appearance-catalog.json"), java.io.File(it, "apps/android/sdk-core/src/main/assets/appearance-catalog.json")) }
+            .first { it.isFile }.readText()
+        val root = Json.parseToJsonElement(catalogText) as kotlinx.serialization.json.JsonObject
+        val designs = ((root["wallpapers"] as kotlinx.serialization.json.JsonArray).first() as kotlinx.serialization.json.JsonObject)["designs"]!!
+        val contractText = """{"domain":"wallpaper","designs":$designs}"""
+        val contract = checkNotNull(me.meeshy.sdk.model.appearance.ServedAppearanceContract.parse(contractText))
+        val served = AppearanceCatalog.EMPTY.withServed(
+            me.meeshy.sdk.model.appearance.ServedAppearanceContracts(
+                byAddress = mapOf("0123456789abcdef.json" to contract),
+                packs = mapOf(
+                    me.meeshy.sdk.model.appearance.AppearancePackDomain.WALLPAPER to
+                        listOf(me.meeshy.sdk.model.appearance.ServedAppearancePack("fonds-neige", "0123456789abcdef.json")),
+                ),
+            ),
+        )
+        var refreshed = false
+        val f = fixture(
+            current = { if (refreshed) served else AppearanceCatalog.EMPTY },
+            installed = listOf(me.meeshy.sdk.model.appearance.InstalledPackSummary(slug = "fonds-neige", installed = true, owned = true)),
+        )
+        refreshed = true
+
+        f.vm.start("c1")
+        advanceUntilIdle()
+
+        assertThat(f.vm.state.value.packs.map { it.slug }).containsExactly("fonds-neige")
+        assertThat(f.vm.state.value.catalog).isSameInstanceAs(served)
     }
 }

@@ -78,7 +78,6 @@ struct MyStoryCard: View {
             MyStoryActionBar(
                 glyphs: MyStoryCardPresentation.glyphs(for: model.kind),
                 counts: model.counts,
-                moreMenu: moreMenu,
                 onSelect: onGlyph
             )
             .equatable()
@@ -113,12 +112,35 @@ struct MyStoryCard: View {
             .overlay(thumbnailLayers)
             .clipped()
             .overlay(alignment: .topTrailing) { selectionBadge }
+            .overlay(alignment: .topTrailing) { moreButton }
             .overlay { saveProgressOverlay }
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
             .accessibilityAddTraits(.isButton)
             .accessibilityAddTraits(selectionIndicator == .selected ? .isSelected : [])
             .accessibilityLabel(thumbnailAccessibilityLabel)
+    }
+
+    /// Le « … » posé SUR la vignette (#16386) : un rond translucide lisible sur
+    /// toute couverture, cible de 44 pt. Son coin appartient à la pastille de
+    /// sélection quand la grille sélectionne.
+    @ViewBuilder
+    private var moreButton: some View {
+        if MyStoryCardPresentation.showsMoreOnThumbnail(hasMenu: moreMenu != nil, isSelecting: isSelecting),
+           let moreMenu {
+            Menu { moreMenu } label: {
+                Image(systemName: MyStoryGlyph.more.systemImage)
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Color.black.opacity(0.45)))
+                    .shadow(color: .black.opacity(0.3), radius: 2)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(MyStoryGlyph.more.accessibilityLabel)
+            .accessibilityIdentifier("myStoryCard.more")
+        }
     }
 
     /// Pastille de sélection — cercle vide (à sélectionner) ou plein avec
@@ -140,7 +162,7 @@ struct MyStoryCard: View {
                 Circle().fill(accentColor)
                 Image(systemName: "checkmark")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
             }
             .frame(width: 22, height: 22)
             .shadow(color: .black.opacity(0.35), radius: 2)
@@ -227,7 +249,7 @@ struct MyStoryCard: View {
             if let title = model.title, !title.isEmpty {
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .lineLimit(2)
                     .padding(MeeshySpacing.sm)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -271,13 +293,13 @@ struct MyStoryCard: View {
     private var placeholderFill: some View {
         Rectangle()
             .fill(accentColor.opacity(0.20))
-            .overlay(Image(systemName: "photo").foregroundColor(accentColor))
+            .overlay(Image(systemName: "photo").foregroundStyle(accentColor))
     }
 
     private var dateLabel: some View {
         Text(MyStoryCardPresentation.dateLabel(for: model.date, now: now, locale: locale))
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-            .foregroundColor(.secondary)
+            .foregroundStyle(.secondary)
             .lineLimit(1)
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.bottom, MeeshySpacing.sm)

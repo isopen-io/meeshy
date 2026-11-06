@@ -40,6 +40,7 @@ import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
+import me.meeshy.sdk.outbox.stateEnum
 import me.meeshy.sdk.session.AccountClosedException
 
 /**
@@ -270,6 +271,10 @@ internal class MessageSendCoordinator(
         if (outboxRepository.retryWithPrerequisites(cmid)) return
         val message = MeeshyApi.json.decodeFromString<ApiMessage>(row.payload)
         val trace = SendTrace.read(message)
+        if (message.expectsUploadedPiece(trace)) {
+            resendFromUploads(cmid, row.retryCount)
+            return
+        }
         val outgoing = OutgoingMessage(
             conversationId = message.conversationId,
             content = message.content,
@@ -298,6 +303,28 @@ internal class MessageSendCoordinator(
             ),
         )
     }
+
+    /**
+     * La ligne d'envoi de la bulle [cid] a disparu alors que sa pièce devait être téléversée (arrêt du processus entre les
+     * téléversements et l'enfilage du message, #16168) : reposter le corps seul donnerait « message vide ». Les téléversements
+     * qui lui restent repartent avec un budget neuf et le message est remis en file derrière eux ; sans eux, la pièce est
+     * perdue et la bulle le dit (un second appui la retire).
+     */
+    private suspend fun resendFromUploads(cid: String, retryCount: Int) {
+        val uploads = outboxRepository.uploadsOfMessage(cid)
+        if (uploads.isEmpty()) {
+            messageDao.recordSendAttempt(cid, LocalSendState.FAILED.name, retryCount, MediaLoss.REASON)
+            return
+        }
+        uploads.filter { it.stateEnum == OutboxState.EXHAUSTED }.forEach { outboxRepository.retry(it.cmid) }
+        val cmids = uploads.map { it.cmid }
+        if (!sendPostedBubble(cid, cmids, cmids.toSet())) markSendFailed(cid)
+    }
+
+    private fun ApiMessage.expectsUploadedPiece(trace: SendTrace): Boolean =
+        sticker == null && location == null &&
+            trace.forwardedAttachmentIds.isNullOrEmpty() && trace.copyAttachmentsFromMessageId.isNullOrEmpty() &&
+            (attachments.isNotEmpty() || messageType in PIECE_TYPES)
 
     /**
      * Met en file l'envoi d'une bulle DÉJÀ posée au tap (groupe de pièces, texte, lieu) sous son `cid_` : le message réutilise
@@ -374,4 +401,8 @@ internal class MessageSendCoordinator(
 
     private fun isDefinitive(reason: String?): Boolean =
         MediaLocationRefusal.isReason(reason) || MediaLoss.isReason(reason) || OutgoingAttachmentRules.isDefinitiveReason(reason) || ConversationWriteRestriction.fromReason(reason) != null
+
+    private companion object {
+        val PIECE_TYPES = setOf("image", "video", "audio", "file")
+    }
 }

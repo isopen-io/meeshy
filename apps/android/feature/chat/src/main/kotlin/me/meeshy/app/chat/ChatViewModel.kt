@@ -339,6 +339,7 @@ class ChatViewModel @Inject constructor(
                         isGuest = isGuest,
                     ),
                     context = MentionContext.of(conversation, currentUser?.id, isGuest),
+                    participants = conversation.participants,
                 )
             }
         }
@@ -685,6 +686,8 @@ class ChatViewModel @Inject constructor(
 
     /** Insert the picked candidate's handle into the draft and dismiss the suggestion panel. */
     fun onMentionSelected(candidate: MentionCandidate) = composer.onMentionSelected(candidate)
+
+    fun greetArrivals(messageId: String) = composer.greetArrivals(messageOf(messageId))
 
     fun send() = composer.send()
 

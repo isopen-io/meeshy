@@ -13,10 +13,6 @@ import UniformTypeIdentifiers
 @MainActor
 final class StoryStillExportTests: XCTestCase {
 
-    @MainActor private final class ImagerView {
-        var presented: [ImagerWork] = []
-    }
-
     @MainActor private final class Frames {
         var calls = 0
         var fails = false
@@ -36,7 +32,6 @@ final class StoryStillExportTests: XCTestCase {
         let photos: StubPhotoSaver
         let toasts: MockFeedbackToast
         let frames: Frames
-        let imagerView: ImagerView
     }
 
     private func makeSUT() -> SUT {
@@ -44,7 +39,6 @@ final class StoryStillExportTests: XCTestCase {
         let photos = StubPhotoSaver()
         let toasts = MockFeedbackToast()
         let frames = Frames()
-        let imagerView = ImagerView()
         let service = StoryPhotoSaveService(
             exporter: exporter,
             photoSaver: photos,
@@ -52,11 +46,9 @@ final class StoryStillExportTests: XCTestCase {
             preferredLanguages: { ["fr"] },
             intro: { nil },
             authorIntro: { _ in nil },
-            presentImager: { work, _ in imagerView.presented.append(work) },
             stillFrame: { frames.frame($0) }
         )
-        return SUT(service: service, exporter: exporter, photos: photos, toasts: toasts, frames: frames,
-                   imagerView: imagerView)
+        return SUT(service: service, exporter: exporter, photos: photos, toasts: toasts, frames: frames)
     }
 
     private func stillStory(seconds: TimeInterval? = nil) -> StoryItem {
@@ -134,47 +126,28 @@ final class StoryStillExportTests: XCTestCase {
         XCTAssertEqual(sut.exporter.lastAppendsBrandOutro, true)
     }
 
-    /// « Imager » ouvre la vue ; « Sauvegarder », depuis elle, range l'image.
-    private func saveFromTheImagerView(_ sut: SUT, key: String) async throws {
-        let work = try XCTUnwrap(sut.imagerView.presented.last, "« Imager » ouvre la vue")
-        XCTAssertEqual(work.id, key)
-        XCTAssertTrue(sut.photos.savedImageFileURLs.isEmpty, "rien n'est rangé avant le geste de la vue")
-        sut.service.saveImaged(work, quarter: nil)
-        await waitUntilIdle(sut, key: key)
-    }
-
-    func test_imager_aLongStillStory_neverAsksForALength_andSavesAnImage() async throws {
+    func test_theCardLead_ofAStillScene_isAnImage_bakedBare() async throws {
         let sut = makeSUT()
-        let story = stillStory(seconds: 240)
 
-        sut.service.image(story: story, author: nil)
-        XCTAssertEqual(sut.imagerView.presented.last?.choices, [], "une image n'a pas de longueur")
-        XCTAssertEqual(sut.imagerView.presented.last?.isStill, true)
-        try await saveFromTheImagerView(sut, key: story.id)
+        let rendered = await sut.service.renderSceneFile(of: stillScene())
+        let file = try XCTUnwrap(rendered)
+        defer { try? FileManager.default.removeItem(at: file) }
 
-        XCTAssertEqual(sut.photos.savedImageFileURLs.count, 1)
-    }
-
-    func test_imager_aStillScene_savesAnImage() async throws {
-        let sut = makeSUT()
-        let scene = stillScene()
-
-        sut.service.image(scene: scene)
-        try await saveFromTheImagerView(sut, key: scene.id)
-
-        XCTAssertEqual(sut.photos.savedImageFileURLs.count, 1)
+        XCTAssertEqual(file.pathExtension, "jpg")
         XCTAssertEqual(sut.exporter.lastAppendsBrandOutro, false)
+        XCTAssertTrue(sut.photos.savedImageFileURLs.isEmpty, "le rendu de la carte ne range rien dans Photos")
     }
 
-    func test_imager_aStillComposedPost_savesAnImage() async throws {
+    func test_theCardLead_ofAStillComposedPost_isAnImage() async throws {
         let sut = makeSUT()
         var post = FeedPost(id: "post-\(UUID().uuidString)", author: "alice", type: "POST", content: "Fixe")
         post.storyEffects = StoryEffects(textObjects: [StoryTextObject(text: "Fixe")])
 
-        sut.service.image(post: post)
-        try await saveFromTheImagerView(sut, key: post.id)
+        let rendered = await sut.service.renderSceneFile(of: post)
+        let file = try XCTUnwrap(rendered)
+        defer { try? FileManager.default.removeItem(at: file) }
 
-        XCTAssertEqual(sut.photos.savedImageFileURLs.count, 1)
+        XCTAssertEqual(file.pathExtension, "jpg")
         XCTAssertTrue(sut.service.exportsStill(post: post))
     }
 

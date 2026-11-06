@@ -58,9 +58,10 @@ struct ProgressionView: View {
         .task { await GameShaders.precompile() }
         // Les réglages du jeu sont ceux du SERVEUR (#9481) : « Jeu masqué » posé depuis un autre appareil se lit ici.
         .task { await GameSettingsSync().refresh() }
-        // `.task` rejoue au retour d'une fiche : un geste fait là-bas (frappe, coffre, gel) se relit ici, cache d'abord.
+        // `.task` rejoue au retour d'une fiche : cache d'abord à l'ouverture, puis chaque RETOUR relit le réseau en silence
+        // (#16425) — un geste fait là-bas, un défi avancé pendant l'absence, se montre ici.
         .task {
-            await viewModel.load()
+            await viewModel.appear()
             #if DEBUG
             if viewModel.progress != nil, VitrineLaunch.isActive {
                 let router = self.router

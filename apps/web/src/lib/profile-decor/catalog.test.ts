@@ -19,13 +19,18 @@ const ASSORTED: readonly (readonly [string, string])[] = [
   ['atelier-du-pere-noel', 'bannieres-atelier-noel'],
 ];
 
+/** #16270, #16271 — les offres de Noël et du Nouvel An se posent APRÈS les collections Meeshy ; les comptes ci-dessous portent sur ce qui les précède. */
+const SEASONAL: readonly string[] = ['noel-bannieres', 'noel-contours-fixes', 'noel-cadres-fixes', 'nouvel-an-contours', 'nouvel-an-contours-vifs', 'nouvel-an-images', 'nouvel-an-images-vives', 'nouvel-an-cadres', 'nouvel-an-cadres-vifs', 'nouvel-an-fonds', 'nouvel-an-fonds-vifs'];
+const beforeSeasonal = <T extends { readonly slug: string }>(packs: readonly T[]): readonly T[] => packs.filter((pack) => !SEASONAL.includes(pack.slug));
+
 describe('le catalogue embarqué du décor de profil', () => {
-  test('77 contours et neuf bannières, tous lisibles par le contrat partagé — dont les packs de Noël (#15553) et les deux collections Meeshy (#15158), qui débordent de 1,2 au plus', () => {
+  test('91 contours, dont 77 avant les offres saisonnières (#16270, #16271), et neuf bannières avant elles, tous lisibles par le contrat partagé — dont les packs de Noël (#15553) et les deux collections Meeshy (#15158), qui débordent de 1,2 au plus', () => {
     expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items.map((item) => item.key)).slice(0, 9)).toEqual(['filet', 'double-filet', 'perle', 'aurore', 'deco', 'laurier', 'halo-or', 'prisme-vivant', 'onde']);
-    expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items)).toHaveLength(77);
-    expect(BUILTIN_RING_PACKS.slice(-2).map((pack) => [pack.slug, pack.items.length])).toEqual([['meeshy-signature', 6], ['meeshy-vivants', 6]]);
-    expect(BUILTIN_RING_PACKS.at(-2)?.items.every((item) => item.decor === undefined)).toBe(true);
-    expect(BUILTIN_RING_PACKS.at(-1)?.items.map((item) => item.decor?.reach)).toEqual([1.2, 1.2, 1.2, 1.2, 1.2, 1.2]);
+    expect(BUILTIN_RING_PACKS.flatMap((pack) => pack.items)).toHaveLength(91);
+    expect(beforeSeasonal(BUILTIN_RING_PACKS).flatMap((pack) => pack.items)).toHaveLength(77);
+    expect(beforeSeasonal(BUILTIN_RING_PACKS).slice(-2).map((pack) => [pack.slug, pack.items.length])).toEqual([['meeshy-signature', 6], ['meeshy-vivants', 6]]);
+    expect(beforeSeasonal(BUILTIN_RING_PACKS).at(-2)?.items.every((item) => item.decor === undefined)).toBe(true);
+    expect(beforeSeasonal(BUILTIN_RING_PACKS).at(-1)?.items.map((item) => item.decor?.reach)).toEqual([1.2, 1.2, 1.2, 1.2, 1.2, 1.2]);
     expect(BUILTIN_RING_PACKS.find((pack) => pack.slug === 'cadres-illustres')?.items.map((item) => item.decor?.reach)).toEqual([1.4, 1.4, 1.4, 1.4, 1.4, 1.4]);
     const families = BUILTIN_RING_PACKS.filter((pack) => pack.slug.startsWith('cadres-') && pack.slug !== 'cadres-illustres');
     expect(families.length).toBeGreaterThanOrEqual(3);
@@ -33,15 +38,15 @@ describe('le catalogue embarqué du décor de profil', () => {
       expect({ slug: pack.slug, frames: pack.items.length >= 3 && pack.items.length <= 4 }).toEqual({ slug: pack.slug, frames: true });
       expect(pack.items.every((item) => item.decor?.reach === 1.4 && item.decor.back !== undefined && item.decor.front !== undefined)).toBe(true);
     });
-    expect(BUILTIN_BANNER_PACKS.flatMap((pack) => pack.items.map((item) => item.key))).toEqual(['aurore', 'maille', 'constellation', 'art-deco', 'bogolan', 'topographie', 'aurore-vive', 'maree', 'braises']);
+    expect(beforeSeasonal(BUILTIN_BANNER_PACKS).flatMap((pack) => pack.items.map((item) => item.key))).toEqual(['aurore', 'maille', 'constellation', 'art-deco', 'bogolan', 'topographie', 'aurore-vive', 'maree', 'braises']);
   });
 
-  test('les 14 cadres de bannière des sept styles (#10936), fixe et animé, lisibles en entier, puis les bannières assorties (#15553) et les deux collections Meeshy (#15158)', () => {
+  test('les 14 cadres de bannière des sept styles (#10936), fixe et animé, lisibles en entier, puis les bannières assorties (#15553), les deux collections Meeshy (#15158) et les offres saisonnières (#16270, #16271)', () => {
     const styles = ['haussmannien', 'arabe', 'grec', 'ancestral', 'technologique', 'rituel', 'celte'];
-    expect(BUILTIN_BANNER_FRAME_PACKS.map((pack) => pack.slug)).toEqual([...styles.map((style) => `cadres-${style}`), ...ASSORTED.map(([, banner]) => banner), 'meeshy-bordures', 'meeshy-bordures-vivantes']);
+    expect(BUILTIN_BANNER_FRAME_PACKS.map((pack) => pack.slug)).toEqual([...styles.map((style) => `cadres-${style}`), ...ASSORTED.map(([, banner]) => banner), 'meeshy-bordures', 'meeshy-bordures-vivantes', 'noel-cadres-fixes', 'nouvel-an-cadres', 'nouvel-an-cadres-vifs']);
     expect(BUILTIN_BANNER_FRAME_PACKS.slice(0, styles.length).map((pack) => pack.items.map((item) => item.key))).toEqual(styles.map((style) => [style, `${style}-anime`]));
-    expect(BUILTIN_BANNER_FRAME_PACKS.slice(-2).map((pack) => pack.items.length)).toEqual([6, 4]);
-    expect(BUILTIN_BANNER_FRAME_PACKS.at(-1)?.items.every((item) => (item.motion?.length ?? 0) >= 2)).toBe(true);
+    expect(beforeSeasonal(BUILTIN_BANNER_FRAME_PACKS).slice(-2).map((pack) => pack.items.length)).toEqual([6, 4]);
+    expect(beforeSeasonal(BUILTIN_BANNER_FRAME_PACKS).at(-1)?.items.every((item) => (item.motion?.length ?? 0) >= 2)).toBe(true);
     expect(BUILTIN_BANNER_FRAME_PACKS.every((pack) => pack.removable)).toBe(true);
     expect(BUILTIN_BANNER_FRAME_PACKS.filter((pack) => pack.installedByDefault).map((pack) => pack.slug)).toEqual(['cadres-haussmannien', 'cadres-ancestral']);
     expect(builtinBannerFrameDesign({ pack: 'cadres-celte', item: 'celte-anime' })?.motion?.length).toBeGreaterThan(0);

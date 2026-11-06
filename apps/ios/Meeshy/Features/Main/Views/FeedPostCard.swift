@@ -717,7 +717,9 @@ struct FeedPostCard: View {
                     onRepost: onRepost,
                     onQuote: onQuote,
                     onBookmark: onBookmark,
-                    sendSubject: .publication(post)
+                    sendSubject: .publication(post),
+                    onImager: imagerAction,
+                    onImagerQuick: imagerQuickAction
                 )
                 .equatable()
             }
@@ -726,7 +728,7 @@ struct FeedPostCard: View {
             // Comments preview (compact)
             if !post.comments.isEmpty {
                 commentsPreview
-                    .commentMediaGallery(topLevel: post.comments)
+                    .commentMediaGallery(topLevel: post.comments, post: post)
             }
         }
         .background(
@@ -798,13 +800,6 @@ struct FeedPostCard: View {
                 senderName: post.author
             ).closesForConversationOpening(.place)
         }
-        // **Le plein écran d'un post passe par son SITE UNIQUE** (#4927).
-        //
-        // Cette vingtaine de lignes était l'un des trois exemplaires que
-        // `socialMediaGallery` a été écrit pour remplacer — et le dernier à
-        // n'avoir pas été raccordé. Le brancher n'est pas qu'un nettoyage :
-        // c'est ce qui apporte à la carte du fil la branche SCÈNE, qui rejoue
-        // le canvas au lieu d'ouvrir son fond.
         .socialMediaGallery(
             post: post,
             isPresented: $showFullscreenGallery,
@@ -822,18 +817,17 @@ struct FeedPostCard: View {
         #endif
     }
 
-    /// « Sauvegarder » (#9681) : la règle UNIQUE `PostSaveRoute` — post composé
-    /// rendu comme une story, média simple enregistré tel quel.
     func requestSaveMedia() {
         PostSaveAction.perform(post, coordinator: mediaSaveCoordinator)
     }
 
-    /// Le menu offre « Sauvegarder » ssi la règle a quelque chose à enregistrer ;
-    /// sinon le même item reste le favori.
     var canSaveMedia: Bool {
         PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable
     }
     var imagerAction: (() -> Void)? { PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator) }
+    var imagerQuickAction: (() -> Void)? {
+        MessageCardExportMenu.hasDefaultFormat ? PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator, quick: true) : nil
+    }
 
 
     // MARK: - Repost View

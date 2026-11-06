@@ -11,6 +11,7 @@ import { NO_MEDIA_OFFERS, type MediaPageOffers, type MediaViewerPage } from '@/l
 
 import { setAttachmentReactionEmitter } from '@/lib/api/attachment-reaction-emit';
 
+import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import MediaViewer from './media-viewer';
 
 /**
@@ -191,6 +192,47 @@ describe('MediaViewer — les actions de la page (#6303)', () => {
       item.click();
     });
     expect(imaged).toEqual(['a']);
+  });
+
+  const traceOf = (body: string): string | undefined => /d="([^"]+)"/.exec(body)?.[1];
+  const traceIn = (selector: string): string | null | undefined => dialog().querySelector(`${selector} svg path`)?.getAttribute('d');
+
+  test('#16333 — « Créer avec ce média » porte l’icône de POST, plus la baguette', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, ALL, () => {}) });
+    await settle();
+    expect(traceIn('[data-viewer-action="compose"]')).toBe(traceOf(THREAD_MENU_GLYPHS.notePencil.body));
+    expect(traceIn('[data-viewer-action="compose"]')).not.toBe(traceOf(THREAD_MENU_GLYPHS.magicWand.body));
+  });
+
+  test('#16333 — la page qu’on sait imager porte la BAGUETTE au rail, après Créer : le toucher image le message et sa pièce', async () => {
+    const items = photos(['a']);
+    const imaged: string[] = [];
+    mount({ items, startIndex: 0, actionsAt: () => ({ ...pageOf(items[0]!, ALL, () => {}), imager: () => imaged.push('a') }) });
+    await settle();
+    expect(railOf()).toEqual(['react', 'reply', 'compose', 'imager', 'save']);
+    const wand = dialog().querySelector<HTMLButtonElement>('[data-viewer-action="imager"]')!;
+    expect(wand.getAttribute('aria-label')).toBe('Imager');
+    expect(traceIn('[data-viewer-action="imager"]')).toBe(traceOf(THREAD_MENU_GLYPHS.magicWand.body));
+    act(() => {
+      wand.click();
+    });
+    expect(imaged).toEqual(['a']);
+  });
+
+  test('#16333 — dans le menu « … », Imager garde son icône d’IMAGE', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => ({ ...pageOf(items[0]!, NO_MEDIA_OFFERS), imager: () => {} }) });
+    await settle();
+    openMenu();
+    expect(traceIn('[data-viewer-menu-item="imager"]')).toBe(traceOf(THREAD_MENU_GLYPHS.imageSquare.body));
+  });
+
+  test('#16333 — une page sans Imager n’a pas de baguette au rail', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, ALL, () => {}) });
+    await settle();
+    expect(dialog().querySelector('[data-viewer-action="imager"]')).toBeNull();
   });
 
   test('« Imager » seul suffit à porter le menu « … » (loi 4 : un contrôle qui a un effet existe)', async () => {

@@ -35,7 +35,6 @@ public object GloryLaws {
     public const val MYTHE_SIZE: Int = 100
 
     public const val DIVISION_COUNT: Int = 5
-    public const val CHEST_GLORY_DIVISOR: Int = 10
 
     public const val POINTS_MINT: Int = 1000
     public const val POINTS_FIRST_LEVEL: Int = 100
@@ -61,9 +60,6 @@ public object GloryLaws {
         MissionDifficulty.Hard -> 250
         MissionDifficulty.Gold -> 500
     }
-
-    /** La Gloire du coffre du jour : un point pour dix points du coffre. */
-    public fun gloryForChest(points: Int): Int = max(0, points) / CHEST_GLORY_DIVISOR
 
     public enum class AchievementRarity { Common, Rare, Epic, Legendary, Mythic }
 

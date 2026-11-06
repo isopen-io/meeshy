@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -26,9 +27,11 @@ import org.robolectric.annotation.Config
 /**
  * #16225 : sur un S8 (360 × 740 dp), la feuille Son prend la hauteur de son contenu — son titre et ses trois sources —
  * sans vide sous le dernier bouton ; la scène garde tout le reste. Les stickers, une grille qui défile, gardent la hauteur maximale.
+ * La fenêtre Robolectric est plus grande que la boîte de 360 × 740 dp : la décoration du système n'en rogne pas le bas. La
+ * scène se lit à ses bornes DESSINÉES, car elle se réduit par une couche graphique et non par sa mise en page.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], qualifiers = "w360dp-h740dp")
+@Config(sdk = [34], qualifiers = "w1300dp-h1000dp")
 class StorySoundSheetHeightTest {
 
     @get:Rule
@@ -72,6 +75,12 @@ class StorySoundSheetHeightTest {
 
     private fun bounds(tag: String): DpRect = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot()
 
+    private fun drawnBounds(tag: String): DpRect {
+        val px = compose.onNodeWithTag(tag).fetchSemanticsNode().layoutInfo.coordinates.boundsInRoot()
+        val density = compose.density.density
+        return DpRect((px.left / density).dp, (px.top / density).dp, (px.right / density).dp, (px.bottom / density).dp)
+    }
+
     private val DpRect.h: Float get() = (bottom - top).value
 
     @Test
@@ -89,8 +98,9 @@ class StorySoundSheetHeightTest {
     fun `the scene keeps everything above the sound sheet`() {
         show(StoryComposerSheet.SOUND)
 
-        assertThat(bounds(SCENE).bottom.value).isWithin(1f).of(bounds(SHEET).top.value)
-        assertThat(bounds(SCENE).h).isGreaterThan(480f)
+        val scene = drawnBounds(SCENE)
+        assertThat(scene.bottom.value).isAtMost(bounds(SHEET).top.value + 0.5f)
+        assertThat(scene.h).isGreaterThan(480f)
     }
 
     @Test

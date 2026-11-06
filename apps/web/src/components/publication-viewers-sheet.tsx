@@ -42,9 +42,10 @@ import { Link } from '@/routes/route-table';
  * liste le dit en tête, discrètement, et le détail d'une personne le redit au
  * lieu de « sans autre interaction » — qui serait un mensonge.
  *
- * **Toucher une ligne REBONDIT et ouvre son DÉTAIL** dans la feuille : ce que
- * la personne a fait, en toutes lettres, et « Voir le profil ». « Retour aux
- * vues » rend la liste et le focus à la ligne d'où l'on venait.
+ * **Toucher une ligne REBONDIT et ouvre son DÉTAIL en feuille PLEIN ÉCRAN**
+ * (#16386), posée sur la liste : un en-tête au nom de la personne et son
+ * chevron (<), ce qu'elle a fait en toutes lettres, et « Voir le profil ». Le
+ * chevron rend la liste, intacte, et le focus à la ligne d'où l'on venait.
  *
  * **Nommé `publication-viewers-sheet`, pas `story-viewers-sheet`** : le motif
  * de `story_reader` (`budgets.json`) l'aurait capté dans le plafond du
@@ -102,29 +103,35 @@ export function PublicationViewersSheet({
 
   return (
     <Sheet title={title} onClose={onClose}>
+      <ViewersBody
+        query={query}
+        viewers={viewers}
+        lang={lang}
+        subject={subject}
+        labelsReady={labelsReady}
+        engagementUnavailable={engagementUnavailable}
+        visitors={visitors}
+        returnFocusTo={returnTo}
+        onOpen={(id) => {
+          setReturnTo(null);
+          setOpenedId(id);
+        }}
+      />
       {opened !== undefined && labelsReady ? (
-        <ViewerDetail
-          viewer={opened}
-          lang={lang}
-          engagementUnavailable={engagementUnavailable}
-          onBack={() => {
-            setReturnTo(opened.id);
-            setOpenedId(null);
-          }}
-        />
-      ) : (
-        <ViewersBody
-          query={query}
-          viewers={viewers}
-          lang={lang}
-          subject={subject}
-          labelsReady={labelsReady}
-          engagementUnavailable={engagementUnavailable}
-          visitors={visitors}
-          returnFocusTo={returnTo}
-          onOpen={setOpenedId}
-        />
-      )}
+        <li className="contents">
+          <Sheet
+            title={nameOf(opened)}
+            backLabel={translateViewerEngagement(lang, 'viewerEngagement.back')}
+            dialogData={{ 'data-viewer-detail-sheet': opened.id }}
+            onClose={() => {
+              setReturnTo(opened.id);
+              setOpenedId(null);
+            }}
+          >
+            <ViewerDetail viewer={opened} lang={lang} engagementUnavailable={engagementUnavailable} />
+          </Sheet>
+        </li>
+      ) : null}
     </Sheet>
   );
 }
@@ -384,36 +391,18 @@ function ViewerDetail({
   viewer,
   lang,
   engagementUnavailable,
-  onBack,
 }: {
   readonly viewer: PostViewerRow;
   readonly lang: InterfaceLanguage;
   readonly engagementUnavailable: boolean;
-  readonly onBack: () => void;
 }) {
-  const back = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => {
-    back.current?.focus();
-  }, []);
-  const label = nameOf(viewer);
   const marks = viewerEngagementMarks(viewer);
   return (
-    <li className="grid gap-4 px-4 pb-6" data-viewer-detail={viewer.id}>
-      <button
-        ref={back}
-        type="button"
-        onClick={onBack}
-        className="inline-flex items-center gap-1 justify-self-start rounded-full pe-3 font-semibold"
-        style={{ minHeight: 44, color: 'var(--color-primary)' }}
-        data-viewer-detail-back
-      >
-        <GlyphSvg glyph={FEED_GLYPHS.caretRight} size={16} style={{ transform: 'scaleX(-1)' }} />
-        {translateViewerEngagement(lang, 'viewerEngagement.back')}
-      </button>
+    <li className="grid gap-4 px-4 pb-6 pt-2" data-viewer-detail={viewer.id}>
       <div className="grid justify-items-center gap-1 text-center">
-        <ViewerAvatar viewer={viewer} size={64} />
-        <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          {label}
+        <ViewerAvatar viewer={viewer} size={80} />
+        <p className="text-mini" style={MUTED}>
+          @{viewer.username}
         </p>
         <p className="text-mini" style={MUTED}>
           {translateViewerEngagement(lang, 'viewerEngagement.viewedAt', { time: time(viewer.viewedAt) })}

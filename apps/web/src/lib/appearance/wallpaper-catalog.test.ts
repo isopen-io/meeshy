@@ -3,9 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import { findWallpaperDesign, loadWallpaperNames, visibleWallpaperPacks, WALLPAPER_PACKS } from './wallpaper-catalog';
 
 describe('les 17 modèles embarqués', () => {
-  test('neuf packs et trente-trois modèles que le contrat lit tous — les fonds de Noël (#15553) puis les deux collections Meeshy (#15158) en dernier', () => {
-    expect(WALLPAPER_PACKS.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations', 'animes', 'fonds-noel', 'fonds-noel-vivants', 'meeshy-fonds', 'meeshy-fonds-vivants']);
-    expect(WALLPAPER_PACKS.flatMap((pack) => pack.designs)).toHaveLength(33);
+  test('onze packs et quarante et un modèles que le contrat lit tous — les fonds de Noël (#15553), les deux collections Meeshy (#15158), puis les fonds du Nouvel An (#16271)', () => {
+    expect(WALLPAPER_PACKS.map((pack) => pack.slug)).toEqual(['essentiels', 'heritages', 'nature-et-ciel', 'illustrations', 'animes', 'fonds-noel', 'fonds-noel-vivants', 'meeshy-fonds', 'meeshy-fonds-vivants', 'nouvel-an-fonds', 'nouvel-an-fonds-vifs']);
+    expect(WALLPAPER_PACKS.flatMap((pack) => pack.designs)).toHaveLength(41);
   });
 
   test('les fonds de Noël, un par thème, se trouvent par leur pack ; les animés portent leur film (#15553)', () => {

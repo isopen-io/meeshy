@@ -25,7 +25,7 @@ struct ConversationBodyCovers: ViewModifier {
             .modifier(ConversationMediaGalleryLayer(
                 viewModel: viewModel, scrollState: $scrollState,
                 composerState: $composerState, accentColor: accentColor,
-                authority: authority, onReply: onReply))
+                authority: authority, onReply: onReply, onImager: { actions.export($0, false) }))
             .mediaSaveFlow(mediaSaveCoordinator)
             .modifier(ConversationMessageSheets(
                 viewModel: viewModel, overlayState: $overlayState, conversation: conversation,
@@ -69,7 +69,8 @@ struct ConversationBodySheets<Anchor: View, Picker: View>: ViewModifier {
             .modifier(ConversationVoiceConsentAlert(
                 isPresented: $composerState.showVoiceAutoTranslateConsent,
                 onAccept: onVoiceConsentAccept,
-                onLater: onVoiceConsentLater))
+                onLater: onVoiceConsentLater,
+                onConfigure: { VoiceSetupLauncher.open(.voice) { router.push(.settings) } }))
             .overlay { deleteAnchor() }
             .modifier(ConversationForwardSheet(composerState: $composerState, picker: forwardPicker))
     }

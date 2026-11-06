@@ -260,4 +260,14 @@
     line-height: 1.2;
     text-align: center;
   }
+  /* « Télécharger » (#16407) monte à côté de la marque, au bout de la
+   * première rangée : la langue et « Mes conversations » gardent la seconde. */
+  .ld-bar > .ld-brand {
+    order: -2;
+  }
+  .ld-bar > a[data-download] {
+    order: -1;
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+  }
 }

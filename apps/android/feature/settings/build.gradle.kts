@@ -42,6 +42,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // #16269 — la fiche et le plein écran de la boutique se referment au retour système (BackHandler).
+    implementation(libs.androidx.activity.compose)
     implementation(platform(libs.compose.bom))
     implementation(libs.bundles.compose)
     implementation(libs.hilt.android)

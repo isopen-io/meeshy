@@ -148,7 +148,8 @@ export async function ensureGlobalConversationMembership(
 
   const account = await deps.prisma.user.findUnique({
     where: { id: input.userId },
-    select: RECIPIENT_LANG_SELECT,
+    /* Le pseudo signe l'arrivée dans la ligne d'arrivées (#16338) : « dis-leur salut » l'écrit en mention. */
+    select: { ...RECIPIENT_LANG_SELECT, username: true },
   });
   const joinedAt = new Date();
   const created = await deps.prisma.participant.create({
@@ -189,7 +190,12 @@ export async function ensureGlobalConversationMembership(
     // d'inscriptions noyait le salon.
     await postGlobalArrival(
       { prisma: deps.prisma, broadcast, broadcastUpdate },
-      { conversationId: globalConversation.id, participantId: created.id, displayName: input.displayName },
+      {
+        conversationId: globalConversation.id,
+        participantId: created.id,
+        displayName: input.displayName,
+        ...(account?.username ? { username: account.username } : {}),
+      },
     );
 
     await emitMemberCountBestEffort(deps, socketManager, {

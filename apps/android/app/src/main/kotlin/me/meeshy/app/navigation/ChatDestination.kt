@@ -8,6 +8,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import me.meeshy.ui.appearance.LocalPackShopOpener
 import me.meeshy.ui.appearance.PackShopOpener
+import me.meeshy.ui.settings.LocalSettingsInviteOpener
+import me.meeshy.ui.settings.SettingsInviteOpener
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModelStoreOwner
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -68,7 +70,13 @@ internal fun NavGraphBuilder.chatDestination(
                     val packShopOpener = remember(navController) {
                         PackShopOpener { domain -> navController.navigate(Routes.packShop(domain = domain.wire)) }
                     }
-                    CompositionLocalProvider(LocalPackShopOpener provides packShopOpener) {
+                    val settingsInviteOpener = remember(navController) {
+                        SettingsInviteOpener { invite -> navController.navigate(Routes.settingsFocus(invite)) }
+                    }
+                    CompositionLocalProvider(
+                        LocalPackShopOpener provides packShopOpener,
+                        LocalSettingsInviteOpener provides settingsInviteOpener,
+                    ) {
                     ChatScreen(
                         onBack = { navController.popBackStack() },
                         onStartCall = { peerName, isVideo ->

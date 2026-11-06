@@ -46,6 +46,10 @@ nonisolated struct StoryActionRailPlan: Equatable {
     /// geste que l'entrée « Composer » du menu « … », qui reste. Sur sa propre
     /// story, le rail ne change pas.
     let showsCompose: Bool
+    /// « Imager » au rail (#16332) : la baguette fait de la story une carte
+    /// image, pour tout lecteur — comme l'entrée « Imager » du menu « … ».
+    /// Une story encore dans la file n'a rien à rendre.
+    var showsImager: Bool = false
 
     static func resolve(
         isOwnStory: Bool,
@@ -81,38 +85,13 @@ nonisolated struct StoryActionRailPlan: Equatable {
             // comme il choisit déjà sa langue d'export. Le Prisme est un outil
             // de lecture, pas une permission.
             showsTranslations: hasTranslatableContent,
-            showsCompose: !isOwnStory && canCompose
+            showsCompose: !isOwnStory && canCompose,
+            showsImager: true
         )
     }
 
     static func isRepublishable(visibility: String?) -> Bool {
         !StoryRepostAudience.allowed(fromRawValue: visibility).isEmpty
-    }
-}
-
-// MARK: - Export Rail Button (Enregistrer)
-
-/// Résolution PURE du bouton Enregistrer du rail auteur — testée sans
-/// instancier de vue. Membership = `showsExport` (== `isOwnStory`, voir
-/// `StoryActionRailPlan.resolve`) ; pendant un job de sauvegarde, le bouton
-/// cède la place à l'anneau de progression.
-///
-/// **L'anneau, lui, se montre sur TOUTE story en cours d'export** (#13871) :
-/// le menu « … » enregistre ou image la story d'un autre, et sans anneau le
-/// lecteur ne voyait ni la progression ni le moyen d'annuler. Il apparaît
-/// parce que le lecteur vient d'agir, jamais de lui-même en cours de lecture.
-///
-/// Le bouton « Partager » (export vidéo) n'en fait plus partie (#9953) : le
-/// menu « … » l'offre à tout lecteur sous « Partager ▸ Exporter en vidéo ».
-nonisolated struct StoryExportRailButtons: Equatable {
-    let showsSaveButton: Bool
-    let showsSaveProgressRing: Bool
-
-    static func resolve(showsExport: Bool, saveProgress: Double?) -> StoryExportRailButtons {
-        StoryExportRailButtons(
-            showsSaveButton: showsExport && saveProgress == nil,
-            showsSaveProgressRing: saveProgress != nil
-        )
     }
 }
 
@@ -595,6 +574,17 @@ struct StoryActionSidebarView: View {
         }
     }
 
+    /// « Imager » (#16332) : la baguette fait de la story affichée une carte image.
+    @ViewBuilder
+    private var imagerButton: some View {
+        if railPlan.showsImager, let story = currentStory {
+            StoryActionButton(icon: FullscreenChromeSymbol.imager, label: MessageCardExportMenu.imageLabel) {
+                HapticFeedback.light()
+                MessageCardExportPresenter.present(ImagerCardRequest.story(story, author: currentGroup.map { StoryExportAuthor.served(from: $0) }, accentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex))
+            }
+        }
+    }
+
     private var railPlanAfterCommentsReconciled: StoryActionRailPlan {
         resolvedRailPlan(commentCount: storyCommentCount, canCompose: railPlan.showsCompose)
     }
@@ -804,16 +794,15 @@ struct StoryActionSidebarView: View {
             // « Composer » au rail sur la story d'une AUTRE personne (#9953) :
             // le même geste que l'entrée du menu « … » — la porte du conteneur.
             if railPlan.showsCompose {
-                StoryActionButton(
-                    icon: "wand.and.stars",
-                    label: String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)
-                ) {
+                StoryActionButton(icon: FullscreenChromeSymbol.compose,
+                                  label: String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)) {
                     guard let cible = composeTarget, let demanderComposer else { return }
                     HapticFeedback.light()
                     pauseTimer()
                     demanderComposer(cible)
                 }
             }
+            imagerButton
 
             // Author-only Enregistrer → `StoryPhotoSaveService.shared.save(story:)`,
             // EXACTEMENT comme sur la ligne « Mes stories » : un export lancé ici

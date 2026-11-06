@@ -1,9 +1,14 @@
 package me.meeshy.app.chat
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.window.Dialog
+import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,6 +19,7 @@ import me.meeshy.app.chat.audio.AudioFullscreenAuthorVisual
 import me.meeshy.sdk.model.QueuedAudio
 import me.meeshy.sdk.model.fullscreen.AudioFullscreenStart
 import me.meeshy.sdk.model.media.PlaybackSpeed
+import me.meeshy.sdk.model.playback.VoiceVariant
 import me.meeshy.sdk.model.playback.AudioPlaybackState
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.playback.ConversationAudioCoordinator
@@ -131,6 +137,15 @@ internal class CoordinatorAudioFullscreenPlayer(
     override fun restingPositionMs(attachmentId: String): Long? = restingOf(attachmentId)
 
     override fun samples(source: AudioFullscreenSource): StateFlow<List<Float>> = samplesOf(source)
+
+    /** Une langue de piste choisie : le moteur recharge la piste servie de CE vocal au même point, la file et le contexte la reprennent. */
+    override fun switchTrack(source: AudioFullscreenSource): Boolean {
+        val playing = coordinator.snapshot.value.queue.current ?: return false
+        val served = source.queuedAudio()
+        if (!VoiceVariant.isStale(playing, served)) return false
+        coordinator.switchVariant(served)
+        return true
+    }
 }
 
 /**
@@ -157,6 +172,8 @@ internal fun ChatAudioFullscreen(
     onDismissDownload: () -> Unit = {},
     onRetryDownload: () -> Unit = {},
     actions: me.meeshy.ui.component.audio.AudioFullscreenActionPort? = null,
+    languages: ChatAudioFullscreenLanguages? = null,
+    transcription: AudioFullscreenViewModel = hiltViewModel(),
 ) {
     val player = voice?.fullscreenPlayer()
     val sources = remember(attachmentId, thread, conversationId, conversationName) {
@@ -167,6 +184,18 @@ internal fun ChatAudioFullscreen(
         return
     }
     val pageIds = remember(sources) { sources.map { it.id }.toSet() }
+    var languagesOf by remember { mutableStateOf<String?>(null) }
+    val latestThread by rememberUpdatedState(thread)
+    val transcripts = remember(transcription, languages, conversationIsEndToEnd) {
+        ChatAudioFullscreenTranscripts(
+            transcription = transcription,
+            languages = languages,
+            isEndToEnd = conversationIsEndToEnd,
+            readerLanguages = transcription::readerLanguages,
+            thread = { latestThread },
+            onOpenLanguages = { source -> languagesOf = source.carrierId },
+        )
+    }
     Dialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = false)) {
         Box(Modifier.fillMaxSize()) {
             AudioFullscreenScreen(
@@ -180,7 +209,20 @@ internal fun ChatAudioFullscreen(
                 onDownload = onDownload,
                 conversationIsEndToEnd = conversationIsEndToEnd,
                 actions = actions,
+                transcripts = transcripts,
             )
+            languagesOf?.let { messageId ->
+                val input = remember(messageId, thread, languages) { transcripts.sheetInput(messageId) }
+                if (input != null && languages != null) {
+                    AudioTranslationSheet(
+                        input = input,
+                        accentColor = accent,
+                        onPlayTrack = languages.onAudioLanguage,
+                        onOpenConsent = null,
+                        onDismiss = { languagesOf = null },
+                    )
+                }
+            }
             FileAttachmentDownloadBanner(
                 download = download?.takeIf { it.attachmentId in pageIds },
                 onDismiss = onDismissDownload,

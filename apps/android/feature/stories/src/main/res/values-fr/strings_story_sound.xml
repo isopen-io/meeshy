@@ -2,4 +2,5 @@
 <resources>
     <string name="story_audio_chip_playing">En lecture</string>
     <string name="story_audio_chip_muted">Coupé</string>
+    <string name="story_audio_chip_a11y">%1$s, dure %2$s</string>
 </resources>

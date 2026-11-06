@@ -266,7 +266,7 @@ public object BubbleContentBuilder {
             // notice, never a signed bubble — resolved FIRST in `BubbleRenderKind`.
             isSystem = message.isSystemMessage,
             joinNotice = message.joinNotice?.takeIf { message.isSystemMessage && !isDeleted }
-                ?.let(JoinNoticePresentation::of),
+                ?.let { JoinNoticePresentation.of(it, isOwn = isOutgoing) },
             isArrivalsNotice = message.isSystemMessage && message.arrivalsNotice != null,
             videoCount = files.count { it.isVideo },
             contactCards = attachments.contactCards,

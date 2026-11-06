@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import me.meeshy.app.feed.RepostChoiceDialog
 import me.meeshy.feature.reels.R
+import me.meeshy.feature.stories.R as StoriesR
 import me.meeshy.sdk.model.PostReactionPaletteState
 import me.meeshy.sdk.model.PostReactionPick
 import me.meeshy.sdk.model.fullscreen.ChromeRect
@@ -45,12 +46,15 @@ internal class ReelRailActions(
     val onSend: (String) -> Unit = {},
     /** « Citer » : le compositeur de citation du réel ; `null` le retire du choix, jamais inerte (#12234). */
     val onQuote: ((String) -> Unit)? = null,
+    /** « Imager » : la baguette ouvre la vue Imager du réel entier ; `null` la retire, jamais inerte (#16334). */
+    val onImager: ((String) -> Unit)? = null,
 )
 
 /**
  * Le rail d'actions d'un réel (iOS `ReelActionRail`) : j'aime — appui bref ❤️, appui long la
  * palette —, commentaires, favori, republier (le choix « Repartager / Citer » de [RepostChoiceDialog], comme la carte du
- * fil), envoyer (la feuille Meeshy ; « Partager » vit dans le menu « ⋯ »). Le kit plein écran donne à chaque cellule son saut
+ * fil), envoyer (la feuille Meeshy ; « Partager » vit dans le menu « ⋯ »), puis la baguette « Imager » quand le réel se rend en
+ * vidéo (#16334). Le kit plein écran donne à chaque cellule son saut
  * (échelle, ressort rebondissant), son halo coloré à l'état posé et son haptique ; les compteurs
  * sont abrégés comme sur iOS.
  */
@@ -140,6 +144,17 @@ internal fun ReelRail(
             caption = ReelRailCaption.of(reel.shareCount, stringResource(R.string.reels_action_send), locale),
             accessibilityValue = reel.shareCount.takeIf { it > 0 }?.toString(),
         )
+        val imager = actions.onImager
+        if (imager != null && reel.export != null) {
+            val label = stringResource(StoriesR.string.stories_viewer_export_imager)
+            FullscreenActionButton(
+                icon = FullscreenChromeSymbol.Imager.icon,
+                label = label,
+                onClick = { haptics.light(); imager(reel.id) },
+                style = style,
+                caption = label,
+            )
+        }
     }
     if (choosingRepost) {
         RepostChoiceDialog(

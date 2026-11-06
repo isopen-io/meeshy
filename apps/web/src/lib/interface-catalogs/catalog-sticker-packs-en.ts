@@ -91,6 +91,8 @@ const enStickerPacks = {
   'packs.frames.yourAtmosphere': "Your atmosphere",
   'packs.frames.atmosphereKept': "This pack holds your atmosphere, so it stays installed. Change atmosphere to remove it.",
   'packs.frames.atmosphereQueued': "Offline: your choice will be sent once you’re back online.",
+  'packs.sheet.open': "Open the {name} pack",
+  'packs.preview.open': "View {name} full screen",
 } satisfies StickerPacksCatalog;
 
 export default enStickerPacks;

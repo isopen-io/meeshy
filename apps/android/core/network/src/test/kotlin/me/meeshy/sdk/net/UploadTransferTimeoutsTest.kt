@@ -49,6 +49,30 @@ class UploadTransferTimeoutsTest {
     }
 
     @Test
+    fun `#16168 a multipart attachment upload waits for its answer longer than the default read timeout`() {
+        val server = slowServer()
+        try {
+            val code = runBlocking { client().newCall(multipart(server, "/api/v1/attachments/upload")).execute().use { it.code } }
+
+            assertThat(code).isEqualTo(204)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
+    fun `#16168 a multipart post to any other path keeps the default read timeout`() {
+        val server = slowServer()
+        try {
+            val failure = runCatching { client().newCall(multipart(server, "/api/v1/users/avatar")).execute().close() }.exceptionOrNull()
+
+            assertThat(failure).isInstanceOf(SocketTimeoutException::class.java)
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun `an ordinary request keeps the default read timeout`() {
         val server = slowServer()
         try {
@@ -70,6 +94,14 @@ class UploadTransferTimeoutsTest {
         assertThat(UploadTransferTimeouts.readMillis(Long.MAX_VALUE)).isEqualTo(UploadTransferTimeouts.MAX_READ_MILLIS)
         assertThat(UploadTransferTimeouts.readMillis(-1L)).isEqualTo(UploadTransferTimeouts.readMillis(0L))
     }
+
+    private fun multipart(server: MockWebServer, path: String) = Request.Builder()
+        .url(server.url(path))
+        .post(
+            okhttp3.MultipartBody.Builder().setType(okhttp3.MultipartBody.FORM)
+                .addFormDataPart("files", "p.jpg", ByteArray(CHUNK_BYTES).toRequestBody("image/jpeg".toMediaType())).build(),
+        )
+        .build()
 
     private companion object {
         const val BASE_READ_MILLIS = 250L

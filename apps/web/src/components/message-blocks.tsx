@@ -17,6 +17,7 @@ import { quotedAudioOf } from '@/lib/view/quoted-audio';
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import { GLYPHS, type GlyphName } from './glyphs';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
+import { SendProgressMark } from './send-progress-pastille';
 import { QuoteFrame } from './quote-frame';
 import { QuoteAudioPreview, QuoteOpenZone, QuoteVideoStill } from './quote-media';
 
@@ -358,10 +359,14 @@ export function Check({
   status,
   isMine,
   sendStartedAt,
+  progressKey,
   onOpen,
 }: {
   status: Delivery;
   isMine: boolean;
+  /** `clientMessageId` du message en envoi (#16134) — la pastille y lit SA
+   * progression de téléversement, à la place de l'horloge. */
+  progressKey?: string;
   /** Epoch ms du DÉBUT de la tentative en cours (`outbox-store.ts`) — SEUL
    * `status === 'pending'` en tient compte (§5 étape 9 de la spécification
    * #5813) : sous ce seuil, aucune horloge ne clignote. */
@@ -410,10 +415,9 @@ export function Check({
         {glyph}
       </button>
     );
-  if (status === 'pending' && sendStartedAt !== undefined) {
-    return <SendingClock startedAt={sendStartedAt}>{node}</SendingClock>;
-  }
-  return node;
+  const clock = status === 'pending' && sendStartedAt !== undefined ? <SendingClock startedAt={sendStartedAt}>{node}</SendingClock> : node;
+  if (status === 'pending' && progressKey !== undefined) return <SendProgressMark progressKey={progressKey} fallback={clock} />;
+  return clock;
 }
 
 /**

@@ -325,6 +325,7 @@ internal fun ChatListHost(
                 }
             },
             onOpenJoinProfile = { bubble -> bubble.joinNotice?.toProfileSheetUser()?.let(profileTap) },
+            onGreetArrivals = actions.greetArrivals,
             onCallBack = { bubble ->
                 val isVideo = bubble.callSummary?.callType == me.meeshy.sdk.model.CallSummaryMetadata.MediaType.VIDEO
                 host.navigation.onStartCall(state.conversationTitle.orEmpty(), isVideo)
@@ -454,12 +455,16 @@ internal fun ChatListHost(
             download = state.fileDownload,
             onDismissDownload = actions.dismissFileDownload,
             onRetryDownload = actions.retryFileDownload,
+            languages = remember(actions.onAudioLanguage, actions.attachmentsOf, state.encryptionMode) {
+                ChatAudioFullscreenLanguages(actions.onAudioLanguage, actions.attachmentsOf, state.encryptionMode)
+            },
             actions = me.meeshy.app.chat.audio.rememberChatAudioFullscreenActions(
                 replies = actions.audioFullscreenReplies,
                 actions = actions,
                 state = state,
                 clearance = LocalChatSignalClearance.current,
                 closure = host.composerClosure,
+                openCard = host.sheets.openExportCard,
             ),
         )
         else -> Unit
