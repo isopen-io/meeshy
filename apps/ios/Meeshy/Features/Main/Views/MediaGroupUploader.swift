@@ -12,6 +12,10 @@ nonisolated struct MediaGroupUploadItem: Sendable, Equatable {
     let thumbHash: String?
     let transcription: TusUploadTranscriptionMetadata?
     let capturedInApp: Bool
+    /// Le nom choisi par l'auteur (`originalName`), jamais celui de la copie
+    /// temporaire `file_<UUID>_…` que l'import fabrique (#11166). `nil` : le
+    /// téléverseur prend le nom du fichier.
+    let fileName: String?
 }
 
 extension MediaGroupUploadItem {
@@ -35,9 +39,20 @@ extension MediaGroupUploadItem {
                 mimeType: isAudioGroup ? "audio/mp4" : attachment.mimeType,
                 thumbHash: thumbnails[attachment.id]?.toThumbHash(),
                 transcription: transcriptions[attachment.id]?.tusUploadMetadata,
-                capturedInApp: attachment.capturedInApp
+                capturedInApp: attachment.capturedInApp,
+                fileName: chosenName(of: attachment, sentAs: fileURL)
             )
         }
+    }
+
+    /// Le nom d'origine ne voyage que s'il décrit les octets envoyés : le
+    /// serveur en tire l'extension du fichier stocké. Une pièce réencodée sous
+    /// une autre extension garde le nom de son fichier.
+    static func chosenName(of attachment: MeeshyMessageAttachment, sentAs fileURL: URL) -> String? {
+        let name = attachment.originalName
+        guard !name.isEmpty,
+              (name as NSString).pathExtension.lowercased() == fileURL.pathExtension.lowercased() else { return nil }
+        return name
     }
 }
 
@@ -80,7 +95,7 @@ struct TusMediaGroupUploader: MediaGroupUploading {
             try await MessageAttachmentUpload.uploadMessageAttachment(
                 with: uploader, fileURL: item.fileURL, mimeType: item.mimeType, credential: credential,
                 thumbHash: item.thumbHash, transcription: item.transcription,
-                capturedInApp: item.capturedInApp
+                capturedInApp: item.capturedInApp, fileName: item.fileName
             )
         }
 
