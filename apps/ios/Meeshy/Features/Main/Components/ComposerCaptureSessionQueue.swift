@@ -32,6 +32,12 @@ nonisolated final class ComposerCaptureSessionQueue: @unchecked Sendable {
         let session: any ComposerCaptureRunning
     }
 
+    var wantsToRun: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return wantsRunning
+    }
+
     func perform(_ work: @escaping @Sendable () -> Void) {
         queue.async(execute: work)
     }

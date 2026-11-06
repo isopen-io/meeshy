@@ -145,7 +145,7 @@ extension MeeshyComposerHost {
         sceneCapture.finishCapture()
         HapticFeedback.success()
         Task {
-            if let cadrage = await ComposerTakeAspect.sceneFit(of: result) { applySceneFitMode(cadrage) }
+            if sceneIntakeAllowsAnother, let cadrage = await ComposerTakeAspect.sceneFit(of: result) { applySceneFitMode(cadrage) }
             await ingestCameraCapture(result)
         }
     }

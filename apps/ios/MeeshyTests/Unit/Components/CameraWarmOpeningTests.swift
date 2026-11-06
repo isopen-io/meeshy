@@ -129,6 +129,58 @@ final class CameraWarmOpeningTests: XCTestCase {
         XCTAssertTrue(try source("Meeshy/Features/Composer/MeeshyComposerHost.swift").contains("ComposerWarmCapture.session("))
     }
 
+    // MARK: - La caméra gardée n'en fait qu'à son viseur
+
+    private final class StubRunning: ComposerCaptureRunning {
+        var isRunning = false
+        func startRunning() {}
+        func stopRunning() {}
+    }
+
+    /// `session.isRunning` retombe tant que la file n'a pas démarré : c'est le
+    /// VŒU qui dit si un objectif va s'allumer sans personne pour le regarder.
+    func test_stopIfRunning_withAStartStillQueued_cancelsIt() {
+        let camera = CameraModel()
+        camera.sessionQueue.setRunning(true, StubRunning())
+        camera.stopIfRunning()
+        XCTAssertFalse(camera.sessionQueue.wantsToRun)
+    }
+
+    func test_opening_stoppedBeforeThePermissionAnswers_neverStartsTheSession() {
+        let camera = CameraModel()
+        let ouverture = camera.beginOpening()
+        XCTAssertTrue(camera.openingIsCurrent(ouverture))
+        camera.stop()
+        XCTAssertFalse(camera.openingIsCurrent(ouverture), "fermé, le viseur n'allume plus l'objectif")
+    }
+
+    func test_opening_handedBackBeforeThePermissionAnswers_neverStartsTheSession() {
+        let camera = CameraModel()
+        let ouverture = camera.beginOpening()
+        camera.rewindForNewHolder()
+        XCTAssertFalse(camera.openingIsCurrent(ouverture), "gardée, la caméra n'a plus de viseur à servir")
+    }
+
+    /// Un appel posé sur l'objectif arrière écrit `activeFormat` sur l'appareil
+    /// partagé : la session gardée passe en `.inputPriority` et y resterait.
+    func test_reclaimLens_afterAForeignFormat_returnsToTheCapturePreset() {
+        let camera = CameraModel()
+        camera.session.sessionPreset = .inputPriority
+        camera.reclaimLensAfterHandBack()
+        camera.sessionQueue.drain()
+        XCTAssertEqual(camera.session.sessionPreset, .high)
+    }
+
+    func test_setup_reclaimsTheLensBeforeStarting_onlyAfterAHandBack() throws {
+        let code = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let debut = try XCTUnwrap(code.range(of: "private func setupSession("))
+        let fin = try XCTUnwrap(code.range(of: "private func prepareSession(", range: debut.upperBound..<code.endIndex))
+        let armement = code[debut.upperBound..<fin.lowerBound]
+        let reprise = try XCTUnwrap(armement.range(of: "reclaimLensAfterHandBack()"))
+        let lancement = try XCTUnwrap(armement.range(of: "setRunning(true"))
+        XCTAssertLessThan(reprise.lowerBound, lancement.lowerBound, "ni zoom ni format d'un autre propriétaire au premier cadre")
+    }
+
     // MARK: - Le micro
 
     func test_armsAtSetup_forAPhoto_neverArmsTheMicrophone() {

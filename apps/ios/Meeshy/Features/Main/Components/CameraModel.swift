@@ -112,6 +112,12 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// La session audio d'un enregistrement : posée par la loi, plus
     /// par la capture elle-même.
     let recordingSession: MeeshyRecordingSession = .shared
+    /// La dernière ouverture demandée : fermer l'annule, sinon la réponse de la
+    /// permission allumerait l'objectif d'une caméra gardée, sans viseur.
+    var openingGeneration = 0
+    /// La caméra sort de la garde : un appel a pu écrire format et zoom sur
+    /// l'appareil partagé depuis sa remise.
+    private var lensWasHandedBack = false
     /// La dernière remise de session demandée : un viseur qui revient avant
     /// qu'elle ne s'exécute l'annule.
     private var sessionHandBackGeneration = 0
@@ -201,13 +207,14 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
         #endif
         firstFrameClock.start(prewarmed: sessionIsPrepared)
+        let ouverture = beginOpening()
         Task { @MainActor [weak self] in
             let state = await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false)
                 ? MediaPermissionState.granted
                 : MediaPermissionState.camera
             guard let self else { return }
             self.permission = state
-            guard state.isUsable else { return }
+            guard state.isUsable, self.openingIsCurrent(ouverture) else { return }
             self.setupSession(filming: filming)
         }
     }
@@ -231,6 +238,10 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         let micro = microphoneArmsAtSetup(filming: filming)
         let prechauffee = sessionIsPrepared
         prepareSession(withMicrophone: micro)
+        if lensWasHandedBack {
+            lensWasHandedBack = false
+            reclaimLensAfterHandBack()
+        }
         reclaimRecordingSessionIfArmed()
         armMicrophoneAtSetup(micro, inPreparedSession: prechauffee)
         if let activeVideoDevice { watchSubjectArea(of: activeVideoDevice) }
@@ -331,6 +342,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// prise du précédent, pas de micro, objectif arrière à ×1. La session reste
     /// arrêtée et le travail se fait sur sa file, hors du chemin de l'ouverture.
     func rewindForNewHolder() {
+        cancelOpening()
+        lensWasHandedBack = true
         capturedPhoto = nil
         capturedPhotoData = nil
         capturedVideoURL = nil
@@ -354,6 +367,24 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             guard !derriere else { return CameraInputInstaller.reopenLens(in: self.session) }
             let installe = self.swapLens(to: .back)
             DispatchQueue.main.async { MainActor.assumeIsolated { self.publishLens(installe) } }
+        }
+    }
+
+    /// **La caméra gardée reprend son objectif** (#16504). Un appel sur le même
+    /// appareil écrit `activeFormat` et `videoZoomFactor` : la session passe en
+    /// `.inputPriority` et garderait son format, et l'affichage dirait ×1 sur un
+    /// autre cadrage. Sur la file de la session, avant le lancement.
+    func reclaimLensAfterHandBack() {
+        sessionQueue.perform { [weak self] in
+            guard let self else { return }
+            if self.session.sessionPreset != .high, self.session.canSetSessionPreset(.high) {
+                self.session.beginConfiguration()
+                self.session.sessionPreset = .high
+                self.session.commitConfiguration()
+                let entree = self.session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
+                if let device = entree?.device { CameraPhotoTuning.confirm(self.photoOutput, in: self.session, for: device) }
+            }
+            CameraInputInstaller.reopenLens(in: self.session)
         }
     }
 
@@ -604,7 +635,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         ) else { return }
         let settings = CameraPhotoTuning.settings(
             flash: flash, supportedFlashModes: photoOutput.supportedFlashModes,
-            outputMaxPhotoDimensions: CameraPhotoDimensions(photoOutput.maxPhotoDimensions))
+            outputMaxPhotoDimensions: CameraPhotoDimensions(photoOutput.maxPhotoDimensions),
+            formatMaxPhotoDimensions: photoOutput.sourceMaxPhotoDimensions)
         horizon.level(connection)
         isTakingPhoto = true
         photoOutput.capturePhoto(with: settings, delegate: self)
@@ -874,6 +906,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     }
 
     func stop() {
+        cancelOpening()
         #if DEBUG
         fixture?.stop()
         #endif

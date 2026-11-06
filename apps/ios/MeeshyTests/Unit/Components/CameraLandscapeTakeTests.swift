@@ -163,6 +163,8 @@ final class CameraLandscapeTakeTests: XCTestCase {
         let code = try source("Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift")
         XCTAssertTrue(code.contains("ComposerTakeAspect.sceneFit(of: result)"),
                       "posée remplie, une prise paysage perd ses côtés à l'entrée de la scène")
+        XCTAssertTrue(code.contains("if sceneIntakeAllowsAnother, let cadrage"),
+                      "une prise que la scène refuse ne recadre pas le fond déjà posé")
     }
 
     // MARK: - Ce que le viseur montrait

@@ -67,7 +67,8 @@ final class CameraShutterSotaTests: XCTestCase {
 
     func test_settings_unsupportedFlash_isOff_andQualityIsBalanced() {
         let reglages = CameraPhotoTuning.settings(flash: .on, supportedFlashModes: [.off],
-                                                  outputMaxPhotoDimensions: dims(4032, 2268))
+                                                  outputMaxPhotoDimensions: dims(4032, 2268),
+                                                  formatMaxPhotoDimensions: [dims(1920, 1080), dims(4032, 2268)])
         XCTAssertEqual(reglages.flashMode, .off)
         XCTAssertEqual(reglages.photoQualityPrioritization, .balanced)
         XCTAssertEqual(reglages.maxPhotoDimensions.width, 4032)
@@ -76,8 +77,43 @@ final class CameraShutterSotaTests: XCTestCase {
 
     func test_settings_supportedFlash_isKept() {
         let reglages = CameraPhotoTuning.settings(flash: .auto, supportedFlashModes: [.off, .auto, .on],
-                                                  outputMaxPhotoDimensions: dims(0, 0))
+                                                  outputMaxPhotoDimensions: dims(0, 0),
+                                                  formatMaxPhotoDimensions: [])
         XCTAssertEqual(reglages.flashMode, .auto)
+    }
+
+    /// `capturePhoto` lève si la définition demandée n'est pas celle du format
+    /// ACTIF, et la sortie ne suit pas un format changé hors de la session.
+    func test_settings_afterAForeignFormat_neverAsksWhatTheFormatRefuses() {
+        let reglages = CameraPhotoTuning.settings(flash: .off, supportedFlashModes: [.off],
+                                                  outputMaxPhotoDimensions: dims(4032, 2268),
+                                                  formatMaxPhotoDimensions: [dims(1280, 720), dims(1920, 1080)])
+        XCTAssertEqual(reglages.maxPhotoDimensions.width, 1920, "la plus grande que le format sert sous le plafond de la sortie")
+        XCTAssertEqual(reglages.maxPhotoDimensions.height, 1080)
+    }
+
+    func test_settings_whenTheFormatServesNothingUnderTheOutput_leavesTheDefault() {
+        let reglages = CameraPhotoTuning.settings(flash: .off, supportedFlashModes: [.off],
+                                                  outputMaxPhotoDimensions: dims(1280, 720),
+                                                  formatMaxPhotoDimensions: [dims(4032, 3024)])
+        XCTAssertEqual(reglages.maxPhotoDimensions.width, 0, "(0, 0) : AVFoundation ne valide rien et sert son défaut")
+    }
+
+    func test_settings_withoutAReadableFormat_leavesTheDefault() {
+        let reglages = CameraPhotoTuning.settings(flash: .off, supportedFlashModes: [.off],
+                                                  outputMaxPhotoDimensions: dims(4032, 2268),
+                                                  formatMaxPhotoDimensions: [])
+        XCTAssertEqual(reglages.maxPhotoDimensions.width, 0)
+    }
+
+    /// La VRAIE sortie : sans connexion, `maxPhotoDimensions` lève une exception
+    /// Objective-C — le processus meurt, le témoin ne peut pas rougir autrement.
+    func test_adopt_onAnOutputWithoutConnection_leavesItsDimensionsAlone() {
+        let sortie = AVCapturePhotoOutput()
+        sortie.adopt(CameraPhotoTuningPlan(zeroShutterLag: false, responsiveCapture: false,
+                                           fastCapturePrioritization: false, qualityPrioritization: .balanced,
+                                           maxPhotoDimensions: dims(4032, 2268)))
+        XCTAssertEqual(sortie.maxPhotoDimensions.width, 0)
     }
 
     // MARK: - Le zoom d'ouverture
