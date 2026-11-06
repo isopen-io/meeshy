@@ -1,33 +1,42 @@
 import Combine
 import XCTest
+import os
 @testable import MeeshyUI
 import MeeshySDK
 
 // MARK: - La vitrine montre AUSSI ce qui se télécharge, et le dit pendant qu'il arrive (#16268)
 
-private final class StubServedAppearance: ServedAppearanceProviding, @unchecked Sendable {
-    private var onDevice: [String: ServedAppearanceContract] = [:]
+private final class StubServedAppearance: ServedAppearanceProviding, Sendable {
+    private struct State: Sendable {
+        var onDevice: [String: ServedAppearanceContract]
+        var prepared: [String] = []
+    }
+
+    private let state: OSAllocatedUnfairLock<State>
     private let fetchable: [String: ServedAppearanceContract]
-    private(set) var prepared: [String] = []
-    private let subject = PassthroughSubject<Void, Never>()
 
     init(onDevice: [String: ServedAppearanceContract] = [:], fetchable: [String: ServedAppearanceContract] = [:]) {
-        self.onDevice = onDevice
+        self.state = OSAllocatedUnfairLock(initialState: State(onDevice: onDevice))
         self.fetchable = fetchable
     }
 
-    var changes: AnyPublisher<Void, Never> { subject.eraseToAnyPublisher() }
+    var prepared: [String] { state.withLock { $0.prepared } }
+    var changes: AnyPublisher<Void, Never> { Empty(completeImmediately: false).eraseToAnyPublisher() }
 
-    func contract(src: String) -> ServedAppearanceContract? { onDevice[src] }
+    func contract(src: String) -> ServedAppearanceContract? { state.withLock { $0.onDevice[src] } }
     func contractSource(domain: PackDomain, slug: String) -> String? {
-        onDevice[slug] != nil || fetchable[slug] != nil ? slug : nil
+        let onDevice = state.withLock { $0.onDevice[slug] }
+        return onDevice != nil || fetchable[slug] != nil ? slug : nil
     }
-    func load(src: String) async -> ServedAppearanceContract? { onDevice[src] }
+    func load(src: String) async -> ServedAppearanceContract? { contract(src: src) }
     func prepare(domain: PackDomain, installed: [ShopPack]) async {}
     func prepare(domain: PackDomain, slug: String) async -> ServedAppearanceContract? {
-        prepared.append(domain.rawValue + "/" + slug)
-        onDevice[slug] = fetchable[slug] ?? onDevice[slug]
-        return onDevice[slug]
+        let fetched = fetchable[slug]
+        return state.withLock { state in
+            state.prepared.append(domain.rawValue + "/" + slug)
+            state.onDevice[slug] = fetched ?? state.onDevice[slug]
+            return state.onDevice[slug]
+        }
     }
 }
 
@@ -121,6 +130,8 @@ final class ServedPackElementDesignsTests: XCTestCase {
 
 @MainActor
 private final class StubDesigns: PackElementDesignProviding {
+    nonisolated deinit {}
+
     var resolution: PackElementsResolution = .downloadRequired
     var onPrepare: PackElementsResolution?
     private(set) var prepares: [String] = []
@@ -136,7 +147,7 @@ private final class StubDesigns: PackElementDesignProviding {
     }
 }
 
-private final class NoDecorService: ProfileDecorProviding, @unchecked Sendable {
+private final class NoDecorService: ProfileDecorProviding, Sendable {
     func update(_ write: ProfileDecorWrite) async throws -> ServedProfileDecor { .empty }
 }
 

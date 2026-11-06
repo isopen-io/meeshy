@@ -14,5 +14,6 @@ package me.meeshy.sdk.net.routes
 public object ApiRoutesPublishers {
     public const val ADMIN: String = "publishers/admin"
     public const val BY_SLUG: String = "publishers/{slug}"
+    public const val BY_SLUG_PAGE: String = "publishers/{slug}/page"
     public const val ME: String = "publishers/me"
 }

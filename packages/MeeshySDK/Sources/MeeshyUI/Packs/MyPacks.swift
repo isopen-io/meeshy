@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import os
 
 // MARK: - Mes packs : les packs installés, rangés et triés (#16433)
 
@@ -81,15 +82,14 @@ public protocol PackInstallRecording: Sendable {
     func installDates() -> [String: Date]
 }
 
-public final class PackInstallRecency: PackInstallRecording, @unchecked Sendable {
+public final class PackInstallRecency: PackInstallRecording, Sendable {
     public static let shared = PackInstallRecency()
 
     private static let key = "meeshy.packs.install-recency.v1"
-    private let defaults: UserDefaults
-    private let lock = NSLock()
+    private let defaults: OSAllocatedUnfairLock<UserDefaults>
 
     public init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+        self.defaults = OSAllocatedUnfairLock(uncheckedState: defaults)
     }
 
     public func recordInstall(domain: PackDomain, slug: String, at date: Date) {
@@ -101,21 +101,19 @@ public final class PackInstallRecency: PackInstallRecording, @unchecked Sendable
     }
 
     public func installDates() -> [String: Date] {
-        lock.lock()
-        defer { lock.unlock() }
-        return stored().mapValues { Date(timeIntervalSince1970: $0) }
+        defaults.withLockUnchecked { Self.stored(in: $0) }.mapValues { Date(timeIntervalSince1970: $0) }
     }
 
-    private func stored() -> [String: Double] {
-        defaults.dictionary(forKey: Self.key) as? [String: Double] ?? [:]
+    private static func stored(in defaults: UserDefaults) -> [String: Double] {
+        defaults.dictionary(forKey: key) as? [String: Double] ?? [:]
     }
 
     private func update(_ change: (inout [String: Double]) -> Void) {
-        lock.lock()
-        defer { lock.unlock() }
-        var current = stored()
-        change(&current)
-        defaults.set(current, forKey: Self.key)
+        defaults.withLockUnchecked { defaults in
+            var current = Self.stored(in: defaults)
+            change(&current)
+            defaults.set(current, forKey: Self.key)
+        }
     }
 }
 
