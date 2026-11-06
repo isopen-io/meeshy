@@ -456,6 +456,8 @@ extension FocalRowInput {
 
 /// Sac de callbacks — EXCLU de l'`Equatable` (patron `BubbleFooterActions`).
 struct FocalRowActions {
+    /// Toucher l'invite « dis-lui salut » d'un avis d'arrivée (#16338).
+    var onGreetArrivals: (() -> Void)?
     var onToggleReaction: ((String) -> Void)?
     var onAddReaction: ((String) -> Void)?
     var onOpenReactPicker: ((String) -> Void)?

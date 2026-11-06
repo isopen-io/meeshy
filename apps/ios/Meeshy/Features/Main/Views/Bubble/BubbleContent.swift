@@ -427,6 +427,9 @@ nonisolated struct BubbleContent: Equatable {
     /// de témoins (`Unit/Focal/…`) qui énumèrent chaque champ ; une valeur par
     /// défaut garde leur appel intact, un `let` sans défaut les casserait tous.
     var sticker: Sticker? = nil
+    /// « dis-lui salut » (#16338) — l'invite qu'un avis d'arrivée offre à ce lecteur, lue
+    /// par TOUS les modes de lecture (Bulles, Focal, Script) ; `nil` sinon.
+    var arrivalsInvite: String? = nil
 
     /// #13622 — ce que la conversation porteuse permet aux cartes de visite de
     /// faire du réseau ; `.unknown` (défaut) ne résout rien.
@@ -534,6 +537,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.callNotice == rhs.callNotice
             && lhs.joinNotice == rhs.joinNotice
             && lhs.sticker == rhs.sticker
+            && lhs.arrivalsInvite == rhs.arrivalsInvite
             && lhs.contactCardScope == rhs.contactCardScope
     }
 }

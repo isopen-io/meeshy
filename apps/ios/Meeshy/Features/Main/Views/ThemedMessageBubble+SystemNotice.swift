@@ -14,26 +14,18 @@ extension ThemedMessageBubble {
             // Une arrivée a sa propre notice : la notice générique a pour
             // icône un TÉLÉPHONE, héritée des résumés d'appel.
             BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, onOpenProfile: onOpenParticipantProfile,
-                                 timeString: content.meta.timeString, greeting: joinGreeting(joinNotice))
+                                 timeString: content.meta.timeString, greeting: greeting(content))
         } else {
             let text = content.text?.raw ?? message.content
-            let line = message.arrivalsNotice == nil ? (sentence: text, invite: nil) : ArrivalGreeting.split(text)
-            BubbleSystemNoticeView(text: line.sentence, isDark: isDark, timeString: content.meta.timeString,
-                                   greeting: line.invite.flatMap(greeting(text:)))
+            let sentence = content.arrivalsInvite == nil ? text : ArrivalGreeting.split(text).sentence
+            BubbleSystemNoticeView(text: sentence, isDark: isDark, timeString: content.meta.timeString, greeting: greeting(content))
         }
     }
 
-    /// « dis-lui salut » (#16338) — l'invite du catalogue, offerte à tout
-    /// lecteur sauf à l'arrivant lui-même et pour un visiteur sans pseudo.
-    private func joinGreeting(_ notice: BubbleContent.JoinNotice) -> ArrivalGreetingInvite? {
-        guard !message.isMe, !notice.isAnonymous, notice.username?.isEmpty == false else { return nil }
-        let line = ConversationPreviewCatalog.strings()(.systemMembersArrivedOne, ["first": notice.displayName])
-        return ArrivalGreeting.split(line).invite.flatMap(greeting(text:))
-    }
-
-    private func greeting(text: String) -> ArrivalGreetingInvite? {
-        guard let onGreetArrivals else { return nil }
+    /// « dis-lui salut » (#16338) — l'invite que porte le modèle, en couleur de la conversation.
+    private func greeting(_ content: BubbleContent) -> ArrivalGreetingInvite? {
+        guard let onGreetArrivals, let invite = content.arrivalsInvite else { return nil }
         let messageId = message.id
-        return ArrivalGreetingInvite(text: text) { onGreetArrivals(messageId) }
+        return ArrivalGreetingInvite(text: invite, accentHex: contactColor) { onGreetArrivals(messageId) }
     }
 }

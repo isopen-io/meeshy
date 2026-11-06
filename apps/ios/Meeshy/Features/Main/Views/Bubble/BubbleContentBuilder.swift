@@ -203,7 +203,7 @@ extension BubbleContent {
             emojiFontSize: emojiResult.fontSize,
             authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount
         )
-
+        self.arrivalsInvite = ArrivalGreeting.invite(for: message, noticeText: effective)
         // --- Translation panel ---
         let hasAny = !translations.isEmpty || !translatedAudios.isEmpty
         if hasAny && !isEmojiOnly {

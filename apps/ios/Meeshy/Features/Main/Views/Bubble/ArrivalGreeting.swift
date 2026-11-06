@@ -59,6 +59,18 @@ extension ArrivalGreeting {
         return message.arrivalsNotice?.arrivals.map { ($0.participantId, $0.username) } ?? []
     }
 
+    /// L'invite qu'un avis offre à ce lecteur : celle de l'avis individuel d'un
+    /// AUTRE compte, ou celle de la ligne d'arrivées regroupées (`noticeText`,
+    /// déjà composée dans la langue d'interface). Un visiteur sans pseudo n'en a pas.
+    static func invite(for message: Message, noticeText: String) -> String? {
+        guard message.messageSource == .system else { return nil }
+        if let join = message.joinNotice {
+            guard !message.isMe, !join.isAnonymous, join.username?.isEmpty == false else { return nil }
+            return split(ConversationPreviewCatalog.strings()(.systemMembersArrivedOne, ["first": join.displayName])).invite
+        }
+        return message.arrivalsNotice == nil ? nil : split(noticeText).invite
+    }
+
     /// Le brouillon après avoir touché l'invite de l'avis `messageId` — `nil`
     /// si l'avis n'est plus dans le fil.
     static func draft(greeting messageId: String, in messages: [Message], ownHandle: String?, draft: String) -> String? {
@@ -76,13 +88,15 @@ extension ArrivalGreeting {
 /// L'invite détachée de l'avis, rendue en GRAS et touchable.
 struct ArrivalGreetingInvite: View {
     let text: String
+    /// La couleur de la conversation : l'invite se lit comme un geste offert.
+    let accentHex: String
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
-                .foregroundColor(ThemeManager.shared.textPrimary)
+                .foregroundColor(Color(hex: accentHex))
                 .multilineTextAlignment(.center)
         }
         .buttonStyle(.plain)
