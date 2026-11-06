@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { GAMUT_KEYS } from '../design/appearance/gamut';
+import { effectiveEventWindow, type PackEventDeclaration } from '../utils/decoration-event-window';
 import { buildAppearanceCatalog, IOS_CATALOG_PATH, IOS_CATALOG_SWIFT_PATH, renderAppearanceCatalog, renderAppearanceCatalogSwift } from '../scripts/sync-appearance-catalog-ios';
 
 const read = (path: string): string => readFileSync(resolve(__dirname, '../../..', path), 'utf8');
@@ -25,5 +26,23 @@ describe('la copie iOS du catalogue d’apparence (#10631, § 8.2)', () => {
     expect(catalog.rings.flatMap((pack) => pack.rings)).toHaveLength(91);
     expect(catalog.bannerFrames.flatMap((pack) => pack.frames)).toHaveLength(80);
     expect(Object.keys(catalog.strings).sort()).toEqual(['ar', 'de', 'en', 'es', 'fr', 'it', 'pt']);
+  });
+
+  it('chaque pack porte sa fenêtre EFFECTIVE (#16447) — date écrite gardée, borne absente d’un pack d’événement dérivée — et la déclaration `event` ne voyage pas', () => {
+    type Source = { readonly slug: string; readonly event?: PackEventDeclaration; readonly availability?: { readonly startsAt?: string; readonly endsAt?: string } };
+    const source = (relative: string): readonly Source[] => (JSON.parse(readFileSync(resolve(__dirname, '../design/appearance', relative), 'utf8')) as { packs: readonly Source[] }).packs;
+    const catalog = buildAppearanceCatalog();
+    const pairs: readonly [readonly Source[], readonly object[]][] = [
+      [source('wallpapers/designs.json'), catalog.wallpapers],
+      [source('banners/designs.json'), catalog.banners],
+      [source('avatar-rings/rings.json'), catalog.rings],
+      [source('banner-frames/frames.json'), catalog.bannerFrames],
+    ];
+    pairs.forEach(([packs, served]) =>
+      packs.forEach((pack, index) => {
+        const out = served[index] as Source;
+        expect({ slug: out.slug, event: 'event' in out, availability: out.availability }).toEqual({ slug: pack.slug, event: false, availability: effectiveEventWindow(pack) });
+      }),
+    );
   });
 });

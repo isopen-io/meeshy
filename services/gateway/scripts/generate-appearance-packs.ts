@@ -27,6 +27,7 @@ import { PACK_LANGUAGES } from '@meeshy/shared/types/content-pack';
 import { parsePackIndex } from '@meeshy/shared/types/content-pack-index';
 import { avatarRingSvg, designToSvg } from '@meeshy/shared/utils/appearance-svg';
 import { bannerFrameSvg } from '@meeshy/shared/utils/banner-frame-svg';
+import { effectiveEventWindow, type PackEventDeclaration } from '@meeshy/shared/utils/decoration-event-window';
 
 const ROOT = resolve(import.meta.dir, '../../..');
 const DESIGN = join(ROOT, 'packages/shared/design');
@@ -44,6 +45,8 @@ type SourcePack<T> = {
   readonly usage?: unknown;
   /** La fenêtre de l'offre (#11274, #16270) : la boutique ne propose le pack qu'entre ces deux instants. */
   readonly availability?: { readonly startsAt?: string; readonly endsAt?: string };
+  /** L'événement servi (#16447) : sans date écrite, la fenêtre vient de la règle partagée, une date écrite primant. */
+  readonly event?: PackEventDeclaration;
   readonly designs?: readonly T[];
   readonly rings?: readonly T[];
   readonly frames?: readonly T[];
@@ -128,6 +131,7 @@ const contractSchemaOf = (items: readonly unknown[]): number =>
     : 1;
 
 async function buildEntry(kind: Kind, pack: SourcePack<unknown>, over: Record<string, unknown> = {}, names?: Names, itemNames?: (lang: string, key: string) => string) {
+  const availability = effectiveEventWindow(pack);
   const items = pack[kind.itemsKey] ?? [];
   const contractValue = contractOf(kind.domain, items);
   assertContract(kind.domain, contractValue, pack.slug);
@@ -157,7 +161,7 @@ async function buildEntry(kind: Kind, pack: SourcePack<unknown>, over: Record<st
     downloadBytes: { story: contract.bytes, square: null },
     names: names ?? Object.fromEntries(PACK_LANGUAGES.map((language) => [language, strings[language].packs[pack.slug]])),
     ...(pack.usage === undefined ? {} : { usage: pack.usage }),
-    ...(pack.availability === undefined ? {} : { availability: pack.availability }),
+    ...(availability === undefined ? {} : { availability }),
     ...over,
   };
 }

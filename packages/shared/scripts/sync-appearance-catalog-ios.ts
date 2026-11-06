@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APPEARANCE_GAMUT, GAMUT_KEYS } from '../design/appearance/gamut.js';
+import { materializePackWindow, type PackEventDeclaration } from '../utils/decoration-event-window.js';
 
 export const IOS_CATALOG_PATH = 'packages/MeeshySDK/Sources/MeeshySDK/Resources/appearance-catalog.json';
 export const IOS_CATALOG_SWIFT_PATH = 'packages/MeeshySDK/Sources/MeeshySDK/Appearance/AppearanceCatalogData.swift';
@@ -20,15 +21,15 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SOURCE_DIR = resolve(HERE, '../design/appearance');
 const LANGUAGES = ['fr', 'en', 'es', 'pt', 'de', 'it', 'ar'] as const;
 
-type PackFile<Item extends 'designs' | 'rings' | 'frames'> = { readonly packs: readonly ({ readonly slug: string; readonly order: number; readonly installedByDefault: boolean; readonly removable: boolean; readonly usage?: unknown } & { readonly [K in Item]: readonly unknown[] })[] };
+type PackFile<Item extends 'designs' | 'rings' | 'frames'> = { readonly packs: readonly ({ readonly slug: string; readonly order: number; readonly installedByDefault: boolean; readonly removable: boolean; readonly usage?: unknown; readonly event?: PackEventDeclaration; readonly availability?: { readonly startsAt?: string; readonly endsAt?: string } } & { readonly [K in Item]: readonly unknown[] })[] };
 
 const readJson = <T>(relative: string): T => JSON.parse(readFileSync(join(SOURCE_DIR, relative), 'utf8')) as T;
 
 export function buildAppearanceCatalog() {
-  const wallpapers = readJson<PackFile<'designs'>>('wallpapers/designs.json').packs;
-  const banners = readJson<PackFile<'designs'>>('banners/designs.json').packs;
-  const rings = readJson<PackFile<'rings'>>('avatar-rings/rings.json').packs;
-  const bannerFrames = readJson<PackFile<'frames'>>('banner-frames/frames.json').packs;
+  const wallpapers = readJson<PackFile<'designs'>>('wallpapers/designs.json').packs.map(materializePackWindow);
+  const banners = readJson<PackFile<'designs'>>('banners/designs.json').packs.map(materializePackWindow);
+  const rings = readJson<PackFile<'rings'>>('avatar-rings/rings.json').packs.map(materializePackWindow);
+  const bannerFrames = readJson<PackFile<'frames'>>('banner-frames/frames.json').packs.map(materializePackWindow);
   return {
     version: 1,
     gamut: GAMUT_KEYS.map((key) => ({ key, ...APPEARANCE_GAMUT[key] })),
