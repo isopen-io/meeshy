@@ -103,9 +103,38 @@ final class SceneWindowSizeWiringGuardTests: XCTestCase {
         // reçoit pas la publication ; lire `UIWindow.safeAreaInsets` pendant son `body` rappelait le contrôleur hôte
         // (`statusBarHidden`) — cycle du graphe, gel de 83 s, 0x8BADF00D sur iPhone.
         let layout = AppSourceGuard.stripComments(try source("Meeshy/Core/DeviceLayout.swift"))
-        let windowInsets = layout.components(separatedBy: "struct WindowInsets").last ?? ""
-        XCTAssertFalse(windowInsets.prefix(400).contains("DeviceLayout.safeArea"),
-                       "le repli de WindowInsets lit encore la fenêtre clé pendant body")
+        let windowInsets = try XCTUnwrap(Self.declaration(of: "struct WindowInsets", in: layout),
+                                         "WindowInsets doit rester dans DeviceLayout.swift, sinon la garde ne garde rien")
+        for windowRead in ["DeviceLayout.safeArea", "safeAreaInsets", "measurementWindow", "UIWindow", "keyWindow", "WindowMetrics"] {
+            XCTAssertFalse(windowInsets.contains(windowRead),
+                           "le repli de WindowInsets lit encore la fenêtre (\(windowRead)) pendant body")
+        }
+    }
+
+    func test_theInsetsGuard_seesAWindowReadSmuggledIntoTheFallback() throws {
+        let smuggled = """
+        struct WindowInsets {
+            let published: EdgeInsets?
+            var top: CGFloat { published?.top ?? measurementWindow?.safeAreaInsets.top ?? 0 }
+        }
+        struct Other {}
+        """
+        let declaration = try XCTUnwrap(Self.declaration(of: "struct WindowInsets", in: smuggled))
+        XCTAssertTrue(declaration.contains("safeAreaInsets"))
+        XCTAssertFalse(declaration.contains("struct Other"), "la déclaration s'arrête à sa propre accolade")
+        XCTAssertNil(Self.declaration(of: "struct WindowInsets", in: "struct Renamed {}"))
+    }
+
+    private static func declaration(of header: String, in code: String) -> String? {
+        guard let start = code.range(of: header + " {") else { return nil }
+        var depth = 1
+        var index = start.upperBound
+        while index < code.endIndex, depth > 0 {
+            if code[index] == "{" { depth += 1 }
+            if code[index] == "}" { depth -= 1 }
+            index = code.index(after: index)
+        }
+        return depth == 0 ? String(code[start.lowerBound..<index]) : nil
     }
 
     @MainActor
