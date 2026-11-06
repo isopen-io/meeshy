@@ -169,7 +169,7 @@ export async function lensPartnerRoutes(fastify: FastifyInstance, options: LensP
           '409 PUBLISHER_NAME_TAKEN quand un autre éditeur porte déjà ce nom (#16274), 403 PUBLISHER_RESERVED pour un nom réservé.',
         tags,
         summary: 'Save my partner profile',
-        body: { type: 'object', required: ['displayName'], properties: { displayName: { type: 'string' }, website: { type: 'string', nullable: true }, logo: { type: 'string', nullable: true }, showOwnerProfile: { type: 'boolean' } } },
+        body: { type: 'object', required: ['displayName'], properties: { displayName: { type: 'string' }, website: { type: 'string', nullable: true }, logo: { type: 'string', nullable: true }, showOwnerProfile: { enum: [true, false], description: 'Booléen strict, jamais coercé : `true` affiche le compte sur la page éditeur, `false` le masque, absent ne change rien (#16440).' } } },
         response: { 200: packEnvelope(profileJsonSchema), 409: errorResponseSchema, 422: { type: 'object', properties: { success: { type: 'boolean' }, error: { type: 'string' }, message: { type: 'string' }, code: { type: 'string' }, reason: { type: 'string' } } }, ...PACK_ERRORS },
       },
     },

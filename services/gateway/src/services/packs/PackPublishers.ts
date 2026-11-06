@@ -378,10 +378,11 @@ export class PackPublishers {
    * Et, sur tout cela, le compte n'est nommé que si l'éditeur l'a CHOISI (`ownerShownAt`,
    * #16440) — masqué par défaut, lu dans la même lecture que le sceau et le site ; le compte
    * officiel en est dispensé. Ce choix ne lève aucune des gardes ci-dessus.
-   * Le site ne part que d'un éditeur VÉRIFIÉ dont le compte PASSE ces gardes : un lien que
-   * personne n'a revu ne se pose jamais à côté de l'identité, et un site personnel ne
+   * Le site ne part que d'un éditeur VÉRIFIÉ : un lien que personne n'a revu ne se pose
+   * jamais à côté de l'identité. Compte affiché, il suit le compte — un site personnel ne
    * ré-identifie pas celui que le blocage ou « ne pas être trouvé » taisent (audit du
-   * 2026-11-06, N1 et N2). Masquer son compte, en revanche, ne retire pas son site.
+   * 2026-11-06, N1 et N2). Compte masqué, il ne suit que ce que le lecteur ne contrôle pas
+   * (`maskedSiteTravels`).
    */
   async page(slug: string, viewerId: string): Promise<PublisherPage | null> {
     const row = await this.pageRow(slug);
@@ -390,10 +391,33 @@ export class PackPublishers {
     if (publisher === null) return null;
     const neutralized = row.profile !== null && !publisher.official && publisher.name !== row.profile.displayName;
     if (neutralized) return { publisher, owner: null, website: null };
-    const servable = row.soleHolder ? await this.ownerCard(row.ownerId, viewerId) : null;
-    const chosen = (row.ownerId !== null && this.isOfficial(row.ownerId)) || (row.profile?.ownerShownAt ?? null) !== null;
-    const website = publisher.verified && servable !== null ? row.profile?.website ?? null : null;
-    return { publisher, owner: chosen ? servable : null, website };
+    if (!row.soleHolder || row.ownerId === null) return { publisher, owner: null, website: null };
+    const site = publisher.verified ? row.profile?.website ?? null : null;
+    const chosen = this.isOfficial(row.ownerId) || (row.profile?.ownerShownAt ?? null) !== null;
+    if (chosen) {
+      const owner = await this.ownerCard(row.ownerId, viewerId);
+      return { publisher, owner, website: owner === null ? null : site };
+    }
+    const siteTravels = site !== null && (await this.maskedSiteTravels(row.ownerId, viewerId));
+    return { publisher, owner: null, website: siteTravels ? site : null };
+  }
+
+  /**
+   * Le site d'un éditeur dont le compte est MASQUÉ (#16440) : il ne dépend que de ce que le
+   * LECTEUR ne contrôle pas — compte actif, pack approuvé, et le blocage posé par le TITULAIRE
+   * (jamais celui du lecteur). Un critère que le lecteur bascule (bloquer un suspect, la loi
+   * « ne pas être trouvé ») ferait de la présence du site un oracle qui démasque le compte
+   * (audit du 2026-11-06).
+   */
+  private async maskedSiteTravels(ownerId: string, viewerId: string): Promise<boolean> {
+    const visibility = this.ownerVisibility;
+    if (visibility === null) return false;
+    const account = await this.prisma.user.findUnique({ where: { id: ownerId }, select: ACCOUNT_SELECT });
+    if (!isLive(account)) return false;
+    if (!this.isOfficial(ownerId) && !(await visibility.hasPublished(ownerId))) return false;
+    if (ownerId === viewerId) return true;
+    const ownerBlockedViewer = await this.prisma.user.findFirst({ where: { id: ownerId, blockedUserIds: { has: viewerId } }, select: { id: true } });
+    return ownerBlockedViewer === null;
   }
 
   private async pageRow(slug: string): Promise<{ readonly ownerId: string | null; readonly soleHolder: boolean; readonly profile: PageRow | null } | null> {

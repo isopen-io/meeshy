@@ -285,7 +285,7 @@ export class LensPartners {
     }
     await this.prisma.partnerProfile.updateMany({
       where: { id: saved.id, updatedAt: writtenAt },
-      data: { displayName: previous.displayName, nameKey: previous.nameKey, updatedAt: this.now() },
+      data: { displayName: previous.displayName, nameKey: previous.nameKey, ownerShownAt: previous.ownerShownAt ?? null, updatedAt: this.now() },
     });
   }
 

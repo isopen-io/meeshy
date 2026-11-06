@@ -184,6 +184,25 @@ describe('/publishers — la boutique, le propriétaire, l’administration (#16
     expect(blocked.json().data).toMatchObject({ owner: null, website: null });
   });
 
+  it('#16440 — compte MASQUÉ : rien de ce que le LECTEUR contrôle ne fait varier la page, sans quoi bloquer un suspect le démasquerait (audit 2026-11-06)', async () => {
+    const { app, as, db, facts } = await build({ ownerShown: false });
+    const profile = db.profiles.find((row) => row.userId === AWA)!;
+    profile.website = 'https://studio.example';
+    profile.verifiedAt = new Date('2026-02-01T00:00:00Z');
+    as(MODO);
+    const read = async () => (await app.inject({ method: 'GET', url: '/studio-lumiere/page' })).json().data;
+    const baseline = await read();
+    expect(baseline).toMatchObject({ owner: null, website: 'https://studio.example' });
+
+    db.users.get(MODO)!.blockedUserIds = [ADMIN];
+    expect(await read()).toEqual(baseline);
+    db.users.get(MODO)!.blockedUserIds = [AWA];
+    expect(await read()).toEqual(baseline);
+    db.users.get(MODO)!.blockedUserIds = [];
+    facts.hidden.add(AWA);
+    expect(await read()).toEqual(baseline);
+  });
+
   it('GET /meeshy/page nomme le compte officiel ; un éditeur inconnu rend 404', async () => {
     const { app } = await build();
     const res = await app.inject({ method: 'GET', url: '/meeshy/page' });
