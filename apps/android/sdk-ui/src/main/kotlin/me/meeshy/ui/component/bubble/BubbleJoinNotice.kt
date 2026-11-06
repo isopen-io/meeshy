@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -29,6 +30,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -58,6 +60,7 @@ internal fun JoinNoticeCard(
     join: JoinNoticePresentation,
     createdAtIso: String?,
     onOpenProfile: ((participantId: String) -> Unit)?,
+    accentColor: Color,
     modifier: Modifier = Modifier,
     onSayHi: (() -> Unit)? = null,
 ) {
@@ -118,22 +121,31 @@ internal fun JoinNoticeCard(
             JoinDetailRow(join = join)
         }
         val greet = onSayHi?.takeIf { join.greetHandle != null }
-        if (greet != null) ArrivalGreetingInvite(text = stringResource(R.string.bubble_joinNotice_sayHi), onTap = greet)
+        if (greet != null) ArrivalGreetingInvite(text = stringResource(R.string.bubble_joinNotice_sayHi), accentColor = accentColor, onTap = greet)
     }
 }
 
 /**
- * **L'invite « dis-lui salut »** (#16338) : en GRAS, hors de la capsule (son toucher simple ne se confond pas avec le
+ * Le style des invites « dis-lui / dis-leur salut » (#16338, #16488) : en GRAS et dans la COULEUR DE LA CONVERSATION,
+ * pour se lire comme un geste à toucher (web `arrival-greeting-invite.tsx`, iOS). Partagé par l'avis individuel et la
+ * ligne d'arrivées groupées.
+ */
+internal fun arrivalGreetingInviteStyle(accentColor: Color): SpanStyle =
+    SpanStyle(fontWeight = FontWeight.Bold, color = accentColor)
+
+/**
+ * **L'invite « dis-lui salut »** (#16338) : en GRAS dans l'accent de la conversation, hors de la capsule (son toucher simple ne se confond pas avec le
  * double toucher de la fiche), une cible de 48 dp ; elle écrit les `@mentions` des arrivants dans le composeur.
  */
 @Composable
-internal fun ArrivalGreetingInvite(text: String, onTap: () -> Unit) {
+internal fun ArrivalGreetingInvite(text: String, accentColor: Color, onTap: () -> Unit) {
     val haptics = rememberMeeshyHaptics()
+    val style = arrivalGreetingInviteStyle(accentColor)
     Text(
         text = text,
         fontSize = 12.5.sp,
-        fontWeight = FontWeight.Bold,
-        color = MeeshyTheme.tokens.textSecondary,
+        fontWeight = style.fontWeight,
+        color = style.color,
         textAlign = TextAlign.Center,
         modifier = Modifier
             .heightIn(min = 48.dp)

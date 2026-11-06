@@ -81,7 +81,7 @@ internal fun FocalSpecialRowView(
                 onLongPress = callbacks.onLongPress,
             )
         }
-        FocalSpecialRow.JoinNotice, FocalSpecialRow.SystemNotice -> SystemNoticeLine(content = content, callbacks = callbacks)
+        FocalSpecialRow.JoinNotice, FocalSpecialRow.SystemNotice -> SystemNoticeLine(content = content, callbacks = callbacks, accentColor = accentColor)
         FocalSpecialRow.Empty, FocalSpecialRow.None -> Unit
     }
 }

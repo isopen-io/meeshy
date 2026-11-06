@@ -13,8 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
@@ -32,16 +32,22 @@ import me.meeshy.ui.theme.MeeshyTheme
  *
  * - un avis d'arrivée ([BubbleContent.joinNotice]) se rend par [JoinNoticeCard] (BubbleJoinNotice.kt) ;
  * - la ligne d'arrivées groupées ([BubbleContent.isArrivalsNotice]) porte son invite « dis-leur salut » EN GRAS ;
- *   elle est touchable quand l'hôte pose [BubbleCallbacks.onSayHi], qui écrit les `@mentions` des arrivants (#16338).
+ *   dans l'accent de la conversation ; elle est touchable quand l'hôte pose [BubbleCallbacks.onSayHi], qui écrit les `@mentions` des arrivants (#16338).
  */
 @Composable
-internal fun SystemNoticeLine(content: BubbleContent, callbacks: BubbleCallbacks, modifier: Modifier = Modifier) {
+internal fun SystemNoticeLine(
+    content: BubbleContent,
+    callbacks: BubbleCallbacks,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+) {
     val join = content.joinNotice
     if (join != null && join.primaryName.isNotEmpty()) {
         JoinNoticeCard(
             join = join,
             createdAtIso = content.createdAtIso,
             onOpenProfile = callbacks.onOpenJoinProfile,
+            accentColor = accentColor,
             modifier = modifier,
             onSayHi = callbacks.onSayHi,
         )
@@ -66,7 +72,7 @@ internal fun SystemNoticeLine(content: BubbleContent, callbacks: BubbleCallbacks
             Text(text = clock, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = muted.copy(alpha = muted.alpha * 0.7f))
         }
         Text(
-            text = if (content.isArrivalsNotice) arrivalsLine(content.text) else AnnotatedString(content.text),
+            text = if (content.isArrivalsNotice) arrivalsLine(content.text, accentColor) else AnnotatedString(content.text),
             fontSize = 12.5.sp,
             fontWeight = FontWeight.Medium,
             color = muted,
@@ -75,12 +81,12 @@ internal fun SystemNoticeLine(content: BubbleContent, callbacks: BubbleCallbacks
     }
 }
 
-/** La phrase d'arrivées, son invite finale « dis-leur salut » en GRAS (#16338). */
-internal fun arrivalsLine(text: String): AnnotatedString {
+/** La phrase d'arrivées, son invite finale « dis-leur salut » en GRAS dans l'accent de la conversation (#16338, #16488). */
+internal fun arrivalsLine(text: String, accentColor: Color): AnnotatedString {
     val split = ArrivalGreeting.splitInvite(text)
     val invite = split.invite ?: return AnnotatedString(text)
     return buildAnnotatedString {
         append(split.lead)
-        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(invite) }
+        withStyle(arrivalGreetingInviteStyle(accentColor)) { append(invite) }
     }
 }
