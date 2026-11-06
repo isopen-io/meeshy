@@ -44,12 +44,13 @@ final class ConversationListMessageSearchModelTests: XCTestCase {
     private func makeSUT(
         text: PassthroughSubject<String, Never> = PassthroughSubject(),
         debounce: DispatchQueue.SchedulerTimeType.Stride = .milliseconds(300),
-        contentLocks: @escaping () -> Set<String> = { [] }
+        contentLocks: @escaping () -> Set<String> = { [] },
+        locksChanged: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher()
     ) -> (sut: ConversationListMessageSearchModel, search: MockConversationMessageSearch) {
         let search = MockConversationMessageSearch()
         let sut = ConversationListMessageSearchModel(
             text: text.eraseToAnyPublisher(), search: search, reader: { nil }, debounce: debounce,
-            contentLocks: contentLocks
+            contentLocks: contentLocks, locksChanged: locksChanged
         )
         return (sut, search)
     }
@@ -129,6 +130,137 @@ final class ConversationListMessageSearchModelTests: XCTestCase {
         XCTAssertEqual(sut.results.map(\.id), ["m3"])
         XCTAssertEqual(sut.nextCursor, "c1", "la page ratée se redemande au défilement suivant")
         XCTAssertFalse(sut.isLoadingMore)
+    }
+
+    /// Ce que fait le témoin de fin de section : il repart tant qu'il est à
+    /// l'écran, chaque curseur le faisant renaître.
+    private func sentinelWalk(_ sut: ConversationListMessageSearchModel) async -> Int {
+        var trips = 0
+        while sut.walksByItself, trips < 50 {
+            await sut.loadMore()
+            trips += 1
+        }
+        return trips
+    }
+
+    func test_walk_pageThatShowsNothing_stopsUntilTheGesture() async {
+        let (sut, search) = makeSUT()
+        search.remoteResult = GlobalSearchLeg(items: [makeResult(id: "m3", at: 30)], failure: nil, nextCursor: "c1")
+        for page in 1...30 {
+            search.remotePages["c\(page)"] = GlobalSearchLeg(items: [], failure: nil, nextCursor: "c\(page + 1)")
+        }
+        await sut.run(query: "rare")
+
+        let trips = await sentinelWalk(sut)
+
+        XCTAssertEqual(trips, 1, "un terme rare ne balaie pas tout l'historique sans qu'on le demande (#16476)")
+        XCTAssertEqual(search.remoteCursors, [nil, "c1"])
+        XCTAssertTrue(sut.canLoadMore, "le serveur a encore à rendre : la section garde la porte ouverte")
+        XCTAssertEqual(sut.results.map(\.id), ["m3"])
+    }
+
+    func test_walk_afterTheGesture_resumesOnAPageThatShows() async {
+        let (sut, search) = makeSUT()
+        search.remoteResult = GlobalSearchLeg(items: [makeResult(id: "m3", at: 30)], failure: nil, nextCursor: "c1")
+        search.remotePages["c1"] = GlobalSearchLeg(items: [], failure: nil, nextCursor: "c2")
+        search.remotePages["c2"] = GlobalSearchLeg(items: [makeResult(id: "m1", at: 10)], failure: nil, nextCursor: "c3")
+        await sut.run(query: "rare")
+        await sut.loadMore()
+        XCTAssertFalse(sut.walksByItself)
+
+        await sut.loadMore()
+
+        XCTAssertEqual(sut.results.map(\.id), ["m3", "m1"])
+        XCTAssertTrue(sut.walksByItself, "une page qui montre quelque chose rend la suite au défilement")
+    }
+
+    func test_walk_failedPage_waitsForTheGesture_thenTheSamePageIsAskedAgain() async {
+        let (sut, search) = makeSUT()
+        search.remoteResult = GlobalSearchLeg(items: [makeResult(id: "m3", at: 30)], failure: nil, nextCursor: "c1")
+        search.remotePages["c1"] = GlobalSearchLeg(items: [], failure: "panne", nextCursor: "c1")
+        await sut.run(query: "rendez")
+
+        await sut.loadMore()
+        XCTAssertFalse(sut.walksByItself, "une section courte ne se défile pas : sans geste, la panne serait définitive")
+        XCTAssertTrue(sut.canLoadMore)
+
+        search.remotePages["c1"] = .served([makeResult(id: "m2", at: 20)])
+        await sut.loadMore()
+
+        XCTAssertEqual(search.remoteCursors, [nil, "c1", "c1"])
+        XCTAssertEqual(sut.results.map(\.id), ["m3", "m2"])
+    }
+
+    func test_run_firstPageShowsNothing_butTheServerHasMore_theSectionStays() async {
+        let (sut, search) = makeSUT()
+        search.remoteResult = GlobalSearchLeg(items: [], failure: nil, nextCursor: "c8")
+
+        await sut.run(query: "rare")
+
+        XCTAssertTrue(sut.showsSection, "« Aucun résultat » serait faux : le serveur n'a pas fini de chercher")
+        XCTAssertTrue(sut.canLoadMore)
+        XCTAssertFalse(sut.walksByItself)
+    }
+
+    func test_run_firstPageAllLocked_doesNotWalkPastThem() async {
+        let (sut, search) = makeSUT(contentLocks: { ["conv-locked"] })
+        search.remoteResult = GlobalSearchLeg(
+            items: [makeResult(id: "secret", at: 30, conversationId: "conv-locked")], failure: nil, nextCursor: "c1"
+        )
+
+        await sut.run(query: "rendez")
+
+        XCTAssertTrue(sut.results.isEmpty)
+        XCTAssertTrue(sut.showsSection)
+        XCTAssertFalse(sut.walksByItself)
+    }
+
+    func test_run_nothingAndNoCursor_saysNoResult() async {
+        let (sut, search) = makeSUT()
+        search.remoteResult = .served([])
+
+        await sut.run(query: "rare")
+
+        XCTAssertFalse(sut.showsSection)
+    }
+
+    func test_walk_pageAlreadyFoundLocally_stillWalks() async {
+        let (sut, search) = makeSUT()
+        search.localResult = [makeResult(id: "m3", at: 30)]
+        search.remoteResult = GlobalSearchLeg(items: [makeResult(id: "m3", at: 30)], failure: nil, nextCursor: "c1")
+
+        await sut.run(query: "rendez")
+
+        XCTAssertTrue(sut.walksByItself, "la page a rendu un message : l'index local l'ayant déjà ne la rend pas stérile")
+    }
+
+    func test_run_cachedPagesShowingNothing_waitForTheGestureToo() async {
+        let (sut, search) = makeSUT()
+        search.remoteResult = GlobalSearchLeg(items: [], failure: nil, nextCursor: "c8")
+        await sut.run(query: "rare")
+
+        await sut.run(query: "rare")
+
+        XCTAssertEqual(search.remoteCallCount, 1)
+        XCTAssertFalse(sut.walksByItself)
+        XCTAssertTrue(sut.showsSection)
+    }
+
+    func test_lockSetWhileResultsAreShown_hidesThemAtOnce() async {
+        var locks: Set<String> = []
+        let changed = PassthroughSubject<Void, Never>()
+        let (sut, search) = makeSUT(contentLocks: { locks }, locksChanged: changed.eraseToAnyPublisher())
+        search.remoteResult = .served([
+            makeResult(id: "secret", at: 30, conversationId: "conv-locked"),
+            makeResult(id: "m1", at: 10)
+        ])
+        await sut.run(query: "rendez")
+        XCTAssertEqual(sut.results.map(\.id), ["secret", "m1"])
+
+        locks = ["conv-locked"]
+        changed.send()
+
+        XCTAssertEqual(sut.results.map(\.id), ["m1"], "le verrou posé à côté ne laisse pas son texte à l'écran (#11387)")
     }
 
     func test_loadMore_answerOfAnOlderQuery_isDropped() async {
