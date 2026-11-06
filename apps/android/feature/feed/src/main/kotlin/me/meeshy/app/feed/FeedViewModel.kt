@@ -27,6 +27,7 @@ import me.meeshy.sdk.model.analytics.ContentSurface
 import me.meeshy.sdk.model.analytics.ImpressionSource
 import me.meeshy.sdk.post.FeedEngagementRepository
 import me.meeshy.sdk.post.ImpressionBatcher
+import me.meeshy.sdk.post.PostCommentSettingsRepository
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.post.writeMediaCaptionTranslationsTo
 import me.meeshy.sdk.post.writePostTranslationsTo
@@ -101,6 +102,7 @@ class FeedViewModel @Inject constructor(
     engagement: FeedEngagementRepository,
     private val publications: PublicationOutbox,
     private val network: NetworkMonitor = InMemoryNetworkMonitor(),
+    commentSettings: PostCommentSettingsRepository? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -600,7 +602,14 @@ class FeedViewModel @Inject constructor(
         scope = viewModelScope,
         head = realtimeHead,
         notify = { notice -> _state.update { it.copy(notice = notice) } },
+        commentSettings = commentSettings,
     )
+
+    /** #16541 — ferme ou rouvre les commentaires d'une carte ; voir [FeedPostActionsDelegate.toggleComments]. */
+    fun toggleComments(postId: String) {
+        val post = _state.value.posts.firstOrNull { it.id == postId } ?: return
+        postActions.toggleComments(postId, disabled = !post.commentsDisabled)
+    }
 
     /** Epingle un de SES PROPRES posts (iOS `pinPost`) ; voir [FeedPostActionsDelegate.pin]. */
     fun pinPost(postId: String) = postActions.pin(postId)
@@ -701,8 +710,9 @@ private fun List<ApiPost>.toPresentations(
     preferences: LanguageResolver.ContentLanguagePreferences,
     mediaBaseUrl: String,
     overrides: Map<String, String>,
+    viewerRole: String?,
 ): List<FeedPostPresentation> =
-    map { FeedPostBuilder.build(it, preferences, mediaBaseUrl, activeLanguageCode = overrides[it.id]) }
+    map { FeedPostBuilder.build(it, preferences, mediaBaseUrl, activeLanguageCode = overrides[it.id], viewerRole = viewerRole) }
 
 /**
  * Projects the cache result plus the real-time head into the UI state. Realtime posts
@@ -719,8 +729,8 @@ private fun FeedUiState.project(
     newPostsCount: Int,
 ): FeedUiState {
     val prefs = user ?: EmptyContentPreferences
-    val projected = realtimePosts.toPresentations(prefs, mediaBaseUrl, overrides) +
-        cachePosts.toPresentations(prefs, mediaBaseUrl, overrides)
+    val projected = realtimePosts.toPresentations(prefs, mediaBaseUrl, overrides, user?.role) +
+        cachePosts.toPresentations(prefs, mediaBaseUrl, overrides, user?.role)
     val stillFailed = loadFailed && result !is CacheResult.Fresh && projected.isEmpty()
     val isSyncing = when (result) {
         is CacheResult.Fresh -> false

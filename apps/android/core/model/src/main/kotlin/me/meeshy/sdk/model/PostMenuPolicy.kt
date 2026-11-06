@@ -16,6 +16,8 @@ enum class PostMenuEntry {
     Pin,
     Edit,
     NearHere,
+    DisableComments,
+    EnableComments,
     Report,
     Delete,
     RetrySend,
@@ -46,6 +48,10 @@ data class PostMenuContext(
     val hasLocation: Boolean = false,
     /** La publication est encore dans la file d'envoi (#14902) ; `null` pour une publication en ligne. */
     val pendingSend: PendingSendMenu? = null,
+    /** Les commentaires de CE post sont fermés : l'entrée offerte est « Réactiver », sinon « Désactiver » (#16541). */
+    val commentsDisabled: Boolean = false,
+    /** La surface hôte sait fermer ou rouvrir les commentaires ; sans elle, l'entrée n'existe pas. */
+    val canToggleComments: Boolean = false,
 )
 
 /**
@@ -53,7 +59,9 @@ data class PostMenuContext(
  * qu'un rendu. Règles (iOS `FeedPostCard+Header`) : partager, copier, reposter, citer et enregistrer valent pour
  * tout contenu ; épingler, modifier et supprimer ne visent que le SIEN ; signaler ne vise que le contenu D'AUTRUI
  * et vient avant la suppression dans l'ordre, jamais avant une action ordinaire ; la liste des vues n'est offerte
- * qu'à ADMIN/BIGBOSS ([PublicationViewersAccess]) ; une story ou un statut ne se modifie ni ne s'épingle.
+ * qu'à ADMIN/BIGBOSS ([PublicationViewersAccess]) ; une story ou un statut ne se modifie ni ne s'épingle. Fermer ou
+ * rouvrir les commentaires s'offre à l'auteur et à la modération de la plateforme ([PostCommentSettings]), avant le
+ * signalement et la suppression.
  */
 object PostMenuPolicy {
     private val ephemeralTypes = setOf("STORY", "STATUS")
@@ -90,6 +98,9 @@ object PostMenuPolicy {
         if (ctx.isAuthor && !ephemeral) add(PostMenuEntry.Pin)
         if (ctx.isAuthor && ctx.editable && !ephemeral) add(PostMenuEntry.Edit)
         if (ctx.hasLocation) add(PostMenuEntry.NearHere)
+        if (ctx.canToggleComments && PostCommentSettings.mayToggle(ctx.isAuthor, ctx.viewerRole)) {
+            add(if (ctx.commentsDisabled) PostMenuEntry.EnableComments else PostMenuEntry.DisableComments)
+        }
         if (!ctx.isAuthor) add(PostMenuEntry.Report)
         if (ctx.isAuthor) add(PostMenuEntry.Delete)
     }

@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import me.meeshy.feature.stories.R
+import me.meeshy.feature.feed.R as FeedR
 import me.meeshy.sdk.model.story.StoryOptionsMenuEntry
 import me.meeshy.sdk.model.story.StoryRepostDestination
 import me.meeshy.sdk.model.story.StoryOptionsMenuPlan
@@ -32,6 +33,7 @@ internal fun StoryOptionsMenu(
     videoExport: StoryVideoExport,
     actions: StoryViewerActions,
     mayRemove: Boolean,
+    onToggleComments: (() -> Unit)? = null,
 ) {
     val storyId = state.currentStoryId
     val composable = actions.onComposeStory != null && state.canCompose && storyId != null
@@ -42,6 +44,7 @@ internal fun StoryOptionsMenu(
         add(StoryOptionsMenuEntry.Report)
         add(StoryOptionsMenuEntry.Delete)
         if (mayRemove) add(StoryOptionsMenuEntry.Remove)
+        if (onToggleComments != null) add(StoryOptionsMenuEntry.ToggleComments)
         addAll(actions.entryHandlers.keys)
     }
     val plan = StoryOptionsMenuPlan
@@ -51,6 +54,7 @@ internal fun StoryOptionsMenu(
             hasAudioTranscript = StoryOptionsMenuEntry.Transcript in actions.entryHandlers,
             canCompose = composable,
             canRemove = mayRemove,
+            canToggleComments = onToggleComments != null,
         )
         .onlyWired(wired)
     Box {
@@ -64,7 +68,7 @@ internal fun StoryOptionsMenu(
         DropdownMenu(expanded = chrome.showOptions, onDismissRequest = { chrome.showOptions = false }) {
             plan.sections.forEachIndexed { index, section ->
                 if (index > 0) HorizontalDivider()
-                section.forEach { entry -> StoryOptionsMenuItem(entry, state, chrome, videoExport, actions) }
+                section.forEach { entry -> StoryOptionsMenuItem(entry, state, chrome, videoExport, actions, onToggleComments) }
             }
         }
     }
@@ -77,6 +81,7 @@ private fun StoryOptionsMenuItem(
     chrome: StoryViewerChromeState,
     videoExport: StoryVideoExport,
     actions: StoryViewerActions,
+    onToggleComments: (() -> Unit)?,
 ) {
     val storyId = state.currentStoryId
     fun act(block: () -> Unit) {
@@ -106,6 +111,11 @@ private fun StoryOptionsMenuItem(
                 StoryMenuRow(R.string.my_stories_edit, MeeshyIcons.Edit) { act { storyId?.let(edit) } }
             }
             StoryMenuRow(R.string.stories_action_delete, MeeshyIcons.Delete, destructive = true) { act { chrome.showDeleteDialog = true } }
+        }
+        StoryOptionsMenuEntry.ToggleComments -> onToggleComments?.let { toggle ->
+            val label = if (state.commentsDisabled) FeedR.string.feed_action_enable_comments else FeedR.string.feed_action_disable_comments
+            val icon = if (state.commentsDisabled) MeeshyIcons.ChatBubbleOutline else MeeshyIcons.Lock
+            StoryMenuRow(label, icon) { act(toggle) }
         }
         StoryOptionsMenuEntry.Close -> StoryMenuRow(R.string.stories_viewer_close, MeeshyIcons.Close) { act(actions.onClose) }
         // Branchées par leur lot : l'action porte son libellé et son icône (`entryHandlers`).

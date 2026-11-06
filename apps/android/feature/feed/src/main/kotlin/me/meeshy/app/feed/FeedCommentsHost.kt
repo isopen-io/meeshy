@@ -19,6 +19,7 @@ internal fun FeedCommentsSheetHost(
     onDismiss: () -> Unit,
     onCommentSent: (String) -> Unit,
     replyToCommentId: String? = null,
+    commentsClosed: Boolean? = null,
 ) {
     if (postId == null) return
     val thread = rememberPostCommentsViewModel(postId)
@@ -30,5 +31,6 @@ internal fun FeedCommentsSheetHost(
         title = pluralStringResource(R.plurals.feed_post_stat_comments, count, count),
         onDismiss = onDismiss,
         onCommentSent = onCommentSent,
+        commentsClosed = commentsClosed,
     )
 }

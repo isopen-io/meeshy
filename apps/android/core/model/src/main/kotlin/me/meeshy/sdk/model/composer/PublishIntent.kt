@@ -45,6 +45,8 @@ class PublishIntent private constructor(
     val mediaAlts: List<String?>,
     val mediaObjectIds: List<String?>,
     val allowSoundExtraction: Boolean?,
+    /** `true` : la publication naît commentaires fermés (#16541) ; `null` = le défaut du serveur (ouverts). */
+    val commentsDisabled: Boolean? = null,
 ) {
     val localMediaPaths: List<String> get() = localMedia.map { it.path }
     val localMediaMimeTypes: List<String> get() = localMedia.map { it.mimeType }
@@ -73,6 +75,7 @@ class PublishIntent private constructor(
             mediaAlts: Map<String, String>,
             mediaObjectIds: Map<String, String>,
             allowSoundExtraction: Boolean?,
+            commentsDisabled: Boolean? = null,
         ): PublishIntent {
             val type = declaredType ?: ReelComposition.defaultType(
                 media = localMedia.map { ReelComposition.MediaKind(it.mimeType, it.durationMs) },
@@ -95,6 +98,7 @@ class PublishIntent private constructor(
                 mediaAlts = localMedia.map { mediaAlts[it.path] },
                 mediaObjectIds = localMedia.map { mediaObjectIds[it.path] },
                 allowSoundExtraction = allowSoundExtraction,
+                commentsDisabled = commentsDisabled,
             )
         }
 

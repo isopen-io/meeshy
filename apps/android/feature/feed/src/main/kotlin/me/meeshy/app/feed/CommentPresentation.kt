@@ -2,7 +2,9 @@ package me.meeshy.app.feed
 
 import me.meeshy.sdk.lang.ReaderPrism
 import me.meeshy.sdk.model.SocialAudioSurface
-import me.meeshy.sdk.model.servedAudioUrl
+import me.meeshy.sdk.model.LanguageData
+import me.meeshy.sdk.model.SocialAudioChoice
+import me.meeshy.sdk.model.socialAudioChoice
 import me.meeshy.sdk.model.CommentLikeState
 import me.meeshy.sdk.model.CommentEffects
 import me.meeshy.sdk.model.CommentPieceKind
@@ -43,6 +45,8 @@ data class CommentMediaPreview(
     val kind: CommentPieceKind = if (isVideo) CommentPieceKind.VIDEO else if (isAudio) CommentPieceKind.AUDIO else CommentPieceKind.IMAGE,
     val fileName: String? = null,
     val fileSize: Int? = null,
+    /** Les drapeaux d'un vocal (#16541) : l'origine et les langues du lecteur qu'une piste parle, l'active étant celle jouée. */
+    val audioChips: List<LanguageChip> = emptyList(),
 ) {
     val isFile: Boolean get() = kind == CommentPieceKind.FILE
 }
@@ -150,7 +154,7 @@ object CommentProjection {
             isPending = isPending,
             isOwn = currentUserId != null && comment.author?.id == currentUserId,
             depth = depth,
-            media = mediaPreviews(comment, mediaBaseUrl, ReaderPrism.resolve(preferences)),
+            media = mediaPreviews(comment, mediaBaseUrl, ReaderPrism.resolve(preferences), audioOverride = activeLanguageCode),
             effects = CommentEffects.served(comment.effectFlags),
             place = FeedPostLocationBuilder.build(comment.location),
             quotedMedia = comment.quotedCitation,
@@ -162,12 +166,20 @@ object CommentProjection {
         comment: ApiPostComment,
         mediaBaseUrl: String?,
         readerLanguages: List<String> = emptyList(),
+        audioOverride: String? = null,
     ): List<CommentMediaPreview> =
         comment.media.orEmpty().sortedBy { it.order ?: 0 }.map { media ->
             // Un média servi sans type reste une image, comme avant #14386 : seul un type DÉCLARÉ fait un fichier.
             val kind = media.mimeType?.takeIf { it.isNotBlank() }?.let(CommentPieceKind::of) ?: CommentPieceKind.IMAGE
             val isVideo = kind == CommentPieceKind.VIDEO
             val isAudio = kind == CommentPieceKind.AUDIO
+            val audio = if (!isAudio) null else media.socialAudioChoice(
+                surface = SocialAudioSurface.COMMENT,
+                carrierLanguage = comment.originalLanguage,
+                preferredLanguages = readerLanguages,
+                manualOverride = audioOverride,
+                resolveUrl = { resolveFeedMediaUrl(it, mediaBaseUrl) },
+            )
             val still = if (!kind.isVisual) null else media.thumbnailUrl?.takeIf { it.isNotBlank() } ?: media.fileUrl?.takeIf { it.isNotBlank() && !isVideo }
             CommentMediaPreview(
                 id = media.id,
@@ -178,15 +190,21 @@ object CommentProjection {
                 fileName = (media.originalName ?: media.fileName)?.takeIf { it.isNotBlank() },
                 fileSize = media.fileSize,
                 url = if (isAudio) {
-                    media.servedAudioUrl(SocialAudioSurface.COMMENT, comment.originalLanguage, readerLanguages) { resolveFeedMediaUrl(it, mediaBaseUrl) }
+                    audio?.url
                 } else {
                     media.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveFeedMediaUrl(it, mediaBaseUrl) }
                 },
                 width = media.width,
                 height = media.height,
                 durationMillis = media.duration,
+                audioChips = audio?.chips().orEmpty(),
             )
         }
+
+    /** Les drapeaux d'un vocal, dans la forme de la bande des bulles : la langue jouée est l'active. */
+    private fun SocialAudioChoice.chips(): List<LanguageChip> = offered.map { code ->
+        LanguageChip(code = code, info = LanguageData.info(code), isOriginal = code == originalLanguage, isActive = code == servedLanguage)
+    }
 
     /**
      * The effective displayed language for [comment]: the viewer's [override] when it

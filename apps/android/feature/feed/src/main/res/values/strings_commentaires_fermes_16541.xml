@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_comments_closed_banner">Comments are turned off</string>
+    <string name="feed_action_disable_comments">Turn off comments</string>
+    <string name="feed_action_enable_comments">Turn on comments</string>
+    <string name="feed_comment_settings_failed">Couldn\'t change the comment settings</string>
+    <string name="feed_comments_disable_hint">Nobody will be able to comment</string>
+</resources>

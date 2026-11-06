@@ -63,6 +63,7 @@ internal fun ReelPostCard(
     onReport: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     onOpenProfile: ((String) -> Unit)? = null,
+    onToggleComments: (() -> Unit)? = null,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     val source = post.republishedReel
@@ -170,6 +171,9 @@ internal fun ReelPostCard(
                 onDelete = onDelete,
                 tint = MeeshyPalette.White,
                 onImager = rememberPostImager(post),
+                viewerRole = post.viewerRole,
+                commentsDisabled = post.commentsDisabled,
+                onToggleComments = onToggleComments,
             )
         }
     }

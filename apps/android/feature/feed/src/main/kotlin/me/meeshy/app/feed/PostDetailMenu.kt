@@ -23,6 +23,8 @@ internal data class PostDetailMenuActions(
     val onPin: () -> Unit,
     val onReport: (ReportReason) -> Unit,
     val onDelete: () -> Unit,
+    /** Fermer ou rouvrir les commentaires (#16541) ; l'entrée ne s'offre qu'à l'auteur et à la modération. */
+    val onToggleComments: (() -> Unit)? = null,
 )
 
 /**
@@ -57,6 +59,9 @@ internal fun PostDetailMenu(post: FeedPostPresentation, actions: PostDetailMenuA
             onDelete = { deleting = true },
             tint = me.meeshy.ui.theme.MeeshyTheme.tokens.textPrimary,
             onImager = imager,
+            viewerRole = post.viewerRole,
+            commentsDisabled = post.commentsDisabled,
+            onToggleComments = actions.onToggleComments,
         )
     }
 }
@@ -86,6 +91,7 @@ internal fun rememberPostDetailMenuActions(
             onPin = viewModel::pin,
             onReport = viewModel::report,
             onDelete = viewModel::delete,
+            onToggleComments = viewModel::toggleComments,
         )
     }
 }

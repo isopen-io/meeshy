@@ -217,6 +217,8 @@ private fun StoryComposerSheetBody(
                 onRemoveMention = viewModel::onRemoveMention,
                 onRemoveHashtag = viewModel::onRemoveHashtag,
                 onDismiss = onDone,
+                commentsDisabled = state.draft.commentsDisabled,
+                onCommentsDisabledChange = viewModel::onCommentsDisabledChange,
             )
         }
         StoryComposerSheet.MENTION, StoryComposerSheet.HASHTAGS, StoryComposerSheet.PLACE ->

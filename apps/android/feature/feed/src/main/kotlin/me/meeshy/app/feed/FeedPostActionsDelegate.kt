@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.PostCommentSettingsRepository
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.report.ReportRepository
 
@@ -21,7 +22,19 @@ internal class FeedPostActionsDelegate(
     private val scope: CoroutineScope,
     private val head: MutableStateFlow<FeedRealtimeHead>,
     private val notify: (FeedNotice) -> Unit,
+    private val commentSettings: PostCommentSettingsRepository? = null,
 ) {
+
+    /**
+     * #16541 — ferme ([disabled]) ou rouvre les commentaires d'une carte : la ligne du fil bascule avant le réseau
+     * ([PostCommentSettingsRepository]) et revient sur un refus, que le fil dit.
+     */
+    fun toggleComments(postId: String, disabled: Boolean) {
+        val settings = commentSettings ?: return
+        scope.launch {
+            if (attempt { settings.setCommentsDisabled(postId, disabled) } !is NetworkResult.Success) notify(FeedNotice.COMMENT_SETTINGS_FAILED)
+        }
+    }
 
     /** Épingle un de SES posts ; le rafraîchissement fait remonter `isPinned`. */
     fun pin(postId: String) {

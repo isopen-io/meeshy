@@ -10,6 +10,8 @@ enum class StoryOptionsMenuEntry {
     Imager,
     Report,
     MakePrivate,
+    /** « Désactiver / Réactiver les commentaires » (#16541) : l'auteur, et la modération de la plateforme. */
+    ToggleComments,
     Remove,
     Delete,
     Close,
@@ -42,6 +44,7 @@ data class StoryOptionsMenuPlan(val sections: List<List<StoryOptionsMenuEntry>>)
             hasAudioTranscript: Boolean,
             canCompose: Boolean,
             canRemove: Boolean = false,
+            canToggleComments: Boolean = false,
         ): StoryOptionsMenuPlan {
             val reading = if (hasAudioTranscript) {
                 listOf(StoryOptionsMenuEntry.Fullscreen, StoryOptionsMenuEntry.Transcript)
@@ -56,10 +59,11 @@ data class StoryOptionsMenuPlan(val sections: List<List<StoryOptionsMenuEntry>>)
                 add(StoryOptionsMenuEntry.ExportVideo)
                 add(StoryOptionsMenuEntry.Imager)
             }
+            val toggle = listOfNotNull(StoryOptionsMenuEntry.ToggleComments.takeIf { canToggleComments })
             val acting = when {
-                isOwnStory -> listOf(StoryOptionsMenuEntry.Delete)
-                canRemove -> listOf(StoryOptionsMenuEntry.Report, StoryOptionsMenuEntry.MakePrivate, StoryOptionsMenuEntry.Remove)
-                else -> listOf(StoryOptionsMenuEntry.Report)
+                isOwnStory -> toggle + StoryOptionsMenuEntry.Delete
+                canRemove -> listOf(StoryOptionsMenuEntry.Report, StoryOptionsMenuEntry.MakePrivate) + toggle + StoryOptionsMenuEntry.Remove
+                else -> toggle + StoryOptionsMenuEntry.Report
             }
             return StoryOptionsMenuPlan(listOf(reading, making, acting, close))
         }

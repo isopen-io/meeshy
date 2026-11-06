@@ -41,4 +41,11 @@ object CommentMenuPolicy {
             CommentMenuAction.REMOVE to (known && !mine && removable && moderates),
         ).filter { it.second }.map { it.first }
     }
+
+    /**
+     * Ce que le « … » DESSINE (#16541) : « Imager » a sa baguette dans le rail d'actions du commentaire, il ne se répète
+     * pas dans le menu. TalkBack garde la liste entière de [actions] en actions personnalisées.
+     */
+    fun overflow(actions: List<CommentMenuAction>): List<CommentMenuAction> =
+        actions.filterNot { it == CommentMenuAction.IMAGINE }
 }

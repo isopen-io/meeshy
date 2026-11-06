@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_comments_closed_banner">I commenti sono disattivati</string>
+    <string name="feed_action_disable_comments">Disattiva i commenti</string>
+    <string name="feed_action_enable_comments">Riattiva i commenti</string>
+    <string name="feed_comment_settings_failed">Impossibile modificare le impostazioni dei commenti</string>
+    <string name="feed_comments_disable_hint">Nessuno potrà commentare</string>
+</resources>

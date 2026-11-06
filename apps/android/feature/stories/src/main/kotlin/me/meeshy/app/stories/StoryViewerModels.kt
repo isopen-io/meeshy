@@ -365,6 +365,10 @@ data class StoryViewerUiState(
     val authorUserId: String? = null,
     /** Présence servie de l'auteur courant (jamais la sienne) : repli de la carte unique pour le point de l'en-tête. */
     val authorPresence: UserPresence? = null,
+    /** Les commentaires de la story courante sont fermés par elle (#16541) : le menu offre « Réactiver ». */
+    val commentsDisabled: Boolean = false,
+    /** Fermés par elle ou par sa source : le composeur épinglé cède la place au bandeau, le fil reste lisible. */
+    val commentsClosed: Boolean = false,
 ) {
     val hasNextGroup: Boolean get() = groupIndex < groupCount - 1
     val hasPreviousGroup: Boolean get() = groupIndex > 0

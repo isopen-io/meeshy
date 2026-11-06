@@ -44,6 +44,8 @@ data class ComposerDocumentDraft(
     val storyEffects: StoryEffects? = null,
     val forcePlainPost: Boolean = false,
     val allowSoundExtraction: Boolean? = null,
+    /** La publication naît commentaires fermés (#16541). */
+    val commentsDisabled: Boolean = false,
     val mediaCaptions: Map<String, String> = emptyMap(),
     val mediaAlts: Map<String, String> = emptyMap(),
     val mediaObjectIds: Map<String, String> = emptyMap(),
@@ -67,6 +69,7 @@ fun ComposerDocumentDraft.toPublishIntent(): PublishIntent = PublishIntent.docum
     mediaAlts = mediaAlts,
     mediaObjectIds = mediaObjectIds,
     allowSoundExtraction = allowSoundExtraction,
+    commentsDisabled = commentsDisabled.takeIf { it },
 )
 
 sealed interface ComposerDocumentSendPlan {

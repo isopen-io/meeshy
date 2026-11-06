@@ -3,7 +3,8 @@ package me.meeshy.app.feed
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
-import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
@@ -25,7 +26,8 @@ import org.robolectric.annotation.Config
 
 /**
  * #13922, recette S8 rejouée par l'écran : la section des commentaires du détail, sous l'atelier que l'application
- * fournit, offre « Imager » dans le menu ⋯ d'un commentaire racine public à emoji, et l'ouvre sur sa carte.
+ * fournit, offre « Imager » — icône seule dans le rail d'actions, plus dans le menu ⋯ (#16541) — sur un commentaire
+ * racine public à emoji, et l'ouvre sur sa carte.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -41,7 +43,7 @@ class PostCommentsSectionImagingComposeTest {
     private fun text(id: Int): String = ApplicationProvider.getApplicationContext<android.content.Context>().getString(id)
 
     @Test
-    fun `the menu of a public root comment offers Imager and opens its card`() {
+    fun `the actions rail of a public root comment offers Imager as an icon and opens its card`() {
         val opened = mutableListOf<Pair<String, PostCommentCardSubject>>()
         val exporter: CommentCardExporter = { key, card, _ -> opened += key to card }
         val vm = RecetteCommentThread.loadedViewModel()
@@ -54,11 +56,30 @@ class PostCommentsSectionImagingComposeTest {
         }
         compose.waitForIdle()
 
-        compose.onAllNodesWithContentDescription(text(R.string.post_comments_more_options))[0].performClick()
-        compose.onNodeWithText(text(R.string.feed_comment_imagine)).performClick()
+        compose.onAllNodesWithText(text(R.string.feed_comment_imagine)).assertCountEquals(0)
+        compose.onAllNodesWithContentDescription(text(R.string.feed_comment_imagine))[0].performClick()
         compose.waitForIdle()
 
         assertThat(opened.map { it.first }).contains("c-grace")
         assertThat(opened.last().second.reply.text).isEqualTo(RecetteCommentThread.GRACE_TEXT)
+    }
+
+    @Test
+    fun `the overflow menu no longer repeats Imager`() {
+        val exporter: CommentCardExporter = { _, _, _ -> }
+        val vm = RecetteCommentThread.loadedViewModel()
+        compose.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(LocalCommentCardExporter provides exporter) {
+                    PostCommentsSection(viewModel = vm, support = RecetteCommentThread.support)
+                }
+            }
+        }
+        compose.waitForIdle()
+
+        compose.onAllNodesWithContentDescription(text(R.string.post_comments_more_options))[0].performClick()
+        compose.waitForIdle()
+
+        compose.onAllNodesWithText(text(R.string.feed_comment_imagine)).assertCountEquals(0)
     }
 }

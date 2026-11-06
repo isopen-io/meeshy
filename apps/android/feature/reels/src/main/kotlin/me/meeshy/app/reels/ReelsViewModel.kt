@@ -23,6 +23,10 @@ import me.meeshy.sdk.net.toContentFetchFailure
 import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.post.PostPage
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.PostCommentSettingsRepository
+import me.meeshy.sdk.model.PostCommentSettings
+import me.meeshy.sdk.model.commentsClosed
+import me.meeshy.feature.feed.R as FeedR
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
@@ -79,6 +83,7 @@ class ReelsViewModel @Inject constructor(
     private val playbackCoordinator: PlaybackCoordinator = PlaybackCoordinator(),
     floatingButtonPositions: FloatingButtonPositionStore = InMemoryFloatingButtonPositionStore(),
     callGate: CallActivityGate = CallActivityGate(),
+    private val commentSettings: PostCommentSettingsRepository? = null,
 ) : ViewModel() {
 
     /** Un appel est en cours : aucun réel ne démarre sous la voix, et la lecture reprend à sa fin. */
@@ -378,6 +383,18 @@ class ReelsViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            // #16541 — l'auteur ou la modération a fermé (ou rouvert) les commentaires : `post:updated` porte le post entier.
+            try {
+                socialSocket.postUpdated.collect { event ->
+                    updateReel(event.post.id) { it.copy(commentsDisabled = event.post.commentsDisabled, commentsClosed = event.post.commentsClosed) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                Unit
+            }
+        }
     }
 
     private fun mine(actorId: String, liked: Boolean): Boolean? =
@@ -561,6 +578,38 @@ class ReelsViewModel @Inject constructor(
             when (postRepository.pinPost(reelId)) {
                 is NetworkResult.Success -> toast(R.string.reels_toast_pinned, FeedbackKind.Success)
                 is NetworkResult.Failure -> toast(R.string.reels_toast_pin_failed, FeedbackKind.Error)
+            }
+        }
+    }
+
+    /** Le rôle de plateforme du lecteur : la modération ferme les commentaires d'un réel d'autrui (#16541). */
+    val viewerRole: String? get() = sessionRepository.currentUser.value?.role
+
+    /** L'hôte sait fermer ou rouvrir les commentaires : sans le dépôt, l'entrée du menu n'existe pas. */
+    val canToggleComments: Boolean get() = commentSettings != null
+
+    /**
+     * #16541 — ferme ou rouvre les commentaires du réel : la page bascule avant le réseau (le menu, le composeur de la
+     * feuille), la passerelle dit l'état appliqué, un refus le remet — sauf si une diffusion a dit autre chose entre-temps.
+     */
+    fun toggleComments(reelId: String) {
+        val settings = commentSettings ?: return
+        val before = _state.value.reels.firstOrNull { it.id == reelId }?.commentsDisabled ?: return
+        val target = !before
+        updateReel(reelId) { it.withCommentsDisabled(target) }
+        viewModelScope.launch {
+            val result = try {
+                settings.setCommentsDisabled(reelId, target)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (result is NetworkResult.Success) {
+                updateReel(reelId) { it.withCommentsDisabled(result.data) }
+            } else {
+                updateReel(reelId) { it.withCommentsDisabled(PostCommentSettings.rolledBack(it.commentsDisabled, target, before)) }
+                toast(FeedR.string.feed_comment_settings_failed, FeedbackKind.Error)
             }
         }
     }

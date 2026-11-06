@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.os.bundleOf
@@ -47,8 +48,10 @@ fun PostCommentsThreadSheet(
     onDismiss: () -> Unit,
     headerAction: (@Composable RowScope.() -> Unit)? = null,
     onCommentSent: ((postId: String) -> Unit)? = null,
+    commentsClosed: Boolean? = null,
 ) {
     val context = LocalContext.current
+    CommentsClosedEffect(viewModel, commentsClosed)
     DisposableEffect(viewModel, onCommentSent) {
         viewModel.onCommentSent = onCommentSent
         onDispose { viewModel.onCommentSent = null }
@@ -66,6 +69,16 @@ fun PostCommentsThreadSheet(
             onNotice = { notice -> Toast.makeText(context, context.getString(notice.messageRes), Toast.LENGTH_SHORT).show() },
         )
     }
+}
+
+/**
+ * #16541 — l'hôte dit au fil ce que le post SERT : fermé, le composeur cède la place au bandeau « Les commentaires sont
+ * désactivés » ; rouvert (une diffusion `post:updated`), il revient. `null` : l'hôte ne sait pas, le fil garde ce qu'il a
+ * appris (un refus `COMMENTS_DISABLED`).
+ */
+@Composable
+fun CommentsClosedEffect(viewModel: PostCommentsViewModel, commentsClosed: Boolean?) {
+    LaunchedEffect(viewModel, commentsClosed) { commentsClosed?.let(viewModel::setCommentsClosed) }
 }
 
 /**

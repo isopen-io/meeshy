@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.PostStoryEffectsWireSerializer
 import me.meeshy.sdk.model.StoryEditEffectsWireSerializer
 import me.meeshy.sdk.model.StoryEffectsWireSerializer
+import me.meeshy.sdk.net.routes.ApiRoutesPosts
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -68,6 +69,8 @@ data class CreatePostRequest(
     /** Légende visible par média, clé = un id de [mediaIds]. */
     val mediaCaption: Map<String, String>? = null,
     val discoverabilityPrecision: DiscoverabilityPrecision? = null,
+    /** `true` : le post naît commentaires fermés (#16541) ; absent = le défaut du serveur (ouverts). */
+    val commentsDisabled: Boolean? = null,
 )
 
 /** Le modèle vit dans :core:model ; ces alias gardent les imports historiques valides. */
@@ -100,6 +103,8 @@ data class CreateStoryRequest(
     val alsoAsReel: Boolean? = null,
     /** La transcription faite sur l'appareil du premier son du post (même champ qu'iOS) ; absente, la passerelle transcrit. */
     val mobileTranscription: MobileTranscriptionPayload? = null,
+    /** `true` : la story naît commentaires fermés (#16541) ; absent = ouverts. */
+    val commentsDisabled: Boolean? = null,
 )
 
 /** Update a post — port of UpdatePostRequest (ServiceModels.swift). */
@@ -122,6 +127,19 @@ data class UpdatePostRequest(
     val allowSoundExtraction: Boolean? = null,
     val mediaAlt: Map<String, String>? = null,
     val mediaCaption: Map<String, String>? = null,
+    /** Fermer (`true`) ou rouvrir (`false`) les commentaires à l'édition (#16541) ; `null` = clé absente. */
+    val commentsDisabled: Boolean? = null,
+)
+
+/** Fermer ou rouvrir les commentaires d'une publication (`PATCH /posts/:postId/comment-settings`, #16541). */
+@Serializable
+data class CommentSettingsRequest(val commentsDisabled: Boolean)
+
+/** Ce que la passerelle rend du réglage : l'état appliqué, qui fait foi. */
+@Serializable
+data class CommentSettingsResult(
+    val postId: String = "",
+    val commentsDisabled: Boolean = false,
 )
 
 /** Create a comment — port of CreateCommentRequest (ServiceModels.swift). */
@@ -493,6 +511,13 @@ interface PostApi {
     /** Publie une pièce jointe de conversation ; soumis à la porte e-mail côté intercepteur, pas ici. */
     @POST("posts/from-attachment")
     suspend fun publishAttachment(@Body body: PublishAttachmentRequest): ApiResponse<ApiPost>
+
+    /** Fermer ou rouvrir les commentaires (#16541) : l'auteur, ou la modération qui le dépasse ; 403 `FORBIDDEN` sinon. */
+    @PATCH(ApiRoutesPosts.BY_POST_ID_COMMENT_SETTINGS)
+    suspend fun updateCommentSettings(
+        @Path("postId") postId: String,
+        @Body body: CommentSettingsRequest,
+    ): ApiResponse<CommentSettingsResult>
 
     /** Rendre privée la publication d'un autre : la même porte que la console d'administration. */
     @POST("admin/users/{authorId}/publications/moderation")

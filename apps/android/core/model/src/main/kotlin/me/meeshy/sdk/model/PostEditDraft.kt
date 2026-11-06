@@ -21,6 +21,7 @@ enum class PostEditField {
     ALLOW_SOUND_EXTRACTION,
     MEDIA_ALT,
     MEDIA_CAPTION,
+    COMMENTS_DISABLED,
     ;
 
     companion object {
@@ -47,6 +48,8 @@ data class PostEditDraft(
     val allowSoundExtraction: Boolean? = null,
     val mediaAlt: Map<String, String>? = null,
     val mediaCaption: Map<String, String>? = null,
+    /** Fermer (`true`) ou rouvrir (`false`) les commentaires (#16541) ; `null` = ne rien en dire. */
+    val commentsDisabled: Boolean? = null,
 )
 
 /** Le SEUL filtre du corps d'une édition : seuls les champs [known] survivent. */
@@ -67,6 +70,7 @@ object PostEditPayload {
             allowSoundExtraction = draft.allowSoundExtraction.takeIf { PostEditField.ALLOW_SOUND_EXTRACTION in known },
             mediaAlt = draft.mediaAlt.takeIf { PostEditField.MEDIA_ALT in known },
             mediaCaption = draft.mediaCaption.takeIf { PostEditField.MEDIA_CAPTION in known },
+            commentsDisabled = draft.commentsDisabled.takeIf { PostEditField.COMMENTS_DISABLED in known },
         )
 }
 

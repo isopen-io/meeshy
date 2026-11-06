@@ -54,6 +54,9 @@ internal fun PostOptionsButton(
     onImager: (() -> Unit)? = null,
     onOpen: (() -> Unit)? = null,
     pendingSend: PendingSendActions? = null,
+    viewerRole: String? = null,
+    commentsDisabled: Boolean = false,
+    onToggleComments: (() -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = rememberMeeshyHaptics()
@@ -64,6 +67,9 @@ internal fun PostOptionsButton(
         imageable = onImager != null,
         canOpen = onOpen != null,
         pendingSend = pendingSend?.let { PendingSendMenu(canRetry = it.canRetry, canReopen = it.canReopen) },
+        viewerRole = viewerRole,
+        commentsDisabled = commentsDisabled,
+        canToggleComments = onToggleComments != null,
     )
     // Sans effet, une entrée n'est pas offerte ; sans entrée, le bouton « ⋯ » n'est pas dessiné (#12234, #13244).
     val wired: (PostAction) -> Boolean = { action ->
@@ -77,6 +83,7 @@ internal fun PostOptionsButton(
             PostAction.Pin -> onPin != null
             PostAction.Report -> onReport != null
             PostAction.Delete -> onDelete != null
+            PostAction.DisableComments, PostAction.EnableComments -> onToggleComments != null
             PostAction.SaveMedia, PostAction.ViewViewers, PostAction.Edit, PostAction.NearHere -> false
             else -> true
         }
@@ -104,6 +111,8 @@ internal fun PostOptionsButton(
                     PostAction.Unbookmark -> stringResource(R.string.feed_action_unbookmark) to { haptics.light(); onBookmarkToggle?.invoke(); Unit }
                     PostAction.Imager -> stringResource(R.string.feed_comment_imagine) to (onImager ?: {})
                     PostAction.Pin -> stringResource(R.string.feed_action_pin) to { haptics.light(); onPin?.invoke(); Unit }
+                    PostAction.DisableComments -> stringResource(R.string.feed_action_disable_comments) to { haptics.light(); onToggleComments?.invoke(); Unit }
+                    PostAction.EnableComments -> stringResource(R.string.feed_action_enable_comments) to { haptics.light(); onToggleComments?.invoke(); Unit }
                     PostAction.Report -> stringResource(R.string.feed_action_report) to { haptics.medium(); onReport?.invoke(); Unit }
                     PostAction.Delete -> stringResource(R.string.feed_action_delete) to { haptics.medium(); onDelete?.invoke(); Unit }
                     PostAction.RetrySend -> stringResource(R.string.feed_unsent_retry) to { haptics.light(); pendingSend?.onRetry?.invoke(); Unit }

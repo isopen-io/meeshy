@@ -1,10 +1,12 @@
 package me.meeshy.ui.component.comments
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -84,6 +86,32 @@ public fun CommentsOfflineBand(message: String, modifier: Modifier = Modifier) {
             .padding(vertical = MeeshySpacing.xs)
             .semantics { liveRegion = LiveRegionMode.Polite },
     )
+}
+
+/**
+ * Les commentaires sont FERMÉS (#16541) : à la place du composeur, une ligne discrète — un cadenas et la phrase. Le fil
+ * au-dessus reste lisible ; rien ne s'y saisit. Annoncée poliment par TalkBack quand elle apparaît.
+ */
+@Composable
+public fun CommentsClosedBanner(message: String, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm)
+            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Icon(MeeshyIcons.Lock, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(start = MeeshySpacing.xs),
+        )
+    }
 }
 
 /**

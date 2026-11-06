@@ -100,4 +100,28 @@ class PostApiRequestSerializationTest {
 
         assertThat(json.decodeFromString<CreatePostRequest>(parked).storyEffects?.background).isEqualTo("302B63")
     }
+
+    @Test
+    fun `closing comments rides the create, story and edit bodies only when said`() {
+        assertThat(wire(CreatePostRequest(content = "x", commentsDisabled = true))["commentsDisabled"].toString()).isEqualTo("true")
+        assertThat(wire(CreatePostRequest(content = "x")).keys).doesNotContain("commentsDisabled")
+        val story = json.parseToJsonElement(json.encodeToString(CreateStoryRequest(commentsDisabled = true))).jsonObject
+        assertThat(story["commentsDisabled"].toString()).isEqualTo("true")
+        val reopened = json.parseToJsonElement(json.encodeToString(PostEditDraft(commentsDisabled = false).toUpdateRequest())).jsonObject
+        assertThat(reopened["commentsDisabled"].toString()).isEqualTo("false")
+        val untouched = json.parseToJsonElement(json.encodeToString(PostEditDraft(content = "x").toUpdateRequest())).jsonObject
+        assertThat(untouched.keys).doesNotContain("commentsDisabled")
+    }
+
+    @Test
+    fun `the comment settings toggle always sends its flag, even to reopen`() {
+        val body = json.parseToJsonElement(json.encodeToString(CommentSettingsRequest(commentsDisabled = false))).jsonObject
+        assertThat(body["commentsDisabled"].toString()).isEqualTo("false")
+    }
+
+    @Test
+    fun `the comment settings answer is read from the gateway's envelope`() {
+        val result = json.decodeFromString<CommentSettingsResult>("""{"postId":"p1","commentsDisabled":true}""")
+        assertThat(result).isEqualTo(CommentSettingsResult(postId = "p1", commentsDisabled = true))
+    }
 }

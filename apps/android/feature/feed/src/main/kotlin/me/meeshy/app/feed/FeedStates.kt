@@ -53,6 +53,7 @@ internal fun FeedNotice.messageRes(): Int = when (this) {
     FeedNotice.PUBLISH_QUEUED -> R.string.feed_notice_publish_queued
     FeedNotice.TRANSLATION_FAILED -> R.string.feed_notice_translation_failed
     FeedNotice.UNBOOKMARKED -> R.string.post_bookmark_removed
+    FeedNotice.COMMENT_SETTINGS_FAILED -> R.string.feed_comment_settings_failed
 }
 
 /**

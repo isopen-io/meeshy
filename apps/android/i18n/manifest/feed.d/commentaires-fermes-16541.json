@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "androidName": "feed_comments_closed_banner",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_action_disable_comments",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_action_enable_comments",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_comment_settings_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "feed_comments_disable_hint",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
