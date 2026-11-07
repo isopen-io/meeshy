@@ -313,7 +313,13 @@ const FROZEN_BARE_INCLUDES: Readonly<Record<string, number>> = {
   // dans `participant-role-core.ts`, inchange. Compte inchange : 1 — meme
   // mecanique que #4284 sur `core-lifecycle.ts`.
   'conversations/participant-role-core.ts': 1,
-  'reactions.ts': 1,
+  // #16561 a RETIRÉ le site de `reactions.ts` : son `participants: true` était
+  // la garde d'admission de `GET /reactions/:messageId`, qui décidait donc sur
+  // la liste NON filtrée — un membre banni y gardait l'accès au trombinoscope
+  // des réactions. L'include porte désormais la loi partagée
+  // (`participants: { where: ADMITTED_FILE_READER_WHERE }`), donc le fichier
+  // n'a plus aucun include nu. Une entrée EN MOINS est un site RÉPARÉ, et
+  // retirer sa ligne fait partie du correctif.
   'translation-non-blocking.ts': 1,
   'translation.ts': 1,
 };
