@@ -58,6 +58,59 @@ describe('enqueueForOfflineParticipants — the audience', () => {
 
     expect(sink.map(e => e.userId)).toEqual(['participant-C']);
   });
+
+  /**
+   * #16687 — « connecté » n'est pas « JOIGNABLE pour CETTE conversation ».
+   *
+   * `AuthHandler` inscrit la socket dans `connectedUsers` même quand
+   * `_joinConversationRoomsWithRetry` a épuisé ses tentatives : l'échec n'était
+   * que JOURNALISÉ. La socket était donc vue joignable par ce gate, qui cessait
+   * d'enfiler, alors que le `io.to(ROOMS.conversation(...))` ne l'atteignait pas
+   * davantage. **Les messages n'allaient nulle part, et sans rejeu ultérieur,
+   * puisque rien n'avait jamais été écrit dans la file.**
+   *
+   * Le code énonçait lui-même le dommage, vingt lignes au-dessus de la ligne
+   * fautive : « s'inscrire n'est donc pas neutre : ça DÉSARME la file hors
+   * ligne ». Le marqueur que la porte d'authentification pose désormais sur le
+   * `SocketUser` est ce qui rend cette phrase actionnable ici.
+   *
+   * Sur-enfiler est la BONNE direction d'erreur : les trois clients absorbent
+   * un doublon (web fusionne par id, iOS garde un jeu de vus de 48 h calé sur
+   * le TTL de la file, Android fait un upsert par clé primaire), là où
+   * sous-enfiler est irrécupérable.
+   */
+  it("enfile pour une socket connectée dont la room de CETTE conversation a échoué", async () => {
+    const { sink, deps } = makeDeps(THREE, ['user-B']);
+    deps.connectedUsers.set('user-B', { unreachableConversations: new Set(['conv-1']) });
+
+    await enqueueForOfflineParticipants(deps, { ...base, actorParticipantId: 'participant-A' });
+
+    expect(sink.map(e => e.userId).sort()).toEqual(['participant-C', 'user-B']);
+  });
+
+  it("n'enfile PAS pour une socket dont une AUTRE conversation a échoué", async () => {
+    const { sink, deps } = makeDeps(THREE, ['user-B']);
+    deps.connectedUsers.set('user-B', { unreachableConversations: new Set(['conv-autre']) });
+
+    await enqueueForOfflineParticipants(deps, { ...base, actorParticipantId: 'participant-A' });
+
+    expect(sink.map(e => e.userId)).toEqual(['participant-C']);
+  });
+
+  /**
+   * Le double le plus plausible du dépôt est une carte dont les valeurs sont
+   * `{}` : l'absence de marqueur vaut JOIGNABLE, soit le comportement d'avant
+   * ce lot. Un `connectedUsers` qui ne sait même pas répondre `get` (double
+   * réduit à `has`) ne doit pas faire lever le gate.
+   */
+  it("un connectedUsers sans `get` reste accepté — l'absence de marqueur vaut joignable", async () => {
+    const { sink, deps } = makeDeps(THREE, ['user-B']);
+    deps.connectedUsers = { has: (k: string) => k === 'user-B' } as any;
+
+    await enqueueForOfflineParticipants(deps, { ...base, actorParticipantId: 'participant-A' });
+
+    expect(sink.map(e => e.userId)).toEqual(['participant-C']);
+  });
 });
 
 // The five implementations this function replaced excluded the actor on two

@@ -855,13 +855,43 @@ describe('AuthHandler', () => {
       ]);
 
       // A permanently failing join must not throw or hang — auth still resolves
-      // and the user is registered (best-effort delivery from later reconnects).
+      // and the user IS registered: presence, `socketToUser` and the disconnect
+      // cleanup all hang off that registration, so withholding it would trade
+      // one defect for three.
+      //
+      // #16687 — ce que « best-effort delivery from later reconnects » ne
+      // disait pas : il n'y AVAIT pas de livraison ultérieure. L'arriéré qu'une
+      // reconnexion drainerait n'était jamais écrit, parce que l'inscription
+      // seule suffisait à faire croire la socket joignable. La socket reste
+      // donc inscrite, et porte désormais le marqueur qui ARME la file pour les
+      // conversations dont la room a échoué.
       await expect(authHandler.handleTokenAuthentication(mockSocket)).resolves.toBeUndefined();
       // Bounded: 1 initial attempt + a finite number of retries, never infinite.
       const total = attemptsByRoom.get('conversation:conv-aaa') ?? 0;
       expect(total).toBeGreaterThan(1);
       expect(total).toBeLessThanOrEqual(3);
       expect(connectedUsers.size).toBe(1);
+      expect([...(connectedUsers.values() as any)][0].unreachableConversations)
+        .toEqual(new Set(['conv-aaa']));
+    });
+
+    it("une jonction qui RÉUSSIT ne laisse aucun marqueur — le cas nominal", async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } },
+        join: jest.fn().mockResolvedValue(undefined),
+      });
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en',
+        regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+      } as any);
+      jest.spyOn((mockPrisma as any).participant, 'findMany').mockResolvedValue([
+        { conversationId: 'conv-aaa' },
+      ]);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(connectedUsers.size).toBe(1);
+      expect([...(connectedUsers.values() as any)][0].unreachableConversations).toBeUndefined();
     });
 
     it('awaits all conversation room joins before handleTokenAuthentication resolves', async () => {
@@ -1492,6 +1522,12 @@ describe('AuthHandler', () => {
       // L'échec définitif ne doit pas priver l'invité de sa session : la
       // décision « refuser la session » est instruite au carnet, pas prise ici.
       expect(connectedUsers.has('anon-123')).toBe(true);
+      // #16687 — mais la session inscrite ne vaut plus « joignable ». Un invité
+      // n'a qu'UNE conversation : sans ce marqueur, « une room échouée » valait
+      // la TOTALITÉ de sa livraison temps réel, sans aucun recours — la file
+      // n'étant jamais armée, il n'y avait rien à drainer à la reconnexion.
+      expect((connectedUsers.get('anon-123') as any).unreachableConversations)
+        .toEqual(new Set(['conv-guest']));
     });
 
     it('les deux portes accordent le MÊME nombre de tentatives à une room qui rejette', async () => {

@@ -42,6 +42,25 @@ export interface SocketUser {
   displayName?: string;
   /** @deprecated kept for backward compat during migration — raw session token */
   sessionToken?: string;
+  /**
+   * #16687 — les conversations dont la room n'a PAS pu être rejointe pour cette
+   * socket, après épuisement des réessais (`_joinConversationRoomsWithRetry`).
+   *
+   * Inscrire la socket dans `connectedUsers` n'est pas neutre : c'est ce que
+   * `enqueueForOfflineParticipants` lit pour décider de ne PAS enfiler. Sans ce
+   * marqueur, une socket absente de la room était tenue pour joignable et le
+   * message n'allait nulle part — ni émission vive, ni rejeu.
+   *
+   * ABSENT ou vide = joignable partout, le cas nominal. L'ensemble est
+   * RECALCULÉ à chaque authentification, donc une reconnexion qui rejoint
+   * correctement ses rooms l'efface d'elle-même.
+   *
+   * Granularité par UTILISATEUR, comme `connectedUsers` lui-même : un second
+   * appareil sain écrase le marqueur, ce qui est juste — l'utilisateur EST
+   * joignable par la room. La convergence de l'appareil resté muet est une
+   * question distincte (#16688).
+   */
+  unreachableConversations?: ReadonlySet<string>;
 }
 
 export interface ConnectedUserResult {

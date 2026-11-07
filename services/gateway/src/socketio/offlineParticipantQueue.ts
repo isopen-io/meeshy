@@ -22,7 +22,22 @@ export interface OfflineParticipantQueueDeps {
     enqueue(userId: string, entry: QueuedMessagePayload, options?: { readonly sealAtRest?: boolean }): Promise<void>;
   } | null | undefined;
   prisma: Pick<PrismaClient, 'participant'>;
-  connectedUsers: { has(key: string): boolean };
+  /**
+   * #16687 — la porte de joignabilité. `has` répond « cette clé a-t-elle une
+   * socket ? » ; `get` permet de demander la question JUSTE — « cette socket
+   * est-elle joignable pour CETTE conversation ? ».
+   *
+   * `get` est OPTIONNEL par décision : une carte réelle
+   * (`Map<string, SocketUser>`) le fournit déjà, et un double réduit à `has`
+   * garde le comportement d'avant ce lot (absence de marqueur ⇒ joignable).
+   * C'est fail-OPEN, et c'est le bon sens d'arbitrage ici : le pire cas est une
+   * entrée inutile en file, que les trois clients absorbent par idempotence,
+   * là où l'inverse perd le message sans recours.
+   */
+  connectedUsers: {
+    has(key: string): boolean;
+    get?(key: string): { readonly unreachableConversations?: ReadonlySet<string> } | undefined;
+  };
 }
 
 /**
@@ -257,7 +272,16 @@ export async function enqueueForOfflineParticipants(
       const isActor =
         (actorParticipantId != null && p.id === actorParticipantId) ||
         (actorUserId != null && p.userId === actorUserId);
-      if (isActor || connectedUsers.has(queueKey) || params.excludedQueueKeys?.has(queueKey)) continue;
+      // #16687 — « connecté » ne vaut pas « joignable POUR CETTE
+      // conversation ». Une socket dont la room de cette conversation n'a pas
+      // pu être rejointe après réessais est inscrite dans `connectedUsers`
+      // (l'échec n'est que journalisé) : la tenir pour joignable DÉSARMAIT la
+      // file, alors que le `io.to(ROOMS.conversation(...))` ne l'atteint pas
+      // davantage — message perdu, et sans rejeu puisque rien n'a été écrit.
+      const reachableHere =
+        connectedUsers.has(queueKey) &&
+        !connectedUsers.get?.(queueKey)?.unreachableConversations?.has(conversationId);
+      if (isActor || reachableHere || params.excludedQueueKeys?.has(queueKey)) continue;
       if (restrictToLanguage !== null) {
         // Échec OUVERT sur prisme vide : un participant dont aucune langue n'est
         // résoluble reçoit l'entrée, exactement comme avant ce filtre. Le pire
