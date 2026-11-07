@@ -10,6 +10,14 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+
+// #16557 — la loi de lecture est prouvée sur une base en mémoire par
+// `translation-read-law.test.ts` ; ce fichier juge autre chose et la tient pour
+// acquise, sauf là où il la refuse explicitement.
+const mockReaderMayTranslate = jest.fn<any>().mockResolvedValue(true);
+jest.mock('../../services/messaging/translationReadGate', () => ({
+  readerMayTranslateMessage: (...args: unknown[]) => mockReaderMayTranslate(...args),
+}));
 import { EventEmitter } from 'events';
 
 // ---------------------------------------------------------------------------
@@ -1484,11 +1492,13 @@ describe('MeeshySocketIOManager', () => {
       });
       // Requester is not an active participant of conv-not-mine.
       prisma.participant.findFirst.mockResolvedValue(null);
+      mockReaderMayTranslate.mockResolvedValueOnce(false);
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
       await handler({ messageId: convId('msg-cached-foreign'), targetLanguage: 'fr' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Access denied' }));
       expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
+      expect(translationService.getTranslation).not.toHaveBeenCalled();
     });
 
     it('increments translations_sent stat when translation found', async () => {
@@ -1553,6 +1563,7 @@ describe('MeeshySocketIOManager', () => {
       // Not a participant of conv-not-mine — the membership guard must block the
       // request before any translation work happens (no unauthorized data access).
       prisma.participant.findFirst.mockResolvedValue(null);
+      mockReaderMayTranslate.mockResolvedValueOnce(false);
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
       await handler({ messageId: convId('msg-foreign'), targetLanguage: 'en' });

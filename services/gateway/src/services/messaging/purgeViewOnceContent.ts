@@ -3,6 +3,7 @@ import { EPHEMERAL_UNRECEIVED_RETENTION_MS } from '@meeshy/shared/utils/ephemera
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { eraseSharedTranslations, type SharedTranslationErasureClient } from './sharedTranslationErasure';
+import { purgeTranslationCacheFor } from '../message-translation/translationCacheRegistry';
 import { computeViewOnceStates, type ViewOnceAudiencePrisma } from './viewOnceAudience';
 
 /**
@@ -224,7 +225,9 @@ export async function purgeDueViewOnceContent(
     // reprendra les deux. En `finally` : un rappel `onError` qui lèverait
     // interromprait la boucle, et les messages déjà purgés garderaient leur
     // version scellée jusqu'à une passe qui ne les revoit jamais (leur échéance
-    // est effacée). BEST-EFFORT dans l'unité même — elle ne lève pas.
+    // est effacée). BEST-EFFORT dans l'unité même — elle ne lève pas. La copie
+    // EN MÉMOIRE de leurs traductions part avec elles (#16557).
+    purgeTranslationCacheFor(purgedIds);
     await eraseSharedTranslations(prisma, { messageIds: purgedIds });
   }
 

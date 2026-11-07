@@ -1,13 +1,15 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError, logger } from '../utils/logger';
-import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError, sendForbidden } from '../utils/response.js';
+import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../utils/conversation-id-cache';
 import type { UnifiedAuthRequest } from '../middleware/auth';
 import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
 import { gatewayKeyring, SERVER_AT_REST_UNREADABLE_TRANSLATION_MESSAGE, translationSourceOf } from '../services/messaging/atRestTranslationSource';
 import { SERVER_AT_REST_UNREADABLE } from '../services/messaging/serverAtRest';
+import { historyReaderFromAuthContext } from '../services/historyFloor';
+import { readerMayTranslateMessage } from '../services/messaging/translationReadGate';
 
 // ===== SCHEMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
@@ -128,42 +130,6 @@ const translationNonBlockingResponseSchema = {
 } as const;
 
 // ===== ROUTE NON-BLOQUANTE =====
-/**
- * L'appelant participe-t-il à cette conversation ?
- *
- * La traduction porte le CONTENU des messages : sans cette garde, connaître un
- * identifiant suffisait à lire le texte traduit — donc déchiffré — de n'importe
- * quelle conversation privée. Le contrôle vit ici, partagé par toutes les
- * routes du module, plutôt que recopié dans chacune : c'est la recopie qui a
- * produit les trous (une route l'avait, sa voisine non).
- *
- * Couvre les deux formes d'identité : utilisateur enregistré et participant
- * anonyme arrivé par un lien de partage.
- */
-async function callerParticipatesIn(
-  fastify: FastifyInstance,
-  authContext: UnifiedAuthRequest['authContext'] | undefined,
-  conversationId: string
-): Promise<boolean> {
-  if (!authContext?.isAuthenticated && !authContext?.participantId) return false;
-
-  if (authContext?.participantId) {
-    const anonymous = await fastify.prisma.participant.findFirst({
-      where: { id: authContext.participantId, conversationId, isActive: true },
-      select: { id: true }
-    });
-    return anonymous !== null;
-  }
-
-  if (!authContext?.userId) return false;
-
-  const member = await fastify.prisma.participant.findFirst({
-    where: { userId: authContext.userId, conversationId, isActive: true },
-    select: { id: true }
-  });
-  return member !== null;
-}
-
 export async function translationRoutes(fastify: FastifyInstance, _options: Record<string, unknown>) {
   // Recuperer les services depuis l'instance fastify (comme dans translation.ts)
   const translationService = fastify.translationService;
@@ -213,30 +179,29 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
       // ===== CAS 1: RETRADUCTION D'UN MESSAGE EXISTANT =====
       if (validatedData.message_id) {
 
-        // Recuperer le message depuis la base de donnees
-        const existingMessage = await fastify.prisma.message.findUnique({
-          where: { id: validatedData.message_id },
-          include: {
-            conversation: { include: { participants: true } }
-          }
+        // SECURITY (#16557) : la loi de lecture, avant toute lecture de la ligne.
+        // Tout compte valide pouvait retraduire un message arbitraire ; un membre
+        // pouvait relancer celle d'un message rappelé, ou d'avant son arrivée. Le
+        // refus ne dit ni que le message existe, ni qu'il est rappelé.
+        const mayTranslate = await readerMayTranslateMessage(fastify.prisma, {
+          reader: historyReaderFromAuthContext(authContext),
+          messageId: validatedData.message_id,
+          now: new Date()
         });
-
-        if (!existingMessage) {
-          logger.warn(`[Translation] Message ${validatedData.message_id} not found`);
+        if (!mayTranslate) {
+          logger.warn('[Translation] Retraduction refusée par la loi de lecture', {
+            messageId: validatedData.message_id
+          });
           return sendNotFound(reply, 'Message not found');
         }
 
-        // Les participants étaient chargés ci-dessus mais jamais consultés :
-        // tout compte valide pouvait déclencher la retraduction d'un message
-        // arbitraire, puis en lire le texte via /status. La garde ferme la
-        // chaîne des deux côtés.
-        if (!(await callerParticipatesIn(fastify, authContext, existingMessage.conversationId))) {
-          logger.warn('[Translation] Retraduction refusée : appelant hors de la conversation', {
-            messageId: validatedData.message_id
-          });
-          return sendForbidden(reply, 'Access denied to this message');
-        }
+        const existingMessage = await fastify.prisma.message.findUnique({
+          where: { id: validatedData.message_id }
+        });
 
+        if (!existingMessage) {
+          return sendNotFound(reply, 'Message not found');
+        }
 
         // #11381 — un message `server`/`hybrid` se retraduit depuis son CLAIR, jamais depuis `content: ''`.
         const source = await translationSourceOf(existingMessage, gatewayKeyring(fastify.prisma));
@@ -248,7 +213,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
         const messageData = {
           id: validatedData.message_id,
           conversationId: existingMessage.conversationId,
-          content: validatedData.text || source.row.content,
+          content: source.row.content, // la ligne fait foi, jamais le texte du corps
           originalLanguage: validatedData.source_language || existingMessage.originalLanguage,
           targetLanguage: validatedData.target_language,
           modelType: validatedData.model_type || 'basic'
