@@ -58,7 +58,7 @@ extension CallView {
 
             Spacer()
 
-            // #8795 — micro et caméra de l'aperçu, puis filtres et raccroché
+            // #8795 — micro et caméra de l'aperçu, puis effets et raccroché
             HStack(spacing: MeeshySpacing.xl) {
                 CallPreviewOutgoingControls(
                     preview: .shared,
@@ -66,7 +66,7 @@ extension CallView {
                     isVideoCall: callManager.isVideoEnabled
                 )
                 if callManager.isVideoEnabled {
-                    effectsToggleButton
+                    effectsModeButton
                 }
                 endCallButton
             }
@@ -121,7 +121,7 @@ extension CallView {
 
             HStack(spacing: 40) {
                 if callManager.isVideoEnabled {
-                    effectsToggleButton
+                    effectsModeButton
                 }
                 endCallButton
             }

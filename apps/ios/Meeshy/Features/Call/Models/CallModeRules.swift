@@ -188,3 +188,39 @@ enum CallModeGestureRule {
         MediaFormat.duration(elapsed, locale: locale)
     }
 }
+
+/// OPUS-4 — avant la connexion, le bouton « Effets » ouvre le MÊME mode que
+/// l'appel établi. Ce que ce mode montre et permet tant que l'autre n'a pas
+/// décroché se lit ici, sans vue.
+enum CallPreConnectEffectsRule {
+    /// Le mode Effets se pose hors de l'appel établi : appel vidéo sortant qui
+    /// sonne, offre envoyée, connexion en cours (des deux côtés) ou établie
+    /// sans média négocié. Jamais sur la sonnerie ENTRANTE : l'écran d'appel
+    /// entrant n'a pas de bouton Effets, et rien de ma caméra n'y est montré.
+    static func showsMode(
+        _ mode: CallScreenMode?,
+        state: CallState,
+        isVideoEnabled: Bool,
+        showsConnectedLayout: Bool
+    ) -> Bool {
+        guard case .effects? = mode, isVideoEnabled, !showsConnectedLayout else { return false }
+        switch state {
+        case .ringing(let isOutgoing): return isOutgoing
+        case .offering, .connecting, .connected, .reconnecting: return true
+        case .idle, .ended: return false
+        }
+    }
+
+    /// Photo et film de mon image n'existent qu'une fois l'appel établi :
+    /// avant, il n'y a rien à garder de l'appel, et la capture ne s'arme pas
+    /// (aucune trame tirée de la piste locale pour rien).
+    static func capturesMyImage(showsConnectedLayout: Bool) -> Bool {
+        showsConnectedLayout
+    }
+
+    /// Les vignettes des autres au-dessus du carrousel (#8737) n'ont de sens
+    /// qu'à plusieurs : avant le décroché, personne n'est encore là.
+    static func showsCompanions(showsConnectedLayout: Bool) -> Bool {
+        showsConnectedLayout
+    }
+}
