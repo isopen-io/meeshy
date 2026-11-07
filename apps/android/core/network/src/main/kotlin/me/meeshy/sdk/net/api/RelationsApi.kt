@@ -30,6 +30,11 @@ data class RelationLevelResponse(
     val canRaise: Boolean? = null,
     /** Élargissement #14910 : l'échéance ISO du cool-down de remontée, ou `null`. */
     val raiseBlockedUntil: String? = null,
+    /**
+     * Élargissement #16623 : le niveau auquel la passerelle juge les outils de cercle (le Bring) — le lien réel, sauf entre
+     * deux comptes de l'équipe (Sang sans lien). Absent ⇒ retomber sur [effectiveLevel] ; aucun rôle n'est servi.
+     */
+    val accessLevel: String? = null,
 )
 
 /** Le corps de `POST /relations/:userId/level` (#14910) : le cran visé, strictement sous mon accord ; `PUBLIC` annule le lien. */

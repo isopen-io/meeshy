@@ -7,16 +7,18 @@
  * et passait `'unknown'` pour l'âge faute de le lire — ce qui laisse ouvert tout
  * bouclier des mineurs. Ici, les lectures sont celles que la feature EXIGE
  * (`relationAccessReads`) : l'âge pour le bouclier et la Connaissance
- * automatique, la communauté quand un plancher s'atteint par elle.
+ * automatique, la communauté quand un plancher s'atteint par elle, le rôle des
+ * deux côtés quand le privilège d'équipe peut ouvrir la feature (#16623). L'âge et
+ * le rôle partent en UNE lecture, parallèle à celle du niveau : elle n'allonge rien.
  *
  * Le niveau vient du site unique (`niveauxParmi`) ; aucune comparaison de
  * niveaux n'est écrite ici. Une lecture qui échoue LÈVE : l'appelant ferme.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { declaredAgeClass, type DeclaredAgeClass } from '@meeshy/shared/utils/age';
+import { ACCOUNT_STATE_SELECT, lawRoleOf } from './usableAccount';
 import { relationAccessReads, resolveRelationAccess, type RelationAccess, type RelationConsent } from '@meeshy/shared/utils/relation-access';
 import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
-import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { niveauxParmi } from '../friendship';
 
@@ -30,7 +32,6 @@ export type PairAccessAmongParams = {
   readonly subjectId: string;
   readonly otherIds: readonly string[];
   readonly subjectIs: PairAccessSubject;
-  readonly viewerRole?: GlobalUserRoleType | null;
   readonly now?: Date;
   /**
    * Le consentement, pour une feature qui en exige un (écoute, position) : l'appelant
@@ -40,9 +41,14 @@ export type PairAccessAmongParams = {
   readonly consentOf?: (otherId: string) => RelationConsent;
 };
 
-async function agesOf(prisma: PairAccessDb, ids: readonly string[], now: Date): Promise<ReadonlyMap<string, DeclaredAgeClass>> {
-  const rows = await prisma.user.findMany({ where: { id: { in: [...ids] } }, select: { id: true, birthDate: true } });
-  return new Map(rows.map((row) => [row.id, declaredAgeClass(row.birthDate ?? null, now)]));
+type PairPerson = { readonly age: DeclaredAgeClass; readonly role: string | null };
+
+async function peopleOf(prisma: PairAccessDb, ids: readonly string[], now: Date): Promise<ReadonlyMap<string, PairPerson>> {
+  const rows = await prisma.user.findMany({
+    where: { id: { in: [...ids] } },
+    select: { id: true, birthDate: true, role: true, ...ACCOUNT_STATE_SELECT },
+  });
+  return new Map(rows.map((row) => [row.id, { age: declaredAgeClass(row.birthDate ?? null, now), role: lawRoleOf(row) }]));
 }
 
 async function coMembersAmong(prisma: PairAccessDb, subjectId: string, ids: readonly string[]): Promise<ReadonlySet<string>> {
@@ -68,14 +74,15 @@ export async function pairAccessAmong(prisma: PairAccessDb, params: PairAccessAm
 
   const now = params.now ?? new Date();
   const reads = relationAccessReads(feature);
-  const [levels, blocked, ages, coMembers] = await Promise.all([
+  const [levels, blocked, people, coMembers] = await Promise.all([
     niveauxParmi(prisma, subjectId, ids),
     getBlockedUserIdsAmong(prisma, subjectId, ids),
-    reads.age ? agesOf(prisma, [subjectId, ...ids], now) : Promise.resolve(new Map<string, DeclaredAgeClass>()),
+    reads.age || reads.role ? peopleOf(prisma, [subjectId, ...ids], now) : Promise.resolve(new Map<string, PairPerson>()),
     reads.community ? coMembersAmong(prisma, subjectId, ids) : Promise.resolve(new Set<string>()),
   ]);
 
-  const ageOf = (id: string): DeclaredAgeClass => ages.get(id) ?? 'unknown';
+  const ageOf = (id: string): DeclaredAgeClass => (reads.age ? people.get(id)?.age : undefined) ?? 'unknown';
+  const roleOf = (id: string): string | null => people.get(id)?.role ?? null;
   return new Map(
     ids.map((id) => {
       const level = levels.get(id) ?? 'PUBLIC';
@@ -91,7 +98,8 @@ export async function pairAccessAmong(prisma: PairAccessDb, params: PairAccessAm
           blockedEitherWay: blocked.has(id),
           viewerMinor: ageOf(viewerId),
           targetMinor: ageOf(targetId),
-          viewerRole: params.subjectIs === 'viewer' ? params.viewerRole : null,
+          viewerRole: roleOf(viewerId),
+          targetRole: roleOf(targetId),
           feature,
           consent: params.consentOf?.(id),
         }),
@@ -103,14 +111,13 @@ export async function pairAccessAmong(prisma: PairAccessDb, params: PairAccessAm
 /** Le verdict de la loi pour UNE paire : `viewerId` voit ou agit envers `targetId`. */
 export async function pairAccess(
   prisma: PairAccessDb,
-  params: { readonly feature: RelationFeature; readonly viewerId: string; readonly targetId: string; readonly viewerRole?: GlobalUserRoleType | null; readonly now?: Date },
+  params: { readonly feature: RelationFeature; readonly viewerId: string; readonly targetId: string; readonly now?: Date },
 ): Promise<RelationAccess> {
   const among = await pairAccessAmong(prisma, {
     feature: params.feature,
     subjectId: params.viewerId,
     otherIds: [params.targetId],
     subjectIs: 'viewer',
-    viewerRole: params.viewerRole,
     now: params.now,
   });
   return (
@@ -124,7 +131,6 @@ export async function pairAccess(
       blockedEitherWay: false,
       viewerMinor: 'unknown',
       targetMinor: 'unknown',
-      viewerRole: params.viewerRole,
       feature: params.feature,
     })
   );
@@ -143,8 +149,8 @@ export async function minorShieldedAmong(
   const now = params.now ?? new Date();
   const ids = [...new Set(params.recipientIds)].filter((id) => id && id !== params.senderId);
   if (ids.length === 0) return new Set();
-  const ages = await agesOf(prisma, ids, now);
-  const minors = ids.filter((id) => ages.get(id) === 'minor');
+  const people = await peopleOf(prisma, ids, now);
+  const minors = ids.filter((id) => people.get(id)?.age === 'minor');
   if (minors.length === 0) return new Set();
   const verdicts = await pairAccessAmong(prisma, { feature: params.feature, subjectId: params.senderId, otherIds: minors, subjectIs: 'viewer', now });
   return new Set(minors.filter((id) => verdicts.get(id)?.allowed === false && verdicts.get(id)?.reason === 'level'));

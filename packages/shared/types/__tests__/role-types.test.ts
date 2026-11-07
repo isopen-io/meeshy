@@ -15,6 +15,7 @@ import {
   isMemberRole,
   isGlobalAdmin,
   isGlobalModerator,
+  isPlatformTeam,
   isMemberAdmin,
   isMemberModerator,
   isMemberCreator,
@@ -288,5 +289,23 @@ describe('WRITE_PERMISSION_HIERARCHY', () => {
   it('everyone is least restrictive', () => {
     const allLevels = Object.values(WRITE_PERMISSION_HIERARCHY);
     expect(Math.min(...allLevels)).toBe(WRITE_PERMISSION_HIERARCHY['everyone']);
+  });
+});
+
+describe('isPlatformTeam', () => {
+  it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])('%s est de l\'équipe', (role) => {
+    expect(isPlatformTeam(role)).toBe(true);
+  });
+
+  it.each(['moderator', 'Admin', 'bigBoss'])('replie la casse comme ses voisins : %s', (role) => {
+    expect(isPlatformTeam(role)).toBe(true);
+  });
+
+  it.each(['AUDIT', 'ANALYST', 'USER', 'AGENT'])('%s n\'en est pas', (role) => {
+    expect(isPlatformTeam(role)).toBe(false);
+  });
+
+  it.each([undefined, null, '', 'MODO', 'SUPERADMIN', '__proto__', 'constructor'])('échoue fermé sur %s', (role) => {
+    expect(isPlatformTeam(role)).toBe(false);
   });
 });
