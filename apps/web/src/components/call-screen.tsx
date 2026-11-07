@@ -506,6 +506,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           {capsule}
         </div>
       ),
+    local,
   };
   const stage = (
     <CallStage

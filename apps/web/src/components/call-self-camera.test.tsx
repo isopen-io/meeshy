@@ -4,7 +4,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { DEFAULT_SELF_TILE, selfTileStore } from '@/lib/calls/call-self-tile';
-import { setLocalZoom } from '@/lib/calls/self-zoom';
+import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
+import { setLocalZoom, useLocalZoom } from '@/lib/calls/self-zoom';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
@@ -100,32 +101,36 @@ const pinchOn = (element: HTMLElement, from: number, to: number) => {
 
 const MINE = ['flip', 'camera', 'effects', 'screen'] as const;
 
-function Harness({ active, layout, controls }: { readonly active: ActiveCall; readonly layout: 'video-duo' | 'grid'; readonly controls: boolean }) {
+function Harness({ active, layout, controls, choice = null }: { readonly active: ActiveCall; readonly layout: 'video-duo' | 'grid'; readonly controls: boolean; readonly choice?: SpotlightChoice }) {
   const [full, setFull] = useState(false);
-  const self = { full, onToggle: () => setFull((value) => !value), controls, mine: MINE, row: (group?: string) => <div data-test-row={group ?? 'all'} />, column: (capsule: ReactNode) => <div data-test-column="">{capsule}</div> };
-  return <CallStage call={active} layout={layout} language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} />;
+  const local = useLocalZoom(active.callId, active.facing);
+  const self = { full, onToggle: () => setFull((value) => !value), controls, mine: MINE, row: (group?: string) => <div data-test-row={group ?? 'all'} />, column: (capsule: ReactNode) => <div data-test-column="">{capsule}</div>, local };
+  return <CallStage call={active} layout={layout} language="fr" choice={choice} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} />;
 }
 
 describe('mon image pendant un appel', () => {
-  const mount = (active: ActiveCall, options: { readonly layout?: 'video-duo' | 'grid'; readonly controls?: boolean } = {}) => {
+  const mount = (active: ActiveCall, options: { readonly layout?: 'video-duo' | 'grid'; readonly controls?: boolean; readonly choice?: SpotlightChoice } = {}) => {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
-    act(() => root.render(<Harness active={active} layout={options.layout ?? 'video-duo'} controls={options.controls ?? true} />));
+    act(() => root.render(<Harness active={active} layout={options.layout ?? 'video-duo'} controls={options.controls ?? true} choice={options.choice ?? null} />));
     const find = (selector: string) => host.querySelector(selector);
     const press = (selector: string) => act(() => (find(selector) as HTMLElement | null)?.click());
-    const full = async () => {
-      press('[data-call-corner]');
+    const settle = async () => {
       await act(async () => {
         await import('./call-self-camera');
       });
       await act(async () => {});
     };
+    const full = async () => {
+      press('[data-call-corner]');
+      await settle();
+    };
     const done = () => {
       act(() => root.unmount());
       host.remove();
     };
-    return { find, press, full, done };
+    return { find, press, full, settle, done };
   };
 
   /** Les rangées se posent par `translate: x y` (#11314), relatif à la vignette. */
@@ -250,6 +255,28 @@ describe('mon image pendant un appel', () => {
     fresh();
     const view = mount(call(zoomCamera(), { isGroup: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }), { layout: 'grid' });
     expect(view.find('[data-call-zoom]')).toBeNull();
+    view.done();
+  });
+
+  test('en groupe, ma tuile À LA UNE porte le zoom de ma caméra, comme iOS (#9182)', async () => {
+    fresh();
+    const camera = zoomCamera();
+    const view = mount(call(camera, { isGroup: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }), { layout: 'grid', choice: { kind: 'self' } });
+    await view.settle();
+    expect(view.find('[data-test-column] [data-call-zoom]')?.getAttribute('data-call-zoom')).toBe('device');
+    expect(view.find('[data-call-self-gestures]')).not.toBeNull();
+    view.press('[data-call-zoom-in]');
+    await act(async () => {});
+    expect(camera.applied).toEqual([1.3]);
+    view.done();
+  });
+
+  test('en groupe, ma tuile caméra coupée ne porte pas de zoom, même à la une', async () => {
+    fresh();
+    const view = mount(call(zoomCamera(), { isGroup: true, cameraOn: false, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }), { layout: 'grid', choice: { kind: 'self' } });
+    await view.settle();
+    expect(view.find('[data-call-zoom]')).toBeNull();
+    expect(view.find('[data-call-self-gestures]')).toBeNull();
     view.done();
   });
 });
