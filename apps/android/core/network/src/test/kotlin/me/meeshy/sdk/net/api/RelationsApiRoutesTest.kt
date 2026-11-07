@@ -35,6 +35,17 @@ class RelationsApiRoutesTest {
     }
 
     @Test
+    fun `le niveau des outils de cercle est lu quand il est servi, absent sinon (#16623)`() = runTest {
+        val team = RecordingHttp(
+            responseBody = """{"success":true,"data":{"userId":"u","effectiveLevel":"PUBLIC","accessLevel":"BLOOD"}}""",
+        )
+        val older = RecordingHttp(responseBody = """{"success":true,"data":{"userId":"u","effectiveLevel":"FRIEND"}}""")
+
+        assertThat(team.serve(RelationsApi::class.java).byUserId("u").data!!.accessLevel).isEqualTo("BLOOD")
+        assertThat(older.serve(RelationsApi::class.java).byUserId("u").data!!.accessLevel).isNull()
+    }
+
+    @Test
     fun `mes cercles appellent relations et lisent chaque lien`() = runTest {
         val http = RecordingHttp(
             responseBody = """{"success":true,"data":[{"userId":"u","effectiveLevel":"FRIEND","grantedByMe":"FRIEND",

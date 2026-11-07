@@ -39,7 +39,10 @@ public enum RelationRaiseOffer: Sendable, Equatable {
 /// Un lien tel que `GET /relations` le sert (`RelationLinkView`, #13933). `userId` est
 /// l'AUTRE personne ; jamais un nom ni une présence — l'écran hydrate la personne par ses
 /// propres caches. `GET /relations/:userId` peut servir en plus `raiseBlockedUntil` et
-/// `canRaise` (#14910) : absents, la proposition de montée reste celle d'avant.
+/// `canRaise` (#14910) : absents, la proposition de montée reste celle d'avant. Elle sert
+/// aussi `accessLevel` (#16623), le niveau auquel la passerelle juge les outils de cercle
+/// (le Bring) : le lien réel, sauf entre deux comptes de l'équipe. Absent : `nil`, et
+/// `toolLevel` retombe sur `effectiveLevel` ; illisible : `public`.
 ///
 /// Le décodage est tolérant et fermé par défaut : un niveau que ce client ne connaît pas
 /// se lit `public` (jamais un niveau plus haut), une éligibilité illisible se lit `nil`.
@@ -52,8 +55,12 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
     public let eligibleFor: RelationLevel?
     public let raiseBlockedUntil: Date?
     public let canRaise: Bool?
+    public let accessLevel: RelationLevel?
 
     public var id: String { userId }
+
+    /// Le niveau auquel proposer un outil de cercle : `accessLevel` servi, sinon le lien.
+    public var toolLevel: RelationLevel { accessLevel ?? effectiveLevel }
 
     public init(
         userId: String,
@@ -63,7 +70,8 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
         progress: RelationProgress = RelationProgress(),
         eligibleFor: RelationLevel? = nil,
         raiseBlockedUntil: Date? = nil,
-        canRaise: Bool? = nil
+        canRaise: Bool? = nil,
+        accessLevel: RelationLevel? = nil
     ) {
         self.userId = userId
         self.effectiveLevel = effectiveLevel
@@ -73,10 +81,11 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
         self.eligibleFor = eligibleFor
         self.raiseBlockedUntil = raiseBlockedUntil
         self.canRaise = canRaise
+        self.accessLevel = accessLevel
     }
 
     private enum CodingKeys: String, CodingKey {
-        case userId, effectiveLevel, grantedByMe, since, progress, eligibleFor, raiseBlockedUntil, canRaise
+        case userId, effectiveLevel, grantedByMe, since, progress, eligibleFor, raiseBlockedUntil, canRaise, accessLevel
     }
 
     public init(from decoder: Decoder) throws {
@@ -90,6 +99,7 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
         eligibleFor = served == .public ? nil : served
         raiseBlockedUntil = Self.instant((try? c.decodeIfPresent(String.self, forKey: .raiseBlockedUntil)) ?? nil)
         canRaise = (try? c.decodeIfPresent(Bool.self, forKey: .canRaise)) ?? nil
+        accessLevel = c.contains(.accessLevel) ? RelationLevel(wire: try? c.decodeIfPresent(String.self, forKey: .accessLevel)) : nil
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -102,6 +112,7 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
         try c.encodeIfPresent(eligibleFor?.rawValue, forKey: .eligibleFor)
         try c.encodeIfPresent(raiseBlockedUntil.map(Self.wireInstant), forKey: .raiseBlockedUntil)
         try c.encodeIfPresent(canRaise, forKey: .canRaise)
+        try c.encodeIfPresent(accessLevel?.rawValue, forKey: .accessLevel)
     }
 
     /// Le lien après MA baisse : le niveau effectif et mon accord plafonnés au cran visé ; l'éligibilité servie ne
@@ -115,7 +126,8 @@ public struct RelationLink: Codable, CacheIdentifiable, Identifiable, Sendable, 
             progress: progress,
             eligibleFor: nil,
             raiseBlockedUntil: raiseBlockedUntil,
-            canRaise: canRaise
+            canRaise: canRaise,
+            accessLevel: accessLevel
         )
     }
 
