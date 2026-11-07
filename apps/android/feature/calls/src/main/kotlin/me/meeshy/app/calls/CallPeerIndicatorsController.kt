@@ -2,6 +2,7 @@ package me.meeshy.app.calls
 
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.call.CallCaptureKind
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
@@ -108,6 +109,7 @@ class CallPeerIndicatorsController @Inject constructor(
     private fun onScreenCaptureAlert(alert: CallScreenCaptureAlertPayload) {
         val host = host ?: return
         if (host.callId.isBlank() || alert.callId != host.callId) return
+        if (alert.captureKind != CallCaptureKind.RECORDING) return
         indicators = indicators.copy(screenCapturing = alert.isCapturing)
         host.publish()
     }

@@ -15,6 +15,10 @@
     <string name="call_capture_faces">Ogni volto</string>
     <string name="call_capture_faces_saved">%1$d volti salvati</string>
     <string name="call_capture_failed">Impossibile salvare la cattura</string>
+    <string name="call_capture_journal_call_recording_started">La registrazione della chiamata è iniziata</string>
+    <string name="call_capture_journal_call_recording_stopped">La registrazione della chiamata si è interrotta</string>
+    <string name="call_capture_journal_recording">sta registrando lo schermo</string>
+    <string name="call_capture_journal_screenshot">ha catturato lo schermo</string>
     <string name="call_capture_no_video">Ancora nessuna immagine da catturare</string>
     <string name="call_capture_preview">Anteprima del montaggio</string>
     <string name="call_capture_saved">Cattura salvata</string>

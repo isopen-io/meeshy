@@ -30,11 +30,15 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
+import me.meeshy.sdk.model.call.CallCaptureKind
 import me.meeshy.sdk.model.call.CallDetailParticipantRow
 import me.meeshy.sdk.model.call.CallTranscriptLine
 import me.meeshy.sdk.model.call.CallTranscriptState
@@ -176,7 +180,10 @@ private fun TranscriptLines(state: CallTranscriptState.Ready, accentHex: String,
                 .padding(MeeshySpacing.md),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),
         ) {
-            state.lines.forEach { line -> TranscriptRow(line, showOriginal) }
+            state.lines.forEach { line ->
+                val kind = line.captureKind
+                if (kind == null) TranscriptRow(line, showOriginal) else CaptureRow(line, kind)
+            }
         }
         TranscriptDisclaimer()
         TranscriptDeletion(onDelete)
@@ -264,6 +271,43 @@ private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean) {
             ?.let { hexColor(it, MeeshyTheme.tokens.textPrimary) } ?: MeeshyTheme.tokens.textPrimary
         Text(text, style = MaterialTheme.typography.bodyMedium, color = textColor)
     }
+}
+
+/**
+ * #16665 — « Awa · a capturé l'écran » : the name (and its dot) in the author's colour,
+ * the phrase in secondary ink, never coloured; a call-recording bound names nobody.
+ */
+@Composable
+private fun CaptureRow(line: CallTranscriptLine, kind: CallCaptureKind) {
+    val phrase = stringResource(captureKindPhrase(kind))
+    val spoken = listOfNotNull(line.speakerName.takeIf { it.isNotBlank() }, phrase, line.elapsedLabel).joinToString(", ")
+    val scheme = if (isSystemInDarkTheme()) DynamicColorGenerator.ThemeMode.DARK else DynamicColorGenerator.ThemeMode.LIGHT
+    val nameColor = hexColor(CallSpeakerColor.hex(line.speakerId.ifBlank { line.speakerName }, scheme), MeeshyTheme.tokens.textPrimary)
+    val sentence = buildAnnotatedString {
+        if (line.speakerName.isNotBlank()) {
+            withStyle(SpanStyle(color = nameColor, fontWeight = FontWeight.SemiBold)) { append("${line.speakerName} · ") }
+        }
+        withStyle(SpanStyle(color = MeeshyTheme.tokens.textSecondary)) { append(phrase) }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics { contentDescription = spoken },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(sentence, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        line.elapsedLabel?.let { elapsed ->
+            Spacer(Modifier.width(MeeshySpacing.xsPlus))
+            Text(elapsed, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted)
+        }
+    }
+}
+
+private fun captureKindPhrase(kind: CallCaptureKind): Int = when (kind) {
+    CallCaptureKind.SCREENSHOT -> R.string.call_capture_journal_screenshot
+    CallCaptureKind.RECORDING -> R.string.call_capture_journal_recording
+    CallCaptureKind.CALL_RECORDING_STARTED -> R.string.call_capture_journal_call_recording_started
+    CallCaptureKind.CALL_RECORDING_STOPPED -> R.string.call_capture_journal_call_recording_stopped
 }
 
 private const val TRANSCRIPT_TINT_ALPHA = 0.08f

@@ -15,6 +15,10 @@
     <string name="call_capture_faces">كل وجه</string>
     <string name="call_capture_faces_saved">تم حفظ %1$d وجوه</string>
     <string name="call_capture_failed">تعذّر حفظ اللقطة</string>
+    <string name="call_capture_journal_call_recording_started">بدأ تسجيل المكالمة</string>
+    <string name="call_capture_journal_call_recording_stopped">توقّف تسجيل المكالمة</string>
+    <string name="call_capture_journal_recording">يسجّل الشاشة</string>
+    <string name="call_capture_journal_screenshot">التقط صورة للشاشة</string>
     <string name="call_capture_no_video">لا توجد صورة لالتقاطها بعد</string>
     <string name="call_capture_preview">معاينة التركيب</string>
     <string name="call_capture_saved">تم حفظ اللقطة</string>

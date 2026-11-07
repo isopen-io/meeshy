@@ -15,6 +15,10 @@
     <string name="call_capture_faces">Jedes Gesicht</string>
     <string name="call_capture_faces_saved">%1$d Gesichter gespeichert</string>
     <string name="call_capture_failed">Die Aufnahme konnte nicht gespeichert werden</string>
+    <string name="call_capture_journal_call_recording_started">Die Aufnahme des Anrufs hat begonnen</string>
+    <string name="call_capture_journal_call_recording_stopped">Die Aufnahme des Anrufs wurde beendet</string>
+    <string name="call_capture_journal_recording">nimmt den Bildschirm auf</string>
+    <string name="call_capture_journal_screenshot">hat einen Screenshot gemacht</string>
     <string name="call_capture_no_video">Noch kein Bild zum Aufnehmen</string>
     <string name="call_capture_preview">Collage-Vorschau</string>
     <string name="call_capture_saved">Aufnahme gespeichert</string>

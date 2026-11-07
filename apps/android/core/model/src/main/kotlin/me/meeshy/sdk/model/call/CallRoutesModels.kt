@@ -107,9 +107,10 @@ data class CallTranscriptPage(
     val total: Int = 0,
     val hasMore: Boolean = false,
     val segments: List<PersistedTranscriptSegment> = emptyList(),
+    val captures: List<PersistedTranscriptCapture> = emptyList(),
 ) {
     override fun toString(): String =
-        "CallTranscriptPage(callId=$callId, total=$total, hasMore=$hasMore, segments=${segments.size})"
+        "CallTranscriptPage(callId=$callId, total=$total, hasMore=$hasMore, segments=${segments.size}, captures=${captures.size})"
 }
 
 /** `data` de `DELETE /calls/history/{callId}` — l'appel quitte le journal de CET utilisateur seulement. */

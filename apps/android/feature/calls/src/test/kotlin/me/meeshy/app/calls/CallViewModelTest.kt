@@ -1774,8 +1774,8 @@ class CallViewModelTest {
     private fun qualityAlert(callId: String = "call-9") =
         CallQualityAlertPayload(callId = callId, participantId = "p2", metric = "rtt", value = 900.0, threshold = 500.0)
 
-    private fun captureAlert(callId: String = "call-9", capturing: Boolean = true) =
-        CallScreenCaptureAlertPayload(callId = callId, participantId = "p2", isCapturing = capturing)
+    private fun captureAlert(callId: String = "call-9", capturing: Boolean = true, kind: String? = null) =
+        CallScreenCaptureAlertPayload(callId = callId, participantId = "p2", isCapturing = capturing, kind = kind)
 
     private fun segment(callId: String = "call-9", text: String = "bonjour", translated: String? = "hello") =
         CallTranslatedSegmentPayload(
@@ -1817,6 +1817,14 @@ class CallViewModelTest {
         assertThat(vm.state.value.isPeerScreenCapturing).isTrue()
 
         screenCaptureAlerts.emit(captureAlert(capturing = false))
+        assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
+    }
+
+    @Test
+    fun `a peer screenshot never raises the persistent recording banner (#16665)`() = runTest {
+        val vm = vm().connect()
+        screenCaptureAlerts.emit(captureAlert(capturing = true, kind = "screenshot"))
+
         assertThat(vm.state.value.isPeerScreenCapturing).isFalse()
     }
 

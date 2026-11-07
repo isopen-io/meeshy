@@ -405,6 +405,19 @@ class CallSignalMapperTest {
     }
 
     @Test
+    fun `screenCaptureAlert reads the capture kind and the capturer (#16665)`() {
+        val alert = CallSignalMapper.screenCaptureAlert("""{"callId":"c1","participantId":"p2","userId":"u2","isCapturing":true,"kind":"screenshot"}""")
+        assertThat(alert?.userId).isEqualTo("u2")
+        assertThat(alert?.captureKind).isEqualTo(CallCaptureKind.SCREENSHOT)
+    }
+
+    @Test
+    fun `screenCaptureAlert without a kind speaks of a screen recording`() {
+        val alert = CallSignalMapper.screenCaptureAlert("""{"callId":"c1","isCapturing":true}""")
+        assertThat(alert?.captureKind).isEqualTo(CallCaptureKind.RECORDING)
+    }
+
+    @Test
     fun `screenCaptureAlert returns null for a frame missing the capture flag`() {
         assertThat(CallSignalMapper.screenCaptureAlert("""{"callId":"c1","participantId":"p2"}""")).isNull()
     }
