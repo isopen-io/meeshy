@@ -46,6 +46,9 @@ enum MessageAccessibilityLabelComposer {
         if let chip = content.viewOnceChipState {
             parts.append(ViewOnceChip.accessibilityLabel(for: chip))
             parts.append(content.meta.timeString)
+            if content.isMe {
+                parts.append(deliveryStatusAccessibilityLabel(content.meta.deliveryStatus))
+            }
             parts.append(contentsOf: MessageProtectionChrome.accessibilityLabels(for: content.chromeProtection))
             return parts.joined(separator: ", ")
         }

@@ -33,7 +33,9 @@
  *     retour ;
  *  7. hors ligne, la liste reste lisible et le dit, et la création ne part pas ;
  *     la pastille de synchronisation ne recouvre pas la recherche (#6401) ;
- *  8. aucune erreur de page.
+ *  8. les membres (#6375) : le détail y mène, les rôles se lisent AA, un
+ *     administrateur repasse un modérateur membre et retire un membre confirmé ;
+ *  9. aucune erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -343,6 +345,51 @@ try {
       await page.waitForURL('**/c/c-deploiement');
       check(true, `${label} : une conversation ouvre son fil`);
       await page.goBack();
+      await page.waitForSelector('[data-community-hero]');
+      // LES MEMBRES (#6375) : le détail y mène, les rôles se lisent AA, et un administrateur
+      // (le lecteur a créé « Équipe déploiement ») change un rôle et retire un membre, au geste.
+      await page.click('[data-community-members-link]');
+      await page.waitForURL('**/communities/m-deploiement/members');
+      await page.waitForSelector('[data-community-member]');
+      const sections = await page.$$eval('[data-community-member-section]', (els) => els.map((el) => el.getAttribute('data-community-member-section')));
+      check(JSON.stringify(sections) === JSON.stringify(['admin', 'moderator', 'member']), `${label} : les membres se rangent par rôle (${JSON.stringify(sections)})`);
+      const managed = await page.$$eval('[data-community-member]', (els) =>
+        els.filter((el) => el.querySelector('[data-community-member-manage]') !== null).map((el) => el.getAttribute('data-community-member')),
+      );
+      check(
+        JSON.stringify(managed) === JSON.stringify(['u-amina', 'u-kwame', 'u-ines', 'u-yuki']),
+        `${label} : ni sa propre ligne ni celle du créateur n'offrent de geste (${JSON.stringify(managed)})`,
+      );
+      const membersRest = await reachAtRest(page, REACH);
+      const membersBlocked = membersRest.controls.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
+      check(membersRest.controls.length >= 3 && membersBlocked.length === 0, `${label} : le retour et chaque « Gérer » s'atteignent, 44 au moins — ${JSON.stringify(membersBlocked)}`);
+      const memberInks = {
+        titre: await contrastOf(page, 'header h1'),
+        nom: await contrastOf(page, '[data-community-member="u-amina"] .text-body'),
+        admin: await contrastOf(page, '[data-community-member-role="admin"]'),
+        moderateur: await contrastOf(page, '[data-community-member-role="moderator"]'),
+        membre: await contrastOf(page, '[data-community-member-role="member"]'),
+        section: await contrastOf(page, '#community-members-admin'),
+      };
+      const memberFaibles = Object.entries(memberInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(memberFaibles.length === 0, `${label} : chaque texte des membres tient AA — ${JSON.stringify(memberInks)}`);
+      await capture(page, `communaute-membres-${slug}`);
+      await page.click('[data-community-member="u-kwame"] [data-community-member-manage]');
+      check(
+        (await page.getAttribute('[data-community-member="u-kwame"] [data-community-member-manage]', 'aria-expanded')) === 'true',
+        `${label} : « Gérer » se déplie et le dit`,
+      );
+      await page.click('[data-community-member="u-kwame"] [data-community-member-make="member"]');
+      await page.waitForSelector('[data-community-member-section="member"] [data-community-member="u-kwame"]');
+      check(true, `${label} : repasser membre range la ligne sous « Membres »`);
+      await page.click('[data-community-member="u-yuki"] [data-community-member-manage]');
+      await page.click('[data-community-member="u-yuki"] [data-community-member-remove]');
+      await page.waitForSelector('[data-confirm-dialog="community-member-remove"]');
+      check(((await textOf(page, '[data-confirm-dialog="community-member-remove"]')) ?? '').includes('Yuki Tanaka'), `${label} : le retrait se confirme, en nommant le membre`);
+      await page.click('[data-confirm-dialog="community-member-remove"] [data-confirm="confirm"]');
+      await page.waitForSelector('[data-community-member="u-yuki"]', { state: 'detached' });
+      check((await page.$('[data-community-members-failure]')) === null, `${label} : le retrait part sans erreur, et la ligne disparaît`);
+      await page.click('[data-community-members-back]');
       await page.waitForSelector('[data-community-hero]');
       await page.goto(`${BASE}/communities/inconnue`, { waitUntil: 'load' });
       await page.waitForSelector('[data-community-refused]');

@@ -158,3 +158,38 @@ socket jusqu'au client.
    qu'il est remplacé dans la même ligne, sur web, iOS et Android.
 2. Les deux restes ci-dessus, en issues s'ils tiennent.
 3. Lire `call_caption_translation_seconds` sur le staging.
+
+## Cycle 4 — 2026-11-07
+
+- **Base** : `origin/dev` @ `f57a6a076` (le cycle 3, #16618, y est fusionné).
+- **Branche** : `claude/intelligent-edison-y68gfr`.
+- **Objectif** : #16622, sous #3722. C'est la piste 2 du cycle 3.
+- **Constat** : le relais abandonne la traduction d'un sous-titre à 10 s, mais le client ZMQ
+  gardait son délai générique (30 s) avec renvois. Le même taskId repartait au traducteur à
+  +30, +60, +90 et +120 s (5 envois mesurés), précisément quand le traducteur est lent.
+- **Livré** : `translateText` / `sendTranslationRequest` acceptent un `TranslationDeadline`
+  optionnel. Le relais leur passe `CALL_CAPTION_TRANSLATION_TIMEOUT_MS` (10 s, seule source,
+  partagée avec son propre minuteur) avec `retryEnabled: false`. Les autres appelants ne changent pas.
+- **Tests** : `ZmqTranslationClient.callerDeadline.test.ts` (3) et
+  `call-caption-translation-deadline.test.ts` (3). Rouge prouvé sur le code d'avant : 5 sur 6
+  échouent, le sixième est le témoin de non-régression « renvoi à 30 s sans option ». Suites
+  socketio, ZMQ, métriques et traduction de messages : 238 suites, 3 396 témoins. `tsc` 0.
+  Ces chiffres ont été relevés par l'agent et par la QA, et j'ai moi-même relancé les 4 suites touchées (25/25).
+- **QA** : favorable avec réserves. Le disjoncteur n'est pas touché (20 expirations,
+  `cbConsecutiveErrors === 0`) et aucun texte de sous-titre n'est journalisé.
+
+### Limites connues
+
+- Un identifiant `call-<callId>-<startMs>` est pris pour un `Message.id` par
+  `MessageTranslationService`. Chaque traduction réussie fait une lecture Mongo perdue et un warn.
+  Chaque expiration (désormais à 10 s) laisse un `logger.error`, incrémente le compteur d'erreurs
+  des messages et émet un `translation:failed` vers une salle vide. → #16625.
+
+### Cycle suivant : par où reprendre
+
+1. #16625 : petit lot passerelle, à fort ratio. Vérifier d'abord comment le traducteur Python
+   traite le `messageId` avant de choisir entre un espace de noms et un filtre côté passerelle.
+2. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613 (l'original d'abord, puis la traduction dans la même ligne).
+3. Piste 3 du cycle 3 (N requêtes ZMQ par segment au lieu d'une requête multi-langues) : mesurer
+   d'abord côté traducteur.
