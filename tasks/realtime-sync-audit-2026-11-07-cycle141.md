@@ -223,12 +223,84 @@ de la laisser passer au vert — exactement ce pour quoi il est écrit. **Une
 mesure faite sous contention n'est pas une mesure** ; la suite complète s'est
 rejouée seule.
 
+## L'audit adversarial a trouvé que mon correctif était à MOITIÉ livré
+
+La directive du `CLAUDE.md` racine fait passer les lots d'authentification par
+`auditeur-adversarial` avant fusion. Lot C y est allé, et il en est revenu avec
+un **défaut bloquant que ma propre décision de contrat avait créé**.
+
+### Le défaut — un contrat OPTIONNEL ne se mesure pas, il se contente
+
+J'avais rendu `OfflineParticipantQueueDeps.connectedUsers.get` **optionnel**,
+« par décision, fail-OPEN », en justifiant la tolérance par les DOUBLES DE
+TEST : une carte réduite à `has` garderait le comportement d'avant le lot.
+
+`MeeshySocketIOHandler.ts:122` passait `new Set(manager.getConnectedUsers())`.
+`getConnectedUsers()` rend `string[]` ; un `Set` répond `has` et **n'a pas
+`get`**. Le gate retombait donc sur `connectedUsers.has(…)` seul, sur les
+**quatre** chemins de `message:attachment-updated`. Un vocal dont Whisper finit
+la transcription partait sur une room que le destinataire n'avait pas pu
+rejoindre, et **rien n'était enfilé**. Le défaut même que le lot nomme, sur le
+transport que le lot ne couvrait pas — et l'asymétrie était totale AU SEIN du
+même événement, le manager appelant le même helper avec sa vraie `Map`.
+
+> **« Optionnel » dans un contrat de dépendance ne veut pas dire « tolérant » :
+> il veut dire « muet ».** L'arbitrage fail-open appartient à une ENTRÉE de
+> file — une donnée qu'on peut examiner — jamais à la forme d'un collaborateur,
+> où il ne fait que supprimer le signal. Requis, le compilateur a nommé les
+> quatre sites en une compilation.
+
+### Et mon témoin CERTIFIAIT le trou
+
+Le lot avait ajouté « un connectedUsers sans `get` reste accepté — l'absence de
+marqueur vaut joignable », avec un doc-comment présentant la forme réduite comme
+un double plausible. Il était vert, il l'aurait resté, et il documentait le
+défaut comme un choix. C'est mot pour mot la forme que le dépôt décrit :
+« poser une surface de double pour empêcher une route de tomber, c'est
+supprimer le seul signal qui la ferait réparer ».
+
+> La question à poser à tout témoin qui ÉTEND la tolérance d'un contrat est :
+> **« la forme que je viens de déclarer acceptable, qui la passe en
+> PRODUCTION ? »** Je ne l'avais pas posée ; je l'avais supposée.
+
+### Les trois autres constats, non bloquants
+
+| # | constat | suite |
+|---|---|---|
+| D2 | la LECTURE des participants qui lève laisse la socket sans room ET sans marqueur — pire que le cas couvert, et inexprimable par un `ReadonlySet` d'ids | #16719 |
+| D3 | le marqueur est PERDU au départ de l'appareil sain (`_handleDisconnect` recopie l'entrée du socket parti) ; et il s'arme à tort au départ inverse, pour toute la vie d'une socket mal jointe | #16726 |
+| D4 | Android lit `clientMessageId` DU FIL pour propager les citations à l'édition, là où iOS lit la clé LOCALE — usage MESURÉ, donc nommé (#9223) | #16727 |
+
+**D2 et D3 ne sont pas des régressions** — ces chemins étaient déjà fail-open —
+mais le doc-comment que le lot venait d'écrire AFFIRMAIT l'inverse, au présent,
+en tête du champ. Il énumère désormais ce que le marqueur NE couvre PAS.
+
+> **Un invariant annoncé plus fort qu'il n'est vaut moins que pas d'invariant :
+> personne n'ira vérifier derrière.** C'est la même famille que « un
+> commentaire qui ÉNONCE une contrainte est une AFFIRMATION », appliquée non à
+> une contrainte héritée mais à celle qu'on vient d'écrire soi-même.
+
+### Ce que l'audit a CHERCHÉ et n'a pas trouvé
+
+Utile à consigner, parce qu'une absence vérifiée vaut une mesure : lot B ne
+laisse `senderId` atteindre aucune requête, clé de map ou comparaison en aval
+(deux occurrences seulement après le gate) ; ses six appelants sourcent tous
+l'auteur d'une colonne NON NULLE, et l'auteur ne reçoit pas sa propre pastille
+(`computeUnreadCounts` soustrait depuis la BASE) ; lot A ne perd aucun champ au
+spread, prouvé au TYPE sous le `tsconfig` réel (`Omit` y est une identité, et
+`keyof` de l'objet reconstruit est égal à `keyof` du membre) ; les deux
+`SocketUser` d'`origin/dev` étaient identiques à un mot de doc-comment près ;
+et `unreachableConversations` ne fuit sur aucun fil.
+
 ## Ce qui reste ouvert
 
 | issue | ce qui reste |
 |---|---|
 | **#16688** | la convergence multi-appareil : la file est par UTILISATEUR, un appareil hors ligne ne converge pas si un autre était connecté. Ses deux moitiés se décident ensemble, et la seconde est une décision de produit. |
 | **#16706** | déposée au cycle 140 : le clair d'un message détruit survit dans Redis jusqu'au TTL de 48 h, et `peek` est un second lecteur sans garde. |
+| **#16726** | le marqueur de joignabilité est perdu au départ de l'appareil sain (audit D3). |
+| **#16727** | Android lit le `clientMessageId` du FIL pour la propagation de citation (audit D4). |
+| **#16721** | `AuthHandler.ts` est à une ligne du plafond de taille. |
 | **#16719** (ouverte ici) | `_joinUserConversations` rend `[]` quand la LECTURE des participants lève : la socket n'a rejoint AUCUNE room et aucun marqueur n'est posable, puisqu'on ne peut pas nommer des conversations jamais chargées. Classe distincte de #16687 — et sa difficulté est l'arbitrage, pas le code : le fail-open actuel est DÉLIBÉRÉ, il protège d'une tempête de reconnexions, et le fermer ferait enfiler tout le trafic des comptes qui se reconnectent dans la fenêtre d'une base indisponible. |
 
 ## Dimensions
