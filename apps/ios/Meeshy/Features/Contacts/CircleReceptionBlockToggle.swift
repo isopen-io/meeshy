@@ -2,30 +2,43 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// L'interrupteur ACTIF « Bloquer ses Bring » de la fiche d'un lien (#13936). Les trois autres réglages restent derrière
-/// leur drapeau tant que leur lot n'est pas livré.
-struct CircleBringBlockToggle: View {
-    @StateObject private var viewModel: CircleBringBlockViewModel
+/// L'interrupteur ACTIF d'une préférence de réception, sur la fiche d'un lien : « Bloquer ses Bring » (#13936) et
+/// « Couper son talkie » (#16673). Les autres réglages restent derrière leur drapeau tant que leur lot n'est pas livré.
+struct CircleReceptionBlockToggle: View {
+    @StateObject private var viewModel: CircleReceptionBlockViewModel
     let title: String
+    let detail: String?
+    let identifier: String
 
-    init(userId: String, title: String) {
-        _viewModel = StateObject(wrappedValue: CircleBringBlockViewModel(userId: userId))
+    init(userId: String, setting: RelationReceptionSetting, title: String, detail: String? = nil, identifier: String) {
+        _viewModel = StateObject(wrappedValue: CircleReceptionBlockViewModel(userId: userId, setting: setting))
         self.title = title
+        self.detail = detail
+        self.identifier = identifier
     }
 
     var body: some View {
-        Toggle(title, isOn: Binding(
-            get: { viewModel.blocked },
-            set: { next in Task { await viewModel.setBlocked(next) } }
-        ))
-        .disabled(viewModel.isSaving)
-        .frame(minHeight: MeeshyControlSize.tapTarget)
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            Toggle(title, isOn: Binding(
+                get: { viewModel.blocked },
+                set: { next in Task { await viewModel.setBlocked(next) } }
+            ))
+            .disabled(viewModel.isSaving)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
+            .accessibilityHint(detail ?? "")
+            .accessibilityIdentifier(identifier)
+            if let detail {
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+        }
         .task(id: viewModel.userId) { await viewModel.load() }
         .adaptiveOnChange(of: viewModel.notice) { _, new in
             guard let new else { return }
             FeedbackToastManager.shared.showError(new)
             viewModel.notice = nil
         }
-        .accessibilityIdentifier("circles.settings.blockBring")
     }
 }
