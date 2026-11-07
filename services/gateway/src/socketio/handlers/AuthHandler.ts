@@ -412,12 +412,8 @@ export class AuthHandler {
     // #3706 — la room de l'appareil E2EE lié à CETTE session : ses seules enveloppes y arrivent.
     await joinE2EEDeviceRoom(socket, this.prisma, { userId: user.id, sessionId: decoded.sid });
 
-    // #16687 — le verdict des jonctions décide de ce que la file hors ligne
-    // croit de cette socket. Posé AVANT l'inscription : `_registerUser` range
-    // `socketUser` tel quel dans `connectedUsers`, qui est ce que le gate lit.
     const failedRooms = await this._joinUserConversations(socket, user.id, false);
     if (failedRooms.length > 0) socketUser.unreachableConversations = new Set(failedRooms);
-
     const isFirstSocket = this._registerUser(user.id, socketUser, socket);
     scheduleTokenExpiry(socket, decoded.exp);
     // #10440 — le socket n'est plus celui d'un invité : le minuteur de lien
@@ -635,11 +631,7 @@ export class AuthHandler {
       });
     }
 
-    // #16687 — ce verdict était journalisé et rien de plus. Un invité n'a
-    // qu'UNE conversation : « une room échouée » vaut ici la TOTALITÉ de sa
-    // livraison temps réel, et la file est son seul recours.
     if (guestJoinFailed.length > 0) socketUser.unreachableConversations = new Set(guestJoinFailed);
-
     const isFirstSocket = this._registerUser(participant.id, socketUser, socket);
     this.guestLinkWatch.schedule(socket, participant, linkExpiresAt);
 
@@ -962,21 +954,6 @@ export class AuthHandler {
     return pending;
   }
 
-  /**
-   * Rejoint les rooms de conversation de ce compte et REND celles qui ont
-   * échoué après réessais (#16687).
-   *
-   * Elle rendait `void`, et son appelant n'avait donc AUCUN accès au verdict :
-   * l'échec était journalisé ici et la socket inscrite joignable là-bas. C'est
-   * la porte inscrite qui était la plus mal placée des deux — la porte invitée
-   * CAPTURAIT déjà son verdict pour le journaliser.
-   *
-   * Le `catch` reste fail-OUVERT et rend `[]` : une lecture de participants qui
-   * LÈVE ne nous apprend rien sur les rooms, et on ne peut pas nommer des
-   * conversations qu'on n'a jamais chargées. Ce cas-là — « la socket n'a rejoint
-   * AUCUNE room parce que la liste est tombée » — est distinct de celui que ce
-   * lot ferme, et il n'a pas de marqueur possible par conversation.
-   */
   private async _joinUserConversations(socket: Socket, userId: string, isAnonymous: boolean): Promise<string[]> {
     try {
       let conversations: { conversationId: string }[] = [];
