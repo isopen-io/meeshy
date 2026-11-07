@@ -45,6 +45,7 @@ class BringRingService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var player: MediaPlayer? = null
     private var playing: String? = null
+    private var lastStartId: Int = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -54,6 +55,7 @@ class BringRingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        lastStartId = startId
         val push = state.current.value
         if (push != null) {
             promote(push)
@@ -148,7 +150,9 @@ class BringRingService : Service() {
         stopSound()
         runCatching { vibrator()?.cancel() }
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        // Le DERNIER démarrage seulement : un second Bring arrivé pendant l'arrêt a déjà demandé un démarrage au premier
+        // plan ; `stopSelf()` le tuerait avant sa promotion (« did not then call startForeground »), et il ne sonnerait pas.
+        stopSelfResult(lastStartId)
     }
 
     override fun onDestroy() {

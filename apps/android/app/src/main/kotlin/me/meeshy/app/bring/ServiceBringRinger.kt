@@ -3,6 +3,8 @@ package me.meeshy.app.bring
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import me.meeshy.sdk.model.relation.BringRingPush
@@ -19,7 +21,10 @@ import javax.inject.Singleton
 class ServiceBringRinger @Inject constructor(
     @ApplicationContext private val context: Context,
     private val state: BringRingState,
+    private val stopper: BringStopper,
 ) : BringRinger {
+
+    private val expiry = Handler(Looper.getMainLooper())
 
     override fun ring(push: BringRingPush) {
         state.ring(push)
@@ -28,7 +33,10 @@ class ServiceBringRinger @Inject constructor(
         }.onFailure { failure ->
             Timber.w("Bring service refused (%s): notification only", failure.javaClass.simpleName)
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.notify(BringRingNotification.NOTIFICATION_ID, BringRingNotification.build(context, push, System.currentTimeMillis()))
+            val now = System.currentTimeMillis()
+            manager.notify(BringRingNotification.NOTIFICATION_ID, BringRingNotification.build(context, push, now))
+            // Sans service, personne d'autre ne tient l'échéance : l'état se libère à l'expiration.
+            expiry.postDelayed({ stopper.expire(push.bringId) }, (push.expiresAtMillis - now).coerceAtLeast(0L))
         }
     }
 

@@ -21,6 +21,23 @@ class PushTokenRequestTest {
     }
 
     @Test
+    fun `l enregistrement du jeton part avec la version et le bundle du build en cours`() {
+        val repository: me.meeshy.sdk.notification.NotificationRepository = io.mockk.mockk(relaxed = true)
+
+        PushTokenHandler(repository).onTokenRefresh("tok")
+
+        io.mockk.coVerify(timeout = 5_000) {
+            repository.registerDeviceToken(
+                match<RegisterDeviceTokenRequest> {
+                    it.token == "tok" &&
+                        it.appVersion == me.meeshy.app.BuildConfig.VERSION_NAME &&
+                        it.bundleId == me.meeshy.app.BuildConfig.APPLICATION_ID
+                },
+            )
+        }
+    }
+
+    @Test
     fun `le bundle du build en cours se lit natif pour la passerelle`() {
         assertThat(me.meeshy.app.BuildConfig.APPLICATION_ID).matches("^me\\.meeshy\\.(app|android)(\\..*)?$")
     }

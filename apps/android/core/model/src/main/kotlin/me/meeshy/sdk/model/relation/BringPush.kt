@@ -85,7 +85,7 @@ class BringRingLedger private constructor(private val entries: Map<String, Entry
 data class BringPushDecision(val route: BringPushRoute, val ledger: BringRingLedger)
 
 /**
- * La loi PURE du Bring reçu : un push `bring` sonne une fois, jusqu'à son expiration — jamais au-delà de la fenêtre
+ * La loi PURE du Bring reçu : un push `bring` sonne une fois, le temps que le serveur lui a donné — jamais au-delà de la fenêtre
  * (`BRING_RING_WINDOW_MS`), même si la charge le demande ; un push `bring_stopped` arrête et s'inscrit au registre.
  */
 object BringPushRouter {
@@ -115,8 +115,9 @@ object BringPushRouter {
             return BringPushDecision(BringPushRoute.Ignore(BringPushRoute.Reason.MALFORMED), ledger)
         }
         ledger.seen(bringId, nowMillis)?.let { return BringPushDecision(BringPushRoute.Ignore(it), ledger) }
-        val expiresAt = expiresAtOf(data["expiresAt"], nowMillis)
-        if (expiresAt <= nowMillis) return BringPushDecision(BringPushRoute.Ignore(BringPushRoute.Reason.EXPIRED), ledger)
+        val ringFor = ringDurationOf(sentAt = data["sentAt"], expiresAt = data["expiresAt"])
+        if (ringFor <= 0L) return BringPushDecision(BringPushRoute.Ignore(BringPushRoute.Reason.EXPIRED), ledger)
+        val expiresAt = nowMillis + ringFor
         val push = BringRingPush(
             bringId = bringId,
             fromUserId = fromUserId,
@@ -129,11 +130,20 @@ object BringPushRouter {
         return BringPushDecision(BringPushRoute.Ring(push), ledger.remember(bringId, nowMillis))
     }
 
-    private fun expiresAtOf(raw: String?, nowMillis: Long): Long {
-        val ceiling = nowMillis + RING_WINDOW_MS
-        val parsed = raw?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() } ?: return ceiling
-        return minOf(parsed, ceiling)
+    /**
+     * La DURÉE de sonnerie, lue sur les deux horloges du SERVEUR (`expiresAt − sentAt`) et comptée à la réception :
+     * l'horloge de l'appareil n'entre jamais dans la décision. Un téléphone qui avance de cinq minutes sonne quand même
+     * — une urgence perdue sans un signe serait le pire défaut. Le TTL FCM écarte déjà une livraison trop tardive.
+     * Bornée à la fenêtre ; une charge illisible sonne la fenêtre entière.
+     */
+    private fun ringDurationOf(sentAt: String?, expiresAt: String?): Long {
+        val sent = sentAt.epochMillisOrNull()
+        val expires = expiresAt.epochMillisOrNull()
+        if (sent == null || expires == null) return RING_WINDOW_MS
+        return minOf(expires - sent, RING_WINDOW_MS)
     }
+
+    private fun String?.epochMillisOrNull(): Long? = this?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
 
     private fun String?.nonBlank(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 }

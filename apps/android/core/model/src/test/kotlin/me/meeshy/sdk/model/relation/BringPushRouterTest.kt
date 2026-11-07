@@ -15,19 +15,18 @@ class BringPushRouterTest {
     private fun ring(
         bringId: String = "b1",
         expiresAt: String? = iso(now + 120_000),
-        vararg extra: Pair<String, String>,
+        sentAt: String = iso(now),
     ): Map<String, String> = buildMap {
         put("type", "bring")
         put("bringId", bringId)
         put("fromUserId", "alice")
         put("fromName", "Alice")
         put("fromAvatar", "")
-        put("sentAt", iso(now))
+        put("sentAt", sentAt)
         expiresAt?.let { put("expiresAt", it) }
         put("title", "Alice fait sonner votre téléphone")
         put("body", "Touchez pour arrêter")
         put("stopLabel", "Arrêter")
-        putAll(extra)
     }
 
     private fun stopped(bringId: String = "b1") = mapOf("type" to "bring_stopped", "bringId" to bringId, "reason" to "sender")
@@ -55,7 +54,7 @@ class BringPushRouterTest {
     }
 
     @Test
-    fun `une sonnerie deja expiree ne sonne pas`() {
+    fun `une sonnerie dont le serveur a fixe l expiration avant l envoi ne sonne pas`() {
         val route = BringPushRouter.route(ring(expiresAt = iso(now - 1)), now, BringRingLedger.EMPTY).route
 
         assertThat(route).isEqualTo(BringPushRoute.Ignore(BringPushRoute.Reason.EXPIRED))
@@ -70,6 +69,25 @@ class BringPushRouterTest {
         assertThat(missing.push.expiresAtMillis).isEqualTo(now + BringPushRouter.RING_WINDOW_MS)
         assertThat(garbage.push.expiresAtMillis).isEqualTo(now + BringPushRouter.RING_WINDOW_MS)
         assertThat(tooFar.push.expiresAtMillis).isEqualTo(now + BringPushRouter.RING_WINDOW_MS)
+    }
+
+    @Test
+    fun `l horloge de l appareil n entre pas dans la decision, un telephone en avance de cinq minutes sonne`() {
+        val serverNow = now - 5 * 60_000
+        val skewed = ring(sentAt = iso(serverNow), expiresAt = iso(serverNow + 120_000))
+
+        val route = BringPushRouter.route(skewed, now, BringRingLedger.EMPTY).route
+
+        assertThat((route as BringPushRoute.Ring).push.expiresAtMillis).isEqualTo(now + 120_000)
+    }
+
+    @Test
+    fun `la duree servie plus courte que la fenetre est tenue a partir de la reception`() {
+        val short = ring(sentAt = iso(now - 60_000), expiresAt = iso(now - 30_000))
+
+        val route = BringPushRouter.route(short, now, BringRingLedger.EMPTY).route
+
+        assertThat((route as BringPushRoute.Ring).push.expiresAtMillis).isEqualTo(now + 30_000)
     }
 
     @Test
