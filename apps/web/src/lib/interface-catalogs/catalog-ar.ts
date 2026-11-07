@@ -13,6 +13,7 @@ import arRowActions from './catalog-ar-row-actions';
 import arEngagement from './catalog-ar-engagement';
 import arCallShell from './catalog-ar-call-shell';
 import arCallJoin from './catalog-ar-call-join';
+import arCommunityMembership from './catalog-ar-community-membership';
 import arCallDecline from './catalog-ar-call-decline';
 import arCallFeedback from './catalog-ar-call-feedback';
 import arCallsErase from './catalog-ar-calls-erase';
@@ -228,6 +229,7 @@ const ar = {
   ...arEngagement,
   ...arCallShell,
   ...arCallJoin,
+  ...arCommunityMembership,
   ...arCallDecline,
   ...arCallFeedback,
   ...arCallsErase,

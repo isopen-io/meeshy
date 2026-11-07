@@ -36,7 +36,8 @@ export const communitySchema = {
     updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' },
     creator: { ...userMinimalSchema, description: 'Creator user info' },
     memberCount: { type: 'number', description: 'Number of members' },
-    conversationCount: { type: 'number', description: 'Number of conversations' }
+    conversationCount: { type: 'number', description: 'Number of conversations' },
+    currentUserRole: { type: 'string', nullable: true, description: "Reader's active role (admin, moderator, member); null when not a member. Served by GET /communities/:id" }
   }
 } as const;
 

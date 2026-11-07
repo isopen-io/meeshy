@@ -6,14 +6,17 @@ enum CommunityStubs {
         id: String = "c1",
         name: String = "Alpha",
         createdBy: String = "u-creator",
-        members: [APICommunityMember]? = nil
+        members: [APICommunityMember]? = nil,
+        currentUserRole: String? = nil
     ) -> APICommunity {
         let membersJSON = members
             .flatMap { try? JSONEncoder().encode($0) }
             .map { String(decoding: $0, as: UTF8.self) } ?? "null"
+        let roleJSON = currentUserRole.map { "\"\($0)\"" } ?? "null"
         let json = """
         {"id":"\(id)","identifier":"mshy_\(id)","name":"\(name)","isPrivate":false,
-         "createdBy":"\(createdBy)","createdAt":"2026-09-01T10:00:00.000Z","members":\(membersJSON)}
+         "createdBy":"\(createdBy)","createdAt":"2026-09-01T10:00:00.000Z","members":\(membersJSON),
+         "currentUserRole":\(roleJSON)}
         """
         return JSONStub.decode(json)
     }
@@ -120,7 +123,11 @@ final class MockCommunityService: CommunityServiceProviding, @unchecked Sendable
         throw MeeshyError.server(statusCode: 501, message: "unused")
     }
 
-    func getConversations(communityId: String) async throws -> [APIConversation] { try conversationsResult.get() }
+    private(set) var getConversationsCallCount = 0
+    func getConversations(communityId: String) async throws -> [APIConversation] {
+        getConversationsCallCount += 1
+        return try conversationsResult.get()
+    }
 
     func addConversation(communityId: String, conversationId: String) async throws -> APIConversation {
         addConversationCallCount += 1

@@ -32,6 +32,7 @@ import frRowActions from './catalog-fr-row-actions';
 import frEngagement from './catalog-fr-engagement';
 import frCallShell from './catalog-fr-call-shell';
 import frCallJoin from './catalog-fr-call-join';
+import frCommunityMembership from './catalog-fr-community-membership';
 import frCallDecline from './catalog-fr-call-decline';
 import frCallFeedback from './catalog-fr-call-feedback';
 import frCallsErase from './catalog-fr-calls-erase';
@@ -217,6 +218,7 @@ const fr = {
   ...frEngagement,
   ...frCallShell,
   ...frCallJoin,
+  ...frCommunityMembership,
   ...frCallDecline,
   ...frCallFeedback,
   ...frCallsErase,

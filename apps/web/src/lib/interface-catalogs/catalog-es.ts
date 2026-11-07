@@ -13,6 +13,7 @@ import esRowActions from './catalog-es-row-actions';
 import esEngagement from './catalog-es-engagement';
 import esCallShell from './catalog-es-call-shell';
 import esCallJoin from './catalog-es-call-join';
+import esCommunityMembership from './catalog-es-community-membership';
 import esCallDecline from './catalog-es-call-decline';
 import esCallFeedback from './catalog-es-call-feedback';
 import esCallsErase from './catalog-es-calls-erase';
@@ -228,6 +229,7 @@ const es = {
   ...esEngagement,
   ...esCallShell,
   ...esCallJoin,
+  ...esCommunityMembership,
   ...esCallDecline,
   ...esCallFeedback,
   ...esCallsErase,

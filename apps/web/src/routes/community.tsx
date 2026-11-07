@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, type InfiniteData } from '@tanstack/react-query';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { ApiError } from '@/lib/api/client';
@@ -11,8 +11,9 @@ import {
 } from '@/lib/api/communities';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
+import { performJoinCommunity, performLeaveCommunity } from '@/lib/api/community-actions';
 import { sessionStore } from '@/lib/api/session';
-import { findCachedCommunity } from '@/lib/communities/view';
+import { findCachedCommunity, membershipActionOf } from '@/lib/communities/view';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
@@ -32,6 +33,8 @@ import {
   CommunityRowsSkeleton,
   CommunityStats,
 } from '@/routes/communities-parts';
+import { CommunityMembershipAction, type MembershipFailure } from '@/routes/community-membership';
+import { href, navigate } from '@/routes/route-table';
 
 /**
  * **UNE COMMUNAUTÉ** (#6364) — miroir `CommunityDetailView.swift` : bannière et
@@ -43,10 +46,14 @@ import {
  * création, le geste a déjà écrit son détail. Le squelette n'est dessiné que
  * par un lien direct sur un cache vide.
  *
+ * **Rejoindre / Quitter** (#6378) se posent sous les compteurs, selon le rôle
+ * que le détail SERT au lecteur (`membershipActionOf`), optimistes avec retour
+ * arrière (`community-actions.ts`). Quitter, confirmé, ramène à la liste —
+ * comme iOS ferme l'écran — où la carte a déjà disparu.
+ *
  * **Ce que l'écran ne montre pas, parce que le web ne le sert pas encore** —
  * loi 4, un contrôle n'existe que s'il a un effet : Membres, Inviter, Réglages,
- * Rejoindre / Quitter, l'onglet Publications — #6375, #6376, #6377, #6378,
- * #6379 (D-60). Le
+ * l'onglet Publications — #6375, #6376, #6377, #6379 (D-60). Le
  * cœur « Réagir à la communauté » d'iOS n'a aucun effet, là-bas non plus.
  *
  * 403 et 404 rendent le MÊME refus (D-6) : un identifiant ne dit pas si une
@@ -60,6 +67,9 @@ export default function CommunityScreen() {
   const language = currentInterfaceLanguage();
   const online = useOnline();
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated');
+  const viewerId = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
+  const [membershipPending, setMembershipPending] = useState(false);
+  const [membershipFailure, setMembershipFailure] = useState<MembershipFailure | null>(null);
   const enabled = apiDeps.source === 'fixtures' || signedIn;
 
   const detail = useQuery(
@@ -90,6 +100,26 @@ export default function CommunityScreen() {
     enabled: conversations.hasNextPage && !conversations.isFetchingNextPage && !conversations.isFetchNextPageError,
     onReach: () => void conversations.fetchNextPage(),
   });
+
+  const actionDeps = { ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine };
+  const changeMembership = async (gesture: 'join' | 'leave') => {
+    if (community === undefined || membershipPending) return;
+    setMembershipPending(true);
+    setMembershipFailure(null);
+    if (gesture === 'join') {
+      const outcome = await performJoinCommunity({ community, deps: actionDeps });
+      setMembershipPending(false);
+      if (outcome.status !== 'joined') setMembershipFailure(outcome.status === 'refused' ? 'refused' : outcome.status === 'offline' ? 'offline' : 'join');
+      return;
+    }
+    const outcome = await performLeaveCommunity({ community, deps: actionDeps });
+    setMembershipPending(false);
+    if (outcome.status === 'left') {
+      navigate(href('communities'), true);
+      return;
+    }
+    setMembershipFailure(outcome.status === 'offline' ? 'offline' : 'leave');
+  };
 
   const refused = detail.error instanceof ApiError && (detail.error.status === 403 || detail.error.status === 404);
 
@@ -136,6 +166,15 @@ export default function CommunityScreen() {
             <div className="mx-auto grid max-w-xl gap-5 px-4 pb-24 pt-5">
               {online ? null : <CommunitiesOfflineNotice language={language} />}
               <CommunityStats language={language} community={community} />
+              <CommunityMembershipAction
+                language={language}
+                action={membershipActionOf(community, viewerId)}
+                pending={membershipPending}
+                online={online}
+                failure={membershipFailure}
+                onJoin={() => void changeMembership('join')}
+                onLeave={() => void changeMembership('leave')}
+              />
               <CommunityConversationsSection language={language}>{conversationBody}</CommunityConversationsSection>
             </div>
           </>

@@ -1,5 +1,5 @@
 import type { ApiResult } from './http';
-import type { CommunityConversationPage, CommunityPage, CommunitySummary, CreateCommunityBody } from './communities';
+import type { CommunityConversationPage, CommunityPage, CommunitySummary, CreateCommunityBody, MembershipGesture } from './communities';
 import { COMMUNITIES_PAGE_SIZE, searchTermOf } from './communities';
 import { VIEWER_ID } from './fixtures-base';
 
@@ -58,6 +58,27 @@ const INITIAL: readonly CommunitySummary[] = [
   },
 ];
 
+/**
+ * Une communauté PUBLIQUE dont le lecteur n'est pas membre (#6378) : absente de
+ * « mes communautés », elle s'ouvre par son lien direct
+ * (`/communities/mshy_randonneurs`) et se rejoint — c'est elle qui fait voir
+ * « Rejoindre » au gate navigateur.
+ */
+const OUTSIDE: readonly CommunitySummary[] = [
+  {
+    id: 'm-randonneurs',
+    identifier: 'mshy_randonneurs',
+    name: 'Randonneurs du Cap-Vert',
+    description: 'Sorties du dimanche et récits de sentier.',
+    avatar: null,
+    banner: null,
+    isPrivate: false,
+    createdBy: 'u-amina',
+    memberCount: 57,
+    conversationCount: 0,
+  },
+];
+
 const CONVERSATIONS: Readonly<Record<string, CommunityConversationPage>> = {
   'm-deploiement': {
     conversations: [
@@ -68,7 +89,10 @@ const CONVERSATIONS: Readonly<Record<string, CommunityConversationPage>> = {
   },
 };
 
-const state: { communities: readonly CommunitySummary[] } = { communities: INITIAL };
+const state: { communities: readonly CommunitySummary[]; outside: readonly CommunitySummary[] } = { communities: INITIAL, outside: OUTSIDE };
+
+const sameCommunity = (communityId: string) => (community: CommunitySummary) =>
+  community.id === communityId || community.identifier === communityId;
 
 const matches = (community: CommunitySummary, term: string): boolean => {
   const needle = term.toLowerCase();
@@ -84,7 +108,29 @@ export function fixtureCommunities(search: string, offset: number): CommunityPag
 }
 
 export function fixtureCommunity(communityId: string): CommunitySummary | null {
-  return state.communities.find((community) => community.id === communityId || community.identifier === communityId) ?? null;
+  const mine = state.communities.find(sameCommunity(communityId));
+  if (mine !== undefined) return { ...mine, viewerRole: mine.createdBy === VIEWER_ID ? 'admin' : 'member' };
+  const outside = state.outside.find(sameCommunity(communityId));
+  return outside === undefined || outside.isPrivate ? null : { ...outside, viewerRole: null };
+}
+
+/** Rejoindre / quitter, avec les refus de la passerelle (403 privée ou créateur, 409 déjà membre, 404 déjà parti). */
+export function fixtureChangeMembership(communityId: string, gesture: MembershipGesture): ApiResult<null> {
+  const mine = state.communities.find(sameCommunity(communityId));
+  const outside = state.outside.find(sameCommunity(communityId));
+  if (gesture === 'join') {
+    if (mine !== undefined) return { ok: false, status: 409, error: 'You are already a member of this community' };
+    if (outside === undefined) return { ok: false, status: 404, error: 'Community not found' };
+    if (outside.isPrivate) return { ok: false, status: 403, error: 'Cannot join a private community without an invite' };
+    state.outside = state.outside.filter((community) => community.id !== outside.id);
+    state.communities = [{ ...outside, memberCount: outside.memberCount + 1 }, ...state.communities];
+    return { ok: true, data: null };
+  }
+  if (mine === undefined) return { ok: false, status: 404, error: 'You are not a member of this community' };
+  if (mine.createdBy === VIEWER_ID) return { ok: false, status: 403, error: 'Community creator cannot leave their own community.' };
+  state.communities = state.communities.filter((community) => community.id !== mine.id);
+  state.outside = [{ ...mine, memberCount: Math.max(0, mine.memberCount - 1) }, ...state.outside];
+  return { ok: true, data: null };
 }
 
 export function fixtureCommunityConversations(communityId: string): CommunityConversationPage {
@@ -103,7 +149,7 @@ const slugOf = (name: string): string =>
 export function fixtureCreateCommunity(body: CreateCommunityBody): ApiResult<CommunitySummary> {
   const raw = body.identifier ?? slugOf(body.name);
   const identifier = raw.startsWith('mshy_') ? raw : `mshy_${raw}`;
-  if (state.communities.some((community) => community.identifier === identifier)) {
+  if ([...state.communities, ...state.outside].some((community) => community.identifier === identifier)) {
     return { ok: false, status: 409, error: `A community with identifier "${identifier}" already exists`, field: 'identifier' };
   }
   const created: CommunitySummary = {

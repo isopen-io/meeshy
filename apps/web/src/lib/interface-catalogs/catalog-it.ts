@@ -13,6 +13,7 @@ import itRowActions from './catalog-it-row-actions';
 import itEngagement from './catalog-it-engagement';
 import itCallShell from './catalog-it-call-shell';
 import itCallJoin from './catalog-it-call-join';
+import itCommunityMembership from './catalog-it-community-membership';
 import itCallDecline from './catalog-it-call-decline';
 import itCallFeedback from './catalog-it-call-feedback';
 import itCallsErase from './catalog-it-calls-erase';
@@ -228,6 +229,7 @@ const it = {
   ...itEngagement,
   ...itCallShell,
   ...itCallJoin,
+  ...itCommunityMembership,
   ...itCallDecline,
   ...itCallFeedback,
   ...itCallsErase,

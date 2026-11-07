@@ -13,6 +13,7 @@ import ptRowActions from './catalog-pt-row-actions';
 import ptEngagement from './catalog-pt-engagement';
 import ptCallShell from './catalog-pt-call-shell';
 import ptCallJoin from './catalog-pt-call-join';
+import ptCommunityMembership from './catalog-pt-community-membership';
 import ptCallDecline from './catalog-pt-call-decline';
 import ptCallFeedback from './catalog-pt-call-feedback';
 import ptCallsErase from './catalog-pt-calls-erase';
@@ -232,6 +233,7 @@ const pt = {
   ...ptEngagement,
   ...ptCallShell,
   ...ptCallJoin,
+  ...ptCommunityMembership,
   ...ptCallDecline,
   ...ptCallFeedback,
   ...ptCallsErase,
