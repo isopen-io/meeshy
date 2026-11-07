@@ -61,7 +61,9 @@ function CaptionLine({
   const content = (
     <>
       <strong style={{ color }}>{speaker} · </strong>
-      <span dir="auto">{shown}</span>
+      <span dir="auto" style={{ color }}>
+        {shown}
+      </span>
       {languages === null ? null : (
         <span className="ms-1.5 inline-block rounded px-1 align-middle text-check font-semibold tracking-wide" style={{ color: INK_2, border: `1px solid ${INK_2}` }} data-call-caption-languages="">
           {languages}

@@ -56,9 +56,9 @@ enum CallCaptionsCopy {
     }
 }
 
-/// Une phrase : le nom du locuteur dans SA couleur (la même que le liseré de
-/// sa vignette), l'étiquette « EN → FR » quand la ligne est traduite, le
-/// texte. Toucher une phrase traduite montre son original, et inversement.
+/// Une phrase : le nom du locuteur ET son texte dans SA couleur d'auteur (la
+/// même que le liseré de sa vignette, #16614), l'étiquette « EN → FR » quand
+/// la ligne est traduite. Toucher une phrase traduite montre son original, et inversement.
 struct CallCaptionRow: View {
     let line: CallCaptionLine
     var showsTime: Bool = false
@@ -84,9 +84,11 @@ struct CallCaptionRow: View {
                             .background(Capsule().fill(Color.white.opacity(MeeshyOpacity.light)))
                     }
                 }
+                // #16614 — le TEXTE porte aussi la couleur de son auteur,
+                // la même que son nom et que le liseré de sa vignette.
                 Text(line.text)
                     .font(.callout.weight(line.isFinal ? .regular : .light))
-                    .foregroundColor(.white)
+                    .foregroundColor(Color(hex: line.speakerColorHex))
                     .opacity(line.isFinal ? 1 : 0.7)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
