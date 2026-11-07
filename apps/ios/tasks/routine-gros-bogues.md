@@ -51,7 +51,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Piste : lire chaque ticket, vérifier qu'il n'est pas déjà corrigé sur dev, puis le traiter ou le fermer avec la preuve.
 
 ## OPUS-4 — Avant la connexion, « Filtres » ouvre un ancien panneau au lieu des « Effets de ma caméra »
-- Statut : à faire
+- Statut : fait (#16668) — reste la recette iPhone listée dans la PR
 - Signalé par : routine appels, le 2026-11-07
 - Point d'origine : APP-5
 - Constat : pendant la sonnerie sortante et la connexion d'un appel vidéo, le bouton « Filtres » (`Call/Views/CallView+States.swift:67-69` et `:122-124`, défini dans `CallView+Controls.swift:23-51`) bascule `showEffectsToolbar`, qui affiche l'ancien `CallEffectsOverlay` (`Call/Views/CallView.swift:413-421`) : une capsule à un seul bouton puis `VideoFiltersPanel` (`Main/Views/VideoFiltersPanel.swift`, curseurs et interrupteurs dans une feuille). Une fois l'appel établi, les mêmes réglages vivent dans le mode « Effets de ma caméra » (carrousel, `CallView+Mode.swift:8-33`, `CallModeControls.swift`, flou déjà présent `:214-240`). Deux interfaces pour la même chose selon le moment de l'appel. Le mode n'est monté que dans `connectedView` (`CallView+Connected.swift:39`), et sa scène lit `callManager.localVideoTrack` (`CallView+Connected.swift:588` → `CallManager+MediaControls.swift:110`, `webRTCService.localVideoTrack`).
