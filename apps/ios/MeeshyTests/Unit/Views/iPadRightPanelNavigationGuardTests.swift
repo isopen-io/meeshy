@@ -479,9 +479,9 @@ final class DetachedWindowsTests: XCTestCase {
     func test_theAppHasOneGatedMainWindow_andADetachedScene() throws {
         let app = try appSource("MeeshyApp.swift")
         XCTAssertTrue(app.contains("MainWindowGate {"), "la fenêtre principale passe par sa porte d'unicité")
-        XCTAssertTrue(app.contains("WindowGroup(id: DetachedWindowOpener.sceneId, for: DetachedWindowContent.self)"))
-        let order = try XCTUnwrap(app.range(of: "MainWindowGate {")).lowerBound
-            < (try XCTUnwrap(app.range(of: "WindowGroup(id: DetachedWindowOpener.sceneId")).lowerBound)
+        XCTAssertTrue(app.contains("id: DetachedWindowOpener.sceneId,\n            for: DetachedWindowContent.self,"))
+        let order = try XCTUnwrap(app.range(of: "WindowGroup(content: PrebuiltSceneContent(mainWindow).make)")).lowerBound
+            < (try XCTUnwrap(app.range(of: "        detachedWindows\n")).lowerBound)
         XCTAssertTrue(order, "la scène principale vient EN PREMIER : c'est elle qu'iPadOS ouvre par défaut")
     }
 
