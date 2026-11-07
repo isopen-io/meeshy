@@ -45,11 +45,13 @@ describe('repostOf.commentsDisabled (#16541)', () => {
   it('la SERT sur le fil : la projection de l’imbriqué ne la retire pas', async () => {
     const { withMentions } = await import('../../../../services/posts/postReferences');
     const { WIRE_BROADCAST } = await import('../../../../services/posts/storyEffectsV3');
-    const served = withMentions({
+    const repost = {
       id: 'repost-1',
+      postMentions: [],
       repostOf: { id: 'root-1', visibility: 'PUBLIC', moderationHiddenAt: null, deletedAt: null, commentsDisabled: true, author: null },
-    } as never, WIRE_BROADCAST) as { repostOf: Record<string, unknown> | null };
+    };
+    const served = withMentions(repost, WIRE_BROADCAST);
 
-    expect(served.repostOf?.['commentsDisabled']).toBe(true);
+    expect(served.repostOf).toMatchObject({ commentsDisabled: true });
   });
 });

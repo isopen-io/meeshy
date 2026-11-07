@@ -680,9 +680,11 @@ async function runScheme(colorScheme) {
       const declencheur = document.querySelector(selecteur)?.getBoundingClientRect();
       const entrees = [...(panneau?.querySelectorAll('[role="menuitem"]') ?? [])];
       const boite = panneau?.getBoundingClientRect();
+      const imager = document.querySelector('[data-comment-row="cm-st-2"] [data-comment-rail-image]')?.getBoundingClientRect();
       return {
         entrees: entrees.map((e) => e.getAttribute('data-comment-gesture')),
         hauteurs: entrees.map((e) => Math.round(e.getBoundingClientRect().height)),
+        imagerRail: imager === undefined ? null : [Math.round(imager.width), Math.round(imager.height)],
         declencheur: declencheur === undefined ? null : [Math.round(declencheur.width), Math.round(declencheur.height)],
         dessus: entrees.length > 0 && entrees.every((e) => {
           const r = e.getBoundingClientRect();
@@ -692,8 +694,14 @@ async function runScheme(colorScheme) {
       };
     }, plus);
     check(
-      JSON.stringify(menu.entrees) === '["copy","image","report"]' && menu.hauteurs.every((h) => h >= 44) && (menu.declencheur?.every((c) => c >= 44) ?? false),
-      `${tag} st-amie-2 : le « … » d'un commentaire d'autrui offre Copier, Imager, Signaler, cibles de 44 px (#8734) — ${JSON.stringify(menu)}`,
+      JSON.stringify(menu.entrees) === '["copy","report"]' && menu.hauteurs.every((h) => h >= 44) && (menu.declencheur?.every((c) => c >= 44) ?? false),
+      `${tag} st-amie-2 : le « … » d'un commentaire d'autrui offre Copier, Signaler, cibles de 44 px (#8734) — ${JSON.stringify(menu)}`,
+    );
+    /* « Imager » a quitté le « … » (#16541) : il vit à découvert dans le rail
+       de la rangée, en icône seule, cible de 44 px. */
+    check(
+      menu.imagerRail !== null && menu.imagerRail.every((c) => c >= 44),
+      `${tag} st-amie-2 : « Imager » est dans le RAIL du commentaire, cible de 44 px (#16541) — ${JSON.stringify(menu)}`,
     );
     check(menu.dessus && menu.dansEcran, `${tag} st-amie-2 : le menu se pose AU-DESSUS de la feuille, dans l'écran (#8734) — ${JSON.stringify(menu)}`);
     if (SHOT_DIR !== null) await page.screenshot({ path: `${SHOT_DIR}/story-comment-menu-${colorScheme}-${viewport.width}.png` });
