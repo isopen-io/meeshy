@@ -530,11 +530,6 @@ const PENDING_CLIENT_ENTRIES = {
   'lens.partnersPending': { issue: 14097, reason: 'GET /lens/partners/pending — la file de vérification de la console' },
   'lens.partnersByUserIdVerify': { issue: 14097, reason: 'POST /lens/partners/:userId/verify — vérifier l’état vu' },
   'lens.partnersByUserIdRevoke': { issue: 14097, reason: 'POST /lens/partners/:userId/revoke — retirer une vérification' },
-  // Le Bring et les réglages par personne (#13936, servis par la PR #14441) : le sous-lot web
-  // `proche-bring@web` les appellera (bouton, compteur, blocage par personne).
-  'bring.byUserId': { issue: 13936, reason: 'GET|POST /bring/:userId — disponibilité et envoi du Bring, sous-lot web' },
-  'bring.byBringId': { issue: 13936, reason: 'DELETE /bring/:bringId — arrêter un Bring, sous-lot web' },
-  'relations.byUserIdSettings': { issue: 13936, reason: 'GET|PUT /relations/:userId/settings — bloquer le Bring de quelqu’un, sous-lot web' },
   // L'éditeur de packs lié à un compte Meeshy vérifié (#16274, servi par la PR #16378) : la
   // boutique et la console web liront sa fiche, son espace et sa liste d'administration.
   'publishers.bySlug': { issue: 16274, reason: 'GET /publishers/:slug — la fiche publique de l’éditeur, lue par la boutique web' },
