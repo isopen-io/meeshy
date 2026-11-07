@@ -81,6 +81,28 @@ function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
+/**
+ * La CLÉ DE LECTEUR des accusés, par conversation (#16604) — la participation
+ * la PLUS RÉCENTE. `MessageStatusEntry` est indexé par `Participant.id`, qui
+ * est scopé par conversation : une page de favoris en mêle autant que le
+ * lecteur en a, d'où une clé par conversation et jamais une seule.
+ *
+ * `memberships` est ordonné `joinedAt desc` et `new Map` garde la DERNIÈRE
+ * entrée d'une clé — d'où la lecture à rebours, le même idiome que
+ * `loadDirectPeers`. Une ligne dupliquée héritée désignerait sinon la plus
+ * ancienne, dont les accusés sont muets : la coupure y lirait « décompte pas
+ * démarré » et servirait. Une porte ne se laisse pas départager par l'ordre
+ * naturel d'une collection.
+ *
+ * Une conversation ABSENTE de la carte reçoit `undefined` — « aucune échéance
+ * de lecteur », jamais le décompte d'un autre.
+ */
+function readerKeyByConversation(
+  memberships: readonly { readonly id: string; readonly conversationId: string }[],
+): ReadonlyMap<string, string> {
+  return new Map([...memberships].reverse().map((m) => [m.conversationId, m.id] as const));
+}
+
 export class StarredMessagesReader {
   constructor(
     private readonly prisma: PrismaClient,
@@ -149,29 +171,13 @@ export class StarredMessagesReader {
       }),
       loadPersonalHistoryHidingByConversation(this.prisma, { userId, conversationIds }),
     ]);
-    const peers = await this.loadDirectPeers(userId, conversations.filter((c) => c.type === 'direct').map((c) => c.id));
-
-    // Les deux coupures de service, par CONVERSATION du lecteur : une page de
-    // favoris traverse les conversations, et la clé des accusés est scopée par
-    // conversation (voir l'en-tête, critère 4). Une conversation absente de la
-    // carte reçoit `undefined` — « aucune échéance de lecteur », jamais celle
-    // d'un autre.
-    // La participation la PLUS RÉCENTE par conversation : `memberships` est
-    // ordonné `joinedAt desc`, et `new Map` garde la dernière entrée d'une
-    // clé — d'où la lecture à rebours, le même idiome que `loadDirectPeers`
-    // ci-dessous. Une ligne dupliquée héritée choisirait sinon la plus
-    // ancienne, dont les accusés sont muets : la coupure lirait « décompte pas
-    // démarré » et servirait. Une porte ne se laisse pas départager par
-    // l'ordre naturel d'une collection.
-    const participantByConversation = new Map(
-      [...memberships].reverse().map((m) => [m.conversationId, m.id] as const),
-    );
-    const readerPage = await keepAliveForReaderAcrossConversations(
-      this.prisma,
-      messages,
-      participantByConversation,
-      now,
-    );
+    // Les pairs d'un direct et les deux coupures de service ne se répondent
+    // rien : les attendre l'un après l'autre ajouterait un aller-retour à une
+    // liste lue cache-first.
+    const [peers, readerPage] = await Promise.all([
+      this.loadDirectPeers(userId, conversations.filter((c) => c.type === 'direct').map((c) => c.id)),
+      keepAliveForReaderAcrossConversations(this.prisma, messages, readerKeyByConversation(memberships), now),
+    ]);
 
     const messagesById = new Map(readerPage.alive.map((message) => [message.id, message]));
     const conversationsById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
