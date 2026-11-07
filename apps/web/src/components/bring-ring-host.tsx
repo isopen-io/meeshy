@@ -79,9 +79,9 @@ export function BringRingView({
       aria-describedby={`bring-body-${ring.bringId}`}
       data-bring-ring={ring.bringId}
       className="fixed inset-0 z-[90] grid place-items-center px-4"
-      style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 88%, black)' }}
+      style={{ backgroundColor: 'var(--color-error)' }}
     >
-      <div className="grid w-full max-w-sm justify-items-center gap-4 text-center" style={{ color: 'white' }}>
+      <div className="grid w-full max-w-sm justify-items-center gap-4 text-center" style={{ color: 'var(--color-on-state)' }}>
         <span aria-hidden="true" className="text-[64px] leading-none motion-safe:animate-pulse">
           🔔
         </span>
@@ -97,7 +97,7 @@ export function BringRingView({
           data-bring-stop={ring.bringId}
           onClick={onStop}
           className="grid w-full place-items-center rounded-card px-6 text-title font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ minHeight: 64, backgroundColor: 'white', color: 'var(--color-error)', outlineColor: 'white' }}
+          style={{ minHeight: 64, backgroundColor: 'var(--color-on-state)', color: 'var(--color-error)', outlineColor: 'var(--color-on-state)' }}
         >
           {translateCircles(language, 'bring.incoming.stop')}
         </button>

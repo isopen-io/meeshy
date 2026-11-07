@@ -103,8 +103,8 @@ export const ProfileBringRowView = memo(function ProfileBringRowView({
             disabled={busy}
             aria-busy={busy}
             onClick={onBring}
-            className={`grid shrink-0 place-items-center rounded-chip px-4 text-body font-bold text-white ${FOCUS}`}
-            style={{ minHeight: 44, backgroundColor: DANGER, outlineColor: DANGER, opacity: busy ? 0.6 : 1 }}
+            className={`grid shrink-0 place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
+            style={{ minHeight: 44, color: 'var(--color-on-state)', backgroundColor: DANGER, outlineColor: DANGER, opacity: busy ? 0.6 : 1 }}
           >
             <span>
               <span aria-hidden="true">🔔 </span>
