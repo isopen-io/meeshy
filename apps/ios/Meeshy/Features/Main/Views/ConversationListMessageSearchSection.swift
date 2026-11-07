@@ -25,7 +25,7 @@ struct ConversationListMessageSearchSection: View {
                     .padding(.top, MeeshySpacing.md)
                     .accessibilityAddTraits(.isHeader)
 
-                if model.results.isEmpty {
+                if model.results.isEmpty && model.isSearching {
                     SkeletonConversationRow()
                     SkeletonConversationRow()
                 } else {
@@ -36,7 +36,8 @@ struct ConversationListMessageSearchSection: View {
                         }
                         .buttonStyle(MeeshyPointerButtonStyle())
                     }
-                    if model.canLoadMore { nextPageSentinel }
+                    if model.walksByItself { nextPageSentinel }
+                    if model.canLoadMore && model.awaitsGesture { searchFurther }
                 }
             }
             .padding(.horizontal, MeeshySpacing.lg)
@@ -48,7 +49,7 @@ struct ConversationListMessageSearchSection: View {
     /// fait naître un NOUVEAU témoin, sans quoi `.task(id:)` partirait pour le
     /// témoin qu'une page pleine vient de pousser hors de l'écran : requête
     /// annulée aussitôt, mesuré au simulateur. Né à l'écran après une page
-    /// courte, il enchaîne ; un échec attend le prochain défilement.
+    /// courte, il enchaîne, tant que les pages montrent quelque chose.
     private var nextPageSentinel: some View {
         ZStack {
             if model.isLoadingMore { ProgressView() }
@@ -56,6 +57,22 @@ struct ConversationListMessageSearchSection: View {
         .frame(maxWidth: .infinity, minHeight: MeeshySpacing.xxl)
         .task { await model.loadMore() }
         .id(model.nextCursor)
+    }
+
+    /// La suite d'une recherche qui n'a rien montré, ou dont la page a échoué :
+    /// c'est le geste qui la relance, jamais le défilement seul (#16476).
+    private var searchFurther: some View {
+        Button {
+            HapticFeedback.light()
+            Task { await model.loadMore() }
+        } label: {
+            Text(String(localized: "search.messages.further", defaultValue: "Chercher plus loin"))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundStyle(MeeshyColors.indigo500)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(MeeshyPointerButtonStyle())
     }
 
     private func open(_ result: GlobalSearchMessageResult) {
