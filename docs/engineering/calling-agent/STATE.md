@@ -221,9 +221,14 @@ socket jusqu'au client.
   redémarrage prend une dernière fois l'ancien chemin. L'effet se limite à un warn et une lecture
   perdue, et l'écouteur scopé a de toute façon disparu au redémarrage.
 
+- La QA a relevé un défaut antérieur au lot : le traducteur met en cache Redis le texte traduit
+  des sous-titres, avec le TTL des traductions de messages (`redis_service.py:578`). → #16648.
+
 ### Cycle suivant : par où reprendre
 
-1. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+1. #16648 : exclure les sous-titres d'appel du cache Redis du traducteur. C'est un lot Python
+   à faible risque, lié à la vie privée.
+2. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
    de #16613.
-2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
+3. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
    traducteur (`translateToMultipleLanguages`, lot de `translation_processor.py:278`).
