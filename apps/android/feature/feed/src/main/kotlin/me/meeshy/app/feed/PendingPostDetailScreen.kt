@@ -27,9 +27,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.chrome.MeeshyBackground
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.component.chrome.leadingNavigationIcon
+import me.meeshy.ui.component.chrome.leadingNavigationLabel
 
 /**
  * Le détail d'une publication encore sur l'appareil (#14902, iOS #14879) — atteint en touchant sa carte. Rien n'existe
@@ -84,8 +85,8 @@ internal fun PendingPostDetailContent(card: PendingFeedCard, offline: Boolean, o
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = MeeshyIcons.Back,
-                                contentDescription = stringResource(R.string.post_detail_back),
+                                imageVector = leadingNavigationIcon(),
+                                contentDescription = leadingNavigationLabel(stringResource(R.string.post_detail_back)),
                                 tint = MeeshyTheme.tokens.textPrimary,
                             )
                         }

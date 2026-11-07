@@ -114,8 +114,11 @@ internal fun NavGraphBuilder.feedNavGraph(
             onOpenHashtag = { tag -> navController.navigate(Routes.hashtag(tag)) },
         )
     }
-    composable(
+    // #16676 — le détail d'un post est une FEUILLE, comme sur iOS : le fil, le réel ou le profil restent dessous,
+    // la croix ou le glissé vers le bas la referment.
+    sheetComposable(
         route = Routes.POST_DETAIL,
+        navController = navController,
         arguments = listOf(
             navArgument(PostDetailViewModel.POST_ID_ARG) { type = NavType.StringType },
             navArgument(PostDetailViewModel.SHOW_COMMENTS_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
@@ -123,14 +126,14 @@ internal fun NavGraphBuilder.feedNavGraph(
             navArgument(PostDetailViewModel.PARENT_COMMENT_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
         deepLinks = (Routes.POST_SHARE_DEEP_LINKS + Routes.STORY_SHARE_DEEP_LINKS.filter { "/story/" !in it }).map { pattern -> navDeepLink { uriPattern = pattern } },
-    ) { entry ->
+    ) { entry, dismiss ->
         val postId = entry.arguments?.getString(PostDetailViewModel.POST_ID_ARG)
         if (postId != null && OutboxIds.isCmid(postId)) {
-            PendingPostDetailScreen(cmid = postId, onBack = { navController.popBackStack() })
-            return@composable
+            PendingPostDetailScreen(cmid = postId, onBack = dismiss)
+            return@sheetComposable
         }
         PostDetailScreen(
-            onBack = { navController.popBackStack() },
+            onBack = dismiss,
             onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
             onOpenReel = { postId -> navController.navigate(Routes.reels(seed = postId)) },
             onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },

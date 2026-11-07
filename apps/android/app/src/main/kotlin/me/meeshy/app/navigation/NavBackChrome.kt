@@ -109,7 +109,7 @@ internal object NavBackChrome {
         sheet("Routes.MY_STORIES", Routes.MY_STORIES, IosPresentation.SHEET, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/MyStoriesScreen.kt"),
         arrow("Routes.SAVED_POSTS", Routes.SAVED_POSTS, feed("BookmarksScreen.kt")),
         arrow("Routes.NEARBY_DISCOVERY", Routes.NEARBY_DISCOVERY, feed("NearbyScreen.kt")),
-        arrow("Routes.POST_DETAIL", Routes.POST_DETAIL, feed("PostDetailScreen.kt")),
+        sheet("Routes.POST_DETAIL", Routes.POST_DETAIL, IosPresentation.SHEET, feed("PostDetailScreen.kt")),
         modal("Routes.REELS", Routes.REELS, IosPresentation.COVER, "$FEATURE/reels/src/main/kotlin/me/meeshy/app/reels/ReelsScreen.kt"),
         modal("Routes.STORY_VIEWER", Routes.STORY_VIEWER, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerScreen.kt"),
         modal("StoryRoutes.STORY_POST", StoryRoutes.STORY_POST, IosPresentation.COVER, "$FEATURE/stories/src/main/kotlin/me/meeshy/app/stories/StoryViewerScreen.kt"),
