@@ -292,6 +292,15 @@ export class ConversationViewingHandler {
     // fin d'appartenance (`invalidateParticipantCache`). Elle est placée APRÈS
     // le limiteur de débit pour qu'un flot d'activité ne la convoque pas sans
     // borne.
+    //
+    // LE VERDICT A TROIS ÉTATS, et les deux qui comptent s'arbitrent à
+    // l'opposé. `resolveParticipant` n'attrape RIEN : une panne de base LÈVE,
+    // elle ne rend pas `null`. Un `null` est donc un négatif PROUVÉ — aucune
+    // ligne vivante — et il ferme ; une levée est une ABSENCE DE PREUVE, elle
+    // remonte au `.catch` de `listen` et n'éteint rien. C'est le bon sens pour
+    // un signal de vivacité : on ne retire pas quelqu'un d'un fil sur une
+    // panne. Même arbitrage, mêmes conséquences, que le jumeau `typing:start`,
+    // qui expire aussi la room sur ce même négatif prouvé.
     const participant = await resolveParticipant({
       prisma: this.prisma,
       userIdOrToken,

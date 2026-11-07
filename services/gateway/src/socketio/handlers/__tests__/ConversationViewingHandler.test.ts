@@ -124,7 +124,7 @@ function makeWorld({
     if (at >= 0) roster.splice(at, 1);
   };
 
-  return { handler, emissions, connect, arrive, retire };
+  return { handler, emissions, connect, arrive, retire, prisma };
 }
 
 const startsFor = (emissions: readonly Emission[]) =>
@@ -696,6 +696,32 @@ describe('ConversationViewingHandler — fin d’appartenance (#16654)', () => {
     expect(stopsFor(emissions).map(e => e.data)).toEqual([{ userId: ALICE, conversationId: CONV }]);
     await handler.handleActivity(alice.socket, { conversationId: OTHER_CONV });
     expect(activitiesFor(emissions).map(e => e.data)).toEqual([{ userId: ALICE, conversationId: OTHER_CONV }]);
+  });
+
+  /**
+   * LE TROISIÈME ÉTAT DU VERDICT — une ABSENCE DE PREUVE n'éteint rien.
+   * `resolveParticipant` n'attrape rien : une panne de base LÈVE au lieu de
+   * rendre `null`. Confondre les deux ferait sortir un membre PARFAITEMENT
+   * VIVANT de la room de son fil — donc cesser de lui livrer `message:new` —
+   * sur un accroc Mongo. Fail-CLOSED sur la preuve, fail-OPEN sur son absence.
+   */
+  it('une panne de la lecture d’appartenance n’éteint rien et ne sort personne de la room', async () => {
+    const { handler, emissions, connect, prisma } = makeWorld();
+    const alice = connect(ALICE, 's-alice', [CONV]);
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+    const before = activitiesFor(emissions).length;
+
+    prisma.participant.findFirst.mockRejectedValueOnce(new Error('replica set unreachable'));
+    await expect(handler.handleActivity(alice.socket, { conversationId: CONV })).rejects.toThrow();
+
+    expect(stopsFor(emissions)).toEqual([]);
+    expect(alice.socket.rooms.has(`conversation:${CONV}`)).toBe(true);
+    expect(activitiesFor(emissions).length).toBe(before);
+
+    // Et le registre tient toujours : le geste suivant, la base répondant de
+    // nouveau, relaie normalement.
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+    expect(activitiesFor(emissions).length).toBe(before + 1);
   });
 
   /**
