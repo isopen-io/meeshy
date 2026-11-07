@@ -1417,12 +1417,25 @@ const readerMembership = () => ({
 async function fetchSyncPage(): Promise<any> {
   const prisma = makePrisma();
   prisma.participant.findMany = jest.fn<any>().mockResolvedValue([readerMembership()]);
-  prisma.message.findMany = jest
-    .fn<any>()
-    .mockResolvedValueOnce([syncMessageRow()])
-    .mockResolvedValueOnce([
-      { id: 'm-gone', conversationId: 'c1', deletedAt: new Date('2026-07-02T12:00:00.000Z') },
-    ]);
+  // Le magasin répond par CONTENU de `where`, jamais par ordre d'appel
+  // (#16586). La ligne de la fixture porte `replyToId`, et la coupure de
+  // CITATION (#8630) ouvre pour elle une lecture d'ancêtres : une chaîne de
+  // `mockResolvedValueOnce` lui servait la page des TOMBSTONES, puis rendait
+  // `undefined` à la requête des disparitions — toute la suite échouait sur
+  // `body.data` absent. Un double qui répond à l'ordre atteste un ordre, pas un
+  // comportement.
+  prisma.message.findMany = jest.fn<any>().mockImplementation((args: any) => {
+    const where = args?.where ?? {};
+    if (where.deletedAt && typeof where.deletedAt === 'object') {
+      return Promise.resolve([
+        { id: 'm-gone', conversationId: 'c1', deletedAt: new Date('2026-07-02T12:00:00.000Z') },
+      ]);
+    }
+    // La remontée de citations interroge par `id: { in: [...] }` — l'ancêtre
+    // `m-parent` n'existe pas dans cette fixture, et c'est le cas nominal.
+    if (where.id?.in) return Promise.resolve([]);
+    return Promise.resolve([syncMessageRow()]);
+  });
   const app = await buildApp(prisma);
   const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
   await app.close();
@@ -1477,9 +1490,13 @@ describe('GET /sync — l’enveloppe réelle', () => {
     const leaky = syncMessageRow();
     (leaky.sender as Record<string, unknown>).isOnline = true;
     (leaky.sender as Record<string, unknown>).lastActiveAt = new Date('2026-07-02T09:00:00Z');
-    prisma.message.findMany = jest.fn<any>()
-      .mockResolvedValueOnce([leaky])
-      .mockResolvedValueOnce([]);
+    // Par CONTENU de `where`, jamais par ordre d'appel : voir `fetchSyncPage`.
+    prisma.message.findMany = jest.fn<any>().mockImplementation((args: any) => {
+      const where = args?.where ?? {};
+      if (where.deletedAt && typeof where.deletedAt === 'object') return Promise.resolve([]);
+      if (where.id?.in) return Promise.resolve([]);
+      return Promise.resolve([leaky]);
+    });
     const app = await buildApp(prisma);
 
     const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });

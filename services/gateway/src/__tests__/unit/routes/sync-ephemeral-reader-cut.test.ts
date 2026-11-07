@@ -107,7 +107,7 @@ const base = (id: string, conversationId: string, extra: Record<string, unknown>
   id,
   conversationId,
   senderId: 's1',
-  content: 'Le code du coffre est 4242',
+  content: `texte de ${id}`,
   clientMessageId: null,
   originalLanguage: 'fr',
   translations: null,
@@ -244,7 +244,9 @@ describe('GET /sync/messages — la coupure de service par lecteur de l’éphé
     const res = await injectMessages(prisma);
     expect(res.statusCode).toBe(200);
     expect(servedIds(res)).toEqual(['m-plain']);
-    expect(res.payload).not.toContain('Le code du coffre');
+    // Pas seulement la ligne : rien de ce que la ligne TRANSPORTAIT (leçon 275).
+    expect(res.payload).not.toContain('texte de m-flame');
+    expect(res.payload).toContain('texte de m-plain');
   });
 
   it('sert encore la flamme-œil consommée DANS la grâce — la fenêtre de rattrapage est la directive', async () => {

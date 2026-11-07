@@ -138,6 +138,10 @@ describe('#4173 c.5(a) — `fields` réduit la REQUÊTE de chaque collection', (
       // #9629 — la marque d'un avis de capture, épinglée pour le classer.
       'messageSource',
       'messageType',
+      // #16586 — épinglée : sans elle la coupure de CITATION (#8630) ne peut
+      // pas remonter la chaîne, et une réponse survivrait à l'éphémère qu'elle
+      // cite. Lue pour la MÉCANIQUE, servie seulement si `?fields=` la nomme.
+      'replyToId',
       'updatedAt',
       // #11269 — l'estampille de purge, épinglée : lue pour la projection par lecteur, jamais servie.
       'viewOnceBurnedAt',
@@ -169,8 +173,17 @@ describe('#4173 c.5(a) — `fields` réduit la REQUÊTE de chaque collection', (
 
     // `conversations` n'est pas nommée : elle garde son profil par défaut ENTIER.
     expect(Object.keys(changedSelect(prisma.conversation.findMany)).length).toBeGreaterThan(10);
+    // #16586 — `effectFlags`, `ephemeralDuration` et `replyToId` rejoignent les
+    // colonnes ÉPINGLÉES : la coupure de service par lecteur de l'éphémère
+    // décide si la ligne a le droit de partir, et elle doit pouvoir décider
+    // sous TOUTE projection — y compris celle qui ne nomme que `id`. Elles sont
+    // LUES, jamais servies ici (`servedPinnedFor` n'ouvre le bloc de protection
+    // que quand `content` est servi).
     expect(Object.keys(changedSelect(prisma.message.findMany)).sort())
-      .toEqual(['conversationId', 'createdAt', 'expiresAt', 'id', 'messageSource', 'messageType', 'updatedAt', 'viewOnceBurnedAt']);
+      .toEqual([
+        'conversationId', 'createdAt', 'effectFlags', 'ephemeralDuration', 'expiresAt', 'id',
+        'messageSource', 'messageType', 'replyToId', 'updatedAt', 'viewOnceBurnedAt',
+      ]);
     await app.close();
   });
 });
