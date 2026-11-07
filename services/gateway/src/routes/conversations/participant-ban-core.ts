@@ -5,7 +5,8 @@ import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { enhancedLogger } from '../../utils/logger-enhanced.js'
-import { resolveBanWrite, resolveUnbanWrite } from '../../services/conversations/conversationBanState'
+import { liftBanOnly, resolveBanWrite, resolveUnbanWrite } from '../../services/conversations/conversationBanState'
+import { applyCommunityAdmission, loadSalonCommunity, planSalonEntry } from '../../services/conversations/communityMembershipSync'
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resolveTargetParticipant, identifyTarget } from './utils/target-participant'
@@ -277,7 +278,7 @@ export async function leverBannissementDeParticipant(
 
   const currentParticipant = await prisma.participant.findFirst({
     where: { conversationId: id, userId: currentUserId, isActive: true },
-    select: { id: true, role: true },
+    select: { id: true, role: true, conversation: { select: { communityId: true } } },
   })
 
   if (!currentParticipant) {
@@ -355,11 +356,27 @@ export async function leverBannissementDeParticipant(
     )
   }
 
-  const unban = resolveUnbanWrite(targetParticipant)
+  // #16703 — rendre le salon, c'est y faire RENTRER : dans une communauté
+  // privée, la loi de `planSalonEntry` décide, l'appelant étant celui qui
+  // débannit. Refusé, le bannissement est levé quand même (la porte n'est
+  // plus fermée par CE geste) mais l'appartenance n'est pas rendue.
+  const proposedUnban = resolveUnbanWrite(targetParticipant)
+  const community = proposedUnban.membershipRestored
+    ? await loadSalonCommunity(prisma, { communityId: currentParticipant.conversation?.communityId, actorId: currentUserId })
+    : null
+  const communityAdmission = await planSalonEntry(
+    prisma,
+    community,
+    targetParticipant.userId ? { kind: 'registered', userId: targetParticipant.userId } : { kind: 'guest' },
+  )
+  const unban = communityAdmission.kind === 'refused' ? liftBanOnly() : proposedUnban
   await prisma.participant.update({
     where: { id: targetParticipant.id },
     data: unban.data,
   })
+  if (community && communityAdmission.kind === 'admitted') {
+    await applyCommunityAdmission(prisma, community.communityId, communityAdmission)
+  }
   invalidateParticipantLookup(targetParticipant.id, id)
   if (unban.membershipRestored) {
     announceConversationLanguageChange({ kind: 'arrival', conversationId: id, language: targetParticipant.language, readerUserId: targetParticipant.userId })
