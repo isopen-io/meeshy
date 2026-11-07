@@ -120,4 +120,34 @@ socket jusqu'au client.
 3. Un segment final à N langues envoie N requêtes ZMQ (`translateText` par langue) alors que
    `translateToMultipleLanguages` existe. Le gain réel est à mesurer côté traducteur avant de
    changer quoi que ce soit.
-4. La décision produit « servir l'original tout de suite, puis le remplacer » reste à poser.
+4. ~~La décision produit « servir l'original tout de suite, puis le remplacer » reste à poser.~~ Tranchée par le porteur le jour même (#16612), voir le cycle 3 bis.
+
+## Cycle 3 bis — 2026-11-07, décision du porteur
+
+- **Décision #16612** (porteur, close) :
+  1. un sous-titre part tout de suite, en original, et sa traduction le rejoint à tout moment, comme un message ;
+  2. le sous-titre, texte compris, porte la couleur vive de son auteur, tirée de LA fonction partagée ;
+  3. la voix traduite viendra plus tard, avec sa propre latence (#16615, horizon moyen/long terme).
+- **#16613 (passerelle)** : `translateAndEmitSegment` émet l'original à `ROOMS.call` avant toute
+  demande de traduction, puis chaque traduction à ses seuls auditeurs, sous le même énoncé. Un délai
+  dépassé ou une erreur n'émet plus de second original. Les fusions client existaient déjà sur les
+  trois plateformes (web `mergeCaption`, iOS `CallTranscriptMergeRules`, Android
+  `CallLiveJournal.merged`). Nouveau témoin : `call-caption-instant-original.test.ts`, 4/4, rouge
+  sur l'ancien code. Les anciens témoins de ciblage ont été réécrits sur le nouveau contrat. Les
+  traductions ne partent toujours jamais à la salle. Suites socketio, appels et métriques :
+  3 147 témoins ; `tsc` 0.
+- **#16614 (couleur)** : sur le web, `speakerColor` = `authorAccentColor`, éclaircie par
+  `legibleTint` (extraite d'`author-ink`) jusqu'à l'AA sur le pire fond de `glass-call-prominent`.
+  La palette propre de #8393 a disparu. Le texte du bandeau prend la couleur, ma parole comprise.
+  Sur iOS et Android, le texte du bandeau prend `CallSpeakerColor`, qui était déjà
+  `colorForName(userId)` adapté au sombre.
+  Restes connus : la vignette de SOI reste blanche sur le web (le modèle `self` de `call-grid` ne
+  porte pas d'identifiant) ; le journal d'après-appel iOS (`CallTranscriptSection`) colore encore le
+  nom en `indigo400` / `brandPrimary`.
+
+### Cycle suivant : par où reprendre
+
+1. Recette staging : un appel fr↔en, vérifier que l'original s'affiche avant la traduction, puis
+   qu'il est remplacé dans la même ligne, sur web, iOS et Android.
+2. Les deux restes ci-dessus, en issues s'ils tiennent.
+3. Lire `call_caption_translation_seconds` sur le staging.
