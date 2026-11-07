@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreGraphics
 import Foundation
 
@@ -12,8 +13,8 @@ import Foundation
 ///
 /// Le biais revient à 0 au toucher suivant (`CameraFocusControl.aim`) et à
 /// l'ouverture d'un objectif (`CameraInputInstaller.openLens`, bascule comprise).
-/// Les lois sont pures ; `ComposerCaptureSession` les câble, `CameraModel` les
-/// écrit sur l'appareil.
+/// Les lois sont pures ; le chrome du viseur tient le cadran
+/// (`ComposerCaptureExposureDial`) et `CameraModel` écrit le biais sur l'appareil.
 nonisolated enum ComposerCaptureExposure {
 
     /// La course du doigt pour un EV.
@@ -93,5 +94,70 @@ nonisolated enum ComposerCaptureExposure {
         format.minimumIntegerDigits = 1
         let chiffre = format.string(from: NSNumber(value: abs(bias))) ?? String(abs(bias))
         return (bias > 0 ? "+" : "-") + chiffre + " EV"
+    }
+}
+
+/// **Le cadran du soleil** : le biais posé, et l'objectif sur lequel il l'a été.
+/// Un autre objectif repart du neutre — `openLens` lui a déjà rendu 0 —, et le
+/// toucher suivant remet un cadran neuf. Chaque geste rend le biais à ÉCRIRE,
+/// `nil` s'il ne change pas : l'objectif n'est pas sollicité pour rien.
+nonisolated struct ComposerCaptureExposureDial: Equatable, Sendable {
+    private(set) var bias: Float = 0
+    private var lens: AVCaptureDevice.Position?
+    private var dragStart: Float?
+
+    /// Le biais que montre le soleil sur cet objectif.
+    func bias(on lens: AVCaptureDevice.Position) -> Float {
+        lens == self.lens ? bias : 0
+    }
+
+    /// Le doigt glisse : la course part du biais du début du glissé.
+    mutating func drag(translationY: CGFloat, range: ClosedRange<Float>,
+                       lens: AVCaptureDevice.Position) -> Float? {
+        adopt(lens)
+        let depart = dragStart ?? bias
+        dragStart = depart
+        return settle(ComposerCaptureExposure.bias(from: depart, dragY: translationY, range: range))
+    }
+
+    mutating func endDrag() {
+        dragStart = nil
+    }
+
+    /// VoiceOver incrémente d'un tiers d'EV.
+    mutating func step(up: Bool, range: ClosedRange<Float>, lens: AVCaptureDevice.Position) -> Float? {
+        adopt(lens)
+        return settle(ComposerCaptureExposure.stepped(bias, up: up, range: range))
+    }
+
+    private mutating func adopt(_ objectif: AVCaptureDevice.Position) {
+        guard objectif != lens else { return }
+        lens = objectif
+        bias = 0
+        dragStart = nil
+    }
+
+    private mutating func settle(_ valeur: Float) -> Float? {
+        guard valeur != bias else { return nil }
+        bias = valeur
+        return valeur
+    }
+}
+
+extension ComposerCaptureExposure {
+
+    /// **Le soleil est-il offert ?** Sur une image vivante, hors retouche, et
+    /// si l'objectif règle son biais.
+    static func offered(stage: ComposerSceneCameraStage, editing: Bool, range: ClosedRange<Float>) -> Bool {
+        !editing && stage != .off && usable(range) != nil
+    }
+
+    /// **Écrit le biais rendu par le cadran** ; `true` quand il revient au
+    /// neutre — le chrome le fait sentir sous le doigt.
+    @MainActor @discardableResult
+    static func send(_ valeur: Float?, to objectif: any ComposerCaptureCameraProviding) -> Bool {
+        guard let valeur else { return false }
+        objectif.setExposureBias(valeur)
+        return valeur == 0
     }
 }

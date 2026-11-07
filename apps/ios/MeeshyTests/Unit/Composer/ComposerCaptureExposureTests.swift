@@ -69,73 +69,54 @@ final class ComposerCaptureExposureTests: XCTestCase {
         XCTAssertEqual(ComposerCaptureExposure.valueText(0.7, locale: Locale(identifier: "fr_FR")), "+0,7 EV")
     }
 
-    // MARK: - Le câblage
+    // MARK: - Le cadran
 
-    private func makeSUT(stage: ComposerSceneCameraStage = .armed) -> (ComposerCaptureSession, MockComposerCaptureCamera) {
+    func test_dial_drag_followsTheFingerFromTheDragStart() {
+        var cadran = ComposerCaptureExposureDial()
+        XCTAssertEqual(cadran.drag(translationY: -50, range: -8...8, lens: .back) ?? 9, 0.5, accuracy: 0.001)
+        XCTAssertEqual(cadran.drag(translationY: -100, range: -8...8, lens: .back) ?? 9, 1, accuracy: 0.001)
+        cadran.endDrag()
+        XCTAssertEqual(cadran.drag(translationY: -50, range: -8...8, lens: .back) ?? 9, 1.5, accuracy: 0.001,
+                       "un nouveau glissé part du biais posé")
+        XCTAssertEqual(cadran.bias(on: .back), 1.5, accuracy: 0.001)
+    }
+
+    func test_dial_sameValue_writesNothing() {
+        var cadran = ComposerCaptureExposureDial()
+        XCTAssertEqual(cadran.drag(translationY: -1_000, range: -8...8, lens: .back), 2)
+        XCTAssertNil(cadran.drag(translationY: -1_200, range: -8...8, lens: .back), "déjà en butée")
+    }
+
+    func test_dial_step_forVoiceOver() {
+        var cadran = ComposerCaptureExposureDial()
+        XCTAssertEqual(cadran.step(up: true, range: -8...8, lens: .back) ?? 9, 1.0 / 3, accuracy: 0.001)
+        XCTAssertEqual(cadran.step(up: false, range: -8...8, lens: .back), 0, "le retour au neutre s'écrit")
+        XCTAssertNil(cadran.step(up: true, range: 0...0, lens: .back), "objectif sans biais : rien à écrire")
+    }
+
+    func test_dial_anotherLens_startsFromNeutral() {
+        var cadran = ComposerCaptureExposureDial()
+        _ = cadran.drag(translationY: -100, range: -8...8, lens: .back)
+        XCTAssertEqual(cadran.bias(on: .front), 0, "la bascule rend l'objectif au neutre")
+        XCTAssertEqual(cadran.drag(translationY: -50, range: -8...8, lens: .front) ?? 9, 0.5, accuracy: 0.001,
+                       "le glissé sur le nouvel objectif part de 0, pas du biais de l'ancien")
+    }
+
+    func test_offered_onlyOnALiveImage_withABias() {
+        XCTAssertTrue(ComposerCaptureExposure.offered(stage: .armed, editing: false, range: -8...8))
+        XCTAssertFalse(ComposerCaptureExposure.offered(stage: .off, editing: false, range: -8...8))
+        XCTAssertFalse(ComposerCaptureExposure.offered(stage: .armed, editing: true, range: -8...8),
+                       "en retouche, l'objectif se repose")
+        XCTAssertFalse(ComposerCaptureExposure.offered(stage: .armed, editing: false, range: 0...0))
+    }
+
+    func test_send_writesToTheLens_andReportsNeutral() {
         let camera = MockComposerCaptureCamera()
-        return (ComposerCaptureSession(stage: stage, mode: .photo, controls: camera), camera)
-    }
-
-    func test_drag_sendsTheBiasToTheLens_fromTheDragStart() {
-        let (session, camera) = makeSUT()
-        session.dragExposure(translationY: -50)
-        session.dragExposure(translationY: -100)
-        XCTAssertEqual(camera.exposureBiasRequests.count, 2)
-        XCTAssertEqual(camera.exposureBiasRequests.last ?? 0, 1, accuracy: 0.001)
-        XCTAssertEqual(session.exposureBias, 1, accuracy: 0.001)
-
-        session.endExposureDrag()
-        session.dragExposure(translationY: -50)
-        XCTAssertEqual(session.exposureBias, 1.5, accuracy: 0.001, "un nouveau glissé part du biais posé")
-    }
-
-    func test_drag_sameValue_doesNotHitTheLensAgain() {
-        let (session, camera) = makeSUT()
-        session.dragExposure(translationY: -1_000)
-        session.dragExposure(translationY: -1_200)
-        XCTAssertEqual(camera.exposureBiasRequests, [2])
-    }
-
-    func test_stepExposure_forVoiceOver() {
-        let (session, camera) = makeSUT()
-        session.stepExposure(up: true)
-        XCTAssertEqual(camera.exposureBiasRequests.count, 1)
-        XCTAssertEqual(session.exposureBias, 1.0 / 3, accuracy: 0.001)
-    }
-
-    func test_noSun_whenTheLensHasNoBias_orTheViewfinderIsOff() {
-        let (session, camera) = makeSUT()
-        camera.exposureBiasRange = 0...0
-        XCTAssertFalse(session.offersExposure)
-        session.dragExposure(translationY: -100)
-        XCTAssertTrue(camera.exposureBiasRequests.isEmpty)
-
-        let (eteint, _) = makeSUT(stage: .off)
-        XCTAssertFalse(eteint.offersExposure)
-    }
-
-    func test_editing_offersNoSun() {
-        let (session, camera) = makeSUT()
-        session.phase = .editing(.photo)
-        XCTAssertFalse(session.offersExposure, "en retouche, l'objectif se repose")
-        session.stepExposure(up: true)
-        XCTAssertTrue(camera.exposureBiasRequests.isEmpty)
-    }
-
-    func test_switch_resetsTheBias() {
-        let (session, camera) = makeSUT()
-        session.dragExposure(translationY: -100)
-        session.flipCamera()
-        camera.finishSwitch()
-        XCTAssertEqual(session.exposureBias, 0)
-        XCTAssertNil(session.exposureDragStart)
-    }
-
-    func test_forgetExposure_isWhatTheNextTapDoes() {
-        let (session, _) = makeSUT()
-        session.dragExposure(translationY: -100)
-        session.forgetExposure()
-        XCTAssertEqual(session.exposureBias, 0)
+        XCTAssertFalse(ComposerCaptureExposure.send(nil, to: camera))
+        XCTAssertTrue(camera.exposureBiasRequests.isEmpty, "rien à écrire, l'objectif n'est pas sollicité")
+        XCTAssertFalse(ComposerCaptureExposure.send(1, to: camera))
+        XCTAssertTrue(ComposerCaptureExposure.send(0, to: camera))
+        XCTAssertEqual(camera.exposureBiasRequests, [1, 0])
     }
 
     // MARK: - Les gardes de source
@@ -147,13 +128,13 @@ final class ComposerCaptureExposureTests: XCTestCase {
         return try String(contentsOf: racine.appendingPathComponent(chemin), encoding: .utf8)
     }
 
-    func test_source_aimResetsTheBias_andTheTapForgetsIt() throws {
+    func test_source_aimResetsTheBias_andTheTapResetsTheDial() throws {
         let visee = try Self.code("Meeshy/Features/Main/Components/CameraFocusControl.swift")
         XCTAssertTrue(visee.contains("apply(plan, to: device, resettingBias: true)"),
                       "le toucher suivant rend le biais de l'objectif à 0")
         XCTAssertTrue(visee.contains("device.setExposureTargetBias(0, completionHandler: nil)"))
-        let toucher = try Self.code("Meeshy/Features/Composer/ComposerCaptureSession+Tap.swift")
-        XCTAssertTrue(toucher.contains("forgetExposure()"), "la machine oublie le biais avec l'objectif")
+        let vues = try Self.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(vues.contains("exposure = ComposerCaptureExposureDial()"), "le toucher remet un cadran neuf")
     }
 
     func test_source_lensWritesTheBiasUnderLock() throws {
@@ -167,6 +148,6 @@ final class ComposerCaptureExposureTests: XCTestCase {
         XCTAssertTrue(vues.contains("exposureSun(beside: focusMark"))
         XCTAssertTrue(vues.contains(".highPriorityGesture("),
                       "le glissé du soleil ne doit pas zoomer ni ranger le viseur")
-        XCTAssertTrue(vues.contains("session.stepExposure(up: true)"), "VoiceOver règle aussi l'exposition")
+        XCTAssertTrue(vues.contains("exposure.step(up: sens == .increment"), "VoiceOver règle aussi l'exposition")
     }
 }

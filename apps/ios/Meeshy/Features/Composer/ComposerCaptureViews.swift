@@ -180,6 +180,8 @@ struct ComposerCaptureChrome: View {
     /// l'efface, un glissé du soleil en repousse l'échéance (OPUS-5).
     @State private var markFadeTicket = 0
     @State private var exposureDragging = false
+    /// Le biais posé au soleil — un état de VUE, comme l'anneau qu'il suit.
+    @State private var exposure = ComposerCaptureExposureDial()
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     /// Retombe tout seul quand le pincement finit — y compris annulé par le
     /// système, qui n'appelle pas `onEnded`.
@@ -240,14 +242,7 @@ struct ComposerCaptureChrome: View {
                         rezoomStep = nil
                         session.endPinchZoom()
                     }
-                    .overlay(alignment: .topLeading) {
-                        if let focusMark {
-                            ComposerCaptureFocusRing(reduceMotion: reduceMotion)
-                                .id(focusMark.id)
-                                .position(focusMark.location)
-                                .allowsHitTesting(false)
-                        }
-                    }
+                    .overlay(alignment: .topLeading) { focusRing }
                     .accessibilityElement()
                     .accessibilityLabel(session.phase.isEditing
                         ? ComposerCaptureCopy.reframe
@@ -264,13 +259,7 @@ struct ComposerCaptureChrome: View {
                         @unknown default: break
                         }
                     }
-                    // Après l'élément de la scène : le soleil reste son propre
-                    // élément VoiceOver, et les gestes de la scène ne le voient pas.
-                    .overlay(alignment: .topLeading) {
-                        if let focusMark, session.offersExposure {
-                            exposureSun(beside: focusMark, width: proxy.size.width)
-                        }
-                    }
+                    .overlay(alignment: .topLeading) { exposureLayer(width: proxy.size.width) }
                     .allowsHitTesting(!finishing)
             }
             cropBrackets
@@ -582,7 +571,35 @@ struct ComposerCaptureChrome: View {
             id: UUID(), location: CGPoint(x: location.x - origin.x, y: location.y - origin.y))
         focusMark = marque
         exposureDragging = false
+        exposure = ComposerCaptureExposureDial()
         scheduleMarkFade(marque)
+    }
+
+    @ViewBuilder private var focusRing: some View {
+        if let focusMark {
+            ComposerCaptureFocusRing(reduceMotion: reduceMotion)
+                .id(focusMark.id)
+                .position(focusMark.location)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var offersExposure: Bool {
+        ComposerCaptureExposure.offered(stage: session.stage, editing: session.phase.isEditing,
+                                        range: session.controls.exposureBiasRange)
+    }
+
+    /// Posé APRÈS l'élément d'accessibilité de la scène : le soleil reste son
+    /// propre élément VoiceOver, et les gestes de la scène ne le voient pas.
+    @ViewBuilder private func exposureLayer(width: CGFloat) -> some View {
+        if let focusMark, offersExposure {
+            exposureSun(beside: focusMark, width: width)
+        }
+    }
+
+    /// Le biais rendu par le cadran part à l'objectif ; le neutre se sent.
+    private func sendExposure(_ valeur: Float?) {
+        if ComposerCaptureExposure.send(valeur, to: session.controls) { HapticFeedback.light() }
     }
 
     /// L'anneau s'efface à son échéance — sauf si un effacement plus récent a
@@ -590,7 +607,7 @@ struct ComposerCaptureChrome: View {
     private func scheduleMarkFade(_ marque: ComposerCaptureFocusMark) {
         markFadeTicket += 1
         let ticket = markFadeTicket
-        let duree = ComposerCaptureExposure.markLifetime(adjustable: session.offersExposure,
+        let duree = ComposerCaptureExposure.markLifetime(adjustable: offersExposure,
                                                          voiceOver: voiceOverEnabled)
         Task { @MainActor in
             _ = await cancellableSleep(for: .seconds(duree))
@@ -604,26 +621,27 @@ struct ComposerCaptureChrome: View {
     /// range pas le viseur, ceux de la scène ne le voient pas.
     private func exposureSun(beside marque: ComposerCaptureFocusMark, width: CGFloat) -> some View {
         let diametre = ComposerCaptureFocusRing.diameter
-        return ComposerCaptureExposureSun(bias: session.exposureBias)
+        let objectif = session.controls
+        let biais = exposure.bias(on: objectif.currentPosition)
+        return ComposerCaptureExposureSun(bias: biais)
             .position(x: ComposerCaptureExposure.sunX(ringX: marque.location.x, ringDiameter: diametre, width: width),
-                      y: marque.location.y + ComposerCaptureExposure.sunOffsetY(session.exposureBias))
+                      y: marque.location.y + ComposerCaptureExposure.sunOffsetY(biais))
             .highPriorityGesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .global)
                     .onChanged { valeur in
                         exposureDragging = true
-                        session.dragExposure(translationY: valeur.translation.height)
+                        sendExposure(exposure.drag(translationY: valeur.translation.height,
+                                                   range: objectif.exposureBiasRange, lens: objectif.currentPosition))
                     }
                     .onEnded { _ in
                         exposureDragging = false
-                        session.endExposureDrag()
+                        exposure.endDrag()
                         scheduleMarkFade(marque)
                     })
             .accessibilityAdjustableAction { sens in
-                switch sens {
-                case .increment: session.stepExposure(up: true)
-                case .decrement: session.stepExposure(up: false)
-                @unknown default: break
-                }
+                guard sens == .increment || sens == .decrement else { return }
+                sendExposure(exposure.step(up: sens == .increment, range: objectif.exposureBiasRange,
+                                           lens: objectif.currentPosition))
                 scheduleMarkFade(marque)
             }
     }

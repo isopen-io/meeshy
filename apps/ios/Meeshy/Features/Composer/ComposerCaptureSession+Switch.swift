@@ -17,7 +17,6 @@ extension ComposerCaptureSession {
     func followSwitch(to position: AVCaptureDevice.Position) {
         zoomAnchor = nil
         pinchAnchor = nil
-        forgetExposure()
         controls.setZoom(1)
         let suite = ComposerCameraSwitchFollow.after(switchingTo: position, flash: flash, stage: stage)
         if let torche = suite.torch { controls.setTorch(torche, level: flashIntensity) }

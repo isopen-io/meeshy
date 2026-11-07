@@ -164,11 +164,6 @@ final class ComposerCaptureSession: ObservableObject {
     /// repart à zéro au démarrage suivant, et le fichier n'arrive qu'après.
     private(set) var pendingSegmentDuration: TimeInterval = 0
     var zoomAnchor: ComposerCaptureZoomAnchor?
-    /// Le biais d'exposition posé au soleil, en EV (OPUS-5) — 0 au toucher
-    /// suivant et à la bascule, comme l'objectif.
-    @Published var exposureBias: Float = 0
-    /// Le biais au début du glissé du soleil, `nil` hors glissé.
-    var exposureDragStart: Float?
     /// Le facteur au premier écart des doigts, `nil` hors pincement.
     var pinchAnchor: CGFloat?
     /// Deux doigts sont posés : ni le rangement, ni l'appui long, ni un
