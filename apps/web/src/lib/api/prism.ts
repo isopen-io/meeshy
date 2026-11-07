@@ -124,6 +124,53 @@ export function resolveMediaCaption(params: {
 }
 
 /**
+ * LE TEXTE ALTERNATIF D'UN MÉDIA (#7392) — le TROISIÈME contenu traduisible
+ * d'un `PostMedia`, et le seul qu'un lecteur d'écran PRONONCE.
+ *
+ * Le doc-comment de `resolveMediaCaption` ci-dessus ÉNUMÉRAIT déjà les trois
+ * contenus que la directive porteur #6280 interdit de confondre même à chaînes
+ * égales — « `Post.content`, la légende, `alt` » — et deux seulement avaient un
+ * résolveur. Le fil servait `PostMedia.alt` BRUT, dans la langue de l'auteur,
+ * pendant que la légende descendait le Prisme deux lignes plus haut : la carte
+ * `altTranslations` n'était même pas DÉCLARÉE sur `FeedMedia`, donc jetée au
+ * décodage, donc la descente était impossible en aval.
+ *
+ * Le défaut que ce site referme est celui que l'en-tête de ce fichier nomme
+ * comme sa raison d'exister — « un lecteur d'écran qui prononce un texte
+ * français avec une voix anglaise est ce défaut-là, rendu audible ». C'était la
+ * seule chaîne du dépôt à ne pas traverser `served()`.
+ *
+ * TROIS couples, jamais mélangés : `altLanguage`/`altTranslations` décrivent le
+ * texte alternatif, `captionLanguage`/`captionTranslations` la légende,
+ * `Post.originalLanguage`/`Post.translations` le corps. Même dialecte CARTE que
+ * la légende (`{ langue: { text, … } }`), donc même dépouillement
+ * (`buildPostTranslationRecord`), jamais celui du dialecte TABLEAU d'un message.
+ *
+ * **La conversation descend DÉJÀ ce couple** par la loi partagée
+ * `resolveMediaDescription` (#12333, `lib/view/media.ts` → `electDescription`),
+ * qui fait concourir la description de l'auteur ET la transcription dans une
+ * seule descente. Le FIL n'a pas de transcription à faire concourir — son
+ * `altText` alimente l'attribut `alt` d'une image, quand la légende et la
+ * transcription y sont rendues en texte VISIBLE, ailleurs. D'où une projection
+ * de `served()` sur le seul couple de l'alt, et non un appel à la loi à deux
+ * sources : y verser une transcription ferait prononcer au lecteur d'écran le
+ * texte que l'écran montre déjà.
+ */
+export function resolveMediaAlt(params: {
+  readonly preferredLanguages: readonly string[];
+  readonly altLanguage: string | null | undefined;
+  readonly altTranslations: unknown;
+  readonly alt: string;
+}): Served {
+  return served({
+    preferredLanguages: params.preferredLanguages,
+    originalLanguage: params.altLanguage,
+    translations: buildPostTranslationRecord(params.altTranslations),
+    original: params.alt,
+  });
+}
+
+/**
  * LE TEXTE D'UNE TRANSCRIPTION, QUEL QUE SOIT SON DISCRIMINANT.
  *
  * `Attachment.transcription` (`packages/shared/types/attachment.ts`) porte le

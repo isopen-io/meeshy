@@ -12,7 +12,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 
-import { prismFor, resolveAudioTrack, resolveMediaCaption, served, servedTranscript } from './prism';
+import { prismFor, resolveAudioTrack, resolveMediaAlt, resolveMediaCaption, served, servedTranscript } from './prism';
 
 /** La forme que rend un message : un tableau de lignes `MessageTranslation`. */
 const rows = (targetLanguage: string, translatedContent: string) => [
@@ -320,5 +320,61 @@ describe('prismFor — l’exploration prend la TÊTE du prisme, sans court-circ
       original: 'Bonjour',
     });
     expect(servedText).toEqual({ text: 'Bonjour', language: 'fr', translated: false });
+  });
+});
+
+/**
+ * `resolveMediaAlt` (#7392) — LE TEXTE ALTERNATIF D'UN MÉDIA, le TROISIÈME
+ * contenu traduisible d'un `PostMedia` et le seul qu'un lecteur d'écran
+ * PRONONCE. Son couple est `altLanguage` / `altTranslations`, jamais celui de
+ * la légende ni celui du corps du post : la directive porteur #6280 interdit de
+ * confondre les trois même à chaînes égales, et le doc-comment de
+ * `resolveMediaCaption` les ÉNUMÈRE — « `Post.content`, la légende, `alt` ».
+ *
+ * TÉMOIN DE RANG ≠ 1 (leçon 261) : au rang 1, le court-circuit interdit et la
+ * règle juste rendent le même verdict.
+ */
+describe('resolveMediaAlt — le texte alternatif descend son PROPRE couple langue/traductions', () => {
+  test('la langue primaire gagne même quand `altLanguage` est dans le prisme à un rang inférieur', () => {
+    const r = resolveMediaAlt({
+      preferredLanguages: ['fr', 'en'],
+      altLanguage: 'en',
+      altTranslations: { fr: { text: 'Un marché couvert au petit matin', translationModel: 'nllb-200', createdAt: '2026-11-07T00:00:00.000Z' } },
+      alt: 'A covered market at dawn',
+    });
+    expect(r).toEqual({ text: 'Un marché couvert au petit matin', language: 'fr', translated: true });
+  });
+
+  test('sans traduction vers une langue du lecteur, l’ORIGINAL est servi à SA langue', () => {
+    const r = resolveMediaAlt({
+      preferredLanguages: ['fr'],
+      altLanguage: 'en',
+      altTranslations: null,
+      alt: 'A covered market at dawn',
+    });
+    expect(r).toEqual({ text: 'A covered market at dawn', language: 'en', translated: false });
+  });
+
+  /** La carte de la LÉGENDE ne traduit pas le texte alternatif, et réciproquement. */
+  test('une traduction rangée dans la carte de la légende ne sert JAMAIS le texte alternatif', () => {
+    const r = resolveMediaAlt({
+      preferredLanguages: ['fr', 'en'],
+      altLanguage: 'en',
+      altTranslations: null,
+      alt: 'A covered market at dawn',
+    });
+    expect(r.text).toBe('A covered market at dawn');
+    expect(r.translated).toBe(false);
+  });
+
+  /** Même dialecte que `captionTranslations` — la CARTE, jamais le tableau d’un message. */
+  test('le dépouillement est celui de la carte `{ langue: { text } }`', () => {
+    const r = resolveMediaAlt({
+      preferredLanguages: ['de'],
+      altLanguage: 'en',
+      altTranslations: { de: { text: 'Ein überdachter Markt im Morgengrauen', translationModel: 'nllb-200', createdAt: '2026-11-07T00:00:00.000Z' } },
+      alt: 'A covered market at dawn',
+    });
+    expect(r).toEqual({ text: 'Ein überdachter Markt im Morgengrauen', language: 'de', translated: true });
   });
 });
