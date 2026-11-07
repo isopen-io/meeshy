@@ -42,7 +42,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "call.mode.gesture.hint",
+          "iosKey": "composer.camera.hint.photo",
           "androidName": "call_mode_gesture_hint",
           "status": "adopted"
         },
