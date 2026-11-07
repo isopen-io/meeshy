@@ -81,3 +81,27 @@ export function fixtureRemoveMember(communityId: string, userId: string): ApiRes
   write(community.id, members.filter((member) => member.userId !== userId));
   return { ok: true, data: null };
 }
+
+const INVITABLE: Readonly<Record<string, { readonly name: string; readonly username: string }>> = {
+  'u-bruno': { name: 'Bruno Laurent', username: 'bruno.laurent' },
+  'u-amina': { name: 'Amina Diallo', username: 'amina' },
+  'u-kwame': { name: 'Kwame Mensah', username: 'kwame' },
+  'u-ines': { name: 'Inès Ferreira', username: 'ines' },
+  'u-yuki': { name: 'Yuki Tanaka', username: 'yuki' },
+};
+
+/** `POST …/invite` de la recette (#6376) : mêmes refus que la passerelle — non-membre, simple membre d'une privée, inconnu, déjà membre. */
+export function fixtureInviteMember(communityId: string, userId: string): ApiResult<CommunityMember> {
+  const community = resolved(communityId);
+  if (community === null) return { ok: false, status: 404, error: 'Community not found' };
+  const role = community.viewerRole;
+  if (role === null || role === undefined) return { ok: false, status: 403, error: 'You must be a member to invite others' };
+  if (community.isPrivate && role === 'member') return { ok: false, status: 403, error: 'Only admins and moderators can invite to private communities' };
+  const invitee = INVITABLE[userId];
+  if (invitee === undefined) return { ok: false, status: 404, error: 'User to invite not found' };
+  const members = state.members[community.id] ?? [];
+  if (members.some((member) => member.userId === userId)) return { ok: false, status: 409, error: 'User is already a member of this community' };
+  const added = person(`ci-${userId}`, userId, invitee.name, invitee.username, 'member');
+  write(community.id, [...members, added]);
+  return { ok: true, data: added };
+}

@@ -15,7 +15,7 @@ from typing import List, Callable, Optional, Any
 
 # Import local
 from ..zmq_models import TranslationTask
-from services.task_privacy import task_scope
+from services.task_privacy import is_live_call_caption, task_scope
 from config.settings import LANGUAGE_MAPPINGS
 
 logger = logging.getLogger(__name__)
@@ -42,9 +42,14 @@ def _is_at_rest(task: Any) -> bool:
     return getattr(task, 'at_rest', False) is True
 
 
+def _cache_forbidden(task: Any) -> bool:
+    """#12822 au repos, #16648 sous-titre d'appel en direct : ni lu ni écrit dans un cache."""
+    return _is_at_rest(task) or is_live_call_caption(getattr(task, 'message_id', None))
+
+
 def _structure_kwargs(task: Any) -> dict:
     """Le choix de cache transmis au service ML : absent pour un texte ordinaire (signature d'avant)."""
-    return {'use_cache': False} if _is_at_rest(task) else {}
+    return {'use_cache': False} if _cache_forbidden(task) else {}
 
 
 UNSUPPORTED_LANGUAGE = 'UNSUPPORTED_LANGUAGE'
@@ -339,7 +344,7 @@ async def _translate_single_language(
         # ═══════════════════════════════════════════════════════════════════
         # ÉTAPE 1: Vérifier le cache
         # ═══════════════════════════════════════════════════════════════════
-        use_cache = translation_cache is not None and not _is_at_rest(task)
+        use_cache = translation_cache is not None and not _cache_forbidden(task)
         if use_cache:
             cached = await translation_cache.get_translation(
                 text=task.text,

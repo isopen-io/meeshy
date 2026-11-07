@@ -37,6 +37,23 @@ const arCommunityMembership = {
   'community.members.error': 'تعذّر تحميل الأعضاء.',
   'community.members.retry': 'إعادة المحاولة',
   'community.members.refused': 'يمكن للمسؤول فقط إدارة الأعضاء.',
+  'community.invite.open': 'دعوة',
+  'community.invite.title': 'دعوة أعضاء',
+  'community.invite.search': 'البحث عن أشخاص',
+  'community.invite.friends': 'الأصدقاء',
+  'community.invite.others': 'أشخاص آخرون',
+  'community.invite.member': 'عضو بالفعل',
+  'community.invite.searching': 'جارٍ البحث…',
+  'community.invite.empty': 'لم يتم العثور على أحد.',
+  'community.invite.offline': 'غير متصل: أعد الاتصال للدعوة.',
+  'community.invite.submit.none': 'دعوة',
+  'community.invite.submit.one': 'دعوة شخص واحد',
+  'community.invite.submit.other': 'دعوة {count} أشخاص',
+  'community.invite.done.one': 'انضم شخص واحد إلى المجتمع.',
+  'community.invite.done.other': 'انضم {count} أشخاص إلى المجتمع.',
+  'community.invite.partial': 'تعذّرت إضافة بعض الأشخاص.',
+  'community.invite.failed': 'فشلت الدعوة. حاول مرة أخرى.',
+  'community.invite.refused': 'لم يعد بإمكانك الدعوة إلى هذا المجتمع.',
 } as const satisfies CommunityMembershipCatalog;
 
 export default arCommunityMembership;
