@@ -344,11 +344,11 @@ final class ComposerCaptureSession: ObservableObject {
         photoIsRamping = true
         screenFlashBurst = true
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.brightnessRamp * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(ComposerFrontFlash.brightnessRamp))
             photoIsRamping = false
             guard stage == .armed else { return }
             controls.takePhoto(flash: .off)
-            try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.photoHold * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(ComposerFrontFlash.photoHold))
             screenFlashBurst = false
             guard stage == .armed else { return }
             ComposerScreenFlash.shared.restore()
