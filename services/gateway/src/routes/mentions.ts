@@ -7,6 +7,7 @@ import type { MentionSuggestion } from '../services/MentionService.js';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
 import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../services/historyFloor.js';
 import { mapMessageProtectionFields } from './conversations/messageProtectionProjection.js';
+import { keepAliveForReaderAcrossConversations, withInheritedExpiry } from '../services/messaging/quoteCascade.js';
 import { logError } from '../utils/logger.js';
 import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility';
 
@@ -207,7 +208,63 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         limit || 50
       );
 
-      return sendSuccess(reply, mentions.map(mention => ({
+      // #16583 — LES DEUX COUPURES DE SERVICE, SUR UNE LISTE QUI TRAVERSE LES
+      // CONVERSATIONS.
+      //
+      // #16558 a doté cette porte des drapeaux de protection et a tranché, à
+      // raison, de servir `expiresAt: null` faute d'échéances de lecteur
+      // résolues. Il n'a pas posé la COUPURE — ce sont deux questions, et seule
+      // la première avait été instruite : « quelle échéance servir ? » puis
+      // « ce message a-t-il le droit d'être servi à ce lecteur ? ».
+      //
+      // Et c'est leur COMPOSITION qui aggravait. Un éphémère échu arrivait avec
+      // `expiresAt: null`, `isViewOnce: false`, `isBlurred: false` : le client
+      // n'avait AUCUN drapeau à lire, donc rendait une bulle ORDINAIRE. Le
+      // choix fail-closed sur le décompte est juste pris seul ; combiné à
+      // l'absence de coupure, il retirait au client le dernier indice qui lui
+      // aurait fait masquer la bulle.
+      //
+      // La clé de lecteur est PAR CONVERSATION (`MessageStatusEntry` est indexé
+      // par `Participant.id`, lui-même scopé par conversation), d'où la forme
+      // `…AcrossConversations` — une clé unique ferait paraître « décompte pas
+      // démarré » tout message d'une autre conversation, donc servirait PLUS.
+      // Une liste vide ne coûte aucune requête.
+      const mentionRows = mentions.map((mention) => mention.message);
+      const mentionConversationIds = [...new Set(mentionRows.map((row) => row.conversationId))];
+      const mentionReaderKeys = mentionConversationIds.length === 0
+        ? []
+        : await prisma.participant.findMany({
+            where: { userId, conversationId: { in: mentionConversationIds }, isActive: true },
+            select: { id: true, conversationId: true },
+            // #4165 — borné, et la borne est EXACTE, pas un plafond arbitraire :
+            // un utilisateur n'a au plus qu'UNE participation active par
+            // conversation, donc le nombre de conversations distinctes de la
+            // page est le maximum de lignes que cette lecture peut rendre.
+            take: mentionConversationIds.length,
+          });
+      const mentionReaderPage = await keepAliveForReaderAcrossConversations(
+        prisma,
+        mentionRows,
+        new Map(mentionReaderKeys.map((row) => [row.conversationId, row.id])),
+      );
+      const aliveMentionIds = new Set(mentionReaderPage.alive.map((row) => row.id));
+      const servableMentions = mentions.filter((mention) => aliveMentionIds.has(mention.message.id));
+
+      /**
+       * La protection servie d'une mention : l'échéance de CE lecteur, puis
+       * raccourcie par ce que la mention cite. `withInheritedExpiry` s'adresse
+       * à une ligne qui porte son `id` — on le lui donne et on ne le réémet
+       * pas, l'objet servi le posant déjà lui-même.
+       */
+      const servedProtection = (row: (typeof mentionRows)[number]) => {
+        const { id: _addressedById, ...protection } = withInheritedExpiry(
+          { id: row.id, ...mapMessageProtectionFields(row, mentionReaderPage.deadlines.get(row.id)) },
+          mentionReaderPage.inherited,
+        );
+        return protection;
+      };
+
+      return sendSuccess(reply, servableMentions.map(mention => ({
         id: mention.id,
         messageId: mention.messageId,
         mentionedAt: mention.mentionedAt,
@@ -218,11 +275,11 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
           senderId: mention.message.senderId,
           createdAt: mention.message.createdAt,
           // #16558 — les drapeaux que le client lit pour VOILER la bulle et
-          // refuser son transfert. Sans échéances de lecteur résolues,
-          // `mapMessageProtectionFields` sert `expiresAt: null` pour un
-          // éphémère plutôt que la colonne interne : une porte de service
-          // échoue en montrant MOINS, jamais le décompte de quelqu'un d'autre.
-          ...mapMessageProtectionFields(mention.message),
+          // refuser son transfert. #16583 — et depuis que les échéances du
+          // lecteur sont résolues ci-dessus, l'`expiresAt` servi est LE SIEN,
+          // plus le `null` prudent d'alors ni la colonne interne. L'échéance
+          // héritée d'une citation la raccourcit encore, jamais ne l'allonge.
+          ...servedProtection(mention.message),
           sender: mention.message.sender ? {
             id: mention.message.sender.id,
             username: mention.message.sender.user?.username,
