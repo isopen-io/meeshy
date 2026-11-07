@@ -70,12 +70,42 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/**
+ * #16583 — la participation du lecteur PAR CONVERSATION, et ses échéances
+ * d'éphémère. `GET /mentions/me` applique désormais les deux coupures de
+ * service par lecteur, donc lit ces deux surfaces.
+ *
+ * Elles sont RENDUES, pas seulement déclarées : un double qui lève sur une
+ * surface que la production appelle fait répondre 500 à cette route, laquelle
+ * échoue CLOSED sur toute lecture de protection illisible — c'est déjà la
+ * posture de son plancher d'historique (voir le commentaire de
+ * `mockPrismaParticipantFindFirst` ci-dessus). Le défaut n'était donc pas dans
+ * la route mais dans l'étroitesse de ce double : un double partiel ne se
+ * signale qu'au moment où le module GRANDIT.
+ */
+const mockPrismaParticipantFindMany = jest.fn<any>();
+const mockPrismaStatusEntryFindMany = jest.fn<any>();
+const mockPrismaStatusEntryFindFirst = jest.fn<any>();
+
 function makePrisma() {
   return {
-    message: { findFirst: mockPrismaMessageFindFirst },
-    participant: { findFirst: mockPrismaParticipantFindFirst },
+    message: { findFirst: mockPrismaMessageFindFirst, findMany: jest.fn<any>().mockResolvedValue([]) },
+    participant: { findFirst: mockPrismaParticipantFindFirst, findMany: mockPrismaParticipantFindMany },
+    messageStatusEntry: {
+      findMany: mockPrismaStatusEntryFindMany,
+      findFirst: mockPrismaStatusEntryFindFirst,
+    },
     conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
   } as unknown as PrismaClient;
+}
+
+/** Le lecteur participe, et aucun éphémère ne décompte : le cas nominal. */
+function resetReaderSurfaces(): void {
+  mockPrismaParticipantFindMany.mockResolvedValue([
+    { id: '507f1f77bcf86cd7994390aa', conversationId: VALID_CONV_ID, userId: USER_ID },
+  ]);
+  mockPrismaStatusEntryFindMany.mockResolvedValue([]);
+  mockPrismaStatusEntryFindFirst.mockResolvedValue(null);
 }
 
 async function buildApp(): Promise<FastifyInstance> {
@@ -115,6 +145,7 @@ describe('GET /mentions/messages/:messageId', () => {
     mockPrismaMessageFindFirst.mockResolvedValue(makeMessageRow());
     mockPrismaParticipantFindFirst.mockResolvedValue(null);
     mockGetMentionsForMessage.mockResolvedValue([]);
+    resetReaderSurfaces();
   });
 
   it('returns 401 when no authorization header', async () => {
@@ -281,6 +312,7 @@ describe('GET /mentions/me', () => {
 
   beforeAll(async () => {
     mockGetRecentMentionsForUser.mockResolvedValue([]);
+    resetReaderSurfaces();
     app = await buildApp();
   });
 
@@ -289,6 +321,7 @@ describe('GET /mentions/me', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetRecentMentionsForUser.mockResolvedValue([]);
+    resetReaderSurfaces();
   });
 
   it('returns 401 when no authorization header', async () => {

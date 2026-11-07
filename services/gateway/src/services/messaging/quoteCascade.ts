@@ -250,6 +250,70 @@ export async function keepAliveForReader<T extends ReaderPageRow>(
   };
 }
 
+/**
+ * Les mêmes deux coupures, pour une page qui TRAVERSE les conversations
+ * (#16583).
+ *
+ * ─── POURQUOI UNE SECONDE FORME, ET PAS UN APPEL DE PLUS ────────────────────
+ *
+ * `MessageStatusEntry` est indexé par `Participant.id`, et un `Participant` est
+ * scopé par CONVERSATION : une liste qui mêle plusieurs conversations n'a pas
+ * UNE clé de lecteur, elle en a une par conversation. Passer une clé unique à
+ * {@link keepAliveForReader} sur une telle page lirait les échéances du lecteur
+ * dans la seule conversation d'où vient sa clé — et les messages des autres
+ * paraîtraient « décompte pas démarré », donc servis. La porte échouerait en
+ * montrant PLUS, exactement ce qu'elle ne doit jamais faire.
+ *
+ * `globalMessageSearch.servableForReader` résolvait déjà ce problème chez lui,
+ * en groupant par conversation. Cette unité en est le site PARTAGÉ : la boucle
+ * n'est plus à retaper, et c'est ce qui compte — une règle qu'il faut récrire à
+ * chaque site est une règle qu'un site finira par ne pas avoir.
+ *
+ * La carte est un PARAMÈTRE, jamais une requête interne : les deux appelants la
+ * tiennent déjà d'une lecture qu'ils font pour d'autres raisons (la portée
+ * d'accès pour la recherche, la participation du lecteur pour les mentions), et
+ * la relire ici doublerait une requête sans rien apprendre.
+ *
+ * Une conversation ABSENTE de la carte reçoit `undefined` — soit « aucune
+ * échéance de lecteur », soit la posture de {@link keepAliveForReader} : servi
+ * SANS décompte, jamais le décompte d'un autre.
+ */
+export async function keepAliveForReaderAcrossConversations<
+  T extends ReaderPageRow & { readonly conversationId: string },
+>(
+  prisma: QuoteCascadePrisma,
+  rows: readonly T[],
+  participantByConversation: ReadonlyMap<string, string | undefined>,
+  now: Date = new Date(),
+): Promise<ReaderPage<T>> {
+  if (rows.length === 0) return { alive: [], deadlines: new Map(), inherited: new Map() };
+
+  const byConversation = new Map<string, T[]>();
+  for (const row of rows) {
+    const bucket = byConversation.get(row.conversationId);
+    if (bucket) bucket.push(row);
+    else byConversation.set(row.conversationId, [row]);
+  }
+
+  const pages = await Promise.all(
+    [...byConversation].map(([conversationId, group]) =>
+      keepAliveForReader(prisma, group, participantByConversation.get(conversationId), now),
+    ),
+  );
+
+  const deadlines = new Map<string, EphemeralReaderResolution>();
+  const inherited = new Map<string, Date>();
+  for (const page of pages) {
+    for (const [id, resolution] of page.deadlines) deadlines.set(id, resolution);
+    for (const [id, deadline] of page.inherited) inherited.set(id, deadline);
+  }
+
+  // L'ordre d'ENTRÉE est rendu, pas l'ordre des groupes : cette unité garde une
+  // page, elle ne la trie pas — l'appelant a déjà choisi son `orderBy`.
+  const alive = new Set(pages.flatMap((page) => page.alive).map((row) => row.id));
+  return { alive: rows.filter((row) => alive.has(row.id)), deadlines, inherited };
+}
+
 export type QuoteDescendant = { readonly id: string; readonly conversationId: string };
 
 /**

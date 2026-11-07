@@ -489,6 +489,10 @@ export class MentionService {
             conversationId: true,
             senderId: true,
             createdAt: true,
+            // #16583 — la coupure de CITATION (#8630) remonte la chaîne par
+            // `replyToId` : sans lui, une mention qui RÉPOND à un éphémère mort
+            // pour ce lecteur survit à ce qu'elle cite.
+            replyToId: true,
             // #16558 — cette lecture alimente `GET /mentions/me`, qui SERT
             // `Message.content` : elle doit donc le bloc de protection, source
             // UNIQUE du `select` et de la projection servie (#4885 critère 4,
