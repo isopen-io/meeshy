@@ -5,7 +5,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
-import type { LiveSocketWatcher } from '@/lib/api/live-socket-watchers';
+import { watchRealtime, type WatchRealtime } from '@/lib/api/watch-realtime';
 import { stopBring, type BringDeps } from '@/lib/bring/bring-api';
 import { bindBringLive, bringStore, type BringStoreApi, type LiveBring } from '@/lib/bring/bring-live';
 import { startTone, stopTone, type ToneKind } from '@/lib/calls/call-tones';
@@ -37,23 +37,7 @@ export type BringTones = {
 
 const CALL_TONES: BringTones = { start: startTone, stop: stopTone };
 
-type Watch = (watcher: LiveSocketWatcher) => () => void;
-
-/** La socket vivante, chargée à la demande : le chunk `realtime` est à son plafond de poids. */
-const watchRealtime: Watch = (watcher) => {
-  let live = true;
-  let stop: (() => void) | null = null;
-  void import('@/lib/api/realtime').then(
-    ({ watchLiveSocket }) => {
-      if (live) stop = watchLiveSocket(watcher);
-    },
-    () => undefined,
-  );
-  return () => {
-    live = false;
-    stop?.();
-  };
-};
+type Watch = WatchRealtime;
 
 const viewerIdOf = (): string | null => resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? null;
 
