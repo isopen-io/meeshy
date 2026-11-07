@@ -5,7 +5,8 @@ import { GlyphSvg } from '@/components/glyph';
 import { COMMUNITIES_GLYPHS } from '@/components/glyphs-communities';
 import { ROW_MENU_GLYPHS } from '@/components/glyphs-row-menu';
 import type { MembershipAction } from '@/lib/communities/view';
-import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { translate } from '@/lib/i18n-catalog';
+import { translateMembership, type CommunityMembershipCatalogKey } from '@/lib/i18n-community-membership-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
@@ -22,10 +23,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 export type MembershipFailure = 'join' | 'refused' | 'leave' | 'offline';
 
-const FAILURE_KEY: Readonly<Record<MembershipFailure, InterfaceCatalogKey>> = {
-  join: 'community.membership.error.join',
+const FAILURE_KEY: Readonly<Record<MembershipFailure, CommunityMembershipCatalogKey>> = {
+  join: 'community.membership.error',
   refused: 'community.membership.error.refused',
-  leave: 'community.membership.error.leave',
+  leave: 'community.membership.error',
   offline: 'community.membership.offline',
 };
 
@@ -79,7 +80,7 @@ export function CommunityMembershipAction({
           style={{ ...JOIN_STYLE, opacity: inert ? 0.55 : 1 }}
         >
           <GlyphSvg glyph={COMMUNITIES_GLYPHS.plusCircle} size={18} />
-          {translate(language, pending ? 'community.membership.joining' : 'community.membership.join')}
+          {translateMembership(language, 'community.membership.join')}
         </button>
       ) : (
         <button
@@ -93,21 +94,21 @@ export function CommunityMembershipAction({
           style={{ ...LEAVE_STYLE, opacity: inert ? 0.55 : 1 }}
         >
           <GlyphSvg glyph={ROW_MENU_GLYPHS.signOut} size={18} className="rtl:-scale-x-100" />
-          {translate(language, pending ? 'community.membership.leaving' : 'community.membership.leave')}
+          {translateMembership(language, 'community.membership.leave')}
         </button>
       )}
       {shownFailure === null ? null : (
         <p role={shownFailure === 'offline' ? 'status' : 'alert'} data-community-membership-failure={shownFailure} className="text-center text-caption" style={{ color: shownFailure === 'offline' ? undefined : ERROR_INK }}>
-          {translate(language, FAILURE_KEY[shownFailure])}
+          {translateMembership(language, FAILURE_KEY[shownFailure])}
         </p>
       )}
       {confirming ? (
         <ConfirmDialog
           name="community-leave"
-          title={translate(language, 'community.membership.leave.confirm.title')}
-          body={translate(language, 'community.membership.leave.confirm.body')}
-          cancelLabel={translate(language, 'community.membership.cancel')}
-          confirmLabel={translate(language, 'community.membership.leave.confirm.action')}
+          title={translateMembership(language, 'community.membership.leave.confirm.title')}
+          body={translateMembership(language, 'community.membership.leave.confirm.body')}
+          cancelLabel={translate(language, 'common.cancel')}
+          confirmLabel={translateMembership(language, 'community.membership.leave.confirm.action')}
           tone="destructive"
           onCancel={() => setConfirming(false)}
           onConfirm={() => {

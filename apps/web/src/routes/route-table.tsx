@@ -201,6 +201,15 @@ const withAccountRecoveryCatalog = <Screen,>(screen: Promise<Screen>) =>
     import('@/lib/i18n-account-recovery-catalog').then((m) => m.loadAccountRecoveryCatalog(currentInterfaceLanguage())),
   ]).then(([loaded]) => loaded);
 
+/* LE DÉTAIL D'UNE COMMUNAUTÉ (#6378) — son chunk ET le catalogue
+   `community.membership.*`, en parallèle : le catalogue d'interface est à son
+   plafond, et `translateMembership` lève sur un catalogue non chargé. */
+const communityScreen = () =>
+  Promise.all([
+    import('@/routes/community'),
+    import('@/lib/i18n-community-membership-catalog').then((m) => m.loadCommunityMembershipCatalog(currentInterfaceLanguage())),
+  ]).then(([screen]) => screen);
+
 /* LA CONFIRMATION D'UN LIEN DE CONNEXION (« Se connecter en tant que @x ? », 8da83d255f) — le lien magique et la
    vérification d'adresse la montrent : leur chunk ET le catalogue `signInLink.confirm.*`, en parallèle — le
    catalogue d'interface est à son plafond, et `translateSignInLink` lève sur un catalogue non chargé. */
@@ -577,7 +586,7 @@ export const ROUTES = {
      L'ORDRE compte : le routeur rend la PREMIÈRE adresse qui correspond, et
      `new` serait sinon lu comme l'identifiant d'une communauté. */
   communityNew: { pattern: '/communities/new', screen: () => import('@/routes/community-new') },
-  community: { pattern: '/communities/$community', screen: () => import('@/routes/community') },
+  community: { pattern: '/communities/$community', screen: communityScreen },
   settings: { pattern: '/settings', screen: () => import('@/routes/settings') },
   profile: { pattern: '/me', screen: () => import('@/routes/profile') },
   /* L'ESPACE D'ADMINISTRATION (#6432) — nomenclature LEGACY reprise (D-5) :

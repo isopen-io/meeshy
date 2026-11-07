@@ -13,7 +13,6 @@ import enRowActions from './catalog-en-row-actions';
 import enEngagement from './catalog-en-engagement';
 import enCallShell from './catalog-en-call-shell';
 import enCallJoin from './catalog-en-call-join';
-import enCommunityMembership from './catalog-en-community-membership';
 import enCallDecline from './catalog-en-call-decline';
 import enCallFeedback from './catalog-en-call-feedback';
 import enCallsErase from './catalog-en-calls-erase';
@@ -229,7 +228,6 @@ const en = {
   ...enEngagement,
   ...enCallShell,
   ...enCallJoin,
-  ...enCommunityMembership,
   ...enCallDecline,
   ...enCallFeedback,
   ...enCallsErase,

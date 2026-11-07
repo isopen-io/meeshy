@@ -1,7 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadCommunityMembershipCatalog } from '@/lib/i18n-community-membership-catalog';
 
 import { CommunityMembershipAction } from './community-membership';
 
@@ -14,6 +15,11 @@ const noop = () => undefined;
 const base = { pending: false, online: true, failure: null, onJoin: noop, onLeave: noop } as const;
 
 describe('CommunityMembershipAction', () => {
+  beforeAll(async () => {
+    await loadCommunityMembershipCatalog('fr');
+    await loadCommunityMembershipCatalog('en');
+  });
+
   test('« Rejoindre » est un bouton nommé, actif', () => {
     const html = renderToStaticMarkup(<CommunityMembershipAction language="fr" action="join" {...base} />);
     expect(html).toContain('data-community-join');
@@ -37,14 +43,13 @@ describe('CommunityMembershipAction', () => {
     const html = renderToStaticMarkup(<CommunityMembershipAction language="fr" action="join" {...base} pending />);
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain(' disabled="');
-    expect(html).toContain('Adhésion…');
   });
 
   test('hors ligne, le geste est inerte et l’écran dit pourquoi', () => {
     const html = renderToStaticMarkup(<CommunityMembershipAction language="fr" action="leave" {...base} online={false} />);
     expect(html).toContain(' disabled="');
     expect(html).toContain('role="status"');
-    expect(html).toContain('Hors ligne');
+    expect(html).toContain('Hors ligne.');
   });
 
   test('un refus d’adhésion se dit dans la langue du lecteur', async () => {

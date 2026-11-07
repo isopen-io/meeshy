@@ -13,7 +13,6 @@ import deRowActions from './catalog-de-row-actions';
 import deEngagement from './catalog-de-engagement';
 import deCallShell from './catalog-de-call-shell';
 import deCallJoin from './catalog-de-call-join';
-import deCommunityMembership from './catalog-de-community-membership';
 import deCallDecline from './catalog-de-call-decline';
 import deCallFeedback from './catalog-de-call-feedback';
 import deCallsErase from './catalog-de-calls-erase';
@@ -229,7 +228,6 @@ const de = {
   ...deEngagement,
   ...deCallShell,
   ...deCallJoin,
-  ...deCommunityMembership,
   ...deCallDecline,
   ...deCallFeedback,
   ...deCallsErase,
