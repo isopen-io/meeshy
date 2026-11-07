@@ -316,7 +316,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'messaging/contentCaptureNotices.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
-  'messaging/messageReadAccess.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  // #16557 — la troisième lecture est celle de `loadMessageReadableByReader` (la forme « demande »), même projection sans contenu.
+  'messaging/messageReadAccess.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageNotificationFanOut.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageRemovalEffects.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7377 — la pose d'une étoile : `STAR_ADMISSION_MESSAGE_SELECT`, les seules

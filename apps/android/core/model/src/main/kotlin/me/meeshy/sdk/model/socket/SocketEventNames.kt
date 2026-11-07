@@ -196,6 +196,7 @@ object SocketEventNames {
     const val RELATION_RITUAL_STARTED = "relation:ritual-started"
     const val RELATION_RITUAL_PROGRESS = "relation:ritual-progress"
     const val RELATION_RITUAL_COMPLETED = "relation:ritual-completed"
+    const val BRING_STOPPED = "bring:stopped"
 
     // status
     const val STATUS_CREATED = "status:created"
@@ -409,6 +410,7 @@ object SocketEventNames {
         RELATION_RITUAL_STARTED,
         RELATION_RITUAL_PROGRESS,
         RELATION_RITUAL_COMPLETED,
+        BRING_STOPPED,
         STATUS_CREATED,
         STATUS_DELETED,
         STATUS_REACTED,

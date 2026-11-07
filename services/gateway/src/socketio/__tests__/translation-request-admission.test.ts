@@ -91,6 +91,14 @@ function build(options: {
         ? jest.fn<any>().mockRejectedValue(new Error('mongo down'))
         : jest.fn<any>().mockResolvedValue({ allowViewHistory: false }),
     },
+    // #16557 — la VRAIE loi de lecture lit aussi le masquage personnel et les
+    // accusés du lecteur : rien de masqué, aucune échéance, aucune ouverture.
+    userConversationPreferences: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    userMessageDeletion: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    messageStatusEntry: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
   };
   manager.socketToUser = new Map([['sock-1', USER_ID]]);
   manager.connectedUsers = new Map([[USER_ID, { id: USER_ID, isAnonymous: false, participantId: 'p-2' }]]);
