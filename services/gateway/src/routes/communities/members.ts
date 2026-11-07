@@ -15,6 +15,7 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateCoMemberPresence, type MemberUser } from './member-presence';
+import { isAddableUser } from './addable-user';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembersRoutes' });
@@ -306,13 +307,8 @@ const community = await fastify.prisma.community.findFirst({
         return sendForbidden(reply, 'Only community admins can add members');
       }
 
-      // Verifier que l'utilisateur a ajouter existe
-      const userToAdd = await fastify.prisma.user.findFirst({
-        where: { id: validatedData.userId },
-        select: { id: true }
-      });
-
-      if (!userToAdd) {
+      // #6376 — un compte vivant, sans blocage : la règle de POST …/invite (`isAddableUser`).
+      if (!(await isAddableUser(fastify.prisma, userId, validatedData.userId))) {
         return sendNotFound(reply, 'User to add not found');
       }
 

@@ -45,6 +45,14 @@ final class MockComposerCaptureCamera: ComposerCaptureCameraProviding {
         torchRequests.append(mode)
     }
 
+    /// Le biais que l'objectif sert ; `0...0` ⇒ objectif sans réglage.
+    var exposureBiasRange: ClosedRange<Float> = -8...8
+    private(set) var exposureBiasRequests: [Float] = []
+
+    func setExposureBias(_ ev: Float) {
+        exposureBiasRequests.append(ev)
+    }
+
     func takePhoto(flash: AVCaptureDevice.FlashMode) {
         photoFlashes.append(flash)
     }

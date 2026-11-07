@@ -245,3 +245,21 @@ export function CommunityMembersLink({ language, communityId }: { readonly langu
     </Link>
   );
 }
+
+/** « Inviter » (#6376) : ouvre la feuille d'invitation, chargée à la demande (`community-invite.tsx`). */
+export function CommunityInviteButton({ language, onOpen }: { readonly language: InterfaceLanguage; readonly onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      data-community-invite-open
+      className="flex items-center gap-3 rounded-card px-3.5 text-start focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{ ...SECTION_CARD_STYLE, minHeight: 52, color: INK }}
+    >
+      <span aria-hidden="true" style={{ color: 'var(--color-ios-brand)' }}>
+        <Glyph name="plus" size={18} />
+      </span>
+      <span className="flex-1 text-body font-semibold">{translateMembership(language, 'community.invite.open')}</span>
+    </button>
+  );
+}
