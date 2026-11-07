@@ -1869,7 +1869,17 @@ describe('MessageHandler._updateUnreadCounts', () => {
     mockPostReplyToFromMetadata.mockReturnValue(null);
   });
 
-  it('returns early when senderId is null', async () => {
+  /**
+   * #16691 — RE-INSTRUIT. Ce témoin était le SECOND exemplaire du gate
+   * `!senderId`, dans une autre suite que celui d'
+   * `emitUnreadCountsToRecipients.test.ts` : deux témoins gelaient le même
+   * symptôme, et le correctif devait faire tomber les deux.
+   *
+   * Sans expéditeur il n'y a personne à EXCLURE — l'audience correcte est
+   * l'ensemble des participants vivants, jamais ∅. Un message d'agent ou
+   * système passe donc par le compteur comme les autres.
+   */
+  it('compte les non-lus même sans expéditeur — personne à exclure', async () => {
     const io = makeMockIo();
     const participantFindMany = jest.fn(async () => [{ id: 'p1', userId: 'u1', joinedAt: new Date() }]);
     const prisma = makeMockPrisma({
@@ -1883,9 +1893,16 @@ describe('MessageHandler._updateUnreadCounts', () => {
     const msg = { id: 'msg-1', conversationId: 'conv-abc', senderId: null, content: 'hi', createdAt: new Date(), sender: null, attachments: [], translations: [] } as any;
     await handler.broadcastNewMessage(msg, 'conv-abc');
 
-    // unread count update participants query should not be called for unread counts (but conversation:updated will still call findMany)
-    // The key check: readStatusService.getUnreadCountsForParticipants should not be called with senderId=null
-    expect(readStatusService.getUnreadCountsForParticipants).not.toHaveBeenCalled();
+    // L'audience n'est pas vide : le participant vivant entre dans le lot, et
+    // le service de comptage est bien interrogé pour lui.
+    expect(readStatusService.getUnreadCountsForParticipants).toHaveBeenCalled();
+    // Les arguments se relisent depuis `mock.calls` : le double est un
+    // `jest.fn()` sans generics, donc `toHaveBeenCalledWith` y est typé à ZÉRO
+    // argument et un appel à deux rendrait TS2554 — le seul code que le cliquet
+    // de dette de types ne musèle pas.
+    const [lot, convId] = (readStatusService.getUnreadCountsForParticipants as any).mock.calls[0];
+    expect(lot).toEqual([{ id: 'p1', userId: 'u1', joinedAt: expect.any(Date) }]);
+    expect(convId).toBe('conv-normalized');
   });
 
   it('emits CONVERSATION_UNREAD_UPDATED per participant', async () => {
