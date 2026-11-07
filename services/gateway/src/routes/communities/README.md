@@ -60,6 +60,8 @@ Gestion complète des membres:
 - `PATCH /communities/:id/members/:memberId/role` - Modifier le rôle d'un membre (admin uniquement)
 - `DELETE /communities/:id/members/:memberId` - Retirer un membre (admin uniquement)
 
+**Ne plus être membre d'une communauté qui garde ses salons, c'est en sortir (#16704).** `DELETE …/members/:memberId` et `POST /communities/:id/leave` (`membership.ts`), sur une communauté privée ou désactivée (`communityGuardsItsSalons`), font sortir la personne de chaque salon vivant de la communauté par `exitCommunitySalons` (`services/conversations/communitySalonExit.ts`) : le même départ que `POST /conversations/:id/leave` (`leftAt`, succession du créateur, avis « X a quitté la conversation », `conversation:participant-left` avec l'effectif absolu, fin d'appartenance), sans jamais clore un salon. Une communauté publique vivante ne fait sortir de rien : ses salons sont ouverts à quiconque.
+
 ### settings.ts
 Paramètres et modifications:
 - `PUT /communities/:id` - Mettre à jour une communauté (créateur uniquement)
