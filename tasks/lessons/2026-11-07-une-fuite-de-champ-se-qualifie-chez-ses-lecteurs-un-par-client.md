@@ -1,8 +1,8 @@
-# Une fuite de champ se qualifie chez ses LECTEURS, un par client
+## Une fuite de champ se qualifie chez ses LECTEURS, un par client (cycle 141)
 
 **Date** : 2026-11-07 · **Cycle** : 141 · **Issues** : #16689, #16691, #16687
 
-## Le constat
+### Le constat
 
 #16689 annonçait la conséquence d'une fuite de `clientMessageId` sur
 `message:edited` en citant le web : « un pair peut prendre l'édition d'un autre
@@ -20,7 +20,7 @@ La conséquence VIVANTE était ailleurs, et l'issue ne la nommait pas : iOS rout
 Le cid de l'auteur se GRAVAIT dans la ligne locale du pair, où il alimente le
 verdict de couche appareil d'un hybride.
 
-## La règle
+### La règle
 
 > « Un pair pourrait se tromper » est une HYPOTHÈSE ; « ce décodeur-là l'écrit
 > dans sa base » est une MESURE. Les deux justifient le même correctif et ne
@@ -37,7 +37,7 @@ leçon du cycle 122 (« qui AFFICHE ce qu'il élit ? ») appliquées non au
 correctif mais à son RÉCIT : annoncer une panne qu'on n'a pas mesurée coûte la
 confiance dans les cycles où il y en a une.
 
-## Corollaire — un témoin gelant a des JUMEAUX, et la suite ciblée ne les voit pas
+### Corollaire — un témoin gelant a des JUMEAUX, et la suite ciblée ne les voit pas
 
 Le lot #16691 a re-instruit le témoin qui gelait le gate `!senderId` dans
 `emitUnreadCountsToRecipients.test.ts`. Un SECOND exemplaire du même gel vivait
@@ -50,7 +50,7 @@ le répertoire du module corrigé, ne l'atteignaient pas.
 > la suite complète avant de se dire fini : le dépôt documente déjà « deux
 > exemplaires du même témoin gelaient le symptôme ».
 
-## Corollaire — une jumelle de TYPE se révèle au premier champ ajouté
+### Corollaire — une jumelle de TYPE se révèle au premier champ ajouté
 
 `MeeshySocketIOManager.ts` déclarait son propre `SocketUser`, copie verbatim de
 celui de `utils/socket-helpers.ts`. Ajouter un champ à l'un a fait tomber la
@@ -63,7 +63,7 @@ une relecture.
 > deux. Devant un `type`/`interface` qu'on s'apprête à élargir :
 > `grep -rn "interface <Nom>"` AVANT d'écrire le champ.
 
-## Corollaire — retirer un gate n'est pas une opération locale
+### Corollaire — retirer un gate n'est pas une opération locale
 
 Le gate `!senderId` garantissait `senderId` non nul au code d'APRÈS, qui
 filtrait `p.userId !== senderId`. Le retirer naïvement aurait fait satisfaire
