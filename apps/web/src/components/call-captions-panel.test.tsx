@@ -5,14 +5,14 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { CallCaption } from '@/lib/calls/call-captions';
-import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
+import { speakerColor } from '@/lib/calls/call-speaker-color';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
 import { CallCaptionsPanel } from './call-captions-panel';
 
-const colorOf = (line: CallCaption): string => (line.mine ? SELF_SPEAKER_COLOR : speakerColor(line.speakerId));
+const colorOf = (line: CallCaption): string => speakerColor(line.speakerId, line.speakerName);
 
 /**
  * LE BANDEAU DES SOUS-TITRES (#8393) — un verre d'appel sombre, une couleur
@@ -81,10 +81,13 @@ describe('le bandeau', () => {
     expect(html).toContain('dir="auto"');
   });
 
-  test('le nom de chaque personne dans SA couleur ; le mien en blanc', () => {
+  test('le nom ET le texte de chaque sous-titre portent la couleur de son auteur, la mienne comprise (#16614)', () => {
     const html = panel({ captions: [caption(), caption({ id: 'w-2', speakerId: 'u-me', mine: true, translated: null, pair: null, original: 'Salut', at: 2_000 })] });
-    expect(html).toContain(`color:${speakerColor('u-nadia')}`);
-    expect(html).toContain(`color:${SELF_SPEAKER_COLOR}`);
+    const nadia = speakerColor('u-nadia', 'Nadia');
+    const me = speakerColor('u-me', 'Nadia');
+    expect(html).toContain(`<strong style="color:${nadia}">`);
+    expect(html).toContain(`<span dir="auto" style="color:${nadia}">Bonjour à tous</span>`);
+    expect(html).toContain(`<span dir="auto" style="color:${me}">Salut</span>`);
   });
 
   test('une ligne traduite porte l’étiquette « EN → FR » ; l’original n’en porte pas', () => {

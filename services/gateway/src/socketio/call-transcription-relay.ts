@@ -178,7 +178,9 @@ export async function readCallListeners(prisma: PrismaClient, callId: string): P
  * Translates a final transcription segment to each active participant's
  * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
  * Only fires for final segments (isFinal=true) to avoid flooding ZMQ.
- * Falls back to emitting the original text if translation fails.
+ * The ORIGINAL goes to the whole call room at once (#16613); each translation
+ * follows to its listeners when it arrives, and a failed or late one leaves
+ * them on the original — nothing is emitted twice.
  *
  * Security fix 2026-08-13: every relayed segment is stamped with
  * `speakerUserId` (the server-authenticated caller resolved by
@@ -285,11 +287,14 @@ export async function translateAndEmitSegment(
     return;
   }
 
-  // Les auditeurs de même langue sont servis TOUT DE SUITE, en original :
-  // leur sous-titre n'attend pas le retour ZMQ des autres langues.
-  emitTranslatedSegmentTo(
-    socket,
-    sameLanguageListeners,
+  // #16612 / #16613 — l'original part TOUT DE SUITE vers toute la salle, sans
+  // attendre aucune traduction : personne ne reste sans sous-titre pendant
+  // que le traducteur travaille. La traduction de chaque langue suit vers ses
+  // seuls auditeurs, sous le même énoncé, et les trois clients l'y fusionnent
+  // (web `mergeCaption`, iOS `CallTranscriptMergeRules`, Android
+  // `CallLiveJournal.merged`) — comme la traduction d'un message.
+  socket.to(ROOMS.call(data.callId)).emit(
+    CALL_EVENTS.TRANSLATED_SEGMENT,
     buildTranslatedSegment(data, speaker, data.segment.language)
   );
   if (sameLanguageListeners.length > 0) metrics.delivered('same_language');
@@ -324,7 +329,6 @@ export async function translateAndEmitSegment(
           const TIMEOUT_MS = 10_000;
           const timer = guardedTimeout({ name: 'call-transcription-segment-timeout', afterMs: TIMEOUT_MS, logger, run: () => {
             zmqClient.off(scopedEvent, onResult);
-            emitTranslatedSegmentTo(socket, listeners, buildTranslatedSegment(data, speaker, targetLanguage));
             timing.finish('timeout');
             resolve();
           } });
@@ -345,8 +349,7 @@ export async function translateAndEmitSegment(
           zmqClient.on(scopedEvent, onResult);
         });
       } catch (err) {
-        logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });
-        emitTranslatedSegmentTo(socket, listeners, buildTranslatedSegment(data, speaker, targetLanguage));
+        logger.warn('Call transcription translation failed — the original already went out', { callId: data.callId, targetLanguage, err });
         timing.finish('error');
       }
     })

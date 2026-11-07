@@ -187,9 +187,10 @@ describe('call:transcription-segment — les lectures partent ensemble (#16575)'
     await done;
 
     const served = h.emissions.filter((e) => e.event === CALL_EVENTS.TRANSLATED_SEGMENT);
-    expect(served).toHaveLength(1);
-    expect(served[0].rooms).toEqual([ROOMS.user(LISTENER_ID)]);
-    expect(served[0].payload.segment.translatedText).toBe('Hello world');
+    expect(served).toHaveLength(2);
+    expect(served[0].rooms).toEqual([ROOMS.call(CALL_ID)]);
+    expect(served[1].rooms).toEqual([ROOMS.user(LISTENER_ID)]);
+    expect(served[1].payload.segment.translatedText).toBe('Hello world');
   });
 
   it('ne lit pas les auditeurs pour un segment partiel', async () => {

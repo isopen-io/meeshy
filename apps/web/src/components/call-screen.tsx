@@ -21,7 +21,7 @@ import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/c
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallPanels, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { mineInMenu, SELF_CONTROL_GROUPS, selfControlsPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
-import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
+import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall, type CallMember } from '@/lib/calls/call-store';
@@ -564,7 +564,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
      cadre de la pilule déployée, ils en sortent quand elle s'efface, et
      restent lus (et annoncés) au-dessus de sa place. */
   const captionsFramed = expanded && !hidden && chrome.panel !== 'journal';
-  const colorOf = (caption: CallCaption): string => (caption.mine ? SELF_SPEAKER_COLOR : speakerColor(caption.speakerId));
+  const colorOf = (caption: CallCaption): string => speakerColor(caption.speakerId, caption.speakerName);
   const captions =
     call.captionsMode === 'off' || !live || chrome.panel === 'journal' ? null : (
       <Suspense fallback={null}>
