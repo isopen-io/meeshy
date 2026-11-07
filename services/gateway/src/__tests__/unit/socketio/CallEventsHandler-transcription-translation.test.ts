@@ -471,7 +471,9 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
       VALID_SEGMENT.segment.language,
       'es',
       MESSAGE_ID,
-      VALID_CALL_ID
+      VALID_CALL_ID,
+      'basic',
+      { timeoutMs: 10_000, retryEnabled: false }
     );
     expect(zmqClient.translateText).not.toHaveBeenCalledWith(
       expect.anything(),
