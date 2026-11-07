@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 
-import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+import { authorAccentColor, DEFAULT_AUTHOR_ACCENT } from '@meeshy/shared/utils/conversation-colors';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { myProfileQueryOptions } from '@/lib/api/profile';
@@ -40,7 +40,6 @@ import { useScheme } from './profile-banner-design';
  * telle qu'elle était, défilement compris : elle n'a jamais été démontée.
  */
 
-const FALLBACK_ACCENT = '#6366F1';
 const SWIPE_DISTANCE = 48;
 
 export type DecorPreviewProps = {
@@ -75,7 +74,7 @@ export function DecorPreview(props: DecorPreviewProps) {
   const proposals = useProposals({ current: pack, packs, deps });
   const profile = useQuery({ ...myProfileQueryOptions(deps), enabled: deps.source === 'gateway' });
   const mine = useDecorDesigns(profile.data?.profileDecor);
-  const accent = profile.data === undefined ? FALLBACK_ACCENT : authorAccentColor(profile.data.id, profile.data.displayName ?? profile.data.username);
+  const accent = profile.data === undefined ? DEFAULT_AUTHOR_ACCENT : authorAccentColor(profile.data.id, profile.data.displayName ?? profile.data.username);
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [equipFailed, setEquipFailed] = useState(false);

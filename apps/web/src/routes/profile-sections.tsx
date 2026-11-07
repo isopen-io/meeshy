@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
+import { DEFAULT_AUTHOR_ACCENT } from '@meeshy/shared/utils/conversation-colors';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { Avatar, MoodPeekTarget } from '@/components/avatar';
@@ -686,8 +687,8 @@ export function StatsSection({ language, stats }: { readonly language: Interface
   );
 }
 
-/** L'accent des bannières de design sur MON profil : l'indigo de la marque, la couleur que mon profil porte déjà. */
-export const DECOR_ACCENT = '#6366F1';
+/** L'accent des bannières de design sur MON profil : l'indigo de la marque, la couleur que mon profil porte déjà. Source UNIQUE partagée (`@meeshy/shared`), jamais un littéral réécrit ici. */
+export const DECOR_ACCENT = DEFAULT_AUTHOR_ACCENT;
 
 const ENTRY_CLASS = 'flex items-center gap-3 px-3.5 focus-visible:outline-2';
 

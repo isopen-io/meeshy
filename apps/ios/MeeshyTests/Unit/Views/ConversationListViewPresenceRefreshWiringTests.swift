@@ -105,6 +105,8 @@ final class LivePresenceRepaintGuardTests: XCTestCase {
         "Features/Main/Views/AdaptiveRootView.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
         "Features/Main/Views/AudioFullscreenPage+Transcription.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
         "Features/Main/Views/PostDetailView+Presentations.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
+        "Features/Stories/Views/MyStoriesViewersPresentation.swift": "fournisseur de UserProfileSheet — l'en-tête se repeint par MeeshyLivePresence",
+        "Features/Settings/Views/PacksSettingsView.swift": "fournisseur du profil de l'éditeur — sa page et UserProfileSheet se repeignent par MeeshyLivePresence",
         "Features/Main/Views/CommentRowView.swift": "reçoit sa présence de ThreadedCommentSection, monté sous LivePresence par ses hôtes",
         "Features/Stories/Views/StoryTrayView+RingCell.swift": "cellule Equatable — ses hôtes la montent sous LivePresence",
         "Features/Main/Components/MessageDetail/MessageViewsMemberPresence.swift": "règle sans vue — ses deux hôtes lisent sous LivePresence",
