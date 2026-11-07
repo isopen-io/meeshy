@@ -1,3 +1,4 @@
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
@@ -161,7 +162,7 @@ export async function emitUnreadCountsToRecipients(params: {
     const all =
       participants ??
       (await prisma.participant.findMany({
-        where: { conversationId, isActive: true },
+        where: { conversationId, ...PARTICIPATION_VIVANTE },
         select: { id: true, userId: true, joinedAt: true },
       }));
 

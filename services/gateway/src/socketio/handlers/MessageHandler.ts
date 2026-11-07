@@ -29,6 +29,7 @@
 // (`@meeshy/shared/types/index`), donc `message.messageType || 'text'` la rend.
 // Une fois le sac de clés retiré, il ne restait AUCUN blocage : ni cast, ni
 // validateur au producteur.
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import type { MeeshySocket, MeeshyIOServer } from '../typed-socket';
 import { clientDeclaredProtection } from './messageProtectionInput';
 import { forwardReferencesOf } from '../../validation/forwarded-attachments';
@@ -1711,7 +1712,7 @@ export class MessageHandler {
     if (!senderId) return;
 
     const participants = await this.prisma.participant.findMany({
-      where: { conversationId, isActive: true },
+      where: { conversationId, ...PARTICIPATION_VIVANTE },
       select: { id: true, userId: true }
     });
 

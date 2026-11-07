@@ -91,6 +91,7 @@
  * périodique (cf. `ExpiredStoriesCleanupService`), qui a sa propre issue.
  */
 
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
@@ -330,7 +331,7 @@ async function announceDepartures(params: {
   const { prisma, io, conversationId, guests, revokedAt } = params;
   announceConversationLanguageChange({ kind: 'departure', conversationId });
   const remaining: ReadonlyArray<MemberCountAudienceTarget> = await prisma.participant.findMany({
-    where: { conversationId, isActive: true },
+    where: { conversationId, ...PARTICIPATION_VIVANTE },
     select: { id: true, userId: true, role: true, user: { select: { role: true } } },
   });
 
