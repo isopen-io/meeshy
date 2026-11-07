@@ -141,7 +141,7 @@ async function buildApp(): Promise<FastifyInstance> {
     },
     $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
     user: {
-      findFirst: jest.fn().mockResolvedValue({ id: OTHER_USER_ID, username: 'bob' }),
+      findFirst: jest.fn().mockImplementation(async ({ where }: any) => (where?.OR ? null : { id: OTHER_USER_ID, username: 'bob' })),
       findUnique: jest.fn().mockResolvedValue({ id: OTHER_USER_ID, username: 'bob' }),
     },
   });

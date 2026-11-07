@@ -21,6 +21,7 @@ import {
   sendInternalError
 } from '../../utils/response.js';
 import { CommunityRole } from './types';
+import { isBlockedBetween } from '../../utils/blocking';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
@@ -467,12 +468,15 @@ export async function registerMembershipRoutes(
         }
       }
 
+      // #6376 — l'invitation AJOUTE la personne, sans son accord : ni un compte
+      // désactivé, ni un blocage dans un sens ou dans l'autre. Même 404 qu'un
+      // inconnu, pour ne pas dire à l'inviteur qu'on l'a bloqué.
       const userToInvite = await fastify.prisma.user.findFirst({
-        where: { id: inviteeId },
+        where: { id: inviteeId, deactivatedAt: null },
         select: { id: true }
       });
 
-      if (!userToInvite) {
+      if (!userToInvite || await isBlockedBetween(fastify.prisma, userId, inviteeId)) {
         return sendNotFound(reply, 'User to invite not found');
       }
 
