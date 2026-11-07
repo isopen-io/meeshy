@@ -291,6 +291,17 @@ describe('#16684 · le curseur du fil ordonne TOTALEMENT', () => {
     await app.close();
   });
 
+  /* Le mode de RATTRAPAGE lit en ASCENDANT : sa clé de rupture doit suivre ce
+   * sens-là, sans quoi l'ordre et la fenêtre décriraient deux ordres
+   * différents. Témoin venu de `messages-routes.test.ts` (#16684). */
+  it('départage dans le MÊME sens que le tri, y compris en rattrapage ascendant', async () => {
+    const { app, prisma } = await openThread(FRATRIE);
+    await readPage(app, 'limit=10&after=2026-11-04T09:00:00.000Z');
+
+    expect(pageQueries(prisma)[0].orderBy).toEqual([{ createdAt: 'asc' }, { id: 'asc' }]);
+    await app.close();
+  });
+
   it('garde la fratrie de la cible dans la fenêtre `around`', async () => {
     const { app } = await openThread(FRATRIE);
     const page = await readPage(app, `limit=10&around=${B}`);
