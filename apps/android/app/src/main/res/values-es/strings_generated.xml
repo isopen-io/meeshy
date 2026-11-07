@@ -8,6 +8,10 @@
     <string name="a11y_state_open">Abrir</string>
     <string name="app_name">Meeshy</string>
     <string name="auth_pending_link_notice">Inicia sesión: el contenido que te compartieron se abrirá justo después.</string>
+    <string name="bring_incoming_body">Un Bring: una llamada por una urgencia extrema.</string>
+    <string name="bring_incoming_someone">Alguien</string>
+    <string name="bring_incoming_stop">Detener</string>
+    <string name="bring_incoming_title">%1$s te está llamando con un Bring</string>
     <string name="call_channel_name">Llamadas</string>
     <string name="call_incoming_audio">Llamada entrante</string>
     <string name="call_incoming_video">Videollamada entrante</string>

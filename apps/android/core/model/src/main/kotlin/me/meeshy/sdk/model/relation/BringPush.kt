@@ -15,7 +15,27 @@ data class BringRingPush(
     val body: String?,
     val stopLabel: String?,
     val expiresAtMillis: Long,
+) {
+    /**
+     * Ce que l'écran et la notification disent : les libellés servis par la passerelle (Prisme, langue du destinataire),
+     * sinon ceux de l'appareil — le nom de l'expéditeur, ou « Quelqu'un » quand il est masqué.
+     */
+    fun texts(fallback: BringRingFallbackTexts): BringRingTexts = BringRingTexts(
+        title = title ?: fallback.title(fromName ?: fallback.someone),
+        body = body ?: fallback.body,
+        stopLabel = stopLabel ?: fallback.stop,
+    )
+}
+
+/** Les libellés de l'appareil (`bring.incoming.*` du catalogue iOS, adoptés par Android). */
+data class BringRingFallbackTexts(
+    val title: (String) -> String,
+    val someone: String,
+    val body: String,
+    val stop: String,
 )
+
+data class BringRingTexts(val title: String, val body: String, val stopLabel: String)
 
 /** Ce que le service FCM fait d'un push : exactement une issue, jamais d'exception. */
 sealed interface BringPushRoute {

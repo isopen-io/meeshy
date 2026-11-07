@@ -137,4 +137,32 @@ class BringPushRouterTest {
         assertThat(BringPushRouter.route(ring(), now + 1_000, ledger).route)
             .isEqualTo(BringPushRoute.Ignore(BringPushRoute.Reason.DUPLICATE))
     }
+
+    private val fallback = BringRingFallbackTexts(
+        title = { name -> "$name vous fait sonner" },
+        someone = "Quelqu’un",
+        body = "Un Bring : un appel pour une urgence extrême.",
+        stop = "Arrêter",
+    )
+
+    @Test
+    fun `les libelles servis par la passerelle priment sur ceux de l appareil`() {
+        val push = (BringPushRouter.route(ring(), now, BringRingLedger.EMPTY).route as BringPushRoute.Ring).push
+
+        assertThat(push.texts(fallback)).isEqualTo(
+            BringRingTexts("Alice fait sonner votre téléphone", "Touchez pour arrêter", "Arrêter"),
+        )
+    }
+
+    @Test
+    fun `sans libelle servi, l appareil nomme l expediteur, ou quelqu un quand son nom est masque`() {
+        val bare = ring() - "title" - "body" - "stopLabel"
+        val named = (BringPushRouter.route(bare, now, BringRingLedger.EMPTY).route as BringPushRoute.Ring).push
+        val hidden = (BringPushRouter.route(bare + ("fromName" to ""), now, BringRingLedger.EMPTY).route as BringPushRoute.Ring).push
+
+        assertThat(named.texts(fallback).title).isEqualTo("Alice vous fait sonner")
+        assertThat(hidden.texts(fallback).title).isEqualTo("Quelqu’un vous fait sonner")
+        assertThat(hidden.texts(fallback).body).isEqualTo("Un Bring : un appel pour une urgence extrême.")
+        assertThat(hidden.texts(fallback).stopLabel).isEqualTo("Arrêter")
+    }
 }

@@ -35,6 +35,38 @@
           "status": "android-only"
         },
         {
+          "androidName": "bring_channel_description",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bring_channel_name",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.incoming.body",
+          "androidName": "bring_incoming_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.incoming.someone",
+          "androidName": "bring_incoming_someone",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.incoming.stop",
+          "androidName": "bring_incoming_stop",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bring.incoming.title",
+          "androidName": "bring_incoming_title",
+          "status": "adopted"
+        },
+        {
           "androidName": "call_channel_description",
           "status": "android-only"
         },

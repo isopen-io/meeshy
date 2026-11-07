@@ -56,6 +56,12 @@ object NotificationChannelIds {
     const val CHANNEL_SOCIAL_V2: String = "meeshy_social_v2"
     const val CHANNEL_SYSTEM_V2: String = "meeshy_system_v2"
 
+    /**
+     * Le Bring (#13936) : une sonnerie FORCÉE pour l'urgence extrême, catégorie alarme. Le canal est muet — le service
+     * au premier plan joue le son sur le flux alarme — et passe Ne pas déranger quand le système l'accorde.
+     */
+    const val CHANNEL_BRING: String = "meeshy_bring"
+
     /** Les notifications en cours (envoi long, vocal en cours d'enregistrement) : discrètes, sans son. */
     const val CHANNEL_ONGOING: String = "meeshy_ongoing"
 
