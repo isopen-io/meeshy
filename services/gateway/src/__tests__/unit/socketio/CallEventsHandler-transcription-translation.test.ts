@@ -258,8 +258,10 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
 
     await segmentPromise;
 
-    expect(roomEmit).toHaveBeenCalledTimes(1);
-    const [eventName, payload] = roomEmit.mock.calls[0];
+    // #16613 — l'original part d'abord, la traduction le rejoint ensuite.
+    expect(roomEmit).toHaveBeenCalledTimes(2);
+    expect(roomEmit.mock.calls[0][1].segment.translatedText).toBeUndefined();
+    const [eventName, payload] = roomEmit.mock.calls[1];
     expect(eventName).toBe(CALL_EVENTS.TRANSLATED_SEGMENT);
     expect(payload.segment.translatedText).toBe('Hello world');
     expect(payload.segment.targetLanguage).toBe('en');
@@ -294,8 +296,9 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
     });
     await segmentPromise;
 
-    expect(roomEmit).toHaveBeenCalledTimes(1);
-    const [, payload] = roomEmit.mock.calls[0];
+    expect(roomEmit).toHaveBeenCalledTimes(2);
+    expect(roomEmit.mock.calls[0][1].segment.speakerId).toBe(SPEAKER_ID);
+    const [, payload] = roomEmit.mock.calls[1];
     expect(payload.segment.speakerId).toBe(SPEAKER_ID);
     expect(payload.segment.speakerId).not.toBe(LISTENER_ID);
   });
@@ -331,8 +334,10 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
     });
     await segmentPromise;
 
-    expect(roomEmit).toHaveBeenCalledTimes(1);
-    const [eventName, payload] = roomEmit.mock.calls[0];
+    // #16613 — l'original part d'abord, la traduction le rejoint ensuite.
+    expect(roomEmit).toHaveBeenCalledTimes(2);
+    expect(roomEmit.mock.calls[0][1].segment.translatedText).toBeUndefined();
+    const [eventName, payload] = roomEmit.mock.calls[1];
     expect(eventName).toBe(CALL_EVENTS.TRANSLATED_SEGMENT);
     expect(payload.segment.translatedText).toBe('Hello world');
   });
@@ -383,8 +388,9 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
     });
     await segmentPromise;
 
-    expect(roomEmit).toHaveBeenCalledTimes(1);
-    const [, payload] = roomEmit.mock.calls[0];
+    expect(roomEmit).toHaveBeenCalledTimes(2);
+    expect(roomEmit.mock.calls[0][1].segment.speakerId).toBe(SPEAKER_ID);
+    const [, payload] = roomEmit.mock.calls[1];
     expect(payload.segment.id).toBe('f81d4fae-7dec-4b57-b93a-2c675ddac001');
     expect(payload.segment.speakerDisplayName).toBe('Alice Doe');
     expect(payload.segment.capturedAtMs).toBe(1765650000000);
@@ -549,12 +555,16 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
       expect(spanishEmission!.rooms).not.toContain(ROOMS.user(EN_LISTENER_ID));
     });
 
-    it('emits exactly two segments total — one per distinct target language, never a call-room broadcast', async () => {
+    it('emits the ORIGINAL once to the call room, then one translation per distinct target language — never a translation to the call room (#16613)', async () => {
       const { emitter, emissions, segmentPromise } = setupThreeWayCall();
       await resolveBothLanguages(emitter, segmentPromise);
 
-      expect(emissions).toHaveLength(2);
-      expect(emissions.every((e) => !e.rooms.includes(ROOMS.call(VALID_CALL_ID)))).toBe(true);
+      expect(emissions).toHaveLength(3);
+      expect(emissions[0].rooms).toEqual([ROOMS.call(VALID_CALL_ID)]);
+      expect(emissions[0].payload.segment.translatedText).toBeUndefined();
+      const translations = emissions.slice(1);
+      expect(translations.every((e) => e.payload.segment.translatedText !== undefined)).toBe(true);
+      expect(translations.every((e) => !e.rooms.includes(ROOMS.call(VALID_CALL_ID)))).toBe(true);
     });
   });
   describe('group call, listener sharing the SPEAKER\'s language (same-language starvation guard)', () => {
@@ -600,24 +610,23 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
       await segmentPromise;
     }
 
-    it('still delivers the ORIGINAL segment to the listener who shares the speaker\'s language', async () => {
+    it('still delivers the ORIGINAL segment to the listener who shares the speaker\'s language — through the call room, at once (#16613)', async () => {
       const { emitter, emissions, segmentPromise } = setupMixedCall();
       await resolveEnglish(emitter, segmentPromise);
 
-      const frEmission = emissions.find((e) => e.rooms.includes(ROOMS.user(FR_LISTENER_ID)));
-      expect(frEmission).toBeDefined();
-      expect(frEmission!.payload.segment.text).toBe('Bonjour le monde');
-      expect(frEmission!.payload.segment.translatedText).toBeUndefined();
-      expect(frEmission!.payload.segment.targetLanguage).toBe('fr');
+      const original = emissions.find((e) => e.rooms.includes(ROOMS.call(VALID_CALL_ID)));
+      expect(original).toBeDefined();
+      expect(original!.payload.segment.text).toBe('Bonjour le monde');
+      expect(original!.payload.segment.translatedText).toBeUndefined();
+      expect(original!.payload.segment.targetLanguage).toBe('fr');
     });
 
-    it('does not leak the same-language original into the English listener\'s room', async () => {
+    it('serves the same-language listener the original exactly once — no second copy to their personal room', async () => {
       const { emitter, emissions, segmentPromise } = setupMixedCall();
       await resolveEnglish(emitter, segmentPromise);
 
-      const frEmission = emissions.find((e) => e.rooms.includes(ROOMS.user(FR_LISTENER_ID)));
-      expect(frEmission!.rooms).not.toContain(ROOMS.user(EN_LISTENER_ID));
-      expect(frEmission!.rooms).not.toContain(ROOMS.call(VALID_CALL_ID));
+      expect(emissions.filter((e) => e.rooms.includes(ROOMS.user(FR_LISTENER_ID)))).toHaveLength(0);
+      expect(emissions.filter((e) => e.payload.segment.translatedText === undefined)).toHaveLength(1);
     });
 
     it('still translates for the English listener', async () => {
