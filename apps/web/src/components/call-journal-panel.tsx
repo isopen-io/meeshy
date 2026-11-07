@@ -20,7 +20,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * un appel de trois heures ne se peint que là où je regarde.
  *
  * Chunk à part (`budgets.json` › `call_journal_panel`) : il n'importe rien de
- * l'écran d'appel, qui lui remet la couleur de chaque personne.
+ * l'écran d'appel, qui lui remet la couleur de chaque personne. Cette couleur
+ * teint le nom ET la phrase servie, comme le sous-titre en direct (#16634,
+ * `docs/product/appels-vue-finale.md` loi 4) ; l'original reste en encre
+ * secondaire.
  */
 
 const INK_2 = 'var(--color-on-media-3)';
@@ -99,13 +102,14 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
             {captions.map((caption) => {
               const served = captionText(caption, 'translated');
               const languages = captionLanguageLabel(caption, 'translated');
+              const color = colorOf(caption);
               return (
                 <li key={caption.id} className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 64px', opacity: caption.isFinal ? 1 : 0.7 }} data-call-journal-entry={caption.mine ? 'mine' : 'peer'}>
                   <span className="text-mini" style={{ color: INK_2 }}>
-                    <strong style={{ color: colorOf(caption) }}>{speaker(caption)}</strong> · <time dateTime={new Date(caption.at).toISOString()}>{clock.format(caption.at)}</time>
+                    <strong style={{ color }}>{speaker(caption)}</strong> · <time dateTime={new Date(caption.at).toISOString()}>{clock.format(caption.at)}</time>
                     {languages === null ? null : <span className="ms-1.5 text-check font-semibold tracking-wide">{languages}</span>}
                   </span>
-                  <span className="text-body text-on-media" dir="auto" data-call-journal-text="">
+                  <span className="text-body" style={{ color }} dir="auto" data-call-journal-text="">
                     {served}
                   </span>
                   {served === caption.original ? null : (

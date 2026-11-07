@@ -39,6 +39,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { cameraMirrored } from '@/lib/media/camera-mirror';
 import { sessionStore } from '@/lib/api/session';
+import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 
 /**
  * **LA SCÈNE DE L'APPEL** (#6382, #8063, #8392) — ce que l'écran d'appel montre
@@ -198,6 +199,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   const callId = call.callId ?? '';
   const scale = useStore(selfTileStore, (state) => selfTileScaleFor(state, callId));
   const corner = useStore(selfTileStore, (state) => selfTileCornerFor(state, callId));
+  const meId = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
   const [said, setSaid] = useState('');
   const hint = useId();
   const resize = (next: SelfTileScale): void => {
@@ -212,6 +214,9 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   const firstPeer = orderedMembers(call.members)[0];
   const remoteStream = firstPeer === undefined ? null : (call.remoteStreams[firstPeer.userId] ?? null);
   const remoteVideoOn = firstPeer !== undefined && firstPeer.cameraOn && hasVideo(remoteStream);
+  /* La vignette du coin porte la couleur de qui s'y montre : la mienne, ou celle du correspondant une fois échangée (#16635). */
+  const cornerOwner = swapped ? (firstPeer?.userId ?? null) : meId;
+  const cornerColor = cornerOwner === null ? SELF_SPEAKER_COLOR : speakerColor(cornerOwner);
   const selfMirrored = selfPreviewMirrored(call);
   const local = useLocalZoom(call.callId, call.facing);
   const you = translate(language, 'call.you');
@@ -303,9 +308,9 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
             aria-describedby={swapped ? undefined : hint}
             onClick={self.onToggle}
             onKeyDown={onArrow}
-            className={`relative z-10 grid size-full place-items-center overflow-hidden rounded-card shadow-lg ${swapped ? '' : offset === null ? 'cursor-grab' : 'cursor-grabbing'}`}
+            className={`relative z-10 grid size-full place-items-center overflow-hidden rounded-card border-2 shadow-lg ${swapped ? '' : offset === null ? 'cursor-grab' : 'cursor-grabbing'}`}
             {...(swapped ? {} : gestures)}
-            style={{ background: 'var(--color-scrim-soft)', ...(swapped ? {} : { ...pinch.style, transformOrigin: PIN_ORIGIN[corner] }) }}
+            style={{ background: 'var(--color-scrim-soft)', borderColor: cornerColor, ...(swapped ? {} : { ...pinch.style, transformOrigin: PIN_ORIGIN[corner] }) }}
             data-call-corner=""
             data-call-self-tile={swapped ? undefined : String(scale)}
           >
@@ -336,7 +341,7 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
       <CallGrid
         members={orderedMembers(call.members)}
         remoteStreams={call.remoteStreams}
-        self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
+        self={{ id: me?.id ?? null, stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
         selfControls={self.controls ? self.row() : null}
         choice={choice}
         onChoose={onChoose}

@@ -111,6 +111,17 @@ describe('CallJournalPanel', () => {
     view.done();
   });
 
+  test('la phrase servie porte la couleur de son auteur, comme son nom ; l’original reste en encre secondaire (#16634)', () => {
+    const view = mount([caption({ id: 'peer' }), caption({ id: 'me', mine: true, speakerName: '', original: 'Salut', translated: null, pair: null })]);
+    const peer = view.find('[data-call-journal-entry="peer"]') as HTMLElement;
+    const mine = view.find('[data-call-journal-entry="mine"]') as HTMLElement;
+    expect((peer.querySelector('strong') as HTMLElement).style.color).toBe('#f0a');
+    expect((peer.querySelector('[data-call-journal-text]') as HTMLElement).style.color).toBe('#f0a');
+    expect((peer.querySelector('[data-call-journal-original]') as HTMLElement).style.color).not.toBe('#f0a');
+    expect((mine.querySelector('[data-call-journal-text]') as HTMLElement).style.color).toBe('#fff');
+    view.done();
+  });
+
   test('en bas, une phrase nouvelle m’y garde', () => {
     const view = mount(lines(3));
     const list = view.find('[data-call-journal]') as HTMLElement;

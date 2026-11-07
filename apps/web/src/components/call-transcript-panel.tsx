@@ -8,9 +8,10 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { formatCallClock } from '@/lib/calls/call-store';
-import { callTranscriptQueryKey, loadCallTranscript, transcriptLines } from '@/lib/calls/call-transcript';
+import { callTranscriptQueryKey, loadCallTranscript, transcriptLines, type TranscriptLine } from '@/lib/calls/call-transcript';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { authorInkStyle } from '@/lib/view/author-ink';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 
 /**
@@ -20,6 +21,11 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
  * de `CallSummaryDetailSheet` d'iOS : le locuteur, l'heure dans l'appel, la
  * ligne servie par le Prisme du lecteur, et « Voir l'original » qui rend ce
  * qui a été dit. Gardée en cache par sa clé : la rouvrir ne recharge rien.
+ *
+ * Le journal d'après l'appel est FIDÈLE au journal de l'appel (#16634,
+ * `docs/product/appels-vue-finale.md` lois 4 et 7) : chaque ligne garde la
+ * couleur de son auteur, sur le nom ET la phrase, tirée de la loi partagée
+ * `authorAccentColor` et rendue lisible sur le fond du fil (`authorInk`).
  */
 
 const muted = { color: 'var(--color-ios-ink-2)' } as const;
@@ -64,24 +70,39 @@ export function CallTranscriptPanel({ callId, language }: { readonly callId: str
       </p>
     );
   }
+  return <CallTranscriptLines lines={lines} language={language} original={original} onToggleOriginal={() => setOriginal((value) => !value)} />;
+}
+
+type LinesProps = {
+  readonly lines: readonly TranscriptLine[];
+  readonly language: InterfaceLanguage;
+  readonly original: boolean;
+  readonly onToggleOriginal?: () => void;
+};
+
+export function CallTranscriptLines({ lines, language, original, onToggleOriginal }: LinesProps) {
   const translatedSome = lines.some((line) => line.translated);
   return (
     <section aria-label={translate(language, 'callTranscript.title')} className="flex w-full max-w-[560px] flex-col gap-2 rounded-card px-3 py-2 text-start" style={{ background: 'color-mix(in srgb, var(--color-ios-ink-2) 8%, transparent)' }} data-call-transcript="lines">
       <ol className="flex flex-col gap-2">
-        {lines.map((line) => (
-          <li key={line.id} data-call-transcript-line={line.mine ? 'mine' : 'peer'}>
-            <span className="flex justify-between gap-3 text-mini font-semibold" style={muted}>
-              <span>{line.mine ? translate(language, 'message.author.self') : (line.speakerName ?? translate(language, 'callCaptions.participant'))}</span>
-              <span className="tabular-nums">{formatCallClock(line.offsetSec)}</span>
-            </span>
-            <span className="block text-[13.5px]" style={{ color: 'var(--color-ios-ink)' }} dir="auto" lang={original ? undefined : line.language || undefined}>
-              {original ? line.original : line.text}
-            </span>
-          </li>
-        ))}
+        {lines.map((line) => {
+          const name = line.mine ? translate(language, 'message.author.self') : (line.speakerName ?? translate(language, 'callCaptions.participant'));
+          const ink = authorInkStyle({ authorId: line.speakerId, name: line.speakerName ?? '' });
+          return (
+            <li key={line.id} data-call-transcript-line={line.mine ? 'mine' : 'peer'}>
+              <span className="flex justify-between gap-3 text-mini font-semibold" style={muted}>
+                <span className="author-ink" style={ink}>{name}</span>
+                <span className="tabular-nums">{formatCallClock(line.offsetSec)}</span>
+              </span>
+              <span className="author-ink block text-[13.5px]" style={ink} dir="auto" lang={original ? undefined : line.language || undefined}>
+                {original ? line.original : line.text}
+              </span>
+            </li>
+          );
+        })}
       </ol>
-      {translatedSome ? (
-        <button type="button" aria-pressed={original} className="min-h-11 self-start rounded-chip px-3 text-[12.5px] font-semibold" style={{ color: 'var(--accent)' }} onClick={() => setOriginal((value) => !value)} data-call-transcript-original="">
+      {translatedSome && onToggleOriginal !== undefined ? (
+        <button type="button" aria-pressed={original} className="min-h-11 self-start rounded-chip px-3 text-[12.5px] font-semibold" style={{ color: 'var(--accent)' }} onClick={onToggleOriginal} data-call-transcript-original="">
           {translate(language, original ? 'callTranscript.showTranslated' : 'callTranscript.showOriginal')}
         </button>
       ) : null}

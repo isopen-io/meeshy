@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import type { AuthenticatedSession } from '@/lib/api/session';
+import { sessionStore } from '@/lib/api/session';
+import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { DEFAULT_SELF_CORNER, DEFAULT_SELF_TILE, selfTileStore } from '@/lib/calls/call-self-tile';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
@@ -278,5 +281,20 @@ describe('le micro coupé du correspondant se voit en vidéo (#8787)', () => {
     expect(view.find('[data-call-peer-muted="main"]')).toBeNull();
     expect(view.find('[data-call-corner] [data-call-peer-muted="corner"]')).not.toBeNull();
     view.done();
+  });
+});
+
+describe('la couleur de la vignette du coin (#16635)', () => {
+  const asMe = () => sessionStore.setState({ session: { status: 'authenticated', token: 'jwt', sessionToken: 's', expiresAt: Number.MAX_SAFE_INTEGER, user: { id: 'u-moi', username: 'moi', displayName: 'Moi' } } as unknown as AuthenticatedSession });
+
+  test('ma vignette porte MA couleur ; échangée, elle porte celle du correspondant', () => {
+    fresh();
+    asMe();
+    const view = mount();
+    expect(view.tile().style.borderColor).toBe(speakerColor('u-moi'));
+    act(() => view.tile().click());
+    expect(view.tile().style.borderColor).toBe(speakerColor('u-peer'));
+    view.done();
+    sessionStore.setState({ session: { status: 'anonymous' } });
   });
 });
