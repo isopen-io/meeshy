@@ -8,7 +8,7 @@ struct OverlayHost: ViewModifier {
         content
             .feedbackToastOverlay()
             .ageGateOverlay()
-            .talkieOverlay()
+            .modifier(TalkieOverlay(center: .shared))
             .bringRingOverlay()
             .sheet(isPresented: $isCrashSheetPresented) {
                 CrashReportSheet(reports: crashReports)

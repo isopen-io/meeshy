@@ -58,7 +58,7 @@ struct TalkieIndicator: View {
     }
 }
 
-private struct TalkieOverlay: ViewModifier {
+struct TalkieOverlay: ViewModifier {
     @ObservedObject var center: TalkieCenter
 
     func body(content: Content) -> some View {
@@ -70,13 +70,6 @@ private struct TalkieOverlay: ViewModifier {
             }
         }
         .animation(.easeOut(duration: 0.2), value: center.active.first?.id)
-    }
-}
-
-extension View {
-    /// Pose l'indicateur d'un talkie reçu en haut de l'app, sans rien masquer d'autre.
-    func talkieOverlay() -> some View {
-        modifier(TalkieOverlay(center: TalkieCenter.shared))
     }
 }
 
