@@ -85,3 +85,13 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Passerelle seule. Un ancien client affiche une erreur générique sur les deux nouveaux 403 ; la réponse de `…/unban` ne dit pas encore `membershipRestored` (l'événement socket le dit).
 - Revue adversariale avant la PR : non bloquante ; corrigés dans le lot (ordre admission → rattachement, témoin d'ordre, témoins sur `communityId` et sur une communauté publique désactivée). Ouvertes, préexistantes : #16723 (passer une communauté en privée laisse les non-membres dans ses salons — prioritaire), #16724 (`ensureParticipantFromMember` crée un participant sans la loi). Fenêtres TOCTOU communes à toutes les portes : rejoignent #16711.
 - Prochain lot recommandé : #16723, puis la seconde moitié de #6376 (la création propose l'ajout de membres).
+
+## 2026-11-07 — réveil 10
+
+- Lot : #16723 (sécurité, préexistant). Les deux portes qui rendent une communauté publique privée (`PUT /communities/:id` du créateur, `PATCH /admin/communities/:id`) appliquent `services/conversations/communitySalonAdoption.ts` :
+  - AVANT d'écrire `isPrivate` : chaque occupant inscrit, actif et non banni d'un salon (clos compris) qui n'a JAMAIS été membre entre en `member`, sous l'autorité du créateur (compte vivant, aucun blocage avec lui) ; une panne laisse la communauté publique (500, rejouable) ;
+  - APRÈS : une seconde passe rattrape les retardataires, puis sortent des salons (loi de #16704) ceux qui ne peuvent pas entrer et les ANCIENS membres (partis, ou retirés quand la communauté était publique) — la bascule ne défait ni un départ ni un retrait.
+- Décision prise sur la lecture recommandée (carte posée au porteur) : les occupants deviennent membres plutôt que de sortir. Invités sans compte et bots : non touchés (→ #16739).
+- Revue adversariale avant la PR : un BLOQUANT corrigé dans le lot (la première version réactivait la ligne d'un membre retiré par l'équipe) ; corrigés aussi : participant banni, seconde passe contre la course admission → bascule. Ouvertes : #16739 (désactivation d'une communauté publique, invités), #16740 (sortie groupée, performance), #16741 (le nouveau membre n'est pas prévenu).
+- Passerelle seule ; aucun contrat d'API ne change.
+- Prochain lot recommandé : la seconde moitié de #6376 (la création propose l'ajout de membres), puis #16739.

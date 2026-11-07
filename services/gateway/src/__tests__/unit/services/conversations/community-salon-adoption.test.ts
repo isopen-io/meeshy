@@ -4,7 +4,8 @@
  * membres (#16695) : à la bascule, chaque occupant inscrit qui n'en est pas
  * membre y ENTRE sous l'autorité du créateur (la loi de
  * `planCommunityAdmission`), et celui qui ne peut pas y entrer (compte mort,
- * blocage avec le créateur) SORT des salons (`exitCommunitySalons`).
+ * blocage avec le créateur) ou ne doit pas y revenir (ancien membre parti ou
+ * retiré) SORT des salons (`exitCommunitySalons`).
  *
  * Le double honore les `where` posés : lignes actives, salons de la seule
  * communauté, comptes vivants.
@@ -28,6 +29,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 import {
   admitSalonOccupants,
+  closeSalonsAfterSwitch,
   exitSalonOutsiders,
   isBecomingPrivate,
 } from '../../../../services/conversations/communitySalonAdoption';
@@ -49,6 +51,7 @@ type Occupation = {
   readonly userId: string | null;
   readonly type?: string;
   readonly isActive?: boolean;
+  readonly bannedAt?: Date | null;
 };
 
 type Monde = {
@@ -82,7 +85,7 @@ function prismaDouble(monde: Monde = {}) {
         .filter((o) => args.where.conversationId.in.includes(o.conversationId))
         .filter((o) => (o.isActive ?? true) === args.where.isActive)
         .filter((o) => (o.type ?? 'user') === args.where.type)
-        .map((o) => ({ userId: o.userId }))),
+        .map((o) => ({ userId: o.userId, isActive: o.isActive ?? true, bannedAt: o.bannedAt ?? null }))),
     },
     communityMember: {
       findMany: jest.fn<any>(async (args: any) => membres
@@ -146,18 +149,42 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
     expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 
-  it("la ligne d'un ancien membre se réactive en MEMBER, jamais avec son ancien rang", async () => {
+  it("un ANCIEN membre (parti, ou retiré d'une communauté encore publique) n'est pas réinscrit : il est rendu pour sortir", async () => {
     const prisma = prismaDouble({
       occupations: [{ conversationId: SALON_B, userId: ANCIEN }],
       membres: [{ id: 'cm-ancien', userId: ANCIEN, isActive: false }],
     });
 
-    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
 
-    expect(prisma.communityMember.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['cm-ancien'] }, isActive: false },
-      data: { isActive: true, leftAt: null, role: 'member' },
+    expect(exclus).toEqual([ANCIEN]);
+    expect(prisma.communityMember.updateMany).not.toHaveBeenCalled();
+    expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
+  });
+
+  it("une ligne active fait foi sur une ligne inactive en double : le membre reste, rien n'est écrit", async () => {
+    const prisma = prismaDouble({
+      occupations: [{ conversationId: SALON_A, userId: MEMBRE }],
+      membres: [
+        { id: 'cm-vivante', userId: MEMBRE, isActive: true },
+        { id: 'cm-perimee', userId: MEMBRE, isActive: false },
+      ],
     });
+
+    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+
+    expect(exclus).toEqual([]);
+    expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
+  });
+
+  it("un participant BANNI d'un salon (ligne restée active) n'entre pas par lui", async () => {
+    const prisma = prismaDouble({
+      occupations: [{ conversationId: SALON_A, userId: OCCUPANT, bannedAt: new Date('2026-10-01T00:00:00.000Z') }],
+    });
+
+    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+
+    expect(exclus).toEqual([]);
     expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
   });
 
@@ -251,5 +278,44 @@ describe('exitSalonOutsiders — ceux qui ne peuvent pas entrer sortent des salo
     await expect(exitSalonOutsiders(deps, { communityId: COMMUNITY, userIds: [BLOQUE, MORT], now: NOW }))
       .resolves.toBeUndefined();
     expect(exitCommunitySalons).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('closeSalonsAfterSwitch — la bascule écrite, rattraper puis faire sortir', () => {
+  it("une seconde passe fait entrer qui est arrivé entre-temps, et les exclus des deux passes sortent une fois chacun", async () => {
+    const prisma = prismaDouble({
+      occupations: [
+        { conversationId: SALON_A, userId: OCCUPANT },
+        { conversationId: SALON_A, userId: BLOQUE },
+      ],
+      bloquesParCreateur: [BLOQUE],
+    });
+    const deps = { prisma: prisma as never, socketIOHandler: null };
+
+    await closeSalonsAfterSwitch(deps, {
+      communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [BLOQUE, MORT], now: NOW,
+    });
+
+    expect(creations(prisma)).toEqual([{ communityId: COMMUNITY, userId: OCCUPANT, role: 'member' }]);
+    expect(exitCommunitySalons.mock.calls.map((c: any) => c[1].userId).sort()).toEqual([BLOQUE, MORT].sort());
+  });
+
+  it('une seconde passe en panne ne rejette pas : les exclus de la première sortent quand même', async () => {
+    const prisma = prismaDouble();
+    prisma.conversation.findMany.mockRejectedValueOnce(new Error('panne'));
+    const deps = { prisma: prisma as never, socketIOHandler: null };
+
+    await expect(closeSalonsAfterSwitch(deps, {
+      communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [MORT], now: NOW,
+    })).resolves.toBeUndefined();
+    expect(exitCommunitySalons).toHaveBeenCalledWith(deps, { communityId: COMMUNITY, userId: MORT, now: NOW });
+  });
+
+  it("personne à faire sortir : aucune sortie", async () => {
+    const prisma = prismaDouble();
+    await closeSalonsAfterSwitch({ prisma: prisma as never, socketIOHandler: null }, {
+      communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [], now: NOW,
+    });
+    expect(exitCommunitySalons).not.toHaveBeenCalled();
   });
 });

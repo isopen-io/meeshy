@@ -1,8 +1,9 @@
 /**
  * #16723 — les deux portes qui rendent une communauté privée (le créateur :
  * `PUT /communities/:id` ; l'administration : `PATCH /admin/communities/:id`)
- * font entrer les occupants de ses salons AVANT la bascule et sortir APRÈS
- * ceux qui ne peuvent pas entrer. Une requête refusée ne fait entrer ni sortir
+ * font entrer les occupants de ses salons AVANT la bascule ; APRÈS, une
+ * seconde passe rattrape les retardataires et fait sortir qui ne peut pas
+ * entrer. Une requête refusée ne fait entrer ni sortir
  * personne (fail-closed), et une admission en panne n'écrit pas la bascule.
  *
  * @jest-environment node
@@ -22,7 +23,7 @@ const admitSalonOccupants = jest.fn<any>(async () => {
   order.push('admit');
   return [] as string[];
 });
-const exitSalonOutsiders = jest.fn<any>(async () => {
+const closeSalonsAfterSwitch = jest.fn<any>(async () => {
   order.push('exit');
 });
 jest.mock('../../../services/conversations/communitySalonAdoption', () => {
@@ -32,7 +33,7 @@ jest.mock('../../../services/conversations/communitySalonAdoption', () => {
   return {
     ...actual,
     admitSalonOccupants: (...args: unknown[]) => admitSalonOccupants(...args),
-    exitSalonOutsiders: (...args: unknown[]) => exitSalonOutsiders(...args),
+    closeSalonsAfterSwitch: (...args: unknown[]) => closeSalonsAfterSwitch(...args),
   };
 });
 
@@ -133,18 +134,22 @@ describe('PUT /communities/:id — le créateur rend sa communauté privée', ()
 
     expect(res.statusCode).toBe(200);
     expect(admitSalonOccupants).toHaveBeenCalledWith(prisma, { communityId: COMMUNITY, createdBy: CREATEUR });
-    expect(exitSalonOutsiders).toHaveBeenCalledWith(
+    expect(closeSalonsAfterSwitch).toHaveBeenCalledWith(
       expect.objectContaining({ prisma }),
-      expect.objectContaining({ communityId: COMMUNITY, userIds: [EXCLU] }),
+      expect.objectContaining({ communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [EXCLU] }),
     );
     expect(order).toEqual(['admit', 'update', 'exit']);
     await app.close();
   });
 
-  it('personne à exclure : aucune sortie', async () => {
+  it('personne à exclure à la première passe : la seconde passe tourne quand même, après la bascule', async () => {
     const app = await creatorApp(prismaDouble({ isPrivate: false }));
     expect((await put(app, { isPrivate: true })).statusCode).toBe(200);
-    expect(exitSalonOutsiders).not.toHaveBeenCalled();
+    expect(closeSalonsAfterSwitch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ outsiders: [] }),
+    );
+    expect(order).toEqual(['admit', 'update', 'exit']);
     await app.close();
   });
 
@@ -166,7 +171,7 @@ describe('PUT /communities/:id — le créateur rend sa communauté privée', ()
     const app = await creatorApp(prismaDouble(monde));
     expect((await put(app, payload)).statusCode).toBe(200);
     expect(admitSalonOccupants).not.toHaveBeenCalled();
-    expect(exitSalonOutsiders).not.toHaveBeenCalled();
+    expect(closeSalonsAfterSwitch).not.toHaveBeenCalled();
     await app.close();
   });
 

@@ -59,7 +59,7 @@ import {
 } from '../../utils/response';
 import { ADMIN_PERSON_SELECT } from './oversight-people';
 import { NOT_DELETED } from '../../services/posts/softDelete';
-import { admitSalonOccupants, exitSalonOutsiders, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
+import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
 import {
   booleen,
   chaine,
@@ -392,11 +392,10 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
             ...(privacyChanged ? { isPrivate } : {}),
           },
         });
-
-        if (outsiders.length > 0) {
-          await exitSalonOutsiders(
+        if (closesSalons) {
+          await closeSalonsAfterSwitch(
             { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler },
-            { communityId, userIds: outsiders, now: new Date() },
+            { communityId, createdBy: current.creator.id, outsiders, now: new Date() },
           );
         }
 

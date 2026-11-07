@@ -16,7 +16,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendForbidden, sendConflict, sendInternalError } from '../../utils/response.js';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { COMMUNITY_ACTIVE_COUNTS, flattenCommunityCounts } from './serialization';
-import { admitSalonOccupants, exitSalonOutsiders, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
+import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
 
 const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
 
@@ -147,11 +147,10 @@ const community = await fastify.prisma.community.findFirst({
           _count: { select: COMMUNITY_ACTIVE_COUNTS }
         }
       });
-
-      if (outsiders.length > 0) {
-        await exitSalonOutsiders(
+      if (closesSalons) {
+        await closeSalonsAfterSwitch(
           { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler },
-          { communityId: id, userIds: outsiders, now: new Date() },
+          { communityId: id, createdBy: community.createdBy, outsiders, now: new Date() },
         );
       }
 

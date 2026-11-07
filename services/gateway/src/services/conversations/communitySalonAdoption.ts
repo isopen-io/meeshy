@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { applyCommunityAdmission } from './communityMembershipSync';
 import { exitCommunitySalons, type SalonExitDeps } from './communitySalonExit';
+import { participationEstVivante } from '../../routes/conversations/utils/access-control';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'CommunitySalonAdoption' });
@@ -28,11 +29,17 @@ export function isBecomingPrivate(change: { readonly before: boolean; readonly r
  * La bascule ferme la porte aux nouveaux venus ; elle ne retire pas en silence
  * une conversation à qui y était déjà. Chaque occupant INSCRIT et actif d'un
  * salon (clos compris : une archive se lit par sa seule ligne `Participant`)
- * qui n'est pas membre actif y entre donc, sous l'autorité du créateur — la
+ * qui n'a JAMAIS été membre y entre donc, sous l'autorité du créateur — la
  * loi de `planCommunityAdmission` : compte vivant, aucun blocage avec le
- * créateur dans un sens ou dans l'autre, ligne d'un ancien membre réactivée
- * en MEMBER. Le créateur n'est jamais réinscrit : il revient dans ses salons
- * sans ligne (#16703).
+ * créateur dans un sens ou dans l'autre. Le créateur n'est jamais réinscrit :
+ * il revient dans ses salons sans ligne (#16703).
+ *
+ * Un ANCIEN membre (ligne inactive : il est parti, ou l'équipe l'a retiré
+ * d'une communauté encore publique) n'est pas réinscrit : la bascule ne défait
+ * ni un départ ni un retrait. Il sort des salons, comme il en serait sorti si
+ * la communauté avait été privée au moment de son départ (#16704). Un
+ * participant BANNI d'un salon n'y lit plus rien (`PARTICIPATION_VIVANTE`) :
+ * il n'entre pas par lui.
  *
  * Écrit AVANT la bascule : une panne laisse la communauté publique, intacte,
  * et la requête rejouable. Rend ceux qui ne peuvent pas entrer, pour qu'ils
@@ -52,9 +59,11 @@ export async function admitSalonOccupants(
 
   const occupations = await prisma.participant.findMany({
     where: { conversationId: { in: salons.map((salon) => salon.id) }, isActive: true, type: 'user' },
-    select: { userId: true },
+    select: { userId: true, isActive: true, bannedAt: true },
   });
-  const occupants = [...new Set(occupations.flatMap((o) => (o.userId ? [o.userId] : [])))]
+  const occupants = [...new Set(occupations
+    .filter((o) => participationEstVivante(o))
+    .flatMap((o) => (o.userId ? [o.userId] : [])))]
     .filter((userId) => userId !== request.createdBy);
   if (occupants.length === 0) return [];
 
@@ -65,20 +74,17 @@ export async function admitSalonOccupants(
   const rowOf = new Map(
     [...rows].sort((a, b) => Number(a.isActive) - Number(b.isActive)).map((row) => [row.userId, row]),
   );
-  const entering = occupants.filter((userId) => rowOf.get(userId)?.isActive !== true);
-  if (entering.length === 0) return [];
+  const former = occupants.filter((userId) => rowOf.has(userId) && rowOf.get(userId)?.isActive !== true);
+  const strangers = occupants.filter((userId) => !rowOf.has(userId));
+  if (strangers.length === 0) return former;
 
-  const addable = await addableUnderCreator(prisma, request.createdBy, entering);
-  const admitted = entering.filter((userId) => addable.has(userId));
+  const addable = await addableUnderCreator(prisma, request.createdBy, strangers);
   await applyCommunityAdmission(prisma, request.communityId, {
     kind: 'admitted',
-    reactivations: admitted.flatMap((userId) => {
-      const row = rowOf.get(userId);
-      return row ? [{ id: row.id, role: 'member' as const }] : [];
-    }),
-    creations: admitted.filter((userId) => !rowOf.has(userId)).map((userId) => ({ userId, role: 'member' as const })),
+    reactivations: [],
+    creations: strangers.filter((userId) => addable.has(userId)).map((userId) => ({ userId, role: 'member' as const })),
   });
-  return entering.filter((userId) => !addable.has(userId));
+  return [...former, ...strangers.filter((userId) => !addable.has(userId))];
 }
 
 /**
@@ -108,6 +114,25 @@ async function addableUnderCreator(
   return new Set(
     living.map((user) => user.id).filter((id) => !blockedByCreator.has(id) && !blocking.has(id)),
   );
+}
+
+/**
+ * La bascule ÉCRITE, une seconde passe d'admission rattrape qui est entré
+ * dans un salon entre la première passe et l'écriture (la communauté était
+ * encore publique) ; puis tous ceux qui ne peuvent pas entrer sortent. Ne
+ * rejette jamais.
+ */
+export async function closeSalonsAfterSwitch(
+  deps: SalonExitDeps & { readonly prisma: SalonAdoptionPrisma },
+  request: SalonAdoptionRequest & { readonly outsiders: readonly string[]; readonly now: Date },
+): Promise<void> {
+  const late = await admitSalonOccupants(deps.prisma, request).catch((error: unknown) => {
+    logger.error('Late salon admission failed', { communityId: request.communityId, error });
+    return [] as readonly string[];
+  });
+  const userIds = [...new Set([...request.outsiders, ...late])];
+  if (userIds.length === 0) return;
+  await exitSalonOutsiders(deps, { communityId: request.communityId, userIds, now: request.now });
 }
 
 /**
