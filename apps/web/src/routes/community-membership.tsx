@@ -23,12 +23,12 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 export type MembershipFailure = 'join' | 'refused' | 'leave' | 'offline';
 
-const FAILURE_KEY: Readonly<Record<MembershipFailure, CommunityMembershipCatalogKey>> = {
+const FAILURE_KEY = {
   join: 'community.membership.error',
   refused: 'community.membership.error.refused',
   leave: 'community.membership.error',
   offline: 'community.membership.offline',
-};
+} as const satisfies Readonly<Record<MembershipFailure, CommunityMembershipCatalogKey>>;
 
 const ERROR_INK = 'var(--color-error)';
 
