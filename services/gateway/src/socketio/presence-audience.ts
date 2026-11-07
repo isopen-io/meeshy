@@ -1,6 +1,7 @@
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import type { RelationAgeClass } from '@meeshy/shared/utils/relation-access';
 
 /**
  * Qui reçoit une transition de présence (`user:status`), et avec quelle charge.
@@ -13,7 +14,9 @@ import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibil
  * de présence. »
  *
  * L'audience est donc faite de RELATIONS, jamais de fils : amis acceptés,
- * administrateurs globaux, et les autres appareils du sujet.
+ * administrateurs globaux, et les autres appareils du sujet — plus, quand le sujet
+ * est de l'équipe, ses collègues MODERATOR (#16623), que la même loi juge sur
+ * les deux rôles : un sujet ordinaire n'en a aucun.
  *
  * L'AMI est BINAIRE (directive porteur 2026-10-31, #13928) : il reçoit « en
  * ligne » ou rien, jamais `lastActiveAt`. Seuls les PROCHES et au-dessus
@@ -38,7 +41,23 @@ export type PresenceAudienceInput = {
   readonly friendLevels: ReadonlyMap<string, RelationLevel>;
   /** `User.id` des ADMIN/BIGBOSS de la plateforme. */
   readonly adminIds: readonly string[];
+  /** `User.role` du sujet : absent, aucun collègue n'est retenu. */
+  readonly subjectRole?: string | null;
+  /**
+   * Âge déclaré du sujet : mineur, aucun collègue adulte n'est retenu (#16623). L'âge
+   * des modérateurs n'est pas lu, ils comptent comme adultes : un sujet mineur ne part
+   * chez aucun.
+   */
+  readonly subjectMinor?: RelationAgeClass;
+  /** `User.id` des MODERATOR de la plateforme, candidats que la loi retient ou non. */
+  readonly moderatorIds?: readonly string[];
 };
+
+/**
+ * Les MODERATOR candidats à la transition d'un collègue (#16623) : actifs, ni supprimés
+ * ni désactivés. Un compte parti ne reçoit plus la présence de l'équipe.
+ */
+export const TEAM_COLLEAGUES_WHERE = { role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: null } as const;
 
 export type PresenceStatusAudience = {
   /**
@@ -77,15 +96,18 @@ export function presenceStatusAudience(input: PresenceAudienceInput): PresenceSt
     input.isAnonymous ? input.adminIds : [...input.adminIds, input.subjectId],
   );
   const alreadyPrivileged = new Set(privileged);
-  const friends = input.isAnonymous
+  const moderators = new Set(input.moderatorIds ?? []);
+  const candidates = input.isAnonymous
     ? []
-    : uniqueIds([...input.friendLevels.keys()]).filter((id) => !alreadyPrivileged.has(id));
+    : uniqueIds([...input.friendLevels.keys(), ...moderators]).filter((id) => !alreadyPrivileged.has(id));
 
-  const verdicts = friends.map((id) => ({
+  const verdicts = candidates.map((id) => ({
     id,
     ...resolvePresenceVisibility({
       isSelf: false,
-      viewerRole: 'USER',
+      viewerRole: moderators.has(id) ? 'MODERATOR' : 'USER',
+      targetRole: input.subjectRole,
+      targetMinor: moderators.has(id) ? input.subjectMinor : undefined,
       relationLevel: input.friendLevels.get(id) ?? 'PUBLIC',
       targetShowOnlineStatus: true,
       targetShowLastSeen: true,

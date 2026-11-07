@@ -164,11 +164,23 @@ describe('la porte de montée (#14910) — `canRaise` et `raiseBlockedUntil` de 
     const served = fakeTransport({ ok: true, data: servedLink({ canRaise: false, raiseBlockedUntil: '2026-12-01T00:00:00.000Z' }) });
     expect(await loadRelationRaiseGate({ source: 'gateway', transport: served.transport }, 'u 1')).toEqual({
       ok: true,
-      data: { canRaise: false, raiseBlockedUntil: '2026-12-01T00:00:00.000Z' },
+      data: { canRaise: false, raiseBlockedUntil: '2026-12-01T00:00:00.000Z', accessLevel: 'FRIEND' },
     });
     expect(served.requests.map((r) => [r.method, r.path])).toEqual([['GET', '/api/v1/relations/u%201']]);
     const old = fakeTransport({ ok: true, data: { userId: 'u1', effectiveLevel: 'FRIEND' } });
-    expect(await loadRelationRaiseGate({ source: 'gateway', transport: old.transport }, 'u1')).toEqual({ ok: true, data: { canRaise: null, raiseBlockedUntil: null } });
+    expect(await loadRelationRaiseGate({ source: 'gateway', transport: old.transport }, 'u1')).toEqual({ ok: true, data: { canRaise: null, raiseBlockedUntil: null, accessLevel: 'FRIEND' } });
+  });
+
+  test('`accessLevel` (#16623) : le verdict servi pour les outils de cercle, le lien réel chez une passerelle d’avant, PUBLIC s’il est illisible', async () => {
+    const gate = async (data: unknown) => {
+      const { transport } = fakeTransport({ ok: true, data });
+      const result = await loadRelationRaiseGate({ source: 'gateway', transport }, 'u1');
+      return result.ok ? result.data.accessLevel : 'échec';
+    };
+    expect(await gate({ userId: 'u1', effectiveLevel: 'PUBLIC', accessLevel: 'BLOOD' })).toBe('BLOOD');
+    expect(await gate({ userId: 'u1', effectiveLevel: 'CLOSE' })).toBe('CLOSE');
+    expect(await gate({ userId: 'u1', effectiveLevel: 'PUBLIC', accessLevel: 'GALAXY' })).toBe('PUBLIC');
+    expect(await gate({ userId: 'u1', accessLevel: 'ATOM' })).toBe('PUBLIC');
   });
 
   test('décodés sur le lien quand ils sont servis, sans clé sinon', () => {

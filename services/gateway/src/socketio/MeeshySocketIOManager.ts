@@ -63,7 +63,7 @@ import {
   emitToConversationParticipants,
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
-import { presenceStatusEmissions } from './presence-audience';
+import { presenceStatusEmissions, TEAM_COLLEAGUES_WHERE } from './presence-audience';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -78,7 +78,8 @@ import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService
 import { getBlockRelatedUserIds } from '../utils/blocking';
 import { PresenceVisibilityService, type PresenceViewer } from '../services/PresenceVisibilityService';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { isGlobalAdmin, isPlatformTeam } from '@meeshy/shared/types/role-types';
+import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { MediaCaptionTranslationService } from '../services/posts/MediaCaptionTranslationService';
@@ -311,6 +312,7 @@ export class MeeshySocketIOManager {
   // de maintenance passe hors ligne d'un coup. La requête est bornée par le
   // nombre d'administrateurs (une poignée), jamais par la population connectée.
   private globalAdminIdsCache: { ids: string[]; cachedAt: number } | null = null;
+  private moderatorIdsCache: { ids: string[]; cachedAt: number } | null = null;
   private readonly GLOBAL_ADMIN_IDS_CACHE_TTL_MS = 60_000;
 
   // Statistiques
@@ -2765,6 +2767,25 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Les `User.id` des MODERATOR : les collègues d'un sujet de l'équipe (#16623). Même
+   * mémoire de 60 s que la liste des administrateurs, et elle n'est lue que pour un
+   * sujet de l'équipe : une transition ordinaire n'en paie rien.
+   */
+  private async _moderatorUserIds(): Promise<string[]> {
+    const cached = this.moderatorIdsCache;
+    if (cached && Date.now() - cached.cachedAt < this.GLOBAL_ADMIN_IDS_CACHE_TTL_MS) {
+      return cached.ids;
+    }
+    const rows = await this.prisma.user.findMany({
+      where: TEAM_COLLEAGUES_WHERE,
+      select: { id: true },
+    });
+    const ids = rows.map(row => row.id);
+    this.moderatorIdsCache = { ids, cachedAt: Date.now() };
+    return ids;
+  }
+
+  /**
    * Diffuse une transition de présence (connexion / déconnexion) aux personnes
    * AUTORISÉES à la connaître.
    *
@@ -2873,7 +2894,9 @@ export class MeeshySocketIOManager {
           firstName: true,
           lastName: true,
           lastActiveAt: true,
-          deactivatedAt: true
+          deactivatedAt: true,
+          role: true,
+          birthDate: true
         }
       });
       if (!user) return;
@@ -2891,12 +2914,18 @@ export class MeeshySocketIOManager {
       const friendLevels = privacyPrefs.showOnlineStatus
         ? await this.presenceVisibilityService.acceptedFriendLevels(user.id, { blockRelated: blockedUserIds })
         : new Map();
+      const moderatorIds = privacyPrefs.showOnlineStatus && isPlatformTeam(user.role)
+        ? (await this._moderatorUserIds()).filter(id => !blockedUserIds.has(id))
+        : [];
 
       const emissions = presenceStatusEmissions({
         subjectId: user.id,
+        subjectRole: user.role,
+        subjectMinor: declaredAgeClass(user.birthDate ?? null, new Date()),
         isAnonymous: false,
         friendLevels,
         adminIds,
+        moderatorIds,
         lastActiveAt: user.lastActiveAt,
         showOnlineStatus: privacyPrefs.showOnlineStatus,
         showLastSeen: privacyPrefs.showLastSeen,
