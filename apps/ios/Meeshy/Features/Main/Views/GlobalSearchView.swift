@@ -617,8 +617,9 @@ struct GlobalSearchView: View {
         dismiss()
 
         // Le toucher ouvre la conversation SUR le message (#14619).
-        if let conv = conversationListViewModel?.conversations.first(where: { $0.id == result.conversationId }) {
-            router.navigateToConversation(conv, highlightMessageId: result.id)
+        let conversations = conversationListViewModel?.conversations ?? []
+        Task { @MainActor in
+            await MessageSearchResultOpener.open(result, among: conversations, router: router)
         }
     }
 

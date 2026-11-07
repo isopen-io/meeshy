@@ -231,7 +231,7 @@ extension ConversationView {
         composerState.uploads.begin(upload, mediaIds: Set(batch.mediaFiles.keys))
         let runner = AttachmentSendRunner(host: viewModel, callbacks: AttachmentSendCallbacks(
             restorePlace: { place, sent in restorePlaceTile(place, sent: sent) },
-            setProgress: { tempId, fraction in progress.report(fraction, for: tempId) },
+            setProgress: { tempId, sent, total in progress.report(sent: sent, total: total, for: tempId) },
             abortUpload: { settleUpload(upload, bubbles: bubbles) }
         ))
         Task {

@@ -28,7 +28,7 @@ function harness(options: { readonly color?: boolean; readonly effects?: VideoEf
   let effects = options.effects ?? NO_EFFECTS;
   let zoom = options.zoom ?? 1;
   let lens = options.lens;
-  const built: Array<{ camera: MediaStreamTrack; pipeline: EffectsPipeline & { updates: FrameSettings[]; stopped: boolean } }> = [];
+  const built: Array<{ camera: MediaStreamTrack; pipeline: EffectsPipeline & { updates: FrameSettings[]; stopped: boolean; fail: () => void } }> = [];
   const port = createCameraEffects({
     effects: () => effects,
     zoom: () => zoom,
@@ -36,7 +36,16 @@ function harness(options: { readonly color?: boolean; readonly effects?: VideoEf
     colorSupported: () => options.color ?? true,
     loadPipeline: async () => async (source, initial) => {
       const output = camera(`out-${built.length}`) as unknown as MediaStreamTrack;
-      const pipeline = { output, updates: [initial], stopped: false, update: (next: FrameSettings) => void pipeline.updates.push(next), stop: () => void ((pipeline.stopped = true), output.stop()) };
+      let failHandler: (() => void) | null = null;
+      const pipeline = {
+        output,
+        updates: [initial],
+        stopped: false,
+        update: (next: FrameSettings) => void pipeline.updates.push(next),
+        stop: () => void ((pipeline.stopped = true), output.stop()),
+        onFailed: (handler: () => void) => void (failHandler = handler),
+        fail: () => failHandler?.(),
+      };
       built.push({ camera: source, pipeline });
       return pipeline;
     },
@@ -206,6 +215,41 @@ describe('ce que l’analytique retient', () => {
   test('les effets actifs, nommés', () => {
     const h = harness({ effects: { ...NO_EFFECTS, preset: 'cool', blur: true } });
     expect(h.port.used()).toEqual(['filter:cool', 'background-blur']);
+  });
+});
+
+describe('un traitement qui meurt en cours d’appel (#9187)', () => {
+  test('la panne prévient l’abonné avec la caméra BRUTE, et arrête le traitement mort', async () => {
+    const h = harness({ effects: { ...NO_EFFECTS, preset: 'warm' } });
+    const raw = camera();
+    const sent = await h.port.wrap(asTrack(raw));
+    const failures: MediaStreamTrack[] = [];
+    h.port.onFailure((camera) => void failures.push(camera));
+    h.built[0]?.pipeline.fail();
+    expect(failures).toEqual([asTrack(raw)]);
+    expect(h.built[0]?.pipeline.stopped).toBe(true);
+    expect(cameraSourceOf(sent)).toBe(sent);
+  });
+
+  test('sans abonné, une panne ne lève rien', async () => {
+    const h = harness({ effects: { ...NO_EFFECTS, preset: 'warm' } });
+    await h.port.wrap(asTrack(camera()));
+    expect(() => h.built[0]?.pipeline.fail()).not.toThrow();
+  });
+
+  test('une panne déjà relâchée (retour à « naturel » entre-temps) ne défait rien deux fois', async () => {
+    const h = harness({ effects: { ...NO_EFFECTS, preset: 'warm' } });
+    const sent = await h.port.wrap(asTrack(camera()));
+    h.set(NO_EFFECTS);
+    await h.port.refresh(sent);
+    const failures: MediaStreamTrack[] = [];
+    h.port.onFailure((camera) => void failures.push(camera));
+    expect(() => h.built[0]?.pipeline.fail()).not.toThrow();
+    expect(failures).toEqual([]);
+  });
+
+  test('le moteur sans port d’effets n’a rien à signaler', () => {
+    expect(() => PASSTHROUGH_EFFECTS.onFailure(() => undefined)).not.toThrow();
   });
 });
 

@@ -121,9 +121,11 @@ import { wireCallMessageBroadcasters } from './callMessageBroadcasters';
 import { attachSocketIORedisAdapter, type SocketIORedisAdapterHandle } from './redis-adapter';
 import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
 import { loadTranslatableMessage } from '../services/messaging/atRestTranslationSource';
+import { loadHistoryFloor, HISTORY_FLOOR_PARTICIPANT_SELECT } from '../services/historyFloor';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
+
 
 /**
  * Combien de conversations au plus reçoivent leur pont ✦ dans l'instantané de
@@ -2131,17 +2133,52 @@ export class MeeshySocketIOManager {
 
       // Verify requesting user is a participant of the message's conversation
       const connectedUser = this.connectedUsers.get(userId);
+      // #16552 — le `select` porte en plus les colonnes du PLANCHER
+      // D'HISTORIQUE. La garde ne coûte donc aucune requête de plus : elle
+      // s'ajoute à une lecture que ce site faisait déjà (doctrine du cycle 127 —
+      // « avant de conclure qu'une garde coûterait une requête, regarder ce que
+      // le site lit déjà »).
       const membershipCheck = connectedUser?.isAnonymous
         ? await this.prisma.participant.findFirst({
             where: { id: connectedUser.participantId, conversationId: message.conversationId, isActive: true },
-            select: { id: true },
+            select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
           })
         : await this.prisma.participant.findFirst({
             where: { userId, conversationId: message.conversationId, isActive: true },
-            select: { id: true },
+            select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
           });
 
       if (!membershipCheck) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
+        return;
+      }
+
+      // #16552 — ce que le JUMEAU POUSSÉ du même événement garde déjà.
+      // `deliverTextTranslation` → `translationReaders` exclut, fail-closed, le
+      // lecteur entré après le message ; le chemin DEMANDÉ ne gardait que
+      // l'appartenance ACTIVE. Le même `message:translation` était donc retenu
+      // quand le serveur le POUSSE et remis quand le client le DEMANDE — et
+      // l'id d'un message ancien est à portée de tout client, `replyToId`
+      // voyageant au premier niveau de `message:new`.
+      //
+      // FAIL-CLOSED comme son jumeau : un plancher illisible refuse. Ici c'est
+      // un refus de LECTURE, pas une livraison perdue — se taire ne coûte
+      // qu'une traduction non servie, la servir à tort coûte le message.
+      // Un plancher ILLISIBLE et un plancher `null` sont deux choses : `null` est
+      // une RÉPONSE (« ce lecteur lit tout l'historique »), l'illisibilité est
+      // une ignorance. Les confondre ferait d'une panne de base une
+      // autorisation, d'où le couple explicite plutôt qu'une valeur sentinelle.
+      const floor = await loadHistoryFloor(this.prisma, membershipCheck)
+        .then((value) => ({ readable: true, value }))
+        .catch((error: unknown) => {
+          logger.warn('history floor unreadable — translation request refused', {
+            conversationId: message.conversationId,
+            error,
+          });
+          return { readable: false, value: null };
+        });
+
+      if (!floor.readable || (floor.value !== null && message.createdAt < floor.value)) {
         socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
         return;
       }

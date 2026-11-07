@@ -391,7 +391,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       callActions.minimize();
     },
   });
-  const visibility = useCallChrome({ videoScene: videoScene && chrome.mode === null, root, swallowTap: swipe.swallowTap });
+  const { visibility, reveal: revealChrome } = useCallChrome({ videoScene: videoScene && chrome.mode === null, root, swallowTap: swipe.swallowTap });
   const send = (event: CallLayerEvent) => {
     const next = nextLayer(shown, event);
     focusNext.current = focusTarget(shown, next);
@@ -507,7 +507,21 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         </div>
       ),
   };
-  const stage = <CallStage call={call} layout={layout} language={language} choice={choice} onChoose={setChoice} immersive={immersive} onToggleImmersive={toggleImmersive} moderation={moderation} self={self} />;
+  const stage = (
+    <CallStage
+      call={call}
+      layout={layout}
+      language={language}
+      choice={choice}
+      onChoose={setChoice}
+      immersive={immersive}
+      onToggleImmersive={toggleImmersive}
+      moderation={moderation}
+      self={self}
+      chromeVisible={visibility === 'shown'}
+      onRevealChrome={revealChrome}
+    />
+  );
 
   const incomingControls = (
     <div className="flex flex-col gap-6">

@@ -4677,6 +4677,28 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
         )
     }
 
+    /// #16517 — the watchdog used the legacy `Task.sleep(nanoseconds:)` API
+    /// (manual `* 1_000_000_000` conversion) while the rest of the app has
+    /// already standardized on `Task.sleep(for:)` (140+ call sites).
+    func test_videoWatchdog_usesModernTaskSleepFor_notNanoseconds() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var connectingVideoPlaceholder") else {
+            XCTFail("connectingVideoPlaceholder not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("Task.sleep(for: .seconds(Double(videoConnectWatchdogSeconds)))"),
+            "connectingVideoPlaceholder watchdog must use Task.sleep(for: .seconds(...)) " +
+            "like the rest of the app, not Task.sleep(nanoseconds:)."
+        )
+        XCTAssertFalse(
+            body.contains("Task.sleep(nanoseconds:"),
+            "Task.sleep(nanoseconds:) must not return to the video-connect watchdog."
+        )
+    }
+
 }
 
 // MARK: - Screen Capture Monitoring (iOS 16+ deprecation guard)

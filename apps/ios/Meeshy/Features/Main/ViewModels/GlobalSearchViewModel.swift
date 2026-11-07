@@ -71,6 +71,8 @@ struct GlobalSearchUserResult: Identifiable, Sendable {
 nonisolated struct GlobalSearchLeg<Item: Sendable>: Sendable {
     let items: [Item]
     let failure: String?
+    /// Le curseur de la page suivante, quand le serveur a encore à rendre.
+    var nextCursor: String? = nil
 
     static func served(_ items: [Item]) -> GlobalSearchLeg<Item> {
         GlobalSearchLeg(items: items, failure: nil)

@@ -541,6 +541,19 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
+  test('en groupe, chrome rangé, toucher une vignette le RANGE au lieu de changer la une ; chrome visible, elle la met à la une (#9183)', () => {
+    const view = mount({ isGroup: true, members: peers, cameraOn: true });
+    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
+    tapStage(view);
+    expect(chrome()).toBe('hidden');
+    view.press('[data-call-tile-self]');
+    expect(chrome()).toBe('shown');
+    expect(view.find('[data-call-spotlight]')).toBeNull();
+    view.press('[data-call-tile-self]');
+    expect(view.find('[data-call-spotlight]')?.getAttribute('data-call-spotlight')).toBe('self');
+    view.done();
+  });
+
   test('Échap, un panneau ouvert, le ferme SANS réduire l’appel — même quand le focus a quitté le panneau (#8618)', async () => {
     const original = callActions.minimize;
     const minimized: number[] = [];

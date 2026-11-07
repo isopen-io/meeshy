@@ -30,7 +30,6 @@ export function StreamVideo({
   className,
   label,
   fit = 'cover',
-  zoom = 1,
   videoRef,
   member,
   self = false,
@@ -40,8 +39,6 @@ export function StreamVideo({
   readonly className?: string;
   readonly label?: string;
   readonly fit?: 'cover' | 'contain';
-  /** Le zoom numérique de MON aperçu (#8441) : à l'écran seulement, jamais dans ce qui part. */
-  readonly zoom?: number;
   /** L'élément tenu par qui le NOMME (#8737) : la capture du mode Effets lit MA vidéo par lui, jamais en fouillant l'écran. */
   readonly videoRef?: MutableRefObject<HTMLVideoElement | null>;
   /** À QUI est cette vidéo (#8743) : le membre montré — la capture pose chaque visage dans SA case d'un cadre. */
@@ -50,7 +47,7 @@ export function StreamVideo({
   readonly self?: boolean;
 }) {
   const ref = useSrcObject<HTMLVideoElement>(stream, videoRef);
-  const transform = [mirrored ? 'scaleX(-1)' : '', zoom > 1 ? `scale(${zoom})` : ''].filter((part) => part !== '').join(' ');
+  const transform = mirrored ? 'scaleX(-1)' : '';
   return (
     <video
       ref={ref}

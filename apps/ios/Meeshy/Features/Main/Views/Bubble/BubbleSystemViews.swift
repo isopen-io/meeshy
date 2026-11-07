@@ -59,7 +59,7 @@ struct BubbleDeletedView: View, Equatable {
 struct BubbleSystemNoticeView: View, Equatable {
     static func == (lhs: BubbleSystemNoticeView, rhs: BubbleSystemNoticeView) -> Bool {
         lhs.text == rhs.text && lhs.isDark == rhs.isDark && lhs.timeString == rhs.timeString
-            && lhs.greeting?.text == rhs.greeting?.text && lhs.greeting?.accentHex == rhs.greeting?.accentHex
+            && lhs.greeting?.text == rhs.greeting?.text && lhs.greeting?.accentColor == rhs.greeting?.accentColor
     }
 
     let text: String
@@ -164,7 +164,7 @@ struct BubbleJoinNoticeView: View, Equatable {
         lhs.notice == rhs.notice
             && lhs.isDark == rhs.isDark
             && lhs.timeString == rhs.timeString
-            && lhs.greeting?.text == rhs.greeting?.text && lhs.greeting?.accentHex == rhs.greeting?.accentHex
+            && lhs.greeting?.text == rhs.greeting?.text && lhs.greeting?.accentColor == rhs.greeting?.accentColor
     }
 
     let notice: BubbleContent.JoinNotice

@@ -107,16 +107,26 @@ extension OutboxDispatcher {
     /// finissait par voir. Un report (`OutboxDeferralError`) et une annulation
     /// ne sont pas des échecs d'envoi : la ligne n'est pas touchée.
     func dispatchSendMessageRecordingFailure(_ record: OutboxRecord) async throws {
+        defer { Task { @MainActor in ReplayUploadProgressRelay.shared.stop(record.clientMessageId) } }
         do {
             try await dispatchSendMessage(record)
         } catch {
             guard OutboxDispatcher.persistsReplayFailure(error) else { throw error }
             let localId = record.messageLocalId ?? record.clientMessageId
             await bestEffort("outbox.sendFailed", category: .messages) {
-                try await persistence().applyEvent(localId: localId, event: .sendFailed(error))
+                try await persistence().applyEvent(localId: localId, event: .replayFailed(error))
             }
             throw error
         }
+    }
+
+    /// Une bulle retombée dans la file est `.queued`, rendue `.slow`, et cet état n'a pas d'anneau :
+    /// sa reprise la rend `.sending`, sinon sa progression ne se voit pas (#16275).
+    func replayUploader(baseURL: URL, for clientMessageId: String, stored paths: [String]) async -> TusUploadManager {
+        await bestEffort("outbox.startSending", category: .messages) {
+            try await persistence().applyEvent(localId: clientMessageId, event: .startSending)
+        }
+        return await ReplayUploadProgressRelay.shared.uploader(baseURL: baseURL, for: clientMessageId, stored: paths)
     }
 
     static func persistsReplayFailure(_ error: any Error) -> Bool {
@@ -170,11 +180,11 @@ extension OutboxDispatcher {
                     )
                 }
 
-                let uploader = TusUploadManager(baseURL: baseURL)
+                let uploader = await replayUploader(baseURL: baseURL, for: item.clientMessageId, stored: pendingAudioPaths)
                 var uploadedIds: [String] = []
                 var firstUploadErrorAudio: Error?
 
-                for stored in pendingAudioPaths {
+                for (index, stored) in pendingAudioPaths.enumerated() {
                     let absolutePath = OfflineQueue.absoluteAudioPath(forStored: stored)
                     guard FileManager.default.fileExists(atPath: absolutePath) else {
                         logger.error("Audio file missing on dispatch, path=\(stored, privacy: .public)")
@@ -184,7 +194,7 @@ extension OutboxDispatcher {
                         let tusResult = try await uploader.uploadFile(
                             fileURL: URL(fileURLWithPath: absolutePath),
                             mimeType: "audio/mp4",
-                            credential: credential
+                            credential: credential, fileName: item.originalMediaName(at: index)
                         )
                         uploadedIds.append(tusResult.id)
                     } catch {
@@ -227,7 +237,7 @@ extension OutboxDispatcher {
                     )
                 }
 
-                let uploader = TusUploadManager(baseURL: baseURL)
+                let uploader = await replayUploader(baseURL: baseURL, for: item.clientMessageId, stored: pendingMediaPaths)
                 var uploadedIds: [String] = []
                 var firstUploadErrorMedia: Error?
 

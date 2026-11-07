@@ -137,6 +137,27 @@ describe('le chemin nominal : les flux remis au worker (Chrome, la coque Android
     pipeline.stop();
   });
 
+  test('un worker qui tombe APRÈS le premier mot le signale au port d’effets (#9187)', async () => {
+    const worker = fakeWorker();
+    const f = framesEnv();
+    const pipeline = await createEffectsPipeline(camera(), warm, { worker: () => worker.port, frames: f.frames, canvas: null, local: async () => localEnv().env });
+    let failures = 0;
+    pipeline.onFailed?.(() => void failures++);
+    worker.reply({ kind: 'failed' });
+    expect(failures).toBe(1);
+    pipeline.stop();
+  });
+
+  test('le relevé de coût continue d’arriver après le premier mot (#9187)', async () => {
+    const worker = fakeWorker();
+    const marks: number[] = [];
+    const pipeline = await createEffectsPipeline(camera(), warm, { worker: () => worker.port, frames: framesEnv().frames, canvas: null, local: async () => localEnv().env, mark: (timings) => void marks.push(timings.p95) });
+    pipeline.onFailed?.(() => undefined);
+    worker.reply({ kind: 'timings', timings: { frames: 30, p50: 1, p95: 4, max: 5 } });
+    expect(marks).toEqual([4]);
+    pipeline.stop();
+  });
+
   test('un worker qui refuse : le fil principal traite lui-même, sur un générateur neuf', async () => {
     const worker = fakeWorker(() => ({ kind: 'failed' }));
     const f = framesEnv();
@@ -208,6 +229,7 @@ describe('le repli : le canevas filmé, là où rien d’autre ne sait', () => {
   test('chaque image de la caméra est redessinée sur la piste filmée', async () => {
     const h = canvasEnv();
     const pipeline = await createEffectsPipeline(camera(), warm, h.env);
+    expect(pipeline.onFailed).toBeUndefined();
     h.tick();
     pipeline.update(settings({ preset: 'muted' }));
     h.tick();

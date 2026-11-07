@@ -618,6 +618,9 @@ export const SERVER_EVENTS = {
   // --- Décor de profil (#10632) : contour d'avatar et bannière équipés, synchronisés entre mes appareils ---
   PROFILE_DECOR_UPDATED: 'profile:decor-updated',
 
+  // --- Mes stickers (#16515) : la bibliothèque de stickers du COMPTE, synchronisée entre mes appareils ---
+  STICKER_LIBRARY_UPDATED: 'sticker:library-updated',
+
   // --- User Profile (realtime propagation to conversation partners) ---
   USER_UPDATED: 'user:updated',
 

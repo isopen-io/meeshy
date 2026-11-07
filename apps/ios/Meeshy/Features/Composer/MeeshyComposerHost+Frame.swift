@@ -39,16 +39,12 @@ extension MeeshyComposerHost {
     }
 
     func applySceneFitMode(_ mode: String) {
-        var slide = viewModel.currentSlide
-        slide.effects.backgroundTransform = ComposerBackdropFraming.applying(
-            fitMode: mode, to: slide.effects.backgroundTransform)
-        viewModel.currentSlide = slide
+        viewModel.currentSlide.effects.backgroundTransform = ComposerBackdropFraming.applying(
+            fitMode: mode, to: viewModel.currentSlide.effects.backgroundTransform)
     }
 
     func applySceneBackdrop(_ fond: StoryBackdrop) {
-        var slide = viewModel.currentSlide
-        slide.effects.backgroundTransform = ComposerBackdropFraming.applying(
-            backdrop: fond, to: slide.effects.backgroundTransform)
-        viewModel.currentSlide = slide
+        viewModel.currentSlide.effects.backgroundTransform = ComposerBackdropFraming.applying(
+            backdrop: fond, to: viewModel.currentSlide.effects.backgroundTransform)
     }
 }

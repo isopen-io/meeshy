@@ -335,3 +335,46 @@ describe('contact_recently_active ouvre le profil du contact revenu', () => {
     expect(pushTapTarget({ type: 'contact_recently_active' })).toEqual({ route: 'notifications' });
   });
 });
+
+/**
+ * UN APPEL MANQUÉ SANS CONVERSATION NOMMÉE (#9177) — une invitée non membre,
+ * sans DM avec l'inviteur : la passerelle ne pose aucun `conversationId`, et
+ * sans ce repli le tap n'ouvrait rien (loi 4 enfreinte : un geste posé, aucun
+ * effet). Le cas nominal (conversationId présent) reste inchangé.
+ */
+describe('un appel manqué sans conversation ouvre le profil de l’appelant (#9177)', () => {
+  const appelant = { id: 'u-kwame', username: 'kwame', displayName: 'Kwame', avatar: null };
+
+  test('avec conversation, le fil reste la destination — inchangé', () => {
+    expect(notificationTarget(record({ type: 'missed_call', actor: appelant, context: { conversationId: 'c-9' } }))).toEqual({
+      route: 'thread',
+      params: { conversation: 'c-9' },
+    });
+  });
+
+  test('sans conversation, la cloche ouvre le profil de l’appelant plutôt que rien', () => {
+    expect(notificationTarget(record({ type: 'missed_call', actor: appelant }))).toEqual({
+      route: 'userProfile',
+      params: { username: 'kwame' },
+    });
+  });
+
+  test('le tap d’une bannière suit le même repli', () => {
+    expect(pushTapTarget({ type: 'missed_call', senderUsername: 'kwame' })).toEqual({
+      route: 'userProfile',
+      params: { username: 'kwame' },
+    });
+  });
+
+  test('un appel refusé (call_declined) suit le même repli', () => {
+    expect(pushTapTarget({ type: 'call_declined', senderUsername: 'kwame' })).toEqual({
+      route: 'userProfile',
+      params: { username: 'kwame' },
+    });
+  });
+
+  test('sans pseudonyme, aucune adresse n’est inventée : le tap retombe sur la liste', () => {
+    expect(pushTapTarget({ type: 'missed_call' })).toEqual({ route: 'notifications' });
+    expect(notificationTarget(record({ type: 'missed_call' }))).toBeNull();
+  });
+});
