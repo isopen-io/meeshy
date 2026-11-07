@@ -1,3 +1,4 @@
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -46,7 +47,7 @@ export async function fetchParticipantSuperset(
 ): Promise<ParticipantSuperset | undefined> {
   try {
     return await prisma.participant.findMany({
-      where: { conversationId, isActive: true },
+      where: { conversationId, ...PARTICIPATION_VIVANTE },
       select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true },
     }) as ParticipantSuperset;
   } catch (error) {

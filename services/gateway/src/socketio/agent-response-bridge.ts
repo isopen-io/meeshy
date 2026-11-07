@@ -1,3 +1,4 @@
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Message } from '@meeshy/shared/types/index';
 import type { MentionParticipant } from '@meeshy/shared/utils/mention-parser';
@@ -94,7 +95,7 @@ async function conversationParticipantsForMention(
 ): Promise<MentionParticipant[]> {
   try {
     const participants = await prisma.participant.findMany({
-      where: { conversationId, isActive: true, userId: { not: null } },
+      where: { conversationId, ...PARTICIPATION_VIVANTE, userId: { not: null } },
       select: {
         userId: true,
         displayName: true,
