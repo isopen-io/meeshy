@@ -245,8 +245,13 @@ class CallScreenShareActionHandler @Inject constructor(
 
 /** Le partage, lu par la pilule pour qu'elle se redessine quand il commence ou cesse. */
 @HiltViewModel
-class CallScreenShareViewModel @Inject constructor(controller: CallScreenShareController) : ViewModel() {
+class CallScreenShareViewModel @Inject constructor(private val controller: CallScreenShareController) : ViewModel() {
     val state: StateFlow<CallScreenShareUi> = controller.state
+
+    /** « Arrêter » de la pastille repliée (#16664) : n'arrête qu'un partage en cours, ne le démarre jamais. */
+    fun stop() {
+        if (state.value.phase != CallScreenSharePhase.Idle) controller.toggle()
+    }
 }
 
 @Module

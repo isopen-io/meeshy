@@ -3,6 +3,7 @@ package me.meeshy.sdk.net.api
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.relation.BringBlockBody
+import me.meeshy.sdk.model.relation.NowPlayingSnapshotWire
 import me.meeshy.sdk.model.relation.RelationPersonSettings
 import me.meeshy.sdk.model.relation.RelationLinkWire
 import me.meeshy.sdk.model.relation.RelationRitualBody
@@ -44,6 +45,10 @@ interface RelationsApi {
     /** « Mes cercles » : chaque lien d'au moins Connaissance, avec sa progression et son éligibilité. */
     @GET(ApiRoutesRelations.ROOT)
     suspend fun links(): ApiResponse<List<RelationLinkWire>>
+
+    /** Ce que mes Proches et mes Sangs écoutent en ce moment, tronqué par la passerelle à ce qu'ils me partagent (#16686). */
+    @GET(ApiRoutesRelations.NOW_PLAYING)
+    suspend fun nowPlaying(): ApiResponse<NowPlayingSnapshotWire>
 
     /** Les niveaux, leurs libellés des sept langues et leurs icônes. */
     @GET(ApiRoutesRelations.CONFIG)

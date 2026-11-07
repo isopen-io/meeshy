@@ -210,6 +210,63 @@ type AtRestDeclarationFor<K extends QueuedEventType> = K extends TextBearingQueu
   : { readonly atRest?: never };
 
 /**
+ * La forme RUNTIME de `TextBearingQueuedEvent`, et le `Record` est ce qui
+ * interdit à la liste de dériver du type : ajouter un membre à l'union sans
+ * l'ajouter ici ne compile plus. Une seconde énumération écrite à la main
+ * aurait divergé au premier `eventType` neuf — c'est exactement la jumelle que
+ * ce fichier existe pour empêcher.
+ */
+const TEXT_BEARING_TABLE: Record<TextBearingQueuedEvent, true> = {
+  new: true,
+  edited: true,
+  translation: true,
+  'link-message': true,
+  'attachment-updated': true,
+};
+
+/**
+ * Le même ensemble en `Set`, parce que le test d'appartenance porte sur une
+ * valeur venue de Redis : `'constructor' in TEXT_BEARING_TABLE` est VRAI, et
+ * `eventType` sort d'un `JSON.parse(...) as QueuedMessagePayload` — une
+ * AFFIRMATION, jamais une vérification. Le sens de l'erreur serait ici
+ * inoffensif (une entrée de trop est GARDÉE, donc relue), mais une garde ne se
+ * repose pas sur la direction de sa propre faille.
+ */
+const TEXT_BEARING = new Set<string>(Object.keys(TEXT_BEARING_TABLE));
+
+/**
+ * Cette entrée transporte-t-elle le TEXTE du message ?
+ *
+ * C'est la question qui CADRE la garde de vivacité du rejeu (#16685), et le
+ * cadrage est la moitié difficile du lot : une garde de vivacité posée sur
+ * TOUTES les entrées serait un défaut PIRE que celui qu'elle corrige.
+ * `'deleted'` et `'expired'` ont pour UNIQUE objet d'annoncer la mort du
+ * message — les refuser PARCE QUE le message est mort laisserait le client
+ * afficher indéfiniment un message détruit, et la garde aurait l'air de
+ * marcher.
+ *
+ * | famille | la charge porte | la garde de vivacité |
+ * |---|---|---|
+ * | `new` `edited` `translation` `link-message` `attachment-updated` | le TEXTE | **s'applique** |
+ * | `deleted` `expired` | la MORT du message | **doit passer** |
+ * | `pinned` `unpinned` + les quatre réactions | des identifiants, un emoji | rien à garder |
+ *
+ * L'ensemble n'est pas choisi pour ce lot : c'est `TextBearingQueuedEvent`
+ * (#12822), déjà déclaré pour décider qui doit SCELLER sa charge avant Redis.
+ * Les deux questions sont distinctes — « faut-il chiffrer au repos ? » et
+ * « faut-il revérifier que le message existe encore ? » — et ont la même
+ * réponse pour une raison qui n'est pas une coïncidence : **toutes deux portent
+ * sur la présence d'un secret dans la charge.**
+ *
+ * L'absence d'`eventType` vaut `'new'`, la forme héritée — donc GARDÉE. C'est
+ * le bon défaut : une entrée dont on ne sait pas ce qu'elle porte est traitée
+ * comme si elle portait le secret.
+ */
+export function carriesMessageText(eventType: QueuedMessagePayload['eventType']): boolean {
+  return TEXT_BEARING.has(eventType ?? 'new');
+}
+
+/**
  * Le sous-ensemble corrélé des variantes, pour les relais qui n'en portent que
  * quelques-unes — `enqueueOfflineMessageMutation` (quatre), la file de
  * réactions (deux), celle des réactions de pièce jointe (deux).

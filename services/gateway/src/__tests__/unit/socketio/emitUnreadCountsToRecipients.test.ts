@@ -5,6 +5,7 @@
  * @jest-environment node
  */
 
+import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 import { describe, it, expect, jest } from '@jest/globals';
 
 import { emitUnreadCountsToRecipients } from '../../../socketio/emitUnreadCountsToRecipients';
@@ -179,7 +180,23 @@ describe('emitUnreadCountsToRecipients — participants anonymes', () => {
 });
 
 describe('emitUnreadCountsToRecipients — source des participants', () => {
-  it('ne lit que les participants actifs de la conversation', async () => {
+  /**
+   * #16690 — la pastille s'adresse à l'appartenance VIVANTE, par la même
+   * constante que les portes d'accès (`PARTICIPATION_VIVANTE`) : une ligne
+   * `isActive: true, bannedAt ≠ null` existe en base, et sa room `user:<id>`
+   * est rejointe inconditionnellement.
+   *
+   * **Ce témoin assert la REQUÊTE, et c'est sa limite** : il ne peut pas voir
+   * ce que la clause FAIT, et c'est précisément sous cette forme que le défaut
+   * a vécu — l'assertion portait sur `isActive: true` et passait au vert sur
+   * une audience qui servait un banni. L'effet est gardé chez son voisin, par
+   * un double qui ÉVALUE le `where`
+   * (`socketio/__tests__/living-participation-audience.test.ts`). Celui-ci
+   * garde ce que l'autre ne voit pas : la PROJECTION, qu'aucun témoin d'effet
+   * ne peut attester (une audience dont le `select` ne ramène pas `id` n'ignore
+   * pas la room de repli, elle ne la lit jamais).
+   */
+  it('lit les participants à l’appartenance VIVANTE de la conversation', async () => {
     const { io } = makeIO();
     const prisma = makePrisma([sender(), peer()]);
 
@@ -193,7 +210,7 @@ describe('emitUnreadCountsToRecipients — source des participants', () => {
 
     expect(prisma.participant.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { conversationId: CONV_ID, isActive: true },
+        where: { conversationId: CONV_ID, ...PARTICIPATION_VIVANTE },
         select: { id: true, userId: true, joinedAt: true },
       })
     );

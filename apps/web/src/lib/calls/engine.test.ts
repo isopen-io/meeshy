@@ -437,6 +437,7 @@ describe('partage d’écran (#8063)', () => {
     expect(display).toBeDefined();
     expect(h.links[0]?.sent.at(-1)).toBe(display);
     expect(h.call()?.screenSharing).toBe(true);
+    expect(h.call()?.display).toBe('pill');
     expect(h.call()?.cameraOn).toBe(false);
     expect(h.call()?.localStream?.getVideoTracks()).toEqual([display] as unknown as MediaStreamTrack[]);
     expect(h.emitted.at(-1)).toEqual([CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: true }]);

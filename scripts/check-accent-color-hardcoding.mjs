@@ -429,7 +429,12 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // `MeeshyAvatar(accentColor:)`), pour le fond de repli de l'avatar et de la bannière et la bulle « moi » de la
 // conversation factice. Hors de tout contexte de conversation, même règle que `ProfileDecorSheet.swift` ci-dessus.
 // #16437 en posait trois ; ramenés à une. Valeur MESURÉE le 2026-11-06 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 473;
+// 473 -> 475 (2026-11-07, #16662, la couleur d'AUTEUR dans un appel) : `CallCaptionsViews.swift` (1) peint la phrase
+// d'un sous-titre de la couleur de son locuteur quand elle sert une traduction (`CallCaptionLine.textColorHex`), et
+// `CallTranscriptSection.swift` (1) peint le nom du locuteur dans le fil d'après l'appel (`CallSpeakerColor.hex(for:mode:)`).
+// C'est l'identité d'une PERSONNE, dérivée de son identifiant (même graine que le liseré de sa vignette), pas la
+// couleur d'une conversation : `accentColor` n'en dit rien. Valeur MESURÉE le 2026-11-07 en local.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 475;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

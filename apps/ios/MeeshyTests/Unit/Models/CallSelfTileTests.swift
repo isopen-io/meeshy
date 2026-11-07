@@ -119,4 +119,16 @@ final class CallSelfTileTests: XCTestCase {
         XCTAssertFalse(code.contains("static let pipSize"), "La taille de la vignette vient de son palier")
         XCTAssertTrue(code.contains("func pipCenter(_ corner: PiPCorner, in container: CGSize, size: CGSize"))
     }
+
+    // MARK: - #16663 — un toucher range tout, ma vignette passe à sa petite taille
+
+    func test_resting_chromeHidden_isTheSmallestSize() {
+        XCTAssertEqual(CallSelfTileScale.resting(.x3, isChromeVisible: false), .x1)
+        XCTAssertEqual(CallSelfTileScale.resting(.x2, isChromeVisible: false), .x1)
+    }
+
+    func test_resting_chromeVisible_keepsTheChosenSize() {
+        XCTAssertEqual(CallSelfTileScale.resting(.x3, isChromeVisible: true), .x3)
+        XCTAssertEqual(CallSelfTileScale.resting(.x1, isChromeVisible: true), .x1)
+    }
 }

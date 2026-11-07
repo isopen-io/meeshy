@@ -31,7 +31,7 @@ import {
 } from '../../services/messaging/messageRequests';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
-import { reconcileCommunityMembership } from '../../services/conversations/communityMembershipSync';
+import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import {
@@ -143,19 +143,21 @@ export function registerCreateConversationRoute(
 
       // Note: La validation de l'identifier est maintenant gérée par CommonSchemas.conversationIdentifier dans Zod
 
-      // Validate community access if communityId is provided
+      // Validate community access if communityId is provided.
+      // #8876 — une communauté désactivée n'accueille plus aucun geste (404).
+      const hostCommunity = communityId
+        ? await prisma.community.findFirst({
+            where: { id: communityId, isActive: true },
+            select: { createdBy: true, isPrivate: true, members: { where: activeMembershipOf(userId), select: { userId: true, role: true }, take: 1 } }
+          })
+        : null;
       if (communityId) {
-        const community = await prisma.community.findFirst({
-          where: { id: communityId },
-          select: { createdBy: true, members: { where: activeMembershipOf(userId), select: { userId: true }, take: 1 } }
-        });
-
-        if (!community) {
+        if (!hostCommunity) {
           return sendNotFound(reply, 'Community not found');
         }
 
         // Check if user is member of the community
-        const isMember = community.createdBy === userId || community.members.length > 0;
+        const isMember = hostCommunity.createdBy === userId || hostCommunity.members.length > 0;
 
         if (!isMember) {
           return sendForbidden(reply, 'You must be a member of this community to create a conversation');
@@ -192,6 +194,25 @@ export function registerCreateConversationRoute(
       // doit donc en porter un.
       if (type === 'group' && uniqueParticipantIds.length === 0 && (!title || title.trim() === '')) {
         throw createError(ErrorCode.MISSING_REQUIRED_FIELD, 'Un groupe sans invité doit avoir un titre');
+      }
+
+      // #16639 — faire entrer les participants dans la communauté hôte est une
+      // INVITATION : elle se décide AVANT la création, sous la loi de
+      // `POST /communities/:id/invite`, pour refuser sans rien écrire.
+      const communityAdmission = communityId && hostCommunity
+        ? await planCommunityAdmission(prisma, {
+            communityId,
+            actorId: userId,
+            createdBy: hostCommunity.createdBy,
+            isPrivate: hostCommunity.isPrivate,
+            actorRole: hostCommunity.members[0]?.role ?? null,
+            participantIds: uniqueParticipantIds,
+          })
+        : null;
+      if (communityAdmission?.kind === 'refused') {
+        return communityAdmission.reason === 'invite-forbidden'
+          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
+          : sendNotFound(reply, 'User to invite not found');
       }
 
       // Block enforcement applies to DIRECT conversations only (group / community /
@@ -407,13 +428,10 @@ export function registerCreateConversationRoute(
         conversationId: conversation.id,
       }).catch(() => undefined);
 
-      // Si la conversation est créée dans une communauté, ajouter automatiquement
-      // tous les participants à la communauté s'ils n'y sont pas déjà —
-      // réactivant au passage une ligne laissée par un départ (#5760), voir
-      // `reconcileCommunityMembership`.
-      if (communityId) {
-        const allUserIds = [userId, ...uniqueParticipantIds];
-        await reconcileCommunityMembership(prisma, communityId, allUserIds);
+      // Si la conversation est créée dans une communauté, ses participants y
+      // entrent selon le plan admis plus haut (#16639, `planCommunityAdmission`).
+      if (communityId && communityAdmission?.kind === 'admitted') {
+        await applyCommunityAdmission(prisma, communityId, communityAdmission);
       }
 
       // Pour les DMs, pas de titre — le frontend résout le nom de l'interlocuteur

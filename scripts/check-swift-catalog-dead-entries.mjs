@@ -582,6 +582,8 @@ const PENDING_CLIENT_ENTRIES = {
   'PublishersEndpoint.bySlug': { issue: 16274, reason: 'GET /publishers/:slug — la fiche publique de l’éditeur, lue par la boutique' },
   'PublishersEndpoint.me': { issue: 16274, reason: 'GET|PUT /publishers/me — l’espace de l’éditeur connecté' },
   'PublishersEndpoint.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web seulement' },
+  // Le rattrapage de l'écoute partagée (#13934, catalogues par #16686) : Android le lit déjà, l'écran iOS des cercles le lira.
+  'RelationsEndpoint.nowPlaying': { issue: 13934, reason: 'GET /relations/now-playing — le rattrapage de l’écoute partagée, client iOS à venir' },
 };
 
 const BASELINE_DEAD_ENTRIES = 329;

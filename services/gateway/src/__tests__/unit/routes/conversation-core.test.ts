@@ -218,7 +218,7 @@ const makePrisma = (): any => ({
   },
   user: {
     findMany: jest.fn().mockResolvedValue([]),
-    findUnique: jest.fn().mockResolvedValue(null),
+    findUnique: jest.fn().mockResolvedValue(null), findFirst: jest.fn().mockResolvedValue(null),
   },
   community: {
     findFirst: jest.fn().mockResolvedValue(null),
@@ -2642,7 +2642,7 @@ describe('registerCoreRoutes', () => {
         createdAt: new Date(),
         participants: [],
       });
-      prisma.user.findMany.mockResolvedValue([]);
+      prisma.user.findMany.mockResolvedValue([{ id: OTHER_USER_ID, displayName: 'Bob', username: 'bob', avatar: null }]);
       prisma.communityMember.findMany.mockResolvedValue([]);
 
       const req = makeRequest({ body: {} });

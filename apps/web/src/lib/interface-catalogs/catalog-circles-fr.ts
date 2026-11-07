@@ -105,6 +105,19 @@ const fr = {
   'circles.settings.blockTalkie': 'Couper son talkie',
   'circles.settings.blockTalkie.detail': 'Sa voix ne sortira plus directement chez vous : elle arrivera en message vocal. Cette personne n’en est pas prévenue.',
   'circles.settings.blockTalkie.failed': 'Le réglage n’a pas pu être enregistré',
+  'talkie.send.explain': 'Maintenez et parlez : votre voix sort directement chez {name}, sans décrocher.',
+  'talkie.send.hold': 'Maintenir pour parler',
+  'talkie.send.hold.a11y': 'Maintenir pour parler à {name} — au clavier, gardez Espace enfoncé',
+  'talkie.send.connecting': 'Connexion…',
+  'talkie.send.talking': 'Vous parlez à {name}…',
+  'talkie.send.unsupported': 'Ce navigateur ne peut pas encore parler en talkie : envoyez plutôt un message vocal.',
+  'talkie.send.voice': 'Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal.',
+  'talkie.send.e2ee': 'Le talkie n’est pas chiffré de bout en bout : il reste fermé avec une conversation chiffrée.',
+  'talkie.send.rateLimited': 'Trop de prises de parole : réessayez dans un instant.',
+  'talkie.send.offline': 'Hors ligne : le talkie n’a pas pu partir.',
+  'talkie.send.failed': 'Le talkie n’a pas pu partir.',
+  'talkie.send.micDenied': 'Autorisez le micro pour parler en talkie.',
+  'talkie.send.limit': 'Trente secondes au plus : la prise de parole s’est arrêtée.',
 } as const;
 
 export default fr;

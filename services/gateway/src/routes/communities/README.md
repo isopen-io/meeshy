@@ -42,6 +42,7 @@ Routes CRUD principales pour les communautés.
 - `POST /communities` - Créer une nouvelle communauté
 - `GET /communities/:id/conversations` - Conversations d'une communauté (privée : membres ACTIFS et créateur seulement)
 - `POST /communities/:id/conversations/:conversationId` - Rattacher une conversation : administrateur ACTIF (ou créateur) de la cible, et de la source si elle en a une
+- `POST /conversations` avec `communityId` (route des conversations) - Créer un salon de la communauté : communauté active (sinon 404), appelant membre ACTIF ou créateur. Ses participants qui ne sont pas membres actifs y ENTRENT sous la loi de `…/invite` (#16639, `services/conversations/communityMembershipSync.ts`) : communauté privée ⇒ créateur, administrateur ou modérateur seulement (403 `COMMUNITY_INVITE_FORBIDDEN`), compte vivant et sans blocage (404), ligne d'un retiré réactivée en `member`. Le refus tombe AVANT la création : rien n'est écrit. Différence assumée avec `…/invite` : le créateur de la communauté sans ligne active (il ne peut ni partir ni être retiré) y revient `admin`.
 
 ### search.ts
 Routes de recherche publique:
@@ -58,6 +59,8 @@ Gestion complète des membres:
 **Qui peut être ajouté (#6376).** `POST …/members` et `POST …/invite` (`membership.ts`) ajoutent quelqu'un sans son accord : toutes deux passent `isAddableUser` (`addable-user.ts`) — compte vivant (ni `deactivatedAt`, ni `deletedAt`, `isActive`), aucun blocage dans un sens ou dans l'autre — et rendent le même 404 qu'un inconnu.
 - `PATCH /communities/:id/members/:memberId/role` - Modifier le rôle d'un membre (admin uniquement)
 - `DELETE /communities/:id/members/:memberId` - Retirer un membre (admin uniquement)
+
+**Ne plus être membre d'une communauté qui garde ses salons, c'est en sortir (#16704).** `DELETE …/members/:memberId` et `POST /communities/:id/leave` (`membership.ts`), sur une communauté privée ou désactivée (`communityGuardsItsSalons`), font sortir la personne de chaque salon vivant de la communauté par `exitCommunitySalons` (`services/conversations/communitySalonExit.ts`) : le même départ que `POST /conversations/:id/leave` (`leftAt`, succession du créateur, avis « X a quitté la conversation », `conversation:participant-left` avec l'effectif absolu, fin d'appartenance), sans jamais clore un salon. Une communauté publique vivante ne fait sortir de rien : ses salons sont ouverts à quiconque.
 
 ### settings.ts
 Paramètres et modifications:

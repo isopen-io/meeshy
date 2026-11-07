@@ -21,12 +21,26 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
-import { unsetOrNull } from '../../utils/prisma-unset';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { logger } from '../../utils/logger';
 import { shareLinkHasExpired } from '../shareLinkReadGate';
 
-/** À répandre dans le `where` d'une lecture `Participant` — il porte une clé `OR`. */
-export const ADMITTED_FILE_READER_WHERE = { isActive: true, ...unsetOrNull('bannedAt') } as const;
+/**
+ * L'admission d'un lecteur de fichier EST l'appartenance vivante — et c'est
+ * désormais la MÊME constante, pas une seconde expression de la règle (#16690).
+ *
+ * Les deux valeurs étaient écrites séparément et byte pour byte identiques
+ * (`{ isActive: true, ...unsetOrNull('bannedAt') }`). Deux définitions d'une
+ * seule règle divergent au premier cycle qui en touche une : c'est la « jumelle »
+ * du § `services/gateway/CLAUDE.md`, ici sous un nom qui la rendait invisible —
+ * on ne cherche pas `PARTICIPATION_VIVANTE` en lisant `fileReaderAdmission`.
+ *
+ * Le NOM survit parce qu'il dit l'USAGE (quelle porte, pour quel contenu), et le
+ * cliquet des audiences (`conversation-audience-living-participation`) ne
+ * l'accepte comme épellation de la loi que parce que le témoin voisin prouve
+ * cette identité.
+ */
+export const ADMITTED_FILE_READER_WHERE = PARTICIPATION_VIVANTE;
 
 export async function withoutExpiredShareLinks<T extends { readonly shareLinkId?: string | null }>(
   prisma: Pick<PrismaClient, 'conversationShareLink'>,
