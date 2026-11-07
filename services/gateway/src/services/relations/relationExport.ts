@@ -45,11 +45,13 @@ type InteractionDayRow = PairRow & { readonly day: Date } & { readonly [K in `by
 
 type ConsentRow = {
   readonly otherId: string;
+  readonly listeningCategoryShared?: boolean | null;
   readonly listeningTitleShared: boolean;
   readonly locationShared: boolean;
   readonly locationHistoryShared: boolean;
   readonly proximityShared: boolean;
   readonly consentedAt: Date;
+  readonly listeningCategoryWithdrawnAt?: Date | null;
   readonly listeningTitleWithdrawnAt?: Date | null;
   readonly locationWithdrawnAt?: Date | null;
   readonly locationHistoryWithdrawnAt?: Date | null;
@@ -88,12 +90,14 @@ const interactionDayOf = (row: InteractionDayRow, userId: string) => {
 
 const consentOf = (row: ConsentRow) => ({
   userId: row.otherId,
+  listeningCategoryShared: row.listeningCategoryShared === true,
   listeningTitleShared: row.listeningTitleShared,
   locationShared: row.locationShared,
   locationHistoryShared: row.locationHistoryShared,
   proximityShared: row.proximityShared,
   consentedAt: row.consentedAt.toISOString(),
   withdrawnAt: {
+    listeningCategoryShared: row.listeningCategoryWithdrawnAt?.toISOString() ?? null,
     listeningTitleShared: row.listeningTitleWithdrawnAt?.toISOString() ?? null,
     locationShared: row.locationWithdrawnAt?.toISOString() ?? null,
     locationHistoryShared: row.locationHistoryWithdrawnAt?.toISOString() ?? null,
@@ -128,8 +132,8 @@ export async function exportRelations(prisma: RelationsExportPrisma | PrismaClie
     } as never),
     db.relationFeatureSetting.findMany({
       where: { ownerId: userId },
-      select: { otherId: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true, consentedAt: true,
-        listeningTitleWithdrawnAt: true, locationWithdrawnAt: true, locationHistoryWithdrawnAt: true, proximityWithdrawnAt: true },
+      select: { otherId: true, listeningCategoryShared: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true, consentedAt: true,
+        listeningCategoryWithdrawnAt: true, listeningTitleWithdrawnAt: true, locationWithdrawnAt: true, locationHistoryWithdrawnAt: true, proximityWithdrawnAt: true },
       orderBy: { consentedAt: 'asc' },
       take,
       skip,

@@ -65,7 +65,7 @@ describe('relationConsentOf — ce que JE partage à l’autre, lu à chaque foi
 });
 
 const GATEWAY_SRC = join(__dirname, '../../../..');
-const CONSENT_COLUMN = /\b(?:listeningTitleShared|locationShared|locationHistoryShared|proximityShared)\b/;
+const CONSENT_COLUMN = /\b(?:listeningCategoryShared|listeningTitleShared|locationShared|locationHistoryShared|proximityShared)\b/;
 
 /** Les seuls fichiers qui nomment une colonne de consentement : le site unique, et ce qui l'écrit, le sert à son auteur ou l'exporte. */
 const ALLOWED: readonly string[] = [
@@ -95,7 +95,7 @@ describe('garde — le consentement de cercle ne se lit que par relationConsentO
   });
 
   it('la garde sait rougir : elle reconnaît chaque colonne', () => {
-    ['listeningTitleShared', 'locationShared', 'locationHistoryShared', 'proximityShared'].forEach((column) =>
+    ['listeningCategoryShared', 'listeningTitleShared', 'locationShared', 'locationHistoryShared', 'proximityShared'].forEach((column) =>
       expect(CONSENT_COLUMN.test(`select: { ${column}: true }`)).toBe(true));
     expect(CONSENT_COLUMN.test('locationWithdrawnAt')).toBe(false);
   });

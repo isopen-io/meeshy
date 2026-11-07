@@ -8,6 +8,7 @@ import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { recordLevel, startCooldown, cooldownEnd, type RelationWriteOutcome } from '../../services/relations/userRelationWriter';
 import { judgeRelationRequest, thresholdsNow } from '../../services/relations/relationRequestGate';
 import { emitRelationLevelRaised, relationIoOf } from '../../socketio/relationEvents';
+import { refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
 import { parseRequestLevel, type RelationRequestLevel } from '@meeshy/shared/types/relation';
 import { forgetFriends } from '../../services/relations/relationCaches';
 import { isBlockedBetween } from '../../utils/blocking';
@@ -277,6 +278,11 @@ async function accepterAuNiveau(
   await forgetFriends(fastify, [demande.senderId, demande.receiverId]);
   if (ecrit === 'created' || ecrit === 'raised') {
     emitRelationLevelRaised(relationIoOf(fastify), { userA: demande.senderId, userB: demande.receiverId, level: niveau, at });
+    // #13934 — le lien monte : l'écoute conservée remonte chez l'autre, au détail de son nouveau niveau.
+    await refreshNowPlayingAfter(
+      { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Now playing not refreshed after raise:', error) },
+      { userA: demande.senderId, userB: demande.receiverId, mode: 'raise' },
+    );
   }
   if (niveau !== 'ACQUAINTANCE') crediterAmitie(fastify, demande);
 

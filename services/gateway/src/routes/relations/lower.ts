@@ -4,6 +4,8 @@ import { RELATION_LEVELS, type RelationLevel } from '@meeshy/shared/types/relati
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger';
+import { refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { relationIoOf } from '../../socketio/relationEvents';
 import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWriter';
 import { loadRelationLink } from '../../services/relations/relationLinks';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
@@ -68,6 +70,11 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       const link = await loadRelationLink(fastify.prisma, { viewerId, otherId, now });
       // Rejoué sans condition, comme le retrait des demandes : sous le Sang, aucun partage du rituel ne reste allumé.
       if (link.effectiveLevel !== 'BLOOD') await withdrawRitualSharesBetween(fastify.prisma, { actorId: viewerId, otherId, at: now });
+      // #13934 — sous le niveau, l'écoute s'efface chez l'autre (et chez moi), sans rien lui dire de la baisse.
+      await refreshNowPlayingAfter(
+        { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Now playing not refreshed after drop:', error) },
+        { userA: viewerId, userB: otherId, mode: 'cut' },
+      );
       return sendSuccess(reply, link);
     } catch (error) {
       if (error instanceof z.ZodError) return sendBadRequest(reply, 'Donnees invalides');
