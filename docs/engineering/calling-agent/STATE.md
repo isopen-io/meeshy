@@ -89,3 +89,35 @@ socket jusqu'au client.
    chiffrer le gain de ce cycle : un timer de plus dans `callCaptionMetrics`, étiquette bornée.
 3. La décision produit « servir l'original tout de suite, puis le remplacer » reste à poser en
    issue `décision-produit`.
+
+## Cycle 3 — 2026-11-07
+
+- **Base** : `origin/dev` @ `d9179d46b` (le cycle 2, #16577, y est fusionné).
+- **Branche** : `claude/fervent-wozniak-sobae2`.
+- **Objectif** : #16599, sous #3722. Il est hors du dossier des appels, mais il est sur leur chemin critique.
+- **Constat** : `ZmqTranslationClient._startResultListener` lançait UN `receive()` par tick
+  de 100 ms et ne relançait qu'au tick suivant. Le canal retour du traducteur, que se partagent
+  messages, sous-titres d'appel, audio et pongs, plafonnait ainsi à ~10 résultats/s, et le
+  N-ième résultat d'une rafale attendait N × 100 ms.
+- **Livré** : la lecture boucle tant que le client tourne. Un seul `receive()` reste en vol ;
+  une erreur sort de la boucle et c'est le tick qui relance, donc aucune boucle chaude. Le chien
+  de garde du socket zombie est inchangé.
+- **Tests** : `zmq-translation/__tests__/ZmqTranslationClient.drainResults.test.ts` 4/4.
+  Rouge prouvé sur le code d'avant : 1 résultat lu sur 3, et une vidange incomplète.
+  ZMQ + socketio 87 suites / 1 624 témoins ; consommateurs de ZMQ 20 suites / 544 témoins.
+  `tsc --noEmit` code 0.
+- **Mesure** (jest, horloge réelle, 30 résultats prêts sur le socket simulé) : vidés en
+  **3 005 ms avant, 103 ms après** (dont 100 ms d'attente du premier tick). Le temps de
+  traduction du modèle n'y entre pas ; c'est la file de lecture qui disparaît.
+
+### Cycle suivant : par où reprendre
+
+1. Toujours : lire `call_caption_translation_seconds` sur le staging. Ce cycle doit en baisser
+   le p95 sous charge. Décider ensuite du délai de 10 s.
+2. Le relais de sous-titres abandonne à 10 s, mais `sendTranslationRequest` arme un délai de
+   30 s AVEC retry : une traduction de sous-titre déjà abandonnée est re-poussée au traducteur
+   pour rien. Il faut instruire la piste (`_registerRequestTimeout`) avant d'ouvrir une issue.
+3. Un segment final à N langues envoie N requêtes ZMQ (`translateText` par langue) alors que
+   `translateToMultipleLanguages` existe. Le gain réel est à mesurer côté traducteur avant de
+   changer quoi que ce soit.
+4. La décision produit « servir l'original tout de suite, puis le remplacer » reste à poser.
