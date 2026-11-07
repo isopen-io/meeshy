@@ -27,6 +27,12 @@ const itCallCaptions = {
   'callTranscript.retry': 'Riprova',
   'callTranscript.showOriginal': 'Vedi l’originale',
   'callTranscript.showTranslated': 'Vedi la traduzione',
+  'callJournal.capture.screenshot': '{name} ha catturato lo schermo',
+  'callJournal.capture.recording': '{name} sta registrando lo schermo',
+  'callJournal.capture.screenshot.action': 'ha catturato lo schermo',
+  'callJournal.capture.recording.action': 'sta registrando lo schermo',
+  'callJournal.recording.started': 'La registrazione della chiamata è iniziata',
+  'callJournal.recording.stopped': 'La registrazione della chiamata si è interrotta',
 } as const;
 
 export default itCallCaptions;

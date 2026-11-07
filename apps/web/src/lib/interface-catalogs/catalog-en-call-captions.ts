@@ -27,6 +27,12 @@ const enCallCaptions = {
   'callTranscript.retry': 'Try again',
   'callTranscript.showOriginal': 'Show original',
   'callTranscript.showTranslated': 'Show translation',
+  'callJournal.capture.screenshot': '{name} took a screenshot',
+  'callJournal.capture.recording': '{name} is recording the screen',
+  'callJournal.capture.screenshot.action': 'took a screenshot',
+  'callJournal.capture.recording.action': 'is recording the screen',
+  'callJournal.recording.started': 'Call recording started',
+  'callJournal.recording.stopped': 'Call recording stopped',
 } as const;
 
 export default enCallCaptions;

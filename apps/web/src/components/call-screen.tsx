@@ -564,7 +564,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
      cadre de la pilule déployée, ils en sortent quand elle s'efface, et
      restent lus (et annoncés) au-dessus de sa place. */
   const captionsFramed = expanded && !hidden && chrome.panel !== 'journal';
-  const colorOf = (caption: CallCaption): string => speakerColor(caption.speakerId, caption.speakerName);
+  const colorOf = (who: Pick<CallCaption, 'speakerId' | 'speakerName'>): string => speakerColor(who.speakerId, who.speakerName);
   const captions =
     call.captionsMode === 'off' || !live || chrome.panel === 'journal' ? null : (
       <Suspense fallback={null}>
@@ -585,7 +585,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       case 'record':
         return <CallRecordChoice {...base} onRowKeyDown={onRowKeyDown} onRowWheel={onRowWheel} />;
       case 'journal':
-        return <CallJournalPanel {...base} captions={call.captions} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />;
+        return <CallJournalPanel {...base} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />;
       case 'people':
         return <CallPeopleSheet {...base} members={orderedMembers(call.members)} renderModeration={(member) => <CallModerationSlot member={member} language={language} moderation={moderation} />} />;
     }

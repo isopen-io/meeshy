@@ -89,7 +89,8 @@ export function CallPeerAlerts({ members, language }: { readonly members: Readon
       {peers
         .filter((member) => member.capturing)
         .map((member) => (
-          <span key={`capture-${member.userId}`} role="alert" className="rounded-full px-3 py-1 text-mini font-semibold" style={{ background: 'color-mix(in srgb, var(--ios-error-strong) 85%, transparent)', color: 'var(--color-ios-on-brand)' }} data-call-alert="capturing">
+          <span key={`capture-${member.userId}`} role="alert" className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-mini font-semibold" style={{ background: 'color-mix(in srgb, var(--ios-error-strong) 85%, transparent)', color: 'var(--color-ios-on-brand)' }} data-call-alert="capturing">
+            <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full border-2 border-current" data-call-alert-dot=""></span>
             {translate(language, 'call.alert.capturing', { name: member.name })}
           </span>
         ))}

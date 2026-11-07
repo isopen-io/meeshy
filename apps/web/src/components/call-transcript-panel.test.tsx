@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { TranscriptLine } from '@/lib/calls/call-transcript';
+import type { TranscriptLine, TranscriptNote } from '@/lib/calls/call-transcript';
 import { authorInk } from '@/lib/view/author-ink';
 
 import { CallTranscriptLines } from './call-transcript-panel';
@@ -60,5 +60,30 @@ describe('le journal d’après l’appel (#16634)', () => {
     const html = render([line()], true);
     expect(html).toMatch(/data-call-transcript-text="original"[^>]*>Can you hear me\?</);
     expect(inkOf(html, 'data-call-transcript-line="peer"')).toHaveLength(1);
+  });
+});
+
+describe('les captures dans le journal d’après l’appel (#16665)', () => {
+  const notes: readonly TranscriptNote[] = [
+    { id: 'cap-1', kind: 'screenshot', userId: 'u-karim', name: 'Karim', offsetSec: 6 },
+    { id: 'cap-2', kind: 'call-recording-started', userId: 'u-awa', name: 'Awa', offsetSec: 1 },
+  ];
+  const html = renderToStaticMarkup(<CallTranscriptLines lines={[line({ offsetSec: 4 }), line({ id: 's-9', offsetSec: 9 })]} notes={notes} language="fr" original={false} />);
+
+  test('chaque capture entre à son heure dans l’appel, parmi les phrases', () => {
+    const order = [...html.matchAll(/data-call-transcript-(?:line|note)="([^"]+)"/g)].map((match) => match[1]);
+    expect(order).toEqual(['call-recording-started', 'peer', 'screenshot', 'peer']);
+  });
+
+  test('« Karim a capturé l’écran » : la phrase à l’encre secondaire, le pseudo seul à son encre d’auteur, l’heure au bout', () => {
+    const entry = html.split('<li').find((chunk) => chunk.includes('data-call-transcript-note="screenshot"')) ?? '';
+    expect(entry).toContain('0:06');
+    expect(entry).toContain('style="color:var(--color-ios-ink-2)" dir="auto" data-call-transcript-note-text=""');
+    expect(entry).toMatch(/<strong class="author-ink" style="[^"]*" data-call-journal-note-name="">Karim<\/strong> a capturé l’écran/);
+    expect(entry).toContain(`--author-ink-dark:${authorInk({ authorId: 'u-karim', name: 'Karim' }).dark}`);
+  });
+
+  test('l’enregistrement consenti : « L’enregistrement de l’appel a commencé »', () => {
+    expect(html).toContain('L’enregistrement de l’appel a commencé');
   });
 });

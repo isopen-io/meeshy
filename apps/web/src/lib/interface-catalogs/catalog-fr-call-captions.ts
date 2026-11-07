@@ -27,6 +27,12 @@ const frCallCaptions = {
   'callTranscript.retry': 'Réessayer',
   'callTranscript.showOriginal': 'Voir l’original',
   'callTranscript.showTranslated': 'Voir la traduction',
+  'callJournal.capture.screenshot': '{name} a capturé l’écran',
+  'callJournal.capture.recording': '{name} enregistre l’écran',
+  'callJournal.capture.screenshot.action': 'a capturé l’écran',
+  'callJournal.capture.recording.action': 'enregistre l’écran',
+  'callJournal.recording.started': 'L’enregistrement de l’appel a commencé',
+  'callJournal.recording.stopped': 'L’enregistrement de l’appel s’est arrêté',
 } as const;
 
 export default frCallCaptions;

@@ -159,6 +159,18 @@ describe('les alertes d’un pair (#8047)', () => {
     expect(html).not.toContain('data-call-alert=');
   });
 
+  test('#16665 — R1 : une capsule rouge, un petit anneau blanc puis « Karim capture l’écran de l’appel »', () => {
+    const html = renderToStaticMarkup(<CallPeerAlerts members={{ b: member({ userId: 'u-b', name: 'Karim', capturing: true }) }} language="fr" />);
+    expect(html).toMatch(/data-call-alert="capturing"[^>]*><span aria-hidden="true"[^>]*data-call-alert-dot=""[^>]*><\/span>Karim capture l’écran de l’appel<\/span>/);
+  });
+
+  test('#16665 — la capsule de capture se montre en audio comme en vidéo', () => {
+    for (const media of ['audio', 'video'] as const) {
+      const html = renderToStaticMarkup(<CallScreen call={call({ media, cameraOn: media === 'video', members: { 'u-peer': member({ capturing: true, cameraOn: media === 'video' }) } })} canShare={false} />);
+      expect(html).toContain('data-call-alert="capturing"');
+    }
+  });
+
   test('l’écran d’appel les montre', () => {
     expect(renderToStaticMarkup(<CallScreen call={call({ members: { 'u-peer': member({ weakNetwork: true }) } })} canShare={false} />)).toContain('data-call-alert="weak-network"');
   });
