@@ -127,7 +127,7 @@ struct CallTranscriptSection: View {
     private func transcriptRow(_ segment: CallTranscriptSegment, callStartedAt: Date) -> some View {
         let elapsed = segment.capturedAt.timeIntervalSince(callStartedAt)
         let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
-        let speakerColor = segment.isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
+        let speakerColor = Color(hex: CallSpeakerColor.hex(for: segment.speakerId, mode: theme.mode))
         let displayText = segment.isLocal ? segment.text : (showOriginalText ? segment.text : (segment.translatedText ?? segment.text))
         return VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             HStack(spacing: MeeshySpacing.xsPlus) {
@@ -141,7 +141,7 @@ struct CallTranscriptSection: View {
             }
             Text(displayText)
                 .font(.callout)
-                .foregroundStyle(theme.textPrimary)
+                .foregroundStyle(speakerColor)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(segment.speakerName), \(elapsedLabel) : \(displayText)")

@@ -124,9 +124,9 @@ Ce tableau est un compte rendu daté. L'état vivant est dans les issues du mile
 |---|---|---|---|
 | Pilule, rails, groupe (lois 1–3) | livré | livré ; reliquats de mise en page dans `apps/ios/tasks/routine-appels.md` (APP-1 à APP-6) | à vérifier contre la planche |
 | Sous-titre coloré, original puis traduction (lois 4–5) | livré (#16613, #16614) | livré | livré (`CallSpeakerColor`) |
-| Ma vignette à ma couleur (loi 4) | **manque** : liseré blanc, #16635 | à vérifier, #16635 | à vérifier, #16635 |
-| Journal pendant l'appel coloré (lois 4, 7) | **partiel** : le nom seul, #16634 | livré (`CallCaptionRow`) | à vérifier, #16634 |
-| Journal après l'appel coloré (lois 4, 7) | **manque** : encre neutre, #16634 | **manque** : `indigo400` / `brandPrimary`, #16634 | à vérifier, #16634 |
+| Ma vignette à ma couleur (loi 4) | livré, grille et coin du duo (#16635) | livré en groupe (`GroupCallStage`, « me » compris) | à vérifier |
+| Journal pendant l'appel coloré (lois 4, 7) | livré, nom et phrase (#16634) | livré (`CallCaptionRow`) | livré (`CallCaptionRow`) |
+| Journal après l'appel coloré (lois 4, 7) | livré, `authorInk` sur le fil (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) |
 | Journal en colonne sur grand écran (W1) | à faire | sans objet (iPad : à trancher) | sans objet |
 | Vidéo entrante avec aperçu et « Sans vidéo » (P17) | à vérifier | APP-6 | à vérifier |
 

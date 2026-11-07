@@ -93,6 +93,12 @@ final class CallCaptionLineTests: XCTestCase {
         XCTAssertEqual(a.speakerColorHex, CallSpeakerColor.hex(for: "user-42"))
     }
 
+    func test_speakerColor_onTheThread_isTheAuthorColorAdaptedToTheScheme() {
+        let base = DynamicColorGenerator.colorForName("user-42")
+        XCTAssertEqual(CallSpeakerColor.hex(for: "user-42", mode: .light), DynamicColorGenerator.adaptedColor(base, for: .light))
+        XCTAssertEqual(CallSpeakerColor.hex(for: "user-42", mode: .dark), CallSpeakerColor.hex(for: "user-42"))
+    }
+
     func test_speakerColor_differsForMostIds() {
         let hexes = Set((0..<12).map { CallSpeakerColor.hex(for: "user-\($0)") })
         XCTAssertGreaterThan(hexes.count, 4)

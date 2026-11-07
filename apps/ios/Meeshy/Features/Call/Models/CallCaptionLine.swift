@@ -6,9 +6,18 @@ import MeeshySDK
 /// sous-titres et pour le liseré de sa vignette de groupe. Palette et hachage
 /// sont ceux du SDK (`DynamicColorGenerator`), éclaircis pour l'écran d'appel,
 /// épinglé en sombre.
+///
+/// Hors de l'écran d'appel (journal d'après l'appel, dans un fil clair ou
+/// sombre), la MÊME couleur s'adapte au schéma du fil (#16634,
+/// `docs/product/appels-vue-finale.md` loi 4) : une personne garde sa couleur
+/// avant et après la fin de l'appel.
 enum CallSpeakerColor {
     static func hex(for userId: String) -> String {
-        DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(userId), for: .dark)
+        hex(for: userId, mode: .dark)
+    }
+
+    static func hex(for userId: String, mode: ThemeMode) -> String {
+        DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(userId), for: mode)
     }
 }
 
