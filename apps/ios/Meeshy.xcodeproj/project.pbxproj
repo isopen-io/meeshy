@@ -2042,6 +2042,7 @@
 		74D3C50CC7E27E595D0A4C26 /* iPadRootSheetTargets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC8CD028DE3A1F0691E25942 /* iPadRootSheetTargets.swift */; };
 		74D85752FE13127516F37B3A /* RouterCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C26209D5D5D4DCB5CC5ADD3 /* RouterCommands.swift */; };
 		74E2A29E0CAD6844008FC5B4 /* LocallyHiddenMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D46E931BC529CDB77411E0 /* LocallyHiddenMessagesStore.swift */; };
+		9ADA61FA6B4C4E3045970492 /* CameraModel+Lens.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA01E8C9A16B2233FCAD419C /* CameraModel+Lens.swift */; };
 		74F069DC59917D7AA1A9A1BD /* CameraModel+Recovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 361FEFC0DCC60D5EDA4AAE94 /* CameraModel+Recovery.swift */; };
 		7521E3C29349F50F587621B6 /* FeedPostCardLikeWiringSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E828A2A7824D92FA85C3E21D /* FeedPostCardLikeWiringSourceGuardTests.swift */; };
 		7532EB2312208BC8FCE2EC85 /* CommunityListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C744D4A25D0B3C3A6CD05EC /* CommunityListViewModel.swift */; };
@@ -5386,6 +5387,7 @@
 		35E4EA2573AAF43A348A6ACD /* VoiceProfileWizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileWizardView.swift; sourceTree = "<group>"; };
 		36059291DBC7DF96A6E34D7C /* CallManagerSelectCameraFailureCorrectionSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManagerSelectCameraFailureCorrectionSourceTests.swift; sourceTree = "<group>"; };
 		3617BEA5ABD3D480670C6E3F /* ProfilePostsCountsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePostsCountsTests.swift; sourceTree = "<group>"; };
+		FA01E8C9A16B2233FCAD419C /* CameraModel+Lens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CameraModel+Lens.swift"; sourceTree = "<group>"; };
 		361FEFC0DCC60D5EDA4AAE94 /* CameraModel+Recovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CameraModel+Recovery.swift"; sourceTree = "<group>"; };
 		362DBDF76913F396AA2E258D /* PublicationCommentClosure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicationCommentClosure.swift; sourceTree = "<group>"; };
 		3637C4A5F83B0AE9A814F1F8 /* ActivationInviteViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivationInviteViewModelTests.swift; sourceTree = "<group>"; };
@@ -9792,6 +9794,7 @@
 				D8E4E65C3D5305BBF8AC56CB /* CameraModel+Pause.swift */,
 				423099AC7AB164C4861E995C /* CameraModel+PhotoLibrary.swift */,
 				0C94A900A303C90881FC818D /* CameraModel+Recording.swift */,
+				FA01E8C9A16B2233FCAD419C /* CameraModel+Lens.swift */,
 				361FEFC0DCC60D5EDA4AAE94 /* CameraModel+Recovery.swift */,
 				8F24C5E90ECF60E218503F8C /* CameraModel+Warm.swift */,
 				5F4A2C68CC2A0849B00A3A0D /* CameraPermissionPanel.swift */,
@@ -15334,6 +15337,7 @@
 				2AD35178B07B71A5BC52517A /* CameraModel+Pause.swift in Sources */,
 				9EA23C456CBB87AC4C1AF53E /* CameraModel+PhotoLibrary.swift in Sources */,
 				0FBFEE8469FA4B1C09FD3481 /* CameraModel+Recording.swift in Sources */,
+				9ADA61FA6B4C4E3045970492 /* CameraModel+Lens.swift in Sources */,
 				74F069DC59917D7AA1A9A1BD /* CameraModel+Recovery.swift in Sources */,
 				4B9C4A12BD3653F80BD2C203 /* CameraModel+Warm.swift in Sources */,
 				3974C242BFF62FFD20D43B15 /* CameraModel.swift in Sources */,
