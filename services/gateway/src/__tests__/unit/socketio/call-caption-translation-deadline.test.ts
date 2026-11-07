@@ -91,7 +91,7 @@ describe("le délai d'un sous-titre d'appel est le même pour le relais et le cl
       const relay = translateAndEmitSegment(depsWith(zmq, registry), silentSocket(), finalSegment(), SPEAKER);
       await settle();
       jest.advanceTimersByTime(CALL_CAPTION_TRANSLATION_TIMEOUT_MS);
-      zmq.emit('translationError', { taskId: 'task-en', messageId: `call-${CALL_ID}-0`, error: 'ZMQ timeout: no response from translator' });
+      zmq.emit('translationError', { taskId: 'task-en', messageId: `call-caption:${CALL_ID}:0`, error: 'ZMQ timeout: no response from translator' });
       await relay;
       jest.advanceTimersByTime(60_000);
 
