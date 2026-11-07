@@ -42,6 +42,7 @@ Routes CRUD principales pour les communautés.
 - `POST /communities` - Créer une nouvelle communauté
 - `GET /communities/:id/conversations` - Conversations d'une communauté (privée : membres ACTIFS et créateur seulement)
 - `POST /communities/:id/conversations/:conversationId` - Rattacher une conversation : administrateur ACTIF (ou créateur) de la cible, et de la source si elle en a une
+- `POST /conversations` avec `communityId` (route des conversations) - Créer un salon de la communauté : communauté active (sinon 404), appelant membre ACTIF ou créateur. Ses participants qui ne sont pas membres actifs y ENTRENT sous la loi de `…/invite` (#16639, `services/conversations/communityMembershipSync.ts`) : communauté privée ⇒ créateur, administrateur ou modérateur seulement (403 `COMMUNITY_INVITE_FORBIDDEN`), compte vivant et sans blocage (404), ligne d'un retiré réactivée en `member`. Le refus tombe AVANT la création : rien n'est écrit.
 
 ### search.ts
 Routes de recherche publique:
