@@ -16,6 +16,7 @@ from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 from config.settings import LANGUAGE_MAPPINGS
+from services.task_privacy import shown
 from utils.sentence_plan import SentencePlan, plan_sentences
 from utils.text_segmentation import (
     has_translatable_text,
@@ -489,8 +490,8 @@ class TranslatorEngine:
                 elif result and isinstance(result, list) and len(result) > 0 and 'translation_text' in result[0]:
                     return result[0]['translation_text']
                 else:
-                    logger.error(f"[NLLB] Résultat inattendu: {result}")
-                    raise TranslationInferenceError(f"Résultat NLLB inattendu: {result}")
+                    logger.error(f"[NLLB] Résultat inattendu: {shown(result)}")
+                    raise TranslationInferenceError(f"Résultat NLLB inattendu: {shown(result)}")
 
             except TranslationInferenceError:
                 raise
@@ -627,7 +628,7 @@ class TranslatorEngine:
                         elif isinstance(result, list) and len(result) > 0 and 'translation_text' in result[0]:
                             all_results.append(result[0]['translation_text'])
                         else:
-                            raise TranslationInferenceError(f"Résultat batch NLLB inattendu: {result}")
+                            raise TranslationInferenceError(f"Résultat batch NLLB inattendu: {shown(result)}")
 
             if len(all_results) != len(inputs):
                 raise TranslationInferenceError(
