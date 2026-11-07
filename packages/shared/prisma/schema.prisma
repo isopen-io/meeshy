@@ -2810,6 +2810,9 @@ model CallSession {
   /// Transcriptions (Phase 2A/2B)
   transcriptions Transcription[]
 
+  /// Captures gardées au journal de l'appel (#16665)
+  captureEvents CallCaptureEvent[]
+
   /// Reason the call ended (null while active)
   endReason CallEndReason?
 
@@ -2940,6 +2943,28 @@ model CallRecording {
   kind             String?
 
   @@index([callSessionId])
+}
+
+/// Une capture gardée au journal de l'appel (#16665, loi 13 de
+/// `docs/product/appels-vue-finale.md`) : le DÉBUT d'une capture d'écran
+/// signalée par un participant (`recording` | `screenshot`, au plus une ligne
+/// par participant, par sorte et par fenêtre de 5 s), ou un moment de
+/// l'enregistrement consenti (`call-recording-started` | `call-recording-stopped`),
+/// écrit par la passerelle là où elle le diffuse. Relue par
+/// `GET /calls/:callId/transcript` (`captures`). `participantId`/`userId` sont
+/// nuls pour un arrêt que personne n'a demandé (fin d'appel, délai).
+model CallCaptureEvent {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  callSessionId String      @db.ObjectId
+  callSession   CallSession @relation(fields: [callSessionId], references: [id], onDelete: Cascade)
+  participantId String?     @db.ObjectId
+  userId        String?     @db.ObjectId
+  kind          String
+  offsetMs      Int
+  createdAt     DateTime    @default(now())
+
+  @@index([callSessionId, createdAt])
+  @@index([callSessionId, participantId, kind, createdAt])
 }
 
 /// Transcription - Phase 2A/2B (prepared for future)

@@ -627,6 +627,25 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
     expect(h.call()?.members[PEER]?.capturing).toBe(false);
   });
 
+  test('#16665 — une capture ponctuelle entre au journal, et sa puce s’éteint seule sans éteindre l’alerte de lien', async () => {
+    const h = await connected();
+    h.engine.handle(SERVER_EVENTS.CALL_QUALITY_ALERT, { callId: 'call-1', userId: PEER, metric: 'rtt', value: 400, threshold: 300 });
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: true, kind: 'screenshot' });
+    expect(h.call()?.members[PEER]?.capturing).toBe(true);
+    expect(h.call()?.journalNotes?.map((note) => [note.kind, note.userId])).toEqual([['screenshot', PEER]]);
+    h.advance(5_000);
+    expect(h.call()?.members[PEER]?.capturing).toBe(false);
+    expect(h.call()?.members[PEER]?.weakNetwork).toBe(true);
+  });
+
+  test('#16665 — l’enregistrement consenti note son début et sa fin au journal', async () => {
+    const h = await connected();
+    h.engine.handle(SERVER_EVENTS.CALL_RECORDING_STARTED, { callId: 'call-1', recordingId: 'r1', recorderId: PEER, startedAt: 'x', kind: 'audio' });
+    h.engine.handle(SERVER_EVENTS.CALL_RECORDING_STOPPED, { callId: 'call-1', recordingId: 'r1', reason: 'stopped', byUserId: PEER, wasRecording: true });
+    h.engine.handle(SERVER_EVENTS.CALL_RECORDING_STARTED, { callId: 'autre', recordingId: 'r2', recorderId: PEER });
+    expect(h.call()?.journalNotes?.map((note) => note.kind)).toEqual(['call-recording-started', 'call-recording-stopped']);
+  });
+
   test('au raccroché, `call:analytics` part UNE fois, avec le codec lu, les reprises, les transitions réseau et la qualité', async () => {
     const h = await connected([{ total: total({ level: 'excellent', rtt: 60, packetLoss: 0 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }, { total: total({ level: 'poor', rtt: 500, packetLoss: 10 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }]);
     await h.sampleQuality();

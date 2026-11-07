@@ -14,6 +14,7 @@ import {
 import { SOCKET_RATE_LIMITS, type SocketRateLimiter } from '../utils/socket-rate-limiter';
 import { logger } from '../utils/logger';
 import { guardedTimeout } from '../utils/guarded-timer';
+import type { CallCaptureJournal } from '../services/calls/callCaptureJournal';
 
 /**
  * Les trois verbes du consentement à l'enregistrement (#8064) — demander,
@@ -27,9 +28,13 @@ import { guardedTimeout } from '../utils/guarded-timer';
 
 export type CallRecordingAuthority = Pick<CallRecordingService, 'request' | 'consent' | 'stop' | 'arrival' | 'expire'>;
 
+/** #16665 — le journal de l'appel note le début et la fin de l'enregistrement, là où ils se diffusent. */
+export type CallRecordingJournal = Pick<CallCaptureJournal, 'callRecording'>;
+
 export type CallRecordingEventDeps = {
   readonly io: MeeshyIOServer;
   readonly authority: CallRecordingAuthority;
+  readonly journal: CallRecordingJournal;
   readonly rateLimiter: Pick<SocketRateLimiter, 'checkLimit'>;
   readonly schedule?: (task: () => void, delayMs: number) => void;
 };
@@ -40,8 +45,18 @@ const defaultSchedule = (task: () => void, delayMs: number): void => {
   guardedTimeout({ name: 'call-recording-task', afterMs: delayMs, logger, run: task }).unref();
 };
 
-export function broadcastRecording(io: MeeshyIOServer, broadcasts: readonly RecordingBroadcast[]): void {
+const journalMoment = (broadcast: RecordingBroadcast): Parameters<CallRecordingJournal['callRecording']>[0] | null => {
+  if (broadcast.event === 'started') return { callId: broadcast.payload.callId, userId: broadcast.payload.recorderId, kind: 'call-recording-started' };
+  if (broadcast.event === 'stopped' && broadcast.payload.wasRecording) return { callId: broadcast.payload.callId, userId: broadcast.payload.byUserId, kind: 'call-recording-stopped' };
+  return null;
+};
+
+export function broadcastRecording(io: MeeshyIOServer, journal: CallRecordingJournal, broadcasts: readonly RecordingBroadcast[]): void {
   broadcasts.forEach((broadcast) => {
+    const moment = journalMoment(broadcast);
+    if (moment !== null) {
+      journal.callRecording(moment).catch((error: unknown) => logger.error('call-recording: journal write failed', { callId: moment.callId, error }));
+    }
     const room = io.to(ROOMS.call(broadcast.payload.callId));
     switch (broadcast.event) {
       case 'requested':
@@ -58,12 +73,12 @@ export function broadcastRecording(io: MeeshyIOServer, broadcasts: readonly Reco
 }
 
 export async function announceRecordingArrival(
-  deps: Pick<CallRecordingEventDeps, 'io' | 'authority'>,
+  deps: Pick<CallRecordingEventDeps, 'io' | 'authority' | 'journal'>,
   callId: string,
   userId: string,
 ): Promise<void> {
   try {
-    broadcastRecording(deps.io, await deps.authority.arrival(callId, userId));
+    broadcastRecording(deps.io, deps.journal, await deps.authority.arrival(callId, userId));
   } catch (error) {
     logger.error('call-recording: arrival check failed', { callId, userId, error });
   }
@@ -91,7 +106,7 @@ export function registerCallRecordingEvents(
       const parsed = schema.safeParse(raw);
       if (!parsed.success) return reply({ success: false, code: 'VALIDATION_ERROR' });
       const outcome = await run(userId, parsed.data);
-      broadcastRecording(deps.io, outcome.broadcasts);
+      broadcastRecording(deps.io, deps.journal, outcome.broadcasts);
       reply(outcome.ack);
     } catch (error) {
       logger.error('call-recording: handler failed', { error });
@@ -105,7 +120,7 @@ export function registerCallRecordingEvents(
     schedule(() => {
       deps.authority
         .expire(recordingId)
-        .then((broadcasts) => broadcastRecording(deps.io, broadcasts))
+        .then((broadcasts) => broadcastRecording(deps.io, deps.journal, broadcasts))
         .catch((error: unknown) => logger.error('call-recording: expiry failed', { recordingId, error }));
     }, CALL_RECORDING_CONSENT_TIMEOUT_MS + 500);
   };
