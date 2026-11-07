@@ -165,7 +165,9 @@ export type SalonCommunityPrisma = Pick<PrismaClient, 'community' | 'communityMe
 
 /**
  * Lit, UNE fois par requête, la communauté qui héberge un salon. `null` quand
- * le salon n'en a pas, ou quand elle est publique : rien n'y change (#16695).
+ * le salon n'en a pas, ou quand elle est publique et vivante : rien n'y change
+ * (#16695). Une communauté DÉSACTIVÉE se garde comme une privée : suspendue,
+ * elle ne devient pas plus ouverte qu'une vivante.
  */
 export async function loadSalonCommunity(
   prisma: Pick<PrismaClient, 'community'>,
@@ -173,10 +175,11 @@ export async function loadSalonCommunity(
 ): Promise<SalonCommunity | null> {
   if (!salon.communityId) return null;
   const community = await prisma.community.findFirst({
-    where: { id: salon.communityId, isActive: true },
-    select: { createdBy: true, isPrivate: true, members: { where: { userId: salon.actorId, isActive: true }, select: { role: true }, take: 1 } },
+    where: { id: salon.communityId },
+    select: { createdBy: true, isPrivate: true, isActive: true, members: { where: { userId: salon.actorId, isActive: true }, select: { role: true }, take: 1 } },
   });
-  if (!community?.isPrivate) return null;
+  if (!community) return null;
+  if (!community.isPrivate && community.isActive) return null;
   return {
     communityId: salon.communityId,
     createdBy: community.createdBy,

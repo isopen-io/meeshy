@@ -42,6 +42,7 @@ function prismaDouble(monde: Monde = {}) {
         return {
           createdBy: CREATEUR,
           isPrivate: monde.isPrivate ?? true,
+          isActive: monde.isActive ?? true,
           members: lignes.filter((l) => l.userId === where.userId && l.isActive === where.isActive),
         };
       }),
@@ -128,6 +129,11 @@ describe('#16695 — un salon d’une communauté privée n’accueille que ce q
     const { verdict, prisma } = await entrer({ isPrivate: false, lignes: [] }, { kind: 'registered', userId: ENTRANT });
     expect(verdict).toEqual({ kind: 'admitted', reactivations: [], creations: [] });
     expect(prisma.communityMember.findMany).not.toHaveBeenCalled();
+  });
+
+  it('une communauté publique DÉSACTIVÉE se garde comme une privée : un simple membre n’y fait plus entrer personne', async () => {
+    const { verdict } = await entrer({ isPrivate: false, isActive: false, lignes: [membre(ACTEUR)] }, { kind: 'registered', userId: ENTRANT });
+    expect(verdict).toEqual({ kind: 'refused', reason: 'invite-forbidden' });
   });
 
   it('un salon hors communauté ne lit aucune communauté', async () => {

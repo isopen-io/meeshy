@@ -65,6 +65,7 @@ function communityDouble(monde: Monde) {
         return {
           createdBy: CREATEUR,
           isPrivate: monde.isPrivate ?? true,
+          isActive: true,
           members: monde.lignes.filter((l) => l.userId === where.userId && l.isActive === where.isActive),
         };
       }),
