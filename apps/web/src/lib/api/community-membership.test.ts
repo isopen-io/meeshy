@@ -94,7 +94,8 @@ describe('performJoinCommunity', () => {
     queryClient.setQueryData(communityQueryKey('m-club'), club({ viewerRole: null }));
     release();
     expect(await performJoinCommunity({ community: club({ viewerRole: null }), deps })).toEqual({ status: 'joined' });
-    expect(queryClient.getQueryData<CommunitySummary>(communityQueryKey('m-club'))?.viewerRole).toBe('member');
+    const detail = queryClient.getQueryData<CommunitySummary>(communityQueryKey('m-club'));
+    expect([detail?.viewerRole, detail?.memberCount]).toEqual(['member', 10]);
   });
 
   test('un refus rend EXACTEMENT le cache d’avant', async () => {

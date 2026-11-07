@@ -35,6 +35,7 @@ type CommunityRow = {
   readonly identifier: string;
   readonly isPrivate: boolean;
   readonly createdBy: string;
+  readonly isActive: boolean;
   readonly members: readonly MemberRow[];
 };
 
@@ -58,6 +59,7 @@ const community = (overrides: Partial<CommunityRow> = {}): CommunityRow => ({
   identifier: 'mshy_club',
   isPrivate: false,
   createdBy: CREATOR,
+  isActive: true,
   members: [
     { userId: CREATOR, role: 'admin', isActive: true },
     { userId: MEMBER, role: 'member', isActive: true },
@@ -74,7 +76,7 @@ const matches = (row: MemberRow, where: MemberWhere | undefined) =>
 const fakePrisma = (row: CommunityRow) => {
   const findFirst = jest.fn(async (args: FindArgs) => {
     const found = args.where.id === row.id || args.where.identifier === row.identifier;
-    if (!found) return null;
+    if (!found || (args.where.isActive !== undefined && args.where.isActive !== row.isActive)) return null;
     const memberInclude = args.include?.members;
     const memberWhere = typeof memberInclude === 'object' ? memberInclude.where : undefined;
     const countInclude = args.include?._count?.select.members;
@@ -84,7 +86,7 @@ const fakePrisma = (row: CommunityRow) => {
       identifier: row.identifier,
       name: 'Club',
       isPrivate: row.isPrivate,
-      isActive: true,
+      isActive: row.isActive,
       createdBy: row.createdBy,
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date('2026-01-01'),
@@ -163,6 +165,13 @@ describe('GET /communities/:id — communauté privée', () => {
   it('un ancien membre est refusé : quitter ferme la porte', async () => {
     const response = await detailAs(FORMER, community({ isPrivate: true }));
     expect(response.statusCode).toBe(403);
+  });
+});
+
+describe('GET /communities/:id — communauté désactivée', () => {
+  it.each([[CREATOR], [MEMBER], [STRANGER]])('%s ne la trouve pas, par id comme par identifiant', async (viewer) => {
+    expect((await detailAs(viewer, community({ isActive: false }))).statusCode).toBe(404);
+    expect((await detailAs(viewer, community({ isActive: false }), 'mshy_club')).statusCode).toBe(404);
   });
 });
 

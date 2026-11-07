@@ -140,6 +140,10 @@ export async function performJoinCommunity({
     restore(queryClient, snapshot);
     return { status: result.status === 403 ? 'refused' : 'error' };
   }
+  if (!result.ok) {
+    restore(queryClient, snapshot);
+    patchDetail(queryClient, community.id, (cached) => ({ ...cached, viewerRole: 'member' }));
+  }
   const list = queryClient.getQueryData<InfiniteData<CommunityPage, number>>(communitiesQueryKey(''));
   if (list !== undefined) queryClient.setQueryData(communitiesQueryKey(''), prepend(list, joined));
   void queryClient.invalidateQueries({ queryKey: [...LIST_PREFIX], refetchType: 'none' });
