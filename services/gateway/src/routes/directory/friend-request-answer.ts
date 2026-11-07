@@ -281,7 +281,7 @@ async function accepterAuNiveau(
     // #13934 — le lien monte : l'écoute conservée remonte chez l'autre, au détail de son nouveau niveau.
     await refreshNowPlayingAfter(
       { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Now playing not refreshed after raise:', error) },
-      { userA: demande.senderId, userB: demande.receiverId, mode: 'raise' },
+      { userA: demande.senderId, userB: demande.receiverId },
     );
   }
   if (niveau !== 'ACQUAINTANCE') crediterAmitie(fastify, demande);

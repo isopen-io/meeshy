@@ -141,3 +141,18 @@ describe('#13934 — la catégorie de mon écoute s\'accorde et se retire, perso
     expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ listeningCategoryShared: false, listeningCategoryWithdrawnAt: NOW });
   });
 });
+
+describe('#13934 — retirer la catégorie retire aussi le titre', () => {
+  it('le Sang qui avait le titre le perd avec la catégorie, et un nouvel accord efface la date de retrait', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    await regler(app, { listeningCategoryShared: true });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ...app.reglages.get(`${AUTRE}:${MOI}`), listeningTitleShared: true });
+    const retire = await regler(app, { listeningCategoryShared: false });
+    const reaccorde = await regler(app, { listeningCategoryShared: true });
+    await app.close();
+
+    expect(retire.body.data).toMatchObject({ listeningCategoryShared: false, listeningTitleShared: false });
+    expect(reaccorde.body.data).toMatchObject({ listeningCategoryShared: true, listeningTitleShared: false });
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ listeningCategoryWithdrawnAt: null, listeningTitleWithdrawnAt: NOW });
+  });
+});

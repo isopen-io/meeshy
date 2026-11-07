@@ -10,7 +10,7 @@ import { ritualShareWithdrawalOf } from '../../services/relations/ritualShareWit
 import { stopBringsOnBlock } from '../../services/bring/bringService';
 import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkieCut';
 import { logError } from '../../utils/logger';
-import { refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
@@ -162,12 +162,20 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
         blocking ? linkedPerson(fastify.prisma, ownerId, userId) : false,
         granting ? linkedPerson(fastify.prisma, ownerId, userId, 'listening.category') : false,
       ]);
-      const withdrawn = Object.keys(requested) as RelationRitualShare[];
+      // Retirer la catégorie retire aussi le titre : on ne garde pas le plus riche des deux partages
+      // quand on vient de couper le moindre.
+      const withdrawn = [
+        ...(Object.keys(requested) as RelationRitualShare[]),
+        ...(listeningCategoryShared === false ? (['listeningTitleShared'] as const) : []),
+      ];
       const categoryWithdrawn = listeningCategoryShared === false && current?.listeningCategoryShared === true;
+      const cutsListening = categoryWithdrawn || (withdrawn.includes('listeningTitleShared') && current?.listeningTitleShared === true);
+      const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, 'Now playing not refreshed after settings:', error) };
+      const ecouteAvant = cutsListening ? await captureNowPlayingBefore(ecoute, { userA: ownerId, userB: userId }) : new Map();
       const data = {
         ...ritualShareWithdrawalOf(current, withdrawn, now),
         ...(categoryWithdrawn ? { listeningCategoryShared: false, listeningCategoryWithdrawnAt: now } : {}),
-        ...(granting && close ? { listeningCategoryShared: true } : {}),
+        ...(granting && close ? { listeningCategoryShared: true, listeningCategoryWithdrawnAt: null } : {}),
         ...(bringBlocked === false ? { bringBlockedAt: null } : {}),
         ...(talkieBlocked === false ? { talkieBlockedAt: null } : {}),
         ...(bringBlocked === true && linked ? { bringBlockedAt: now } : {}),
@@ -192,14 +200,8 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       } else if (Object.keys(data).length > 0) {
         await fastify.prisma.relationFeatureSetting.updateMany({ where: { ownerId, otherId: userId }, data });
       }
-      // #13934 — un accord fait remonter l'écoute en cours chez l'autre ; un retrait l'efface.
-      const cutsListening = categoryWithdrawn || (withdrawn.includes('listeningTitleShared') && current?.listeningTitleShared === true);
-      if ((granting && close) || cutsListening) {
-        await refreshNowPlayingAfter(
-          { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Now playing not refreshed after settings:', error) },
-          { userA: ownerId, userB: userId, mode: cutsListening ? 'cut' : 'raise' },
-        );
-      }
+      // #13934 — un accord fait remonter l'écoute en cours chez l'autre ; un retrait l'efface chez qui la voyait.
+      if ((granting && close) || cutsListening) await refreshNowPlayingAfter(ecoute, { userA: ownerId, userB: userId, before: ecouteAvant });
       if ((blocking && !linked) || (granting && !close)) return sendNotFound(reply, 'Personne introuvable');
 
       return sendSuccess(reply, servedSettings(userId, await readSettings(fastify.prisma, ownerId, userId)));

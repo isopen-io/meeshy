@@ -15,6 +15,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { NOW_PLAYING_ERROR_CODES, NOW_PLAYING_TTL_SECONDS } from '@meeshy/shared/types/now-playing';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
+  captureNowPlayingAccess,
   clearNowPlayingOf,
   nowPlayingSnapshotFor,
   publishNowPlaying,
@@ -215,7 +216,7 @@ describe('le niveau change — la troncature se recalcule sans nouvel envoi', ()
     await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
     await m.lier(EMETTEUR, AMI, 'BLOOD');
 
-    await refreshNowPlayingBetween(m.deps, { userA: EMETTEUR, userB: AMI, mode: 'raise' });
+    await refreshNowPlayingBetween(m.deps, { userA: EMETTEUR, userB: AMI });
 
     expect(m.vers(AMI).map((e) => [e.event, e.data.title, e.data.source])).toEqual([
       [SERVER_EVENTS.NOW_PLAYING_CHANGED, ECOUTE.title, ECOUTE.source],
@@ -226,11 +227,13 @@ describe('le niveau change — la troncature se recalcule sans nouvel envoi', ()
     const m = monde();
     await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
     m.emissions.length = 0;
+    const avantSang = await captureNowPlayingAccess(m.deps, { userA: SANG, userB: EMETTEUR });
+    const avantProche = await captureNowPlayingAccess(m.deps, { userA: EMETTEUR, userB: PROCHE });
     await m.lier(EMETTEUR, SANG, 'CLOSE');
     await m.lier(EMETTEUR, PROCHE, 'FRIEND');
 
-    await refreshNowPlayingBetween(m.deps, { userA: SANG, userB: EMETTEUR, mode: 'cut' });
-    await refreshNowPlayingBetween(m.deps, { userA: EMETTEUR, userB: PROCHE, mode: 'cut' });
+    await refreshNowPlayingBetween(m.deps, { userA: SANG, userB: EMETTEUR, before: avantSang });
+    await refreshNowPlayingBetween(m.deps, { userA: EMETTEUR, userB: PROCHE, before: avantProche });
 
     expect(m.vers(SANG).map((e) => [e.event, Object.keys(e.data).includes('title')])).toEqual([[SERVER_EVENTS.NOW_PLAYING_CHANGED, false]]);
     expect(m.vers(PROCHE)).toEqual([{ room: ROOMS.user(PROCHE), event: SERVER_EVENTS.NOW_PLAYING_CLEARED, data: { userId: EMETTEUR } }]);
@@ -241,7 +244,7 @@ describe('le niveau change — la troncature se recalcule sans nouvel envoi', ()
     await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
     await m.lier(EMETTEUR, PROCHE_SANS_ACCORD, 'BLOOD');
 
-    await refreshNowPlayingBetween(m.deps, { userA: EMETTEUR, userB: PROCHE_SANS_ACCORD, mode: 'raise' });
+    await refreshNowPlayingBetween(m.deps, { userA: EMETTEUR, userB: PROCHE_SANS_ACCORD });
 
     expect(m.vers(PROCHE_SANS_ACCORD)).toEqual([]);
   });
@@ -250,11 +253,39 @@ describe('le niveau change — la troncature se recalcule sans nouvel envoi', ()
     const m = monde();
     await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
     m.emissions.length = 0;
+    const avant = await captureNowPlayingAccess(m.deps, { userA: EMETTEUR, userB: PROCHE });
     await m.settings.updateMany({ where: { ownerId: EMETTEUR, otherId: PROCHE }, data: { listeningCategoryShared: false } });
 
-    await refreshNowPlayingBetween(m.deps, { userA: EMETTEUR, userB: PROCHE, mode: 'cut' });
+    await refreshNowPlayingBetween(m.deps, { userA: EMETTEUR, userB: PROCHE, before: avant });
 
     expect(m.vers(PROCHE).map((e) => e.event)).toEqual([SERVER_EVENTS.NOW_PLAYING_CLEARED]);
+  });
+
+  it('une coupure vers qui ne voyait RIEN ne dit rien : pas d\'oracle d\'écoute par une baisse ou un blocage sans lien', async () => {
+    const m = monde();
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+    m.emissions.length = 0;
+    const INCONNU = '6200000000000000000000ff';
+    const avantInconnu = await captureNowPlayingAccess(m.deps, { userA: INCONNU, userB: EMETTEUR });
+    const avantAmi = await captureNowPlayingAccess(m.deps, { userA: AMI, userB: EMETTEUR });
+    await m.lier(EMETTEUR, AMI, 'ACQUAINTANCE');
+
+    await refreshNowPlayingBetween(m.deps, { userA: INCONNU, userB: EMETTEUR, before: avantInconnu });
+    await refreshNowPlayingBetween(m.deps, { userA: AMI, userB: EMETTEUR, before: avantAmi });
+
+    expect(m.emissions).toEqual([]);
+  });
+
+  it('un compte désactivé ne voit plus rien, et le sien ne part plus', async () => {
+    const m = monde();
+    m.world.users.rows.filter((u) => u.id === PROCHE).forEach((u) => Object.assign(u, { deactivatedAt: new Date(T0) }));
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+    expect(m.vers(PROCHE)).toEqual([]);
+
+    m.world.users.rows.filter((u) => u.id === EMETTEUR).forEach((u) => Object.assign(u, { deactivatedAt: new Date(T0) }));
+    m.emissions.length = 0;
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+    expect(m.emissions).toEqual([]);
   });
 });
 

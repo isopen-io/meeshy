@@ -93,7 +93,7 @@ export function registerRelationRitual(fastify: FastifyInstance): void {
         // #13934 — le Sang est scellé : le titre consenti au rituel remonte aussitôt.
         await refreshNowPlayingAfter(
           { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Now playing not refreshed after ritual:', error) },
-          { userA: request.user!.userId, userB: otherId, mode: 'raise' },
+          { userA: request.user!.userId, userB: otherId },
         );
       }
       return outcome.ok === true ? sendSuccess(reply, outcome.data) : sendCoded(reply, outcome.status, outcome.message, outcome.code);

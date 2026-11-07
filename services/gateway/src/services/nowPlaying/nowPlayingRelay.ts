@@ -16,9 +16,9 @@
  * avec SA charge : aucune room partagée ne sert à tous la charge du plus proche.
  *
  * `refreshNowPlayingBetween` rejoue la projection d'une paire quand son lien ou ses
- * consentements changent : une montée fait remonter le détail conservé (`raise` : rien
- * n'est dit si rien ne s'ouvre), une baisse, un blocage ou un retrait efface chez
- * l'autre (`cut`).
+ * consentements changent : une montée fait remonter le détail conservé (rien n'est dit
+ * si rien ne s'ouvre) ; une baisse, un blocage ou un retrait effacent chez l'autre — à
+ * condition qu'il VOYAIT quelque chose, capturé avant (`captureNowPlayingAccess`).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
@@ -97,12 +97,22 @@ async function accessAmong(
       return [access, law] as const;
     }),
   );
+  const usable = await usableAccounts(prisma, [params.subjectId, ...params.otherIds]);
   return new Map(
     params.otherIds.map((id) => {
-      const opened = verdicts.find(([, law]) => law.get(id)?.allowed === true);
+      const opened = usable.has(params.subjectId) && usable.has(id) ? verdicts.find(([, law]) => law.get(id)?.allowed === true) : undefined;
       return [id, opened ? opened[0] : 'none'];
     }),
   );
+}
+
+/** Un compte désactivé ou supprimé n'émet ni ne reçoit, même avec une socket encore ouverte. */
+async function usableAccounts(prisma: NowPlayingDb, ids: readonly string[]): Promise<ReadonlySet<string>> {
+  const rows = await prisma.user.findMany({
+    where: { id: { in: [...new Set(ids)] } },
+    select: { id: true, isActive: true, deactivatedAt: true, deletedAt: true },
+  });
+  return new Set(rows.filter((row) => row.isActive !== false && !row.deactivatedAt && !row.deletedAt).map((row) => row.id));
 }
 
 /** Un lecteur injoignable n'arrête pas l'éventail. */
@@ -173,23 +183,51 @@ export async function clearNowPlayingOf(deps: NowPlayingRelayDeps, emitterId: st
   return { success: true };
 }
 
+/** L'accès de chaque sens d'une paire, pour les seuls émetteurs qui ont une écoute en cours. */
+export type NowPlayingPairAccess = ReadonlyMap<string, NowPlayingReaderAccess>;
+
+const directions = (userA: string, userB: string) => [[userA, userB], [userB, userA]] as const;
+const directionKey = (emitterId: string, readerId: string): string => `${emitterId}>${readerId}`;
+
+/**
+ * Ce que chaque sens de la paire voit MAINTENANT. À capturer AVANT une baisse, un blocage
+ * ou un retrait : l'effacement ne part ensuite que vers un lecteur qui VOYAIT quelque chose.
+ */
+export async function captureNowPlayingAccess(
+  deps: NowPlayingRelayDeps,
+  pair: { readonly userA: string; readonly userB: string },
+): Promise<NowPlayingPairAccess> {
+  const now = deps.now();
+  const seen = new Map<string, NowPlayingReaderAccess>();
+  for (const [emitterId, readerId] of directions(pair.userA, pair.userB)) {
+    if (!(await readNowPlaying(deps.cache, emitterId, now))) continue;
+    const access = await accessAmong(deps.prisma, { subjectId: emitterId, otherIds: [readerId], subjectIs: 'target', now: new Date(now) });
+    seen.set(directionKey(emitterId, readerId), access.get(readerId) ?? 'none');
+  }
+  return seen;
+}
+
 /**
  * Rejoue la projection d'une paire dans les DEUX sens après un changement de lien, de
- * consentement ou de blocage. `raise` ne dit rien quand rien ne s'ouvre ; `cut` efface
- * chez l'autre ce qui ne lui est plus servi.
+ * consentement ou de blocage. `changed` part vers un lecteur dont l'accès est ouvert et
+ * a changé ; `cleared` SEULEMENT vers un lecteur qui voyait quelque chose AVANT (`before`)
+ * et ne voit plus rien : à quiconque n'avait pas d'accès, rien ne part — un effacement
+ * trahirait une écoute. Sans `before` (une montée), rien n'est jamais effacé.
  */
 export async function refreshNowPlayingBetween(
   deps: NowPlayingRelayDeps,
-  params: { readonly userA: string; readonly userB: string; readonly mode: 'raise' | 'cut' },
+  params: { readonly userA: string; readonly userB: string; readonly before?: NowPlayingPairAccess },
 ): Promise<void> {
   const now = deps.now();
-  for (const [emitterId, readerId] of [[params.userA, params.userB], [params.userB, params.userA]] as const) {
+  for (const [emitterId, readerId] of directions(params.userA, params.userB)) {
     const state = await readNowPlaying(deps.cache, emitterId, now);
     if (!state) continue;
     const access = await accessAmong(deps.prisma, { subjectId: emitterId, otherIds: [readerId], subjectIs: 'target', now: new Date(now) });
-    const served = projectNowPlaying(emitterId, state, access.get(readerId) ?? 'none');
-    if (served) serve(deps.io, readerId, served);
-    else if (params.mode === 'cut') unserve(deps.io, readerId, emitterId);
+    const after = access.get(readerId) ?? 'none';
+    const before = params.before?.get(directionKey(emitterId, readerId)) ?? 'none';
+    const served = projectNowPlaying(emitterId, state, after);
+    if (served && after !== before) serve(deps.io, readerId, served);
+    else if (!served && before !== 'none') unserve(deps.io, readerId, emitterId);
   }
 }
 
