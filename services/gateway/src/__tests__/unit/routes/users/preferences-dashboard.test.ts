@@ -15,6 +15,8 @@ jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { getDashboardStats } from '../../../../routes/users/preferences';
+import { CONVERSATION_LAST_MESSAGE_PREVIEW_QUERY } from '../../../../routes/users/dashboardRecentPreview';
+import { withoutCaptureNotices } from '../../../../services/messaging/captureNoticeVisibility';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -51,9 +53,6 @@ async function buildApp(
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   const prisma = {
-    participant: {
-      count: jest.fn().mockResolvedValue(3),
-    },
     conversation: {
       findMany: jest.fn().mockResolvedValue([mockConversation]),
     },
@@ -65,9 +64,32 @@ async function buildApp(
     },
     message: {
       count: jest.fn().mockResolvedValue(42),
+      // #16590 — la reprise CIBLÉE du dernier message visible, quand l'aperçu
+      // de la requête est masqué pour ce lecteur. Aucun repli par défaut.
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    // #16590 — les surfaces que la résolution d'aperçu par lecteur LIT.
+    // Le double les RÉGLE au cas nominal (rien de masqué, aucun plancher) :
+    // un double partiel ne se signale qu'au moment où le module GRANDIT, et
+    // c'est exactement ce qui vient d'arriver ici.
+    participant: {
+      count: jest.fn().mockResolvedValue(3),
+      // La participation du LECTEUR dans la conversation de la page : sans
+      // elle, l'aperçu est retiré — l'absence ne vaut pas autorisation.
+      findMany: jest.fn().mockResolvedValue([
+        { id: 'p-reader', conversationId: 'conv-1', role: 'member', joinedAt: new Date('2025-01-01'), shareLinkId: null, historyVisibleFrom: null, permissions: null, anonymousSession: null, user: { role: 'USER' } },
+      ]),
+    },
+    userConversationPreferences: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    userMessageDeletion: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
     conversationShareLink: {
       count: jest.fn().mockResolvedValue(5),
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
     },
     ...prismaOverrides,
   };
@@ -201,7 +223,14 @@ describe('GET /users/me/dashboard-stats (conversation without messages)', () => 
 });
 
 describe('GET /users/me/dashboard-stats (last-message preview excludes soft-deleted)', () => {
-  it('gates the nested recent-conversation messages preview with deletedAt: null', async () => {
+  /**
+   * #16590 — la sélection d'aperçu est désormais PRISE au bloc partagé de la
+   * ligne de liste : le `where` y porte `deletedAt: null` ET l'exclusion des
+   * avis de capture (#9630), et la projection y porte le bloc de protection.
+   * Les trois se lisent depuis leur SOURCE, jamais retapées — une copie dans
+   * le témoin dériverait comme la copie dans la route a dérivé.
+   */
+  it('lit l’aperçu par le bloc PARTAGÉ de la ligne de liste — where, ordre et projection', async () => {
     const findMany = jest.fn().mockResolvedValue([mockConversation]);
     const app = await buildApp('authenticated', {
       conversation: { findMany },
@@ -210,7 +239,13 @@ describe('GET /users/me/dashboard-stats (last-message preview excludes soft-dele
     expect(res.statusCode).toBe(200);
 
     const queryArg = (findMany.mock.calls[0] as any[])[0];
-    expect(queryArg.select.messages.where).toEqual({ deletedAt: null });
+    expect(queryArg.select.messages).toBe(CONVERSATION_LAST_MESSAGE_PREVIEW_QUERY);
+    expect(queryArg.select.messages.where).toEqual(withoutCaptureNotices({ deletedAt: null }));
+    // Et le bloc de protection est bien dans ce que la route LIT : sans lui,
+    // aucun client ne peut masquer une vue unique, un flouté ou un éphémère.
+    for (const cle of ['isViewOnce', 'isBlurred', 'effectFlags', 'expiresAt', 'ephemeralDuration', 'translations', 'originalLanguage']) {
+      expect((queryArg.select.messages.select as Record<string, unknown>)[cle]).toBe(true);
+    }
     await app.close();
   });
 });
