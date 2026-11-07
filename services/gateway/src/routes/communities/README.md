@@ -35,7 +35,7 @@ src/routes/communities/
 Routes CRUD principales pour les communautés:
 - `GET /communities/check-identifier/:identifier` - Vérifier disponibilité d'un identifiant
 - `GET /communities` - Liste des communautés de l'utilisateur (avec pagination et recherche)
-- `GET /communities/:id` - Détails d'une communauté (par ID ou identifier)
+- `GET /communities/:id` - Détails d'une communauté (par ID ou identifier) ; sert `currentUserRole` (rôle ACTIF du lecteur, `admin` pour le créateur, `null` sinon — #6378). Ne charge que la ligne d'adhésion active du lecteur, jamais la liste des membres ; un ancien membre (`isActive: false`) est refusé d'une communauté privée ; `memberCount` ne compte que les membres actifs.
 - `POST /communities` - Créer une nouvelle communauté
 - `GET /communities/:id/conversations` - Conversations d'une communauté
 

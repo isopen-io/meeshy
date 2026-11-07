@@ -50,20 +50,18 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         }
     }
 
+    /// `currentUserRole` (servi par le détail depuis #6378) fait foi ; `members`
+    /// n'est lu que si un ancien serveur le portait, puis le créateur vaut admin.
     private func applyMembership(of apiCommunity: APICommunity) {
         let readerId = currentUserId()
         let creatorMatch = apiCommunity.createdBy == readerId
-        let memberRecord = apiCommunity.members?.first(where: { $0.userId == readerId })
+        let servedRole = apiCommunity.currentUserRole.flatMap(MemberRole.init(rawValue:))
+        let recordRole = apiCommunity.members?.first(where: { $0.userId == readerId })?.communityRole
+        let role = servedRole ?? recordRole ?? (creatorMatch ? .admin : nil)
 
         isCreator = creatorMatch
-        isMember = creatorMatch || memberRecord != nil
-
-        if let record = memberRecord {
-            currentUserRole = record.communityRole
-        } else if creatorMatch {
-            currentUserRole = .admin
-        }
-
+        isMember = role != nil
+        currentUserRole = role ?? .member
         isAdmin = currentUserRole.hasMinimumRole(.admin) || isCreator
     }
 

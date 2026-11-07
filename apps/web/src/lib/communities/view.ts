@@ -60,3 +60,20 @@ export function cachedSearchPlaceholder(
     .filter((community) => community.name.toLowerCase().includes(term) || community.identifier.toLowerCase().includes(term));
   return { pages: [{ communities, nextOffset: null }], pageParams: [0] };
 }
+
+export type MembershipAction = 'join' | 'leave' | 'none';
+
+/**
+ * **LE GESTE D'ADHÉSION QUE LE DÉTAIL OFFRE** (#6378) — miroir
+ * `CommunityDetailView.actionsSection` : « Rejoindre » à un non-membre d'une
+ * communauté PUBLIQUE (une privée ne s'ouvre que sur invitation, la passerelle
+ * rendrait 403), « Quitter » à un membre qui ne l'a pas créée (la passerelle
+ * refuse le départ du créateur), rien sinon — et rien tant que le rôle du
+ * lecteur n'est pas SERVI : un bouton deviné serait un contrôle qui ment.
+ */
+export function membershipActionOf(community: CommunitySummary, viewerId: string | null): MembershipAction {
+  if (viewerId === null || community.viewerRole === undefined) return 'none';
+  if (community.createdBy === viewerId) return 'none';
+  if (community.viewerRole === null) return community.isPrivate ? 'none' : 'join';
+  return 'leave';
+}

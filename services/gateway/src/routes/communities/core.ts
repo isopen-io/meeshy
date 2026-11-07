@@ -20,7 +20,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { communityConversationSchema, flattenCommunityCounts } from './serialization';
+import { communityConversationSchema, communityDetailInclude, flattenCommunityCounts, viewerCommunityRole } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
@@ -303,91 +303,27 @@ export async function registerCoreRoutes(
       }
 
       const userId = authContext.userId;
+      const include = communityDetailInclude(userId);
 
-      // Chercher d'abord par ID, puis par identifier si pas trouve
-      let community = await fastify.prisma.community.findFirst({
-        // #8876 — une communauté désactivée n'existe plus pour un lecteur public.
-        where: { id, isActive: true },
-        include: {
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true
-            }
-          },
-          members: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  isOnline: true
-                }
-              }
-            }
-          },
-          _count: {
-            select: {
-              members: true,
-              Conversation: true
-            }
-          }
-        }
-      });
-
-      // Si pas trouve par ID, essayer par identifier
-      if (!community) {
-        community = await fastify.prisma.community.findFirst({
-          where: { identifier: id, isActive: true },
-          include: {
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                avatar: true
-              }
-            },
-            members: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    avatar: true,
-                    isOnline: true
-                  }
-                }
-              }
-            },
-            _count: {
-              select: {
-                members: true,
-                Conversation: true
-              }
-            }
-          }
-        });
-      }
+      // #8876 — une communauté désactivée n'existe plus pour un lecteur public.
+      const community =
+        (await fastify.prisma.community.findFirst({ where: { id, isActive: true }, include })) ??
+        (await fastify.prisma.community.findFirst({ where: { identifier: id, isActive: true }, include }));
 
       if (!community) {
         return sendNotFound(reply, 'Community not found');
       }
 
-      // Verifier l'acces (createur ou membre)
-      const hasAccess = community.createdBy === userId ||
-                       community.members.some(member => member.userId === userId);
+      const currentUserRole = viewerCommunityRole({
+        isCreator: community.createdBy === userId,
+        activeRole: community.members[0]?.role ?? null,
+      });
 
-      if (!hasAccess && community.isPrivate) {
+      if (currentUserRole === null && community.isPrivate) {
         return sendForbidden(reply, 'Access denied to this community');
       }
 
-      sendSuccess(reply, flattenCommunityCounts(community));
+      sendSuccess(reply, { ...flattenCommunityCounts(community), currentUserRole });
     } catch (error) {
       logger.error('Error fetching community', error as Error);
       sendInternalError(reply, 'Failed to fetch community');
