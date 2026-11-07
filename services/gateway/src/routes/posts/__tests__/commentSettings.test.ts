@@ -35,7 +35,7 @@ function anonymousAuth() {
   };
 }
 
-type PostRow = { id: string; authorId: string; type: string; commentsDisabled: boolean; visibility: string; visibilityUserIds: string[] };
+type PostRow = { id: string; authorId: string; type: string; commentsDisabled: boolean; visibility: string; visibilityUserIds: string[]; metadata?: Record<string, unknown> | null };
 
 function fixture(options: { post?: Partial<PostRow> | null; authorRole?: Role } = {}) {
   let row: PostRow | null = options.post === null
@@ -220,5 +220,37 @@ describe('PUT /posts/:postId — l’auteur ferme les commentaires depuis l’é
     expect(UpdatePostSchema.parse({ commentsDisabled: true })).toEqual({ commentsDisabled: true });
     expect(UpdatePostSchema.parse({ content: 'x' })).not.toHaveProperty('commentsDisabled');
     expect(UpdatePostSchema.safeParse({ commentsDisabled: 'oui' }).success).toBe(false);
+  });
+});
+
+describe('PATCH /posts/:postId/comment-settings — audit adversarial (#16541)', () => {
+  it('test_commentSettings_broadcast_hoistsLocationAndTrackingLinks_likeTheEditRoute', async () => {
+    const location = { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null, category: null };
+    const trackingLinks = [{ token: 'abc', url: 'https://meeshy.me' }];
+    const f = fixture({ post: { metadata: { location, trackingLinks } } });
+    await patch(await buildApp(f, auth(AUTHOR_ID, 'USER')), { commentsDisabled: true });
+    await flush();
+
+    const [served] = f.social.broadcastPostUpdated.mock.calls[0] as [Record<string, unknown>, string];
+    expect(served['location']).toEqual(location);
+    expect(served['trackingLinks']).toEqual(trackingLinks);
+  });
+
+  it('test_commentSettings_unchangedValue_answers200_withoutWritingNorBroadcasting', async () => {
+    const f = fixture({ post: { commentsDisabled: true } });
+    const res = await patch(await buildApp(f, auth('moderation-1', 'MODERATOR')), { commentsDisabled: true });
+    await flush();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual({ postId: POST_ID, commentsDisabled: true });
+    expect(f.prisma.post.updateMany).not.toHaveBeenCalled();
+    expect(f.social.broadcastPostUpdated).not.toHaveBeenCalled();
+    expect(f.prisma.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('test_commentSettings_unchangedValue_isStillRefusedToAnOutsider', async () => {
+    const f = fixture({ post: { commentsDisabled: true } });
+    const res = await patch(await buildApp(f, auth('intrus-1', 'USER')), { commentsDisabled: true });
+    expect(res.statusCode).toBe(403);
   });
 });

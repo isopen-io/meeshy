@@ -11,6 +11,7 @@ import { admitThirdPartyRemoval } from '../../services/moderation/contentRemoval
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
 import { logError, logWarn } from '../../utils/logger.js';
 import { postIdParamsSchema, type PostParams } from './types';
+import { hoistLocation, hoistTrackingLinks } from './publication';
 
 /**
  * #16541 — fermer ou rouvrir les commentaires d'une publication (post, reel,
@@ -55,7 +56,9 @@ async function broadcastCommentSettings(prisma: PrismaClient, social: Broadcaste
   if (!social) return;
   const post = await prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED }, select: postInclude });
   if (!post) return;
-  const wire = withMentions(post, WIRE_BROADCAST) as unknown as Post;
+  // Même hissage que la diffusion de l'édition (`PUT /posts/:postId`) : sans lui,
+  // un client qui remplace la carte par l'événement y perdrait le lieu et les liens.
+  const wire = withMentions(hoistLocation(hoistTrackingLinks(post as unknown as Record<string, unknown>)), WIRE_BROADCAST) as unknown as Post;
   if (post.type === 'STORY') return social.broadcastStoryUpdated(wire, post.authorId, { engagementReset: false });
   if (post.type === 'STATUS') return social.broadcastStatusUpdated(wire, post.authorId);
   return social.broadcastPostUpdated(wire, post.authorId);
@@ -80,7 +83,7 @@ export function registerCommentSettingsRoutes(fastify: FastifyInstance, prisma: 
       const { commentsDisabled } = parsed.data;
       const { postId } = request.params;
 
-      const target = await prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED }, select: { id: true, authorId: true } });
+      const target = await prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED }, select: { id: true, authorId: true, commentsDisabled: true } });
       if (!target) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
@@ -88,6 +91,12 @@ export function registerCommentSettingsRoutes(fastify: FastifyInstance, prisma: 
       const admittedAs = await admitCommentSettingsChange(prisma, { id: actor.id, role: actor.role }, target.authorId);
       if (admittedAs === 'refused') {
         return sendForbidden(reply, 'Not authorized to change comment settings on this post', { code: 'FORBIDDEN' });
+      }
+
+      // Rien à changer : aucune écriture, aucune trace, aucune rediffusion à
+      // toute l'audience — une bascule répétée ne coûte qu'une lecture.
+      if (target.commentsDisabled === commentsDisabled) {
+        return sendSuccess(reply, { postId, commentsDisabled });
       }
 
       const written = await prisma.post.updateMany({ where: { id: postId, deletedAt: NOT_DELETED }, data: { commentsDisabled } });

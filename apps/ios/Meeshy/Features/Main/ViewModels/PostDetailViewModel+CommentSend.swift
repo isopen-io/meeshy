@@ -178,7 +178,6 @@ extension PostDetailViewModel {
             decrementCommentCount()
             if CommentsClosure.isRefusal(cause) {
                 commentsRefusedLocally = true
-                FeedbackToastManager.shared.showError(CommentsClosedNotice.text)
             } else if !DailyGestureLimitNotice.surface(cause) { showSendError() }
             return false
         case .unqueued:
