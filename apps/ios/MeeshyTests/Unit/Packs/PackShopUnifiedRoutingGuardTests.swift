@@ -34,7 +34,7 @@ final class PackShopUnifiedRoutingGuardTests: XCTestCase {
     /// #11306 — la vitrine nomme le rang d'un pack à gagner avec le nom du jeu (`GameCopy`), pas une copie.
     func test_laVitrineDesReglagesNommeLesRangsAvecLeNomDuJeu() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.path))
-        XCTAssertTrue(source.contains("rankName: GameCopy.rankName)"),
+        XCTAssertTrue(source.contains("language: PackShopScreen.language, rankName: GameCopy.rankName,"),
                       "« Rang Voix — Gloire manquante » : le nom du rang est celui que le jeu affiche (#11306)")
     }
 
