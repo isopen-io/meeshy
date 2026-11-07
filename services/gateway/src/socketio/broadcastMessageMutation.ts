@@ -83,12 +83,22 @@ type MessageMutationBase<TPayload> = {
 };
 
 /**
- * `authorId` n'existe QUE sur la suppression et sur l'expiration, et y est
- * REQUIS.
+ * `authorId` n'existe QUE sur la suppression et sur l'expiration, et la CLÉ y
+ * est requise.
+ *
+ * La clé, pas la VALEUR : le type est `string | null | undefined`, donc il
+ * oblige le transport à se prononcer et ne garantit pas qu'il nomme quelqu'un.
+ * La distinction a pris du poids avec #16691 — un `authorId` nul ne faisait
+ * avant AUCUNE pastille (le gate `!senderId` sortait tôt) ; il en pousse
+ * désormais une à TOUS les participants, auteur compris, puisque sans auteur
+ * il n'y a personne à exclure. Inoffensif aujourd'hui, les quatre appelants
+ * passant une colonne non nulle (`message.senderId`, requise au schéma), et le
+ * compte servi restant juste (`computeUnreadCounts` soustrait les messages
+ * propres depuis la BASE). Resserrer la valeur en `string` est un lot à part :
+ * il faut d'abord prouver les quatre appelants au type.
  *
  * Requis, parce que les deux doivent repousser la pastille de non-lus et que
- * l'exclusion porte sur l'AUTEUR du message : le type est ce qui empêche un
- * transport de suppression ou d'expiration de rouvrir la brèche en silence.
+ * l'exclusion porte sur l'AUTEUR du message.
  * `'expired'` est le transport SERVEUR de la même famille — un message
  * autodestructible échu et brûlé par `ExpiredMessagesCleanupService` plutôt
  * qu'une suppression demandée — et il ne compte pas plus dans le badge qu'une

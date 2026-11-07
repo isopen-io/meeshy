@@ -17,6 +17,17 @@ const logger = enhancedLogger.child({ module: 'offlineParticipantQueue' });
  * the manager, the REST broadcasters and test doubles can all supply them
  * without importing each other.
  */
+/**
+ * #16687 — ce que la file doit pouvoir demander de `connectedUsers`. Les sites
+ * qui la consomment DÉRIVENT ce type au lieu de redéclarer une forme étroite :
+ * les deux redéclarations du dépôt (`emitAttachmentUpdated`, `ready-listener`)
+ * sont exactement celles où la garde était morte.
+ */
+export type ReachabilityView = {
+  has(key: string): boolean;
+  get(key: string): { readonly unreachableConversations?: ReadonlySet<string> } | undefined;
+};
+
 export interface OfflineParticipantQueueDeps {
   deliveryQueue: {
     enqueue(userId: string, entry: QueuedMessagePayload, options?: { readonly sealAtRest?: boolean }): Promise<void>;
@@ -24,20 +35,23 @@ export interface OfflineParticipantQueueDeps {
   prisma: Pick<PrismaClient, 'participant'>;
   /**
    * #16687 — la porte de joignabilité. `has` répond « cette clé a-t-elle une
-   * socket ? » ; `get` permet de demander la question JUSTE — « cette socket
-   * est-elle joignable pour CETTE conversation ? ».
+   * socket ? » ; `get` pose la question JUSTE : « cette socket est-elle
+   * joignable pour CETTE conversation ? ».
    *
-   * `get` est OPTIONNEL par décision : une carte réelle
-   * (`Map<string, SocketUser>`) le fournit déjà, et un double réduit à `has`
-   * garde le comportement d'avant ce lot (absence de marqueur ⇒ joignable).
-   * C'est fail-OPEN, et c'est le bon sens d'arbitrage ici : le pire cas est une
-   * entrée inutile en file, que les trois clients absorbent par idempotence,
-   * là où l'inverse perd le message sans recours.
+   * **`get` est REQUIS**, et il l'est par mesure, pas par goût. Il a d'abord
+   * été écrit OPTIONNEL « par décision, fail-OPEN » — un double réduit à `has`
+   * gardait alors le comportement d'avant le lot. L'audit adversarial a montré
+   * que ce n'était pas un double mais un CONSOMMATEUR DE PRODUCTION :
+   * `MeeshySocketIOHandler` passait `new Set(manager.getConnectedUsers())`, un
+   * `Set<string>` qui a `has` et n'a pas `get`, sur les QUATRE chemins média de
+   * `message:attachment-updated`. La porte y était morte en silence.
+   *
+   * Un contrat optionnel ne se mesure pas : il se contente. Requis, le
+   * compilateur NOMME les sites à moitié livrés — c'est la seule forme de cette
+   * garde qui ne puisse pas se reperdre. L'arbitrage fail-open appartient à une
+   * ENTRÉE de file, jamais à un contrat de dépendance.
    */
-  connectedUsers: {
-    has(key: string): boolean;
-    get?(key: string): { readonly unreachableConversations?: ReadonlySet<string> } | undefined;
-  };
+  connectedUsers: ReachabilityView;
 }
 
 /**
@@ -280,7 +294,7 @@ export async function enqueueForOfflineParticipants(
       // davantage — message perdu, et sans rejeu puisque rien n'a été écrit.
       const reachableHere =
         connectedUsers.has(queueKey) &&
-        !connectedUsers.get?.(queueKey)?.unreachableConversations?.has(conversationId);
+        !connectedUsers.get(queueKey)?.unreachableConversations?.has(conversationId);
       if (isActor || reachableHere || params.excludedQueueKeys?.has(queueKey)) continue;
       if (restrictToLanguage !== null) {
         // Échec OUVERT sur prisme vide : un participant dont aucune langue n'est

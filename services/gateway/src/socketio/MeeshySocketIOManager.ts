@@ -59,6 +59,7 @@ import { loadSealedQuoteAudience, sealedQuoteVariant } from './quotedEphemeralAu
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
 import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 import { stripClientMessageId } from './utils/message-ack-shaping.js';
+import type { ReachabilityView } from './offlineParticipantQueue.js';
 import {
   emitToConversationParticipants,
   type ParticipantRoomTarget,
@@ -3456,6 +3457,19 @@ export class MeeshySocketIOManager {
    */
   getConnectedUsers(): string[] {
     return Array.from(this.connectedUsers.keys());
+  }
+
+  /**
+   * #16687 — la carte VIVANTE, pour qui doit demander « joignable pour CETTE
+   * conversation ? » et non seulement « connecté ? ».
+   *
+   * `getConnectedUsers()` rend des CLÉS : enveloppées dans un `Set`, elles
+   * répondent `has` et perdent le marqueur de joignabilité. C'est ce que les
+   * quatre chemins média passaient à la file, et la porte y était morte en
+   * silence. Rendre la carte évite aussi une copie par appel.
+   */
+  getReachability(): ReachabilityView {
+    return this.connectedUsers;
   }
 
   /**

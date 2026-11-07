@@ -98,14 +98,23 @@ describe('enqueueForOfflineParticipants — the audience', () => {
   });
 
   /**
-   * Le double le plus plausible du dépôt est une carte dont les valeurs sont
-   * `{}` : l'absence de marqueur vaut JOIGNABLE, soit le comportement d'avant
-   * ce lot. Un `connectedUsers` qui ne sait même pas répondre `get` (double
-   * réduit à `has`) ne doit pas faire lever le gate.
+   * Une entrée SANS marqueur vaut joignable — le cas nominal, et la forme que
+   * prend une carte réelle pour un compte dont toutes les rooms sont jointes.
+   *
+   * Ce témoin a d'abord été écrit « un connectedUsers sans `get` reste accepté »,
+   * en présentant la forme réduite à `has` comme un DOUBLE DE TEST plausible.
+   * L'audit adversarial a montré que ce n'était pas un double : c'était
+   * `MeeshySocketIOHandler`, qui passait `new Set(manager.getConnectedUsers())`
+   * sur les quatre chemins média. Le témoin était vert, il le serait resté, et
+   * il CERTIFIAIT le trou — exactement « poser une surface de double pour
+   * empêcher une route de tomber, c'est supprimer le seul signal qui la ferait
+   * réparer » (§ `services/gateway/CLAUDE.md`).
+   *
+   * `get` est désormais REQUIS au contrat, donc la forme réduite ne compile
+   * plus, et c'est le compilateur qui garde cette classe.
    */
-  it("un connectedUsers sans `get` reste accepté — l'absence de marqueur vaut joignable", async () => {
+  it("une entrée SANS marqueur vaut joignable — le cas nominal", async () => {
     const { sink, deps } = makeDeps(THREE, ['user-B']);
-    deps.connectedUsers = { has: (k: string) => k === 'user-B' } as any;
 
     await enqueueForOfflineParticipants(deps, { ...base, actorParticipantId: 'participant-A' });
 

@@ -55,10 +55,24 @@ export interface SocketUser {
    * RECALCULÉ à chaque authentification, donc une reconnexion qui rejoint
    * correctement ses rooms l'efface d'elle-même.
    *
-   * Granularité par UTILISATEUR, comme `connectedUsers` lui-même : un second
-   * appareil sain écrase le marqueur, ce qui est juste — l'utilisateur EST
-   * joignable par la room. La convergence de l'appareil resté muet est une
-   * question distincte (#16688).
+   * **CE QUE CE MARQUEUR NE COUVRE PAS**, énuméré parce qu'un invariant annoncé
+   * plus fort qu'il n'est vaut moins que pas d'invariant :
+   *
+   * - **Zéro room jointe, zéro marqueur (#16719).** `_joinUserConversations`
+   *   enveloppe la LECTURE des participants et les jonctions dans un seul
+   *   `try` ; si la lecture lève, la socket ne rejoint AUCUNE room et la
+   *   fonction rend `[]`, donc aucun marqueur. C'est le cas strictement PIRE
+   *   que celui d'ici, et un `ReadonlySet` d'ids ne peut pas le dire — il
+   *   faudrait une seconde forme (« injoignable partout »).
+   * - **Le marqueur est perdu au départ de l'appareil SAIN (#16726).**
+   *   Granularité par UTILISATEUR, comme `connectedUsers` lui-même. Un second
+   *   appareil sain écrase le marqueur, ce qui est juste tant qu'il vit —
+   *   l'utilisateur EST joignable par la room. Mais `_handleDisconnect` recopie
+   *   l'entrée en ne changeant que `socketId` : quand l'appareil sain part, le
+   *   survivant malade hérite d'une entrée SANS marqueur. L'inverse (le malade
+   *   écrase un état sain) arme la file à tort pour toute la vie de sa socket.
+   * - La convergence de l'appareil resté muet est une question distincte
+   *   (#16688).
    */
   unreachableConversations?: ReadonlySet<string>;
 }

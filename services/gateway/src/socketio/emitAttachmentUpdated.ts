@@ -18,7 +18,7 @@ export interface AttachmentUpdatedParams {
   io: ConversationRoomEmitter | null | undefined;
   prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>;
   deliveryQueue: OfflineParticipantQueueDeps['deliveryQueue'];
-  connectedUsers: { has(key: string): boolean };
+  connectedUsers: OfflineParticipantQueueDeps['connectedUsers'];
   conversationId: string;
   messageId: string;
   /**
