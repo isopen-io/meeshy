@@ -20,11 +20,13 @@
  *  2. le bouton « Partager l’écran » est offert, cible de 44, derrière le (…)
  *     de la pilule qui déplie les actions (#8391) ;
  *  3. le toucher annonce le partage, et le pair DÉCODE des images de l'écran
- *     (la renégociation d'un appel vocal a eu lieu) ; la pastille « Vous
+ *     (la renégociation d'un appel vocal a eu lieu) ; l'appel se réduit en
+ *     capsule rouge « Arrêter » (#16664), qui rend l'appel : la pastille « Vous
  *     partagez votre écran » s'affiche, le bouton est enfoncé ;
  *  4. « Arrêter le partage » du navigateur (fin de la piste) arrête le partage
  *     et l'annonce — l'appel reste vocal ;
- *  5. la caméra allumée, un partage puis son arrêt au bouton rendent la caméra ;
+ *  5. la caméra allumée, un partage puis son arrêt par « Arrêter » de la
+ *     capsule rendent la caméra ;
  *  6. le pair partage à son tour : son écran s'affiche en grand, ENTIER
  *     (`object-fit: contain`), des images arrivent, sous la bannière « Nadia
  *     Benali partage son écran » ; réduit en bulle, puis dans l'image dans
@@ -190,7 +192,11 @@ try {
 
         // ------------------------------------------------ 3. partager
         await share.click();
+        check(await appears(page, '[data-call-pill-bar][data-call-pill-sharing] [data-call-pill-stop-share]'), `${label} : partager réduit l'appel en capsule « Arrêter » (#16664)`);
+        await capture(page, `partage-capsule-${slug}`);
+        await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
         check(await appears(page, '[data-call-pill="screen-sharing"]'), `${label} : la pastille « Vous partagez votre écran » s'affiche`);
+        await openActions(page);
         check((await share.getAttribute('aria-pressed')) === 'true' && (await share.getAttribute('aria-label')) === 'Arrêter le partage d’écran', `${label} : le bouton devient « Arrêter le partage d’écran », enfoncé`);
         check((await peerToggles(page)).some((t) => t.event === 'call:toggle-screen' && t.enabled), `${label} : le partage est annoncé (call:toggle-screen)`);
         check(await peerReceives(page), `${label} : le pair décode l'écran partagé (renégociation d'un appel vocal)`);
@@ -214,10 +220,15 @@ try {
         await appears(page, 'button[aria-label="Couper la caméra"]');
         await openActions(page);
         await share.click();
+        await appears(page, '[data-call-pill-stop-share]');
+        await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
         await appears(page, '[data-call-pill="screen-sharing"]');
-        check(await page.locator('button[aria-label="Couper la caméra"], button[aria-label="Activer la caméra"]').first().isDisabled(), `${label} : la caméra ne se rallume pas par-dessus un partage`);
         await openActions(page);
-        await share.click();
+        check(await page.locator('button[aria-label="Couper la caméra"], button[aria-label="Activer la caméra"]').first().isDisabled(), `${label} : la caméra ne se rallume pas par-dessus un partage`);
+        await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+        await page.click('[data-call-pill-stop-share]');
+        await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
+        await openActions(page);
         check(await appears(page, 'button[aria-label="Couper la caméra"][aria-pressed="true"]:not([disabled])'), `${label} : arrêter le partage rend la caméra qui tournait`);
         await openActions(page);
         await page.click('button[aria-label="Couper la caméra"]');

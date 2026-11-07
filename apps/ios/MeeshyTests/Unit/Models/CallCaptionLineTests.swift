@@ -50,6 +50,13 @@ final class CallCaptionLineTests: XCTestCase {
         XCTAssertTrue(sut.canRevealOriginal)
     }
 
+    func test_textColor_onlyATranslatedLineTakesTheSpeakerColor() {
+        XCTAssertEqual(line(segment()).textColorHex, CallSpeakerColor.hex(for: "peer"))
+        XCTAssertNil(line(segment(), isRevealed: true).textColorHex)
+        XCTAssertNil(line(segment(translatedText: nil, translatedLanguage: nil)).textColorHex)
+        XCTAssertNil(line(segment(speakerId: "me", text: "Salut", language: "fr"), isLocal: true).textColorHex)
+    }
+
     func test_make_tappedTranslatedLine_showsOriginalWithoutTag() {
         let sut = line(segment(), isRevealed: true)
         XCTAssertEqual(sut.text, "Hello")
@@ -91,6 +98,12 @@ final class CallCaptionLineTests: XCTestCase {
     func test_speakerColor_isDerivedFromTheId_notTheName() {
         let a = line(segment(speakerId: "user-42"))
         XCTAssertEqual(a.speakerColorHex, CallSpeakerColor.hex(for: "user-42"))
+    }
+
+    func test_speakerColor_onTheThread_isTheAuthorColorAdaptedToTheScheme() {
+        let base = DynamicColorGenerator.colorForName("user-42")
+        XCTAssertEqual(CallSpeakerColor.hex(for: "user-42", mode: .light), DynamicColorGenerator.adaptedColor(base, for: .light))
+        XCTAssertEqual(CallSpeakerColor.hex(for: "user-42", mode: .dark), CallSpeakerColor.hex(for: "user-42"))
     }
 
     func test_speakerColor_differsForMostIds() {

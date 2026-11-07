@@ -81,13 +81,15 @@ describe('le bandeau', () => {
     expect(html).toContain('dir="auto"');
   });
 
-  test('le nom ET le texte de chaque sous-titre portent la couleur de son auteur, la mienne comprise (#16614)', () => {
+  test('le nom porte TOUJOURS la couleur de son auteur ; seule une phrase TRADUITE la prend, un original reste à l’encre de l’appel', () => {
     const html = panel({ captions: [caption(), caption({ id: 'w-2', speakerId: 'u-me', mine: true, translated: null, pair: null, original: 'Salut', at: 2_000 })] });
     const nadia = speakerColor('u-nadia', 'Nadia');
     const me = speakerColor('u-me', 'Nadia');
     expect(html).toContain(`<strong style="color:${nadia}">`);
+    expect(html).toContain(`<strong style="color:${me}">`);
     expect(html).toContain(`<span dir="auto" style="color:${nadia}">Bonjour à tous</span>`);
-    expect(html).toContain(`<span dir="auto" style="color:${me}">Salut</span>`);
+    expect(html).toContain('<span dir="auto" style="color:var(--color-on-media)">Salut</span>');
+    expect(panel({ captionsMode: 'original' })).toContain('<span dir="auto" style="color:var(--color-on-media)">Hello everyone</span>');
   });
 
   test('une ligne traduite porte l’étiquette « EN → FR » ; l’original n’en porte pas', () => {

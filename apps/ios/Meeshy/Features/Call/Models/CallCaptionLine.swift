@@ -6,9 +6,18 @@ import MeeshySDK
 /// sous-titres et pour le liseré de sa vignette de groupe. Palette et hachage
 /// sont ceux du SDK (`DynamicColorGenerator`), éclaircis pour l'écran d'appel,
 /// épinglé en sombre.
+///
+/// Hors de l'écran d'appel (journal d'après l'appel, dans un fil clair ou
+/// sombre), la MÊME couleur s'adapte au schéma du fil (#16634,
+/// `docs/product/appels-vue-finale.md` loi 4) : une personne garde sa couleur
+/// avant et après la fin de l'appel.
 enum CallSpeakerColor {
     static func hex(for userId: String) -> String {
-        DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(userId), for: .dark)
+        hex(for: userId, mode: .dark)
+    }
+
+    static func hex(for userId: String, mode: ThemeMode) -> String {
+        DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(userId), for: mode)
     }
 }
 
@@ -30,6 +39,12 @@ struct CallCaptionLine: Equatable, Identifiable {
     let canRevealOriginal: Bool
 
     var speakerColorHex: String { CallSpeakerColor.hex(for: speakerId) }
+
+    /// La couleur du TEXTE : celle de l'auteur quand la ligne sert sa
+    /// TRADUCTION, `nil` (encre de l'écran d'appel) pour un original, ma
+    /// parole comprise — le nom, lui, porte toujours la couleur
+    /// (`docs/product/appels-vue-finale.md` loi 4).
+    var textColorHex: String? { isShowingOriginal ? nil : speakerColorHex }
 
     /// Ce que VoiceOver lit : la phrase FINALE seulement — une révision
     /// partielle, remplacée quelques centaines de millisecondes plus tard,

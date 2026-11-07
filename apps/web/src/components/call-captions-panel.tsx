@@ -27,6 +27,9 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * lit de droite à gauche même sous une interface française.
  */
 
+/** L'encre d'une phrase ORIGINALE : seule une traduction prend la couleur de son auteur (`docs/product/appels-vue-finale.md` loi 4). */
+const INK = 'var(--color-on-media)';
+
 const INK_2 = 'var(--color-on-media-3)';
 
 const NOTE_KEY = { listening: 'callCaptions.listening', unsupported: 'callCaptions.unsupported', denied: 'callCaptions.denied', sealed: 'callCaptions.sealed' } as const;
@@ -61,7 +64,7 @@ function CaptionLine({
   const content = (
     <>
       <strong style={{ color }}>{speaker} · </strong>
-      <span dir="auto" style={{ color }}>
+      <span dir="auto" style={{ color: unfoldable ? color : INK }}>
         {shown}
       </span>
       {languages === null ? null : (

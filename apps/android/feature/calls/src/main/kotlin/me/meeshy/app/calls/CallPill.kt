@@ -89,6 +89,9 @@ enum class CallBackAction { Inert, Minimize, Close }
  * resolved from the peer identity for colour coherence (the conversation-accent
  * rule). [peerAvatarUrl] is the peer's photo ([CallPeerVisual.avatarUrl]): like iOS,
  * the pill shows the real avatar, its initials only standing in while it loads (#12569).
+ *
+ * While I share my screen ([isScreenSharing]) the pill turns red and offers one control, « Arrêter »
+ * ([onStopScreenShare]) — the capsule of law 12 (#16664), like iOS `FloatingCallPillView` and the web `CallPill`.
  */
 @Composable
 fun CallPill(
@@ -99,6 +102,8 @@ fun CallPill(
     onHangUp: () -> Unit,
     modifier: Modifier = Modifier,
     peerAvatarUrl: String? = null,
+    isScreenSharing: Boolean = false,
+    onStopScreenShare: () -> Unit = {},
 ) {
     val accent = hexColor(DynamicColorGenerator.colorForName(state.peerName))
     val ongoingLabel = stringResource(R.string.call_pill_ongoing, state.peerName)
@@ -109,7 +114,7 @@ fun CallPill(
             .fillMaxWidth()
             .padding(horizontal = MeeshySpacing.md)
             .clip(RoundedCornerShape(MeeshyRadius.xxl))
-            .background(MeeshyTheme.tokens.backgroundSecondary)
+            .background(if (isScreenSharing) MeeshyTheme.tokens.error else MeeshyTheme.tokens.backgroundSecondary)
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm, Alignment.Start),
         verticalAlignment = Alignment.CenterVertically,
@@ -138,14 +143,14 @@ fun CallPill(
                     text = state.peerName,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MeeshyTheme.tokens.textPrimary,
+                    color = if (isScreenSharing) Color.White else MeeshyTheme.tokens.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = pillStatusLine(state),
+                    text = if (isScreenSharing) stringResource(R.string.call_screen_share_local_banner) else pillStatusLine(state),
                     style = MaterialTheme.typography.bodySmall,
-                    color = pillStatusColor(state.status),
+                    color = if (isScreenSharing) Color.White else pillStatusColor(state.status),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -154,16 +159,20 @@ fun CallPill(
             Icon(
                 imageVector = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
                 contentDescription = null,
-                tint = accent,
+                tint = if (isScreenSharing) Color.White else accent,
             )
         }
 
-        CallPillControls(
-            state = state,
-            onToggleMute = onToggleMute,
-            onToggleSpeaker = onToggleSpeaker,
-            onHangUp = onHangUp,
-        )
+        if (isScreenSharing) {
+            CallPillStopShare(onStopScreenShare)
+        } else {
+            CallPillControls(
+                state = state,
+                onToggleMute = onToggleMute,
+                onToggleSpeaker = onToggleSpeaker,
+                onHangUp = onHangUp,
+            )
+        }
     }
 }
 

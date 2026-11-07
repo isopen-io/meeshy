@@ -132,7 +132,14 @@ export type LinkAdmissionRefusalCode =
   | 'LINK_EXHAUSTED'
   | 'REGION_NOT_ALLOWED'
   | 'ACCOUNT_REQUIRED'
-  | 'BANNED';
+  | 'BANNED'
+  /**
+   * #16695 — le salon appartient à une communauté PRIVÉE : n'y entre qu'un de
+   * ses membres actifs, ou quiconque par le lien d'un créateur, administrateur
+   * ou modérateur de la communauté. Posé par `performLinkJoin`, après la loi
+   * du lien — la communauté n'est pas une propriété du lien.
+   */
+  | 'COMMUNITY_MEMBERS_ONLY';
 
 export interface LinkAdmissionRefusal {
   readonly granted: false;

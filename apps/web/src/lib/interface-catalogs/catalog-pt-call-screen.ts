@@ -7,6 +7,7 @@
 const ptCallScreen = {
   'call.screen.share': 'Partilhar ecrã',
   'call.screen.stop': 'Parar partilha de ecrã',
+  'call.screen.stopShort': 'Parar',
   'call.screen.sharing': 'Está a partilhar o seu ecrã',
   'call.screen.peerSharing': '{name} está a partilhar o ecrã',
   'call.more': 'Mais ações',

@@ -7,6 +7,7 @@
 const deCallScreen = {
   'call.screen.share': 'Bildschirm teilen',
   'call.screen.stop': 'Bildschirmfreigabe beenden',
+  'call.screen.stopShort': 'Beenden',
   'call.screen.sharing': 'Du teilst deinen Bildschirm',
   'call.screen.peerSharing': '{name} teilt den Bildschirm',
   'call.more': 'Weitere Aktionen',

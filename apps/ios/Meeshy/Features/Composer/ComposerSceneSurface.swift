@@ -671,7 +671,7 @@ struct ComposerSceneSurface: View {
             .task(id: ComposerSceneFloorRules.key(slide: slide, imagesVersion: sceneImagesVersion)) {
                 // Anti-rebond : un geste de cadrage change la clé à chaque image,
                 // et le sol n'a pas à suivre le doigt — il suit la COMPOSITION.
-                try? await Task.sleep(nanoseconds: 200_000_000)
+                try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
                 floorHash = StorySlideRenderer.computeThumbHash(slide: slide,
                                                                 bgImage: nil,
