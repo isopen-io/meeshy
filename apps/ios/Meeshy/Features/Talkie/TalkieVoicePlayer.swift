@@ -15,6 +15,7 @@ final class TalkieVoicePlayer: TalkieSink {
 
     /// Le tampon de gigue avant le premier fragment : assez pour que le second arrive avant la fin du premier.
     private static let jitter: TimeInterval = 0.08
+    private static let adtsTypeHint = "public.aac-audio"
 
     /// Un fragment planifié, gardé en vie jusqu'à sa fin : un `AVAudioPlayer` libéré se tait.
     private struct Scheduled {
@@ -39,7 +40,7 @@ final class TalkieVoicePlayer: TalkieSink {
     }
 
     func play(_ talkieId: String, _ data: Data) {
-        guard !isInCall(), let player = try? AVAudioPlayer(data: data, fileTypeHint: AVFileType.aac.rawValue) else { return }
+        guard !isInCall(), let player = try? AVAudioPlayer(data: data, fileTypeHint: Self.adtsTypeHint) else { return }
         if queues.isEmpty { prepareSession() }
         var queue = queues[talkieId] ?? Queue()
         guard !queue.released else { return }
