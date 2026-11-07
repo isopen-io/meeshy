@@ -13,6 +13,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case audioTranslationsProgressive = "audio:translations-progressive"
     case authSessionRevoked = "auth:session-revoked"
     case authTokenExpired = "auth:token-expired"
+    case bringRing = "bring:ring"
+    case bringStopped = "bring:stopped"
     case callAlreadyAnswered = "call:already-answered"
     case callAnalytics = "call:analytics"
     case callBackgrounded = "call:backgrounded"
