@@ -110,6 +110,20 @@ def shown(text, limit=None) -> str:
     return value if limit is None else value[:limit]
 
 
+def caused_by(error: BaseException, cause: BaseException) -> BaseException:
+    """
+    #16715 — la cause qu'une erreur peut porter : l'exception d'origine pour
+    une tâche ordinaire, aucune pour une tâche au repos ou un sous-titre
+    d'appel. Une exception du pipeline peut citer l'entrée, et un
+    `exc_info=True` ou un `traceback.print_exc()` en amont rendrait la chaîne
+    entière. L'appelant lève l'erreur rendue HORS de son bloc `except`, pour
+    qu'aucun `__context__` ne la rattache non plus à l'exception d'origine.
+    """
+    if text_may_be_logged():
+        error.__cause__ = cause
+    return error
+
+
 def under_declared_regime(handler):
     """
     Décore un handler `async (self, request_data)` : la requête s'exécute sous
