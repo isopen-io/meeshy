@@ -31,7 +31,7 @@ import {
   type TileSize,
 } from '@/lib/calls/call-self-tile';
 import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
-import { useLocalZoom } from '@/lib/calls/self-zoom';
+import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { hasVideo, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
@@ -58,8 +58,9 @@ import { sessionStore } from '@/lib/api/session';
  *   dessous (`selfRowsLayout`) ; quand mon image passe en PLEIN ÉCRAN, elles
  *   montent en haut au centre. La vignette se pose 8 rem sous la zone sûre
  *   dans les deux cas : la rangée du haut tient entre elle et l'en-tête.
- * - Mon image en plein écran porte seule le zoom de ma caméra, chargé à part
- *   (`call-self-camera.tsx`). Tout se retire dans un mode.
+ * - Mon image en plein écran, DUO ou GROUPE (ma tuile à la une, #9182), porte
+ *   le zoom de ma caméra, chargé à part (`call-self-camera.tsx`). Tout se
+ *   retire dans un mode.
  */
 
 /** Ce que l'écran d'appel remet à la scène pour MON image. */
@@ -74,6 +75,8 @@ export type SelfView = {
   readonly row: (group?: SelfControlGroup) => ReactNode;
   /** La colonne de la capsule du zoom, sur le bord. */
   readonly column: (capsule: ReactNode) => ReactNode;
+  /** Le zoom de ma caméra courante (#9182) — absent : un témoin qui n'en parle pas (aucun zoom offert, ancien comportement). */
+  readonly local?: LocalZoom;
 };
 
 const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallSelfCamera })));
@@ -343,6 +346,7 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
         language={language}
         chromeVisible={chromeVisible}
         onRevealChrome={onRevealChrome}
+        selfZoom={self.local === undefined ? null : { local: self.local, column: self.column }}
       />
     );
   }
