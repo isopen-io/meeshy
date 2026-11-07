@@ -121,33 +121,49 @@ struct CallEffectsModeControls: View {
     @ViewBuilder
     private var carousel: some View {
         switch category {
-        case .face:
-            CallModeCarousel(
-                items: CallEffectsModeRule.faces,
-                selection: faceBinding,
-                title: CallModeCopy.categoryName(.face),
-                name: CallEffectsCopy.name,
-                isRecording: capture.isRecording,
-                hint: gestureHint,
-                onCapturePhoto: photoAction,
-                onStartRecording: filmAction
-            ) { effect, isSelected in
-                CallModeGlyph(art: CallEffectsCopy.art(effect), isSelected: isSelected)
-            }
-        case .color:
-            CallModeCarousel(
-                items: CallEffectsModeRule.colors,
-                selection: colorBinding,
-                title: CallModeCopy.categoryName(.color),
-                name: CallEffectsCopy.presetName,
-                isRecording: capture.isRecording,
-                hint: gestureHint,
-                onCapturePhoto: photoAction,
-                onStartRecording: filmAction
-            ) { preset, isSelected in
-                CallModeGlyph(art: .symbol(CallEffectsCopy.presetSymbol(preset)), isSelected: isSelected)
-            }
+        case .face: faceCarousel
+        case .color: colorCarousel
         }
+    }
+
+    private var faceCarousel: some View {
+        CallModeCarousel(
+            items: CallEffectsModeRule.faces,
+            selection: faceBinding,
+            title: CallModeCopy.categoryName(.face),
+            name: CallEffectsCopy.name,
+            isRecording: capture.isRecording,
+            hint: gestureHint,
+            onCapturePhoto: photoAction,
+            onStartRecording: recordingAction
+        ) { effect, isSelected in
+            CallModeGlyph(art: CallEffectsCopy.art(effect), isSelected: isSelected)
+        }
+    }
+
+    private var colorCarousel: some View {
+        CallModeCarousel(
+            items: CallEffectsModeRule.colors,
+            selection: colorBinding,
+            title: CallModeCopy.categoryName(.color),
+            name: CallEffectsCopy.presetName,
+            isRecording: capture.isRecording,
+            hint: gestureHint,
+            onCapturePhoto: photoAction,
+            onStartRecording: recordingAction
+        ) { preset, isSelected in
+            CallModeGlyph(art: .symbol(CallEffectsCopy.presetSymbol(preset)), isSelected: isSelected)
+        }
+    }
+
+    private var photoAction: (() -> Void)? {
+        guard capturesMyImage else { return nil }
+        return shootMyImage
+    }
+
+    private var recordingAction: (() -> Void)? {
+        guard capturesMyImage else { return nil }
+        return filmMyImage
     }
 
     private var gestureHint: String? {
@@ -157,18 +173,6 @@ struct CallEffectsModeControls: View {
 
     /// #8625 — en mode Effets, la photo et le film portent MON image seule,
     /// telle que l'effet la rend.
-    /// Typées une fois : la ternaire d'une méthode et de `nil` dans les deux branches du `switch` dépassait le
-    /// vérificateur de types (« failed to produce diagnostic »).
-    private var photoAction: (() -> Void)? {
-        guard capturesMyImage else { return nil }
-        return { shootMyImage() }
-    }
-
-    private var filmAction: (() -> Void)? {
-        guard capturesMyImage else { return nil }
-        return { filmMyImage() }
-    }
-
     private func shootMyImage() {
         hasSeenGestureHint = true
         Task { await capture.capture(style: .screen) }

@@ -120,7 +120,7 @@ async function buildApp(opts: AppOpts = {}): Promise<FastifyInstance> {
       create: jest.fn<any>().mockResolvedValue(opts.createdMember ?? memberRow(SHY_ID, true)),
     },
     user: {
-      findFirst: jest.fn<any>().mockResolvedValue({ id: SHY_ID }),
+      findFirst: jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: SHY_ID })),
     },
   } as any);
 

@@ -185,6 +185,13 @@ import type {
   TalkieStartPayload,
 } from '../talkie.js';
 import type {
+  NowPlayingAck,
+  NowPlayingChangedEventData,
+  NowPlayingClearAck,
+  NowPlayingClearedEventData,
+  NowPlayingUpdatePayload,
+} from '../now-playing.js';
+import type {
   LocationLiveStartData,
   LocationLiveStartedEventData,
   LocationLiveStopData,
@@ -351,6 +358,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.TALKIE_INCOMING]: (data: TalkieIncomingEventData) => void;
   [SERVER_EVENTS.TALKIE_CHUNK]: (data: TalkieChunkEventData) => void;
   [SERVER_EVENTS.TALKIE_ENDED]: (data: TalkieEndedEventData) => void;
+  [SERVER_EVENTS.NOW_PLAYING_CHANGED]: (data: NowPlayingChangedEventData) => void;
+  [SERVER_EVENTS.NOW_PLAYING_CLEARED]: (data: NowPlayingClearedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED]: (data: MessageViewOncePurgedEventData) => void;
@@ -517,6 +526,8 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.TALKIE_START]: (data: TalkieStartPayload, callback?: (response: TalkieStartAck) => void) => void;
   [CLIENT_EVENTS.TALKIE_SEND_CHUNK]: (data: TalkieChunkPayload) => void;
   [CLIENT_EVENTS.TALKIE_END]: (data: TalkieEndPayload) => void;
+  [CLIENT_EVENTS.NOW_PLAYING_UPDATE]: (data: NowPlayingUpdatePayload, callback?: (response: NowPlayingAck) => void) => void;
+  [CLIENT_EVENTS.NOW_PLAYING_CLEAR]: (data: Record<string, never>, callback?: (response: NowPlayingClearAck) => void) => void;
   [CLIENT_EVENTS.CONVERSATION_JOIN]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.CONVERSATION_LEAVE]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.TYPING_START]: (data: TypingActionData) => void;

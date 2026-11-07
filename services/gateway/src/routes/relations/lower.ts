@@ -4,11 +4,13 @@ import { RELATION_LEVELS, type RelationLevel } from '@meeshy/shared/types/relati
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger';
+import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { relationIoOf } from '../../socketio/relationEvents';
 import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWriter';
 import { loadRelationLink } from '../../services/relations/relationLinks';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
 import { forgetFriends } from '../../services/relations/relationCaches';
-import { withdrawRitualSharesBetween } from '../../services/relations/ritualShareWithdrawal';
+import { withdrawListeningCategoryBetween, withdrawRitualSharesBetween } from '../../services/relations/ritualShareWithdrawal';
 import { asseoirLienHerite, retirerDemandesAuDessus } from '../directory/friend-request-withdraw';
 import { errorResponses, otherUserOf, relationLimiter, relationLinkSchema, sendCoded, userIdParams } from './shared';
 
@@ -56,6 +58,8 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       }
 
       const now = new Date();
+      const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, 'Now playing not refreshed after drop:', error) };
+      const ecouteAvant = await captureNowPlayingBefore(ecoute, { userA: viewerId, userB: otherId });
       await asseoirLienHerite(fastify.prisma, viewerId, otherId, now);
       const outcome = await lowerGrant(fastify.prisma, {
         actorId: viewerId, otherId, level: level as RelationLevel, at: now, cooldownUntil: cooldownEnd(now, thresholdsNow().cooldownDays),
@@ -68,6 +72,11 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       const link = await loadRelationLink(fastify.prisma, { viewerId, otherId, now });
       // Rejoué sans condition, comme le retrait des demandes : sous le Sang, aucun partage du rituel ne reste allumé.
       if (link.effectiveLevel !== 'BLOOD') await withdrawRitualSharesBetween(fastify.prisma, { actorId: viewerId, otherId, at: now });
+      // #13934 — sous Proche, l'accord de la catégorie d'écoute s'éteint aussi ; l'écoute s'efface chez qui la voyait.
+      if (link.effectiveLevel !== 'BLOOD' && link.effectiveLevel !== 'CLOSE') {
+        await withdrawListeningCategoryBetween(fastify.prisma, { actorId: viewerId, otherId, at: now });
+      }
+      await refreshNowPlayingAfter(ecoute, { userA: viewerId, userB: otherId, before: ecouteAvant });
       return sendSuccess(reply, link);
     } catch (error) {
       if (error instanceof z.ZodError) return sendBadRequest(reply, 'Donnees invalides');

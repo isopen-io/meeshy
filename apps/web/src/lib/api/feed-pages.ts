@@ -77,6 +77,28 @@ export type FeedMedia = {
    */
   readonly captionTranslations?: unknown;
   readonly alt?: string | null;
+  /**
+   * LA LANGUE SOURCE DU TEXTE ALTERNATIF (#7392, `PostMedia.altLanguage`,
+   * servie par `postIncludes.ts`) — le TROISIÈME couple de ce média, distinct
+   * de celui de la légende comme de celui du corps du post (directive porteur
+   * #6280 : trois contenus jamais confondus même à chaînes égales).
+   *
+   * Ces deux clés n'étaient PAS déclarées jusqu'au 2026-11-07 : la passerelle
+   * les servait, le décodage les jetait, et `altText` sortait donc brut — dans
+   * la langue de l'auteur, pour la seule chaîne qu'un lecteur d'écran
+   * PRONONCE. Ce n'était pas un résolveur à corriger en aval, c'était une
+   * donnée absente de la forme lue.
+   */
+  readonly altLanguage?: string | null;
+  /**
+   * `{ [langue]: { text, translationModel, confidenceScore?, createdAt,
+   * updatedAt? } }` (#6737, `PostMedia.altTranslations`) — MÊME forme que
+   * `captionTranslations` et `Post.translations`, donc même dépouillement par
+   * `buildPostTranslationRecord` (@meeshy/shared), jamais celui du dialecte
+   * TABLEAU de `Message.translations`. DISTINCTE de `PostMedia.translations`
+   * (déjà prise par les pistes audio traduites).
+   */
+  readonly altTranslations?: unknown;
   readonly order?: number | null;
   /** La transcription d'un vocal (`PostMedia.transcription`, forme de `Attachment.transcription`). */
   readonly transcription?: Attachment['transcription'] | null;

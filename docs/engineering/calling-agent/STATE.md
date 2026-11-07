@@ -239,3 +239,89 @@ socket jusqu'au client.
    de #16613.
 3. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
    traducteur (`translateToMultipleLanguages`, lot de `translation_processor.py:278`).
+
+## Cycle 6 — 2026-11-07
+
+- **Base** : `origin/dev` @ `eb3dda579` (le cycle 5, #16625, y est fusionné).
+- **Branche** : `claude/determined-volta-26ijeh`.
+- **Objectif** : #16648 (piste 1 du cycle 5). Un sous-titre d'appel ne doit être ni lu ni rangé dans
+  le cache Redis de traduction du traducteur.
+- **Constat** : le processeur ZMQ lisait et écrivait le cache du texte entier pour toute tâche
+  au régime ordinaire. `set_translation` rangeait la traduction indexée sous
+  `call-caption:<callId>:<startMs>`, au TTL des messages. Le cache par segment du service ML
+  était aussi LU (il n'écrivait rien, faute d'ObjectId dans le contexte).
+- **Livré** (traducteur seul, la passerelle et le protocole ZMQ ne changent pas) :
+  - `task_privacy.is_live_call_caption(message_id)`, prédicat source unique, reconnaît `call-caption:`
+    et l'ancien `call-` (transition) ;
+  - `message_scope` pose `_LIVE_CAPTION`, et `cache_allowed()` est faux sous une tâche de sous-titre.
+    Toute porte de cache qui le consulte se tait donc ;
+  - le processeur (`_cache_forbidden`) coupe le cache du texte entier et transmet `use_cache=False`
+    au service ML, chemin simple et repli du batch ;
+  - défense en profondeur : `set_translation` refuse un identifiant de sous-titre nommé explicitement.
+- **Tests** : `tests/test_call_caption_never_cached.py`, 9 témoins (dont 1 ajouté par la QA pour le
+  batch). Ils passent par le vrai `process_single_translation` et le vrai `TranslationCacheService`.
+  - **Rouge sur le code d'avant** : 6 sur 8 tombent (les 2 qui passent sont les témoins des
+    messages de conversation). Le témoin batch : 1 sur 1.
+  - **Vert** : 9/9. Suites voisines (22 fichiers) : 497 passés, 6 sautés. La suite complète a les
+    mêmes échecs avant et après, tous dus à des dépendances ML absentes du conteneur (torch,
+    langdetect, fastapi). J'ai moi-même relancé le témoin : 8/8, avant l'ajout de la QA.
+- **QA** : favorable avec réserves. L'isolation contextvars a été vérifiée en concurrence asyncio et
+  après une exception. Aucun autre espace de noms n'est exclu (un ObjectId ne peut pas commencer
+  par `call`).
+- **Environnement** : le pytest du conteneur n'a pas pytest-asyncio. Il faut un venv avec pytest,
+  pytest-asyncio, redis, pydantic, pyzmq, psutil, prometheus_client et numpy, lancé par
+  `python -m pytest <fichiers> -q -p no:cacheprovider -o addopts=""`.
+
+### Limites connues
+
+- Le préfixe `call-` est large, et il doit tomber à zéro usage mesuré de l'ancien format. → #16681.
+- `shown()` ne tait pas encore le texte d'un sous-titre déclaré `atRest: false`. Aucun site ne le
+  journalise aujourd'hui, mais la garde n'est que circonstancielle. → #16682.
+
+### Cycle suivant : par où reprendre
+
+1. #16682 : petit lot Python de vie privée, il s'appuie sur le drapeau posé par ce cycle.
+2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
+   traducteur (`translation_processor.py`, chemin batch).
+3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613.
+
+## Cycle 7 — 2026-11-07
+
+- **Base** : `origin/dev` @ `f7dd924df` (le cycle 6, #16648, y est fusionné).
+- **Branche** : `claude/determined-volta-5q1g5o`.
+- **Objectif** : #16682 (piste 1 du cycle 6). Le traducteur ne doit jamais journaliser le texte d'un
+  sous-titre d'appel, même quand la tâche est déclarée au régime ordinaire (`atRest: false`).
+- **Livré** (traducteur seul : ni la passerelle ni le protocole ZMQ ne changent) :
+  - `task_privacy.text_may_be_logged()` vaut faux sous une tâche au repos, sous un régime non
+    déclaré et sous un sous-titre d'appel (`_LIVE_CAPTION`, posé depuis #16648). `shown()` s'en sert.
+    `in_at_rest_task()` et `cache_allowed()` ne changent pas ;
+  - fuite trouvée pendant la relecture des journaux : quand le pipeline NLLB rendait une forme
+    inattendue, `translator_engine.py` écrivait la sortie brute (la traduction) dans un
+    `logger.error` et dans le message de l'exception. Ce message était ensuite rejournalisé par
+    `translation_processor.py` via `{e}`. Les trois sites passent maintenant par `shown()`.
+- **Tests** : `tests/test_call_caption_never_logged.py`, 12 témoins.
+  - **Rouge sur le code d'avant** : 7 sur 12 tombent. Les 5 autres sont les témoins de
+    non-régression : message ordinaire, au repos, régime non déclaré.
+  - **Vert** : 12/12. J'ai moi-même relancé ce fichier avec `test_call_caption_never_cached` :
+    21/21. Suites voisines (24 fichiers) : 323 passés, 9 sautés, 4 échecs. Ces 4 échecs sont les
+    mêmes sur `origin/dev` : des tests de détection de langue (`test_21`, `test_detect_language`),
+    sans lien avec le lot.
+- **QA** : favorable avec réserves. Elle a relu tous les journaux et toutes les exceptions du chemin
+  handler ZMQ → `zmq_pool` → `translation_ml` : le texte n'y apparaît que par sa longueur.
+
+### Limites connues
+
+- Le moteur NLLB lance ses threads sans recopier le contexte. Le diagnostic « sortie inattendue » y
+  tait donc aussi le texte d'un message ordinaire, et les témoins du moteur ne prouvent pas la règle
+  propre aux sous-titres. Il reste aussi un risque théorique sur les `{e}` du pipeline Hugging Face.
+  → #16701.
+
+### Cycle suivant : par où reprendre
+
+1. #16701 : petit lot Python. Recopier le contexte dans les trois `run_in_executor` du moteur, puis
+   écrire un témoin pour le cas ordinaire et un pour le sous-titre.
+2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
+   traducteur (`translation_processor.py`, chemin batch).
+3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613.

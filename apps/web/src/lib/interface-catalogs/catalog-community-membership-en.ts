@@ -37,6 +37,23 @@ const enCommunityMembership = {
   'community.members.error': 'Members could not be loaded.',
   'community.members.retry': 'Try again',
   'community.members.refused': 'Only an admin can manage members.',
+  'community.invite.open': 'Invite',
+  'community.invite.title': 'Invite members',
+  'community.invite.search': 'Search people',
+  'community.invite.friends': 'Friends',
+  'community.invite.others': 'Other people',
+  'community.invite.member': 'Already a member',
+  'community.invite.searching': 'Searching…',
+  'community.invite.empty': 'No one found.',
+  'community.invite.offline': 'Offline: reconnect to invite.',
+  'community.invite.submit.none': 'Invite',
+  'community.invite.submit.one': 'Invite 1 person',
+  'community.invite.submit.other': 'Invite {count} people',
+  'community.invite.done.one': '1 person joined the community.',
+  'community.invite.done.other': '{count} people joined the community.',
+  'community.invite.partial': 'Some people could not be added.',
+  'community.invite.failed': 'The invitation failed. Try again.',
+  'community.invite.refused': 'You can no longer invite to this community.',
 } as const satisfies CommunityMembershipCatalog;
 
 export default enCommunityMembership;

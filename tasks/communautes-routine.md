@@ -6,7 +6,10 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 |---|---|---|---|---|
 | 2026-11-07 | Rejoindre / quitter depuis le détail (web), le détail dit au lecteur son rôle (passerelle, iOS) | #16601 | #6378 | fusionnée dans dev |
 | 2026-11-07 | Un ancien membre ne voit plus une communauté privée nulle part ; compteur actif partout (passerelle) | #16610 + #16611 | #16603 | fusionnées dans dev |
-| 2026-11-07 | Les membres d'une communauté se lisent et se gèrent sur le web ; la passerelle protège le créateur | voir lot 3 | #6375 | PR ouverte |
+| 2026-11-07 | Les membres d'une communauté se lisent et se gèrent sur le web ; la passerelle protège le créateur | #16636 | #6375 | fusionnée dans dev |
+| 2026-11-07 | On invite quelqu'un dans sa communauté depuis le web ; un compte non vivant ou bloqué n'est plus ajouté (passerelle) | #16670 | #6376 (refs, reste : la création) | fusionnée dans dev (réveil 5) |
+| 2026-11-07 | Créer une conversation dans une communauté n'y fait plus entrer que ce que l'appelant peut admettre (passerelle) | #16697 | #16639 | fusionnée dans dev |
+| 2026-11-07 | Un salon d'une communauté privée n'accueille que ce que la communauté admet — inviter, ajouter, lien (passerelle) | voir réveil 7 | #16695 | voir réveil 7 |
 
 ## 2026-11-07 — lot 1
 
@@ -31,3 +34,33 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Restes : iOS déduit l'admin de la page chargée et ses libellés français des membres sont en anglais (« No Members ») ; miroir Android ; aucun événement temps réel `community:*` ne rafraîchit la liste.
 - Revue adversariale : non bloquante ; corrigés dans le lot (créateur rétrogradé réparable, 404 au retrait relu, deux témoins de plus). Ouvert : #16639 (créer une conversation réactive un membre retiré, PRÉEXISTANT, sécurité) — prioritaire.
 - Prochain lot recommandé : #16639, puis #6376 (inviter depuis le web).
+
+## 2026-11-07 — lot 4
+
+- Début du run : #16636 (#6375) avait sa CI de preuve verte et a été fusionnée par le porteur pendant l'attente.
+- Lot : #6376, première moitié. Passerelle : `isAddableUser` (`routes/communities/addable-user.ts`), site unique de `POST …/invite` et `POST …/members` — compte vivant (`isActive`, ni `deactivatedAt` ni `deletedAt`) et aucun blocage ; même 404 qu'un inconnu. Web : « Inviter » sous « Membres » pour qui la passerelle l'accepte (`canInviteOf`), feuille chargée à la demande (amis d'abord, recherche), invitation optimiste par personne avec retour arrière ; 17 clés `community.invite.*` × 7 langues.
+- Revue adversariale avant la PR : trois corrections dans le lot (compte supprimé par son titulaire, route jumelle `/members`, doublons dans une liste paginée pas lue jusqu'au bout).
+- Décision ouverte pour le porteur : #16669 (une invitation ajoute sans accord et réactive la ligne d'un retiré ; pas de limite de débit).
+- Reste de #6376 : « la création propose l'ajout de membres », par le même port (`performInviteMembers`) — prochain lot. #6376 reste ouverte.
+- Gotcha : la passerelle teste beaucoup de routes avec un double `user.findFirst` inconditionnel ; toute garde qui ajoute une seconde lecture `user` (ici `isBlockedBetween`, `where.OR`) doit adapter ces doubles.
+
+## 2026-11-07 — réveil 5
+
+- Run consacré à mener #16670 à la fusion (règle de la routine : une PR ouverte se termine avant d'en ouvrir une autre). `origin/dev` intégré sans conflit (6 commits, chemins disjoints : sockets, zmq, scripts iOS) ; gardes `check-any-debt` (492/492) et catalogue TS (270/270) relancées sur la fusion.
+- Preuve : `workflow_dispatch` de `ci.yml` sur la dernière tête ; `ios.yml` non requis (aucun chemin iOS touché).
+- Prochain lot recommandé : #16639 (sécurité, préexistant : créer une conversation réactive un membre retiré), puis la seconde moitié de #6376 (la création propose l'ajout de membres, via `performInviteMembers`).
+
+## 2026-11-07 — réveil 6
+
+- Lot : #16639 (sécurité, préexistant). `POST /conversations` avec `communityId` : la réconciliation devient une INVITATION décidée AVANT la création (`planCommunityAdmission`, `services/conversations/communityMembershipSync.ts`) — communauté privée ⇒ créateur, admin ou modérateur (403 `COMMUNITY_INVITE_FORBIDDEN`) ; compte vivant sans blocage (404, en deux lectures pour tout le lot) ; ligne d'un retiré réactivée en `member` (garde `isActive: false`) ; communauté désactivée ⇒ 404. Le créateur sans ligne active revient `admin` (différence assumée avec `…/invite`).
+- Passerelle seule : aucun client (iOS, web, Android) n'envoie `communityId` sur `POST /conversations` — mesuré par la revue.
+- Revue adversariale avant la PR : non bloquante ; corrigés dans le lot (ligne active prioritaire si une paire est en double, vérification groupée au lieu d'une rafale, témoin de route du 404). Ouvertes, préexistantes : #16695 (inviter dans un salon d'une communauté privée ou y entrer par lien ignore la communauté), #16696 (aucun index unique sur la paire de `CommunityMember`). Le « retrait n'est pas un bannissement » rejoint la décision #16669.
+- CI de preuve rouge au premier passage : `conversation-core.test.ts` (non lancé en local, chemin `unit/routes/` racine) n'avait pas `user.findFirst` dans son double, et la vérification « compte vivant » comparait des TAILLES (un double qui rend plus de lignes la trompait) — elle compare désormais des IDENTIFIANTS. Gotcha : lancer `src/__tests__/unit/routes` en entier, pas seulement `…/routes/conversations`.
+- Prochain lot recommandé : #16695 (sécurité, même loi), puis la seconde moitié de #6376 (la création propose l'ajout de membres).
+
+## 2026-11-07 — réveil 7
+
+- Lot : #16695 (sécurité, préexistant). Les trois portes qui ajoutent à un salon déjà rattaché — `POST /conversations/:id/invite`, `POST /conversations/:id/participants` (verdict par personne `community-forbidden`, additif ; forme `userId` : 403 `COMMUNITY_INVITE_FORBIDDEN`) et la jonction par lien (cœur `performLinkJoin`, donc aussi `/conversations/join/:linkId` et `/anonymous/join/:linkId` ; 403 `COMMUNITY_MEMBERS_ONLY`) — consultent `planSalonEntry` (`services/conversations/communityMembershipSync.ts`), qui est `planCommunityAdmission` avec `admitActor: false`. Un lien ne donne que ce que son AUTEUR pourrait donner aujourd'hui (rang relu à chaque jonction) ; un invité sans compte n'entre que par le lien d'un créateur / admin / modérateur. Communauté publique vivante et salon hors communauté : inchangés.
+- Revue adversariale avant la PR : non bloquante ; corrigé dans le lot : une communauté DÉSACTIVÉE se garde comme une privée (elle était « tout permis »). Ouvertes, préexistantes : #16703 (débannir, rattacher une conversation, restaurer un « supprimé pour moi » contournent la loi), #16704 (un retiré d'une communauté privée reste actif dans ses salons).
+- Reste côté clients : le web range `COMMUNITY_MEMBERS_ONLY` dans le refus générique « indisponible » (`apps/web/src/lib/api/link-join.ts`, `REFUSAL_BY_CODE`) — à expliquer dans la langue du lecteur avec #7816.
+- Prochain lot recommandé : #16704 puis #16703 (sécurité, même loi), puis la seconde moitié de #6376.
