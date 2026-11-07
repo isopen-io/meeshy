@@ -183,7 +183,38 @@ relevé**.
 > ajouter de la dette de types. Les deux gates sont disjoints, et celui des
 > tests ne tourne qu'en suite complète (111 s).
 
-### 3. Un garde de mesure qui a fait son travail
+### 3. La ligne de base contre laquelle j'ai mesuré était PÉRIMÉE
+
+**Correction du récit de ce cycle, et c'est la faute la plus chère.** Le
+`workflow_dispatch` de la branche a rendu huit rouges. Pour trier les miens,
+j'ai confronté la branche au dernier run `dev` **complété**, et j'ai écarté le
+run `dev` **en cours** en invoquant la règle du dépôt (« un relevé pris sur un
+run inachevé n'est pas un verdict »).
+
+C'est ce run-là qui portait la réponse : `dev` était passé à `d367563cc`
+(« épingle ubuntu-24.04 », #16714) et il était **intégralement vert**.
+
+J'ai donc affirmé deux fois, sur la PR, avec tableaux : que les cinq témoins
+vidéo et les six suites de codecs d'image étaient « la ligne de base durable de
+`dev` », et qu'« aucun correctif n'existe dans le dépôt ». Faux depuis deux
+merges. Les deux commentaires sont corrigés publiquement, et #16722 — ouverte
+pour un défaut déjà réparé — est fermée avec sa raison.
+
+> **Un run complété vieux de deux merges décrit un `dev` qui n'existe plus.** La
+> règle « un run inachevé n'est pas un verdict » interdit de CONCLURE d'un run
+> en cours ; elle n'autorise pas à se rabattre sur le dernier verdict archivé.
+> La ligne de base d'une PR est l'ÉTAT COURANT de sa base.
+
+Et la conséquence remonte plus haut que ce cycle : **ce que plusieurs journaux
+consignaient comme « les rouges de codecs d'image, capacité libvips du
+conteneur, verts en CI » était une image de runner qui avait bougé.** Une cause
+héritée de journal en journal cesse d'être une mesure et devient une
+explication — et une explication dispense de regarder. C'est « un compte est une
+AFFIRMATION » (cycle 93) appliqué à une CAUSE, pas à un nombre.
+
+Leçon : `tasks/lessons/2026-11-07-la-ligne-de-base-d-une-pr-est-la-tete-de-sa-base-pas-le-dernier-verdict-archive.md`.
+
+### 4. Un garde de mesure qui a fait son travail
 
 Le garde de corpus du cliquet (« la commande voit bien un corpus substantiel »)
 a d'abord rougi parce que `tsc` avait été tué par l'OOM d'une suite complète
