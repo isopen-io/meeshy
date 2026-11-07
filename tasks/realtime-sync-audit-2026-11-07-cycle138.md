@@ -1,7 +1,7 @@
 # Cycle 138 — un membre retiré d'un fil y restait « ici », et y annonçait son activité
 
 **Issue livrée** : #16654. **Branche** : `claude/exciting-planck-t1dj8f`.
-**Issues ouvertes en chemin** : #16655 (passerelle), #16656 (iOS), #7392 (web, déjà ouverte le 2026-09-21 et retrouvée par le balayage).
+**Issues ouvertes en chemin** : #16655 (passerelle), #16659 (iOS), #7392 (web, déjà ouverte le 2026-09-21 et retrouvée par le balayage).
 
 Le cycle 137 datait du 2026-08-29 et ses surfaces (`apps/web/app/…`) ont quitté
 le dépôt avec le legacy (#7668) ; son unique suivi actionnable
@@ -105,7 +105,7 @@ Deux lacunes de HARNAIS, pas une inattention :
   Son témoin de référence (`emitAttachmentUpdated.readerSigned.test.ts`)
   EXERCE le défaut à chaque exécution — `connectedUsers: new Map()` met ses deux
   participants hors ligne — et n'assert que sur `emitted`.
-- **#16656 — deux passes de drain concurrentes désordonnent l'arriéré iOS**, et
+- **#16659 — deux passes de drain concurrentes désordonnent l'arriéré iOS**, et
   le réordre est réécrit DANS le fil local (`next.createdAt = api.createdAt`).
   Non développé ici : aucun Xcode dans le conteneur, et un lot iOS se prouve par
   `./apps/ios/meeshy.sh test`.
