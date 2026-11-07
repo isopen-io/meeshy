@@ -24,10 +24,6 @@ extension CallView {
                     duoLayout
                 }
 
-                CallScreenShareBanner(isSharing: callManager.screenShare.isSharing, remoteSharerName: callManager.screenShare.isRemoteSharing ? (callManager.remoteUsername ?? "") : nil, onStop: callManager.screenShare.stopSharing)
-                    .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
-                    .callChromeVisibility(chromeVisibility.isVisible(.screenShareBanner))
-
                 if !isGroupStage && chromeVisibility.isVisible(.selfView) && !isLiveFrameShown {
                     duoOverlays
                 }
@@ -38,13 +34,9 @@ extension CallView {
 
                 callModeLayer
 
-                CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice, showsStatus: chromeVisibility.isVisible(.recordingStatus))
-                    .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
-
-                liveFrameStatus
-                    .padding(.top, 160)
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .frame(maxHeight: .infinity, alignment: .top)
+                // APP-1 — partage, enregistrement, cadre : une pile sous l'en-tête.
+                CallTopBannerStackView(screenShare: callManager.screenShare, recording: callManager.recording, remoteName: callManager.remoteUsername ?? "", chrome: chromeVisibility, hasLiveFrameStatus: hasLiveFrameStatus,
+                                       topInset: CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset)) { liveFrameStatus }
 
                 CallCaptureFlash(capture: capture, reduceMotion: reduceMotion)
                 CallCaptureOutcomeAnnouncer(capture: capture)

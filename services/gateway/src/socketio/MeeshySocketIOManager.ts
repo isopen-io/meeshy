@@ -115,6 +115,8 @@ import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
 import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
+import { dropQueuedEntriesWhoseMessageDied } from './queuedMessageLiveness';
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
 import { wireCallMessageBroadcasters } from './callMessageBroadcasters';
@@ -799,7 +801,47 @@ export class MeeshySocketIOManager {
       // accusé de réception). Un accusé affirme « ce message est arrivé chez son
       // destinataire » — l'affirmer d'un message qu'on vient de refuser de livrer
       // mentirait à son auteur.
-      const pending = await this._dropEndedMemberships(userId, isAnonymous, addressable);
+      const authorized = await this._dropEndedMemberships(userId, isAnonymous, addressable);
+      if (authorized.length === 0) return;
+
+      // QUATRIÈME refus, et il vient APRÈS l'autorisation pour deux raisons qui
+      // vont dans le même sens : l'autorisation précède le contenu, et le gate
+      // d'appartenance a déjà retiré des entrées — celles-ci ne coûtent donc
+      // aucun id dans la question de celui-ci.
+      //
+      // Les trois refus au-dessus interrogent ce que l'ENTRÉE dit. Celui-ci
+      // interroge le MONDE : une charge bien formée, nommée, adressable et
+      // autorisée peut porter le texte d'un message que le serveur a DÉTRUIT
+      // entre l'enfilage et le drain — jusqu'à 48 h plus tard
+      // (`DELIVERY_QUEUE_TTL_SECONDS`). `_burn` revendique l'invariant « le
+      // contenu est détruit » ; il ne tenait pas sur ce chemin, qui remet le
+      // message ENTIER là où `NotificationService` ne remettait qu'une
+      // bannière — et qui portait pourtant, lui, la garde depuis le cycle 127.
+      //
+      // Le refus est DÉLIBÉRÉ, pas un accident : il ne passe donc pas par
+      // `dropEntry`, qui journalise en ERROR une perte à rattraper et nomme sa
+      // conversation dans `pending-messages:delivered` pour y envoyer le client
+      // relire. Ici il n'y a RIEN à relire — le serveur a détruit le contenu, et
+      // le client n'en a jamais rien reçu : la convergence est déjà atteinte.
+      // C'est la forme du gate d'appartenance, pas celle d'un échec d'émission.
+      const { kept: pending, refused } = await dropQueuedEntriesWhoseMessageDied({
+        prisma: this.prisma,
+        entries: authorized,
+        onReadFailure: (error) =>
+          logger.warn('Message liveness re-read failed on drain — replaying the backlog unfiltered', {
+            userId,
+            error,
+          }),
+      });
+      for (const { entry, cause } of refused) {
+        logger.info('Dropped a queued entry whose message no longer exists', {
+          userId,
+          cause,
+          conversationId: entry.conversationId,
+          messageId: entry.messageId,
+          eventType: entry.eventType ?? 'new',
+        });
+      }
       if (pending.length === 0) return;
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
@@ -1022,7 +1064,7 @@ export class MeeshySocketIOManager {
     // a sender who left the conversation view (socket dropped `conversation:<id>`
     // but stays in `user:<id>`) must still see their checkmark advance.
     const participantRows = await this.prisma.participant.findMany({
-      where: { conversationId: { in: [...convLatest.keys()] }, isActive: true },
+      where: { conversationId: { in: [...convLatest.keys()] }, ...PARTICIPATION_VIVANTE },
       select: { id: true, userId: true, conversationId: true },
     });
 

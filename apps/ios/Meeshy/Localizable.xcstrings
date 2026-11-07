@@ -6583,53 +6583,6 @@
         }
       }
     },
-    "capture.gesture.photoOrVideo": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "انقر مرتين لالتقاط صورة · اضغط مطولًا للتصوير"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "zweimal tippen für ein Foto · halten zum Filmen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "double-tap for a photo · hold to film"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "toca dos veces para una foto · mantén para grabar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "toucher deux fois pour une photo · maintenir pour filmer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "tocca due volte per una foto · tieni premuto per girare"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "toque duas vezes para uma foto · segure para filmar"
-          }
-        }
-      }
-    },
     "circles.action.request": {
       "extractionState": "manual",
       "localizations": {
