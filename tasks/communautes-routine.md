@@ -74,3 +74,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Revue adversariale avant la PR : non bloquante ; corrigés dans le lot (salons clos, écriture groupée + annonces en arrière-plan). Ouvertes : #16711 (rattrapage d'une sortie perdue, entrée concurrente), #16712 (salon sans créateur).
 - Prochain lot recommandé : #16703 (débannir, rattacher, restaurer contournent la loi), puis la seconde moitié de #6376.
 
+
+## 2026-11-07 — réveil 9 (en cours)
+
+- Lot : #16703 — débannir, rattacher une conversation, restaurer un « supprimé pour moi » consultent la loi de la communauté.
