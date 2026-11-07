@@ -7,6 +7,7 @@
  * et lui annoncer après coup qu'un inconnu l'a appelé rouvrirait la porte qu'il
  * a fermée.
  */
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CallService } from '../services/CallService';
 import type { NotificationService } from '../services/notifications/NotificationService';
@@ -85,7 +86,7 @@ export async function sendNeverJoinedCancellationPushes(
   try {
     const [members, joined] = await Promise.all([
       deps.prisma.participant.findMany({
-        where: { conversationId, isActive: true, userId: { not: null } },
+        where: { conversationId, ...PARTICIPATION_VIVANTE, userId: { not: null } },
         select: { userId: true },
       }),
       deps.prisma.callParticipant.findMany({

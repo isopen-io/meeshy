@@ -116,6 +116,7 @@ import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
 import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { dropQueuedEntriesWhoseMessageDied } from './queuedMessageLiveness';
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
 import { wireCallMessageBroadcasters } from './callMessageBroadcasters';
@@ -1063,7 +1064,7 @@ export class MeeshySocketIOManager {
     // a sender who left the conversation view (socket dropped `conversation:<id>`
     // but stays in `user:<id>`) must still see their checkmark advance.
     const participantRows = await this.prisma.participant.findMany({
-      where: { conversationId: { in: [...convLatest.keys()] }, isActive: true },
+      where: { conversationId: { in: [...convLatest.keys()] }, ...PARTICIPATION_VIVANTE },
       select: { id: true, userId: true, conversationId: true },
     });
 

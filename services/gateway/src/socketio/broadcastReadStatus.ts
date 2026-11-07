@@ -1,3 +1,4 @@
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { FastifyInstance } from 'fastify';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { ReadStatusUpdatedEventData, ReadStatusSummary } from '@meeshy/shared/types/socketio-events';
@@ -355,7 +356,7 @@ export async function broadcastReadStatus(
   const [summaries, activeParticipants] = await Promise.all([
     buildSummaries(),
     prisma.participant.findMany({
-      where: { conversationId: args.conversationId, isActive: true },
+      where: { conversationId: args.conversationId, ...PARTICIPATION_VIVANTE },
       // `id` NOMME la room personnelle d'un participant sans ligne `User` —
       // sans lui, l'identité de repli n'est pas ignorée, elle n'est jamais lue.
       select: { id: true, userId: true },

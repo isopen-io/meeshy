@@ -1,3 +1,4 @@
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
@@ -286,7 +287,7 @@ export async function emitConversationPreviewUpdate(
     const realPrisma = prisma as unknown as PrismaClient;
     const [participants, storedLatest] = await Promise.all([
       prisma.participant.findMany({
-        where: { conversationId, isActive: true },
+        where: { conversationId, ...PARTICIPATION_VIVANTE },
         // `id` is not decoration: it NAMES the personal room of a participant
         // with no `User` row. Selecting `userId` alone did not ignore the
         // fallback identity, it never read it. `user` carries the reader's
