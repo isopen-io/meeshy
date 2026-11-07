@@ -100,13 +100,14 @@ function prismaDouble(monde: Monde = {}) {
           ? l.conversationId === args.where.conversationId
           : args.where.conversationId.in.includes(l.conversationId))))),
     update: jest.fn<any>(async (args: any) => ({ id: args.where.id })),
+    updateMany: jest.fn<any>(async (args: any) => ({ count: args.where.id.in.length })),
   };
   return {
     conversation: {
       findMany: jest.fn<any>(async (args: any) => salons
         .filter((s) => s.communityId === args.where.communityId)
         .filter((s) => args.where.isActive === undefined || (s.isActive ?? true) === args.where.isActive)
-        .map((s) => ({ id: s.id }))),
+        .map((s) => ({ id: s.id, isActive: s.isActive ?? true }))),
     },
     participant,
     user: { findFirst: jest.fn<any>(async () => null) },
@@ -119,7 +120,17 @@ const io = { to: jest.fn() };
 const manager = { getIO: () => io };
 const socketIOHandler = { getManager: () => manager };
 
-beforeEach(() => {
+// Les annonces partent en arrière-plan : chaque témoin attend les siennes avant
+// que le suivant ne remette les doubles à zéro.
+const pending: Promise<void>[] = [];
+const sortir = async (...args: Parameters<typeof exitCommunitySalons>) => {
+  const result = await exitCommunitySalons(...args);
+  pending.push(result.announcements);
+  return result;
+};
+
+beforeEach(async () => {
+  await Promise.all(pending.splice(0));
   jest.clearAllMocks();
 });
 
@@ -141,8 +152,11 @@ describe('communityGuardsItsSalons — quelle communauté fait sortir de ses sal
   });
 });
 
+const fermees = (prisma: ReturnType<typeof prismaDouble>) =>
+  prisma.participant.updateMany.mock.calls.flatMap((c: any) => c[0].where.id.in as string[]);
+
 describe('exitCommunitySalons — le partant sort de chaque salon de la communauté', () => {
-  it('désactive SES lignes actives dans les salons de la communauté, avec la même date de départ', async () => {
+  it('coupe SES lignes actives dans les salons de la communauté, en UNE écriture, avec la même date de départ', async () => {
     const prisma = prismaDouble({
       lignes: [
         ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT }),
@@ -152,44 +166,73 @@ describe('exitCommunitySalons — le partant sort de chaque salon de la communau
       ],
     });
 
-    const result = await exitCommunitySalons({ prisma: prisma as never, socketIOHandler: null }, {
+    const result = await sortir({ prisma: prisma as never, socketIOHandler: null }, {
       communityId: COMMUNITY, userId: PARTANT, now: NOW,
     });
 
-    expect(result.exitedConversationIds.sort()).toEqual([SALON_A, SALON_B].sort());
-    const updated = prisma.participant.update.mock.calls.map((c: any) => c[0]);
-    expect(updated).toEqual(expect.arrayContaining([
-      { where: { id: 'p-a' }, data: { isActive: false, leftAt: NOW } },
-      { where: { id: 'p-b' }, data: { isActive: false, leftAt: NOW } },
-    ]));
-    expect(updated.map((u: any) => u.where.id)).not.toContain('p-hors');
-    expect(updated.map((u: any) => u.where.id)).not.toContain('r-a');
+    expect([...result.exitedConversationIds].sort()).toEqual([SALON_A, SALON_B].sort());
+    expect(prisma.participant.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.participant.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['p-a', 'p-b'] }, isActive: true },
+      data: { isActive: false, leftAt: NOW },
+    });
+    expect(fermees(prisma)).not.toContain('p-hors');
+    expect(fermees(prisma)).not.toContain('r-a');
   });
 
-  it('ne lit les lignes que dans les salons VIVANTS de la communauté (index conversationId)', async () => {
+  it('un salon CLOS compte aussi : sa ligne se coupe (une archive se lit par la seule ligne Participant), sans avis', async () => {
+    const prisma = prismaDouble({
+      salons: [{ id: SALON_A, communityId: COMMUNITY, isActive: false }],
+      lignes: [ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT, role: 'creator' })],
+    });
+
+    const result = await sortir({ prisma: prisma as never, socketIOHandler }, {
+      communityId: COMMUNITY, userId: PARTANT, now: NOW,
+    });
+    await result.announcements;
+
+    expect(fermees(prisma)).toEqual(['p-a']);
+    expect(resoudreSuccessionDuCreateur).not.toHaveBeenCalled();
+    expect(postConversationNotice).not.toHaveBeenCalled();
+    expect(emitConversationMemberCountEvent).not.toHaveBeenCalled();
+  });
+
+  it('lit les salons de la communauté, clos compris', async () => {
     const prisma = prismaDouble({ lignes: [] });
-    await exitCommunitySalons({ prisma: prisma as never, socketIOHandler: null }, {
+    await sortir({ prisma: prisma as never, socketIOHandler: null }, {
       communityId: COMMUNITY, userId: PARTANT, now: NOW,
     });
     expect(prisma.conversation.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { communityId: COMMUNITY, isActive: true },
+      where: { communityId: COMMUNITY },
     }));
   });
 
   it('une communauté sans salon ne lit aucun participant', async () => {
     const prisma = prismaDouble({ salons: [], lignes: [] });
-    const result = await exitCommunitySalons({ prisma: prisma as never, socketIOHandler: null }, {
+    const result = await sortir({ prisma: prisma as never, socketIOHandler: null }, {
       communityId: COMMUNITY, userId: PARTANT, now: NOW,
     });
     expect(result.exitedConversationIds).toEqual([]);
     expect(prisma.participant.findMany).not.toHaveBeenCalled();
   });
 
-  it('dit « Bob a quitté la conversation » dans chaque salon quitté', async () => {
+  it('l\'accès est coupé AVANT les annonces : l\'écriture est faite quand la route reprend la main', async () => {
     const prisma = prismaDouble({ lignes: [ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT })] });
-    await exitCommunitySalons({ prisma: prisma as never, socketIOHandler: null }, {
+    const result = await sortir({ prisma: prisma as never, socketIOHandler: null }, {
       communityId: COMMUNITY, userId: PARTANT, now: NOW,
     });
+    expect(prisma.participant.updateMany).toHaveBeenCalledTimes(1);
+    expect(postConversationNotice).not.toHaveBeenCalled();
+    await result.announcements;
+    expect(postConversationNotice).toHaveBeenCalledTimes(1);
+  });
+
+  it('dit « Bob a quitté la conversation » dans chaque salon vivant quitté', async () => {
+    const prisma = prismaDouble({ lignes: [ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT })] });
+    const result = await sortir({ prisma: prisma as never, socketIOHandler: null }, {
+      communityId: COMMUNITY, userId: PARTANT, now: NOW,
+    });
+    await result.announcements;
     expect(postConversationNotice).toHaveBeenCalledWith(expect.anything(), {
       conversationId: SALON_A,
       notice: { kind: 'member-left', actor: { participantId: 'p-a', displayName: 'Bob' } },
@@ -197,21 +240,16 @@ describe('exitCommunitySalons — le partant sort de chaque salon de la communau
   });
 
   it('annonce le départ aux restants avec l\'effectif absolu, puis sort le partant des rooms du salon', async () => {
-    const prisma = prismaDouble({
-      lignes: [
-        ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT }),
-        ligne({ id: 'r-a', conversationId: SALON_A, userId: RESTANT }),
-      ],
-    });
-    // Après l'écriture, le partant n'est plus actif : le double relit le monde.
+    const prisma = prismaDouble();
     const monde = [ligne({ id: 'r-a', conversationId: SALON_A, userId: RESTANT })];
     prisma.participant.findMany
       .mockImplementationOnce(async () => [ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT })])
       .mockImplementationOnce(async () => monde);
 
-    await exitCommunitySalons({ prisma: prisma as never, socketIOHandler }, {
+    const result = await sortir({ prisma: prisma as never, socketIOHandler }, {
       communityId: COMMUNITY, userId: PARTANT, now: NOW,
     });
+    await result.announcements;
 
     expect(emitConversationMemberCountEvent).toHaveBeenCalledWith(expect.objectContaining({
       io,
@@ -232,18 +270,20 @@ describe('exitCommunitySalons — le partant sort de chaque salon de la communau
     });
   });
 
-  it('créateur d\'un salon : l\'héritier devient créateur dans la MÊME transaction que le départ', async () => {
+  it('créateur d\'un salon vivant : l\'héritier devient créateur dans la MÊME transaction que le départ', async () => {
     const prisma = prismaDouble({
       lignes: [ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT, role: 'CREATOR' })],
     });
     resoudreSuccessionDuCreateur.mockResolvedValue({ kind: 'transfer', successor: { id: 'r-a', userId: RESTANT } });
 
-    await exitCommunitySalons({ prisma: prisma as never, socketIOHandler }, {
+    const result = await sortir({ prisma: prisma as never, socketIOHandler }, {
       communityId: COMMUNITY, userId: PARTANT, now: NOW,
     });
+    await result.announcements;
 
     expect(resoudreSuccessionDuCreateur).toHaveBeenCalledWith(prisma, { conversationId: SALON_A, sortantUserId: PARTANT });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.participant.updateMany).not.toHaveBeenCalled();
     const updated = prisma.participant.update.mock.calls.map((c: any) => c[0]);
     expect(updated).toEqual(expect.arrayContaining([
       { where: { id: 'r-a' }, data: { role: 'creator' } },
@@ -261,7 +301,7 @@ describe('exitCommunitySalons — le partant sort de chaque salon de la communau
     });
     resoudreSuccessionDuCreateur.mockResolvedValue({ kind: 'close' });
 
-    const result = await exitCommunitySalons({ prisma: prisma as never, socketIOHandler: null }, {
+    const result = await sortir({ prisma: prisma as never, socketIOHandler: null }, {
       communityId: COMMUNITY, userId: PARTANT, now: NOW,
     });
 
@@ -270,29 +310,47 @@ describe('exitCommunitySalons — le partant sort de chaque salon de la communau
     expect(prisma.participant.update).toHaveBeenCalledWith({ where: { id: 'p-a' }, data: { isActive: false, leftAt: NOW } });
   });
 
-  it('un salon qui échoue n\'empêche pas la sortie des autres', async () => {
+  it('la succession d\'un salon qui échoue n\'empêche pas la sortie des autres', async () => {
+    const prisma = prismaDouble({
+      lignes: [
+        ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT, role: 'creator' }),
+        ligne({ id: 'p-b', conversationId: SALON_B, userId: PARTANT }),
+      ],
+    });
+    resoudreSuccessionDuCreateur.mockImplementationOnce(async () => { throw new Error('lecture perdue'); });
+
+    const result = await sortir({ prisma: prisma as never, socketIOHandler: null }, {
+      communityId: COMMUNITY, userId: PARTANT, now: NOW,
+    });
+
+    expect(fermees(prisma)).toEqual(['p-b']);
+    expect(result.exitedConversationIds).toEqual([SALON_B]);
+  });
+
+  it('une annonce qui échoue n\'empêche pas les suivantes, et les annonces ne rejettent jamais', async () => {
     const prisma = prismaDouble({
       lignes: [
         ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT }),
         ligne({ id: 'p-b', conversationId: SALON_B, userId: PARTANT }),
       ],
     });
-    prisma.participant.update.mockImplementationOnce(async () => { throw new Error('écriture perdue'); });
+    postConversationNotice.mockImplementationOnce(async () => { throw new Error('avis perdu'); });
 
-    const result = await exitCommunitySalons({ prisma: prisma as never, socketIOHandler: null }, {
+    const result = await sortir({ prisma: prisma as never, socketIOHandler: null }, {
       communityId: COMMUNITY, userId: PARTANT, now: NOW,
     });
-
-    expect(prisma.participant.update).toHaveBeenCalledTimes(2);
-    expect(result.exitedConversationIds).toHaveLength(1);
+    await expect(result.announcements).resolves.toBeUndefined();
+    expect(postConversationNotice).toHaveBeenCalledTimes(2);
   });
 
   it('ne rejette jamais : une lecture des salons perdue laisse la route répondre au départ déjà écrit', async () => {
     const prisma = prismaDouble();
     prisma.conversation.findMany.mockImplementationOnce(async () => { throw new Error('base indisponible'); });
 
-    await expect(exitCommunitySalons({ prisma: prisma as never, socketIOHandler: null }, {
+    const result = await sortir({ prisma: prisma as never, socketIOHandler: null }, {
       communityId: COMMUNITY, userId: PARTANT, now: NOW,
-    })).resolves.toEqual({ exitedConversationIds: [] });
+    });
+    expect(result.exitedConversationIds).toEqual([]);
+    await expect(result.announcements).resolves.toBeUndefined();
   });
 });

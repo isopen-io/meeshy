@@ -15,7 +15,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: jest.fn(() => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() })) },
 }));
 
-const exitCommunitySalons = jest.fn<any>(async () => ({ exitedConversationIds: [] }));
+const exitCommunitySalons = jest.fn<any>(async () => ({ exitedConversationIds: [], announcements: Promise.resolve() }));
 jest.mock('../../../services/conversations/communitySalonExit', () => {
   const actual = jest.requireActual<typeof import('../../../services/conversations/communitySalonExit')>(
     '../../../services/conversations/communitySalonExit',

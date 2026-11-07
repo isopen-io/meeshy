@@ -66,42 +66,56 @@ export function communityGuardsItsSalons(community: {
  * communauté réserve à ses membres — les portes d'entrée (#16639, #16695) ne
  * l'arrêtaient pas, il était « déjà dans le salon ».
  *
- * Chaque salon reçoit le MÊME départ que `POST /conversations/:id/leave` :
- * `isActive: false` + `leftAt`, la succession du créateur (`creatorSuccession`,
- * la loi unique), l'avis « X a quitté la conversation », l'effectif absolu aux
- * restants et la fin d'appartenance (`endConversationMembership`). Une seule
- * différence, assumée : un créateur sans héritier sort sans CLORE le salon — la
- * clôture est un geste du créateur sur SON fil, pas la conséquence d'une
- * décision prise dans la communauté.
+ * DEUX temps. D'abord COUPER l'accès, pendant la requête : une écriture groupée
+ * (`updateMany`) pour toutes les lignes ordinaires, la succession du créateur
+ * (`creatorSuccession`, la loi unique) pour chaque salon vivant qu'il a fondé,
+ * puis l'invalidation du cache de participation. Les salons CLOS comptent aussi :
+ * la lecture d'un fil ne regarde que la ligne `Participant`, jamais l'état de la
+ * conversation, donc une archive restait lisible. Ensuite ANNONCER, en arrière-
+ * plan (`announcements`), dans chaque salon vivant quitté : l'avis « X a quitté
+ * la conversation », `conversation:participant-left` avec l'effectif absolu, la
+ * fin d'appartenance (`endConversationMembership`) — le même départ que
+ * `POST /conversations/:id/leave`, sans faire attendre la route autant de
+ * salons qu'en compte la communauté.
  *
- * Un salon qui échoue est journalisé et n'empêche pas la sortie des autres : le
- * départ de la communauté est déjà écrit, et chaque salon quitté est un accès
- * de moins. Contrat : NE REJETTE JAMAIS — les deux routes appelantes ont déjà
- * commis le départ, et un 500 nierait un fait durable que le client ne peut plus
- * rejouer (le second appel répondrait « vous n'êtes pas membre »).
+ * Une différence assumée avec `leave.ts` : un créateur sans héritier sort sans
+ * CLORE le salon — la clôture est un geste du créateur sur SON fil, pas la
+ * conséquence d'une décision prise dans la communauté.
+ *
+ * Contrat : NE REJETTE JAMAIS, `announcements` non plus — les deux routes
+ * appelantes ont déjà commis le départ, et un 500 nierait un fait durable que le
+ * client ne peut plus rejouer (le second appel répondrait « vous n'êtes pas
+ * membre »).
  */
 export async function exitCommunitySalons(
   deps: SalonExitDeps,
   request: SalonExitRequest,
-): Promise<{ readonly exitedConversationIds: readonly string[] }> {
+): Promise<SalonExit> {
   try {
     return await exitEverySalon(deps, request);
   } catch (error) {
     logger.error('Community salon exit failed before any salon', { communityId: request.communityId, error });
-    return { exitedConversationIds: [] };
+    return NO_EXIT;
   }
 }
 
-async function exitEverySalon(
-  deps: SalonExitDeps,
-  request: SalonExitRequest,
-): Promise<{ readonly exitedConversationIds: readonly string[] }> {
+export type SalonExit = {
+  readonly exitedConversationIds: readonly string[];
+  readonly announcements: Promise<void>;
+};
+
+const NO_EXIT: SalonExit = { exitedConversationIds: [], announcements: Promise.resolve() };
+
+type Departure = { readonly row: DepartingRow; readonly successor: { readonly userId: string | null } | null };
+
+async function exitEverySalon(deps: SalonExitDeps, request: SalonExitRequest): Promise<SalonExit> {
   const { prisma } = deps;
   const salons = await prisma.conversation.findMany({
-    where: { communityId: request.communityId, isActive: true },
-    select: { id: true },
+    where: { communityId: request.communityId },
+    select: { id: true, isActive: true },
   });
-  if (salons.length === 0) return { exitedConversationIds: [] };
+  if (salons.length === 0) return NO_EXIT;
+  const liveSalons = new Set(salons.filter((salon) => salon.isActive !== false).map((salon) => salon.id));
 
   const rows: DepartingRow[] = await prisma.participant.findMany({
     where: {
@@ -111,26 +125,61 @@ async function exitEverySalon(
     },
     select: { id: true, conversationId: true, userId: true, role: true, displayName: true },
   });
+  if (rows.length === 0) return NO_EXIT;
 
-  const exited: string[] = [];
-  for (const row of rows) {
+  const foundsLiveSalon = (row: DepartingRow) =>
+    liveSalons.has(row.conversationId) && isMemberCreator(row.role ?? 'member');
+  const plainRows = rows.filter((row) => !foundsLiveSalon(row));
+  const creatorRows = rows.filter(foundsLiveSalon);
+
+  const departures: Departure[] = [];
+  if (plainRows.length > 0) {
+    await prisma.participant.updateMany({
+      where: { id: { in: plainRows.map((row) => row.id) }, isActive: true },
+      data: { isActive: false, leftAt: request.now },
+    });
+    departures.push(...plainRows.map((row) => ({ row, successor: null })));
+  }
+  for (const row of creatorRows) {
     try {
-      await exitSalon(deps, request, row);
-      exited.push(row.conversationId);
+      departures.push({ row, successor: await writeCreatorDeparture(prisma, request, row) });
     } catch (error) {
       logger.error('Community salon exit failed', { conversationId: row.conversationId, error });
     }
   }
-  return { exitedConversationIds: exited };
+  for (const { row } of departures) invalidateParticipantLookup(row.id, row.conversationId);
+
+  const announced = departures.filter(({ row }) => liveSalons.has(row.conversationId));
+  return {
+    exitedConversationIds: departures.map(({ row }) => row.conversationId),
+    announcements: announceEveryExit(deps, request, announced),
+  };
 }
 
-async function exitSalon(deps: SalonExitDeps, request: SalonExitRequest, row: DepartingRow): Promise<void> {
-  const { prisma, socketIOHandler } = deps;
-  const { conversationId } = row;
-  const leaveSelf: LeaveSelf = { where: { id: row.id }, data: { isActive: false, leftAt: request.now } };
+function announceEveryExit(
+  deps: SalonExitDeps,
+  request: SalonExitRequest,
+  departures: readonly Departure[],
+): Promise<void> {
+  if (departures.length === 0) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    setImmediate(async () => {
+      for (const departure of departures) {
+        try {
+          await announceExit(deps, request, departure);
+        } catch (error) {
+          logger.error('Community salon exit announcement failed', { conversationId: departure.row.conversationId, error });
+        }
+      }
+      resolve();
+    });
+  });
+}
 
-  const successor = await writeDeparture(prisma, request, row, leaveSelf);
-  invalidateParticipantLookup(row.id, conversationId);
+async function announceExit(deps: SalonExitDeps, request: SalonExitRequest, departure: Departure): Promise<void> {
+  const { prisma, socketIOHandler } = deps;
+  const { row, successor } = departure;
+  const { conversationId } = row;
   announceConversationLanguageChange({ kind: 'departure', conversationId });
 
   const displayName = row.displayName ?? '';
@@ -173,16 +222,12 @@ async function exitSalon(deps: SalonExitDeps, request: SalonExitRequest, row: De
   await endConversationMembership({ io, manager, conversationId, userId: row.userId ?? row.id });
 }
 
-async function writeDeparture(
+async function writeCreatorDeparture(
   prisma: PrismaClient,
   request: SalonExitRequest,
   row: DepartingRow,
-  leaveSelf: LeaveSelf,
 ): Promise<{ readonly userId: string | null } | null> {
-  if (!isMemberCreator(row.role ?? 'member')) {
-    await prisma.participant.update(leaveSelf);
-    return null;
-  }
+  const leaveSelf: LeaveSelf = { where: { id: row.id }, data: { isActive: false, leftAt: request.now } };
   const succession = await resoudreSuccessionDuCreateur(prisma, {
     conversationId: row.conversationId,
     sortantUserId: request.userId,
