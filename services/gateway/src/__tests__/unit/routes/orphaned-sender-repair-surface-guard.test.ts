@@ -172,6 +172,9 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   // `sender`. Absent du garde du masquage personnel : une `findUnique`, hors
   // de son périmètre (`findMany`/`count`), et elle ne sert aucun contenu.
   'readerSignedDelivery.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #16685 — la garde de vivacité du rejeu : elle ne lit que `deletedAt`/`expiresAt`
+  // (`MESSAGE_LIVENESS_SELECT`), jamais `sender`.
+  'queuedMessageLiveness.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #12822 — relit le seul régime du message enrichi (`encryptionMode`, et
   // celui de sa conversation) pour sceller son entrée de file hors ligne.
   'emitAttachmentUpdated.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

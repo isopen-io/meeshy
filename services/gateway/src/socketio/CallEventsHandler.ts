@@ -24,6 +24,7 @@
  * compilateur. Portée exacte de ce qu'ils gardent (mesurée, pas supposée) :
  * `socketio/clientReceive.ts`.
  */
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { MeeshySocket as Socket, MeeshyIOServer as SocketIOServer } from './typed-socket';
 import { startSilentGroup } from '../services/conversations/announceStartedGroup';
 import { sealMessageIfConversationObsoleted } from '../services/conversations/obsoleteMessageSeal';
@@ -1965,7 +1966,7 @@ export class CallEventsHandler {
         const conversationParticipants = await this.prisma.participant.findMany({
           where: {
             conversationId: data.conversationId,
-            isActive: true,
+            ...PARTICIPATION_VIVANTE,
             userId: { not: null }
           },
           select: {
