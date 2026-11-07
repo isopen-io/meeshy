@@ -125,8 +125,10 @@ class RouteManifestRatchetTest {
          * Android la portera avec sa page éditeur.
          * 128 : moins `DELETE /bring/:bringId` (#13936, `proche-bring@android` : arrêter un Bring d'un geste), que porte
          * `BringApi.stop`.
+         * 124 : moins `GET|POST /bring/:userId` et `GET|PUT /relations/:userId/settings` (#16617 : faire sonner un ami depuis
+         * sa fiche, et bloquer ses Bring depuis la fiche d'un lien), que portent `BringApi` et `RelationsApi`.
          */
-        const val TO_PORT_CEILING = 128
+        const val TO_PORT_CEILING = 124
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

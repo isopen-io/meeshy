@@ -33,6 +33,7 @@ import {
   CommunityRowsSkeleton,
   CommunityStats,
 } from '@/routes/communities-parts';
+import { CommunityMembersLink } from '@/routes/community-members-parts';
 import { CommunityMembershipAction, type MembershipFailure } from '@/routes/community-membership';
 import { href, navigate } from '@/routes/route-table';
 
@@ -51,9 +52,11 @@ import { href, navigate } from '@/routes/route-table';
  * arrière (`community-actions.ts`). Quitter, confirmé, ramène à la liste —
  * comme iOS ferme l'écran — où la carte a déjà disparu.
  *
+ * **« Membres »** (#6375) mène à la liste servie (`community-members.tsx`).
+ *
  * **Ce que l'écran ne montre pas, parce que le web ne le sert pas encore** —
- * loi 4, un contrôle n'existe que s'il a un effet : Membres, Inviter, Réglages,
- * l'onglet Publications — #6375, #6376, #6377, #6379 (D-60). Le
+ * loi 4, un contrôle n'existe que s'il a un effet : Inviter, Réglages,
+ * l'onglet Publications — #6376, #6377, #6379 (D-60). Le
  * cœur « Réagir à la communauté » d'iOS n'a aucun effet, là-bas non plus.
  *
  * 403 et 404 rendent le MÊME refus (D-6) : un identifiant ne dit pas si une
@@ -166,6 +169,7 @@ export default function CommunityScreen() {
             <div className="mx-auto grid max-w-xl gap-5 px-4 pb-24 pt-5">
               {online ? null : <CommunitiesOfflineNotice language={language} />}
               <CommunityStats language={language} community={community} />
+              <CommunityMembersLink language={language} communityId={community.id} />
               <CommunityMembershipAction
                 language={language}
                 action={membershipActionOf(community, viewerId)}

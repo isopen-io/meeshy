@@ -18,6 +18,7 @@ export type {
 import { withoutCaptureNotices } from './captureNoticeVisibility';
 import { boundCaptureNoticesNaming } from './captureNoticeRetention';
 import { eraseSharedTranslations } from './sharedTranslationErasure';
+import { purgeTranslationCacheFor } from '../message-translation/translationCacheRegistry';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -276,6 +277,12 @@ export async function applyMessageRemovalEffects(
   announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
   options: { readonly cause?: 'deleted' | 'expired' } = {}
 ): Promise<void> {
+  // La copie EN MÉMOIRE de ses traductions (#16557). L'écrivain vient de vider
+  // `Message.translations`, mais le cache du traducteur, servi avant la base et
+  // sans TTL, gardait le texte traduit d'un message rappelé. Synchrone, ne lève
+  // jamais : elle passe avant tout `await`.
+  purgeTranslationCacheFor([message.id]);
+
   // Les traductions PARTAGÉES du message (#9899). Chaque écrivain de retrait vide
   // `Message.translations` ; la table voisine, elle, gardait la version scellée
   // du message — lisible, pour qui détenait la clé, aussi longtemps que la base

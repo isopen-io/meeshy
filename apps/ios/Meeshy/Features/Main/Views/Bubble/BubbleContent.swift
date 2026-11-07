@@ -203,6 +203,9 @@ nonisolated struct BubbleContent: Equatable {
     struct Meta: Equatable {
         let timeString: String
         let deliveryStatus: MeeshyMessage.DeliveryStatus?  // nil si reçu
+        /// Le `createdAt` de MON message : ce qui retient l'horloge d'un envoi de moins de
+        /// 200 ms (`SendingClockGlyph`). `nil` sur un message reçu.
+        var sendStartedAt: Date? = nil
     }
 
     /// Resolved facts for a call-summary system message — everything the leaf
@@ -343,6 +346,11 @@ nonisolated struct BubbleContent: Equatable {
         default: return nil
         }
     }
+
+    /// Un envoi en cours se voit au repos sur cette rangée plate (#16130) : la puce n'a
+    /// aucun contenu qui dise que le message existe encore. Les autres rangées attendent
+    /// #16542.
+    var pinsPendingDelivery: Bool { isMe && viewOnceChipState != nil }
 
     /// Le chrome à peindre au-dessus du message : celui d'une vue unique
     /// scellée ne répète pas la vue unique, que sa puce dit déjà (#7619).
