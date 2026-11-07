@@ -539,7 +539,7 @@ const PENDING_CLIENT_ENTRIES = {
   'publishers.bySlugPage': { issue: 16433, reason: 'GET /publishers/:slug/page — l’identité de l’éditeur et le profil qui l’édite, page éditeur web' },
 };
 
-const BASELINE_DEAD_ENTRIES = 276;
+const BASELINE_DEAD_ENTRIES = 274;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
