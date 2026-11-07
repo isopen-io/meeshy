@@ -145,7 +145,8 @@ export async function bloquer(
   const couper = async () => cutTalkiesOnBlock(talkieCutDepsOf(), { blockerId: moi, blockedId: cibleId, scope: 'user' });
   couper().catch((error: unknown) => logError(fastify.log, '[BLOCKS] Talkie not cut after block', error));
   // L'écoute partagée (#13934) : ce que chacun voyait de l'écoute de l'autre s'efface.
-  void refreshNowPlayingAfter(ecoute, { userA: moi, userB: cibleId, before: ecouteAvant });
+  refreshNowPlayingAfter(ecoute, { userA: moi, userB: cibleId, before: ecouteAvant })
+    .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Now-playing not refreshed after block', error));
 
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une
