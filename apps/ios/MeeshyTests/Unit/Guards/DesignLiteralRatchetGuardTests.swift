@@ -196,8 +196,6 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
         Exemption(
             reason: "filtres et effets : teintes d'effet, fond audio d'un réel",
             globs: [
-                "\(app)/Views/VideoFiltersPanel.swift",
-                "\(app)/Views/VideoFilterControlView.swift",
                 "\(app)/Views/ReelAudioBackdrop.swift",
                 "\(app)/Components/MessageEffectModifiers.swift",
             ]

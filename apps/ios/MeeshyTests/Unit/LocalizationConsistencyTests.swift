@@ -248,7 +248,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView.swift",  // 8
         // #13907 — les mots du rail ont quitté sa vue retirée ; le cliquet les suit.
         "apps/ios/Meeshy/Features/Composer/ComposerRailCopy.swift",  // 7
-        "apps/ios/Meeshy/Features/Call/Views/CallEffectsOverlay.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift",  // 6
@@ -530,7 +529,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Call/Views/FloatingCallPillView.swift",  // 16
         "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift",  // 16
-        "apps/ios/Meeshy/Features/Main/Views/VideoFiltersPanel.swift",  // 16
         "apps/ios/Meeshy/Features/Contacts/CallsTab.swift",  // 15
         "apps/ios/Meeshy/Features/Contacts/RequestsTab.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Components/MemberManagementSection.swift",  // 15
@@ -580,7 +578,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+Header.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Views/VideoFilterControlView.swift",  // 8
         "apps/ios/Meeshy/Features/Focal/Row/FocalQuotedReplyView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/ViewModels/StatusViewModel.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift",  // 7
