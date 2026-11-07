@@ -46,11 +46,46 @@ socket jusqu'au client.
 1. Lire les séries sur le staging après quelques appels réels, puis décider du délai
    (issue à ouvrir avec la mesure, pas avant).
 2. Autres pistes relevées pendant l'audit du cycle 1, à instruire avant d'en faire des issues :
-   - chaque segment final fait trois lectures Mongo en série avant la demande de
-     traduction (locuteur actif, admission e2ee, participants actifs). Un cache par appel
-     de la carte langue → auditeurs réduirait le temps avant traduction ;
+   - ~~chaque segment final fait trois lectures Mongo en série~~ → traité au cycle 2 (#16575) ;
    - un auditeur dans une autre langue n'a rien à l'écran tant que la traduction n'est pas
      revenue. Lui servir l'original tout de suite, puis le remplacer, est une décision
      produit (Prisme) : à poser en issue `décision-produit`, pas à trancher ici.
 - Une routine iOS parallèle travaille sur `apps/ios/.../Features/Call/Views/`
   (`apps/ios/tasks/routine-appels.md`). Ne pas toucher à ces vues sans s'y coordonner.
+
+## Cycle 2 — 2026-11-07
+
+- **Base** : `origin/dev` @ `8253b5c43` (le cycle 1, #16549, y est fusionné).
+- **Branche** : `claude/fervent-wozniak-66fy29`.
+- **Objectif** : #16575, sous-issue de #3722.
+- **Constat** : un segment final attendait trois lectures EN SÉRIE avant la demande de
+  traduction — `getCallSession` (4 requêtes Prisma-Mongo enchaînées), l'admission e2ee (2),
+  les auditeurs (3) — soit ~9 allers-retours. Et une lecture d'auditeurs qui levait PERDAIT
+  le segment pour tout le monde (le `catch` du gestionnaire n'émet rien).
+- **Livré** :
+  - `socketio/call-transcription-segment.ts` (`relayTranscriptionSegment`) : les trois lectures
+    partent ensemble par `Promise.all` ; aucune ne rejette, les décisions restent dans l'ordre
+    locuteur → admission → relais. Le gestionnaire sort de `CallEventsHandler.ts`
+    (4 109 → ~4 015 lignes).
+  - `readCallListeners` (relais) ne rejette jamais ; liste illisible ⇒ original à la salle,
+    compté `call_caption_deliveries_total{path="untranslated"}`.
+  - `settleCallCaptionsAdmission` sépare la décision d'admission de sa lecture ;
+    `admitCallCaptions` (utilisé par `call:transcription-active`) en est la composition.
+- **Tests** : `CallEventsHandler-transcription-parallel-reads.test.ts` 5/5 sur le vrai
+  gestionnaire. Rouge prouvé sur le code d'avant : « trois lectures émises avant la première
+  réponse » et « auditeurs illisibles ⇒ original » tombent ; les trois gardes d'ordre
+  (non-participant, e2ee, partiel) passent avant ET après. Suites d'appel 151/151
+  (1 904 témoins). `tsc --noEmit` code 0.
+- **Mesure** : structurelle — le chemin critique avant traduction passe de trois attentes de la
+  base à une (la plus lente des trois). Aucune mesure de latence de bout en bout : l'histogramme
+  du cycle 1 mesure l'aller-retour traducteur, pas ce qui le précède.
+
+### Cycle suivant : par où reprendre
+
+1. Toujours : lire `call_caption_translation_seconds` sur le staging et décider du délai de 10 s.
+   Un auditeur attend jusqu'à 10 s quand le traducteur ne répond pas — au-delà du critère de 2 s
+   de #3722. C'est la piste à plus fort impact dès qu'il y a des chiffres.
+2. Mesurer ce qui précède la traduction (réception du segment → `translateText`) si on veut
+   chiffrer le gain de ce cycle : un timer de plus dans `callCaptionMetrics`, étiquette bornée.
+3. La décision produit « servir l'original tout de suite, puis le remplacer » reste à poser en
+   issue `décision-produit`.

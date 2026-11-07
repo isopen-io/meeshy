@@ -54,14 +54,10 @@ import {
   resolveActiveCallParticipantDetailed,
   resolveActiveCallParticipantId,
   resolvePreJoinDeclineParticipantId,
-  resolveActiveCallSpeaker,
   resolveEverCallParticipantId,
 } from './call-participants';
-import {
-  type CallTranscriptionRelayDeps,
-  persistTranscriptionSegment,
-  translateAndEmitSegment,
-} from './call-transcription-relay';
+import type { CallTranscriptionRelayDeps } from './call-transcription-relay';
+import { relayTranscriptionSegment } from './call-transcription-segment';
 import { admitCallCaptions } from './call-captions-admission';
 import type { AckOf } from '@meeshy/shared/types/socketio-events';
 import {
@@ -69,7 +65,6 @@ import {
   type CallClientReportDeps,
 } from './call-client-reports';
 import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-parsing';
-import { buildTranslatedSegment } from './utils/call-translated-segment';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { ringableCallees } from '../services/calls/callRingPolicy';
 import { isInvitedToCall } from '../services/calls/callInvitation';
@@ -1393,13 +1388,6 @@ export class CallEventsHandler {
     return resolvePreJoinDeclineParticipantId(this.participantResolverDependencies(), userId, callId);
   }
 
-  private resolveActiveCallSpeaker(
-    userId: string,
-    callId: string
-  ): ReturnType<typeof resolveActiveCallSpeaker> {
-    return resolveActiveCallSpeaker(this.participantResolverDependencies(), userId, callId);
-  }
-
   private resolveEverCallParticipantId(userId: string, callId: string): Promise<string | null> {
     return resolveEverCallParticipantId(this.participantResolverDependencies(), userId, callId);
   }
@@ -1575,28 +1563,6 @@ export class CallEventsHandler {
 
   private transcriptionRelayDependencies(): CallTranscriptionRelayDeps {
     return { prisma: this.prisma, zmqClient: () => this.zmqClient };
-  }
-
-  private persistTranscriptionSegment(
-    data: CallTranscriptionSegmentEvent,
-    participantId: string
-  ): Promise<string | null> {
-    return persistTranscriptionSegment(this.transcriptionRelayDependencies(), data, participantId);
-  }
-
-  private async translateAndEmitSegment(
-    socket: Socket,
-    data: CallTranscriptionSegmentEvent,
-    speaker: { userId: string; displayName: string | null },
-    persistedTranscriptionId: Promise<string | null> | null = null
-  ): Promise<void> {
-    return translateAndEmitSegment(
-      this.transcriptionRelayDependencies(),
-      socket,
-      data,
-      speaker,
-      persistedTranscriptionId,
-    );
   }
 
   /**
@@ -3771,74 +3737,13 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketTranscriptionSegmentSchema, data);
         if (!validation.success) return;
 
-        // Authorization — only an ACTIVE PARTICIPANT OF THIS CALL may inject
-        // transcription text into it (not merely a member of its conversation
-        // — `resolveParticipantIdFromCall` only checked that, letting any
-        // other conversation member broadcast arbitrary text into a call
-        // they never joined). Same fix as QUALITY_REPORT / RECONNECTING.
-        const speaker = await this.resolveActiveCallSpeaker(userId, data.callId);
-        if (!speaker) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call',
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // #13720 — AVANT tout relais, traduction ou écriture : une parole d'un
-        // appel e2ee (ou au régime illisible) n'atteint rien (call-captions-admission.ts).
-        if (!(await admitCallCaptions(this.prisma, { callId: data.callId, userId, event: CALL_EVENTS.TRANSCRIPTION_SEGMENT, ack }))) return;
-
-        // Journal metadata normalized once so every downstream emission
-        // (translated or not, success or timeout) stamps the SAME
-        // capturedAtMs — the clients' journal ordering key. Legacy clients
-        // that don't send it get reception time.
-        const segmentEvent: CallTranscriptionSegmentEvent = {
-          callId: data.callId,
-          segment: {
-            ...data.segment,
-            capturedAtMs: data.segment.capturedAtMs ?? Date.now()
-          }
-        };
-        const stampedSpeaker = { userId, displayName: speaker.displayName };
-
-        // Persistance serveur du journal (décision produit 2026-08-13) : les
-        // segments FINAUX sont stockés (modèle Transcription) pour le replay
-        // post-appel via GET /calls/:callId/transcript — le journal survit à
-        // la suppression de l'app et de ses caches locaux. Les partiels
-        // (révisions du stream de corrections) ne sont JAMAIS persistés :
-        // seule la dernière valeur dite compte. Fire-and-forget interne
-        // (jamais de rejet — voir persistTranscriptionSegment) : un échec de
-        // persistance ne bloque ni le relais ni la traduction. La promesse
-        // (id de ligne) est transmise au chemin de traduction pour y
-        // accrocher les TranslationCall.
-        const persistedTranscriptionId = data.segment.isFinal
-          ? this.persistTranscriptionSegment(segmentEvent, speaker.participantId)
-          : null;
-
-        // No callSession.metadata.translationEnabled gate — the real product
-        // control is client-side (the speaker's own captions toggle; no
-        // client ever emits a segment unless the user turned captions on).
-        // See docs/superpowers/specs/2026-07-10-live-call-transcription-design.md.
-        if (this.zmqClient && data.segment.isFinal) {
-          await this.translateAndEmitSegment(socket, segmentEvent, stampedSpeaker, persistedTranscriptionId);
-        } else {
-          // Security fix 2026-08-13: stamp the authenticated `userId` (and a
-          // server-resolved displayName), never the client-supplied
-          // `data.segment.speakerId` — see translateAndEmitSegment's doc
-          // comment for the spoofing this closes.
-          socket.to(ROOMS.call(data.callId)).emit(
-            CALL_EVENTS.TRANSLATED_SEGMENT,
-            buildTranslatedSegment(segmentEvent, stampedSpeaker, data.segment.language)
-          );
-        }
-
-        logger.debug('Transcription segment relayed', {
-          callId: data.callId,
-          speakerId: userId,
-          isFinal: data.segment.isFinal
-        });
+        // #16575 — locuteur, admission e2ee et auditeurs lus EN PARALLÈLE,
+        // décidés dans l'ordre : voir call-transcription-segment.ts.
+        await relayTranscriptionSegment(
+          { ...this.transcriptionRelayDependencies(), callService: this.callService },
+          socket,
+          { userId, data, ack }
+        );
       } catch (error) {
         logger.error('Error handling transcription segment', { error });
       }

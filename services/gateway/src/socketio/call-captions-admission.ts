@@ -86,21 +86,24 @@ export async function readCallCaptionsAdmission(
   }
 }
 
+type CallCaptionsAdmissionRequest = {
+  readonly callId: string;
+  readonly userId: string;
+  readonly event: string;
+  readonly ack?: AckOf<typeof CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT | typeof CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE>;
+};
+
 /**
- * La porte des deux gestionnaires : vrai seulement quand l'appel admet les
+ * Tranche une admission DÉJÀ LUE : vrai seulement quand l'appel admet les
  * sous-titres. Un appel terminé se tait ; un refus est journalisé (sans aucun
  * texte) et répondu à l'émetteur par son acquittement, s'il en a passé un.
+ * Séparée de la lecture pour qu'un gestionnaire lise en parallèle et décide
+ * dans l'ordre (#16575).
  */
-export async function admitCallCaptions(
-  prisma: PrismaClient,
-  request: {
-    readonly callId: string;
-    readonly userId: string;
-    readonly event: string;
-    readonly ack?: AckOf<typeof CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT | typeof CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE>;
-  },
-): Promise<boolean> {
-  const admission = await readCallCaptionsAdmission(prisma, request.callId);
+export function settleCallCaptionsAdmission(
+  admission: CallCaptionsAdmission,
+  request: CallCaptionsAdmissionRequest,
+): boolean {
   if (admission.kind !== 'refused') return admission.kind === 'admitted';
   logger.warn('Call captions refused', {
     callId: request.callId,
@@ -117,4 +120,12 @@ export async function admitCallCaptions(
     });
   }
   return false;
+}
+
+/** La porte des deux gestionnaires : la lecture, puis `settleCallCaptionsAdmission`. */
+export async function admitCallCaptions(
+  prisma: PrismaClient,
+  request: CallCaptionsAdmissionRequest,
+): Promise<boolean> {
+  return settleCallCaptionsAdmission(await readCallCaptionsAdmission(prisma, request.callId), request);
 }
