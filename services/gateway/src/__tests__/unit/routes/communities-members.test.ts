@@ -75,7 +75,7 @@ function makePrisma(overrides: any = {}) {
       ...overrides.communityMember,
     },
     user: {
-      findFirst: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
+      findFirst: jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_USER_ID })),
       ...overrides.user,
     },
     ...overrides,

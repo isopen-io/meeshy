@@ -43,8 +43,9 @@ import me.meeshy.ui.theme.hexColor
 
 /**
  * Les réglages PAR PERSONNE — blocage du Bring, talkie, écoute, position, selon ce que le cercle ouvre
- * ([CirclePersonSetting]) — n'existent côté serveur qu'au jalon 2
- * (`PUT /relations/:userId/settings`, #14229). Tant qu'il n'est pas livré, la fiche les MONTRE désactivés et DIT pourquoi :
+ * ([CirclePersonSetting]) — arrivent chacun avec son lot du jalon 2 (`PUT /relations/:userId/settings`, #14229).
+ * « Bloquer ses Bring » est ACTIF depuis le sien (#16617, [CircleBringBlockToggle]). Tant qu'un réglage n'est pas
+ * livré, la fiche le MONTRE désactivé et DIT pourquoi :
  * ni cachés (on chercherait où ils sont), ni simulés (un interrupteur sans effet est un mensonge). Miroir du drapeau iOS
  * `circle_person_settings`, fermé.
  */
@@ -117,14 +118,20 @@ internal fun CircleLinkSheet(
                     color = tokens.textMuted,
                 )
             } else {
-                if (!CIRCLE_PERSON_SETTINGS_ENABLED) {
+                if (!CIRCLE_PERSON_SETTINGS_ENABLED && settings.any { it != CirclePersonSetting.BLOCK_BRING }) {
                     Text(
                         text = stringResource(R.string.circles_sheet_settings_unavailable),
                         style = MaterialTheme.typography.bodySmall,
                         color = tokens.textMuted,
                     )
                 }
-                settings.forEach { SettingRow(stringResource(it.titleRes())) }
+                settings.forEach { setting ->
+                    if (setting == CirclePersonSetting.BLOCK_BRING) {
+                        CircleBringBlockToggle(userId = link.userId, title = stringResource(setting.titleRes()))
+                    } else {
+                        SettingRow(stringResource(setting.titleRes()))
+                    }
+                }
             }
             Spacer(Modifier.heightIn(min = 16.dp))
         }

@@ -50,7 +50,7 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Trouvé en chemin : le jeton FCM de l'Android natif ne déclarait ni `appVersion` ni `bundleId` ; la passerelle ne lui
   servait donc AUCUN type à plancher. Le jeton les déclare désormais, `versionName` passe à 3.1.0 et le plancher
   Android de `bring_stopped` est posé à 3.1.0.
-- Livré dans la PR #16616 : loi pure `BringPushRouter` (`:core:model`), `BringPushHandler` avant le chemin des messages,
+- Livré et FUSIONNÉ dans `dev` par la PR #16616 (CI verte, `android.yml` vert sur le dernier commit : assembleDebug + testDebugUnitTest) : loi pure `BringPushRouter` (`:core:model`), `BringPushHandler` avant le chemin des messages,
   `BringRingService` (premier plan, `USAGE_ALARM`, vibration, expiration), notification alarme sur canal muet dédié,
   écran plein `BringRingActivity` iso `BringRingView.swift`, « Arrêter » optimiste puis `DELETE /bring/:bringId`
   (`BringApi.stop`, cliquet « à porter » 129 → 128), libellés `bring.incoming.*` adoptés du catalogue iOS.
@@ -62,3 +62,44 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   (iOS l'affiche, la charge le porte) ; interrupteurs globaux iOS (#16609) et web (#16588) ; Critical Alerts (#14112) ;
   décisions #14409, #14450.
 - Prochain lot recommandé : #16617 (envoyer et bloquer sur Android), puis le talkie (#13935).
+- Revue adversariale : non bloquante. Corrigé dans le lot : la durée de sonnerie se lit sur les horloges du serveur
+  (un téléphone en avance ne perdait plus le Bring sans un signe), `stopSelfResult` protège un second Bring arrivé
+  pendant l'arrêt, le repli sans service libère l'état à l'échéance, le témoin du jeton peut tomber. Consignés :
+  registre persistant, type du service au regard de Play, quota de priorité FCM (#16619).
+
+## 2026-11-07 — réveil 4 : envoyer et bloquer le Bring sur Android (#16617)
+
+- Reprise : la PR #16616 (réception du Bring sur Android) était ouverte ; sa CI (`android.yml` et `ci.yml` en
+  `workflow_dispatch`) est passée au vert et le réveil 3 l'a fusionnée dans `dev` pendant ce réveil. La PR #16624
+  (présence sur l'écran du Bring iOS) est menée par le réveil 2 : ce réveil ne l'a pas touchée. Un réveil 5 a démarré
+  en parallèle ; la branche de ce lot a été poussée vide avant toute écriture et le réveil 5 prévenu (« celui qui n'a
+  rien écrit cède »).
+- Lot : #16617. SDK : modèles du contrat (`Bring.kt`), `BringApi` (disponibilité, envoi), `RelationsApi` (réglages par
+  personne), `bring:stopped` sur la socket (étend `RelationSocketEventsManager`, pas de jumelle), `BringRepository`
+  (refus rangés sans dire « bloqué », « Ça sonne » suivi jusqu'à l'arrêt, l'échéance ou l'annulation). Fiche d'un ami :
+  `ProfileBringRow` iso `ProfileBringRow.swift`. Fiche d'un lien : « Bloquer ses Bring » ACTIF, optimiste, retour
+  arrière dit. Cliquet « à porter » 128 → 124. Douze libellés adoptés du catalogue iOS.
+- Gates locaux : modèles Kotlin purs (`jvm-check`) verts, chaînes générées à jour, budget de taille respecté. Le reste
+  se prouve par `android.yml` sur la PR.
+- Prochain lot recommandé : le talkie (#13935), côté serveur puis iOS ; restent du Bring les suivis #16619, #16609,
+  #16588, #14112.
+
+## 2026-11-07 — réveil 5 : le talkie reçu sur le web (`proche-talkie@web`, #16638)
+
+- Reprise : #16624 (présence sur l'écran du Bring iOS) est menée par le réveil 2, encore actif ; #16617 (envoyer et
+  bloquer le Bring sur Android) est réservée par le réveil 3 (branche `claude/cercles-bring-android-envoyer`). Ce
+  réveil n'avait rien écrit (le réveil 4 l'a prévenu) : il cède les deux et prend le talkie (#13935).
+- Lot choisi : la RÉCEPTION du talkie sur le web et « Couper son talkie » sur la fiche d'un lien (#16638).
+- Livré dans la PR (voir #16638) : `lib/talkie/talkie-live.ts` (`talkie:incoming` / `talkie:chunk` / `talkie:ended`,
+  ordre par `seq`, dédoublonnage, émetteur vérifié, expiration à l'horloge de l'onglet, `cut` fait taire sur-le-champ),
+  `lib/talkie/talkie-player.ts` (chaque fragment AAC ADTS décodé en parallèle et planifié À LA SUITE du précédent,
+  tampon de gigue de 80 ms, `AudioContext` créé au premier fragment), `components/talkie-host.tsx` (indicateur non modal
+  « X vous parle » + « Couper », armé dans le chrome différé), « Couper son talkie » ACTIF dès Proche sur la fiche d'un
+  lien. Le réglage par personne est GÉNÉRALISÉ : `lib/relations/person-settings.ts` (une lecture pour la fiche, une
+  écriture stricte d'un champ) sert Bring et talkie, `circle-bring-block.tsx` devient `circle-reception-block.tsx`.
+  `packages/shared/types/talkie-constants.ts` sort les constantes du talkie de `talkie.ts` (qui les répand) pour que le
+  web les lise sans embarquer Zod (le cliquet de poids du chunk `zod` l'exigeait).
+- Ce qui reste du talkie : ÉMETTRE depuis le web (#16641, encodage AAC du navigateur), `proche-talkie@ios`
+  (PushToTalk, NSE), `proche-talkie@android` ; décisions #14465, #14492.
+- Prochain lot recommandé : `proche-talkie@ios` (référence ; recevoir d'abord, prouvé par la CI iOS), sinon l'écoute
+  (#13934) côté web avec le titre défilant sur l'avatar.

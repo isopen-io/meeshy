@@ -14,7 +14,7 @@ extension CallView {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
                 VStack(spacing: MeeshySpacing.mdPlus) {
-                    if mode == .effects {
+                    if mode == .effects, CallPreConnectEffectsRule.showsCompanions(showsConnectedLayout: showsConnectedLayout) {
                         effectsCompanions
                     }
                     if showTranscript {
@@ -66,13 +66,14 @@ extension CallView {
     private func modeControls(_ mode: CallScreenMode) -> some View {
         switch mode {
         case .effects:
-            CallEffectsModeControls(callManager: callManager, capture: capture, subjects: myImageCaptureSubjects, tracks: myImageCaptureTracks, onExit: exitMode)
+            CallEffectsModeControls(callManager: callManager, capture: capture, subjects: myImageCaptureSubjects, tracks: myImageCaptureTracks, capturesMyImage: CallPreConnectEffectsRule.capturesMyImage(showsConnectedLayout: showsConnectedLayout), entryConfig: $effectsEntryConfig, onExit: exitMode)
         case .montage:
             CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, call: montageCallContext, hold: liveFrameHold, onExit: exitMode)
         }
     }
 
     func enterMode(_ mode: CallScreenMode) {
+        if mode == .effects { effectsEntryConfig = nil }
         withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .easeInOut(duration: 0.3)) {
             layer = layer.entering(mode)
         }

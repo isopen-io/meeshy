@@ -33,7 +33,9 @@
  *     retour ;
  *  7. hors ligne, la liste reste lisible et le dit, et la création ne part pas ;
  *     la pastille de synchronisation ne recouvre pas la recherche (#6401) ;
- *  8. aucune erreur de page.
+ *  8. les membres (#6375) : le détail y mène, les rôles se lisent AA, un
+ *     administrateur repasse un modérateur membre et retire un membre confirmé ;
+ *  9. aucune erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -344,6 +346,71 @@ try {
       check(true, `${label} : une conversation ouvre son fil`);
       await page.goBack();
       await page.waitForSelector('[data-community-hero]');
+      // LES MEMBRES (#6375) : le détail y mène, les rôles se lisent AA, et un administrateur
+      // (le lecteur a créé « Équipe déploiement ») change un rôle et retire un membre, au geste.
+      await page.click('[data-community-members-link]');
+      await page.waitForURL('**/communities/m-deploiement/members');
+      await page.waitForSelector('[data-community-member]');
+      const sections = await page.$$eval('[data-community-member-section]', (els) => els.map((el) => el.getAttribute('data-community-member-section')));
+      check(JSON.stringify(sections) === JSON.stringify(['admin', 'moderator', 'member']), `${label} : les membres se rangent par rôle (${JSON.stringify(sections)})`);
+      const managed = await page.$$eval('[data-community-member]', (els) =>
+        els.filter((el) => el.querySelector('[data-community-member-manage]') !== null).map((el) => el.getAttribute('data-community-member')),
+      );
+      check(
+        JSON.stringify(managed) === JSON.stringify(['u-amina', 'u-kwame', 'u-ines', 'u-yuki']),
+        `${label} : ni sa propre ligne ni celle du créateur n'offrent de geste (${JSON.stringify(managed)})`,
+      );
+      const membersRest = await reachAtRest(page, REACH);
+      const membersBlocked = membersRest.controls.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
+      check(membersRest.controls.length >= 3 && membersBlocked.length === 0, `${label} : le retour et chaque « Gérer » s'atteignent, 44 au moins — ${JSON.stringify(membersBlocked)}`);
+      const memberInks = {
+        titre: await contrastOf(page, 'header h1'),
+        nom: await contrastOf(page, '[data-community-member="u-amina"] .text-body'),
+        admin: await contrastOf(page, '[data-community-member-role="admin"]'),
+        moderateur: await contrastOf(page, '[data-community-member-role="moderator"]'),
+        membre: await contrastOf(page, '[data-community-member-role="member"]'),
+        section: await contrastOf(page, '#community-members-admin'),
+      };
+      const memberFaibles = Object.entries(memberInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(memberFaibles.length === 0, `${label} : chaque texte des membres tient AA — ${JSON.stringify(memberInks)}`);
+      await capture(page, `communaute-membres-${slug}`);
+      await page.click('[data-community-member="u-kwame"] [data-community-member-manage]');
+      check(
+        (await page.getAttribute('[data-community-member="u-kwame"] [data-community-member-manage]', 'aria-expanded')) === 'true',
+        `${label} : « Gérer » se déplie et le dit`,
+      );
+      await page.click('[data-community-member="u-kwame"] [data-community-member-make="member"]');
+      await page.waitForSelector('[data-community-member-section="member"] [data-community-member="u-kwame"]');
+      check(true, `${label} : repasser membre range la ligne sous « Membres »`);
+      await page.click('[data-community-member="u-yuki"] [data-community-member-manage]');
+      await page.click('[data-community-member="u-yuki"] [data-community-member-remove]');
+      await page.waitForSelector('[data-confirm-dialog="community-member-remove"]');
+      check(((await textOf(page, '[data-confirm-dialog="community-member-remove"]')) ?? '').includes('Yuki Tanaka'), `${label} : le retrait se confirme, en nommant le membre`);
+      await page.click('[data-confirm-dialog="community-member-remove"] [data-confirm="confirm"]');
+      await page.waitForSelector('[data-community-member="u-yuki"]', { state: 'detached' });
+      check((await page.$('[data-community-members-failure]')) === null, `${label} : le retrait part sans erreur, et la ligne disparaît`);
+      await page.click('[data-community-members-back]');
+      await page.waitForSelector('[data-community-hero]');
+      // INVITER (#6376) : le détail ouvre la feuille, les amis y sont avant toute frappe,
+      // le choix se dit sur le bouton, et l'issue se lit sous « Membres ».
+      await page.click('[data-community-invite-open]');
+      await page.waitForSelector('[data-community-invite-candidate="u-bruno"]');
+      const inviteRest = await reachAtRest(page, { controls: '[data-community-invite] button', texts: '[data-community-invite] .text-body' });
+      const inviteBlocked = inviteRest.controls.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
+      check(inviteRest.controls.length >= 2 && inviteBlocked.length === 0, `${label} : chaque contrôle de la feuille « Inviter » s'atteint, 44 au moins — ${JSON.stringify(inviteBlocked)}`);
+      const inviteInks = {
+        nom: await contrastOf(page, '[data-community-invite-candidate="u-bruno"] .text-body'),
+        pseudo: await contrastOf(page, '[data-community-invite-candidate="u-bruno"] .text-caption'),
+      };
+      const inviteFaibles = Object.entries(inviteInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(inviteFaibles.length === 0, `${label} : chaque texte de la feuille « Inviter » tient AA — ${JSON.stringify(inviteInks)}`);
+      await page.click('[data-community-invite-candidate="u-bruno"]');
+      check((await textOf(page, '[data-community-invite-submit]')) === 'Inviter 1 personne', `${label} : le choix se dit sur le bouton`);
+      await capture(page, `communaute-inviter-${slug}`);
+      await page.click('[data-community-invite-submit]');
+      await page.waitForSelector('[data-community-invite-status]');
+      check((await textOf(page, '[data-community-invite-status]')) === '1 personne a rejoint la communauté.', `${label} : l'invitation se dit, la feuille se ferme`);
+      check((await page.$('[data-community-invite]')) === null, `${label} : la feuille est fermée après l'envoi`);
       await page.goto(`${BASE}/communities/inconnue`, { waitUntil: 'load' });
       await page.waitForSelector('[data-community-refused]');
       check((await textOf(page, '[data-community-refused] p')) === 'Communauté introuvable', `${label} : une adresse inconnue rend le refus`);

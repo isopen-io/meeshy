@@ -121,7 +121,8 @@ import { wireCallMessageBroadcasters } from './callMessageBroadcasters';
 import { attachSocketIORedisAdapter, type SocketIORedisAdapterHandle } from './redis-adapter';
 import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
 import { loadTranslatableMessage } from '../services/messaging/atRestTranslationSource';
-import { loadHistoryFloor, HISTORY_FLOOR_PARTICIPANT_SELECT } from '../services/historyFloor';
+import { historyReaderFromAuthContext } from '../services/historyFloor';
+import { readerMayTranslateMessage } from '../services/messaging/translationReadGate';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -1331,6 +1332,25 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Éteint « ici » pour un membre qui vient de perdre l'appartenance au fil
+   * (#16654).
+   *
+   * Unique appelant : `endConversationMembership`, le point de convergence des
+   * chemins de fin d'appartenance — c'est là qu'est écrit POURQUOI l'extinction
+   * précède l'éviction des rooms. Le raisonnement propre au regard (un registre
+   * en mémoire dont la surface était clavetée par socket, donc inatteignable
+   * depuis une route) vit dans
+   * `ConversationViewingHandler.retractViewingForDepartedMember` ; le
+   * gestionnaire n'en est que le porteur, comme pour la position vive et
+   * l'appel.
+   *
+   * Ne rejette jamais : le handler absorbe ses propres échecs.
+   */
+  public async retractViewingForDepartedMember(conversationId: string, userId: string): Promise<void> {
+    await this.conversationViewingHandler?.retractViewingForDepartedMember(conversationId, userId);
+  }
+
+  /**
    * Expose SocialEventsHandler for use in routes (broadcast social events)
    */
   public getSocialEventsHandler(): SocialEventsHandler {
@@ -2115,12 +2135,23 @@ export class MeeshySocketIOManager {
       }
 
 
-      // Charger le message pour connaître sa conversation, PUIS vérifier
-      // l'appartenance AVANT de servir toute traduction (cache OU on-demand).
-      // Sans cette garde en amont, la branche cache divulguait le contenu
-      // traduit à un non-participant : le contrôle n'existait que côté on-demand,
-      // donc un message déjà mis en cache fuitait vers n'importe quel socket
-      // connaissant son id (IDOR / message-content disclosure).
+      // #16557 — la loi de lecture, AVANT toute traduction, en cache comme à la
+      // demande. Un refus ne dit ni que le message existe, ni qu'il est rappelé :
+      // inconnu, rappelé et « pas pour toi » rendent le même `Access denied`.
+      const connectedUser = this.connectedUsers.get(userId);
+      const mayTranslate = await readerMayTranslateMessage(this.prisma, {
+        reader: historyReaderFromAuthContext({
+          isAnonymous: connectedUser?.isAnonymous,
+          userId: connectedUser?.isAnonymous ? connectedUser.participantId : userId,
+        }),
+        messageId,
+        now: new Date(),
+      });
+      if (!mayTranslate) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
+        return;
+      }
+
       // #11381 — le texte d'un message `server`/`hybrid` est ouvert par la passerelle ; scellé, il reste vide.
       const message = await loadTranslatableMessage(this.prisma, messageId);
 
@@ -2131,57 +2162,6 @@ export class MeeshySocketIOManager {
         return;
       }
 
-      // Verify requesting user is a participant of the message's conversation
-      const connectedUser = this.connectedUsers.get(userId);
-      // #16552 — le `select` porte en plus les colonnes du PLANCHER
-      // D'HISTORIQUE. La garde ne coûte donc aucune requête de plus : elle
-      // s'ajoute à une lecture que ce site faisait déjà (doctrine du cycle 127 —
-      // « avant de conclure qu'une garde coûterait une requête, regarder ce que
-      // le site lit déjà »).
-      const membershipCheck = connectedUser?.isAnonymous
-        ? await this.prisma.participant.findFirst({
-            where: { id: connectedUser.participantId, conversationId: message.conversationId, isActive: true },
-            select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
-          })
-        : await this.prisma.participant.findFirst({
-            where: { userId, conversationId: message.conversationId, isActive: true },
-            select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
-          });
-
-      if (!membershipCheck) {
-        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
-        return;
-      }
-
-      // #16552 — ce que le JUMEAU POUSSÉ du même événement garde déjà.
-      // `deliverTextTranslation` → `translationReaders` exclut, fail-closed, le
-      // lecteur entré après le message ; le chemin DEMANDÉ ne gardait que
-      // l'appartenance ACTIVE. Le même `message:translation` était donc retenu
-      // quand le serveur le POUSSE et remis quand le client le DEMANDE — et
-      // l'id d'un message ancien est à portée de tout client, `replyToId`
-      // voyageant au premier niveau de `message:new`.
-      //
-      // FAIL-CLOSED comme son jumeau : un plancher illisible refuse. Ici c'est
-      // un refus de LECTURE, pas une livraison perdue — se taire ne coûte
-      // qu'une traduction non servie, la servir à tort coûte le message.
-      // Un plancher ILLISIBLE et un plancher `null` sont deux choses : `null` est
-      // une RÉPONSE (« ce lecteur lit tout l'historique »), l'illisibilité est
-      // une ignorance. Les confondre ferait d'une panne de base une
-      // autorisation, d'où le couple explicite plutôt qu'une valeur sentinelle.
-      const floor = await loadHistoryFloor(this.prisma, membershipCheck)
-        .then((value) => ({ readable: true, value }))
-        .catch((error: unknown) => {
-          logger.warn('history floor unreadable — translation request refused', {
-            conversationId: message.conversationId,
-            error,
-          });
-          return { readable: false, value: null };
-        });
-
-      if (!floor.readable || (floor.value !== null && message.createdAt < floor.value)) {
-        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
-        return;
-      }
       const creditRequest = () => creditTranslationRequest({
         engagement: this.translationRequestEngagement,
         requester: { userId, isAnonymous: connectedUser?.isAnonymous ?? false },

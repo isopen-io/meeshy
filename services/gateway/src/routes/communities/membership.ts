@@ -21,6 +21,7 @@ import {
   sendInternalError
 } from '../../utils/response.js';
 import { CommunityRole } from './types';
+import { isAddableUser } from './addable-user';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
@@ -467,12 +468,9 @@ export async function registerMembershipRoutes(
         }
       }
 
-      const userToInvite = await fastify.prisma.user.findFirst({
-        where: { id: inviteeId },
-        select: { id: true }
-      });
-
-      if (!userToInvite) {
+      // #6376 — l'invitation AJOUTE la personne, sans son accord : un compte
+      // vivant, sans blocage (`isAddableUser`, partagé avec POST …/members).
+      if (!(await isAddableUser(fastify.prisma, userId, inviteeId))) {
         return sendNotFound(reply, 'User to invite not found');
       }
 

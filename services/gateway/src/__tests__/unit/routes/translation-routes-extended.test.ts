@@ -15,6 +15,14 @@
  */
 
 import { describe, it, expect, jest, afterEach } from '@jest/globals';
+
+// #16557 — la loi de lecture est prouvée sur une base en mémoire par
+// `translation-read-law.test.ts` ; ce fichier juge autre chose et la tient pour
+// acquise, sauf là où il la refuse explicitement.
+const mockReaderMayTranslate = jest.fn<any>().mockResolvedValue(true);
+jest.mock('../../../services/messaging/translationReadGate', () => ({
+  readerMayTranslateMessage: (...args: unknown[]) => mockReaderMayTranslate(...args),
+}));
 import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -179,7 +187,8 @@ describe('POST /translate-blocking — message_id e2ee returns 400 (line 337)', 
 // ─── message_id path: access denied (lines 342-347) ─────────────────────────
 
 describe('POST /translate-blocking — message_id forbidden (line 345)', () => {
-  it('returns 403 when user is not a participant', async () => {
+  it('returns 404 — the refusal of a non-reader, indistinguishable from an unknown message (#16557)', async () => {
+    mockReaderMayTranslate.mockResolvedValueOnce(false);
     const app = await buildApp({
       messageFindResult: makeMessage({
         conversation: { participants: [{ userId: 'other-user' }] },
@@ -189,7 +198,7 @@ describe('POST /translate-blocking — message_id forbidden (line 345)', () => {
       method: 'POST', url: '/translate-blocking',
       payload: { message_id: MSG_ID, target_language: 'fr' },
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });
