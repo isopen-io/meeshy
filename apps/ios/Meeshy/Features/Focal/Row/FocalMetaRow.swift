@@ -55,6 +55,10 @@ struct FocalMetaRow: View, Equatable {
     /// 2026-08-24 — elle n'a ni l'un ni l'autre : c'est la ligne d'accueil
     /// qui pousse, et le retrait y est déjà appliqué.
     var fillsWidth: Bool = true
+    /// Un envoi en cours reste visible au repos (#16130) ; `false`, il suit le révélé.
+    var pinsPendingDelivery: Bool = false
+    /// Retient l'horloge d'un envoi de moins de 200 ms, qui clignoterait au repos.
+    var sendStartedAt: Date? = nil
 
     /// `==` MANUEL : `onShowReadStatus` est une closure, donc la synthèse
     /// automatique d'`Equatable` ne s'applique plus. Elle est volontairement
@@ -73,6 +77,14 @@ struct FocalMetaRow: View, Equatable {
             && lhs.isEditSaving == rhs.isEditSaving
             && lhs.hasEditHistory == rhs.hasEditHistory
             && lhs.fillsWidth == rhs.fillsWidth
+            && lhs.pinsPendingDelivery == rhs.pinsPendingDelivery
+            && lhs.sendStartedAt == rhs.sendStartedAt
+    }
+
+    /// L'accusé échappe au révélé tant qu'il dit « pas encore parti ». Les coches d'un
+    /// message parti restent au geste (directive 2026-08-24).
+    static func showsDeliveryAtRest(_ status: Message.DeliveryStatus, pinsPendingDelivery: Bool) -> Bool {
+        false
     }
 
     private var metaTint: Color {
