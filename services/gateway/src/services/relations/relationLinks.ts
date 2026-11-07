@@ -28,6 +28,7 @@ import { hasStandingRequest, raiseOutlookOf } from './relationRequestGate';
 import type { RelationLinkDetail } from '@meeshy/shared/types/relation-level-response';
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
 import { isPlatformTeam } from '@meeshy/shared/types/role-types';
+import { ACCOUNT_STATE_SELECT, lawRoleOf } from './usableAccount';
 
 export type { RelationLinkView };
 
@@ -128,14 +129,14 @@ export async function loadRelationLinkDetail(
     niveauEffectifUniforme(prisma, viewerId, otherId),
     prisma.userRelation.findUnique({ where: { userLowId_userHighId: relationPairKey(viewerId, otherId) }, select: LINK_SELECT }),
     hasStandingRequest(prisma, { requesterId: viewerId, otherId }),
-    prisma.user.findMany({ where: { id: { in: [viewerId, otherId] } }, select: { id: true, role: true } }),
+    prisma.user.findMany({ where: { id: { in: [viewerId, otherId] } }, select: { id: true, role: true, ...ACCOUNT_STATE_SELECT } }),
   ]);
   const link: LinkRow | null = row;
   const progress = await loadRelationProgress(prisma, {
     userA: viewerId, userB: otherId, level, levelSince: link?.levelSince ?? null, now,
   });
 
-  const roleOf = (id: string) => people.find((candidate) => candidate.id.toLowerCase() === id.toLowerCase())?.role;
+  const roleOf = (id: string) => lawRoleOf(people.find((candidate) => candidate.id.toLowerCase() === id.toLowerCase()));
   const teamPair = isPlatformTeam(roleOf(viewerId)) && isPlatformTeam(roleOf(otherId));
   const accessLevel = resolveRelationAccess({
     viewerId,

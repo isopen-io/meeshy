@@ -53,6 +53,12 @@ export type PresenceAudienceInput = {
   readonly moderatorIds?: readonly string[];
 };
 
+/**
+ * Les MODERATOR candidats à la transition d'un collègue (#16623) : actifs, ni supprimés
+ * ni désactivés. Un compte parti ne reçoit plus la présence de l'équipe.
+ */
+export const TEAM_COLLEAGUES_WHERE = { role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: null } as const;
+
 export type PresenceStatusAudience = {
   /**
    * Rooms des lecteurs que la loi partagée met en FULL — administrateurs

@@ -63,7 +63,7 @@ import {
   emitToConversationParticipants,
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
-import { presenceStatusEmissions } from './presence-audience';
+import { presenceStatusEmissions, TEAM_COLLEAGUES_WHERE } from './presence-audience';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -2755,7 +2755,7 @@ export class MeeshySocketIOManager {
       return cached.ids;
     }
     const rows = await this.prisma.user.findMany({
-      where: { role: UserRole.MODERATOR, deactivatedAt: null },
+      where: TEAM_COLLEAGUES_WHERE,
       select: { id: true },
     });
     const ids = rows.map(row => row.id);

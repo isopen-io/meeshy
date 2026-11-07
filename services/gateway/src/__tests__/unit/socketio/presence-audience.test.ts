@@ -22,7 +22,9 @@ import type { RelationLevel } from '@meeshy/shared/types/relation';
 import {
   presenceStatusAudience,
   presenceStatusEmissions,
+  TEAM_COLLEAGUES_WHERE,
 } from '../../../socketio/presence-audience';
+import { matchesMongoWhere, type MongoDocument } from '../../helpers/mongo-where';
 
 const SEEN_AT = new Date('2026-08-25T10:00:00.000Z');
 
@@ -230,5 +232,20 @@ describe('presenceStatusEmissions', () => {
     });
 
     expect(emissions).toEqual([{ rooms: [ROOMS.user('u_self')], lastActiveAt: null }]);
+  });
+});
+
+describe('TEAM_COLLEAGUES_WHERE — les modérateurs destinataires de `user:status` (#16623)', () => {
+  it('ne retient que les modérateurs actifs, ni supprimés ni désactivés', () => {
+    const passe = new Date('2026-10-01T00:00:00Z');
+    const comptes = [
+      { id: 'actif', role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: null },
+      { id: 'inactif', role: 'MODERATOR', isActive: false, deletedAt: null, deactivatedAt: null },
+      { id: 'supprime', role: 'MODERATOR', isActive: true, deletedAt: passe, deactivatedAt: null },
+      { id: 'desactive', role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: passe },
+      { id: 'admin', role: 'ADMIN', isActive: true, deletedAt: null, deactivatedAt: null },
+    ];
+    const retenus = comptes.filter((c) => matchesMongoWhere(c as unknown as MongoDocument, TEAM_COLLEAGUES_WHERE as unknown as MongoDocument));
+    expect(retenus.map((c) => c.id)).toEqual(['actif']);
   });
 });

@@ -43,6 +43,7 @@ import {
 import { loadPrivacyPreferencesCached } from '../preferences/privacy-cache';
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
+import { ACCOUNT_STATE_SELECT, lawRoleOf } from '../relations/usableAccount';
 import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
 import { niveauEffectif } from '../friendship';
 import type { PresenceViewer } from '../PresenceVisibilityService';
@@ -183,7 +184,10 @@ export class GameProfileService {
     const [level, people] = await Promise.all([
       niveauEffectif(this.prisma, viewer.userId, targetId),
       isPlatformTeam(viewer.role)
-        ? this.prisma.user.findMany({ where: { id: { in: [viewer.userId, targetId] } }, select: { id: true, role: true, birthDate: true } })
+        ? this.prisma.user.findMany({
+            where: { id: { in: [viewer.userId, targetId] } },
+            select: { id: true, role: true, birthDate: true, ...ACCOUNT_STATE_SELECT },
+          })
         : [],
     ]);
     const now = new Date();
@@ -199,7 +203,7 @@ export class GameProfileService {
         viewerMinor: declaredAgeClass(person(viewer.userId)?.birthDate ?? null, now),
         targetMinor: declaredAgeClass(person(targetId)?.birthDate ?? null, now),
         viewerRole: viewer.role,
-        targetRole: person(targetId)?.role,
+        targetRole: lawRoleOf(person(targetId)),
         feature,
       }).allowed;
     return { kind: opens('game.basic') ? 'friend' : 'other', sparksGlory: opens('game.sparksGlory') };

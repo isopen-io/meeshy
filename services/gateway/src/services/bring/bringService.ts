@@ -68,6 +68,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs }
 import { niveauEffectif } from '../friendship';
 import { bringDayOf } from './bringDay';
 import { buildBringRingPushes, buildBringStoppedPushes } from './bringPush';
+import { ACCOUNT_STATE_SELECT, isUsableAccount, type AccountState } from '../relations/usableAccount';
 
 export type BringDb = Pick<PrismaClient, 'user' | 'friendRequest' | 'userRelation' | 'relationFeatureSetting' | 'userPreferences'>;
 
@@ -120,7 +121,7 @@ const DISABLED = refuse(403, BRING_ERROR_CODES.DISABLED, 'Bring indisponible');
 const USER_SELECT = {
   id: true,
   role: true,
-  deactivatedAt: true,
+  ...ACCOUNT_STATE_SELECT,
   timezone: true,
   birthDate: true,
   displayName: true,
@@ -129,9 +130,8 @@ const USER_SELECT = {
   ...RECIPIENT_LANG_SELECT,
 } as const;
 
-type Party = RecipientLanguagePrefs & {
+type Party = RecipientLanguagePrefs & AccountState & {
   readonly id: string;
-  readonly deactivatedAt: Date | null;
   readonly timezone: string | null;
   readonly birthDate: Date | null;
   readonly displayName: string | null;
@@ -189,7 +189,7 @@ async function judge(deps: BringDeps, fromUserId: string, toUserId: string): Pro
     }),
     receptionPrefs(deps.prisma, toUserId),
   ]);
-  if (!sender || !recipient || sender.deactivatedAt || recipient.deactivatedAt) return NOT_ALLOWED;
+  if (!isUsableAccount(sender) || !isUsableAccount(recipient)) return NOT_ALLOWED;
 
   const now = deps.now();
   const verdict = resolveRelationAccess({

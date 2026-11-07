@@ -148,6 +148,7 @@ function makeBatchMocks(state: {
   deactivatedIds?: string[];
   roles?: Record<string, string>;
   birthDates?: Record<string, Date>;
+  deletedIds?: string[];
 }) {
   const prisma = {
     user: {
@@ -161,6 +162,8 @@ function makeBatchMocks(state: {
           deactivatedAt: (state.deactivatedIds ?? []).includes(id) ? new Date() : null,
           ...(state.roles?.[id] ? { role: state.roles[id] } : {}),
           birthDate: state.birthDates?.[id] ?? null,
+          isActive: true,
+          deletedAt: (state.deletedIds ?? []).includes(id) ? new Date() : null,
         })));
       }),
       findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: state.viewerBlocks ?? [] }),
@@ -180,14 +183,32 @@ function makeBatchMocks(state: {
 
 describe('PresenceVisibilityService — l\'équipe (#16623)', () => {
   const MINEUR = new Date(Date.now() - 15 * 365 * 24 * 3600 * 1000);
-  const personnesLues = (role: string | null, birthDate: Date | null = null) =>
-    jest.fn<any>().mockResolvedValue(role === null ? [] : [{ id: TARGET, role, birthDate }, { id: VIEWER, role: 'MODERATOR', birthDate: null }]);
+  const ACTIF = { isActive: true, deletedAt: null, deactivatedAt: null };
+  const personnesLues = (role: string | null, birthDate: Date | null = null, etat: object = {}) =>
+    jest.fn<any>().mockResolvedValue(
+      role === null ? [] : [{ id: TARGET, role, birthDate, ...ACTIF, ...etat }, { id: VIEWER, role: 'MODERATOR', birthDate: null, ...ACTIF }],
+    );
 
-  const entre = (role: string | null, prefs?: Partial<PrivacyPreferences>, birthDate: Date | null = null) => {
+  const entre = (role: string | null, prefs?: Partial<PrivacyPreferences>, birthDate: Date | null = null, etat: object = {}) => {
     const mocks = makeMocks({ prefs });
-    mocks.prisma.user.findMany = personnesLues(role, birthDate);
+    mocks.prisma.user.findMany = personnesLues(role, birthDate, etat);
     return mocks;
   };
+
+  it.each([
+    ['inactif', { isActive: false }],
+    ['supprimé', { deletedAt: new Date('2026-10-01T00:00:00Z') }],
+  ])('un collègue %s n\'est plus lu comme un Sang', async (_label, etat) => {
+    const v = await entre('ADMIN', undefined, null, etat).service.resolveForTarget({ userId: VIEWER, role: 'MODERATOR' }, target);
+    expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
+
+  it('la liste non plus : un collègue supprimé n\'est pas servi', async () => {
+    const { service } = makeBatchMocks({ roles: { collegue: 'ADMIN', parti: 'ADMIN' }, deletedIds: ['parti'] });
+    const map = await service.resolveForTargets({ userId: VIEWER, role: 'MODERATOR' }, ['collegue', 'parti']);
+    expect(map.get('collegue')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(map.get('parti')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
 
   it('un adulte de l\'équipe ne lit pas un collègue mineur déclaré comme un Sang', async () => {
     const v = await entre('ADMIN', undefined, MINEUR).service.resolveForTarget({ userId: VIEWER, role: 'MODERATOR' }, target);

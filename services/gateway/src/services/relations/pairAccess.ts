@@ -16,6 +16,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { declaredAgeClass, type DeclaredAgeClass } from '@meeshy/shared/utils/age';
+import { ACCOUNT_STATE_SELECT, lawRoleOf } from './usableAccount';
 import { relationAccessReads, resolveRelationAccess, type RelationAccess } from '@meeshy/shared/utils/relation-access';
 import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
@@ -37,8 +38,11 @@ export type PairAccessAmongParams = {
 type PairPerson = { readonly age: DeclaredAgeClass; readonly role: string | null };
 
 async function peopleOf(prisma: PairAccessDb, ids: readonly string[], now: Date): Promise<ReadonlyMap<string, PairPerson>> {
-  const rows = await prisma.user.findMany({ where: { id: { in: [...ids] } }, select: { id: true, birthDate: true, role: true } });
-  return new Map(rows.map((row) => [row.id, { age: declaredAgeClass(row.birthDate ?? null, now), role: row.role ?? null }]));
+  const rows = await prisma.user.findMany({
+    where: { id: { in: [...ids] } },
+    select: { id: true, birthDate: true, role: true, ...ACCOUNT_STATE_SELECT },
+  });
+  return new Map(rows.map((row) => [row.id, { age: declaredAgeClass(row.birthDate ?? null, now), role: lawRoleOf(row) }]));
 }
 
 async function coMembersAmong(prisma: PairAccessDb, subjectId: string, ids: readonly string[]): Promise<ReadonlySet<string>> {

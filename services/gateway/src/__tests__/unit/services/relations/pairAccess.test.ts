@@ -45,6 +45,9 @@ const QUIDAM = '6100000000000000000000b3';
 const SANS_ROLE = '6100000000000000000000b4';
 const ANALYSTE = '6100000000000000000000b5';
 const EQUIPE_MINEURE = '6100000000000000000000b6';
+const ADMIN_SUPPRIME = '6100000000000000000000b7';
+const MODO_INACTIF = '6100000000000000000000b8';
+const MODO_DESACTIVE = '6100000000000000000000b9';
 
 const equipe = () =>
   messagingWorld({
@@ -56,6 +59,9 @@ const equipe = () =>
       { id: SANS_ROLE, birthDate: ADULT_BIRTH },
       { id: ANALYSTE, birthDate: ADULT_BIRTH, role: 'ANALYST' },
       { id: EQUIPE_MINEURE, birthDate: MINOR_BIRTH, role: 'ADMIN' },
+      { id: ADMIN_SUPPRIME, birthDate: ADULT_BIRTH, role: 'ADMIN', deletedAt: new Date('2026-10-01T00:00:00Z') },
+      { id: MODO_INACTIF, birthDate: ADULT_BIRTH, role: 'MODERATOR', isActive: false },
+      { id: MODO_DESACTIVE, birthDate: ADULT_BIRTH, role: 'MODERATOR', deactivatedAt: new Date('2026-10-01T00:00:00Z') },
     ],
     communityMembers: [],
   });
@@ -86,6 +92,13 @@ describe('pairAccessAmong — l\'équipe (#16623)', () => {
       subjectIs: 'viewer',
     });
     expect(verdicts.get(ADMINISTRATEUR)).toMatchObject({ allowed: false, effectiveLevel: 'PUBLIC' });
+  });
+
+  it('un compte de l\'équipe supprimé, inactif ou désactivé n\'a plus le privilège, dans aucun sens', async () => {
+    const hors = [ADMIN_SUPPRIME, MODO_INACTIF, MODO_DESACTIVE];
+    const vers = await pairAccessAmong(db(equipe()), { feature: 'dm.typing', subjectId: MODERATRICE, otherIds: hors, subjectIs: 'viewer' });
+    const depuis = await pairAccessAmong(db(equipe()), { feature: 'dm.typing', subjectId: MODERATRICE, otherIds: hors, subjectIs: 'target' });
+    expect([...vers.values(), ...depuis.values()].map((v) => v.allowed)).toEqual([false, false, false, false, false, false]);
   });
 
   it('le bouclier des mineurs n\'est pas franchi par le rôle', async () => {

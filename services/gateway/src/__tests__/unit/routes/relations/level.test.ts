@@ -42,6 +42,7 @@ type Monde = {
   readonly acceptees?: ReadonlyArray<{ readonly senderId: string; readonly receiverId: string; readonly respondedAt: Date }>;
   readonly roles?: Readonly<Record<string, string>>;
   readonly naissances?: Readonly<Record<string, Date>>;
+  readonly supprimes?: readonly string[];
 };
 
 /**
@@ -53,12 +54,12 @@ type Monde = {
  */
 const memeObjectId = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-function prismaDouble({ niveaux, bloques = [], acceptees = [], roles = {}, naissances = {} }: Monde) {
+function prismaDouble({ niveaux, bloques = [], acceptees = [], roles = {}, naissances = {}, supprimes = [] }: Monde) {
   const user = {
     findMany: jest.fn<any>(async (args: any) =>
       Object.entries(roles)
         .filter(([id]) => args.where.id.in.some((wanted: string) => memeObjectId(wanted, id)))
-        .map(([id, role]) => ({ id, role, birthDate: naissances[id] ?? null }))
+        .map(([id, role]) => ({ id, role, birthDate: naissances[id] ?? null, isActive: true, deletedAt: supprimes.includes(id) ? new Date() : null, deactivatedAt: null }))
     ),
     findFirst: jest.fn<any>(async (args: any) => {
       const or: ReadonlyArray<{ id: string; blockedUserIds: { has: string } }> = args.where.OR;
@@ -188,6 +189,12 @@ describe('GET /relations/:userId', () => {
     expect((await lire(bloque.app, AUTRE)).json().data).toEqual((await lire(libre.app, AUTRE)).json().data);
     await bloque.app.close();
     await libre.app.close();
+  });
+
+  it('un collègue supprimé n\'a plus le privilège : `accessLevel` vaut le niveau réel (#16623)', async () => {
+    const { app } = await monter({ roles: { [MOI]: 'ADMIN', [AUTRE]: 'MODERATOR' }, supprimes: [AUTRE] });
+    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'PUBLIC'));
+    await app.close();
   });
 
   it('un collègue mineur déclaré ne se distingue pas d\'un collègue adulte : `accessLevel` ne dit pas l\'âge (#16623)', async () => {

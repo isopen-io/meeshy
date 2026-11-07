@@ -5,6 +5,7 @@ import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import { declaredAgeClass, type DeclaredAgeClass } from '@meeshy/shared/utils/age';
+import { ACCOUNT_STATE_SELECT, lawRoleOf } from './relations/usableAccount';
 import { PrivacyPreferencesService } from './PrivacyPreferencesService';
 import { amisAcceptes, niveauEffectif, niveauxParmi } from './friendship';
 import { getBlockedUserIdsAmong, isBlockedBetween } from '../utils/blocking';
@@ -47,11 +48,11 @@ export class PresenceVisibilityService {
    */
   private async teamPeople(ids: readonly string[]): Promise<ReadonlyMap<string, TeamPerson>> {
     const now = new Date();
-    const rows: ReadonlyArray<{ id: string; role: string | null; birthDate: Date | null }> = await this.prisma.user.findMany({
+    const rows = await this.prisma.user.findMany({
       where: { id: { in: [...ids] } },
-      select: { id: true, role: true, birthDate: true },
+      select: { id: true, role: true, birthDate: true, ...ACCOUNT_STATE_SELECT },
     });
-    return new Map(rows.map((row) => [row.id, { role: row.role, age: declaredAgeClass(row.birthDate ?? null, now) }]));
+    return new Map(rows.map((row) => [row.id, { role: lawRoleOf(row), age: declaredAgeClass(row.birthDate ?? null, now) }]));
   }
 
   async resolveForTarget(viewer: PresenceViewer, target: PresenceTarget): Promise<PresenceVisibility> {
@@ -100,10 +101,10 @@ export class PresenceVisibilityService {
     const team = isPlatformTeam(viewer.role);
     const targetRows = await this.prisma.user.findMany({
       where: { id: { in: team ? [...new Set([...uniqueIds, viewer.userId])] : uniqueIds } },
-      select: { id: true, deactivatedAt: true, role: true, birthDate: true },
+      select: { id: true, role: true, birthDate: true, ...ACCOUNT_STATE_SELECT },
     });
     const now = new Date();
-    const roles = new Map(targetRows.map((r: { id: string; role?: string | null }) => [r.id, r.role]));
+    const roles = new Map(targetRows.map((r) => [r.id, lawRoleOf(r)]));
     const ages = new Map(
       targetRows.map((r: { id: string; birthDate?: Date | null }) => [r.id, team ? declaredAgeClass(r.birthDate ?? null, now) : 'unknown'] as const),
     );

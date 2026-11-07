@@ -14,9 +14,13 @@ const CIBLE = '6100000000000000000000d2';
 
 const MINEUR = new Date(Date.now() - 15 * 365 * 24 * 3600 * 1000);
 
-const service = (targetRole: string | null, blocked = false, birthDate: Date | null = null) => {
+const ACTIF = { isActive: true, deletedAt: null, deactivatedAt: null };
+
+const service = (targetRole: string | null, blocked = false, birthDate: Date | null = null, etat: object = {}) => {
   const findMany = jest.fn<any>().mockResolvedValue(
-    targetRole === null ? [] : [{ id: CIBLE, role: targetRole, birthDate }, { id: LECTEUR, role: 'MODERATOR', birthDate: null }],
+    targetRole === null
+      ? []
+      : [{ id: CIBLE, role: targetRole, birthDate, ...ACTIF, ...etat }, { id: LECTEUR, role: 'MODERATOR', birthDate: null, ...ACTIF }],
   );
   const prisma = {
     user: { findMany, findFirst: jest.fn<any>().mockResolvedValue(blocked ? { id: CIBLE } : null) },
@@ -50,6 +54,11 @@ describe('viewerReach — l\'équipe (#16623)', () => {
 
   it('un adulte de l\'équipe ne voit pas le jeu d\'un collègue mineur déclaré comme un Sang', async () => {
     const reach = await service('ADMIN', false, MINEUR).game.viewerReach({ userId: LECTEUR, role: 'MODERATOR' }, CIBLE);
+    expect(reach).toEqual({ kind: 'other', sparksGlory: false });
+  });
+
+  it('un collègue supprimé n\'a plus le privilège', async () => {
+    const reach = await service('ADMIN', false, null, { deletedAt: new Date('2026-10-01T00:00:00Z') }).game.viewerReach({ userId: LECTEUR, role: 'MODERATOR' }, CIBLE);
     expect(reach).toEqual({ kind: 'other', sparksGlory: false });
   });
 });

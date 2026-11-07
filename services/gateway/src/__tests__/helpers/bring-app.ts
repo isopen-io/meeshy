@@ -18,6 +18,8 @@ export type Emission = { readonly room: string; readonly event: string; readonly
 export type Personne = {
   readonly timezone?: string | null;
   readonly deactivatedAt?: Date | null;
+  readonly isActive?: boolean;
+  readonly deletedAt?: Date | null;
   readonly birthDate?: Date | null;
   readonly blockedUserIds?: readonly string[];
   readonly systemLanguage?: string;
@@ -71,6 +73,8 @@ export async function buildBringApp(
         lastName: 'B',
         avatar: null,
         deactivatedAt: p.deactivatedAt ?? null,
+        isActive: p.isActive ?? true,
+        deletedAt: p.deletedAt ?? null,
         timezone: p.timezone ?? null,
         birthDate: p.birthDate ?? null,
         blockedUserIds: [...(p.blockedUserIds ?? [])],

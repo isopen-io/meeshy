@@ -122,6 +122,30 @@ describe('#16623 — l\'équipe a le Bring sans lien', () => {
     expect(disponible.body.data.available).toBe(false);
   });
 
+  it('un collègue mineur déclaré qui sonne peut être bloqué : le réglage se juge dans les deux sens', async () => {
+    const quinzeAns = new Date(Date.now() - 15 * 365 * 24 * 3600 * 1000);
+    const app = await appli({ personnes: { [MOI]: { role: 'MODERATOR', birthDate: quinzeAns }, [AUTRE]: { role: 'ADMIN' } } });
+    const sonnerie = await sonner(app);
+    const reglage = await reglerPour(app, MOI, { bringBlocked: true });
+    await app.close();
+    expect(sonnerie.status).toBe(201);
+    expect(reglage.status).toBe(200);
+  });
+
+  it.each([
+    ['inactif', { isActive: false }],
+    ['supprimé', { deletedAt: new Date('2026-10-01T00:00:00Z') }],
+  ])('un collègue %s n\'a plus le privilège : le même refus qu\'à un inconnu', async (_label, etat) => {
+    const app = await appli({ personnes: { [MOI]: { role: 'MODERATOR' }, [AUTRE]: { role: 'ADMIN', ...etat } } });
+    const inconnu = await appli();
+    const refus = await sonner(app);
+    const reference = await sonner(inconnu);
+    await app.close();
+    await inconnu.close();
+    expect(refus.status).toBe(reference.status);
+    expect(refus.body).toEqual(reference.body);
+  });
+
   it('bloquer les Bring d\'un collègue s\'écrit sans lien, et le ferme', async () => {
     const app = await appli(equipe);
     const reglage = await reglerPour(app, MOI, { bringBlocked: true });
