@@ -78,6 +78,9 @@ export type CallGridProps = {
   readonly onToggleImmersive: () => void;
   readonly moderation: CallModeration | null;
   readonly language: InterfaceLanguage;
+  /** Le chrome est-il affiché (#9183, `GroupStageTapRule.outcome(isChromeVisible:)` sur iOS). Par défaut visible : une scène sans chrome à gérer (témoins qui n'en parlent pas) garde l'ancien comportement. */
+  readonly chromeVisible?: boolean;
+  readonly onRevealChrome?: () => void;
 };
 
 function NameLabel({ name, muted, suffix }: { readonly name: string; readonly muted: boolean; readonly suffix: string | null }) {
@@ -191,9 +194,10 @@ function SharedScreen({ member, stream, language }: { readonly member: CallMembe
   );
 }
 
-export function CallGrid({ members, remoteStreams, self, selfControls = null, choice, onChoose, immersive, onToggleImmersive, moderation, language }: CallGridProps) {
-  const featureSelf = () => onChoose(chooseSelf());
-  const feature = (member: CallMember) => () => onChoose(chooseMember(member.userId));
+export function CallGrid({ members, remoteStreams, self, selfControls = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined }: CallGridProps) {
+  /** #9183 — chrome masqué, toucher une tuile le RANGE/rend au lieu de changer la une (`GroupStageTapRule` sur iOS). */
+  const featureSelf = () => (chromeVisible ? onChoose(chooseSelf()) : onRevealChrome());
+  const feature = (member: CallMember) => () => (chromeVisible ? onChoose(chooseMember(member.userId)) : onRevealChrome());
   const featureLabel = (member: CallMember) => translate(language, 'call.spotlight.show', { name: member.name });
   const view = resolveSpotlight({ members, choice, remoteStreams });
 

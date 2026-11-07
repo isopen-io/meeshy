@@ -67,22 +67,35 @@ type ChromeInput = {
   readonly swallowTap?: () => boolean;
 };
 
+export type CallChrome = {
+  readonly visibility: ChromeVisibility;
+  /**
+   * Range ou rend les commandes comme le ferait un toucher de la scène
+   * (#9183) — pour un appelant qui n'en a pas émis un : une tuile de groupe
+   * est un `<button>`, donc `tapTogglesChrome` lui laisse toujours son
+   * toucher (loi `INTERACTIVE`). Chrome masqué, une tuile appelle `reveal()`
+   * au lieu de se mettre à la une ; chrome visible, elle se met à la une
+   * normalement — exactement `GroupStageTapRule.outcome(isChromeVisible:)`.
+   */
+  readonly reveal: () => void;
+};
+
 /**
  * Ce que montrent les commandes : `shown` hors d'une scène vidéo, sinon
  * l'état de `chromeAfter` — que l'écran projette en opacité et en visibilité.
  */
-export function useCallChrome({ videoScene, root, swallowTap }: ChromeInput): ChromeVisibility {
+export function useCallChrome({ videoScene, root, swallowTap }: ChromeInput): CallChrome {
   const [visibility, setVisibility] = useState<ChromeVisibility>('shown');
   const scene = useRef(videoScene);
   scene.current = videoScene;
   const swallow = useRef(swallowTap);
   swallow.current = swallowTap;
+  const cue = (next: ChromeCue) => setVisibility((current) => chromeAfter(current, next));
 
   useEffect(() => {
     const element = root.current;
     if (element === null) return undefined;
     const page = element.ownerDocument;
-    const cue = (next: ChromeCue) => setVisibility((current) => chromeAfter(current, next));
     const key = () => cue('key');
     const tap = (event: Event) => {
       if (swallow.current?.() === true) return;
@@ -102,5 +115,5 @@ export function useCallChrome({ videoScene, root, swallowTap }: ChromeInput): Ch
     if (!videoScene) setVisibility('shown');
   }, [videoScene]);
 
-  return videoScene ? visibility : 'shown';
+  return { visibility: videoScene ? visibility : 'shown', reveal: () => cue('tap') };
 }
