@@ -21,6 +21,8 @@ nonisolated struct ComposerAutosaveSignature: Equatable {
     let format: ComposerFormat
     /// Le choix armé au chevron (#9419) : le choisir est une mutation.
     let publishChoice: ComposerPublishChoice?
+    /// « Désactiver les commentaires » (#16541) : le basculer est une mutation.
+    let commentsDisabled: Bool
 }
 
 extension MeeshyComposerHost {
@@ -43,7 +45,7 @@ extension MeeshyComposerHost {
                                   location: documentLocation,
                                   references: composerReferences,
                                   format: selectedFormat,
-                                  publishChoice: authorPublishChoice)
+                                  publishChoice: authorPublishChoice, commentsDisabled: commentsDisabledChoice)
     }
 
     /// L'état à écrire — `nil` hors du meuble : l'atelier tient son propre
@@ -75,7 +77,7 @@ extension MeeshyComposerHost {
             audios: viewModel.loadedAudioURLs,
             stickerAnimations: viewModel.loadedStickerAnimations,
             adoptedLocalMedia: viewModel.adoptedLocalMedia,
-            publishChoice: authorPublishChoice
+            publishChoice: authorPublishChoice, commentsDisabled: commentsDisabledChoice
         )
     }
 
@@ -121,11 +123,11 @@ extension MeeshyComposerHost {
         documentLanguage = state.language
         documentLocation = state.location
         composerReferences = state.references
-        // Le format d'OUVERTURE n'est pas rendu : il n'a aucun écrivain, et la
-        // surface ne bouge pas sous les doigts de l'auteur. Ce qu'il avait ARMÉ
-        // à l'envoi (#6502) — format et disposition — revient, lui (#9419), et
-        // reste son choix : aucune bascule automatique ne l'écrase.
+        // Le format d'OUVERTURE n'est pas rendu : aucun écrivain, et la surface
+        // ne bouge pas sous les doigts de l'auteur. Ce qu'il avait ARMÉ (#6502) —
+        // format, disposition — revient (#9419) : aucune bascule ne l'écrase.
         if let choix = state.publishChoice { chooseArmedPublish(choix) }
+        commentsDisabledChoice = state.commentsDisabled
     }
 
     func scheduleAutosave() {

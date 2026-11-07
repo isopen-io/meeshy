@@ -46,7 +46,8 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
             storyEffects: storyEffects,
             mediaCaption: mediaCaption,
             mediaAlt: mediaAlt,
-            allowSoundExtraction: allowSoundExtraction
+            allowSoundExtraction: allowSoundExtraction,
+            commentsDisabled: nil
         )
     }
 

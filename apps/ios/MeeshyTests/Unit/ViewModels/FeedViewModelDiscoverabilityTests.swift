@@ -145,7 +145,7 @@ final class FeedViewModelDiscoverabilityTests: XCTestCase {
             declaredType: .reel, forcePlainPost: false, content: "Concert", visibility: "PUBLIC",
             visibilityUserIds: nil, originalLanguage: nil, mentions: nil, location: makePlace(),
             discoverabilityPrecision: precision, transcription: nil, storyEffects: nil,
-            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil, commentsDisabled: false
         )
     }
 

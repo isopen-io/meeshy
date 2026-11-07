@@ -1009,7 +1009,7 @@ final class FeedViewModelTests: XCTestCase {
             declaredType: type, forcePlainPost: false, content: content, visibility: "PUBLIC",
             visibilityUserIds: nil, originalLanguage: originalLanguage, mentions: nil, location: location,
             discoverabilityPrecision: discoverabilityPrecision, transcription: nil, storyEffects: nil,
-            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil, commentsDisabled: false
         )
     }
 

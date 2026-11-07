@@ -282,7 +282,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             transcription: brouillon.mobileTranscription,
             storyEffects: brouillon.storyEffects,
             mediaCaptions: brouillon.mediaCaptions, mediaAlts: brouillon.mediaAlts, mediaObjectIds: brouillon.mediaObjectIds,
-            allowSoundExtraction: brouillon.allowSoundExtraction
+            allowSoundExtraction: brouillon.allowSoundExtraction, commentsDisabled: false
         )
         XCTAssertEqual(intent.location, lieu, "Le lieu choisi doit atteindre l'intention publiée, jamais s'y perdre.")
     }
@@ -511,7 +511,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             transcription: brouillon.mobileTranscription,
             storyEffects: brouillon.storyEffects,
             mediaCaptions: brouillon.mediaCaptions, mediaAlts: brouillon.mediaAlts, mediaObjectIds: brouillon.mediaObjectIds,
-            allowSoundExtraction: brouillon.allowSoundExtraction
+            allowSoundExtraction: brouillon.allowSoundExtraction, commentsDisabled: false
         )
         XCTAssertNotNil(
             intent.mobileTranscription,
@@ -553,7 +553,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             discoverabilityPrecision: nil,
             transcription: MobileTranscriptionPayload(text: "Salaam", language: "wo"),
             storyEffects: nil,
-            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil, commentsDisabled: false
         )
         XCTAssertEqual(
             intent.originalLanguage, "wo",
@@ -581,7 +581,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             discoverabilityPrecision: nil,
             transcription: nil,
             storyEffects: nil,
-            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil, commentsDisabled: false
         )
         XCTAssertEqual(
             intent.originalLanguage, "en",

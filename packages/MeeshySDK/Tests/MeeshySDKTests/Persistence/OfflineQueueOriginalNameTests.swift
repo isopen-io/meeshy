@@ -96,7 +96,7 @@ final class OfflineQueueOriginalNameTests: XCTestCase {
             sourceMediaURLs: [copy, camera], sourceMediaMimeTypes: ["application/pdf", "video/mp4"],
             clientMutationId: cmid, content: nil, visibility: "PUBLIC",
             mobileTranscription: nil, storyEffects: nil, mediaCaptions: nil, mediaAlts: nil,
-            mediaObjectIds: nil, allowSoundExtraction: nil)
+            mediaObjectIds: nil, allowSoundExtraction: nil, commentsDisabled: nil)
 
         let payload = try await postPayload(cmid: cmid)
         let sent = result.localMediaPaths.map { URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(forStored: $0)) }
@@ -112,6 +112,32 @@ final class OfflineQueueOriginalNameTests: XCTestCase {
         let relu = payload.withUploadedMedia([UploadedPostMedia(sourceIndex: 0, id: "id", url: "u")])
 
         XCTAssertEqual(relu.localMediaOriginalNames, ["Devis.pdf"])
+    }
+
+    /// #16585 — la progression RÉÉCRIT la ligne : un rejeu après relance relit
+    /// cette copie, et une copie qui oublierait le choix publierait ouvert.
+    func test_postMediaProgress_keepsTheCommentClosure() {
+        let payload = CreatePostPayload(
+            clientMutationId: "m", content: "", attachmentIds: [], visibility: "PUBLIC",
+            localMediaPaths: ["pending-media/m/0.jpg"], commentsDisabled: true)
+
+        let relu = payload.withUploadedMedia([UploadedPostMedia(sourceIndex: 0, id: "id", url: "u")])
+
+        XCTAssertEqual(relu.commentsDisabled, true)
+    }
+
+    /// #16585 — le choix s'écrit sur la ligne, dans la transaction qui la crée.
+    func test_enqueuePostMedia_closedPublication_writesTheChoiceOnTheRow() async throws {
+        let cmid = "cmid_\(UUID().uuidString.lowercased())"
+
+        _ = try await queue.enqueuePostMedia(
+            sourceMediaURLs: [try tempFile(ext: "jpg")], sourceMediaMimeTypes: nil,
+            clientMutationId: cmid, content: nil, visibility: "PUBLIC",
+            mobileTranscription: nil, storyEffects: nil, mediaCaptions: nil, mediaAlts: nil,
+            mediaObjectIds: nil, allowSoundExtraction: nil, commentsDisabled: true)
+
+        let relue = try await postPayload(cmid: cmid)
+        XCTAssertEqual(relue.commentsDisabled, true)
     }
 
     func test_postPayload_withoutNames_namesNoFile() {

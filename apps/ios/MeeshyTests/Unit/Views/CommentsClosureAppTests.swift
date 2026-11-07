@@ -118,25 +118,47 @@ final class CommentsClosureAppTests: XCTestCase {
         XCTAssertFalse(Self.draft(.status).closingComments(true).commentsDisabled)
     }
 
-    func test_registry_carriesTheChoiceToTheDurableBody_byMutationId() throws {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "CommentsClosureAppTests.\(UUID().uuidString)"))
+    /// #16585 — le corps vient de la ligne : le choix doit y entrer, par les
+    /// deux portes qui enfilent, sans quoi la publication naît ouverte.
+    func test_durablePublisher_writesTheClosureOnTheRow() async throws {
+        let file = MockOfflineQueue()
 
-        PublicationCommentClosure.record("cmid-closed", disabled: true, defaults: defaults)
-        PublicationCommentClosure.record("cmid-open", disabled: false, defaults: defaults)
+        let accepted = await ComposerDocumentDurablePublisher.publish(Self.draft(.post).closingComments(true), queue: file, isOffline: false)
 
-        XCTAssertEqual(PublicationCommentClosure.commentsDisabled(for: "cmid-closed", defaults: defaults), true)
-        XCTAssertNil(PublicationCommentClosure.commentsDisabled(for: "cmid-open", defaults: defaults))
-        XCTAssertEqual(PublicationCommentClosure.commentsDisabled(for: "cmid-closed", defaults: defaults), true,
-                       "un rejeu de la même ligne relit le même choix")
+        XCTAssertTrue(accepted)
+        XCTAssertEqual(file.enqueuePostMediaCalls.first?.commentsDisabled, true)
+    }
+
+    func test_durablePublisher_leavesAnOpenPublicationSilent() async throws {
+        let file = MockOfflineQueue()
+
+        _ = await ComposerDocumentDurablePublisher.publish(Self.draft(.post), queue: file, isOffline: false)
+
+        XCTAssertEqual(file.enqueuePostMediaCalls.count, 1)
+        XCTAssertNil(file.enqueuePostMediaCalls.first?.commentsDisabled, "ouverte : la clé reste absente du corps")
+    }
+
+    /// Le corps de `DocumentComposerDoor` est privé : sa jumelle ci-dessus le
+    /// prouve par comportement, celle-ci se lit à la source.
+    func test_feedDoor_handsTheDraftsClosureToTheIntent() throws {
+        let code = try Self.composerSource("DocumentComposerDoor.swift")
+
+        XCTAssertTrue(code.contains("commentsDisabled: draft.commentsDisabled"))
     }
 
     func test_durableBody_encodesTheClosureOnlyWhenSet() throws {
-        var body = Self.body()
-        XCTAssertNil(try Self.json(body)["commentsDisabled"])
+        XCTAssertNil(try Self.json(Self.body(commentsDisabled: nil))["commentsDisabled"])
+        XCTAssertEqual(try Self.json(Self.body(commentsDisabled: true))["commentsDisabled"] as? Bool, true)
+    }
 
-        body.commentsDisabled = true
+    /// #16585 — le meuble relit le choix avec le brouillon, et le basculer
+    /// suffit à l'écrire : la bascule ne touche ni le texte, ni la scène.
+    func test_composer_savesAndRestoresTheClosure() throws {
+        let code = try Self.composerSource("MeeshyComposerHost+Autosave.swift")
 
-        XCTAssertEqual(try Self.json(body)["commentsDisabled"] as? Bool, true)
+        XCTAssertEqual(code.components(separatedBy: "commentsDisabled: commentsDisabledChoice").count - 1, 2,
+                       "la signature ET l'état écrit portent le choix")
+        XCTAssertTrue(code.contains("commentsDisabledChoice = state.commentsDisabled"))
     }
 
     // MARK: - Fabriques
@@ -150,14 +172,23 @@ final class CommentsClosureAppTests: XCTestCase {
         )
     }
 
-    private static func body() -> CreatePostBody {
+    private static func composerSource(_ nom: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Composer/\(nom)")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private static func body(commentsDisabled: Bool?) -> CreatePostBody {
         CreatePostBody(
             content: "x", mediaIds: nil, visibility: "PUBLIC",
             originalLanguage: nil, type: nil, moodEmoji: nil,
             audioUrl: nil, audioDuration: nil, visibilityUserIds: nil,
             location: nil, mentions: nil, discoverabilityPrecision: nil,
             repostOfId: nil, mobileTranscription: nil, storyEffects: nil,
-            mediaCaption: nil, mediaAlt: nil, allowSoundExtraction: nil
+            mediaCaption: nil, mediaAlt: nil, allowSoundExtraction: nil,
+            commentsDisabled: commentsDisabled
         )
     }
 

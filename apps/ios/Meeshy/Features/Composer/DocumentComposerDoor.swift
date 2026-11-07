@@ -342,9 +342,9 @@ struct DocumentComposerDoor: View {
             // **L'autorisation d'extraction du son** (#3996). Même discipline
             // que le canvas juste au-dessus : la porte jumelle passe la même
             // valeur au même rang.
-            allowSoundExtraction: draft.allowSoundExtraction
+            allowSoundExtraction: draft.allowSoundExtraction,
+            commentsDisabled: draft.commentsDisabled
         )
-        PublicationCommentClosure.record(intent.clientMutationId, disabled: draft.commentsDisabled)
         await viewModel.publish(intent)
 
         let issue = ComposerDocumentSendOutcome.reported(

@@ -266,7 +266,21 @@ final class ComposerNonDestructiveEditTests: XCTestCase {
 
     func test_publierUnDocument_cuitLeLookAvantDeRemettre() throws {
         let code = try source("MeeshyComposerHost+Socle.swift")
-        XCTAssertTrue(code.contains("awaitonPublishDocument(awaitComposerDocumentLookBake.baked(draft))"),
+        XCTAssertTrue(code.contains("awaitonPublishDocument(awaitComposerDocumentLookBake.baked(draft.closingComments(commentsDisabledChoice)))"),
                       "post, réel et document à plusieurs scènes passent par la cuisson, comme la story")
+        XCTAssertEqual(code.components(separatedBy: "onPublishDocument(").count - 1, 1,
+                       "aucune autre remise ne contourne la cuisson")
+    }
+
+    /// La cuisson RÉÉCRIT le brouillon : ce qu'elle ne recopie pas ne part pas.
+    func test_documentBake_gardeLaFermetureDesCommentaires() async throws {
+        let url = try fichierGris()
+        let draft = brouillon(url, effets: effets(look: StoryMediaLook(filterPreset: "warm"), url: url))
+            .closingComments(true)
+
+        let cuit = await ComposerDocumentLookBake.baked(draft)
+
+        XCTAssertNotEqual(cuit.localMedia.first?.url, url, "le brouillon est bien passé par la réécriture")
+        XCTAssertTrue(cuit.commentsDisabled)
     }
 }

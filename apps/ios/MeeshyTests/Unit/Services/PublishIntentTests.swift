@@ -88,7 +88,7 @@ final class PublishIntentTests: XCTestCase {
             mediaCaptions: mediaCaptions,
             mediaAlts: mediaAlts,
             mediaObjectIds: mediaObjectIds,
-            allowSoundExtraction: allowSoundExtraction
+            allowSoundExtraction: allowSoundExtraction, commentsDisabled: false
         )
     }
 
@@ -256,6 +256,21 @@ final class PublishIntentTests: XCTestCase {
             intentionDocument(allowSoundExtraction: nil).allowSoundExtraction,
             "`nil` doit rester `nil` — c'est « l'auteur n'a rien décidé », distinct d'un refus explicite."
         )
+    }
+
+    /// #16541 — un brouillon ouvert ne dit rien : `false` ne part jamais.
+    func test_laFermetureDesCommentaires_nExisteDansLIntentionQueSiElleEstChoisie() {
+        func intention(_ fermee: Bool) -> PublishIntent {
+            PublishIntent.document(
+                localMedia: [], declaredType: .post, forcePlainPost: false, content: "x", visibility: "PUBLIC",
+                visibilityUserIds: nil, originalLanguage: nil, mentions: nil, location: nil,
+                discoverabilityPrecision: nil, transcription: nil, storyEffects: nil,
+                mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil,
+                commentsDisabled: fermee)
+        }
+
+        XCTAssertEqual(intention(true).commentsDisabled, true)
+        XCTAssertNil(intention(false).commentsDisabled)
     }
 
     // MARK: - Lecture de la source de production
@@ -455,7 +470,7 @@ final class PublishIntentTests: XCTestCase {
             originalLanguage: "fr", mentions: nil, location: nil,
             discoverabilityPrecision: nil, transcription: nil, storyEffects: nil,
             mediaCaptions: [b.url: "Au bord de l'eau"], mediaAlts: [:], mediaObjectIds: [:],
-            allowSoundExtraction: nil)
+            allowSoundExtraction: nil, commentsDisabled: false)
 
         XCTAssertEqual(intent.type, "REEL")
         XCTAssertEqual(intent.content, "Au bord de l'eau\n#voyage")

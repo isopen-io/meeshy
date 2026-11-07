@@ -78,7 +78,8 @@ nonisolated enum ComposerAutosaveCodec {
                 .init(format: ComposerAutosaveFormatCode.code($0.format), layout: $0.layout?.rawValue,
                       formats: $0.formats.count > 1 ? $0.formats.map(ComposerAutosaveFormatCode.code) : nil)
             },
-            fileAliases: aliases.isEmpty ? nil : aliases
+            fileAliases: aliases.isEmpty ? nil : aliases,
+            commentsDisabled: state.commentsDisabled ? true : nil
         )
         return ComposerAutosaveWrite(snapshot: snapshot, files: files, bitmaps: table.bitmaps, blobs: blobs)
     }
@@ -144,7 +145,8 @@ nonisolated enum ComposerAutosaveCodec {
                     ?? ComposerAutosaveFormatCode.format(choix.format).map {
                         ComposerPublishChoice(format: $0, layout: disposition)
                     }
-            }
+            },
+            commentsDisabled: snapshot.commentsDisabled ?? false
         )
     }
 

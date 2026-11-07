@@ -77,7 +77,8 @@ final class PublishChainCensusTests: XCTestCase {
             audioUrl: nil, audioDuration: nil, visibilityUserIds: nil,
             location: nil, mentions: nil, discoverabilityPrecision: nil,
             repostOfId: nil, mobileTranscription: nil, storyEffects: nil,
-            mediaCaption: nil, mediaAlt: nil, allowSoundExtraction: nil
+            mediaCaption: nil, mediaAlt: nil, allowSoundExtraction: nil,
+            commentsDisabled: nil
         )
     }
 
@@ -236,7 +237,12 @@ final class PublishChainCensusTests: XCTestCase {
     /// qu'il pose est celle que les sept pertes n'ont jamais eu l'occasion de
     /// se voir poser : *ce champ traverse-t-il l'autre voie ?*
     func test_leRecensementDesDeuxCorps_estLeCompteReel() {
-        XCTAssertEqual(champs(voieEnLigne()).count, 18,
+        // **19 depuis #16541 : `commentsDisabled`** (relevé #16585). Sur cette
+        // voie il n'a aucun producteur, et c'est juste : elle ne sert plus que
+        // la feuille du fil et le son emprunté, qui n'offrent pas le choix. Il
+        // ne s'offre qu'au meuble, qui part par la voie durable. `nil` omet la
+        // clé, et l'absence vaut « ouvert ».
+        XCTAssertEqual(champs(voieEnLigne()).count, 19,
                        "`CreatePostRequest` (voie EN LIGNE) a changé de taille — ce champ neuf "
                        + "traverse-t-il la voie DURABLE ?")
         // 17 depuis le 2026-09-05 : `mediaAlt`. Il ne NAÎT pas ici — il vient
@@ -259,7 +265,19 @@ final class PublishChainCensusTests: XCTestCase {
         // le constructeur d'un cliquet sans répondre à sa question, c'est le
         // faire taire sans l'écouter ; il ne reste alors qu'un rouge que
         // personne ne sait plus lire.
-        XCTAssertEqual(champs(voieDurable()).count, 18,
+        //
+        // **19 depuis le 2026-11-07 : `commentsDisabled`** (#16541, relevé
+        // #16585). La première réponse à ce compte a été NON : le champ
+        // naissait ici, relu d'un registre `UserDefaults` à côté de la ligne,
+        // borné à 64 entrées et sans transaction commune avec elle. Il suit
+        // désormais les quatre maillons — `ComposerDocumentDraft
+        // .closingComments` → `ComposerDocumentLookBake` →
+        // `PublishIntent.document` → `enqueuePostMedia` → `CreatePostPayload`,
+        // recopié par `withUploadedMedia` qui réécrit la ligne pendant
+        // l'envoi. Et en amont de la file, le brouillon rouvert le relit de
+        // `ComposerAutosaveSnapshot` : sans lui, « Rouvrir en brouillon »
+        // republiait ouvert sous un nouvel identifiant.
+        XCTAssertEqual(champs(voieDurable()).count, 19,
                        "`CreatePostBody` (voie DURABLE) a changé de taille — ce champ neuf "
                        + "vient-il des quatre maillons amont, ou naît-il ici ?")
     }

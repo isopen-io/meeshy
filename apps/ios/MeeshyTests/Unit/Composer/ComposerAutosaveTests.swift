@@ -423,6 +423,33 @@ final class ComposerAutosaveTests: XCTestCase {
         XCTAssertEqual(relu.publishChoice, ComposerPublishChoice(format: .post, layout: .reel))
     }
 
+    /// #16585 — « Rouvrir en brouillon » et la reprise après un kill passent
+    /// par ce tiroir : un brouillon qui oublierait le choix repartirait OUVERT
+    /// sous un nouvel identifiant, sans que rien ne le dise.
+    func test_save_thenLoad_keepsTheCommentClosure() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        var etat = makeState(format: .post)
+        etat.commentsDisabled = true
+
+        store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertTrue(relu.commentsDisabled)
+    }
+
+    func test_save_thenLoad_withoutCommentClosure_staysOpen_andWritesNoKey() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        let ecrit = ComposerAutosaveCodec.write(from: makeState(format: .post))
+
+        store.save(ecrit, account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertNil(ecrit.snapshot.commentsDisabled, "un brouillon ouvert n'écrit rien")
+        XCTAssertFalse(relu.commentsDisabled)
+    }
+
     func test_save_thenLoad_withoutPublishChoice_restoresNone() throws {
         let store = makeStore()
         let compte = makeAccount()

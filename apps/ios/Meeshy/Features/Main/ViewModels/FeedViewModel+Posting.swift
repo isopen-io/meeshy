@@ -253,7 +253,7 @@ extension FeedViewModel {
             // > comptant, et c'est ce que fait `PublishIntentRelayTests`.
             mediaAlts: intent.mediaAlts,
             mediaObjectIds: intent.mediaObjectIds,
-            allowSoundExtraction: intent.allowSoundExtraction
+            allowSoundExtraction: intent.allowSoundExtraction, commentsDisabled: intent.commentsDisabled
         )
     }
 
@@ -286,7 +286,7 @@ extension FeedViewModel {
         /// `mediaAlts`/`mediaObjectIds` juste au-dessus : ce cœur est le point
         /// de passage des DEUX entrées, et c'est ici qu'un champ oublié se
         /// perdrait pour les deux à la fois.
-        allowSoundExtraction: Bool?
+        allowSoundExtraction: Bool?, commentsDisabled: Bool?
     ) async {
         let currentUser = AuthManager.shared.currentUser
         var optimistic = FeedPost(
@@ -354,7 +354,7 @@ extension FeedViewModel {
                 // pont était nul, et l'adoption ne pouvait pas avoir lieu.
                 mediaAlts: mediaAlts,
                 mediaObjectIds: mediaObjectIds,
-                allowSoundExtraction: allowSoundExtraction
+                allowSoundExtraction: allowSoundExtraction, commentsDisabled: commentsDisabled
             )
             showRelocatedMedia(of: cmid, storedPaths: enqueued.localMediaPaths)
             publishSuccess = true

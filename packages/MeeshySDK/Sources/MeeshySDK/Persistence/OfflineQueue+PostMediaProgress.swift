@@ -100,6 +100,7 @@ extension CreatePostPayload {
             mediaAlts: mediaAlts,
             mediaObjectIds: mediaObjectIds,
             allowSoundExtraction: allowSoundExtraction,
+            commentsDisabled: commentsDisabled,
             uploadedMedia: acquis
         )
     }
