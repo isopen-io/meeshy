@@ -71,3 +71,36 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Piste de correction : 1) `CallManager.answerCall(withVideo: Bool = true)` : sans vidéo, ne pas activer la piste locale (ou l'activer `isEnabled = false`) et émettre l'état média au pair dès la connexion, sans renégociation si la transceiver existe déjà. 2) Vignette locale : réutiliser la capture que la piste locale WebRTC ouvrira de toute façon, démarrée à la sonnerie mais jamais attachée à l'émetteur avant le décroché ; sinon un `AVCaptureVideoPreviewLayer` léger arrêté au décroché. 3) Vue : vignette arrondie en haut à droite (`CallSelfTile` comme modèle), bouton « Répondre sans vidéo » (`video.slash`) à côté d'Accepter, libellés `String(localized:…, bundle: .main)` et VoiceOver ; règle pure « quels boutons pour quel appel » testée.
 - Critères d'acceptation : sur iPhone réel, la vignette s'affiche en moins de 500 ms après la sonnerie, rien ne part au réseau avant le décroché (vérifié par les statistiques WebRTC), « Répondre sans vidéo » connecte l'appel caméra coupée et le pair voit l'avatar ; `thermalState` inchangé sur 30 s de sonnerie ; tests de la règle des boutons.
 - Liens : `apps/ios/tasks/routine-appels.md` (APP-6), #8480 (aperçu avant décroché).
+
+## OPUS-6 — Aucune grille des tiers pour cadrer au viseur
+- Statut : décision attendue
+- Signalé par : routine caméra, le 2026-11-07
+- Point d'origine : CAM-2 (audit B4)
+- Constat : le viseur ne peint ni grille ni niveau. Le réglage demandé n'a nulle part où vivre : la rangée haute est pleine (`Meeshy/Features/Composer/ComposerCaptureTopRow.swift:36-38`, « la rangée tient alors sept contrôles, et la largeur d'un iPhone n'en porte pas huit »), le viseur n'a ni menu ni `⋯` (aucun `Menu`/`confirmationDialog` de réglage dans `ComposerCapture*`, `ComposerSceneCamera*`, `ComposerCamera*`), et l'app n'a pas d'écran de réglages caméra. Les seules préférences du viseur sont l'intensité du flash (`ComposerCaptureSession.swift:210`, `:642`) et l'astuce vue (`ComposerCaptureBottomRow.swift:33`).
+- Reproduction : ouvrir le viseur du composeur sur simulateur ou iPhone : aucun contrôle ni réglage « Grille ».
+- Pourquoi la routine ne l'a pas fait : il faut décider où vit l'interrupteur (décision produit). La partie technique est petite une fois ce choix fait.
+- Piste de correction : choix à trancher par Jacques parmi (a) un `⋯` en bout de rangée haute qui remplace `[ ]` et ouvre un petit menu (Grille, plus tard Retardateur, voir OPUS-8), (b) un appui long sur le retournement, (c) une ligne « Grille du viseur » dans les réglages de l'app. Ensuite : clé `@AppStorage("composer.camera.grid")` à `false` ; règle pure `ComposerCaptureGrid.lines(in: CGRect) -> [CGFloat]` (tiers de l'IMAGE visible, donc du trou du cadre quand la vue Metal peint, comme `ComposerCaptureSession+Tap.swift:57-67`) ; vue `Canvas` 0,5 pt, blanc 35 % avec ombre légère, `allowsHitTesting(false)`, `accessibilityHidden(true)`, posée dans l'overlay du viseur (`ComposerCaptureViews.swift:225-245`) et jamais dans le rendu de la prise ; masquée en retouche et pendant l'enregistrement si Jacques le souhaite.
+- Critères d'acceptation : désactivée par défaut ; test unitaire des lignes (image pleine et trou de cadre) ; la photo et la vidéo prises n'ont pas de grille ; réglage conservé d'une ouverture à l'autre ; libellé traduit (`String(localized:…, bundle: .main)` + `Localizable.xcstrings`) et annoncé par VoiceOver.
+- Liens : `/mnt/project-files/frames/07-audit-ui-ux-camera-appels.md` § B4, `tasks/routine-camera.md` CAM-2.
+
+## OPUS-7 — Pas de compensation d'exposition après le toucher de mise au point
+- Statut : à faire
+- Signalé par : routine caméra, le 2026-11-07
+- Point d'origine : CAM-3 (audit)
+- Constat : le toucher vise netteté et exposition (`Meeshy/Features/Composer/ComposerCaptureFocus.swift:65-80`, `ComposerCaptureSession+Tap.swift:44-53`) puis montre l'anneau (`ComposerCaptureViews.swift:238-244`), mais rien ne règle le biais d'exposition. Le protocole des commandes d'objectif n'a pas de méthode pour ça (`Meeshy/Features/Main/Components/ComposerCaptureCamera.swift:7-28` : zoom, torche, photo, mise au point seulement), et `CameraModel` n'appelle jamais `setExposureTargetBias` (aucune occurrence dans le dépôt).
+- Reproduction : viseur armé, toucher un sujet en contre-jour : l'anneau paraît, aucun moyen d'éclaircir ou d'assombrir.
+- Pourquoi la routine ne l'a pas fait : il faut une nouvelle commande dans `ComposerCaptureCameraProviding` et son implémentation dans `CameraModel+Lens.swift` (session caméra, interdite à la routine), plus une recette sur iPhone réel.
+- Piste de correction : ajouter `setExposureBias(_ ev: Float)` au protocole, implémenté dans `CameraModel+Lens.swift` sous `lockForConfiguration` et borné à `minExposureTargetBias...maxExposureTargetBias`, remis à 0 dans `CameraFocusControl.aim` et au changement d'objectif (`switchCamera`). Côté composeur : règle pure `ComposerCaptureExposure.bias(dragY:range:)` (environ 1 EV pour 100 pt, bornée à ±2 EV), petit soleil à droite de l'anneau, glissé vertical qui DÉMARRE sur le soleil (le glissé vertical de la scène sert déjà au zoom et à la fermeture, `ComposerCaptureViews.swift:471-480`), `accessibilityAdjustableAction` pour VoiceOver. Le soleil s'efface avec l'anneau.
+- Critères d'acceptation : tests de la règle (bornes, remise à zéro au toucher suivant et au retournement) ; doublure du protocole qui compte les appels ; sur iPhone, l'image s'éclaircit ou s'assombrit sans saut et revient à 0 au toucher suivant ; aucun conflit avec le zoom au glissé.
+- Liens : `tasks/routine-camera.md` CAM-3, OPUS-1.
+
+## OPUS-8 — Pas de retardateur pour une photo posée ou de groupe
+- Statut : décision attendue
+- Signalé par : routine caméra, le 2026-11-07
+- Point d'origine : CAM-4 (audit B5)
+- Constat : aucun retardateur au viseur. La rangée haute ne peut pas prendre de huitième contrôle (`Meeshy/Features/Composer/ComposerCaptureTopRow.swift:36-38`, `:56-63`) et l'audit laisse deux emplacements possibles (« sous le flash ou dans un appui long »).
+- Reproduction : ouvrir le viseur : rien ne permet de différer la prise.
+- Pourquoi la routine ne l'a pas fait : l'emplacement est une décision produit, et le point est de taille M (état du compte à rebours, annulation, annonces VoiceOver, sons).
+- Piste de correction : à trancher avec OPUS-6 (un même `⋯` pourrait porter Grille et Retardateur). Ensuite : état pur `ComposerCaptureTimer` (off / 3 s / 10 s, compte qui décroît, annulé par un toucher, par (x), par la sortie du viseur ou par le passage en arrière-plan), testé ; grand chiffre au centre du viseur en police dynamique, sans animation sous Reduce Motion ; chaque seconde annoncée à VoiceOver (`AccessibilityNotification.Announcement`) ; le déclenchement réutilise le chemin du déclencheur existant (`ComposerCaptureSession` photo), pas de nouvelle commande caméra.
+- Critères d'acceptation : tests de l'état (décompte, annulations) ; la photo part à 3 s et 10 s ; un toucher annule ; VoiceOver annonce le décompte ; textes traduits.
+- Liens : `/mnt/project-files/frames/07-audit-ui-ux-camera-appels.md` § B5, `tasks/routine-camera.md` CAM-4.
