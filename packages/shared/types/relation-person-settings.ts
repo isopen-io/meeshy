@@ -7,7 +7,10 @@
  *   (#13936) coupe le Bring de cette personne vers moi, `talkieBlocked` (#13935) la
  *   réception directe de son talkie (sa voix arrive alors en message vocal) ;
  * - les partages consentis au rituel du Sang (#14401) : ils s'accordent au rituel
- *   seulement, et se RETIRENT ici, un par un, sans quitter le Sang (RGPD art. 7(3)).
+ *   seulement, et se RETIRENT ici, un par un, sans quitter le Sang (RGPD art. 7(3)) ;
+ * - la catégorie de mon écoute (#13934, #16686) : un consentement de l'ÉMETTEUR,
+ *   refusé par défaut (#14407), qui s'ACCORDE et se retire ici, personne par personne,
+ *   dès Proche (`listeningCategoryShared`).
  *
  * L'écriture est PARTIELLE (au moins un réglage) et STRICTE : un réglage inconnu
  * est refusé, jamais ignoré — un client ne doit pas croire avoir réglé ce que le
@@ -30,6 +33,8 @@ export const relationPersonSettingsSchema = z.object({
   userId: z.string(),
   bringBlocked: z.boolean(),
   talkieBlocked: z.boolean(),
+  /** Absent d'un serveur antérieur à #16686 : lu `false`. */
+  listeningCategoryShared: z.boolean().optional(),
   listeningTitleShared: z.boolean(),
   locationShared: z.boolean(),
   locationHistoryShared: z.boolean(),
@@ -46,6 +51,7 @@ export const relationPersonSettingsUpdateSchema = z
   .object({
     bringBlocked: z.boolean().optional(),
     talkieBlocked: z.boolean().optional(),
+    listeningCategoryShared: z.boolean().optional(),
     listeningTitleShared: z.literal(false).optional(),
     locationShared: z.literal(false).optional(),
     locationHistoryShared: z.literal(false).optional(),
