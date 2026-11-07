@@ -25,6 +25,10 @@ final class CaptureGestureCopyTests: XCTestCase {
         XCTAssertNil(strings["call.mode.gesture.hint"], "l'ancienne formulation de l'appel ne doit plus exister")
     }
 
+    func test_gestureHintSeenKey_isKept_soTheHintIsNotShownAgain() {
+        XCTAssertEqual(CallModeCopy.gestureHintSeenKey, "call.mode.gestureHint.seen")
+    }
+
     func test_effectsFiltersLabel_readsTheAppBundle() throws {
         let source = try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsOverlay.swift")
         XCTAssertTrue(source.contains(#"String(localized: "call.effects.videoFilters", defaultValue: "Filtres", bundle: .main)"#))
