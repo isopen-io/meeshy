@@ -327,6 +327,92 @@ describe('resolveFeedCardModel — le SITE UNIQUE qui compose type, Prisme, acce
     expect(model.media[0]?.captionTranslated).toBe(false);
   });
 
+  /**
+   * LE TEXTE ALTERNATIF DESCEND SON PROPRE PRISME (#7392) — `altLanguage` /
+   * `altTranslations`, le TROISIÈME couple, distinct de celui de la légende et
+   * de celui du corps du post. C'est la seule chaîne qu'un lecteur d'écran
+   * PRONONCE, et c'était la seule que le fil servait brute.
+   * TÉMOIN DE RANG ≠ 1 (leçon 261).
+   */
+  test('le texte alternatif d’un média descend le Prisme jusqu’au rang 2, avec la langue servie', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [
+          {
+            id: 'm1',
+            mimeType: 'image/jpeg',
+            fileUrl: 'a.jpg',
+            alt: 'A covered market at dawn',
+            altLanguage: 'en',
+            altTranslations: {
+              fr: { text: 'Un marché couvert au petit matin', translationModel: 'nllb-200', createdAt: '2026-11-07T00:00:00.000Z' },
+            },
+          },
+        ],
+      }),
+      { preferredLanguages: ['de', 'fr'], now: NOW },
+    );
+    expect(model.media[0]?.altText).toBe('Un marché couvert au petit matin');
+    expect(model.media[0]?.altTextLanguage).toBe('fr');
+    expect(model.media[0]?.altTextTranslated).toBe(true);
+  });
+
+  test('sans traduction vers une langue du lecteur, le texte alternatif ORIGINAL est servi à sa langue', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', alt: 'A covered market at dawn', altLanguage: 'en' }],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.altText).toBe('A covered market at dawn');
+    expect(model.media[0]?.altTextLanguage).toBe('en');
+    expect(model.media[0]?.altTextTranslated).toBe(false);
+  });
+
+  /**
+   * LES TROIS CARTES NE SE MÉLANGENT PAS. Le corps du post et la légende ont
+   * tous deux une traduction française ; le texte alternatif n'en a pas. Il
+   * reste donc EN ANGLAIS — servir l'une des deux autres serait exactement ce
+   * que #4904 a coûté, en pire : le lecteur d'écran prononcerait la légende que
+   * l'écran montre déjà.
+   */
+  test('ni la carte de la légende ni celle du post ne traduisent le texte alternatif', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        content: 'The morning market',
+        originalLanguage: 'en',
+        translations: { fr: { text: 'Le marché du matin', translationModel: 'nllb-200', createdAt: '2026-11-07T00:00:00.000Z' } },
+        media: [
+          {
+            id: 'm1',
+            mimeType: 'image/jpeg',
+            fileUrl: 'a.jpg',
+            caption: 'The market',
+            captionLanguage: 'en',
+            captionTranslations: { fr: { text: 'Le marché', translationModel: 'nllb-200', createdAt: '2026-11-07T00:00:00.000Z' } },
+            alt: 'A covered market at dawn',
+            altLanguage: 'en',
+          },
+        ],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('Le marché');
+    expect(model.media[0]?.altText).toBe('A covered market at dawn');
+    expect(model.media[0]?.altTextLanguage).toBe('en');
+    expect(model.media[0]?.altTextTranslated).toBe(false);
+  });
+
+  test('un média sans texte alternatif ne porte aucune clé `altTextLanguage`', () => {
+    const model = resolveFeedCardModel(
+      basePost({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect('altText' in (model.media[0] ?? {})).toBe(false);
+    expect('altTextLanguage' in (model.media[0] ?? {})).toBe(false);
+    expect('altTextTranslated' in (model.media[0] ?? {})).toBe(false);
+  });
+
   test('un média sans légende ne porte aucune clé `captionLanguage`', () => {
     const model = resolveFeedCardModel(
       basePost({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] }),

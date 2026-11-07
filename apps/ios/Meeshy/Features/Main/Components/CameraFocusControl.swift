@@ -7,12 +7,14 @@ import MeeshySDK
 /// demande, jamais ce qu'il possède : le périphérique arrive en paramètre.
 nonisolated enum CameraFocusControl {
 
-    /// Mise au point et exposition sur ce point du capteur, une fois.
+    /// Mise au point et exposition sur ce point du capteur, une fois — et le
+    /// biais d'exposition rendu à 0 : un nouveau sujet repart de la mesure
+    /// neutre (OPUS-5).
     /// `false` ⇒ l'objectif ne règle ni la netteté ni l'exposition sur un point.
     static func aim(at devicePoint: CGPoint, smooth: Bool, on device: AVCaptureDevice) -> Bool {
         let plan = ComposerCaptureFocus.focusing(at: devicePoint, focusCapabilities(of: device), smooth: smooth)
         guard ComposerCaptureFocus.aims(plan) else { return false }
-        apply(plan, to: device)
+        apply(plan, to: device, resettingBias: true)
         return true
     }
 
@@ -36,10 +38,14 @@ nonisolated enum CameraFocusControl {
             continuousAutoExposure: device.isExposureModeSupported(.continuousAutoExposure))
     }
 
-    private static func apply(_ plan: ComposerCaptureFocus.Plan, to device: AVCaptureDevice) {
+    private static func apply(_ plan: ComposerCaptureFocus.Plan, to device: AVCaptureDevice,
+                              resettingBias: Bool = false) {
         do {
             try device.lockForConfiguration()
             defer { device.unlockForConfiguration() }
+            if resettingBias, device.exposureTargetBias != 0 {
+                device.setExposureTargetBias(0, completionHandler: nil)
+            }
             configure(plan, on: device)
         } catch {
             Logger.media.error("Focus configuration failed: \(error.localizedDescription, privacy: .public)")

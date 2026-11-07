@@ -71,7 +71,7 @@ async function buildApp(update: UpdateDouble): Promise<FastifyInstance> {
         members: [{ userId: ADMIN_DE_A, role: 'admin' }],
       }),
     },
-    communityMember: { update },
+    communityMember: { update, findFirst: jest.fn<any>().mockResolvedValue(null) },
   } as any);
   await app.register(registerMemberRoutes);
   await app.ready();

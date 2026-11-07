@@ -23,7 +23,7 @@ from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from datetime import datetime
 
-from services.task_privacy import cache_allowed, current_message_id
+from services.task_privacy import cache_allowed, current_message_id, is_live_call_caption
 
 logger = logging.getLogger(__name__)
 
@@ -555,7 +555,8 @@ class TranslationCacheService:
             ttl: Durée de vie en secondes (défaut: 1 mois)
         """
         # #13102 — ni le texte ni sa traduction d'une tâche au repos ne se rangent.
-        if not cache_allowed():
+        # #16648 — ni ceux d'un sous-titre d'appel, même nommé hors de sa tâche.
+        if not cache_allowed() or is_live_call_caption(message_id):
             return False
 
         cache_hash = self._compute_hash(text, source_lang, target_lang, model_type)

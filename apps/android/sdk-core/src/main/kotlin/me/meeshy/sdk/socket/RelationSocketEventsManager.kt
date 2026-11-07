@@ -10,6 +10,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.model.relation.BringStoppedEvent
 import me.meeshy.sdk.model.relation.RelationLevelRaisedEvent
 import me.meeshy.sdk.model.relation.RelationRitualCompletedEvent
 import me.meeshy.sdk.model.relation.RelationRitualProgressEvent
@@ -17,7 +18,7 @@ import me.meeshy.sdk.model.relation.RelationRitualStartedEvent
 import me.meeshy.sdk.model.socket.SocketEventNames
 
 /**
- * Les quatre événements du LIEN entre deux personnes (#13933, #13938) — miroir de `MessageSocketManager+Relations.swift`.
+ * Les quatre événements du LIEN entre deux personnes (#13933, #13938), et l'arrêt d'un Bring (#13936) — miroir de `MessageSocketManager+Relations.swift`.
  *
  * Tous serveur → client, tous sur la room `user:<id>` (`packages/shared/types/socketio-events/relation-event-names.ts`).
  * Chaque charge nomme `userId` = l'AUTRE personne, du point de vue du destinataire. Il n'existe AUCUN événement de baisse,
@@ -38,6 +39,7 @@ class RelationSocketEventsManager @Inject constructor(
     private val _ritualStarted = SocketInboundRoute.subject<RelationRitualStartedEvent>()
     private val _ritualProgress = SocketInboundRoute.subject<RelationRitualProgressEvent>()
     private val _ritualCompleted = SocketInboundRoute.subject<RelationRitualCompletedEvent>()
+    private val _bringStopped = SocketInboundRoute.subject<BringStoppedEvent>()
 
     /** `relation:level-raised` — le niveau effectif de la paire a monté (aux DEUX). */
     val levelRaised: SharedFlow<RelationLevelRaisedEvent> = _levelRaised.exposed()
@@ -50,6 +52,12 @@ class RelationSocketEventsManager @Inject constructor(
 
     /** `relation:ritual-completed` — les deux ont confirmé : le lien vaut Sang. */
     val ritualCompleted: SharedFlow<RelationRitualCompletedEvent> = _ritualCompleted.exposed()
+
+    /**
+     * `bring:stopped` — un Bring a cessé (aux DEUX, #13936). L'expéditeur y lit la fin de « Ça sonne chez X » ; le
+     * destinataire Android s'arrête par le push `bring_stopped`, qui atteint aussi une app tuée.
+     */
+    val bringStopped: SharedFlow<BringStoppedEvent> = _bringStopped.exposed()
 
     override fun attach() {
         if (installed.compareAndSet(false, true)) router.install(routes())
@@ -64,6 +72,7 @@ class RelationSocketEventsManager @Inject constructor(
         SocketInboundRoute.decoding(SocketEventNames.RELATION_RITUAL_STARTED, json, _ritualStarted),
         SocketInboundRoute.decoding(SocketEventNames.RELATION_RITUAL_PROGRESS, json, _ritualProgress),
         SocketInboundRoute.decoding(SocketEventNames.RELATION_RITUAL_COMPLETED, json, _ritualCompleted),
+        SocketInboundRoute.decoding(SocketEventNames.BRING_STOPPED, json, _bringStopped),
     )
 }
 

@@ -56,8 +56,10 @@ final class CallScreenShareControllerTests: XCTestCase {
         var screenShareRestoresCamera = false
         var router = MockRouter()
         var renegotiationCount = 0
+        var startedCount = 0
         var screenShareRouter: (any ScreenShareVideoRouting)? { router }
         func screenShareNeedsRenegotiation() async { renegotiationCount += 1 }
+        func screenShareDidStart() { startedCount += 1 }
     }
 
     private final class EmitRecorder {
@@ -109,6 +111,7 @@ final class CallScreenShareControllerTests: XCTestCase {
         XCTAssertEqual(emits.toggles.map(\.callId), ["call-1"])
         XCTAssertEqual(emits.toggles.map(\.enabled), [true])
         XCTAssertEqual(host.renegotiationCount, 0)
+        XCTAssertEqual(host.startedCount, 1, "#16664 — l'hôte réduit l'appel en capsule")
     }
 
     func test_broadcastDidStart_onAudioCall_renegotiatesSoThePeerReceivesVideo() async {
@@ -130,6 +133,7 @@ final class CallScreenShareControllerTests: XCTestCase {
         XCTAssertEqual(service.requestBroadcastStopCallCount, 1)
         XCTAssertTrue(emits.toggles.isEmpty)
         XCTAssertEqual(emits.failures, 1)
+        XCTAssertEqual(host.startedCount, 0)
     }
 
     func test_broadcastDidStart_afterCallEnded_stopsBroadcast() async {

@@ -7,6 +7,7 @@
 const esCallScreen = {
   'call.screen.share': 'Compartir pantalla',
   'call.screen.stop': 'Dejar de compartir pantalla',
+  'call.screen.stopShort': 'Detener',
   'call.screen.sharing': 'Estás compartiendo tu pantalla',
   'call.screen.peerSharing': '{name} está compartiendo su pantalla',
   'call.more': 'Más acciones',

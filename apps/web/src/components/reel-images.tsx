@@ -33,6 +33,11 @@ export default function ReelImages({ images, language }: { readonly images: read
               src={image.src}
               {...(image.srcSet !== undefined ? { srcSet: image.srcSet, sizes: '100vw' } : {})}
               alt={image.altText ?? translate(language, 'reels.image', { index: String(i + 1), count: String(images.length) })}
+              /* `lang` SEULEMENT sur le texte servi par le Prisme (#7392) : le
+                 repli « Image 1 sur 3 » est composé dans la langue de
+                 l'INTERFACE, donc déjà prononcé par la bonne voix — l'étiqueter
+                 avec la langue d'un texte alternatif absent serait faux. */
+              {...(image.altText !== undefined && image.altTextLanguage !== undefined ? { lang: image.altTextLanguage } : {})}
               draggable={false}
               decoding="async"
               className="h-full w-full shrink-0 snap-start object-contain"

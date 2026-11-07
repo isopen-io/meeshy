@@ -1,0 +1,48 @@
+import * as relationsEndpoints from '@meeshy/shared/api/endpoints/relations';
+
+import type { DataSource } from '@/lib/api/config';
+import type { ApiResult, HttpTransport } from '@/lib/api/http';
+
+/**
+ * **LES PRÉFÉRENCES DE RÉCEPTION PAR PERSONNE** — `GET|PUT
+ * /relations/:userId/settings` (`packages/shared/types/relation-person-settings.ts`).
+ *
+ * Une seule lecture sert toute la fiche d'un lien : le Bring (#13936) et le
+ * talkie (#16638) sont deux champs du même objet, actifs par défaut, que JE
+ * coupe pour une personne. L'écriture est PARTIELLE et STRICTE (un champ à la
+ * fois, jamais un champ inconnu) ; la réponse rend l'objet entier.
+ *
+ * Décodé à la main, TOLÉRANT : un champ absent ou illisible se lit « non
+ * coupé », la valeur par défaut du serveur.
+ */
+
+export type PersonSettingsDeps = { readonly source: DataSource; readonly transport: HttpTransport };
+
+export const RECEPTION_BLOCKS = ['bringBlocked', 'talkieBlocked'] as const;
+export type ReceptionBlock = (typeof RECEPTION_BLOCKS)[number];
+
+export type ReceptionSettings = Readonly<Record<ReceptionBlock, boolean>>;
+
+const OPEN: ReceptionSettings = { bringBlocked: false, talkieBlocked: false };
+
+const objectOf = (raw: unknown): Readonly<Record<string, unknown>> | null =>
+  typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? (raw as Readonly<Record<string, unknown>>) : null;
+
+export function decodeReceptionSettings(raw: unknown): ReceptionSettings {
+  const wire = objectOf(raw);
+  return { bringBlocked: wire?.bringBlocked === true, talkieBlocked: wire?.talkieBlocked === true };
+}
+
+export const personSettingsQueryKey = (userId: string) => ['relations', 'settings', userId] as const;
+
+export async function loadReceptionSettings(deps: PersonSettingsDeps, userId: string, signal?: AbortSignal): Promise<ApiResult<ReceptionSettings>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: OPEN };
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: relationsEndpoints.byUserIdSettings(userId), ...(signal === undefined ? {} : { signal }) });
+  return result.ok ? { ok: true, data: decodeReceptionSettings(result.data) } : result;
+}
+
+export async function setReceptionBlocked(deps: PersonSettingsDeps, userId: string, block: ReceptionBlock, blocked: boolean): Promise<ApiResult<ReceptionSettings>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: false, status: 0, error: 'Indisponible en démonstration' };
+  const result = await deps.transport.request<unknown>({ method: 'PUT', path: relationsEndpoints.byUserIdSettings(userId), body: { [block]: blocked } });
+  return result.ok ? { ok: true, data: decodeReceptionSettings(result.data) } : result;
+}

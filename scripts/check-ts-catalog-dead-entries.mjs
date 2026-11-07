@@ -518,6 +518,8 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // L'écoute en direct (#13934, PR #16694) : le serveur sert le rattrapage avant la réception web, sous-lot suivant de #13934.
+  'relations.nowPlaying': { issue: 13934, reason: 'GET /relations/now-playing — le rattrapage de ce qu’écoutent mes Proches et mes Sangs, lu par la réception web' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'conversations.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (web)' },
   // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
@@ -539,7 +541,9 @@ const PENDING_CLIENT_ENTRIES = {
   'publishers.bySlugPage': { issue: 16433, reason: 'GET /publishers/:slug/page — l’identité de l’éditeur et le profil qui l’édite, page éditeur web' },
 };
 
-const BASELINE_DEAD_ENTRIES = 274;
+// 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et
+// `.byIdMembersByMemberIdRole` ont leur appelant web (l'écran Membres d'une communauté).
+const BASELINE_DEAD_ENTRIES = 270;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

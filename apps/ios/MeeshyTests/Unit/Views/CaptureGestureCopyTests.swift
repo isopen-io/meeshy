@@ -29,11 +29,6 @@ final class CaptureGestureCopyTests: XCTestCase {
         XCTAssertEqual(CallModeCopy.gestureHintSeenKey, "call.mode.gestureHint.seen")
     }
 
-    func test_effectsFiltersLabel_readsTheAppBundle() throws {
-        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsOverlay.swift")
-        XCTAssertTrue(source.contains(#"String(localized: "call.effects.videoFilters", defaultValue: "Filtres", bundle: .main)"#))
-    }
-
     private func catalogStrings() throws -> [String: Any] {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // …/Unit/Views

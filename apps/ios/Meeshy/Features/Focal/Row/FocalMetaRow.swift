@@ -55,6 +55,10 @@ struct FocalMetaRow: View, Equatable {
     /// 2026-08-24 — elle n'a ni l'un ni l'autre : c'est la ligne d'accueil
     /// qui pousse, et le retrait y est déjà appliqué.
     var fillsWidth: Bool = true
+    /// Un envoi en cours reste visible au repos (#16130) ; `false`, il suit le révélé.
+    var pinsPendingDelivery: Bool = false
+    /// Retient l'horloge d'un envoi de moins de 200 ms, qui clignoterait au repos.
+    var sendStartedAt: Date? = nil
 
     /// `==` MANUEL : `onShowReadStatus` est une closure, donc la synthèse
     /// automatique d'`Equatable` ne s'applique plus. Elle est volontairement
@@ -73,6 +77,18 @@ struct FocalMetaRow: View, Equatable {
             && lhs.isEditSaving == rhs.isEditSaving
             && lhs.hasEditHistory == rhs.hasEditHistory
             && lhs.fillsWidth == rhs.fillsWidth
+            && lhs.pinsPendingDelivery == rhs.pinsPendingDelivery
+            && lhs.sendStartedAt == rhs.sendStartedAt
+    }
+
+    /// L'accusé échappe au révélé tant qu'il dit « pas encore parti ». Les coches d'un
+    /// message parti restent au geste, comme l'heure.
+    static func showsDeliveryAtRest(_ status: Message.DeliveryStatus, pinsPendingDelivery: Bool) -> Bool {
+        guard pinsPendingDelivery else { return false }
+        switch status {
+        case .sending, .clock, .slow: return true
+        case .invisible, .sent, .delivered, .read, .failed: return false
+        }
     }
 
     private var metaTint: Color {
@@ -89,11 +105,15 @@ struct FocalMetaRow: View, Equatable {
             editedIndicator
             stamp
             if isMe, let deliveryStatus {
-                // Directive 2026-08-24 : les coches ne s'inscrivent plus en
-                // permanence — elles paraissent et s'effacent avec l'heure,
-                // sous la MÊME fenêtre de défilement.
-                FocalRevealedDetail {
+                if Self.showsDeliveryAtRest(deliveryStatus, pinsPendingDelivery: pinsPendingDelivery) {
                     deliveryChecks(deliveryStatus)
+                } else {
+                    // Directive 2026-08-24 : les coches ne s'inscrivent plus en
+                    // permanence — elles paraissent et s'effacent avec l'heure,
+                    // sous la MÊME fenêtre de défilement.
+                    FocalRevealedDetail {
+                        deliveryChecks(deliveryStatus)
+                    }
                 }
             }
         }
@@ -105,7 +125,7 @@ struct FocalMetaRow: View, Equatable {
     /// lecture (zone de toucher élargie, le glyphe reste au gabarit méta).
     @ViewBuilder
     private func deliveryChecks(_ status: Message.DeliveryStatus) -> some View {
-        let check = BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)
+        let check = BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint, sendStartedAt: sendStartedAt)
         if let onShowReadStatus {
             Button(action: onShowReadStatus) {
                 check

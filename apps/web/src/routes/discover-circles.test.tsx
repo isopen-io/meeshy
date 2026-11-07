@@ -149,7 +149,6 @@ describe('la fiche d’un lien', () => {
     expect(switches.map((s) => s.getAttribute('data-circle-setting'))).toEqual([
       'circles.settings.blockBring',
       'circles.settings.listening',
-      'circles.settings.talkie',
       'circles.settings.location',
     ]);
     const [bring, ...upcoming] = switches;
@@ -157,6 +156,12 @@ describe('la fiche d’un lien', () => {
     expect(upcoming.every((s) => s.disabled && !s.checked)).toBe(true);
     expect(document.body.textContent).toContain('Ces réglages arrivent avec la prochaine étape de Meeshy');
     expect(document.body.textContent).toContain('Ami');
+  });
+
+  test('dès Proche, « Couper son talkie » est ACTIF à côté du Bring (#16638)', async () => {
+    await mount(<CircleLinkSheet language="fr" link={link({ effectiveLevel: 'CLOSE' })} person={ada} now={NOW} onClose={noop} />);
+    const active = [...document.querySelectorAll<HTMLInputElement>('[data-circle-setting]')].filter((s) => !s.disabled);
+    expect(active.map((s) => s.getAttribute('data-circle-setting'))).toEqual(['circles.settings.blockBring', 'circles.settings.blockTalkie']);
   });
 });
 

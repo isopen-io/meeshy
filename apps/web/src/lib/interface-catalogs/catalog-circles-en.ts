@@ -97,6 +97,12 @@ const en = {
   'bring.incoming.stop': 'Stop',
   'bring.incoming.someone': 'Someone',
   'bring.tab': '🔔 Bring',
+  'talkie.incoming.title': '{name} is talking to you',
+  'talkie.incoming.mute': 'Mute',
+  'talkie.incoming.someone': 'Someone',
+  'circles.settings.blockTalkie': 'Mute their talkie',
+  'circles.settings.blockTalkie.detail': 'Their voice will no longer play directly on your device: it will arrive as a voice message. They are not notified.',
+  'circles.settings.blockTalkie.failed': 'The setting could not be saved',
 } as const satisfies CirclesCatalog;
 
 export default en;

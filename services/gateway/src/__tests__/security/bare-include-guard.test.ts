@@ -319,8 +319,12 @@ const FROZEN_BARE_INCLUDES: Readonly<Record<string, number>> = {
   // (`participants: { where: ADMITTED_FILE_READER_WHERE }`), donc le fichier
   // n'a plus aucun include nu. Une entrée EN MOINS est un site RÉPARÉ, et
   // retirer sa ligne fait partie du correctif.
-  'translation-non-blocking.ts': 1,
-  'translation.ts': 1,
+  //
+  // #16557 a RETIRÉ les sites des deux routes de traduction demandée : leur
+  // `participants: true` était, là aussi, la garde d'admission — jugée sur la
+  // liste NON filtrée (`isActive` ignoré, un ex-membre passait). Elles appellent
+  // désormais la loi de lecture partagée (`translationReadGate.ts`) et ne
+  // chargent plus aucun participant.
 };
 
 describe("Aucun include: { relation: true } hors inventaire figé (#4166 critère 5)", () => {

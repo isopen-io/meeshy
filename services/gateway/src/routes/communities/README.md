@@ -42,6 +42,7 @@ Routes CRUD principales pour les communautés.
 - `POST /communities` - Créer une nouvelle communauté
 - `GET /communities/:id/conversations` - Conversations d'une communauté (privée : membres ACTIFS et créateur seulement)
 - `POST /communities/:id/conversations/:conversationId` - Rattacher une conversation : administrateur ACTIF (ou créateur) de la cible, et de la source si elle en a une
+- `POST /conversations` avec `communityId` (route des conversations) - Créer un salon de la communauté : communauté active (sinon 404), appelant membre ACTIF ou créateur. Ses participants qui ne sont pas membres actifs y ENTRENT sous la loi de `…/invite` (#16639, `services/conversations/communityMembershipSync.ts`) : communauté privée ⇒ créateur, administrateur ou modérateur seulement (403 `COMMUNITY_INVITE_FORBIDDEN`), compte vivant et sans blocage (404), ligne d'un retiré réactivée en `member`. Le refus tombe AVANT la création : rien n'est écrit. Différence assumée avec `…/invite` : le créateur de la communauté sans ligne active (il ne peut ni partir ni être retiré) y revient `admin`.
 
 ### search.ts
 Routes de recherche publique:
@@ -54,6 +55,8 @@ Routes de recherche publique:
 Gestion complète des membres:
 - `GET /communities/:id/members` - Liste des membres (avec pagination)
 - `POST /communities/:id/members` - Ajouter un membre (admin uniquement)
+
+**Qui peut être ajouté (#6376).** `POST …/members` et `POST …/invite` (`membership.ts`) ajoutent quelqu'un sans son accord : toutes deux passent `isAddableUser` (`addable-user.ts`) — compte vivant (ni `deactivatedAt`, ni `deletedAt`, `isActive`), aucun blocage dans un sens ou dans l'autre — et rendent le même 404 qu'un inconnu.
 - `PATCH /communities/:id/members/:memberId/role` - Modifier le rôle d'un membre (admin uniquement)
 - `DELETE /communities/:id/members/:memberId` - Retirer un membre (admin uniquement)
 

@@ -51,6 +51,12 @@ enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
         return CGSize(width: width, height: width * aspectRatio)
     }
 
+    /// #16663 — un toucher range le chrome : ma vignette passe à sa petite
+    /// taille ; le chrome revenu, elle reprend celle que j'avais choisie.
+    static func resting(_ chosen: CallSelfTileScale, isChromeVisible: Bool) -> CallSelfTileScale {
+        isChromeVisible ? chosen : .x1
+    }
+
     static func fitted(_ size: CGSize, in available: CGSize) -> CGSize {
         guard size.width > 0, size.height > 0, available.width > 0, available.height > 0 else { return size }
         let ratio = min(1, available.width / size.width, available.height / size.height)
