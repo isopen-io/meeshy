@@ -186,7 +186,7 @@ export class ZmqTranslationClient extends EventEmitter {
 
     this.requestSender.registerTimeout(taskId, timeoutMs, async (pendingLanguages) => {
       if (!retryEnabled) {
-        logger.error(`❌ ZMQ deadman timeout (${Math.round(timeoutMs / 1000)}s) for taskId=${taskId}, giving up (no retry for long voice pipelines)`);
+        logger.warn(`⏱️ ZMQ deadman timeout (${Math.round(timeoutMs / 1000)}s) for taskId=${taskId}, giving up (retry disabled by caller)`);
         this.retryCount.delete(taskId);
         this.stats.errors_received++;
         this.emit(errorEventName, { ...errorEvent, taskId });

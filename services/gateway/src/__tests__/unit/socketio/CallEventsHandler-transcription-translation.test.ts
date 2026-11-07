@@ -73,7 +73,7 @@ import type { ZmqTranslationClient } from '../../../services/zmq-translation';
 const VALID_CALL_ID = '507f1f77bcf86cd799439011';
 const SPEAKER_ID = 'user-speaker-abc';
 const LISTENER_ID = 'user-listener-def';
-const MESSAGE_ID = `call-${VALID_CALL_ID}-0`;
+const MESSAGE_ID = `call-caption:${VALID_CALL_ID}:0`;
 
 const VALID_SEGMENT = {
   callId: VALID_CALL_ID,
