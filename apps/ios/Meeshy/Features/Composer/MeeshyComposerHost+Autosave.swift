@@ -23,6 +23,8 @@ nonisolated struct ComposerAutosaveSignature: Equatable {
     let publishChoice: ComposerPublishChoice?
     /// « Désactiver les commentaires » (#16541) : le basculer est une mutation.
     let commentsDisabled: Bool
+    /// « Autoriser la reprise du son » (#16595) : le basculer est une mutation.
+    let soundExtractionChoice: Bool?
 }
 
 extension MeeshyComposerHost {
@@ -45,7 +47,8 @@ extension MeeshyComposerHost {
                                   location: documentLocation,
                                   references: composerReferences,
                                   format: selectedFormat,
-                                  publishChoice: authorPublishChoice, commentsDisabled: commentsDisabledChoice)
+                                  publishChoice: authorPublishChoice, commentsDisabled: commentsDisabledChoice,
+                                  soundExtractionChoice: soundExtractionChoice)
     }
 
     /// L'état à écrire — `nil` hors du meuble : l'atelier tient son propre
@@ -77,7 +80,8 @@ extension MeeshyComposerHost {
             audios: viewModel.loadedAudioURLs,
             stickerAnimations: viewModel.loadedStickerAnimations,
             adoptedLocalMedia: viewModel.adoptedLocalMedia,
-            publishChoice: authorPublishChoice, commentsDisabled: commentsDisabledChoice
+            publishChoice: authorPublishChoice, commentsDisabled: commentsDisabledChoice,
+            soundExtractionChoice: soundExtractionChoice
         )
     }
 
@@ -128,6 +132,7 @@ extension MeeshyComposerHost {
         // format, disposition — revient (#9419) : aucune bascule ne l'écrase.
         if let choix = state.publishChoice { chooseArmedPublish(choix) }
         commentsDisabledChoice = state.commentsDisabled
+        soundExtractionChoice = state.soundExtractionChoice
     }
 
     func scheduleAutosave() {

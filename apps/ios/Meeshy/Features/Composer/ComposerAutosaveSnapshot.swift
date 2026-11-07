@@ -154,6 +154,10 @@ nonisolated struct ComposerAutosaveSnapshot: Codable, Sendable {
     /// « Désactiver les commentaires » (#16541). Absent d'un instantané écrit
     /// avant, et d'un brouillon resté ouvert : il se relit ouvert.
     var commentsDisabled: Bool?
+    /// « Autoriser la reprise du son » (#16595) : `nil` tant que l'auteur n'a
+    /// rien choisi, et dans un instantané écrit avant — l'accord par défaut
+    /// (#8012) s'applique alors, comme à la composition.
+    var soundExtractionChoice: Bool?
 }
 
 /// Ce que le meuble tient au moment de la capture — des VALEURS, lues sur le
@@ -184,6 +188,9 @@ nonisolated struct ComposerAutosaveState: @unchecked Sendable {
     /// Le choix de ⋯ : sans lui, un brouillon rouvert republierait ouvert ce
     /// que l'auteur avait fermé (#16541).
     var commentsDisabled = false
+    /// Le choix de ⋯ sur la reprise du son : sans lui, un brouillon rouvert
+    /// republierait avec la reprise autorisée ce que l'auteur avait refusé.
+    var soundExtractionChoice: Bool?
 
     /// Un fond de palette seul n'est pas une création : le composer en pose un
     /// au hasard à la naissance, et le sauvegarder ferait naître un brouillon
