@@ -167,7 +167,7 @@ final class VitrineReelTests: XCTestCase {
             content: "Coucher de soleil", mediaIds: mediaIds, visibility: "PUBLIC", originalLanguage: "fr", type: type,
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, visibilityUserIds: nil, location: nil, mentions: nil,
             discoverabilityPrecision: nil, repostOfId: nil, mobileTranscription: nil, storyEffects: nil,
-            mediaCaption: nil, mediaAlt: nil, allowSoundExtraction: nil
+            mediaCaption: nil, mediaAlt: nil, allowSoundExtraction: nil, commentsDisabled: nil
         )
     }
 

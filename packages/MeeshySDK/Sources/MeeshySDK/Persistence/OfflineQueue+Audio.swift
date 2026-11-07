@@ -468,7 +468,7 @@ extension OfflineQueue {
         /// L'autorisation d'extraction du son (#3996). SANS défaut, même
         /// discipline que `mobileTranscription`/`storyEffects` juste
         /// au-dessus : chaque appelant DÉCLARE `nil` ou sa vraie valeur.
-        allowSoundExtraction: Bool?
+        allowSoundExtraction: Bool?, commentsDisabled: Bool?
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -494,7 +494,7 @@ extension OfflineQueue {
             mediaCaptions: mediaCaptions,
             mediaAlts: mediaAlts,
             mediaObjectIds: mediaObjectIds,
-            allowSoundExtraction: allowSoundExtraction
+            allowSoundExtraction: allowSoundExtraction, commentsDisabled: commentsDisabled
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the

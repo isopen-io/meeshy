@@ -83,7 +83,7 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
             declaredType: .post, forcePlainPost: false, content: "Hors ligne", visibility: "PUBLIC",
             visibilityUserIds: nil, originalLanguage: nil, mentions: nil, location: nil,
             discoverabilityPrecision: nil, transcription: nil, storyEffects: nil,
-            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil, commentsDisabled: false
         ))
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
@@ -91,6 +91,23 @@ final class FeedViewModelPendingPublicationTests: XCTestCase {
         XCTAssertEqual(sut.posts.first?.media.map(\.url), [expected],
                        "la source est effacée par la file : la carte vise la copie gardée jusqu'à l'envoi")
         XCTAssertEqual(sut.posts.first?.media.first?.type, .image)
+    }
+
+    /// #16585 — `publish(_:)` est un relais qui recopie champ par champ :
+    /// c'est ici qu'un choix de l'intention mourrait en silence.
+    func test_publish_relaysTheCommentClosureToTheQueue() async {
+        let (sut, queue, _) = makeSUT()
+
+        await sut.publish(PublishIntent.document(
+            localMedia: [ComposerDocumentMedia(url: URL(fileURLWithPath: NSTemporaryDirectory() + "photo-fermee.jpg"),
+                                               mimeType: "image/jpeg", durationMs: nil)],
+            declaredType: .post, forcePlainPost: false, content: "Fermé", visibility: "PUBLIC",
+            visibilityUserIds: nil, originalLanguage: nil, mentions: nil, location: nil,
+            discoverabilityPrecision: nil, transcription: nil, storyEffects: nil,
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil, commentsDisabled: true
+        ))
+
+        XCTAssertEqual(queue.enqueuePostMediaCalls.first?.commentsDisabled, true)
     }
 
     func test_rebased_movesAPendingCardsLocalMediaIntoTheCurrentContainer() {

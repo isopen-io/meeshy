@@ -1173,7 +1173,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             transcription: arme.mobileTranscription,
             storyEffects: arme.storyEffects,
             mediaCaptions: arme.mediaCaptions, mediaAlts: arme.mediaAlts, mediaObjectIds: arme.mediaObjectIds,
-            allowSoundExtraction: arme.allowSoundExtraction
+            allowSoundExtraction: arme.allowSoundExtraction, commentsDisabled: false
         )
         XCTAssertEqual(
             intentArme.type, "POST",
@@ -1198,7 +1198,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             transcription: nonArme.mobileTranscription,
             storyEffects: nonArme.storyEffects,
             mediaCaptions: nonArme.mediaCaptions, mediaAlts: nonArme.mediaAlts, mediaObjectIds: nonArme.mediaObjectIds,
-            allowSoundExtraction: nonArme.allowSoundExtraction
+            allowSoundExtraction: nonArme.allowSoundExtraction, commentsDisabled: false
         )
         XCTAssertEqual(
             intentNonArme.type, "REEL",

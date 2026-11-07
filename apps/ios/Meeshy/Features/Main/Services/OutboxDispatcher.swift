@@ -912,8 +912,8 @@ nonisolated struct CreatePostBody: Encodable {
     let allowSoundExtraction: Bool?
 
     /// La publication naît fermée aux commentaires (#16541) — le choix du
-    /// composer, relu par `PublicationCommentClosure`. `nil` omet la clé.
-    var commentsDisabled: Bool? = nil
+    /// composer, relu sur la ligne (`CreatePostPayload`). `nil` omet la clé.
+    let commentsDisabled: Bool?
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)

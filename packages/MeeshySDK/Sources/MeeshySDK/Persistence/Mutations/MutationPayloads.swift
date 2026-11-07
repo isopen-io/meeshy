@@ -566,6 +566,15 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// de décoder.
     public let allowSoundExtraction: Bool?
 
+    /// **La publication naît fermée aux commentaires** (#16541), même clé
+    /// top-level `commentsDisabled` que `CreatePostSchema`.
+    ///
+    /// Le choix vit sur la LIGNE, et c'est ce qui le rend aussi durable que la
+    /// publication : il s'écrit dans la même transaction, se rejoue avec elle
+    /// et disparaît avec elle. `nil` omet la clé — ouvert, le défaut de la
+    /// passerelle —, et c'est aussi ce que relit toute ligne d'avant ce champ.
+    public let commentsDisabled: Bool?
+
     /// Le MIME que ce média a DÉCLARÉ, ou `nil` si la ligne n'en portait pas
     /// (écrite avant ce champ, ou site d'envoi qui n'en connaît aucun).
     ///
@@ -630,6 +639,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         mediaAlts: [String?]? = nil,
         mediaObjectIds: [String?]? = nil,
         allowSoundExtraction: Bool? = nil,
+        commentsDisabled: Bool? = nil,
         uploadedMedia: [UploadedPostMedia]? = nil
     ) {
         self.clientMutationId = clientMutationId
@@ -655,6 +665,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.mediaAlts = mediaAlts
         self.mediaObjectIds = mediaObjectIds
         self.allowSoundExtraction = allowSoundExtraction
+        self.commentsDisabled = commentsDisabled
         self.uploadedMedia = uploadedMedia
     }
 }

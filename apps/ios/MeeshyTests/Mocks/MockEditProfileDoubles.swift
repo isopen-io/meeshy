@@ -100,6 +100,7 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         /// raison que ses voisins : un mock qui reçoit sans enregistrer ne
         /// teste pas ce qu'il reçoit.
         let allowSoundExtraction: Bool?
+        let commentsDisabled: Bool?
     }
 
     var enqueuePostMediaCalls: [EnqueuePostMediaCall] = []
@@ -125,7 +126,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         mediaCaptions: [String?]?,
         mediaAlts: [String?]?,
         mediaObjectIds: [String?]?,
-        allowSoundExtraction: Bool?
+        allowSoundExtraction: Bool?,
+        commentsDisabled: Bool?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         enqueuePostMediaCalls.append(EnqueuePostMediaCall(
             sourceMediaURLs: sourceMediaURLs,
@@ -144,7 +146,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
             mediaCaptions: mediaCaptions,
             mediaAlts: mediaAlts,
             mediaObjectIds: mediaObjectIds,
-            allowSoundExtraction: allowSoundExtraction
+            allowSoundExtraction: allowSoundExtraction,
+            commentsDisabled: commentsDisabled
         ))
         if let enqueuePostMediaError { throw enqueuePostMediaError }
         return OfflineQueue.EnqueueMediaResult(
