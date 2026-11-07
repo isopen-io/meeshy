@@ -16,6 +16,9 @@ import os
 /// dans la liste.
 enum NSEPreferencesGate {
 
+    /// `data.type` du push qui fait sonner un Bring (`BRING_PUSH_TYPES.RING`).
+    static let bringRingType = "bring"
+
     /// Miroir absent (première installation, jamais de sync) → `nil` ; les
     /// appelants retombent sur `.defaults` (tout activé = comportement
     /// historique).
@@ -47,6 +50,10 @@ enum NSEPreferencesGate {
         rawType: String?,
         now: Date = Date()
     ) {
+        // #13936 — le Bring est une catégorie de livraison À PART, comme la sonnerie d'appel (décision D-3) : il
+        // PASSE Ne pas déranger, le push coupé et les sons coupés. Le serveur l'a déjà jugé (niveau, quota, blocage,
+        // interrupteur `notification.bringEnabled`) ; l'abaisser ici en `passive` taierait une urgence.
+        if rawType == Self.bringRingType { return }
         if !preferences.soundEnabled {
             content.sound = nil
         }

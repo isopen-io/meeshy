@@ -1,6 +1,6 @@
 import Foundation
 
-// LE BRING (#13936, décision porteur D-3 du 2026-10-31, #13945) — un son FORCÉ sur le téléphone de l'autre, pour
+// LE BRING (#13936, décision porteur D-3, #13945) — un son FORCÉ sur le téléphone de l'autre, pour
 // l'urgence extrême. Le contrat est `packages/shared/types/bring.ts` ; ce fichier en est la lecture Swift. Le client
 // ne recalcule AUCUNE règle (niveau, quota, blocage, service coupé) : il lit ce que la passerelle sert.
 
