@@ -41,6 +41,7 @@ protocol CallScreenShareHosting: AnyObject {
     var screenShareRestoresCamera: Bool { get }
     var screenShareRouter: (any ScreenShareVideoRouting)? { get }
     func screenShareNeedsRenegotiation() async
+    /// #16664 — partager, c'est partir montrer autre chose : l'hôte réduit l'appel en capsule.
     func screenShareDidStart()
 }
 

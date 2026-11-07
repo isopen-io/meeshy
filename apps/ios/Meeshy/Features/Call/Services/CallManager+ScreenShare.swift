@@ -21,9 +21,7 @@ extension CallManager: CallScreenShareHosting {
         webRTCService
     }
 
-    /// Même chemin que la bascule audio → vidéo (§5.4) : l'émetteur vidéo a
-    /// changé de direction, le pair doit recevoir une offre pour commencer
-    /// (ou cesser) de recevoir la piste.
+    /// Même chemin que la bascule audio → vidéo (§5.4) : le pair reçoit une offre.
     func screenShareNeedsRenegotiation() async {
         guard let callId = currentCallId,
               let userId = remoteUserId,
@@ -34,11 +32,7 @@ extension CallManager: CallScreenShareHosting {
             .info("screen share renegotiation offer sent (callId=\(callId))")
     }
 
-    /// #16664 — partager, c'est partir montrer autre chose : l'appel se
-    /// réduit en capsule (`FloatingCallPillView`), qui offre « Arrêter ».
-    func screenShareDidStart() {
-        displayMode = .pip
-    }
+    func screenShareDidStart() { displayMode = .pip }
 
     func makeScreenShareController() -> CallScreenShareController {
         let controller = CallScreenShareController()
