@@ -22,7 +22,41 @@ public protocol RelationsProviding: Sendable {
     ) async throws -> RelationRitualStep
 }
 
-public final class RelationsService: RelationsProviding, Sendable {
+/// `GET /relations/now-playing` (#13934, #16686) — les écoutes en cours de mes liens, déjà
+/// tronquées par la passerelle : un Proche ne reçoit que la catégorie, un Sang le titre et la
+/// source qui lui ont été partagés. Le client ne recalcule rien.
+public protocol RelationNowPlayingProviding: Sendable {
+    func nowPlaying() async throws -> [RelationNowPlaying]
+}
+
+public struct RelationNowPlaying: Codable, Sendable, Equatable {
+    public let userId: String
+    /// Brute (`music`, `video`, `browsing`) : une catégorie ajoutée au serveur n'est pas fatale.
+    public let category: String
+    public let title: String?
+    public let source: String?
+    public let updatedAt: String
+    public let expiresAt: String
+
+    public init(userId: String, category: String, title: String? = nil, source: String? = nil, updatedAt: String, expiresAt: String) {
+        self.userId = userId
+        self.category = category
+        self.title = title
+        self.source = source
+        self.updatedAt = updatedAt
+        self.expiresAt = expiresAt
+    }
+}
+
+public struct RelationNowPlayingSnapshot: Codable, Sendable, Equatable {
+    public let items: [RelationNowPlaying]
+
+    public init(items: [RelationNowPlaying]) {
+        self.items = items
+    }
+}
+
+public final class RelationsService: RelationsProviding, RelationNowPlayingProviding, Sendable {
     public static let shared = RelationsService()
     private let api: APIClientProviding
 
@@ -73,6 +107,13 @@ public final class RelationsService: RelationsProviding, Sendable {
             RelationsEndpoint.byUserIdRitual(userId: userId), body: body
         )
         return response.data
+    }
+
+    public func nowPlaying() async throws -> [RelationNowPlaying] {
+        let response: APIResponse<RelationNowPlayingSnapshot> = try await api.request(
+            RelationsEndpoint.nowPlaying, method: "GET", body: nil, queryItems: nil
+        )
+        return response.data.items
     }
 
     private struct LevelBody: Encodable {

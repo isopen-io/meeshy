@@ -4510,9 +4510,7 @@ describe('CallEventsHandler', () => {
         callId: CALL_ID,
         participantId: PARTICIPANT_ID,
         userId: USER_ID,
-        isCapturing: true,
-        // #16665 — un client d'avant n'envoie pas de kind : il se relaie « recording ».
-        kind: 'recording',
+        isCapturing: true, kind: 'recording',
       });
     });
 
@@ -4530,9 +4528,7 @@ describe('CallEventsHandler', () => {
         callId: CALL_ID,
         participantId: PARTICIPANT_ID,
         userId: USER_ID,
-        isCapturing: false,
-        // #16665 — un client d'avant n'envoie pas de kind : il se relaie « recording ».
-        kind: 'recording',
+        isCapturing: false, kind: 'recording',
       });
     });
   });
