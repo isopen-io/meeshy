@@ -62,7 +62,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : `apps/ios/tasks/routine-appels.md` (APP-5), audit `frames/07-audit-ui-ux-camera-appels.md` du projet.
 
 ## OPUS-5 — Appel vidéo entrant : pas de vignette de ma caméra, pas de « Répondre sans vidéo »
-- Statut : à faire
+- Statut : fait (#16667, fusionnée le 2026-11-07) — reste à valider sur iPhone réel (critères ci-dessous)
 - Signalé par : routine appels, le 2026-11-07
 - Point d'origine : APP-6
 - Constat : l'écran d'appel vidéo entrant (`Call/Views/IncomingCallView.swift`) montre l'appelant derrière la sonnerie (`CallPreviewBackdrop`, `CallPreviewViews.swift:10-27`) mais jamais ma propre image : je décroche sans savoir de quoi j'ai l'air. Les boutons (`IncomingCallView.swift:226`, `actionButtons`) n'offrent que Accepter et Refuser ; `acceptCall()` (`:36-44`) demande la caméra si `callManager.isVideoEnabled` puis appelle `callManager.answerCall()` (`Services/CallManager+Answer.swift:19`), qui répond avec la vidéo de l'appel. Couper la caméra n'existe qu'après la connexion (`Services/CallCollaborators/CallCameraActuator.swift:30`, `toggleVideo()`, qui peut exiger une renégociation : `announceVideoToggle(target:needsRenegotiation:)`, `:133`).
