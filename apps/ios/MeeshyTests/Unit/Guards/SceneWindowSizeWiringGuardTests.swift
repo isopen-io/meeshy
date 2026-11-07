@@ -21,17 +21,17 @@ final class SceneWindowSizeWiringGuardTests: XCTestCase {
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             .joined(separator: "\n") + "\n"
         XCTAssertTrue(app.contains("""
-                }
             }
-            }
-            .publishingSceneWindowSize()
         }
+        }
+        .publishingSceneWindowSize()
+    }
 """), "la fenêtre principale publie sa taille sur MainWindowGate, après tout ce qu'il porte")
         XCTAssertTrue(app.contains("""
-                .meeshyThemeRoot(theme)
-                .publishingSceneWindowSize()
-        }
-        .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
+            .meeshyThemeRoot(theme)
+            .publishingSceneWindowSize()
+    }
+}
 """), "la fenêtre détachée publie sa taille après ses toasts et sa barrière d'âge")
 
         let roots = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/AdaptiveRootView.swift"))
