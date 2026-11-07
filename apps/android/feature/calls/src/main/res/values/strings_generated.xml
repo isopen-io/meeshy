@@ -154,7 +154,7 @@
     <string name="call_live_frame_none">No frame</string>
     <string name="call_live_frame_not_proposed">The frame is applied on your side but couldn\'t be offered</string>
     <string name="call_live_frame_proposal">%1$s suggests the “%2$s” frame</string>
-    <string name="call_mode_gesture_hint">Double tap: photo · Long press: video</string>
+    <string name="call_mode_gesture_hint">double-tap for a photo · hold to film</string>
     <string name="call_mode_montage_title">Call montage</string>
     <string name="call_mode_photo">Take a photo</string>
     <string name="call_mode_quit">Exit</string>
