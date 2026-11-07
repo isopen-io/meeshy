@@ -203,8 +203,9 @@ socket jusqu'au client.
   - le relais construit `call-caption:<callId>:<startMs>` par `translationTargetId` ;
   - les gardes `isMessageTranslationTarget`, qui existaient déjà, écartent désormais les sous-titres
     sans code supplémentaire ;
-  - le délai sans renvoi de `ZmqTranslationClient` journalise en `warn`, avec un libellé neutre
-    (« retry disabled by caller »). Le comportement ne change pas.
+  - le délai sans renvoi de `ZmqTranslationClient` garde le niveau `error`, avec un libellé neutre
+    (« retry disabled by caller »). La QA a refusé le passage en `warn` : ce délai sert aussi de
+    chien de garde de 15 min aux pipelines vocaux, qui doivent rester visibles en `error`.
 - **Le traducteur Python renvoie le `messageId` tel quel** : `zmq_translation_handler.py:363`
   puis `:419`, et `zmq_pool/translation_processor.py:278` / `:428`. Aucun client ne voit
   l'identifiant (`buildTranslatedSegment` ne le porte pas).
