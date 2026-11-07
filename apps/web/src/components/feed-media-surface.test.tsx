@@ -111,3 +111,50 @@ describe('FeedMediaSurface — une vidéo du fil se lit dans le fil', () => {
     expect(html).toContain('url(&quot;https://gate.meeshy.me/v.jpeg&quot;)');
   });
 });
+
+/**
+ * LE TEXTE ALTERNATIF VOYAGE AVEC SA LANGUE (#7392).
+ *
+ * C'est la moitié « qui l'AFFICHE » du Prisme (cycle 122), et sur cette chaîne
+ * elle est AUDIBLE : l'attribut `lang` d'une image gouverne la voix dont un
+ * lecteur d'écran prononce son `alt`. Un texte alternatif traduit en français
+ * sous un `lang` anglais est le défaut que le doc-comment de `lib/api/prism.ts`
+ * nomme comme sa raison d'exister.
+ *
+ * `lang` ne se pose QUE sur un texte servi — jamais sur une absence, où il ne
+ * qualifierait rien.
+ */
+describe('FeedMediaSurface — le texte alternatif porte la langue dans laquelle il est servi', () => {
+  test('un texte alternatif TRADUIT porte `lang` à la langue servie, pas à celle de l’auteur', () => {
+    const html = renderToStaticMarkup(
+      <FeedMediaSurface media={media({ altText: 'Un marché couvert au petit matin', altTextLanguage: 'fr', altTextTranslated: true })} />,
+    );
+
+    expect(html).toContain('alt="Un marché couvert au petit matin"');
+    expect(html).toContain('lang="fr"');
+  });
+
+  test('un texte alternatif ORIGINAL porte `lang` à SA langue source', () => {
+    const html = renderToStaticMarkup(
+      <FeedMediaSurface media={media({ altText: 'A covered market at dawn', altTextLanguage: 'en', altTextTranslated: false })} />,
+    );
+
+    expect(html).toContain('lang="en"');
+  });
+
+  test('une image DÉCORATIVE (`alt=""`) ne porte aucun `lang` — il ne qualifierait rien', () => {
+    const html = renderToStaticMarkup(<FeedMediaSurface media={media({})} />);
+
+    expect(html).toContain('alt=""');
+    expect(html).not.toContain('lang=');
+  });
+
+  /* La langue peut manquer quand ni `altLanguage` ni le Prisme n'ont pu la
+     dire : on sert alors le texte SANS mentir sur sa langue. */
+  test('un texte alternatif dont la langue est inconnue ne porte aucun `lang`', () => {
+    const html = renderToStaticMarkup(<FeedMediaSurface media={media({ altText: 'Un puesto de frutas' })} />);
+
+    expect(html).toContain('alt="Un puesto de frutas"');
+    expect(html).not.toContain('lang=');
+  });
+});
