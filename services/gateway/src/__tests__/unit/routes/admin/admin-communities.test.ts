@@ -87,6 +87,8 @@ function makePrisma(row: Row | null = communityRow()) {
       ]),
     },
     post: { count: jest.fn<any>().mockResolvedValue(12) },
+    // #16723 — rendre privée relit les occupants des salons : aucun ici.
+    participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
     adminAuditLog: { create: jest.fn<any>().mockResolvedValue({}) },
   } as any;
 }

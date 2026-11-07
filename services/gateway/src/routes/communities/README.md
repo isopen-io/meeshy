@@ -65,6 +65,7 @@ Gestion complète des membres:
 ### settings.ts
 Paramètres et modifications:
 - `PUT /communities/:id` - Mettre à jour une communauté (créateur uniquement)
+  - **Passer en privée fait entrer les occupants de ses salons (#16723).** Une communauté publique qui devient privée (ici, ou par `PATCH /admin/communities/:id`) fait d'abord entrer dans la communauté chaque occupant inscrit et actif de ses salons (clos compris) qui n'en est pas membre, sous l'autorité du créateur (`admitSalonOccupants`, `services/conversations/communitySalonAdoption.ts` : compte vivant, aucun blocage avec le créateur, ligne d'un ancien membre réactivée en `member`) ; puis, la bascule écrite, ceux qui n'ont pas pu entrer sortent des salons (`exitSalonOutsiders`, loi de #16704). Une admission en panne n'écrit pas la bascule (500, rejouable). Les invités sans compte et les bots ne sont pas touchés.
 - `DELETE /communities/:id` - Supprimer une communauté (créateur uniquement)
 
 ## Caractéristiques préservées

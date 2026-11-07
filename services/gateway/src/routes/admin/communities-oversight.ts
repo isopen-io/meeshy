@@ -59,6 +59,7 @@ import {
 } from '../../utils/response';
 import { ADMIN_PERSON_SELECT } from './oversight-people';
 import { NOT_DELETED } from '../../services/posts/softDelete';
+import { admitSalonOccupants, exitSalonOutsiders, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
 import {
   booleen,
   chaine,
@@ -377,6 +378,13 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
           return sendForbidden(reply, "Rendre une communauté privée ou publique exige le rang d'administration");
         }
 
+        // #16723 — même loi que la bascule du créateur : les occupants des
+        // salons entrent sous son autorité avant, les autres sortent après.
+        const closesSalons = isBecomingPrivate({ before: current.isPrivate, requested: isPrivate });
+        const outsiders = closesSalons
+          ? await admitSalonOccupants(fastify.prisma, { communityId, createdBy: current.creator.id })
+          : [];
+
         await fastify.prisma.community.update({
           where: { id: communityId },
           data: {
@@ -384,6 +392,13 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
             ...(privacyChanged ? { isPrivate } : {}),
           },
         });
+
+        if (outsiders.length > 0) {
+          await exitSalonOutsiders(
+            { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler },
+            { communityId, userIds: outsiders, now: new Date() },
+          );
+        }
 
         await withAudit(request, {
           action: 'ADMIN_COMMUNITY_UPDATED',
