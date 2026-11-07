@@ -15,8 +15,15 @@ public protocol BringProviding: Sendable {
     func stop(bringId: String) async throws
     /// `GET /relations/:userId/settings`.
     func personSettings(userId: String) async throws -> RelationPersonSettings
-    /// `PUT /relations/:userId/settings { bringBlocked }` — corps strict, un seul réglage.
-    func setBringBlocked(userId: String, blocked: Bool) async throws -> RelationPersonSettings
+    /// `PUT /relations/:userId/settings { bringBlocked | talkieBlocked }` — corps strict, un seul réglage.
+    func setReceptionBlocked(_ setting: RelationReceptionSetting, userId: String, blocked: Bool) async throws -> RelationPersonSettings
+}
+
+public extension BringProviding {
+    /// `PUT /relations/:userId/settings { bringBlocked }`.
+    func setBringBlocked(userId: String, blocked: Bool) async throws -> RelationPersonSettings {
+        try await setReceptionBlocked(.bring, userId: userId, blocked: blocked)
+    }
 }
 
 public final class BringService: BringProviding, Sendable {
@@ -56,18 +63,14 @@ public final class BringService: BringProviding, Sendable {
         return response.data
     }
 
-    public func setBringBlocked(userId: String, blocked: Bool) async throws -> RelationPersonSettings {
+    public func setReceptionBlocked(_ setting: RelationReceptionSetting, userId: String, blocked: Bool) async throws -> RelationPersonSettings {
         let response: APIResponse<RelationPersonSettings> = try await api.put(
-            RelationsEndpoint.byUserIdSettings(userId: userId), body: BringBlockedBody(bringBlocked: blocked)
+            RelationsEndpoint.byUserIdSettings(userId: userId), body: [setting.rawValue: blocked]
         )
         return response.data
     }
 
     private struct EmptyBody: Encodable {}
-
-    private struct BringBlockedBody: Encodable {
-        let bringBlocked: Bool
-    }
 
     struct StopAck: Decodable, Sendable {
         let bringId: String?

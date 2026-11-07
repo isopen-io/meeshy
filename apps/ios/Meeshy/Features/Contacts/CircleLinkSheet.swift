@@ -3,7 +3,8 @@ import MeeshySDK
 import MeeshyUI
 
 /// La fiche d'un lien (#13938) : la personne, son niveau, ce qui manque pour monter, et les réglages PAR PERSONNE
-/// — écoute, talkie, Bring, position. « Bloquer ses Bring » est ACTIF depuis son lot (#13936) ; les autres n'existent côté
+/// — écoute, talkie, Bring, position. « Bloquer ses Bring » (#13936) et « Couper son talkie » (#16673) sont ACTIFS depuis
+/// leur lot ; les autres n'existent côté
 /// serveur qu'avec leur lot du jalon 2. Tant qu'il n'est pas livré
 /// (`MeeshyFeatureFlags.areCirclePersonSettingsEnabled`), ils sont MONTRÉS désactivés et l'interface le DIT : ni
 /// cachés (on chercherait où ils sont), ni simulés (un interrupteur sans effet est un mensonge).
@@ -73,14 +74,20 @@ struct CircleLinkSheet: View {
                     .font(.footnote)
                     .foregroundStyle(theme.textMuted)
             } else {
-                if !settingsEnabled && settings.contains(where: { $0 != .blockBring }) {
+                if !settingsEnabled && settings.contains(where: { $0.receptionSetting == nil }) {
                     Text(String(localized: "circles.sheet.settings.unavailable", defaultValue: "Ces réglages arrivent avec la prochaine étape de Meeshy. Ils sont désactivés pour l'instant.", bundle: .main))
                         .font(.footnote)
                         .foregroundStyle(theme.textMuted)
                 }
                 ForEach(settings) { setting in
-                    if setting == .blockBring {
-                        CircleBringBlockToggle(userId: row.id, title: setting.title)
+                    if let reception = setting.receptionSetting {
+                        CircleReceptionBlockToggle(
+                            userId: row.id,
+                            setting: reception,
+                            title: setting.title,
+                            detail: setting.detail,
+                            identifier: "circles.settings.\(setting.rawValue)"
+                        )
                     } else {
                         Toggle(setting.title, isOn: .constant(false))
                             .disabled(!settingsEnabled)
