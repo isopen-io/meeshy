@@ -16,6 +16,7 @@ import type { QueuedVariantFor } from './queuedEventContract';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { withSealedQuote } from '../services/messaging/servedQuotedMessage';
 import { readerSignedPlanForMessageId } from './readerSignedDelivery';
+import { stripClientMessageId } from './utils/message-ack-shaping';
 
 // Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
 // Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
@@ -291,7 +292,50 @@ function emitEditedWithSealedQuote(
   }
 }
 
-export async function broadcastMessageMutation(params: MessageMutationParams): Promise<void> {
+/**
+ * #16689 — `clientMessageId` ne franchit pas ce transport, sur AUCUNE de ses
+ * sorties.
+ *
+ * C'est l'id OPTIMISTE de l'auteur. Les quatre chemins d'ENVOI le retirent déjà
+ * de la charge des pairs par ce MÊME helper ; les trois transports REST
+ * d'édition l'y laissaient entrer en étalant la ligne Prisma brute, et le type
+ * ne pouvait pas le dire — le contrôle des propriétés excédentaires est
+ * invisible à travers un spread (§ CLAUDE.md, cycle 106), et c'est par un
+ * spread que ces charges se composent.
+ *
+ * Le retrait se fait ICI, à l'ENTRÉE, et non aux trois sites d'appel : ce
+ * transport a SIX sorties pour une même charge — la room, la variante scellée,
+ * le plan signé par lecteur, la room personnelle, l'entrée de file et la
+ * variante de file par lecteur. Garder le champ à l'entrée les couvre toutes
+ * par construction, là où un retrait par appelant est l'« inventaire à tenir à
+ * jour » que la leçon 279 décrit : le septième chemin ne l'aurait pas.
+ *
+ * Le `switch` n'est pas un ornement : destructurer l'union rendrait `eventType`
+ * et `payload` à deux unions INDÉPENDANTES, et le couple cesserait d'être
+ * corrélé à l'étage même où il vient de l'être (cycle 106). `Omit` est ici une
+ * identité de type — aucun payload du contrat ne DÉCLARE ce champ — donc rien
+ * ne se rétrécit en aval.
+ *
+ * L'AUTEUR, lui, garde son id : il le reçoit par la réponse REST, qui compose
+ * sa propre charge et ne passe pas par ce transport.
+ */
+function withSanitizedPayload(params: MessageMutationParams): MessageMutationParams {
+  switch (params.eventType) {
+    case 'edited':
+      return { ...params, payload: stripClientMessageId(params.payload) };
+    case 'deleted':
+      return { ...params, payload: stripClientMessageId(params.payload) };
+    case 'expired':
+      return { ...params, payload: stripClientMessageId(params.payload) };
+    case 'pinned':
+      return { ...params, payload: stripClientMessageId(params.payload) };
+    case 'unpinned':
+      return { ...params, payload: stripClientMessageId(params.payload) };
+  }
+}
+
+export async function broadcastMessageMutation(rawParams: MessageMutationParams): Promise<void> {
+  const params = withSanitizedPayload(rawParams);
   const { manager, conversationId, actorUserId, eventType, messageId, onError } = params;
   if (!manager) return;
 
