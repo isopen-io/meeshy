@@ -32,7 +32,7 @@ struct BubbleViewOnceSealedView: View, Equatable {
             && lhs.isMe == rhs.isMe
             && lhs.isDark == rhs.isDark
             && lhs.protection == rhs.protection
-            && lhs.footer.timestamp == rhs.footer.timestamp
+            && lhs.footer == rhs.footer
     }
 
     /// Le pied d'une vue unique : l'heure et le statut, et RIEN d'autre — ni identité, ni
@@ -40,12 +40,13 @@ struct BubbleViewOnceSealedView: View, Equatable {
     static func footerModel(for content: BubbleContent, isOnline: Bool) -> BubbleFooterModel {
         BubbleFooterModel.make(
             timeString: content.meta.timeString,
-            deliveryStatus: .sent,
-            isMe: false,
+            deliveryStatus: content.meta.deliveryStatus ?? .sent,
+            isMe: content.isMe,
             isOnline: isOnline,
             sender: nil,
             flags: [],
-            showsTranslate: false
+            showsTranslate: false,
+            sendStartedAt: content.meta.sendStartedAt
         )
     }
 
@@ -59,10 +60,8 @@ struct BubbleViewOnceSealedView: View, Equatable {
                 HStack(alignment: .center, spacing: MeeshySpacing.xsPlus) {
                     ViewOnceChip(state: state, isDark: isDark, hint: hint, onOpen: onOpen)
                         .equatable()
-                    Text(footer.timestamp ?? "")
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                        .foregroundColor(ThemeManager.shared.textMuted)
-                        .accessibilityHidden(true)
+                    BubbleFooter(model: footer, actions: footerActions, style: .compact, isDark: isDark)
+                        .equatable()
                 }
             }
 

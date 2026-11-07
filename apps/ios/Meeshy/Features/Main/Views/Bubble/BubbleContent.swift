@@ -350,7 +350,7 @@ nonisolated struct BubbleContent: Equatable {
     /// Un envoi en cours se voit au repos sur cette rangée plate (#16130) : la puce n'a
     /// aucun contenu qui dise que le message existe encore. Les autres rangées attendent
     /// #16542.
-    var pinsPendingDelivery: Bool { false }
+    var pinsPendingDelivery: Bool { isMe && viewOnceChipState != nil }
 
     /// Le chrome à peindre au-dessus du message : celui d'une vue unique
     /// scellée ne répète pas la vue unique, que sa puce dit déjà (#7619).

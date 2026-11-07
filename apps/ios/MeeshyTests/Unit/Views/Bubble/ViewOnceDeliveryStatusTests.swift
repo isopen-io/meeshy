@@ -28,11 +28,11 @@ final class ViewOnceDeliveryStatusTests: XCTestCase {
         let voice = MessageAttachment(
             id: "a1", messageId: "vu1", fileName: fileName, originalName: fileName,
             mimeType: "audio/mp4", fileSize: 10, fileUrl: "https://staging.meeshy.me/v.m4a",
-            duration: 4242, caption: secret, isViewOnce: true
+            caption: secret, isViewOnce: true, duration: 4242
         )
         var message = Message(
             id: "vu1", conversationId: "c1", senderId: isMe ? "me" : "u2", content: secret,
-            attachments: [voice], createdAt: sentAt, senderName: "Demo", deliveryStatus: status, isMe: isMe
+            createdAt: sentAt, attachments: [voice], senderName: "Demo", deliveryStatus: status, isMe: isMe
         )
         message.isViewOnce = true
         message.viewOnceOpenedAt = isOpened ? sentAt : nil

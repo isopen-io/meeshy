@@ -82,9 +82,13 @@ struct FocalMetaRow: View, Equatable {
     }
 
     /// L'accusé échappe au révélé tant qu'il dit « pas encore parti ». Les coches d'un
-    /// message parti restent au geste (directive 2026-08-24).
+    /// message parti restent au geste, comme l'heure.
     static func showsDeliveryAtRest(_ status: Message.DeliveryStatus, pinsPendingDelivery: Bool) -> Bool {
-        false
+        guard pinsPendingDelivery else { return false }
+        switch status {
+        case .sending, .clock, .slow: return true
+        case .invisible, .sent, .delivered, .read, .failed: return false
+        }
     }
 
     private var metaTint: Color {
@@ -101,11 +105,15 @@ struct FocalMetaRow: View, Equatable {
             editedIndicator
             stamp
             if isMe, let deliveryStatus {
-                // Directive 2026-08-24 : les coches ne s'inscrivent plus en
-                // permanence — elles paraissent et s'effacent avec l'heure,
-                // sous la MÊME fenêtre de défilement.
-                FocalRevealedDetail {
+                if Self.showsDeliveryAtRest(deliveryStatus, pinsPendingDelivery: pinsPendingDelivery) {
                     deliveryChecks(deliveryStatus)
+                } else {
+                    // Directive 2026-08-24 : les coches ne s'inscrivent plus en
+                    // permanence — elles paraissent et s'effacent avec l'heure,
+                    // sous la MÊME fenêtre de défilement.
+                    FocalRevealedDetail {
+                        deliveryChecks(deliveryStatus)
+                    }
                 }
             }
         }
@@ -117,7 +125,7 @@ struct FocalMetaRow: View, Equatable {
     /// lecture (zone de toucher élargie, le glyphe reste au gabarit méta).
     @ViewBuilder
     private func deliveryChecks(_ status: Message.DeliveryStatus) -> some View {
-        let check = BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)
+        let check = BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint, sendStartedAt: sendStartedAt)
         if let onShowReadStatus {
             Button(action: onShowReadStatus) {
                 check
