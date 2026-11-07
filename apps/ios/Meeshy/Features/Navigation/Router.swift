@@ -218,6 +218,38 @@ extension Route {
     }
 }
 
+/// Le détail d'un post, présenté en FEUILLE (#16676).
+///
+/// Directive porteur du 2026-11-07 : « la vue détail doit s'afficher en
+/// feuille et non plus ouvrir une vue à part ». `.postDetail` reste la route
+/// que TOUS les appelants poussent — fil, recherche, notification, lien
+/// profond, repost, réel, profil — et c'est le routeur qui la transforme en
+/// feuille : aucune porte n'a à le savoir, aucune ne peut l'oublier.
+struct PostDetailSheetTarget: Identifiable, Equatable {
+    let postId: String
+    let initialPost: FeedPost?
+    let showComments: Bool
+    let commentId: String?
+    let parentCommentId: String?
+
+    /// Un autre commentaire visé, c'est une autre feuille : l'identité porte
+    /// la cible entière, pour que la feuille se rouvre sur elle.
+    var id: String {
+        [postId, commentId ?? "", parentCommentId ?? "", showComments ? "comments" : ""].joined(separator: "|")
+    }
+
+    init?(_ route: Route) {
+        guard case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId) = route else {
+            return nil
+        }
+        self.postId = postId
+        self.initialPost = initialPost
+        self.showComments = showComments
+        self.commentId = commentId
+        self.parentCommentId = parentCommentId
+    }
+}
+
 /// Une ouverture de conversation que le verrou PIN retient (#11386).
 ///
 /// Elle garde l'ouverture ENTIÈRE — cible du saut, transition, colonne iPad —
@@ -272,10 +304,12 @@ final class Router: ObservableObject {
 
     init(refusesProfiles: Bool = false,
          surfaces: PresentedSurfaceRegistryProviding = PresentedSurfaceRegistry.shared,
-         locks: ConversationLockGating = ConversationLockManager.shared) {
+         locks: ConversationLockGating = ConversationLockManager.shared,
+         surfaceHandoffNanoseconds: UInt64 = 400_000_000) {
         self.refusesProfiles = refusesProfiles
         self.surfaces = surfaces
         self.locks = locks
+        self.surfaceHandoffNanoseconds = surfaceHandoffNanoseconds
     }
 
     /// La fiche d'un participant SANS COMPTE, à ouvrir.
@@ -289,6 +323,26 @@ final class Router: ObservableObject {
     @Published var participantProfileTarget: ParticipantProfileTarget? {
         didSet { if refusesProfiles, participantProfileTarget != nil { participantProfileTarget = nil } }
     }
+
+    /// Le post dont le détail est présenté en feuille (#16676). `nil` : aucun.
+    /// Seul `push(.postDetail)` le pose ; la racine iPhone le présente.
+    @Published var presentedPost: PostDetailSheetTarget? {
+        didSet {
+            guard oldValue?.id != presentedPost?.id else { return }
+            AnalyticsManager.shared.trackRoute(presentedPost.map { .postDetail($0.postId) } ?? path.last)
+        }
+    }
+
+    /// Le post qui attend qu'une surface ait fini de partir pour monter : une
+    /// feuille ne se présente pas pendant qu'une autre se referme.
+    private var postAwaitingPresentation: PostDetailSheetTarget?
+
+    /// Les surfaces encore en train de partir (`noteSurfacesLeaving`).
+    private var leavingSurfaces = 0
+
+    /// Le temps qu'une surface met à se refermer avant que la feuille du post
+    /// monte à sa place.
+    private let surfaceHandoffNanoseconds: UInt64
 
     /// Ce que le lien profond de partage remet à l'écran de partage unique (#10947).
     @Published var pendingShareContent: ShareSubject? = nil
@@ -350,6 +404,12 @@ final class Router: ObservableObject {
     /// recherche, communauté — passe par le site qui libère l'écran (#10543) :
     /// rien de présenté, elle s'empile sur-le-champ, comme avant.
     func push(_ route: Route) {
+        // iPad deux colonnes : le détail vit dans le panneau de droite, à côté
+        // de la liste — il ne remplace pas l'écran, rien n'y change.
+        if presentsPostDetailAsSheet, let post = PostDetailSheetTarget(route) {
+            presentPost(post)
+            return
+        }
         guard case .conversation(let conversation) = route else {
             place(route)
             return
@@ -375,12 +435,70 @@ final class Router: ObservableObject {
             return
         }
 
+        // Une page ouverte DEPUIS la feuille d'un post (hashtag, profil, lieu)
+        // se pose dessous, et c'est la feuille qui part qui la révèle.
+        closePresentedPost()
+
         if route.isHub, let idx = path.lastIndex(where: { $0 == route }) {
             path.removeSubrange((idx + 1)...)
             return
         }
 
         path.append(route)
+    }
+
+    // MARK: - Détail d'un post en feuille (#16676)
+
+    /// La feuille monte sur-le-champ quand rien n'est présenté ; sinon story,
+    /// réel, fiche de profil ou feuille d'un autre post partent d'ABORD, et
+    /// elle monte une fois leur départ fini — jamais deux présentations qui se
+    /// croisent, ce qui ferait tomber la seconde en silence.
+    private func presentPost(_ post: PostDetailSheetTarget) {
+        clearPresentedSurfaces { [weak self] _ in
+            self?.postAwaitingPresentation = post
+            self?.presentPostAwaitingPresentation()
+        }
+    }
+
+    /// Le compte des départs en cours : chaque `clearPresentedSurfaces` qui a
+    /// refermé quelque chose ouvre une fenêtre, que la feuille du post attend.
+    /// Un lien profond referme d'ABORD puis pousse le post : sans ce compte, la
+    /// seconde levée ne voit plus rien à fermer et la feuille monterait pendant
+    /// que la story descend encore.
+    private func noteSurfacesLeaving() {
+        leavingSurfaces += 1
+        let delay = surfaceHandoffNanoseconds
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: delay)
+            self?.leavingSurfaces -= 1
+            self?.presentPostAwaitingPresentation()
+        }
+    }
+
+    private func presentPostAwaitingPresentation() {
+        guard leavingSurfaces == 0, let post = postAwaitingPresentation else { return }
+        postAwaitingPresentation = nil
+        presentedPost = post
+    }
+
+    /// Le détail d'un post s'ouvre en feuille partout, sauf dans les deux
+    /// colonnes de l'iPad où il occupe le panneau de droite.
+    var presentsPostDetailAsSheet: Bool { onRouteRequested == nil }
+
+    /// Referme la feuille du post, et oublie celui qui attendait de monter.
+    func closePresentedPost() {
+        postAwaitingPresentation = nil
+        if presentedPost != nil { presentedPost = nil }
+    }
+
+    /// « Fermer » du détail d'un post : la feuille part ; hors feuille (le
+    /// panneau de l'iPad), l'écran se retire de la pile comme avant.
+    func closePostDetail() {
+        guard presentedPost != nil else {
+            pop()
+            return
+        }
+        closePresentedPost()
     }
 
     func pop() {
@@ -514,7 +632,11 @@ final class Router: ObservableObject {
             let closesProfile = deepLinkProfileUser != nil || participantProfileTarget != nil
             if deepLinkProfileUser != nil { deepLinkProfileUser = nil }
             if participantProfileTarget != nil { participantProfileTarget = nil }
-            open(closedSurfaces || closesProfile)
+            let closesPost = presentedPost != nil
+            closePresentedPost()
+            let closes = closedSurfaces || closesProfile || closesPost
+            if closes { noteSurfacesLeaving() }
+            open(closes)
         }
     }
 
@@ -620,6 +742,7 @@ final class Router: ObservableObject {
             return
         }
         guard case .conversation(let conversation) = route else {
+            closePresentedPost()
             path = [route]
             return
         }

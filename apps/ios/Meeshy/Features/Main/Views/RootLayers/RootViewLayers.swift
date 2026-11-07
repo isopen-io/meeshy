@@ -59,6 +59,13 @@ struct RootEnvironmentLayer: ViewModifier {
                     .presentationDragIndicator(.visible)
                     .closesForConversationOpening(.sheet)
             }
+            .modifier(PostDetailSheetHost(
+                router: router,
+                storyViewModel: storyViewModel,
+                statusViewModel: statusViewModel,
+                conversationViewModel: conversationViewModel,
+                storyViewerCoordinator: storyViewerCoordinator
+            ))
             // Propagate story viewer presentation state down to chrome (sync
             // pill, etc.) so they can skip rendering while a `fullScreenCover`
             // story is on top. Read by `ConnectionBanner` via
@@ -308,8 +315,7 @@ struct RootSheetsLayer: ViewModifier {
                     presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                     postsContent: { uid in
                         AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
-                            router.deepLinkProfileUser = nil
-                            router.push(.postDetail(post.id, post))
+                            router.push(.postDetail(post.id, post)) // la fiche part d'abord (#16676)
                         }, onOpenReel: { reel, reels in
                             ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
                         }))

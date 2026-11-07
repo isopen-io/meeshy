@@ -10,8 +10,9 @@ import MeeshyUI
 // Centralizes how a host (any sheet presenting `ProfileUserPostsList`) opens a
 // tapped post or reel: dismiss the profile sheet first, then navigate at the
 // root. Reels present the immersive overlay — which lives behind the sheet, so
-// it must come up AFTER the dismiss settles (hence the small delay). Posts push
-// the detail route via RootView's existing `pushNavigateToRoute` listener, so
+// it must come up AFTER the dismiss settles (hence the small delay). Posts open
+// their detail SHEET the same way, after the same delay (#16676), via RootView's
+// existing `pushNavigateToRoute` listener, so
 // hosts without a `Router` in scope (audio fullscreen, comments sheet) work too.
 @MainActor
 enum ProfilePostsOpener {
@@ -23,12 +24,16 @@ enum ProfilePostsOpener {
         }
     }
 
+    /// Le détail est une FEUILLE (#16676) : elle ne monte qu'une fois la fiche
+    /// de profil partie, comme le lecteur des réels ci-dessus.
     static func openPost(_ post: FeedPost, dismiss: @escaping () -> Void) {
         dismiss()
-        NotificationCenter.default.post(
-            name: Notification.Name("pushNavigateToRoute"),
-            object: "postDetail:\(post.id)"
-        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            NotificationCenter.default.post(
+                name: Notification.Name("pushNavigateToRoute"),
+                object: "postDetail:\(post.id)"
+            )
+        }
     }
 
     static func postsContent(dismiss: @escaping () -> Void) -> (String) -> AnyView {
