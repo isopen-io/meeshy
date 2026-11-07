@@ -47,8 +47,9 @@ android {
         // Numéro de build LU à la construction : `-PmeeshyBuildNumber=<n>`, au-dessus de tout code déjà envoyé sur la
         // fiche (la coque y a monté jusqu'à 34085). Sans lui, 1 — la marque d'un build fait hors publication.
         versionCode = (findProperty("meeshyBuildNumber") ?: "1").toString().toInt()
-        // 3.x : la native succède sur la fiche aux 2.x de la coque, sans recouvrement de numéros.
-        versionName = "3.0.0"
+        // 3.x : la native succède sur la fiche aux 2.x de la coque, sans recouvrement de numéros. 3.1.0 : la version qui
+        // arrête un Bring (#13936) — plancher Android de `bring_stopped` dans `services/gateway/src/services/push-type-routing.ts`.
+        versionName = "3.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // #14628 — le commit EXACT du build, servi par l'offre de source de l'écran Licences (AGPL-3.0 de libsignal).
         // GitHub Actions pose `GITHUB_SHA` ; un build local n'en a aucun et l'écran renvoie au dépôt.

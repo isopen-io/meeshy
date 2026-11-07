@@ -24,6 +24,7 @@
  */
 import {
   BRING_IOS_SOUND,
+  BRING_RING_WINDOW_MS,
   BRING_PUSH_TYPES,
   type BringPushData,
   type BringStopReason,
@@ -118,7 +119,14 @@ export function buildBringStoppedPushes(params: {
         data,
       },
     },
-    { userId: params.toUserId, bypassDnd: true, types: ['fcm'], platforms: ['android'], payload: { title: '', body: '', silent: true, data } },
+    // Android : data-only, borné à la fenêtre — un arrêt plus vieux que la sonnerie n'a plus rien à éteindre.
+    {
+      userId: params.toUserId,
+      bypassDnd: true,
+      types: ['fcm'],
+      platforms: ['android'],
+      payload: { title: '', body: '', silent: true, ttlMs: BRING_RING_WINDOW_MS, data },
+    },
   ];
 }
 

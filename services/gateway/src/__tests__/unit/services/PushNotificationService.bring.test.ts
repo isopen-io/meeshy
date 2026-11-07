@@ -218,6 +218,32 @@ describe('PushNotificationService — le Bring (#13936)', () => {
     expect(mockFirebaseMessagingSend).not.toHaveBeenCalled();
   });
 
+  it('l’arrêt part vers un Android natif 3.1.0+ en data-only haute priorité, borné à la fenêtre de sonnerie', async () => {
+    const svc = await service();
+    mockPrisma.pushToken.findMany.mockResolvedValue([{ ...ANDROID, appVersion: '3.1.0' }]);
+
+    const results = await svc.sendToUser(buildBringStoppedPushes({ bringId: 'b'.repeat(24), toUserId: 'u-to', reason: 'sender' })[1]);
+
+    expect(results).toEqual([expect.objectContaining({ success: true })]);
+    const message = mockFirebaseMessagingSend.mock.calls[0][0] as Record<string, any>;
+    expect(message.notification).toBeUndefined();
+    expect(message.android).toMatchObject({ priority: 'high', ttl: 120_000 });
+    expect(message.data).toMatchObject({ type: 'bring_stopped', bringId: 'b'.repeat(24), reason: 'sender' });
+  });
+
+  it('l’arrêt ne part pas vers un Android natif 3.0.x ni vers un jeton sans bundle : ils n’ont pas le récepteur', async () => {
+    const svc = await service();
+    mockPrisma.pushToken.findMany.mockResolvedValue([
+      { ...ANDROID, appVersion: '3.0.0' },
+      { ...ANDROID, id: 'nobundle', bundleId: null, appVersion: '3.1.0' },
+    ]);
+
+    const results = await svc.sendToUser(buildBringStoppedPushes({ bringId: 'b'.repeat(24), toUserId: 'u-to', reason: 'sender' })[1]);
+
+    expect(results).toEqual([]);
+    expect(mockFirebaseMessagingSend).not.toHaveBeenCalled();
+  });
+
   it('une notification ORDINAIRE reste gouvernée : pushEnabled:false la retient', async () => {
     const svc = await service();
     mockPrisma.pushToken.findMany.mockResolvedValue([IOS]);
