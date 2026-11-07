@@ -32,12 +32,16 @@ src/routes/communities/
 - **Types TypeScript**: Types inférés des schémas Zod
 
 ### core.ts
-Routes CRUD principales pour les communautés:
+Routes CRUD principales pour les communautés.
+
+**Un membre est une ligne `CommunityMember` ACTIVE (#16603).** Un départ ou un retrait laisse la ligne en `isActive: false` : toute route qui demande « est-il membre ? » passe `activeMembershipOf(userId)` (`serialization.ts`), et tout `memberCount` passe `COMMUNITY_ACTIVE_COUNTS`. La liste et le détail se servent par le même `communityForViewer`.
+
 - `GET /communities/check-identifier/:identifier` - Vérifier disponibilité d'un identifiant
-- `GET /communities` - Liste des communautés de l'utilisateur (avec pagination et recherche)
+- `GET /communities` - Liste des communautés de l'utilisateur (avec pagination et recherche) ; une communauté quittée n'y figure plus, chaque carte sert `currentUserRole`, et la route ne charge plus la liste des membres de chaque communauté
 - `GET /communities/:id` - Détails d'une communauté (par ID ou identifier) ; sert `currentUserRole` (rôle ACTIF du lecteur, `admin` pour le créateur, `null` sinon — #6378). Ne charge que la ligne d'adhésion active du lecteur, jamais la liste des membres ; un ancien membre (`isActive: false`) est refusé d'une communauté privée ; `memberCount` ne compte que les membres actifs.
 - `POST /communities` - Créer une nouvelle communauté
-- `GET /communities/:id/conversations` - Conversations d'une communauté
+- `GET /communities/:id/conversations` - Conversations d'une communauté (privée : membres ACTIFS et créateur seulement)
+- `POST /communities/:id/conversations/:conversationId` - Rattacher une conversation : administrateur ACTIF (ou créateur) de la cible, et de la source si elle en a une
 
 ### search.ts
 Routes de recherche publique:
