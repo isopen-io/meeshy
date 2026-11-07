@@ -158,7 +158,7 @@
     <string name="call_live_frame_none">بلا إطار</string>
     <string name="call_live_frame_not_proposed">تم تطبيق الإطار لديك، لكن تعذّر اقتراحه</string>
     <string name="call_live_frame_proposal">يقترح %1$s الإطار «%2$s»</string>
-    <string name="call_mode_gesture_hint">نقرتان: صورة · ضغطة مطوّلة: فيديو</string>
+    <string name="call_mode_gesture_hint">انقر مرتين لالتقاط صورة · اضغط مطولًا للتصوير</string>
     <string name="call_mode_montage_title">مونتاج المكالمة</string>
     <string name="call_mode_photo">التقاط صورة</string>
     <string name="call_mode_quit">خروج</string>

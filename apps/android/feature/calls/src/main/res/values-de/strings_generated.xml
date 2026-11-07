@@ -158,7 +158,7 @@
     <string name="call_live_frame_none">Kein Rahmen</string>
     <string name="call_live_frame_not_proposed">Der Rahmen ist bei dir aktiv, konnte aber nicht vorgeschlagen werden</string>
     <string name="call_live_frame_proposal">%1$s schlägt dir den Rahmen „%2$s“ vor</string>
-    <string name="call_mode_gesture_hint">Doppeltippen: Foto · Gedrückt halten: Video</string>
+    <string name="call_mode_gesture_hint">zweimal tippen für ein Foto · halten zum Filmen</string>
     <string name="call_mode_montage_title">Anrufcollage</string>
     <string name="call_mode_photo">Foto aufnehmen</string>
     <string name="call_mode_quit">Beenden</string>

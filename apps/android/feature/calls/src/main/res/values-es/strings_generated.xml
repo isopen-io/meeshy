@@ -158,7 +158,7 @@
     <string name="call_live_frame_none">Sin marco</string>
     <string name="call_live_frame_not_proposed">El marco se aplica en tu pantalla, pero no se pudo proponer</string>
     <string name="call_live_frame_proposal">%1$s te propone el marco «%2$s»</string>
-    <string name="call_mode_gesture_hint">Doble toque: foto · Mantén pulsado: vídeo</string>
+    <string name="call_mode_gesture_hint">toca dos veces para una foto · mantén para grabar</string>
     <string name="call_mode_montage_title">Montaje de la llamada</string>
     <string name="call_mode_photo">Hacer una foto</string>
     <string name="call_mode_quit">Salir</string>

@@ -158,7 +158,7 @@
     <string name="call_live_frame_none">Nessuna cornice</string>
     <string name="call_live_frame_not_proposed">La cornice è applicata da te, ma non è stato possibile proporla</string>
     <string name="call_live_frame_proposal">%1$s ti propone la cornice «%2$s»</string>
-    <string name="call_mode_gesture_hint">Doppio tocco: foto · Pressione prolungata: video</string>
+    <string name="call_mode_gesture_hint">tocca due volte per una foto · tieni premuto per girare</string>
     <string name="call_mode_montage_title">Montaggio della chiamata</string>
     <string name="call_mode_photo">Scatta una foto</string>
     <string name="call_mode_quit">Esci</string>
