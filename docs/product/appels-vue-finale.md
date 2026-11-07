@@ -190,7 +190,7 @@ Ce tableau est un compte rendu daté. L'état vivant est dans les issues du mile
 | Journal pendant l'appel coloré (lois 4, 7) | livré, nom et phrase (#16634) | livré (`CallCaptionRow`) | livré (`CallCaptionRow`) |
 | Journal après l'appel coloré (lois 4, 7) | livré, `authorInk` sur le fil (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) |
 | Couleur : pseudo toujours, phrase seulement traduite (loi 4) | livré (#16662) | livré (#16662) | livré (#16662) |
-| Toucher : tout se range, ma vignette se réduit (loi 11) | **manque** la réduction de ma vignette, #16663 | **manque** la réduction de ma vignette, #16663 | à vérifier, #16663 |
+| Toucher : tout se range, ma vignette se réduit (loi 11) | livré (#16663) | livré (#16663) | livré (#16663) |
 | Partage lancé ⇒ appel réduit en capsule (loi 12) | **manque**, #16664 | **manque** (bandeau seul), #16664 | à vérifier, #16664 |
 | Capture visible chez tous et gardée au journal (loi 13) | puce seule, #16665 | enregistrement d'écran seul, puce en audio seulement, #16665 | à vérifier, #16665 |
 | Cadres en direct (loi 16) | absent | livré | à vérifier |

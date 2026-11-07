@@ -84,4 +84,10 @@ class CallSelfTileLawTest {
     fun `the initial corner is top end`() {
         assertThat(CallSelfTileLaw.InitialCorner).isEqualTo(CallSelfTileCorner.TopEnd)
     }
+
+    @Test
+    fun `controls hidden, my tile rests at its smallest size, and takes the chosen one back after`() {
+        assertThat(CallSelfTileLaw.resting(CallSelfTileScale.X3, controlsVisible = false)).isEqualTo(CallSelfTileScale.X1)
+        assertThat(CallSelfTileLaw.resting(CallSelfTileScale.X3, controlsVisible = true)).isEqualTo(CallSelfTileScale.X3)
+    }
 }

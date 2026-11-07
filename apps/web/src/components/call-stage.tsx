@@ -105,7 +105,7 @@ type StageProps = {
   readonly onToggleImmersive: () => void;
   readonly moderation: CallModeration | null;
   readonly self: SelfView;
-  /** Le chrome est-il affiché (#9183) : décide ce que touche une tuile de groupe — la mettre à la une, ou juste rendre le chrome. Sans objet hors du layout `grid` ; défaut `true` (ancien comportement). */
+  /** Le chrome est-il affiché (#9183) : en grille, décide ce que touche une tuile (la mettre à la une, ou juste rendre le chrome) ; en duo vidéo, chrome retiré, ma vignette passe à sa petite taille (#16663). Défaut `true`. */
   readonly chromeVisible?: boolean;
   readonly onRevealChrome?: () => void;
 };
@@ -194,7 +194,7 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
   );
 }
 
-function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language' | 'self'>) {
+function VideoDuo({ call, language, self, chromeVisible = true }: Pick<StageProps, 'call' | 'language' | 'self' | 'chromeVisible'>) {
   const swapped = self.full;
   const callId = call.callId ?? '';
   const scale = useStore(selfTileStore, (state) => selfTileScaleFor(state, callId));
@@ -226,7 +226,8 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   const cornerShown = swapped || call.cameraOn;
   const cornerVideo = swapped ? remoteVideoOn : call.cameraOn;
   const screen = viewport();
-  const size = selfTileSize(scale, screen);
+  const compact = !chromeVisible;
+  const size = selfTileSize(compact ? 1 : scale, screen);
   const rest = selfTileBox({ corner, size, viewport: screen });
   const drop = ({ dx, dy }: TileOffset): void => {
     const next = nearestSelfCorner({ center: { x: rest.x + rest.width / 2 + dx, y: rest.y + rest.height / 2 + dy }, size, viewport: screen });
@@ -295,6 +296,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
           style={{ ...cornerPlace(corner, size), width: size.width, height: size.height, transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
           data-call-corner-frame=""
           data-call-self-tile-corner={corner}
+          data-call-self-tile-compact={compact ? '' : undefined}
           data-call-self-tile-dragging={offset === null ? undefined : ''}
         >
           {rows?.effects ? (
@@ -356,6 +358,6 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
     );
   }
   if (layout === 'screen') return <DuoScreen call={call} language={language} immersive={immersive} onToggleImmersive={onToggleImmersive} />;
-  if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} />;
+  if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} chromeVisible={chromeVisible} />;
   return null;
 }
