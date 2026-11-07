@@ -16,6 +16,15 @@ enum SocketPayloadDecoder {
     /// de livraison.
     private static let deliveryLane = MainActorDeliveryLane()
 
+    /// Une valeur déjà lue hors JSON (un fragment binaire du talkie) prend la MÊME voie que les charges décodées :
+    /// elle passe derrière tout ce qui l'a précédée sur la file de décodage, et n'arrive donc jamais avant l'événement
+    /// qui l'annonce.
+    static func deliverInOrder<T: Sendable>(_ value: T, handler: @escaping @MainActor @Sendable (T) -> Void) {
+        Self.decodeQueue.async {
+            Self.deliveryLane.deliver { handler(value) }
+        }
+    }
+
     static func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @MainActor @Sendable (T) -> Void) {
         guard let first = data.first else {
             Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=empty-payload")
