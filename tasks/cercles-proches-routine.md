@@ -103,3 +103,21 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   (PushToTalk, NSE), `proche-talkie@android` ; décisions #14465, #14492.
 - Prochain lot recommandé : `proche-talkie@ios` (référence ; recevoir d'abord, prouvé par la CI iOS), sinon l'écoute
   (#13934) côté web avec le titre défilant sur l'avatar.
+
+## 2026-11-07 — réveil 7 : l'écoute partagée, côté serveur (`proche-sang-ecoute`, #16686 ⊂ #13934)
+
+- Reprise : #16674 (talkie reçu sur iOS) est menée par le réveil 6, #16624 (présence sur l'écran du Bring iOS) par le
+  réveil 2 ; ni l'une ni l'autre n'est touchée ici. Aucune branche vivante n'écrit `now-playing` ni `services/nowPlaying`.
+- Lot choisi : le sous-lot SERVEUR de l'écoute (#13934), premier de son ordre (`proche-sang-ecoute` → iOS → Android →
+  web). Issue #16686 ouverte au milestone #215.
+- Livré dans la PR (voir #16686) : contrat partagé `now-playing:update|clear` → `now-playing:changed|cleared` ; état
+  complet rangé SCELLÉ (`secret-at-rest`, lié au compte, 15 min) ; projection par lecteur (rien sous Proche, catégorie
+  seule pour un Proche qui l'a reçue, titre + origine pour un Sang qui les a reçus au rituel) ; recalcul aux montées
+  (acceptation, rituel, accord), aux baisses, blocages et retraits ; `GET /relations/now-playing` ; la catégorie devient
+  un consentement de l'émetteur (`listeningCategoryShared`, refusé par défaut, accordé dès Proche, retiré et daté par
+  personne, exporté) ; `pairAccessAmong` prend le consentement.
+- Ce qui reste de l'écoute : émettre et recevoir sur iOS (`proche-sang-ecoute@ios`, avec l'écran d'accord de la
+  catégorie), Android, puis la réception web avec le titre DÉFILANT sur l'avatar (demande de Jacques du 2026-11-07) ;
+  le fantôme (ciblé et global) n'existe pas encore en base.
+- Prochain lot recommandé : `proche-sang-ecoute@web` (réception + bandeau défilant sur l'avatar, petit et prouvable en
+  conteneur), puis `@ios`.

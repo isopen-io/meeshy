@@ -8,6 +8,7 @@ import { getCacheStore } from '../../services/CacheStore';
 import { runRitualPhase } from '../../services/relations/bloodRitual';
 import { forgetFriends } from '../../services/relations/relationCaches';
 import { relationIoOf } from '../../socketio/relationEvents';
+import { refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
 import { errorResponses, otherUserOf, relationLimiter, sendCoded, userIdParams } from './shared';
 
 const corpsRituel = z.object({
@@ -88,6 +89,13 @@ export function registerRelationRitual(fastify: FastifyInstance): void {
         { phase: body.phase, actorId: request.user!.userId, otherId, token: body.token, consents: body.consents },
       );
 
+      if (outcome.ok === true && outcome.data.completed === true) {
+        // #13934 — le Sang est scellé : le titre consenti au rituel remonte aussitôt.
+        await refreshNowPlayingAfter(
+          { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Now playing not refreshed after ritual:', error) },
+          { userA: request.user!.userId, userB: otherId },
+        );
+      }
       return outcome.ok === true ? sendSuccess(reply, outcome.data) : sendCoded(reply, outcome.status, outcome.message, outcome.code);
     } catch (error) {
       if (error instanceof z.ZodError) return sendBadRequest(reply, 'Donnees invalides');
