@@ -329,7 +329,7 @@ final class Router: ObservableObject {
     @Published var presentedPost: PostDetailSheetTarget? {
         didSet {
             guard oldValue?.id != presentedPost?.id else { return }
-            AnalyticsManager.shared.trackRoute(presentedPost.map { .postDetail($0.postId) } ?? path.last)
+            AnalyticsManager.shared.trackRoute(presentedPost.map { Route.postDetail($0.postId) } ?? path.last)
         }
     }
 

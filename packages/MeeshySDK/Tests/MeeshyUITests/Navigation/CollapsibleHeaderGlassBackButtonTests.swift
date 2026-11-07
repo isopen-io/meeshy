@@ -52,12 +52,14 @@ final class CollapsibleHeaderGlassBackButtonTests: XCTestCase {
 
     // MARK: - Un écran présenté en FEUILLE ferme, il ne revient pas (#16676)
 
+    @MainActor
     func test_backGlyph_byDefault_readsBack() {
         XCTAssertEqual(CollapsibleHeaderBackGlyph.back.systemImage, "chevron.backward")
         XCTAssertEqual(CollapsibleHeaderBackGlyph.back.accessibilityLabel,
                        String(localized: "common.back", defaultValue: "Retour", bundle: .module))
     }
 
+    @MainActor
     func test_backGlyph_close_readsCloseAndDrawsACross() {
         XCTAssertEqual(CollapsibleHeaderBackGlyph.close.systemImage, "xmark")
         XCTAssertEqual(CollapsibleHeaderBackGlyph.close.accessibilityLabel,

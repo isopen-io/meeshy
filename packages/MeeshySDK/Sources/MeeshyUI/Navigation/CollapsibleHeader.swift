@@ -508,7 +508,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
 }
 
 /// Le geste que porte le disque de tête d'un `CollapsibleHeader`.
-public nonisolated enum CollapsibleHeaderBackGlyph: Sendable, Equatable {
+public enum CollapsibleHeaderBackGlyph: Equatable {
     /// Revenir à l'écran d'en dessous, dans une pile de navigation.
     case back
     /// Fermer la feuille que l'écran occupe.
