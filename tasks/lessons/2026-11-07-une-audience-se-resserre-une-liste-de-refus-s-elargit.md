@@ -1,9 +1,9 @@
-# Une audience se construit sur le sous-ensemble le plus ÉTROIT, une liste de refus sur le plus LARGE
+## 2026-11-07 — Une audience se construit sur le sous-ensemble le plus ÉTROIT, une liste de refus sur le plus LARGE
 
 **Date** : 2026-11-07. **Cycle** : 140, lot #16690.
 **Famille** : « appliquer une loi uniformément » — et le cas où c'est faux.
 
-## Le constat
+### Le constat
 
 Le dépôt a une loi d'appartenance unique, `PARTICIPATION_VIVANTE` (actif **et**
 `bannedAt` nul ou absent), et douze audiences de diffusion la contournaient en
@@ -38,7 +38,7 @@ sockets à EXCLURE d'une diffusion de frappe — et dont le même relevé décid
 un frappeur actif-et-banni y aurait basculé de la loi des cercles vers la règle
 de blocage seule, strictement plus faible.
 
-## La règle
+### La règle
 
 | l'ensemble répond à | l'appliquer veut dire | le sous-ensemble juste |
 |---|---|---|
@@ -54,7 +54,7 @@ resserre si le resserrement est le sens où il échoue FERMÉ.
 > conversation » et « les membres à qui ne rien envoyer » s'écrivent avec le
 > même vocabulaire, se lisent de la même façon, et n'ont pas la même réponse.
 
-## Comment on l'attrape
+### Comment on l'attrape
 
 Pas par le `where`, qui est identique des deux côtés. **Par le nom de la
 variable et par son consommateur** : `rooms` / `recipients` / `members` d'un
@@ -63,7 +63,7 @@ nommaient `active` et `_getBlockedSocketIdsInRoom` — le premier ne dit rien de
 son usage, le second le DIT dans son nom, et c'est lui qui a été vu le plus
 vite. Lire la variable jusqu'à son emploi, jamais seulement sa requête.
 
-## Corollaire : un inventaire de refus n'est pas toujours une dette
+### Corollaire : un inventaire de refus n'est pas toujours une dette
 
 Le dépôt pose d'ordinaire ses cliquets à inventaire VIDE, avec la règle « il n'y
 a pas de porte non typée légitime à porter ». Ici l'inventaire est NON vide par
@@ -75,7 +75,7 @@ pousserait le prochain lot à « réparer » les deux sites corrects.
 > gardée est VRAIE de tous les sites qu'elle balaie. Sinon le cliquet
 > n'enseigne pas la règle, il enseigne son contraire sur les exceptions.
 
-## Deux erreurs de balayage, dans les deux sens, mesurées le même jour
+### Deux erreurs de balayage, dans les deux sens, mesurées le même jour
 
 Le cliquet de ce lot s'est trompé deux fois avant d'être juste, et les deux
 erreurs sont symétriques :
@@ -93,7 +93,7 @@ erreurs sont symétriques :
 > rassurant est silencieux.** Le sur-signalement se voit (on ouvre le site, il
 > est correct) ; l'omission ne se voit jamais — le cliquet est vert.
 
-## Et le remède peut être plus dangereux que le mal
+### Et le remède peut être plus dangereux que le mal
 
 Resserrer sur `bannedAt` est un correctif à risque que ce dépôt a déjà payé
 quatre fois en production : `{ bannedAt: null }` est une **égalité** et
@@ -109,7 +109,7 @@ n'évaluait `bannedAt` que dans une clé `OR`, si bien que la forme naïve passa
 au vert. **Un évaluateur incomplet est un double qui ment par ce qu'il ne
 REGARDE pas** — jumelle du « double qui ment par ce qu'il ACCEPTE » (cycle 112).
 
-## Et trois doubles qui discriminaient sur une propriété incidente
+### Et trois doubles qui discriminaient sur une propriété incidente
 
 `unsetOrNull('bannedAt')` rend une clé `OR`. Trois doubles de
 `revokeShareLinkGuests` rangeaient leurs requêtes par `if (where?.OR)` — la
