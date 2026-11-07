@@ -16,7 +16,7 @@ from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 from config.settings import LANGUAGE_MAPPINGS
-from services.task_privacy import shown
+from services.task_privacy import run_in_thread_with_context, shown
 from utils.sentence_plan import SentencePlan, plan_sentences
 from utils.text_segmentation import (
     has_translatable_text,
@@ -427,9 +427,16 @@ class TranslatorEngine:
             return []
         if len(inputs) == 1:
             return [await self._translate_single_chunk(inputs[0], source_lang, target_lang, model_type)]
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            self.executor, self._infer_batch_sync, inputs, source_lang, target_lang, model_type
+        return await self._in_inference_thread(
+            self._infer_batch_sync, inputs, source_lang, target_lang, model_type
+        )
+
+    async def _in_inference_thread(self, fn, *args):
+        """L'inférence part au pool AVEC le régime de la tâche (#16701) : sans lui,
+        le thread retombe sur le régime non déclaré et tait même un message ordinaire."""
+        loop = asyncio.get_running_loop()
+        return await run_in_thread_with_context(
+            lambda run, *call: loop.run_in_executor(self.executor, run, *call), fn, *args
         )
 
     async def _translate_single_chunk(
@@ -496,13 +503,11 @@ class TranslatorEngine:
             except TranslationInferenceError:
                 raise
             except Exception as e:
-                logger.error(f"Erreur pipeline {model_type}: {e}")
-                raise TranslationInferenceError(f"Erreur pipeline {model_type}: {e}") from e
+                logger.error(f"Erreur pipeline {model_type}: {shown(str(e))}")
+                raise TranslationInferenceError(f"Erreur pipeline {model_type}: {shown(str(e))}") from e
 
         # Exécuter de manière asynchrone
-        loop = asyncio.get_event_loop()
-        translated = await loop.run_in_executor(self.executor, translate_sync)
-        return translated
+        return await self._in_inference_thread(translate_sync)
 
     async def translate_batch(
         self,
@@ -554,9 +559,8 @@ class TranslatorEngine:
 
         outputs: List[str] = []
         if model_inputs:
-            loop = asyncio.get_event_loop()
-            outputs = await loop.run_in_executor(
-                self.executor, self._infer_batch_sync, model_inputs, source_lang, target_lang, model_type
+            outputs = await self._in_inference_thread(
+                self._infer_batch_sync, model_inputs, source_lang, target_lang, model_type
             )
         logger.info(
             f"⚡ [BATCH] {len(texts)} textes, {len(model_inputs)} phrases au modèle "
@@ -644,8 +648,8 @@ class TranslatorEngine:
         except TranslationInferenceError:
             raise
         except Exception as e:
-            logger.error(f"[BATCH-SYNC] ❌ Erreur batch pipeline {model_type}: {e}")
-            raise TranslationInferenceError(f"Erreur batch pipeline {model_type}: {e}") from e
+            logger.error(f"[BATCH-SYNC] ❌ Erreur batch pipeline {model_type}: {shown(str(e))}")
+            raise TranslationInferenceError(f"Erreur batch pipeline {model_type}: {shown(str(e))}") from e
 
     def cleanup(self):
         """Libère les ressources du moteur"""
