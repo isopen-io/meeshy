@@ -722,7 +722,7 @@ export function registerMessagePinRoutes(
       // échéance servie devient la plus proche de la sienne et de celle qu'elle
       // hérite. `keepAliveForReader` a déjà RETIRÉ celles dont la chaîne est
       // morte ; celle-ci raccourcit ce qui vit encore. N'allonge jamais une vie.
-      const heirsApplied = formattedMessages.map((served: any) => withInheritedExpiry(served, pinnedReaderPage.inherited));
+      const heirsApplied = formattedMessages.map((served) => withInheritedExpiry(served, pinnedReaderPage.inherited));
 
       // #9646 — les pièces d'un message protégé épinglé, signées pour CE lecteur.
       const servedMessages = await signMessagesAttachmentsForReader(prisma, {
