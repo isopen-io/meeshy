@@ -107,6 +107,7 @@ final class PresenceManagerTests: XCTestCase {
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": "entité — groupe, communauté, conversation, message sans compte",
         "Main/Components/ContactCard/ContactCardDetailSheet.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
         "Stories/Views/StoryAuthorIdentityCard.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
+        "Bring/BringRingView.swift": "Bring qui sonne — `BringIncoming` (la charge du push) ne porte aucune présence servie (#13936)",
         "Contacts/BlockedTab.swift": "bloqué — aucune présence ne se montre",
         "Settings/Views/BlockedUsersView.swift": "bloqué — aucune présence ne se montre",
         "Game/Photo/GameAuthorPlateView.swift": "décor, illustration ou son — aucune personne",
