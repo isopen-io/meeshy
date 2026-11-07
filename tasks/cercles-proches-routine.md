@@ -50,7 +50,7 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Trouvé en chemin : le jeton FCM de l'Android natif ne déclarait ni `appVersion` ni `bundleId` ; la passerelle ne lui
   servait donc AUCUN type à plancher. Le jeton les déclare désormais, `versionName` passe à 3.1.0 et le plancher
   Android de `bring_stopped` est posé à 3.1.0.
-- Livré dans la PR #16616 : loi pure `BringPushRouter` (`:core:model`), `BringPushHandler` avant le chemin des messages,
+- Livré et FUSIONNÉ dans `dev` par la PR #16616 (CI verte, `android.yml` vert sur le dernier commit : assembleDebug + testDebugUnitTest) : loi pure `BringPushRouter` (`:core:model`), `BringPushHandler` avant le chemin des messages,
   `BringRingService` (premier plan, `USAGE_ALARM`, vibration, expiration), notification alarme sur canal muet dédié,
   écran plein `BringRingActivity` iso `BringRingView.swift`, « Arrêter » optimiste puis `DELETE /bring/:bringId`
   (`BringApi.stop`, cliquet « à porter » 129 → 128), libellés `bring.incoming.*` adoptés du catalogue iOS.
@@ -62,3 +62,7 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   (iOS l'affiche, la charge le porte) ; interrupteurs globaux iOS (#16609) et web (#16588) ; Critical Alerts (#14112) ;
   décisions #14409, #14450.
 - Prochain lot recommandé : #16617 (envoyer et bloquer sur Android), puis le talkie (#13935).
+- Revue adversariale : non bloquante. Corrigé dans le lot : la durée de sonnerie se lit sur les horloges du serveur
+  (un téléphone en avance ne perdait plus le Bring sans un signe), `stopSelfResult` protège un second Bring arrivé
+  pendant l'arrêt, le repli sans service libère l'état à l'échéance, le témoin du jeton peut tomber. Consignés :
+  registre persistant, type du service au regard de Play, quota de priorité FCM (#16619).

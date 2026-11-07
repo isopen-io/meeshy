@@ -450,6 +450,33 @@ final class ComposerAutosaveTests: XCTestCase {
         XCTAssertFalse(relu.commentsDisabled)
     }
 
+    /// #16595 — un auteur qui avait REFUSÉ la reprise du son la retrouvait
+    /// autorisée après un kill ou « Rouvrir en brouillon » : le choix ne
+    /// voyageait pas, et son absence vaut l'accord par défaut (#8012).
+    func test_save_thenLoad_keepsTheSoundReuseRefusal() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        var etat = makeState(format: .post)
+        etat.soundExtractionChoice = false
+
+        store.save(ComposerAutosaveCodec.write(from: etat), account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertEqual(relu.soundExtractionChoice, false)
+    }
+
+    func test_save_thenLoad_withoutSoundReuseChoice_staysUnchosen_andWritesNoKey() throws {
+        let store = makeStore()
+        let compte = makeAccount()
+        let ecrit = ComposerAutosaveCodec.write(from: makeState(format: .post))
+
+        store.save(ecrit, account: compte, slot: .creation)
+        let relu = try XCTUnwrap(ComposerAutosaveCodec.state(from: XCTUnwrap(store.load(account: compte, slot: .creation))))
+
+        XCTAssertNil(ecrit.snapshot.soundExtractionChoice, "aucun choix, aucune clé")
+        XCTAssertNil(relu.soundExtractionChoice)
+    }
+
     func test_save_thenLoad_withoutPublishChoice_restoresNone() throws {
         let store = makeStore()
         let compte = makeAccount()
