@@ -59,14 +59,18 @@ jest.mock('../../../utils/response', () => ({
   sendConflict: jest.fn(),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  reactionSchema: {}, reactionSummarySchema: {}, addReactionRequestSchema: {}, errorResponseSchema: {},
-}));
-
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  SERVER_EVENTS: { REACTION_ADDED: 'reaction:added', REACTION_REMOVED: 'reaction:removed' },
-  ROOMS: { conversation: (id: string) => `conversation:${id}` },
-}));
+// Les schémas PARTAGÉS ne sont PAS bouchonnés : un bouchon de schéma de RÉPONSE
+// DÉSARME fast-json-stringify, et le dépôt a déjà payé 154 témoins verts sur des
+// routes qui ne rendaient rien (cycle 91 bis). La suite voisine
+// `reactions-routes.test.ts` les bouchonne — c'est de la dette HÉRITÉE, que le
+// cliquet `response-schema-stub-ratchet` gèle sans l'autoriser aux suites neuves.
+// Copier la forme du fichier d'à côté ne suffisait donc pas : c'est ce cliquet
+// qui l'a dit, et il a raison.
+//
+// `socketio-events` n'expose ici que des CONSTANTES pures : la bonne réponse
+// n'est même pas `requireActual`, c'est de ne pas le doubler du tout (cycle 104 —
+// un double énumérant 27 constantes sur 28 faisait émettre un événement nommé
+// `undefined`, témoin vert).
 
 import reactionRoutes from '../../../routes/reactions';
 import { ADMITTED_FILE_READER_WHERE } from '../../../services/attachments/fileReaderAdmission';
