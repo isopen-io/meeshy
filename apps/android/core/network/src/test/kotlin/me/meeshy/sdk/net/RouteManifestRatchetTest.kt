@@ -123,8 +123,10 @@ class RouteManifestRatchetTest {
          * vérifié), servies par la passerelle ; la boutique d'Android les portera. `GET /publishers/admin` est console.
          * 129 : plus `GET /publishers/:slug/page` (#16433 : la page éditeur nomme le profil qui édite) ; iOS la porte,
          * Android la portera avec sa page éditeur.
+         * 128 : moins `DELETE /bring/:bringId` (#13936, `proche-bring@android` : arrêter un Bring d'un geste), que porte
+         * `BringApi.stop`.
          */
-        const val TO_PORT_CEILING = 129
+        const val TO_PORT_CEILING = 128
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

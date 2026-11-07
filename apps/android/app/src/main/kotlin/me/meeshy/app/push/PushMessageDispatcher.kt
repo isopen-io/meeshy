@@ -2,6 +2,7 @@ package me.meeshy.app.push
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import me.meeshy.app.bring.BringPushHandler
 import me.meeshy.sdk.call.CallFreshnessChecker
 import me.meeshy.sdk.model.call.CallFreshness
 import me.meeshy.sdk.model.call.IncomingCallPushRoute
@@ -20,7 +21,9 @@ import javax.inject.Singleton
  *  1. an incoming **call** ring ([IncomingCallNotificationPresenter.show]) ;
  *  2. a **stop-ring** (`call_cancel` / `call_answered_elsewhere`) ([IncomingCallNotificationPresenter.cancel]) ;
  *  3. a **revocation** (`notification_revoked`) ([RevocationPushHandler]) ;
- *  4. anything else : the message pipeline ([MessageNotificationPresenter]).
+ *  4. a **Bring** ring or stop (`bring` / `bring_stopped`, #13936) ([BringPushHandler]) — before the message path,
+ *     which would render it as an ordinary banner ;
+ *  5. anything else : the message pipeline ([MessageNotificationPresenter]).
  *
  * Each stage is isolated (the async EventEmitter rule) : a rendering failure never deprives
  * the observers, an observer failure never deprives the others.
@@ -32,6 +35,7 @@ class PushMessageDispatcher @Inject constructor(
     private val tokenStore: TokenStore,
     private val callPresenter: IncomingCallNotificationPresenter,
     private val revocationHandler: RevocationPushHandler,
+    private val bringHandler: BringPushHandler,
     private val messagePresenter: MessageNotificationPresenter,
     private val freshness: CallFreshnessChecker,
     observers: Set<@JvmSuppressWildcards PushObserver>,
@@ -84,8 +88,10 @@ class PushMessageDispatcher @Inject constructor(
             }
             is IncomingCallPushRoute.StopRing -> callPresenter.cancel(route.push)
             is IncomingCallPushRoute.Suppress -> Timber.d("Suppressed call push: ${route.reason}")
-            IncomingCallPushRoute.NotACallPush -> {
-                if (!revocationHandler.handle(push.data)) messagePresenter.present(push)
+            IncomingCallPushRoute.NotACallPush -> when {
+                revocationHandler.handle(push.data) -> Unit
+                bringHandler.handle(push.data, nowMillis) -> Unit
+                else -> messagePresenter.present(push)
             }
         }
     }

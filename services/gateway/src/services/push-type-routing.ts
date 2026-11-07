@@ -39,11 +39,12 @@ export type PushTypeRoutingFloors = ReadonlyMap<string, Readonly<Record<PushRout
  *
  * `bring_stopped` remplace sur iOS la bannière de la sonnerie (alerte passive, même `collapse-id`) : TOUT jeton iOS
  * la reçoit, version lisible ou non (`ANY_VERSION`). Sur Android c'est un data-only sans titre, qu'un ancien
- * Android natif rendrait en bannière VIDE. Il ne part donc vers Android
- * qu'à partir de la version qui l'arrête (sous-lot `proche-bring@android`, qui pose ici son plancher).
+ * Android natif rendrait en bannière VIDE. Il ne part donc vers l'Android natif qu'à partir de la 3.1.0, la
+ * version qui l'arrête (`proche-bring@android`) et qui déclare enfin `appVersion` + `bundleId` sur son jeton.
+ * La coque et le navigateur ne sonnent que par la socket : rien à arrêter par push.
  */
 const BRING_STOPPED_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = {
-  ios: ANY_VERSION, 'android-native': null, 'android-shell': null, web: null,
+  ios: ANY_VERSION, 'android-native': '3.1.0', 'android-shell': null, web: null,
 };
 
 /**

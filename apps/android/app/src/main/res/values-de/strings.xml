@@ -21,6 +21,8 @@
     <!-- Feed screen -->
 
     <!-- Profile screen -->
+    <string name="bring_channel_name">Bring</string>
+    <string name="bring_channel_description">Lässt dein Telefon klingeln, wenn ein Vertrauter einen Bring auslöst, auch im Lautlos-Modus</string>
     <string name="call_channel_description">Eingehende Sprach- und Videoanrufe</string>
     <string name="a11y_floating_menu">Navigationsmenü</string>
 

@@ -8,6 +8,10 @@
     <string name="a11y_state_open">فتح</string>
     <string name="app_name">Meeshy</string>
     <string name="auth_pending_link_notice">سجّل الدخول: سيُفتح المحتوى الذي شاركه أحدهم معك مباشرةً بعد ذلك.</string>
+    <string name="bring_incoming_body">Bring: نداء لحالة طارئة قصوى.</string>
+    <string name="bring_incoming_someone">شخص ما</string>
+    <string name="bring_incoming_stop">إيقاف</string>
+    <string name="bring_incoming_title">%1$s يجعل هاتفك يرنّ</string>
     <string name="call_channel_name">المكالمات</string>
     <string name="call_incoming_audio">مكالمة واردة</string>
     <string name="call_incoming_video">مكالمة فيديو واردة</string>
