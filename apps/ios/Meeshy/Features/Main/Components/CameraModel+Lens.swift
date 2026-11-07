@@ -62,6 +62,33 @@ extension CameraModel {
         }
     }
 
+    // MARK: - L'exposition (OPUS-5)
+
+    /// Le biais que l'objectif actif sert, en EV. Sans objectif (simulateur),
+    /// `0...0` : le soleil ne paraît pas.
+    var exposureBiasRange: ClosedRange<Float> {
+        guard let device = activeVideoDevice,
+              device.minExposureTargetBias <= device.maxExposureTargetBias
+        else { return 0...0 }
+        return device.minExposureTargetBias...device.maxExposureTargetBias
+    }
+
+    /// **Le soleil éclaircit ou assombrit** autour de la mesure de l'objectif :
+    /// le biais suit le doigt, sans rampe — l'objectif lisse déjà sa
+    /// convergence, une rampe ajouterait un retard au geste.
+    func setExposureBias(_ ev: Float) {
+        guard let device = activeVideoDevice else { return }
+        let borne = min(device.maxExposureTargetBias, max(device.minExposureTargetBias, ev))
+        guard borne != device.exposureTargetBias else { return }
+        do {
+            try device.lockForConfiguration()
+            device.setExposureTargetBias(borne, completionHandler: nil)
+            device.unlockForConfiguration()
+        } catch {
+            Logger.media.error("Exposure bias failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     // MARK: - La mise au point
 
     /// **Le toucher vise ce point du capteur** — mise au point et exposition,

@@ -24,7 +24,7 @@
     "apps/ios/Meeshy/Features/Call/Views/CallView.swift::CallView.callBackground": 83,
     "apps/ios/Meeshy/Features/Call/Views/CallView.swift::CallView.callSurface": 166,
     "apps/ios/Meeshy/Features/Call/Views/CallWaitingBannerView.swift::CallWaitingBannerView.body": 88,
-    "apps/ios/Meeshy/Features/Composer/ComposerCaptureViews.swift::ComposerCaptureChrome.body": 91,
+    "apps/ios/Meeshy/Features/Composer/ComposerCaptureViews.swift::ComposerCaptureChrome.body": 85,
     "apps/ios/Meeshy/Features/Composer/ComposerCaptureViews.swift::ComposerCapturePreview.body": 86,
     "apps/ios/Meeshy/Features/Composer/ComposerIntent.swift::ComposerProfile.profile": 274,
     "apps/ios/Meeshy/Features/Composer/ComposerObjectEditorView.swift::ComposerObjectEditorView.scene": 82,
