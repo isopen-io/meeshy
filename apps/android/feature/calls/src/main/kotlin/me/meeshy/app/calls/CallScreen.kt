@@ -137,6 +137,7 @@ fun CallScreen(
 
     CallImmersiveEffect()
     CallStatusAnnouncer(state.status)
+    ScreenShareFoldsCall(onMinimize)
     BackHandler {
         when (CallPillPresenter.backAction(state.status)) {
             CallBackAction.Inert -> Unit

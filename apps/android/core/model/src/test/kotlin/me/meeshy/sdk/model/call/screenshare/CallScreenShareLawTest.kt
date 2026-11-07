@@ -68,4 +68,12 @@ class CallScreenShareLawTest {
         assertThat(CallScreenShareLaw.reannouncesOnSocket(wasConnected = true, isConnected = true)).isFalse()
         assertThat(CallScreenShareLaw.reannouncesOnSocket(wasConnected = true, isConnected = false)).isFalse()
     }
+
+    @Test
+    fun `the call folds into its pill when my share starts, never when I reopen a call already sharing`() {
+        assertThat(CallScreenShareLaw.minimizesOnStart(CallScreenSharePhase.Requesting, CallScreenSharePhase.Sharing)).isTrue()
+        assertThat(CallScreenShareLaw.minimizesOnStart(CallScreenSharePhase.Sharing, CallScreenSharePhase.Sharing)).isFalse()
+        assertThat(CallScreenShareLaw.minimizesOnStart(CallScreenSharePhase.Idle, CallScreenSharePhase.Requesting)).isFalse()
+        assertThat(CallScreenShareLaw.minimizesOnStart(CallScreenSharePhase.Sharing, CallScreenSharePhase.Idle)).isFalse()
+    }
 }
