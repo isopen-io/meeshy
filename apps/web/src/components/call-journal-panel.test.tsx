@@ -111,14 +111,16 @@ describe('CallJournalPanel', () => {
     view.done();
   });
 
-  test('la phrase servie porte la couleur de son auteur, comme son nom ; l’original reste en encre secondaire (#16634)', () => {
-    const view = mount([caption({ id: 'peer' }), caption({ id: 'me', mine: true, speakerName: '', original: 'Salut', translated: null, pair: null })]);
-    const peer = view.find('[data-call-journal-entry="peer"]') as HTMLElement;
+  test('le nom porte la couleur de son auteur ; seule la phrase TRADUITE la prend, l’original et ma parole restent à l’encre de l’appel', () => {
+    const view = mount([caption({ id: 'peer' }), caption({ id: 'raw', original: 'Same', translated: null, pair: null }), caption({ id: 'me', mine: true, speakerName: '', original: 'Salut', translated: null, pair: null })]);
+    const [peer, raw] = view.all('[data-call-journal-entry="peer"]') as HTMLElement[];
     const mine = view.find('[data-call-journal-entry="mine"]') as HTMLElement;
-    expect((peer.querySelector('strong') as HTMLElement).style.color).toBe('#f0a');
-    expect((peer.querySelector('[data-call-journal-text]') as HTMLElement).style.color).toBe('#f0a');
-    expect((peer.querySelector('[data-call-journal-original]') as HTMLElement).style.color).not.toBe('#f0a');
-    expect((mine.querySelector('[data-call-journal-text]') as HTMLElement).style.color).toBe('#fff');
+    expect((peer?.querySelector('strong') as HTMLElement).style.color).toBe('#f0a');
+    expect((peer?.querySelector('[data-call-journal-text]') as HTMLElement).style.color).toBe('#f0a');
+    expect((peer?.querySelector('[data-call-journal-original]') as HTMLElement).style.color).not.toBe('#f0a');
+    expect((raw?.querySelector('[data-call-journal-text]') as HTMLElement).style.color).toBe('var(--color-on-media)');
+    expect((mine.querySelector('strong') as HTMLElement).style.color).toBe('#fff');
+    expect((mine.querySelector('[data-call-journal-text]') as HTMLElement).style.color).toBe('var(--color-on-media)');
     view.done();
   });
 

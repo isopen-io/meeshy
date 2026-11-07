@@ -40,6 +40,12 @@ struct CallCaptionLine: Equatable, Identifiable {
 
     var speakerColorHex: String { CallSpeakerColor.hex(for: speakerId) }
 
+    /// La couleur du TEXTE : celle de l'auteur quand la ligne sert sa
+    /// TRADUCTION, `nil` (encre de l'écran d'appel) pour un original, ma
+    /// parole comprise — le nom, lui, porte toujours la couleur
+    /// (`docs/product/appels-vue-finale.md` loi 4).
+    var textColorHex: String? { isShowingOriginal ? nil : speakerColorHex }
+
     /// Ce que VoiceOver lit : la phrase FINALE seulement — une révision
     /// partielle, remplacée quelques centaines de millisecondes plus tard,
     /// n'a rien à annoncer.

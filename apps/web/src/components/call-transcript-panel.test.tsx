@@ -34,7 +34,7 @@ const inkOf = (html: string, marker: string): readonly string[] => {
 };
 
 describe('le journal d’après l’appel (#16634)', () => {
-  test('le nom ET la phrase servie d’un pair portent son encre d’auteur', () => {
+  test('le nom ET la phrase TRADUITE d’un pair portent son encre d’auteur', () => {
     const html = render([line()]);
     const ink = authorInk({ authorId: 'u-awa', name: 'Awa' });
     expect(inkOf(html, 'data-call-transcript-line="peer"')).toEqual([ink.dark, ink.dark]);
@@ -43,9 +43,10 @@ describe('le journal d’après l’appel (#16634)', () => {
     expect(html).toMatch(/class="[^"]*author-ink[^"]*"[^>]*>Tu m’entends \?</);
   });
 
-  test('ma parole porte MA couleur, la même que mes sous-titres pendant l’appel', () => {
+  test('mon nom porte MA couleur ; ma parole, jamais traduite, reste à l’encre du thème', () => {
     const html = render([line({ id: 's-2', speakerId: 'u-moi', speakerName: 'Moi', mine: true, text: 'Oui', original: 'Oui', translated: false })]);
-    expect(inkOf(html, 'data-call-transcript-line="mine"')[0]).toBe(authorInk({ authorId: 'u-moi', name: 'Moi' }).dark);
+    expect(inkOf(html, 'data-call-transcript-line="mine"')).toEqual([authorInk({ authorId: 'u-moi', name: 'Moi' }).dark]);
+    expect(html).toMatch(/data-call-transcript-text="original"[^>]*>Oui</);
   });
 
   test('deux auteurs, deux couleurs', () => {
@@ -55,8 +56,9 @@ describe('le journal d’après l’appel (#16634)', () => {
     expect(karim).toBe(authorInk({ authorId: 'u-karim', name: 'Karim' }).dark);
   });
 
-  test('« Voir l’original » rend ce qui a été dit, toujours à la couleur de l’auteur', () => {
+  test('« Voir l’original » rend ce qui a été dit, à l’encre du thème : seule une traduction prend la couleur', () => {
     const html = render([line()], true);
-    expect(html).toMatch(/class="[^"]*author-ink[^"]*"[^>]*>Can you hear me\?</);
+    expect(html).toMatch(/data-call-transcript-text="original"[^>]*>Can you hear me\?</);
+    expect(inkOf(html, 'data-call-transcript-line="peer"')).toHaveLength(1);
   });
 });

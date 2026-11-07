@@ -21,10 +21,13 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  *
  * Chunk à part (`budgets.json` › `call_journal_panel`) : il n'importe rien de
  * l'écran d'appel, qui lui remet la couleur de chaque personne. Cette couleur
- * teint le nom ET la phrase servie, comme le sous-titre en direct (#16634,
- * `docs/product/appels-vue-finale.md` loi 4) ; l'original reste en encre
- * secondaire.
+ * teint TOUJOURS le nom, et la phrase seulement quand elle est TRADUITE ; une
+ * phrase originale (la mienne comprise) reste à l'encre de l'appel, et
+ * l'original déplié dessous à l'encre secondaire (#16634,
+ * `docs/product/appels-vue-finale.md` loi 4).
  */
+
+const INK = 'var(--color-on-media)';
 
 const INK_2 = 'var(--color-on-media-3)';
 
@@ -109,7 +112,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
                     <strong style={{ color }}>{speaker(caption)}</strong> · <time dateTime={new Date(caption.at).toISOString()}>{clock.format(caption.at)}</time>
                     {languages === null ? null : <span className="ms-1.5 text-check font-semibold tracking-wide">{languages}</span>}
                   </span>
-                  <span className="text-body" style={{ color }} dir="auto" data-call-journal-text="">
+                  <span className="text-body" style={{ color: served === caption.original ? INK : color }} dir="auto" data-call-journal-text="">
                     {served}
                   </span>
                   {served === caption.original ? null : (

@@ -260,7 +260,9 @@ private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean) {
                 Text(elapsed, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted)
             }
         }
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = speakerColor)
+        val textColor = CallSpeakerColor.textHex(line.speakerId.ifBlank { line.speakerName }, servesTranslation = !showOriginal && line.translated != null, mode = scheme)
+            ?.let { hexColor(it, MeeshyTheme.tokens.textPrimary) } ?: MeeshyTheme.tokens.textPrimary
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = textColor)
     }
 }
 

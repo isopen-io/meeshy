@@ -86,11 +86,11 @@ struct CallCaptionRow: View {
                             .background(Capsule().fill(Color.white.opacity(MeeshyOpacity.light)))
                     }
                 }
-                // #16614 — le TEXTE porte aussi la couleur de son auteur,
-                // la même que son nom et que le liseré de sa vignette.
+                // Seule une phrase TRADUITE prend la couleur de son auteur ;
+                // un original reste à l'encre de l'appel (vue finale, loi 4).
                 Text(line.text)
                     .font(.callout.weight(line.isFinal ? .regular : .light))
-                    .foregroundColor(speakerColor)
+                    .foregroundColor(line.textColorHex.map { Color(hex: $0) } ?? .white)
                     .opacity(line.isFinal ? 1 : 0.7)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)

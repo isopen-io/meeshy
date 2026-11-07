@@ -50,6 +50,13 @@ final class CallCaptionLineTests: XCTestCase {
         XCTAssertTrue(sut.canRevealOriginal)
     }
 
+    func test_textColor_onlyATranslatedLineTakesTheSpeakerColor() {
+        XCTAssertEqual(line(segment()).textColorHex, CallSpeakerColor.hex(for: "peer"))
+        XCTAssertNil(line(segment(), isRevealed: true).textColorHex)
+        XCTAssertNil(line(segment(translatedText: nil, translatedLanguage: nil)).textColorHex)
+        XCTAssertNil(line(segment(speakerId: "me", text: "Salut", language: "fr"), isLocal: true).textColorHex)
+    }
+
     func test_make_tappedTranslatedLine_showsOriginalWithoutTag() {
         let sut = line(segment(), isRevealed: true)
         XCTAssertEqual(sut.text, "Hello")

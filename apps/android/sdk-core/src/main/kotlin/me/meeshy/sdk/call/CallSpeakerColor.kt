@@ -16,4 +16,14 @@ object CallSpeakerColor {
 
     fun hex(userId: String, mode: DynamicColorGenerator.ThemeMode): String =
         DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(userId), mode)
+
+    /**
+     * The colour of a SENTENCE: the speaker's when it serves a translation, `null` (the theme's ink)
+     * for an original, the reader's own words included. The name always carries [hex].
+     */
+    fun textHex(
+        userId: String,
+        servesTranslation: Boolean,
+        mode: DynamicColorGenerator.ThemeMode = DynamicColorGenerator.ThemeMode.DARK,
+    ): String? = if (servesTranslation) hex(userId, mode) else null
 }

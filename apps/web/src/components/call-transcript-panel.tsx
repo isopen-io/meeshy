@@ -24,8 +24,9 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
  *
  * Le journal d'après l'appel est FIDÈLE au journal de l'appel (#16634,
  * `docs/product/appels-vue-finale.md` lois 4 et 7) : chaque ligne garde la
- * couleur de son auteur, sur le nom ET la phrase, tirée de la loi partagée
- * `authorAccentColor` et rendue lisible sur le fond du fil (`authorInk`).
+ * couleur de son auteur sur le nom, et sur la phrase quand elle est TRADUITE,
+ * tirée de la loi partagée `authorAccentColor` et rendue lisible sur le fond
+ * du fil (`authorInk`) ; un original reste à l'encre du thème.
  */
 
 const muted = { color: 'var(--color-ios-ink-2)' } as const;
@@ -94,9 +95,15 @@ export function CallTranscriptLines({ lines, language, original, onToggleOrigina
                 <span className="author-ink" style={ink}>{name}</span>
                 <span className="tabular-nums">{formatCallClock(line.offsetSec)}</span>
               </span>
-              <span className="author-ink block text-[13.5px]" style={ink} dir="auto" lang={original ? undefined : line.language || undefined}>
-                {original ? line.original : line.text}
-              </span>
+              {!original && line.translated ? (
+                <span className="author-ink block text-[13.5px]" style={ink} dir="auto" lang={line.language || undefined} data-call-transcript-text="translated">
+                  {line.text}
+                </span>
+              ) : (
+                <span className="block text-[13.5px]" style={{ color: 'var(--color-ios-ink)' }} dir="auto" data-call-transcript-text="original">
+                  {line.original}
+                </span>
+              )}
             </li>
           );
         })}
