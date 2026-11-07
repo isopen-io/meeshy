@@ -557,12 +557,20 @@ export class ZmqTranslationClient extends EventEmitter {
 
       receiveInFlight = true;
       try {
-        const message = await this.connectionManager.receive();
+        // #16599 — on VIDE le canal : dès qu'un résultat est traité, la
+        // lecture suivante repart sans attendre le tick. Relancer au tick
+        // plafonnait la passerelle à ~10 résultats/s, et le N-ième résultat
+        // d'une rafale (sous-titres d'appel compris) attendait N × 100 ms.
+        // Toujours un seul receive() en vol ; une erreur sort de la boucle
+        // et laisse le tick relancer, sans boucle chaude.
+        while (this.running) {
+          const message = await this.connectionManager.receive();
 
-        /* istanbul ignore else -- `ZmqConnectionManager.receive()` LÈVE quand aucun message n'est disponible (`throw new Error('No message available')`) : il ne rend jamais null/undefined. Vérifié le 2026-09-24. */
-        if (message) {
-          lastMessageAt = Date.now();
-          await this.messageHandler.handleMessage(message);
+          /* istanbul ignore else -- `ZmqConnectionManager.receive()` LÈVE quand aucun message n'est disponible (`throw new Error('No message available')`) : il ne rend jamais null/undefined. Vérifié le 2026-09-24. */
+          if (message) {
+            lastMessageAt = Date.now();
+            await this.messageHandler.handleMessage(message);
+          }
         }
       } catch (receiveError) {
         // « No message… » est le régime normal du polling ; toute autre
