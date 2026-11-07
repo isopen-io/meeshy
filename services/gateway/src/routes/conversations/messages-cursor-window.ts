@@ -55,6 +55,8 @@
  */
 
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { applyHistoryFloor } from '../../services/historyFloor';
+import { applyPersonalHistoryHiding, type PersonalHistoryHiding } from '../../services/personalHistoryFilter';
 import {
   KEYSET_TIE_BREAK_FIELD,
   keysetClause,
@@ -195,14 +197,13 @@ export async function resolveAroundWindowIds(params: {
   readonly around: string;
   readonly limit: number;
   readonly historyStartDate: Date | null | undefined;
-  readonly applyHistoryFloor: (where: Prisma.MessageWhereInput, floor: Date | null | undefined) => Prisma.MessageWhereInput;
-  readonly applyPersonalHistoryHiding: (where: Prisma.MessageWhereInput, hiding: unknown) => Prisma.MessageWhereInput;
-  readonly personalHiding: unknown;
+  /** Le masquage PERSONNEL du lecteur — appliqué aux DEUX moitiés, jamais à la fin. */
+  readonly personalHiding: PersonalHistoryHiding;
 }): Promise<string[] | null> {
   const { prisma, conversationId, around, limit, historyStartDate } = params;
 
   const target = await prisma.message.findFirst({
-    where: params.applyHistoryFloor({ id: around, conversationId }, historyStartDate),
+    where: applyHistoryFloor({ id: around, conversationId }, historyStartDate),
     select: { id: true, createdAt: true }
   }) as { id: string; createdAt: Date } | null;
   if (!target) return null;
@@ -212,7 +213,7 @@ export async function resolveAroundWindowIds(params: {
   const floorOnly: Prisma.MessageWhereInput = historyStartDate ? { createdAt: { gte: historyStartDate } } : {};
 
   const half = (side: KeysetSide, direction: MessageOrderDirection) => prisma.message.findMany({
-    where: params.applyPersonalHistoryHiding(
+    where: applyPersonalHistoryHiding(
       withKeysetWindow({ conversationId, deletedAt: null, ...floorOnly }, keysetClause({ field: 'createdAt', side, ...cursor })),
       params.personalHiding
     ),

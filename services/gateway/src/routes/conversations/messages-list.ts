@@ -429,8 +429,7 @@ export function registerMessagesListRoute(
       if (around && !before && vue.allowsAround) {
         isAroundMode = true;
         const aroundIds = await resolveAroundWindowIds({
-          prisma, conversationId, around, limit, historyStartDate,
-          applyHistoryFloor, applyPersonalHistoryHiding, personalHiding
+          prisma, conversationId, around, limit, historyStartDate, personalHiding
         });
         if (aroundIds !== null) {
           whereClause.id = { in: aroundIds };
