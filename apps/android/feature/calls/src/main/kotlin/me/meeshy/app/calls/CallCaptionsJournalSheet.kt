@@ -54,10 +54,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.call.CallSpeakerColor
 import me.meeshy.sdk.model.call.CallJournalFollow
 import me.meeshy.sdk.model.call.CallLiveCaptionLine
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.hexColor
 
 private val CAPTION_TARGET = 48.dp
 
