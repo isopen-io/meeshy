@@ -157,7 +157,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'socketio/handlers/__tests__/AuthHandler.test.ts': 1645,
   '__tests__/unit/services/MessageTranslationService.branches.test.ts': 1631,
   '__tests__/unit/services/CallCleanupService.test.ts': 1619,
-  '__tests__/unit/routes/sync.test.ts': 1616,
+  '__tests__/unit/routes/sync.test.ts': 1292,
   'socketio/handlers/__tests__/MessageHandlerEditDelete.test.ts': 1611,
   '__tests__/unit/services/PostFeedService.test.ts': 1607,
   '__tests__/unit/services/ReactionService.test.ts': 1605,

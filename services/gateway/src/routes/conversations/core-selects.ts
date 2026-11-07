@@ -333,14 +333,27 @@ export const conversationListQuerySelect = (viewerId: string) => ({
     take: 1,
     select: conversationUserPreferencesSelect
   },
-  // #9630 — un avis de capture est une ligne silencieuse : jamais l'aperçu.
-  messages: {
-    where: withoutCaptureNotices({ deletedAt: null }),
-    orderBy: { createdAt: 'desc' as const },
-    take: 1,
-    select: conversationLastMessagePreviewSelect
-  }
+  messages: CONVERSATION_LAST_MESSAGE_PREVIEW_QUERY
 }) as const;
+
+/**
+ * La sélection imbriquée qui LIT cet aperçu — le `where`, l'ordre, le `take: 1`
+ * et la projection ENSEMBLE.
+ *
+ * Extraite avec #16590, et pour la raison que la projection seule ne suffisait
+ * pas à tenir : `GET /users/me/dashboard-stats` l'avait récrite à la main en
+ * quatre champs, sans le bloc de protection ni l'exclusion des avis de capture.
+ * Une projection partagée n'empêche pas une TROISIÈME copie du `where` ; le
+ * bloc entier, si.
+ *
+ * #9630 — un avis de capture est une ligne silencieuse : jamais l'aperçu.
+ */
+export const CONVERSATION_LAST_MESSAGE_PREVIEW_QUERY = {
+  where: withoutCaptureNotices({ deletedAt: null }),
+  orderBy: { createdAt: 'desc' as const },
+  take: 1,
+  select: conversationLastMessagePreviewSelect,
+} as const;
 
 /** La forme d'une ligne rendue par `prisma.conversation.findMany({ select: conversationListQuerySelect(...) })`. */
 export type ConversationListRow = Prisma.ConversationGetPayload<{
