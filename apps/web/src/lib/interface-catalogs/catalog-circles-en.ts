@@ -116,6 +116,10 @@ const en = {
   'talkie.send.failed': 'The walkie-talkie could not be sent.',
   'talkie.send.micDenied': 'Allow the microphone to use the walkie-talkie.',
   'talkie.send.limit': 'Thirty seconds at most: the talk has stopped.',
+  'listening.category.music': 'Listening to music',
+  'listening.category.video': 'Watching a video',
+  'listening.category.browsing': 'Browsing',
+  'listening.spoken': 'Right now: {activity}',
 } as const satisfies CirclesCatalog;
 
 export default en;
