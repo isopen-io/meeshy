@@ -64,6 +64,8 @@ struct CallCaptionRow: View {
     var showsTime: Bool = false
     let onToggleOriginal: () -> Void
 
+    private var speakerColor: Color { Color(hex: line.speakerColorHex) }
+
     var body: some View {
         Button {
             guard line.canRevealOriginal else { return }
@@ -73,7 +75,7 @@ struct CallCaptionRow: View {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(speakerHeading)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(Color(hex: line.speakerColorHex))
+                        .foregroundColor(speakerColor)
                         .lineLimit(1)
                     if let tag = line.languageTag {
                         Text(tag)
@@ -88,7 +90,7 @@ struct CallCaptionRow: View {
                 // la même que son nom et que le liseré de sa vignette.
                 Text(line.text)
                     .font(.callout.weight(line.isFinal ? .regular : .light))
-                    .foregroundColor(Color(hex: line.speakerColorHex))
+                    .foregroundColor(speakerColor)
                     .opacity(line.isFinal ? 1 : 0.7)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
