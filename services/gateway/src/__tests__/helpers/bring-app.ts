@@ -18,10 +18,13 @@ export type Emission = { readonly room: string; readonly event: string; readonly
 export type Personne = {
   readonly timezone?: string | null;
   readonly deactivatedAt?: Date | null;
+  readonly isActive?: boolean;
+  readonly deletedAt?: Date | null;
   readonly birthDate?: Date | null;
   readonly blockedUserIds?: readonly string[];
   readonly systemLanguage?: string;
   readonly notification?: Record<string, unknown>;
+  readonly role?: string;
 };
 
 export type BringAppOptions = {
@@ -63,12 +66,15 @@ export async function buildBringApp(
       const p = options.personnes?.[id] ?? {};
       return [id, {
         id,
+        role: p.role ?? 'USER',
         username: `u${id.slice(-2)}`,
         displayName: `U${id.slice(-2)}`,
         firstName: 'A',
         lastName: 'B',
         avatar: null,
         deactivatedAt: p.deactivatedAt ?? null,
+        isActive: p.isActive ?? true,
+        deletedAt: p.deletedAt ?? null,
         timezone: p.timezone ?? null,
         birthDate: p.birthDate ?? null,
         blockedUserIds: [...(p.blockedUserIds ?? [])],

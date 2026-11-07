@@ -36,6 +36,7 @@ import { isBlockedBetween } from '../../utils/blocking';
 import { niveauEffectif } from '../friendship';
 import { SERVER_BLIND_REGIME_FILTER } from '../conversations/encryptionRegime';
 import { accountParticipantIds, LIVE_CALL_PARTICIPATION } from '../calls/liveCallParticipations';
+import { isUsableAccount } from '../relations/usableAccount';
 
 export type TalkieGateDb = Pick<
   PrismaClient,
@@ -55,10 +56,8 @@ export const TALKIE_UNAVAILABLE: TalkieRefusal = refuse(TALKIE_ERROR_CODES.UNAVA
 
 const PARTY_SELECT = { id: true, role: true, isActive: true, deletedAt: true, deactivatedAt: true, birthDate: true } as const;
 
-type Party = { readonly isActive: boolean; readonly deletedAt: Date | null; readonly deactivatedAt: Date | null };
-
 /** Un compte qui peut parler ou être parlé : actif, ni supprimé, ni désactivé. */
-const usable = <T extends Party>(party: T | null): party is T => !!party && party.isActive && !party.deletedAt && !party.deactivatedAt;
+const usable = isUsableAccount;
 
 async function notificationPrefsOf(prisma: Pick<PrismaClient, 'userPreferences'>, userId: string): Promise<NotificationPreference> {
   const row = await prisma.userPreferences.findUnique({ where: { userId }, select: { notification: true } });
@@ -132,6 +131,8 @@ export async function judgeTalkie(
     blockedEitherWay: blocked,
     viewerMinor: declaredAgeClass(sender.birthDate, now),
     targetMinor: declaredAgeClass(recipient.birthDate, now),
+    viewerRole: sender.role,
+    targetRole: recipient.role,
     feature: 'talkie',
     consent: receives ? 'granted' : 'refused',
   });
