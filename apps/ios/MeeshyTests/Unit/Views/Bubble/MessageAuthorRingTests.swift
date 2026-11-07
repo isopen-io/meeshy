@@ -153,6 +153,8 @@ final class MessageAuthorRingTests: XCTestCase {
         "MeeshyUI/Profile/FullscreenImageView.swift": (1, "décor, illustration ou son — aucune personne"),
         "MeeshyUI/Story/Controls/SoundDetailView.swift": (1, "décor, illustration ou son — aucune personne"),
         "MeeshyUI/Story/Controls/SoundLibraryPicker.swift": (1, "décor, illustration ou son — aucune personne"),
+        "MeeshyUI/Packs/PackElementStage.swift": (2, "soi, essai d'un décor — le contour essayé se pose AUTOUR de l'avatar (`.avatarRing`), la bannière essayée n'en montre aucun"),
+        "MeeshyUI/Packs/PublisherPageView.swift": (1, "page d'un éditeur — `PackPublisherOwner` servi ne porte pas le contour (#10957)"),
     ]
 
     func test_everyPersonAvatar_passesTheServedRing_orIsCountedWithItsReason() throws {

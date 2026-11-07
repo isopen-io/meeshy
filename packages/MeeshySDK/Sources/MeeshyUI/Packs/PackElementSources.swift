@@ -10,7 +10,7 @@ import MeeshySDK
 public final class ServedPackElementDesigns: PackElementDesignProviding {
     nonisolated deinit {}
 
-    public typealias StickerDetail = @Sendable (String) async throws -> StickerPack
+    public typealias StickerDetail = @Sendable @concurrent (String) async throws -> StickerPack
 
     private let embedded: EmbeddedPackElementDesigns
     private let served: any ServedAppearanceProviding
