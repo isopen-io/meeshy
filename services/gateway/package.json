@@ -61,7 +61,7 @@
     "isomorphic-dompurify": "^4.5.0",
     "jsonwebtoken": "^9.0.3",
     "libphonenumber-js": "^1.13.13",
-    "mmdb-lib": "^3.0.3",
+    "mmdb-lib": "^3.0.4",
     "mongodb": "^7.7.0",
     "music-metadata": "^12.3.2",
     "nice-grpc": "^2.1.18",
