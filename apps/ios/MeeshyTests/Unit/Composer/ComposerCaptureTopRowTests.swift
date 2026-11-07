@@ -20,12 +20,54 @@ final class ComposerCaptureTopRowTests: XCTestCase {
 
     func test_trailing_putsTheFlipRightOfTheFlash_atTheEdge() {
         let droite = ComposerCaptureTopRow.trailing(Self.input())
-        XCTAssertEqual(droite, [.size, .flash, .flip])
+        XCTAssertEqual(droite, [.more, .flash, .flip])
         XCTAssertEqual(droite.last, .flip, "le retournement touche le bord droit")
     }
 
-    func test_trailing_withoutSizeToggle_isFlashThenFlip() {
-        XCTAssertEqual(ComposerCaptureTopRow.trailing(Self.input(size: false)), [.flash, .flip])
+    func test_trailing_withoutSizeToggle_stillOffersTheMenu_forTheGrid() {
+        XCTAssertEqual(ComposerCaptureTopRow.trailing(Self.input(size: false)), [.more, .flash, .flip])
+    }
+
+    // MARK: - (5) `⋯` remplace `[ ]` au viseur (décision porteur 2026-11-07, OPUS-6)
+
+    func test_theViewfinder_neverShowsTheSizeToggleInTheRow_itLivesInTheMenu() {
+        XCTAssertFalse(ComposerCaptureTopRow.trailing(Self.input()).contains(.size))
+        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: true), [.grid, .size])
+    }
+
+    func test_theMenu_withoutACardToReturnTo_offersOnlyTheGrid() {
+        XCTAssertEqual(ComposerCaptureMoreMenu.items(offersSizeToggle: false), [.grid])
+    }
+
+    func test_inRetouch_theSizeToggleStaysInTheRow_andThereIsNoMenu() {
+        let retouche = ComposerCaptureTopRow.trailing(Self.input(editing: true))
+        XCTAssertTrue(retouche.contains(.size))
+        XCTAssertFalse(retouche.contains(.more))
+    }
+
+    // MARK: - (6) La grille des tiers (CAM-2)
+
+    func test_theGrid_fallsOnTheThirdsOfTheFullImage() {
+        let lignes = ComposerCaptureGrid.lines(in: CGRect(x: 0, y: 0, width: 300, height: 600))
+        XCTAssertEqual(lignes.vertical, [100, 200])
+        XCTAssertEqual(lignes.horizontal, [200, 400])
+    }
+
+    func test_theGrid_fallsOnTheThirdsOfAFrameHole_notOfTheScreen() {
+        let lignes = ComposerCaptureGrid.lines(in: CGRect(x: 30, y: 60, width: 240, height: 360))
+        XCTAssertEqual(lignes.vertical, [110, 190])
+        XCTAssertEqual(lignes.horizontal, [180, 300])
+    }
+
+    func test_theGrid_drawsNothingInAnEmptyZone() {
+        XCTAssertEqual(ComposerCaptureGrid.lines(in: .zero), ComposerCaptureGrid.Lines(vertical: [], horizontal: []))
+    }
+
+    func test_theGrid_isOffByDefault_andNeverShowsInRetouch() {
+        XCTAssertEqual(ComposerCaptureGrid.storageKey, "composer.camera.grid")
+        XCTAssertFalse(ComposerCaptureGrid.shows(enabled: false, editing: false), "désactivée par défaut")
+        XCTAssertTrue(ComposerCaptureGrid.shows(enabled: true, editing: false))
+        XCTAssertFalse(ComposerCaptureGrid.shows(enabled: true, editing: true), "on ne cadre plus en retouche")
     }
 
     // MARK: - (3) Les contrôleurs de segment à GAUCHE des deux boutons
@@ -36,7 +78,7 @@ final class ComposerCaptureTopRowTests: XCTestCase {
         let flash = droite.firstIndex(of: .flash) ?? 0
         XCTAssertLessThan(droite.firstIndex(of: .dropSegment) ?? .max, flash)
         XCTAssertLessThan(droite.firstIndex(of: .validate) ?? .max, flash)
-        XCTAssertFalse(droite.contains(.size), "sept contrôles tiennent sur un iPhone, pas huit : [ ] cède")
+        XCTAssertFalse(droite.contains(.more), "sept contrôles tiennent sur un iPhone, pas huit : ⋯ cède")
     }
 
     func test_whileRecording_onlyTheCrossAndTheChronoRemain() {

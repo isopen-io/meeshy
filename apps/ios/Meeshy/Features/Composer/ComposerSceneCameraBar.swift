@@ -83,6 +83,7 @@ struct ComposerSceneCameraBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
+    @AppStorage(ComposerCaptureGrid.storageKey) private var gridEnabled = false
     @State private var recordingBlink: Double = 1
     /// Le curseur du flash paraît à l'interaction et s'efface 2 s après (#9753).
     @State private var sliderTimer = ComposerFlashSliderTimer()
@@ -155,6 +156,8 @@ struct ComposerSceneCameraBar: View {
         case .size:
             glassControl(symbol: size.toggleSymbol, label: ComposerSceneCameraCopy.sizeLabel(size),
                          tint: .white, action: onToggleSize)
+        case .more:
+            moreMenu
         case .dropSegment:
             glassControl(symbol: "delete.left", label: ComposerSceneCameraCopy.dropSegmentLabel,
                          tint: .white.opacity(0.9), action: onDropLastSegment)
@@ -250,6 +253,28 @@ struct ComposerSceneCameraBar: View {
         }
     }
 
+    /// **`⋯` : la grille et la taille, sans huitième contrôle** (décision porteur,
+    /// OPUS-6). La loi `ComposerCaptureMoreMenu` dit ce qu'il porte.
+    private var moreMenu: some View {
+        Menu {
+            ForEach(ComposerCaptureMoreMenu.items(offersSizeToggle: offersSizeToggle), id: \.self) { item in
+                switch item {
+                case .grid:
+                    Toggle(isOn: $gridEnabled) {
+                        Label(ComposerSceneCameraCopy.gridLabel, systemImage: "grid")
+                    }
+                case .size:
+                    Button(action: onToggleSize) {
+                        Label(ComposerSceneCameraCopy.sizeLabel(size), systemImage: size.toggleSymbol)
+                    }
+                }
+            }
+        } label: {
+            glassGlyph(symbol: "ellipsis", tint: .white)
+        }
+        .accessibilityLabel(ComposerSceneCameraCopy.moreLabel)
+    }
+
     /// **Sur du verre, jamais à nu.** Ces contrôles flottent sur une image que
     /// l'objectif choisit : une glyphe blanche posée sur un mur clair
     /// disparaîtrait.
@@ -261,17 +286,21 @@ struct ComposerSceneCameraBar: View {
             action()
             HapticFeedback.light()
         } label: {
-            Image(systemName: symbol)
-                // **Un glyphe de contrôle SUIT le Dynamic Type.**
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 40, height: 40)
-                .adaptiveLiquidGlass(in: Circle(), interactive: true)
-                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
-                .contentShape(Circle())
+            glassGlyph(symbol: symbol, tint: tint)
         }
         .buttonStyle(ComposerBounceButtonStyle())
         .accessibilityLabel(label)
+    }
+
+    private func glassGlyph(symbol: String, tint: Color) -> some View {
+        Image(systemName: symbol)
+            // **Un glyphe de contrôle SUIT le Dynamic Type.**
+            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: 40, height: 40)
+            .adaptiveLiquidGlass(in: Circle(), interactive: true)
+            .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+            .contentShape(Circle())
     }
 
     // MARK: - La bande des segments (#4099, vue `4b`) et la puce du chrono (#9753)
@@ -339,6 +368,31 @@ struct ComposerSceneCameraBar: View {
 
 /// Le facteur courant, avec la flèche du geste qui le change. Ajustable à la
 /// voix : un lecteur d'écran ne glisse pas.
+/// **La grille des tiers, peinte au viseur** (CAM-2) : fine, blanche sur une
+/// ombre légère pour rester visible sur un mur clair, muette à VoiceOver et
+/// transparente au toucher. Elle n'est qu'une vue : la prise ne la voit pas.
+struct ComposerCaptureGridOverlay: View {
+    var body: some View {
+        Canvas { context, size in
+            let lignes = ComposerCaptureGrid.lines(in: CGRect(origin: .zero, size: size))
+            let trace = Path { path in
+                lignes.vertical.forEach { x in
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x, y: size.height))
+                }
+                lignes.horizontal.forEach { y in
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: size.width, y: y))
+                }
+            }
+            context.stroke(trace, with: .color(.black.opacity(0.2)), lineWidth: 1.5)
+            context.stroke(trace, with: .color(.white.opacity(0.35)), lineWidth: 0.5)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 struct ComposerCaptureZoomChip: View {
     let factor: CGFloat
     let onStep: (Bool) -> Void

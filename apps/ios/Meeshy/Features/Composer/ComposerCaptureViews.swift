@@ -194,6 +194,7 @@ struct ComposerCaptureChrome: View {
     /// La fin de la dernière tenue — sa levée ne compte pas pour un toucher.
     @State private var holdEndedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(ComposerCaptureGrid.storageKey) private var gridEnabled = false
 
     /// Le pas d'un balayage VoiceOver sur le média : un quart de plus, ou de moins.
     private static let accessibleZoomStep: CGFloat = 1.25
@@ -242,7 +243,7 @@ struct ComposerCaptureChrome: View {
                         rezoomStep = nil
                         session.endPinchZoom()
                     }
-                    .overlay(alignment: .topLeading) { focusRing }
+                    .overlay(alignment: .topLeading) { viewfinderMarks }
                     .accessibilityElement()
                     .accessibilityLabel(session.phase.isEditing
                         ? ComposerCaptureCopy.reframe
@@ -573,6 +574,16 @@ struct ComposerCaptureChrome: View {
         exposureDragging = false
         exposure = ComposerCaptureExposureDial()
         scheduleMarkFade(marque)
+    }
+
+    /// La grille des tiers (CAM-2), sous l'anneau de mise au point.
+    private var viewfinderMarks: some View {
+        ZStack(alignment: .topLeading) {
+            if ComposerCaptureGrid.shows(enabled: gridEnabled, editing: session.phase.isEditing) {
+                ComposerCaptureGridOverlay()
+            }
+            focusRing
+        }
     }
 
     @ViewBuilder private var focusRing: some View {
