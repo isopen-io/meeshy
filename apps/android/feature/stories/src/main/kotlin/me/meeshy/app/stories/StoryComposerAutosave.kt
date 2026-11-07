@@ -450,6 +450,7 @@ fun StoryComposerDraft.annotations(): StoryDraftAnnotations = StoryDraftAnnotati
     mediaAlt = mediaAlt,
     mediaCaption = mediaCaption,
     allowSoundExtraction = allowSoundExtraction,
+    commentsDisabled = commentsDisabled,
 )
 
 /** The draft with [annotations] put back (restore, reopening). */
@@ -458,4 +459,5 @@ fun StoryComposerDraft.withAnnotations(annotations: StoryDraftAnnotations): Stor
     mediaAlt = annotations.mediaAlt,
     mediaCaption = annotations.mediaCaption,
     allowSoundExtraction = annotations.allowSoundExtraction,
+    commentsDisabled = annotations.commentsDisabled,
 )

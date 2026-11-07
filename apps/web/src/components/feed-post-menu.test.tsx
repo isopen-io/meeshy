@@ -142,6 +142,30 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     expect(journal).toEqual(['remove:p1:Contenu violent']);
   });
 
+  test('« Désactiver les commentaires » (#16541) : à l’auteur ; le libellé suit le réglage, le geste part vers l’hôte', async () => {
+    const { menu, journal } = host('u-other');
+    monte(post(), { ...menu, onToggleComments: (id, disable) => journal.push(`comments:${id}:${String(disable)}`) });
+    const ouvertes = await ouvre();
+    const entree = ouvertes.find((e) => e.dataset.feedPostAction === 'comments');
+    expect(entree?.textContent).toContain('Désactiver les commentaires');
+    act(() => entree?.click());
+    expect(journal).toEqual(['comments:p1:true']);
+  });
+
+  test('« Réactiver les commentaires » sur une publication qui les a fermés ; rien pour un lecteur ordinaire', async () => {
+    const { menu, journal } = host('u-other');
+    monte(post({ commentsDisabled: true }), { ...menu, onToggleComments: (id, disable) => journal.push(`comments:${id}:${String(disable)}`) });
+    const entree = (await ouvre()).find((e) => e.dataset.feedPostAction === 'comments');
+    expect(entree?.textContent).toContain('Réactiver les commentaires');
+    act(() => entree?.click());
+    expect(journal).toEqual(['comments:p1:false']);
+    act(() => root.unmount());
+    container.remove();
+    const lecteur = host('u-reader');
+    monte(post(), { ...lecteur.menu, onToggleComments: () => undefined });
+    expect((await ouvre()).map((e) => e.dataset.feedPostAction)).not.toContain('comments');
+  });
+
   test('« Retirer » ne s’offre pas sans le rôle, ni sur sa propre publication', async () => {
     const { menu } = host('u-me');
     monte(post({ author: { id: 'u-me', displayName: 'Moi', username: 'moi' } }), { ...menu, viewerModerates: true, onRemove: () => undefined });

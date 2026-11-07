@@ -88,7 +88,7 @@ extension StoryCardView {
                 showReportSheet: $showReportSheet,
                 sharedContentWrapper: $sharedContentWrapper,
                 showExportShareSheet: $showExportShareSheet,
-                deleteCurrentStory: storyWithdrawal.delete, makeCurrentStoryPrivate: storyWithdrawal.makePrivate,
+                deleteCurrentStory: storyWithdrawal.delete, makeCurrentStoryPrivate: storyWithdrawal.makePrivate, toggleComments: storyWithdrawal.toggleComments,
                 pauseTimer: pauseTimer,
                 dismissViewer: dismissViewer,
                 reportStory: reportStory,

@@ -65,7 +65,7 @@ enum ComposerDocumentLookBake {
             suivi.mediaURL = cuit.url.absoluteString
             return suivi
         }
-        return ComposerDocumentDraft(
+        var cuit = ComposerDocumentDraft(
             format: draft.format, text: draft.text, emoji: draft.emoji, visibility: draft.visibility,
             visibilityUserIds: draft.visibilityUserIds, mentions: draft.mentions, repostOfId: draft.repostOfId,
             audioUrl: draft.audioUrl, localMedia: draft.localMedia.map { cuits[$0.url] ?? $0 },
@@ -74,5 +74,7 @@ enum ComposerDocumentLookBake {
             mediaCaptions: suivre(draft.mediaCaptions), mediaAlts: suivre(draft.mediaAlts),
             mediaObjectIds: suivre(draft.mediaObjectIds), forcePlainPost: draft.forcePlainPost,
             mobileTranscription: draft.mobileTranscription, allowSoundExtraction: draft.allowSoundExtraction)
+        cuit.commentsDisabled = draft.commentsDisabled
+        return cuit
     }
 }

@@ -12,6 +12,7 @@ import { announceRowEvent } from '@/lib/view/row-action-notice';
 import { cachedCardSeed } from './card-caches';
 import { ApiError, currentOwnerCredential } from './client';
 import { performCommentGesture, type CommentGestureRequest, type CommentGestureResult } from './comment-gestures';
+import { setCommentsDisabled, type CommentSettingOutcome } from './comment-settings';
 import { repliesInfiniteOptions } from './comment-replies';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
@@ -220,6 +221,11 @@ export function deletePostAction(postId: string, reason?: string): Promise<PostA
 
 export function pinPostAction(postId: string): Promise<PostActionOutcome> {
   return pinPost({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/** FERMER OU ROUVRIR LES COMMENTAIRES (#16541) — même motif : l'optimiste écrit les caisses que les écrans observent. */
+export function commentSettingAction(postId: string, disabled: boolean): Promise<CommentSettingOutcome> {
+  return setCommentsDisabled({ postId, disabled, deps: { ...apiDeps, queryClient: appQueryClient } });
 }
 
 /** MODIFIER LE TEXTE (#7534) — RÉFÉRENCE DE MODULE STABLE, même motif : le

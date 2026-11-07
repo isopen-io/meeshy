@@ -39,6 +39,8 @@ struct ReelFeedCardContainer: View {
     var onRemove: PublicationModerationOffer? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
+    /// « Désactiver / Réactiver les commentaires » (#16541) — `nil` = absente.
+    var onToggleComments: ((String) -> Void)? = nil
 
     var body: some View {
         ReelFeedCard(
@@ -65,7 +67,8 @@ struct ReelFeedCardContainer: View {
             onDelete: onDelete,
             onRemove: onRemove,
             onReport: onReport,
-            onPin: onPin
+            onPin: onPin,
+            onToggleComments: onToggleComments
         )
         .equatable()
         // **Le préchauffage du voisin vit ICI** (#7009), et pas dans le
@@ -117,6 +120,7 @@ struct ReelFeedCard: View, Equatable {
     var onRemove: PublicationModerationOffer? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
+    var onToggleComments: ((String) -> Void)? = nil
 
     static func == (lhs: ReelFeedCard, rhs: ReelFeedCard) -> Bool {
         lhs.post.id == rhs.post.id
@@ -133,6 +137,8 @@ struct ReelFeedCard: View, Equatable {
             && lhs.post.content == rhs.post.content
             && lhs.post.trackedLinkMap == rhs.post.trackedLinkMap
             && lhs.post.translatedContent == rhs.post.translatedContent
+            && lhs.post.commentsDisabled == rhs.post.commentsDisabled
+            && (lhs.onToggleComments == nil) == (rhs.onToggleComments == nil)
     }
 
     // Repost-aware: a republished reel has no media on the outer post — resolve
@@ -608,6 +614,9 @@ struct ReelFeedCard: View, Equatable {
                     Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                 }
             }
+        }
+        if let onToggleComments {
+            CommentSettingsMenuItem(commentsDisabled: post.commentsDisabled) { onToggleComments(post.id) }
         }
         PublicationDestructiveMenuItems(postId: post.id, onDelete: onDelete, onRemove: onRemove)
         if let onReport {

@@ -567,6 +567,15 @@ final class ReelsViewModel: ObservableObject {
         }
     }
 
+    /// Ferme / rouvre les commentaires d'un réel (#16541) — même geste que le fil.
+    func toggleComments(_ postId: String) async {
+        guard let current = reels.first(where: { $0.id == postId })?.commentsDisabled else { return }
+        await CommentSettingsToggle.run(postId: postId, current: current, service: service) { closed in
+            guard let index = reels.firstIndex(where: { $0.id == postId }) else { return }
+            reels[index].commentsDisabled = closed
+        }
+    }
+
     func pinPost(_ postId: String) async {
         do {
             try await service.pinPost(postId: postId)

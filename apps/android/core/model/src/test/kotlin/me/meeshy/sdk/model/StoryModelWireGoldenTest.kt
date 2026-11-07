@@ -298,7 +298,7 @@ class StoryModelWireGoldenTest {
         assertThat(keys(exhaustive.encodeToJsonElement(StorySlide.serializer(), StorySlide(id = "s"))))
             .containsExactly("id", "effects", "duration", "order")
         assertThat(keys(exhaustive.encodeToJsonElement(StoryItem.serializer(), StoryItem(id = "p"))))
-            .containsExactly("id", "media", "isViewed", "reactionCount", "commentCount")
+            .containsExactly("id", "media", "isViewed", "reactionCount", "commentCount", "commentsDisabled", "sourceCommentsDisabled")
         assertThat(keys(exhaustive.encodeToJsonElement(StoryGroup.serializer(), StoryGroup(id = "g"))))
             .containsExactly("id", "username", "avatarColor", "stories")
         assertThat(keys(exhaustive.encodeToJsonElement(StatusEntry.serializer(), StatusEntry(id = "e"))))

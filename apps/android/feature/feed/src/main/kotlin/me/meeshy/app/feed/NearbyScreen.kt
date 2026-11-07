@@ -100,6 +100,7 @@ fun NearbyScreen(
         quoteComposer = state.quoteComposer,
         notice = state.notice,
         commentCount = { id -> state.posts.firstOrNull { it.id == id }?.commentCount ?: 0 },
+        commentsClosed = { id -> state.posts.firstOrNull { it.id == id }?.commentsClosed },
         snackbar = snackbar,
     )
 

@@ -121,6 +121,8 @@ public fun ApiPost.toStoryItem(): StoryItem {
         referenceAccess = referenceAccess,
         mentions = mentions,
         trackingLinks = servedTrackingLinks,
+        commentsDisabled = commentsDisabled,
+        sourceCommentsDisabled = source?.commentsDisabled == true,
     )
 }
 

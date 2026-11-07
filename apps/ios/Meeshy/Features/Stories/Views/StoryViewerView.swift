@@ -639,7 +639,7 @@ struct StoryViewerView: View {
                 makeStoryCommentRow(comment, readerLanguages: readerLanguages)
             },
             toggleStoryCommentThread: { await commentSession.toggleThread($0) },
-            storyWithdrawal: StoryWithdrawalActions(delete: { deleteCurrentStory(reason: $0) }, makePrivate: { StoryPrivatization.makePrivate(currentStory, of: currentGroup, reason: $0, viewModel: viewModel, dismiss: dismissViewer) }),
+            storyWithdrawal: StoryWithdrawalActions(delete: { deleteCurrentStory(reason: $0) }, makePrivate: { StoryPrivatization.makePrivate(currentStory, of: currentGroup, reason: $0, viewModel: viewModel, dismiss: dismissViewer) }, toggleComments: StoryCommentSettings.action(for: currentStory, of: currentGroup, in: viewModel)),
             dismissViewer: { dismissViewer() },
             reportStory: { storyId, reportType, reason in
                 try await ReportService.shared.reportStory(storyId: storyId, reportType: reportType, reason: reason)

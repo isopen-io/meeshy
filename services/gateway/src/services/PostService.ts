@@ -1001,6 +1001,8 @@ export class PostService {
     mediaCaption?: Record<string, string>;
     /** Opt-in extraction bande-son vidéo — `undefined` = inchangé. */
     allowSoundExtraction?: boolean;
+    /** #16541 — fermeture des commentaires par l'auteur — `undefined` = inchangé. */
+    commentsDisabled?: boolean;
     /// Tri-état : `undefined` = inchangé, `null` = retirer, objet = remplacer.
     /// Déjà validé par `parseSharedPlace` côté route — jamais un bloc client brut.
     location?: SharedPlace | null;

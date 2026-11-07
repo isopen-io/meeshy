@@ -20,6 +20,7 @@ import me.meeshy.app.stories.StoryVideoExportMenuEntries
 import me.meeshy.app.feed.LocalPostCardImager
 import me.meeshy.app.stories.rememberSceneVideoExport
 import me.meeshy.feature.reels.R
+import me.meeshy.feature.feed.R as FeedR
 import me.meeshy.sdk.model.ReelMenu
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeSymbol
 import me.meeshy.ui.component.chrome.FullscreenTopBar
@@ -100,7 +101,15 @@ private fun ReelMenuButton(
             isActive = expanded,
         )
         DropdownMenu(expanded = expanded && !export.busy, onDismissRequest = { expanded = false }) {
-            ReelMenu.actions(isOwn = viewModel.isOwn(reel), hasText = !text.isNullOrBlank(), exportable = reel.export != null, canEdit = onEdit != null).forEach { action ->
+            ReelMenu.actions(
+                isOwn = viewModel.isOwn(reel),
+                hasText = !text.isNullOrBlank(),
+                exportable = reel.export != null,
+                canEdit = onEdit != null,
+                commentsDisabled = reel.commentsDisabled,
+                viewerRole = viewModel.viewerRole,
+                canToggleComments = viewModel.canToggleComments,
+            ).forEach { action ->
                 if (action == ReelMenu.Action.EXPORT) {
                     StoryVideoExportMenuEntries(
                         onPick = { mode ->
@@ -143,6 +152,10 @@ private fun ReelMenuButton(
                             haptics.light()
                             onEdit?.invoke(reel.id)
                         }
+                        ReelMenu.Action.DISABLE_COMMENTS, ReelMenu.Action.ENABLE_COMMENTS -> {
+                            haptics.light()
+                            viewModel.toggleComments(reel.id)
+                        }
                         ReelMenu.Action.EXPORT -> Unit
                     }
                 }
@@ -161,6 +174,8 @@ private fun ReelMenuEntry(action: ReelMenu.Action, onClick: () -> Unit) {
             ReelMenu.Action.SHARE, ReelMenu.Action.EXPORT -> R.string.reels_menu_share
             ReelMenu.Action.PIN -> R.string.reels_menu_pin
             ReelMenu.Action.EDIT -> R.string.reels_menu_edit
+            ReelMenu.Action.DISABLE_COMMENTS -> FeedR.string.feed_action_disable_comments
+            ReelMenu.Action.ENABLE_COMMENTS -> FeedR.string.feed_action_enable_comments
             ReelMenu.Action.DELETE -> R.string.reels_menu_delete
             ReelMenu.Action.REPORT -> R.string.reels_menu_report
         },
@@ -175,6 +190,8 @@ private fun ReelMenuEntry(action: ReelMenu.Action, onClick: () -> Unit) {
                     ReelMenu.Action.SHARE, ReelMenu.Action.EXPORT -> MeeshyIcons.Share
                     ReelMenu.Action.PIN -> MeeshyIcons.Pin
                     ReelMenu.Action.EDIT -> MeeshyIcons.Edit
+                    ReelMenu.Action.DISABLE_COMMENTS -> MeeshyIcons.Lock
+                    ReelMenu.Action.ENABLE_COMMENTS -> MeeshyIcons.ChatBubbleOutline
                     ReelMenu.Action.DELETE -> MeeshyIcons.Delete
                     ReelMenu.Action.REPORT -> MeeshyIcons.Warning
                 },

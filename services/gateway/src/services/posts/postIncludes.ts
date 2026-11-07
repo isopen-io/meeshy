@@ -276,6 +276,10 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     createdAt: true,
     likeCount: true,
     commentCount: true,
+    // #16541 — l'original fermé ferme aussi ses republications
+    // (`admitCommentHome` lit les deux) : le client le lit ici pour masquer
+    // la barre de composition sans attendre un refus.
+    commentsDisabled: true,
     // `metadata.location` du post SOURCE — sans ce select, `hoistLocationDeep`
     // n'a rien à hisser sur `repostOf` et un repost perd la position de
     // l'original (même porte que `commentsPreviewInclude.metadata`).

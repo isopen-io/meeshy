@@ -391,10 +391,10 @@ class StoryComposerViewModel @Inject constructor(
     fun onRemoveMention(username: String) = _state.update { StoryComposerDraftMetaReducer.mentionRemoved(it, username) }
 
     fun onMediaAltChange(mediaId: String, text: String) = _state.update { StoryComposerDraftMetaReducer.mediaAltChanged(it, mediaId, text) }
-
     fun onMediaCaptionChange(mediaId: String, text: String) = _state.update { StoryComposerDraftMetaReducer.mediaCaptionChanged(it, mediaId, text) }
-
     fun onAllowSoundExtractionChange(allowed: Boolean) = _state.update { it.copy(draft = it.draft.copy(allowSoundExtraction = allowed)) }
+    /** #16541 — « Désactiver les commentaires » : la publication naît (ou, à l'édition, passe) commentaires fermés. */
+    fun onCommentsDisabledChange(disabled: Boolean) = _state.update { it.copy(draft = it.draft.copy(commentsDisabled = disabled)) }
 
     /** Retire [tag] du texte de TOUTES les slides (du post, en post) : la balise EST dans la phrase, il n'y a pas de liste à côté. */
     fun onRemoveHashtag(tag: String) = reduce { current ->

@@ -25,6 +25,9 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var createResult: Result<APIPost, Error> = .success(stubPost)
     var deleteResult: Result<Void, Error> = .success(())
     var makePrivateResult: Result<Void, Error> = .success(())
+    /// `nil` ⇒ rend l'état demandé, comme la passerelle qui l'écrit.
+    var setCommentsDisabledResult: Result<Bool, Error>? = nil
+    var setCommentsDisabledCalls: [(postId: String, disabled: Bool)] = []
     var makePrivateCallCount = 0
     var lastMakePrivatePostId: String?
     var lastMakePrivateAuthorId: String?
@@ -609,6 +612,11 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func requestTranslation(postId: String, targetLanguage: String) async throws {}
 
     func requestMediaCaptionTranslation(mediaId: String, targetLanguage: String) async throws {}
+
+    func setCommentsDisabled(postId: String, disabled: Bool) async throws -> Bool {
+        setCommentsDisabledCalls.append((postId, disabled))
+        return try setCommentsDisabledResult?.get() ?? disabled
+    }
 
     func pinPost(postId: String) async throws {}
 

@@ -115,21 +115,45 @@ public fun ApiPostMedia.servedAudioUrl(
     carrierLanguage: String?,
     preferredLanguages: List<String>,
     resolveUrl: (String) -> String = { it },
-): String? {
+): String? = socialAudioChoice(surface, carrierLanguage, preferredLanguages, manualOverride = null, resolveUrl = resolveUrl)?.url
+
+/**
+ * Ce qu'un audio SOCIAL fait entendre et dans quelles langues on peut le réentendre (#16541) : l'URL servie, la langue
+ * d'origine, la langue servie (l'origine quand la piste originale joue) et les drapeaux offerts — l'origine puis chaque
+ * langue du lecteur qu'une piste traduite parle, dans l'ordre du Prisme. [offered] est VIDE quand aucune piste ne parle
+ * une langue du lecteur : rien à explorer, aucun drapeau (la règle de la bande des bulles). [manualOverride] est le
+ * drapeau touché : la langue d'origine rend l'original, une langue sans piste retombe sur l'original.
+ */
+public data class SocialAudioChoice(
+    val url: String,
+    val originalLanguage: String?,
+    val servedLanguage: String?,
+    val offered: List<String>,
+)
+
+public fun ApiPostMedia.socialAudioChoice(
+    surface: SocialAudioSurface,
+    carrierLanguage: String?,
+    preferredLanguages: List<String>,
+    manualOverride: String? = null,
+    resolveUrl: (String) -> String = { it },
+): SocialAudioChoice? {
     val original = fileUrl?.takeIf { it.isNotBlank() } ?: return null
     val tracks = translations.orEmpty().mapNotNull { (language, track) ->
         AttachmentMetadataMapping.translatedAudio(id, language, track)
     }
     val transcriptionLanguage = transcription?.language?.takeIf { it.isNotBlank() }
         ?.let { MessageTranscription(attachmentId = id, language = it) }
-    val served = SocialAudioTrack.served(
-        surface = surface,
-        originalUrl = original,
-        originalDurationMs = duration,
-        transcription = transcriptionLanguage,
-        carrierLanguage = carrierLanguage,
-        preferredLanguages = preferredLanguages,
-        translatedAudios = tracks,
+    val originalLanguage = SocialAudioTrack.originalLanguage(transcriptionLanguage, carrierLanguage).lowercase()
+    val servedLanguage = SocialAudioTrack.language(surface, manualOverride, originalLanguage, preferredLanguages, tracks)
+    val track = servedLanguage?.let { lang -> tracks.firstOrNull { it.targetLanguage.lowercase() == lang && it.url.isNotEmpty() } }
+    val spoken = tracks.filter { it.url.isNotEmpty() }.mapTo(HashSet()) { it.targetLanguage.lowercase() }
+    val readable = preferredLanguages.map { it.trim().lowercase() }.filter { it.isNotEmpty() && it != originalLanguage && it in spoken }
+    val offered = if (readable.isEmpty()) emptyList() else (listOfNotNull(originalLanguage.ifEmpty { null }) + readable).distinct()
+    return SocialAudioChoice(
+        url = resolveUrl(track?.url ?: original),
+        originalLanguage = originalLanguage.ifEmpty { null },
+        servedLanguage = if (track != null) servedLanguage else originalLanguage.ifEmpty { null },
+        offered = offered,
     )
-    return resolveUrl(served.url)
 }

@@ -24,6 +24,8 @@ enum class PostAction {
     Pin,
     Edit,
     NearHere,
+    DisableComments,
+    EnableComments,
     Report,
     Delete,
     RetrySend,
@@ -48,6 +50,10 @@ data class PostActionContext(
     val hasLocation: Boolean = false,
     /** La publication est encore sur l'appareil : son menu n'offre que ce qui vaut sans serveur (#14902). */
     val pendingSend: PendingSendMenu? = null,
+    /** Les commentaires de CE post sont fermés : l'entrée offerte est « Réactiver » (#16541). */
+    val commentsDisabled: Boolean = false,
+    /** La surface sait fermer ou rouvrir les commentaires ; l'auteur et la modération de la plateforme le voient. */
+    val canToggleComments: Boolean = false,
 )
 
 /**
@@ -76,6 +82,8 @@ object PostActionMenu {
             editable = ctx.editable,
             hasLocation = ctx.hasLocation,
             pendingSend = ctx.pendingSend,
+            commentsDisabled = ctx.commentsDisabled,
+            canToggleComments = ctx.canToggleComments,
         ),
     ).map(PostMenuEntry::asAction)
 }
@@ -95,6 +103,8 @@ private fun PostMenuEntry.asAction(): PostAction = when (this) {
     PostMenuEntry.Pin -> PostAction.Pin
     PostMenuEntry.Edit -> PostAction.Edit
     PostMenuEntry.NearHere -> PostAction.NearHere
+    PostMenuEntry.DisableComments -> PostAction.DisableComments
+    PostMenuEntry.EnableComments -> PostAction.EnableComments
     PostMenuEntry.Report -> PostAction.Report
     PostMenuEntry.Delete -> PostAction.Delete
     PostMenuEntry.RetrySend -> PostAction.RetrySend

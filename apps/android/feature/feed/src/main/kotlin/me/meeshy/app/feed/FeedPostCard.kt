@@ -39,6 +39,7 @@ internal fun PostCard(
     onSelectLanguage: (String) -> Unit = onFlagTap,
     pendingSend: PendingSendActions? = null,
     modifier: Modifier = Modifier,
+    onToggleComments: (() -> Unit)? = null,
 ) {
     val reelCover = post.reelCover?.takeIf { post.showsReelCard && pendingSend == null }
     if (reelCover != null) {
@@ -61,6 +62,7 @@ internal fun PostCard(
             onReport = onReport,
             onDelete = onDelete,
             onOpenProfile = onOpenProfile,
+            onToggleComments = onToggleComments,
         )
         return
     }
@@ -86,6 +88,7 @@ internal fun PostCard(
                 onDelete = onDelete,
                 onOpen = onClick,
                 pendingSend = pendingSend,
+                onToggleComments = onToggleComments,
             )
             FeedPostCardBody(
                 post = post,

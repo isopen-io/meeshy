@@ -265,6 +265,7 @@ fun FeedScreen(
                             onRepost = { viewModel.repost(post.id) },
                             onQuote = { viewModel.beginQuote(post.id) },
                             onPin = { viewModel.pinPost(post.id) },
+                            onToggleComments = { viewModel.toggleComments(post.id) },
                             onReport = { reportPostId = post.id },
                             onDelete = { deletePostId = post.id },
                             onComments = { commentsPostId = post.id; commentsReplyTo = null },
@@ -299,6 +300,7 @@ fun FeedScreen(
         replyToCommentId = commentsReplyTo,
         onDismiss = { commentsPostId = null; commentsReplyTo = null },
         onCommentSent = viewModel::onCommentSent,
+        commentsClosed = state.posts.firstOrNull { it.id == commentsPostId }?.commentsClosed,
     )
     state.imageViewer?.let { gallery ->
         FeedImageViewerHost(gallery = gallery, onDismiss = viewModel::dismissImageViewer)

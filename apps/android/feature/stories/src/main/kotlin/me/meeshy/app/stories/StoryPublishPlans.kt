@@ -71,6 +71,7 @@ private fun StorySlide.draft(current: StoryComposerUiState, floor: StoryBackgrou
     mediaAlt = current.draft.mediaAlt,
     mediaCaption = current.draft.mediaCaption,
     allowSoundExtraction = current.draft.allowSoundExtraction,
+    commentsDisabled = current.draft.commentsDisabled,
     audio = audio,
     frame = frame,
     places = places,

@@ -95,6 +95,8 @@ export type PublishStoryParams = ConversationsDeps & {
    * client antérieur, que la passerelle lit « story seule ».
    */
   readonly alsoAsReel?: boolean;
+  /** **LES COMMENTAIRES FERMÉS DÈS LA PUBLICATION** (#16541, `CreatePostSchema.commentsDisabled`) — absent ⇒ la clé ne part pas. */
+  readonly commentsDisabled?: boolean;
   readonly storyEffects: CanvasV3;
   readonly mediaIds: readonly string[];
   /**
@@ -159,6 +161,7 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
       ...(params.mediaCaption !== undefined ? { mediaCaption: params.mediaCaption } : {}),
       ...(params.mediaAlt !== undefined ? { mediaAlt: params.mediaAlt } : {}),
       ...(params.alsoAsReel === true ? { alsoAsReel: true } : {}),
+      ...(params.commentsDisabled === true ? { commentsDisabled: true } : {}),
       storyEffects: params.storyEffects,
       mediaIds: params.mediaIds,
     },

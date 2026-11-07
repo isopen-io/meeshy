@@ -377,8 +377,8 @@ async function runScheme({ browser, base, scheme, check }) {
 
   await page.route(isPostDetail, (route) => json(route, envelope(POST)));
 
-  /* LE MENU « … » D'UNE RANGÉE (#8734) — Modifier, Supprimer, Copier, Imager
-     et Signaler vivent derrière lui, comme sur iOS : l'ouvrir, puis choisir.
+  /* LE MENU « … » D'UNE RANGÉE (#8734) — Modifier, Supprimer, Copier et
+     Signaler vivent derrière lui (Imager est dans le rail depuis #16541), comme sur iOS : l'ouvrir, puis choisir.
      Le panneau est en PORTAIL, lu dans le document. */
   const plusDe = (id) => `[data-comment-row="${id}"] [data-comment-gesture="more"]`;
   const entreeDuMenu = (geste) => `[data-comment-menu] [data-comment-gesture="${geste}"]`;
@@ -424,6 +424,7 @@ async function runScheme({ browser, base, scheme, check }) {
     [...document.querySelectorAll('[data-comment-row]')].map((row) => ({
       id: row.getAttribute('data-comment-row'),
       gestes: [...row.querySelectorAll('[data-comment-gesture]')].map((b) => b.getAttribute('data-comment-gesture')),
+      rail: row.querySelector('[data-comment-rail-image]') !== null,
     })),
   );
   const offered = [];
@@ -443,11 +444,16 @@ async function runScheme({ browser, base, scheme, check }) {
     others.every((row) => !row.gestes.includes('edit') && !row.gestes.includes('delete')),
     say(`… et sur AUCUNE autre : la passerelle les garde sur l'AUTEUR — ${JSON.stringify(others)}`),
   );
-  /* LE MENU D'AUTRUI (#8734) : copier, imager, SIGNALER — et le sien ne se
-     signale pas. */
+  /* LE MENU D'AUTRUI (#8734) : copier, SIGNALER — et le sien ne se signale
+     pas. « Imager » a QUITTÉ le menu (#16541) : il vit à découvert dans le
+     rail, en icône seule — le menu ne le répète pas. */
   check(
-    others.every((row) => ['copy', 'image', 'report'].every((g) => row.gestes.includes(g))) && mine !== undefined && !mine.gestes.includes('report'),
-    say(`« Signaler » est offert sur les rangées d'AUTRUI seules, avec Copier et Imager — ${JSON.stringify(offered)}`),
+    others.every((row) => ['copy', 'report'].every((g) => row.gestes.includes(g))) && mine !== undefined && !mine.gestes.includes('report'),
+    say(`« Signaler » est offert sur les rangées d'AUTRUI seules, avec Copier — ${JSON.stringify(offered)}`),
+  );
+  check(
+    offered.every((row) => !row.gestes.includes('image')) && offered.every((row) => row.rail),
+    say(`« Imager » est dans le RAIL de chaque rangée, et dans AUCUN menu « … » (#16541) — ${JSON.stringify(offered)}`),
   );
 
   /* ---------------------------------- 1 bis. LE PRISME S'ANNONCE, ET S'OUVRE
@@ -500,33 +506,42 @@ async function runScheme({ browser, base, scheme, check }) {
     say(`… la voix suit le texte : \`lang\` change avec lui — ${JSON.stringify(prismeCorps)}`),
   );
 
+  /* LA RANGÉE porte les DRAPEAUX du Prisme, comme une bulle de message
+     (#16541) : les AUTRES langues disponibles, l'original en tête, jamais
+     celle déjà servie. Même loi 4 que le corps : toucher un drapeau CHANGE
+     le texte lu, et toucher la langue servie le rend. */
   const prismeRangee = await page.evaluate(async (id) => {
     const rangee = () => document.querySelector(`[data-comment-row="${id}"]`);
     const texte = () => rangee()?.querySelector('p')?.textContent?.trim() ?? '';
-    const bouton = rangee()?.querySelector('[data-prism-toggle]') ?? null;
+    const drapeaux = () => [...(rangee()?.querySelectorAll('[data-comment-prism-flags] [data-prism-flag]') ?? [])];
+    const offerts = drapeaux().map((b) => b.getAttribute('data-prism-flag'));
     const avant = texte();
-    bouton?.click();
+    drapeaux()[0]?.click();
     await new Promise((r) => setTimeout(r, 60));
     const apres = texte();
-    /* ON REFERME — même raison que ci-dessus. */
-    bouton?.click();
+    const offertsApres = drapeaux().map((b) => b.getAttribute('data-prism-flag'));
+    /* ON REFERME — la langue servie revient dans la bande : la toucher rend l'écran. */
+    drapeaux().find((b) => b.getAttribute('data-prism-flag') !== offerts[0])?.click();
     await new Promise((r) => setTimeout(r, 60));
-    return { pastille: bouton !== null, avant, apres, rendu: texte() };
+    return { drapeaux: offerts, drapeauxApres: offertsApres, pastille: rangee()?.querySelector('[data-prism-toggle]') !== null, avant, apres, rendu: texte() };
   }, MINE);
-  check(prismeRangee.pastille, say(`la RANGÉE traduite porte la pastille du Prisme — ${JSON.stringify(prismeRangee)}`));
+  check(
+    prismeRangee.drapeaux.length > 0 && !prismeRangee.drapeaux.includes('fr') && !prismeRangee.pastille,
+    say(`la RANGÉE traduite porte les DRAPEAUX du Prisme, sans celui de la langue servie ni pastille — ${JSON.stringify(prismeRangee)}`),
+  );
   check(
     prismeRangee.avant !== '' && prismeRangee.apres !== '' && prismeRangee.avant !== prismeRangee.apres,
-    say(`… et cliquer CHANGE le texte lu — ${JSON.stringify(prismeRangee)}`),
+    say(`… et toucher un drapeau CHANGE le texte lu — ${JSON.stringify(prismeRangee)}`),
   );
 
   /* LE CONTRE-TÉMOIN — une rangée DÉJÀ dans la langue du lecteur ne porte
-     aucune pastille. Sans lui, les deux verdicts ci-dessus resteraient verts
-     sur une pastille posée INCONDITIONNELLEMENT, qui mentirait partout. */
-  const sansPrisme = await page.evaluate(
-    (id) => document.querySelector(`[data-comment-row="${id}"]`)?.querySelector('[data-prism-toggle]') !== null,
-    OTHER,
-  );
-  check(!sansPrisme, say(`… et une rangée NON traduite n'annonce rien — pastille présente : ${sansPrisme}`));
+     ni drapeau ni pastille. Sans lui, les deux verdicts ci-dessus resteraient
+     verts sur des drapeaux posés INCONDITIONNELLEMENT, qui mentiraient partout. */
+  const sansPrisme = await page.evaluate((id) => {
+    const rangee = document.querySelector(`[data-comment-row="${id}"]`);
+    return rangee?.querySelector('[data-prism-toggle]') !== null || rangee?.querySelector('[data-comment-prism-flags] [data-prism-flag]') !== null;
+  }, OTHER);
+  check(!sansPrisme, say(`… et une rangée NON traduite n'annonce rien — drapeau ou pastille présent : ${sansPrisme}`));
   check(
     prismeCorps.rendu === prismeCorps.avant && prismeRangee.rendu === prismeRangee.avant,
     say(`… et le geste REFERMÉ rend l'écran à son état — ${JSON.stringify({ corps: prismeCorps.rendu, rangee: prismeRangee.rendu })}`),

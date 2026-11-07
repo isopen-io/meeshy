@@ -6,6 +6,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.theme.authorAccentHex
 import me.meeshy.sdk.theme.storyAccentHex
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.commentsClosed
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.PostMediaPresentation
@@ -148,6 +149,12 @@ data class FeedPostPresentation(
     val trackedLinks: Map<String, String> = emptyMap(),
     /** La langue d'origine du texte du post : le porteur de la langue d'un audio sans transcription (Prisme audio). */
     val originalLanguage: String? = null,
+    /** Les commentaires de CE post sont fermés (#16541) : le menu offre « Réactiver ». */
+    val commentsDisabled: Boolean = false,
+    /** Fermés par ce post ou par celui qu'il republie : le fil se lit, le composeur cède la place au bandeau. */
+    val commentsClosed: Boolean = false,
+    /** Le rôle de plateforme du LECTEUR : la modération (MODERATOR, ADMIN, BIGBOSS) ferme les commentaires d'autrui. */
+    val viewerRole: String? = null,
 ) {
     /**
      * Le réel que ce réel republie, quand il n'a pas de média propre : la carte montre alors UNE couverture, celle du
@@ -190,6 +197,7 @@ object FeedPostBuilder {
         mediaBaseUrl: String?,
         activeLanguageCode: String? = null,
         currentUserId: String? = null,
+        viewerRole: String? = null,
     ): FeedPostPresentation {
         val preferredLanguages = ReaderPrism.resolve(preferences)
         val media = FeedMediaMapper.map(post.media, preferredLanguages, mediaBaseUrl)
@@ -287,6 +295,9 @@ object FeedPostBuilder {
             mentionDisplayNames = mentioned.mapNotNull { (u, _, n) -> n?.takeIf(String::isNotBlank)?.let { u to it } }.toMap(),
             trackedLinks = post.trackedLinkMap,
             originalLanguage = post.originalLanguage,
+            commentsDisabled = post.commentsDisabled,
+            commentsClosed = post.commentsClosed,
+            viewerRole = viewerRole,
         )
     }
 

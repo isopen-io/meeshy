@@ -72,6 +72,12 @@ const pick = async (host: HTMLElement, rowId: string, gesture: string) => {
   await settle();
 };
 
+/** « Imager » vit dans le rail de la rangée, en icône (#16541). */
+const railImage = async (host: HTMLElement, rowId: string) => {
+  await act(async () => host.querySelector<HTMLButtonElement>(`[data-comment-row="${rowId}"] [data-comment-rail-image]`)?.click());
+  await settle();
+};
+
 const notice = (host: HTMLElement) => host.querySelector('[data-comment-thread-notice]')?.textContent ?? '';
 
 describe('le fil exécute le menu « … » et en annonce l’issue', () => {
@@ -108,8 +114,8 @@ describe('le fil exécute le menu « … » et en annonce l’issue', () => {
       await act(async () => host.querySelector<HTMLButtonElement>(`[data-comment-row="${rowId}"] [data-comment-gesture="more"]`)?.click());
       return found;
     };
-    expect(await entriesOf('cm-r2-0')).toEqual(['copy', 'image', 'edit', 'delete']);
-    expect(await entriesOf('cm-r2-3')).toEqual(['copy', 'image', 'image-replies', 'report']);
+    expect(await entriesOf('cm-r2-0')).toEqual(['copy', 'edit', 'delete']);
+    expect(await entriesOf('cm-r2-3')).toEqual(['copy', 'image-replies', 'report']);
   });
 });
 
@@ -139,11 +145,11 @@ describe('le commentaire d’un POST compose sa carte (#9687)', () => {
     return found;
   };
 
-  test('un seul « Imager », qui ouvre l’atelier sur « Post + commentaire »', async () => {
+  test('« Imager » (l’icône du rail) ouvre l’atelier sur « Post + commentaire »', async () => {
     seedPost('POST');
     const host = await mountThread('post-text-rank2');
-    expect(await entriesOf(host, 'cm-r2-3')).toEqual(['copy', 'image', 'report']);
-    await pick(host, 'cm-r2-3', 'image');
+    expect(await entriesOf(host, 'cm-r2-3')).toEqual(['copy', 'report']);
+    await railImage(host, 'cm-r2-3');
     for (let attempt = 0; attempt < 20 && document.querySelector('[data-export-compose-mode]') === null; attempt += 1) await settle();
     expect(document.querySelector('[data-export-compose-mode="postAndComment"]')?.getAttribute('aria-pressed')).toBe('true');
   });
@@ -151,7 +157,8 @@ describe('le commentaire d’un POST compose sa carte (#9687)', () => {
   test('une STORY connue compose comme un post, comme iOS : un seul « Imager », sans « avec les réponses »', async () => {
     seedPost('STORY');
     const host = await mountThread('post-text-rank2');
-    expect(await entriesOf(host, 'cm-r2-3')).toEqual(['copy', 'image', 'report']);
+    expect(await entriesOf(host, 'cm-r2-3')).toEqual(['copy', 'report']);
+    expect(host.querySelector('[data-comment-row="cm-r2-3"] [data-comment-rail-image]')).not.toBeNull();
   });
 });
 
@@ -181,7 +188,7 @@ describe('le commentaire de la STORY que le lecteur joue compose sa carte, son v
   };
 
   const openImager = async (host: HTMLElement) => {
-    await pick(host, 'cm-r2-3', 'image');
+    await railImage(host, 'cm-r2-3');
     for (let attempt = 0; attempt < 20 && document.querySelector('[data-export-compose-mode]') === null; attempt += 1) await settle();
   };
 
@@ -190,7 +197,7 @@ describe('le commentaire de la STORY que le lecteur joue compose sa carte, son v
     await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-row="cm-r2-3"] [data-comment-gesture="more"]')?.click());
     const entries = [...document.querySelectorAll('[data-comment-menu] [role="menuitem"]')].map((element) => element.getAttribute('data-comment-gesture'));
     await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-row="cm-r2-3"] [data-comment-gesture="more"]')?.click());
-    expect(entries).toEqual(['copy', 'image', 'report']);
+    expect(entries).toEqual(['copy', 'report']);
     await openImager(host);
     expect(document.querySelector('[data-export-compose-mode="postAndComment"]')?.getAttribute('aria-pressed')).toBe('true');
   });

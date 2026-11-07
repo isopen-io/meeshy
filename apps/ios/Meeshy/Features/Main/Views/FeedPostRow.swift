@@ -42,6 +42,7 @@ nonisolated struct FeedPostRowRenderInputs: Equatable {
     let commentCount: Int
     let authorRing: ServedProfileDecorItem?
     let trackedLinkMap: [String: String]
+    let commentsDisabled: Bool
     let engagement: FeedPostEngagementSnapshot
     let authorStoryRing: StoryRingState
     let authorMoodEmoji: String?
@@ -65,6 +66,7 @@ nonisolated struct FeedPostRowRenderInputs: Equatable {
         commentCount = post.commentCount
         authorRing = post.authorRing
         trackedLinkMap = post.trackedLinkMap
+        commentsDisabled = post.commentsDisabled
         self.engagement = engagement
         self.authorStoryRing = authorStoryRing
         self.authorMoodEmoji = authorMoodEmoji
@@ -119,6 +121,9 @@ struct FeedPostRow: View {
             ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
         }
     }
+
+    /// « Désactiver / Réactiver les commentaires » (#16541) : l'auteur et la modération.
+    private var commentSettingsToggle: ((String) -> Void)? { CommentSettingsToggle.feedAction(for: post, in: viewModel) }
 
     private var removalOffer: PublicationModerationOffer? {
         ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) }
@@ -190,7 +195,8 @@ struct FeedPostRow: View {
             } : nil,
             onPin: isOwnPost ? { postId in
                 Task { await viewModel.pinPost(postId) }
-            } : nil
+            } : nil,
+            onToggleComments: commentSettingsToggle
         )
         // Marge latérale volontairement plus serrée que les posts standards
         // (`FeedPostCard` = 16) → la carte Réel est un peu plus large, tout en
@@ -267,6 +273,7 @@ struct FeedPostRow: View {
             reelAutoplay: reelAutoplay
         )
         .equatable()
+        .environment(\.commentSettingsAction, commentSettingsToggle)
     }
 }
 

@@ -6,6 +6,9 @@ import MeeshySDK
 struct StoryWithdrawalActions {
     let delete: (_ reason: String?) -> Void
     let makePrivate: (_ reason: String) -> Void
+    /// « Désactiver / Réactiver les commentaires » (#16541) — `nil` quand le
+    /// lecteur n'est ni l'auteur ni la modération.
+    var toggleComments: (() -> Void)? = nil
 }
 
 /// **La modération rend PRIVÉE la story d'un autre** (#11535), comme la console

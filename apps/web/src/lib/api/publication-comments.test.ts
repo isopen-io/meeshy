@@ -8,6 +8,7 @@ import { REELS_QUERY_ROOT, reelsQueryKey } from './reels-query-key';
 import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
 import {
   COMMENTS_PAGE_SIZE,
+  COMMENT_CLOSED_MESSAGE,
   COMMENT_FAILED_MESSAGE,
   COMMENT_PENDING_MESSAGE,
   COMMENT_UNCONFIRMED_MESSAGE,
@@ -166,6 +167,25 @@ describe('performComment — optimiste, puis l’issue (`POST /posts/:postId/com
 
     expect(result).toEqual({ ok: false, message: COMMENT_FAILED_MESSAGE });
     expect(flattenCommentPages(queryClient.getQueryData<CommentInfiniteData>(commentsQueryKey('p1'))).map((c) => c.id)).toEqual(['c1']);
+    expect(countOf(queryClient, 'p1')).toBe(1);
+  });
+
+  /** LES COMMENTAIRES FERMÉS (#16541) — `403 COMMENTS_DISABLED` se DIT, et la publication passe fermée là où le client la tient. */
+  test('un 403 COMMENTS_DISABLED rend « commentaires désactivés » et ferme la publication dans ses caisses', async () => {
+    const queryClient = withCaches('p1');
+    const transport = {
+      request: () => Promise.resolve({ ok: false as const, status: 403, error: 'Comments are disabled', code: 'COMMENTS_DISABLED' }),
+    };
+
+    const result = await performComment({
+      postId: 'p1',
+      content: 'bonjour',
+      author,
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
+    });
+
+    expect(result).toEqual({ ok: false, message: COMMENT_CLOSED_MESSAGE });
+    expect((queryClient.getQueryData(postQueryKey('p1')) as { readonly commentsDisabled?: boolean }).commentsDisabled).toBe(true);
     expect(countOf(queryClient, 'p1')).toBe(1);
   });
 

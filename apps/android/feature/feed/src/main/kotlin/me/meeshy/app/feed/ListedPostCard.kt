@@ -97,6 +97,7 @@ internal fun ListedPostOverlays(
     notice: FeedNotice?,
     commentCount: (String) -> Int,
     snackbar: SnackbarHostState,
+    commentsClosed: (String) -> Boolean? = { null },
 ) {
     sheets.reporting?.let { postId ->
         ReportPostDialog(
@@ -122,6 +123,7 @@ internal fun ListedPostOverlays(
         replyToCommentId = sheets.replyTo,
         onDismiss = sheets::closeComments,
         onCommentSent = actions::onCommentSent,
+        commentsClosed = sheets.commentsOf?.let(commentsClosed),
     )
     quoteComposer?.let { composer ->
         QuoteComposerSheet(

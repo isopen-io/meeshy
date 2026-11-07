@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.composer.StoryRepostAudience
 import me.meeshy.sdk.model.story.StoryReplyRules
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.profile.LocalProfileSheetPresented
+import me.meeshy.app.feed.CommentsClosedEffect
 import me.meeshy.app.feed.LocalPostCardImager
 
 /**
@@ -76,6 +77,8 @@ fun StoryViewerScreen(
         author = { state.exportAuthor(accent) },
     )
     val commentThread = rememberStoryCommentThread(state.currentStoryId)
+    // #16541 — la story a fermé ses commentaires : le composeur épinglé cède la place au bandeau, le fil reste lisible.
+    commentThread?.let { CommentsClosedEffect(it, state.commentsClosed) }
     val currentItem = state.currentStoryId?.let(viewModel::rawItem)
     val commentCount = rememberStoryCommentCount(commentThread, currentItem?.commentCount ?: 0)
     val soundShown = rememberStorySoundButtonShown(slide, currentItem?.storyEffects)

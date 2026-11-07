@@ -63,7 +63,7 @@ internal data class StoryEditOpening(
             draft = state.draft
                 .withVisibility(visibility)
                 .withVisibilityUserIds(post.visibilityUserIds.orEmpty())
-                .copy(mentions = mentions, repostOfId = null, allowSoundExtraction = post.allowSoundExtraction),
+                .copy(mentions = mentions, repostOfId = null, allowSoundExtraction = post.allowSoundExtraction, commentsDisabled = post.commentsDisabled),
         ).mirrorDraftToSelection()
     }
 

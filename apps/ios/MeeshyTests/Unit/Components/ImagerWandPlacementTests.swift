@@ -48,11 +48,17 @@ final class ImagerWandPlacementTests: XCTestCase {
         XCTAssertFalse(target.canImagine)
     }
 
-    func test_commentMenuAndRow_readTheSameTarget() throws {
-        XCTAssertTrue(try source("Meeshy/Features/Main/Views/CommentMoreMenu.swift").contains("canImagine: imagerTarget.canImagine"))
-        let row = try source("Meeshy/Features/Main/Views/CommentRowView.swift")
-        XCTAssertTrue(row.contains("CommentImagerButton("))
-        XCTAssertTrue(row.contains("CommentImagerTarget(comment: comment"))
+    /// #16541 — « Imager » a quitté le menu « … » d'un commentaire : il n'a
+    /// qu'un chemin, l'icône de la rangée, sur un commentaire de post comme de story.
+    func test_commentImager_livesInTheRowOnly_neverInTheMenu() throws {
+        let menu = try source("Meeshy/Features/Main/Views/CommentMoreMenu.swift")
+        XCTAssertFalse(menu.contains("MessageCardExportPresenter"))
+        XCTAssertFalse(menu.contains("MessageCardExportMenu.imageLabel"))
+        for path in ["Meeshy/Features/Main/Views/CommentRowView.swift", "Meeshy/Features/Stories/Views/StoryCommentRowView.swift"] {
+            let row = try source(path)
+            XCTAssertTrue(row.contains("CommentImagerButton("), path)
+            XCTAssertTrue(row.contains("CommentImagerTarget(comment: comment"), path)
+        }
     }
 
     // MARK: - Où la baguette se pose

@@ -15,7 +15,7 @@ final class MeeshyCommandsWiringGuardTests: XCTestCase {
 
     func test_app_declaresTheCommandsOnce() throws {
         let app = try code("Meeshy/MeeshyApp.swift")
-        XCTAssertEqual(occurrences(of: ".commands { MeeshyCommands() }", in: app), 1)
+        XCTAssertEqual(occurrences(of: ".commands(content: PrebuiltSceneContent(MeeshyCommands()).make)", in: app), 1)
     }
 
     func test_commands_readEveryBindingFromMeeshyShortcut_andThePreference() throws {

@@ -119,4 +119,27 @@ class ServedAudioUrlTest {
     fun `sans fichier il n'y a rien a jouer`() {
         assertThat(media.copy(fileUrl = null).servedAudioUrl(SocialAudioSurface.COMMENT, null, listOf("fr"))).isNull()
     }
+
+    @Test
+    fun `an audio comment offers its original then the reader's spoken languages, the served one active`() {
+        val choice = media.socialAudioChoice(SocialAudioSurface.COMMENT, null, listOf("fr", "en"))!!
+        assertThat(choice.offered).containsExactly("en", "fr").inOrder()
+        assertThat(choice.originalLanguage).isEqualTo("en")
+        assertThat(choice.servedLanguage).isEqualTo("fr")
+        assertThat(choice.url).isEqualTo("/fr.mp3")
+    }
+
+    @Test
+    fun `tapping the original flag plays the original track`() {
+        val choice = media.socialAudioChoice(SocialAudioSurface.COMMENT, null, listOf("fr"), manualOverride = "en")!!
+        assertThat(choice.servedLanguage).isEqualTo("en")
+        assertThat(choice.url).isEqualTo("/o.mp3")
+    }
+
+    @Test
+    fun `no track in the reader's languages means no flag to explore`() {
+        val choice = media.socialAudioChoice(SocialAudioSurface.COMMENT, null, listOf("de"))!!
+        assertThat(choice.offered).isEmpty()
+        assertThat(choice.servedLanguage).isEqualTo("en")
+    }
 }

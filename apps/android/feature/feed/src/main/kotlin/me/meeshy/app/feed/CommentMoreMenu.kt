@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.CommentMenuAction
+import me.meeshy.sdk.model.CommentMenuPolicy
 import me.meeshy.sdk.model.card.PostCommentCardSubject
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
@@ -35,18 +36,21 @@ internal class CommentImaging(
 
 /**
  * Le « … » d'un commentaire (iOS `CommentMoreMenu`) : UNE cible de 44 dp, UN menu dont la loi est
- * [me.meeshy.sdk.model.CommentMenuPolicy] — Copier, Imager, Modifier, Signaler, Supprimer, Retirer, dans l'ordre d'iOS —
- * et les mêmes entrées en actions personnalisées TalkBack. Sans entrée, aucun bouton.
+ * [me.meeshy.sdk.model.CommentMenuPolicy] — Copier, Modifier, Signaler, Supprimer, Retirer, dans l'ordre d'iOS — et les
+ * mêmes entrées en actions personnalisées TalkBack. « Imager » n'y est pas : sa baguette, icône seule, le précède dans le
+ * rail (#16541). Sans entrée, aucun bouton.
  */
 @Composable
 internal fun CommentMoreMenu(comment: CommentPresentation, onDelete: (String) -> Unit, imaging: CommentImaging? = null) {
     var expanded by remember { mutableStateOf(false) }
     val haptics = rememberMeeshyHaptics()
     val entries = rememberCommentMenuEntries(comment, onDelete, imaging)
-    if (entries.isEmpty()) return
     entries.firstOrNull { it.action == CommentMenuAction.IMAGINE }?.let { imagine ->
         ImagerWand(onClick = imagine.run, tint = MeeshyTheme.tokens.textSecondary)
     }
+    val kept = CommentMenuPolicy.overflow(entries.map { it.action })
+    val overflow = entries.filter { it.action in kept }
+    if (overflow.isEmpty()) return
     Box {
         IconButton(
             onClick = { haptics.light(); expanded = true },
@@ -61,7 +65,7 @@ internal fun CommentMoreMenu(comment: CommentPresentation, onDelete: (String) ->
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            entries.forEach { entry ->
+            overflow.forEach { entry ->
                 DropdownMenuItem(
                     text = { Text(entry.label, color = if (entry.destructive) MeeshyPalette.Error else androidx.compose.ui.graphics.Color.Unspecified) },
                     onClick = {

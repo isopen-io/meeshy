@@ -104,9 +104,14 @@ const monter = async (comment: PostComment): Promise<HTMLDivElement> => {
 const texteLu = (host: ParentNode): string =>
   host.querySelector('[data-comment-row] p')?.textContent?.trim() ?? '';
 
-const pastille = (host: ParentNode): HTMLButtonElement | null =>
-  host.querySelector<HTMLButtonElement>('[data-prism-toggle]');
+const drapeau = (host: ParentNode, code: string): HTMLButtonElement | null =>
+  host.querySelector<HTMLButtonElement>(`[data-comment-prism-flags] [data-prism-flag="${code}"]`);
 
+/**
+ * **LES DRAPEAUX, COMME UN MESSAGE** (#16541, miroir `bubble.tsx` #7599) — la
+ * rangée montre les AUTRES langues disponibles, l'original en tête, jamais
+ * celle déjà servie ; la pastille 🌐 ne se pose que s'il n'y a aucun drapeau.
+ */
 describe('Une rangée de commentaire traduite ANNONCE le Prisme', () => {
   test('le texte servi est celui du rang 2 — et le témoin le distingue de l’original', async () => {
     const host = await monter(commentaire());
@@ -115,46 +120,45 @@ describe('Une rangée de commentaire traduite ANNONCE le Prisme', () => {
     expect(texteLu(host)).not.toBe(ORIGINAL_ES);
   });
 
-  test('la rangée porte la pastille À GESTE, avec le vocabulaire du COMMENTAIRE', async () => {
+  test('la rangée porte le DRAPEAU de l’original, à geste — pas celui de la langue servie', async () => {
     const host = await monter(commentaire());
 
-    const bouton = pastille(host);
-    expect(bouton).not.toBe(null);
-    expect(bouton?.getAttribute('aria-label')).toBe('Afficher le commentaire dans sa langue d’origine');
-    expect(bouton?.getAttribute('aria-pressed')).toBe('false');
+    expect(drapeau(host, 'es')).not.toBe(null);
+    expect(drapeau(host, 'en')).toBe(null);
+    expect(host.querySelector('[data-prism-toggle]')).toBe(null);
   });
 
-  /** LE CONTRE-TÉMOIN — sans lui, le cas ci-dessus verdirait sur une pastille
-      posée INCONDITIONNELLEMENT, qui mentirait sur toute rangée non traduite. */
+  /** LE CONTRE-TÉMOIN — une rangée non traduite n'annonce rien. */
   test('une rangée NON traduite n’annonce rien : il n’y a pas de traduction à dire', async () => {
     const host = await monter(commentaire({ originalLanguage: 'fr', content: 'Bonjour', translations: {} }));
 
     expect(texteLu(host)).toBe('Bonjour');
-    expect(pastille(host)).toBe(null);
+    expect(host.querySelector('[data-comment-prism-flags]')).toBe(null);
+    expect(host.querySelector('[data-prism-toggle]')).toBe(null);
   });
 });
 
 describe('Et l’original s’ouvre AU GESTE — c’est l’effet qui est mesuré, pas l’annonce', () => {
-  test('cliquer la pastille change le texte LU', async () => {
+  test('toucher le drapeau de l’original change le texte LU', async () => {
     const host = await monter(commentaire());
     expect(texteLu(host)).toBe(SERVI_EN);
 
-    await act(async () => pastille(host)?.click());
+    await act(async () => drapeau(host, 'es')?.click());
 
     expect(texteLu(host)).toBe(ORIGINAL_ES);
-    expect(pastille(host)?.getAttribute('aria-pressed')).toBe('true');
-    expect(pastille(host)?.getAttribute('aria-label')).toBe('Masquer le commentaire dans sa langue d’origine');
+    expect(drapeau(host, 'en')).not.toBe(null);
+    expect(drapeau(host, 'es')).toBe(null);
   });
 
-  test('re-cliquer revient à la langue du lecteur — le geste est réversible', async () => {
+  test('toucher le drapeau de la traduction revient à la langue du lecteur — le geste est réversible', async () => {
     const host = await monter(commentaire());
 
-    await act(async () => pastille(host)?.click());
+    await act(async () => drapeau(host, 'es')?.click());
     expect(texteLu(host)).toBe(ORIGINAL_ES);
 
-    await act(async () => pastille(host)?.click());
+    await act(async () => drapeau(host, 'en')?.click());
     expect(texteLu(host)).toBe(SERVI_EN);
-    expect(pastille(host)?.getAttribute('aria-pressed')).toBe('false');
+    expect(drapeau(host, 'es')).not.toBe(null);
   });
 
   /**
@@ -169,8 +173,33 @@ describe('Et l’original s’ouvre AU GESTE — c’est l’effet qui est mesur
 
     expect(paragraphe()?.getAttribute('lang')).toBe('en');
 
-    await act(async () => pastille(host)?.click());
+    await act(async () => drapeau(host, 'es')?.click());
 
     expect(paragraphe()?.getAttribute('lang')).toBe('es');
+  });
+});
+
+describe('Un commentaire VOCAL porte aussi ses drapeaux (#16541)', () => {
+  test('la piste jouée suit le drapeau touché', async () => {
+    const host = await monter(
+      commentaire({
+        content: '',
+        translations: {},
+        media: [
+          {
+            id: 'pm-voice',
+            mimeType: 'audio/mp4',
+            fileUrl: '/voice-es.m4a',
+            transcription: { text: 'Hola a todos', language: 'es' },
+            translations: { en: { type: 'audio', transcription: 'Hello everyone', url: '/voice-en.m4a' } },
+          } as unknown as NonNullable<PostComment['media']>[number],
+        ],
+      }),
+    );
+    const piste = () => host.querySelector('[data-comment-media] audio')?.getAttribute('src') ?? '';
+
+    expect(piste()).toContain('voice-en.m4a');
+    await act(async () => drapeau(host, 'es')?.click());
+    expect(piste()).toContain('voice-es.m4a');
   });
 });

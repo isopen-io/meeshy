@@ -57,7 +57,14 @@ data class StoryItem(
     /** Liens suivis de la légende ; `null` = adresses laissées brutes. */
     @Serializable(with = TolerantTrackedLinksSerializer::class)
     val trackingLinks: List<TrackedLink>? = null,
+    /** L'auteur (ou la modération) a fermé les commentaires de CETTE story (#16541). */
+    val commentsDisabled: Boolean = false,
+    /** La story republiée a fermé les siens : la republication en hérite. */
+    val sourceCommentsDisabled: Boolean = false,
 ) {
+    /** Les commentaires sont fermés, par la story ou par sa source — la même loi que `ApiPost.commentsClosed`. */
+    val commentsClosed: Boolean get() = commentsDisabled || sourceCommentsDisabled
+
     /** `[urlBrute: jeton]` que lit le rendu du texte. */
     val trackedLinkMap: Map<String, String> get() = trackingLinks.orEmpty().trackedLinkMap()
 

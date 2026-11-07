@@ -64,4 +64,23 @@ class StoryEditChromeTest {
         assertThat(StoryEditEntry.offered(isOwnStory = true, storyId = null)).isFalse()
         assertThat(StoryEditEntry.offered(isOwnStory = true, storyId = "s1", expired = true)).isFalse()
     }
+
+    @Test
+    fun `the comments switch reopens as the post served it`() {
+        val closed = opening.copy(post = opening.post.copy(commentsDisabled = true))
+        assertThat(StoryEditFixtures.opened(closed).draft.commentsDisabled).isTrue()
+        assertThat(StoryEditFixtures.opened(opening).draft.commentsDisabled).isFalse()
+    }
+
+    @Test
+    fun `an edit sends the comments switch only when the author changed it`() {
+        val opened = StoryEditFixtures.opened(opening)
+        val untouched = StoryEditMerge.plan(opening, opened, "fr") as StoryEditPlan.Ready
+        assertThat(untouched.request.commentsDisabled).isNull()
+
+        val closing = opened.copy(draft = opened.draft.copy(commentsDisabled = true))
+        val closed = StoryEditMerge.plan(opening, closing, "fr") as StoryEditPlan.Ready
+        assertThat(closed.request.commentsDisabled).isTrue()
+        assertThat(closed.optimistic.commentsDisabled).isTrue()
+    }
 }

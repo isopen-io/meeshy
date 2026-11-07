@@ -52,6 +52,7 @@ internal fun FeedPostCardHeader(
     onDelete: (() -> Unit)?,
     onOpen: (() -> Unit)? = null,
     pendingSend: PendingSendActions? = null,
+    onToggleComments: (() -> Unit)? = null,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -117,6 +118,9 @@ internal fun FeedPostCardHeader(
             onImager = rememberPostImager(post),
             onOpen = onOpen,
             pendingSend = pendingSend,
+            viewerRole = post.viewerRole,
+            commentsDisabled = post.commentsDisabled,
+            onToggleComments = onToggleComments,
         )
     }
 }

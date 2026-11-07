@@ -105,6 +105,8 @@ data class PostCommentsUiState(
     /** Le lecteur et son rôle : la loi du menu « … » (auteur, modération) les lit. */
     val viewerId: String? = null,
     val viewerRole: String? = null,
+    /** La publication a fermé ses commentaires (#16541) : le fil reste lisible, le composeur cède la place au bandeau. */
+    val commentsClosed: Boolean = false,
 ) {
     /** Envoyer : du texte ou une pièce, rien qui se téléverse encore, aucun envoi en vol. */
     val canSubmit: Boolean get() = when (editing) {

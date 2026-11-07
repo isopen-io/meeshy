@@ -112,6 +112,9 @@ export type StudioDraft = {
    * (`PostMedia.caption`) : trois contenus. `''` tant que rien n'est écrit.
    */
   readonly postText: string;
+  /** **« DÉSACTIVER LES COMMENTAIRES »** (#16541) — présent seulement quand
+   * l'auteur l'a coché : la clé ne part alors dans aucun corps. */
+  readonly commentsDisabled?: true;
 };
 
 /** La page COURANTE — le SITE UNIQUE de lecture, pour que « quelle page ? »
@@ -285,6 +288,12 @@ export function withSelected(draft: StudioDraft, id: string | null): StudioDraft
  */
 export function withAudience(draft: StudioDraft, visibility: ChoosableAudience): StudioDraft {
   return { ...draft, visibility };
+}
+
+/** LES COMMENTAIRES DE LA PUBLICATION (#16541) — portent, comme l'audience, sur le brouillon entier. */
+export function withCommentsDisabled(draft: StudioDraft, disabled: boolean): StudioDraft {
+  const { commentsDisabled: _previous, ...rest } = draft;
+  return disabled ? { ...rest, commentsDisabled: true } : rest;
 }
 
 export function withoutText(draft: StudioDraft, id: string): StudioDraft {

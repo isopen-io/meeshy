@@ -154,7 +154,7 @@ final class ComposerLabeledRailTests: XCTestCase {
     /// **Chaque rangée que le rail peut poser a son mot court, dans les sept langues** : un libellé de ⋯ repris tel
     /// quel (« Retirer le fond de la scène », « Vista previa ») ne tient pas dans 112 pt et se tronque.
     func test_title_everyRowTheRailMayServe_hasAShortWordInEveryLanguage() throws {
-        let promouvables = ComposerMoreMenuEntry.allCases.filter { ![.animation, .soundReuse, .clearAll].contains($0) }
+        let promouvables = ComposerMoreMenuEntry.allCases.filter { ![.animation, .soundReuse, .commentsOff, .clearAll].contains($0) }
         let cles = promouvables.map { "composer.rail.title.\($0.rawValue)" }
             + ["text", "media", "sticker", "sound", "drawing", "background", "mention", "place"]
                 .map { "composer.rail.title.\($0)" }

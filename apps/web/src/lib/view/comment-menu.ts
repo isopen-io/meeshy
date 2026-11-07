@@ -11,12 +11,13 @@ import { maskedByEffects } from '@/lib/export/message-card-subject';
  * - **Copier** : le texte que la rangée AFFICHE (le Prisme, ou l'original
  *   demandé) — jamais un commentaire flouté ou à vue unique : ce qui est
  *   masqué à l'écran ne part pas en clair dans le presse-papiers.
- * - **Imager** : la garde est celle de la carte (`commentCardSubjectOf`) — une
- *   seule loi dit ce qui se peint. Une RACINE qui a des réponses offre aussi
- *   « avec les réponses » ; une RÉPONSE emporte déjà sa racine en citation.
- *   Un commentaire de POST (#9687, `postComposition`) n'a qu'UN « Imager » :
- *   l'atelier compose la carte (post en tête, fil, réponses choisies), et la
- *   composition partagée dit seule s'il s'offre.
+ * - **Imager** vit dans le RAIL de la rangée, en icône (#16541,
+ *   `commentImageable`) : le menu ne le répète pas. La garde est celle de la
+ *   carte (`commentCardSubjectOf`) — une seule loi dit ce qui se peint. Une
+ *   RACINE qui a des réponses offre au menu « Imager avec les réponses » ;
+ *   une RÉPONSE emporte déjà sa racine en citation. Un commentaire de POST
+ *   (#9687, `postComposition`) n'a que l'icône : l'atelier compose la carte
+ *   (post en tête, fil, réponses choisies), et la composition dit s'il s'offre.
  * - **Modifier / Supprimer** : à l'AUTEUR seul, reflet de la passerelle
  *   (`PATCH`/`DELETE` gardés par le contrôle d'auteur).
  * - **Retirer** (#11150) : aux AUTRES seuls, pour la modération de plateforme
@@ -26,7 +27,19 @@ import { maskedByEffects } from '@/lib/export/message-card-subject';
  *
  * Une rangée EN VOL n'a pas d'adresse chez la passerelle : aucune entrée.
  */
-export type CommentMenuEntry = 'copy' | 'image' | 'imageWithReplies' | 'edit' | 'delete' | 'remove' | 'report';
+export type CommentMenuEntry = 'copy' | 'imageWithReplies' | 'edit' | 'delete' | 'remove' | 'report';
+
+/** « IMAGER » (#8693, #16541) — l'icône du rail : la garde de la carte, ou la composition d'un post. */
+export function commentImageable(params: {
+  readonly comment: PostComment;
+  readonly servedText: string;
+  readonly canImage: boolean;
+  readonly postComposition?: { readonly imageable: boolean };
+}): boolean {
+  const { comment, servedText, canImage, postComposition } = params;
+  if (comment.pending === true || !canImage) return false;
+  return postComposition?.imageable ?? commentCardSubjectOf({ comment, servedText, parent: null }) !== null;
+}
 
 export function commentMenuEntries(params: {
   readonly comment: PostComment;
@@ -45,12 +58,11 @@ export function commentMenuEntries(params: {
   if (comment.pending === true) return [];
   const isMine = viewerId !== '' && comment.author.id === viewerId;
   const copyable = canCopy && !maskedByEffects(comment.effectFlags) && servedText.trim() !== '';
-  const imageable = canImage && (postComposition?.imageable ?? commentCardSubjectOf({ comment, servedText, parent: null }) !== null);
+  const imageable = commentImageable({ comment, servedText, canImage, ...(postComposition === undefined ? {} : { postComposition }) });
   const isRoot = typeof comment.parentId !== 'string' || comment.parentId === '';
   const hasReplies = typeof comment.replyCount === 'number' && comment.replyCount > 0;
   return [
     ...(copyable ? (['copy'] as const) : []),
-    ...(imageable ? (['image'] as const) : []),
     ...(imageable && isRoot && hasReplies && postComposition === undefined ? (['imageWithReplies'] as const) : []),
     ...(isMine ? (['edit', 'delete'] as const) : []),
     ...(!isMine && params.canRemove === true ? (['remove'] as const) : []),

@@ -45,7 +45,6 @@ const DESTRUCTIVE: ReadonlySet<CommentMenuEntry> = new Set(['delete', 'remove', 
 
 const LABEL = {
   copy: 'feed.post.menu.copy_text',
-  image: 'comments.action.image',
   imageWithReplies: 'comments.action.image_with_replies',
   edit: 'comments.action.edit',
   delete: 'comments.action.delete',
@@ -55,7 +54,6 @@ const LABEL = {
 
 const ICON: Readonly<Record<CommentMenuEntry, () => ReactNode>> = {
   copy: () => <GlyphSvg glyph={THREAD_MENU_GLYPHS.copy} size={16} />,
-  image: () => <GlyphSvg glyph={THREAD_MENU_GLYPHS.imageSquare} size={16} />,
   imageWithReplies: () => <GlyphSvg glyph={THREAD_MENU_GLYPHS.imageSquare} size={16} />,
   edit: () => <GlyphSvg glyph={THREAD_MENU_GLYPHS.pencilSimple} size={16} />,
   delete: () => <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={16} />,

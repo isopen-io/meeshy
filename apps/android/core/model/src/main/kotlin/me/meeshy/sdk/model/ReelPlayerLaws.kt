@@ -33,18 +33,34 @@ public object ReelScrub {
  * juste après « Partager », l'export : Enregistrer, Partager et Imager la vidéo (#13896). « Modifier » (rang iOS : après Épingler) n'est offert que si l'hôte sait ouvrir l'édition.
  */
 public object ReelMenu {
-    public enum class Action { OPEN, COPY_TEXT, SHARE, EXPORT, PIN, EDIT, DELETE, REPORT }
+    public enum class Action { OPEN, COPY_TEXT, SHARE, EXPORT, PIN, EDIT, DISABLE_COMMENTS, ENABLE_COMMENTS, DELETE, REPORT }
 
-    public fun actions(isOwn: Boolean, hasText: Boolean, exportable: Boolean = false, canEdit: Boolean = false): List<Action> = buildList {
+    /**
+     * Fermer ou rouvrir les commentaires (#16541) s'offre à l'auteur, avant « Supprimer », et à la modération de la
+     * plateforme, avant « Signaler » ([PostCommentSettings.mayToggle]) — quand l'hôte sait le faire ([canToggleComments]).
+     */
+    public fun actions(
+        isOwn: Boolean,
+        hasText: Boolean,
+        exportable: Boolean = false,
+        canEdit: Boolean = false,
+        commentsDisabled: Boolean = false,
+        viewerRole: String? = null,
+        canToggleComments: Boolean = false,
+    ): List<Action> = buildList {
         add(Action.OPEN)
         if (hasText) add(Action.COPY_TEXT)
         add(Action.SHARE)
         if (exportable) add(Action.EXPORT)
+        val toggle = (if (commentsDisabled) Action.ENABLE_COMMENTS else Action.DISABLE_COMMENTS)
+            .takeIf { canToggleComments && PostCommentSettings.mayToggle(isOwn, viewerRole) }
         if (isOwn) {
             add(Action.PIN)
             if (canEdit) add(Action.EDIT)
+            toggle?.let(::add)
             add(Action.DELETE)
         } else {
+            toggle?.let(::add)
             add(Action.REPORT)
         }
     }

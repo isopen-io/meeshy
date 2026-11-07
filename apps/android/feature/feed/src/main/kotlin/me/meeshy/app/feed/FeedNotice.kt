@@ -30,6 +30,8 @@ enum class FeedNotice(val isError: Boolean) {
     PUBLISH_QUEUED(false),
     TRANSLATION_FAILED(true),
     UNBOOKMARKED(false),
+    /** Fermer ou rouvrir les commentaires n'a pas abouti : le menu est revenu à l'état d'avant (#16541). */
+    COMMENT_SETTINGS_FAILED(true),
 }
 
 /** Le retour que le fil montre pour une publication que la file de l'appareil a prise, ou n'a pas pu prendre (#13863). */

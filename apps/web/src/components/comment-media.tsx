@@ -3,6 +3,7 @@ import { lazy, Suspense, useMemo, useState } from 'react';
 import type { FeedMedia } from '@/lib/api/feed-pages';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { viewableCommentMedia } from '@/lib/comments/comment-media-viewer';
+import { servedCommentAudio } from '@/lib/comments/comment-prism';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { coordinateNativeMedia } from '@/lib/view/native-media-coordination';
@@ -37,11 +38,18 @@ export function CommentMedia({
   media,
   commentId,
   authorUsername,
+  prism,
+  fallbackLanguage = '',
 }: {
   readonly media: readonly FeedMedia[];
   readonly commentId: string;
   /** L'auteur du commentaire — son @ filigrane ce qu'« Imager » compose. */
   readonly authorUsername?: string | null | undefined;
+  /** LE PRISME DE LA RANGÉE (#16541) — la langue explorée en tête : un vocal
+   * joue la piste de sa transcription servie. Absent ⇒ l'original. */
+  readonly prism?: readonly string[] | undefined;
+  /** La langue du commentaire, quand la transcription ne dit pas la sienne. */
+  readonly fallbackLanguage?: string;
 }) {
   const [opened, setOpened] = useState<number | null>(null);
   const shown = media.filter((piece) => (isImage(piece) || isVideo(piece) || isAudio(piece)) && piece.fileUrl !== '');
@@ -59,7 +67,7 @@ export function CommentMedia({
           <audio
             key={piece.id}
             ref={coordinateNativeMedia}
-            src={attachmentSrc(piece.fileUrl)}
+            src={attachmentSrc(prism === undefined ? piece.fileUrl : servedCommentAudio({ media: piece, prism, fallbackLanguage }).url)}
             controls
             preload="none"
             aria-label={translate(language, 'feed.post.media.audio')}

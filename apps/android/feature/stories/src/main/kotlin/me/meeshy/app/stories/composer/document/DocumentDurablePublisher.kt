@@ -62,6 +62,7 @@ internal object DocumentPostRequest {
             visibilityUserIds = intent.visibilityUserIds,
             storyEffects = effects,
             allowSoundExtraction = intent.allowSoundExtraction,
+            commentsDisabled = intent.commentsDisabled,
             mentions = intent.mentions?.takeIf { it.isNotEmpty() },
             mediaCaption = keyed(intent.mediaCaptions, uploadIds),
             discoverabilityPrecision = intent.discoverabilityPrecision,

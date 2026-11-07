@@ -4,6 +4,7 @@ import me.meeshy.sdk.model.trackedLinkMap
 import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.util.resolveServedImageUrl
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.commentsClosed
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.fullscreen.MediaChromeBackdrop
@@ -68,7 +69,15 @@ data class ReelPresentation(
     val export: Pair<StoryItem, StorySlideView>? = null,
     /** Le média dont la luminance commande la teinte des glyphes du rail (iOS `MediaLuminanceScheme`) ; `null` : glyphes blancs. */
     val backdrop: MediaChromeBackdrop? = null,
-)
+    /** Les commentaires de CE réel sont fermés (#16541) : le menu offre « Réactiver ». */
+    val commentsDisabled: Boolean = false,
+    /** Fermés par ce réel ou par celui qu'il republie : la feuille se lit, son composeur cède la place au bandeau. */
+    val commentsClosed: Boolean = false,
+) {
+    /** Le réel après un geste sur ses commentaires : la fermeture héritée de la source reste. */
+    fun withCommentsDisabled(disabled: Boolean): ReelPresentation =
+        copy(commentsDisabled = disabled, commentsClosed = disabled || repostOf?.commentsDisabled == true)
+}
 
 object ReelBuilder {
 
@@ -139,6 +148,8 @@ object ReelBuilder {
                     scene = scene,
                     export = ReelScene.export(post, scene, layout, mediaBaseUrl, preferences),
                     backdrop = post.media.orEmpty().sortedBy { it.order ?: Int.MAX_VALUE }.firstNotNullOfOrNull { MediaChromeBackdrop.postMedia(it) },
+                    commentsDisabled = post.commentsDisabled,
+                    commentsClosed = post.commentsClosed,
                 )
             }
             .toList()

@@ -17,6 +17,7 @@ import type { PendingAttachment } from '@/lib/send/attachments';
 
 import { updateCardPost, writeCardCache } from './card-caches';
 import { appendReply, commentRepliesQueryKey, dropReply, settleReply } from './comment-replies';
+import { writeCommentsDisabled } from './comment-settings';
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
 import type { FeedAuthor, FeedMedia } from './feed-pages';
@@ -289,11 +290,13 @@ export function shiftCommentCount(queryClient: QueryClient, postId: string, delt
 
 /** Une CLÉ de catalogue, jamais un texte déjà traduit — seule la surface qui
  * annonce connaît la langue d'interface (même patron que `feed-gestures.ts`). */
-type CommentMessageKey = 'comment.send.error' | 'comment.send.pending' | 'comment.send.empty' | 'comment.gesture.unconfirmed';
+type CommentMessageKey = 'comment.send.error' | 'comment.send.pending' | 'comment.send.empty' | 'comment.gesture.unconfirmed' | 'comments.closed';
 
 export const COMMENT_FAILED_MESSAGE: CommentMessageKey = 'comment.send.error';
 export const COMMENT_PENDING_MESSAGE: CommentMessageKey = 'comment.send.pending';
 export const COMMENT_EMPTY_MESSAGE: CommentMessageKey = 'comment.send.empty';
+/** LES COMMENTAIRES SONT FERMÉS (#16541) — `403 COMMENTS_DISABLED` : la publication passe fermée partout, et la surface le DIT au lieu d'un échec générique. */
+export const COMMENT_CLOSED_MESSAGE: CommentMessageKey = 'comments.closed';
 /** UNE PANNE DE PASSERELLE N'EST PAS UNE COUPURE RÉSEAU (revue-correction
  * #7135, défaut majeur 4) — `comment.send.pending` NOMME le réseau, donc ne
  * se sert que sur une absence de réponse alors que le lecteur est hors ligne.
@@ -392,6 +395,15 @@ const ownerOf = (deps: CommentSendDeps, authorId: string): Credential | null =>
 /** 409 `MUTATION_IN_FLIGHT` — la première tentative est EN COURS sur la passerelle : attendre, jamais défaire. */
 export const commentStillInFlight = (failure: ApiFailure): boolean => failure.status === 409 && failure.code === 'MUTATION_IN_FLIGHT';
 
+const closedBy = (failure: ApiFailure): boolean => failure.status === 403 && failure.code === 'COMMENTS_DISABLED';
+
+/** Un refus PERMANENT : le message à dire — et, fermés, la publication passe fermée dans chaque caisse. */
+const refusalOf = (deps: CommentSendDeps, postId: string, failure: ApiFailure): CommentResult => {
+  if (!closedBy(failure)) return { ok: false, message: COMMENT_FAILED_MESSAGE };
+  writeCommentsDisabled(deps.queryClient, postId, true);
+  return { ok: false, message: COMMENT_CLOSED_MESSAGE };
+};
+
 const passing = (failure: ApiFailure): boolean => outcomeOf(failure) !== 'permanent' || commentStillInFlight(failure);
 
 /** L'auteur n'est plus le lecteur connecté au retour : on rend l'issue sans rien écrire. */
@@ -487,7 +499,7 @@ export async function performComment(params: {
 
   deps.queryClient.setQueryData<CommentInfiniteData>(key, (data) => dropComment(data, tempId));
   shiftCommentCount(deps.queryClient, postId, -1);
-  return { ok: false, message: COMMENT_FAILED_MESSAGE };
+  return refusalOf(deps, postId, result);
 }
 
 /**
@@ -588,7 +600,7 @@ async function performReply(params: {
   deps.queryClient.setQueryData<CommentInfiniteData>(key, (data) => dropReply(data, tempId));
   shiftReplyCount(deps.queryClient, postId, parentId, -1);
   shiftCommentCount(deps.queryClient, postId, -1);
-  return { ok: false, message: COMMENT_FAILED_MESSAGE };
+  return refusalOf(deps, postId, result);
 }
 
 /** LA CRÉATION N'A PAS ABOUTI (#9743) — le commentaire attend son rejeu, sous l'identifiant de CETTE tentative. */

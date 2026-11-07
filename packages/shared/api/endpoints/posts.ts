@@ -39,6 +39,9 @@ export const byPostIdCommentsByCommentIdReplies = (postId: string, commentId: st
 /** POST /api/v1/posts/:postId/comments/:commentId/translate */
 export const byPostIdCommentsByCommentIdTranslate = (postId: string, commentId: string): string => `/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/translate`;
 
+/** PATCH /api/v1/posts/:postId/comment-settings */
+export const byPostIdCommentSettings = (postId: string): string => `/api/v1/posts/${encodeURIComponent(postId)}/comment-settings`;
+
 /** POST /api/v1/posts/:postId/downloads */
 export const byPostIdDownloads = (postId: string): string => `/api/v1/posts/${encodeURIComponent(postId)}/downloads`;
 
