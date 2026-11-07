@@ -10,6 +10,8 @@ import { ritualShareWithdrawalOf } from '../../services/relations/ritualShareWit
 import { stopBringsOnBlock } from '../../services/bring/bringService';
 import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkieCut';
 import { logError } from '../../utils/logger';
+import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { relationIoOf } from '../../socketio/relationEvents';
 import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
@@ -30,8 +32,16 @@ import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './sh
  * (#16623). Une audience (`audience.acquaintances`) resterait au lien réel. Elle se juge
  * dans les DEUX sens : on bloque ce qui vient de l'autre, et un collègue mineur déclaré
  * qui peut sonner un adulte doit pouvoir être bloqué par lui — un 404 dirait son âge.
+ *
+ * Accorder sa catégorie d'écoute (#13934) se juge sur `listening.category`, dans le sens
+ * de ce qui part : l'autre VOIT, le propriétaire est vu.
  */
-async function linkedPerson(prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<boolean> {
+async function linkedPerson(
+  prisma: FastifyInstance['prisma'],
+  ownerId: string,
+  otherId: string,
+  feature: 'dm.direct' | 'listening.category' = 'dm.direct',
+): Promise<boolean> {
   const [other, owner, level] = await Promise.all([
     prisma.user.findUnique({ where: { id: otherId }, select: { id: true, role: true, birthDate: true, ...ACCOUNT_STATE_SELECT } }),
     prisma.user.findUnique({ where: { id: ownerId }, select: { role: true, birthDate: true, ...ACCOUNT_STATE_SELECT } }),
@@ -53,8 +63,10 @@ async function linkedPerson(prisma: FastifyInstance['prisma'], ownerId: string, 
       targetMinor: target.minor,
       viewerRole: viewer.role,
       targetRole: target.role,
-      feature: 'dm.direct',
+      feature,
+      consent: 'granted',
     }).allowed;
+  if (feature === 'listening.category') return opensFrom(otherSide, ownerSide);
   return opensFrom(ownerSide, otherSide) || opensFrom(otherSide, ownerSide);
 }
 
@@ -73,21 +85,22 @@ const settingsSchema = {
   type: 'object',
   properties: {
     success: { type: 'boolean' },
-    data: { type: 'object', properties: { userId: { type: 'string' }, bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, ...shareFlags } },
+    data: { type: 'object', properties: { userId: { type: 'string' }, bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, listeningCategoryShared: { type: 'boolean' }, ...shareFlags } },
   },
 } as const;
 
 const SETTINGS_SELECT = {
-  bringBlockedAt: true, talkieBlockedAt: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true,
+  bringBlockedAt: true, talkieBlockedAt: true, listeningCategoryShared: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true,
 } as const;
 
-type SettingsRow = { readonly bringBlockedAt: Date | null; readonly talkieBlockedAt: Date | null } & Readonly<Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>>;
+type SettingsRow = { readonly bringBlockedAt: Date | null; readonly talkieBlockedAt: Date | null; readonly listeningCategoryShared: boolean | null } & Readonly<Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>>;
 
 /** Ce que JE règle pour l'autre : son Bring et son talkie bloqués ou non, et ce que je lui partage depuis le rituel. */
 const servedSettings = (userId: string, row: SettingsRow | null): RelationPersonSettings => ({
   userId,
   bringBlocked: Boolean(row?.bringBlockedAt),
   talkieBlocked: Boolean(row?.talkieBlockedAt),
+  listeningCategoryShared: row?.listeningCategoryShared === true,
   ...(Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, row?.[share] === true])) as Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>),
 });
 
@@ -143,11 +156,11 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
     onRequest: [fastify.authenticate],
     preHandler: [appVersionFloorPreHandler, writes.middleware()],
     schema: {
-      description: 'Set what I allow this person: { bringBlocked?, talkieBlocked?, listeningTitleShared?, locationShared?, locationHistoryShared?, proximityShared? }. A ritual share can only be withdrawn (false). Unknown settings are refused (400).',
+      description: 'Set what I allow this person: { bringBlocked?, talkieBlocked?, listeningCategoryShared? (granted from Close), listeningTitleShared?, locationShared?, locationHistoryShared?, proximityShared? }. A ritual share can only be withdrawn (false). Unknown settings are refused (400).',
       tags: ['relations'],
       summary: 'Update per-person settings',
       params: userIdParams,
-      body: { type: 'object', minProperties: 1, properties: { bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, ...withdrawalFlags } },
+      body: { type: 'object', minProperties: 1, properties: { bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, listeningCategoryShared: { type: 'boolean' }, ...withdrawalFlags } },
       response: { 200: settingsSchema, ...errorResponses },
       security: [{ bearerAuth: [] }],
     },
@@ -160,21 +173,37 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
 
       const ownerId = request.user!.userId;
       const userId = otherId.toLowerCase();
-      const { bringBlocked, talkieBlocked, ...requested } = parsed.data;
+      const { bringBlocked, talkieBlocked, listeningCategoryShared, ...requested } = parsed.data;
       const now = new Date();
       const current = await readSettings(fastify.prisma, ownerId, userId);
       const blocking = bringBlocked === true || talkieBlocked === true;
-      const linked = blocking ? await linkedPerson(fastify.prisma, ownerId, userId) : false;
+      const granting = listeningCategoryShared === true;
+      const [linked, close] = await Promise.all([
+        blocking ? linkedPerson(fastify.prisma, ownerId, userId) : false,
+        granting ? linkedPerson(fastify.prisma, ownerId, userId, 'listening.category') : false,
+      ]);
+      // Retirer la catégorie retire aussi le titre : on ne garde pas le plus riche des deux partages
+      // quand on vient de couper le moindre.
+      const withdrawn = [
+        ...(Object.keys(requested) as RelationRitualShare[]),
+        ...(listeningCategoryShared === false ? (['listeningTitleShared'] as const) : []),
+      ];
+      const categoryWithdrawn = listeningCategoryShared === false && current?.listeningCategoryShared === true;
+      const cutsListening = categoryWithdrawn || (withdrawn.includes('listeningTitleShared') && current?.listeningTitleShared === true);
+      const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, 'Now playing not refreshed after settings:', error) };
+      const ecouteAvant = cutsListening ? await captureNowPlayingBefore(ecoute, { userA: ownerId, userB: userId }) : new Map();
       const data = {
-        ...ritualShareWithdrawalOf(current, Object.keys(requested) as RelationRitualShare[], now),
+        ...ritualShareWithdrawalOf(current, withdrawn, now),
+        ...(categoryWithdrawn ? { listeningCategoryShared: false, listeningCategoryWithdrawnAt: now } : {}),
+        ...(granting && close ? { listeningCategoryShared: true, listeningCategoryWithdrawnAt: null } : {}),
         ...(bringBlocked === false ? { bringBlockedAt: null } : {}),
         ...(talkieBlocked === false ? { talkieBlockedAt: null } : {}),
         ...(bringBlocked === true && linked ? { bringBlockedAt: now } : {}),
         ...(talkieBlocked === true && linked ? { talkieBlockedAt: now } : {}),
       };
 
-      // UNE écriture : le retrait (qui n'exige aucun lien) et les blocages partent ensemble.
-      if (blocking && linked) {
+      // UNE écriture : le retrait (qui n'exige aucun lien), les blocages et l'accord partent ensemble.
+      if ((blocking && linked) || (granting && close)) {
         await fastify.prisma.relationFeatureSetting.upsert({
           where: { ownerId_otherId: { ownerId, otherId: userId } },
           create: { ownerId, otherId: userId, ...data },
@@ -191,7 +220,9 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       } else if (Object.keys(data).length > 0) {
         await fastify.prisma.relationFeatureSetting.updateMany({ where: { ownerId, otherId: userId }, data });
       }
-      if (blocking && !linked) return sendNotFound(reply, 'Personne introuvable');
+      // #13934 — un accord fait remonter l'écoute en cours chez l'autre ; un retrait l'efface chez qui la voyait.
+      if ((granting && close) || cutsListening) await refreshNowPlayingAfter(ecoute, { userA: ownerId, userB: userId, before: ecouteAvant });
+      if ((blocking && !linked) || (granting && !close)) return sendNotFound(reply, 'Personne introuvable');
 
       return sendSuccess(reply, servedSettings(userId, await readSettings(fastify.prisma, ownerId, userId)));
     } catch (error) {

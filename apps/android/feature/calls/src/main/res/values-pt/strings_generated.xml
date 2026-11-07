@@ -154,7 +154,7 @@
     <string name="call_live_frame_none">Sem moldura</string>
     <string name="call_live_frame_not_proposed">A moldura está aplicada para você, mas não pôde ser proposta</string>
     <string name="call_live_frame_proposal">%1$s sugere a moldura “%2$s”</string>
-    <string name="call_mode_gesture_hint">Toque duplo: foto · Toque longo: vídeo</string>
+    <string name="call_mode_gesture_hint">toque duas vezes para uma foto · segure para filmar</string>
     <string name="call_mode_montage_title">Montagem da chamada</string>
     <string name="call_mode_photo">Tirar uma foto</string>
     <string name="call_mode_quit">Sair</string>
@@ -252,23 +252,9 @@
     <string name="call_zoom_hint">Deslize para cima ou para baixo para dar zoom. Na tela, faça o gesto de pinça na sua imagem; toque duas vezes para voltar a 1×</string>
     <string name="call_zoom_label">Zoom da minha câmera</string>
     <string name="permission_microphone_denied">Microfone negado — toque para abrir os Ajustes</string>
-    <string name="video_filter_backgroundBlur">Desfoque de fundo</string>
-    <string name="video_filter_brightness">Brilho</string>
-    <string name="video_filter_contrast">Contraste</string>
-    <string name="video_filter_exposure">Exposição</string>
-    <string name="video_filter_naturalComplexion">Tez natural</string>
-    <string name="video_filter_naturalComplexion_hint">Uniformiza e ilumina a tez, sem retoque visível</string>
-    <string name="video_filter_performanceDegraded">Desempenho reduzido — alguns filtros desativados</string>
     <string name="video_filter_preset_cool">Frio</string>
     <string name="video_filter_preset_muted">Suave</string>
     <string name="video_filter_preset_natural">Natural</string>
     <string name="video_filter_preset_vivid">Vívido</string>
     <string name="video_filter_preset_warm">Quente</string>
-    <string name="video_filter_radius">Raio</string>
-    <string name="video_filter_reinit">Redefinir</string>
-    <string name="video_filter_reset">Redefinir</string>
-    <string name="video_filter_saturation">Saturação</string>
-    <string name="video_filter_skinSmoothing">Suavização da pele</string>
-    <string name="video_filter_temperature">Temperatura</string>
-    <string name="video_filter_title">Filtros de vídeo</string>
 </resources>

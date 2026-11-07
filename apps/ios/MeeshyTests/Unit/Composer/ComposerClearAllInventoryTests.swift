@@ -62,7 +62,11 @@ final class ComposerClearAllInventoryTests: XCTestCase {
         "documentDiscoverability",
         "composerReferences",
         "editedForegroundSound",
-        "selectedSceneItemKind"
+        "selectedSceneItemKind",
+        // Les deux choix de ⋯ (#16594) : ils partent avec la publication sans
+        // se voir sur la scène, donc rien ne rappelle à l'auteur qu'ils restent.
+        "soundExtractionChoice",
+        "commentsDisabledChoice"
     ]
 
     private func clearAllBody() throws -> String {

@@ -39,7 +39,8 @@ struct CallView: View {
     /// et aucun masquage ne tombe sous un doigt posé.
     @State var showTranscript = false
     @State var showOriginalText = false
-    @State var showEffectsToolbar = false
+    /// OPUS-4 — mes réglages à l'ouverture d'Effets, gardés à travers le décroché.
+    @State var effectsEntryConfig: VideoFilterConfig?
     /// Progression du morph PiP (0 = plein écran, 1 = contracté vers la
     /// bannière). Piloté par `collapseIntoPip()` (réduction) et par
     /// `onAppear` (expansion depuis la bannière) — voir le trio
@@ -213,10 +214,8 @@ struct CallView: View {
             // (contact) » / « Serveur déconnecté »). Annonces VoiceOver dans les
             // onChange plus bas.
 
-            // Effects overlay — accessible dans tous les etats actifs (pas seulement
-            // connected). Video-only depuis 2026-07-02 : le panneau d'effets vocaux
-            // est retiré (pipeline de capture audio inexistant — voir
-            // CallEffectsOverlay), il ne reste que les filtres vidéo.
+            // OPUS-4 — le mode « Effets de ma caméra » avant la connexion ;
+            // l'appel établi le monte dans `connectedView`.
             surfaceEffects
 
             // Minimize-to-PiP affordance. The drag-down gesture on the call
@@ -411,13 +410,14 @@ struct CallView: View {
 
     @ViewBuilder
     private var surfaceEffectsBody: some View {
-        if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled && !showsConnectedLayout {
-            CallEffectsOverlay(
-                isExpanded: $showEffectsToolbar,
-                isVideoEnabled: callManager.isVideoEnabled,
-                callManager: callManager
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        if CallPreConnectEffectsRule.showsMode(
+            layer.activeMode,
+            state: callManager.callState,
+            isVideoEnabled: callManager.isVideoEnabled,
+            showsConnectedLayout: showsConnectedLayout
+        ) {
+            callModeLayer
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

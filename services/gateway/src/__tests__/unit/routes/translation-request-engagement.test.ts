@@ -7,6 +7,14 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+
+// #16557 — la loi de lecture est prouvée sur une base en mémoire par
+// `translation-read-law.test.ts` ; ce fichier juge autre chose et la tient pour
+// acquise, sauf là où il la refuse explicitement.
+const mockReaderMayTranslate = jest.fn<any>().mockResolvedValue(true);
+jest.mock('../../../services/messaging/translationReadGate', () => ({
+  readerMayTranslateMessage: (...args: unknown[]) => mockReaderMayTranslate(...args),
+}));
 import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
@@ -185,10 +193,11 @@ describe('POST /translate (non bloquante)', () => {
   });
 
   it('ne crédite pas une retraduction refusée à un non-membre', async () => {
+    mockReaderMayTranslate.mockResolvedValueOnce(false);
     const app = await buildApp(REGISTERED, false);
     const res = await app.inject({ method: 'POST', url: '/translate', payload: { message_id: MESSAGE_ID, target_language: 'fr' } });
     await flush();
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     expect(credits()).toEqual([]);
     await app.close();
   });

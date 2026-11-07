@@ -17,7 +17,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { declaredAgeClass, type DeclaredAgeClass } from '@meeshy/shared/utils/age';
 import { ACCOUNT_STATE_SELECT, lawRoleOf } from './usableAccount';
-import { relationAccessReads, resolveRelationAccess, type RelationAccess } from '@meeshy/shared/utils/relation-access';
+import { relationAccessReads, resolveRelationAccess, type RelationAccess, type RelationConsent } from '@meeshy/shared/utils/relation-access';
 import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { niveauxParmi } from '../friendship';
@@ -33,6 +33,12 @@ export type PairAccessAmongParams = {
   readonly otherIds: readonly string[];
   readonly subjectIs: PairAccessSubject;
   readonly now?: Date;
+  /**
+   * Le consentement, pour une feature qui en exige un (écoute, position) : l'appelant
+   * le lit par `relationConsentGrantedAmong` et le rend par autre personne. Absent, la
+   * loi refuse toute feature à consentement (`reason: 'consent'`).
+   */
+  readonly consentOf?: (otherId: string) => RelationConsent;
 };
 
 type PairPerson = { readonly age: DeclaredAgeClass; readonly role: string | null };
@@ -95,6 +101,7 @@ export async function pairAccessAmong(prisma: PairAccessDb, params: PairAccessAm
           viewerRole: roleOf(viewerId),
           targetRole: roleOf(targetId),
           feature,
+          consent: params.consentOf?.(id),
         }),
       ];
     }),

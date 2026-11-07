@@ -6,6 +6,13 @@ développement ») : en cas d'écart, l'issue a raison. Le backlog de la routine
 liste des issues `appels` du milestone #31 « Appels de groupe et appels traduits »
 et du milestone #6, pas une liste dans ce dossier.
 
+## Direction (2026-11-07, porteur via la session « appels de bout en bout »)
+
+- **La cible de la vue d'appel est écrite : [`docs/product/appels-vue-finale.md`](../../product/appels-vue-finale.md)** (#16633), avec 27 vues dessinées (portrait, paysage, duo vidéo et audio, groupe, partage, entrant, réduit, après l'appel, grand écran). Toute évolution de l'interface d'appel web se lit contre elle.
+- **Deux issues sont prises par la session « appels de bout en bout », côté web, branche `claude/calls-end-to-end-cvakev`** : #16634 (le journal pendant et après l'appel porte la couleur de chaque auteur, nom ET phrase) et #16635 (ma vignette porte ma couleur). Fichiers touchés : `apps/web/src/components/call-journal-panel.tsx`, `call-transcript-panel.tsx`, `call-grid.tsx`, `call-screen.tsx`, `lib/calls/call-speaker-color.ts`. Ne pas les reprendre en parallèle ; tirer `dev` après leur fusion.
+- Les deux « prochaines étapes » de couleur notées au cycle 3 bis (vignette de moi, journal iOS d'après l'appel) sont ces deux issues.
+- Reste à la routine : la recette staging fr↔en de « l'original puis la traduction » (#16613) et le reste du backlog `appels`.
+
 ## Cycle 1 — 2026-11-06
 
 - **Base** : `origin/dev` @ `782fca69a`.
@@ -151,3 +158,209 @@ socket jusqu'au client.
    qu'il est remplacé dans la même ligne, sur web, iOS et Android.
 2. Les deux restes ci-dessus, en issues s'ils tiennent.
 3. Lire `call_caption_translation_seconds` sur le staging.
+
+## Cycle 4 — 2026-11-07
+
+- **Base** : `origin/dev` @ `f57a6a076` (le cycle 3, #16618, y est fusionné).
+- **Branche** : `claude/intelligent-edison-y68gfr`.
+- **Objectif** : #16622, sous #3722. C'est la piste 2 du cycle 3.
+- **Constat** : le relais abandonne la traduction d'un sous-titre à 10 s, mais le client ZMQ
+  gardait son délai générique (30 s) avec renvois. Le même taskId repartait au traducteur à
+  +30, +60, +90 et +120 s (5 envois mesurés), précisément quand le traducteur est lent.
+- **Livré** : `translateText` / `sendTranslationRequest` acceptent un `TranslationDeadline`
+  optionnel. Le relais leur passe `CALL_CAPTION_TRANSLATION_TIMEOUT_MS` (10 s, seule source,
+  partagée avec son propre minuteur) avec `retryEnabled: false`. Les autres appelants ne changent pas.
+- **Tests** : `ZmqTranslationClient.callerDeadline.test.ts` (3) et
+  `call-caption-translation-deadline.test.ts` (3). Rouge prouvé sur le code d'avant : 5 sur 6
+  échouent, le sixième est le témoin de non-régression « renvoi à 30 s sans option ». Suites
+  socketio, ZMQ, métriques et traduction de messages : 238 suites, 3 396 témoins. `tsc` 0.
+  Ces chiffres ont été relevés par l'agent et par la QA, et j'ai moi-même relancé les 4 suites touchées (25/25).
+- **QA** : favorable avec réserves. Le disjoncteur n'est pas touché (20 expirations,
+  `cbConsecutiveErrors === 0`) et aucun texte de sous-titre n'est journalisé.
+
+### Limites connues
+
+- Un identifiant `call-<callId>-<startMs>` est pris pour un `Message.id` par
+  `MessageTranslationService`. Chaque traduction réussie fait une lecture Mongo perdue et un warn.
+  Chaque expiration (désormais à 10 s) laisse un `logger.error`, incrémente le compteur d'erreurs
+  des messages et émet un `translation:failed` vers une salle vide. → #16625.
+
+### Cycle suivant : par où reprendre
+
+1. #16625 : petit lot passerelle, à fort ratio. Vérifier d'abord comment le traducteur Python
+   traite le `messageId` avant de choisir entre un espace de noms et un filtre côté passerelle.
+2. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613 (l'original d'abord, puis la traduction dans la même ligne).
+3. Piste 3 du cycle 3 (N requêtes ZMQ par segment au lieu d'une requête multi-langues) : mesurer
+   d'abord côté traducteur.
+
+## Cycle 5 — 2026-11-07
+
+- **Base** : `origin/dev` @ `d305c36fd` (le cycle 4, #16627, y est fusionné).
+- **Branche** : `claude/determined-volta-7rerrp`.
+- **Objectif** : #16625, sous #3722 (piste 1 du cycle 4).
+- **Constat** : le relais nommait ses demandes `call-<callId>-<startMs>`, un identifiant sans
+  espace de noms. Le pipeline des messages le prenait donc pour un `Message.id` :
+  - à chaque sous-titre traduit, et pour chaque langue : `message.findUnique`, sauvegarde, stats
+    et `translationReady`, plus une relecture dans `deliverTextTranslation` ;
+  - à chaque délai (10 s depuis #16622) : `logger.error`, `stats.errors` incrémenté et un
+    `translationFailed` vers une conversation qui n'existe pas.
+- **Livré** :
+  - nouvel espace de noms `call-caption` dans `TRANSLATION_TARGET_NAMESPACES` ;
+  - le relais construit `call-caption:<callId>:<startMs>` par `translationTargetId` ;
+  - les gardes `isMessageTranslationTarget`, qui existaient déjà, écartent désormais les sous-titres
+    sans code supplémentaire ;
+  - le délai sans renvoi de `ZmqTranslationClient` garde le niveau `error`, avec un libellé neutre
+    (« retry disabled by caller »). La QA a refusé le passage en `warn` : ce délai sert aussi de
+    chien de garde de 15 min aux pipelines vocaux, qui doivent rester visibles en `error`.
+- **Le traducteur Python renvoie le `messageId` tel quel** : `zmq_translation_handler.py:363`
+  puis `:419`, et `zmq_pool/translation_processor.py:278` / `:428`. Aucun client ne voit
+  l'identifiant (`buildTranslatedSegment` ne le porte pas).
+- **Tests** : `call-caption-translation-target.test.ts`, 3 témoins, qui passent par le vrai relais,
+  le vrai `MessageTranslationService` et le vrai `deliverTextTranslation`.
+  - **Rouge sur le code d'avant** : 3 sur 3 tombent. On voyait `message.findUnique` ×3,
+    `message.update`, `message.findFirst`, et un `translationFailed` vers la conversation.
+  - **Suites** : 198 suites, 2 711 témoins. `tsc` 0. J'ai moi-même relancé le témoin : 3/3.
+
+### Limites connues
+
+- Pendant un déploiement, une traduction demandée sous l'ancien format et revenue après le
+  redémarrage prend une dernière fois l'ancien chemin. L'effet se limite à un warn et une lecture
+  perdue, et l'écouteur scopé a de toute façon disparu au redémarrage.
+
+- La QA a relevé un défaut antérieur au lot : le traducteur met en cache Redis le texte traduit
+  des sous-titres, avec le TTL des traductions de messages (`redis_service.py:578`). → #16648.
+
+### Cycle suivant : par où reprendre
+
+1. #16648 : exclure les sous-titres d'appel du cache Redis du traducteur. C'est un lot Python
+   à faible risque, lié à la vie privée.
+2. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613.
+3. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
+   traducteur (`translateToMultipleLanguages`, lot de `translation_processor.py:278`).
+
+## Cycle 6 — 2026-11-07
+
+- **Base** : `origin/dev` @ `eb3dda579` (le cycle 5, #16625, y est fusionné).
+- **Branche** : `claude/determined-volta-26ijeh`.
+- **Objectif** : #16648 (piste 1 du cycle 5). Un sous-titre d'appel ne doit être ni lu ni rangé dans
+  le cache Redis de traduction du traducteur.
+- **Constat** : le processeur ZMQ lisait et écrivait le cache du texte entier pour toute tâche
+  au régime ordinaire. `set_translation` rangeait la traduction indexée sous
+  `call-caption:<callId>:<startMs>`, au TTL des messages. Le cache par segment du service ML
+  était aussi LU (il n'écrivait rien, faute d'ObjectId dans le contexte).
+- **Livré** (traducteur seul, la passerelle et le protocole ZMQ ne changent pas) :
+  - `task_privacy.is_live_call_caption(message_id)`, prédicat source unique, reconnaît `call-caption:`
+    et l'ancien `call-` (transition) ;
+  - `message_scope` pose `_LIVE_CAPTION`, et `cache_allowed()` est faux sous une tâche de sous-titre.
+    Toute porte de cache qui le consulte se tait donc ;
+  - le processeur (`_cache_forbidden`) coupe le cache du texte entier et transmet `use_cache=False`
+    au service ML, chemin simple et repli du batch ;
+  - défense en profondeur : `set_translation` refuse un identifiant de sous-titre nommé explicitement.
+- **Tests** : `tests/test_call_caption_never_cached.py`, 9 témoins (dont 1 ajouté par la QA pour le
+  batch). Ils passent par le vrai `process_single_translation` et le vrai `TranslationCacheService`.
+  - **Rouge sur le code d'avant** : 6 sur 8 tombent (les 2 qui passent sont les témoins des
+    messages de conversation). Le témoin batch : 1 sur 1.
+  - **Vert** : 9/9. Suites voisines (22 fichiers) : 497 passés, 6 sautés. La suite complète a les
+    mêmes échecs avant et après, tous dus à des dépendances ML absentes du conteneur (torch,
+    langdetect, fastapi). J'ai moi-même relancé le témoin : 8/8, avant l'ajout de la QA.
+- **QA** : favorable avec réserves. L'isolation contextvars a été vérifiée en concurrence asyncio et
+  après une exception. Aucun autre espace de noms n'est exclu (un ObjectId ne peut pas commencer
+  par `call`).
+- **Environnement** : le pytest du conteneur n'a pas pytest-asyncio. Il faut un venv avec pytest,
+  pytest-asyncio, redis, pydantic, pyzmq, psutil, prometheus_client et numpy, lancé par
+  `python -m pytest <fichiers> -q -p no:cacheprovider -o addopts=""`.
+
+### Limites connues
+
+- Le préfixe `call-` est large, et il doit tomber à zéro usage mesuré de l'ancien format. → #16681.
+- `shown()` ne tait pas encore le texte d'un sous-titre déclaré `atRest: false`. Aucun site ne le
+  journalise aujourd'hui, mais la garde n'est que circonstancielle. → #16682.
+
+### Cycle suivant : par où reprendre
+
+1. #16682 : petit lot Python de vie privée, il s'appuie sur le drapeau posé par ce cycle.
+2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
+   traducteur (`translation_processor.py`, chemin batch).
+3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613.
+
+## Cycle 7 — 2026-11-07
+
+- **Base** : `origin/dev` @ `f7dd924df` (le cycle 6, #16648, y est fusionné).
+- **Branche** : `claude/determined-volta-5q1g5o`.
+- **Objectif** : #16682 (piste 1 du cycle 6). Le traducteur ne doit jamais journaliser le texte d'un
+  sous-titre d'appel, même quand la tâche est déclarée au régime ordinaire (`atRest: false`).
+- **Livré** (traducteur seul : ni la passerelle ni le protocole ZMQ ne changent) :
+  - `task_privacy.text_may_be_logged()` vaut faux sous une tâche au repos, sous un régime non
+    déclaré et sous un sous-titre d'appel (`_LIVE_CAPTION`, posé depuis #16648). `shown()` s'en sert.
+    `in_at_rest_task()` et `cache_allowed()` ne changent pas ;
+  - fuite trouvée pendant la relecture des journaux : quand le pipeline NLLB rendait une forme
+    inattendue, `translator_engine.py` écrivait la sortie brute (la traduction) dans un
+    `logger.error` et dans le message de l'exception. Ce message était ensuite rejournalisé par
+    `translation_processor.py` via `{e}`. Les trois sites passent maintenant par `shown()`.
+- **Tests** : `tests/test_call_caption_never_logged.py`, 12 témoins.
+  - **Rouge sur le code d'avant** : 7 sur 12 tombent. Les 5 autres sont les témoins de
+    non-régression : message ordinaire, au repos, régime non déclaré.
+  - **Vert** : 12/12. J'ai moi-même relancé ce fichier avec `test_call_caption_never_cached` :
+    21/21. Suites voisines (24 fichiers) : 323 passés, 9 sautés, 4 échecs. Ces 4 échecs sont les
+    mêmes sur `origin/dev` : des tests de détection de langue (`test_21`, `test_detect_language`),
+    sans lien avec le lot.
+- **QA** : favorable avec réserves. Elle a relu tous les journaux et toutes les exceptions du chemin
+  handler ZMQ → `zmq_pool` → `translation_ml` : le texte n'y apparaît que par sa longueur.
+
+### Limites connues
+
+- Le moteur NLLB lance ses threads sans recopier le contexte. Le diagnostic « sortie inattendue » y
+  tait donc aussi le texte d'un message ordinaire, et les témoins du moteur ne prouvent pas la règle
+  propre aux sous-titres. Il reste aussi un risque théorique sur les `{e}` du pipeline Hugging Face.
+  → #16701.
+
+### Cycle suivant : par où reprendre
+
+1. #16701 : petit lot Python. Recopier le contexte dans les trois `run_in_executor` du moteur, puis
+   écrire un témoin pour le cas ordinaire et un pour le sous-titre.
+2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
+   traducteur (`translation_processor.py`, chemin batch).
+3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613.
+
+## Cycle 8 — 2026-11-07
+
+- **Base** : `origin/dev` @ `598fd0e3c` (le cycle 7, #16682, y est fusionné).
+- **Branche** : `claude/determined-volta-d2e6zi`.
+- **Objectif** : #16701 (piste 1 du cycle 7). Les threads d'inférence NLLB doivent connaître le régime
+  de la tâche qu'ils servent.
+- **Livré** (seul le traducteur change : ni la passerelle ni le protocole ZMQ ne bougent) :
+  - les trois `run_in_executor` de `translator_engine.py` passent par `_in_inference_thread`. Cette
+    méthode s'appuie sur `run_in_thread_with_context` (premier site de `src` à l'utiliser). Le
+    thread reçoit donc `_AT_REST` et `_LIVE_CAPTION`. Le diagnostic « sortie NLLB inattendue »
+    garde le texte d'un message ordinaire et tait celui d'un sous-titre ;
+  - les `{e}` du pipeline Hugging Face (`translate_sync`, `_infer_batch_sync`) passent par
+    `shown(str(e))`, dans le journal comme dans le message de `TranslationInferenceError`. Une
+    exception qui citait l'entrée faisait fuir le texte d'un sous-titre : le rouge l'a montré.
+- **Tests** : `tests/test_translator_engine_task_regime.py`, 23 témoins sur trois chemins
+  (`translate_sync`, lot via `translate_text`, lot via `translate_batch`). La QA y a ajouté deux
+  témoins de concurrence : deux tâches de régimes différents sur le même pool, et un thread réutilisé.
+  - **Rouge sur le code d'avant** : 9 sur 21 tombent. 3 viennent du contexte absent, 6 des `{e}`
+    bruts. Les deux témoins de concurrence tombent aussi.
+  - **Vert** : 23/23. Lancés avec les deux fichiers des cycles 6 et 7, j'obtiens 42/42 avant l'ajout
+    de la QA. Fichiers qui importent le moteur : 208 passés, 9 sautés, 4 échecs. Ces 4 échecs sont les
+    mêmes sur `origin/dev` : de la détection de langue (`langdetect` absent du venv).
+- **QA** : favorable avec réserves → #16715 et #16716.
+
+### Limites connues
+
+- `__cause__` garde l'exception brute du pipeline. Aucun appelant ne l'imprime aujourd'hui, mais un
+  futur `exc_info` la ferait fuir. → #16715.
+- Le lot ZMQ (`translation_processor.py:232`) tourne hors régime déclaré. C'est fail-closed, mais
+  le diagnostic d'un lot ordinaire reste tu. → #16716.
+
+### Cycle suivant : par où reprendre
+
+1. #16715 : petit lot Python de vie privée, dans la suite directe de celui-ci.
+2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
+   traducteur (`translation_processor.py`, chemin batch). #16716 touche le même site : les grouper.
+3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613.

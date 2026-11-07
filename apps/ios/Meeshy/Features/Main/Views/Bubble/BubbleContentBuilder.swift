@@ -327,15 +327,19 @@ extension BubbleContent {
         // --- Reactions ---
         self.reactions = Self.summarizeReactions(message.reactions, currentUserId: currentUserId)
 
-        // --- Meta ---
+        self.meta = Self.resolveMeta(message: message, timeString: resolvedTimeString, recipientCount: recipientCount)
+    }
+
+    /// L'heure et l'accusé de la bulle, et l'instant de départ de MON envoi.
+    static func resolveMeta(message: MeeshyMessage, timeString: String, recipientCount: Int) -> Meta {
         // The footer checkmark must EXACTLY represent the real state of every
         // other interlocutor. `message.deliveryStatus` is promoted to
         // delivered/read as soon as a SINGLE recipient does so — correct for a
         // 1:1 but misleading in a group. Re-resolve with the recipient count so
         // ✓✓ (delivered) / indigo ✓✓ (read) only light up once ALL recipients
         // have received / read. `recipientCount <= 1` trusts the stored status.
-        self.meta = Meta(
-            timeString: resolvedTimeString,
+        return Meta(
+            timeString: timeString,
             deliveryStatus: message.isMe
                 ? DeliveryStatusResolver.resolve(
                     status: message.deliveryStatus,
@@ -351,7 +355,8 @@ extension BubbleContent {
                     // stocké, qui doit rester vrai quelle que soit la préférence.
                     // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
                     showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts)
-                : nil
+                : nil,
+            sendStartedAt: message.isMe ? message.createdAt : nil
         )
     }
 

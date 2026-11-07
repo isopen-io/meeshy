@@ -39,6 +39,7 @@ export const relationsExportSchema = {
         type: 'object',
         properties: {
           userId: { type: 'string' },
+          listeningCategoryShared: { type: 'boolean' },
           listeningTitleShared: { type: 'boolean' },
           locationShared: { type: 'boolean' },
           locationHistoryShared: { type: 'boolean' },
@@ -47,6 +48,7 @@ export const relationsExportSchema = {
           withdrawnAt: {
             type: 'object',
             properties: {
+              listeningCategoryShared: { type: 'string', nullable: true },
               listeningTitleShared: { type: 'string', nullable: true },
               locationShared: { type: 'string', nullable: true },
               locationHistoryShared: { type: 'string', nullable: true },

@@ -303,12 +303,34 @@ struct FloatingCallPillView: View {
 
     // MARK: - Control Buttons
 
-    private var controlButtons: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            muteButton
-            speakerButton
-            hangupButton
+    @ViewBuilder private var controlButtons: some View {
+        if callManager.screenShare.isSharing {
+            stopShareButton
+        } else {
+            HStack(spacing: MeeshySpacing.sm) {
+                muteButton
+                speakerButton
+                hangupButton
+            }
         }
+    }
+
+    /// #16664 — je partage mon écran : la capsule offre l'écran et « Arrêter ».
+    private var stopShareButton: some View {
+        Button {
+            callManager.screenShare.stopSharing()
+            HapticFeedback.light()
+        } label: {
+            Label(CallScreenShareCopy.stopCaption, systemImage: "rectangle.on.rectangle.slash")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
+                .padding(.horizontal, MeeshySpacing.md)
+                .frame(minHeight: 44)
+                .background(Capsule().fill(MeeshyColors.error))
+        }
+        .pressable()
+        .accessibilityLabel(CallScreenShareCopy.label(isSharing: true))
     }
 
     private var muteButton: some View {

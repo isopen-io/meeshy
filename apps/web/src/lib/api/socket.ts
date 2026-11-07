@@ -38,6 +38,7 @@ import { applyConversationGone, conversationGoneOf } from './realtime-conversati
 import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import {
+  applyMediaAltTranslation,
   applyMediaCaptionTranslation,
   applyPostCreated,
   applyPostDeleted,
@@ -813,9 +814,15 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * charge porte pourtant `postId` depuis sa naissance — c'est la garde locale
    * qui ne le lisait pas.
    *
+   * **Et `media:alt-translation-updated` depuis #7392** — le TROISIÈME contenu
+   * d'un média, qui n'avait AUCUN auditeur sur aucun client alors que la
+   * passerelle le diffuse depuis #6737. C'est la chaîne qu'un lecteur d'écran
+   * PRONONCE : la laisser muette revenait à faire élire une traduction par le
+   * pipeline, la ranger, la pousser sur le fil — et n'en rien afficher.
+   *
    * Les lois vivent dans `feed-realtime.ts` (validation, fusion par langue,
    * registre des caisses) ; ces écouteurs ne tiennent que le branchement
-   * (D-98). Deux contenus, deux cartes de traduction, jamais mélangées.
+   * (D-98). TROIS contenus, trois cartes de traduction, jamais mélangées.
    */
   const onPostTranslationUpdated = (payload: unknown): void => {
     applyPostTranslation(deps.queryClient, payload);
@@ -823,6 +830,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
 
   const onMediaCaptionTranslationUpdated = (payload: unknown): void => {
     applyMediaCaptionTranslation(deps.queryClient, payload);
+  };
+
+  const onMediaAltTranslationUpdated = (payload: unknown): void => {
+    applyMediaAltTranslation(deps.queryClient, payload);
   };
 
   /**
@@ -1078,6 +1089,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
+  socket.on<unknown>(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, onMediaAltTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);
@@ -1177,6 +1189,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
+      socket.off<unknown>(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, onMediaAltTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);

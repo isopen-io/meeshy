@@ -2157,6 +2157,10 @@ model RelationFeatureSetting {
   id                    String   @id @default(auto()) @map("_id") @db.ObjectId
   ownerId               String   @db.ObjectId
   otherId               String   @db.ObjectId
+  /// Consentement de `ownerId` à partager la CATÉGORIE de son écoute à `otherId` (#13934,
+  /// #16686) : consentement RGPD de l'émetteur, refusé par défaut (#14407). Optionnel, sans
+  /// migration : absent ou nul = refusé. Accordé dès Proche par `PUT /relations/:userId/settings`.
+  listeningCategoryShared Boolean?
   listeningTitleShared  Boolean  @default(false)
   locationShared        Boolean  @default(false)
   locationHistoryShared Boolean  @default(false)
@@ -2164,6 +2168,7 @@ model RelationFeatureSetting {
   /// Quand chaque partage a été RETIRÉ par `PUT /relations/:userId/settings` (#14401,
   /// audit #14535 constat 3) : la trace de ce qui avait été consenti survit au retrait.
   /// Optionnels, sans migration ; la preuve versionnée complète est #14402.
+  listeningCategoryWithdrawnAt DateTime?
   listeningTitleWithdrawnAt  DateTime?
   locationWithdrawnAt        DateTime?
   locationHistoryWithdrawnAt DateTime?

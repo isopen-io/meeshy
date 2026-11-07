@@ -21,9 +21,7 @@ extension CallManager: CallScreenShareHosting {
         webRTCService
     }
 
-    /// Même chemin que la bascule audio → vidéo (§5.4) : l'émetteur vidéo a
-    /// changé de direction, le pair doit recevoir une offre pour commencer
-    /// (ou cesser) de recevoir la piste.
+    /// Même chemin que la bascule audio → vidéo (§5.4) : le pair reçoit une offre.
     func screenShareNeedsRenegotiation() async {
         guard let callId = currentCallId,
               let userId = remoteUserId,
@@ -33,6 +31,8 @@ extension CallManager: CallScreenShareHosting {
         MeeshyLog.logger(.screenShare)
             .info("screen share renegotiation offer sent (callId=\(callId))")
     }
+
+    func screenShareDidStart() { displayMode = .pip }
 
     func makeScreenShareController() -> CallScreenShareController {
         let controller = CallScreenShareController()

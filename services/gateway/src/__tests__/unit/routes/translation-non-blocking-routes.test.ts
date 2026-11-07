@@ -13,6 +13,14 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
+
+// #16557 — la loi de lecture est prouvée sur une base en mémoire par
+// `translation-read-law.test.ts` ; ce fichier juge autre chose et la tient pour
+// acquise, sauf là où il la refuse explicitement.
+const mockReaderMayTranslate = jest.fn<any>().mockResolvedValue(true);
+jest.mock('../../../services/messaging/translationReadGate', () => ({
+  readerMayTranslateMessage: (...args: unknown[]) => mockReaderMayTranslate(...args),
+}));
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -288,6 +296,7 @@ describe('cloisonnement des conversations', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('refuse la retraduction d\'un message d\'une conversation étrangère', async () => {
+    mockReaderMayTranslate.mockResolvedValueOnce(false);
     const app = await buildApp({ participantFindFirst: null });
     const res = await app.inject({
       method: 'POST',
@@ -295,7 +304,7 @@ describe('cloisonnement des conversations', () => {
       headers: { ...AUTH, 'content-type': 'application/json' },
       body: JSON.stringify({ message_id: MSG_ID, target_language: 'fr' }),
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     expect(mockHandleNewMessage).not.toHaveBeenCalled();
     await app.close();
   });

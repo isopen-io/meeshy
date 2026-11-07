@@ -1,3 +1,4 @@
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import {
@@ -228,7 +229,7 @@ export async function enqueueForOfflineParticipants(
     // sa projection à deux colonnes.
     const participants: OfflineQueueParticipant[] = restrictToLanguage
       ? await prisma.participant.findMany({
-          where: { conversationId, isActive: true },
+          where: { conversationId, ...PARTICIPATION_VIVANTE },
           select: {
             id: true,
             userId: true,
@@ -245,7 +246,7 @@ export async function enqueueForOfflineParticipants(
         })
       : params.participants ??
         (await prisma.participant.findMany({
-          where: { conversationId, isActive: true },
+          where: { conversationId, ...PARTICIPATION_VIVANTE },
           select: { id: true, userId: true },
         }));
     for (const p of participants) {

@@ -130,6 +130,7 @@ internal fun ProfileActionsSection(
                         onLower = callbacks.onLower,
                         allowPromote = group.actions.isEmpty(),
                     )
+                    ProfileBringRow(userId = circle.link.userId, displayName = displayName)
                 } else if (group.showsConnected) {
                     ConnectedPill()
                 }

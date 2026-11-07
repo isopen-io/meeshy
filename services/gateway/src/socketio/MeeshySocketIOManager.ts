@@ -31,7 +31,7 @@ import { StatusHandler } from './handlers/StatusHandler';
 import { ConversationViewingHandler } from './handlers/ConversationViewingHandler';
 import { captureNoticeDelivery, listenContentCapture } from './handlers/ContentCaptureHandler';
 import { e2eeSignalHandlerDeps, listenE2EESignals } from './handlers/E2EESignalHandler';
-import { listenTalkie, talkieHandlerDeps } from './handlers/TalkieHandler';
+import { listenCircleLive } from './handlers/circleLiveHandlers';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
 import { AttachmentReactionService } from '../services/AttachmentReactionService';
@@ -116,13 +116,16 @@ import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
 import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
+import { dropQueuedEntriesWhoseMessageDied } from './queuedMessageLiveness';
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
 import { wireCallMessageBroadcasters } from './callMessageBroadcasters';
 import { attachSocketIORedisAdapter, type SocketIORedisAdapterHandle } from './redis-adapter';
 import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
 import { loadTranslatableMessage } from '../services/messaging/atRestTranslationSource';
-import { loadHistoryFloor, HISTORY_FLOOR_PARTICIPANT_SELECT } from '../services/historyFloor';
+import { historyReaderFromAuthContext } from '../services/historyFloor';
+import { readerMayTranslateMessage } from '../services/messaging/translationReadGate';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -800,7 +803,47 @@ export class MeeshySocketIOManager {
       // accusé de réception). Un accusé affirme « ce message est arrivé chez son
       // destinataire » — l'affirmer d'un message qu'on vient de refuser de livrer
       // mentirait à son auteur.
-      const pending = await this._dropEndedMemberships(userId, isAnonymous, addressable);
+      const authorized = await this._dropEndedMemberships(userId, isAnonymous, addressable);
+      if (authorized.length === 0) return;
+
+      // QUATRIÈME refus, et il vient APRÈS l'autorisation pour deux raisons qui
+      // vont dans le même sens : l'autorisation précède le contenu, et le gate
+      // d'appartenance a déjà retiré des entrées — celles-ci ne coûtent donc
+      // aucun id dans la question de celui-ci.
+      //
+      // Les trois refus au-dessus interrogent ce que l'ENTRÉE dit. Celui-ci
+      // interroge le MONDE : une charge bien formée, nommée, adressable et
+      // autorisée peut porter le texte d'un message que le serveur a DÉTRUIT
+      // entre l'enfilage et le drain — jusqu'à 48 h plus tard
+      // (`DELIVERY_QUEUE_TTL_SECONDS`). `_burn` revendique l'invariant « le
+      // contenu est détruit » ; il ne tenait pas sur ce chemin, qui remet le
+      // message ENTIER là où `NotificationService` ne remettait qu'une
+      // bannière — et qui portait pourtant, lui, la garde depuis le cycle 127.
+      //
+      // Le refus est DÉLIBÉRÉ, pas un accident : il ne passe donc pas par
+      // `dropEntry`, qui journalise en ERROR une perte à rattraper et nomme sa
+      // conversation dans `pending-messages:delivered` pour y envoyer le client
+      // relire. Ici il n'y a RIEN à relire — le serveur a détruit le contenu, et
+      // le client n'en a jamais rien reçu : la convergence est déjà atteinte.
+      // C'est la forme du gate d'appartenance, pas celle d'un échec d'émission.
+      const { kept: pending, refused } = await dropQueuedEntriesWhoseMessageDied({
+        prisma: this.prisma,
+        entries: authorized,
+        onReadFailure: (error) =>
+          logger.warn('Message liveness re-read failed on drain — replaying the backlog unfiltered', {
+            userId,
+            error,
+          }),
+      });
+      for (const { entry, cause } of refused) {
+        logger.info('Dropped a queued entry whose message no longer exists', {
+          userId,
+          cause,
+          conversationId: entry.conversationId,
+          messageId: entry.messageId,
+          eventType: entry.eventType ?? 'new',
+        });
+      }
       if (pending.length === 0) return;
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
@@ -1023,7 +1066,7 @@ export class MeeshySocketIOManager {
     // a sender who left the conversation view (socket dropped `conversation:<id>`
     // but stays in `user:<id>`) must still see their checkmark advance.
     const participantRows = await this.prisma.participant.findMany({
-      where: { conversationId: { in: [...convLatest.keys()] }, isActive: true },
+      where: { conversationId: { in: [...convLatest.keys()] }, ...PARTICIPATION_VIVANTE },
       select: { id: true, userId: true, conversationId: true },
     });
 
@@ -1330,6 +1373,25 @@ export class MeeshySocketIOManager {
       conversationId,
       userId
     });
+  }
+
+  /**
+   * Éteint « ici » pour un membre qui vient de perdre l'appartenance au fil
+   * (#16654).
+   *
+   * Unique appelant : `endConversationMembership`, le point de convergence des
+   * chemins de fin d'appartenance — c'est là qu'est écrit POURQUOI l'extinction
+   * précède l'éviction des rooms. Le raisonnement propre au regard (un registre
+   * en mémoire dont la surface était clavetée par socket, donc inatteignable
+   * depuis une route) vit dans
+   * `ConversationViewingHandler.retractViewingForDepartedMember` ; le
+   * gestionnaire n'en est que le porteur, comme pour la position vive et
+   * l'appel.
+   *
+   * Ne rejette jamais : le handler absorbe ses propres échecs.
+   */
+  public async retractViewingForDepartedMember(conversationId: string, userId: string): Promise<void> {
+    await this.conversationViewingHandler?.retractViewingForDepartedMember(conversationId, userId);
   }
 
   /**
@@ -1866,8 +1928,8 @@ export class MeeshySocketIOManager {
       listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, deliver: captureNoticeDelivery({ io: this.io, prisma: this.prisma, readStatusService: this.readStatusService, bridgeService: this.bridgeService }) });
       // #13142 — la porte unique des signaux chiffrés d'une conversation e2ee.
       listenE2EESignals(socket, e2eeSignalHandlerDeps({ prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers }));
-      // #13935 — le talkie : chaque fragment repart vers le destinataire à l'instant où il arrive.
-      listenTalkie(socket, talkieHandlerDeps({ prisma: this.prisma, io: this.io, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers }));
+      // #13935, #13934 — le talkie et l'écoute partagée, tronquée lecteur par lecteur.
+      listenCircleLive(socket, { prisma: this.prisma, io: this.io, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers });
 
       this.callEventsHandler.setupCallEvents(
         socket,
@@ -2117,12 +2179,23 @@ export class MeeshySocketIOManager {
       }
 
 
-      // Charger le message pour connaître sa conversation, PUIS vérifier
-      // l'appartenance AVANT de servir toute traduction (cache OU on-demand).
-      // Sans cette garde en amont, la branche cache divulguait le contenu
-      // traduit à un non-participant : le contrôle n'existait que côté on-demand,
-      // donc un message déjà mis en cache fuitait vers n'importe quel socket
-      // connaissant son id (IDOR / message-content disclosure).
+      // #16557 — la loi de lecture, AVANT toute traduction, en cache comme à la
+      // demande. Un refus ne dit ni que le message existe, ni qu'il est rappelé :
+      // inconnu, rappelé et « pas pour toi » rendent le même `Access denied`.
+      const connectedUser = this.connectedUsers.get(userId);
+      const mayTranslate = await readerMayTranslateMessage(this.prisma, {
+        reader: historyReaderFromAuthContext({
+          isAnonymous: connectedUser?.isAnonymous,
+          userId: connectedUser?.isAnonymous ? connectedUser.participantId : userId,
+        }),
+        messageId,
+        now: new Date(),
+      });
+      if (!mayTranslate) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
+        return;
+      }
+
       // #11381 — le texte d'un message `server`/`hybrid` est ouvert par la passerelle ; scellé, il reste vide.
       const message = await loadTranslatableMessage(this.prisma, messageId);
 
@@ -2133,57 +2206,6 @@ export class MeeshySocketIOManager {
         return;
       }
 
-      // Verify requesting user is a participant of the message's conversation
-      const connectedUser = this.connectedUsers.get(userId);
-      // #16552 — le `select` porte en plus les colonnes du PLANCHER
-      // D'HISTORIQUE. La garde ne coûte donc aucune requête de plus : elle
-      // s'ajoute à une lecture que ce site faisait déjà (doctrine du cycle 127 —
-      // « avant de conclure qu'une garde coûterait une requête, regarder ce que
-      // le site lit déjà »).
-      const membershipCheck = connectedUser?.isAnonymous
-        ? await this.prisma.participant.findFirst({
-            where: { id: connectedUser.participantId, conversationId: message.conversationId, isActive: true },
-            select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
-          })
-        : await this.prisma.participant.findFirst({
-            where: { userId, conversationId: message.conversationId, isActive: true },
-            select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
-          });
-
-      if (!membershipCheck) {
-        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
-        return;
-      }
-
-      // #16552 — ce que le JUMEAU POUSSÉ du même événement garde déjà.
-      // `deliverTextTranslation` → `translationReaders` exclut, fail-closed, le
-      // lecteur entré après le message ; le chemin DEMANDÉ ne gardait que
-      // l'appartenance ACTIVE. Le même `message:translation` était donc retenu
-      // quand le serveur le POUSSE et remis quand le client le DEMANDE — et
-      // l'id d'un message ancien est à portée de tout client, `replyToId`
-      // voyageant au premier niveau de `message:new`.
-      //
-      // FAIL-CLOSED comme son jumeau : un plancher illisible refuse. Ici c'est
-      // un refus de LECTURE, pas une livraison perdue — se taire ne coûte
-      // qu'une traduction non servie, la servir à tort coûte le message.
-      // Un plancher ILLISIBLE et un plancher `null` sont deux choses : `null` est
-      // une RÉPONSE (« ce lecteur lit tout l'historique »), l'illisibilité est
-      // une ignorance. Les confondre ferait d'une panne de base une
-      // autorisation, d'où le couple explicite plutôt qu'une valeur sentinelle.
-      const floor = await loadHistoryFloor(this.prisma, membershipCheck)
-        .then((value) => ({ readable: true, value }))
-        .catch((error: unknown) => {
-          logger.warn('history floor unreadable — translation request refused', {
-            conversationId: message.conversationId,
-            error,
-          });
-          return { readable: false, value: null };
-        });
-
-      if (!floor.readable || (floor.value !== null && message.createdAt < floor.value)) {
-        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
-        return;
-      }
       const creditRequest = () => creditTranslationRequest({
         engagement: this.translationRequestEngagement,
         requester: { userId, isAnonymous: connectedUser?.isAnonymous ?? false },

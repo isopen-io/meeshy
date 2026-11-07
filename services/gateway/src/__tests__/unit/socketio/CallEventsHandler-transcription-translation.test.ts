@@ -73,7 +73,7 @@ import type { ZmqTranslationClient } from '../../../services/zmq-translation';
 const VALID_CALL_ID = '507f1f77bcf86cd799439011';
 const SPEAKER_ID = 'user-speaker-abc';
 const LISTENER_ID = 'user-listener-def';
-const MESSAGE_ID = `call-${VALID_CALL_ID}-0`;
+const MESSAGE_ID = `call-caption:${VALID_CALL_ID}:0`;
 
 const VALID_SEGMENT = {
   callId: VALID_CALL_ID,
@@ -471,7 +471,9 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
       VALID_SEGMENT.segment.language,
       'es',
       MESSAGE_ID,
-      VALID_CALL_ID
+      VALID_CALL_ID,
+      'basic',
+      { timeoutMs: 10_000, retryEnabled: false }
     );
     expect(zmqClient.translateText).not.toHaveBeenCalledWith(
       expect.anything(),

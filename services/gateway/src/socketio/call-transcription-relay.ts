@@ -39,7 +39,10 @@ import type {
   CallTranslatedSegmentEvent,
 } from '@meeshy/shared/types/video-call';
 import { guardedTimeout } from '../utils/guarded-timer';
+import { translationTargetId } from '../services/zmq-translation/utils/zmq-helpers';
 import { processCallCaptionMetrics, type CallCaptionMetrics } from '../services/metrics/callCaptionMetrics';
+
+export const CALL_CAPTION_TRANSLATION_TIMEOUT_MS = 10_000;
 
 /**
  * Ce que le relais emprunte à l'instance.
@@ -307,7 +310,7 @@ export async function translateAndEmitSegment(
   // anywhere (chat messages, stories, other calls) re-ran every pending
   // call's taskId filter. Listener count is now bounded by this call's
   // active target languages instead of process-wide traffic.
-  const messageId = `call-${data.callId}-${data.segment.startMs}`;
+  const messageId = translationTargetId('call-caption', `${data.callId}:${data.segment.startMs}`);
   const scopedEvent = `translationCompleted:${messageId}`;
 
   await Promise.allSettled(
@@ -320,14 +323,15 @@ export async function translateAndEmitSegment(
           segmentLanguage,
           targetLanguage,
           messageId,
-          data.callId
+          data.callId,
+          'basic',
+          { timeoutMs: CALL_CAPTION_TRANSLATION_TIMEOUT_MS, retryEnabled: false }
         );
 
         logger.debug('Call transcription segment translation requested', { callId: data.callId, taskId, targetLanguage });
 
         return new Promise<void>((resolve) => {
-          const TIMEOUT_MS = 10_000;
-          const timer = guardedTimeout({ name: 'call-transcription-segment-timeout', afterMs: TIMEOUT_MS, logger, run: () => {
+          const timer = guardedTimeout({ name: 'call-transcription-segment-timeout', afterMs: CALL_CAPTION_TRANSLATION_TIMEOUT_MS, logger, run: () => {
             zmqClient.off(scopedEvent, onResult);
             timing.finish('timeout');
             resolve();

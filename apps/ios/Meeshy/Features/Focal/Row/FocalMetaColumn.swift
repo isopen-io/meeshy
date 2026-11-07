@@ -88,6 +88,9 @@ struct FocalMetaColumn: View, Equatable {
     /// Toucher les COCHES ouvre les détails de lecture. Relayé tel quel à
     /// `FocalMetaRow`, qui porte l'affordance depuis la directive 2026-08-23.
     var onShowReadStatus: (() -> Void)? = nil
+    /// Relayés à `FocalMetaRow` : l'envoi d'une vue unique reste visible au repos (#16130).
+    var pinsPendingDelivery: Bool = false
+    var sendStartedAt: Date? = nil
 
     /// `==` MANUEL, pour la même raison que `FocalMetaRow` : `onShowReadStatus`
     /// est une closure, donc la synthèse automatique ne s'applique plus. Elle
@@ -103,6 +106,8 @@ struct FocalMetaColumn: View, Equatable {
             && lhs.editedByModerator == rhs.editedByModerator
             && lhs.isEditSaving == rhs.isEditSaving
             && lhs.hasEditHistory == rhs.hasEditHistory
+            && lhs.pinsPendingDelivery == rhs.pinsPendingDelivery
+            && lhs.sendStartedAt == rhs.sendStartedAt
     }
 
     var body: some View {
@@ -118,7 +123,9 @@ struct FocalMetaColumn: View, Equatable {
             onShowReadStatus: onShowReadStatus,
             // La colonne ne remplit RIEN : c'est elle la largeur, et le retrait
             // de 29 pt appartient à la bulle, qui est l'autre colonne.
-            fillsWidth: false
+            fillsWidth: false,
+            pinsPendingDelivery: pinsPendingDelivery,
+            sendStartedAt: sendStartedAt
         )
         .frame(minWidth: FocalMetrics.MetaColumn.reservedWidth, alignment: .trailing)
     }

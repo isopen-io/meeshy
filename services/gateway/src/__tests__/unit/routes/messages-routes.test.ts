@@ -837,24 +837,11 @@ describe('GET /conversations/:id/messages', () => {
     expect(body.data[0].sender.lastActiveAt).toBeNull();
   });
 
-  it('forward watermark mode: after param triggers ascending request', async () => {
-    prisma.message.findMany.mockResolvedValue([]);
-    const reply = makeReply();
-    await getMessagesHandler()(makeRequest({ query: { after: '2024-01-01T00:00:00.000Z' } }), reply);
-    // findMany should be called with ascending order (afterMode)
-    const call = prisma.message.findMany.mock.calls[0][0] as any;
-    expect(call.orderBy?.createdAt).toBe('asc');
-  });
-
-  it('before cursor mode: fetches beforeMessage and applies createdAt filter', async () => {
-    const beforeDate = new Date('2024-06-01');
-    prisma.message.findFirst.mockResolvedValue({ createdAt: beforeDate });
-    prisma.message.findMany.mockResolvedValue([]);
-    const reply = makeReply();
-    await getMessagesHandler()(makeRequest({ query: { before: MSG_ID } }), reply);
-    const whereArg = (prisma.message.findMany.mock.calls[0][0] as any).where;
-    expect(whereArg.createdAt?.lt).toEqual(beforeDate);
-  });
+  // #16684 — les deux témoins d'ORDRE et de FENÊTRE de cette route ont rejoint
+  // `messages-list-total-order-cursor.test.ts`, qui PAGINE pour de vrai au lieu
+  // d'asserter la forme d'un `where`. Ce fichier porte de la dette de taille :
+  // y faire grandir deux témoins pour suivre un changement de forme était
+  // interdit, et les déplacer vaut mieux que les étendre.
 
   it('around mode: fetches messages before/after target and builds id filter', async () => {
     const aroundDate = new Date('2024-06-01');

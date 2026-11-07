@@ -17,5 +17,6 @@ public object ApiRoutesRelations {
     public const val BY_USER_ID_RITUAL: String = "relations/{userId}/ritual"
     public const val BY_USER_ID_SETTINGS: String = "relations/{userId}/settings"
     public const val CONFIG: String = "relations/config"
+    public const val NOW_PLAYING: String = "relations/now-playing"
     public const val ROOT: String = "relations"
 }
