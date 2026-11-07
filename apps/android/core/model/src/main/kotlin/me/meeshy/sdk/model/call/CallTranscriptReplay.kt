@@ -27,6 +27,8 @@ data class CallTranscriptLine(
     val original: String,
     val translated: String?,
     val translatedLanguage: String?,
+    /** Who spoke: the post-call journal keeps the speaker's colour (#16634). */
+    val speakerId: String = "",
 ) {
     /** What the row shows: the original when asked for, or when nothing was translated. */
     fun text(showOriginal: Boolean): String = if (showOriginal) original else translated ?: original
@@ -67,6 +69,7 @@ object CallTranscriptReplay {
                     original = segment.text,
                     translated = translation?.text,
                     translatedLanguage = translation?.language,
+                    speakerId = segment.speakerId,
                 )
             }
     }

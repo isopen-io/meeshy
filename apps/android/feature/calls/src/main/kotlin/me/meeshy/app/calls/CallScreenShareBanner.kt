@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,8 +34,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeElement
+import me.meeshy.sdk.model.call.screenshare.CallScreenShareLaw
 import me.meeshy.sdk.model.call.screenshare.CallScreenSharePhase
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.icons.MeeshyIcons
@@ -72,6 +75,24 @@ class CallScreenShareBannerOverlay @Inject constructor(
                 onStop = if (share.phase == CallScreenSharePhase.Sharing) controller::toggle else null,
                 modifier = Modifier.padding(top = MeeshySpacing.sm),
             )
+        }
+    }
+}
+
+/**
+ * Mon partage commence : l'appel se replie dans la pastille rouge « Arrêter » (#16664, loi 12 de
+ * `docs/product/appels-vue-finale.md`), comme iOS `screenShareDidStart` et le web `startScreen`.
+ */
+@Composable
+internal fun ScreenShareFoldsCall(onMinimize: () -> Unit) {
+    val share: CallScreenShareViewModel = hiltViewModel()
+    val minimize by rememberUpdatedState(onMinimize)
+    LaunchedEffect(share) {
+        var previous = share.state.value.phase
+        share.state.collect { next ->
+            val before = previous
+            previous = next.phase
+            if (CallScreenShareLaw.minimizesOnStart(before, next.phase)) minimize()
         }
     }
 }

@@ -62,7 +62,7 @@ jest.mock('../../../../services/achievements/CerclesAchievements', () => ({
 }));
 
 import { registerCreateConversationRoute } from '../../../../routes/conversations/core-lifecycle';
-import { sendForbidden } from '../../../../utils/response';
+import { sendForbidden, sendNotFound } from '../../../../utils/response';
 
 const CONV_ID = '507f1f77bcf86cd799439011';
 const MOI = '507f1f77bcf86cd799439022';
@@ -71,19 +71,25 @@ const COMMUNITY = '507f1f77bcf86cd799439044';
 
 type Ligne = { readonly userId: string; readonly role: string; readonly isActive: boolean };
 
-function prismaDouble(lignes: readonly Ligne[]) {
+type Communaute = { readonly isPrivate?: boolean; readonly isActive?: boolean; readonly vivants?: readonly string[] };
+
+function prismaDouble(lignes: readonly Ligne[], communaute: Communaute = {}) {
   const garde = (ligne: Ligne, where: Record<string, unknown> | undefined) =>
     !where || Object.entries(where).every(([k, v]) => (ligne as unknown as Record<string, unknown>)[k] === v);
   return {
     community: {
       findFirst: jest.fn<any>(async (args: any) => {
+        const isActive = communaute.isActive ?? true;
+        if (args?.where?.isActive === true && !isActive) return null;
         const relation = args?.include?.members ?? args?.select?.members;
         const where = typeof relation === 'object' ? relation.where : undefined;
-        return { id: COMMUNITY, createdBy: AUTRE, members: lignes.filter((l) => garde(l, where)) };
+        return { id: COMMUNITY, createdBy: AUTRE, isPrivate: communaute.isPrivate ?? false, members: lignes.filter((l) => garde(l, where)) };
       }),
     },
     communityMember: {
-      findMany: jest.fn<any>().mockResolvedValue([]),
+      findMany: jest.fn<any>(async (args: any) => lignes
+        .filter((l) => args.where.userId.in.includes(l.userId))
+        .map((l) => ({ id: `cm-${l.userId}`, ...l }))),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       createMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       create: jest.fn<any>().mockResolvedValue({}),
@@ -96,7 +102,12 @@ function prismaDouble(lignes: readonly Ligne[]) {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
-    user: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    user: {
+      findMany: jest.fn<any>(async (args: any) => (args.where?.id?.in ?? [])
+        .filter((id: string) => communaute.vivants === undefined || communaute.vivants.includes(id))
+        .map((id: string) => ({ id }))),
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+    },
   };
 }
 
@@ -110,8 +121,8 @@ function replyDouble() {
   return reply;
 }
 
-async function creerDansLaCommunaute(lignes: readonly Ligne[]) {
-  const prisma = prismaDouble(lignes);
+async function creerDansLaCommunaute(lignes: readonly Ligne[], options: Communaute & { readonly participantIds?: readonly string[] } = {}) {
+  const prisma = prismaDouble(lignes, options);
   let handler: any;
   const fastify: any = {
     post: jest.fn<any>((_path: string, _opts: any, h: any) => { handler = h; }),
@@ -125,7 +136,7 @@ async function creerDansLaCommunaute(lignes: readonly Ligne[]) {
   registerCreateConversationRoute(fastify, prisma as never, jest.fn<any>());
   await handler(
     {
-      body: { type: 'group', title: 'Salon', participantIds: [], communityId: COMMUNITY },
+      body: { type: 'group', title: 'Salon', participantIds: options.participantIds ?? [], communityId: COMMUNITY },
       params: {}, query: {}, headers: {},
       authContext: {
         type: 'user', isAuthenticated: true, isAnonymous: false,
@@ -157,5 +168,66 @@ describe('#16603 — POST /conversations dans une communauté', () => {
 
     expect(sendForbidden).not.toHaveBeenCalled();
     expect(prisma.conversation.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+const INVITE = '507f1f77bcf86cd799439055';
+
+describe('#16639 — créer une conversation n\'admet dans la communauté que ce que l\'appelant peut admettre', () => {
+  it('communauté PRIVÉE : un simple membre n\'y fait entrer personne, et rien n\'est créé', async () => {
+    const prisma = await creerDansLaCommunaute(
+      [{ userId: MOI, role: 'member', isActive: true }],
+      { isPrivate: true, participantIds: [INVITE] },
+    );
+
+    expect(sendForbidden).toHaveBeenCalledWith(expect.anything(), expect.any(String), { code: 'COMMUNITY_INVITE_FORBIDDEN' });
+    expect(prisma.conversation.create).not.toHaveBeenCalled();
+    expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
+    expect(prisma.communityMember.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('communauté PRIVÉE : un simple membre ne réintègre pas un administrateur retiré', async () => {
+    const prisma = await creerDansLaCommunaute(
+      [{ userId: MOI, role: 'member', isActive: true }, { userId: INVITE, role: 'admin', isActive: false }],
+      { isPrivate: true, participantIds: [INVITE] },
+    );
+
+    expect(sendForbidden).toHaveBeenCalledTimes(1);
+    expect(prisma.conversation.create).not.toHaveBeenCalled();
+    expect(prisma.communityMember.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('communauté DÉSACTIVÉE : 404, rien n\'est créé ni réconcilié', async () => {
+    const prisma = await creerDansLaCommunaute(
+      [{ userId: MOI, role: 'admin', isActive: true }],
+      { isActive: false, participantIds: [INVITE] },
+    );
+
+    expect(sendNotFound).toHaveBeenCalledTimes(1);
+    expect(prisma.conversation.create).not.toHaveBeenCalled();
+    expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
+  });
+
+  it('un compte non vivant ou qui bloque : 404, la conversation n\'est pas créée', async () => {
+    const prisma = await creerDansLaCommunaute(
+      [{ userId: MOI, role: 'member', isActive: true }],
+      { participantIds: [INVITE], vivants: [] },
+    );
+
+    expect(sendNotFound).toHaveBeenCalledTimes(1);
+    expect(prisma.conversation.create).not.toHaveBeenCalled();
+    expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
+  });
+
+  it('communauté PUBLIQUE : un membre y fait entrer son invité, en MEMBER — le témoin miroir', async () => {
+    const prisma = await creerDansLaCommunaute(
+      [{ userId: MOI, role: 'member', isActive: true }],
+      { participantIds: [INVITE] },
+    );
+
+    expect(prisma.conversation.create).toHaveBeenCalledTimes(1);
+    expect(prisma.communityMember.createMany).toHaveBeenCalledWith({
+      data: [{ communityId: COMMUNITY, userId: INVITE, role: 'member' }],
+    });
   });
 });

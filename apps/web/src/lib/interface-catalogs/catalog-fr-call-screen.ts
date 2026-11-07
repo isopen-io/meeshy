@@ -13,6 +13,7 @@
 const frCallScreen = {
   'call.screen.share': 'Partager l’écran',
   'call.screen.stop': 'Arrêter le partage d’écran',
+  'call.screen.stopShort': 'Arrêter',
   'call.screen.sharing': 'Vous partagez votre écran',
   'call.screen.peerSharing': '{name} partage son écran',
   'call.more': 'Plus d’actions',

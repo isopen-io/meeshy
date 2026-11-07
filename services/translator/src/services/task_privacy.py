@@ -57,6 +57,11 @@ def cache_allowed() -> bool:
     return _AT_REST.get() is False and not _LIVE_CAPTION.get()
 
 
+def text_may_be_logged() -> bool:
+    """Un journal ne dit le texte que d'une tâche ordinaire DÉCLARÉE — jamais d'un sous-titre d'appel (#16682)."""
+    return not in_at_rest_task() and not _LIVE_CAPTION.get()
+
+
 @contextmanager
 def at_rest_scope(at_rest: bool) -> Iterator[None]:
     token = _AT_REST.set(bool(at_rest))
@@ -95,11 +100,12 @@ def task_scope(at_rest: bool, message_id) -> Iterator[None]:
 def shown(text, limit=None) -> str:
     """
     Ce qu'un journal peut dire d'un texte : le texte (tronqué à `limit`) pour
-    une tâche ordinaire, sa seule longueur pour une tâche au repos. Les
-    journaux du translator sont un stockage comme un autre.
+    une tâche ordinaire, sa seule longueur pour une tâche au repos ou un
+    sous-titre d'appel. Les journaux du translator sont un stockage comme un
+    autre.
     """
     value = "" if text is None else str(text)
-    if in_at_rest_task():
+    if not text_may_be_logged():
         return f"<{len(value)} caractères tus>"
     return value if limit is None else value[:limit]
 

@@ -6,6 +6,13 @@ développement ») : en cas d'écart, l'issue a raison. Le backlog de la routine
 liste des issues `appels` du milestone #31 « Appels de groupe et appels traduits »
 et du milestone #6, pas une liste dans ce dossier.
 
+## Direction (2026-11-07, porteur via la session « appels de bout en bout »)
+
+- **La cible de la vue d'appel est écrite : [`docs/product/appels-vue-finale.md`](../../product/appels-vue-finale.md)** (#16633), avec 27 vues dessinées (portrait, paysage, duo vidéo et audio, groupe, partage, entrant, réduit, après l'appel, grand écran). Toute évolution de l'interface d'appel web se lit contre elle.
+- **Deux issues sont prises par la session « appels de bout en bout », côté web, branche `claude/calls-end-to-end-cvakev`** : #16634 (le journal pendant et après l'appel porte la couleur de chaque auteur, nom ET phrase) et #16635 (ma vignette porte ma couleur). Fichiers touchés : `apps/web/src/components/call-journal-panel.tsx`, `call-transcript-panel.tsx`, `call-grid.tsx`, `call-screen.tsx`, `lib/calls/call-speaker-color.ts`. Ne pas les reprendre en parallèle ; tirer `dev` après leur fusion.
+- Les deux « prochaines étapes » de couleur notées au cycle 3 bis (vignette de moi, journal iOS d'après l'appel) sont ces deux issues.
+- Reste à la routine : la recette staging fr↔en de « l'original puis la traduction » (#16613) et le reste du backlog `appels`.
+
 ## Cycle 1 — 2026-11-06
 
 - **Base** : `origin/dev` @ `782fca69a`.
@@ -274,6 +281,46 @@ socket jusqu'au client.
 ### Cycle suivant : par où reprendre
 
 1. #16682 : petit lot Python de vie privée, il s'appuie sur le drapeau posé par ce cycle.
+2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
+   traducteur (`translation_processor.py`, chemin batch).
+3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613.
+
+## Cycle 7 — 2026-11-07
+
+- **Base** : `origin/dev` @ `f7dd924df` (le cycle 6, #16648, y est fusionné).
+- **Branche** : `claude/determined-volta-5q1g5o`.
+- **Objectif** : #16682 (piste 1 du cycle 6). Le traducteur ne doit jamais journaliser le texte d'un
+  sous-titre d'appel, même quand la tâche est déclarée au régime ordinaire (`atRest: false`).
+- **Livré** (traducteur seul : ni la passerelle ni le protocole ZMQ ne changent) :
+  - `task_privacy.text_may_be_logged()` vaut faux sous une tâche au repos, sous un régime non
+    déclaré et sous un sous-titre d'appel (`_LIVE_CAPTION`, posé depuis #16648). `shown()` s'en sert.
+    `in_at_rest_task()` et `cache_allowed()` ne changent pas ;
+  - fuite trouvée pendant la relecture des journaux : quand le pipeline NLLB rendait une forme
+    inattendue, `translator_engine.py` écrivait la sortie brute (la traduction) dans un
+    `logger.error` et dans le message de l'exception. Ce message était ensuite rejournalisé par
+    `translation_processor.py` via `{e}`. Les trois sites passent maintenant par `shown()`.
+- **Tests** : `tests/test_call_caption_never_logged.py`, 12 témoins.
+  - **Rouge sur le code d'avant** : 7 sur 12 tombent. Les 5 autres sont les témoins de
+    non-régression : message ordinaire, au repos, régime non déclaré.
+  - **Vert** : 12/12. J'ai moi-même relancé ce fichier avec `test_call_caption_never_cached` :
+    21/21. Suites voisines (24 fichiers) : 323 passés, 9 sautés, 4 échecs. Ces 4 échecs sont les
+    mêmes sur `origin/dev` : des tests de détection de langue (`test_21`, `test_detect_language`),
+    sans lien avec le lot.
+- **QA** : favorable avec réserves. Elle a relu tous les journaux et toutes les exceptions du chemin
+  handler ZMQ → `zmq_pool` → `translation_ml` : le texte n'y apparaît que par sa longueur.
+
+### Limites connues
+
+- Le moteur NLLB lance ses threads sans recopier le contexte. Le diagnostic « sortie inattendue » y
+  tait donc aussi le texte d'un message ordinaire, et les témoins du moteur ne prouvent pas la règle
+  propre aux sous-titres. Il reste aussi un risque théorique sur les `{e}` du pipeline Hugging Face.
+  → #16701.
+
+### Cycle suivant : par où reprendre
+
+1. #16701 : petit lot Python. Recopier le contexte dans les trois `run_in_executor` du moteur, puis
+   écrire un témoin pour le cas ordinaire et un pour le sous-titre.
 2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
    traducteur (`translation_processor.py`, chemin batch).
 3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en

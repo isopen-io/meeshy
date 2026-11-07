@@ -192,7 +192,7 @@ internal fun CallCaptionRow(line: CallLiveCaptionLine, showsTime: Boolean, onTog
             text = line.text,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = if (line.isFinal) FontWeight.Normal else FontWeight.Light,
-            color = speakerColor,
+            color = CallSpeakerColor.textHex(line.speakerId, servesTranslation = !line.isShowingOriginal)?.let { hexColor(it) } ?: Color.White,
             modifier = Modifier.alpha(if (line.isFinal) 1f else 0.7f),
         )
     }

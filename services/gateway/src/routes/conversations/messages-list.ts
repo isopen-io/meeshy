@@ -67,6 +67,14 @@ import {
   enrichPostReplyMessagesForList,
   parseLanguageFilterParam
 } from './messages-list-query';
+import {
+  messageKeysetWindow,
+  messageOrderKeyOf,
+  nextPageSide,
+  resolveAroundWindowIds,
+  totalMessageOrderBy,
+  withKeysetWindow,
+} from './messages-cursor-window';
 import { loadCurrentUserConsumptionMap, loadMessageReadStatusMap } from './messages-list-reader-state';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import type { RawMessageRow } from './messages-list-query-types';
@@ -383,17 +391,28 @@ export function registerMessagesListRoute(
         // handler, scope déjà correctement sa résolution
         // (`applyHistoryFloor({ id: around, conversationId }, …)`) — les deux
         // curseurs de la même route doivent se comporter pareil ici.
-        const beforeMessage = await prisma.message.findFirst({
+        //
+        // La fenêtre exprime l'ordre TOTAL de la vue (#16684) — `(clé, id)` —
+        // et non un `<` sur la seule clé de tri, qui n'est PAS unique :
+        // `createdAt` est à la milliseconde, et les membres d'un groupe
+        // d'égalité restés sur le carreau d'une page étaient exclus de toutes
+        // les suivantes. La clé se LIT dans `vue.orderBy` : `view=pinned` trie
+        // par date d'épingle, et un curseur qui borne `createdAt` ne pagine
+        // alors pas la collection qu'il trie.
+        const cursorOrder = messageOrderKeyOf(vue.orderBy);
+        const beforeMessage = cursorOrder === null ? null : await prisma.message.findFirst({
           where: { id: before, conversationId },
-          select: { createdAt: true }
+          select: { id: true, createdAt: true, pinnedAt: true }
         });
 
-        if (beforeMessage) {
-          const priorCreatedAt = whereClause.createdAt as Prisma.DateTimeFilter | undefined;
-          whereClause.createdAt = {
-            ...priorCreatedAt,
-            lt: beforeMessage.createdAt
-          };
+        if (beforeMessage && cursorOrder !== null) {
+          const cursorValue = (beforeMessage as Record<string, unknown>)[cursorOrder.field];
+          whereClause.AND = withKeysetWindow(whereClause, messageKeysetWindow({
+            field: cursorOrder.field,
+            side: nextPageSide(cursorOrder.direction),
+            value: cursorValue instanceof Date ? cursorValue : null,
+            id: String(beforeMessage.id)
+          })).AND;
         }
       }
 
@@ -409,51 +428,11 @@ export function registerMessagesListRoute(
       let isAroundMode = false;
       if (around && !before && vue.allowsAround) {
         isAroundMode = true;
-        // La cible n'entre dans la fenêtre que si elle est LISIBLE : sous le
-        // plancher, `around` se comporte comme un id inconnu.
-        const aroundMessage = await prisma.message.findFirst({
-          where: applyHistoryFloor({ id: around, conversationId }, historyStartDate),
-          select: { createdAt: true }
+        const aroundIds = await resolveAroundWindowIds({
+          prisma, conversationId, around, limit, historyStartDate, personalHiding
         });
-
-        if (aroundMessage) {
-          // Get half before and half after the target message
-          const halfLimit = Math.floor(limit / 2);
-
-          const beforeFilter: Prisma.DateTimeFilter = { lt: aroundMessage.createdAt };
-          if (historyStartDate) beforeFilter.gte = historyStartDate;
-
-          // Les deux moitiés sont filtrées ICI et pas seulement à la fin : sans
-          // cela, `take: halfLimit` remplirait sa moitié de messages masqués
-          // que la soustraction finale retirerait, et la fenêtre `around`
-          // rendrait moins de messages que demandé sans jamais le dire.
-          const [messagesBefore, messagesAfter] = await Promise.all([
-            prisma.message.findMany({
-              where: applyPersonalHistoryHiding(
-                { conversationId, deletedAt: null, createdAt: beforeFilter },
-                personalHiding
-              ),
-              orderBy: { createdAt: 'desc' },
-              take: halfLimit,
-              select: { id: true }
-            }),
-            prisma.message.findMany({
-              where: applyPersonalHistoryHiding(
-                { conversationId, deletedAt: null, createdAt: { gt: aroundMessage.createdAt } },
-                personalHiding
-              ),
-              orderBy: { createdAt: 'asc' },
-              take: halfLimit,
-              select: { id: true }
-            })
-          ]);
-
-          const allIds = [
-            ...messagesBefore.map(m => m.id),
-            around,
-            ...messagesAfter.map(m => m.id)
-          ];
-          whereClause.id = { in: allIds };
+        if (aroundIds !== null) {
+          whereClause.id = { in: aroundIds };
           // Remove any createdAt filter since we're using id-based filtering —
           // sauf le plancher, qui ne se retire jamais d'une lecture.
           delete whereClause.createdAt;
@@ -524,7 +503,11 @@ export function registerMessagesListRoute(
           // modes return newest-first.
           // `view=pinned` se lit par DATE D'ÉPINGLE, comme
           // `GET .../pinned-messages` — jamais par date d'écriture.
-          orderBy: afterMode ? { createdAt: 'asc' } : vue.orderBy,
+          // #16684 — l'ordre est TOTAL : la clé de la vue, puis `id` dans le même
+          // sens. Sans clé de rupture, l'ordre DANS une égalité de milliseconde
+          // n'est pas défini, et la pagination par `offset` de la première page
+          // pouvait resservir ou sauter une ligne entre deux requêtes.
+          orderBy: totalMessageOrderBy(afterMode ? { createdAt: 'asc' } : vue.orderBy),
           // Cursor reads (before / after): fetch limit+1 to MEASURE hasMore
           // without an extra COUNT query. The probe row is trimmed before
           // returning to the client. `after` was sized to `limit` and inferred
