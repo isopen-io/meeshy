@@ -27,7 +27,7 @@ enum CallModeCopy {
     static let gestureHintSeenKey = "call.mode.gestureHint.seen"
 
     static var gestureHint: String {
-        String(localized: "call.mode.gesture.hint", defaultValue: "Deux tapes : photo · Appui long : vidéo", bundle: .main)
+        CaptureGestureCopy.photoOrVideo
     }
 
     static var takePhoto: String {
