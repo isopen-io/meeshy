@@ -39,6 +39,7 @@ import type {
   CallTranslatedSegmentEvent,
 } from '@meeshy/shared/types/video-call';
 import { guardedTimeout } from '../utils/guarded-timer';
+import { processCallCaptionMetrics, type CallCaptionMetrics } from '../services/metrics/callCaptionMetrics';
 
 /**
  * Ce que le relais emprunte à l'instance.
@@ -51,6 +52,8 @@ import { guardedTimeout } from '../utils/guarded-timer';
 export type CallTranscriptionRelayDeps = {
   readonly prisma: PrismaClient;
   readonly zmqClient: () => ZmqTranslationClient | null;
+  /** #16548 — absent ⇒ l'instance du processus, celle que le port interne sert. */
+  readonly captionMetrics?: CallCaptionMetrics;
 };
 
 /**
@@ -202,8 +205,10 @@ export async function translateAndEmitSegment(
     else listenersByLanguage.set(lang, [userId]);
   }
   const targetLanguages: string[] = [...listenersByLanguage.keys()];
+  const metrics = deps.captionMetrics ?? processCallCaptionMetrics;
 
   if (targetLanguages.length === 0) {
+    if (sameLanguageListeners.length > 0) metrics.delivered('same_language');
     socket.to(ROOMS.call(data.callId)).emit(
       CALL_EVENTS.TRANSLATED_SEGMENT,
       buildTranslatedSegment(data, speaker, data.segment.language)
@@ -218,6 +223,8 @@ export async function translateAndEmitSegment(
   const zmqClient = deps.zmqClient();
   if (!zmqClient) {
     logger.warn('[CallEventsHandler] translateAndEmitSegment called without zmqClient — relaying original', { callId: data.callId });
+    targetLanguages.forEach(() => metrics.delivered('untranslated'));
+    if (sameLanguageListeners.length > 0) metrics.delivered('same_language');
     socket.to(ROOMS.call(data.callId)).emit(
       CALL_EVENTS.TRANSLATED_SEGMENT,
       buildTranslatedSegment(data, speaker, data.segment.language)
@@ -232,6 +239,7 @@ export async function translateAndEmitSegment(
     sameLanguageListeners,
     buildTranslatedSegment(data, speaker, data.segment.language)
   );
+  if (sameLanguageListeners.length > 0) metrics.delivered('same_language');
 
   // Scoped to this call+segment (shared across the segment's target
   // languages, disambiguated below by taskId) — NOT the global
@@ -247,6 +255,7 @@ export async function translateAndEmitSegment(
   await Promise.allSettled(
     targetLanguages.map(async (targetLanguage) => {
       const listeners = listenersByLanguage.get(targetLanguage) ?? [];
+      const timing = metrics.startTranslation();
       try {
         const taskId = await zmqClient.translateText(
           data.segment.text,
@@ -263,6 +272,7 @@ export async function translateAndEmitSegment(
           const timer = guardedTimeout({ name: 'call-transcription-segment-timeout', afterMs: TIMEOUT_MS, logger, run: () => {
             zmqClient.off(scopedEvent, onResult);
             emitTranslatedSegmentTo(socket, listeners, buildTranslatedSegment(data, speaker, targetLanguage));
+            timing.finish('timeout');
             resolve();
           } });
           timer.unref?.();
@@ -276,6 +286,7 @@ export async function translateAndEmitSegment(
               socket, listeners,
               buildTranslatedSegment(data, speaker, targetLanguage, event.result.translatedText)
             );
+            timing.finish('translated');
             resolve();
           };
           zmqClient.on(scopedEvent, onResult);
@@ -283,6 +294,7 @@ export async function translateAndEmitSegment(
       } catch (err) {
         logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });
         emitTranslatedSegmentTo(socket, listeners, buildTranslatedSegment(data, speaker, targetLanguage));
+        timing.finish('error');
       }
     })
   );

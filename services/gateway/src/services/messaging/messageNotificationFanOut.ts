@@ -551,9 +551,24 @@ export async function notifyMessageRecipients(params: {
     // ces champs, répondre par un vocal ou mentionner quelqu'un sous une photo
     // sans légende poussait une bannière au corps VIDE, pendant que les autres
     // membres du fil recevaient la transcription.
+    // Cycle 125 / #16551 — la garde ci-dessus décide si le média du message a le
+    // droit de voyager ; elle ne dit RIEN des pièces 2..n. `maskedAttachment` le
+    // dit chez elle : « le fail-closed de ce domaine vit dans l'appelant, qui
+    // doit poser la question pour CHAQUE pièce et non pour la première ». Ce
+    // site ne la posait que pour `first`, puis remettait la liste ENTIÈRE —
+    // nature, nom de fichier, nom d'origine, pages, lignes, nom du contact — et
+    // comptait les pièces masquées dans `attachmentCount`. Une photo ordinaire
+    // suivie d'un PDF à VUE UNIQUE annonçait donc « 2 pièces » et le NOM du PDF.
+    //
+    // L'inventaire qui voyage est donc celui des pièces NON masquées. Le verdict
+    // reste par pièce et ne s'élargit pas : une pièce masquée au rang 1 garde le
+    // fail-closed EN BLOC de `mediaMayTravel` (`first` est alors masqué), parce
+    // qu'un correctif de confidentialité ne doit jamais faire voyager plus qu'avant.
+    const travellingAttachments = attachments.filter((att) => !maskedAttachment(att));
+
     const bannerMedia = mediaMayTravel
       ? {
-          attachments: attachments.map(bannerAttachmentOf),
+          attachments: travellingAttachments.map(bannerAttachmentOf),
           firstAttachmentFileSize: first?.fileSize,
           firstAttachmentDuration: first?.duration,
           firstAttachmentWidth: first?.width,
@@ -567,8 +582,8 @@ export async function notifyMessageRecipients(params: {
     // d'usage aujourd'hui — cf. le suivi du lot.
     const richPushMedia = mediaMayTravel
       ? {
-          hasAttachments: attachments.length > 0,
-          attachmentCount: attachments.length,
+          hasAttachments: travellingAttachments.length > 0,
+          attachmentCount: travellingAttachments.length,
           firstAttachmentType: attachmentTypeOf(first?.mimeType),
           firstAttachmentFilename: first ? bannerAttachmentOf(first).filename ?? undefined : undefined,
           ...pushedAttachmentFile(first),
