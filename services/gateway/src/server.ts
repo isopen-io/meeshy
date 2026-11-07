@@ -38,6 +38,7 @@ import { rateLimitRefusalResponse } from './utils/rate-limit-refusal';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MessageTranslationService } from './services/message-translation/MessageTranslationService';
+import { setSharedTranslationCache } from './services/message-translation/translationCacheRegistry';
 import { MessagingService } from './services/MessagingService';
 import { MentionService } from './services/MentionService';
 import { StatusService } from './services/StatusService';
@@ -248,6 +249,7 @@ class MeeshyServer {
 
     // Initialiser le service de traduction avec le cache partagé
     this.translationService = new MessageTranslationService(this.prisma, this.jobMappingCache);
+    setSharedTranslationCache(this.translationService); // #16557 — un retrait purge la copie en mémoire de ses traductions
 
     // Initialiser le service de messaging
     this.messagingService = new MessagingService(this.prisma, this.translationService);
