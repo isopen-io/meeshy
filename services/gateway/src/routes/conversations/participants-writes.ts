@@ -32,6 +32,12 @@ import { repondreAuRefus } from './utils/participant-geste-reponse';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
+import {
+  applyCommunityAdmission,
+  loadSalonCommunity,
+  planSalonEntry,
+  type SalonCommunity,
+} from '../../services/conversations/communityMembershipSync';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantWriteRoutes' });
 
 /**
@@ -48,7 +54,12 @@ export const MAX_PARTICIPANTS_PER_CALL = 50;
 /** Ce qui est arrivé à UN identifiant du lot. */
 export type ParticipantAdmissionVerdict = {
   readonly userId: string;
-  readonly outcome: 'new' | 'rejoin' | 'already-member' | 'banned' | 'not-found';
+  /**
+   * `community-forbidden` (#16695) : le salon appartient à une communauté
+   * PRIVÉE dont la personne n'est pas membre, et l'appelant n'y fait entrer
+   * personne (ni créateur, ni administrateur, ni modérateur de la communauté).
+   */
+  readonly outcome: 'new' | 'rejoin' | 'already-member' | 'banned' | 'not-found' | 'community-forbidden';
   readonly participantId?: string;
 };
 
@@ -249,8 +260,10 @@ export function registerParticipantWriteRoutes(
     currentUserId: string | undefined;
     /** Le membre qui ajoute — l'avis se lit « Demo a ajouté X » (#7593). */
     addedBy: NoticeActor;
+    /** La communauté PRIVÉE qui héberge le salon, lue une fois pour le lot (#16695). */
+    community: SalonCommunity | null;
   }): Promise<ParticipantAdmissionVerdict> {
-    const { conversationId, conversation, userId, currentUserId, addedBy } = options;
+    const { conversationId, conversation, userId, currentUserId, addedBy, community } = options;
 
     const userToAdd = await prisma.user.findFirst({ where: { id: userId } });
     if (!userToAdd) return { userId, outcome: 'not-found' };
@@ -269,6 +282,12 @@ export function registerParticipantWriteRoutes(
     if (entry.outcome === 'closed') return { userId, outcome: 'not-found' };
     if (entry.outcome === 'banned') return { userId, outcome: 'banned' };
     if (entry.outcome === 'already-member') return { userId, outcome: 'already-member' };
+
+    // #16695 — entrer dans un salon d'une communauté privée, c'est y être admis.
+    const communityAdmission = await planSalonEntry(prisma, community, { kind: 'registered', userId });
+    if (communityAdmission.kind === 'refused') {
+      return { userId, outcome: communityAdmission.reason === 'invite-forbidden' ? 'community-forbidden' : 'not-found' };
+    }
 
     // #4174 — la table de droits vient du site UNIQUE
     // (`services/participantRights.ts`), partagé avec `POST …/invite`.
@@ -329,6 +348,7 @@ export function registerParticipantWriteRoutes(
       }).catch(() => undefined);
     }
 
+    if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission);
     announceConversationLanguageChange({ kind: 'arrival', conversationId, language: addedMemberFields.language, readerUserId: userId });
 
     // Annoncer l'arrivée — quatrième et dernière porte, même loi. Une entrée
@@ -570,7 +590,7 @@ export function registerParticipantWriteRoutes(
                       userId: { type: 'string' },
                       outcome: {
                         type: 'string',
-                        enum: ['new', 'rejoin', 'already-member', 'banned', 'not-found'],
+                        enum: ['new', 'rejoin', 'already-member', 'banned', 'not-found', 'community-forbidden'],
                         description: 'What happened to THIS identifier'
                       },
                       // Produit par `admitOneParticipant`, porté par
@@ -652,7 +672,7 @@ export function registerParticipantWriteRoutes(
       // fil terminé. Deux colonnes, cf. `conversationWriteAdmission`.
       const conversation = await prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { isActive: true, closedAt: true },
+        select: { isActive: true, closedAt: true, communityId: true },
       });
       if (conversation && (conversation.isActive === false || conversation.closedAt)) {
         return sendError(reply, 410, 'Cette conversation est terminée');
@@ -662,10 +682,11 @@ export function registerParticipantWriteRoutes(
       // concurrentes sur la même conversation liraient le même effectif et
       // émettraient deux fois le même total. L'éventail de diffusion n'est pas
       // mécanique — chaque tour a ses destinataires et son compte.
+      const community = await loadSalonCommunity(prisma, { communityId: conversation?.communityId, actorId: currentUserId });
       const results: ParticipantAdmissionVerdict[] = [];
       for (const userId of demandes.userIds) {
         results.push(await admitOneParticipant({
-          conversationId, conversation, userId, currentUserId, addedBy: noticeActor(currentUserParticipant),
+          conversationId, conversation, userId, currentUserId, addedBy: noticeActor(currentUserParticipant), community,
         }));
       }
 
@@ -679,6 +700,9 @@ export function registerParticipantWriteRoutes(
       if (demandes.single && results.length === 1) {
         const seul = results[0];
         if (seul.outcome === 'not-found') return sendNotFound(reply, 'User not found');
+        if (seul.outcome === 'community-forbidden') {
+          return sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' });
+        }
         if (seul.outcome === 'banned') {
           return sendForbidden(reply, 'Cet utilisateur est banni de la conversation — levez le bannissement d\'abord');
         }
