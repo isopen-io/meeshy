@@ -19,7 +19,7 @@ enum CallTranscriptLoader {
     /// dans le cache local chiffré.
     private static func fetchRemote(callId: String) async -> CallTranscript? {
         guard let remote = try? await CallTranscriptRemoteService.shared.transcript(callId: callId),
-              !remote.segments.isEmpty else { return nil }
+              !remote.segments.isEmpty || !(remote.captures ?? []).isEmpty else { return nil }
         let localUser = AuthManager.shared.currentUser
         let localUserId = localUser?.id ?? ""
         let localName = localUser?.displayName ?? localUser?.username
@@ -47,7 +47,8 @@ enum CallTranscriptLoader {
                     language: seg.language,
                     capturedAt: Date(timeIntervalSince1970: Double(seg.capturedAtMs) / 1000)
                 )
-            }
+            },
+            captures: CallTranscriptCaptureMapping.captures(remote.captures ?? [], localUserId: localUserId, localName: localName)
         )
         await CallTranscriptStore.shared.saveMerging(fetched)
         return fetched
@@ -89,8 +90,13 @@ struct CallTranscriptSection: View {
                 // id: \.offset, not \.capturedAt (recommended, plan review) — saveMerging's dedup
                 // key deliberately allows two segments to share a capturedAt (different
                 // speaker/text at the same instant), which would collide as a ForEach id.
-                ForEach(Array(transcript.segments.enumerated()), id: \.offset) { _, segment in
-                    transcriptRow(segment, callStartedAt: transcript.callStartedAt)
+                ForEach(Array(journal.enumerated()), id: \.offset) { _, item in
+                    switch item {
+                    case .speech(let segment):
+                        transcriptRow(segment, callStartedAt: transcript.callStartedAt)
+                    case .capture(let capture):
+                        captureRow(capture, callStartedAt: transcript.callStartedAt)
+                    }
                 }
             }
             .padding(MeeshySpacing.md)
@@ -124,10 +130,32 @@ struct CallTranscriptSection: View {
         }
     }
 
+    /// #16665 — les captures à leur heure parmi les phrases, comme pendant l'appel.
+    private var journal: [CallJournalItem<CallTranscriptSegment>] {
+        CallJournalTimeline.merged(transcript.segments, time: \.capturedAt, captures: transcript.captures)
+    }
+
+    /// « Awa · a capturé l'écran » : le pseudo à sa couleur, la phrase en encre
+    /// secondaire, jamais colorée ; une borne d'enregistrement ne nomme personne.
+    private func captureRow(_ capture: CallTranscriptCapture, callStartedAt: Date) -> some View {
+        let elapsedLabel = CallManager.formatDuration(max(0, capture.capturedAt.timeIntervalSince(callStartedAt)))
+        let name = capture.kind.namesCapturer ? CallCaptureCopy.who(capture.displayName) : ""
+        let phrase = CallCaptureCopy.phrase(capture.kind)
+        return HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
+            CallCaptureSentence.text(name: name, nameColor: authorColor(capture.userId), tail: phrase, tailColor: theme.textSecondary)
+            Spacer()
+            Text(elapsedLabel)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(theme.textMuted)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([name, phrase, elapsedLabel].filter { !$0.isEmpty }.joined(separator: ", "))
+    }
+
     private func transcriptRow(_ segment: CallTranscriptSegment, callStartedAt: Date) -> some View {
         let elapsed = segment.capturedAt.timeIntervalSince(callStartedAt)
         let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
-        let speakerColor = Color(hex: CallSpeakerColor.hex(for: segment.speakerId, mode: theme.mode))
+        let speakerColor = authorColor(segment.speakerId)
         let servesTranslation = !segment.isLocal && !showOriginalText && segment.translatedText != nil
         let displayText = servesTranslation ? (segment.translatedText ?? segment.text) : segment.text
         return VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -146,5 +174,11 @@ struct CallTranscriptSection: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(segment.speakerName), \(elapsedLabel) : \(displayText)")
+    }
+
+    /// La couleur d'une personne, la même avant et après la fin de l'appel,
+    /// adaptée au schéma du fil (loi 4).
+    private func authorColor(_ userId: String) -> Color {
+        Color(hex: CallSpeakerColor.hex(for: userId, mode: theme.mode))
     }
 }

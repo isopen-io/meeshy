@@ -200,7 +200,6 @@ public protocol MessageSocketProviding: Sendable {
     func emitRequestIceServers(callId: String)
     func emitCallBackgrounded(callId: String, participantId: String)
     func emitCallForegrounded(callId: String, participantId: String)
-    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool)
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool, kind: CallScreenCaptureKind)
     func emitCallAnalytics(callId: String, payload: [String: Any])
     func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload)
@@ -248,10 +247,7 @@ public extension MessageSocketProviding {
     func emitRequestIceServers(callId: String) {}
     func emitCallBackgrounded(callId: String, participantId: String) {}
     func emitCallForegrounded(callId: String, participantId: String) {}
-    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
-    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool, kind: CallScreenCaptureKind) {
-        emitCallScreenCaptureDetected(callId: callId, participantId: participantId, isCapturing: isCapturing)
-    }
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool, kind: CallScreenCaptureKind) {}
     func emitCallAnalytics(callId: String, payload: [String: Any]) {}
     func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {}
     func emitCallTranscriptionActive(callId: String, active: Bool) {}
