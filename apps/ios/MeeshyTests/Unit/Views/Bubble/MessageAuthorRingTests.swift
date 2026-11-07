@@ -155,7 +155,6 @@ final class MessageAuthorRingTests: XCTestCase {
         "MeeshyUI/Story/Controls/SoundDetailView.swift": (1, "décor, illustration ou son — aucune personne"),
         "MeeshyUI/Story/Controls/SoundLibraryPicker.swift": (1, "décor, illustration ou son — aucune personne"),
         "MeeshyUI/Packs/PackElementStage.swift": (2, "soi, essai d'un décor — le contour essayé se pose AUTOUR de l'avatar (`.avatarRing`), la bannière essayée n'en montre aucun"),
-        "Bring/BringRingView.swift": (1, "Bring qui sonne — `BringIncoming` (la charge du push) ne porte pas le contour du sonneur (#13936)"),
         "MeeshyUI/Packs/PublisherPageView.swift": (1, "page d'un éditeur — `PackPublisherOwner` servi ne porte pas le contour (#10957)"),
     ]
 

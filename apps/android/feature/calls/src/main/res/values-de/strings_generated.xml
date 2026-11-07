@@ -257,9 +257,23 @@
     <string name="call_zoom_hint">Nach oben oder unten wischen, um zu zoomen. Auf dem Bildschirm dein Bild auseinanderziehen; zweimal tippen für 1×</string>
     <string name="call_zoom_label">Zoom meiner Kamera</string>
     <string name="permission_microphone_denied">Mikrofon verweigert — zum Öffnen der Einstellungen tippen</string>
+    <string name="video_filter_backgroundBlur">Hintergrundunschärfe</string>
+    <string name="video_filter_brightness">Helligkeit</string>
+    <string name="video_filter_contrast">Kontrast</string>
+    <string name="video_filter_exposure">Belichtung</string>
+    <string name="video_filter_naturalComplexion">Natürlicher Teint</string>
+    <string name="video_filter_naturalComplexion_hint">Gleicht den Teint aus und lässt ihn strahlen, ohne sichtbare Retusche</string>
+    <string name="video_filter_performanceDegraded">Reduzierte Leistung – einige Filter deaktiviert</string>
     <string name="video_filter_preset_cool">Kühl</string>
     <string name="video_filter_preset_muted">Weich</string>
     <string name="video_filter_preset_natural">Natürlich</string>
     <string name="video_filter_preset_vivid">Lebendig</string>
     <string name="video_filter_preset_warm">Warm</string>
+    <string name="video_filter_radius">Radius</string>
+    <string name="video_filter_reinit">Zurücksetzen</string>
+    <string name="video_filter_reset">Zurücksetzen</string>
+    <string name="video_filter_saturation">Sättigung</string>
+    <string name="video_filter_skinSmoothing">Hautglättung</string>
+    <string name="video_filter_temperature">Temperatur</string>
+    <string name="video_filter_title">Videofilter</string>
 </resources>

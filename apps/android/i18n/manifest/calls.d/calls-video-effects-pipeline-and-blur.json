@@ -5,32 +5,46 @@
       "resDir": "feature/calls/src/main/res",
       "entries": [
         {
+          "catalog": "app",
+          "iosKey": "video.filter.backgroundBlur",
           "androidName": "video_filter_backgroundBlur",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.brightness",
           "androidName": "video_filter_brightness",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.contrast",
           "androidName": "video_filter_contrast",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.exposure",
           "androidName": "video_filter_exposure",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.naturalComplexion",
           "androidName": "video_filter_naturalComplexion",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.naturalComplexion.hint",
           "androidName": "video_filter_naturalComplexion_hint",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.performanceDegraded",
           "androidName": "video_filter_performanceDegraded",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "catalog": "app",
@@ -63,32 +77,46 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.radius",
           "androidName": "video_filter_radius",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.reinit",
           "androidName": "video_filter_reinit",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.reset",
           "androidName": "video_filter_reset",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.saturation",
           "androidName": "video_filter_saturation",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.skinSmoothing",
           "androidName": "video_filter_skinSmoothing",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.temperature",
           "androidName": "video_filter_temperature",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "video.filter.title",
           "androidName": "video_filter_title",
-          "status": "android-only"
+          "status": "adopted"
         }
       ]
     }
