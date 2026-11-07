@@ -1,7 +1,7 @@
-# Cycle 138 — un membre retiré d'un fil y restait « ici », et y annonçait son activité
+# Cycle 138 — un retiré restait « ici », et le texte alternatif du fil ne descendait pas le Prisme
 
-**Issue livrée** : #16654. **Branche** : `claude/exciting-planck-t1dj8f`.
-**Issues ouvertes en chemin** : #16655 (passerelle), #16659 (iOS), #7392 (web, déjà ouverte le 2026-09-21 et retrouvée par le balayage).
+**Issues livrées** : #16654 (passerelle, lot A) et #7392 (web, lot B). **Branche** : `claude/exciting-planck-t1dj8f`, PR #16661.
+**Issues ouvertes en chemin** : #16655 (passerelle), #16659 (iOS).
 
 Le cycle 137 datait du 2026-08-29 et ses surfaces (`apps/web/app/…`) ont quitté
 le dépôt avec le legacy (#7668) ; son unique suivi actionnable
@@ -88,6 +88,59 @@ Deux lacunes de HARNAIS, pas une inattention :
 > et « le statut en ligne est masqué » — trois façons dont le LECTEUR se retire,
 > aucune dont le FIL le retire.
 
+## Le lot B — le texte alternatif du fil descend le Prisme (#7392)
+
+C'est l'orphelin `media:alt-translation-updated` du tableau ci-dessus, instruit
+jusqu'au bout. Son type se déclare « **jumelle exacte** de
+`MediaCaptionTranslationUpdatedEventData`, sur un champ DISTINCT » ; la légende
+est câblée sur le web ET sur iOS, le texte alternatif sur personne.
+
+Mais le canal muet n'était que la MOITIÉ du défaut, et la seconde est plus
+grave : `FeedMedia` ne DÉCLARAIT ni `altLanguage` ni `altTranslations`. La
+passerelle les sert (`postIncludes.ts`) ; le décodage les jetait. **Ce n'était
+pas un résolveur à corriger en aval — la donnée était absente de la forme lue.**
+
+| contenu de `PostMedia` | couple | le fil, avant |
+|---|---|---|
+| `caption` | `captionLanguage` / `captionTranslations` | descend le Prisme |
+| `alt` | `altLanguage` / `altTranslations` | **servi BRUT** |
+
+Le doc-comment de `resolveMediaCaption` ÉNUMÉRAIT les trois contenus depuis
+#6280 — « `Post.content`, la légende, `alt` » — et deux seulement avaient un
+résolveur. **Une énumération qui nomme trois choses et n'en outille que deux ne
+rougit nulle part.**
+
+Et c'est la seule chaîne qu'un lecteur d'écran PRONONCE. L'en-tête de
+`apps/web/src/lib/api/prism.ts` nomme exactement ce défaut comme sa raison
+d'exister — « un lecteur d'écran qui prononce un texte français avec une voix
+anglaise est ce défaut-là, rendu audible ». La seule chaîne du dépôt à ne pas
+traverser `served()` était celle-là.
+
+**La jumelle était DANS LE MÊME CLIENT** : la conversation descend déjà ce
+couple par la loi partagée `resolveMediaDescription` (#12333,
+`lib/view/media.ts` → `electDescription`). Seul le FIL ne le faisait pas — la
+forme la plus discrète de « cette entité a-t-elle une jumelle ? », puisqu'il n'y
+avait ni autre table, ni autre site, ni autre moment : le même client, deux
+surfaces.
+
+### Le choix discutable, dit à voix haute
+
+`resolveMediaAlt` est une PROJECTION de `served()`, posée à côté de
+`resolveMediaCaption` — **pas** un appel à `resolveMediaDescription`. Cette loi
+fait concourir la description de l'auteur ET la transcription dans une seule
+descente, ce qui est juste pour une bulle, où une seule description est rendue.
+Le fil rend la légende et la transcription en texte VISIBLE, ailleurs : y verser
+la transcription ferait prononcer au lecteur d'écran ce que l'écran montre déjà.
+
+### Jusqu'au PIXEL
+
+`lang` est posé sur l'image, parce que c'est lui qui gouverne la VOIX. Seulement
+sur un texte servi ET une langue connue : sur une image décorative il ne
+qualifierait rien, et le repli « Image 1 sur 3 » des réels est composé dans la
+langue de l'INTERFACE, donc déjà prononcé par la bonne voix. **Suivre une donnée
+jusqu'à son consommateur s'arrête un cran trop tôt — la suivre jusqu'au pixel**,
+et ici jusqu'au SON.
+
 ## Gates
 
 | gate | résultat |
@@ -95,8 +148,12 @@ Deux lacunes de HARNAIS, pas une inattention :
 | `ConversationViewingHandler` + `endConversationMembership` + `MeeshySocketIOManager` + `StatusHandler` | **566 verts** (11 témoins neufs, tous vus ROUGES) |
 | suite gateway complète (`bun run test`) | **39 376 verts**, 17 rouges |
 | les 17 rouges | **PRÉ-EXISTANTS** — vérifiés identiques sur `origin/dev` nu (EXIF/HEIF/AVIF : sharp sans ces codecs dans le conteneur) |
-| `tsc --noEmit -p tsconfig.json` | **0 erreur**, code de sortie lu DIRECTEMENT (jamais au travers d'un pipe — leçon du cycle 109) |
+| `tsc --noEmit -p tsconfig.json` (passerelle) | **0 erreur**, code de sortie lu DIRECTEMENT (jamais au travers d'un pipe — leçon du cycle 109) |
 | `detached-promise-catch-sweep`, `server-emit-door-sweep`, `presence-visibility-viewer-aware-guard`, `route-manifest-ratchet` | verts |
+| `bun test` sur `apps/web` | **29 802 verts** (25 témoins neufs, tous vus ROUGES), 1 rouge |
+| le rouge du web | **PRÉ-EXISTANT** — `act-leak-guard`, un méta-témoin qui relance bun en sous-processus ; identique sur `origin/dev` nu |
+| `bun run type-check` (web), `scripts/check-law-literals.sh` | **0 erreur**, vert |
+| gates navigateur (`check-feed-media`, `check-reels`) | **non concluants dans ce conteneur** — ils veulent un `chromium_headless_shell` absent et des ressources rendues en 404 ; échouent identiquement sur `origin/dev` nu, la CI les porte |
 
 ## Suivi MESURÉ, une issue chacun
 
@@ -109,15 +166,9 @@ Deux lacunes de HARNAIS, pas une inattention :
   le réordre est réécrit DANS le fil local (`next.createdAt = api.createdAt`).
   Non développé ici : aucun Xcode dans le conteneur, et un lot iOS se prouve par
   `./apps/ios/meeshy.sh test`.
-- **#7392 — le texte alternatif du fil web ne descend pas le Prisme** (ouverte
-  le 2026-09-21, retrouvée par le balayage). `FeedMedia` ne déclare ni
-  `altLanguage` ni `altTranslations`, donc la carte est jetée au décodage ;
-  `altText` sort brut quand la légende, à deux lignes, descend le Prisme. La
-  jumelle est **dans le même client** : la conversation le fait déjà
-  (`electDescription` → `resolveMediaDescription`, #12333). Et le doc-comment de
-  `apps/web/src/lib/api/prism.ts` nomme ce défaut comme sa raison d'exister —
-  « un lecteur d'écran qui prononce un texte français avec une voix anglaise » —
-  pour la seule chaîne qui ne le traversait pas.
+- **#7392 est LIVRÉE dans ce cycle** (lot B), pas reportée : le balayage l'a
+  retrouvée ouverte depuis le 2026-09-21, et son critère de fin était déjà
+  écrit. Voir § « Le lot B » ci-dessous.
 - **La garde manquante** — « tout événement serveur déclaré a un consommateur
   client, ou est déclaré non consommé AVEC sa raison, vérifié dans les DEUX
   sens » — reste à poser, sur le modèle de `RESERVED_SERVER_EVENTS` (la
