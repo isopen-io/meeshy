@@ -57,6 +57,21 @@ describe('la pastille', () => {
   });
 });
 
+describe('je partage mon écran : l’appel réduit en capsule (#16664)', () => {
+  test('la capsule rougit, montre l’écran et offre « Arrêter » ; le micro et la bulle cèdent la place', () => {
+    const html = overlay(call({ display: 'pill', screenSharing: true }));
+    expect(html).toContain('data-call-pill-sharing=""');
+    expect(html).toMatch(/aria-label="Arrêter le partage d’écran"[^>]*data-call-pill-stop-share=""[^>]*>Arrêter</);
+    expect(html).not.toContain('data-call-pill-collapse');
+  });
+
+  test('sans partage, la pastille reste celle de toujours', () => {
+    const html = overlay(call({ display: 'pill' }));
+    expect(html).not.toContain('data-call-pill-sharing');
+    expect(html).not.toContain('data-call-pill-stop-share');
+  });
+});
+
 describe('la bulle', () => {
   test('remplace la pastille : revenir, micro, raccrocher — et la consigne clavier pour la déplacer', () => {
     expect(overlay(call({ display: 'bubble' }))).toBe('');

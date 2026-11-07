@@ -81,6 +81,13 @@ class CallTranscriptReplayTest {
     }
 
     @Test
+    fun `every line keeps its speaker id, so it keeps the speaker's colour after the call`() {
+        val lines = lines(page(segment(id = "a", speakerId = "me", language = "fr"), segment(id = "b", speakerId = "peer", capturedAtMs = startMs + 6_000)))
+
+        assertThat(lines.map { it.speakerId }).containsExactly("me", "peer").inOrder()
+    }
+
+    @Test
     fun `the reader without a name reads « Vous »`() {
         val line = lines(page(segment(speakerId = "me")), reader = reader(name = " ")).single()
 

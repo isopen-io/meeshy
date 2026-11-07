@@ -4,6 +4,10 @@ Source : audit du 2026-11-06 (`frames/07-audit-ui-ux-camera-appels.md` du projet
 Périmètre : `apps/ios/Meeshy/Features/Call/Views/`, `Features/Call/Models/` (règles pures), `Main/Views/VideoFilter*.swift` et leurs tests.
 Interdit à la routine : `Features/Call/Services/` (sauf lecture), `CallManager`, `WebRTCService`, `Main/Services/VideoFilterPipeline.swift`, tout `Features/Composer/`.
 
+**Cible (2026-11-07) : [`docs/product/appels-vue-finale.md`](../../../docs/product/appels-vue-finale.md)** (#16633). Chaque point de cette file se termine conforme à ses vues (P1–P18 portrait, L1–L5 paysage, A1–A2 après l'appel). La couleur d'une personne vient UNIQUEMENT de `CallSpeakerColor` / `DynamicColorGenerator.colorForName(userId)` (loi 4), y compris pour ma vignette et le journal.
+
+**Pris ailleurs, ne pas toucher sans se coordonner :** `Features/Call/Views/CallTranscriptSection.swift` (journal d'après l'appel, couleur par auteur, #16634) est repris par la session « appels de bout en bout », branche `claude/calls-end-to-end-cvakev`. Tirer `dev` après sa fusion.
+
 Statuts : `à faire` · `en cours (#PR)` · `fait (#PR)` · `signalé Opus`.
 Taille : P petit, M moyen. Un point G n'entre pas ici : il va dans `routine-gros-bogues.md`.
 
