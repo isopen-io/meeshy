@@ -186,3 +186,49 @@ socket jusqu'au client.
    de #16613 (l'original d'abord, puis la traduction dans la même ligne).
 3. Piste 3 du cycle 3 (N requêtes ZMQ par segment au lieu d'une requête multi-langues) : mesurer
    d'abord côté traducteur.
+
+## Cycle 5 — 2026-11-07
+
+- **Base** : `origin/dev` @ `d305c36fd` (le cycle 4, #16627, y est fusionné).
+- **Branche** : `claude/determined-volta-7rerrp`.
+- **Objectif** : #16625, sous #3722 (piste 1 du cycle 4).
+- **Constat** : le relais nommait ses demandes `call-<callId>-<startMs>`, un identifiant sans
+  espace de noms. Le pipeline des messages le prenait donc pour un `Message.id` :
+  - à chaque sous-titre traduit, et pour chaque langue : `message.findUnique`, sauvegarde, stats
+    et `translationReady`, plus une relecture dans `deliverTextTranslation` ;
+  - à chaque délai (10 s depuis #16622) : `logger.error`, `stats.errors` incrémenté et un
+    `translationFailed` vers une conversation qui n'existe pas.
+- **Livré** :
+  - nouvel espace de noms `call-caption` dans `TRANSLATION_TARGET_NAMESPACES` ;
+  - le relais construit `call-caption:<callId>:<startMs>` par `translationTargetId` ;
+  - les gardes `isMessageTranslationTarget`, qui existaient déjà, écartent désormais les sous-titres
+    sans code supplémentaire ;
+  - le délai sans renvoi de `ZmqTranslationClient` garde le niveau `error`, avec un libellé neutre
+    (« retry disabled by caller »). La QA a refusé le passage en `warn` : ce délai sert aussi de
+    chien de garde de 15 min aux pipelines vocaux, qui doivent rester visibles en `error`.
+- **Le traducteur Python renvoie le `messageId` tel quel** : `zmq_translation_handler.py:363`
+  puis `:419`, et `zmq_pool/translation_processor.py:278` / `:428`. Aucun client ne voit
+  l'identifiant (`buildTranslatedSegment` ne le porte pas).
+- **Tests** : `call-caption-translation-target.test.ts`, 3 témoins, qui passent par le vrai relais,
+  le vrai `MessageTranslationService` et le vrai `deliverTextTranslation`.
+  - **Rouge sur le code d'avant** : 3 sur 3 tombent. On voyait `message.findUnique` ×3,
+    `message.update`, `message.findFirst`, et un `translationFailed` vers la conversation.
+  - **Suites** : 198 suites, 2 711 témoins. `tsc` 0. J'ai moi-même relancé le témoin : 3/3.
+
+### Limites connues
+
+- Pendant un déploiement, une traduction demandée sous l'ancien format et revenue après le
+  redémarrage prend une dernière fois l'ancien chemin. L'effet se limite à un warn et une lecture
+  perdue, et l'écouteur scopé a de toute façon disparu au redémarrage.
+
+- La QA a relevé un défaut antérieur au lot : le traducteur met en cache Redis le texte traduit
+  des sous-titres, avec le TTL des traductions de messages (`redis_service.py:578`). → #16648.
+
+### Cycle suivant : par où reprendre
+
+1. #16648 : exclure les sous-titres d'appel du cache Redis du traducteur. C'est un lot Python
+   à faible risque, lié à la vie privée.
+2. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613.
+3. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
+   traducteur (`translateToMultipleLanguages`, lot de `translation_processor.py:278`).

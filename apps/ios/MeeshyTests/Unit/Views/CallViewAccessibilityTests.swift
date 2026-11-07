@@ -375,34 +375,25 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
-    // MARK: - Effects toggle button accessibility
+    // MARK: - Effects button before the connection (OPUS-4)
 
-    func test_effectsToggleButton_hasAccessibilityHint() throws {
-        // The call.filters.a11y label appears on TWO controls (the ringing /
-        // connecting effects toggle AND the « mon image » action, #8394) —
-        // EVERY occurrence must pair the label with the call.filters.hint
-        // hint, or VoiceOver users get no indication that the control toggles
-        // the video effects toolbar.
+    /// OPUS-4 — avant la connexion, « Effets » ouvre le MÊME mode que l'appel
+    /// établi, avec le libellé et l'indice VoiceOver de la pilule : plus de
+    /// second panneau ni d'état « ouvert/fermé » propre à la sonnerie.
+    func test_preConnectEffectsButton_entersTheEffectsMode() throws {
         let source = try callViewSource()
-        var searchStart = source.startIndex
-        var occurrences = 0
-        while let labelRange = source.range(of: "call.filters.a11y", range: searchStart..<source.endIndex) {
-            occurrences += 1
-            let end = source.index(labelRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
-            let vicinity = String(source[labelRange.lowerBound ..< end])
-            XCTAssertTrue(
-                vicinity.contains(".accessibilityHint") || vicinity.contains("hint: String(localized: \"call.filters.hint\""),
-                "occurrence #\(occurrences) of call.filters.a11y has no hint nearby — " +
-                "unlike every sibling control."
-            )
-            XCTAssertTrue(
-                vicinity.contains("call.filters.hint"),
-                "occurrence #\(occurrences) of call.filters.a11y must pair with the " +
-                "call.filters.hint localization key."
-            )
-            searchStart = labelRange.upperBound
+        guard let start = source.range(of: "var effectsModeButton: some View {"),
+              let end = source.range(of: "var endCallButton: some View {", range: start.upperBound..<source.endIndex) else {
+            XCTFail("CallView must define effectsModeButton then endCallButton")
+            return
         }
-        XCTAssertGreaterThan(occurrences, 0, "effectsToggleButton must carry the call.filters.a11y accessibility label")
+        let button = String(source[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(button.contains("enterMode(.effects)"), "Effets ouvre le mode « Effets de ma caméra »")
+        XCTAssertTrue(button.contains(".accessibilityLabel(CallControlsCopy.effects)"))
+        XCTAssertTrue(button.contains(".accessibilityHint(CallControlsCopy.effectsHint)"))
+        for gone in ["showEffectsToolbar", "CallEffectsOverlay", "VideoFiltersPanel", "call.filters.a11y", "call.filters.hint"] {
+            XCTAssertFalse(source.contains(gone), "\(gone) a disparu avec l'ancien panneau d'effets")
+        }
     }
 
     // MARK: - Video toggle accessibility value (audit fix — inverted state, 2026-08-13)
@@ -553,30 +544,6 @@ final class CallViewAccessibilityTests: XCTestCase {
             source.contains(".environment(\\.colorScheme, .dark)"),
             "CallView must still pin the call chrome subtree to .dark — only the unused " +
             "local reader/computed property were dead, not the environment override itself."
-        )
-    }
-
-    // MARK: - CallEffectsOverlay wiring
-
-    func test_callEffectsOverlay_receivesCallManagerFromParent() throws {
-        // `CallEffectsOverlay(... )` must not fall back to instantiating
-        // `CallManager.shared` itself (`@ObservedObject private var callManager
-        // = CallManager.shared`) — that re-creates the subscription on every
-        // CallView body re-evaluation (pulse animation, showEffectsToolbar
-        // toggle, control-bar auto-hide). CallView and IncomingCallView were
-        // already fixed for this exact hazard (Audit P1-16); the overlay must
-        // receive the same singleton instance CallView already holds.
-        let source = try callViewSource()
-        guard let range = source.range(of: "CallEffectsOverlay(") else {
-            XCTFail("CallView must instantiate CallEffectsOverlay")
-            return
-        }
-        let end = source.index(range.lowerBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
-        let call = String(source[range.lowerBound ..< end])
-        XCTAssertTrue(
-            call.contains("callManager: callManager"),
-            "CallView must pass its own `callManager` into CallEffectsOverlay so the child " +
-            "reuses the parent's @ObservedObject subscription instead of creating its own."
         )
     }
 

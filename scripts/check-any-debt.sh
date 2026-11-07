@@ -363,12 +363,15 @@ readonly SHARED_BASELINE=0
 # `(member: any) => member.userId === userId` ; il a disparu avec la bascule sur
 # `translationReadGate`, et la mesure passe de 4 à 3 usages pour ce fichier.
 #
-# ENREGISTRÉ PAR UN AUTRE LOT QUE CELUI QUI L'A GAGNÉ (#16654/#7392, PR #16661) :
-# #16660 a fusionné dans `dev` sans baisser cette ligne, donc `dev` LUI-MÊME échoue à
-# ce cliquet depuis — mesuré sur `origin/dev` nu, 492 contre une baseline de 493. Toute
-# PR partant de `dev` hérite donc d'un rouge qui ne lui appartient pas. La règle du
-# dépôt est d'inscrire le progrès, pas d'attendre que son auteur revienne : la
-# correction voyage avec la première PR qui bute dessus, et c'était celle-ci.
+# INSCRIT DEUX FOIS, PAR DEUX LOTS, À LA MÊME VALEUR — et c'est le symptôme d'un
+# cliquet qu'on laisse rouge : #16660 a fusionné dans `dev` sans baisser cette ligne,
+# donc `dev` LUI-MÊME échouait ici (mesuré sur `origin/dev` nu : 492 contre une
+# baseline de 493), et TOUTE PR partant de `dev` héritait d'un rouge qui ne lui
+# appartenait pas. Deux lots ont buté dessus en parallèle et l'ont corrigé chacun de
+# son côté ; la fusion les a départagés sur une seule ligne de valeur, identique.
+# Seule l'ATTRIBUTION a survécu de ce côté-ci, et c'est elle qui manquait : la
+# convention de ce fichier veut qu'une baisse dise QUEL lot l'a gagnée, sans quoi le
+# prochain à la relire ne peut pas vérifier qu'elle était méritée.
 readonly GATEWAY_BASELINE=492
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
