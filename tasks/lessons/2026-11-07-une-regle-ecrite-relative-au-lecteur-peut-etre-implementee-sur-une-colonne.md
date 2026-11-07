@@ -1,8 +1,8 @@
-# Une règle ÉCRITE relative au lecteur peut être implémentée sur une colonne, et sa prose ne le dit pas
+## 2026-11-07 — Une règle ÉCRITE relative au lecteur peut être implémentée sur une colonne, et sa prose ne le dit pas (#16604)
 
-*2026-11-07 — #16604, sixième porte de l'éphémère. Cycles précédents : #16578, #16581, #16583, #16586, #16590.*
+*Sixième porte de l'éphémère. Cycles précédents : #16578, #16581, #16583, #16586, #16590.*
 
-## Le fait
+### Le fait
 
 La décision #7377 énonce, règle 2 : « supprimé pour tous, **expiré**, ou à vue unique :
 la ligne SORT de la liste », et règle 3 : « éphémère **encore vivant** : la ligne est un
@@ -19,7 +19,7 @@ jusqu'au décompte du dernier.
 ne distingue pas l'horloge. Relire la décision pour vérifier l'implémentation ne pouvait
 pas trouver l'écart : la décision ne nomme pas l'horloge, elle nomme l'état.
 
-## La règle
+### La règle
 
 > **Devant une règle de service dont le prédicat est relatif à un lecteur — « expiré »,
 > « déjà vu », « encore disponible », « non lu » —, la question n'est pas « le code
@@ -35,7 +35,7 @@ porte ne protège que ses appelants** — c'est la leçon 276 (une projection tr
 la leçon 97 (un invariant de paire ne garde que l'exemplaire qui l'écrit) appliquées à une
 horloge.
 
-## Ce qui l'a trouvée, et ce que ça dit de la recette
+### Ce qui l'a trouvée, et ce que ça dit de la recette
 
 La recette est dans le doc-comment de `keepAliveForReader`, et elle a tenu six fois :
 
@@ -63,7 +63,7 @@ URL — alors que le fil l'avait retirée avec ce qu'elle cite (#8630). La coupu
 postérieure de huit jours à la décision. **Une décision ne s'étend pas d'elle-même aux
 lois votées après elle.**
 
-## Corollaire de lot : corriger la lecture sans la pose aurait créé la divergence qu'un fichier existait pour interdire
+### Corollaire de lot : corriger la lecture sans la pose aurait créé la divergence qu'un fichier existait pour interdire
 
 `starredMessageVerdict.ts` s'ouvre sur sa raison d'être : « pour que la pose d'une étoile
 et sa lecture ne puissent pas diverger ». Le verdict est partagé — donc le défaut l'était,
@@ -83,7 +83,7 @@ dire comment il l'a lu — la liste par le balayage de page
 (`readEphemeralReaderResolution`, #9579), parce qu'une porte qui décide seule ne peut pas
 lire « ligne absente d'une tranche plafonnée » comme « décompte pas démarré ».
 
-## Et le témoin : un témoin d'horloge pose les DEUX horloges ensemble
+### Et le témoin : un témoin d'horloge pose les DEUX horloges ensemble
 
 Variante de « un témoin de RANG s'écrit sur un rang AUTRE que le premier » (leçon 261).
 Un témoin qui ne poserait qu'une colonne `expiresAt` passée ne peut pas tomber : la lecture
