@@ -372,8 +372,12 @@ final class CallHangupFastPathTests: XCTestCase {
         }
         let row = String(view[start.upperBound ..< end.lowerBound])
         XCTAssertTrue(
-            row.contains(".foregroundColor(Color(hex: line.speakerColorHex))"),
-            "Le nom du locuteur se colore de SA couleur, dérivée de son identifiant."
+            row.contains("private var speakerColor: Color { Color(hex: line.speakerColorHex) }"),
+            "La couleur de la ligne est celle de son AUTEUR, dérivée de son identifiant (#16614)."
+        )
+        XCTAssertEqual(
+            row.components(separatedBy: ".foregroundColor(speakerColor)").count - 1, 2,
+            "Le nom ET le texte du sous-titre portent la couleur de leur auteur (#16612, #16614)."
         )
         XCTAssertTrue(
             row.contains("Text(speakerHeading)"),
