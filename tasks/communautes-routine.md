@@ -5,7 +5,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | date | lot | PR | issues | état |
 |---|---|---|---|---|
 | 2026-11-07 | Rejoindre / quitter depuis le détail (web), le détail dit au lecteur son rôle (passerelle, iOS) | #16601 | #6378 | fusionnée dans dev |
-| 2026-11-07 | Un ancien membre ne voit plus une communauté privée nulle part ; compteur actif partout (passerelle) | #16610 + suite | #16603 | #16610 fusionnée ; suite (revue adversariale) en PR |
+| 2026-11-07 | Un ancien membre ne voit plus une communauté privée nulle part ; compteur actif partout (passerelle) | #16610 + #16611 | #16603 | fusionnées dans dev |
+| 2026-11-07 | Les membres d'une communauté se lisent et se gèrent sur le web | à venir | #6375 | en cours |
 
 ## 2026-11-07 — lot 1
 
