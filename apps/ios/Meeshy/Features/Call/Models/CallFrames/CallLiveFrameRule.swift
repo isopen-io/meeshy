@@ -19,6 +19,11 @@ nonisolated enum CallLiveFrameDisplay: Equatable, Sendable {
         guard case .frame(let design) = self else { return nil }
         return design
     }
+
+    var isSuspended: Bool {
+        guard case .suspended = self else { return false }
+        return true
+    }
 }
 
 /// Ce qui oblige à REPEINDRE les couches du cadre (doc frames 06 § 4.1) : le cadre, les
