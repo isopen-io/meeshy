@@ -58,7 +58,7 @@ const COMMUNAUTE = '507f1f77bcf86cd799439044';
 const CREATEUR = '507f1f77bcf86cd7994390c0';
 
 type Ligne = { readonly userId: string; readonly role: string; readonly isActive: boolean };
-type Monde = { readonly isPrivate?: boolean; readonly lignes: readonly Ligne[]; readonly vivants?: readonly string[] };
+type Monde = { readonly isPrivate?: boolean; readonly desactivee?: boolean; readonly lignes: readonly Ligne[]; readonly vivants?: readonly string[] };
 
 const membre = (userId: string, role = 'member'): Ligne => ({ userId, role, isActive: true });
 const ancien = (userId: string): Ligne => ({ userId, role: 'member', isActive: false });
@@ -74,14 +74,14 @@ function communauteDouble(monde: Monde) {
           id: COMMUNAUTE,
           createdBy: CREATEUR,
           isPrivate: monde.isPrivate ?? true,
-          isActive: true,
+          isActive: monde.desactivee !== true,
           members: monde.lignes.filter((l) => l.userId === where.userId && l.isActive === (where.isActive ?? true)),
         };
       }),
     },
     communityMember: {
       findMany: jest.fn<any>(async (args: any) => monde.lignes
-        .filter((l) => args.where.userId.in.includes(l.userId))
+        .filter((l) => args.where.communityId === COMMUNAUTE && args.where.userId.in.includes(l.userId))
         .map((l) => ({ id: `cm-${l.userId}`, ...l }))),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
       createMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
@@ -193,6 +193,12 @@ describe('#16703 — débannir dans un salon d’une communauté privée', () =>
     expect(prisma.communityMember.findMany).not.toHaveBeenCalled();
   });
 
+  it('garde comme une privée une communauté publique DÉSACTIVÉE', async () => {
+    const { prisma } = await debannir({ isPrivate: false, desactivee: true, lignes: [membre(ACTEUR), ancien(CIBLE)] });
+
+    expect(prisma.participant.update).toHaveBeenCalledWith({ where: { id: 'p-cible' }, data: { bannedAt: null } });
+  });
+
   it('ne change rien hors communauté', async () => {
     const { prisma } = await debannir({ communityId: null, lignes: [] });
 
@@ -254,7 +260,8 @@ describe('#16703 — rattacher une conversation à une communauté privée', () 
     expect(prisma.conversation.update).toHaveBeenCalled();
     expect(prisma.communityMember.createMany).toHaveBeenCalledWith({
       data: [{ communityId: COMMUNAUTE, userId: CIBLE, role: 'member' }],
-    });
+    });    expect(prisma.communityMember.createMany.mock.invocationCallOrder[0])
+      .toBeLessThan(prisma.conversation.update.mock.invocationCallOrder[0]);
   });
 
   it('refuse sans rien écrire quand un participant ne peut pas entrer dans la communauté', async () => {

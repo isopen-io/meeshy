@@ -760,6 +760,12 @@ const community = await fastify.prisma.community.findFirst({
           : sendForbidden(reply, 'Some participants cannot join this private community', { code: 'COMMUNITY_PARTICIPANT_NOT_ADDABLE' });
       }
 
+      // L'admission s'écrit AVANT le rattachement : si elle échoue, rien n'est
+      // rattaché (au pire des membres en plus, jamais un salon ouvert).
+      if (admission?.kind === 'admitted') {
+        await applyCommunityAdmission(fastify.prisma, id, admission);
+      }
+
       // Update conversation to belong to this community (allows moving between communities)
       const updated = await fastify.prisma.conversation.update({
         where: { id: conversationId },
@@ -789,10 +795,6 @@ const community = await fastify.prisma.community.findFirst({
       // fermé (`communityConversationSchema`). Le gate masque la présence de
       // `user` ET celle de la ligne `Participant` ; le schéma retient le reste
       // de la ligne que l'`include` rend (jeton de session, session anonyme).
-      if (admission?.kind === 'admitted') {
-        await applyCommunityAdmission(fastify.prisma, id, admission);
-      }
-
       const [gated] = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), [updated]);
       return sendSuccess(reply, gated);
     } catch (error) {

@@ -75,6 +75,13 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Prochain lot recommandé : #16703 (débannir, rattacher, restaurer contournent la loi), puis la seconde moitié de #6376.
 
 
-## 2026-11-07 — réveil 9 (en cours)
+## 2026-11-07 — réveil 9
 
-- Lot : #16703 — débannir, rattacher une conversation, restaurer un « supprimé pour moi » consultent la loi de la communauté.
+- Lot : #16703 (sécurité, préexistant). Les trois chemins qui REMETTENT quelqu'un dans un salon d'une communauté privée (ou désactivée) suivent la loi de #16695 :
+  - débannir (`leverBannissementDeParticipant`) : l'appartenance n'est rendue que si `planSalonEntry` admet la cible, l'appelant étant le modérateur ; sinon le bannissement est levé seul (`liftBanOnly`). Admise par un admin/modérateur de la communauté, la cible y redevient membre ;
+  - rattacher une conversation (`POST /communities/:id/conversations/:conversationId`) : ses participants actifs entrent dans la communauté (`planCommunityAdmission`), l'admission écrite AVANT le rattachement ; un compte qui ne peut pas entrer ⇒ 403 `COMMUNITY_PARTICIPANT_NOT_ADDABLE`, rien d'écrit ;
+  - restaurer un « supprimé pour moi » : `mayReturnToSalon` ; un ancien membre ⇒ 403 `COMMUNITY_MEMBERS_ONLY`.
+- `planCommunityAdmission` ne lit plus la base quand personne n'entre.
+- Passerelle seule. Un ancien client affiche une erreur générique sur les deux nouveaux 403 ; la réponse de `…/unban` ne dit pas encore `membershipRestored` (l'événement socket le dit).
+- Revue adversariale avant la PR : non bloquante ; corrigés dans le lot (ordre admission → rattachement, témoin d'ordre, témoins sur `communityId` et sur une communauté publique désactivée). Ouvertes, préexistantes : #16723 (passer une communauté en privée laisse les non-membres dans ses salons — prioritaire), #16724 (`ensureParticipantFromMember` crée un participant sans la loi). Fenêtres TOCTOU communes à toutes les portes : rejoignent #16711.
+- Prochain lot recommandé : #16723, puis la seconde moitié de #6376 (la création propose l'ajout de membres).
