@@ -25,6 +25,11 @@ import { EngagementService } from '../../services/engagement/EngagementService';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { viewerFromRequest } from '../users/presence-gate';
+import {
+  applyCommunityAdmission,
+  loadSalonCommunity,
+  planSalonEntry,
+} from '../../services/conversations/communityMembershipSync';
 
 const logger = enhancedLogger.child({ module: 'ConversationInviteRoute' });
 
@@ -228,6 +233,16 @@ export function registerInviteRoute(
         return sendBadRequest(reply, 'This user is already a member of the conversation');
       }
 
+      // #16695 — entrer dans un salon d'une communauté privée, c'est y être
+      // admis : la loi de `POST …/participants` et de la création, une fois.
+      const community = await loadSalonCommunity(fastify.prisma, { communityId: conversation.communityId, actorId: inviterId });
+      const communityAdmission = await planSalonEntry(fastify.prisma, community, { kind: 'registered', userId });
+      if (communityAdmission.kind === 'refused') {
+        return communityAdmission.reason === 'invite-forbidden'
+          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
+          : sendNotFound(reply, 'User not found');
+      }
+
       // #4174 — la table de droits vient du site UNIQUE
       // (`services/participantRights.ts`). Elle était écrite ICI, et elle
       // DIFFÉRAIT de celle que `POST …/participants` posait pour le même
@@ -292,6 +307,7 @@ export function registerInviteRoute(
       if (entry.outcome === 'rejoin' && entry.participantId) {
         invalidateParticipantLookup(entry.participantId, conversationId);
       }
+      if (community) await applyCommunityAdmission(fastify.prisma, community.communityId, communityAdmission);
       announceConversationLanguageChange({ kind: 'arrival', conversationId, language: invitedMemberFields.language, readerUserId: userId });
 
       // `social.conversation_invite` (#8959) — même crédit que
