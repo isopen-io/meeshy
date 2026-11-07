@@ -47,7 +47,8 @@ async function everyoneAddable(
     select: { id: true },
     take: ids.length,
   });
-  if (living.length !== ids.length) return false;
+  const livingIds = new Set(living.map((user) => user.id));
+  if (!ids.every((id) => livingIds.has(id))) return false;
   const blocking = await prisma.user.findFirst({
     where: {
       OR: [
