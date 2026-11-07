@@ -150,4 +150,59 @@ final class FocalMetaColumnSourceGuardTests: XCTestCase {
         XCTAssertTrue(stripped.contains("mountsBottomLine("),
                       "FocalRow.swift doit décider de la ligne basse via FocalMetaColumn.mountsBottomLine")
     }
+
+}
+
+/// #16672 — la colonne méta ne pousse jamais la bulle.
+@MainActor
+final class FocalMetaColumnWidthTests: XCTestCase {
+
+    /// **Une photo en cours d'envoi garde la place qu'elle aura une fois partie.**
+    ///
+    /// La grille d'une photo est calculée pour la largeur RÉSERVÉE de cette
+    /// colonne (`FocalMediaGridLayout.gridWidth`). Pendant l'envoi, la colonne
+    /// portait « 13:41 ◯ 0 % », plus large que la réserve : la rangée débordait,
+    /// SwiftUI la recentrait, et la photo comme l'avatar se décalaient de 20 pt
+    /// vers la gauche, pour revenir à la confirmation.
+    func test_envoiEnCours_etEnvoiConfirme_ontLaMemeLargeur() {
+        let tempId = "cid_16672_\(UUID().uuidString)"
+        MessageUploadProgressStore.shared.begin([tempId])
+        MessageUploadProgressStore.shared.report(0, for: tempId)
+        defer { MessageUploadProgressStore.shared.end([tempId]) }
+        let progress = MessageUploadProgressStore.shared.progress(for: tempId)
+        XCTAssertEqual(progress?.percent, 0, "le témoin doit monter l'anneau « 0 % »")
+
+        let enCours = width(of: column(.sending), upload: progress)
+        let confirme = width(of: column(.delivered), upload: nil)
+
+        XCTAssertEqual(enCours, FocalMetrics.MetaColumn.reservedWidth, accuracy: 0.5,
+                       "pendant l'envoi, la colonne déborde de sa réserve et pousse la photo")
+        XCTAssertEqual(enCours, confirme, accuracy: 0.5,
+                       "la bulle en cours d'envoi et la bulle confirmée doivent garder la même mise en page")
+    }
+
+    /// Le repli EMPILÉ tient dans la réserve : l'anneau passe sous l'heure au
+    /// lieu de déborder sur la photo.
+    func test_leRepliEmpile_tientDansLaReserve() {
+        let tempId = "cid_16672_\(UUID().uuidString)"
+        MessageUploadProgressStore.shared.begin([tempId])
+        MessageUploadProgressStore.shared.report(1, for: tempId)
+        defer { MessageUploadProgressStore.shared.end([tempId]) }
+        let row = FocalMetaRow(isMe: true, timeString: "23:59", deliveryStatus: .sending, isDark: false,
+                               fillsWidth: false, stacksDelivery: true)
+        XCTAssertLessThanOrEqual(width(of: row, upload: MessageUploadProgressStore.shared.progress(for: tempId)),
+                                 FocalMetrics.MetaColumn.reservedWidth)
+    }
+
+    private func column(_ status: Message.DeliveryStatus) -> FocalMetaColumn {
+        FocalMetaColumn(isMe: true, timeString: "23:59", deliveryStatus: status, isDark: false)
+    }
+
+    private func width(of view: some View, upload: MessageUploadProgress?) -> CGFloat {
+        let host = UIHostingController(rootView: view
+            .environment(\.pendingUploadProgress, upload)
+            .environmentObject(FocalTimestampRevealState())
+            .fixedSize())
+        return host.sizeThatFits(in: CGSize(width: 1_000, height: 1_000)).width
+    }
 }

@@ -71,6 +71,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     var transcriptionDataChannel: RTCDataChannel?
     private var dataChannelPingTask: Task<Void, Never>?
     private var toggleVideoTask: Task<Void, Never>?
+    /// Vrai entre `disableLocalVideo()` et `enableLocalVideo()` : la caméra a
+    /// été retirée volontairement (coupure, « Répondre sans vidéo », gel de
+    /// survie). `attachAnswererTracks` ne doit alors PAS rattacher la piste
+    /// vidéo ni repasser la section en sendRecv — sinon un appel décroché sans
+    /// vidéo, ou une renégociation reçue caméra coupée, renverrait la caméra.
+    private var localVideoWithheld = false
 
     var localVideoTrack: Any? { localVideoTrack_ }
     var remoteVideoTrack: Any? { remoteVideoTrack_ }
@@ -439,7 +445,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                 applyAudioCodecPreferences(audioTransceiver: transceiver)
             case .video:
                 self.videoTransceiver = transceiver
-                if let video = localVideoTrack_ {
+                if let video = localVideoTrack_, !localVideoWithheld {
                     transceiver.sender.track = video
                     forceSendRecv(transceiver)
                     applyVideoCodecPreferences(videoTransceiver: transceiver)
@@ -646,6 +652,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     /// false when video was already being sent (no SDP change needed).
     func enableLocalVideo() async throws -> Bool {
         guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
+        localVideoWithheld = false
         if localVideoTrack_ == nil {
             try await buildLocalVideoTrackAndStartCapture()
         } else {
@@ -683,6 +690,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     /// track and flips the transceiver to recvonly (we keep receiving the peer's
     /// video). Returns true when a renegotiation is required.
     func disableLocalVideo() async -> Bool {
+        localVideoWithheld = true
         localVideoTrack_?.isEnabled = false
         await videoCapturer?.stopCapture()
         guard let vt = videoTransceiver else { return false }
@@ -906,6 +914,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         peerConnection = nil
         localAudioTrack = nil
         localVideoTrack_ = nil
+        localVideoWithheld = false
         remoteVideoTrack_ = nil
         remoteAudioTrack_ = nil
         audioTransceiver = nil

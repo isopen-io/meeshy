@@ -104,6 +104,22 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Prochain lot recommandé : `proche-talkie@ios` (référence ; recevoir d'abord, prouvé par la CI iOS), sinon l'écoute
   (#13934) côté web avec le titre défilant sur l'avatar.
 
+## 2026-11-07 — réveil 6 : recevoir le talkie sur iOS (#16673)
+
+- Reprise : deux autres réveils menaient encore leur PR (#16624 écran du Bring iOS, #16644 réception du talkie sur le
+  web) ; ce réveil ne les a pas touchées et a pris le sous-lot iOS du talkie, que personne n'écrivait. Issue #16673
+  ouverte sous #13935 (milestone #215), branche réservée avant toute écriture, l'autre réveil prévenu.
+- Livré dans la PR #16674 : SDK (`Talkie.swift`, trois événements routés, fragment binaire lu en `Data` et passé par la
+  même file ordonnée que les charges décodées, `talkieBlocked` lu, `setReceptionBlocked` écrit un champ) ; app
+  (`TalkieCenter` iso `talkie-live.ts`, `TalkieVoicePlayer` par fragments planifiés sur l'horloge audio, silencieux
+  respecté, indicateur non modal « X vous parle · Couper », « Couper son talkie » actif dès Proche ;
+  `CircleBringBlock*` → `CircleReceptionBlock*`).
+- Gates locaux : `check_localization.py`, `check_house_rules.sh` (30 règles), `check_cohesion_budget.sh` verts ;
+  `vitest packages/shared/__tests__/ci` 122/122. iOS se prouve par la CI de la PR (`[xcodegen]` puis `ios.yml` en
+  `workflow_dispatch`).
+- Ce qui reste du talkie : Android (réception + couper), émission iOS / web (#16641) / Android, arrière-plan iOS
+  (PushToTalk ou NSE) et Android (FCM), décodeur continu iOS si la recette entend une couture entre fragments.
+- Prochain lot recommandé : réception du talkie sur Android (#16675, iso iOS), puis l’émission iOS.
 ## 2026-11-07 — réveil 7 : l'écoute partagée, côté serveur (`proche-sang-ecoute`, #16686 ⊂ #13934)
 
 - Reprise : #16674 (talkie reçu sur iOS) est menée par le réveil 6, #16624 (présence sur l'écran du Bring iOS) par le
@@ -121,3 +137,45 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   le fantôme (ciblé et global) n'existe pas encore en base.
 - Prochain lot recommandé : `proche-sang-ecoute@web` (réception + bandeau défilant sur l'avatar, petit et prouvable en
   conteneur), puis `@ios`.
+
+## 2026-11-07 — réveil 8 : émettre le talkie depuis le web (`proche-talkie@web`, #16641)
+
+- Reprise : deux PR de la routine sont ouvertes, chacune menée par un réveil encore actif — #16674 (talkie reçu sur
+  iOS) et #16694 (relais serveur de l'écoute, #16686). Ce réveil ne les touche pas (« celui qui n'a rien écrit
+  cède ») ; l'écoute sur le web attend la fusion de #16694. Branche `claude/cercles-talkie-web-emettre` poussée vide
+  avant toute écriture.
+- Lot choisi : ÉMETTRE le talkie depuis le web (#16641), suite de #16638 (le web le reçoit déjà).
+- Livré dans la PR : `lib/talkie/talkie-sender.ts` (appuyer ouvre `talkie:start` et le micro ensemble, ce qui est capté
+  avant l'accusé part dès l'ouverture, trames AAC ADTS regroupées en fragments de ~250 ms sous le plafond servi,
+  `seq` croissant, relâcher vide le reste puis `talkie:end`, durée maximale et plafonds fermés avant que le serveur ne
+  coupe, un `talkie:ended` qui porte MON `talkieId` arrête le micro, refus codés rendus sans fuite : blocage et repli
+  donnent la même phrase), `lib/talkie/talkie-encoder.ts` (WebCodecs : `getUserMedia` → `MediaStreamTrackProcessor` →
+  `AudioEncoder` `mp4a.40.2` en `adts`, 64 kb/s ; sonde une fois par onglet), `routes/user-profile-talkie.tsx`
+  (« Maintenir pour parler » sur la fiche d'un Proche ou d'un Sang, pointeur ou Espace/Entrée maintenus ; ailleurs,
+  une phrase propose le message vocal ; `TALKIE_NOT_ALLOWED` retire le bouton). Treize libellés en sept langues.
+- Ce qui reste du talkie : la copie en message vocal après la prise de parole et le bouton
+  « Envoyer un message vocal » qui ouvre la conversation directe (#16698) ; Safari et Firefox (#16699, worklet ou second encodage
+  Opus) ; l'émission iOS et Android ; la recette deux navigateurs sur staging.
+- Prochain lot recommandé : l'écoute sur le web (#13934, réception + titre défilant sur l'avatar), le relais serveur
+  (#16694) étant fusionné dans `dev` pendant ce réveil ; sinon l'émission du talkie sur iOS.
+
+## 2026-11-07 — réveil 9 : mener #16700 à la fusion
+
+- Reprise : #16700 (émettre le talkie depuis le web, #16641) n'avait plus de réveil pour la suivre ; sa CI complète
+  tournait encore sur le commit de fusion précédent. #16674 (talkie reçu sur iOS) est menée par le réveil 6, encore
+  actif : ce réveil ne la touche pas.
+- Fait : `origin/dev` fusionné à la main dans la branche (aucun conflit, aucun fichier du lot touché par `dev`) ;
+  gates locaux relancés : témoins du talkie et de la fiche 48/48, `tsc --noEmit` du web vert ; CI complète relancée
+  sur le dernier commit, puis fusion dans `dev`.
+- Prochain lot recommandé : l'écoute sur le web (#13934 : réception + titre défilant sur l'avatar).
+
+## 2026-11-07 — réveil 10 : #16700 menée à la fusion (suite du réveil 9)
+
+- Reprise : le réveil 9 s'est arrêté en attendant la CI de #16700 et de #16714 (`ci.yml` épinglé sur `ubuntu-24.04`,
+  #16713). Aucun réveil vivant ne suivait ni l'une ni l'autre.
+- CI de #16700 (run 42412024556) : verte sauf « Traducteur · tests Python », tombé sur un runner sans disque
+  (`No space left on device` dans le diagnostic du runner, hors lot). #16714 entièrement verte : fusionnée dans `dev`.
+- `origin/dev` fusionné à la main dans la branche (aucun conflit ; `dev` n'a touché que les communautés, le traducteur
+  et l'iOS des appels). Gates locaux : `bun test` du web sur talkie, relations et composants 5558/5558, `tsc --noEmit`
+  du web vert. CI complète relancée sur le dernier commit avant fusion.
+- Prochain lot recommandé : l'écoute sur le web (#13934 : réception + titre défilant sur l'avatar).

@@ -154,7 +154,7 @@
     <string name="call_live_frame_none">Aucun cadre</string>
     <string name="call_live_frame_not_proposed">Le cadre est appliqué chez vous, mais n\'a pas pu être proposé</string>
     <string name="call_live_frame_proposal">%1$s vous propose le cadre « %2$s »</string>
-    <string name="call_mode_gesture_hint">Deux tapes : photo · Appui long : vidéo</string>
+    <string name="call_mode_gesture_hint">toucher deux fois pour une photo · maintenir pour filmer</string>
     <string name="call_mode_montage_title">Montage de l\'appel</string>
     <string name="call_mode_photo">Prendre une photo</string>
     <string name="call_mode_quit">Quitter</string>
