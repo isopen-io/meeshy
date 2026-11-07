@@ -25,6 +25,7 @@ import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-type
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityEngagementOptions } from './types';
+import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -659,6 +660,7 @@ const community = await fastify.prisma.community.findFirst({
         select: {
           id: true,
           createdBy: true,
+          isPrivate: true,
           members: { where: activeMembershipOf(userId), select: { role: true }, take: 1 }
         }
       });
@@ -735,6 +737,29 @@ const community = await fastify.prisma.community.findFirst({
         }
       }
 
+      // #16703 — rattacher à une communauté PRIVÉE fait de ses participants
+      // les occupants d'un salon qu'elle réserve à ses membres : ils y entrent
+      // sous la loi d'une invitation (`planCommunityAdmission`), ou rien ne
+      // se rattache.
+      const admission = community.isPrivate
+        ? await planCommunityAdmission(fastify.prisma, {
+            communityId: id,
+            actorId: userId,
+            createdBy: community.createdBy,
+            isPrivate: true,
+            actorRole: community.members[0]?.role ?? null,
+            participantIds: conversation.participants
+              .filter((p: { userId: string | null; isActive?: boolean }) => p.isActive !== false)
+              .flatMap((p: { userId: string | null }) => (p.userId ? [p.userId] : [])),
+            admitActor: false,
+          })
+        : null;
+      if (admission?.kind === 'refused') {
+        return admission.reason === 'invite-forbidden'
+          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
+          : sendForbidden(reply, 'Some participants cannot join this private community', { code: 'COMMUNITY_PARTICIPANT_NOT_ADDABLE' });
+      }
+
       // Update conversation to belong to this community (allows moving between communities)
       const updated = await fastify.prisma.conversation.update({
         where: { id: conversationId },
@@ -764,6 +789,10 @@ const community = await fastify.prisma.community.findFirst({
       // fermé (`communityConversationSchema`). Le gate masque la présence de
       // `user` ET celle de la ligne `Participant` ; le schéma retient le reste
       // de la ligne que l'`include` rend (jeton de session, session anonyme).
+      if (admission?.kind === 'admitted') {
+        await applyCommunityAdmission(fastify.prisma, id, admission);
+      }
+
       const [gated] = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), [updated]);
       return sendSuccess(reply, gated);
     } catch (error) {
