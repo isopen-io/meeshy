@@ -10,7 +10,7 @@ import type { FeedMedia, FeedPost } from '@/lib/api/feed-pages';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 
-import { resolveMediaCaption } from '@/lib/api/prism';
+import { resolveMediaAlt, resolveMediaCaption } from '@/lib/api/prism';
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 import type { SceneCarrier } from '@/lib/canvas/carrier';
 
@@ -100,6 +100,18 @@ export type FeedCardMedia = {
    * #5893). La LÉGENDE ne le remplace pas — elle est déjà rendue en texte
    * VISIBLE sous le média, et la répéter en `alt` la ferait lire deux fois. */
   readonly altText?: string;
+  /** LA LANGUE DANS LAQUELLE `altText` est servi (#7392) — elle porte
+   * l'attribut `lang` de l'image, donc la VOIX du lecteur d'écran. Le
+   * doc-comment de `lib/api/prism.ts` nomme ce défaut comme sa raison
+   * d'exister : « un lecteur d'écran qui prononce un texte français avec une
+   * voix anglaise ». Absente quand `altText` l'est, ou quand ni `altLanguage`
+   * ni le Prisme n'ont pu dire la langue. */
+  readonly altTextLanguage?: string;
+  /** Vrai quand `altText` est une TRADUCTION de `PostMedia.alt`, jamais la
+   * source elle-même. Il n'a pas l'ambiguïté de `captionTranslated` : le texte
+   * alternatif n'a qu'UNE provenance, sa propre carte — aucun repli sur le
+   * corps du post (#6864 ne vaut que pour la légende, qui est VISIBLE). */
+  readonly altTextTranslated?: boolean;
 };
 
 export type FeedCardAuthor = {
@@ -375,7 +387,32 @@ function resolveMedia(
           ? { text: fallback.full, language: fallback.language, translated: fallback.translated, origin: 'post' as const }
           : undefined;
     const captionLanguage = caption === undefined ? undefined : textOrUndefined(caption.language);
-    const altText = textOrUndefined(m.alt);
+    // LE TEXTE ALTERNATIF DESCEND SON PROPRE PRISME (#7392) — même dispositif
+    // que la légende juste au-dessus, sur le TROISIÈME couple
+    // (`altLanguage` / `altTranslations`). Il sortait brut jusqu'au 2026-11-07,
+    // c'est-à-dire dans la langue de l'auteur, pour la seule chaîne du média
+    // qu'un lecteur d'écran PRONONCE.
+    //
+    // Même garde que la légende, pour la même raison : une pièce SANS texte
+    // alternatif n'a rien à résoudre, et `resolveMediaAlt` sur une chaîne vide
+    // rendrait un `language` trompeur — l'original vide « servi » dans la
+    // langue du lecteur.
+    const rawAlt = textOrUndefined(m.alt);
+    const resolvedAlt =
+      rawAlt === undefined
+        ? undefined
+        : resolveMediaAlt({
+            preferredLanguages,
+            altLanguage: m.altLanguage,
+            altTranslations: m.altTranslations,
+            alt: rawAlt,
+          });
+    const altText = resolvedAlt?.text;
+    // La langue voyage AVEC le texte, dans la même valeur : c'est elle qui
+    // porte l'attribut `lang` de l'image, donc la voix du lecteur d'écran
+    // (§ Prisme cycle 122 — qui AFFICHE ce que le résolveur élit). Absente
+    // seulement quand ni `altLanguage` ni le Prisme n'ont pu la dire.
+    const altTextLanguage = resolvedAlt === undefined ? undefined : textOrUndefined(resolvedAlt.language);
     const durationMs = numberOrUndefined(m.duration);
     const width = numberOrUndefined(m.width);
     const height = numberOrUndefined(m.height);
@@ -402,6 +439,8 @@ function resolveMedia(
       ...(caption !== undefined && trackingLinks.length > 0 ? { trackingLinks } : {}),
       ...(captionLanguage !== undefined ? { captionLanguage } : {}),
       ...(altText !== undefined ? { altText } : {}),
+      ...(altTextLanguage !== undefined ? { altTextLanguage } : {}),
+      ...(resolvedAlt !== undefined ? { altTextTranslated: resolvedAlt.translated } : {}),
     };
   });
 }

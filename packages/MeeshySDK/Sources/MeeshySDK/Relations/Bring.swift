@@ -208,9 +208,6 @@ public enum RelationReceptionSetting: String, Sendable, Equatable, CaseIterable 
 /// Les instants ISO 8601 du contrat, avec ou sans millisecondes.
 public enum BringInstant {
     public static func parse(_ value: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: value) { return date }
-        return ISO8601DateFormatter().date(from: value)
+        WireDate.date(from: value)
     }
 }
