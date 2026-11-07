@@ -179,10 +179,17 @@ extension MessageSocketManager {
     /// screen capture state changed. Other participants receive
     /// `call:screen-capture-alert` so they can display a warning.
     public func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {
+        emitCallScreenCaptureDetected(callId: callId, participantId: participantId, isCapturing: isCapturing, kind: .recording)
+    }
+
+    /// #16665 — `kind` dit la sorte de capture ; une capture ponctuelle part
+    /// avec `isCapturing` vrai seul.
+    public func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool, kind: CallScreenCaptureKind) {
         socket?.emit("call:screen-capture-detected", [
             "callId": callId,
             "participantId": participantId,
-            "isCapturing": isCapturing
+            "isCapturing": isCapturing,
+            "kind": kind.rawValue
         ])
     }
 
