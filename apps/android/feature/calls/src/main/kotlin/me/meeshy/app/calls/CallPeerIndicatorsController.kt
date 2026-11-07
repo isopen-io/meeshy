@@ -24,6 +24,8 @@ data class PeerIndicators(
     val screenCapturing: Boolean = false,
     /** #16665 — a peer SCREENSHOT, shown on the capsule for a short window (no end on the wire). */
     val screenshotFlashing: Boolean = false,
+    /** #16665 — who captured last, so the capsule names them in a group. */
+    val capturerId: String = "",
     /** #16665 — the captures of the call in progress, dated, for the live journal and the captions band. */
     val liveCaptures: List<CallLiveCapture> = emptyList(),
     /**
@@ -145,6 +147,7 @@ class CallPeerIndicatorsController @Inject constructor(
         }
         if (alert.isCapturing) {
             val capturer = alert.userId?.takeIf { it.isNotBlank() } ?: alert.participantId.orEmpty()
+            indicators = indicators.copy(capturerId = capturer)
             journal(host, "capture:$capturer:${kind.wire}:${captureSequence++}", kind, capturer)
         }
         host.publish()

@@ -68,7 +68,13 @@ private val CAPTION_TARGET = 48.dp
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CallCaptionsJournalSheet(onDismiss: () -> Unit, viewModel: CallCaptionsViewModel = hiltViewModel()) {
+internal fun CallCaptionsJournalSheet(
+    onDismiss: () -> Unit,
+    viewModel: CallCaptionsViewModel = hiltViewModel(),
+    /** #16665 — the dated captures of the call, in the journal at their time (loi 13). */
+    captures: List<CallLiveCapture> = emptyList(),
+    peerName: String = "",
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val labels = rememberCaptionLabels()
     val lines = remember(state, labels) {
@@ -77,7 +83,7 @@ internal fun CallCaptionsJournalSheet(onDismiss: () -> Unit, viewModel: CallCapt
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = CallPalette.Raised, contentColor = Color.White) {
         Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f).navigationBarsPadding()) {
             CallJournalHeader(showsOriginal = state.showsOriginal, onShowsOriginal = viewModel::setShowsOriginal, onClose = onDismiss)
-            CallJournalList(lines = lines, onToggleOriginal = viewModel::toggleReveal, modifier = Modifier.weight(1f))
+            CallJournalList(lines = lines, onToggleOriginal = viewModel::toggleReveal, modifier = Modifier.weight(1f), captures = captures, peerName = peerName)
             state.ownSpeech.notCaptionedRes()?.let { notCaptioned ->
                 Text(
                     text = stringResource(notCaptioned),
@@ -125,11 +131,15 @@ internal fun CallJournalList(
     onToggleOriginal: (String) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: androidx.compose.ui.unit.Dp = MeeshySpacing.lg,
+    captures: List<CallLiveCapture> = emptyList(),
+    peerName: String = "",
 ) {
+    val entries = remember(lines, captures) { CallBandEntries.all(lines, captures) }
+    val you = stringResource(R.string.call_avatar_you)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var follow by remember { mutableStateOf(CallJournalFollow.LIVE) }
-    val tail = lines.lastOrNull()?.let { "${lines.size}|${it.key}|${it.text.length}" }.orEmpty()
+    val tail = lines.lastOrNull()?.let { "${entries.size}|${it.key}|${it.text.length}" } ?: "${entries.size}"
 
     LaunchedEffect(listState) {
         var lastIndex = listState.firstVisibleItemIndex
@@ -143,8 +153,8 @@ internal fun CallJournalList(
             }
     }
     LaunchedEffect(tail) {
-        if (lines.isEmpty()) return@LaunchedEffect
-        if (follow.isFollowing) listState.animateScrollToItem(lines.lastIndex) else follow = follow.lineArrived()
+        if (entries.isEmpty()) return@LaunchedEffect
+        if (follow.isFollowing) listState.animateScrollToItem(entries.lastIndex) else follow = follow.lineArrived()
     }
 
     Box(modifier = modifier.fillMaxWidth()) {
@@ -154,7 +164,7 @@ internal fun CallJournalList(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(contentPadding),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         ) {
-            if (lines.isEmpty()) {
+            if (entries.isEmpty()) {
                 item(key = "waiting") {
                     Text(
                         text = stringResource(R.string.call_captions_waiting),
@@ -163,16 +173,26 @@ internal fun CallJournalList(
                     )
                 }
             }
-            items(lines, key = { it.key }) { line ->
-                CallCaptionRow(line = line, showsTime = true, onToggleOriginal = { onToggleOriginal(line.key) })
+            items(entries, key = { entry -> journalKey(entry) }) { entry ->
+                when (entry) {
+                    is CallBandEntry.Sentence ->
+                        CallCaptionRow(line = entry.line, showsTime = true, onToggleOriginal = { onToggleOriginal(entry.line.key) })
+                    is CallBandEntry.Capture -> CallCaptureLine(
+                        name = liveCaptureName(entry.capture, selfId = null, youLabel = you, peerName = peerName),
+                        nameColor = hexColor(CallSpeakerColor.hex(entry.capture.userId.ifBlank { peerName })),
+                        kind = entry.capture.kind,
+                        elapsed = entry.capture.elapsedLabel,
+                        ink = Color.White.copy(alpha = 0.75f),
+                    )
+                }
             }
         }
-        if (follow.showsReturnToLive && lines.isNotEmpty()) {
+        if (follow.showsReturnToLive && entries.isNotEmpty()) {
             CallJournalReturnToLive(
                 hasUnseen = follow.hasUnseen,
                 onClick = {
                     follow = CallJournalFollow.LIVE
-                    scope.launch { listState.animateScrollToItem(lines.lastIndex) }
+                    scope.launch { listState.animateScrollToItem(entries.lastIndex) }
                 },
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = MeeshySpacing.md),
             )
@@ -237,6 +257,8 @@ internal fun CallCaptionsTranscriptPanel(
         }
         CallJournalList(
             lines = lines,
+            captures = state.liveCaptures,
+            peerName = state.peerName,
             onToggleOriginal = viewModel::toggleReveal,
             modifier = Modifier
                 .weight(1f)
@@ -245,4 +267,9 @@ internal fun CallCaptionsTranscriptPanel(
             contentPadding = MeeshySpacing.md,
         )
     }
+}
+
+private fun journalKey(entry: CallBandEntry): String = when (entry) {
+    is CallBandEntry.Sentence -> entry.line.key
+    is CallBandEntry.Capture -> "capture:${entry.capture.id}"
 }

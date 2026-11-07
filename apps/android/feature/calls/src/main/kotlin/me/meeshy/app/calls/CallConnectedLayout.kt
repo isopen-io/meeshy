@@ -227,7 +227,7 @@ internal fun CallConnectedColumn(
         // comme en groupe ; hors du fondu du chrome : une capture ne se cache pas.
         if (state.isPeerScreenCapturing && !inPip) {
             CallCaptureCapsule(
-                name = state.peerName,
+                name = state.peerScreenCapturerName.ifBlank { state.peerName },
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = CALL_CAPTURE_CAPSULE_TOP, start = MeeshySpacing.lg, end = MeeshySpacing.lg),
             )
         }

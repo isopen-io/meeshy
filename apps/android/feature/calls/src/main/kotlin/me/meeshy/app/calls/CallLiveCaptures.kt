@@ -3,6 +3,7 @@ package me.meeshy.app.calls
 import me.meeshy.sdk.model.call.CallCaptureKind
 import me.meeshy.sdk.model.call.CallLiveCaptionLine
 import me.meeshy.sdk.model.call.CallRecordingSocketEvent
+import me.meeshy.sdk.model.call.group.GroupCallRoster
 
 /**
  * #16665 — a capture of the call in progress, as the live journal and the captions band show it
@@ -17,7 +18,15 @@ data class CallLiveCapture(
     val userId: String,
     val atMs: Long,
     val elapsedLabel: String,
+    /** Who captured, as the call names them ([CallCapturerName]) — blank until the screen resolves it. */
+    val name: String = "",
 )
+
+/** In a group, a capture is named by its author in the roster; the call's name only stands in (duo, unknown member). */
+object CallCapturerName {
+    fun resolve(userId: String, roster: GroupCallRoster, peerName: String): String =
+        roster.member(userId)?.displayName?.takeIf { it.isNotBlank() } ?: peerName
+}
 
 /** The live journal's law: one line per person, per kind and per 5 s window, bounded. */
 object CallLiveCaptureJournal {
@@ -66,7 +75,10 @@ sealed interface CallBandEntry {
  */
 object CallBandEntries {
     fun last(lines: List<CallLiveCaptionLine>, captures: List<CallLiveCapture>, count: Int): List<CallBandEntry> =
+        all(lines, captures).takeLast(count)
+
+    /** The whole live journal (the Journal sheet, the audio panel): every sentence and every capture, at their time. */
+    fun all(lines: List<CallLiveCaptionLine>, captures: List<CallLiveCapture>): List<CallBandEntry> =
         (lines.map { CallBandEntry.Sentence(it) } + captures.map { CallBandEntry.Capture(it) })
             .sortedWith(compareBy<CallBandEntry> { it.atMs }.thenBy { if (it is CallBandEntry.Sentence) 0 else 1 })
-            .takeLast(count)
 }

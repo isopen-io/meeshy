@@ -138,6 +138,8 @@ data class CallUiState(
      * `isRemoteScreenCapturing` parity). Never leaks past the call's media phases.
      */
     val isPeerScreenCapturing: Boolean = false,
+    /** #16665 — who the capsule names: the capturer in a group, the call's name in a duo. */
+    val peerScreenCapturerName: String = "",
     /**
      * The latest live caption from the remote speaker (`call:translated-segment`),
      * preferring the server-side translation over the original text — `null` when

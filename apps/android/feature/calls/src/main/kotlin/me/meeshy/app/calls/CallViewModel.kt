@@ -853,12 +853,17 @@ class CallViewModel @Inject constructor(
 
     private fun publish() {
         val peer = peers.indicators
+        val roster = groupMesh.value.roster
+        val captures = peer.liveCaptures.map { it.copy(name = CallCapturerName.resolve(it.userId, roster, config.peerName)) }
         _state.value = CallPresenter.present(
             callState, config, media, elapsedSeconds, connectionQuality, waiting.state,
             peer.qualityDegraded, peer.screenCapturing || peer.screenshotFlashing, peer.caption,
             peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
-            peerScreenSharing = peer.screenSharing, videoNotice = videoNotice, liveCaptures = peer.liveCaptures,
-        ).withGroupTitle(groupTitle?.text(groupTitleWording.current())).copy(isOnHold = hold.isOnHold.value)
+            peerScreenSharing = peer.screenSharing, videoNotice = videoNotice, liveCaptures = captures,
+        ).withGroupTitle(groupTitle?.text(groupTitleWording.current())).copy(
+            isOnHold = hold.isOnHold.value,
+            peerScreenCapturerName = CallCapturerName.resolve(peer.capturerId, roster, config.peerName),
+        )
         syncPreview()
     }
 

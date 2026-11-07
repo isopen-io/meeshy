@@ -52,4 +52,27 @@ class CallLiveCapturesTest {
         assertThat(entries.map { if (it is CallBandEntry.Capture) it.capture.id else (it as CallBandEntry.Sentence).line.key })
             .containsExactly("n1", "s2").inOrder()
     }
+
+    @Test
+    fun `in a group the capture is named by who captured, the peer name only standing in`() {
+        val roster = me.meeshy.sdk.model.call.group.GroupCallRoster(
+            localUserId = "u-me",
+            members = listOf(me.meeshy.sdk.model.call.group.GroupCallMember(userId = "u-karim", displayName = "Karim")),
+        )
+
+        assertThat(CallCapturerName.resolve("u-karim", roster, peerName = "Équipe")).isEqualTo("Karim")
+        assertThat(CallCapturerName.resolve("u-unknown", roster, peerName = "Équipe")).isEqualTo("Équipe")
+        assertThat(CallCapturerName.resolve("", roster, peerName = "Awa")).isEqualTo("Awa")
+    }
+
+    @Test
+    fun `the journal holds every sentence and every capture, at their time`() {
+        val entries = CallBandEntries.all(
+            lines = listOf(sentence("s1", 1_000), sentence("s2", 3_000)),
+            captures = listOf(capture("c1", 2_000)),
+        )
+
+        assertThat(entries.map { it.atMs }).containsExactly(1_000L, 2_000L, 3_000L).inOrder()
+        assertThat(entries[1]).isInstanceOf(CallBandEntry.Capture::class.java)
+    }
 }

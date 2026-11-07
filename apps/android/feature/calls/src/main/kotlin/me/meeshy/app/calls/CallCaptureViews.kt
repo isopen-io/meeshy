@@ -105,5 +105,5 @@ internal fun captureKindPhrase(kind: CallCaptureKind): Int = when (kind) {
 internal fun liveCaptureName(capture: CallLiveCapture, selfId: String?, youLabel: String, peerName: String): String = when {
     !capture.kind.namesCapturer -> ""
     selfId != null && capture.userId == selfId -> youLabel
-    else -> peerName
+    else -> capture.name.ifBlank { peerName }
 }
