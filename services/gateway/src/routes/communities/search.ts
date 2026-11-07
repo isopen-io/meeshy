@@ -9,6 +9,7 @@ import { validatePagination } from '../../utils/pagination';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendPaginatedSuccess, sendInternalError, createPaginationMeta } from '../../utils/response.js';
 import { resolveCommunityMemberPresence } from '../../services/community-member-presence';
+import { COMMUNITY_ACTIVE_COUNTS } from './serialization';
 
 const logger = enhancedLogger.child({ module: 'CommunitySearchRoutes' });
 
@@ -127,6 +128,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
           {
             members: {
               some: {
+                isActive: true,
                 user: {
                   OR: [
                     { username: { contains: q, mode: 'insensitive' as const } },
@@ -173,12 +175,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
                 }
               }
             },
-            _count: {
-              select: {
-                members: true,
-                Conversation: true
-              }
-            }
+            _count: { select: COMMUNITY_ACTIVE_COUNTS }
           },
           orderBy: { createdAt: 'desc' },
           skip: offsetNum,

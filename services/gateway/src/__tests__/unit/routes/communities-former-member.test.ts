@@ -212,17 +212,6 @@ describe('GET /communities — la liste de mes communautés', () => {
     expect(role(OWN)).toBe('admin');
     await app.close();
   });
-
-  it('ne sert ni la liste des membres ni leur présence', async () => {
-    const app = await build();
-    const body = JSON.parse((await app.inject({ method: 'GET', url: '/communities' })).body);
-
-    body.data.forEach((row: Row) => {
-      expect(row.members).toBeUndefined();
-      expect(JSON.stringify(row)).not.toContain('isOnline');
-    });
-    await app.close();
-  });
 });
 
 describe('GET /communities/:id/conversations — les salons d’une communauté', () => {

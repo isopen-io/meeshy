@@ -27,6 +27,7 @@ import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
 import { keepDiscoverable } from '../../services/profile-discoverability';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
+import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS } from '../communities/serialization';
 
 
 /**
@@ -238,17 +239,11 @@ export async function getDashboardStats(fastify: FastifyInstance) {
           take: 5
         }),
         fastify.prisma.communityMember.count({
-          where: {
-            userId
-          }
+          where: activeMembershipOf(userId)
         }),
         fastify.prisma.community.findMany({
           where: {
-            members: {
-              some: {
-                userId
-              }
-            }
+            members: { some: activeMembershipOf(userId) }
           },
           select: {
             id: true,
@@ -257,10 +252,9 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             avatar: true,
             isPrivate: true,
             updatedAt: true,
-            _count: {
-              select: { members: true, Conversation: true }
-            },
+            _count: { select: COMMUNITY_ACTIVE_COUNTS },
             members: {
+              where: { isActive: true },
               take: 5,
               select: {
                 user: {
