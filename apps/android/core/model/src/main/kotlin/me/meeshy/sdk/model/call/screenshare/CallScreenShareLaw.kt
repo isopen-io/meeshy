@@ -63,4 +63,11 @@ object CallScreenShareLaw {
     /** Offert sur un appel établi ; un partage en cours garde toujours son bouton d'arrêt. */
     fun isOffered(isEstablished: Boolean, phase: CallScreenSharePhase): Boolean =
         isEstablished || phase != CallScreenSharePhase.Idle
+
+    /**
+     * Mon partage commence : l'appel se replie dans sa pastille, pour montrer ce qu'on partage (#16664,
+     * `docs/product/appels-vue-finale.md` loi 12). Rouvrir un appel qui partage déjà ne le replie pas.
+     */
+    fun minimizesOnStart(previous: CallScreenSharePhase, next: CallScreenSharePhase): Boolean =
+        previous == CallScreenSharePhase.Requesting && next == CallScreenSharePhase.Sharing
 }

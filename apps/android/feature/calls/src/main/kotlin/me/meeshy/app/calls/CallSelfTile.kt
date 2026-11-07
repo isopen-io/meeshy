@@ -117,7 +117,7 @@ internal fun CallSelfTile(
         val scope = rememberCoroutineScope()
         val haptics = LocalHapticFeedback.current
 
-        val size = CallSelfTileLaw.tileSize(container, insets, scale, pinch)
+        val size = CallSelfTileLaw.tileSize(container, insets, CallSelfTileLaw.resting(scale, controlsVisible), pinch)
         val rowBounds = CallSelfTileControlsLaw.bounds(container, insets)
         fun restingCenter(at: CallSelfTileCorner): CallTilePoint =
             CallSelfTileControlsLaw.restingCenter(CallSelfTileLaw.center(at, container, size, insets), size, rowBounds)
