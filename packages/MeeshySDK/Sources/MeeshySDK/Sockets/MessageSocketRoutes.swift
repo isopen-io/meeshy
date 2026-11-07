@@ -19,6 +19,7 @@ enum MessageSocketRoutes {
             manager.profileDecorRoutes,
             game(manager),
             relations(manager),
+            bring(manager),
             conversations(manager),
             notifications(manager, presentedToken: presentedToken),
             media(manager),

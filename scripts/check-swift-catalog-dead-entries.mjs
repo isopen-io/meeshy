@@ -577,11 +577,6 @@ const PENDING_CLIENT_ENTRIES = {
   'LensEndpoint.partnersPending': { issue: 14097, reason: 'GET /lens/partners/pending — file de vérification, console web seulement' },
   'LensEndpoint.partnersByUserIdVerify': { issue: 14097, reason: 'POST /lens/partners/:userId/verify — console web seulement' },
   'LensEndpoint.partnersByUserIdRevoke': { issue: 14097, reason: 'POST /lens/partners/:userId/revoke — console web seulement' },
-  // Le Bring et les réglages par personne (#13936, servis par la PR #14441) : le sous-lot iOS
-  // `proche-bring@ios` les appellera ; les réglages par personne, l'écran de #14229.
-  'BringEndpoint.byUserId': { issue: 13936, reason: 'GET|POST /bring/:userId — disponibilité et envoi du Bring, sous-lot iOS' },
-  'BringEndpoint.byBringId': { issue: 13936, reason: 'DELETE /bring/:bringId — arrêter un Bring d’un geste, sous-lot iOS' },
-  'RelationsEndpoint.byUserIdSettings': { issue: 14229, reason: 'GET|PUT /relations/:userId/settings — les réglages par personne sur iOS' },
   // L'éditeur de packs lié à un compte Meeshy vérifié (#16274, servi par la PR #16378) : la boutique iOS lira la
   // fiche publique et l'espace de l'éditeur ; la liste d'administration reste à la console web.
   'PublishersEndpoint.bySlug': { issue: 16274, reason: 'GET /publishers/:slug — la fiche publique de l’éditeur, lue par la boutique' },

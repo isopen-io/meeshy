@@ -24,6 +24,9 @@ struct ProfileCircleSection: View {
             if let level = viewModel.shownLevel {
                 VStack(spacing: MeeshySpacing.smPlus) {
                     row(level)
+                    if level >= .friend {
+                        ProfileBringRow(userId: viewModel.userId, displayName: displayName)
+                    }
                     promoteButton
                     loweringButton(from: level)
                 }

@@ -30,15 +30,27 @@ export const STARRED_MESSAGE_ATTACHMENT_PREVIEW_COUNT = 4;
  * Le message VIVANT : les colonnes du verdict, le contenu que le Prisme lit, et
  * l'auteur SANS aucune présence. Rien du chiffrement, des métadonnées, des
  * réactions ni des mentions.
+ *
+ * `senderId`, `ephemeralDuration` et `replyToId` sont LUS sans jamais être
+ * SERVIS (#16604) — la règle 4 tient parce que la projection ci-dessous
+ * reconstruit chaque ligne champ par champ. Ils portent la coupure par
+ * lecteur : `senderId` dit si le lecteur est l'auteur (qui ne décompte pas
+ * comme les autres), `ephemeralDuration` fait l'échéance par lecteur avec le
+ * bit flamme-œil, et `replyToId` ouvre la chaîne de citations dont une réponse
+ * hérite sa mort (#8630). Sans eux, la coupure se tairait sur une page entière
+ * en lisant « décompte pas démarré » partout.
  */
 export const STARRED_MESSAGE_SELECT = Prisma.validator<Prisma.MessageSelect>()({
   id: true,
   conversationId: true,
+  senderId: true,
+  replyToId: true,
   messageType: true,
   createdAt: true,
   editedAt: true,
   deletedAt: true,
   expiresAt: true,
+  ephemeralDuration: true,
   isViewOnce: true,
   isBlurred: true,
   isEncrypted: true,

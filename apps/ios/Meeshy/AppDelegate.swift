@@ -711,6 +711,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let userInfo = notification.request.content.userInfo
+        if routeBringPush(userInfo) { return completionHandler([]) }
         let convId = userInfo["conversationId"] as? String
         let messageId = userInfo["messageId"] as? String
 
@@ -800,6 +801,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         let actionIdentifier = response.actionIdentifier
         let replyText = (response as? UNTextInputNotificationResponse)?.userText
         logger.info("Notification response: action=\(actionIdentifier)")
+        if actionIdentifier != UNNotificationDismissActionIdentifier { _ = routeBringPush(userInfo) }
 
         Task { @MainActor in
             // #10507 — « ouverte », ou « écartée » sur une catégorie qui le déclare.
@@ -818,6 +820,23 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 }
 
 
+
+extension AppDelegate {
+    /// #13936 — le push `bring` / `bring_stopped` va au centre du Bring, jamais en bannière : au premier plan il ne
+    /// fait pas DEUX sonneries (dédoublonné avec `bring:ring`), et toucher sa bannière ouvre l'écran d'où UN geste
+    /// l'arrête partout. Rend `false` pour tout autre push. Les valeurs sont ramenées `Sendable` avant le saut.
+    fileprivate func routeBringPush(_ userInfo: [AnyHashable: Any]) -> Bool {
+        guard BringCenter.handlesPush(userInfo) else { return false }
+        let ring = BringRing(push: userInfo)
+        let stopped = BringStopped(push: userInfo)
+        let name = userInfo["fromName"] as? String
+        let avatarURL = userInfo["fromAvatar"] as? String
+        Task { @MainActor in
+            BringCenter.shared.receive(push: ring, stopped: stopped, name: name, avatarURL: avatarURL)
+        }
+        return true
+    }
+}
 
 /// Le ménage de `tmp` au lancement : les copies d'ingestion du composeur, de la bande des médias récents et des
 /// retouches, plus vieilles qu'une semaine. Aucun composeur n'est ouvert au lancement, et la file de publication

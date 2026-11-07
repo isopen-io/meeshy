@@ -25,7 +25,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "attachment-status:updated", "attachment:deleted", "attachment:reaction-added", "attachment:reaction-removed",
         "audio:transcription-failed", "audio:transcription-ready", "audio:translation-failed",
         "audio:translation-ready", "audio:translations-completed", "audio:translations-progressive",
-        "auth:session-revoked", "auth:token-expired", "call:already-answered", "call:ended", "call:error",
+        "auth:session-revoked", "auth:token-expired", "bring:ring", "bring:stopped", "call:already-answered", "call:ended", "call:error",
         "call:force-leave", "call:frame-selected", "call:ice-servers-refreshed", "call:initiated",
         "call:invite-declined", "call:invite-expired", "call:media-toggled", "call:missed",
         "call:muted-by-moderator", "call:participant-invited", "call:participant-joined", "call:participant-left",
