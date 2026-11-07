@@ -391,6 +391,26 @@ try {
       check((await page.$('[data-community-members-failure]')) === null, `${label} : le retrait part sans erreur, et la ligne disparaît`);
       await page.click('[data-community-members-back]');
       await page.waitForSelector('[data-community-hero]');
+      // INVITER (#6376) : le détail ouvre la feuille, les amis y sont avant toute frappe,
+      // le choix se dit sur le bouton, et l'issue se lit sous « Membres ».
+      await page.click('[data-community-invite-open]');
+      await page.waitForSelector('[data-community-invite-candidate="u-bruno"]');
+      const inviteRest = await reachAtRest(page, { controls: '[data-community-invite] button', texts: '[data-community-invite] .text-body' });
+      const inviteBlocked = inviteRest.controls.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
+      check(inviteRest.controls.length >= 2 && inviteBlocked.length === 0, `${label} : chaque contrôle de la feuille « Inviter » s'atteint, 44 au moins — ${JSON.stringify(inviteBlocked)}`);
+      const inviteInks = {
+        nom: await contrastOf(page, '[data-community-invite-candidate="u-bruno"] .text-body'),
+        pseudo: await contrastOf(page, '[data-community-invite-candidate="u-bruno"] .text-caption'),
+      };
+      const inviteFaibles = Object.entries(inviteInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(inviteFaibles.length === 0, `${label} : chaque texte de la feuille « Inviter » tient AA — ${JSON.stringify(inviteInks)}`);
+      await page.click('[data-community-invite-candidate="u-bruno"]');
+      check((await textOf(page, '[data-community-invite-submit]')) === 'Inviter 1 personne', `${label} : le choix se dit sur le bouton`);
+      await capture(page, `communaute-inviter-${slug}`);
+      await page.click('[data-community-invite-submit]');
+      await page.waitForSelector('[data-community-invite-status]');
+      check((await textOf(page, '[data-community-invite-status]')) === '1 personne a rejoint la communauté.', `${label} : l'invitation se dit, la feuille se ferme`);
+      check((await page.$('[data-community-invite]')) === null, `${label} : la feuille est fermée après l'envoi`);
       await page.goto(`${BASE}/communities/inconnue`, { waitUntil: 'load' });
       await page.waitForSelector('[data-community-refused]');
       check((await textOf(page, '[data-community-refused] p')) === 'Communauté introuvable', `${label} : une adresse inconnue rend le refus`);

@@ -30,7 +30,7 @@ export type MemberGestureOutcome = { readonly status: 'changed' | 'removed' | 'r
 type MembersData = InfiniteData<CommunityMemberPage, number>;
 type CacheEntry = readonly [readonly unknown[], unknown];
 
-const DETAIL_PREFIX = [...COMMUNITIES_QUERY_PREFIX, 'detail'] as const;
+export const DETAIL_PREFIX = [...COMMUNITIES_QUERY_PREFIX, 'detail'] as const;
 
 const snapshotOf = (queryClient: QueryClient, communityId: string): readonly CacheEntry[] => [
   ...queryClient.getQueriesData({ queryKey: communityMembersQueryKey(communityId) }),
@@ -40,7 +40,7 @@ const snapshotOf = (queryClient: QueryClient, communityId: string): readonly Cac
 const restore = (queryClient: QueryClient, snapshot: readonly CacheEntry[]) =>
   snapshot.forEach(([key, data]) => queryClient.setQueryData(key, data));
 
-const patchMembers = (queryClient: QueryClient, communityId: string, patch: (members: readonly CommunityMember[]) => readonly CommunityMember[]) => {
+export const patchMembers = (queryClient: QueryClient, communityId: string, patch: (members: readonly CommunityMember[]) => readonly CommunityMember[]) => {
   const data = queryClient.getQueryData<MembersData>(communityMembersQueryKey(communityId));
   if (data === undefined) return;
   queryClient.setQueryData<MembersData>(communityMembersQueryKey(communityId), {
@@ -52,10 +52,10 @@ const patchMembers = (queryClient: QueryClient, communityId: string, patch: (mem
 const isCommunitySummary = (value: unknown): value is CommunitySummary =>
   typeof value === 'object' && value !== null && 'id' in value && 'memberCount' in value;
 
-const decrementDetail = (queryClient: QueryClient, communityId: string) =>
+export const shiftDetailCount = (queryClient: QueryClient, communityId: string, delta: number) =>
   queryClient.getQueriesData({ queryKey: DETAIL_PREFIX }).forEach(([key, data]) => {
     if (isCommunitySummary(data) && data.id === communityId) {
-      queryClient.setQueryData(key, { ...data, memberCount: Math.max(0, data.memberCount - 1) });
+      queryClient.setQueryData(key, { ...data, memberCount: Math.max(0, data.memberCount + delta) });
     }
   });
 
@@ -96,7 +96,7 @@ export async function performRemoveMember({
   const { queryClient } = deps;
   const snapshot = snapshotOf(queryClient, community.id);
   patchMembers(queryClient, community.id, (members) => members.filter((row) => row.userId !== member.userId));
-  decrementDetail(queryClient, community.id);
+  shiftDetailCount(queryClient, community.id, -1);
 
   const result = await removeCommunityMember(deps, { communityId: community.id, member });
   if (result.ok) return { status: 'removed' };
