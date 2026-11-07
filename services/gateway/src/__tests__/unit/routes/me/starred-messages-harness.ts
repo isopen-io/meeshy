@@ -114,6 +114,14 @@ export type Store = {
   deletions: Row[];
   prefs: Row[];
   shareLinks: Row[];
+  /**
+   * Les accusés par destinataire — `D(u)` d'un éphémère vit ici, dans
+   * `ephemeralExpiresAt`, et NULLE PART ailleurs. `Message.expiresAt` est
+   * l'heure interne de destruction : les deux divergent dès qu'un
+   * destinataire reçoit avant le dernier, et c'est ce que les témoins de la
+   * coupure par lecteur exercent (#16604).
+   */
+  statusEntries: Row[];
 };
 
 export type Emitted = { room: string; event: string; payload: unknown };
@@ -127,6 +135,7 @@ export function makeStore(overrides: Partial<Store> = {}): Store {
     deletions: [],
     prefs: [],
     shareLinks: [],
+    statusEntries: [],
     ...overrides,
   };
 }
@@ -172,6 +181,11 @@ export function makePrisma(store: Store, options: { now?: () => Date } = {}) {
     },
     userMessageDeletion: {
       findMany: async (args: { where?: Where }) => findMany(store.deletions.map(withMessage), args),
+    },
+    messageStatusEntry: {
+      findMany: async (args: { where?: Where; take?: number }) => findMany(store.statusEntries, args),
+      findFirst: async (args: { where?: Where; orderBy?: unknown }) =>
+        findMany(store.statusEntries, args)[0] ?? null,
     },
     messageStar: {
       create: async (args: { data: Row }) => {
@@ -330,6 +344,21 @@ export function conversationRow(overrides: Row = {}): Row {
     avatar: null,
     memberCount: 4200,
     encryptionMode: 'server',
+    ...overrides,
+  };
+}
+
+/**
+ * Une ligne d'accusé qui porte `D(u)` — l'échéance d'UN destinataire nommé.
+ * `participantId` est la ligne du lecteur DANS la conversation du message,
+ * jamais son `User.id`.
+ */
+export function statusEntryRow(overrides: Row = {}): Row {
+  return {
+    id: '68d000000000000000000001',
+    messageId: MSG_1,
+    participantId: '68b000000000000000000011',
+    ephemeralExpiresAt: fromHarnessNow(-HOUR_MS),
     ...overrides,
   };
 }
