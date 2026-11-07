@@ -70,6 +70,7 @@ describe('#14910 — GET /relations/:userId sert la vue complète du lien', () =
       eligibleFor: null,
       canRaise: true,
       raiseBlockedUntil: null,
+      accessLevel: 'ACQUAINTANCE',
     });
     expect(relationLevelResponseSchema.parse(res.body.data)).toEqual(res.body.data);
   });
@@ -80,7 +81,7 @@ describe('#14910 — GET /relations/:userId sert la vue complète du lien', () =
     const tous = await app.call('GET', PREFIXE);
     await app.close();
 
-    const { canRaise: _c, raiseBlockedUntil: _r, ...vue } = un.body.data;
+    const { canRaise: _c, raiseBlockedUntil: _r, accessLevel: _a, ...vue } = un.body.data;
     expect(vue).toEqual(tous.body.data.find((l: { userId: string }) => l.userId === AUTRE));
   });
 
@@ -160,6 +161,7 @@ describe('#14910 — GET /relations/:userId sert la vue complète du lien', () =
     const attendu = {
       userId: AUTRE, effectiveLevel: 'PUBLIC', grantedByMe: 'PUBLIC', since: null,
       progress: { activeWeeks: 0, needed: null, missing: [] }, eligibleFor: null, canRaise: false, raiseBlockedUntil: null,
+      accessLevel: 'PUBLIC',
     };
     expect(sansLien).toEqual(attendu);
     expect(bloque).toEqual(attendu);

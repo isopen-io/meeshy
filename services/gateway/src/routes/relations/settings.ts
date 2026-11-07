@@ -22,10 +22,15 @@ import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './sh
  * quelconque. Inconnu, désactivé, sans lien ou bloqué : le même 404. Un RETRAIT de
  * partage ou un déblocage ne demandent aucun lien : ils ne touchent que MA ligne
  * existante, et ne la créent jamais (audit #14535 constat 1).
+ *
+ * La feature jugée est `dm.direct`, un OUTIL au plancher Connaissance : entre deux comptes
+ * de l'équipe, qui peuvent se sonner sans lien, bloquer ces Bring doit s'écrire aussi
+ * (#16623). Une audience (`audience.acquaintances`) resterait au lien réel.
  */
 async function linkedPerson(prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<boolean> {
-  const [other, level] = await Promise.all([
-    prisma.user.findUnique({ where: { id: otherId }, select: { id: true, deactivatedAt: true } }),
+  const [other, owner, level] = await Promise.all([
+    prisma.user.findUnique({ where: { id: otherId }, select: { id: true, deactivatedAt: true, role: true } }),
+    prisma.user.findUnique({ where: { id: ownerId }, select: { role: true } }),
     niveauEffectif(prisma, ownerId, otherId),
   ]);
   if (!other || other.deactivatedAt) return false;
@@ -38,7 +43,9 @@ async function linkedPerson(prisma: FastifyInstance['prisma'], ownerId: string, 
     blockedEitherWay: false,
     viewerMinor: 'unknown',
     targetMinor: 'unknown',
-    feature: 'audience.acquaintances',
+    viewerRole: owner?.role,
+    targetRole: other.role,
+    feature: 'dm.direct',
   }).allowed;
 }
 

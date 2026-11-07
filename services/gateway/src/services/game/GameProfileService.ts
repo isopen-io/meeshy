@@ -28,7 +28,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GameVisibility } from '@meeshy/shared/types/game';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { isGlobalAdmin, isPlatformTeam } from '@meeshy/shared/types/role-types';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import {
   ATLAS_DEFAULT_VISIBILITY,
@@ -170,7 +170,8 @@ export class GameProfileService {
   /**
    * Quel lecteur est CE lecteur pour ce membre : la loi des cercles, rien d'autre. `kind` classe pour les réglages
    * (`friends` s'ouvre à Ami+) ; `sparksGlory` dit si le cercle ouvre aussi les étincelles et la gloire (Proche+).
-   * Soi et ADMIN/BIGBOSS voient tout ; le blocage ferme ; l'anonyme est le public.
+   * Soi et ADMIN/BIGBOSS voient tout ; le blocage ferme ; l'anonyme est le public. Le rôle de la cible n'est lu
+   * que pour un lecteur de l'équipe : un MODERATOR voit un collègue comme un Sang (#16623).
    */
   async viewerReach(viewer: PresenceViewer, targetId: string): Promise<GameReach> {
     if (!isValidObjectId(targetId)) return CLOSED_REACH;
@@ -178,7 +179,10 @@ export class GameProfileService {
     if (viewer.userId === targetId) return { kind: 'self', sparksGlory: true };
     if (isGlobalAdmin(viewer.role)) return { kind: 'admin', sparksGlory: true };
     if (await isBlockedBetween(this.prisma, viewer.userId, targetId)) return { kind: 'blocked', sparksGlory: false };
-    const level = await niveauEffectif(this.prisma, viewer.userId, targetId);
+    const [level, target] = await Promise.all([
+      niveauEffectif(this.prisma, viewer.userId, targetId),
+      isPlatformTeam(viewer.role) ? this.prisma.user.findUnique({ where: { id: targetId }, select: { role: true } }) : null,
+    ]);
     const opens = (feature: RelationFeature): boolean =>
       resolveRelationAccess({
         viewerId: viewer.userId,
@@ -190,6 +194,7 @@ export class GameProfileService {
         viewerMinor: 'unknown',
         targetMinor: 'unknown',
         viewerRole: viewer.role,
+        targetRole: target?.role,
         feature,
       }).allowed;
     return { kind: opens('game.basic') ? 'friend' : 'other', sparksGlory: opens('game.sparksGlory') };

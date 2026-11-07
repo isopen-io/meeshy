@@ -44,6 +44,7 @@ export const relationLevelJsonSchema = {
         eligibleFor: { type: 'string', nullable: true },
         canRaise: { type: 'boolean' },
         raiseBlockedUntil: { type: 'string', nullable: true },
+        accessLevel: { type: 'string', enum: [...RELATION_LEVELS] },
       },
     },
   },
@@ -62,7 +63,9 @@ export const relationLevelJsonSchema = {
  * loi de `niveauEffectif` lue sans que le lien décide des lectures ; `canRaise`
  * est la loi de l'envoi (`evaluateRelationRequest`) sur les mêmes faits que sa
  * garde (`raiseOutlookOf`, `services/relations/relationRequestGate.ts`). La
- * forme est ADDITIVE : `userId` et `effectiveLevel` restent.
+ * forme est ADDITIVE : `userId` et `effectiveLevel` restent. `accessLevel` est le
+ * verdict de la loi d'accès pour les outils de cercle (#16623) : le client le lit pour
+ * proposer le Bring, sans apprendre aucun rôle.
  *
  * ## `PUBLIC` dit « pas de lien », et c'est tout
  *

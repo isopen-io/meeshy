@@ -36,7 +36,10 @@ function makeMocks(opts: {
   prefs?: Partial<PrivacyPreferences>;
 } = {}) {
   const prisma = {
-    user: { findFirst: jest.fn<any>().mockResolvedValue(opts.blocked ? { id: 'x' } : null) },
+    user: {
+      findFirst: jest.fn<any>().mockResolvedValue(opts.blocked ? { id: 'x' } : null),
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+    },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(opts.friend ? { id: 'fr' } : null) },
     userRelation: noRelations(),
   } as any;
@@ -142,6 +145,7 @@ function makeBatchMocks(state: {
   blockedTargetIds?: string[];
   viewerBlocks?: string[];
   deactivatedIds?: string[];
+  roles?: Record<string, string>;
 }) {
   const prisma = {
     user: {
@@ -150,7 +154,11 @@ function makeBatchMocks(state: {
           return Promise.resolve((state.blockedTargetIds ?? []).map((id) => ({ id })));
         }
         const ids: string[] = where?.id?.in ?? [];
-        return Promise.resolve(ids.map((id) => ({ id, deactivatedAt: (state.deactivatedIds ?? []).includes(id) ? new Date() : null })));
+        return Promise.resolve(ids.map((id) => ({
+          id,
+          deactivatedAt: (state.deactivatedIds ?? []).includes(id) ? new Date() : null,
+          ...(state.roles?.[id] ? { role: state.roles[id] } : {}),
+        })));
       }),
       findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: state.viewerBlocks ?? [] }),
     },
@@ -166,6 +174,48 @@ function makeBatchMocks(state: {
   } as any;
   return { service: new PresenceVisibilityService(prisma, privacy), prisma };
 }
+
+describe('PresenceVisibilityService — l\'équipe (#16623)', () => {
+  const roleLu = (role: string | null) => jest.fn<any>().mockResolvedValue(role === null ? null : { role });
+
+  const entre = (role: string | null, prefs?: Partial<PrivacyPreferences>) => {
+    const mocks = makeMocks({ prefs });
+    mocks.prisma.user.findUnique = roleLu(role);
+    return mocks;
+  };
+
+  it('un MODERATOR lit la présence détaillée d\'un collègue sans lien', async () => {
+    const v = await entre('ADMIN').service.resolveForTarget({ userId: VIEWER, role: 'MODERATOR' }, target);
+    expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+  });
+
+  it('il la lit sous les préférences du collègue, comme un Sang — pas comme un administrateur', async () => {
+    const masque = await entre('ADMIN', { showOnlineStatus: false }).service.resolveForTarget({ userId: VIEWER, role: 'MODERATOR' }, target);
+    const sansDate = await entre('MODERATOR', { showLastSeen: false }).service.resolveForTarget({ userId: VIEWER, role: 'MODERATOR' }, target);
+    expect(masque).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(sansDate).toEqual({ showOnline: true, showLastSeenTimestamp: false });
+  });
+
+  it.each(['USER', 'AUDIT', 'ANALYST', 'SUPERADMIN', null])('face à la cible %s, un MODERATOR ne lit rien', async (role) => {
+    const v = await entre(role).service.resolveForTarget({ userId: VIEWER, role: 'MODERATOR' }, target);
+    expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
+
+  it('un viewer ordinaire ne paie aucune lecture de rôle', async () => {
+    const mocks = entre('ADMIN');
+    const v = await mocks.service.resolveForTarget({ userId: VIEWER, role: 'USER' }, target);
+    expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(mocks.prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('la liste suit la loi : un collègue est servi, l\'utilisateur ordinaire voisin ne l\'est pas', async () => {
+    const { service } = makeBatchMocks({ roles: { collegue: 'ADMIN', quidam: 'USER' } });
+    const map = await service.resolveForTargets({ userId: VIEWER, role: 'MODERATOR' }, ['collegue', 'quidam', 'sans-role']);
+    expect(map.get('collegue')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(map.get('quidam')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(map.get('sans-role')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
+});
 
 describe('PresenceVisibilityService.resolveForTargets (batch)', () => {
   const IDS = ['friend', 'stranger', 'blocked', 'mate'];

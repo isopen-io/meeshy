@@ -13,7 +13,9 @@ import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibil
  * de présence. »
  *
  * L'audience est donc faite de RELATIONS, jamais de fils : amis acceptés,
- * administrateurs globaux, et les autres appareils du sujet.
+ * administrateurs globaux, et les autres appareils du sujet — plus, quand le sujet
+ * est de l'équipe, ses collègues MODERATOR (#16623), que la même loi juge sur
+ * les deux rôles : un sujet ordinaire n'en a aucun.
  *
  * L'AMI est BINAIRE (directive porteur 2026-10-31, #13928) : il reçoit « en
  * ligne » ou rien, jamais `lastActiveAt`. Seuls les PROCHES et au-dessus
@@ -38,6 +40,10 @@ export type PresenceAudienceInput = {
   readonly friendLevels: ReadonlyMap<string, RelationLevel>;
   /** `User.id` des ADMIN/BIGBOSS de la plateforme. */
   readonly adminIds: readonly string[];
+  /** `User.role` du sujet : absent, aucun collègue n'est retenu. */
+  readonly subjectRole?: string | null;
+  /** `User.id` des MODERATOR de la plateforme, candidats que la loi retient ou non. */
+  readonly moderatorIds?: readonly string[];
 };
 
 export type PresenceStatusAudience = {
@@ -77,15 +83,17 @@ export function presenceStatusAudience(input: PresenceAudienceInput): PresenceSt
     input.isAnonymous ? input.adminIds : [...input.adminIds, input.subjectId],
   );
   const alreadyPrivileged = new Set(privileged);
-  const friends = input.isAnonymous
+  const moderators = new Set(input.moderatorIds ?? []);
+  const candidates = input.isAnonymous
     ? []
-    : uniqueIds([...input.friendLevels.keys()]).filter((id) => !alreadyPrivileged.has(id));
+    : uniqueIds([...input.friendLevels.keys(), ...moderators]).filter((id) => !alreadyPrivileged.has(id));
 
-  const verdicts = friends.map((id) => ({
+  const verdicts = candidates.map((id) => ({
     id,
     ...resolvePresenceVisibility({
       isSelf: false,
-      viewerRole: 'USER',
+      viewerRole: moderators.has(id) ? 'MODERATOR' : 'USER',
+      targetRole: input.subjectRole,
       relationLevel: input.friendLevels.get(id) ?? 'PUBLIC',
       targetShowOnlineStatus: true,
       targetShowLastSeen: true,
