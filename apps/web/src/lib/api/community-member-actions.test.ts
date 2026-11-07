@@ -100,6 +100,15 @@ describe('retirer un membre', () => {
     expect(rows().map((row) => row.id)).toEqual(['r1', 'r3']);
   });
 
+  test('et puisqu’un 404 dit aussi « communauté désactivée », la liste et la fiche sont relues', async () => {
+    const { deps, gate } = setup();
+    const pending = performRemoveMember({ community, member: member('r2', 'u-bob'), deps });
+    gate.release({ ok: false, status: 404, error: 'gone' });
+    await pending;
+    expect(deps.queryClient.getQueryState(communityMembersQueryKey('c1'))?.isInvalidated).toBe(true);
+    expect(deps.queryClient.getQueryState(communityQueryKey('mshy_c1'))?.isInvalidated).toBe(true);
+  });
+
   test('un échec remet la ligne ET le compteur', async () => {
     const { deps, gate, rows, detail } = setup();
     const before = rows();

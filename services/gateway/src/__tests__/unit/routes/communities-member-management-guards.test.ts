@@ -135,6 +135,20 @@ describe('PATCH /communities/:id/members/:memberId/role', () => {
     await app.close();
   });
 
+  it('rendre le rôle d’administrateur au créateur reste permis (réparation d’une rétrogradation antérieure)', async () => {
+    const { app, writes } = await build(ADMIN);
+    expect((await patchRole(app, ALIVE, `${ALIVE}-creator`, 'admin')).statusCode).toBe(200);
+    expect(writes).toHaveLength(1);
+    await app.close();
+  });
+
+  it('la ligne du créateur d’une AUTRE communauté, visée par le chemin de celle-ci : 404, jamais 403', async () => {
+    const { app, writes } = await build(ADMIN);
+    expect((await patchRole(app, ALIVE, `${DEACTIVATED}-creator`, 'member')).statusCode).toBe(404);
+    expect(writes).toHaveLength(0);
+    await app.close();
+  });
+
   it('le rôle d’un ancien membre ne se réécrit pas : 404', async () => {
     const { app, writes } = await build(ADMIN);
     expect((await patchRole(app, ALIVE, `${ALIVE}-former`)).statusCode).toBe(404);
@@ -161,6 +175,13 @@ describe('DELETE /communities/:id/members/:memberId', () => {
   it('une communauté désactivée ne se gère plus : 404, sans écriture', async () => {
     const { app, writes } = await build(ADMIN);
     expect((await remove(app, DEACTIVATED, MEMBER)).statusCode).toBe(404);
+    expect(writes).toHaveLength(0);
+    await app.close();
+  });
+
+  it('un ancien membre ne se retire pas une seconde fois : 404, sans écriture', async () => {
+    const { app, writes } = await build(ADMIN);
+    expect((await remove(app, ALIVE, FORMER)).statusCode).toBe(404);
     expect(writes).toHaveLength(0);
     await app.close();
   });

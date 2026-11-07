@@ -18,8 +18,10 @@ import {
  * refuse rend EXACTEMENT ce qui était en cache (la page de membres et la fiche
  * de la communauté, dont le compteur descend au retrait).
  *
- * Un 404 au retrait est un succès : la ligne est déjà partie (un autre
- * administrateur, un autre onglet), ce qui est l'état visé. Hors ligne, rien
+ * Un 404 au retrait décrit en général l'état visé (la ligne est déjà partie :
+ * un autre administrateur, un autre onglet) — mais il dit aussi « communauté
+ * désactivée » : la liste et la fiche sont donc relues, et la vérité servie
+ * remplace la supposition. Hors ligne, rien
  * ne part : le web n'a pas de file d'écriture (#6325).
  */
 
@@ -97,7 +99,12 @@ export async function performRemoveMember({
   decrementDetail(queryClient, community.id);
 
   const result = await removeCommunityMember(deps, { communityId: community.id, member });
-  if (result.ok || result.status === 404) return { status: 'removed' };
+  if (result.ok) return { status: 'removed' };
+  if (result.status === 404) {
+    void queryClient.invalidateQueries({ queryKey: communityMembersQueryKey(community.id) });
+    void queryClient.invalidateQueries({ queryKey: DETAIL_PREFIX });
+    return { status: 'removed' };
+  }
   restore(queryClient, snapshot);
   return failureOf(result.status);
 }

@@ -497,7 +497,14 @@ const community = await fastify.prisma.community.findFirst({
       // deux bornes vivent dans le `where` de l'écriture : aucune lecture
       // préalable ne peut se périmer avant elle.
       const updatedMember = await fastify.prisma.communityMember.update({
-        where: { id: memberId, communityId: id, isActive: true, userId: { not: community.createdBy } },
+        // Rendre le rôle d'administrateur au créateur reste permis : une ligne
+        // rétrogradée avant cette garde doit pouvoir être réparée.
+        where: {
+          id: memberId,
+          communityId: id,
+          isActive: true,
+          ...(validatedData.role === CommunityRole.ADMIN ? {} : { userId: { not: community.createdBy } })
+        },
         data: { role: validatedData.role as string },
         include: {
           user: {
