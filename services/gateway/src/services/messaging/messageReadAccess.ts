@@ -174,7 +174,7 @@ const unknownMessage = (id: string): ReadableMessageRow => ({
 /** Ce que vaut un masquage personnel ILLISIBLE — chaque appelant le dit. */
 export type UnreadableHidingPosture = 'serve' | 'refuse';
 
-type ReaderParticipation = { readonly id: string };
+export type ReaderParticipation = { readonly id: string };
 
 function participationWhere(reader: HistoryReader, conversationId: string): Prisma.ParticipantWhereInput {
   return reader.kind === 'anonymous'
@@ -224,6 +224,30 @@ async function readingLawOf(
     hidingOf(prisma, { userId: reader.kind === 'user' ? reader.userId : null, conversationId }),
   ]);
   return { floor, hiding };
+}
+
+/**
+ * La PARTICIPATION du lecteur quand il lit ce message, `null` sinon — la même
+ * loi que {@link readerMayReadMessage}, dont le booléen n'est qu'une
+ * projection.
+ *
+ * Elle est exposée parce que la ligne qu'elle rend est la CLÉ DE LECTEUR des
+ * accusés (`MessageStatusEntry`), sans laquelle aucune échéance d'éphémère
+ * n'est adressable : un appelant qui doit, après avoir jugé la lecture, juger
+ * ce que le contenu est encore POUR ce lecteur (#16604) la tiendrait sinon
+ * d'une seconde requête de participation — deux lectures, deux occasions de
+ * diverger.
+ */
+export async function readerParticipationForMessage(
+  prisma: PrismaClient,
+  params: {
+    readonly reader: HistoryReader;
+    readonly message: ReadableMessageRow;
+    readonly now: Date;
+    readonly whenHidingUnreadable: UnreadableHidingPosture;
+  },
+): Promise<ReaderParticipation | null> {
+  return readerParticipation(prisma, params);
 }
 
 async function readerParticipation(

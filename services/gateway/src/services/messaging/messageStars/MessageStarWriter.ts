@@ -6,10 +6,24 @@
  * liste. RETIRER ne juge rien : l'appelant ne touche que SA ligne, adressée
  * par `(userId, messageId)`, et on peut toujours défaire ce qu'on a fait
  * (même lecture que `routes/posts/bookmarks.ts`).
+ *
+ * Le verdict étant le MÊME que celui de la liste, l'horloge l'est aussi
+ * (#16604) : la pose lit l'échéance de l'éphémère POUR CE POSEUR. Corriger la
+ * seule lecture aurait créé la divergence que `starredMessageVerdict.ts`
+ * existe pour interdire — on aurait pu étoiler, avec succès, une flamme déjà
+ * morte chez soi, pour une ligne que la liste ne servirait jamais.
+ *
+ * La lecture est CIBLÉE (`readEphemeralReaderResolution`, #9579), jamais le
+ * balayage plafonné d'une page : une porte qui décide seule ne peut pas lire
+ * « ligne absente d'une tranche tronquée » comme « décompte pas démarré ». Et
+ * elle PROPAGE : une échéance illisible n'est pas une échéance absente, et la
+ * pose refuse déjà en propageant les lectures de la loi de lecture — un 404
+ * mentirait en disant « n'existe pas » là où rien n'a été prouvé.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
-import { readerMayReadMessage } from '../messageReadAccess';
+import { readEphemeralReaderResolution } from '../../../routes/conversations/ephemeralReaderDeadlines';
+import { readerParticipationForMessage } from '../messageReadAccess';
 import { starredMessageVerdict } from './starredMessageVerdict';
 import { refusesContentGesture } from '../captureNoticeVisibility';
 
@@ -29,11 +43,15 @@ const NOT_STARRABLE: StarOutcome = { kind: 'not-starrable' };
 const STAR_ADMISSION_MESSAGE_SELECT = {
   id: true,
   conversationId: true,
+  // #16604 — l'auteur ne décompte pas comme ses destinataires, et c'est la
+  // durée (avec le bit flamme-œil) qui fait l'échéance par lecteur.
+  senderId: true,
   messageType: true,
   metadata: true,
   createdAt: true,
   deletedAt: true,
   expiresAt: true,
+  ephemeralDuration: true,
   isViewOnce: true,
   isBlurred: true,
   isEncrypted: true,
@@ -64,16 +82,19 @@ export class MessageStarWriter {
     // masquage personnel — vit dans `messageReadAccess.ts` : c'est la même
     // que celle d'un transfert (#9579), jamais une seconde écriture.
     const now = this.now();
-    const mayRead = await readerMayReadMessage(this.prisma, {
+    const participation = await readerParticipationForMessage(this.prisma, {
       reader: { kind: 'user', userId },
       message,
       now,
       // Décision #7377 : le masquage personnel est une courtoisie, illisible il sert.
       whenHidingUnreadable: 'serve',
     });
-    if (!mayRead) return NOT_FOUND;
+    if (!participation) return NOT_FOUND;
 
-    const verdict = starredMessageVerdict(message, now);
+    // La ligne du poseur DANS la conversation du message est la clé de ses
+    // accusés : c'est elle, et pas son compte, qui porte `D(u)`.
+    const ephemeralReader = await readEphemeralReaderResolution(this.prisma, message, participation.id);
+    const verdict = starredMessageVerdict(message, { now, ephemeralReader });
     if (verdict === 'gone') return NOT_FOUND;
     if (verdict === 'view-once') return NOT_STARRABLE;
     // #9629 — un avis de capture n'est pas un contenu : il ne rejoint pas une
