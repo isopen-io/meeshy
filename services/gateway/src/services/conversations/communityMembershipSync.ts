@@ -20,6 +20,12 @@ export type CommunityAdmissionRequest = {
   /** Le rang de la ligne ACTIVE de l'appelant, `null` s'il n'en a pas (le créateur parti). */
   readonly actorRole: string | null;
   readonly participantIds: readonly string[];
+  /**
+   * L'appelant entre-t-il lui-même ? Oui quand il CRÉE un salon (le créateur de
+   * la communauté parti y revient administrateur) ; jamais quand il ajoute
+   * quelqu'un à un salon existant — inviter ne réinscrit pas l'inviteur.
+   */
+  readonly admitActor?: boolean;
 };
 
 const INVITING_ROLES: ReadonlySet<string> = new Set(['admin', 'moderator']);
@@ -101,7 +107,9 @@ export async function planCommunityAdmission(
     return { kind: 'refused', reason: 'not-addable' };
   }
 
-  const actorEntering = rowOf.get(request.actorId)?.isActive === true ? [] : [request.actorId];
+  const actorEntering = request.admitActor === false || rowOf.get(request.actorId)?.isActive === true
+    ? []
+    : [request.actorId];
   const admissions = [
     ...actorEntering.map((userId) => ({ userId, role: 'admin' as const })),
     ...entering.map((userId) => ({ userId, role: 'member' as const })),
@@ -136,4 +144,81 @@ export async function applyCommunityAdmission(
       data: admission.creations.map(({ userId, role }) => ({ communityId, userId, role })),
     });
   }
+}
+
+const NOTHING_TO_WRITE: CommunityAdmission = { kind: 'admitted', reactivations: [], creations: [] };
+
+/** La communauté PRIVÉE et vivante qui héberge un salon, vue depuis celui qui y fait entrer. */
+export type SalonCommunity = {
+  readonly communityId: string;
+  readonly createdBy: string;
+  readonly actorId: string;
+  /** Le rang de la ligne ACTIVE de l'appelant, `null` s'il n'en a pas. */
+  readonly actorRole: string | null;
+};
+
+export type SalonEntrant =
+  | { readonly kind: 'registered'; readonly userId: string }
+  | { readonly kind: 'guest' };
+
+export type SalonCommunityPrisma = Pick<PrismaClient, 'community' | 'communityMember' | 'user'>;
+
+/**
+ * Lit, UNE fois par requête, la communauté qui héberge un salon. `null` quand
+ * le salon n'en a pas, ou quand elle est publique : rien n'y change (#16695).
+ */
+export async function loadSalonCommunity(
+  prisma: Pick<PrismaClient, 'community'>,
+  salon: { readonly communityId: string | null | undefined; readonly actorId: string },
+): Promise<SalonCommunity | null> {
+  if (!salon.communityId) return null;
+  const community = await prisma.community.findFirst({
+    where: { id: salon.communityId, isActive: true },
+    select: { createdBy: true, isPrivate: true, members: { where: { userId: salon.actorId, isActive: true }, select: { role: true }, take: 1 } },
+  });
+  if (!community?.isPrivate) return null;
+  return {
+    communityId: salon.communityId,
+    createdBy: community.createdBy,
+    actorId: salon.actorId,
+    actorRole: community.members[0]?.role ?? null,
+  };
+}
+
+/**
+ * QUI ENTRE DANS UN SALON D'UNE COMMUNAUTÉ PRIVÉE (#16695).
+ *
+ * Y entrer, c'est lire ce que la communauté réserve à ses membres : c'est donc
+ * y être admis, sous la loi de `planCommunityAdmission` — un membre actif entre
+ * sans rien écrire ; un autre n'entre que par le créateur, un administrateur ou
+ * un modérateur de la communauté, et y devient membre. L'« appelant » est
+ * celui qui ajoute (`…/invite`, `…/participants`) ou l'auteur du lien de
+ * partage : un lien ne donne que ce que son auteur pourrait donner
+ * aujourd'hui. Un invité sans compte ne peut pas être membre : il n'entre que
+ * par le lien de quelqu'un qui peut faire entrer, et rien ne s'écrit.
+ */
+export async function planSalonEntry(
+  prisma: SalonCommunityPrisma,
+  community: SalonCommunity | null,
+  entrant: SalonEntrant,
+): Promise<CommunityAdmission> {
+  if (!community) return NOTHING_TO_WRITE;
+  const request: CommunityAdmissionRequest = {
+    communityId: community.communityId,
+    actorId: community.actorId,
+    createdBy: community.createdBy,
+    isPrivate: true,
+    actorRole: community.actorRole,
+    participantIds: entrant.kind === 'registered' ? [entrant.userId] : [],
+    admitActor: false,
+  };
+  if (entrant.kind === 'guest') {
+    return mayAdmitOthers(request) ? NOTHING_TO_WRITE : { kind: 'refused', reason: 'invite-forbidden' };
+  }
+  if (entrant.userId === community.actorId) {
+    return community.actorRole !== null || community.actorId === community.createdBy
+      ? NOTHING_TO_WRITE
+      : { kind: 'refused', reason: 'invite-forbidden' };
+  }
+  return planCommunityAdmission(prisma, request);
 }
