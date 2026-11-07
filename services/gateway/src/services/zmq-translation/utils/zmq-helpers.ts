@@ -127,8 +127,12 @@ export function mimeTypeToAudioFormat(mimeType: string): string {
  * (`translateTextDirectly`, servi par `POST /translate-blocking` sans
  * `message_id`). Son unique consommateur est l'écouteur que la requête pose
  * elle-même, apparié par `taskId`.
+ *
+ * `call-caption` : un sous-titre d'appel en direct (`<callId>:<startMs>`),
+ * persisté par le relais lui-même (`call-transcription-relay.ts`) qui écoute
+ * `translationCompleted:<id>` — jamais une ligne `Message` (#16625).
  */
-export const TRANSLATION_TARGET_NAMESPACES = ['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption', 'message-attachment-alt', 'direct-text'] as const;
+export const TRANSLATION_TARGET_NAMESPACES = ['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption', 'message-attachment-alt', 'direct-text', 'call-caption'] as const;
 
 export type TranslationTargetNamespace = (typeof TRANSLATION_TARGET_NAMESPACES)[number];
 

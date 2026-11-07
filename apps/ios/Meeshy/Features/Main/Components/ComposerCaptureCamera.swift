@@ -18,6 +18,13 @@ protocol ComposerCaptureCameraProviding: AnyObject {
     func switchCamera(then: @escaping @MainActor @Sendable (AVCaptureDevice.Position) -> Void)
     func setZoom(_ factor: CGFloat)
     func setTorch(_ mode: AVCaptureDevice.TorchMode, level: Double)
+    /// Ce que l'objectif sert en biais d'exposition, en EV ; `0...0` ⇒ rien
+    /// à régler (OPUS-5).
+    var exposureBiasRange: ClosedRange<Float> { get }
+    /// Éclaircit (positif) ou assombrit (négatif) l'image autour de la mesure
+    /// de l'objectif, borné à ce qu'il sert. Le toucher suivant et l'objectif
+    /// qui s'ouvre le remettent à 0.
+    func setExposureBias(_ ev: Float)
     func takePhoto(flash: AVCaptureDevice.FlashMode)
     /// Vise ce point du capteur ; `false` ⇒ l'objectif n'a rien réglé.
     /// `smooth` : la netteté glisse (pendant une prise).
