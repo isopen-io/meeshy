@@ -241910,53 +241910,6 @@
         }
       }
     },
-    "call.mode.gesture.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "نقرتان: صورة · ضغطة مطوّلة: فيديو"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Doppeltippen: Foto · Gedrückt halten: Video"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Double tap: photo · Long press: video"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Doble toque: foto · Mantén pulsado: vídeo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deux tapes : photo · Appui long : vidéo"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Doppio tocco: foto · Pressione prolungata: video"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toque duplo: foto · Toque longo: vídeo"
-          }
-        }
-      }
-    },
     "call.mode.photo": {
       "extractionState": "manual",
       "localizations": {

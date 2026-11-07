@@ -16,6 +16,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateCoMemberPresence, type MemberUser } from './member-presence';
 import { isAddableUser } from './addable-user';
+import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembersRoutes' });
@@ -461,6 +462,8 @@ const community = await fastify.prisma.community.findFirst({
         where: { id, isActive: true },
         select: {
           createdBy: true,
+          isPrivate: true,
+          isActive: true,
           members: {
             where: activeMembershipOf(userId),
             select: { role: true }
@@ -615,6 +618,8 @@ const community = await fastify.prisma.community.findFirst({
         where: { id, isActive: true },
         select: {
           createdBy: true,
+          isPrivate: true,
+          isActive: true,
           members: {
             where: activeMembershipOf(userId),
             select: { role: true }
@@ -650,10 +655,19 @@ const community = await fastify.prisma.community.findFirst({
         return sendNotFound(reply, 'Member not found in this community');
       }
 
+      const leftAt = new Date();
       await fastify.prisma.communityMember.update({
         where: { id: activeMembership.id },
-        data: { isActive: false, leftAt: new Date() }
+        data: { isActive: false, leftAt }
       });
+
+      // #16704 — retiré d'une communauté qui garde ses salons, on ne les lit plus.
+      if (communityGuardsItsSalons(community)) {
+        await exitCommunitySalons(
+          { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler },
+          { communityId: id, userId: memberId, now: leftAt },
+        );
+      }
 
       return sendSuccess(reply, { message: 'Member removed successfully' });
     } catch (error) {
