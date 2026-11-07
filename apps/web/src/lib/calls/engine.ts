@@ -914,6 +914,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
    * une renégociation quand la ligne vidéo ne faisait que recevoir (appel
    * vocal). La caméra, si elle tournait, est relâchée : elle revient à l'arrêt.
    */
+  /** Partager réduit l'appel en capsule (#16664) : on part montrer autre chose, l'appel suit. */
   const startScreen = async (call: ActiveCall): Promise<void> => {
     if (screenPicking) return;
     screenPicking = true;
@@ -928,7 +929,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.cameraBeforeShare = current.cameraOn;
     display.onended = () => void stopScreen();
     await setCamera(display, false);
-    update((next) => ({ ...next, screenSharing: true }));
+    update((next) => ({ ...next, screenSharing: true, display: 'pill' }));
     announceScreen(true);
   };
 

@@ -4,13 +4,10 @@ import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 
 import {
   bringAvailabilityQueryKey,
-  bringBlockedQueryKey,
   bringSendOutcomeOf,
   decodeBringAvailability,
   loadBringAvailability,
-  loadBringBlocked,
   sendBring,
-  setBringBlocked,
   stopBring,
 } from './bring-api';
 
@@ -87,24 +84,8 @@ describe('les routes', () => {
     expect(requests[0]).toMatchObject({ method: 'DELETE', path: '/api/v1/bring/b1' });
   });
 
-  test('le blocage par personne se lit et s’écrit par /relations/:userId/settings, corps STRICT', async () => {
-    const read = fakeTransport({ ok: true, data: { userId: OTHER, bringBlocked: true, talkieBlocked: false } });
-    expect(await loadBringBlocked(read.deps, OTHER)).toEqual({ ok: true, data: true });
-    expect(read.requests[0]).toMatchObject({ method: 'GET', path: `/api/v1/relations/${OTHER}/settings` });
-
-    const write = fakeTransport({ ok: true, data: { userId: OTHER, bringBlocked: false } });
-    expect(await setBringBlocked(write.deps, OTHER, false)).toEqual({ ok: true, data: false });
-    expect(write.requests[0]).toMatchObject({ method: 'PUT', path: `/api/v1/relations/${OTHER}/settings`, body: { bringBlocked: false } });
-  });
-
-  test('un réglage illisible se lit « non bloqué » : la valeur par défaut du serveur', async () => {
-    const { deps } = fakeTransport({ ok: true, data: {} });
-    expect(await loadBringBlocked(deps, OTHER)).toEqual({ ok: true, data: false });
-  });
-
   test('les clés de cache sont par personne', () => {
     expect(bringAvailabilityQueryKey(OTHER)).not.toEqual(bringAvailabilityQueryKey('x'));
-    expect(bringBlockedQueryKey(OTHER)).not.toEqual(bringAvailabilityQueryKey(OTHER));
   });
 });
 

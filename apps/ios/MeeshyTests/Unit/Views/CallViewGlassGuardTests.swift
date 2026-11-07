@@ -93,13 +93,12 @@ final class CallViewGlassGuardTests: XCTestCase {
     private func horizontalScrollerSources() throws -> [String: String] {
         let anchor = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Call/Views/CallModeCarousel.swift").first)
         let directory = anchor.deletingLastPathComponent()
-        let filtersPanel = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/VideoFiltersPanel.swift").first)
         let horizontal = try NSRegularExpression(pattern: #"ScrollView\([^)]*\.horizontal"#)
-        return try (FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) + [filtersPanel])
+        return try (FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil))
             .filter { url in
                 let name = url.lastPathComponent
                 return url.pathExtension == "swift"
-                    && (name.hasPrefix("Call") || name.hasPrefix("GroupCall") || name == "VideoFiltersPanel.swift")
+                    && (name.hasPrefix("Call") || name.hasPrefix("GroupCall"))
             }
             .reduce(into: [String: String]()) { result, url in
                 let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
@@ -115,7 +114,7 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// aucun geste — dans TOUT fichier d'appel qui défile à l'horizontale.
     func test_horizontalScrollers_carryNoDragGesture_soEveryRowScrolls() throws {
         let scrollers = try horizontalScrollerSources()
-        let expected: Set<String> = ["CallModeCarousel.swift", "CallPillRow.swift", "VideoFiltersPanel.swift", "GroupCallStageView.swift"]
+        let expected: Set<String> = ["CallModeCarousel.swift", "CallPillRow.swift", "GroupCallStageView.swift"]
         XCTAssertTrue(expected.isSubset(of: Set(scrollers.keys)), "La garde ne mesurerait rien : \(scrollers.keys.sorted())")
         for (file, code) in scrollers {
             XCTAssertFalse(code.contains(".pressable()"), "\(file) : pressable() pose un DragGesture(minimumDistance: 0) qui vole le défilement")
@@ -125,7 +124,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(code.contains(".pressable()"))
         XCTAssertFalse(code.contains("DragGesture(minimumDistance: 0)"))
         XCTAssertTrue(code.contains("struct CallPressButtonStyle: ButtonStyle"))
-        for file in ["CallPillRow.swift", "CallModeCarousel.swift", "VideoFiltersPanel.swift"] {
+        for file in ["CallPillRow.swift", "CallModeCarousel.swift"] {
             XCTAssertTrue(scrollers[file]?.contains(".buttonStyle(CallPressButtonStyle())") == true, file)
         }
     }

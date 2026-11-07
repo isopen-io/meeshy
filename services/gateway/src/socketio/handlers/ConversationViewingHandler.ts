@@ -155,6 +155,48 @@ export class ConversationViewingHandler {
     });
   }
 
+  /**
+   * LE PARTANT N'EST PLUS ICI (#16654) — le PREMIER verbe du registre qui ne
+   * soit pas claveté par socket, et c'est ce qui le rendait nécessaire : toute
+   * la surface publique ci-dessus part d'un `socket.id`, si bien qu'aucune
+   * route ne pouvait rétracter un spectateur. Mesuré avant ce lot : deux
+   * fichiers seulement citaient le registre, le gestionnaire et le manager.
+   *
+   * La garde de `viewing:activity` ferme le RELAIS vivant ; celle-ci ferme
+   * l'ÉTAT SERVEUR, et les deux sont nécessaires. Le relais suppose que
+   * l'appareil du partant parle encore ; l'instantané, non — `viewersOf` ne
+   * filtre que soi et le blocage, donc un pair qui ouvre le fil APRÈS le
+   * retrait s'entendait nommer un non-membre, sans aucune coopération de
+   * personne.
+   *
+   * Unique appelant : `endConversationMembership`, le point de convergence des
+   * chemins de fin d'appartenance — c'est là qu'est écrit POURQUOI l'extinction
+   * précède l'éviction des rooms.
+   *
+   * **Ne rejette jamais** (contrat de `DepartedMemberEphemeralState`) : les
+   * appelants ont déjà commis leur écriture quand cette unité s'exécute.
+   *
+   * Pas de `inOrder` : les mutations du registre sont SYNCHRONES, donc
+   * atomiques vis-à-vis de la boucle d'événements, et le seul `await` vient
+   * après elles. Un `viewing:start` concurrent du même socket ne peut pas
+   * réinscrire le partant — il regate sur `resolveParticipant`, dont le cache
+   * vient d'être invalidé par le même appelant.
+   */
+  async retractViewingForDepartedMember(conversationId: string, userId: string): Promise<void> {
+    try {
+      const socketIds = [...(this.byConversation.get(conversationId)?.get(userId) ?? [])];
+      if (socketIds.length === 0) return;
+
+      socketIds.forEach(socketId => this.untrack(socketId, [conversationId]));
+      if (this.isHere(userId, conversationId)) return;
+
+      const blockRelated = await this.blockRelatedOf(userId);
+      this.broadcast(SERVER_EVENTS.VIEWING_STOP, { userId, conversationId }, blockRelated);
+    } catch (error) {
+      logger.error('viewing retraction for departed member failed', { error, conversationId, userId });
+    }
+  }
+
   handleSocketDisconnecting(socketId: string): Promise<void> {
     return this.inOrder(socketId, async () => {
       this.pendingBySocket.delete(socketId);
@@ -231,6 +273,61 @@ export class ConversationViewingHandler {
     if (!viewing.conversationIds.has(conversationId)) return;
     const allowed = await this.rateLimiter.checkLimit(userIdOrToken, SOCKET_RATE_LIMITS.CONVERSATION_ACTIVITY);
     if (!allowed) return;
+
+    // L'APPARTENANCE SE REVÉRIFIE ICI (#16654). L'entrée en mémoire ci-dessus
+    // a été écrite par `viewing:start`, qui l'a gatée sur `resolveParticipant`
+    // — mais elle est un INSTANTANÉ de ce moment-là, et le signal, lui, revient
+    // toutes les deux secondes pendant que l'écran reste ouvert (#9061). Entre
+    // les deux, un retrait, un bannissement ou un départ peut avoir eu lieu :
+    // l'ancien membre continuait alors d'annoncer « je suis ici, maintenant »
+    // dans un fil dont son droit d'être venait de cesser.
+    //
+    // C'est mot pour mot ce que `typing:start` a reçu (`StatusHandler`, #5947) :
+    // « letting any authenticated user — including one removed/banned from the
+    // conversation — broadcast their identity into a room they don't belong to ».
+    // La frappe a été gardée ; le regard, non — il est arrivé après.
+    //
+    // La lecture est AMORTIE : `resolveParticipant` sert sa réponse d'un cache
+    // de cinq minutes, qu'`endConversationMembership` invalide précisément à la
+    // fin d'appartenance (`invalidateParticipantCache`). Elle est placée APRÈS
+    // le limiteur de débit pour qu'un flot d'activité ne la convoque pas sans
+    // borne.
+    //
+    // LE VERDICT A TROIS ÉTATS, et les deux qui comptent s'arbitrent à
+    // l'opposé. `resolveParticipant` n'attrape RIEN : une panne de base LÈVE,
+    // elle ne rend pas `null`. Un `null` est donc un négatif PROUVÉ — aucune
+    // ligne vivante — et il ferme ; une levée est une ABSENCE DE PREUVE, elle
+    // remonte au `.catch` de `listen` et n'éteint rien. C'est le bon sens pour
+    // un signal de vivacité : on ne retire pas quelqu'un d'un fil sur une
+    // panne. Même arbitrage, mêmes conséquences, que le jumeau `typing:start`,
+    // qui expire aussi la room sur ce même négatif prouvé.
+    const participant = await resolveParticipant({
+      prisma: this.prisma,
+      userIdOrToken,
+      conversationId,
+      connectedUsers: this.connectedUsers,
+    });
+    if (!participant) {
+      // RÉTRACTER D'ABORD, ÉVINCER ENSUITE — même ordre et même raison que
+      // l'extinction d'`endConversationMembership` : le `viewing:stop` voyage
+      // par la room de la conversation, et il annonce aux pairs ce que leur
+      // interface montre encore. Sans lui, le point resterait allumé jusqu'à
+      // la fin de leur session.
+      await this.retract(socket.id, [conversationId]);
+      // La room est une autorisation MISE EN CACHE (#5947) : une
+      // non-appartenance PROUVÉE l'expire, sinon l'ancien membre reçoit encore
+      // le fil. Dans son PROPRE `try` (#6051) : l'échec de cette mesure de
+      // sécurité ne doit pas emporter la rétractation qui la précède, ni
+      // l'inverse.
+      try {
+        await socket.leave(ROOMS.conversation(conversationId));
+      } catch (error) {
+        logger.error('viewing:activity — expiration de la room échouée, la rétractation a eu lieu', {
+          error, userId: viewing.userId, conversationId,
+        });
+      }
+      return;
+    }
 
     const focus = validation.data.focus === true ? { focus: true } : {};
     this.broadcast(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: viewing.userId, conversationId, ...focus }, viewing.blockRelated);

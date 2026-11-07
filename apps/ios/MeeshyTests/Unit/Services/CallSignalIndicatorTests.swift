@@ -372,8 +372,16 @@ final class CallHangupFastPathTests: XCTestCase {
         }
         let row = String(view[start.upperBound ..< end.lowerBound])
         XCTAssertTrue(
-            row.contains(".foregroundColor(Color(hex: line.speakerColorHex))"),
-            "Le nom du locuteur se colore de SA couleur, dérivée de son identifiant."
+            row.contains("private var speakerColor: Color { Color(hex: line.speakerColorHex) }"),
+            "La couleur de la ligne est celle de son AUTEUR, dérivée de son identifiant (#16614)."
+        )
+        XCTAssertEqual(
+            row.components(separatedBy: ".foregroundColor(speakerColor)").count - 1, 1,
+            "Le NOM porte toujours la couleur de son auteur (#16662)."
+        )
+        XCTAssertTrue(
+            row.contains(".foregroundColor(line.textColorHex.map { Color(hex: $0) } ?? .white)"),
+            "La phrase ne prend la couleur que traduite ; l'original reste à l'encre de l'appel (#16662)."
         )
         XCTAssertTrue(
             row.contains("Text(speakerHeading)"),

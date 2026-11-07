@@ -94,6 +94,11 @@ describe('CallGrid', () => {
     expect(html).toContain(`border-color:${speakerColor('u-b')}`);
   });
 
+  test('ma vignette porte MA couleur, celle de mes sous-titres (#16635)', () => {
+    const html = grid({ self: { id: 'u-me', stream: null, cameraOn: false, mirrored: true, micMuted: false } });
+    expect(html).toMatch(new RegExp(`border-color:${speakerColor('u-me')}[^>]*data-call-tile-self=""`));
+  });
+
   test('l’étiquette de nom d’une vignette est un verre d’appel', () => {
     expect(grid()).toMatch(/class="glass-call[^"]*"[^>]*>Awa/);
   });

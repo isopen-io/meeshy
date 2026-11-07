@@ -66,6 +66,8 @@ export type CallGridProps = {
   readonly members: readonly CallMember[];
   readonly remoteStreams: Readonly<Record<string, MediaStream>>;
   readonly self: {
+    /** Mon identifiant : ma vignette porte MA couleur, celle de mes sous-titres (#16635). Absent : le liseré neutre. */
+    readonly id?: string | null;
     readonly stream: MediaStream | null;
     readonly cameraOn: boolean;
     readonly mirrored: boolean;
@@ -161,7 +163,7 @@ function PeerTile(props: Parameters<typeof Tile>[0] & { readonly moderation: Cal
 function SelfTile({ self, language, portrait, onPress }: { readonly self: CallGridProps['self']; readonly language: InterfaceLanguage; readonly portrait: number; readonly onPress: (() => void) | null }) {
   const you = translate(language, 'call.you');
   const className = 'relative grid min-h-0 place-items-center overflow-hidden rounded-card border-2';
-  const frame = { background: TILE, borderColor: SELF_SPEAKER_COLOR };
+  const frame = { background: TILE, borderColor: self.id ? speakerColor(self.id) : SELF_SPEAKER_COLOR };
   const body = (
     <>
       {self.cameraOn ? <StreamVideo stream={self.stream} mirrored={self.mirrored} className="absolute inset-0 size-full" label={you} self /> : <Portrait name={self.name || you} avatar={self.avatar ?? null} size={portrait} pulse={false} presenceKey={undefined} />}

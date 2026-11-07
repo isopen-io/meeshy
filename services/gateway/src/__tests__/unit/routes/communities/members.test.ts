@@ -71,7 +71,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     user: {
       findUnique: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
-      findFirst: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
+      findFirst: jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_USER_ID })),
     },
     ...overrides,
   } as any;
