@@ -57,8 +57,8 @@ extension ProfileBringViewModel {
     }
 }
 
-extension CircleBringBlockViewModel {
-    convenience init(userId: String) {
-        self.init(userId: userId, service: BringService.shared)
+extension CircleReceptionBlockViewModel {
+    convenience init(userId: String, setting: RelationReceptionSetting) {
+        self.init(userId: userId, setting: setting, service: BringService.shared)
     }
 }
