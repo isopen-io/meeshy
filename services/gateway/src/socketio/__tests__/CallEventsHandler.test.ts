@@ -4511,6 +4511,8 @@ describe('CallEventsHandler', () => {
         participantId: PARTICIPANT_ID,
         userId: USER_ID,
         isCapturing: true,
+        // #16665 — un client d'avant n'envoie pas de kind : il se relaie « recording ».
+        kind: 'recording',
       });
     });
 
@@ -4529,6 +4531,8 @@ describe('CallEventsHandler', () => {
         participantId: PARTICIPANT_ID,
         userId: USER_ID,
         isCapturing: false,
+        // #16665 — un client d'avant n'envoie pas de kind : il se relaie « recording ».
+        kind: 'recording',
       });
     });
   });

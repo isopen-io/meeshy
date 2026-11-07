@@ -2810,6 +2810,9 @@ model CallSession {
   /// Transcriptions (Phase 2A/2B)
   transcriptions Transcription[]
 
+  /// Captures gardées au journal de l'appel (#16665)
+  captureEvents CallCaptureEvent[]
+
   /// Reason the call ended (null while active)
   endReason CallEndReason?
 
@@ -2951,13 +2954,14 @@ model CallRecording {
 /// `GET /calls/:callId/transcript` (`captures`). `participantId`/`userId` sont
 /// nuls pour un arrêt que personne n'a demandé (fin d'appel, délai).
 model CallCaptureEvent {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  callSessionId String   @db.ObjectId
-  participantId String?  @db.ObjectId
-  userId        String?  @db.ObjectId
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  callSessionId String      @db.ObjectId
+  callSession   CallSession @relation(fields: [callSessionId], references: [id], onDelete: Cascade)
+  participantId String?     @db.ObjectId
+  userId        String?     @db.ObjectId
   kind          String
   offsetMs      Int
-  createdAt     DateTime @default(now())
+  createdAt     DateTime    @default(now())
 
   @@index([callSessionId, createdAt])
   @@index([callSessionId, participantId, kind, createdAt])

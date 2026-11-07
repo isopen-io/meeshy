@@ -17,6 +17,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import fastJsonStringify from 'fast-json-stringify';
 
 // ─── Module-level mock variables (hoisted before jest.mock()) ─────────────────
 
@@ -128,7 +129,7 @@ const TARGET_PART_ID = '507f1f77bcf86cd799439055';
 // ─── Factories ────────────────────────────────────────────────────────────────
 
 type RouteHandler = (req: any, reply: any) => Promise<any>;
-type RouteReg = { method: string; path: string; handler: RouteHandler };
+type RouteReg = { method: string; path: string; handler: RouteHandler; opts?: any };
 
 function makeCallSession(overrides: Record<string, any> = {}) {
   return {
@@ -184,8 +185,8 @@ function createMockFastify(prismaOverrides?: Record<string, any>) {
     post: jest.fn<any>((path: string, _opts: any, handler: RouteHandler) => {
       routes.push({ method: 'POST', path, handler });
     }),
-    get: jest.fn<any>((path: string, _opts: any, handler: RouteHandler) => {
-      routes.push({ method: 'GET', path, handler });
+    get: jest.fn<any>((path: string, opts: any, handler: RouteHandler) => {
+      routes.push({ method: 'GET', path, handler, opts });
     }),
     delete: jest.fn<any>((path: string, _opts: any, handler: RouteHandler) => {
       routes.push({ method: 'DELETE', path, handler });
@@ -503,6 +504,22 @@ describe('callRoutes', () => {
       // #4165 — la page par defaut est bornee : un appel d'une heure ne rend
       // plus son journal entier au premier acces au replay.
       expect(mockGetCallTranscript).toHaveBeenCalledWith(CALL_ID, USER_ID, 0, 100);
+    });
+
+    // #16665 — Fastify retire tout champ que le schéma de réponse ne déclare
+    // pas : sans déclaration, `captures` n'atteindrait jamais un client.
+    it('déclare captures dans le schéma de réponse, sans quoi fast-json-stringify les retire', () => {
+      const { routes } = setup();
+      const route = routes.find((r) => r.method === 'GET' && r.path === '/calls/:callId/transcript');
+      const serialize = fastJsonStringify(route?.opts.schema.response[200]);
+      const captures = [
+        { id: 'cap-1', participantId: PART_ID, userId: USER_ID, displayName: 'Karim', kind: 'screenshot', offsetMs: 760_000, at: '2026-11-07T10:12:40.000Z' },
+        { id: 'cap-2', participantId: null, userId: null, displayName: null, kind: 'call-recording-stopped', offsetMs: 800_000, at: '2026-11-07T10:13:20.000Z' },
+      ];
+
+      const body = JSON.parse(serialize({ success: true, data: { ...transcript, captures } }));
+
+      expect(body.data.captures).toEqual(captures);
     });
 
     it('transmet la fenetre demandee au service, jamais un slice apres coup', async () => {
