@@ -205,12 +205,20 @@ pour un défaut déjà réparé — est fermée avec sa raison.
 > en cours ; elle n'autorise pas à se rabattre sur le dernier verdict archivé.
 > La ligne de base d'une PR est l'ÉTAT COURANT de sa base.
 
-Et la conséquence remonte plus haut que ce cycle : **ce que plusieurs journaux
-consignaient comme « les rouges de codecs d'image, capacité libvips du
-conteneur, verts en CI » était une image de runner qui avait bougé.** Une cause
-héritée de journal en journal cesse d'être une mesure et devient une
-explication — et une explication dispense de regarder. C'est « un compte est une
-AFFIRMATION » (cycle 93) appliqué à une CAUSE, pas à un nombre.
+**Et j'ai SUR-corrigé, ce qui est la même faute dans l'autre sens.** Cette
+section accusait d'abord les journaux précédents : leur « rouges de codecs
+d'image, capacité libvips du conteneur, verts en CI » aurait été une image de
+runner qui avait bougé. **Mesuré faux.** Sous l'épingle `ubuntu-24.04`, les
+trois tranches `Tests · gateway` sont VERTES — et les six suites de codecs
+d'image vivent dans la passerelle. Leur verdict en CI est donc vert, et leur
+rouge en local est bien une capacité absente de CE conteneur : les deux moitiés
+de leur phrase étaient justes. Faux était seulement MON attribution — j'ai
+expliqué des rouges observés en CI sous Ubuntu 26.04 par leur cause locale, qui
+n'y était pour rien. Deux causes distinctes, un même nom de suite.
+
+> **Corriger une erreur en accusant la mesure d'un autre demande la même preuve
+> que l'erreur elle-même.** Une sur-correction a le ton de quelqu'un qui vient
+> de vérifier, et elle salit un relevé juste dans un registre permanent.
 
 Leçon : `tasks/lessons/2026-11-07-la-ligne-de-base-d-une-pr-est-la-tete-de-sa-base-pas-le-dernier-verdict-archive.md`.
 

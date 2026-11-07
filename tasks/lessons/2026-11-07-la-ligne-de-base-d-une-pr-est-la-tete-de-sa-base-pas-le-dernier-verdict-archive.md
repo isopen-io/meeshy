@@ -29,13 +29,33 @@ défaut déjà réparé, et un cycle entier passé à construire une explication
 (« capacité du conteneur ») pour des rouges qui avaient une cause et un
 correctif.
 
-Et la conséquence la plus chère est en amont de moi : **ce que plusieurs cycles
-avaient consigné comme « les rouges de codecs d'image, capacité libvips du
-conteneur, verts en CI » était une image de runner qui avait bougé.** Une ligne
-de base héritée de journal en journal cesse d'être une mesure et devient une
-explication — et une explication dispense de regarder. C'est la forme « un
-compte est une AFFIRMATION, il se compte, il ne s'hérite pas » (cycle 93),
-appliquée non à un nombre mais à une CAUSE.
+### Et j'ai SUR-corrigé, ce qui est la même faute dans l'autre sens
+
+La première version de cette leçon accusait les cycles précédents : « ce que
+plusieurs cycles avaient consigné comme *les rouges de codecs d'image, capacité
+libvips du conteneur, verts en CI* était une image de runner qui avait bougé ».
+
+**Faux, et mesuré faux.** Le run de CI sous l'épingle `ubuntu-24.04` rend les
+trois tranches `Tests · gateway` VERTES — or les six suites de codecs d'image
+vivent dans la passerelle. Leur verdict en CI est donc bien VERT, exactement ce
+que les cycles précédents avaient écrit. Leur rouge en LOCAL est bien une
+capacité absente de ce conteneur de développement. **Les deux moitiés de leur
+phrase étaient justes.**
+
+Ce qui était faux était uniquement MON attribution : j'ai pris les rouges
+observés en CI sous Ubuntu 26.04 et je les ai expliqués par leur cause locale,
+qui n'avait rien à y voir. Deux causes distinctes produisaient le même nom de
+suite en échec, et j'ai fusionné les deux.
+
+> **Corriger une erreur en accusant la mesure d'un autre demande la même preuve
+> que l'erreur elle-même.** Une sur-correction se lit comme de la rigueur — elle
+> a le ton de quelqu'un qui vient de vérifier — et elle salit un relevé juste
+> dans un registre permanent. Avant de réécrire le constat d'un cycle
+> précédent : le MESURER, pas seulement constater qu'il ne colle pas à ce que je
+> viens de voir.
+
+La leçon de MÉTHODE sur la ligne de base (ci-dessus) tient entièrement. C'est sa
+généralisation en amont qui était de trop.
 
 Deux réflexes qui l'attrapent, et le second est le vrai :
 
