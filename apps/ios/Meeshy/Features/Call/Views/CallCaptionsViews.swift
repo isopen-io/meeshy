@@ -67,6 +67,29 @@ struct CallCaptionRow: View {
     private var speakerColor: Color { Color(hex: line.speakerColorHex) }
 
     var body: some View {
+        if line.isEvent {
+            eventLine
+        } else {
+            speechLine
+        }
+    }
+
+    /// #16665 — « Karim · a capturé l'écran · 12:40 » : le pseudo à sa
+    /// couleur, la phrase et l'heure en encre secondaire, jamais colorées.
+    private var eventLine: some View {
+        CallCaptureSentence.text(
+            name: line.speakerName,
+            nameColor: speakerColor,
+            tail: [line.text, line.timeLabel ?? ""].filter { !$0.isEmpty }.joined(separator: " · "),
+            tailColor: MeeshyColors.mediaChromeSecondary
+        )
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(line.announcement ?? line.text)
+    }
+
+    private var speechLine: some View {
         Button {
             guard line.canRevealOriginal else { return }
             onToggleOriginal()
@@ -172,8 +195,8 @@ struct CallCaptionsBand: View {
 }
 
 struct CallJournalList: View {
-    let segments: [CallTranscriptionSegment]
-    let line: (CallTranscriptionSegment) -> CallCaptionLine
+    let items: [CallJournalItem<CallTranscriptionSegment>]
+    let line: (CallJournalItem<CallTranscriptionSegment>) -> CallCaptionLine
     let onToggleOriginal: (UUID) -> Void
     var contentPadding: CGFloat = 16
 
@@ -189,13 +212,14 @@ struct CallJournalList: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                        if segments.isEmpty {
+                        if items.isEmpty {
                             Text(CallCaptionsCopy.waiting)
                                 .font(.callout)
                                 .foregroundColor(MeeshyColors.mediaChromeTertiary)
                         }
-                        ForEach(segments) { segment in
-                            CallCaptionRow(line: line(segment), showsTime: true) { onToggleOriginal(segment.id) }
+                        ForEach(items) { item in
+                            let resolved = line(item)
+                            CallCaptionRow(line: resolved, showsTime: true) { onToggleOriginal(resolved.id) }
                         }
                         Color.clear
                             .frame(height: 1)
@@ -253,8 +277,14 @@ struct CallJournalList: View {
     }
 
     private var tailSignature: String {
-        guard let last = segments.last else { return "" }
-        return "\(segments.count)|\(last.id.uuidString)|\(last.text.count)|\(last.translatedText?.count ?? 0)"
+        switch items.last {
+        case .none:
+            return ""
+        case .capture(let capture):
+            return "\(items.count)|\(capture.id)"
+        case .speech(let last):
+            return "\(items.count)|\(last.id.uuidString)|\(last.text.count)|\(last.translatedText?.count ?? 0)"
+        }
     }
 
     private func returnToLive(action: @escaping () -> Void) -> some View {
@@ -321,8 +351,8 @@ private nonisolated struct CallJournalScrollKey: PreferenceKey {
 /// Tout l'appel, Traduit ou Original — le réglage est celui du bouton
 /// Sous-titres (`showOriginalText`), un toucher par phrase l'inverse.
 struct CallCaptionsJournalSheet: View {
-    let segments: [CallTranscriptionSegment]
-    let line: (CallTranscriptionSegment) -> CallCaptionLine
+    let items: [CallJournalItem<CallTranscriptionSegment>]
+    let line: (CallJournalItem<CallTranscriptionSegment>) -> CallCaptionLine
     @Binding var showsOriginal: Bool
     let onToggleOriginal: (UUID) -> Void
 
@@ -330,7 +360,7 @@ struct CallCaptionsJournalSheet: View {
 
     var body: some View {
         NavigationStack {
-            CallJournalList(segments: segments, line: line, onToggleOriginal: onToggleOriginal)
+            CallJournalList(items: items, line: line, onToggleOriginal: onToggleOriginal)
                 .navigationTitle(CallCaptionsCopy.journalTitle)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {

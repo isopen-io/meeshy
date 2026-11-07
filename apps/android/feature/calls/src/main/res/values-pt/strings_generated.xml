@@ -15,6 +15,10 @@
     <string name="call_capture_faces">Cada rosto</string>
     <string name="call_capture_faces_saved">%1$d rostos salvos</string>
     <string name="call_capture_failed">Não foi possível salvar a captura</string>
+    <string name="call_capture_journal_call_recording_started">A gravação da chamada começou</string>
+    <string name="call_capture_journal_call_recording_stopped">A gravação da chamada parou</string>
+    <string name="call_capture_journal_recording">está gravando a tela</string>
+    <string name="call_capture_journal_screenshot">capturou a tela</string>
     <string name="call_capture_no_video">Ainda não há imagem para capturar</string>
     <string name="call_capture_preview">Pré-visualização da montagem</string>
     <string name="call_capture_saved">Captura salva</string>

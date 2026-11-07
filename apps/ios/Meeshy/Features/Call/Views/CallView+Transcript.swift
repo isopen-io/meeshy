@@ -14,8 +14,8 @@ extension CallView {
     /// pas être en overlay des autres points d'action".
     var transcriptPanel: some View {
         CallJournalList(
-            segments: transcriptionService.displayedSegments,
-            line: captionLine,
+            items: journal.items,
+            line: journal.line,
             onToggleOriginal: { toggleOriginal(of: $0) },
             contentPadding: 12
         )
@@ -38,6 +38,10 @@ extension CallView {
             prefersOriginal: showOriginalText,
             isRevealed: revealedCaptionIds.contains(segment.id)
         )
+    }
+
+    var journal: CallJournalComposer {
+        CallJournalComposer(segments: transcriptionService.displayedSegments, captures: transcriptionService.captureJournal.marks, callStartedAt: callManager.callStartDate, speechLine: captionLine)
     }
 
     /// Le nom du locuteur : le mien, puis le roster du groupe (source de
@@ -70,7 +74,7 @@ extension CallView {
     /// sont rangées ; en groupe il se pose dans le verre de la pilule.
     func captionsBand(hasOwnGlass: Bool, opensJournal: Bool = true) -> some View {
         CallCaptionsBand(
-            lines: transcriptionService.displayedSegments.suffix(2).map(captionLine),
+            lines: journal.items.suffix(2).map(journal.line),
             hasOwnGlass: hasOwnGlass,
             onToggleOriginal: { toggleOriginal(of: $0) },
             onOpenJournal: opensJournal ? { togglePanel(.journal) } : nil
@@ -92,8 +96,8 @@ extension CallView {
 
     var captionsJournal: some View {
         CallCaptionsJournalSheet(
-            segments: transcriptionService.displayedSegments,
-            line: captionLine,
+            items: journal.items,
+            line: journal.line,
             showsOriginal: $showOriginalText,
             onToggleOriginal: { toggleOriginal(of: $0) }
         )

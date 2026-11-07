@@ -37,9 +37,9 @@ extension CallView {
                 callControlsLayer
 
                 callModeLayer
-
                 CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice, showsStatus: chromeVisibility.isVisible(.recordingStatus))
                     .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
+                CallCaptureAlertLayer(journal: transcriptionService.captureJournal, isBelowRecording: callManager.recording.phase != .idle || callManager.recording.notice != nil)
 
                 liveFrameStatus
                     .padding(.top, 160)
@@ -411,9 +411,6 @@ extension CallView {
                 }
                 if !callManager.isRemoteAudioEnabled {
                     statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(MeeshyOpacity.heavy))
-                }
-                if callManager.isRemoteScreenCapturing {
-                    statusPill(icon: "record.circle", text: String(localized: "call.status.peer.recording", defaultValue: "Enregistrement", bundle: .main), color: MeeshyColors.error)
                 }
                 if callManager.isSpeaker {
                     statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)

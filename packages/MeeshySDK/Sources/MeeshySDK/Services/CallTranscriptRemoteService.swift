@@ -13,6 +13,21 @@ public struct APICallTranscript: Decodable, Sendable {
     public let conversationId: String
     public let callStartedAt: Date
     public let segments: [APICallTranscriptSegment]
+    /// #16665 — absent d'une passerelle antérieure.
+    public var captures: [APICallTranscriptCapture]? = nil
+}
+
+/// #16665 — une capture d'écran ou une borne de l'enregistrement de l'appel,
+/// telle que la passerelle la garde (`CallCaptureEvent`). `kind` reste brut :
+/// une sorte inconnue de ce client se laisse de côté au mapping, app-side.
+public struct APICallTranscriptCapture: Decodable, Sendable {
+    public let id: String
+    public let participantId: String
+    public let userId: String?
+    public let displayName: String?
+    public let kind: String
+    public let offsetMs: Int
+    public let at: Date
 }
 
 public struct APICallTranscriptSegment: Decodable, Sendable {

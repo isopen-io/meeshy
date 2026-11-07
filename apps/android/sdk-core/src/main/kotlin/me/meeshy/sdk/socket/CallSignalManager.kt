@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import me.meeshy.sdk.model.call.CallCaptureKind
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallErrorSignal
 import me.meeshy.sdk.model.call.CallEvent
@@ -402,13 +403,19 @@ class CallSignalManager internal constructor(
      * le SIEN depuis la socket authentifiée (anti-usurpation, fix 2026-07-03) —
      * le userId local suffit.
      */
-    fun emitScreenCaptureDetected(callId: String, participantId: String, isCapturing: Boolean) =
+    fun emitScreenCaptureDetected(
+        callId: String,
+        participantId: String,
+        isCapturing: Boolean,
+        kind: CallCaptureKind = CallCaptureKind.RECORDING,
+    ) =
         socketManager.emit(
             SocketEventNames.CALL_SCREEN_CAPTURE_DETECTED,
             JSONObject()
                 .put("callId", callId)
                 .put("participantId", participantId)
-                .put("isCapturing", isCapturing),
+                .put("isCapturing", isCapturing)
+                .put("kind", kind.wire),
         )
 
     /**

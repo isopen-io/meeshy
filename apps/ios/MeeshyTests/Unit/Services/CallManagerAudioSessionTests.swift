@@ -2883,14 +2883,14 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
         return try String(contentsOf: url.appendingPathComponent(name), encoding: .utf8)
     }
 
-    /// CallView must check isRemoteScreenCapturing to display a recording indicator.
+    /// #16665 — CallView shows the R1 capture capsule in EVERY layout (audio,
+    /// video, group): it lives in the shared connected stack, not in a layout.
     func test_callView_showsRecordingIndicator() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("isRemoteScreenCapturing"),
-            "CallView must check isRemoteScreenCapturing to display a recording warning " +
-            "pill — the local user must know when the remote peer is capturing the call " +
-            "so they can make an informed privacy decision")
+            source.contains("CallCaptureAlertLayer(journal: transcriptionService.captureJournal"),
+            "CallView must show the capture capsule — the local user must know when " +
+            "someone captures the call so they can make an informed privacy decision")
     }
 }
 
