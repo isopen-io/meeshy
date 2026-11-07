@@ -576,7 +576,7 @@ struct ComposerLookStrip: View {
         if !scrolling { scrolling = true }
         settle.task?.cancel()
         settle.task = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
             scrolling = false
             rest(reader: reader)
