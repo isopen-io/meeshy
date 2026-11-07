@@ -176,6 +176,11 @@ struct ComposerCaptureChrome: View {
 
     /// L'anneau de la dernière mise au point — un état de VUE, pas de la machine.
     @State private var focusMark: ComposerCaptureFocusMark?
+    /// Le ticket du dernier effacement prévu de l'anneau : seul le plus récent
+    /// l'efface, un glissé du soleil en repousse l'échéance (OPUS-5).
+    @State private var markFadeTicket = 0
+    @State private var exposureDragging = false
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     /// Retombe tout seul quand le pincement finit — y compris annulé par le
     /// système, qui n'appelle pas `onEnded`.
     @GestureState private var pinchActive = false
@@ -257,6 +262,13 @@ struct ComposerCaptureChrome: View {
                         case .increment: adjustAccessible(up: true)
                         case .decrement: adjustAccessible(up: false)
                         @unknown default: break
+                        }
+                    }
+                    // Après l'élément de la scène : le soleil reste son propre
+                    // élément VoiceOver, et les gestes de la scène ne le voient pas.
+                    .overlay(alignment: .topLeading) {
+                        if let focusMark, session.offersExposure {
+                            exposureSun(beside: focusMark, width: proxy.size.width)
                         }
                     }
                     .allowsHitTesting(!finishing)
@@ -569,10 +581,69 @@ struct ComposerCaptureChrome: View {
         let marque = ComposerCaptureFocusMark(
             id: UUID(), location: CGPoint(x: location.x - origin.x, y: location.y - origin.y))
         focusMark = marque
+        exposureDragging = false
+        scheduleMarkFade(marque)
+    }
+
+    /// L'anneau s'efface à son échéance — sauf si un effacement plus récent a
+    /// été prévu, ou si le doigt tient le soleil.
+    private func scheduleMarkFade(_ marque: ComposerCaptureFocusMark) {
+        markFadeTicket += 1
+        let ticket = markFadeTicket
+        let duree = ComposerCaptureExposure.markLifetime(adjustable: session.offersExposure,
+                                                         voiceOver: voiceOverEnabled)
         Task { @MainActor in
-            _ = await cancellableSleep(for: .seconds(ComposerCaptureFocus.markLifetime))
-            if focusMark == marque { focusMark = nil }
+            _ = await cancellableSleep(for: .seconds(duree))
+            guard ticket == markFadeTicket, !exposureDragging, focusMark == marque else { return }
+            focusMark = nil
         }
+    }
+
+    /// **Le soleil d'exposition** (OPUS-5) : à côté de l'anneau, il monte quand
+    /// l'image s'éclaircit. Son glissé lui est propre — il ne zoome pas et ne
+    /// range pas le viseur, ceux de la scène ne le voient pas.
+    private func exposureSun(beside marque: ComposerCaptureFocusMark, width: CGFloat) -> some View {
+        let diametre = ComposerCaptureFocusRing.diameter
+        return ComposerCaptureExposureSun(bias: session.exposureBias)
+            .position(x: ComposerCaptureExposure.sunX(ringX: marque.location.x, ringDiameter: diametre, width: width),
+                      y: marque.location.y + ComposerCaptureExposure.sunOffsetY(session.exposureBias))
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                    .onChanged { valeur in
+                        exposureDragging = true
+                        session.dragExposure(translationY: valeur.translation.height)
+                    }
+                    .onEnded { _ in
+                        exposureDragging = false
+                        session.endExposureDrag()
+                        scheduleMarkFade(marque)
+                    })
+            .accessibilityAdjustableAction { sens in
+                switch sens {
+                case .increment: session.stepExposure(up: true)
+                case .decrement: session.stepExposure(up: false)
+                @unknown default: break
+                }
+                scheduleMarkFade(marque)
+            }
+    }
+}
+
+/// **Le soleil d'exposition** (OPUS-5) : glisser vers le haut éclaircit, vers
+/// le bas assombrit. La zone de toucher fait 44 pt, le dessin moins.
+private struct ComposerCaptureExposureSun: View {
+    let bias: Float
+
+    var body: some View {
+        Image(systemName: "sun.max.fill")
+            .font(.title3.weight(.semibold))
+            .foregroundStyle(Color.white)
+            .shadow(color: .black.opacity(0.45), radius: 3)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .accessibilityElement()
+            .accessibilityLabel(ComposerCaptureCopy.exposure)
+            .accessibilityValue(ComposerCaptureExposure.valueText(bias))
     }
 }
 

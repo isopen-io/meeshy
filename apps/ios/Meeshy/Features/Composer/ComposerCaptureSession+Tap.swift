@@ -48,6 +48,7 @@ extension ComposerCaptureSession {
               let capteur = ComposerCaptureFocusGeometry.devicePoint(viewPoint: point, imageRect: image,
                                                                      mirrored: controls.currentPosition == .front),
               controls.focus(at: capteur, smooth: stage == .recording) else { return false }
+        forgetExposure()
         HapticFeedback.light()
         return true
     }
