@@ -15,12 +15,22 @@
  *      elle aussi.
  *   3. Masquage personnel — `loadPersonalHistoryHidingByConversation`, appliqué
  *      APRÈS le keyset, comme `/sync` (une courtoisie : illisible ⇒ on sert).
- *   4. Le verdict du message (règles 2 et 3) — `starredMessageVerdict`, le
- *      même que la pose d'une étoile.
- *   5. Un expéditeur disparu répare la portée de la page et rejoue la lecture
+ *   4. Les DEUX coupures de service d'une page lue par UN lecteur (#16604) —
+ *      `keepAliveForReaderAcrossConversations` : l'éphémère dont le service est
+ *      clos pour lui (#7451), puis la réponse à ce qui est mort pour lui
+ *      (#8630). La forme qui TRAVERSE les conversations est la seule possible
+ *      ici : `MessageStatusEntry` est indexé par `Participant.id`, qui est
+ *      scopé par conversation, et une page de favoris en mêle autant que le
+ *      lecteur en a. Passer une clé unique lirait les échéances d'UNE
+ *      conversation et ferait paraître les autres « décompte pas démarré » —
+ *      la porte échouerait en montrant PLUS.
+ *   5. Le verdict du message (règles 2 et 3) — `starredMessageVerdict`, le
+ *      même que la pose d'une étoile, nourri par l'échéance que la coupure a
+ *      déjà résolue : la liste ne lit pas deux fois la même horloge.
+ *   6. Un expéditeur disparu répare la portée de la page et rejoue la lecture
  *      (`withOrphanedSenderRepair`, #6501) au lieu de la rendre illisible.
  *
- * Les critères 2 à 4 se tranchent en mémoire, sur les lignes déjà chargées :
+ * Les critères 2 à 5 se tranchent en mémoire, sur les lignes déjà chargées :
  * une page peut donc être COURTE. Le curseur avance sur la dernière étoile
  * LUE, jamais sur la dernière servie — aucune ligne n'est sautée, et `hasMore`
  * reste juste.
@@ -33,6 +43,7 @@ import { differsOrUnset, unsetOrNull } from '../../../utils/prisma-unset';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../../historyFloor';
 import { NO_PERSONAL_HIDING, loadPersonalHistoryHidingByConversation } from '../../personalHistoryFilter';
 import { loadExpiredShareLinkConversationIds } from '../../shareLinkReadGate';
+import { keepAliveForReaderAcrossConversations } from '../quoteCascade';
 import { withOrphanedSenderRepair } from '../withOrphanedSenderRepair';
 import {
   STARRED_CONVERSATION_SELECT,
@@ -85,7 +96,9 @@ export class StarredMessagesReader {
 
     const memberships = await this.prisma.participant.findMany({
       where: { userId, isActive: true, ...unsetOrNull('bannedAt') },
-      select: { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
+      // `id` est la CLÉ DE LECTEUR de `MessageStatusEntry` (#16604) : sans
+      // elle, aucune échéance d'éphémère n'est adressable pour ce lecteur.
+      select: { id: true, conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
       orderBy: [{ joinedAt: 'desc' }, { id: 'desc' }],
       take: MEMBERSHIPS_READ_CAP,
     });
@@ -138,7 +151,29 @@ export class StarredMessagesReader {
     ]);
     const peers = await this.loadDirectPeers(userId, conversations.filter((c) => c.type === 'direct').map((c) => c.id));
 
-    const messagesById = new Map(messages.map((message) => [message.id, message]));
+    // Les deux coupures de service, par CONVERSATION du lecteur : une page de
+    // favoris traverse les conversations, et la clé des accusés est scopée par
+    // conversation (voir l'en-tête, critère 4). Une conversation absente de la
+    // carte reçoit `undefined` — « aucune échéance de lecteur », jamais celle
+    // d'un autre.
+    // La participation la PLUS RÉCENTE par conversation : `memberships` est
+    // ordonné `joinedAt desc`, et `new Map` garde la dernière entrée d'une
+    // clé — d'où la lecture à rebours, le même idiome que `loadDirectPeers`
+    // ci-dessous. Une ligne dupliquée héritée choisirait sinon la plus
+    // ancienne, dont les accusés sont muets : la coupure lirait « décompte pas
+    // démarré » et servirait. Une porte ne se laisse pas départager par
+    // l'ordre naturel d'une collection.
+    const participantByConversation = new Map(
+      [...memberships].reverse().map((m) => [m.conversationId, m.id] as const),
+    );
+    const readerPage = await keepAliveForReaderAcrossConversations(
+      this.prisma,
+      messages,
+      participantByConversation,
+      now,
+    );
+
+    const messagesById = new Map(readerPage.alive.map((message) => [message.id, message]));
     const conversationsById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
 
     const items = page.flatMap((star): StarredMessageItem[] => {
@@ -146,7 +181,7 @@ export class StarredMessagesReader {
       const conversation = conversationsById.get(star.conversationId);
       if (!message || !conversation || message.conversationId !== star.conversationId) return [];
 
-      const verdict = starredMessageVerdict(message, now);
+      const verdict = starredMessageVerdict(message, { now, ephemeralReader: readerPage.deadlines.get(message.id) });
       if (verdict === 'gone' || verdict === 'view-once') return [];
 
       const reader = {

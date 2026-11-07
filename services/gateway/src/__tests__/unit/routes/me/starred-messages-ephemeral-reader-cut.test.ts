@@ -55,7 +55,7 @@ async function list(store: Store) {
   const app = await buildApp(makePrisma(store));
   try {
     const res = await app.inject({ method: 'GET', url: '/starred-messages' });
-    return { res, body: res.json() as { data: { items: Array<{ message: Record<string, unknown> }> } } };
+    return { res, body: res.json() as { data: Array<{ message: Record<string, unknown> }> } };
   } finally {
     await app.close();
   }
@@ -112,7 +112,7 @@ describe('GET — la coupure de l’éphémère est celle du LECTEUR, pas celle 
     );
 
     expect(res.statusCode).toBe(200);
-    expect(body.data.items).toEqual([]);
+    expect(body.data).toEqual([]);
   });
 
   it('sert encore, en placeholder, la flamme dont le service du lecteur court toujours', async () => {
@@ -127,16 +127,16 @@ describe('GET — la coupure de l’éphémère est celle du LECTEUR, pas celle 
     );
 
     expect(res.statusCode).toBe(200);
-    expect(body.data.items).toHaveLength(1);
-    expect(body.data.items[0].message).toMatchObject({ isProtected: true, content: null });
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].message).toMatchObject({ isProtected: true, content: null });
   });
 
   it('sert la flamme dont le décompte du lecteur n’a pas démarré', async () => {
     const { res, body } = await list(store({ messages: [durationFlame()], statusEntries: [] }));
 
     expect(res.statusCode).toBe(200);
-    expect(body.data.items).toHaveLength(1);
-    expect(body.data.items[0].message).toMatchObject({ isProtected: true, content: null });
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].message).toMatchObject({ isProtected: true, content: null });
   });
 
   it('retire une flamme APRÈS LECTURE que le lecteur a consommée', async () => {
@@ -155,7 +155,7 @@ describe('GET — la coupure de l’éphémère est celle du LECTEUR, pas celle 
     );
 
     expect(res.statusCode).toBe(200);
-    expect(body.data.items).toEqual([]);
+    expect(body.data).toEqual([]);
   });
 
   it('GARDE la flamme APRÈS LECTURE pour son EXPÉDITEUR, qui ne décompte pas', async () => {
@@ -175,7 +175,7 @@ describe('GET — la coupure de l’éphémère est celle du LECTEUR, pas celle 
     );
 
     expect(res.statusCode).toBe(200);
-    expect(body.data.items).toHaveLength(1);
+    expect(body.data).toHaveLength(1);
   });
 
   it('GARDE la flamme à durée pour son EXPÉDITEUR tant qu’un destinataire décompte', async () => {
@@ -190,7 +190,7 @@ describe('GET — la coupure de l’éphémère est celle du LECTEUR, pas celle 
     );
 
     expect(res.statusCode).toBe(200);
-    expect(body.data.items).toHaveLength(1);
+    expect(body.data).toHaveLength(1);
   });
 
   it('retire la RÉPONSE à une flamme morte chez ce lecteur — avec son texte', async () => {
@@ -210,7 +210,7 @@ describe('GET — la coupure de l’éphémère est celle du LECTEUR, pas celle 
     );
 
     expect(res.statusCode).toBe(200);
-    expect(body.data.items).toEqual([]);
+    expect(body.data).toEqual([]);
   });
 
   it('garde la réponse quand la flamme citée vit encore pour ce lecteur', async () => {
@@ -227,8 +227,31 @@ describe('GET — la coupure de l’éphémère est celle du LECTEUR, pas celle 
     );
 
     expect(res.statusCode).toBe(200);
-    expect(body.data.items).toHaveLength(1);
-    expect(body.data.items[0].message).toMatchObject({ content: 'oui, entendu', isProtected: false });
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].message).toMatchObject({ content: 'oui, entendu', isProtected: false });
+  });
+
+  it('lit la participation la PLUS RÉCENTE quand le lecteur en a deux dans la conversation', async () => {
+    const OLD_PARTICIPANT = '68b000000000000000000013';
+    const { res, body } = await list(
+      makeStore({
+        messages: [durationFlame()],
+        participants: [
+          // Une ligne héritée, plus ancienne, dont les accusés sont muets :
+          // la lire ferait paraître la flamme « décompte pas démarré ».
+          participantRow({ id: OLD_PARTICIPANT, userId: USER_ID, joinedAt: new Date('2025-01-01T00:00:00.000Z') }),
+          participantRow({ id: READER_PARTICIPANT, userId: USER_ID, joinedAt: new Date('2026-01-01T00:00:00.000Z') }),
+        ],
+        conversations: [conversationRow()],
+        stars: [starRow()],
+        statusEntries: [
+          statusEntryRow({ participantId: READER_PARTICIPANT, ephemeralExpiresAt: fromHarnessNow(-2 * HOUR_MS) }),
+        ],
+      }),
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(body.data).toEqual([]);
   });
 
   it('NON-RÉGRESSION — sans échéance par lecteur, la colonne garde son mot', async () => {
@@ -242,7 +265,7 @@ describe('GET — la coupure de l’éphémère est celle du LECTEUR, pas celle 
     );
 
     expect(res.statusCode).toBe(200);
-    expect(body.data.items).toEqual([]);
+    expect(body.data).toEqual([]);
   });
 });
 
