@@ -118,7 +118,10 @@ struct PublisherPageView: View {
                 shownOwner = owner
             } label: {
                 HStack(spacing: MeeshySpacing.md) {
-                    MeeshyAvatar(name: owner.displayName ?? owner.username, context: .custom(44), avatarURL: owner.avatar)
+                    MeeshyLivePresence {
+                        MeeshyAvatar(name: owner.displayName ?? owner.username, context: .custom(44), avatarURL: owner.avatar,
+                                     presenceState: ownerProfile?.presence(owner.id))
+                    }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "shop.publisher.editedBy", defaultValue: "Édité par", bundle: .module))
                             .font(MeeshyFont.relative(12))

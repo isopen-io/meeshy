@@ -80,7 +80,7 @@ public enum PackDetailFacts {
     }
 
     public static func weightText(_ row: PackRow) -> String? {
-        row.downloadBytes.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) }
+        row.downloadBytes.map { MediaFormat.bytes(Int64($0)) }
     }
 
     /// « Autres propositions » : les autres packs de la même étagère, dans son ordre.

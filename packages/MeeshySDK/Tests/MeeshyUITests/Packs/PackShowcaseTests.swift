@@ -131,7 +131,8 @@ final class PackDetailFactsTests: XCTestCase {
 
     func test_weight_isShownOnlyWhenKnown() {
         XCTAssertNil(PackDetailFacts.weightText(PackRow(slug: "a", name: "A", installed: false)))
-        XCTAssertNotNil(PackDetailFacts.weightText(PackRow(slug: "a", name: "A", installed: false, downloadBytes: 2_400_000)))
+        XCTAssertEqual(PackDetailFacts.weightText(PackRow(slug: "a", name: "A", installed: false, downloadBytes: 2_400_000)),
+                       MediaFormat.bytes(2_400_000))
     }
 
     func test_alternatives_areTheOtherPacksOfTheSameShelf() {

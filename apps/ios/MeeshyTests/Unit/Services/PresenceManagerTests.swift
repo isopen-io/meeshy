@@ -99,6 +99,7 @@ final class PresenceManagerTests: XCTestCase {
         "Auth/Views/LoginView.swift": "soi — l'avatar du compte connecté",
         "Profile/Views/ProfileDecorSheet.swift": "soi — l'avatar du compte connecté",
         "Profile/Views/ProfileOwnAvatar.swift": "soi — l'avatar du compte connecté",
+        "MeeshyUI/Packs/PackElementStage.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootFloatingChrome.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootViewComponents.swift": "soi — l'avatar du compte connecté",
         "Settings/Views/SettingsView.swift": "soi — l'avatar du compte connecté",
