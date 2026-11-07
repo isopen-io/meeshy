@@ -150,13 +150,55 @@ fait tomber la compilation. Le manager re-exporte désormais le type canonique.
 > que personne n'en fait évoluer une — et c'est la seule qui compte qui était
 > invisible : celle que le gate lit.
 
+## Ce que la suite COMPLÈTE a rendu, et que les suites ciblées cachaient
+
+Les suites ciblées des trois lots étaient vertes (213 suites, 3 002 témoins). La
+suite complète a rendu **huit** suites rouges là où le cycle 140 avait mesuré
+six — les six étant les codecs d'image (capacité libvips du conteneur, verts en
+CI). **Les deux de plus étaient les miennes.**
+
+### 1. Le SECOND témoin qui gelait le gate `!senderId`
+
+`MessageHandler.core.test.ts` portait « returns early when senderId is null » —
+le même gel que celui re-instruit dans `emitUnreadCountsToRecipients.test.ts`,
+dans une autre suite. Les suites ciblées du lot, choisies par le répertoire du
+module corrigé, ne l'atteignaient pas.
+
+> **Un correctif qui fait tomber un témoin gelant cherche ses JUMEAUX par le nom
+> du GATE, jamais par le répertoire du module.** Le dépôt documente déjà « deux
+> exemplaires du même témoin gelaient le symptôme, et le fix de la production
+> n'en a fait tomber aucun » ; ici il en a fait tomber un, et c'est la suite
+> complète — pas le lot — qui a trouvé l'autre.
+
+### 2. La dette de types que ce témoin a AJOUTÉE
+
+`tsc-never-loaded-tests-ratchet` est passé de 76 à 77. `toHaveBeenCalledWith` à
+deux arguments sur un `jest.fn()` sans generics rend **TS2554**, le seul code que
+ce cliquet ne musèle pas (il musèle TS2322, TS2339, TS2345, TS2740 — soit
+exactement les codes dont la liste d'erreurs de test est pleine). Les arguments
+se relisent depuis `mock.calls` : cliquet de retour à 76, **réparé et jamais
+relevé**.
+
+> `tsc --noEmit` du gateway EXCLUT les tests : un lot peut rendre EXIT=0 et
+> ajouter de la dette de types. Les deux gates sont disjoints, et celui des
+> tests ne tourne qu'en suite complète (111 s).
+
+### 3. Un garde de mesure qui a fait son travail
+
+Le garde de corpus du cliquet (« la commande voit bien un corpus substantiel »)
+a d'abord rougi parce que `tsc` avait été tué par l'OOM d'une suite complète
+tournant en parallèle de mes runs ciblés. Il a refusé une mesure VIDE plutôt que
+de la laisser passer au vert — exactement ce pour quoi il est écrit. **Une
+mesure faite sous contention n'est pas une mesure** ; la suite complète s'est
+rejouée seule.
+
 ## Ce qui reste ouvert
 
 | issue | ce qui reste |
 |---|---|
 | **#16688** | la convergence multi-appareil : la file est par UTILISATEUR, un appareil hors ligne ne converge pas si un autre était connecté. Ses deux moitiés se décident ensemble, et la seconde est une décision de produit. |
 | **#16706** | déposée au cycle 140 : le clair d'un message détruit survit dans Redis jusqu'au TTL de 48 h, et `peek` est un second lecteur sans garde. |
-| **nouveau** | `_joinUserConversations` rend `[]` quand la LECTURE des participants lève : la socket n'a rejoint AUCUNE room et aucun marqueur n'est posable, puisqu'on ne peut pas nommer des conversations jamais chargées. Classe distincte de #16687, sans marqueur par conversation possible. |
+| **#16719** (ouverte ici) | `_joinUserConversations` rend `[]` quand la LECTURE des participants lève : la socket n'a rejoint AUCUNE room et aucun marqueur n'est posable, puisqu'on ne peut pas nommer des conversations jamais chargées. Classe distincte de #16687 — et sa difficulté est l'arbitrage, pas le code : le fail-open actuel est DÉLIBÉRÉ, il protège d'une tempête de reconnexions, et le fermer ferait enfiler tout le trafic des comptes qui se reconnectent dans la fenêtre d'une base indisponible. |
 
 ## Dimensions
 
