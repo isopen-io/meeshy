@@ -318,6 +318,18 @@ export function isGlobalModerator(role: GlobalUserRole | GlobalUserRoleType): bo
 }
 
 /**
+ * L'ÉQUIPE de la plateforme (MODERATOR, ADMIN, BIGBOSS) : ceux qui testent les
+ * features de cercle entre eux, sans lien à construire (#16623).
+ *
+ * C'est une lecture de DROIT : elle échoue fermé (`globalRoleLevel`), et rien
+ * n'y entre d'une valeur absente ou inconnue. AUDIT et ANALYST n'en sont pas.
+ * La casse est repliée comme chez `isGlobalAdmin`, sa voisine.
+ */
+export function isPlatformTeam(role: string | null | undefined): boolean {
+  return typeof role === 'string' && globalRoleLevel(role) >= GLOBAL_ROLE_HIERARCHY[GlobalUserRole.MODERATOR];
+}
+
+/**
  * Vérifie si un membre est admin
  */
 export function isMemberAdmin(role: MemberRole | MemberRoleType | string): boolean {
