@@ -152,3 +152,14 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   gates locaux relancés : témoins du talkie et de la fiche 48/48, `tsc --noEmit` du web vert ; CI complète relancée
   sur le dernier commit, puis fusion dans `dev`.
 - Prochain lot recommandé : l'écoute sur le web (#13934 : réception + titre défilant sur l'avatar).
+
+## 2026-11-07 — réveil 10 : #16700 menée à la fusion (suite du réveil 9)
+
+- Reprise : le réveil 9 s'est arrêté en attendant la CI de #16700 et de #16714 (`ci.yml` épinglé sur `ubuntu-24.04`,
+  #16713). Aucun réveil vivant ne suivait ni l'une ni l'autre.
+- CI de #16700 (run 42412024556) : verte sauf « Traducteur · tests Python », tombé sur un runner sans disque
+  (`No space left on device` dans le diagnostic du runner, hors lot). #16714 entièrement verte : fusionnée dans `dev`.
+- `origin/dev` fusionné à la main dans la branche (aucun conflit ; `dev` n'a touché que les communautés, le traducteur
+  et l'iOS des appels). Gates locaux : `bun test` du web sur talkie, relations et composants 5558/5558, `tsc --noEmit`
+  du web vert. CI complète relancée sur le dernier commit avant fusion.
+- Prochain lot recommandé : l'écoute sur le web (#13934 : réception + titre défilant sur l'avatar).
