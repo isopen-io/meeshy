@@ -114,6 +114,14 @@ final class ComposerCaptureExposureTests: XCTestCase {
         XCTAssertFalse(eteint.offersExposure)
     }
 
+    func test_editing_offersNoSun() {
+        let (session, camera) = makeSUT()
+        session.phase = .editing(.photo)
+        XCTAssertFalse(session.offersExposure, "en retouche, l'objectif se repose")
+        session.stepExposure(up: true)
+        XCTAssertTrue(camera.exposureBiasRequests.isEmpty)
+    }
+
     func test_switch_resetsTheBias() {
         let (session, camera) = makeSUT()
         session.dragExposure(translationY: -100)
