@@ -82,6 +82,7 @@ export function baseCall(request: StartCallRequest, direction: ActiveCall['direc
     localStream: null,
     remoteStreams: {},
     captions: [],
+    journalNotes: [],
     captionsMode: 'off',
     captionPeers: [],
     transcription: 'idle',
