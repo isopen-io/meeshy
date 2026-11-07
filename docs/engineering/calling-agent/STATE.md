@@ -6,6 +6,13 @@ développement ») : en cas d'écart, l'issue a raison. Le backlog de la routine
 liste des issues `appels` du milestone #31 « Appels de groupe et appels traduits »
 et du milestone #6, pas une liste dans ce dossier.
 
+## Direction (2026-11-07, porteur via la session « appels de bout en bout »)
+
+- **La cible de la vue d'appel est écrite : [`docs/product/appels-vue-finale.md`](../../product/appels-vue-finale.md)** (#16633), avec 27 vues dessinées (portrait, paysage, duo vidéo et audio, groupe, partage, entrant, réduit, après l'appel, grand écran). Toute évolution de l'interface d'appel web se lit contre elle.
+- **Deux issues sont prises par la session « appels de bout en bout », côté web, branche `claude/calls-end-to-end-cvakev`** : #16634 (le journal pendant et après l'appel porte la couleur de chaque auteur, nom ET phrase) et #16635 (ma vignette porte ma couleur). Fichiers touchés : `apps/web/src/components/call-journal-panel.tsx`, `call-transcript-panel.tsx`, `call-grid.tsx`, `call-screen.tsx`, `lib/calls/call-speaker-color.ts`. Ne pas les reprendre en parallèle ; tirer `dev` après leur fusion.
+- Les deux « prochaines étapes » de couleur notées au cycle 3 bis (vignette de moi, journal iOS d'après l'appel) sont ces deux issues.
+- Reste à la routine : la recette staging fr↔en de « l'original puis la traduction » (#16613) et le reste du backlog `appels`.
+
 ## Cycle 1 — 2026-11-06
 
 - **Base** : `origin/dev` @ `782fca69a`.
