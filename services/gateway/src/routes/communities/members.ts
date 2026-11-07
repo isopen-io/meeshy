@@ -28,7 +28,11 @@ import {
   CommunityRole
 } from './types';
 import { validatePagination } from '../../utils/pagination';
+import { activeMembershipOf } from './serialization';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+
+/** #6375 — le créateur garde la main : ni rétrogradé ni retiré par un administrateur. */
+const CREATOR_PROTECTED = 'COMMUNITY_CREATOR_PROTECTED';
 
 export async function registerMemberRoutes(fastify: FastifyInstance) {
   // Route pour obtenir les membres d'une communaute
@@ -455,13 +459,14 @@ const community = await fastify.prisma.community.findFirst({
 
       const userId = authContext.userId;
 
-      // Verifier que la communaute existe et que l'utilisateur est admin
+      // #6375 — une communauté désactivée (#8876) ne se gère plus : 404,
+      // comme pour tous ses lecteurs.
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
+        where: { id, isActive: true },
         select: {
           createdBy: true,
           members: {
-            where: { userId, isActive: true },
+            where: activeMembershipOf(userId),
             select: { role: true }
           }
         }
@@ -487,8 +492,12 @@ const community = await fastify.prisma.community.findFirst({
       // administrateur de A promouvait un membre de B en connaissant son
       // identifiant de ligne. La decision d'autorisation et la ligne ecrite
       // doivent designer la meme communaute.
+      // #6375 — seule une ligne ACTIVE se gère, et jamais celle du créateur :
+      // ses droits viennent de `createdBy`, qu'aucun rôle ne lui retire. Les
+      // deux bornes vivent dans le `where` de l'écriture : aucune lecture
+      // préalable ne peut se périmer avant elle.
       const updatedMember = await fastify.prisma.communityMember.update({
-        where: { id: memberId, communityId: id },
+        where: { id: memberId, communityId: id, isActive: true, userId: { not: community.createdBy } },
         data: { role: validatedData.role as string },
         include: {
           user: {
@@ -508,6 +517,18 @@ const community = await fastify.prisma.community.findFirst({
         if ((error as { code?: string }).code === 'P2025') return null;
         throw error;
       });
+
+      if (!updatedMember) {
+        // Le seul 403 : la ligne active du créateur, DANS cette communauté —
+        // l'appelant, administrateur, la voit déjà dans la liste.
+        const creatorRow = await fastify.prisma.communityMember.findFirst({
+          where: { id: memberId, communityId: id, ...activeMembershipOf(community.createdBy) },
+          select: { id: true }
+        });
+        if (creatorRow) {
+          return sendForbidden(reply, 'The community creator keeps their role', { code: CREATOR_PROTECTED });
+        }
+      }
 
       if (!updatedMember) {
         return sendNotFound(reply, 'Member not found in this community');
@@ -585,13 +606,14 @@ const community = await fastify.prisma.community.findFirst({
 
       const userId = authContext.userId;
 
-      // Verifier que la communaute existe et que l'utilisateur est admin
+      // #6375 — une communauté désactivée (#8876) ne se gère plus : 404,
+      // comme pour tous ses lecteurs.
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
+        where: { id, isActive: true },
         select: {
           createdBy: true,
           members: {
-            where: { userId, isActive: true },
+            where: activeMembershipOf(userId),
             select: { role: true }
           }
         }
@@ -613,8 +635,12 @@ const community = await fastify.prisma.community.findFirst({
       // jamais une suppression — la ligne reste la trace du retrait, et la
       // ré-adhésion (POST .../join, .../invite, .../members) la réactive au
       // lieu d'en ouvrir une seconde (#5800).
+      if (memberId === community.createdBy) {
+        return sendForbidden(reply, 'The community creator cannot be removed', { code: CREATOR_PROTECTED });
+      }
+
       const activeMembership = await fastify.prisma.communityMember.findFirst({
-        where: { communityId: id, userId: memberId, isActive: true }
+        where: { communityId: id, ...activeMembershipOf(memberId) }
       });
 
       if (!activeMembership) {
