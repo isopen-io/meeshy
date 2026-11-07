@@ -64,6 +64,7 @@ import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest
 import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
 import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
 import { ENCRYPTION_MODE_UNSUPPORTED_CODE } from '@meeshy/shared/utils/conversation-creation-encryption';
+import { activeMembershipOf } from '../communities/serialization';
 import {
   composeConversationUpdate,
   broadcastConversationUpdated,
@@ -146,7 +147,7 @@ export function registerCreateConversationRoute(
       if (communityId) {
         const community = await prisma.community.findFirst({
           where: { id: communityId },
-          include: { members: true }
+          select: { createdBy: true, members: { where: activeMembershipOf(userId), select: { userId: true }, take: 1 } }
         });
 
         if (!community) {
@@ -154,8 +155,7 @@ export function registerCreateConversationRoute(
         }
 
         // Check if user is member of the community
-        const isMember = community.createdBy === userId ||
-                        community.members.some(member => member.userId === userId);
+        const isMember = community.createdBy === userId || community.members.length > 0;
 
         if (!isMember) {
           return sendForbidden(reply, 'You must be a member of this community to create a conversation');

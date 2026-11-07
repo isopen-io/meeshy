@@ -5,7 +5,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | date | lot | PR | issues | état |
 |---|---|---|---|---|
 | 2026-11-07 | Rejoindre / quitter depuis le détail (web), le détail dit au lecteur son rôle (passerelle, iOS) | #16601 | #6378 | fusionnée dans dev |
-| 2026-11-07 | Un ancien membre ne voit plus une communauté privée nulle part ; compteur actif partout (passerelle) | voir lot 2 | #16603 | PR ouverte |
+| 2026-11-07 | Un ancien membre ne voit plus une communauté privée nulle part ; compteur actif partout (passerelle) | #16610 + suite | #16603 | #16610 fusionnée ; suite (revue adversariale) en PR |
 
 ## 2026-11-07 — lot 1
 
@@ -18,4 +18,6 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 
 - Lot : #16603. Un seul prédicat « membre » (`activeMembershipOf`, `serialization.ts`) pour la liste, les salons et le rattachement d'un salon (cible ET source) ; `COMMUNITY_ACTIVE_COUNTS` pour tout `memberCount` ; la liste et le détail servis par `communityForViewer` (la liste sert donc `currentUserRole`, additif, et ne charge plus les membres de chaque communauté).
 - Passerelle seule : aucun client ne change de comportement (un ancien client ignore `currentUserRole` dans la liste).
+- #16610 a été fusionnée avant les correctifs de la revue adversariale ; ils partent dans une PR de suite : `POST /conversations` avec `communityId` admettait un ancien membre puis réactivait sa ligne (élevée), le tableau de bord rendait la communauté privée quittée, la recherche et `PUT /communities/:id` comptaient les partis.
+- Laissé tel quel : `CerclesAchievements.communautesRejointes` compte aussi les départs (« rejointes un jour », probablement voulu).
 - Prochain lot recommandé : #6375 (membres lus et gérés sur le web).

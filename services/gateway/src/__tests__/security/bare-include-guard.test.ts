@@ -304,9 +304,8 @@ function compterParFichier(sites: ReadonlyArray<BareIncludeSite>): Record<string
 // =============================================================================
 const FROZEN_BARE_INCLUDES: Readonly<Record<string, number>> = {
   'conversation-preferences.ts': 2,
-  // #4284 a découpé conversations/core.ts en fichiers frères ; ce site vit
-  // désormais dans core-lifecycle.ts (compte inchangé : 1).
-  'conversations/core-lifecycle.ts': 1,
+  // #16603 a réparé le dernier site de core-lifecycle.ts (`include: { members: true }`
+  // de la garde de communauté de `POST /conversations`) : sa ligne tombe.
   'conversations/participant-removal.ts': 1,
   // #4713 a extrait le NOYAU de `PATCH …/role` hors de son gestionnaire ; ce
   // site (`include: { user: true }` sur la ligne du demandeur) vit desormais

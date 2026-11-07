@@ -15,7 +15,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendForbidden, sendConflict, sendInternalError } from '../../utils/response.js';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { flattenCommunityCounts } from './serialization';
+import { COMMUNITY_ACTIVE_COUNTS, flattenCommunityCounts } from './serialization';
 
 const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
 
@@ -136,12 +136,7 @@ const community = await fastify.prisma.community.findFirst({
               avatar: true
             }
           },
-          _count: {
-            select: {
-              members: true,
-              Conversation: true
-            }
-          }
+          _count: { select: COMMUNITY_ACTIVE_COUNTS }
         }
       });
 
