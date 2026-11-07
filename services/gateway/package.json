@@ -43,7 +43,7 @@
     "@grpc/proto-loader": "^0.8.1",
     "@meeshy/shared": "workspace:*",
     "@parse/node-apn": "^8.1.0",
-    "@prisma/client": "^6.19.3",
+    "@prisma/client": "^7.10.1",
     "@signalapp/libsignal-client": "0.106.1",
     "@socket.io/redis-adapter": "^8.3.0",
     "@tus/file-store": "^2.1.1",
