@@ -171,6 +171,7 @@
     <string name="call_open_conversation_hint">Ouvre la conversation en gardant l\'appel actif</string>
     <string name="call_panel_back">Retour aux actions</string>
     <string name="call_participants_more">%1$s +%2$d</string>
+    <string name="call_peer_screen_capturing">%1$s capture l’écran de l’appel</string>
     <string name="call_preview_camera_a11y">Caméra avant le décroché</string>
     <string name="call_preview_camera_hint">Décide si %1$s vous voit avant de décrocher</string>
     <string name="call_preview_heard_and_seen_by">%1$s vous entend et vous voit avant de décrocher</string>

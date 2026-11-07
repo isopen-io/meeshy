@@ -49,6 +49,15 @@ describe('le journal vivant garde les captures (#16665)', () => {
   });
 });
 
+describe('une note se range dans l’ordre d’arrivée, quelle que soit l’horloge du pair', () => {
+  test('une capture arrivée après une phrase datée en avance par l’appareil du pair reste au bandeau', () => {
+    const captions = [caption('s1', 10_000), caption('s2', 12_000)];
+    const next = withJournalNote(call({ captions }), note({ id: 'n1', at: 8_000 }));
+    const shown = overlayEntries(captions, next.journalNotes ?? [], 2).map((entry) => (entry.type === 'caption' ? entry.caption.id : entry.note.id));
+    expect(shown).toEqual(['s2', 'n1']);
+  });
+});
+
 describe('l’enregistrement consenti note son début et sa fin', () => {
   test('le pont remet aussi ces deux moments au moteur, qui seul écrit le journal', () => {
     expect(CALL_SERVER_EVENTS).toContain(SERVER_EVENTS.CALL_RECORDING_STARTED);

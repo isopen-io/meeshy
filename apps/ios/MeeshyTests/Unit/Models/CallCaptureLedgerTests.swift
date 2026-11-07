@@ -74,6 +74,33 @@ final class CallCaptureLedgerTests: XCTestCase {
         XCTAssertEqual(stopped.marks.map(\.id), ["r1"])
     }
 
+    func test_screenRecording_restartedWithinFiveSeconds_showsTheCapsuleAgain_withOneMark() {
+        let sut = CallCaptureLedger()
+            .applying(signal(kind: .recording), id: "r1")
+            .applying(signal(kind: .recording, isActive: false, after: 1), id: "r2")
+            .applying(signal(kind: .recording, after: 3), id: "r3")
+
+        XCTAssertNotNil(sut.alert)
+        XCTAssertEqual(sut.marks.map(\.id), ["r1"])
+    }
+
+    func test_screenshotEnd_relayedForOlderClients_keepsTheRecordingCapsule() {
+        let sut = CallCaptureLedger()
+            .applying(signal(kind: .recording), id: "r1")
+            .applying(signal(kind: .screenshot, isActive: false, after: 6), id: "x")
+
+        XCTAssertEqual(sut.alert?.id, "r1")
+    }
+
+    func test_peerLeftWhileRecording_removesTheCapsule_withoutALine() {
+        let sut = CallCaptureLedger()
+            .applying(signal(kind: .recording), id: "r1")
+            .applying(.participantLeft(userId: "karim", at: t0.addingTimeInterval(20)), id: "l1")
+
+        XCTAssertNil(sut.alert)
+        XCTAssertEqual(sut.marks.map(\.id), ["r1"])
+    }
+
     func test_myOwnCapture_entersTheJournal_neverTheCapsule() {
         let sut = CallCaptureLedger().applying(signal(userId: "me", name: "Moi", isLocal: true), id: "m1")
 
@@ -174,6 +201,25 @@ final class CallCaptureLedgerTests: XCTestCase {
         XCTAssertEqual(captures.map(\.id), ["a", "b"])
         XCTAssertEqual(captures.map(\.displayName), ["Moi", ""])
         XCTAssertEqual(captures.last?.userId, "p2")
+    }
+
+    func test_remoteTranscriptMapping_unrequestedRecordingStop_mapsWithoutAuthor() throws {
+        let json = Data("""
+        [{"id": "s", "participantId": null, "userId": null, "displayName": null, "kind": "call-recording-stopped", "offsetMs": 0, "at": "2026-11-07T12:00:00Z"}]
+        """.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let wire = try decoder.decode([APICallTranscriptCapture].self, from: json)
+
+        let captures = CallTranscriptCaptureMapping.captures(wire, localUserId: "me", localName: "Moi")
+
+        XCTAssertEqual(captures.map(\.kind), [.callRecordingStopped])
+        XCTAssertEqual(captures.first?.userId, "")
+    }
+
+    func test_captureAlertClearance_pushesTheSelfTileBelowTheCapsule() {
+        XCTAssertEqual(CallCaptureAlertClearance.top(isAlertShown: false), 0)
+        XCTAssertEqual(CallCaptureAlertClearance.top(isAlertShown: true), 52)
     }
 
     // MARK: - Collaborateur

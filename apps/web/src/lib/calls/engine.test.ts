@@ -638,6 +638,27 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
     expect(h.call()?.members[PEER]?.weakNetwork).toBe(true);
   });
 
+  test('#16665 — une capture ponctuelle pendant un enregistrement d’écran n’éteint pas la puce', async () => {
+    const h = await connected();
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: true, kind: 'recording' });
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: true, kind: 'screenshot' });
+    h.advance(5_000);
+    expect(h.call()?.members[PEER]?.capturing).toBe(true);
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: false, kind: 'screenshot' });
+    expect(h.call()?.members[PEER]?.capturing).toBe(true);
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: false, kind: 'recording' });
+    expect(h.call()?.members[PEER]?.capturing).toBe(false);
+  });
+
+  test('#16665 — un enregistrement qui commence après une capture ponctuelle annule l’extinction de la puce', async () => {
+    const h = await connected();
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: true, kind: 'screenshot' });
+    h.advance(2_000);
+    h.engine.handle(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'call-1', userId: PEER, isCapturing: true, kind: 'recording' });
+    h.advance(5_000);
+    expect(h.call()?.members[PEER]?.capturing).toBe(true);
+  });
+
   test('#16665 — l’enregistrement consenti note son début et sa fin au journal', async () => {
     const h = await connected();
     h.engine.handle(SERVER_EVENTS.CALL_RECORDING_STARTED, { callId: 'call-1', recordingId: 'r1', recorderId: PEER, startedAt: 'x', kind: 'audio' });

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { JournalNoteCaption } from '@/components/call-journal-note';
+import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
 import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
 import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
@@ -52,7 +52,7 @@ export type SpeakerColorOf = (who: Pick<CallCaption, 'speakerId' | 'speakerName'
 
 function NoteLine({ note, language, color, clock }: { readonly note: CallJournalNote; readonly language: InterfaceLanguage; readonly color: string; readonly clock: string | null }) {
   return (
-    <p className="py-1" dir="auto" style={{ color: INK_2 }} data-call-caption-note={note.kind}>
+    <p className="py-1" dir={noteDirection(language)} style={{ color: INK_2 }} data-call-caption-note={note.kind}>
       <JournalNoteCaption note={note} language={language} ink={{ style: { color } }} />
       {clock === null ? null : ` · ${clock}`}
     </p>

@@ -8,7 +8,7 @@ import MeeshyUI
 // comme en vidéo, et les mots des lignes datées du journal
 // (`docs/product/appels-vue-finale.md` loi 13).
 
-enum CallCaptureCopy {
+enum CallCaptureJournalCopy {
     static func who(_ name: String) -> String {
         name.isEmpty
             ? String(localized: "call.recording.someone", defaultValue: "Un participant", bundle: .main)
@@ -68,11 +68,23 @@ struct CallJournalComposer {
             let elapsed = capture.capturedAt.timeIntervalSince(callStartedAt ?? capture.capturedAt)
             return CallCaptionLine.capture(
                 capture,
-                displayName: CallCaptureCopy.who(capture.displayName),
-                phrase: CallCaptureCopy.phrase(capture.kind),
+                displayName: CallCaptureJournalCopy.who(capture.displayName),
+                phrase: CallCaptureJournalCopy.phrase(capture.kind),
                 timeLabel: CallManager.formatDuration(max(0, elapsed))
             )
         }
+    }
+}
+
+/// R1 — la place que la capsule prend sous l'en-tête : la vignette et ses
+/// rangées descendent d'autant pendant qu'elle est montrée (la planche pose la
+/// vignette à `top:130`, sous la puce). Pure, pour être testée seule.
+enum CallCaptureAlertClearance {
+    static let capsuleHeight: CGFloat = 44
+    static let margin: CGFloat = 8
+
+    static func top(isAlertShown: Bool) -> CGFloat {
+        isAlertShown ? capsuleHeight + margin : 0
     }
 }
 
@@ -111,10 +123,10 @@ struct CallCaptureAlertCapsule: View, Equatable {
 
     var body: some View {
         if let alert {
-            capsule(CallCaptureCopy.alert(name: alert.displayName))
+            capsule(CallCaptureJournalCopy.alert(name: alert.displayName))
                 .transition(.opacity)
                 .task(id: alert.id) {
-                    UIAccessibility.post(notification: .announcement, argument: CallCaptureCopy.alert(name: alert.displayName))
+                    UIAccessibility.post(notification: .announcement, argument: CallCaptureJournalCopy.alert(name: alert.displayName))
                     guard alert.isTransient,
                           await cancellableSleep(for: .seconds(Self.transientSeconds)),
                           !Task.isCancelled else { return }

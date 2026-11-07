@@ -82,19 +82,35 @@ export function CallQualityChip({ title, clock, quality, language, prominent }: 
   );
 }
 
-export function CallPeerAlerts({ members, language }: { readonly members: Readonly<Record<string, CallMember>>; readonly language: InterfaceLanguage }) {
-  const peers = Object.values(members);
+/**
+ * La capsule de capture (R1, loi 13) : rouge, 44 px, posée UNE fois sous
+ * l'en-tête, en audio comme en vidéo. Elle ne suit pas le chrome : une capture
+ * ne se cache pas (iOS `CallCaptureAlertLayer`).
+ */
+export function CallCaptureAlerts({ members, language }: { readonly members: Readonly<Record<string, CallMember>>; readonly language: InterfaceLanguage }) {
   return (
-    <div className="flex flex-col items-center gap-1 px-4" aria-live="polite">
-      {peers
+    <div className="pointer-events-none flex max-w-full flex-col items-center gap-1 px-4" aria-live="assertive" data-call-capture-row="">
+      {Object.values(members)
         .filter((member) => member.capturing)
         .map((member) => (
-          <span key={`capture-${member.userId}`} role="alert" className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-mini font-semibold" style={{ background: 'color-mix(in srgb, var(--ios-error-strong) 85%, transparent)', color: 'var(--color-ios-on-brand)' }} data-call-alert="capturing">
+          <span key={`capture-${member.userId}`} role="alert" className="inline-flex h-11 max-w-full items-center gap-2 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold leading-none" style={{ background: 'color-mix(in srgb, var(--ios-error-strong) 85%, transparent)', color: 'var(--color-ios-on-brand)' }} data-call-alert="capturing">
             <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full border-2 border-current" data-call-alert-dot=""></span>
-            {translate(language, 'call.alert.capturing', { name: member.name })}
+            <span className="truncate">{translate(language, 'call.alert.capturing', { name: member.name })}</span>
           </span>
         ))}
-      {peers
+    </div>
+  );
+}
+
+/** La place que la capsule prend sous l'en-tête (44 px et sa marge) : la vignette et ses commandes descendent d'autant. */
+export const CALL_CAPTURE_ROW_CLEARANCE = 56;
+
+export const someoneCaptures = (members: Readonly<Record<string, CallMember>>): boolean => Object.values(members).some((member) => member.capturing);
+
+export function CallPeerAlerts({ members, language }: { readonly members: Readonly<Record<string, CallMember>>; readonly language: InterfaceLanguage }) {
+  return (
+    <div className="flex flex-col items-center gap-1 px-4" aria-live="polite">
+      {Object.values(members)
         .filter((member) => member.weakNetwork)
         .map((member) => (
           <span key={`network-${member.userId}`} className="glass-call rounded-full px-3 py-1 text-mini" data-call-alert="weak-network">

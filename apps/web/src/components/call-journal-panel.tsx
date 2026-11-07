@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
-import { JournalNoteSentence } from '@/components/call-journal-note';
+import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
 import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
 import { captionLanguageLabel, captionText, type CallCaption } from '@/lib/calls/call-captions';
 import { journalEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
@@ -118,7 +118,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
                     <time className="text-mini" style={{ color: INK_2 }} dateTime={new Date(note.at).toISOString()}>
                       {clock.format(note.at)}
                     </time>
-                    <span className="text-body" style={{ color: INK_2 }} dir="auto" data-call-journal-note-text="">
+                    <span className="text-body" style={{ color: INK_2 }} dir={noteDirection(language)} data-call-journal-note-text="">
                       <JournalNoteSentence note={note} language={language} ink={{ style: { color: colorOf({ speakerId: note.userId ?? '', speakerName: note.name ?? '' }) } }} />
                     </span>
                   </li>

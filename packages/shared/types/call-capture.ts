@@ -46,3 +46,10 @@ export type CallTranscriptCapture = {
   /** Horodatage ISO 8601 de l'événement. */
   readonly at: string;
 };
+
+/**
+ * Une capture PONCTUELLE n'a pas de fin signalée : l'alerte s'éteint d'elle-même
+ * après cette durée chez les clients récents, et la passerelle relaie une fin
+ * synthétique pour les clients d'avant #16665, qui ne connaissent pas `kind`.
+ */
+export const CALL_SCREENSHOT_ALERT_TTL_MS = 5_000;

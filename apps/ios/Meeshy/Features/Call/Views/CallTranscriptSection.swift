@@ -139,8 +139,8 @@ struct CallTranscriptSection: View {
     /// secondaire, jamais colorée ; une borne d'enregistrement ne nomme personne.
     private func captureRow(_ capture: CallTranscriptCapture, callStartedAt: Date) -> some View {
         let elapsedLabel = CallManager.formatDuration(max(0, capture.capturedAt.timeIntervalSince(callStartedAt)))
-        let name = capture.kind.namesCapturer ? CallCaptureCopy.who(capture.displayName) : ""
-        let phrase = CallCaptureCopy.phrase(capture.kind)
+        let name = capture.kind.namesCapturer ? CallCaptureJournalCopy.who(capture.displayName) : ""
+        let phrase = CallCaptureJournalCopy.phrase(capture.kind)
         return HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
             CallCaptureSentence.text(name: name, nameColor: authorColor(capture.userId), tail: phrase, tailColor: theme.textSecondary)
             Spacer()

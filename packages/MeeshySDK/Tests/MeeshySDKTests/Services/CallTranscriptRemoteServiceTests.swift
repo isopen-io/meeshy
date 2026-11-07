@@ -138,4 +138,29 @@ final class CallTranscriptRemoteServiceTests: XCTestCase {
         XCTAssertEqual(transcript.captures?.first?.offsetMs, 760_000)
         XCTAssertNil(transcript.captures?.last?.userId)
     }
+
+    func test_transcriptDTO_unrequestedRecordingStop_keepsTheSegments() throws {
+        let json = Data("""
+        {
+            "callId": "c1",
+            "conversationId": "v1",
+            "callStartedAt": "2026-11-07T12:00:00Z",
+            "segments": [
+                {"id": "seg-1", "speakerId": "u2", "speakerDisplayName": "Awa", "text": "Bonjour", "language": "fr", "confidence": null, "capturedAtMs": 1765650000000, "translations": []}
+            ],
+            "captures": [
+                {"id": "cap-1", "participantId": null, "userId": null, "displayName": null, "kind": "call-recording-stopped", "offsetMs": 900000, "at": "2026-11-07T12:15:00Z"},
+                {"id": "cap-2", "kind": "screenshot"}
+            ]
+        }
+        """.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let transcript = try decoder.decode(APICallTranscript.self, from: json)
+
+        XCTAssertEqual(transcript.segments.map(\.id), ["seg-1"])
+        XCTAssertEqual(transcript.captures?.map(\.id), ["cap-1"], "a malformed capture is skipped, never the whole transcript")
+        XCTAssertNil(transcript.captures?.first?.participantId)
+    }
 }

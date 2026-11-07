@@ -855,9 +855,9 @@ class CallViewModel @Inject constructor(
         val peer = peers.indicators
         _state.value = CallPresenter.present(
             callState, config, media, elapsedSeconds, connectionQuality, waiting.state,
-            peer.qualityDegraded, peer.screenCapturing, peer.caption,
+            peer.qualityDegraded, peer.screenCapturing || peer.screenshotFlashing, peer.caption,
             peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
-            peerScreenSharing = peer.screenSharing, videoNotice = videoNotice,
+            peerScreenSharing = peer.screenSharing, videoNotice = videoNotice, liveCaptures = peer.liveCaptures,
         ).withGroupTitle(groupTitle?.text(groupTitleWording.current())).copy(isOnHold = hold.isOnHold.value)
         syncPreview()
     }

@@ -65,7 +65,7 @@ extension CallView {
     /// moins l'en-tête, la pilule et les bords. Sert aussi le repos de la
     /// vignette (`pipCenter`), pour que les rangées tiennent à leur côté.
     func selfTileControlsBounds(in container: CGSize, safeArea: EdgeInsets) -> CGRect {
-        let top = Self.chromeTopInset + Self.selfControlsHeaderHeight
+        let top = Self.chromeTopInset + Self.selfControlsHeaderHeight + CallCaptureAlertClearance.top(isAlertShown: transcriptionService.captureJournal.alert != nil)
         let bottom = Self.chromeBottomInset + Self.selfControlsPillHeight
         let leading = safeArea.leading + CallSelfTileControlsPlacement.edgeGap
         let trailing = safeArea.trailing + CallSelfTileControlsPlacement.edgeGap

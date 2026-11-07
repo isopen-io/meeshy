@@ -109,7 +109,13 @@ describe('#16665 — la capture dans le bandeau (R1)', () => {
   test('« Karim · a capturé l’écran · 12:40 » : le pseudo à sa couleur, le reste à l’encre secondaire, l’heure de l’appel au bout', () => {
     const html = panel({ captions: [caption({ at: 700_000 })], journalNotes: [{ id: 'n1', kind: 'screenshot', userId: 'u-karim', name: 'Karim', at: 760_000 }] });
     expect(html).toContain('Bonjour à tous');
-    expect(html).toContain(`<p class="py-1" dir="auto" style="color:var(--color-on-media-3)" data-call-caption-note="screenshot"><strong style="color:${karim}" data-call-journal-note-name="">Karim · </strong>a capturé l’écran · 12:40</p>`);
+    expect(html).toContain(`<p class="py-1" dir="ltr" style="color:var(--color-on-media-3)" data-call-caption-note="screenshot"><strong style="color:${karim}" data-call-journal-note-name=""><bdi>Karim</bdi> · </strong>a capturé l’écran · 12:40</p>`);
+  });
+
+  test('en arabe, la note suit la direction de l’interface et isole le pseudo latin', async () => {
+    await loadInterfaceCatalog('ar');
+    const html = renderToStaticMarkup(<CallCaptionsPanel call={call({ captions: [], journalNotes: [{ id: 'n1', kind: 'screenshot', userId: 'u-karim', name: 'Karim', at: 760_000 }] })} language="ar" colorOf={colorOf} />);
+    expect(html).toMatch(/<p class="py-1" dir="rtl"[^>]*data-call-caption-note="screenshot"><strong[^>]*><bdi>Karim<\/bdi> · <\/strong>/);
   });
 
   test('la phrase traduite garde sa couleur et son étiquette « EN → FR » à côté de la capture', () => {

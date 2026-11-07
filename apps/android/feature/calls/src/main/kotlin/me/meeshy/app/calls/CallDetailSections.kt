@@ -30,10 +30,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
@@ -279,35 +276,9 @@ private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean) {
  */
 @Composable
 private fun CaptureRow(line: CallTranscriptLine, kind: CallCaptureKind) {
-    val phrase = stringResource(captureKindPhrase(kind))
-    val spoken = listOfNotNull(line.speakerName.takeIf { it.isNotBlank() }, phrase, line.elapsedLabel).joinToString(", ")
     val scheme = if (isSystemInDarkTheme()) DynamicColorGenerator.ThemeMode.DARK else DynamicColorGenerator.ThemeMode.LIGHT
     val nameColor = hexColor(CallSpeakerColor.hex(line.speakerId.ifBlank { line.speakerName }, scheme), MeeshyTheme.tokens.textPrimary)
-    val sentence = buildAnnotatedString {
-        if (line.speakerName.isNotBlank()) {
-            withStyle(SpanStyle(color = nameColor, fontWeight = FontWeight.SemiBold)) { append("${line.speakerName} · ") }
-        }
-        withStyle(SpanStyle(color = MeeshyTheme.tokens.textSecondary)) { append(phrase) }
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = spoken },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(sentence, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        line.elapsedLabel?.let { elapsed ->
-            Spacer(Modifier.width(MeeshySpacing.xsPlus))
-            Text(elapsed, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted)
-        }
-    }
-}
-
-private fun captureKindPhrase(kind: CallCaptureKind): Int = when (kind) {
-    CallCaptureKind.SCREENSHOT -> R.string.call_capture_journal_screenshot
-    CallCaptureKind.RECORDING -> R.string.call_capture_journal_recording
-    CallCaptureKind.CALL_RECORDING_STARTED -> R.string.call_capture_journal_call_recording_started
-    CallCaptureKind.CALL_RECORDING_STOPPED -> R.string.call_capture_journal_call_recording_stopped
+    CallCaptureLine(name = line.speakerName, nameColor = nameColor, kind = kind, elapsed = line.elapsedLabel, ink = MeeshyTheme.tokens.textSecondary)
 }
 
 private const val TRANSCRIPT_TINT_ALPHA = 0.08f

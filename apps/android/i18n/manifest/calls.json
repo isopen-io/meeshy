@@ -239,8 +239,10 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.capture.alert",
           "androidName": "call_peer_screen_capturing",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "call_pill_ongoing",

@@ -141,6 +141,9 @@ final class CallSignalingRouter: CallSignalingRouterProviding {
             .sink { [weak self] event in
                 guard let call = self?.call, call.currentCallId == event.callId else { return }
                 guard let identity = event.userId ?? event.participantId else { return }
+                // #16665 — un pair parti en enregistrant son écran n'enverra
+                // jamais `isCapturing: false` : sa capsule s'éteint avec lui.
+                call.transcriptionService.captureJournal.record(.participantLeft(userId: identity, at: Date()))
                 guard call.listeningPeers.remove(identity) != nil else { return }
                 call.remoteTranscriptionActive = !call.listeningPeers.isEmpty
                 call.toggleTranscription()

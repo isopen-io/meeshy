@@ -17,12 +17,40 @@ public struct APICallTranscript: Decodable, Sendable {
     public var captures: [APICallTranscriptCapture]? = nil
 }
 
+extension APICallTranscript {
+    private enum CodingKeys: String, CodingKey {
+        case callId, conversationId, callStartedAt, segments, captures
+    }
+
+    /// Une capture malformée se laisse de côté : elle n'efface jamais les
+    /// phrases du journal relu.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            callId: try container.decode(String.self, forKey: .callId),
+            conversationId: try container.decode(String.self, forKey: .conversationId),
+            callStartedAt: try container.decode(Date.self, forKey: .callStartedAt),
+            segments: try container.decode([APICallTranscriptSegment].self, forKey: .segments),
+            captures: try container.decodeIfPresent([LossyCallTranscriptCapture].self, forKey: .captures)?.compactMap(\.value)
+        )
+    }
+}
+
+private struct LossyCallTranscriptCapture: Decodable {
+    let value: APICallTranscriptCapture?
+
+    init(from decoder: Decoder) throws {
+        value = try? APICallTranscriptCapture(from: decoder)
+    }
+}
+
 /// #16665 — une capture d'écran ou une borne de l'enregistrement de l'appel,
 /// telle que la passerelle la garde (`CallCaptureEvent`). `kind` reste brut :
 /// une sorte inconnue de ce client se laisse de côté au mapping, app-side.
 public struct APICallTranscriptCapture: Decodable, Sendable {
     public let id: String
-    public let participantId: String
+    /// Nul pour un arrêt d'enregistrement que personne n'a demandé.
+    public let participantId: String?
     public let userId: String?
     public let displayName: String?
     public let kind: String

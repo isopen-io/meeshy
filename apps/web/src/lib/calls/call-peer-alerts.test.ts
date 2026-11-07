@@ -10,7 +10,7 @@ const resolve = (userId: string | null, participantId: string | null): string | 
 describe('les alertes d’un pair pendant l’appel (#8047)', () => {
   test('`call:quality-alert` : le lien du pair est instable, le temps que la passerelle le redise', () => {
     const alert = peerAlert(SERVER_EVENTS.CALL_QUALITY_ALERT, { callId: 'c1', participantId: 'p-nadia', userId: 'u-nadia', metric: 'packetLoss', value: 9, threshold: 5 }, resolve);
-    expect(alert).toEqual({ callId: 'c1', userId: 'u-nadia', patch: { weakNetwork: true }, clearAfterMs: QUALITY_ALERT_TTL_MS, reset: { weakNetwork: false }, capture: null });
+    expect(alert).toEqual({ callId: 'c1', userId: 'u-nadia', patch: { weakNetwork: true }, clearAfterMs: QUALITY_ALERT_TTL_MS, reset: { weakNetwork: false }, capture: null, recording: null });
   });
 
   test('un invité sans `userId` se retrouve par son `participantId`', () => {
@@ -19,12 +19,16 @@ describe('les alertes d’un pair pendant l’appel (#8047)', () => {
   });
 
   test('`call:screen-capture-alert` : la capture commence, puis s’arrête — sans minuterie', () => {
-    expect(peerAlert(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'c1', participantId: 'p-nadia', userId: 'u-nadia', isCapturing: true }, resolve)).toEqual({ callId: 'c1', userId: 'u-nadia', patch: { capturing: true }, clearAfterMs: null, reset: { capturing: false }, capture: 'recording' });
+    expect(peerAlert(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'c1', participantId: 'p-nadia', userId: 'u-nadia', isCapturing: true }, resolve)).toEqual({ callId: 'c1', userId: 'u-nadia', patch: { capturing: true }, clearAfterMs: null, reset: { capturing: false }, capture: 'recording', recording: true });
     expect(peerAlert(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'c1', participantId: 'p-nadia', userId: 'u-nadia', isCapturing: false }, resolve)?.patch).toEqual({ capturing: false });
   });
 
+  test('#16665 — la fin d’une capture ponctuelle relayée pour les clients d’avant est ignorée', () => {
+    expect(peerAlert(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'c1', userId: 'u-nadia', isCapturing: false, kind: 'screenshot' }, resolve)).toBeNull();
+  });
+
   test('#16665 — une capture ponctuelle s’annonce puis s’éteint seule, et entre au journal', () => {
-    expect(peerAlert(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'c1', userId: 'u-nadia', isCapturing: true, kind: 'screenshot' }, resolve)).toEqual({ callId: 'c1', userId: 'u-nadia', patch: { capturing: true }, clearAfterMs: SCREENSHOT_ALERT_TTL_MS, reset: { capturing: false }, capture: 'screenshot' });
+    expect(peerAlert(SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT, { callId: 'c1', userId: 'u-nadia', isCapturing: true, kind: 'screenshot' }, resolve)).toEqual({ callId: 'c1', userId: 'u-nadia', patch: { capturing: true }, clearAfterMs: SCREENSHOT_ALERT_TTL_MS, reset: { capturing: false }, capture: 'screenshot', recording: null });
   });
 
   test('#16665 — la fin d’un enregistrement d’écran éteint la puce sans rien inscrire', () => {

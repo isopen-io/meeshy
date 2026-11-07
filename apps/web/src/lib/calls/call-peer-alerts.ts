@@ -14,7 +14,9 @@ import type { CallMember } from './call-store';
  *
  * #16665 — la capture porte sa sorte (`kind`, absent ⇒ `recording`). Une
  * capture PONCTUELLE (`screenshot`) n'a pas de fin : sa puce s'éteint seule.
- * Chaque DÉBUT de capture entre au journal de l'appel (`capture`).
+ * Chaque DÉBUT de capture entre au journal de l'appel (`capture`). La fin
+ * d'une capture ponctuelle que la passerelle relaie pour les clients d'avant
+ * est ignorée : elle éteindrait un enregistrement en cours.
  */
 
 export const QUALITY_ALERT_TTL_MS = 15_000;
@@ -32,6 +34,8 @@ export type PeerAlert = {
   readonly reset: AlertPatch;
   /** La sorte d'une capture qui COMMENCE, à inscrire au journal ; `null` sinon. */
   readonly capture: CallScreenCaptureKind | null;
+  /** Un enregistrement d'écran qui commence (`true`) ou finit (`false`) ; `null` hors enregistrement. */
+  readonly recording: boolean | null;
 };
 
 type Json = Readonly<Record<string, unknown>>;
@@ -44,6 +48,7 @@ function captureAlert(callId: string, userId: string, payload: Json): PeerAlert 
   if (typeof payload.isCapturing !== 'boolean') return null;
   const kind = screenCaptureKindOf(payload.kind);
   const starts = payload.isCapturing;
+  if (!starts && kind === 'screenshot') return null;
   return {
     callId,
     userId,
@@ -51,6 +56,7 @@ function captureAlert(callId: string, userId: string, payload: Json): PeerAlert 
     clearAfterMs: starts && kind === 'screenshot' ? SCREENSHOT_ALERT_TTL_MS : null,
     reset: { capturing: false },
     capture: starts ? kind : null,
+    recording: kind === 'recording' ? starts : null,
   };
 }
 
@@ -59,7 +65,7 @@ export function peerAlert(event: string, payload: unknown, resolve: (userId: str
   const callId = str(payload.callId);
   const userId = resolve(str(payload.userId), str(payload.participantId));
   if (callId === null || userId === null) return null;
-  if (event === SERVER_EVENTS.CALL_QUALITY_ALERT) return METRICS.has(payload.metric) ? { callId, userId, patch: { weakNetwork: true }, clearAfterMs: QUALITY_ALERT_TTL_MS, reset: { weakNetwork: false }, capture: null } : null;
+  if (event === SERVER_EVENTS.CALL_QUALITY_ALERT) return METRICS.has(payload.metric) ? { callId, userId, patch: { weakNetwork: true }, clearAfterMs: QUALITY_ALERT_TTL_MS, reset: { weakNetwork: false }, capture: null, recording: null } : null;
   if (event === SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT) return captureAlert(callId, userId, payload);
   return null;
 }

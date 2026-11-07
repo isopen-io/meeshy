@@ -40,8 +40,19 @@ const repeats = (notes: readonly CallJournalNote[], note: CallJournalNote): bool
       (isScreenCapture(note.kind) && known.kind === note.kind && known.userId === note.userId && Math.abs(note.at - known.at) < CALL_SCREEN_CAPTURE_DEDUPE_MS),
   );
 
-export function withJournalNote(call: ActiveCall, note: CallJournalNote): ActiveCall {
+/**
+ * Une note se range dans l'ORDRE D'ARRIVÉE : les phrases d'un pair portent
+ * l'horloge de SON appareil (`capturedAtMs`), la note celle de ce poste. Une
+ * horloge locale en retard rangerait une capture qui vient d'arriver AVANT les
+ * dernières phrases — hors du bandeau, à la mauvaise place du Journal. Elle ne
+ * précède donc jamais ce qui est déjà là.
+ */
+const arrivalAt = (call: ActiveCall, at: number): number =>
+  Math.max(at, ...call.captions.map((caption) => caption.at), ...(call.journalNotes ?? []).map((known) => known.at));
+
+export function withJournalNote(call: ActiveCall, raw: CallJournalNote): ActiveCall {
   const notes = call.journalNotes ?? [];
+  const note = { ...raw, at: arrivalAt(call, raw.at) };
   if (repeats(notes, note)) return call;
   const name = note.name ?? (note.userId === null ? null : (call.members[note.userId]?.name ?? null));
   return { ...call, journalNotes: [...notes, { ...note, name }].slice(-MAX_NOTES) };

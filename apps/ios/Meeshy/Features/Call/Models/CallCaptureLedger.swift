@@ -42,16 +42,21 @@ struct CallCaptureLedger: Equatable, Sendable {
 
     var alert: CallCaptureAlert? { flash ?? recorders.last }
 
+    /// La fenêtre de 5 s ne garde que le JOURNAL : la capsule suit toujours le
+    /// signal, sans quoi un enregistrement repris dans les 5 s resterait sans
+    /// alerte. Seule la fin d'un ENREGISTREMENT retire la capsule : la fin
+    /// d'une capture ponctuelle, que la passerelle relaie pour les clients
+    /// d'avant, ne touche pas un enregistrement en cours.
     func applying(_ signal: CallCaptureSignal, id: String) -> CallCaptureLedger {
         guard signal.isActive else {
+            guard signal.kind == .recording else { return self }
             return CallCaptureLedger(marks: marks, recorders: recorders.filter { $0.userId != signal.userId }, flash: flash)
         }
-        guard !isDuplicate(signal) else { return self }
         let mark = CallTranscriptCapture(id: id, userId: signal.userId, displayName: signal.displayName, kind: signal.kind, capturedAt: signal.at)
         let alert = CallCaptureAlert(id: id, userId: signal.userId, displayName: signal.displayName, isTransient: signal.kind == .screenshot)
         let showsAlert = !signal.isLocal && signal.kind.namesCapturer
         return CallCaptureLedger(
-            marks: marks + [mark],
+            marks: isDuplicate(signal) ? marks : marks + [mark],
             recorders: showsAlert && signal.kind == .recording
                 ? recorders.filter { $0.userId != signal.userId } + [alert]
                 : recorders,
@@ -78,7 +83,7 @@ enum CallTranscriptCaptureMapping {
     static func captures(_ remote: [APICallTranscriptCapture], localUserId: String, localName: String) -> [CallTranscriptCapture] {
         remote.compactMap { wire in
             guard let kind = CallTranscriptCaptureKind(rawValue: wire.kind) else { return nil }
-            let userId = wire.userId ?? wire.participantId
+            let userId = wire.userId ?? wire.participantId ?? ""
             return CallTranscriptCapture(
                 id: wire.id,
                 userId: userId,

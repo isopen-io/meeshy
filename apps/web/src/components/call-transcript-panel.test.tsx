@@ -78,8 +78,8 @@ describe('les captures dans le journal d’après l’appel (#16665)', () => {
   test('« Karim a capturé l’écran » : la phrase à l’encre secondaire, le pseudo seul à son encre d’auteur, l’heure au bout', () => {
     const entry = html.split('<li').find((chunk) => chunk.includes('data-call-transcript-note="screenshot"')) ?? '';
     expect(entry).toContain('0:06');
-    expect(entry).toContain('style="color:var(--color-ios-ink-2)" dir="auto" data-call-transcript-note-text=""');
-    expect(entry).toMatch(/<strong class="author-ink" style="[^"]*" data-call-journal-note-name="">Karim<\/strong> a capturé l’écran/);
+    expect(entry).toContain('style="color:var(--color-ios-ink-2)" dir="ltr" data-call-transcript-note-text=""');
+    expect(entry).toMatch(/<strong class="author-ink" style="[^"]*" data-call-journal-note-name=""><bdi>Karim<\/bdi><\/strong> a capturé l’écran/);
     expect(entry).toContain(`--author-ink-dark:${authorInk({ authorId: 'u-karim', name: 'Karim' }).dark}`);
   });
 

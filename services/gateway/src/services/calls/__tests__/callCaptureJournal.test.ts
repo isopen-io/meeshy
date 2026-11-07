@@ -72,6 +72,34 @@ describe('callCaptureJournal — chaque début de capture d’écran se garde (#
     expect(prisma.state.rows.map((row) => row.kind)).toEqual(['screenshot', 'recording', 'screenshot']);
   });
 
+  it('n’écrit qu’une ligne pour deux débuts simultanés du même participant', async () => {
+    const prisma = fakePrisma();
+    const slowFindFirst = prisma.callCaptureEvent.findFirst;
+    const created: unknown[] = [];
+    const slowCreate = prisma.callCaptureEvent.create;
+    const racy = {
+      ...prisma,
+      callCaptureEvent: {
+        ...prisma.callCaptureEvent,
+        findFirst: async (args: Parameters<typeof slowFindFirst>[0]) => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return slowFindFirst(args);
+        },
+        create: async (args: Parameters<typeof slowCreate>[0]) => {
+          created.push(args);
+          return slowCreate(args);
+        },
+      },
+    };
+    const journal = prismaCallCaptureJournal(racy as never, at(30));
+    const input = { callId: CALL, participantId: 'p-karim', userId: 'u-karim', kind: 'screenshot' } as const;
+
+    const results = await Promise.all([journal.screenCaptureStarted(input), journal.screenCaptureStarted(input)]);
+
+    expect(created).toHaveLength(1);
+    expect([...results].sort()).toEqual([false, true]);
+  });
+
   it('n’écrit rien pour un appel inconnu', async () => {
     const prisma = fakePrisma({ session: false });
     const journal = prismaCallCaptureJournal(prisma as never, at(1));

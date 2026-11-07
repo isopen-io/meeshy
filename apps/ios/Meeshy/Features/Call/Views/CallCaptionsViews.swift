@@ -81,7 +81,7 @@ struct CallCaptionRow: View {
             name: line.speakerName,
             nameColor: speakerColor,
             tail: [line.text, line.timeLabel ?? ""].filter { !$0.isEmpty }.joined(separator: " · "),
-            tailColor: MeeshyColors.mediaChromeSecondary
+            tailColor: MeeshyColors.mediaChromeTertiary
         )
         .multilineTextAlignment(.leading)
         .frame(maxWidth: .infinity, alignment: .leading)

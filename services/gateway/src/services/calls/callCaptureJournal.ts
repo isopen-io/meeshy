@@ -6,6 +6,7 @@ import {
   type CallScreenCaptureKind,
   type CallTranscriptCapture,
 } from '@meeshy/shared/types/call-capture';
+import { KeyedMutex } from '../../utils/keyed-mutex';
 
 /**
  * Le journal des captures d'un appel (#16665, loi 13 de
@@ -14,7 +15,9 @@ import {
  *
  *  - Une capture d'ÉCRAN s'écrit à son DÉBUT seulement, au plus une ligne par
  *    participant, par sorte et par fenêtre de 5 s : un client qui redit
- *    « je capture » en rafale ne remplit pas le journal.
+ *    « je capture » en rafale ne remplit pas le journal. La lecture et
+ *    l'écriture se sérialisent par clé : deux signaux simultanés ne voient pas
+ *    tous deux la fenêtre vide.
  *  - L'enregistrement CONSENTI note son début et sa fin, chaque moment étant
  *    déjà unique (la diffusion n'a lieu qu'au `markStarted`/`markStopped` gagnant).
  *
@@ -64,16 +67,19 @@ export function prismaCallCaptureJournal(prisma: CaptureJournalPrisma, now: () =
     return true;
   };
 
+  const windows = new KeyedMutex();
+
   return {
-    screenCaptureStarted: async ({ callId, participantId, userId, kind }) => {
-      const at = now();
-      const recent = await prisma.callCaptureEvent.findFirst({
-        where: { callSessionId: callId, participantId, kind, createdAt: { gte: new Date(at.getTime() - CALL_SCREEN_CAPTURE_DEDUPE_MS) } },
-        select: { id: true },
-      });
-      if (recent !== null) return false;
-      return write({ callId, participantId, userId, kind, at });
-    },
+    screenCaptureStarted: ({ callId, participantId, userId, kind }) =>
+      windows.runExclusive(`${callId}:${participantId}:${kind}`, async () => {
+        const at = now();
+        const recent = await prisma.callCaptureEvent.findFirst({
+          where: { callSessionId: callId, participantId, kind, createdAt: { gte: new Date(at.getTime() - CALL_SCREEN_CAPTURE_DEDUPE_MS) } },
+          select: { id: true },
+        });
+        if (recent !== null) return false;
+        return write({ callId, participantId, userId, kind, at });
+      }),
     callRecording: async ({ callId, userId, kind }) => {
       const participation =
         userId === null

@@ -193,7 +193,7 @@ Ce tableau est un compte rendu daté. L'état vivant est dans les issues du mile
 | Couleur : pseudo toujours, phrase seulement traduite (loi 4) | livré (#16662) | livré (#16662) | livré (#16662) |
 | Toucher : tout se range, ma vignette se réduit (loi 11) | livré (#16663) | livré (#16663) | livré (#16663) |
 | Partage lancé ⇒ appel réduit en capsule (loi 12) | livré (#16664) | livré (#16664) | livré (#16664) |
-| Capture visible chez tous et gardée au journal (loi 13) | puce seule, #16665 | enregistrement d'écran seul, puce en audio seulement, #16665 | à vérifier, #16665 |
+| Capture visible chez tous et gardée au journal (loi 13) | livré : puce audio et vidéo, ligne datée au journal vivant, au bandeau (R1) et au journal d'après l'appel (#16665) | enregistrement d'écran seul, puce en audio seulement, #16665 | à vérifier, #16665 |
 | Cadres en direct (loi 16) | absent | livré | à vérifier |
 | Journal en colonne sur grand écran (W1) | à faire | sans objet (iPad : à trancher) | sans objet |
 | Vidéo entrante avec aperçu et « Sans vidéo » (P17) | à vérifier | APP-6 | à vérifier |

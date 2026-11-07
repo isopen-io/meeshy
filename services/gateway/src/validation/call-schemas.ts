@@ -7,7 +7,6 @@
 
 import { z } from 'zod';
 import { isMsRangeOrdered, MS_RANGE_REFINEMENT } from '@meeshy/shared/utils/time-range';
-import { CALL_SCREEN_CAPTURE_KINDS } from '@meeshy/shared/types/call-capture';
 import {
   callTypeEnum,
   CommonSchemas
@@ -433,8 +432,12 @@ export const socketCallScreenCaptureDetectedSchema = z.object({
   callId: objectIdSchema,
   participantId: z.string().min(1),
   isCapturing: z.boolean(),
-  /** #16665 — absent chez un client d'avant : la passerelle le lit `recording`. */
-  kind: z.enum(CALL_SCREEN_CAPTURE_KINDS).optional(),
+  /**
+   * #16665 — absent chez un client d'avant, ou inconnu chez un client d'après :
+   * la passerelle le lit `recording` (`screenCaptureKindOf`). Refuser une sorte
+   * inconnue ferait taire l'alerte de confidentialité d'un client plus récent.
+   */
+  kind: z.string().max(32).optional(),
 });
 export type SocketCallScreenCaptureDetectedInput = z.infer<typeof socketCallScreenCaptureDetectedSchema>;
 

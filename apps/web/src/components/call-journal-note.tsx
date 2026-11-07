@@ -2,6 +2,7 @@ import type { CallCaptureEventKind } from '@meeshy/shared/types/call-capture';
 import type { CSSProperties } from 'react';
 
 import { translate } from '@/lib/i18n-catalog';
+import { interfaceDirection } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
@@ -11,7 +12,13 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * prend jamais de couleur d'auteur ; seul le pseudo garde la sienne (loi 4).
  * Partagée par le Journal vivant, le bandeau des sous-titres et le journal
  * d'après l'appel : chacun remet l'encre du pseudo propre à son fond.
+ *
+ * Une note est une phrase de l'INTERFACE, pas une parole : son hôte lui donne
+ * la direction de la langue d'interface (`noteDirection`), jamais `dir="auto"`,
+ * qui la lirait depuis le pseudo.
  */
+
+export const noteDirection = (language: InterfaceLanguage): 'rtl' | 'ltr' => interfaceDirection(language);
 
 export type JournalNoteView = { readonly kind: CallCaptureEventKind; readonly name: string | null };
 
@@ -30,10 +37,12 @@ const nameOf = (language: InterfaceLanguage, note: JournalNoteView): string => n
 
 type NameInk = { readonly style: CSSProperties; readonly className?: string };
 
-function Name({ text, ink }: { readonly text: string; readonly ink: NameInk }) {
+/** Le pseudo isolé (`<bdi>`) : un nom latin dans une phrase arabe, ou l'inverse, garde sa place. */
+function Name({ text, suffix, ink }: { readonly text: string; readonly suffix?: string; readonly ink: NameInk }) {
   return (
     <strong className={ink.className} style={ink.style} data-call-journal-note-name="">
-      {text}
+      <bdi>{text}</bdi>
+      {suffix}
     </strong>
   );
 }
@@ -53,7 +62,7 @@ export function JournalNoteCaption({ note, language, ink }: { readonly note: Jou
   if (note.kind === 'call-recording-started' || note.kind === 'call-recording-stopped') return <>{translate(language, MOMENT[note.kind])}</>;
   return (
     <>
-      <Name text={`${nameOf(language, note)} · `} ink={ink} />
+      <Name text={nameOf(language, note)} suffix=" · " ink={ink} />
       {translate(language, ACTION[note.kind])}
     </>
   );

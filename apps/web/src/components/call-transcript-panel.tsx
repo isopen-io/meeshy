@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useStore } from 'zustand/react';
 
-import { JournalNoteSentence } from '@/components/call-journal-note';
+import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -95,7 +95,7 @@ const offsetOf = (entry: Entry): number => (entry.type === 'line' ? entry.line.o
 function NoteItem({ note, language }: { readonly note: TranscriptNote; readonly language: InterfaceLanguage }) {
   return (
     <li data-call-transcript-note={note.kind}>
-      <span className="flex justify-between gap-3 text-[13.5px]" style={muted} dir="auto" data-call-transcript-note-text="">
+      <span className="flex justify-between gap-3 text-[13.5px]" style={muted} dir={noteDirection(language)} data-call-transcript-note-text="">
         <span>
           <JournalNoteSentence note={note} language={language} ink={{ className: 'author-ink', style: authorInkStyle({ authorId: note.userId ?? '', name: note.name ?? '' }) }} />
         </span>

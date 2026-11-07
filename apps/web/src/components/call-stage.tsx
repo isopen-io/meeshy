@@ -78,6 +78,8 @@ export type SelfView = {
   readonly column: (capsule: ReactNode) => ReactNode;
   /** Le zoom de ma caméra courante (#9182) — absent : un témoin qui n'en parle pas (aucun zoom offert, ancien comportement). */
   readonly local?: LocalZoom;
+  /** Ce que la capsule de capture prend sous l'en-tête (R1) : ma vignette et ses commandes descendent d'autant. Absent : 0. */
+  readonly topInset?: number;
 };
 
 const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallSelfCamera })));
@@ -123,9 +125,10 @@ const TILE_CORNER_SAID: Readonly<Record<SelfTileCorner, `callControls.selfTile.c
 };
 
 /** Le coin de repos, en marges de zone sûre : ce que `selfTileBox` calcule sans elles. */
-function cornerPlace(corner: SelfTileCorner, size: TileSize): { readonly left: string; readonly top: string } {
+function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number): { readonly left: string; readonly top: string } {
   const left = corner.endsWith('left') ? `calc(env(safe-area-inset-left) + ${SELF_TILE_MARGIN}px)` : `calc(100% - env(safe-area-inset-right) - ${SELF_TILE_MARGIN + size.width}px)`;
-  const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${SELF_TILE_TOP}px)` : `max(calc(env(safe-area-inset-top) + ${SELF_TILE_TOP}px), calc(100% - env(safe-area-inset-bottom) - ${SELF_TILE_BOTTOM + size.height}px))`;
+  const tileTop = SELF_TILE_TOP + topInset;
+  const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${tileTop}px)` : `max(calc(env(safe-area-inset-top) + ${tileTop}px), calc(100% - env(safe-area-inset-bottom) - ${SELF_TILE_BOTTOM + size.height}px))`;
   return { left, top };
 }
 
@@ -165,7 +168,7 @@ function SelfRowSlot({ group, row, tile, children }: { readonly group: SelfContr
   );
 }
 
-const controlsTop = { top: 'calc(env(safe-area-inset-top) + 3.5rem)' } as const;
+const controlsTop = (topInset: number) => ({ top: `calc(env(safe-area-inset-top) + 3.5rem + ${topInset}px)` }) as const;
 
 function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
   const sharer = screenSharer(call.members);
@@ -228,9 +231,10 @@ function VideoDuo({ call, language, self, chromeVisible = true }: Pick<StageProp
   const screen = viewport();
   const compact = !chromeVisible;
   const size = selfTileSize(compact ? 1 : scale, screen);
-  const rest = selfTileBox({ corner, size, viewport: screen });
+  const topInset = self.topInset ?? 0;
+  const rest = selfTileBox({ corner, size, viewport: screen, topInset });
   const drop = ({ dx, dy }: TileOffset): void => {
-    const next = nearestSelfCorner({ center: { x: rest.x + rest.width / 2 + dx, y: rest.y + rest.height / 2 + dy }, size, viewport: screen });
+    const next = nearestSelfCorner({ center: { x: rest.x + rest.width / 2 + dx, y: rest.y + rest.height / 2 + dy }, size, viewport: screen, topInset });
     if (next !== corner) moveTo(next);
   };
   const drag = useTileDrag(drop);
@@ -260,7 +264,7 @@ function VideoDuo({ call, language, self, chromeVisible = true }: Pick<StageProp
   const peerMuted = firstPeer?.micMuted === true;
   const stageLabel = peerMuted ? `${call.title} · ${translate(language, 'call.peer.muted')}` : call.title;
   const count = (group: SelfControlGroup): number => self.mine.filter((action) => inSelfGroup(group, action)).length;
-  const rows = swapped || !self.controls ? null : selfRowsLayout({ tile: tileBox, bounds: selfRowBounds(screen), effectsWidth: selfRowWidth(count('effects')), cameraWidth: selfRowWidth(count('camera') + 1) });
+  const rows = swapped || !self.controls ? null : selfRowsLayout({ tile: tileBox, bounds: selfRowBounds(screen, topInset), effectsWidth: selfRowWidth(count('effects')), cameraWidth: selfRowWidth(count('camera') + 1) });
   const glyphs = { plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> };
   return (
     <div role="group" aria-label={stageLabel} className="absolute inset-0" data-call-duo-stage="">
@@ -285,7 +289,7 @@ function VideoDuo({ call, language, self, chromeVisible = true }: Pick<StageProp
         </Suspense>
       ) : null}
       {swapped && self.controls ? (
-        <div className="absolute left-1/2 z-20 -translate-x-1/2" style={controlsTop}>
+        <div className="absolute left-1/2 z-20 -translate-x-1/2" style={controlsTop(topInset)}>
           {self.row()}
         </div>
       ) : null}
@@ -293,7 +297,7 @@ function VideoDuo({ call, language, self, chromeVisible = true }: Pick<StageProp
         <div
           ref={cornerFrame}
           className="absolute z-10"
-          style={{ ...cornerPlace(corner, size), width: size.width, height: size.height, transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
+          style={{ ...cornerPlace(corner, size, topInset), width: size.width, height: size.height, transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
           data-call-corner-frame=""
           data-call-self-tile-corner={corner}
           data-call-self-tile-compact={compact ? '' : undefined}

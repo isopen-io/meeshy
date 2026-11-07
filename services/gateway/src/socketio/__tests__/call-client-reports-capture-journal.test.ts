@@ -1,6 +1,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { registerCallClientReportEvents, type CallClientReportDeps } from '../call-client-reports';
+import { createScreenshotEndRelay } from '../call-screenshot-end';
 
 /**
  * #16665 — `call:screen-capture-detected` porte un `kind` optionnel que la
@@ -36,6 +37,7 @@ const harness = () => {
     resolveActiveCallParticipantId: async () => 'p-karim',
     resolveEverCallParticipantId: async () => 'p-karim',
     captureJournal: { screenCaptureStarted },
+    screenshotEnd: createScreenshotEndRelay(5_000),
   } as unknown as CallClientReportDeps;
   registerCallClientReportEvents(deps, socket as never, { getUserId: () => 'u-karim', rememberAuth: () => undefined });
   const send = (data: unknown) => handlers.get(CALL_EVENTS.SCREEN_CAPTURE_DETECTED)?.(data);
@@ -79,5 +81,51 @@ describe('call:screen-capture-detected — la sorte de capture voyage et se gard
     await h.send({ callId: CALL, participantId: 'p-karim', isCapturing: true, kind: 'screenshot' });
 
     expect(h.relayed).toHaveLength(1);
+  });
+
+  it('relaie et journalise une sorte inconnue comme un enregistrement d’écran', async () => {
+    const h = harness();
+
+    await h.send({ callId: CALL, participantId: 'p-karim', isCapturing: true, kind: 'selfie' });
+
+    expect(h.relayed[0]?.payload).toEqual(expect.objectContaining({ isCapturing: true, kind: 'recording' }));
+    expect(h.screenCaptureStarted).toHaveBeenCalledWith(expect.objectContaining({ kind: 'recording' }));
+  });
+});
+
+describe('call:screen-capture-detected — une capture ponctuelle s’éteint chez les clients d’avant (#16665)', () => {
+  it('relaie une fin synthétique après la durée de vie de la capture ponctuelle', async () => {
+    jest.useFakeTimers();
+    try {
+      const h = harness();
+
+      await h.send({ callId: CALL, participantId: 'p-karim', isCapturing: true, kind: 'screenshot' });
+      jest.advanceTimersByTime(4_999);
+      expect(h.relayed).toHaveLength(1);
+      jest.advanceTimersByTime(1);
+
+      expect(h.relayed[1]).toEqual({
+        room: `call:${CALL}`,
+        event: CALL_EVENTS.SCREEN_CAPTURE_ALERT,
+        payload: { callId: CALL, participantId: 'p-karim', userId: 'u-karim', isCapturing: false, kind: 'screenshot' },
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('ne relaie aucune fin pendant qu’un enregistrement d’écran du même participant est ouvert', async () => {
+    jest.useFakeTimers();
+    try {
+      const h = harness();
+
+      await h.send({ callId: CALL, participantId: 'p-karim', isCapturing: true, kind: 'recording' });
+      await h.send({ callId: CALL, participantId: 'p-karim', isCapturing: true, kind: 'screenshot' });
+      jest.advanceTimersByTime(10_000);
+
+      expect(h.relayed.map((entry) => (entry.payload as { isCapturing: boolean }).isCapturing)).toEqual([true, true]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

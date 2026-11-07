@@ -62,6 +62,12 @@ extension CallCaptureSignal {
         )
     }
 
+    /// Un pair parti (raccroché, coupure) n'enverra jamais la fin de son
+    /// enregistrement d'écran : son départ l'éteint, sans ligne au journal.
+    static func participantLeft(userId: String, at: Date) -> CallCaptureSignal {
+        CallCaptureSignal(userId: userId, displayName: "", kind: .recording, isActive: false, isLocal: false, at: at)
+    }
+
     /// Le début et la fin de l'enregistrement CONSENTI de l'appel. Une demande
     /// refusée ou échue n'a rien enregistré : elle n'entre pas au journal.
     static func callRecording(_ event: CallRecordingSocketEvent, at: Date) -> CallCaptureSignal? {

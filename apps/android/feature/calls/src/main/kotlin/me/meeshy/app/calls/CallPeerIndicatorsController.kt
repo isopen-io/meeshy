@@ -3,8 +3,10 @@ package me.meeshy.app.calls
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallCaptureKind
+import me.meeshy.sdk.model.call.CallDuration
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
+import me.meeshy.sdk.model.call.CallRecordingSocketEvent
 import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.socket.CallSignalManager
@@ -18,8 +20,12 @@ import javax.inject.Inject
 data class PeerIndicators(
     /** The peer's sustained bad network (`call:quality-alert`). */
     val qualityDegraded: Boolean = false,
-    /** The peer's live screen capture (`call:screen-capture-alert`). */
+    /** The peer's live screen RECORDING (`call:screen-capture-alert`, kind `recording`). */
     val screenCapturing: Boolean = false,
+    /** #16665 — a peer SCREENSHOT, shown on the capsule for a short window (no end on the wire). */
+    val screenshotFlashing: Boolean = false,
+    /** #16665 — the captures of the call in progress, dated, for the live journal and the captions band. */
+    val liveCaptures: List<CallLiveCapture> = emptyList(),
     /**
      * Retired by #13333: the peer's words are the captions band's (CallCaptionsController), read
      * only while the reader opened them, merged per utterance and resolved through the Prisme.
@@ -50,6 +56,9 @@ class CallPeerIndicatorsController @Inject constructor(
     private val signals: CallSignalManager,
     private val qualityResetTimer: CallQualityResetTimer,
     private val screenRecordingDetector: ScreenRecordingDetector,
+    private val screenshotResetTimer: CallScreenshotResetTimer = CallScreenshotResetTimer.Default,
+    private val screenshotSignals: CallScreenshotSignals = CallScreenshotSignals.None,
+    private val recordingMoments: CallRecordingMoments = CallRecordingMoments.None,
 ) {
     /** The latest snapshot — republished by the host after every change. */
     var indicators: PeerIndicators = PeerIndicators()
@@ -60,8 +69,16 @@ class CallPeerIndicatorsController @Inject constructor(
     /** The 15 s silence window that auto-clears the quality flag; restarted per alert. */
     private var qualityResetJob: Job? = null
 
+    /** The short window that clears a peer screenshot's capsule; restarted per screenshot. */
+    private var screenshotResetJob: Job? = null
+
     /** Relays local screen-recording edges to the gateway; alive only while media is flowing. */
     private var screenCaptureReportJob: Job? = null
+
+    /** Relays local screenshots to the gateway; alive only while media is flowing. */
+    private var screenshotReportJob: Job? = null
+
+    private var captureSequence = 0L
 
     /**
      * The last capture state actually SENT this call, or `null` when none was.
@@ -76,6 +93,7 @@ class CallPeerIndicatorsController @Inject constructor(
         host.scope.launch { signals.qualityAlerts.collect(::onQualityAlert) }
         host.scope.launch { signals.screenCaptureAlerts.collect(::onScreenCaptureAlert) }
         host.scope.launch { signals.mediaToggles.collect(::onMediaToggle) }
+        host.scope.launch { recordingMoments.events.collect(::onRecordingMoment) }
     }
 
     /** The FSM moved: run the capture relay while media flows, drop everything once the call is over. */
@@ -88,6 +106,8 @@ class CallPeerIndicatorsController @Inject constructor(
     fun clear() {
         qualityResetJob?.cancel()
         qualityResetJob = null
+        screenshotResetJob?.cancel()
+        screenshotResetJob = null
         indicators = PeerIndicators()
     }
 
@@ -105,13 +125,60 @@ class CallPeerIndicatorsController @Inject constructor(
         restartQualityResetWindow(host)
     }
 
-    /** The remote peer started/stopped capturing the call — flip the privacy banner. */
+    /**
+     * The remote peer captured the call. A screen RECORDING flips the capsule on and off with its
+     * edges; a SCREENSHOT has no end on the wire, so its capsule clears itself after a short window
+     * (the `false` the gateway relays for older clients is ignored: it would end a recording). Each
+     * START enters the live journal (#16665, loi 13).
+     */
     private fun onScreenCaptureAlert(alert: CallScreenCaptureAlertPayload) {
         val host = host ?: return
         if (host.callId.isBlank() || alert.callId != host.callId) return
-        if (alert.captureKind != CallCaptureKind.RECORDING) return
-        indicators = indicators.copy(screenCapturing = alert.isCapturing)
+        val kind = alert.captureKind
+        if (kind == CallCaptureKind.RECORDING) {
+            indicators = indicators.copy(screenCapturing = alert.isCapturing)
+        } else if (alert.isCapturing) {
+            indicators = indicators.copy(screenshotFlashing = true)
+            restartScreenshotResetWindow(host)
+        } else {
+            return
+        }
+        if (alert.isCapturing) {
+            val capturer = alert.userId?.takeIf { it.isNotBlank() } ?: alert.participantId.orEmpty()
+            journal(host, "capture:$capturer:${kind.wire}:${captureSequence++}", kind, capturer)
+        }
         host.publish()
+    }
+
+    /** #16665 — the bounds of the consented call recording enter the live journal. */
+    private fun onRecordingMoment(event: CallRecordingSocketEvent) {
+        val host = host ?: return
+        if (host.callId.isBlank() || event.callId != host.callId) return
+        val (id, kind) = CallLiveCaptureJournal.recordingMoment(event) ?: return
+        journal(host, id, kind, CallLiveCaptureJournal.recordingAuthor(event))
+        host.publish()
+    }
+
+    private fun journal(host: CallSessionHost, id: String, kind: CallCaptureKind, userId: String) {
+        val capture = CallLiveCapture(
+            id = id,
+            kind = kind,
+            userId = userId,
+            atMs = System.currentTimeMillis(),
+            elapsedLabel = CallDuration.clock(host.elapsedSeconds),
+        )
+        indicators = indicators.copy(liveCaptures = CallLiveCaptureJournal.adding(indicators.liveCaptures, capture))
+    }
+
+    private fun restartScreenshotResetWindow(host: CallSessionHost) {
+        screenshotResetJob?.cancel()
+        screenshotResetJob = host.scope.launch {
+            screenshotResetTimer.countdown().collect {
+                screenshotResetJob = null
+                indicators = indicators.copy(screenshotFlashing = false)
+                host.publish()
+            }
+        }
     }
 
     /**
@@ -146,10 +213,25 @@ class CallPeerIndicatorsController @Inject constructor(
 
     private fun startScreenCaptureReportIfNeeded() {
         val host = host ?: return
-        if (screenCaptureReportJob != null) return
-        screenCaptureReportJob = host.scope.launch {
-            screenRecordingDetector.states.collect(::reportScreenCapture)
+        if (screenCaptureReportJob == null) {
+            screenCaptureReportJob = host.scope.launch {
+                screenRecordingDetector.states.collect(::reportScreenCapture)
+            }
         }
+        if (screenshotReportJob == null) {
+            screenshotReportJob = host.scope.launch {
+                screenshotSignals.captures.collect { reportScreenshot() }
+            }
+        }
+    }
+
+    /** #16665 — a screenshot on THIS device during the call: a start, never an end (iOS parity). */
+    private fun reportScreenshot() {
+        val host = host ?: return
+        if (host.callId.isBlank()) return
+        val self = host.selfId
+        if (self.isBlank()) return
+        signals.emitScreenCaptureDetected(host.callId, self, isCapturing = true, kind = CallCaptureKind.SCREENSHOT)
     }
 
     /**
@@ -173,6 +255,8 @@ class CallPeerIndicatorsController @Inject constructor(
     private fun stopScreenCaptureReport() {
         screenCaptureReportJob?.cancel()
         screenCaptureReportJob = null
+        screenshotReportJob?.cancel()
+        screenshotReportJob = null
         lastReportedCapture = null
     }
 }

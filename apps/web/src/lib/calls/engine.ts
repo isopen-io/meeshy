@@ -222,6 +222,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.unwatchNetwork = null;
     for (const timer of session.alertTimers.values()) deps.cancel(timer);
     session.alertTimers.clear();
+    session.recordingPeers.clear();
     session.captions?.stop(false);
     incomingTimer = clear(incomingTimer);
     controls.reset();
@@ -494,8 +495,14 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     const at = deps.now();
     const note = alert.capture === null ? null : { id: `capture:${alert.userId}:${alert.capture}:${at}`, kind: alert.capture, userId: alert.userId, name: null, at };
     update((current) => (note === null ? patchMember(current, alert.userId, alert.patch) : withJournalNote(patchMember(current, alert.userId, alert.patch), note)));
-    if (alert.clearAfterMs === null) return;
     const timer = `${alert.userId}:${Object.keys(alert.reset).join()}`;
+    if (alert.recording !== null) {
+      if (alert.recording) session.recordingPeers.add(alert.userId);
+      else session.recordingPeers.delete(alert.userId);
+      clear(session.alertTimers.get(timer) ?? null);
+      session.alertTimers.delete(timer);
+    }
+    if (alert.clearAfterMs === null || session.recordingPeers.has(alert.userId)) return;
     clear(session.alertTimers.get(timer) ?? null);
     session.alertTimers.set(
       timer,
