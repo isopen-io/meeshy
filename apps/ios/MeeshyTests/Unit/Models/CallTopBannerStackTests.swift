@@ -21,6 +21,16 @@ final class CallTopBannerStackTests: XCTestCase {
         XCTAssertEqual(CallTopBannerStack.ordered([.recording]), [.recording])
     }
 
+    func test_ordered_everyArrivalOrder_givesTheSameStack() {
+        let all = CallTopBanner.allCases
+        for first in all {
+            for second in all where second != first {
+                let arrival = [first, second] + all.filter { $0 != first && $0 != second }
+                XCTAssertEqual(CallTopBannerStack.ordered(Set(arrival)), all)
+            }
+        }
+    }
+
     func test_ordered_none_isEmpty() {
         XCTAssertTrue(CallTopBannerStack.ordered([]).isEmpty)
     }
