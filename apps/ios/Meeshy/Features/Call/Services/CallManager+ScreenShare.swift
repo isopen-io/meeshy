@@ -34,6 +34,12 @@ extension CallManager: CallScreenShareHosting {
             .info("screen share renegotiation offer sent (callId=\(callId))")
     }
 
+    /// #16664 — partager, c'est partir montrer autre chose : l'appel se
+    /// réduit en capsule (`FloatingCallPillView`), qui offre « Arrêter ».
+    func screenShareDidStart() {
+        displayMode = .pip
+    }
+
     func makeScreenShareController() -> CallScreenShareController {
         let controller = CallScreenShareController()
         controller.host = self

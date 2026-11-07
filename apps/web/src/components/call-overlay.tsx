@@ -33,6 +33,9 @@ import { initialsOf } from '@/lib/view/conversation';
 
 const PILL_BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
 const HANGUP = 'var(--ios-error-strong)';
+
+/** Je partage mon écran (#16664) : la capsule rougit, comme l'indicateur du système. */
+const SHARING_BG = 'color-mix(in srgb, var(--ios-error-strong) 88%, transparent)';
 const ANSWER = 'var(--ios-success)';
 
 function CallPill({ call }: { readonly call: ActiveCall }) {
@@ -43,6 +46,7 @@ function CallPill({ call }: { readonly call: ActiveCall }) {
     return () => clearInterval(handle);
   }, []);
   const statusKey = callStatusKey(call);
+  const sharing = call.screenSharing;
   const label = statusKey === null ? formatCallClock(elapsedSeconds(call, now)) : translate(language, statusKey);
   const swipeFrom = useRef<number | null>(null);
   const swiped = useRef(false);
@@ -67,34 +71,50 @@ function CallPill({ call }: { readonly call: ActiveCall }) {
   return (
     <div
       className="fixed left-1/2 z-[190] flex -translate-x-1/2 items-center gap-1 rounded-full py-1 ps-1 pe-1 shadow-lg"
-      style={{ background: PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 0.5rem)', touchAction: 'pan-y' }}
+      style={{ background: sharing ? SHARING_BG : PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 0.5rem)', touchAction: 'pan-y' }}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={() => void (swipeFrom.current = null)}
       data-call-pill-bar=""
+      data-call-pill-sharing={sharing ? '' : undefined}
     >
       <button type="button" onClick={expand} aria-label={translate(language, 'call.expand')} className="flex min-h-11 items-center gap-2 rounded-full px-2">
-        <span aria-hidden className="size-2 rounded-full" style={{ background: ANSWER }} />
+        {sharing ? <GlyphSvg glyph={CALL_SCREEN_GLYPHS.monitorArrowUp} size={18} /> : <span aria-hidden className="size-2 rounded-full" style={{ background: ANSWER }} />}
         <span className="max-w-[9rem] truncate text-body font-semibold">{call.title}</span>
-        <span className="text-mini tabular-nums" style={{ color: 'var(--color-on-media-3)' }}>
+        <span className="text-mini tabular-nums" style={{ color: sharing ? 'var(--color-on-media)' : 'var(--color-on-media-3)' }}>
           {label}
         </span>
       </button>
-      <button
-        type="button"
-        onClick={callActions.toggleMic}
-        aria-label={translate(language, call.micMuted ? 'call.mic.unmute' : 'call.mic.mute')}
-        aria-pressed={call.micMuted}
-        className="grid size-11 place-items-center rounded-full"
-      >
-        {call.micMuted ? <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={20} /> : <Glyph name="microphone" size={20} />}
-      </button>
-      <button type="button" onClick={callActions.collapse} aria-label={translate(language, 'call.bubble.collapse')} className="grid size-11 place-items-center rounded-full" data-call-pill-collapse="">
-        <GlyphSvg glyph={CALL_DEVICES_GLYPHS.arrowDownRight} size={20} />
-      </button>
-      <button type="button" onClick={callActions.hangup} aria-label={translate(language, 'call.hangup')} className="grid size-11 place-items-center rounded-full" style={{ background: HANGUP }}>
-        <GlyphSvg glyph={CALL_SCREEN_GLYPHS.phoneDisconnect} size={20} />
-      </button>
+      {sharing ? (
+        <button
+          type="button"
+          onClick={callActions.toggleScreen}
+          aria-label={translate(language, 'call.screen.stop')}
+          className="min-h-11 whitespace-nowrap rounded-full px-4 text-body font-semibold"
+          style={{ background: 'color-mix(in srgb, white 22%, transparent)' }}
+          data-call-pill-stop-share=""
+        >
+          {translate(language, 'call.screen.stopShort')}
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={callActions.toggleMic}
+            aria-label={translate(language, call.micMuted ? 'call.mic.unmute' : 'call.mic.mute')}
+            aria-pressed={call.micMuted}
+            className="grid size-11 place-items-center rounded-full"
+          >
+            {call.micMuted ? <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={20} /> : <Glyph name="microphone" size={20} />}
+          </button>
+          <button type="button" onClick={callActions.collapse} aria-label={translate(language, 'call.bubble.collapse')} className="grid size-11 place-items-center rounded-full" data-call-pill-collapse="">
+            <GlyphSvg glyph={CALL_DEVICES_GLYPHS.arrowDownRight} size={20} />
+          </button>
+          <button type="button" onClick={callActions.hangup} aria-label={translate(language, 'call.hangup')} className="grid size-11 place-items-center rounded-full" style={{ background: HANGUP }}>
+            <GlyphSvg glyph={CALL_SCREEN_GLYPHS.phoneDisconnect} size={20} />
+          </button>
+        </>
+      )}
     </div>
   );
 }

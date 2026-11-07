@@ -41,6 +41,7 @@ protocol CallScreenShareHosting: AnyObject {
     var screenShareRestoresCamera: Bool { get }
     var screenShareRouter: (any ScreenShareVideoRouting)? { get }
     func screenShareNeedsRenegotiation() async
+    func screenShareDidStart()
 }
 
 final class CallScreenShareController: ObservableObject {
@@ -164,6 +165,7 @@ final class CallScreenShareController: ObservableObject {
             service.setFrameSink(activation.sink)
             isSharing = true
             emitToggle(callId, true)
+            host.screenShareDidStart()
             logger.info("screen share started (renegotiation=\(activation.needsRenegotiation))")
             if activation.needsRenegotiation { await host.screenShareNeedsRenegotiation() }
         } catch {
