@@ -51,3 +51,44 @@ def test_a_call_caption_stays_silent_in_a_worker_thread():
     with ThreadPoolExecutor(max_workers=1) as pool, task_scope(False, "call-caption:x:1"):
         future = run_in_thread_with_context(pool.submit, shown, SPOKEN, 10)
         assert future.result() == SILENCED
+
+
+def _engine_with_unexpected_output():
+    from unittest.mock import MagicMock
+
+    from services.translation_ml.translator_engine import TranslatorEngine
+
+    engine = TranslatorEngine(MagicMock(), ThreadPoolExecutor(max_workers=1))
+
+    def pipeline(texts, **_):
+        if isinstance(texts, str):
+            return {"generated_text": SPOKEN}
+        return [{"generated_text": SPOKEN} for _ in texts]
+
+    engine._get_or_create_pipeline = MagicMock(return_value=(pipeline, True))
+    engine.model_loader.get_model_inference_lock.return_value = MagicMock()
+    return engine
+
+
+@pytest.mark.unit
+async def test_an_unexpected_model_output_never_logs_a_single_caption_chunk(caplog):
+    from services.translation_ml.translator_engine import TranslationInferenceError
+
+    engine = _engine_with_unexpected_output()
+    caplog.set_level("DEBUG")
+    with task_scope(False, "call-caption:x:1"), pytest.raises(TranslationInferenceError) as raised:
+        await engine._translate_single_chunk("Bonjour", "fr", "en", "basic")
+    assert SPOKEN[:12] not in caplog.text
+    assert SPOKEN[:12] not in str(raised.value)
+
+
+@pytest.mark.unit
+def test_an_unexpected_model_output_never_logs_a_caption_batch(caplog):
+    from services.translation_ml.translator_engine import TranslationInferenceError
+
+    engine = _engine_with_unexpected_output()
+    caplog.set_level("DEBUG")
+    with task_scope(False, "call-caption:x:1"), pytest.raises(TranslationInferenceError) as raised:
+        engine._infer_batch_sync(["Bonjour", "Salut"], "fr", "en", "basic")
+    assert SPOKEN[:12] not in caplog.text
+    assert SPOKEN[:12] not in str(raised.value)
