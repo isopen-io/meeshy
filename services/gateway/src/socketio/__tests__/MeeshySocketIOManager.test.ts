@@ -10,14 +10,8 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-
-// #16557 — la loi de lecture est prouvée sur une base en mémoire par
-// `translation-read-law.test.ts` ; ce fichier juge autre chose et la tient pour
-// acquise, sauf là où il la refuse explicitement.
 const mockReaderMayTranslate = jest.fn<any>().mockResolvedValue(true);
-jest.mock('../../services/messaging/translationReadGate', () => ({
-  readerMayTranslateMessage: (...args: unknown[]) => mockReaderMayTranslate(...args),
-}));
+jest.mock('../../services/messaging/translationReadGate', () => ({ readerMayTranslateMessage: (...args: unknown[]) => mockReaderMayTranslate(...args) }));
 import { EventEmitter } from 'events';
 
 // ---------------------------------------------------------------------------
@@ -1476,8 +1470,6 @@ describe('MeeshySocketIOManager', () => {
     it('does NOT serve a cached translation to a non-participant (IDOR guard)', async () => {
       const socket = makeSocket('sock-t4b');
       (manager as any).socketToUser.set('sock-t4b', 'user-t4b');
-      // Cache HIT — before the fix this branch emitted the translated content
-      // with no authorization check at all.
       (translationService.getTranslation as jest.Mock).mockResolvedValue({
         translatedText: 'Bonjour',
         confidenceScore: 0.95,
@@ -1490,8 +1482,6 @@ describe('MeeshySocketIOManager', () => {
         senderId: 'sender-1',
         encryptionMode: null,
       });
-      // Requester is not an active participant of conv-not-mine.
-      prisma.participant.findFirst.mockResolvedValue(null);
       mockReaderMayTranslate.mockResolvedValueOnce(false);
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
@@ -1562,7 +1552,6 @@ describe('MeeshySocketIOManager', () => {
       });
       // Not a participant of conv-not-mine — the membership guard must block the
       // request before any translation work happens (no unauthorized data access).
-      prisma.participant.findFirst.mockResolvedValue(null);
       mockReaderMayTranslate.mockResolvedValueOnce(false);
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
