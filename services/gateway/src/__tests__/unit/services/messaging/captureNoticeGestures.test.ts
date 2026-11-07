@@ -16,10 +16,21 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
+// Le droit de LIRE est écarté : ce témoin juge ce qu'un avis de capture
+// REFUSE, pas la loi de lecture, qui a ses propres suites. La surcharge est
+// CIBLÉE au-dessus de `requireActual` — donc elle est indexée par le NOM de la
+// porte qu'appelle la production, et un lot qui change de porte la contourne en
+// silence (`services/gateway/CLAUDE.md`, « un double PARTIEL d'un module perd
+// ce que le module GAGNE »). C'est arrivé avec #16604 : la pose du favori est
+// passée de `readerMayReadMessage` à `readerParticipationForMessage` pour tenir
+// la clé de lecteur des accusés, et la loi réelle a heurté un faux Prisma sans
+// modèle `participant`. Les DEUX portes sont donc surchargées, et toute porte
+// neuve de cette loi doit rejoindre cette liste.
 jest.mock('../../../../services/messaging/messageReadAccess', () => ({
   ...(jest.requireActual('../../../../services/messaging/messageReadAccess') as object),
   loadMessageReadableByParticipant: async () => ({ id: 'notice', conversationId: 'conv' }),
   readerMayReadMessage: async () => true,
+  readerParticipationForMessage: async () => ({ id: 'p-reader' }),
 }));
 
 import { admitAttachmentReply } from '../../../../services/messaging/attachmentReplySnapshot';
