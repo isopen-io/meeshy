@@ -10,6 +10,7 @@ import { WIRE_BROADCAST } from '../../services/posts/storyEffectsV3';
 import { admitThirdPartyRemoval } from '../../services/moderation/contentRemoval';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
 import { logError, logWarn } from '../../utils/logger.js';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { postIdParamsSchema, type PostParams } from './types';
 import { hoistLocation, hoistTrackingLinks } from './publication';
 
@@ -30,6 +31,25 @@ import { hoistLocation, hoistTrackingLinks } from './publication';
 export const CommentSettingsSchema = z.object({ commentsDisabled: z.boolean() }).strict();
 
 type Actor = { readonly id: string; readonly role?: string | null };
+type AuthHook = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+
+/** La réponse est FERMÉE : `{ postId, commentsDisabled }`, rien d'autre ne part. */
+const commentSettingsSuccessSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    success: { type: 'boolean' },
+    data: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        postId: { type: 'string' },
+        commentsDisabled: { type: 'boolean' },
+      },
+      required: ['postId', 'commentsDisabled'],
+    },
+  },
+} as const;
 type AdmittedAs = 'author' | 'moderation' | 'refused';
 type Broadcaster = Pick<FastifyInstance['socialEvents'], 'broadcastPostUpdated' | 'broadcastStoryUpdated' | 'broadcastStatusUpdated'>;
 
@@ -64,9 +84,19 @@ async function broadcastCommentSettings(prisma: PrismaClient, social: Broadcaste
   return social.broadcastPostUpdated(wire, post.authorId);
 }
 
-export function registerCommentSettingsRoutes(fastify: FastifyInstance, prisma: PrismaClient, requiredAuth: any) {
+export function registerCommentSettingsRoutes(fastify: FastifyInstance, prisma: PrismaClient, requiredAuth: AuthHook) {
   fastify.patch('/posts/:postId/comment-settings', {
-    schema: { params: postIdParamsSchema },
+    schema: {
+      params: postIdParamsSchema,
+      response: {
+        200: commentSettingsSuccessSchema,
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema,
+      },
+    },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
