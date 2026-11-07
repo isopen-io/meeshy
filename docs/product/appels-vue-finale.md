@@ -62,6 +62,7 @@
     - Une puce rouge « X capture l'écran de l'appel » apparaît chez tous, en audio comme en vidéo.
     - Une ligne datée entre dans le journal et reste dans celui d'après l'appel.
     - L'enregistrement demande l'accord de tous, sur une carte qui ne se cache jamais, et le journal note son début et sa fin.
+    - **Contrat (#16665), rétrocompatible.** `call:screen-capture-detected` porte un `kind` optionnel, `recording` (enregistrement d'écran, `isCapturing` vrai puis faux) ou `screenshot` (capture ponctuelle, `isCapturing` vrai seul). Un `kind` absent se lit `recording`, ce qu'envoient les clients d'avant. La passerelle relaie `kind` dans `call:screen-capture-alert`. Elle persiste chaque DÉBUT (`isCapturing` vrai) dans `CallCaptureEvent` (`callSessionId`, `participantId`, `userId?`, `kind`, `offsetMs`, `createdAt`), au plus une ligne par participant, par sorte et par fenêtre de 5 s. `GET /calls/:callId/transcript` ajoute `captures: [{ id, participantId, userId, displayName, kind, offsetMs, at }]` à côté de `segments`. Les clients insèrent ces lignes à leur heure, dans le journal vivant comme dans celui d'après l'appel : « Awa a capturé l'écran » ou « Awa enregistre l'écran », en encre secondaire, sans couleur d'auteur sur la phrase (le pseudo garde la sienne).
 14. **Options en surimpression.**
     - Une option à réglages (Enregistrer, Réagir) s'ouvre DANS la pilule, qui grandit vers le haut avec ‹ Retour et Fermer.
     - « Participants » et « Journal » s'ouvrent en feuille.
