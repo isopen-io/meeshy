@@ -8,12 +8,14 @@ peut citer l'entrée, suit la même règle dans le journal comme dans
 `TranslationInferenceError`.
 """
 
+import asyncio
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
 import pytest
 
-from services.task_privacy import task_scope
+from services.task_privacy import shown, task_scope
 from services.translation_ml.translator_engine import TranslationInferenceError, TranslatorEngine
 
 SPOKEN = "Le code du coffre est 4471, porte B."
@@ -96,3 +98,55 @@ async def test_the_pipeline_exception_stays_the_cause(path, caplog):
     with task_scope(False, "call-caption:x:1"), pytest.raises(TranslationInferenceError) as raised:
         await path(_engine(_failing_pipeline))
     assert isinstance(raised.value.__cause__, ValueError)
+
+
+ORDINARY_TEXT = "Le rapport trimestriel est prêt pour la réunion"
+CAPTION_TEXT = "Le coffre se trouve derrière la porte bleue"
+CAPTION = (False, "call-caption:x:1")
+
+
+def _quoting_pipeline(meeting):
+    def pipeline(texts, **_):
+        if meeting is not None:
+            meeting.wait()
+        raise ValueError(f"tokenizer refused input: {texts}")
+    return pipeline
+
+
+async def _diagnostic(engine, regime, text):
+    with task_scope(*regime), pytest.raises(TranslationInferenceError) as raised:
+        await engine.translate_text(text, "fr", "en", "basic")
+    return str(raised.value)
+
+
+def _engine_on(pipeline, workers):
+    engine = _engine(pipeline)
+    engine.executor = ThreadPoolExecutor(max_workers=workers)
+    return engine
+
+
+@pytest.mark.unit
+async def test_two_concurrent_tasks_on_the_same_pool_keep_their_own_regime(caplog):
+    caplog.set_level("DEBUG")
+    engine = _engine_on(_quoting_pipeline(threading.Barrier(2, timeout=5)), workers=2)
+    ordinary, caption = await asyncio.gather(
+        _diagnostic(engine, ORDINARY, ORDINARY_TEXT),
+        _diagnostic(engine, CAPTION, CAPTION_TEXT),
+    )
+    assert ORDINARY_TEXT in ordinary
+    assert ORDINARY_TEXT in caplog.text
+    assert CAPTION_TEXT not in caption
+    assert CAPTION_TEXT not in caplog.text
+
+
+@pytest.mark.unit
+async def test_a_reused_inference_thread_keeps_no_regime_from_its_previous_task(caplog):
+    caplog.set_level("DEBUG")
+    engine = _engine_on(_quoting_pipeline(None), workers=1)
+    first_caption = await _diagnostic(engine, CAPTION, CAPTION_TEXT)
+    ordinary = await _diagnostic(engine, ORDINARY, ORDINARY_TEXT)
+    second_caption = await _diagnostic(engine, CAPTION, CAPTION_TEXT)
+    undeclared = await asyncio.get_running_loop().run_in_executor(engine.executor, shown, CAPTION_TEXT)
+    assert ORDINARY_TEXT in ordinary
+    assert CAPTION_TEXT not in first_caption + second_caption + caplog.text
+    assert CAPTION_TEXT not in undeclared
