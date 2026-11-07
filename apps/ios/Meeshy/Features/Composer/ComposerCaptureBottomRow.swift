@@ -79,7 +79,7 @@ struct ComposerCaptureBottomRow: View {
             guard lockSeal.sealing else { return }
             let scellement = lockSeal.generation
             let duree = ComposerLockSeal.holdDuration(reduceMotion: reduceMotion)
-            try? await Task.sleep(nanoseconds: UInt64(duree * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(duree))
             guard !Task.isCancelled else { return }
             lockSeal.finish(scellement)
         }
