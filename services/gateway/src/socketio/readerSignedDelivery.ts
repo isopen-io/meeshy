@@ -167,7 +167,15 @@ export async function readerSignedPlan(
   });
 }
 
-const MESSAGE_PROTECTION_COLUMNS = {
+/**
+ * Les cinq colonnes qui PROUVENT la protection d'un message. Exportées depuis
+ * #16655 : le drain les relit aussi, groupées par `messageId`, et deux listes
+ * de cinq colonnes seraient deux occasions d'en oublier une — une colonne non
+ * chargée reste `undefined`, et la loi de sortie la lit comme une preuve
+ * manquante, donc FERME. Une divergence ici ne ferait pas rougir un témoin :
+ * elle signerait, simplement, plus que nécessaire ou moins que nécessaire.
+ */
+export const MESSAGE_PROTECTION_COLUMNS = {
   isViewOnce: true,
   isBlurred: true,
   effectFlags: true,

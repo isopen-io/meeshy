@@ -111,6 +111,7 @@ import { linkMessageEmissions, type SocketEmission } from './linkMessageEmission
 import { emitServerEvent } from './serverEmit';
 import { broadcastReactionMutation } from './broadcastReactionMutation';
 import { announcesMessageArrival } from './queuedMessageArrival';
+import { prepareDrainSigning, signedQueuedPayloadForReader, type DrainReaderRow } from './drainReaderSignedPayload';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
 import { isServerAtRestMode } from '../services/messaging/serverAtRest';
@@ -692,22 +693,55 @@ export class MeeshySocketIOManager {
    * l'appelant, AVANT la requête : c'est le seul endroit où l'entrée fautive est
    * encore nommable une par une.
    */
-  private async _dropEndedMemberships(
+  /**
+   * LA LECTURE, SÉPARÉE DU GATE (#16655).
+   *
+   * Deux portes veulent la MÊME ligne `Participant` : le gate d'autorisation
+   * ci-dessous, et la signature des adresses de pièce. Les lire deux fois
+   * coûterait une requête de plus par drain pour rien ; les lire une fois
+   * oblige à nommer le tri-état, et c'est un gain : `rows` est une PREUVE,
+   * `'unavailable'` est une absence de preuve — et **les deux portes les
+   * arbitrent à l'opposé** (le gate rejoue tout, la signature refuse les
+   * entrées porteuses de média).
+   *
+   * `id` et `shareLinkId` rejoignent le `select` : la signature a besoin du
+   * `Participant.id` du lecteur, et `withoutExpiredShareLinks` du lien pour
+   * fermer un invité dont le lien a expiré — que ce gate-ci ne couvre pas.
+   */
+  private async _readerMembershipsForDrain(
     userId: string,
     isAnonymous: boolean,
-    drained: QueuedMessagePayload[]
-  ): Promise<QueuedMessagePayload[]> {
-    const conversationIds = [...new Set(drained.map(entry => entry.conversationId))];
+    conversationIds: readonly string[]
+  ): Promise<readonly DrainReaderRow[] | 'unavailable'> {
     try {
       // Clé de file = `userId` pour un inscrit, `Participant.id` pour un invité
       // de lien partagé — la convention exacte que `enqueueForOfflineParticipants`
       // applique en enfilant (`p.userId ?? p.id`).
-      const rows = await this.prisma.participant.findMany({
+      return await this.prisma.participant.findMany({
         where: isAnonymous
-          ? { id: userId, conversationId: { in: conversationIds }, isActive: true }
-          : { userId, conversationId: { in: conversationIds }, isActive: true },
-        select: { conversationId: true, bannedAt: true },
+          ? { id: userId, conversationId: { in: [...conversationIds] }, isActive: true }
+          : { userId, conversationId: { in: [...conversationIds] }, isActive: true },
+        select: { conversationId: true, bannedAt: true, id: true, shareLinkId: true },
       });
+    } catch (error) {
+      logger.warn('Membership re-read failed on drain — replaying the backlog unfiltered', {
+        userId,
+        error,
+      });
+      return 'unavailable';
+    }
+  }
+
+  private _dropEndedMemberships(
+    userId: string,
+    drained: QueuedMessagePayload[],
+    rows: readonly DrainReaderRow[] | 'unavailable'
+  ): QueuedMessagePayload[] {
+    const conversationIds = [...new Set(drained.map(entry => entry.conversationId))];
+    {
+      // Fail-OPEN, inchangé : une absence de réponse n'autorise rien à
+      // conclure, et le drain est destructif.
+      if (rows === 'unavailable') return drained;
       const live = new Set(
         rows.filter(row => row.bannedAt == null).map(row => row.conversationId)
       );
@@ -720,12 +754,6 @@ export class MeeshySocketIOManager {
         conversationIds: conversationIds.filter(id => !live.has(id)),
       });
       return kept;
-    } catch (error) {
-      logger.warn('Membership re-read failed on drain — replaying the backlog unfiltered', {
-        userId,
-        error,
-      });
-      return drained;
     }
   }
 
@@ -799,8 +827,24 @@ export class MeeshySocketIOManager {
       // accusé de réception). Un accusé affirme « ce message est arrivé chez son
       // destinataire » — l'affirmer d'un message qu'on vient de refuser de livrer
       // mentirait à son auteur.
-      const pending = await this._dropEndedMemberships(userId, isAnonymous, addressable);
+      const readerRows = await this._readerMembershipsForDrain(
+        userId,
+        isAnonymous,
+        [...new Set(addressable.map(entry => entry.conversationId))]
+      );
+      const pending = this._dropEndedMemberships(userId, addressable, readerRows);
       if (pending.length === 0) return;
+
+      // #16655 — les adresses de pièce sont signées PAR LECTEUR au moment où
+      // elles partent, jamais à l'enfilage (une signature vit 6–7 h, une entrée
+      // de file 48 h). Deux lectures groupées au plus pour tout le lot, et
+      // aucune quand rien ne porte de média.
+      const signing = await prepareDrainSigning({
+        prisma: this.prisma,
+        now: new Date(),
+        readerRows,
+        entries: pending,
+      });
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
       // Emit to the user room so EVERY currently-connected device of this user
@@ -844,10 +888,12 @@ export class MeeshySocketIOManager {
       // amont, et sur le chemin le plus destructif du système.
       //
       // Le journal par entrée (`dropEntry`, monté avant le gate d'appartenance)
-      // porte les QUATRE refus de ce chemin — l'id de conversation illisible, la
+      // porte les HUIT refus de ce chemin — l'id de conversation illisible, la
       // charge informe, le nom d'événement non résolu, l'enveloppe de lien
-      // privée de son message — chacun sous sa propre `reason`, parce qu'aucun
-      // des quatre n'envoie chercher au même endroit.
+      // privée de son message, l'échec d'émission, et les quatre de la signature
+      // par lecteur (#16655 : participant non résolu, protection non résolue,
+      // lecteur non admis, signature en échec) — chacun sous sa propre `reason`,
+      // parce qu'aucun des huit n'envoie chercher au même endroit.
       for (const entry of pending) {
         // Les deux moitiés du couple, refusées séparément parce que le journal
         // doit NOMMER laquelle a manqué : c'est la seule trace qu'une perte de
@@ -857,7 +903,16 @@ export class MeeshySocketIOManager {
           dropEntry(entry, 'payload-not-an-object');
           continue;
         }
-        const emissions = _drainedEmissions(entry);
+        // Signée pour CE lecteur, ou refusée en le nommant (#16655). Placée
+        // avant `_drainedEmissions` parce que l'enveloppe de lien et le message
+        // qu'elle porte sont la MÊME référence d'objet : signer l'entrée une
+        // fois couvre les deux émissions de façon cohérente.
+        const signed = signedQueuedPayloadForReader(entry, signing);
+        if (signed.kind === 'refuse') {
+          dropEntry(entry, signed.reason);
+          continue;
+        }
+        const emissions = _drainedEmissions(signed.kind === 'signed' ? { ...entry, payload: signed.payload } : entry);
         if (emissions.length === 0) {
           // Deux façons de ne rien savoir diffuser, et le journal doit les
           // SÉPARER : elles n'envoient pas chercher au même endroit. Un nom

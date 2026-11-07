@@ -167,6 +167,14 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   // #12822 — relit le seul régime du message enrichi (`encryptionMode`, et
   // celui de sa conversation) pour sceller son entrée de file hors ligne.
   'emitAttachmentUpdated.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #16655 — relit les CINQ colonnes de protection, GROUPÉES par `messageId`,
+  // pour signer au drain les adresses de pièce du lecteur servi. Mêmes colonnes
+  // que `readerSignedDelivery.ts` (et la MÊME constante : `MESSAGE_PROTECTION_COLUMNS`
+  // y est exportée pour que les deux lectures ne puissent pas diverger). Jamais
+  // `sender` : une pièce se signe sur la protection de son message, pas sur son
+  // auteur. UNE lecture pour tout le lot — un `findMany` par entrée serait un
+  // amplificateur de tempête de reconnexions.
+  'drainReaderSignedPayload.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 };
 
 /** `services/` — même règle, troisième racine. */

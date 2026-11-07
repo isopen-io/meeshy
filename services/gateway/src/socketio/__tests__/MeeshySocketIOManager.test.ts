@@ -1901,6 +1901,7 @@ describe('MeeshySocketIOManager', () => {
         // `participant.findMany`, et c'est la seule des deux lectures qui
         // demande `bannedAt`. Le témoin porte sur l'AUTRE — celle des accusés,
         // qui sélectionne `id`/`userId` pour nommer les rooms des expéditeurs.
+        // Discriminant : `userId`, pas `id` — l'appartenance sélectionne `id` depuis #16655.
         prisma.participant.findMany.mockImplementation(async (args: any) =>
           args?.select?.bannedAt
             ? (args?.where?.conversationId?.in ?? []).map((conversationId: string) => ({
@@ -1914,7 +1915,7 @@ describe('MeeshySocketIOManager', () => {
         await (manager as any)._drainPendingMessages('user-off', false);
 
         expect(prisma.participant.findMany).not.toHaveBeenCalledWith(
-          expect.objectContaining({ select: expect.objectContaining({ id: true }) })
+          expect.objectContaining({ select: expect.objectContaining({ userId: true }) })
         );
       });
     });
@@ -3754,7 +3755,8 @@ describe('MeeshySocketIOManager', () => {
             isActive: true,
             conversationId: { in: [convId('a'), convId('b')] },
           }),
-          select: { conversationId: true, bannedAt: true },
+          // Quatre colonnes (#16655) : les deux portes du drain partagent cette lecture.
+          select: { conversationId: true, bannedAt: true, id: true, shareLinkId: true },
         })
       );
     });

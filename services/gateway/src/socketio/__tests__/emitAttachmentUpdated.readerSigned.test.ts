@@ -32,6 +32,8 @@ const attachment = {
   effectFlags: 0,
 } as Record<string, unknown>;
 
+type EnqueueCall = [string, { payload: { attachment: { fileUrl: string; translations: { en: { url: string } } } } }];
+
 function deps(message: Record<string, unknown> | null) {
   const emitted: Array<{ rooms: string[]; event: string; payload: { attachment: { fileUrl: string; translations: { en: { url: string } } } } }> = [];
   const operator = (rooms: string[]) => ({
@@ -83,6 +85,45 @@ describe('emitAttachmentUpdated — pièce protégée', () => {
     const { emitted, deps: d } = deps(null);
     await emitAttachmentUpdated({ ...d, conversationId: 'conv-1', messageId: 'msg-1', attachment });
     expect(emitted.map((e) => readerOf(e.payload.attachment.fileUrl))).toEqual([A.id, B.id]);
+  });
+
+  /**
+   * LA FILE PORTE L'ADRESSE NUE — C'EST LE CONTRAT, PAS LE DÉFAUT (#16655).
+   *
+   * Ce fichier EXERÇAIT le défaut de #16655 à chaque exécution sans jamais le
+   * regarder : `connectedUsers: new Map()` met les DEUX participants hors
+   * ligne dans ses trois cas, donc l'enfilage tourne toujours — et toutes ses
+   * assertions portaient sur `emitted`.
+   *
+   * Ces deux témoins ferment l'autre moitié, et ils restent VERTS après le
+   * correctif de #16655 : c'est leur rôle. Une adresse signée vit 6–7 h quand
+   * une entrée de file vit 48 h — signer à l'ENFILAGE échangerait un 404
+   * contre un autre. La file garde donc l'adresse nue, et c'est le DRAIN qui
+   * signe, pour le lecteur, au moment où il émet.
+   *
+   * Ils INTERDISENT le correctif naïf. Quiconque signera ici les fera tomber.
+   */
+  it('enfile l’adresse NUE pour chaque absent — la signature appartient au drain', async () => {
+    const { deps: d } = deps(FLAME);
+    await emitAttachmentUpdated({ ...d, conversationId: 'conv-1', messageId: 'msg-1', attachment });
+
+    const calls = (d.deliveryQueue as unknown as { enqueue: { mock: { calls: EnqueueCall[] } } }).enqueue.mock.calls;
+    const byKey = new Map(calls.map(([key, entry]) => [key, entry.payload]));
+
+    // A est inscrit (clé de file = `userId`) ; B est un invité de lien (clé = `Participant.id`).
+    expect(byKey.get(A.userId)?.attachment.fileUrl).toBe(KEY);
+    expect(byKey.get(B.id)?.attachment.fileUrl).toBe(KEY);
+  });
+
+  it('enfile aussi la piste traduite NUE — même raison, même contrat', async () => {
+    const { deps: d } = deps(FLAME);
+    await emitAttachmentUpdated({ ...d, conversationId: 'conv-1', messageId: 'msg-1', attachment });
+
+    const calls = (d.deliveryQueue as unknown as { enqueue: { mock: { calls: EnqueueCall[] } } }).enqueue.mock.calls;
+    const byKey = new Map(calls.map(([key, entry]) => [key, entry.payload]));
+
+    expect(byKey.get(A.userId)?.attachment.translations.en.url).toBe(TRACK);
+    expect(byKey.get(B.id)?.attachment.translations.en.url).toBe(TRACK);
   });
 
   it('garde la diffusion chaînée, adresses intactes, pour une pièce ordinaire', async () => {
