@@ -20,7 +20,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { communityConversationSchema, communityDetailInclude, flattenCommunityCounts, viewerCommunityRole } from './serialization';
+import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
@@ -182,7 +182,7 @@ export async function registerCoreRoutes(
       const whereClause: any = {
         OR: [
           { createdBy: userId },
-          { members: { some: { userId: userId } } }
+          { members: { some: activeMembershipOf(userId) } }
         ],
         AND: [{ isActive: true }]
       };
@@ -200,35 +200,7 @@ export async function registerCoreRoutes(
       const [communities, totalCount] = await Promise.all([
         fastify.prisma.community.findMany({
           where: whereClause,
-          include: {
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                avatar: true
-              }
-            },
-            members: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    avatar: true,
-                    isOnline: true
-                  }
-                }
-              }
-            },
-            _count: {
-              select: {
-                members: true,
-                Conversation: true
-              }
-            }
-          },
+          include: communityDetailInclude(userId),
           orderBy: { createdAt: 'desc' },
           skip: offsetNum,
           take: limitNum
@@ -236,7 +208,7 @@ export async function registerCoreRoutes(
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
-      sendPaginatedSuccess(reply, communities.map(flattenCommunityCounts), {
+      sendPaginatedSuccess(reply, communities.map((community) => communityForViewer(community, userId)), {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -314,16 +286,13 @@ export async function registerCoreRoutes(
         return sendNotFound(reply, 'Community not found');
       }
 
-      const currentUserRole = viewerCommunityRole({
-        isCreator: community.createdBy === userId,
-        activeRole: community.members[0]?.role ?? null,
-      });
+      const served = communityForViewer(community, userId);
 
-      if (currentUserRole === null && community.isPrivate) {
+      if (served.currentUserRole === null && community.isPrivate) {
         return sendForbidden(reply, 'Access denied to this community');
       }
 
-      sendSuccess(reply, { ...flattenCommunityCounts(community), currentUserRole });
+      sendSuccess(reply, served);
     } catch (error) {
       logger.error('Error fetching community', error as Error);
       sendInternalError(reply, 'Failed to fetch community');
@@ -423,12 +392,7 @@ export async function registerCoreRoutes(
               }
             }
           },
-          _count: {
-            select: {
-              members: true,
-              Conversation: true
-            }
-          }
+          _count: { select: COMMUNITY_ACTIVE_COUNTS }
         }
       });
 
@@ -547,7 +511,7 @@ const community = await fastify.prisma.community.findFirst({
         select: {
           createdBy: true,
           isPrivate: true,
-          members: { select: { userId: true } }
+          members: { where: activeMembershipOf(userId), select: { userId: true }, take: 1 }
         }
       });
 
@@ -555,8 +519,7 @@ const community = await fastify.prisma.community.findFirst({
         return sendNotFound(reply, 'Community not found');
       }
 
-      const hasAccess = community.createdBy === userId ||
-                       community.members.some(member => member.userId === userId);
+      const hasAccess = community.createdBy === userId || community.members.length > 0;
 
       if (!hasAccess && community.isPrivate) {
         return sendForbidden(reply, 'Access denied to this community');
@@ -696,7 +659,7 @@ const community = await fastify.prisma.community.findFirst({
         select: {
           id: true,
           createdBy: true,
-          members: { select: { userId: true, role: true } }
+          members: { where: activeMembershipOf(userId), select: { role: true }, take: 1 }
         }
       });
 
@@ -705,8 +668,7 @@ const community = await fastify.prisma.community.findFirst({
       }
 
       const isCreator = community.createdBy === userId;
-      const memberRecord = community.members.find(m => m.userId === userId);
-      const isAdmin = memberRecord?.role === CommunityRole.ADMIN;
+      const isAdmin = community.members[0]?.role === CommunityRole.ADMIN;
 
       if (!isCreator && !isAdmin) {
         return sendForbidden(reply, 'Only community admins can add conversations');
@@ -757,17 +719,12 @@ const community = await fastify.prisma.community.findFirst({
           where: { id: conversation.communityId },
           select: {
             createdBy: true,
-            members: { select: { userId: true, role: true } }
+            members: { where: activeMembershipOf(userId), select: { role: true }, take: 1 }
           }
         });
 
         const peutDetacher = Boolean(
-          source && (
-            source.createdBy === userId ||
-            source.members.some(
-              (m: { userId: string; role: string }) => m.userId === userId && m.role === CommunityRole.ADMIN
-            )
-          )
+          source && (source.createdBy === userId || source.members[0]?.role === CommunityRole.ADMIN)
         );
 
         if (!peutDetacher) {

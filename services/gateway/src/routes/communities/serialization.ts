@@ -108,9 +108,43 @@ export const communityConversationSchema = {
 export function communityDetailInclude(viewerId: string) {
   return {
     creator: { select: { id: true, username: true, displayName: true, avatar: true } },
-    members: { where: { userId: viewerId, isActive: true }, select: { role: true }, take: 1 },
-    _count: { select: { members: { where: { isActive: true } }, Conversation: true } },
+    members: { where: activeMembershipOf(viewerId), select: { role: true }, take: 1 },
+    _count: { select: COMMUNITY_ACTIVE_COUNTS },
   } as const;
+}
+
+/**
+ * LE prédicat « membre » d'une communauté (#16603) : une ligne
+ * `CommunityMember` ACTIVE. Un départ (`POST /leave`) ou un retrait laisse la
+ * ligne en `isActive: false` ; décider sur la seule EXISTENCE de la ligne
+ * rouvrait à un ancien membre la liste, les salons et l'administration d'une
+ * communauté PRIVÉE. Toute route qui demande « est-il membre ? » passe ce
+ * `where`, dans un `some`, un `include` ou un `findFirst` — jamais une boucle
+ * sur `members[]`.
+ */
+export function activeMembershipOf(userId: string) {
+  return { userId, isActive: true } as const;
+}
+
+/** Les compteurs servis : les seuls membres ACTIFS, partout (#16603). */
+export const COMMUNITY_ACTIVE_COUNTS = { members: { where: { isActive: true } }, Conversation: true } as const;
+
+/**
+ * Une communauté telle que la voit `viewerId` : compteurs aplatis et rôle
+ * actif du lecteur. Site UNIQUE de la liste et du détail, pour que les deux ne
+ * puissent plus diverger sur ce qu'est un membre.
+ */
+export function communityForViewer<T extends CommunityWithCount & { readonly createdBy: string; readonly members: readonly { readonly role: string }[] }>(
+  community: T,
+  viewerId: string,
+) {
+  return {
+    ...flattenCommunityCounts(community),
+    currentUserRole: viewerCommunityRole({
+      isCreator: community.createdBy === viewerId,
+      activeRole: community.members[0]?.role ?? null,
+    }),
+  };
 }
 
 /**
