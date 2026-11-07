@@ -142,3 +142,13 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   Opus) ; l'émission iOS et Android ; la recette deux navigateurs sur staging.
 - Prochain lot recommandé : l'écoute sur le web (#13934, réception + titre défilant sur l'avatar), le relais serveur
   (#16694) étant fusionné dans `dev` pendant ce réveil ; sinon l'émission du talkie sur iOS.
+
+## 2026-11-07 — réveil 9 : mener #16700 à la fusion
+
+- Reprise : #16700 (émettre le talkie depuis le web, #16641) n'avait plus de réveil pour la suivre ; sa CI complète
+  tournait encore sur le commit de fusion précédent. #16674 (talkie reçu sur iOS) est menée par le réveil 6, encore
+  actif : ce réveil ne la touche pas.
+- Fait : `origin/dev` fusionné à la main dans la branche (aucun conflit, aucun fichier du lot touché par `dev`) ;
+  gates locaux relancés : témoins du talkie et de la fiche 48/48, `tsc --noEmit` du web vert ; CI complète relancée
+  sur le dernier commit, puis fusion dans `dev`.
+- Prochain lot recommandé : l'écoute sur le web (#13934 : réception + titre défilant sur l'avatar).
