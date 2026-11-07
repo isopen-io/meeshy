@@ -30,6 +30,13 @@ function makeWorld({
   blocks = {},
   hidesOnlineStatus = [],
 }: World = {}) {
+  /**
+   * L'APPARTENANCE EST MUTABLE (#16654) — la fixture figée était la raison pour
+   * laquelle la fin d'appartenance n'avait jamais de témoin : aucun des 40
+   * témoins ne pouvait retirer quelqu'un APRÈS un `viewing:start` réussi, donc
+   * la seule chose que `activity()` n'a jamais eu à revérifier.
+   */
+  const roster = [...participants];
   const emissions: Emission[] = [];
   const io = {
     to: (room: string) => ({
@@ -42,7 +49,7 @@ function makeWorld({
     conversation: { findUnique: jest.fn<any>().mockResolvedValue(null) },
     participant: {
       findFirst: jest.fn<any>().mockImplementation(async ({ where }: any) => {
-        const found = participants.find(p => p.userId === where.userId && p.conversationId === where.conversationId);
+        const found = roster.find(p => p.userId === where.userId && p.conversationId === where.conversationId);
         return found ? { id: `p-${found.userId}`, displayName: found.userId, nickname: null } : null;
       }),
     },
@@ -82,6 +89,12 @@ function makeWorld({
       id: socketId,
       rooms: new Set([socketId, ...rooms.map(id => `conversation:${id}`)]),
       emit: (event: string, data: unknown) => direct.push({ event, data }),
+      // `leave` MANQUAIT au double (#16654) : la room est une autorisation mise
+      // en cache, et un double qui ne sait pas la quitter ne peut attester
+      // aucune expiration. Socket.IO retire de `rooms` — le double aussi.
+      leave: async (room: string) => {
+        socket.rooms.delete(room);
+      },
     };
     return { socket: socket as any, direct };
   };
@@ -93,6 +106,9 @@ function makeWorld({
       id: socketId,
       rooms: new Set([socketId, ...rooms.map(id => `conversation:${id}`)]),
       emit: (event: string, data: unknown) => direct.push({ event, data }),
+      leave: async (room: string) => {
+        socket.rooms.delete(room);
+      },
     };
     const authenticate = (userId: string) => {
       connectedUsers.set(userId, { id: userId, socketId, isAnonymous: false, language: 'fr' });
@@ -102,7 +118,13 @@ function makeWorld({
     return { socket: socket as any, direct, authenticate };
   };
 
-  return { handler, emissions, connect, arrive };
+  /** Ce que fait un retrait, un bannissement ou un départ : la ligne cesse d'être vivante. */
+  const retire = (userId: string, conversationId: string): void => {
+    const at = roster.findIndex(p => p.userId === userId && p.conversationId === conversationId);
+    if (at >= 0) roster.splice(at, 1);
+  };
+
+  return { handler, emissions, connect, arrive, retire };
 }
 
 const startsFor = (emissions: readonly Emission[]) =>
@@ -561,5 +583,129 @@ describe('ConversationViewingHandler — regarder en plein écran (#9065)', () =
     await handler.handleActivity(alice.socket, { conversationId: CONV, focus: 'oui' });
 
     expect(activitiesFor(emissions)).toEqual([]);
+  });
+});
+
+/**
+ * FIN D'APPARTENANCE (#16654) — le troisième état vivant qu'un partant tenait
+ * dans le fil. `endConversationMembership` éteignait la position partagée et la
+ * participation d'appel ; le registre « ici », arrivé après cette convergence,
+ * n'y figurait pas, et il n'aurait pas pu : toute la surface publique du
+ * registre était clavetée par SOCKET, jamais par `(conversationId, userId)`.
+ *
+ * Les deux moitiés sont indépendantes, et seule la seconde est de l'état
+ * SERVEUR pur — elle n'attend aucune coopération de l'appareil du partant.
+ */
+describe('ConversationViewingHandler — fin d’appartenance (#16654)', () => {
+  it('ne relaie plus l’activité d’un membre retiré du fil', async () => {
+    const { handler, emissions, connect, retire } = makeWorld();
+    const alice = connect(ALICE, 's-alice', [CONV]);
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    retire(ALICE, CONV);
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(activitiesFor(emissions)).toEqual([]);
+  });
+
+  /**
+   * La room est une autorisation MISE EN CACHE (#5947) : une non-appartenance
+   * prouvée l'expire, sinon l'ancien membre reçoit encore le fil. Même geste,
+   * même raison que `typing:start` (`StatusHandler.handleTypingStart`).
+   */
+  it('expire la room du fil quand l’activité prouve la non-appartenance', async () => {
+    const { handler, connect, retire } = makeWorld();
+    const alice = connect(ALICE, 's-alice', [CONV]);
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    retire(ALICE, CONV);
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(alice.socket.rooms.has(`conversation:${CONV}`)).toBe(false);
+  });
+
+  it('un pair qui ouvre le fil APRÈS le retrait ne voit pas le retiré ICI', async () => {
+    const { handler, connect, retire } = makeWorld();
+    const alice = connect(ALICE, 's-alice', [CONV]);
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    retire(ALICE, CONV);
+    await handler.retractViewingForDepartedMember(CONV, ALICE);
+
+    const carol = connect(CAROL, 's-carol', [CONV]);
+    await handler.handleStart(carol.socket, { conversationId: CONV });
+
+    expect(carol.direct).toContainEqual({
+      event: SERVER_EVENTS.VIEWING_SNAPSHOT,
+      data: { conversationId: CONV, userIds: [] },
+    });
+  });
+
+  it('les pairs présents au retrait reçoivent le `viewing:stop` du partant', async () => {
+    const { handler, emissions, connect, retire } = makeWorld();
+    const alice = connect(ALICE, 's-alice', [CONV]);
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    retire(ALICE, CONV);
+    await handler.retractViewingForDepartedMember(CONV, ALICE);
+
+    expect(stopsFor(emissions)).toEqual([
+      {
+        room: `conversation:${CONV}`,
+        except: ['s-alice'],
+        event: SERVER_EVENTS.VIEWING_STOP,
+        data: { userId: ALICE, conversationId: CONV },
+      },
+    ]);
+  });
+
+  /** Le partant tenait DEUX écrans ouverts : le registre les lâche tous. */
+  it('rétracte TOUS les appareils du partant, et n’annonce qu’un seul arrêt', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const phone = connect(ALICE, 's-alice-1', [CONV]);
+    const tablet = connect(ALICE, 's-alice-2', [CONV]);
+    await handler.handleStart(phone.socket, { conversationId: CONV });
+    await handler.handleStart(tablet.socket, { conversationId: CONV });
+
+    await handler.retractViewingForDepartedMember(CONV, ALICE);
+
+    expect(stopsFor(emissions).map(e => e.data)).toEqual([{ userId: ALICE, conversationId: CONV }]);
+    const carol = connect(CAROL, 's-carol', [CONV]);
+    await handler.handleStart(carol.socket, { conversationId: CONV });
+    expect(carol.direct).toContainEqual({
+      event: SERVER_EVENTS.VIEWING_SNAPSHOT,
+      data: { conversationId: CONV, userIds: [] },
+    });
+  });
+
+  /** Ce que le partant regardait AILLEURS ne le quitte pas. */
+  it('ne touche pas aux autres conversations que le partant regarde', async () => {
+    const { handler, emissions, connect } = makeWorld({
+      participants: [
+        { userId: ALICE, conversationId: CONV },
+        { userId: ALICE, conversationId: OTHER_CONV },
+        { userId: BOB, conversationId: CONV },
+      ],
+    });
+    const alice = connect(ALICE, 's-alice', [CONV, OTHER_CONV]);
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+    await handler.handleStart(alice.socket, { conversationId: OTHER_CONV });
+
+    await handler.retractViewingForDepartedMember(CONV, ALICE);
+
+    expect(stopsFor(emissions).map(e => e.data)).toEqual([{ userId: ALICE, conversationId: CONV }]);
+    await handler.handleActivity(alice.socket, { conversationId: OTHER_CONV });
+    expect(activitiesFor(emissions).map(e => e.data)).toEqual([{ userId: ALICE, conversationId: OTHER_CONV }]);
+  });
+
+  /**
+   * CONTRAT : NE REJETTE JAMAIS (`DepartedMemberEphemeralState`). Les six
+   * appelants ont déjà commis leur écriture quand cette unité s'exécute ; un
+   * rejet ici ferait échouer une route dont le fait est durable.
+   */
+  it('ne rejette pas quand personne ne regardait', async () => {
+    const { handler, emissions } = makeWorld();
+    await expect(handler.retractViewingForDepartedMember(CONV, ALICE)).resolves.toBeUndefined();
+    expect(stopsFor(emissions)).toEqual([]);
   });
 });
