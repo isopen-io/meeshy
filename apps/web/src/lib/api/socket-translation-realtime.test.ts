@@ -1,7 +1,11 @@
 import { QueryClient, type QueryKey } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
-import type { MediaCaptionTranslationUpdatedEventData, PostTranslationUpdatedEventData } from '@meeshy/shared/types/post';
+import type {
+  MediaAltTranslationUpdatedEventData,
+  MediaCaptionTranslationUpdatedEventData,
+  PostTranslationUpdatedEventData,
+} from '@meeshy/shared/types/post';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import { conversationStore } from '@/lib/conversation-store';
@@ -132,7 +136,7 @@ const spanish = (patch: Partial<FeedPost> = {}): FeedPost => ({
   originalLanguage: 'es',
   translations: null,
   media: [
-    { id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'El mercado', captionLanguage: 'es', captionTranslations: null, alt: 'Un puesto de frutas' },
+    { id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'El mercado', captionLanguage: 'es', captionTranslations: null, alt: 'Un puesto de frutas', altLanguage: 'es', altTranslations: null },
   ],
   ...patch,
 });
@@ -144,6 +148,14 @@ const postTranslation = (language: string, text: string, postId = 'p-1'): PostTr
 });
 
 const captionTranslation = (language: string, text: string, patch: Partial<MediaCaptionTranslationUpdatedEventData> = {}): MediaCaptionTranslationUpdatedEventData => ({
+  mediaId: 'm-1',
+  postId: 'p-1',
+  language,
+  translation: entry(text),
+  ...patch,
+});
+
+const altTranslation = (language: string, text: string, patch: Partial<MediaAltTranslationUpdatedEventData> = {}): MediaAltTranslationUpdatedEventData => ({
   mediaId: 'm-1',
   postId: 'p-1',
   language,
@@ -371,5 +383,79 @@ describe('`media:caption-translation-updated` — la LÉGENDE d’un média atte
     socket.fire(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, null);
 
     expect(queryClient.getQueryData(FEED_QUERY_KEY)).toBe(before);
+  });
+});
+
+/**
+ * **`media:alt-translation-updated` — LE TEXTE ALTERNATIF** (#7392, #6737).
+ *
+ * La QUATRIÈME famille de ce fichier, et celle qui n'avait AUCUN auditeur :
+ * son type la déclare « jumelle exacte de
+ * `MediaCaptionTranslationUpdatedEventData`, sur un champ DISTINCT », la
+ * passerelle la diffuse depuis #6737 — et aucun client du dépôt ne la nommait,
+ * ni par littéral ni par constante (mesuré sur 13 932 fichiers de `apps/ios`,
+ * `packages/MeeshySDK/Sources`, `apps/web/src` et `apps/android`). La légende a
+ * reçu ses deux lecteurs, web et iOS ; le texte alternatif, zéro.
+ *
+ * Ce que ça coûtait est précisément ce que la quatrième question du Prisme
+ * attrape (cycle 122) : le pipeline élisait la bonne traduction, la rangeait en
+ * base, la poussait sur le fil — et personne ne l'AFFICHAIT. Un lecteur d'écran
+ * continuait de prononcer la description dans la langue de l'auteur jusqu'à la
+ * prochaine relecture complète.
+ */
+describe('`media:alt-translation-updated` — le TEXTE ALTERNATIF d’un média atteint chaque écran (#7392)', () => {
+  for (const screen of SCREENS) {
+    test(`${screen.name} : un texte alternatif traduit au RANG 2, sans traduction de rang 1, fait basculer la carte`, () => {
+      const { socket, queryClient } = connected();
+      seed(queryClient, screen, spanish());
+      expect(servedBy(cardOn(queryClient, screen))?.media[0]?.altText).toBe('Un puesto de frutas');
+
+      socket.fire(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, altTranslation('en', 'A fruit stall'));
+
+      const media = servedBy(cardOn(queryClient, screen))?.media[0];
+      expect(media?.altText).toBe('A fruit stall');
+      expect(media?.altTextLanguage).toBe('en');
+      expect(media?.altTextTranslated).toBe(true);
+    });
+
+    test(`${screen.name} : un texte alternatif traduit HORS du prisme est rangé, et le texte servi ne bouge pas`, () => {
+      const { socket, queryClient } = connected();
+      seed(queryClient, screen, spanish());
+
+      socket.fire(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, altTranslation('de', 'Ein Obststand'));
+
+      const card = cardOn(queryClient, screen);
+      expect(card?.media?.[0]?.altTranslations).toEqual({ de: entry('Ein Obststand') });
+      expect(servedBy(card)?.media[0]?.altText).toBe('Un puesto de frutas');
+    });
+  }
+
+  test('le TEXTE ALTERNATIF ne touche ni le texte de la publication ni la légende — trois contenus, trois cartes', () => {
+    const { socket, queryClient } = connected();
+    seed(queryClient, SCREENS[0] as Screen, spanish());
+
+    socket.fire(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, altTranslation('en', 'A fruit stall'));
+
+    const card = cardOn(queryClient, SCREENS[0] as Screen);
+    expect(card?.translations).toBeNull();
+    expect(card?.media?.[0]?.captionTranslations).toBeNull();
+    const served = servedBy(card);
+    expect(served?.text?.full).toBe('Hola a todos');
+    expect(served?.media[0]?.caption).toBe('El mercado');
+    expect(served?.media[0]?.altText).toBe('A fruit stall');
+  });
+
+  /* Un média de COMMENTAIRE voyage avec le `postId` de la publication qui porte
+     le commentaire : aucune carte ne le tient, donc rien n'est parcouru — même
+     règle, mot pour mot, que la légende. */
+  test('un texte alternatif de média de COMMENTAIRE ne touche aucune carte de publication', () => {
+    const { socket, queryClient } = connected();
+    seed(queryClient, SCREENS[0] as Screen, spanish());
+
+    socket.fire(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, altTranslation('en', 'A fruit stall', { commentId: 'c-1' }));
+
+    const card = cardOn(queryClient, SCREENS[0] as Screen);
+    expect(card?.media?.[0]?.altTranslations).toBeNull();
+    expect(servedBy(card)?.media[0]?.altText).toBe('Un puesto de frutas');
   });
 });
