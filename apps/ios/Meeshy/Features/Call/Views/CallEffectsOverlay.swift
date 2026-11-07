@@ -96,7 +96,7 @@ struct CallEffectsOverlay: View {
             if isVideoEnabled {
                 toolbarButton(
                     icon: "camera.filters",
-                    label: String(localized: "call.effects.videoFilters", defaultValue: "Filtres"),
+                    label: String(localized: "call.effects.videoFilters", defaultValue: "Filtres", bundle: .main),
                     isActive: activePanel == .videoFilters
                         || callManager.videoFilters.config.isEnabled
                         || callManager.videoFilters.config.hasAdvancedFilters,
