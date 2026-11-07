@@ -39,6 +39,7 @@ function makeMocks(opts: {
     user: {
       findFirst: jest.fn<any>().mockResolvedValue(opts.blocked ? { id: 'x' } : null),
       findUnique: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(opts.friend ? { id: 'fr' } : null) },
     userRelation: noRelations(),
@@ -146,6 +147,7 @@ function makeBatchMocks(state: {
   viewerBlocks?: string[];
   deactivatedIds?: string[];
   roles?: Record<string, string>;
+  birthDates?: Record<string, Date>;
 }) {
   const prisma = {
     user: {
@@ -158,6 +160,7 @@ function makeBatchMocks(state: {
           id,
           deactivatedAt: (state.deactivatedIds ?? []).includes(id) ? new Date() : null,
           ...(state.roles?.[id] ? { role: state.roles[id] } : {}),
+          birthDate: state.birthDates?.[id] ?? null,
         })));
       }),
       findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: state.viewerBlocks ?? [] }),
@@ -176,13 +179,27 @@ function makeBatchMocks(state: {
 }
 
 describe('PresenceVisibilityService — l\'équipe (#16623)', () => {
-  const roleLu = (role: string | null) => jest.fn<any>().mockResolvedValue(role === null ? null : { role });
+  const MINEUR = new Date(Date.now() - 15 * 365 * 24 * 3600 * 1000);
+  const personnesLues = (role: string | null, birthDate: Date | null = null) =>
+    jest.fn<any>().mockResolvedValue(role === null ? [] : [{ id: TARGET, role, birthDate }, { id: VIEWER, role: 'MODERATOR', birthDate: null }]);
 
-  const entre = (role: string | null, prefs?: Partial<PrivacyPreferences>) => {
+  const entre = (role: string | null, prefs?: Partial<PrivacyPreferences>, birthDate: Date | null = null) => {
     const mocks = makeMocks({ prefs });
-    mocks.prisma.user.findUnique = roleLu(role);
+    mocks.prisma.user.findMany = personnesLues(role, birthDate);
     return mocks;
   };
+
+  it('un adulte de l\'équipe ne lit pas un collègue mineur déclaré comme un Sang', async () => {
+    const v = await entre('ADMIN', undefined, MINEUR).service.resolveForTarget({ userId: VIEWER, role: 'MODERATOR' }, target);
+    expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
+
+  it('la liste non plus : le collègue mineur déclaré n\'est pas servi', async () => {
+    const { service } = makeBatchMocks({ roles: { collegue: 'ADMIN', mineur: 'ADMIN' }, birthDates: { mineur: MINEUR } });
+    const map = await service.resolveForTargets({ userId: VIEWER, role: 'MODERATOR' }, ['collegue', 'mineur']);
+    expect(map.get('collegue')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(map.get('mineur')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
 
   it('un MODERATOR lit la présence détaillée d\'un collègue sans lien', async () => {
     const v = await entre('ADMIN').service.resolveForTarget({ userId: VIEWER, role: 'MODERATOR' }, target);
@@ -205,7 +222,7 @@ describe('PresenceVisibilityService — l\'équipe (#16623)', () => {
     const mocks = entre('ADMIN');
     const v = await mocks.service.resolveForTarget({ userId: VIEWER, role: 'USER' }, target);
     expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
-    expect(mocks.prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(mocks.prisma.user.findMany).not.toHaveBeenCalled();
   });
 
   it('la liste suit la loi : un collègue est servi, l\'utilisateur ordinaire voisin ne l\'est pas', async () => {

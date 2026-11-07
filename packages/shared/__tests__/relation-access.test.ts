@@ -427,7 +427,38 @@ describe('relationAccessReads — ce que l\'orchestrateur doit lire pour juger u
   it('lit l\'âge pour la Connaissance automatique et pour toute feature du bouclier', () => {
     expect(relationAccessReads('acquaintance.auto').age).toBe(true);
     expect(relationAccessReads('dm.request').age).toBe(true);
-    expect(relationAccessReads('dm.typing').age).toBe(false);
+    expect(relationAccessReads('audience.close').age).toBe(false);
+  });
+
+  it('lit l\'âge partout où le rôle est lu : le privilège d\'équipe ne franchit pas le bouclier des mineurs (#16623)', () => {
+    expect(RELATION_FEATURES.filter((feature) => relationAccessReads(feature).role && !relationAccessReads(feature).age)).toEqual([]);
+  });
+
+  it('tient son contrat : une lecture épargnée ne change aucun verdict, quels que soient les rôles', () => {
+    const roles = [undefined, 'USER', 'MODERATOR', 'ADMIN'] as const;
+    const ages: RelationAgeClass[] = ['adult', 'minor', 'unknown'];
+    const drifts = RELATION_FEATURES.flatMap((feature) => {
+      const reads = relationAccessReads(feature);
+      return roles.flatMap((viewerRole) =>
+        roles.flatMap((targetRole) =>
+          ages.flatMap((viewerMinor) =>
+            ages.flatMap((targetMinor) => {
+              const base = { viewerRole, targetRole, consent: 'granted' as const, feature };
+              const read = access({ ...base, viewerMinor, targetMinor });
+              const spared = access({
+                ...base,
+                viewerMinor: reads.age ? viewerMinor : 'unknown',
+                targetMinor: reads.age ? targetMinor : 'unknown',
+                viewerRole: reads.role ? viewerRole : 'USER',
+                targetRole: reads.role ? targetRole : undefined,
+              });
+              return read.allowed === spared.allowed ? [] : [`${feature} ${viewerRole}/${targetRole} ${viewerMinor}/${targetMinor}`];
+            }),
+          ),
+        ),
+      );
+    });
+    expect(drifts).toEqual([]);
   });
 
   it('lit la communauté seulement quand un plancher de la feature peut s\'atteindre par elle', () => {

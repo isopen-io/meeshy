@@ -12,6 +12,7 @@ import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkie
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
+import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { niveauEffectif } from '../../services/friendship';
 import { bringDepsOf, bringQuotaOf } from '../bring';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
@@ -29,11 +30,12 @@ import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './sh
  */
 async function linkedPerson(prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<boolean> {
   const [other, owner, level] = await Promise.all([
-    prisma.user.findUnique({ where: { id: otherId }, select: { id: true, deactivatedAt: true, role: true } }),
-    prisma.user.findUnique({ where: { id: ownerId }, select: { role: true } }),
+    prisma.user.findUnique({ where: { id: otherId }, select: { id: true, deactivatedAt: true, role: true, birthDate: true } }),
+    prisma.user.findUnique({ where: { id: ownerId }, select: { role: true, birthDate: true } }),
     niveauEffectif(prisma, ownerId, otherId),
   ]);
   if (!other || other.deactivatedAt) return false;
+  const now = new Date();
   return resolveRelationAccess({
     viewerId: ownerId,
     targetId: otherId,
@@ -41,8 +43,8 @@ async function linkedPerson(prisma: FastifyInstance['prisma'], ownerId: string, 
     grantedByTarget: level,
     sharesCommunity: false,
     blockedEitherWay: false,
-    viewerMinor: 'unknown',
-    targetMinor: 'unknown',
+    viewerMinor: declaredAgeClass(owner?.birthDate ?? null, now),
+    targetMinor: declaredAgeClass(other.birthDate ?? null, now),
     viewerRole: owner?.role,
     targetRole: other.role,
     feature: 'dm.direct',

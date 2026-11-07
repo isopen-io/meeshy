@@ -41,6 +41,7 @@ type Monde = {
   readonly bloques?: ReadonlyArray<{ readonly id: string; readonly bloque: string }>;
   readonly acceptees?: ReadonlyArray<{ readonly senderId: string; readonly receiverId: string; readonly respondedAt: Date }>;
   readonly roles?: Readonly<Record<string, string>>;
+  readonly naissances?: Readonly<Record<string, Date>>;
 };
 
 /**
@@ -52,12 +53,12 @@ type Monde = {
  */
 const memeObjectId = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-function prismaDouble({ niveaux, bloques = [], acceptees = [], roles = {} }: Monde) {
+function prismaDouble({ niveaux, bloques = [], acceptees = [], roles = {}, naissances = {} }: Monde) {
   const user = {
     findMany: jest.fn<any>(async (args: any) =>
       Object.entries(roles)
         .filter(([id]) => args.where.id.in.some((wanted: string) => memeObjectId(wanted, id)))
-        .map(([id, role]) => ({ id, role, birthDate: null }))
+        .map(([id, role]) => ({ id, role, birthDate: naissances[id] ?? null }))
     ),
     findFirst: jest.fn<any>(async (args: any) => {
       const or: ReadonlyArray<{ id: string; blockedUserIds: { has: string } }> = args.where.OR;
@@ -180,10 +181,22 @@ describe('GET /relations/:userId', () => {
     await app.close();
   });
 
-  it('un blocage entre deux comptes de l\'équipe ne se distingue pas d\'un inconnu (#16623)', async () => {
-    const { app } = await monter({ bloques: [{ id: AUTRE, bloque: MOI }], roles: { [MOI]: 'MODERATOR', [AUTRE]: 'ADMIN' } });
-    expect((await lire(app, AUTRE)).json().data).toEqual(vue(AUTRE, 'PUBLIC'));
-    await app.close();
+  it('un blocage entre deux comptes de l\'équipe ne se distingue pas d\'un collègue qui ne bloque pas (#16623)', async () => {
+    const roles = { [MOI]: 'MODERATOR', [AUTRE]: 'ADMIN' };
+    const bloque = await monter({ bloques: [{ id: AUTRE, bloque: MOI }], roles });
+    const libre = await monter({ roles });
+    expect((await lire(bloque.app, AUTRE)).json().data).toEqual((await lire(libre.app, AUTRE)).json().data);
+    await bloque.app.close();
+    await libre.app.close();
+  });
+
+  it('un collègue mineur déclaré ne se distingue pas d\'un collègue adulte : `accessLevel` ne dit pas l\'âge (#16623)', async () => {
+    const roles = { [MOI]: 'ADMIN', [AUTRE]: 'MODERATOR' };
+    const mineur = await monter({ roles, naissances: { [AUTRE]: new Date(Date.now() - 15 * 365 * 24 * 3600 * 1000) } });
+    const adulte = await monter({ roles });
+    expect((await lire(mineur.app, AUTRE)).json().data).toEqual((await lire(adulte.app, AUTRE)).json().data);
+    await mineur.app.close();
+    await adulte.app.close();
   });
 
   it("sert PUBLIC pour quelqu'un qu'aucun lien ne relie", async () => {

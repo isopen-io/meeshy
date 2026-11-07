@@ -135,6 +135,12 @@ describe('presenceStatusEmissions — l\'équipe (#16623)', () => {
     expect(rooms).not.toContain(ROOMS.user('u_mod'));
   });
 
+  it('la transition d\'un collègue mineur déclaré ne part chez aucun modérateur', () => {
+    const rooms = presenceStatusEmissions({ ...base, subjectMinor: 'minor' }).flatMap((e) => e.rooms);
+    expect(rooms).not.toContain(ROOMS.user('u_mod'));
+    expect(rooms).toContain(ROOMS.user('u_admin'));
+  });
+
   it('un invité de lien n\'a pas de collègues', () => {
     const rooms = presenceStatusEmissions({ ...base, isAnonymous: true }).flatMap((e) => e.rooms);
     expect(rooms).toEqual([ROOMS.user('u_admin')]);

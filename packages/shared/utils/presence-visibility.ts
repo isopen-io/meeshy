@@ -1,6 +1,6 @@
 import type { RelationLevel } from '../types/relation.js';
 import type { GlobalUserRoleType } from '../types/role-types.js';
-import { resolveRelationAccess } from './relation-access.js';
+import { resolveRelationAccess, type RelationAgeClass } from './relation-access.js';
 import { PRESENCE_IDLE_WINDOW_MS } from './user-presence.js';
 
 export type PresenceVisibilityInput = {
@@ -12,6 +12,12 @@ export type PresenceVisibilityInput = {
    * ne s'ouvre, MODERATOR reste un viewer ordinaire.
    */
   readonly targetRole?: string | null;
+  /**
+   * Âges déclarés, lus avec le rôle : un adulte de l'équipe face à un collègue
+   * mineur déclaré n'a pas le privilège (#16623). Absents : `unknown`.
+   */
+  readonly viewerMinor?: RelationAgeClass;
+  readonly targetMinor?: RelationAgeClass;
   /**
    * Niveau EFFECTIF du lien viewer/cible (minimum des deux accords). Remplace le
    * booléen d'amitié (#13927) : FRIEND sert « en ligne » seulement, CLOSE et
@@ -88,8 +94,8 @@ export const resolvePresenceVisibility = (input: PresenceVisibilityInput): Prese
       grantedByTarget: input.relationLevel,
       sharesCommunity: false,
       blockedEitherWay: input.isBlockedEitherWay,
-      viewerMinor: 'unknown',
-      targetMinor: 'unknown',
+      viewerMinor: input.viewerMinor ?? 'unknown',
+      targetMinor: input.targetMinor ?? 'unknown',
       viewerRole: input.viewerRole,
       targetRole: input.targetRole,
       feature,

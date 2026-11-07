@@ -200,17 +200,19 @@ export const resolveRelationAccess = (input: RelationAccessInput): RelationAcces
  * déclaré quand la Connaissance automatique ou le bouclier des mineurs la vise,
  * la communauté quand un plancher possible de la feature (matrice, bouclier,
  * réglage d'entourage) s'atteint par elle, le rôle des deux côtés quand le
- * privilège d'équipe peut l'ouvrir. Ne rien lire d'autre est permis : une
- * lecture épargnée ne change aucun verdict.
+ * privilège d'équipe peut l'ouvrir — et alors l'âge aussi, car un mineur déclaré
+ * éteint ce privilège. Ne rien lire d'autre est permis : une lecture épargnée ne
+ * change aucun verdict.
  */
 export const relationAccessReads = (
   feature: RelationFeature,
 ): { readonly age: boolean; readonly community: boolean; readonly role: boolean } => {
   const shield = RELATION_MINOR_TARGET_MIN_LEVEL[feature];
   const floors = [RELATION_FEATURE_MIN_LEVEL[feature], ...(shield ? [shield] : [])];
+  const team = !RELATION_TEAM_CLOSED_FEATURES.has(feature);
   return {
-    age: feature === 'acquaintance.auto' || Boolean(shield),
+    age: feature === 'acquaintance.auto' || Boolean(shield) || team,
     community: RELATION_TUNABLE_FEATURES.has(feature) || floors.some((floor) => compareRelationLevel(floor, 'COMMUNITY') <= 0),
-    role: !RELATION_TEAM_CLOSED_FEATURES.has(feature),
+    role: team,
   };
 };

@@ -27,7 +27,7 @@ import { loadProgressByPartner, loadRelationProgress, type RelationProgress, typ
 import { hasStandingRequest, raiseOutlookOf } from './relationRequestGate';
 import type { RelationLinkDetail } from '@meeshy/shared/types/relation-level-response';
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
-import { declaredAgeClass } from '@meeshy/shared/utils/age';
+import { isPlatformTeam } from '@meeshy/shared/types/role-types';
 
 export type { RelationLinkView };
 
@@ -112,9 +112,11 @@ export async function loadRelationLink(
  * Connaissance — bloqué, inconnu, aucun lien, lien quitté —, la réponse est la vue
  * vide : ni le contenu ni le nombre de requêtes ne disent un blocage ou un cool-down.
  *
- * `accessLevel` (#16623) est le verdict de la LOI sur les outils de cercle de la paire,
- * à côté du LIEN (`effectiveLevel`) : il ne s'en écarte qu'entre deux comptes de
- * l'équipe, si bien qu'il n'apprend aucun rôle à un utilisateur ordinaire.
+ * `accessLevel` (#16623) est le niveau auquel la LOI juge les outils de cercle de la
+ * paire, à côté du LIEN (`effectiveLevel`) : il ne s'en écarte qu'entre deux comptes de
+ * l'équipe, si bien qu'il n'apprend aucun rôle à un utilisateur ordinaire. Entre deux
+ * comptes de l'équipe, il est jugé sans le blocage ni l'âge : il ne dit ni l'un ni
+ * l'autre, et c'est l'action (Bring, talkie) que la loi refuse ensuite.
  */
 export async function loadRelationLinkDetail(
   prisma: RelationLinksDb,
@@ -126,25 +128,26 @@ export async function loadRelationLinkDetail(
     niveauEffectifUniforme(prisma, viewerId, otherId),
     prisma.userRelation.findUnique({ where: { userLowId_userHighId: relationPairKey(viewerId, otherId) }, select: LINK_SELECT }),
     hasStandingRequest(prisma, { requesterId: viewerId, otherId }),
-    prisma.user.findMany({ where: { id: { in: [viewerId, otherId] } }, select: { id: true, role: true, birthDate: true } }),
+    prisma.user.findMany({ where: { id: { in: [viewerId, otherId] } }, select: { id: true, role: true } }),
   ]);
   const link: LinkRow | null = row;
   const progress = await loadRelationProgress(prisma, {
     userA: viewerId, userB: otherId, level, levelSince: link?.levelSince ?? null, now,
   });
 
-  const person = (id: string) => people.find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
+  const roleOf = (id: string) => people.find((candidate) => candidate.id.toLowerCase() === id.toLowerCase())?.role;
+  const teamPair = isPlatformTeam(roleOf(viewerId)) && isPlatformTeam(roleOf(otherId));
   const accessLevel = resolveRelationAccess({
     viewerId,
     targetId: otherId,
     grantedByViewer: level,
     grantedByTarget: level,
     sharesCommunity: false,
-    blockedEitherWay: blocked,
-    viewerMinor: declaredAgeClass(person(viewerId)?.birthDate ?? null, now),
-    targetMinor: declaredAgeClass(person(otherId)?.birthDate ?? null, now),
-    viewerRole: person(viewerId)?.role,
-    targetRole: person(otherId)?.role,
+    blockedEitherWay: blocked && !teamPair,
+    viewerMinor: 'unknown',
+    targetMinor: 'unknown',
+    viewerRole: roleOf(viewerId),
+    targetRole: roleOf(otherId),
     feature: 'bring',
     consent: 'granted',
   }).effectiveLevel;

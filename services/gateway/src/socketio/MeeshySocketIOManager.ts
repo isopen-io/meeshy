@@ -79,6 +79,7 @@ import { getBlockRelatedUserIds } from '../utils/blocking';
 import { PresenceVisibilityService, type PresenceViewer } from '../services/PresenceVisibilityService';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { isGlobalAdmin, isPlatformTeam } from '@meeshy/shared/types/role-types';
+import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { MediaCaptionTranslationService } from '../services/posts/MediaCaptionTranslationService';
@@ -2754,7 +2755,7 @@ export class MeeshySocketIOManager {
       return cached.ids;
     }
     const rows = await this.prisma.user.findMany({
-      where: { role: UserRole.MODERATOR },
+      where: { role: UserRole.MODERATOR, deactivatedAt: null },
       select: { id: true },
     });
     const ids = rows.map(row => row.id);
@@ -2872,7 +2873,8 @@ export class MeeshySocketIOManager {
           lastName: true,
           lastActiveAt: true,
           deactivatedAt: true,
-          role: true
+          role: true,
+          birthDate: true
         }
       });
       if (!user) return;
@@ -2897,6 +2899,7 @@ export class MeeshySocketIOManager {
       const emissions = presenceStatusEmissions({
         subjectId: user.id,
         subjectRole: user.role,
+        subjectMinor: declaredAgeClass(user.birthDate ?? null, new Date()),
         isAnonymous: false,
         friendLevels,
         adminIds,

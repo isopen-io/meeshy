@@ -1,6 +1,7 @@
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import type { RelationAgeClass } from '@meeshy/shared/utils/relation-access';
 
 /**
  * Qui reçoit une transition de présence (`user:status`), et avec quelle charge.
@@ -42,6 +43,12 @@ export type PresenceAudienceInput = {
   readonly adminIds: readonly string[];
   /** `User.role` du sujet : absent, aucun collègue n'est retenu. */
   readonly subjectRole?: string | null;
+  /**
+   * Âge déclaré du sujet : mineur, aucun collègue adulte n'est retenu (#16623). L'âge
+   * des modérateurs n'est pas lu, ils comptent comme adultes : un sujet mineur ne part
+   * chez aucun.
+   */
+  readonly subjectMinor?: RelationAgeClass;
   /** `User.id` des MODERATOR de la plateforme, candidats que la loi retient ou non. */
   readonly moderatorIds?: readonly string[];
 };
@@ -94,6 +101,7 @@ export function presenceStatusAudience(input: PresenceAudienceInput): PresenceSt
       isSelf: false,
       viewerRole: moderators.has(id) ? 'MODERATOR' : 'USER',
       targetRole: input.subjectRole,
+      targetMinor: moderators.has(id) ? input.subjectMinor : undefined,
       relationLevel: input.friendLevels.get(id) ?? 'PUBLIC',
       targetShowOnlineStatus: true,
       targetShowLastSeen: true,

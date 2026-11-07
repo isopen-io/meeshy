@@ -4,12 +4,15 @@ import { isGlobalAdmin, isPlatformTeam } from '@meeshy/shared/types/role-types';
 import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import { declaredAgeClass, type DeclaredAgeClass } from '@meeshy/shared/utils/age';
 import { PrivacyPreferencesService } from './PrivacyPreferencesService';
 import { amisAcceptes, niveauEffectif, niveauxParmi } from './friendship';
 import { getBlockedUserIdsAmong, isBlockedBetween } from '../utils/blocking';
 
 export type PresenceViewer = { readonly userId: string; readonly role: GlobalUserRoleType } | null;
 export type PresenceTarget = { readonly id: string; readonly deactivatedAt?: Date | null };
+
+type TeamPerson = { readonly role: string | null; readonly age: DeclaredAgeClass };
 
 const HIDDEN: PresenceVisibility = { showOnline: false, showLastSeenTimestamp: false };
 const FULL: PresenceVisibility = { showOnline: true, showLastSeenTimestamp: true };
@@ -38,6 +41,19 @@ export class PresenceVisibilityService {
     private readonly privacy: PrivacyPreferencesService,
   ) {}
 
+  /**
+   * Rôle et âge déclaré des deux côtés, lus ensemble pour un lecteur de l'équipe :
+   * un collègue mineur déclaré éteint le privilège (#16623).
+   */
+  private async teamPeople(ids: readonly string[]): Promise<ReadonlyMap<string, TeamPerson>> {
+    const now = new Date();
+    const rows: ReadonlyArray<{ id: string; role: string | null; birthDate: Date | null }> = await this.prisma.user.findMany({
+      where: { id: { in: [...ids] } },
+      select: { id: true, role: true, birthDate: true },
+    });
+    return new Map(rows.map((row) => [row.id, { role: row.role, age: declaredAgeClass(row.birthDate ?? null, now) }]));
+  }
+
   async resolveForTarget(viewer: PresenceViewer, target: PresenceTarget): Promise<PresenceVisibility> {
     if (target.deactivatedAt) return HIDDEN;
 
@@ -47,16 +63,18 @@ export class PresenceVisibilityService {
 
     if (await isBlockedBetween(this.prisma, viewer.userId, target.id)) return HIDDEN;
 
-    const [relationLevel, prefs, targetRow] = await Promise.all([
+    const [relationLevel, prefs, people] = await Promise.all([
       niveauEffectif(this.prisma, viewer.userId, target.id),
       this.privacy.getPreferences(target.id),
-      isPlatformTeam(viewer.role) ? this.prisma.user.findUnique({ where: { id: target.id }, select: { role: true } }) : null,
+      isPlatformTeam(viewer.role) ? this.teamPeople([viewer.userId, target.id]) : new Map<string, TeamPerson>(),
     ]);
 
     return resolvePresenceVisibility({
       isSelf: false,
       viewerRole: viewer.role,
-      targetRole: targetRow?.role,
+      targetRole: people.get(target.id)?.role,
+      viewerMinor: people.get(viewer.userId)?.age,
+      targetMinor: people.get(target.id)?.age,
       relationLevel,
       targetShowOnlineStatus: prefs.showOnlineStatus,
       targetShowLastSeen: prefs.showLastSeen,
@@ -79,11 +97,16 @@ export class PresenceVisibilityService {
       return result;
     }
 
+    const team = isPlatformTeam(viewer.role);
     const targetRows = await this.prisma.user.findMany({
-      where: { id: { in: uniqueIds } },
-      select: { id: true, deactivatedAt: true, role: true },
+      where: { id: { in: team ? [...new Set([...uniqueIds, viewer.userId])] : uniqueIds } },
+      select: { id: true, deactivatedAt: true, role: true, birthDate: true },
     });
+    const now = new Date();
     const roles = new Map(targetRows.map((r: { id: string; role?: string | null }) => [r.id, r.role]));
+    const ages = new Map(
+      targetRows.map((r: { id: string; birthDate?: Date | null }) => [r.id, team ? declaredAgeClass(r.birthDate ?? null, now) : 'unknown'] as const),
+    );
     const deactivated = new Set(
       targetRows.filter((r: { deactivatedAt: Date | null }) => r.deactivatedAt != null).map((r: { id: string }) => r.id),
     );
@@ -116,6 +139,8 @@ export class PresenceVisibilityService {
           isSelf: id === viewerId,
           viewerRole: viewer.role,
           targetRole: roles.get(id),
+          viewerMinor: ages.get(viewerId),
+          targetMinor: ages.get(id),
           relationLevel: levels.get(id) ?? 'PUBLIC',
           targetShowOnlineStatus: prefs?.showOnlineStatus ?? true,
           targetShowLastSeen: prefs?.showLastSeen ?? true,

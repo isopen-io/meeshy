@@ -12,14 +12,18 @@ import { GameProfileService } from '../../../../services/game/GameProfileService
 const LECTEUR = '6100000000000000000000d1';
 const CIBLE = '6100000000000000000000d2';
 
-const service = (targetRole: string | null, blocked = false) => {
-  const findUnique = jest.fn<any>().mockResolvedValue(targetRole === null ? null : { role: targetRole });
+const MINEUR = new Date(Date.now() - 15 * 365 * 24 * 3600 * 1000);
+
+const service = (targetRole: string | null, blocked = false, birthDate: Date | null = null) => {
+  const findMany = jest.fn<any>().mockResolvedValue(
+    targetRole === null ? [] : [{ id: CIBLE, role: targetRole, birthDate }, { id: LECTEUR, role: 'MODERATOR', birthDate: null }],
+  );
   const prisma = {
-    user: { findUnique, findFirst: jest.fn<any>().mockResolvedValue(blocked ? { id: CIBLE } : null) },
+    user: { findMany, findFirst: jest.fn<any>().mockResolvedValue(blocked ? { id: CIBLE } : null) },
     userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null) },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
   };
-  return { game: new GameProfileService(prisma as unknown as PrismaClient), findUnique };
+  return { game: new GameProfileService(prisma as unknown as PrismaClient), findMany };
 };
 
 describe('viewerReach — l\'équipe (#16623)', () => {
@@ -39,8 +43,13 @@ describe('viewerReach — l\'équipe (#16623)', () => {
   });
 
   it('un lecteur ordinaire ne paie aucune lecture de rôle', async () => {
-    const { game, findUnique } = service('ADMIN');
+    const { game, findMany } = service('ADMIN');
     expect(await game.viewerReach({ userId: LECTEUR, role: 'USER' }, CIBLE)).toEqual({ kind: 'other', sparksGlory: false });
-    expect(findUnique).not.toHaveBeenCalled();
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('un adulte de l\'équipe ne voit pas le jeu d\'un collègue mineur déclaré comme un Sang', async () => {
+    const reach = await service('ADMIN', false, MINEUR).game.viewerReach({ userId: LECTEUR, role: 'MODERATOR' }, CIBLE);
+    expect(reach).toEqual({ kind: 'other', sparksGlory: false });
   });
 });

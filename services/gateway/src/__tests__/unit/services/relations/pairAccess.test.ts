@@ -92,6 +92,14 @@ describe('pairAccessAmong — l\'équipe (#16623)', () => {
     const verdict = await pairAccess(db(equipe()), { feature: 'call.ring', viewerId: ADMINISTRATEUR, targetId: EQUIPE_MINEURE });
     expect(verdict.allowed).toBe(false);
   });
+
+  it('ni sur un outil hors bouclier : un adulte de l\'équipe n\'écrit pas en direct à un collègue mineur déclaré', async () => {
+    const outils = ['dm.direct', 'dm.typing', 'presence.dnd', 'views.identity'] as const;
+    const verdicts = await Promise.all(
+      outils.map((feature) => pairAccess(db(equipe()), { feature, viewerId: ADMINISTRATEUR, targetId: EQUIPE_MINEURE })),
+    );
+    expect(verdicts.map((v) => v.allowed)).toEqual([false, false, false, false]);
+  });
 });
 
 describe('pairAccessAmong — la loi jugée sur les lectures vraies', () => {

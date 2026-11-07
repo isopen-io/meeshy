@@ -218,17 +218,24 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertFalse(rig.sut.offersBring)
     }
 
-    func test_offersBring_anAcquaintance_isNotOffered_aFriend_is() async {
-        let acquaintance = makeRig()
-        acquaintance.relations.linksResult = .success([link("a", .acquaintance)])
-        let friend = makeRig()
-        friend.relations.linksResult = .success([link("a", .friend)])
+    func test_offersBring_anAcquaintance_isNotOffered() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .acquaintance)])
+        rig.relations.linkResult = .success(link("a", .acquaintance))
 
-        await acquaintance.sut.load()
-        await friend.sut.load()
+        await rig.sut.load()
 
-        XCTAssertFalse(acquaintance.sut.offersBring)
-        XCTAssertTrue(friend.sut.offersBring)
+        XCTAssertFalse(rig.sut.offersBring)
+    }
+
+    func test_offersBring_aFriend_isOffered() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.relations.linkResult = .success(link("a", .friend))
+
+        await rig.sut.load()
+
+        XCTAssertTrue(rig.sut.offersBring)
     }
 
     // MARK: - Rétrograder d'un cran, annuler le lien à Connaissance (#14910)

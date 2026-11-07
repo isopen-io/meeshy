@@ -2865,6 +2865,52 @@
         "reason": "level",
         "requiresConsent": false
       }
+    },
+    {
+      "id": "team-does-not-cross-the-minor-shield-dm-direct",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "ADMIN",
+        "targetRole": "MODERATOR",
+        "feature": "dm.direct"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-does-not-cross-the-minor-shield-typing",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "minor",
+        "viewerRole": "ADMIN",
+        "targetRole": "MODERATOR",
+        "feature": "dm.typing"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "PUBLIC",
+        "reason": "level",
+        "requiresConsent": false
+      }
     }
   ]
 }
