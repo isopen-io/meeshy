@@ -1,16 +1,18 @@
 import { useInfiniteQuery, useQuery, type InfiniteData } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
+import { useStore } from 'zustand/react';
 
 import { Glyph } from '@/components/glyph';
-import { RingedAvatar } from '@/components/peer-avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { Sheet } from '@/components/sheet';
-import { SECTION_CARD_STYLE, SECTION_INK } from '@/components/grouped-section';
 import type { CommunitySummary } from '@/lib/api/communities';
 import type { CommunityActionDeps } from '@/lib/api/community-actions';
 import { performInviteMembers } from '@/lib/api/community-invite';
 import { communityMembersQueryKey, type CommunityMemberPage } from '@/lib/api/community-members';
 import { flattenFriendRequests, friendRequestsQueryOptions, type PersonSummary } from '@/lib/api/friend-requests';
+import { sessionStore } from '@/lib/api/session';
 import { searchUsers } from '@/lib/api/users-search';
+import { resolveViewer } from '@/lib/api/viewer';
 import { candidatesFor, friendsOf } from '@/lib/conversation-new/candidates';
 import { communityAccent } from '@/lib/communities/view';
 import { translateMembership } from '@/lib/i18n-community-membership-catalog';
@@ -29,8 +31,8 @@ import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
  * passerelle refuse en repart.
  *
  * Une personne déjà membre — connue du cache de la liste des membres — est
- * dite « Déjà membre » et ne se choisit pas. Aucune présence n'est peinte ici :
- * la recherche de personnes ne la sert pas, et le client n'invente rien.
+ * dite « Déjà membre » et ne se choisit pas. La présence est celle du magasin
+ * de présence, qui ne tient que ce que la passerelle a servi : rien d’inventé.
  */
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -39,33 +41,14 @@ const ROW_MIN_HEIGHT = 56;
 
 type MembersData = InfiniteData<CommunityMemberPage, number>;
 
-export function CommunityInviteButton({ language, onOpen }: { readonly language: InterfaceLanguage; readonly onOpen: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      data-community-invite-open
-      className="flex items-center gap-3 rounded-card px-3.5 text-start focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ ...SECTION_CARD_STYLE, minHeight: 52, color: SECTION_INK }}
-    >
-      <span aria-hidden="true" style={{ color: 'var(--color-ios-brand)' }}>
-        <Glyph name="plus" size={18} />
-      </span>
-      <span className="flex-1 text-body font-semibold">{translateMembership(language, 'community.invite.open')}</span>
-    </button>
-  );
-}
-
-export function CommunityInviteSheet({
+export default function CommunityInviteSheet({
   community,
-  viewerId,
   deps,
   language,
   onClose,
   onDone,
 }: {
   readonly community: CommunitySummary;
-  readonly viewerId: string | null;
   readonly deps: CommunityActionDeps;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
@@ -73,6 +56,8 @@ export function CommunityInviteSheet({
 }) {
   const t = translateMembership;
   const online = useOnline();
+  const session = useStore(sessionStore, (state) => state.session);
+  const viewerId = resolveViewer({ source: deps.source, session }).id ?? null;
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [chosen, setChosen] = useState<ReadonlyMap<string, PersonSummary>>(new Map());
@@ -156,7 +141,7 @@ export function CommunityInviteSheet({
           className="flex w-full items-center gap-3 px-4 py-2 text-start focus-visible:outline-2 focus-visible:-outline-offset-2 disabled:opacity-60"
           style={{ minHeight: ROW_MIN_HEIGHT, outlineColor: 'var(--accent)' }}
         >
-          <RingedAvatar ringRef={person.ring ?? null} initials={initialsOf(name)} color={communityAccent(name)} size={40} {...(person.avatar === null ? {} : { src: person.avatar })} />
+          <PeerAvatar presenceKey={person.id} ringRef={person.ring ?? null} initials={initialsOf(name)} color={communityAccent(name)} size={40} {...(person.avatar === null ? {} : { src: person.avatar })} />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="truncate text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>
               {name}

@@ -9,7 +9,7 @@ import { loadCommunityMembershipCatalog } from '@/lib/i18n-community-membership-
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { CommunityInviteSheet } from './community-invite';
+import CommunityInviteSheet from './community-invite';
 
 /**
  * LA FEUILLE « INVITER » (#6376) — les amis d'abord, une personne déjà membre
@@ -46,7 +46,7 @@ async function mountSheet({ members }: { readonly members: readonly CommunityMem
   const deps = { source: 'fixtures' as const, transport: {} as HttpTransport, queryClient, isOnline: () => true };
   const done: string[] = [];
   const host = await mounter.mount(
-    <CommunityInviteSheet community={community} viewerId="u-viewer" deps={deps} language="fr" onClose={() => undefined} onDone={(status) => done.push(status)} />,
+    <CommunityInviteSheet community={community} deps={deps} language="fr" onClose={() => undefined} onDone={(status) => done.push(status)} />,
   );
   await mounter.settle();
   const rows = () => queryClient.getQueryData<InfiniteData<CommunityMemberPage, number>>(communityMembersQueryKey(community.id))?.pages.flatMap((page) => page.members) ?? [];

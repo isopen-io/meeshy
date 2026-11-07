@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { QueryClient, type InfiniteData } from '@tanstack/react-query';
 
 import { communityQueryKey, type CommunitySummary } from './communities';
-import { canInviteOf, performInviteMembers } from './community-invite';
+import { canInviteOf } from '@/lib/communities/view';
+
+import { performInviteMembers } from './community-invite';
 import { communityMembersQueryKey, type CommunityMember, type CommunityMemberPage } from './community-members';
 import type { PersonSummary } from './friend-requests';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';

@@ -395,9 +395,9 @@ try {
       // le choix se dit sur le bouton, et l'issue se lit sous « Membres ».
       await page.click('[data-community-invite-open]');
       await page.waitForSelector('[data-community-invite-candidate="u-bruno"]');
-      const inviteRest = await reachAtRest(page, REACH);
+      const inviteRest = await reachAtRest(page, { controls: '[data-community-invite] button', texts: '[data-community-invite] .text-body' });
       const inviteBlocked = inviteRest.controls.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
-      check(inviteBlocked.length === 0, `${label} : chaque contrôle de la feuille « Inviter » s'atteint, 44 au moins — ${JSON.stringify(inviteBlocked)}`);
+      check(inviteRest.controls.length >= 2 && inviteBlocked.length === 0, `${label} : chaque contrôle de la feuille « Inviter » s'atteint, 44 au moins — ${JSON.stringify(inviteBlocked)}`);
       const inviteInks = {
         nom: await contrastOf(page, '[data-community-invite-candidate="u-bruno"] .text-body'),
         pseudo: await contrastOf(page, '[data-community-invite-candidate="u-bruno"] .text-caption'),

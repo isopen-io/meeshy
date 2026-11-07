@@ -33,13 +33,6 @@ export type InviteOutcome =
   | { readonly status: 'offline' }
   | { readonly status: 'done'; readonly invited: number; readonly refused: number; readonly failed: number };
 
-/** La règle de la passerelle : un membre invite ; dans une communauté privée, administrateurs et modérateurs seulement. */
-export function canInviteOf(community: CommunitySummary): boolean {
-  const role = community.viewerRole;
-  if (role === null || role === undefined) return false;
-  return !community.isPrivate || role === 'admin' || role === 'moderator';
-}
-
 export async function inviteToCommunity(
   deps: CommunityActionDeps,
   { communityId, userId }: { readonly communityId: string; readonly userId: string },

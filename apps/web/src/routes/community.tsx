@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, type InfiniteData } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { ApiError } from '@/lib/api/client';
@@ -12,9 +12,8 @@ import {
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { performJoinCommunity, performLeaveCommunity } from '@/lib/api/community-actions';
-import { canInviteOf } from '@/lib/api/community-invite';
 import { sessionStore } from '@/lib/api/session';
-import { findCachedCommunity, membershipActionOf } from '@/lib/communities/view';
+import { canInviteOf, findCachedCommunity, membershipActionOf } from '@/lib/communities/view';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
@@ -34,8 +33,7 @@ import {
   CommunityRowsSkeleton,
   CommunityStats,
 } from '@/routes/communities-parts';
-import { CommunityInviteButton, CommunityInviteSheet } from '@/routes/community-invite';
-import { CommunityMembersLink } from '@/routes/community-members-parts';
+import { CommunityInviteButton, CommunityMembersLink } from '@/routes/community-members-parts';
 import { CommunityMembershipAction, type MembershipFailure } from '@/routes/community-membership';
 import { href, navigate } from '@/routes/route-table';
 
@@ -68,6 +66,8 @@ import { href, navigate } from '@/routes/route-table';
  * 403 et 404 rendent le MÊME refus (D-6) : un identifiant ne dit pas si une
  * communauté privée existe.
  */
+
+const CommunityInviteSheet = lazy(() => import('@/routes/community-invite'));
 
 const ROW_SEPARATOR = '1px solid color-mix(in srgb, var(--color-ios-ink-3) 18%, transparent)';
 
@@ -199,14 +199,15 @@ export default function CommunityScreen() {
         )}
       </main>
       {inviting && community !== undefined ? (
-        <CommunityInviteSheet
-          community={community}
-          viewerId={viewerId}
-          deps={actionDeps}
-          language={language}
-          onClose={() => setInviting(false)}
-          onDone={setInviteStatus}
-        />
+        <Suspense fallback={null}>
+          <CommunityInviteSheet
+            community={community}
+            deps={actionDeps}
+            language={language}
+            onClose={() => setInviting(false)}
+            onDone={setInviteStatus}
+          />
+        </Suspense>
       ) : null}
       <div className="absolute start-0 top-0 px-2 pt-safe">
         <div className="pt-2.5">
