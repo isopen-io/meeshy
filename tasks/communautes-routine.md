@@ -9,7 +9,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-07 | Les membres d'une communauté se lisent et se gèrent sur le web ; la passerelle protège le créateur | #16636 | #6375 | fusionnée dans dev |
 | 2026-11-07 | On invite quelqu'un dans sa communauté depuis le web ; un compte non vivant ou bloqué n'est plus ajouté (passerelle) | #16670 | #6376 (refs, reste : la création) | fusionnée dans dev (réveil 5) |
 | 2026-11-07 | Créer une conversation dans une communauté n'y fait plus entrer que ce que l'appelant peut admettre (passerelle) | #16697 | #16639 | fusionnée dans dev |
-| 2026-11-07 | Un salon d'une communauté privée n'accueille que ce que la communauté admet — inviter, ajouter, lien (passerelle) | voir réveil 7 | #16695 | voir réveil 7 |
+| 2026-11-07 | Un salon d'une communauté privée n'accueille que ce que la communauté admet — inviter, ajouter, lien (passerelle) | #16705 | #16695 | fusionnée dans dev |
+| 2026-11-07 | Retiré ou parti d'une communauté privée, on ne lit plus ses salons (passerelle) | #16710 | #16704 | voir réveil 8 |
 
 ## 2026-11-07 — lot 1
 
@@ -64,3 +65,12 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Revue adversariale avant la PR : non bloquante ; corrigé dans le lot : une communauté DÉSACTIVÉE se garde comme une privée (elle était « tout permis »). Ouvertes, préexistantes : #16703 (débannir, rattacher une conversation, restaurer un « supprimé pour moi » contournent la loi), #16704 (un retiré d'une communauté privée reste actif dans ses salons).
 - Reste côté clients : le web range `COMMUNITY_MEMBERS_ONLY` dans le refus générique « indisponible » (`apps/web/src/lib/api/link-join.ts`, `REFUSAL_BY_CODE`) — à expliquer dans la langue du lecteur avec #7816.
 - Prochain lot recommandé : #16704 puis #16703 (sécurité, même loi), puis la seconde moitié de #6376.
+
+## 2026-11-07 — réveil 8
+
+- Lot : #16704 (sécurité, préexistant). `exitCommunitySalons` (`services/conversations/communitySalonExit.ts`), branché sur `POST /communities/:id/leave` et `DELETE /communities/:id/members/:memberId` quand la communauté est privée ou désactivée (`communityGuardsItsSalons`). Deux temps : couper l'accès pendant la requête (un `updateMany` pour les lignes ordinaires, salons CLOS compris ; succession du créateur par salon vivant ; cache invalidé), puis annoncer en arrière-plan (avis `member-left`, `participant-left` avec effectif, `endConversationMembership`). Jamais de clôture. Ne rejette jamais.
+- Décision prise sur la lecture la plus probable : le départ VOLONTAIRE suit la même règle que le retrait (rester enfreindrait la loi d'entrée #16695). L'avis dit « X a quitté » même pour un retrait (plus discret que « Y a retiré X ») — à confirmer par le porteur.
+- Clients inchangés : web (`viewerMembershipEndedOf`) et iOS (`participantSelfLeft`) traitent déjà un `participant-left` qui les vise.
+- Revue adversariale avant la PR : non bloquante ; corrigés dans le lot (salons clos, écriture groupée + annonces en arrière-plan). Ouvertes : #16711 (rattrapage d'une sortie perdue, entrée concurrente), #16712 (salon sans créateur).
+- Prochain lot recommandé : #16703 (débannir, rattacher, restaurer contournent la loi), puis la seconde moitié de #6376.
+
