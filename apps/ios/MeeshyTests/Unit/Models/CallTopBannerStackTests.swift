@@ -3,6 +3,7 @@ import XCTest
 
 /// APP-1 — une seule pile de bannières sous l'en-tête de l'appel, ordre fixe
 /// partage → enregistrement → cadre, sans trou ni chevauchement du chevron.
+@MainActor
 final class CallTopBannerStackTests: XCTestCase {
 
     func test_ordered_allPresent_followsShareRecordingFrame() {

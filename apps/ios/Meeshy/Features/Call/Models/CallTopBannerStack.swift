@@ -6,13 +6,13 @@ import CoreGraphics
 /// était posée à un décalage fixe (60, 110, 160 pt depuis le bord) : sur un
 /// iPhone à Dynamic Island, la première passait sous le chevron « Réduire »,
 /// et deux bannières de hauteur variable se chevauchaient.
-enum CallTopBanner: Int, CaseIterable, Sendable {
+nonisolated enum CallTopBanner: Int, CaseIterable, Sendable {
     case screenShare
     case recording
     case liveFrame
 }
 
-enum CallTopBannerStack {
+nonisolated enum CallTopBannerStack {
     /// Hauteur de la rangée d'en-tête (cible tactile 44 pt) plus l'écart qui
     /// la sépare de la première bannière. Même valeur que le badge « micro
     /// coupé » du correspondant, posé lui aussi sous l'en-tête.
