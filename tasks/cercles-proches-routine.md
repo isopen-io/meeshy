@@ -41,3 +41,24 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   Critical Alerts (#14112) ; décisions #14409, #14450 inchangées.
 - Prochain lot recommandé : `proche-bring@android` (prouvé par `android.yml`), puis le talkie (#13935) côté web
   ou iOS.
+
+## 2026-11-07 — réveil 3 : le Bring sur Android (`proche-bring@android`, #13936)
+
+- Reprise : aucune PR de la routine ouverte ; l'iOS du Bring est fusionné (#16608). Aucune branche vivante n'écrit
+  `apps/android/**/bring` ni `push-type-routing.ts`.
+- Lot choisi : `proche-bring@android`, recommandé par le réveil 2.
+- Trouvé en chemin : le jeton FCM de l'Android natif ne déclarait ni `appVersion` ni `bundleId` ; la passerelle ne lui
+  servait donc AUCUN type à plancher. Le jeton les déclare désormais, `versionName` passe à 3.1.0 et le plancher
+  Android de `bring_stopped` est posé à 3.1.0.
+- Livré dans la PR #16616 : loi pure `BringPushRouter` (`:core:model`), `BringPushHandler` avant le chemin des messages,
+  `BringRingService` (premier plan, `USAGE_ALARM`, vibration, expiration), notification alarme sur canal muet dédié,
+  écran plein `BringRingActivity` iso `BringRingView.swift`, « Arrêter » optimiste puis `DELETE /bring/:bringId`
+  (`BringApi.stop`, cliquet « à porter » 129 → 128), libellés `bring.incoming.*` adoptés du catalogue iOS.
+- Gates locaux : passerelle 147/147 (Bring, routage, push) et `tsc` vert ; `BringPushRouterTest` 13/13 par
+  `meeshy.sh jvm-check` (Kotlin pur ; demande `-Dorg.gradle.jvmargs=-Xmx6g` et
+  `-Pkotlin.compiler.execution.strategy=in-process`, sinon le démon Kotlin manque de mémoire). Le reste d'Android se
+  prouve par `android.yml` (déclenché en `workflow_dispatch`, la CI de PR étant gelée).
+- Ce qui reste du Bring : envoyer et bloquer sur Android (#16617) ; avatar de l'expéditeur sur l'écran plein Android
+  (iOS l'affiche, la charge le porte) ; interrupteurs globaux iOS (#16609) et web (#16588) ; Critical Alerts (#14112) ;
+  décisions #14409, #14450.
+- Prochain lot recommandé : #16617 (envoyer et bloquer sur Android), puis le talkie (#13935).
