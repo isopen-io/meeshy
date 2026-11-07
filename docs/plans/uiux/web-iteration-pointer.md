@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-js1tyc` |
+| Branche de travail de la session courante | `claude/practical-fermat-k0hf3y` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -43,7 +43,21 @@ normal.
 | **76w** | 2026-10-25 | `claude/practical-fermat-1peq83` | [#12925](https://github.com/isopen-io/meeshy/pull/12925) → `dev` | ✅ mergé |
 | **77w** | 2026-10-31 | `claude/practical-fermat-95xnj5` | → `dev` | ✅ mergé |
 | **78w** | 2026-11-01 | `claude/practical-fermat-0tzqfi` | [#14198](https://github.com/isopen-io/meeshy/pull/14198) → `dev` | ✅ mergé |
-| **79w** | 2026-11-02 | `claude/practical-fermat-js1tyc` | → `dev` | ⏳ ouverte |
+| **79w** | 2026-11-02 | `claude/practical-fermat-js1tyc` | → `dev` | ✅ mergé |
+| **80w** | 2026-11-07 | `claude/practical-fermat-k0hf3y` | → `dev` | ⏳ ouverte |
+
+**80w** — cohérence / maintenabilité (classe harmonie, héritée 76w→79w) : l'indigo de
+marque `#6366F1` était réécrit EN DUR sur TROIS surfaces web comme accent de repli de
+`authorAccentColor()` — `routes/profile-sections.tsx` (`DECOR_ACCENT`),
+`components/decor-preview.tsx` et `components/pack-sheet.tsx` (`FALLBACK_ACCENT`) —
+trois jumelles divergeant en silence si la marque changeait. Source unique désormais :
+`DEFAULT_AUTHOR_ACCENT` (`@meeshy/shared/utils/conversation-colors`, à côté de
+`authorAccentColor` et de la palette dont elle est la première entrée indigo). Témoins :
+`conversation-colors.test.ts` (parité palette, shared) + `decor-accent-single-source.test.ts`
+(re-export + propreté au gate d'harmonie, web), RED→GREEN. Gate d'harmonie 94 → 91 (−3),
+11 → 8 fichiers. Housekeeping : 79w confirmée mergée (`media.video.paused` sur `dev`) ;
+appariement analyses↔plans 1:1 revérifié (45w→79w) ; sweep i18n texte figé média/overlay
+épuisé. Analyse : `docs/analyses/uiux/2026-11-07-iteration-80w.md`.
 
 **79w** — i18n / Prisme UI : la pastille d'état « En pause » de la visionneuse vidéo
 (`components/viewer-video-page.tsx`) était écrite EN DUR en français — un texte VISIBLE

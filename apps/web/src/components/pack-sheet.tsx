@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+import { authorAccentColor, DEFAULT_AUTHOR_ACCENT } from '@meeshy/shared/utils/conversation-colors';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { myProfileQueryOptions } from '@/lib/api/profile';
@@ -25,7 +25,6 @@ import { Sheet } from './sheet';
  * l'ouverture, sous un état dessiné ; un échec se dit et se réessaie.
  */
 
-const FALLBACK_ACCENT = '#6366F1';
 const PUBLISHER_FALLBACK = 'Meeshy';
 const SKELETON = [0, 1, 2, 3, 4, 5] as const;
 
@@ -61,7 +60,7 @@ export function PackSheet({ language, deps, pack, cover, action, busy, notice, o
   const names = useAppearanceNames(language);
   const items = usePackItems(pack, deps);
   const profile = useQuery({ ...myProfileQueryOptions(deps), enabled: deps.source === 'gateway' });
-  const accent = profile.data === undefined ? FALLBACK_ACCENT : authorAccentColor(profile.data.id, profile.data.displayName ?? profile.data.username);
+  const accent = profile.data === undefined ? DEFAULT_AUTHOR_ACCENT : authorAccentColor(profile.data.id, profile.data.displayName ?? profile.data.username);
   const list = items.data?.items ?? [];
   const embedded = items.data?.embedded === true;
   const state = decorPackState({ embedded, installed: pack.installed });
