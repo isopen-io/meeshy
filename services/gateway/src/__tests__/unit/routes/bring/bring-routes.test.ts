@@ -68,6 +68,84 @@ const nouvellesPushes = () => pushes.splice(0);
 beforeEach(() => { cache.clear(); pushes.length = 0; freezeClock(NOW); process.env.BRING_ENABLED = 'true'; });
 afterEach(() => { thawClock(); delete process.env.BRING_ENABLED; });
 
+describe('#16623 — l\'équipe a le Bring sans lien', () => {
+  const equipe = { personnes: { [MOI]: { role: 'MODERATOR' }, [AUTRE]: { role: 'ADMIN' } } };
+
+  it('deux comptes de l\'équipe sans lien : disponible, ça sonne, et la cible reçoit la sonnerie d\'un vrai Sang', async () => {
+    const app = await appli(equipe);
+    const disponible = await dispo(app);
+    const res = await sonner(app);
+    const sonneries = app.emissions.filter((e) => e.event === 'bring:ring');
+    await app.close();
+    expect(disponible.body.data).toMatchObject({ available: true, userId: AUTRE });
+    expect(res.status).toBe(201);
+    expect(sonneries.map((e) => e.room)).toContain(`user:${AUTRE}`);
+  });
+
+  it('la même chose dans l\'autre sens', async () => {
+    const app = await appli(equipe);
+    const res = await sonner(app, MOI, AUTRE);
+    await app.close();
+    expect(res.status).toBe(201);
+  });
+
+  it('un rôle ne laisse aucune trace de lien', async () => {
+    const app = await appli(equipe);
+    await sonner(app);
+    const lignes = await app.prisma.userRelation.findMany({ where: {} });
+    await app.close();
+    expect(lignes).toEqual([]);
+  });
+
+  it.each([
+    ['un modérateur face à un utilisateur ordinaire', { [MOI]: { role: 'MODERATOR' } }],
+    ['un utilisateur ordinaire face à un administrateur', { [AUTRE]: { role: 'ADMIN' } }],
+    ['un rôle de cible inconnu', { [MOI]: { role: 'ADMIN' }, [AUTRE]: { role: 'SUPERADMIN' } }],
+    ['un analyste', { [MOI]: { role: 'ANALYST' }, [AUTRE]: { role: 'ADMIN' } }],
+  ])('%s : le même refus qu\'à un inconnu', async (_label, personnes) => {
+    const app = await appli({ personnes });
+    const inconnu = await appli();
+    const refus = await sonner(app);
+    const reference = await sonner(inconnu);
+    const disponible = await dispo(app);
+    await app.close();
+    await inconnu.close();
+    expect(refus.status).toBe(reference.status);
+    expect(refus.body).toEqual(reference.body);
+    expect(disponible.body.data.available).toBe(false);
+  });
+
+  it('couper « Recevoir des Bring » ferme : le niveau s\'ouvre, la réception non', async () => {
+    const app = await appli({ personnes: { [MOI]: { role: 'MODERATOR' }, [AUTRE]: { role: 'ADMIN', notification: { bringEnabled: false } } } });
+    const disponible = await dispo(app);
+    await app.close();
+    expect(disponible.body.data.available).toBe(false);
+  });
+
+  it('bloquer les Bring d\'un collègue s\'écrit sans lien, et le ferme', async () => {
+    const app = await appli(equipe);
+    const reglage = await reglerPour(app, MOI, { bringBlocked: true });
+    const disponible = await dispo(app);
+    await app.close();
+    expect(reglage.status).toBe(200);
+    expect(disponible.body.data.available).toBe(false);
+  });
+
+  it('le blocage d\'annuaire ferme entre deux comptes de l\'équipe', async () => {
+    const app = await appli({ personnes: { [MOI]: { role: 'MODERATOR' }, [AUTRE]: { role: 'ADMIN', blockedUserIds: [MOI] } } });
+    const disponible = await dispo(app);
+    await app.close();
+    expect(disponible.body.data.available).toBe(false);
+  });
+
+  it('bloquer un utilisateur ordinaire sans lien reste le 404 d\'un inconnu, même pour un administrateur', async () => {
+    const app = await appli({ personnes: { [AUTRE]: { role: 'ADMIN' } } });
+    const reglage = await reglerPour(app, MOI, { bringBlocked: true });
+    await app.close();
+    expect(reglage.status).toBe(404);
+  });
+});
+
 describe('#13936 — qui peut faire sonner qui', () => {
   it.each(['FRIEND', 'CLOSE', 'BLOOD'])('un lien %s ouvre le Bring : 201, et le destinataire reçoit bring:ring', async (level) => {
     const app = await appli(niveau(level));

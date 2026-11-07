@@ -119,6 +119,7 @@ const DISABLED = refuse(403, BRING_ERROR_CODES.DISABLED, 'Bring indisponible');
 
 const USER_SELECT = {
   id: true,
+  role: true,
   deactivatedAt: true,
   timezone: true,
   birthDate: true,
@@ -200,6 +201,8 @@ async function judge(deps: BringDeps, fromUserId: string, toUserId: string): Pro
     blockedEitherWay: blocked,
     viewerMinor: declaredAgeClass(sender.birthDate, now),
     targetMinor: declaredAgeClass(recipient.birthDate, now),
+    viewerRole: sender.role,
+    targetRole: recipient.role,
     feature: 'bring',
     consent: prefs.receives && !setting?.bringBlockedAt ? 'granted' : 'refused',
   });

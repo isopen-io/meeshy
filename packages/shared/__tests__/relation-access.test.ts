@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import casesFile from '../fixtures/relation-access-cases.json';
-import { relationAccessReads, resolveRelationAccess, type RelationAccessInput, type RelationAgeClass } from '../utils/relation-access';
+import { effectiveRelationLevel, relationAccessReads, resolveRelationAccess, type RelationAccessInput, type RelationAgeClass } from '../utils/relation-access';
 import {
   RELATION_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
   RELATION_LEVEL_LABELS,
   RELATION_LEVEL_PRESENTATION,
+  RELATION_PRESENCE_FEATURES,
+  RELATION_TEAM_CLOSED_FEATURES,
   RELATION_THRESHOLDS,
   relationThresholdsFor,
   type RelationFeature,
@@ -160,6 +162,15 @@ describe('resolveRelationAccess — soi et rôle', () => {
     expect(access({ viewerRole, feature: 'presence.online' }).allowed).toBe(false);
   });
 
+  it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'] as const)('%s face à un utilisateur ordinaire : aucun verdict ne change', (viewerRole) => {
+    const opened = RELATION_FEATURES.filter((feature) => !RELATION_PRESENCE_FEATURES.has(feature)).filter(
+      (feature) =>
+        access({ viewerRole, targetRole: 'USER', feature, consent: 'granted' }).allowed !==
+        access({ viewerRole: 'USER', targetRole: 'USER', feature, consent: 'granted' }).allowed,
+    );
+    expect(opened).toEqual([]);
+  });
+
   it('le blocage l\'emporte sur le privilège administrateur', () => {
     expect(access({ viewerRole: 'ADMIN', blockedEitherWay: true })).toMatchObject({ allowed: false, reason: 'blocked' });
   });
@@ -176,6 +187,43 @@ describe('resolveRelationAccess — soi et rôle', () => {
       requiresConsent: false,
     });
     expect(access({ ...missing, ...both('BLOOD'), feature: 'audience.blood' }).allowed).toBe(false);
+  });
+});
+
+describe('resolveRelationAccess — l\'équipe (#16623)', () => {
+  const team = { viewerRole: 'MODERATOR', targetRole: 'ADMIN', consent: 'granted' } as const;
+
+  it('ouvre à deux comptes de l\'équipe chaque outil de cercle, au niveau Sang, sans lien', () => {
+    const tools = RELATION_FEATURES.filter((feature) => !RELATION_TEAM_CLOSED_FEATURES.has(feature));
+    expect(tools.filter((feature) => !access({ ...team, feature }).allowed)).toEqual([]);
+    expect(new Set(tools.map((feature) => access({ ...team, feature }).effectiveLevel))).toEqual(new Set(['BLOOD']));
+  });
+
+  it('ne dit jamais `role` pour un outil ouvert par l\'équipe : un modérateur reste sous les préférences de la cible', () => {
+    expect(access({ ...team, feature: 'presence.online' }).reason).toBe('level');
+  });
+
+  it('n\'ouvre aucune audience de contenu : ni publication, ni notification, ni relais', () => {
+    const closed = [...RELATION_TEAM_CLOSED_FEATURES].filter((feature) => feature !== 'acquaintance.auto');
+    expect(closed.filter((feature) => access({ ...team, feature }).allowed)).toEqual([]);
+    expect(new Set(closed.map((feature) => access({ ...team, ...both('FRIEND'), feature }).effectiveLevel))).toEqual(new Set(['FRIEND']));
+  });
+
+  it('`NOBODY` ferme, même au rang Sang réel d\'une paire de l\'équipe', () => {
+    expect(access({ ...team, ...both('BLOOD'), feature: 'notify.newContent', ownerAudience: 'NOBODY' }).allowed).toBe(false);
+  });
+
+  it('un rôle de cible absent, nul ou inconnu n\'ouvre rien', () => {
+    const roles = [undefined, null, '', 'SUPERADMIN', 'MODO'] as const;
+    expect(roles.filter((targetRole) => access({ ...team, targetRole, feature: 'bring' }).allowed)).toEqual([]);
+  });
+
+  it('un rôle de viewer absent n\'ouvre rien non plus', () => {
+    expect(access({ ...team, viewerRole: undefined, feature: 'bring' }).allowed).toBe(false);
+  });
+
+  it('`effectiveRelationLevel` ne connaît pas les rôles : il dit le lien réel', () => {
+    expect(effectiveRelationLevel({ ...both('PUBLIC'), sharesCommunity: false })).toBe('PUBLIC');
   });
 });
 
@@ -366,11 +414,51 @@ describe('relation-levels — la config', () => {
   });
 });
 
+describe('relationAccessReads — le rôle (#16623)', () => {
+  it('fait lire le rôle des deux côtés pour un outil, jamais pour une audience de contenu', () => {
+    expect(relationAccessReads('bring').role).toBe(true);
+    expect(relationAccessReads('dm.typing').role).toBe(true);
+    expect(relationAccessReads('audience.close').role).toBe(false);
+    expect(relationAccessReads('acquaintance.auto').role).toBe(false);
+  });
+});
+
 describe('relationAccessReads — ce que l\'orchestrateur doit lire pour juger une feature', () => {
   it('lit l\'âge pour la Connaissance automatique et pour toute feature du bouclier', () => {
     expect(relationAccessReads('acquaintance.auto').age).toBe(true);
     expect(relationAccessReads('dm.request').age).toBe(true);
-    expect(relationAccessReads('dm.typing').age).toBe(false);
+    expect(relationAccessReads('audience.close').age).toBe(false);
+  });
+
+  it('lit l\'âge partout où le rôle est lu : le privilège d\'équipe ne franchit pas le bouclier des mineurs (#16623)', () => {
+    expect(RELATION_FEATURES.filter((feature) => relationAccessReads(feature).role && !relationAccessReads(feature).age)).toEqual([]);
+  });
+
+  it('tient son contrat : une lecture épargnée ne change aucun verdict, quels que soient les rôles', () => {
+    const roles = [undefined, 'USER', 'MODERATOR', 'ADMIN'] as const;
+    const ages: RelationAgeClass[] = ['adult', 'minor', 'unknown'];
+    const drifts = RELATION_FEATURES.flatMap((feature) => {
+      const reads = relationAccessReads(feature);
+      return roles.flatMap((viewerRole) =>
+        roles.flatMap((targetRole) =>
+          ages.flatMap((viewerMinor) =>
+            ages.flatMap((targetMinor) => {
+              const base = { viewerRole, targetRole, consent: 'granted' as const, feature };
+              const read = access({ ...base, viewerMinor, targetMinor });
+              const spared = access({
+                ...base,
+                viewerMinor: reads.age ? viewerMinor : 'unknown',
+                targetMinor: reads.age ? targetMinor : 'unknown',
+                viewerRole: reads.role ? viewerRole : 'USER',
+                targetRole: reads.role ? targetRole : undefined,
+              });
+              return read.allowed === spared.allowed ? [] : [`${feature} ${viewerRole}/${targetRole} ${viewerMinor}/${targetMinor}`];
+            }),
+          ),
+        ),
+      );
+    });
+    expect(drifts).toEqual([]);
   });
 
   it('lit la communauté seulement quand un plancher de la feature peut s\'atteindre par elle', () => {

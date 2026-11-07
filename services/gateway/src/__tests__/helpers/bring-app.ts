@@ -22,6 +22,7 @@ export type Personne = {
   readonly blockedUserIds?: readonly string[];
   readonly systemLanguage?: string;
   readonly notification?: Record<string, unknown>;
+  readonly role?: string;
 };
 
 export type BringAppOptions = {
@@ -63,6 +64,7 @@ export async function buildBringApp(
       const p = options.personnes?.[id] ?? {};
       return [id, {
         id,
+        role: p.role ?? 'USER',
         username: `u${id.slice(-2)}`,
         displayName: `U${id.slice(-2)}`,
         firstName: 'A',

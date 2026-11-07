@@ -95,6 +95,58 @@ describe('presenceStatusAudience', () => {
   });
 });
 
+describe('presenceStatusEmissions — l\'équipe (#16623)', () => {
+  const base = {
+    subjectId: 'u_admin_subject',
+    subjectRole: 'ADMIN',
+    isAnonymous: false,
+    friendLevels: levels({ u_friend: 'FRIEND' }),
+    adminIds: ['u_admin'],
+    moderatorIds: ['u_mod'],
+    lastActiveAt: SEEN_AT,
+    showOnlineStatus: true,
+    showLastSeen: true,
+  };
+
+  it('un modérateur reçoit la transition d\'un collègue, avec la date d\'un Sang, sans lien', () => {
+    expect(presenceStatusEmissions(base)).toEqual([
+      { rooms: [ROOMS.user('u_admin'), ROOMS.user('u_admin_subject')], lastActiveAt: SEEN_AT },
+      { rooms: [ROOMS.user('u_mod')], lastActiveAt: SEEN_AT },
+      { rooms: [ROOMS.user('u_friend')], lastActiveAt: null },
+    ]);
+  });
+
+  it('un lien réel d\'Ami ne rabat pas un collègue à « en ligne » seulement', () => {
+    const emissions = presenceStatusEmissions({ ...base, friendLevels: levels({ u_mod: 'FRIEND' }) });
+    expect(emissions).toContainEqual({ rooms: [ROOMS.user('u_mod')], lastActiveAt: SEEN_AT });
+  });
+
+  it('il suit les préférences du collègue : masqué, il ne reçoit rien ; sans dernière vue, pas de date', () => {
+    const rooms = (over: Partial<typeof base>) => presenceStatusEmissions({ ...base, ...over }).flatMap((e) => e.rooms);
+    expect(rooms({ showOnlineStatus: false })).not.toContain(ROOMS.user('u_mod'));
+    expect(presenceStatusEmissions({ ...base, showLastSeen: false })).toContainEqual({
+      rooms: [ROOMS.user('u_mod'), ROOMS.user('u_friend')],
+      lastActiveAt: null,
+    });
+  });
+
+  it.each(['USER', 'AUDIT', 'ANALYST', null, undefined])('la transition d\'un sujet %s ne part chez aucun modérateur', (subjectRole) => {
+    const rooms = presenceStatusEmissions({ ...base, subjectRole }).flatMap((e) => e.rooms);
+    expect(rooms).not.toContain(ROOMS.user('u_mod'));
+  });
+
+  it('la transition d\'un collègue mineur déclaré ne part chez aucun modérateur', () => {
+    const rooms = presenceStatusEmissions({ ...base, subjectMinor: 'minor' }).flatMap((e) => e.rooms);
+    expect(rooms).not.toContain(ROOMS.user('u_mod'));
+    expect(rooms).toContain(ROOMS.user('u_admin'));
+  });
+
+  it('un invité de lien n\'a pas de collègues', () => {
+    const rooms = presenceStatusEmissions({ ...base, isAnonymous: true }).flatMap((e) => e.rooms);
+    expect(rooms).toEqual([ROOMS.user('u_admin')]);
+  });
+});
+
 describe('presenceStatusEmissions', () => {
   const base = {
     subjectId: 'u_self',

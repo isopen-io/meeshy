@@ -194,6 +194,50 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertEqual(rig.sut.shownLevel, .acquaintance)
     }
 
+    // MARK: - Le Bring entre deux comptes de l'équipe (#16623)
+
+    func test_offersBring_aServedAccessLevelOfBloodWithoutALink_offersIt_withoutShowingACircle() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(RelationLink(userId: "a", effectiveLevel: .public, grantedByMe: .public, accessLevel: .blood))
+
+        await rig.sut.load()
+
+        XCTAssertTrue(rig.sut.offersBring)
+        XCTAssertNil(rig.sut.shownLevel, "aucun lien n'est fabriqué")
+        XCTAssertFalse(rig.sut.claimsTheSlot)
+    }
+
+    func test_offersBring_aStrangerWithoutAccessLevel_isNotOffered() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(link("a", .public))
+
+        await rig.sut.load()
+
+        XCTAssertFalse(rig.sut.offersBring)
+    }
+
+    func test_offersBring_anAcquaintance_isNotOffered() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .acquaintance)])
+        rig.relations.linkResult = .success(link("a", .acquaintance))
+
+        await rig.sut.load()
+
+        XCTAssertFalse(rig.sut.offersBring)
+    }
+
+    func test_offersBring_aFriend_isOffered() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.relations.linkResult = .success(link("a", .friend))
+
+        await rig.sut.load()
+
+        XCTAssertTrue(rig.sut.offersBring)
+    }
+
     // MARK: - Rétrograder d'un cran, annuler le lien à Connaissance (#14910)
 
     func test_offeredLowering_goesDownOneRungAndUnlinksAtAcquaintance() async {

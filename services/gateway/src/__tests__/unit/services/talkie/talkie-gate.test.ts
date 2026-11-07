@@ -8,7 +8,8 @@
  * @jest-environment node
  */
 import { describe, it, expect, jest } from '@jest/globals';
-import { judgeTalkie, type TalkieGateDb } from '../../../../services/talkie/talkieGate';
+import { TALKIE_NOT_ALLOWED, judgeTalkie, type TalkieGateDb } from '../../../../services/talkie/talkieGate';
+import { TALKIE_ERROR_CODES } from '@meeshy/shared/types/talkie';
 import { relationStore } from '../../../helpers/user-relation-store';
 import { matchesMongoWhere } from '../../../helpers/mongo-where';
 import { AUTRE, MOI, NOW, lien } from '../../../helpers/relation-app';
@@ -24,6 +25,7 @@ type Options = {
   readonly connected?: boolean;
   readonly presenceServed?: boolean;
   readonly recipient?: Record<string, unknown>;
+  readonly sender?: Record<string, unknown>;
 };
 
 function db(options: Options = {}) {
@@ -31,7 +33,7 @@ function db(options: Options = {}) {
   const users = new Map([MOI, AUTRE].map((id) => [id, {
     id, role: 'USER', isActive: true, deletedAt: null, deactivatedAt: null, birthDate: null,
     blockedUserIds: options.blocked && id === AUTRE ? [MOI] : [],
-    ...(id === AUTRE ? options.recipient ?? {} : {}),
+    ...(id === AUTRE ? options.recipient ?? {} : options.sender ?? {}),
   }]));
   const conversation = options.directMode === undefined
     ? null
@@ -71,6 +73,33 @@ const juger = async (options: Options = {}) => {
   const verdict = await judgeTalkie({ prisma: prisma as unknown as TalkieGateDb, now: () => NOW, recipientConnected, presenceServed }, MOI, AUTRE);
   return { verdict, prisma, presenceServed, recipientConnected };
 };
+
+describe('#16623 — l\'équipe a le talkie sans lien', () => {
+  const equipe = { sender: { role: 'MODERATOR' }, recipient: { role: 'ADMIN' } };
+
+  it('deux comptes de l\'équipe sans lien : la voix passe', async () => {
+    expect((await juger(equipe)).verdict).toEqual({ ok: true });
+  });
+
+  it('un compte de l\'équipe face à un utilisateur ordinaire : refusé comme un inconnu', async () => {
+    const ordinaire = await juger({ recipient: { role: 'USER' } });
+    expect((await juger({ sender: { role: 'ADMIN' }, recipient: { role: 'USER' } })).verdict).toEqual(ordinaire.verdict);
+    expect(ordinaire.verdict).toEqual(TALKIE_NOT_ALLOWED);
+  });
+
+  it('un rôle de cible inconnu n\'ouvre rien', async () => {
+    expect((await juger({ sender: { role: 'ADMIN' }, recipient: { role: 'SUPERADMIN' } })).verdict).toEqual(TALKIE_NOT_ALLOWED);
+  });
+
+  it('la réception reste celle du destinataire : le rôle ne franchit pas un talkie coupé', async () => {
+    expect((await juger({ ...equipe, talkieBlocked: true })).verdict).toMatchObject({ ok: false, code: TALKIE_ERROR_CODES.BLOCKED });
+    expect((await juger({ ...equipe, notification: { talkieEnabled: false } })).verdict).toMatchObject({ ok: false, code: TALKIE_ERROR_CODES.BLOCKED });
+  });
+
+  it('le blocage ferme entre deux comptes de l\'équipe', async () => {
+    expect((await juger({ ...equipe, blocked: true })).verdict).toEqual(TALKIE_NOT_ALLOWED);
+  });
+});
 
 describe('#13935 — la loi : dès Proche', () => {
   it.each(['CLOSE', 'BLOOD'])('%s : ouvert', async (level) => {

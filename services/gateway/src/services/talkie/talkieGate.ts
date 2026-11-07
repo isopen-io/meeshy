@@ -132,6 +132,8 @@ export async function judgeTalkie(
     blockedEitherWay: blocked,
     viewerMinor: declaredAgeClass(sender.birthDate, now),
     targetMinor: declaredAgeClass(recipient.birthDate, now),
+    viewerRole: sender.role,
+    targetRole: recipient.role,
     feature: 'talkie',
     consent: receives ? 'granted' : 'refused',
   });

@@ -12,6 +12,7 @@ import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkie
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
+import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { niveauEffectif } from '../../services/friendship';
 import { bringDepsOf, bringQuotaOf } from '../bring';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
@@ -22,13 +23,19 @@ import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './sh
  * quelconque. Inconnu, désactivé, sans lien ou bloqué : le même 404. Un RETRAIT de
  * partage ou un déblocage ne demandent aucun lien : ils ne touchent que MA ligne
  * existante, et ne la créent jamais (audit #14535 constat 1).
+ *
+ * La feature jugée est `dm.direct`, un OUTIL au plancher Connaissance : entre deux comptes
+ * de l'équipe, qui peuvent se sonner sans lien, bloquer ces Bring doit s'écrire aussi
+ * (#16623). Une audience (`audience.acquaintances`) resterait au lien réel.
  */
 async function linkedPerson(prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<boolean> {
-  const [other, level] = await Promise.all([
-    prisma.user.findUnique({ where: { id: otherId }, select: { id: true, deactivatedAt: true } }),
+  const [other, owner, level] = await Promise.all([
+    prisma.user.findUnique({ where: { id: otherId }, select: { id: true, deactivatedAt: true, role: true, birthDate: true } }),
+    prisma.user.findUnique({ where: { id: ownerId }, select: { role: true, birthDate: true } }),
     niveauEffectif(prisma, ownerId, otherId),
   ]);
   if (!other || other.deactivatedAt) return false;
+  const now = new Date();
   return resolveRelationAccess({
     viewerId: ownerId,
     targetId: otherId,
@@ -36,9 +43,11 @@ async function linkedPerson(prisma: FastifyInstance['prisma'], ownerId: string, 
     grantedByTarget: level,
     sharesCommunity: false,
     blockedEitherWay: false,
-    viewerMinor: 'unknown',
-    targetMinor: 'unknown',
-    feature: 'audience.acquaintances',
+    viewerMinor: declaredAgeClass(owner?.birthDate ?? null, now),
+    targetMinor: declaredAgeClass(other.birthDate ?? null, now),
+    viewerRole: owner?.role,
+    targetRole: other.role,
+    feature: 'dm.direct',
   }).allowed;
 }
 

@@ -39,6 +39,69 @@ const monde = () =>
 
 const db = (world: ReturnType<typeof monde>) => world.prisma as unknown as PrismaClient;
 
+const MODERATRICE = '6100000000000000000000b1';
+const ADMINISTRATEUR = '6100000000000000000000b2';
+const QUIDAM = '6100000000000000000000b3';
+const SANS_ROLE = '6100000000000000000000b4';
+const ANALYSTE = '6100000000000000000000b5';
+const EQUIPE_MINEURE = '6100000000000000000000b6';
+
+const equipe = () =>
+  messagingWorld({
+    links: [],
+    users: [
+      { id: MODERATRICE, birthDate: ADULT_BIRTH, role: 'MODERATOR' },
+      { id: ADMINISTRATEUR, birthDate: ADULT_BIRTH, role: 'ADMIN' },
+      { id: QUIDAM, birthDate: ADULT_BIRTH, role: 'USER' },
+      { id: SANS_ROLE, birthDate: ADULT_BIRTH },
+      { id: ANALYSTE, birthDate: ADULT_BIRTH, role: 'ANALYST' },
+      { id: EQUIPE_MINEURE, birthDate: MINOR_BIRTH, role: 'ADMIN' },
+    ],
+    communityMembers: [],
+  });
+
+describe('pairAccessAmong — l\'équipe (#16623)', () => {
+  it('lit les DEUX rôles : deux comptes de l\'équipe ont les outils de cercle sans lien, dans les deux sens', async () => {
+    const among = (subjectIs: 'viewer' | 'target') =>
+      pairAccessAmong(db(equipe()), { feature: 'dm.typing', subjectId: MODERATRICE, otherIds: [ADMINISTRATEUR], subjectIs });
+    expect((await among('viewer')).get(ADMINISTRATEUR)).toMatchObject({ allowed: true, effectiveLevel: 'BLOOD' });
+    expect((await among('target')).get(ADMINISTRATEUR)).toMatchObject({ allowed: true, effectiveLevel: 'BLOOD' });
+  });
+
+  it('face à un utilisateur ordinaire, à un rôle absent ou à un analyste, rien ne s\'ouvre', async () => {
+    const verdicts = await pairAccessAmong(db(equipe()), {
+      feature: 'presence.dnd',
+      subjectId: ADMINISTRATEUR,
+      otherIds: [QUIDAM, SANS_ROLE, ANALYSTE],
+      subjectIs: 'viewer',
+    });
+    expect([...verdicts.values()].map((v) => v.allowed)).toEqual([false, false, false]);
+  });
+
+  it('une audience de contenu reste au lien réel : le rôle ne fait entrer personne', async () => {
+    const verdicts = await pairAccessAmong(db(equipe()), {
+      feature: 'audience.close',
+      subjectId: MODERATRICE,
+      otherIds: [ADMINISTRATEUR],
+      subjectIs: 'viewer',
+    });
+    expect(verdicts.get(ADMINISTRATEUR)).toMatchObject({ allowed: false, effectiveLevel: 'PUBLIC' });
+  });
+
+  it('le bouclier des mineurs n\'est pas franchi par le rôle', async () => {
+    const verdict = await pairAccess(db(equipe()), { feature: 'call.ring', viewerId: ADMINISTRATEUR, targetId: EQUIPE_MINEURE });
+    expect(verdict.allowed).toBe(false);
+  });
+
+  it('ni sur un outil hors bouclier : un adulte de l\'équipe n\'écrit pas en direct à un collègue mineur déclaré', async () => {
+    const outils = ['dm.direct', 'dm.typing', 'presence.dnd', 'views.identity'] as const;
+    const verdicts = await Promise.all(
+      outils.map((feature) => pairAccess(db(equipe()), { feature, viewerId: ADMINISTRATEUR, targetId: EQUIPE_MINEURE })),
+    );
+    expect(verdicts.map((v) => v.allowed)).toEqual([false, false, false, false]);
+  });
+});
+
 describe('pairAccessAmong — la loi jugée sur les lectures vraies', () => {
   it('la frappe d\'un membre n\'atteint que ceux qui sont au moins Connaissance, et jamais un bloqueur', async () => {
     const verdicts = await pairAccessAmong(db(monde()), {
