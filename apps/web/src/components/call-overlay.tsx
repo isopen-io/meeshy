@@ -35,7 +35,7 @@ const PILL_BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent
 const HANGUP = 'var(--ios-error-strong)';
 
 /** Je partage mon écran (#16664) : la capsule rougit, comme l'indicateur du système. */
-const SHARING_BG = 'color-mix(in srgb, var(--ios-error-strong) 88%, transparent)';
+const SHARING_BG = 'color-mix(in srgb, var(--ios-error-strong) 96%, transparent)';
 const ANSWER = 'var(--ios-success)';
 
 function CallPill({ call }: { readonly call: ActiveCall }) {
