@@ -26,6 +26,7 @@ jest.mock('../../../services/achievements/CerclesAchievements', () => ({
 }));
 
 import { registerMembershipRoutes } from '../../../routes/communities/membership';
+import { registerMemberRoutes } from '../../../routes/communities/members';
 
 const ADMIN = '507f1f77bcf86cd799439101';
 const MEMBER = '507f1f77bcf86cd799439102';
@@ -33,17 +34,20 @@ const NEWCOMER = '507f1f77bcf86cd799439103';
 const DEACTIVATED_USER = '507f1f77bcf86cd799439104';
 const BLOCKS_ADMIN = '507f1f77bcf86cd799439105';
 const BLOCKED_BY_ADMIN = '507f1f77bcf86cd799439106';
+const SELF_DELETED = '507f1f77bcf86cd799439107';
 const COMMUNITY = '507f1f77bcf86cd7994391a1';
 
 type Row = Record<string, unknown>;
 
 const USERS: Row[] = [
-  { id: ADMIN, deactivatedAt: null, blockedUserIds: [BLOCKED_BY_ADMIN] },
-  { id: MEMBER, deactivatedAt: null, blockedUserIds: [] },
-  { id: NEWCOMER, deactivatedAt: null, blockedUserIds: [] },
-  { id: DEACTIVATED_USER, deactivatedAt: new Date('2026-10-01'), blockedUserIds: [] },
-  { id: BLOCKS_ADMIN, deactivatedAt: null, blockedUserIds: [ADMIN] },
-  { id: BLOCKED_BY_ADMIN, deactivatedAt: null, blockedUserIds: [] },
+  { id: ADMIN, isActive: true, deactivatedAt: null, deletedAt: null, blockedUserIds: [BLOCKED_BY_ADMIN] },
+  { id: MEMBER, isActive: true, deactivatedAt: null, deletedAt: null, blockedUserIds: [] },
+  { id: NEWCOMER, isActive: true, deactivatedAt: null, deletedAt: null, blockedUserIds: [] },
+  { id: DEACTIVATED_USER, isActive: false, deactivatedAt: new Date('2026-10-01'), deletedAt: null, blockedUserIds: [] },
+  { id: BLOCKS_ADMIN, isActive: true, deactivatedAt: null, deletedAt: null, blockedUserIds: [ADMIN] },
+  { id: BLOCKED_BY_ADMIN, isActive: true, deactivatedAt: null, deletedAt: null, blockedUserIds: [] },
+  // Suppression demandée par l'utilisateur (`routes/account-deletion.ts`) : `isActive: false` + `deletedAt`, SANS `deactivatedAt`.
+  { id: SELF_DELETED, isActive: false, deactivatedAt: null, deletedAt: new Date('2026-10-02'), blockedUserIds: [] },
 ];
 
 function userMatches(row: Row, where: Row): boolean {
@@ -104,6 +108,7 @@ async function build(viewer: string): Promise<{ app: FastifyInstance; writes: Ro
   });
   app.decorate('prisma', prisma as any);
   await app.register(registerMembershipRoutes);
+  await app.register(registerMemberRoutes);
   await app.ready();
   return { app, writes };
 }
@@ -122,6 +127,13 @@ describe('POST /communities/:id/invite — qui peut être ajouté', () => {
   it('un compte désactivé n’est pas ajouté : 404, sans écriture', async () => {
     const { app, writes } = await build(ADMIN);
     expect((await invite(app, DEACTIVATED_USER)).statusCode).toBe(404);
+    expect(writes).toHaveLength(0);
+    await app.close();
+  });
+
+  it('un compte supprimé par son titulaire n’est pas ajouté : 404, sans écriture', async () => {
+    const { app, writes } = await build(MEMBER);
+    expect((await invite(app, SELF_DELETED)).statusCode).toBe(404);
     expect(writes).toHaveLength(0);
     await app.close();
   });
@@ -145,6 +157,30 @@ describe('POST /communities/:id/invite — qui peut être ajouté', () => {
   it('un membre déjà actif rend 409, sans écriture', async () => {
     const { app, writes } = await build(ADMIN);
     expect((await invite(app, MEMBER)).statusCode).toBe(409);
+    expect(writes).toHaveLength(0);
+    await app.close();
+  });
+});
+
+const add = (app: FastifyInstance, userId: string) =>
+  app.inject({ method: 'POST', url: `/communities/${COMMUNITY}/members`, payload: { userId } });
+
+describe('POST /communities/:id/members — la route jumelle de l’administrateur garde les mêmes personnes', () => {
+  it('un administrateur ajoute un nouvel arrivant', async () => {
+    const { app, writes } = await build(ADMIN);
+    expect((await add(app, NEWCOMER)).statusCode).toBe(200);
+    expect(writes).toHaveLength(1);
+    await app.close();
+  });
+
+  it.each([
+    ['un compte désactivé', DEACTIVATED_USER],
+    ['un compte supprimé par son titulaire', SELF_DELETED],
+    ['une personne qui a bloqué l’administrateur', BLOCKS_ADMIN],
+    ['une personne que l’administrateur a bloquée', BLOCKED_BY_ADMIN],
+  ])('%s n’est pas ajouté : 404, sans écriture', async (_label, target) => {
+    const { app, writes } = await build(ADMIN);
+    expect((await add(app, target)).statusCode).toBe(404);
     expect(writes).toHaveLength(0);
     await app.close();
   });

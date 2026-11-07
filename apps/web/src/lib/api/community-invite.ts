@@ -20,8 +20,9 @@ import type { ApiResult } from './http';
  * **Optimiste.** Chaque personne paraît AU GESTE dans la page de membres en
  * cache et le compteur du détail monte ; celle que la passerelle refuse en
  * repart seule, les autres restent. Une personne déjà présente dans le cache
- * n'y est pas dédoublée. Un 409 (déjà membre) a atteint l'état visé : la
- * vérité est relue. Hors ligne, rien ne part : le web n'a pas de file
+ * n'y est pas dédoublée, et la ligne n'entre que dans une liste lue jusqu'au
+ * bout. Un 409 (déjà membre) ou une panne (l'écriture a pu aboutir) font
+ * relire la vérité. Hors ligne, rien ne part : le web n'a pas de file
  * d'écriture (#6325).
  *
  * La ligne servie remplace la provisoire par une PROJECTION
@@ -31,7 +32,7 @@ import type { ApiResult } from './http';
 
 export type InviteOutcome =
   | { readonly status: 'offline' }
-  | { readonly status: 'done'; readonly invited: number; readonly refused: number; readonly failed: number };
+  | { readonly status: 'done'; readonly invited: number; readonly already: number; readonly refused: number; readonly failed: number };
 
 export async function inviteToCommunity(
   deps: CommunityActionDeps,
@@ -67,14 +68,20 @@ const cachedMemberIds = (queryClient: QueryClient, communityId: string): Readonl
   return new Set(data?.pages.flatMap((page) => page.members.map((member) => member.userId)) ?? []);
 };
 
-const appendToLastPage = (queryClient: QueryClient, communityId: string, rows: readonly CommunityMember[]) => {
+/**
+ * La ligne n'entre que dans une liste lue JUSQU'AU BOUT : tant qu'une page
+ * reste à lire, la suivante la servira (ordre d'arrivée), et l'ajouter ici la
+ * dédoublerait. Rend vrai si la ligne a été posée.
+ */
+const appendToLastPage = (queryClient: QueryClient, communityId: string, rows: readonly CommunityMember[]): boolean => {
   const data = queryClient.getQueryData<MembersData>(communityMembersQueryKey(communityId));
-  if (data === undefined || data.pages.length === 0 || rows.length === 0) return;
+  if (data === undefined || rows.length === 0 || data.pages.at(-1)?.nextOffset !== null) return false;
   const last = data.pages.length - 1;
   queryClient.setQueryData<MembersData>(communityMembersQueryKey(communityId), {
     ...data,
     pages: data.pages.map((page, index) => (index === last ? { ...page, members: [...page.members, ...rows] } : page)),
   });
+  return true;
 };
 
 type Verdict = 'invited' | 'already' | 'refused' | 'failed';
@@ -96,9 +103,11 @@ export async function performInviteMembers({
 }): Promise<InviteOutcome> {
   if (!deps.isOnline()) return { status: 'offline' };
   const { queryClient } = deps;
+  void queryClient.cancelQueries({ queryKey: communityMembersQueryKey(community.id) });
+  void queryClient.cancelQueries({ queryKey: DETAIL_PREFIX });
   const known = cachedMemberIds(queryClient, community.id);
   const fresh = people.filter((person) => !known.has(person.id));
-  appendToLastPage(queryClient, community.id, fresh.map(provisionalOf));
+  const listed = appendToLastPage(queryClient, community.id, fresh.map(provisionalOf));
   shiftDetailCount(queryClient, community.id, fresh.length);
 
   const settled = await Promise.all(
@@ -118,10 +127,10 @@ export async function performInviteMembers({
     }),
   );
 
-  if (settled.includes('already')) {
+  if (!listed || settled.some((verdict) => verdict === 'already' || verdict === 'failed')) {
     void queryClient.invalidateQueries({ queryKey: communityMembersQueryKey(community.id) });
     void queryClient.invalidateQueries({ queryKey: DETAIL_PREFIX });
   }
   const count = (verdicts: readonly Verdict[]) => settled.filter((verdict) => verdicts.includes(verdict)).length;
-  return { status: 'done', invited: count(['invited', 'already']), refused: count(['refused']), failed: count(['failed']) };
+  return { status: 'done', invited: count(['invited']), already: count(['already']), refused: count(['refused']), failed: count(['failed']) };
 }

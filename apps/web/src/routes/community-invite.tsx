@@ -110,7 +110,9 @@ export default function CommunityInviteSheet({
       return;
     }
     if (outcome.invited === 0) {
-      onDone(t(language, outcome.failed > 0 ? 'community.invite.failed' : 'community.invite.refused'));
+      onDone(
+        t(language, outcome.failed > 0 ? 'community.invite.failed' : outcome.already > 0 && outcome.refused === 0 ? 'community.invite.member' : 'community.invite.refused'),
+      );
       return;
     }
     const added =

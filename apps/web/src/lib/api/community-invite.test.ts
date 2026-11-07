@@ -35,10 +35,18 @@ const servedRow = (userId: string) => ({
   user: { id: userId, username: userId, displayName: `Nom ${userId}`, avatar: null, isOnline: false, lastActiveAt: '2026-11-07T10:00:00Z', email: 'x@y.z' },
 });
 
-function setup({ online = true, answers }: { readonly online?: boolean; readonly answers: Readonly<Record<string, ApiResult<unknown>>> }) {
+function setup({
+  online = true,
+  answers,
+  nextOffset = null,
+}: {
+  readonly online?: boolean;
+  readonly answers: Readonly<Record<string, ApiResult<unknown>>>;
+  readonly nextOffset?: number | null;
+}) {
   const queryClient = new QueryClient();
   queryClient.setQueryData<InfiniteData<CommunityMemberPage, number>>(communityMembersQueryKey('c1'), {
-    pages: [{ members: [member('r1', 'u-creator'), member('r2', 'u-bob')], nextOffset: null }],
+    pages: [{ members: [member('r1', 'u-creator'), member('r2', 'u-bob')], nextOffset }],
     pageParams: [0],
   });
   queryClient.setQueryData(communityQueryKey('mshy_c1'), community());
@@ -56,7 +64,8 @@ function setup({ online = true, answers }: { readonly online?: boolean; readonly
     queryClient.getQueryData<InfiniteData<CommunityMemberPage, number>>(communityMembersQueryKey('c1'))?.pages.flatMap((page) => page.members) ?? [];
   const detail = () => queryClient.getQueryData<CommunitySummary>(communityQueryKey('mshy_c1'));
   const releaseAll = () => gates.forEach((release) => release());
-  return { deps, sent, rows, detail, releaseAll };
+  const stale = () => queryClient.getQueryState(communityMembersQueryKey('c1'))?.isInvalidated === true;
+  return { deps, sent, rows, detail, releaseAll, stale };
 }
 
 describe('qui peut inviter', () => {
@@ -85,7 +94,7 @@ describe('inviter, optimiste', () => {
     expect(detail()?.memberCount).toBe(3);
     releaseAll();
     const outcome = await pending;
-    expect(outcome).toEqual({ status: 'done', invited: 1, refused: 0, failed: 0 });
+    expect(outcome).toEqual({ status: 'done', invited: 1, already: 0, refused: 0, failed: 0 });
     expect(rows().find((row) => row.userId === 'u-ann')?.id).toBe('row-u-ann');
     expect(detail()?.memberCount).toBe(3);
   });
@@ -108,7 +117,7 @@ describe('inviter, optimiste', () => {
     const pending = performInviteMembers({ community: community(), people: [person('u-ann'), person('u-cy')], deps });
     expect(detail()?.memberCount).toBe(4);
     releaseAll();
-    expect(await pending).toEqual({ status: 'done', invited: 1, refused: 1, failed: 0 });
+    expect(await pending).toEqual({ status: 'done', invited: 1, already: 0, refused: 1, failed: 0 });
     expect(rows().map((row) => row.userId)).toEqual(['u-creator', 'u-bob', 'u-ann']);
     expect(detail()?.memberCount).toBe(3);
   });
@@ -118,7 +127,7 @@ describe('inviter, optimiste', () => {
     const before = rows();
     const pending = performInviteMembers({ community: community(), people: [person('u-ann')], deps });
     releaseAll();
-    expect(await pending).toEqual({ status: 'done', invited: 0, refused: 0, failed: 1 });
+    expect(await pending).toEqual({ status: 'done', invited: 0, already: 0, refused: 0, failed: 1 });
     expect(rows()).toEqual(before);
     expect(detail()?.memberCount).toBe(2);
   });
@@ -127,9 +136,28 @@ describe('inviter, optimiste', () => {
     const { deps, rows, detail, releaseAll } = setup({ answers: { 'u-bob': { ok: false, status: 409, error: 'already' } } });
     const pending = performInviteMembers({ community: community(), people: [person('u-bob')], deps });
     releaseAll();
-    expect(await pending).toEqual({ status: 'done', invited: 1, refused: 0, failed: 0 });
+    expect(await pending).toEqual({ status: 'done', invited: 0, already: 1, refused: 0, failed: 0 });
     expect(rows().filter((row) => row.userId === 'u-bob')).toHaveLength(1);
     expect(detail()?.memberCount).toBe(2);
+  });
+
+  test('une liste dont la fin n’est pas encore lue ne reçoit pas la ligne (la page suivante la servira) : le compteur monte, la liste est relue', async () => {
+    const { deps, rows, detail, releaseAll, stale } = setup({ nextOffset: 2, answers: { 'u-ann': { ok: true, data: servedRow('u-ann') } } });
+    const pending = performInviteMembers({ community: community(), people: [person('u-ann')], deps });
+    expect(rows().map((row) => row.userId)).toEqual(['u-creator', 'u-bob']);
+    expect(detail()?.memberCount).toBe(3);
+    releaseAll();
+    await pending;
+    expect(rows().filter((row) => row.userId === 'u-ann')).toHaveLength(0);
+    expect(stale()).toBe(true);
+  });
+
+  test('une panne relit la liste : l’écriture a pu aboutir côté serveur', async () => {
+    const { deps, releaseAll, stale } = setup({ answers: { 'u-ann': { ok: false, status: 504, error: 'timeout' } } });
+    const pending = performInviteMembers({ community: community(), people: [person('u-ann')], deps });
+    releaseAll();
+    await pending;
+    expect(stale()).toBe(true);
   });
 
   test('hors ligne, rien ne part ni ne change', async () => {
