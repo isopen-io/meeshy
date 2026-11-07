@@ -1,7 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
-import { isAddableUser } from '../../routes/communities/addable-user';
-
 export type CommunityMembershipSyncPrisma = Pick<PrismaClient, 'communityMember' | 'user'>;
 
 type AdmittedRole = 'admin' | 'member';
@@ -32,13 +30,34 @@ function mayAdmitOthers(request: CommunityAdmissionRequest): boolean {
   return request.actorRole !== null && INVITING_ROLES.has(request.actorRole);
 }
 
+/**
+ * La loi de `isAddableUser` (compte vivant, aucun blocage dans un sens ou dans
+ * l'autre), en DEUX lectures pour tout un lot : un salon peut naître avec des
+ * centaines de participants, et deux requêtes par personne feraient une rafale.
+ */
 async function everyoneAddable(
   prisma: CommunityMembershipSyncPrisma,
   actorId: string,
   userIds: readonly string[],
 ): Promise<boolean> {
-  const verdicts = await Promise.all(userIds.map((userId) => isAddableUser(prisma, actorId, userId)));
-  return verdicts.every(Boolean);
+  if (userIds.length === 0) return true;
+  const ids = [...userIds];
+  const living = await prisma.user.findMany({
+    where: { id: { in: ids }, isActive: true, deactivatedAt: null, deletedAt: null },
+    select: { id: true },
+    take: ids.length,
+  });
+  if (living.length !== ids.length) return false;
+  const blocking = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { id: actorId, blockedUserIds: { hasSome: ids } },
+        { id: { in: ids }, blockedUserIds: { has: actorId } },
+      ],
+    },
+    select: { id: true },
+  });
+  return blocking === null;
 }
 
 /**
@@ -48,7 +67,7 @@ async function everyoneAddable(
  * dans la communauté hôte. C'est une INVITATION, et elle suit la loi de
  * `POST …/invite` : dans une communauté privée, seuls son créateur, ses
  * administrateurs et ses modérateurs font entrer quelqu'un ; la personne a un
- * compte vivant et aucun blocage avec l'appelant (`isAddableUser`) ; une ligne
+ * compte vivant et aucun blocage avec l'appelant (la loi d'`isAddableUser`) ; une ligne
  * laissée par un départ ou un retrait (#5760) se réactive en MEMBER — un rang
  * se donne, il ne se retrouve pas dans une ligne périmée. Un participant déjà
  * membre actif n'entre pas : il n'est ni vérifié ni touché.
@@ -66,9 +85,12 @@ export async function planCommunityAdmission(
   const rows = await prisma.communityMember.findMany({
     where: { communityId: request.communityId, userId: { in: userIds } },
     select: { id: true, userId: true, isActive: true },
-    take: userIds.length,
   });
-  const rowOf = new Map(rows.map((row) => [row.userId, row]));
+  // Aucun index unique ne tient la paire (communityId, userId) : si une course
+  // en a laissé deux, la ligne ACTIVE fait foi.
+  const rowOf = new Map(
+    [...rows].sort((a, b) => Number(a.isActive) - Number(b.isActive)).map((row) => [row.userId, row]),
+  );
   const entering = participantIds.filter((userId) => rowOf.get(userId)?.isActive !== true);
 
   if (entering.length > 0 && !mayAdmitOthers(request)) {

@@ -28,12 +28,11 @@ function prismaDouble(lignes: readonly Ligne[], options: { readonly vivants?: re
       createMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     user: {
+      findMany: jest.fn<any>(async (args: any) => (args.where.id.in as string[]).filter((id) => vivants.has(id)).map((id) => ({ id }))),
       findFirst: jest.fn<any>(async (args: any) => {
-        if (args.where.OR) {
-          const paires = args.where.OR as Array<{ id: string; blockedUserIds: { has: string } }>;
-          return paires.some((p) => bloques.has(p.id) || bloques.has(p.blockedUserIds.has)) ? { id: 'x' } : null;
-        }
-        return vivants.has(args.where.id) ? { id: args.where.id } : null;
+        const [moi, eux] = args.where.OR as [{ blockedUserIds: { hasSome: string[] } }, { id: { in: string[] } }];
+        const touche = [...moi.blockedUserIds.hasSome, ...eux.id.in].some((id) => bloques.has(id));
+        return touche ? { id: 'x' } : null;
       }),
     },
   };
@@ -113,6 +112,7 @@ describe('planCommunityAdmission — qui entre dans la communauté', () => {
   it('ne regarde ni le droit ni le compte d\'un participant déjà membre actif', async () => {
     const prisma = prismaDouble([MOI_ACTIF, { id: 'cm-u1', userId: 'u1', isActive: true }], { vivants: [MOI] });
     expect(await plan(prisma, { isPrivate: true, participantIds: ['u1'] })).toEqual({ kind: 'admitted', reactivations: [], creations: [] });
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
     expect(prisma.user.findFirst).not.toHaveBeenCalled();
   });
 
@@ -124,6 +124,18 @@ describe('planCommunityAdmission — qui entre dans la communauté', () => {
       where: { id: { in: ['cm-moi'] }, isActive: false },
       data: { isActive: true, leftAt: null, role: 'admin' },
     });
+  });
+
+  it('vérifie tout un lot en deux lectures, quel que soit le nombre de participants', async () => {
+    const prisma = prismaDouble([MOI_ACTIF], { vivants: [MOI, 'u1', 'u2', 'u3'] });
+    expect((await plan(prisma, { participantIds: ['u1', 'u2', 'u3'] })).kind).toBe('admitted');
+    expect(prisma.user.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.user.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('une paire en double (course) : la ligne ACTIVE fait foi, personne n\'est refusé à tort', async () => {
+    const prisma = prismaDouble([MOI_ACTIF, { id: 'cm-u1-actif', userId: 'u1', isActive: true }, { id: 'cm-u1-vieux', userId: 'u1', isActive: false }]);
+    expect(await plan(prisma, { isPrivate: true, participantIds: ['u1'] })).toEqual({ kind: 'admitted', reactivations: [], creations: [] });
   });
 
   it('n\'ouvre jamais une seconde ligne pour une paire qui en a une', async () => {

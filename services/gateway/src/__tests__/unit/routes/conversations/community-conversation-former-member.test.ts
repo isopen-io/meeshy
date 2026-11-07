@@ -71,7 +71,7 @@ const COMMUNITY = '507f1f77bcf86cd799439044';
 
 type Ligne = { readonly userId: string; readonly role: string; readonly isActive: boolean };
 
-type Communaute = { readonly isPrivate?: boolean; readonly isActive?: boolean };
+type Communaute = { readonly isPrivate?: boolean; readonly isActive?: boolean; readonly vivants?: readonly string[] };
 
 function prismaDouble(lignes: readonly Ligne[], communaute: Communaute = {}) {
   const garde = (ligne: Ligne, where: Record<string, unknown> | undefined) =>
@@ -103,8 +103,10 @@ function prismaDouble(lignes: readonly Ligne[], communaute: Communaute = {}) {
     },
     participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
     user: {
-      findMany: jest.fn<any>().mockResolvedValue([]),
-      findFirst: jest.fn<any>(async (args: any) => (args.where.OR ? null : { id: args.where.id })),
+      findMany: jest.fn<any>(async (args: any) => (args.where?.id?.in ?? [])
+        .filter((id: string) => communaute.vivants === undefined || communaute.vivants.includes(id))
+        .map((id: string) => ({ id }))),
+      findFirst: jest.fn<any>().mockResolvedValue(null),
     },
   };
 }
@@ -199,6 +201,17 @@ describe('#16639 — créer une conversation n\'admet dans la communauté que ce
     const prisma = await creerDansLaCommunaute(
       [{ userId: MOI, role: 'admin', isActive: true }],
       { isActive: false, participantIds: [INVITE] },
+    );
+
+    expect(sendNotFound).toHaveBeenCalledTimes(1);
+    expect(prisma.conversation.create).not.toHaveBeenCalled();
+    expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
+  });
+
+  it('un compte non vivant ou qui bloque : 404, la conversation n\'est pas créée', async () => {
+    const prisma = await creerDansLaCommunaute(
+      [{ userId: MOI, role: 'member', isActive: true }],
+      { participantIds: [INVITE], vivants: [] },
     );
 
     expect(sendNotFound).toHaveBeenCalledTimes(1);
