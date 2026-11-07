@@ -119,6 +119,61 @@ export function persistTranslation(
     });
 }
 
+/** Ce que le relais lit des participants actifs : leur identité et les quatre colonnes du Prisme. */
+export const CALL_LISTENER_SELECT = {
+  participant: {
+    select: {
+      userId: true,
+      user: {
+        select: {
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          deviceLocale: true
+        }
+      }
+    }
+  }
+} as const;
+
+export type CallListenerRow = {
+  readonly participant?: {
+    readonly userId?: string | null;
+    readonly user?: {
+      readonly systemLanguage?: string | null;
+      readonly regionalLanguage?: string | null;
+      readonly customDestinationLanguage?: string | null;
+      readonly deviceLocale?: string | null;
+    } | null;
+  } | null;
+};
+
+export type CallListenersRead =
+  | { readonly kind: 'read'; readonly rows: readonly CallListenerRow[] }
+  | { readonly kind: 'unreadable' };
+
+/**
+ * Lit les participants ACTIFS d'un appel. Ne rejette JAMAIS (#16575) : le
+ * gestionnaire la lance en parallèle de la résolution du locuteur et de
+ * l'admission e2ee, et peut l'abandonner sur un refus — une promesse qui
+ * rejetterait alors n'aurait aucun écouteur.
+ */
+export async function readCallListeners(prisma: PrismaClient, callId: string): Promise<CallListenersRead> {
+  try {
+    const rows = await prisma.callParticipant.findMany({
+      where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
+      select: CALL_LISTENER_SELECT
+    });
+    return { kind: 'read', rows };
+  } catch (err) {
+    logger.warn('Call listeners unreadable, relaying original caption', {
+      callId,
+      error: err instanceof Error ? err.message : String(err)
+    });
+    return { kind: 'unreadable' };
+  }
+}
+
 /**
  * Translates a final transcription segment to each active participant's
  * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
@@ -141,26 +196,25 @@ export async function translateAndEmitSegment(
   socket: Socket,
   data: CallTranscriptionSegmentEvent,
   speaker: { userId: string; displayName: string | null },
-  persistedTranscriptionId: Promise<string | null> | null = null
+  persistedTranscriptionId: Promise<string | null> | null = null,
+  prefetchedListeners?: CallListenersRead
 ): Promise<void> {
-  const activeParticipants = await deps.prisma.callParticipant.findMany({
-    where: { callSessionId: data.callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
-    select: {
-      participant: {
-        select: {
-          userId: true,
-          user: {
-            select: {
-              systemLanguage: true,
-              regionalLanguage: true,
-              customDestinationLanguage: true,
-              deviceLocale: true
-            }
-          }
-        }
-      }
-    }
-  });
+  const listenersRead = prefetchedListeners ?? await readCallListeners(deps.prisma, data.callId);
+  const metrics = deps.captionMetrics ?? processCallCaptionMetrics;
+
+  // #16575 — sans la liste des auditeurs, personne ne sait vers quelle langue
+  // traduire : l'original part à la salle, comme quand le traducteur manque.
+  // Lever ici perdait le segment pour TOUT le monde (le `catch` du
+  // gestionnaire n'émet rien).
+  if (listenersRead.kind === 'unreadable') {
+    metrics.delivered('untranslated');
+    socket.to(ROOMS.call(data.callId)).emit(
+      CALL_EVENTS.TRANSLATED_SEGMENT,
+      buildTranslatedSegment(data, speaker, data.segment.language)
+    );
+    return;
+  }
+  const activeParticipants = listenersRead.rows;
 
   // Prisme-first (systemLanguage > regionalLanguage > customDestinationLanguage
   // > deviceLocale > 'fr') — same resolver as resolveNotificationLangs above.
@@ -205,7 +259,6 @@ export async function translateAndEmitSegment(
     else listenersByLanguage.set(lang, [userId]);
   }
   const targetLanguages: string[] = [...listenersByLanguage.keys()];
-  const metrics = deps.captionMetrics ?? processCallCaptionMetrics;
 
   if (targetLanguages.length === 0) {
     if (sameLanguageListeners.length > 0) metrics.delivered('same_language');
