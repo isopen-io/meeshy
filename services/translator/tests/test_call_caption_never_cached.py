@@ -14,7 +14,7 @@ import pytest
 from services.redis_service import TranslationCacheService
 from services.task_privacy import at_rest_scope, task_scope
 from services.zmq_models import TranslationTask
-from services.zmq_pool.translation_processor import process_single_translation
+from services.zmq_pool.translation_processor import process_batch_translation, process_single_translation
 
 CAPTION_IDS = ["call-caption:abc:123", "call-abc-123"]
 MESSAGE_ID = "65f1a2b3c4d5e6f7a8b9c0d1"
@@ -82,6 +82,16 @@ async def test_a_conversation_message_still_reads_and_writes_the_cache():
     assert len(cache.reads) == 1
     assert [w["message_id"] for w in cache.writes] == [MESSAGE_ID]
     assert "use_cache" not in ml.calls[0]
+
+
+@pytest.mark.asyncio
+async def test_a_batched_caption_tells_the_ml_service_not_to_use_its_segment_cache():
+    ml = _RecordingMl()
+    tasks = [_task(CAPTION_IDS[0]), _task(MESSAGE_ID)]
+
+    await process_batch_translation(tasks, "w", ml, _publish)
+
+    assert [call.get("use_cache", "absent") for call in ml.calls] == [False, "absent"]
 
 
 class _FakeRedis:
