@@ -35,6 +35,23 @@ const frCommunityMembership = {
   'community.members.error': 'Les membres n’ont pas pu être chargés.',
   'community.members.retry': 'Réessayer',
   'community.members.refused': 'Seul un administrateur peut gérer les membres.',
+  'community.invite.open': 'Inviter',
+  'community.invite.title': 'Inviter des membres',
+  'community.invite.search': 'Rechercher des personnes',
+  'community.invite.friends': 'Amis',
+  'community.invite.others': 'Autres personnes',
+  'community.invite.member': 'Déjà membre',
+  'community.invite.searching': 'Recherche…',
+  'community.invite.empty': 'Aucune personne trouvée.',
+  'community.invite.offline': 'Hors ligne : reconnectez-vous pour inviter.',
+  'community.invite.submit.none': 'Inviter',
+  'community.invite.submit.one': 'Inviter 1 personne',
+  'community.invite.submit.other': 'Inviter {count} personnes',
+  'community.invite.done.one': '1 personne a rejoint la communauté.',
+  'community.invite.done.other': '{count} personnes ont rejoint la communauté.',
+  'community.invite.partial': 'Certaines personnes n’ont pas pu être ajoutées.',
+  'community.invite.failed': 'L’invitation a échoué. Réessayez.',
+  'community.invite.refused': 'Vous ne pouvez plus inviter dans cette communauté.',
 } as const;
 
 export default frCommunityMembership;

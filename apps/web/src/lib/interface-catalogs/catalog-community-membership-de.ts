@@ -37,6 +37,23 @@ const deCommunityMembership = {
   'community.members.error': 'Die Mitglieder konnten nicht geladen werden.',
   'community.members.retry': 'Erneut versuchen',
   'community.members.refused': 'Nur ein Admin kann Mitglieder verwalten.',
+  'community.invite.open': 'Einladen',
+  'community.invite.title': 'Mitglieder einladen',
+  'community.invite.search': 'Personen suchen',
+  'community.invite.friends': 'Freunde',
+  'community.invite.others': 'Weitere Personen',
+  'community.invite.member': 'Bereits Mitglied',
+  'community.invite.searching': 'Suche…',
+  'community.invite.empty': 'Niemand gefunden.',
+  'community.invite.offline': 'Offline: Verbinde dich erneut, um einzuladen.',
+  'community.invite.submit.none': 'Einladen',
+  'community.invite.submit.one': '1 Person einladen',
+  'community.invite.submit.other': '{count} Personen einladen',
+  'community.invite.done.one': '1 Person ist der Community beigetreten.',
+  'community.invite.done.other': '{count} Personen sind der Community beigetreten.',
+  'community.invite.partial': 'Einige Personen konnten nicht hinzugefügt werden.',
+  'community.invite.failed': 'Die Einladung ist fehlgeschlagen. Versuche es erneut.',
+  'community.invite.refused': 'Du kannst in diese Community nicht mehr einladen.',
 } as const satisfies CommunityMembershipCatalog;
 
 export default deCommunityMembership;

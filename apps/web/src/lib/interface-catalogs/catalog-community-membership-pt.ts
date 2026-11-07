@@ -37,6 +37,23 @@ const ptCommunityMembership = {
   'community.members.error': 'Não foi possível carregar os membros.',
   'community.members.retry': 'Tentar novamente',
   'community.members.refused': 'Só um administrador pode gerenciar os membros.',
+  'community.invite.open': 'Convidar',
+  'community.invite.title': 'Convidar membros',
+  'community.invite.search': 'Pesquisar pessoas',
+  'community.invite.friends': 'Amigos',
+  'community.invite.others': 'Outras pessoas',
+  'community.invite.member': 'Já é membro',
+  'community.invite.searching': 'A pesquisar…',
+  'community.invite.empty': 'Ninguém encontrado.',
+  'community.invite.offline': 'Sem ligação: volte a ligar-se para convidar.',
+  'community.invite.submit.none': 'Convidar',
+  'community.invite.submit.one': 'Convidar 1 pessoa',
+  'community.invite.submit.other': 'Convidar {count} pessoas',
+  'community.invite.done.one': '1 pessoa entrou na comunidade.',
+  'community.invite.done.other': '{count} pessoas entraram na comunidade.',
+  'community.invite.partial': 'Algumas pessoas não puderam ser adicionadas.',
+  'community.invite.failed': 'O convite falhou. Tente novamente.',
+  'community.invite.refused': 'Já não pode convidar para esta comunidade.',
 } as const satisfies CommunityMembershipCatalog;
 
 export default ptCommunityMembership;
