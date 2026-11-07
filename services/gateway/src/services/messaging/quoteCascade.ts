@@ -201,9 +201,38 @@ export type ReaderPage<T> = {
 };
 
 /**
- * Les deux coupures de service d'une page lue par UN lecteur, pour une porte
- * qui n'avait ni l'une ni l'autre (recherche, fil, lien de partage) : l'éphémère
- * échu pour lui (#7451), puis la réponse à ce qui est mort pour lui (#8630).
+ * Les deux coupures de service d'une page lue par UN lecteur : l'éphémère échu
+ * pour lui (#7451), puis la réponse à ce qui est mort pour lui (#8630).
+ *
+ * ─── CE DOC-COMMENT N'EST PAS UN PÉRIMÈTRE (#16578) ─────────────────────────
+ *
+ * Il énumérait ses portes — « recherche, fil, lien de partage ». Elles
+ * l'appelaient toutes les trois, et la phrase était donc vraie ; elle se
+ * relisait pourtant comme la LISTE DES PORTES QUI EN ONT BESOIN, et a servi
+ * d'alibi à qui cherchait s'il en manquait une. Il en manquait DEUX, et toutes
+ * deux servaient une bulle complète : `GET …/pinned-messages` (#16578) et
+ * `GET /messages/:messageId` (#16581, par la forme unitaire ci-dessous).
+ *
+ * Une liste d'appelants écrite ici affirme deux choses — « ces portes
+ * m'appellent », vérifiable en une commande, et « ce sont les portes qui
+ * devraient m'appeler », presque jamais vérifiée. Elle n'est donc plus écrite :
+ * la question se pose dans l'autre sens, et elle est outillée —
+ * `grep -l 'prisma\.message\.' | xargs grep -L 'keepAliveForReader'`, croisé
+ * avec « cette porte sert-elle `Message.content` à un lecteur ? ».
+ *
+ * ─── ET CETTE BORNE EST CELLE DU SERVICE, PAS CELLE DE LA SORTIE ────────────
+ *
+ * `D(u) + 1 h`. Une porte qui fait SORTIR le contenu vers un tiers — transfert,
+ * téléchargement, publication — prend `contentStillVisibleToReader`, qui borne à
+ * `D(u)` SANS grâce et lit la chaîne citée de façon CIBLÉE. Les deux gardent
+ * « le même » éphémère et diffèrent d'une heure ; l'heure est le sujet. Avant
+ * d'emprunter l'une ou l'autre, lire ce qu'elle GARDE, pas ce qu'elle lit.
+ *
+ * La case « chaîne citée CIBLÉE + borne de SERVICE » n'existe pas : elle est
+ * celle qu'une porte UNITAIRE de service voudrait, et son absence est suivie en
+ * #16582. Celle-ci lit la chaîne par un balayage PLAFONNÉ (#4165) qui SERT
+ * quand il échoue (#9625) — juste pour une page, trop lâche pour une porte qui
+ * décide seule.
  */
 export async function keepAliveForReader<T extends ReaderPageRow>(
   prisma: QuoteCascadePrisma,
