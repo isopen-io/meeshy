@@ -1332,6 +1332,25 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Éteint « ici » pour un membre qui vient de perdre l'appartenance au fil
+   * (#16654).
+   *
+   * Unique appelant : `endConversationMembership`, le point de convergence des
+   * chemins de fin d'appartenance — c'est là qu'est écrit POURQUOI l'extinction
+   * précède l'éviction des rooms. Le raisonnement propre au regard (un registre
+   * en mémoire dont la surface était clavetée par socket, donc inatteignable
+   * depuis une route) vit dans
+   * `ConversationViewingHandler.retractViewingForDepartedMember` ; le
+   * gestionnaire n'en est que le porteur, comme pour la position vive et
+   * l'appel.
+   *
+   * Ne rejette jamais : le handler absorbe ses propres échecs.
+   */
+  public async retractViewingForDepartedMember(conversationId: string, userId: string): Promise<void> {
+    await this.conversationViewingHandler?.retractViewingForDepartedMember(conversationId, userId);
+  }
+
+  /**
    * Expose SocialEventsHandler for use in routes (broadcast social events)
    */
   public getSocialEventsHandler(): SocialEventsHandler {
