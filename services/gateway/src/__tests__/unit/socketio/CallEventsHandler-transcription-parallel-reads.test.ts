@@ -182,7 +182,7 @@ describe('call:transcription-segment — les lectures partent ensemble (#16575)'
     admission.resolve(PLAINTEXT_CALL);
     listeners.resolve(LISTENERS);
     await flush();
-    expect(h.zmq.translateText).toHaveBeenCalledWith('Bonjour le monde', 'fr', 'en', `call-${CALL_ID}-0`, CALL_ID);
+    expect(h.zmq.translateText).toHaveBeenCalledWith('Bonjour le monde', 'fr', 'en', `call-${CALL_ID}-0`, CALL_ID, 'basic', { timeoutMs: 10_000, retryEnabled: false });
     h.zmq.emit(`translationCompleted:call-${CALL_ID}-0`, { taskId: 'task-en', result: { translatedText: 'Hello world', targetLanguage: 'en' } });
     await done;
 

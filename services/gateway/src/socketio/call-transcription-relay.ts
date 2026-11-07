@@ -41,6 +41,8 @@ import type {
 import { guardedTimeout } from '../utils/guarded-timer';
 import { processCallCaptionMetrics, type CallCaptionMetrics } from '../services/metrics/callCaptionMetrics';
 
+export const CALL_CAPTION_TRANSLATION_TIMEOUT_MS = 10_000;
+
 /**
  * Ce que le relais emprunte à l'instance.
  *
@@ -320,14 +322,15 @@ export async function translateAndEmitSegment(
           segmentLanguage,
           targetLanguage,
           messageId,
-          data.callId
+          data.callId,
+          'basic',
+          { timeoutMs: CALL_CAPTION_TRANSLATION_TIMEOUT_MS, retryEnabled: false }
         );
 
         logger.debug('Call transcription segment translation requested', { callId: data.callId, taskId, targetLanguage });
 
         return new Promise<void>((resolve) => {
-          const TIMEOUT_MS = 10_000;
-          const timer = guardedTimeout({ name: 'call-transcription-segment-timeout', afterMs: TIMEOUT_MS, logger, run: () => {
+          const timer = guardedTimeout({ name: 'call-transcription-segment-timeout', afterMs: CALL_CAPTION_TRANSLATION_TIMEOUT_MS, logger, run: () => {
             zmqClient.off(scopedEvent, onResult);
             timing.finish('timeout');
             resolve();
