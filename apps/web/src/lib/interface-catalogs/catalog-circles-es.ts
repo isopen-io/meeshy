@@ -103,6 +103,19 @@ const es = {
   'circles.settings.blockTalkie': 'Silenciar su talkie',
   'circles.settings.blockTalkie.detail': 'Su voz ya no sonará directamente en tu dispositivo: llegará como mensaje de voz. Esta persona no recibe ningún aviso.',
   'circles.settings.blockTalkie.failed': 'No se pudo guardar el ajuste',
+  'talkie.send.explain': 'Mantén pulsado y habla: tu voz suena directamente en el lado de {name}, sin descolgar.',
+  'talkie.send.hold': 'Mantén para hablar',
+  'talkie.send.hold.a11y': 'Mantén para hablar con {name} — con el teclado, deja pulsada la barra espaciadora',
+  'talkie.send.connecting': 'Conectando…',
+  'talkie.send.talking': 'Estás hablando con {name}…',
+  'talkie.send.unsupported': 'Este navegador aún no puede usar el walkie-talkie: envía un mensaje de voz.',
+  'talkie.send.voice': 'El walkie-talkie no pasa ahora mismo: envía un mensaje de voz.',
+  'talkie.send.e2ee': 'El walkie-talkie no está cifrado de extremo a extremo: sigue cerrado con una conversación cifrada.',
+  'talkie.send.rateLimited': 'Demasiadas intervenciones: inténtalo de nuevo en un momento.',
+  'talkie.send.offline': 'Sin conexión: el walkie-talkie no se pudo enviar.',
+  'talkie.send.failed': 'El walkie-talkie no se pudo enviar.',
+  'talkie.send.micDenied': 'Permite el micrófono para usar el walkie-talkie.',
+  'talkie.send.limit': 'Treinta segundos como máximo: la intervención se ha detenido.',
 } as const satisfies CirclesCatalog;
 
 export default es;
