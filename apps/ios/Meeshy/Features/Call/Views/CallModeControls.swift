@@ -129,8 +129,8 @@ struct CallEffectsModeControls: View {
                 name: CallEffectsCopy.name,
                 isRecording: capture.isRecording,
                 hint: gestureHint,
-                onCapturePhoto: capturesMyImage ? shootMyImage : nil,
-                onStartRecording: capturesMyImage ? filmMyImage : nil
+                onCapturePhoto: photoAction,
+                onStartRecording: filmAction
             ) { effect, isSelected in
                 CallModeGlyph(art: CallEffectsCopy.art(effect), isSelected: isSelected)
             }
@@ -142,8 +142,8 @@ struct CallEffectsModeControls: View {
                 name: CallEffectsCopy.presetName,
                 isRecording: capture.isRecording,
                 hint: gestureHint,
-                onCapturePhoto: capturesMyImage ? shootMyImage : nil,
-                onStartRecording: capturesMyImage ? filmMyImage : nil
+                onCapturePhoto: photoAction,
+                onStartRecording: filmAction
             ) { preset, isSelected in
                 CallModeGlyph(art: .symbol(CallEffectsCopy.presetSymbol(preset)), isSelected: isSelected)
             }
@@ -157,6 +157,18 @@ struct CallEffectsModeControls: View {
 
     /// #8625 — en mode Effets, la photo et le film portent MON image seule,
     /// telle que l'effet la rend.
+    /// Typées une fois : la ternaire d'une méthode et de `nil` dans les deux branches du `switch` dépassait le
+    /// vérificateur de types (« failed to produce diagnostic »).
+    private var photoAction: (() -> Void)? {
+        guard capturesMyImage else { return nil }
+        return { shootMyImage() }
+    }
+
+    private var filmAction: (() -> Void)? {
+        guard capturesMyImage else { return nil }
+        return { filmMyImage() }
+    }
+
     private func shootMyImage() {
         hasSeenGestureHint = true
         Task { await capture.capture(style: .screen) }
