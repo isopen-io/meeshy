@@ -236,6 +236,11 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         : await prisma.participant.findMany({
             where: { userId, conversationId: { in: mentionConversationIds }, isActive: true },
             select: { id: true, conversationId: true },
+            // #4165 — borné, et la borne est EXACTE, pas un plafond arbitraire :
+            // un utilisateur n'a au plus qu'UNE participation active par
+            // conversation, donc le nombre de conversations distinctes de la
+            // page est le maximum de lignes que cette lecture peut rendre.
+            take: mentionConversationIds.length,
           });
       const mentionReaderPage = await keepAliveForReaderAcrossConversations(
         prisma,
