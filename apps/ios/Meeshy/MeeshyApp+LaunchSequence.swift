@@ -13,6 +13,7 @@ extension MeeshyApp {
         await bootOutbox(session: bootSession)
         await wireSettingsReplay()
         sweepLegacyOutboxFiles()
+        sweepOrphanPendingCopies(session: bootSession)
         drainOutboxAtBoot(session: bootSession)
         bootEngagementAndLiveActivities()
         await resolveStoredSession()
@@ -130,6 +131,17 @@ extension MeeshyApp {
                     UserDefaults.standard.set(true, forKey: didDeleteLegacyKey)
                 }
             }
+        }
+    }
+
+    /// Personne de connecté ⇒ aucune base pour juger : rien ne s'efface (#16129).
+    func sweepOrphanPendingCopies(session: MessageStoreSession) {
+        guard session.key != nil else { return }
+        let storeDirectory = dependencies.storeDirectory
+        Task.detached(priority: .background) {
+            await PendingCopySweep.sweepAtColdStart(
+                activeBase: session.database.pool, activePath: session.path, storeDirectory: storeDirectory
+            )
         }
     }
 

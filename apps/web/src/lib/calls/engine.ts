@@ -239,6 +239,26 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     stream.addTrack(to);
   };
 
+  /** Remplace la piste vidéo envoyée sur chaque lien — `replaceTrack`, sans renégociation. */
+  const applyVideoTrack = async (next: MediaStreamTrack): Promise<void> => {
+    const stream = localStream;
+    const current = stream?.getVideoTracks()[0];
+    if (stream === null || current === undefined || current === next) return;
+    swapTrack(stream, current, next);
+    await Promise.all([...session.links.values()].map((link) => link.setVideoTrack(next).catch(() => undefined)));
+    update((call) => ({ ...call, localStream: deps.createStream(stream.getTracks()) }));
+  };
+
+  /**
+   * Un traitement d'effets MORT en cours d'appel (#9187) : la caméra brute
+   * reprend la place de la piste traitée, sur chaque lien, sans renégociation.
+   */
+  effects.onFailure((camera) => {
+    const call = read();
+    if (call === null || !call.cameraOn || call.screenSharing) return;
+    void applyVideoTrack(camera);
+  });
+
   const teardownMedia = (): void => {
     preview.close();
     for (const link of session.links.values()) link.close();
@@ -863,9 +883,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       effects.release(next);
       return;
     }
-    swapTrack(stream, current, next);
-    await Promise.all([...session.links.values()].map((link) => link.setVideoTrack(next).catch(() => undefined)));
-    update((latest) => ({ ...latest, localStream: deps.createStream(stream.getTracks()) }));
+    await applyVideoTrack(next);
   };
 
   const camera = createEngineCamera({

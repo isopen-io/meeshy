@@ -35,6 +35,8 @@ public enum MessageEvent: Sendable {
     case delivered(count: Int, at: Date)
     case readBy(userId: String, at: Date)
     case sendFailed(any Error & Sendable)
+    /// Une reprise par la file durable a échoué : la file tient le budget, la bulle y retourne.
+    case replayFailed(any Error & Sendable)
     case retry
     case retryExhausted
 }

@@ -79,6 +79,7 @@ const previewHarness = () => {
         },
         release: () => undefined,
         used: () => [],
+        onFailure: () => undefined,
       };
     },
     attach: () => undefined,

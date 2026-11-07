@@ -65,13 +65,29 @@ export const atRestRequestFlag = (encryptionMode: string | null | undefined): { 
 export const translationRequestRegime = (message: { readonly encryptionMode?: string | null; readonly [field: string]: unknown }): { readonly atRest?: true } =>
   isServerAtRestMode(message.encryptionMode) || contentDisappears(message) ? { atRest: true } : {};
 
-/** Le message que `translation:request` retraduit, son texte ouvert ; `content` vide s'il reste scellé. */
+/**
+ * Le message que `translation:request` retraduit, son texte ouvert ; `content`
+ * vide s'il reste scellé.
+ *
+ * #16552 — la garde de VIVACITÉ se relit CHEZ ELLE, pas chez l'appelant. Les
+ * trois transports de suppression écrivent `{ translations: null, deletedAt }` :
+ * ils effacent les copies traduites À DESSEIN et gardent `content`. Un message
+ * rappelé passait donc la garde `!message.content` du handler, repartait au
+ * traducteur, et sa traduction était RÉÉCRITE en base puis rediffusée à toute la
+ * room et à la file hors ligne — le secret revenait sur le fil après qu'on a dit
+ * à l'utilisateur qu'il était détruit.
+ *
+ * `deletedAt` non nul est la SEULE preuve d'un rappel (aucun chemin de la
+ * passerelle ne supprime un message physiquement) : on refuse sur la PREUVE. Une
+ * ligne absente reste traitée comme avant par l'appelant — `null` ici — ce qui ne
+ * sert rien et ne divulgue pas l'existence du message.
+ */
 export async function loadTranslatableMessage(prisma: PrismaClient, messageId: string) {
   const row = await prisma.message.findUnique({
     where: { id: messageId },
-    select: { id: true, content: true, originalLanguage: true, senderId: true, ...AT_REST_MESSAGE_SELECT },
+    select: { id: true, content: true, originalLanguage: true, senderId: true, createdAt: true, deletedAt: true, ...AT_REST_MESSAGE_SELECT },
   });
-  if (!row) return null;
+  if (!row || row.deletedAt) return null;
   const source = await translationSourceOf(row, gatewayKeyring(prisma));
   const content = source.readable ? source.row.content : '';
   return {
@@ -81,5 +97,7 @@ export async function loadTranslatableMessage(prisma: PrismaClient, messageId: s
     originalLanguage: row.originalLanguage,
     senderId: row.senderId,
     encryptionMode: row.encryptionMode,
+    /** L'horloge que le plancher d'historique de l'appelant compare (#16552). */
+    createdAt: row.createdAt,
   };
 }

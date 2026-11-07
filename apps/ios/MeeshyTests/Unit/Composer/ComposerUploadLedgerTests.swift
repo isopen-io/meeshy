@@ -1,4 +1,6 @@
 import XCTest
+import Combine
+import GRDB
 @testable import Meeshy
 @testable import MeeshySDK
 
@@ -200,5 +202,209 @@ final class MessageUploadProgressStoreTests: XCTestCase {
         let spoken = MessageUploadProgress.accessibilityValue(percent: 42, locale: Locale(identifier: "fr_FR"))
         XCTAssertTrue(spoken.hasPrefix("42"))
         XCTAssertTrue(spoken.hasSuffix("%"))
+    }
+}
+
+/// **La progression d'une bulle appartient à l'application, pas au ViewModel** (#16275) :
+/// elle survit à la sortie de la conversation, et la reprise par la file durable publie sous
+/// le même identifiant que l'envoi en direct.
+@MainActor
+final class MessageUploadProgressReplayTests: XCTestCase {
+
+    private func makeCollaborators() throws -> ConversationCollaborators {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        return ConversationCollaborators(
+            persistence: MessagePersistenceActor(dbWriter: pool),
+            syncEngine: ConversationSyncEngine.shared,
+            messageService: MockMessageService(),
+            regimeLedger: EndToEndRegimeLedger()
+        )
+    }
+
+    private func tick(sent: Int64, total: Int64) -> UploadQueueProgress {
+        UploadQueueProgress(
+            files: [], totalFiles: 1, completedFiles: 0, totalBytes: total, uploadedBytes: sent,
+            globalPercentage: total > 0 ? Double(sent) / Double(total) * 100 : 0
+        )
+    }
+
+    private func drainMainQueue() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+    }
+
+    func test_collaborators_conversationReopened_readsTheRunningProgress() throws {
+        let cmid = ClientMessageId.generate()
+        let leftConversation = try makeCollaborators()
+        leftConversation.uploadProgress.begin([cmid])
+        leftConversation.uploadProgress.report(sent: 40, total: 100, for: cmid)
+
+        let reopened = try makeCollaborators()
+
+        XCTAssertEqual(reopened.uploadProgress.progress(for: cmid)?.percent, 40)
+        leftConversation.uploadProgress.end([cmid])
+    }
+
+    func test_reportBytes_servesThePercentOfTheBubble() {
+        let store = MessageUploadProgressStore()
+        store.begin(["video"])
+        store.report(sent: 25, total: 200, for: "video")
+        XCTAssertEqual(store.progress(for: "video")?.percent, 12)
+    }
+
+    func test_reportBytes_unknownTotal_keepsTheClock() {
+        let store = MessageUploadProgressStore()
+        store.begin(["video"])
+        store.report(sent: 0, total: 0, for: "video")
+        XCTAssertNil(store.progress(for: "video")?.percent)
+    }
+
+    /// La cellule d'une bulle en attente se configure AVANT que la file ne la reprenne, et
+    /// rien ne la reconfigure ensuite : l'objet qu'elle a reçu est celui que la reprise nourrit.
+    func test_progress_pendingBubbleConfiguredBeforeTheReplay_receivesItsTicks() {
+        let store = MessageUploadProgressStore()
+        let cmid = ClientMessageId.generate()
+        let heldByTheCell = store.progress(for: cmid)
+        XCTAssertNil(heldByTheCell?.percent)
+
+        store.begin([cmid])
+        store.report(sent: 30, total: 100, for: cmid)
+
+        XCTAssertEqual(heldByTheCell?.percent, 30)
+    }
+
+    func test_progress_serverMessageId_hasNoObject() {
+        XCTAssertNil(MessageUploadProgressStore().progress(for: "507f1f77bcf86cd799439011"))
+    }
+
+    /// Le registre vit autant que l'application : une bulle de texte vue une fois n'y reste pas.
+    func test_progress_idleObjectNobodyHolds_isNotRetained() {
+        let store = MessageUploadProgressStore()
+        weak var idle: MessageUploadProgress?
+        autoreleasepool { idle = store.progress(for: ClientMessageId.generate()) }
+        XCTAssertNil(idle)
+    }
+
+    /// Une reprise qui échoue rend l'horloge à la bulle : elle ne reste pas figée à 97 %.
+    func test_end_objectStillHeldByTheCell_goesBackToTheClock() {
+        let store = MessageUploadProgressStore()
+        let cmid = ClientMessageId.generate()
+        let heldByTheCell = store.progress(for: cmid)
+        store.begin([cmid])
+        store.report(sent: 97, total: 100, for: cmid)
+
+        store.end([cmid])
+
+        XCTAssertNil(heldByTheCell?.percent)
+    }
+
+    func test_relayWatch_replayTicks_reachTheBubbleOfThatCmid() async {
+        let store = MessageUploadProgressStore()
+        let relay = ReplayUploadProgressRelay(store: store)
+        let cmid = ClientMessageId.generate()
+        let heldByTheCell = store.progress(for: cmid)
+        let ticks = PassthroughSubject<UploadQueueProgress, Never>()
+
+        relay.watch(ticks.eraseToAnyPublisher(), for: cmid)
+        ticks.send(tick(sent: 512, total: 1024))
+        await drainMainQueue()
+
+        XCTAssertEqual(heldByTheCell?.percent, 50)
+    }
+
+    func test_relayStop_lateTickChangesNothing() async {
+        let store = MessageUploadProgressStore()
+        let relay = ReplayUploadProgressRelay(store: store)
+        let cmid = ClientMessageId.generate()
+        let heldByTheCell = store.progress(for: cmid)
+        let ticks = PassthroughSubject<UploadQueueProgress, Never>()
+        relay.watch(ticks.eraseToAnyPublisher(), for: cmid)
+        ticks.send(tick(sent: 10, total: 100))
+        await drainMainQueue()
+
+        relay.stop(cmid)
+        ticks.send(tick(sent: 90, total: 100))
+        await drainMainQueue()
+
+        XCTAssertNil(heldByTheCell?.percent)
+    }
+
+    /// Un groupe en échec rejoint la file pendant que le reste de son lot monte encore : la fin
+    /// du lot en direct ne fait pas taire la reprise déjà partie.
+    func test_relayWatch_liveBatchSettlesDuringTheReplay_keepsPublishing() async {
+        let store = MessageUploadProgressStore()
+        let relay = ReplayUploadProgressRelay(store: store)
+        let cmid = ClientMessageId.generate()
+        let heldByTheCell = store.progress(for: cmid)
+        let ticks = PassthroughSubject<UploadQueueProgress, Never>()
+        store.begin([cmid])
+        relay.watch(ticks.eraseToAnyPublisher(), for: cmid)
+
+        store.end([cmid])
+        ticks.send(tick(sent: 60, total: 100))
+        await drainMainQueue()
+
+        XCTAssertEqual(heldByTheCell?.percent, 60)
+        relay.stop(cmid)
+    }
+
+    /// Plusieurs pistes montent l'une après l'autre : sans le lot déclaré, la bulle oscillerait
+    /// à 100 % à chaque fin de piste.
+    func test_relayUploader_declaresTheWholeBatchAndReachesTheBubble() async throws {
+        let store = MessageUploadProgressStore()
+        let relay = ReplayUploadProgressRelay(store: store)
+        let cmid = ClientMessageId.generate()
+        let heldByTheCell = store.progress(for: cmid)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("\(cmid).bin")
+        try Data(repeating: 1, count: 2_048).write(to: file)
+        addTeardownBlock { try? FileManager.default.removeItem(at: file) }
+        let baseURL = try XCTUnwrap(URL(string: "https://staging.meeshy.me"))
+
+        _ = await relay.uploader(baseURL: baseURL, for: cmid, stored: [file.path])
+        await drainMainQueue()
+
+        XCTAssertEqual(heldByTheCell?.percent, 0)
+        relay.stop(cmid)
+    }
+
+    /// Le téléverseur d'un rejeu ne se construit qu'au relais : une troisième branche de
+    /// `dispatchSendMessage` qui en créerait un à la main remonterait sans progression.
+    func test_replayBranches_buildTheirUploaderThroughTheRelay() throws {
+        let source = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/OutboxDispatcher+Messages.swift")
+        let text = try String(contentsOf: source, encoding: .utf8)
+
+        XCTAssertFalse(text.contains("TusUploadManager(baseURL:"))
+        XCTAssertEqual(text.components(separatedBy: "ReplayUploadProgressRelay.shared.uploader(").count - 1, 1)
+        XCTAssertEqual(text.components(separatedBy: "await replayUploader(").count - 1, 2)
+    }
+
+    /// Reprise en échec comme reprise réussie : la bulle ne garde pas un anneau sans envoi derrière.
+    func test_dispatchSendMessage_replayEnds_relayStops() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let dispatcher = OutboxDispatcher(messageService: MockMessageService(), persistence: { persistence })
+        let cmid = ClientMessageId.generate()
+        let heldByTheCell = MessageUploadProgressStore.shared.progress(for: cmid)
+        let ticks = PassthroughSubject<UploadQueueProgress, Never>()
+        ReplayUploadProgressRelay.shared.watch(ticks.eraseToAnyPublisher(), for: cmid)
+        ticks.send(tick(sent: 70, total: 100))
+        await drainMainQueue()
+        XCTAssertEqual(heldByTheCell?.percent, 70)
+
+        let unreadable = OutboxRecord(
+            kind: .sendMessage, conversationId: "conv", clientMessageId: cmid, payload: Data("pas du json".utf8)
+        )
+        try? await dispatcher.dispatchSendMessageRecordingFailure(unreadable)
+        await drainMainQueue()
+        await Task.yield()
+        await drainMainQueue()
+
+        XCTAssertNil(heldByTheCell?.percent)
     }
 }

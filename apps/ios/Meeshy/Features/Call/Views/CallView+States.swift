@@ -70,7 +70,7 @@ extension CallView {
                 }
                 endCallButton
             }
-            .padding(.bottom, 80)
+            .padding(.bottom, Self.chromeBottomInset)
         }
         .task {
             sdpOfferSlow = false
@@ -125,7 +125,7 @@ extension CallView {
                 }
                 endCallButton
             }
-            .padding(.bottom, 80)
+            .padding(.bottom, Self.chromeBottomInset)
         }
         // L'écran entier : l'aperçu de l'appelant posé derrière (`CallView`,
         // état `.connecting`) ne se limite pas à la colonne des boutons.

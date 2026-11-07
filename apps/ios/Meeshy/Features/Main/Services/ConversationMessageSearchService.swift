@@ -10,10 +10,22 @@ import MeeshySDK
 /// partagent : une seule loi de sortie, un seul Prisme.
 protocol ConversationMessageSearchProviding: Sendable {
     func localMessages(query: String, reader: MeeshyUser?) async -> [GlobalSearchMessageResult]
-    func remoteMessages(query: String, reader: MeeshyUser?) async -> GlobalSearchLeg<GlobalSearchMessageResult>
+    func remoteMessages(query: String, reader: MeeshyUser?, after cursor: String?) async -> GlobalSearchLeg<GlobalSearchMessageResult>
+}
+
+extension ConversationMessageSearchProviding {
+    func remoteMessages(query: String, reader: MeeshyUser?) async -> GlobalSearchLeg<GlobalSearchMessageResult> {
+        await remoteMessages(query: query, reader: reader, after: nil)
+    }
 }
 
 nonisolated struct ConversationMessageSearchService: ConversationMessageSearchProviding {
+
+    static let pageSize = 30
+    /// Aller-retours consacrés à des pages VIDES avant de rendre la main : la
+    /// passerelle filtre après lecture, une page vide peut précéder une pleine,
+    /// mais un terme rare ne balaie pas tout l'historique à chaque frappe (#16476).
+    static let emptyPageBudget = 8
 
     private let api: APIClientProviding
     private let searchService: MessageSearchService
@@ -65,14 +77,32 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
 
     /// Le réseau d'abord (il porte le nom et l'avatar frais), le local comble
     /// ce que le réseau n'a pas rendu — hors ligne, conversation chiffrée.
-    static func merged(
+    ///
+    /// Le verrou PIN protège le CONTENU (#11387) : aucun message d'une
+    /// conversation verrouillée ne sort, d'où qu'il vienne. La loi s'applique
+    /// ici, à la sortie, et non à la lecture : un résultat mis en cache avant
+    /// le verrou reste retenu.
+    @MainActor static func merged(
         local: [GlobalSearchMessageResult],
-        remote: [GlobalSearchMessageResult]
+        remote: [GlobalSearchMessageResult],
+        contentLocks: Set<String> = ConversationLockManager.shared.contentLockedConversationIds
     ) -> [GlobalSearchMessageResult] {
         var seen = Set<String>()
         return (remote + local)
+            .filter { !ConversationLockManager.hidesContent(of: $0.conversationId, lockedConversationIds: contentLocks) }
             .filter { seen.insert($0.id).inserted }
             .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// La photo d'une conversation connue : un direct montre son interlocuteur,
+    /// jamais la photo de la conversation (#12569). Sans photo de pair, il
+    /// reste en initiales.
+    static func avatar(of conversation: MeeshyConversation) -> String? {
+        conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar
+    }
+
+    private func conversationsById() async -> [String: MeeshyConversation] {
+        Dictionary(await cachedConversations().map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     // MARK: - Volet local
@@ -84,16 +114,15 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
         let preferred = ReaderPrism.resolve(for: reader)
         let visible = records.filter { Self.appearsInSearch($0.toMessage(currentUserId: readerId)) }
         let translations = (try? await searchService.translations(forMessageLocalIds: visible.map(\.localId))) ?? [:]
-        let conversationsById = Dictionary(
-            await cachedConversations().map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }
-        )
+        let known = await conversationsById()
         return visible.map { record in
-            let conversation = conversationsById[record.conversationId]
+            let conversation = known[record.conversationId]
             return GlobalSearchMessageResult(
                 id: record.serverId ?? record.localId,
                 conversationId: record.conversationId,
-                conversationName: conversation?.displayName ?? record.conversationId,
-                conversationAvatar: conversation?.avatar ?? conversation?.participantAvatarURL,
+                conversationName: conversation?.displayName
+                    ?? String(localized: "conversation.info.header", defaultValue: "Conversation"),
+                conversationAvatar: conversation.flatMap(Self.avatar(of:)),
                 content: Self.servedText(
                     original: record.content ?? "",
                     originalLanguage: record.originalLanguage,
@@ -114,24 +143,54 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
     /// ce qui ne doit pas sortir. Une passerelle qui ne la porte pas encore
     /// (production avant promotion) répond par une erreur : on retombe alors
     /// sur l'ancienne recherche par conversation, jamais sur un vide.
-    func remoteMessages(query: String, reader: MeeshyUser?) async -> GlobalSearchLeg<GlobalSearchMessageResult> {
+    ///
+    /// `cursor` reprend là où la page précédente s'est arrêtée. La suite d'une
+    /// pagination ne se replie pas : son échec garde le curseur, pour que la
+    /// page ratée se redemande.
+    func remoteMessages(query: String, reader: MeeshyUser?, after cursor: String?) async -> GlobalSearchLeg<GlobalSearchMessageResult> {
         do {
-            let page: PaginatedAPIResponse<[APIMessageSearchHit]> = try await api.request(
-                MessagesEndpoint.search,
-                queryItems: [URLQueryItem(name: "q", value: query), URLQueryItem(name: "limit", value: "30")]
+            let page = try await servedPage(query: query, cursor: cursor, emptyPagesLeft: Self.emptyPageBudget)
+            let known = await conversationsById()
+            return GlobalSearchLeg(
+                items: page.hits.map { Self.result(from: $0, in: known[$0.conversationId]) },
+                failure: nil,
+                nextCursor: page.nextCursor
             )
-            return .served(page.data.map(Self.result(from:)))
         } catch {
-            return await legacyRemoteMessages(query: query, reader: reader)
+            guard let cursor else { return await legacyRemoteMessages(query: query, reader: reader) }
+            return GlobalSearchLeg(items: [], failure: String(localized: "common.error.generic"), nextCursor: cursor)
         }
     }
 
-    static func result(from hit: APIMessageSearchHit) -> GlobalSearchMessageResult {
+    /// La première page qui rend quelque chose : une page courte s'affiche
+    /// aussitôt, seule une page VIDE avec `hasMore` s'enchaîne d'elle-même
+    /// (contrat #14619 : le serveur filtre après lecture).
+    private func servedPage(
+        query: String,
+        cursor: String?,
+        emptyPagesLeft: Int
+    ) async throws -> (hits: [APIMessageSearchHit], nextCursor: String?) {
+        let page: PaginatedAPIResponse<[APIMessageSearchHit]> = try await api.request(
+            MessagesEndpoint.search,
+            queryItems: [
+                URLQueryItem(name: "q", value: query),
+                URLQueryItem(name: "limit", value: String(Self.pageSize))
+            ] + (cursor.map { [URLQueryItem(name: "cursor", value: $0)] } ?? [])
+        )
+        let next = page.pagination?.hasMore == true ? page.pagination?.nextCursor : nil
+        guard page.data.isEmpty, let next, emptyPagesLeft > 1, !Task.isCancelled else { return (page.data, next) }
+        return try await servedPage(query: query, cursor: next, emptyPagesLeft: emptyPagesLeft - 1)
+    }
+
+    /// Une conversation que l'appareil connaît garde son nom et sa photo élus
+    /// contre le lecteur (nom choisi, interlocuteur d'un direct) ; la carte
+    /// servie ne nomme que ce qu'il ne connaît pas (#16485).
+    static func result(from hit: APIMessageSearchHit, in conversation: MeeshyConversation? = nil) -> GlobalSearchMessageResult {
         GlobalSearchMessageResult(
             id: hit.id,
             conversationId: hit.conversationId,
-            conversationName: hit.conversation.title,
-            conversationAvatar: hit.conversation.avatar,
+            conversationName: conversation?.displayName ?? hit.conversation.title,
+            conversationAvatar: conversation.map(avatar(of:)) ?? hit.conversation.avatar,
             content: hit.content,
             senderName: hit.senderLabel,
             senderAvatar: hit.sender?.avatar,
@@ -180,7 +239,7 @@ nonisolated struct ConversationMessageSearchService: ConversationMessageSearchPr
                     id: message.id,
                     conversationId: message.conversationId,
                     conversationName: conversation.name,
-                    conversationAvatar: conversation.avatar ?? conversation.participantAvatarURL,
+                    conversationAvatar: Self.avatar(of: conversation),
                     content: Self.servedText(
                         original: message.content ?? "",
                         originalLanguage: message.originalLanguage,

@@ -101,6 +101,9 @@ type StageProps = {
   readonly onToggleImmersive: () => void;
   readonly moderation: CallModeration | null;
   readonly self: SelfView;
+  /** Le chrome est-il affiché (#9183) : décide ce que touche une tuile de groupe — la mettre à la une, ou juste rendre le chrome. Sans objet hors du layout `grid` ; défaut `true` (ancien comportement). */
+  readonly chromeVisible?: boolean;
+  readonly onRevealChrome?: () => void;
 };
 
 /** Le tempo d'un changement de coin : celui de l'ancienne transition. */
@@ -323,7 +326,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   );
 }
 
-export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self }: StageProps) {
+export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined }: StageProps) {
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   if (layout === 'grid') {
     return (
@@ -338,6 +341,8 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
         onToggleImmersive={onToggleImmersive}
         moderation={moderation}
         language={language}
+        chromeVisible={chromeVisible}
+        onRevealChrome={onRevealChrome}
       />
     );
   }

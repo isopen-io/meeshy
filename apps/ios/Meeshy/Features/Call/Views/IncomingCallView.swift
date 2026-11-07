@@ -84,7 +84,10 @@ struct IncomingCallView: View {
                 .padding(.bottom, MeeshySpacing.xl)
 
             declineWithMessageButton
-                .padding(.bottom, 40)
+                // Comme la pilule de l'appel établi (`CallView+Connected.swift`) :
+                // le même encart bas que le reste de l'écran d'appel, pas une
+                // valeur en dur sans rapport avec la safe area de l'appareil.
+                .padding(.bottom, CallView.chromeBottomInset)
         }
         // L'écran ENTIER, avant d'y poser l'aperçu : sans ce cadre, le
         // `VStack` ne prenait que la largeur de ses boutons, et la vidéo de
