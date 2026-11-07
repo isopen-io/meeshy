@@ -201,6 +201,15 @@ async function openThread(corpus: Row[]): Promise<{ app: FastifyInstance; prisma
   return { app, prisma };
 }
 
+/** Les requêtes de PAGE, et elles seules : la route ouvre d'autres
+ *  `message.findMany` autour d'une page (citations, lignes d'arrivée), et
+ *  `.at(-1)` attrapait l'une d'elles. Le discriminant est le `select` de la
+ *  page, seul à demander le contenu. */
+const pageQueries = (prisma: any): any[] =>
+  prisma.message.findMany.mock.calls
+    .map((call: any[]) => call[0])
+    .filter((args: any) => args?.select?.content === true);
+
 type Page = { ids: string[]; nextCursor: string | null; hasMore: boolean };
 
 async function readPage(app: FastifyInstance, query: string): Promise<Page> {
@@ -278,7 +287,7 @@ describe('#16684 · le curseur du fil ordonne TOTALEMENT', () => {
     const { app, prisma } = await openThread(FRATRIE);
     await readPage(app, 'limit=2');
 
-    expect(prisma.message.findMany.mock.calls[0][0].orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+    expect(pageQueries(prisma)[0].orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
     await app.close();
   });
 
@@ -316,8 +325,10 @@ describe('#16684 · la clé du curseur SUIT celle de la vue', () => {
     const page = await readPage(app, 'limit=1&view=pinned');
     await readPage(app, `limit=1&view=pinned&before=${page.nextCursor}`);
 
-    const seconde = prisma.message.findMany.mock.calls.at(-1)[0];
+    const seconde = pageQueries(prisma).at(-1);
     expect(seconde.orderBy).toEqual([{ pinnedAt: 'desc' }, { id: 'desc' }]);
+    // La fenêtre borne la clé de la VUE, jamais `createdAt` — c'est la moitié
+    // du défaut qui ne demandait aucune égalité de milliseconde pour mordre.
     expect(JSON.stringify(seconde.where)).toContain('pinnedAt');
     await app.close();
   });

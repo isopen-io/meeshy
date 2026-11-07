@@ -841,19 +841,27 @@ describe('GET /conversations/:id/messages', () => {
     prisma.message.findMany.mockResolvedValue([]);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest({ query: { after: '2024-01-01T00:00:00.000Z' } }), reply);
-    // findMany should be called with ascending order (afterMode)
+    // findMany should be called with ascending order (afterMode) — et l'ordre est
+    // TOTAL depuis #16684 : la clé, puis `id` dans le MÊME sens.
     const call = prisma.message.findMany.mock.calls[0][0] as any;
-    expect(call.orderBy?.createdAt).toBe('asc');
+    expect(call.orderBy).toEqual([{ createdAt: 'asc' }, { id: 'asc' }]);
   });
 
-  it('before cursor mode: fetches beforeMessage and applies createdAt filter', async () => {
+  // #16684 — la fenêtre n'est plus un `createdAt < T` : elle exprime l'ordre
+  // TOTAL `(clé de la vue, id)`, sans quoi les messages qui partagent la
+  // milliseconde de la frontière étaient sautés par toutes les pages suivantes.
+  // Le double rend donc l'`id` que le `select` du curseur demande — un double
+  // qui l'omet atteste une fenêtre que la production ne construit pas.
+  it('before cursor mode: fetches beforeMessage and applies the total-order window', async () => {
     const beforeDate = new Date('2024-06-01');
-    prisma.message.findFirst.mockResolvedValue({ createdAt: beforeDate });
+    prisma.message.findFirst.mockResolvedValue({ id: MSG_ID, createdAt: beforeDate, pinnedAt: null });
     prisma.message.findMany.mockResolvedValue([]);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest({ query: { before: MSG_ID } }), reply);
     const whereArg = (prisma.message.findMany.mock.calls[0][0] as any).where;
-    expect(whereArg.createdAt?.lt).toEqual(beforeDate);
+    expect(whereArg.AND).toEqual([
+      { OR: [{ createdAt: { lt: beforeDate } }, { createdAt: beforeDate, id: { lt: MSG_ID } }] },
+    ]);
   });
 
   it('around mode: fetches messages before/after target and builds id filter', async () => {
