@@ -66,3 +66,10 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   (un téléphone en avance ne perdait plus le Bring sans un signe), `stopSelfResult` protège un second Bring arrivé
   pendant l'arrêt, le repli sans service libère l'état à l'échéance, le témoin du jeton peut tomber. Consignés :
   registre persistant, type du service au regard de Play, quota de priorité FCM (#16619).
+
+## 2026-11-07 — réveil 4 : le talkie reçu sur le web (`proche-talkie@web`, #16638)
+
+- Reprise : #16624 (présence sur l'écran du Bring iOS) est menée par le réveil 2, encore actif ; #16617 (envoyer et
+  bloquer le Bring sur Android) est réservée par le réveil 3 (branche `claude/cercles-bring-android-envoyer`). Ce
+  réveil n'avait rien écrit : il cède les deux et prend le talkie (#13935).
+- Lot choisi : la RÉCEPTION du talkie sur le web et « Couper son talkie » sur la fiche d'un lien (#16638).
