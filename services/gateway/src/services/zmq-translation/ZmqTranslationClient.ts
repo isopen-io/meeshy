@@ -42,6 +42,11 @@ export interface TranslateTextObjectParams {
   targetLanguages: string[];
 }
 
+export type TranslationDeadline = {
+  readonly retryEnabled?: boolean;
+  readonly timeoutMs?: number;
+};
+
 export interface ZMQClientStats {
   requests_sent: number;
   results_received: number;
@@ -174,14 +179,14 @@ export class ZmqTranslationClient extends EventEmitter {
     errorEventName: string,
     errorEvent: Record<string, unknown>,
     resend: (existingTaskId: string, pendingLanguages?: string[]) => Promise<string>,
-    opts: { retryEnabled?: boolean; timeoutMs?: number } = {}
+    opts: TranslationDeadline = {}
   ): void {
     const retryEnabled = opts.retryEnabled !== false;
     const timeoutMs = opts.timeoutMs ?? ZMQ_REQUEST_TIMEOUT_MS;
 
     this.requestSender.registerTimeout(taskId, timeoutMs, async (pendingLanguages) => {
       if (!retryEnabled) {
-        logger.error(`❌ ZMQ deadman timeout (${Math.round(timeoutMs / 1000)}s) for taskId=${taskId}, giving up (no retry for long voice pipelines)`);
+        logger.error(`❌ ZMQ deadman timeout (${Math.round(timeoutMs / 1000)}s) for taskId=${taskId}, giving up (retry disabled by caller)`);
         this.retryCount.delete(taskId);
         this.stats.errors_received++;
         this.emit(errorEventName, { ...errorEvent, taskId });
@@ -593,7 +598,7 @@ export class ZmqTranslationClient extends EventEmitter {
   /**
    * Envoie une requête de traduction
    */
-  async sendTranslationRequest(request: TranslationRequest): Promise<string> {
+  async sendTranslationRequest(request: TranslationRequest, deadline?: TranslationDeadline): Promise<string> {
     if (this._cbIsOpen()) {
       throw new Error('ZMQ circuit breaker OPEN: translator unavailable, request rejected');
     }
@@ -612,7 +617,8 @@ export class ZmqTranslationClient extends EventEmitter {
         await this.requestSender.sendTranslationRequest(outstanding, existingTaskId);
         this.stats.requests_sent++;
         return existingTaskId;
-      }
+      },
+      deadline
     );
     return taskId;
   }
@@ -740,7 +746,8 @@ export class ZmqTranslationClient extends EventEmitter {
     targetLanguage: string,
     messageId: string,
     conversationId: string,
-    modelType: string = 'basic'
+    modelType: string = 'basic',
+    deadline?: TranslationDeadline
   ): Promise<string> {
     const request: TranslationRequest = {
       messageId: messageId,
@@ -751,7 +758,7 @@ export class ZmqTranslationClient extends EventEmitter {
       modelType: modelType
     };
 
-    return await this.sendTranslationRequest(request);
+    return await this.sendTranslationRequest(request, deadline);
   }
 
   async translateToMultipleLanguages(

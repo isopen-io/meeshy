@@ -88,10 +88,18 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   // portée se DÉCOUVRE (`discoverConversationIdsByMessageIds`), jamais connue
   // d'avance.
   'conversations/messages-list-query.ts': { kind: 'applies', reads: 1, applications: 1 },
-  // Les 4 lectures cursor/`around` (probes `{ select: { createdAt: true } }`
-  // ou `{ select: { id: true } }`) ne chargent jamais `sender` ; seule la
-  // page principale (déjà réparée depuis #6501) la charge.
-  'conversations/messages-list.ts': { kind: 'applies', reads: 5, applications: 1 },
+  // #16684 — les 3 lectures de la fenêtre `around` ont quitté ce fichier pour
+  // `messages-cursor-window.ts` (ci-dessous). Restent la lecture du curseur
+  // `before` (une sonde `{ id, createdAt, pinnedAt }`, qui ne charge pas
+  // `sender`) et la page principale, réparée depuis #6501.
+  'conversations/messages-list.ts': { kind: 'applies', reads: 2, applications: 1 },
+  // #16684 — la résolution de la fenêtre `around`. Ses deux lectures sont des
+  // SONDES d'identifiants (`{ select: { id: true, createdAt: true } }` pour la
+  // cible, `{ select: { id: true } }` pour les deux moitiés) : elles ne
+  // chargent JAMAIS `sender`, donc rien à réparer. La page qui hydrate
+  // réellement les expéditeurs reste celle de `messages-list.ts`, enveloppée
+  // depuis #6501.
+  'conversations/messages-cursor-window.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   // Les 2 lectures d'existence (`pinnedAt`/dé-épinglage) ne chargent que des
   // identifiants ; seule la page des épingles charge `sender`.
   'conversations/messages-pin.ts': { kind: 'applies', reads: 3, applications: 1 },
@@ -316,7 +324,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'messaging/contentCaptureNotices.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
-  'messaging/messageReadAccess.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  // #16557 — la troisième lecture est celle de `loadMessageReadableByReader` (la forme « demande »), même projection sans contenu.
+  'messaging/messageReadAccess.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageNotificationFanOut.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageRemovalEffects.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7377 — la pose d'une étoile : `STAR_ADMISSION_MESSAGE_SELECT`, les seules

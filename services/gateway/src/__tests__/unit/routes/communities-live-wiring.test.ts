@@ -175,7 +175,7 @@ describe('surface de routes servie sous /communities', () => {
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue({
       id: COMM_ID, isPrivate: false, createdBy: USER_ID, members: [{ role: 'admin' }],
     });
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue({ id: OTHER_ID });
+    prisma.user.findFirst = jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_ID }));
     prisma.communityMember.create = jest.fn<any>().mockResolvedValue({
       id: 'mem-2', communityId: COMM_ID, userId: OTHER_ID, role: 'member',
       user: { id: OTHER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true },
@@ -286,7 +286,7 @@ describe('les écritures qui rendent un TIERS filtrent sa présence', () => {
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue({
       id: COMM_ID, isPrivate: false, createdBy: USER_ID, members: [{ role: 'admin' }],
     });
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue({ id: OTHER_ID });
+    prisma.user.findFirst = jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_ID }));
     prisma.communityMember.create = jest.fn<any>().mockResolvedValue({
       id: 'mem-2', communityId: COMM_ID, userId: OTHER_ID, role: 'member',
       user: { id: OTHER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true },
@@ -308,7 +308,7 @@ describe('les écritures qui rendent un TIERS filtrent sa présence', () => {
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue({
       createdBy: USER_ID, members: [{ role: 'admin' }],
     });
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue({ id: OTHER_ID });
+    prisma.user.findFirst = jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_ID }));
     prisma.communityMember.findFirst = jest.fn<any>().mockResolvedValue(null);
     prisma.communityMember.create = jest.fn<any>().mockResolvedValue({
       id: 'mem-3', communityId: COMM_ID, userId: OTHER_ID, role: 'member',
@@ -331,7 +331,7 @@ describe('les écritures qui rendent un TIERS filtrent sa présence', () => {
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue({
       id: COMM_ID, isPrivate: false, createdBy: USER_ID, members: [{ role: 'admin' }],
     });
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue({ id: OTHER_ID });
+    prisma.user.findFirst = jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_ID }));
     prisma.communityMember.create = jest.fn<any>().mockResolvedValue({
       id: 'mem-4', communityId: COMM_ID, userId: OTHER_ID, role: 'member',
       user: { id: OTHER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true },

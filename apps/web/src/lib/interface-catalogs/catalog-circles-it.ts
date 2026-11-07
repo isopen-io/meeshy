@@ -97,6 +97,12 @@ const it = {
   'bring.incoming.stop': 'Ferma',
   'bring.incoming.someone': 'Qualcuno',
   'bring.tab': '🔔 Bring',
+  'talkie.incoming.title': '{name} ti sta parlando',
+  'talkie.incoming.mute': 'Silenzia',
+  'talkie.incoming.someone': 'Qualcuno',
+  'circles.settings.blockTalkie': 'Silenzia il suo talkie',
+  'circles.settings.blockTalkie.detail': 'La sua voce non verrà più riprodotta direttamente sul tuo dispositivo: arriverà come messaggio vocale. Questa persona non viene avvisata.',
+  'circles.settings.blockTalkie.failed': 'Non è stato possibile salvare l’impostazione',
 } as const satisfies CirclesCatalog;
 
 export default it;

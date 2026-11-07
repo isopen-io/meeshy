@@ -80,6 +80,10 @@ object CallSelfTileLaw {
         return CallTileSize(size.widthDp * ratio, size.heightDp * ratio)
     }
 
+    /** #16663 — un toucher range les contrôles : la vignette passe à son plus petit palier, puis reprend le palier choisi. */
+    fun resting(chosen: CallSelfTileScale, controlsVisible: Boolean): CallSelfTileScale =
+        if (controlsVisible) chosen else CallSelfTileScale.X1
+
     /** La taille affichée : le palier, suivi du pincement, borné à la zone sûre de l'écran. */
     fun tileSize(container: CallTileSize, insets: CallSafeInsets, scale: CallSelfTileScale, pinch: Float): CallTileSize {
         val available = CallTileSize(

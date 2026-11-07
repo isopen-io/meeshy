@@ -1,5 +1,4 @@
 import * as bringEndpoints from '@meeshy/shared/api/endpoints/bring';
-import * as relationsEndpoints from '@meeshy/shared/api/endpoints/relations';
 import type { BringErrorCode, BringSent } from '@meeshy/shared/types/bring';
 
 import type { DataSource } from '@/lib/api/config';
@@ -8,8 +7,8 @@ import type { ApiResult, HttpTransport } from '@/lib/api/http';
 /**
  * **LE BRING, CÔTÉ PORT** (#13936, sous-lot `proche-bring@web`) — le contrat de
  * `packages/shared/types/bring.ts` : `GET|POST /bring/:userId`,
- * `DELETE /bring/:bringId`, et le blocage par personne
- * `GET|PUT /relations/:userId/settings { bringBlocked }`.
+ * `DELETE /bring/:bringId`. Le blocage par personne (`bringBlocked`) vit avec
+ * les autres préférences de réception, `lib/relations/person-settings.ts`.
  *
  * Décodé à la main (le web n'embarque pas Zod sur ce chemin), TOLÉRANT et FERMÉ :
  * une disponibilité illisible se lit « indisponible » — le bouton disparaît,
@@ -52,7 +51,6 @@ export function decodeBringSent(raw: unknown): BringSent | null {
 }
 
 export const bringAvailabilityQueryKey = (userId: string) => ['bring', 'availability', userId] as const;
-export const bringBlockedQueryKey = (userId: string) => ['bring', 'blocked', userId] as const;
 
 export async function loadBringAvailability(deps: BringDeps, userId: string, signal?: AbortSignal): Promise<ApiResult<BringAvailabilityView>> {
   if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: CLOSED };
@@ -70,20 +68,6 @@ export async function stopBring(deps: BringDeps, bringId: string): Promise<ApiRe
   if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: true };
   const result = await deps.transport.request<unknown>({ method: 'DELETE', path: bringEndpoints.byBringId(bringId) });
   return result.ok ? { ok: true, data: objectOf(result.data)?.stopped === true } : result;
-}
-
-const blockedOf = (raw: unknown): boolean => objectOf(raw)?.bringBlocked === true;
-
-export async function loadBringBlocked(deps: BringDeps, userId: string, signal?: AbortSignal): Promise<ApiResult<boolean>> {
-  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: false };
-  const result = await deps.transport.request<unknown>({ method: 'GET', path: relationsEndpoints.byUserIdSettings(userId), ...(signal === undefined ? {} : { signal }) });
-  return result.ok ? { ok: true, data: blockedOf(result.data) } : result;
-}
-
-export async function setBringBlocked(deps: BringDeps, userId: string, blocked: boolean): Promise<ApiResult<boolean>> {
-  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: false, status: 0, error: 'Indisponible en démonstration' };
-  const result = await deps.transport.request<unknown>({ method: 'PUT', path: relationsEndpoints.byUserIdSettings(userId), body: { bringBlocked: blocked } });
-  return result.ok ? { ok: true, data: blockedOf(result.data) } : result;
 }
 
 /**

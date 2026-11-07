@@ -1,60 +1,150 @@
+/**
+ * #16639 — créer une conversation dans une communauté n'admet que ce que
+ * l'appelant a le droit d'admettre.
+ *
+ * `POST /conversations` avec un `communityId` faisait entrer chaque
+ * participant dans la communauté, et réactivait la ligne d'un retiré avec son
+ * ancien rang : un simple membre réintégrait un administrateur retiré, ou
+ * faisait entrer n'importe qui dans une communauté PRIVÉE. La réconciliation
+ * suit désormais la loi de `POST …/invite` : droit d'inviter, compte vivant,
+ * aucun blocage, et le rang repart de MEMBER.
+ */
 import { describe, it, expect, jest } from '@jest/globals';
-import { reconcileCommunityMembership } from '../communityMembershipSync';
+import { applyCommunityAdmission, planCommunityAdmission } from '../communityMembershipSync';
 
-function makePrisma(existingMembers: ReadonlyArray<{ id: string; userId: string; isActive: boolean }>) {
+type Ligne = { readonly id: string; readonly userId: string; readonly isActive: boolean };
+
+const COMMUNITY_ID = 'comm-1';
+const MOI = 'moi';
+const CREATEUR = 'createur';
+
+function prismaDouble(lignes: readonly Ligne[], options: { readonly vivants?: readonly string[]; readonly bloques?: readonly string[] } = {}) {
+  const vivants = new Set(options.vivants ?? ['u1', 'u2', 'u3', MOI, CREATEUR]);
+  const bloques = new Set(options.bloques ?? []);
   return {
     communityMember: {
-      findMany: jest.fn<any>().mockResolvedValue(existingMembers),
+      findMany: jest.fn<any>(async (args: any) => lignes.filter((l) => args.where.userId.in.includes(l.userId))),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       createMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    user: {
+      findMany: jest.fn<any>(async (args: any) => (args.where.id.in as string[]).filter((id) => vivants.has(id)).map((id) => ({ id }))),
+      findFirst: jest.fn<any>(async (args: any) => {
+        const [moi, eux] = args.where.OR as [{ blockedUserIds: { hasSome: string[] } }, { id: { in: string[] } }];
+        const touche = [...moi.blockedUserIds.hasSome, ...eux.id.in].some((id) => bloques.has(id));
+        return touche ? { id: 'x' } : null;
+      }),
     },
   };
 }
 
-const COMMUNITY_ID = 'comm-1';
+function plan(prisma: ReturnType<typeof prismaDouble>, params: { readonly isPrivate?: boolean; readonly actorRole?: string | null; readonly participantIds: readonly string[]; readonly createdBy?: string }) {
+  return planCommunityAdmission(prisma as never, {
+    communityId: COMMUNITY_ID,
+    actorId: MOI,
+    createdBy: params.createdBy ?? CREATEUR,
+    isPrivate: params.isPrivate ?? false,
+    actorRole: params.actorRole === undefined ? 'member' : params.actorRole,
+    participantIds: params.participantIds,
+  });
+}
 
-describe('reconcileCommunityMembership', () => {
-  it('creates rows only for users with no existing membership at all', async () => {
-    const prisma = makePrisma([]);
-    await reconcileCommunityMembership(prisma as any, COMMUNITY_ID, ['u1', 'u2']);
+const MOI_ACTIF: Ligne = { id: 'cm-moi', userId: MOI, isActive: true };
+
+describe('planCommunityAdmission — qui entre dans la communauté', () => {
+  it('communauté PUBLIQUE : un simple membre fait entrer un non-membre, en MEMBER', async () => {
+    const prisma = prismaDouble([MOI_ACTIF]);
+    const admission = await plan(prisma, { participantIds: ['u1'] });
+    expect(admission.kind).toBe('admitted');
+    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never);
     expect(prisma.communityMember.createMany).toHaveBeenCalledWith({
-      data: [
-        { communityId: COMMUNITY_ID, userId: 'u1' },
-        { communityId: COMMUNITY_ID, userId: 'u2' },
-      ],
+      data: [{ communityId: COMMUNITY_ID, userId: 'u1', role: 'member' }],
     });
+  });
+
+  it('communauté PRIVÉE : un simple membre ne fait entrer personne', async () => {
+    const prisma = prismaDouble([MOI_ACTIF]);
+    expect(await plan(prisma, { isPrivate: true, participantIds: ['u1'] })).toEqual({ kind: 'refused', reason: 'invite-forbidden' });
+  });
+
+  it('communauté PRIVÉE : un simple membre ne RÉINTÈGRE pas un membre retiré', async () => {
+    const prisma = prismaDouble([MOI_ACTIF, { id: 'cm-u1', userId: 'u1', isActive: false }]);
+    expect(await plan(prisma, { isPrivate: true, participantIds: ['u1'] })).toEqual({ kind: 'refused', reason: 'invite-forbidden' });
     expect(prisma.communityMember.updateMany).not.toHaveBeenCalled();
   });
 
-  it('does nothing for a user who is already an active member', async () => {
-    const prisma = makePrisma([{ id: 'cm-1', userId: 'u1', isActive: true }]);
-    await reconcileCommunityMembership(prisma as any, COMMUNITY_ID, ['u1']);
-    expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
-    expect(prisma.communityMember.updateMany).not.toHaveBeenCalled();
+  it('communauté PRIVÉE : un simple membre crée librement avec des membres ACTIFS', async () => {
+    const prisma = prismaDouble([MOI_ACTIF, { id: 'cm-u1', userId: 'u1', isActive: true }]);
+    const admission = await plan(prisma, { isPrivate: true, participantIds: ['u1'] });
+    expect(admission).toEqual({ kind: 'admitted', reactivations: [], creations: [] });
   });
 
-  it('reactivates a row left by a departure (#5760) instead of leaving the user excluded forever', async () => {
-    const prisma = makePrisma([{ id: 'cm-1', userId: 'u1', isActive: false }]);
-    await reconcileCommunityMembership(prisma as any, COMMUNITY_ID, ['u1']);
+  it.each(['admin', 'moderator'])('communauté PRIVÉE : un %s fait entrer un non-membre', async (role) => {
+    const prisma = prismaDouble([MOI_ACTIF]);
+    expect((await plan(prisma, { isPrivate: true, actorRole: role, participantIds: ['u1'] })).kind).toBe('admitted');
+  });
+
+  it('communauté PRIVÉE : son créateur fait entrer un non-membre', async () => {
+    const prisma = prismaDouble([MOI_ACTIF]);
+    expect((await plan(prisma, { isPrivate: true, createdBy: MOI, participantIds: ['u1'] })).kind).toBe('admitted');
+  });
+
+  it('un membre retiré revient en MEMBER, jamais avec son ancien rang', async () => {
+    const prisma = prismaDouble([MOI_ACTIF, { id: 'cm-u1', userId: 'u1', isActive: false }]);
+    const admission = await plan(prisma, { actorRole: 'admin', participantIds: ['u1'] });
+    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never);
     expect(prisma.communityMember.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['cm-1'] } },
-      data: { isActive: true, leftAt: null },
+      where: { id: { in: ['cm-u1'] }, isActive: false },
+      data: { isActive: true, leftAt: null, role: 'member' },
     });
-    expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
   });
 
-  it('never opens a second row for a pair that already has one, active or not', async () => {
-    const prisma = makePrisma([
-      { id: 'cm-1', userId: 'u1', isActive: true },
-      { id: 'cm-2', userId: 'u2', isActive: false },
-    ]);
-    await reconcileCommunityMembership(prisma as any, COMMUNITY_ID, ['u1', 'u2', 'u3']);
+  it('refuse un compte qui n\'est pas vivant (désactivé, supprimé, en attente)', async () => {
+    const prisma = prismaDouble([MOI_ACTIF], { vivants: [MOI] });
+    expect(await plan(prisma, { participantIds: ['u1'] })).toEqual({ kind: 'refused', reason: 'not-addable' });
+  });
+
+  it('refuse un participant bloqué, dans un sens ou dans l\'autre', async () => {
+    const prisma = prismaDouble([MOI_ACTIF], { bloques: ['u1'] });
+    expect(await plan(prisma, { participantIds: ['u1'] })).toEqual({ kind: 'refused', reason: 'not-addable' });
+  });
+
+  it('ne regarde ni le droit ni le compte d\'un participant déjà membre actif', async () => {
+    const prisma = prismaDouble([MOI_ACTIF, { id: 'cm-u1', userId: 'u1', isActive: true }], { vivants: [MOI] });
+    expect(await plan(prisma, { isPrivate: true, participantIds: ['u1'] })).toEqual({ kind: 'admitted', reactivations: [], creations: [] });
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(prisma.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('le créateur de la communauté sans ligne active y revient ADMINISTRATEUR', async () => {
+    const prisma = prismaDouble([{ id: 'cm-moi', userId: MOI, isActive: false }]);
+    const admission = await plan(prisma, { createdBy: MOI, actorRole: null, participantIds: [] });
+    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never);
+    expect(prisma.communityMember.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['cm-moi'] }, isActive: false },
+      data: { isActive: true, leftAt: null, role: 'admin' },
+    });
+  });
+
+  it('vérifie tout un lot en deux lectures, quel que soit le nombre de participants', async () => {
+    const prisma = prismaDouble([MOI_ACTIF], { vivants: [MOI, 'u1', 'u2', 'u3'] });
+    expect((await plan(prisma, { participantIds: ['u1', 'u2', 'u3'] })).kind).toBe('admitted');
+    expect(prisma.user.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.user.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('une paire en double (course) : la ligne ACTIVE fait foi, personne n\'est refusé à tort', async () => {
+    const prisma = prismaDouble([MOI_ACTIF, { id: 'cm-u1-actif', userId: 'u1', isActive: true }, { id: 'cm-u1-vieux', userId: 'u1', isActive: false }]);
+    expect(await plan(prisma, { isPrivate: true, participantIds: ['u1'] })).toEqual({ kind: 'admitted', reactivations: [], creations: [] });
+  });
+
+  it('n\'ouvre jamais une seconde ligne pour une paire qui en a une', async () => {
+    const prisma = prismaDouble([MOI_ACTIF, { id: 'cm-u2', userId: 'u2', isActive: false }]);
+    const admission = await plan(prisma, { participantIds: ['u2', 'u3'] });
+    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never);
     expect(prisma.communityMember.createMany).toHaveBeenCalledWith({
-      data: [{ communityId: COMMUNITY_ID, userId: 'u3' }],
+      data: [{ communityId: COMMUNITY_ID, userId: 'u3', role: 'member' }],
     });
-    expect(prisma.communityMember.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['cm-2'] } },
-      data: { isActive: true, leftAt: null },
-    });
+    expect(prisma.communityMember.updateMany).toHaveBeenCalledTimes(1);
   });
 });

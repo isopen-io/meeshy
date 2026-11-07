@@ -45,6 +45,11 @@ import {
   type ParticipantRightName,
 } from '../../services/participantRights';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
+import {
+  applyCommunityAdmission,
+  loadSalonCommunity,
+  planSalonEntry,
+} from '../../services/conversations/communityMembershipSync';
 import { deferAfterResponse, type AfterResponse } from '../../utils/after-response';
 import {
   lookupArrivalCountry,
@@ -58,7 +63,7 @@ export type ParticipantRow = Awaited<ReturnType<PrismaClient['participant']['cre
 type ShareLinkRow = Awaited<ReturnType<PrismaClient['conversationShareLink']['findFirst']>>;
 /** Le lien AVEC sa conversation incluse — jamais `null` passé ce point. */
 export type ShareLinkWithConversation = NonNullable<ShareLinkRow> & {
-  conversation: { id: string; identifier?: string | null; title: string; type: string; isActive: boolean; closedAt: Date | null };
+  conversation: { id: string; identifier?: string | null; title: string; type: string; isActive: boolean; closedAt: Date | null; communityId?: string | null };
 };
 
 export type GuestRights = Record<ParticipantRightName, boolean>;
@@ -188,7 +193,7 @@ async function findShareLinkByKey(prisma: PrismaClient, key: string): Promise<Sh
     },
     include: {
       conversation: {
-        select: { id: true, identifier: true, title: true, type: true, isActive: true, closedAt: true },
+        select: { id: true, identifier: true, title: true, type: true, isActive: true, closedAt: true, communityId: true },
       },
     },
   });
@@ -242,6 +247,13 @@ const LINK_EXHAUSTED_RACE: LinkAdmissionRefusal = {
   status: 409,
   code: 'LINK_EXHAUSTED',
   message: "Ce lien a atteint sa limite d'utilisation",
+};
+
+const COMMUNITY_MEMBERS_ONLY: LinkAdmissionRefusal = {
+  granted: false,
+  status: 403,
+  code: 'COMMUNITY_MEMBERS_ONLY',
+  message: 'Cette conversation est réservée aux membres de sa communauté',
 };
 
 async function joinAsGuest(
@@ -520,6 +532,18 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   // `joinAsGuest` en génère un (`automaticNicknameBase`, numéroté par
   // `numberedAnonymousUsername`, #10602).
 
+  // #16695 — un salon d'une communauté privée n'accueille, par lien, que ce
+  // que l'AUTEUR du lien pourrait y faire entrer aujourd'hui.
+  const community = verdict.entry.outcome === 'already-member'
+    ? null
+    : await loadSalonCommunity(prisma, { communityId: shareLink.conversation.communityId, actorId: shareLink.createdBy });
+  const communityAdmission = await planSalonEntry(
+    prisma,
+    community,
+    identity.kind === 'guest' ? { kind: 'guest' } : { kind: 'registered', userId: identity.userId },
+  );
+  if (communityAdmission.kind === 'refused') return { kind: 'refused', refusal: COMMUNITY_MEMBERS_ONLY };
+
   const outcome = identity.kind === 'guest'
     ? await joinAsGuest(prisma, shareLink, profile, broadcast, params.requestUserAgent)
     : await joinAsRegistered(prisma, shareLink, identity.userId, verdict.entry, broadcast);
@@ -528,6 +552,7 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   // l'IP après la réponse ; l'IP n'est écrite ni sur le participant ni dans
   // sa session anonyme (#9342).
   if (outcome.kind === 'joined' && outcome.outcome !== 'already-member') {
+    if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission);
     const participantId = outcome.participant.id;
     (params.afterResponse ?? deferAfterResponse)(
       () => recordArrivalCountry({

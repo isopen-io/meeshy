@@ -12,7 +12,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { progressSummary, raiseOffer, requestedLevelOf, type CircleLevel } from '@/lib/relations/circles';
 import { relationLevelIcon } from '@/lib/relations/level-labels';
 import { levelTitle, progressText } from '@/lib/relations/progress-text';
-import { CircleBringBlockSwitch } from '@/routes/circle-bring-block';
+import { CircleReceptionBlockSwitch, receptionBlocksFor } from '@/routes/circle-reception-block';
 import { PERSON_ROW_HEIGHT, PersonAvatar, PersonText } from '@/routes/discover-parts';
 
 /**
@@ -243,7 +243,7 @@ export function CirclesErrorBanner({ language, onRetry }: { readonly language: I
   );
 }
 
-const SETTINGS = ['circles.settings.listening', 'circles.settings.talkie', 'circles.settings.location'] as const;
+const SETTINGS = ['circles.settings.listening', 'circles.settings.location'] as const;
 
 /**
  * La fiche d'un lien — `CircleLinkSheet` : la personne, son niveau, ce qui
@@ -251,8 +251,8 @@ const SETTINGS = ['circles.settings.listening', 'circles.settings.talkie', 'circ
  * position), qui n'existent côté serveur qu'au jalon 2 (#14229). Ils sont
  * MONTRÉS désactivés et l'interface le DIT : ni cachés (on chercherait où ils
  * sont), ni simulés (un interrupteur sans effet est un mensonge). Le premier
- * livré, « Bloquer ses Bring » (#13936), est ACTIF (`circle-bring-block.tsx`) ;
- * son échec se dit dans la fiche.
+ * livrés, « Bloquer ses Bring » (#13936) et « Couper son talkie » (#16638), sont
+ * ACTIFS (`circle-reception-block.tsx`) ; leur échec se dit dans la fiche.
  */
 export function CircleLinkSheet({
   language,
@@ -289,7 +289,9 @@ export function CircleLinkSheet({
           <h3 id={`circle-settings-${link.userId}`} className="text-body font-bold" style={{ color: INK }}>
             {translateCircles(language, 'circles.sheet.settings.title')}
           </h3>
-          <CircleBringBlockSwitch language={language} userId={link.userId} level={link.effectiveLevel} onNotice={setNotice} />
+          {receptionBlocksFor(link.effectiveLevel).map((block) => (
+            <CircleReceptionBlockSwitch key={block} block={block} language={language} userId={link.userId} level={link.effectiveLevel} onNotice={setNotice} />
+          ))}
           {notice === null ? null : (
             <p role="status" data-circle-setting-notice className="text-caption" style={{ color: 'var(--color-error)' }}>
               {notice}

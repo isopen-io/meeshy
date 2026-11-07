@@ -97,6 +97,12 @@ const ar = {
   'bring.incoming.stop': 'إيقاف',
   'bring.incoming.someone': 'شخص ما',
   'bring.tab': '🔔 Bring',
+  'talkie.incoming.title': '{name} يتحدث إليك',
+  'talkie.incoming.mute': 'كتم',
+  'talkie.incoming.someone': 'شخص ما',
+  'circles.settings.blockTalkie': 'كتم التوكي الخاص به',
+  'circles.settings.blockTalkie.detail': 'لن يُسمع صوته مباشرةً على جهازك بعد الآن: سيصلك كرسالة صوتية. لن يتم إعلام هذا الشخص.',
+  'circles.settings.blockTalkie.failed': 'تعذّر حفظ الإعداد',
 } as const satisfies CirclesCatalog;
 
 export default ar;

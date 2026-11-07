@@ -99,6 +99,12 @@ const fr = {
   'bring.incoming.stop': 'Arrêter',
   'bring.incoming.someone': 'Quelqu’un',
   'bring.tab': '🔔 Bring',
+  'talkie.incoming.title': '{name} vous parle',
+  'talkie.incoming.mute': 'Couper',
+  'talkie.incoming.someone': 'Quelqu’un',
+  'circles.settings.blockTalkie': 'Couper son talkie',
+  'circles.settings.blockTalkie.detail': 'Sa voix ne sortira plus directement chez vous : elle arrivera en message vocal. Cette personne n’en est pas prévenue.',
+  'circles.settings.blockTalkie.failed': 'Le réglage n’a pas pu être enregistré',
 } as const;
 
 export default fr;

@@ -18,6 +18,22 @@ class CallSpeakerColorTest {
     }
 
     @Test
+    fun `on the thread the same colour adapts to the scheme, dark staying the call colour`() {
+        val id = "user-7"
+        val light = DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(id), DynamicColorGenerator.ThemeMode.LIGHT)
+        assertThat(CallSpeakerColor.hex(id, DynamicColorGenerator.ThemeMode.LIGHT)).isEqualTo(light)
+        assertThat(CallSpeakerColor.hex(id, DynamicColorGenerator.ThemeMode.DARK)).isEqualTo(CallSpeakerColor.hex(id))
+    }
+
+    @Test
+    fun `only a translated sentence takes the speaker colour, an original keeps the theme ink`() {
+        assertThat(CallSpeakerColor.textHex("user-7", servesTranslation = true)).isEqualTo(CallSpeakerColor.hex("user-7"))
+        assertThat(CallSpeakerColor.textHex("user-7", servesTranslation = false)).isNull()
+        val light = DynamicColorGenerator.ThemeMode.LIGHT
+        assertThat(CallSpeakerColor.textHex("user-7", servesTranslation = true, mode = light)).isEqualTo(CallSpeakerColor.hex("user-7", light))
+    }
+
+    @Test
     fun `the dark colour is never darker than the raw palette colour`() {
         val id = "ada"
         assertThat(brightness(CallSpeakerColor.hex(id))).isAtLeast(brightness(DynamicColorGenerator.colorForName(id)) - 1)

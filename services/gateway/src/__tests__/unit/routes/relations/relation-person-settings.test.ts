@@ -46,7 +46,7 @@ import { relationsRoutes } from '../../../../routes/relations';
 import { freezeClock, thawClock } from '../../../helpers/relation-app';
 import { AUTRE, MOI, NOW, buildBringApp, lien, type BringAppOptions, type BringTestApp } from '../../../helpers/bring-app';
 
-const AUCUN_PARTAGE = { listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false };
+const AUCUN_PARTAGE = { listeningCategoryShared: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false };
 
 const appli = (options: BringAppOptions = { liens: [lien('CLOSE', 'CLOSE')] }): Promise<BringTestApp> =>
   buildBringApp(async (a) => { await a.register(relationsRoutes, { prefix: '/api/v1/relations' }); }, options);
@@ -105,5 +105,54 @@ describe('#13935 — talkieBlocked', () => {
     expect(vide.status).toBe(400);
     expect(inconnu.status).toBe(400);
     expect(app.reglages.size).toBe(0);
+  });
+});
+
+describe('#13934 — la catégorie de mon écoute s\'accorde et se retire, personne par personne', () => {
+  it('refusée par défaut, accordée à un Proche, et relue', async () => {
+    const app = await appli();
+    const avant = await lire(app);
+    const pose = await regler(app, { listeningCategoryShared: true });
+    const relu = await lire(app);
+    await app.close();
+
+    expect(avant.body.data.listeningCategoryShared).toBe(false);
+    expect(pose.body.data.listeningCategoryShared).toBe(true);
+    expect(relu.body.data.listeningCategoryShared).toBe(true);
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ listeningCategoryShared: true });
+  });
+
+  it('sous Proche, rien ne s\'écrit : le même 404 qu\'une personne inconnue', async () => {
+    const app = await appli({ liens: [lien('FRIEND', 'FRIEND')] });
+    const res = await regler(app, { listeningCategoryShared: true });
+    await app.close();
+
+    expect(res.status).toBe(404);
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toBeUndefined();
+  });
+
+  it('le retrait éteint l\'accord et le date', async () => {
+    const app = await appli();
+    await regler(app, { listeningCategoryShared: true });
+    const retire = await regler(app, { listeningCategoryShared: false });
+    await app.close();
+
+    expect(retire.body.data.listeningCategoryShared).toBe(false);
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ listeningCategoryShared: false, listeningCategoryWithdrawnAt: NOW });
+  });
+});
+
+describe('#13934 — retirer la catégorie retire aussi le titre', () => {
+  it('le Sang qui avait le titre le perd avec la catégorie, et un nouvel accord efface la date de retrait', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    await regler(app, { listeningCategoryShared: true });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ...app.reglages.get(`${AUTRE}:${MOI}`), listeningTitleShared: true });
+    const retire = await regler(app, { listeningCategoryShared: false });
+    const reaccorde = await regler(app, { listeningCategoryShared: true });
+    await app.close();
+
+    expect(retire.body.data).toMatchObject({ listeningCategoryShared: false, listeningTitleShared: false });
+    expect(reaccorde.body.data).toMatchObject({ listeningCategoryShared: true, listeningTitleShared: false });
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ listeningCategoryWithdrawnAt: null, listeningTitleWithdrawnAt: NOW });
   });
 });

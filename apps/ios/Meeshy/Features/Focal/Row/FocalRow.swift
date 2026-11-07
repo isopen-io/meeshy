@@ -203,7 +203,9 @@ struct FocalRow: View {
                 editedByModerator: content.editedByModerator,
                 isEditSaving: content.isEditSaving,
                 hasEditHistory: content.hasEditHistory,
-                onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } }
+                onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } },
+                pinsPendingDelivery: content.pinsPendingDelivery,
+                sendStartedAt: content.meta.sendStartedAt
             )
             .equatable()
             .opacity(input.isFocused ? 0 : 1)

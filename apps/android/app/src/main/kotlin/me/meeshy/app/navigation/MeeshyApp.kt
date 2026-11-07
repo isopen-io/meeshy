@@ -29,6 +29,7 @@ import me.meeshy.app.auth.LoggingOutVeil
 import me.meeshy.app.auth.guest.GuestSessionEndViewModel
 import me.meeshy.app.auth.guest.GuestSessionEndedScreen
 import me.meeshy.app.calls.CallPill
+import me.meeshy.app.calls.CallScreenShareViewModel
 import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallStatus
 import me.meeshy.app.calls.CallViewModel
@@ -54,6 +55,7 @@ import me.meeshy.app.upgrade.UpgradeGateHost
 import me.meeshy.app.upgrade.UpgradeRequiredViewModel
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.call.CallLinkRequest
+import me.meeshy.sdk.model.call.screenshare.CallScreenSharePhase
 import me.meeshy.sdk.model.rootnav.RootRoute
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -352,6 +354,8 @@ private fun MinimizedCallPill(
 ) {
     val callState by callViewModel.state.collectAsStateWithLifecycle()
     val callPeerVisual by callViewModel.peerVisual.collectAsStateWithLifecycle()
+    val screenShare: CallScreenShareViewModel = hiltViewModel()
+    val share by screenShare.state.collectAsStateWithLifecycle()
     CallPill(
         state = callState,
         peerAvatarUrl = callPeerVisual.avatarUrl,
@@ -364,5 +368,7 @@ private fun MinimizedCallPill(
         onToggleSpeaker = callViewModel::toggleSpeaker,
         onHangUp = callViewModel::hangUp,
         modifier = modifier,
+        isScreenSharing = share.phase == CallScreenSharePhase.Sharing,
+        onStopScreenShare = screenShare::stop,
     )
 }

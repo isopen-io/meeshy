@@ -51,7 +51,7 @@ extension CallView {
         .task(id: callManager.isVideoEnabled) {
             if callManager.isVideoEnabled { callManager.cameraActuator.refreshAvailableCameras() }
         }
-        .onAppear { showEffectsToolbar = false }
+        .onAppear { layer = layer.reconciled(with: currentActionSet) }
         .onDisappear {
             showControls = true
             layer = .idle
@@ -197,7 +197,7 @@ extension CallView {
                 swipeDownOffset = CallPiPPolicy.swipeDownOffset(
                     translation: value.translation.height,
                     isGroup: isGroupStage,
-                    isEffectsOpen: showEffectsToolbar || !layer.mayAutoHide
+                    isEffectsOpen: !layer.mayAutoHide
                 )
             }
             .onEnded { value in
@@ -205,7 +205,7 @@ extension CallView {
                     translation: value.translation.height,
                     predictedTranslation: value.predictedEndTranslation.height,
                     isGroup: isGroupStage,
-                    isEffectsOpen: showEffectsToolbar || !layer.mayAutoHide,
+                    isEffectsOpen: !layer.mayAutoHide,
                     canSystemPiP: callManager.canActivateSystemPiP
                 )
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {

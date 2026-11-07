@@ -123,9 +123,9 @@ describe('GET /export?types=relations', () => {
 
     expect(relations.consents).toEqual([
       {
-        userId: OTHER, listeningTitleShared: true, locationShared: false, locationHistoryShared: false, proximityShared: true,
+        userId: OTHER, listeningCategoryShared: false, listeningTitleShared: true, locationShared: false, locationHistoryShared: false, proximityShared: true,
         consentedAt: ROSE.toISOString(),
-        withdrawnAt: { listeningTitleShared: null, locationShared: WITHDRAWN.toISOString(), locationHistoryShared: null, proximityShared: null },
+        withdrawnAt: { listeningCategoryShared: null, listeningTitleShared: null, locationShared: WITHDRAWN.toISOString(), locationHistoryShared: null, proximityShared: null },
       },
     ]);
     expect(relations.hasMore).toEqual({ links: false, interactionDays: false, consents: false });

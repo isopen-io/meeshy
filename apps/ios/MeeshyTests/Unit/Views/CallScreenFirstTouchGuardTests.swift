@@ -166,7 +166,7 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
         for erased in ["surfaceBackdrop", "surfaceContent", "surfaceEffects", "AnyView(topChrome)"] {
             XCTAssertTrue(surface.contains(erased), "\(erased) doit rester un bloc effacé de la surface d'appel")
         }
-        for inline in ["switch callManager.callState", "connectedView", "CallEffectsOverlay(", "LocalCameraVideoView("] {
+        for inline in ["switch callManager.callState", "connectedView", "callModeLayer", "LocalCameraVideoView("] {
             XCTAssertFalse(surface.contains(inline), "\(inline) ne se pose plus DANS la fermeture de callSurface")
         }
         for declaration in ["private var surfaceBackdrop: AnyView { AnyView(surfaceBackdropBody) }",
