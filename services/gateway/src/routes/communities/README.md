@@ -54,6 +54,8 @@ Routes de recherche publique:
 Gestion complète des membres:
 - `GET /communities/:id/members` - Liste des membres (avec pagination)
 - `POST /communities/:id/members` - Ajouter un membre (admin uniquement)
+
+**Qui peut être ajouté (#6376).** `POST …/members` et `POST …/invite` (`membership.ts`) ajoutent quelqu'un sans son accord : toutes deux passent `isAddableUser` (`addable-user.ts`) — compte vivant (ni `deactivatedAt`, ni `deletedAt`, `isActive`), aucun blocage dans un sens ou dans l'autre — et rendent le même 404 qu'un inconnu.
 - `PATCH /communities/:id/members/:memberId/role` - Modifier le rôle d'un membre (admin uniquement)
 - `DELETE /communities/:id/members/:memberId` - Retirer un membre (admin uniquement)
 

@@ -103,7 +103,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
     user: {
-      findFirst: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
+      findFirst: jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_USER_ID })),
       findUnique: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
     },
     ...overrides,
@@ -433,7 +433,7 @@ describe('POST /communities/:id/members — existing member (line 1097)', () => 
       id: COMM_ID, createdBy: USER_ID,
       members: [{ role: 'admin', userId: USER_ID }],
     });
-    prisma.user.findFirst.mockResolvedValue({ id: OTHER_USER_ID });
+    prisma.user.findFirst.mockImplementation(async ({ where }: any) => (where?.OR ? null : { id: OTHER_USER_ID }));
     prisma.communityMember.findFirst.mockResolvedValue({ id: MEMBER_ID, role: 'member', userId: OTHER_USER_ID, isActive: true });
     ({ app } = await buildAuthApp(prisma));
   });
@@ -955,7 +955,8 @@ describe('POST /communities/:id/invite — invitee already a member (line 2019)'
       id: COMM_ID, isPrivate: false, createdBy: OTHER_USER_ID,
       members: [{ role: 'admin', userId: USER_ID }],
     });
-    prisma.user.findFirst.mockResolvedValue({ id: INVITEE_ID });
+    // Le second `user.findFirst` est la recherche d'un blocage (`isBlockedBetween`, #6376) : aucun ici.
+    prisma.user.findFirst.mockImplementation(async ({ where }: any) => (where.OR ? null : { id: INVITEE_ID }));
     prisma.communityMember.findFirst.mockResolvedValue({ id: MEMBER_ID, userId: INVITEE_ID, role: 'member', isActive: true });
     ({ app } = await buildAuthApp(prisma));
   });
