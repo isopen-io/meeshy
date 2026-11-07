@@ -79,6 +79,9 @@ extension CallView {
         )
     }
 
+    /// `liveFrameStatus` a-t-il quelque chose à montrer (mêmes conditions) ?
+    var hasLiveFrameStatus: Bool { liveFrame.proposal.flatMap { CallFrameCatalogue.frame(id: $0.frameId) } != nil || liveFrame.answer != nil || (layer.activeMode == nil && liveFrameDisplay.isSuspended) }
+
     /// Ce qui s'affiche en haut de l'appel au sujet du cadre : une proposition à trancher,
     /// la réponse de l'autre à la mienne, ou la raison d'une pause.
     @ViewBuilder

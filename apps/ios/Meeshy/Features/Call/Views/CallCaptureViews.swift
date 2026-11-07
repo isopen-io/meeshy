@@ -88,26 +88,6 @@ enum CallCaptureAlertClearance {
     }
 }
 
-/// R1 posée dans l'écran d'appel établi : sous la rangée d'en-tête (44 pt et
-/// sa marge), jamais dessus, en audio comme en vidéo ; sous la capsule
-/// d'enregistrement R3 quand elle est là, pour ne jamais la couvrir. Elle ne
-/// se range pas avec les contrôles : une capture ne se cache pas.
-struct CallCaptureAlertLayer: View {
-    @ObservedObject var journal: CallCaptureJournal
-    let isBelowRecording: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        CallCaptureAlertCapsule(alert: journal.alert, onDismiss: journal.dismissFlash)
-            .equatable()
-            .padding(.top, CallView.chromeTopInset + (isBelowRecording ? 104 : 52))
-            .padding(.horizontal, MeeshySpacing.lg)
-            .frame(maxHeight: .infinity, alignment: .top)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: journal.alert)
-    }
-}
-
 /// La capsule R1 : rouge, centrée sous l'en-tête, un petit anneau blanc puis
 /// la phrase. Une capture ponctuelle passe au bout de quelques secondes ; un
 /// enregistrement d'écran reste tant qu'il dure. Paramètres primitifs.

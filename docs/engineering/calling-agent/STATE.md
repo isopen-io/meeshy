@@ -325,3 +325,42 @@ socket jusqu'au client.
    traducteur (`translation_processor.py`, chemin batch).
 3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
    de #16613.
+
+## Cycle 8 — 2026-11-07
+
+- **Base** : `origin/dev` @ `598fd0e3c` (le cycle 7, #16682, y est fusionné).
+- **Branche** : `claude/determined-volta-d2e6zi`.
+- **Objectif** : #16701 (piste 1 du cycle 7). Les threads d'inférence NLLB doivent connaître le régime
+  de la tâche qu'ils servent.
+- **Livré** (seul le traducteur change : ni la passerelle ni le protocole ZMQ ne bougent) :
+  - les trois `run_in_executor` de `translator_engine.py` passent par `_in_inference_thread`. Cette
+    méthode s'appuie sur `run_in_thread_with_context` (premier site de `src` à l'utiliser). Le
+    thread reçoit donc `_AT_REST` et `_LIVE_CAPTION`. Le diagnostic « sortie NLLB inattendue »
+    garde le texte d'un message ordinaire et tait celui d'un sous-titre ;
+  - les `{e}` du pipeline Hugging Face (`translate_sync`, `_infer_batch_sync`) passent par
+    `shown(str(e))`, dans le journal comme dans le message de `TranslationInferenceError`. Une
+    exception qui citait l'entrée faisait fuir le texte d'un sous-titre : le rouge l'a montré.
+- **Tests** : `tests/test_translator_engine_task_regime.py`, 23 témoins sur trois chemins
+  (`translate_sync`, lot via `translate_text`, lot via `translate_batch`). La QA y a ajouté deux
+  témoins de concurrence : deux tâches de régimes différents sur le même pool, et un thread réutilisé.
+  - **Rouge sur le code d'avant** : 9 sur 21 tombent. 3 viennent du contexte absent, 6 des `{e}`
+    bruts. Les deux témoins de concurrence tombent aussi.
+  - **Vert** : 23/23. Lancés avec les deux fichiers des cycles 6 et 7, j'obtiens 42/42 avant l'ajout
+    de la QA. Fichiers qui importent le moteur : 208 passés, 9 sautés, 4 échecs. Ces 4 échecs sont les
+    mêmes sur `origin/dev` : de la détection de langue (`langdetect` absent du venv).
+- **QA** : favorable avec réserves → #16715 et #16716.
+
+### Limites connues
+
+- `__cause__` garde l'exception brute du pipeline. Aucun appelant ne l'imprime aujourd'hui, mais un
+  futur `exc_info` la ferait fuir. → #16715.
+- Le lot ZMQ (`translation_processor.py:232`) tourne hors régime déclaré. C'est fail-closed, mais
+  le diagnostic d'un lot ordinaire reste tu. → #16716.
+
+### Cycle suivant : par où reprendre
+
+1. #16715 : petit lot Python de vie privée, dans la suite directe de celui-ci.
+2. Piste 3 du cycle 3 : un segment final à N langues envoie N requêtes ZMQ. Mesurer d'abord côté
+   traducteur (`translation_processor.py`, chemin batch). #16716 touche le même site : les grouper.
+3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
+   de #16613.

@@ -103,6 +103,19 @@ const de = {
   'circles.settings.blockTalkie': 'Talkie stummschalten',
   'circles.settings.blockTalkie.detail': 'Die Stimme wird nicht mehr direkt bei dir abgespielt, sondern kommt als Sprachnachricht an. Die Person wird nicht benachrichtigt.',
   'circles.settings.blockTalkie.failed': 'Die Einstellung konnte nicht gespeichert werden',
+  'talkie.send.explain': 'Gedrückt halten und sprechen: Deine Stimme ist bei {name} sofort zu hören, ohne Abheben.',
+  'talkie.send.hold': 'Zum Sprechen halten',
+  'talkie.send.hold.a11y': 'Gedrückt halten, um mit {name} zu sprechen — per Tastatur die Leertaste halten',
+  'talkie.send.connecting': 'Verbinde…',
+  'talkie.send.talking': 'Du sprichst mit {name}…',
+  'talkie.send.unsupported': 'Dieser Browser kann das Walkie-Talkie noch nicht nutzen: Sende stattdessen eine Sprachnachricht.',
+  'talkie.send.voice': 'Das Walkie-Talkie kommt gerade nicht durch: Sende stattdessen eine Sprachnachricht.',
+  'talkie.send.e2ee': 'Das Walkie-Talkie ist nicht Ende-zu-Ende-verschlüsselt: Bei einer verschlüsselten Unterhaltung bleibt es geschlossen.',
+  'talkie.send.rateLimited': 'Zu viele Durchsagen: Versuche es gleich noch einmal.',
+  'talkie.send.offline': 'Offline: Das Walkie-Talkie konnte nicht gesendet werden.',
+  'talkie.send.failed': 'Das Walkie-Talkie konnte nicht gesendet werden.',
+  'talkie.send.micDenied': 'Erlaube das Mikrofon, um das Walkie-Talkie zu nutzen.',
+  'talkie.send.limit': 'Höchstens dreißig Sekunden: Die Durchsage wurde beendet.',
 } as const satisfies CirclesCatalog;
 
 export default de;

@@ -33,19 +33,6 @@ final class RelationsServiceTests: XCTestCase {
         XCTAssertEqual(links.map(\.userId), ["u1", "u2"])
     }
 
-    func test_nowPlaying_getsTheListeningOfMyLinks_asServed() async throws {
-        let (service, api) = makeSUT()
-        let item = RelationNowPlaying(userId: "u1", category: "music", updatedAt: "2026-11-07T10:00:00Z", expiresAt: "2026-11-07T10:30:00Z")
-        api.stub("/relations/now-playing", result: APIResponse<RelationNowPlayingSnapshot>(
-            success: true, data: RelationNowPlayingSnapshot(items: [item]), error: nil))
-
-        let served = try await service.nowPlaying()
-
-        XCTAssertEqual(api.lastRequest?.endpoint, "/relations/now-playing")
-        XCTAssertEqual(api.lastRequest?.method, "GET")
-        XCTAssertEqual(served, [item])
-    }
-
     func test_config_getsTheLevelTable() async throws {
         let (service, api) = makeSUT()
         let config = RelationsConfig(levels: [

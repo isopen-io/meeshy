@@ -14,8 +14,7 @@ extension CallView {
     /// pas être en overlay des autres points d'action".
     var transcriptPanel: some View {
         CallJournalList(
-            items: journal.items,
-            line: journal.line,
+            items: journal.items, line: journal.line,
             onToggleOriginal: { toggleOriginal(of: $0) },
             contentPadding: 12
         )
@@ -96,8 +95,7 @@ extension CallView {
 
     var captionsJournal: some View {
         CallCaptionsJournalSheet(
-            items: journal.items,
-            line: journal.line,
+            items: journal.items, line: journal.line,
             showsOriginal: $showOriginalText,
             onToggleOriginal: { toggleOriginal(of: $0) }
         )

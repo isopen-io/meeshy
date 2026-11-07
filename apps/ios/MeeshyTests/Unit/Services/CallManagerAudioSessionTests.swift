@@ -2884,11 +2884,11 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
     }
 
     /// #16665 — CallView shows the R1 capture capsule in EVERY layout (audio,
-    /// video, group): it lives in the shared connected stack, not in a layout.
+    /// video, group): it lives in the single banner stack under the header.
     func test_callView_showsRecordingIndicator() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("CallCaptureAlertLayer(journal: transcriptionService.captureJournal"),
+            source.contains("captureJournal: transcriptionService.captureJournal"),
             "CallView must show the capture capsule — the local user must know when " +
             "someone captures the call so they can make an informed privacy decision")
     }
