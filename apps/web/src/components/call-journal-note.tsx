@@ -15,22 +15,16 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 export type JournalNoteView = { readonly kind: CallCaptureEventKind; readonly name: string | null };
 
-const SENTENCE = {
+/** L'action seule : la phrase se compose « pseudo action » dans les sept langues, et le bandeau « pseudo · action ». */
+const ACTION = {
   screenshot: 'callJournal.capture.screenshot',
   recording: 'callJournal.capture.recording',
-} as const;
-
-const ACTION = {
-  screenshot: 'callJournal.capture.screenshot.action',
-  recording: 'callJournal.capture.recording.action',
 } as const;
 
 const MOMENT = {
   'call-recording-started': 'callJournal.recording.started',
   'call-recording-stopped': 'callJournal.recording.stopped',
 } as const;
-
-const NAME_SLOT = '\u0000';
 
 const nameOf = (language: InterfaceLanguage, note: JournalNoteView): string => note.name ?? translate(language, 'callCaptions.participant');
 
@@ -44,15 +38,12 @@ function Name({ text, ink }: { readonly text: string; readonly ink: NameInk }) {
   );
 }
 
-/** La phrase entière, le pseudo à sa place dans la langue (« Awa a capturé l'écran », « التقط Awa … »). */
+/** La phrase entière : « Awa a capturé l'écran ». */
 export function JournalNoteSentence({ note, language, ink }: { readonly note: JournalNoteView; readonly language: InterfaceLanguage; readonly ink: NameInk }) {
   if (note.kind === 'call-recording-started' || note.kind === 'call-recording-stopped') return <>{translate(language, MOMENT[note.kind])}</>;
-  const [before = '', after = ''] = translate(language, SENTENCE[note.kind], { name: NAME_SLOT }).split(NAME_SLOT);
   return (
     <>
-      {before}
-      <Name text={nameOf(language, note)} ink={ink} />
-      {after}
+      <Name text={nameOf(language, note)} ink={ink} /> {translate(language, ACTION[note.kind])}
     </>
   );
 }

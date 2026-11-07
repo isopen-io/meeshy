@@ -1,7 +1,7 @@
 import { CALL_SCREEN_CAPTURE_DEDUPE_MS, type CallCaptureEventKind } from '@meeshy/shared/types/call-capture';
 import { CALL_RECORDING_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/call-recording-event-names';
 
-import { CAPTIONS_OVERLAY_LINES, type CallCaption } from './call-captions';
+import type { CallCaption } from './call-captions';
 import type { ActiveCall } from './call-store';
 
 /**
@@ -80,7 +80,12 @@ export function journalEntries(captions: readonly CallCaption[], notes: readonly
   return [...entries].sort((left, right) => left.at - right.at);
 }
 
-/** Ce que montre le bandeau : les dernières entrées du journal, phrases et notes mêlées. */
-export function overlayEntries(captions: readonly CallCaption[], notes: readonly CallJournalNote[]): readonly CallJournalEntry[] {
-  return journalEntries(captions, notes).slice(-CAPTIONS_OVERLAY_LINES);
+/**
+ * Ce que montre le bandeau : les `lines` dernières entrées du journal, phrases
+ * et notes mêlées. Le compte vient de l'appelant (`CAPTIONS_OVERLAY_LINES`) : le
+ * moteur importe ce module, et la loi des sous-titres doit rester hors de son
+ * chunk (`budgets.json` › `call_captions_law`).
+ */
+export function overlayEntries(captions: readonly CallCaption[], notes: readonly CallJournalNote[], lines: number): readonly CallJournalEntry[] {
+  return journalEntries(captions, notes).slice(-lines);
 }

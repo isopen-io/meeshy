@@ -45,7 +45,7 @@ describe('le journal vivant garde les captures (#16665)', () => {
     const captions = [caption('s1', 500), caption('s2', 2_000)];
     const notes = [note({ id: 'n1', at: 1_000 })];
     expect(journalEntries(captions, notes).map((entry) => (entry.type === 'caption' ? entry.caption.id : entry.note.id))).toEqual(['s1', 'n1', 's2']);
-    expect(overlayEntries(captions, notes).map((entry) => (entry.type === 'caption' ? entry.caption.id : entry.note.id))).toEqual(['n1', 's2']);
+    expect(overlayEntries(captions, notes, 2).map((entry) => (entry.type === 'caption' ? entry.caption.id : entry.note.id))).toEqual(['n1', 's2']);
   });
 });
 

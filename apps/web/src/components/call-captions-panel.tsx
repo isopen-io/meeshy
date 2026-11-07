@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { JournalNoteCaption } from '@/components/call-journal-note';
-import { captionLanguageLabel, captionText, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
+import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
 import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
@@ -113,7 +113,7 @@ function CaptionLine({
 export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass' }: { readonly call: ActiveCall; readonly language: InterfaceLanguage; readonly colorOf: SpeakerColorOf; readonly surface?: CaptionsSurface }) {
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
   const mode = call.captionsMode;
-  const lines = overlayEntries(call.captions, call.journalNotes ?? []);
+  const lines = overlayEntries(call.captions, call.journalNotes ?? [], CAPTIONS_OVERLAY_LINES);
   const clockOf = (at: number): string | null => (call.connectedAt === null ? null : formatCallClock((at - call.connectedAt) / 1000));
   const note = call.transcription === 'idle' ? null : NOTE_KEY[call.transcription];
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'message.author.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));

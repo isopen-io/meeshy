@@ -27,10 +27,8 @@ const esCallCaptions = {
   'callTranscript.retry': 'Reintentar',
   'callTranscript.showOriginal': 'Ver el original',
   'callTranscript.showTranslated': 'Ver la traducción',
-  'callJournal.capture.screenshot': '{name} hizo una captura de pantalla',
-  'callJournal.capture.recording': '{name} está grabando la pantalla',
-  'callJournal.capture.screenshot.action': 'hizo una captura de pantalla',
-  'callJournal.capture.recording.action': 'está grabando la pantalla',
+  'callJournal.capture.screenshot': 'hizo una captura de pantalla',
+  'callJournal.capture.recording': 'está grabando la pantalla',
   'callJournal.recording.started': 'La grabación de la llamada ha comenzado',
   'callJournal.recording.stopped': 'La grabación de la llamada se ha detenido',
 } as const;
