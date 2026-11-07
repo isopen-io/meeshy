@@ -1,0 +1,51 @@
+import SwiftUI
+import MeeshyUI
+
+/// APP-1 — partage d'écran, enregistrement et cadre en direct : UNE pile sous
+/// la rangée d'en-tête de l'appel, dans l'ordre fixe de `CallTopBannerStack`,
+/// au lieu de trois décalages figés (60, 110, 160 pt) qui passaient sous le
+/// chevron « Réduire » et se chevauchaient. Vue à part : elle observe seule le
+/// partage et l'enregistrement, sans réévaluer tout l'écran d'appel.
+struct CallTopBannerStackView<LiveFrameStatus: View>: View {
+    @ObservedObject var screenShare: CallScreenShareController
+    @ObservedObject var recording: CallRecordingController
+    let remoteName: String
+    let chrome: CallChromeVisibility
+    let hasLiveFrameStatus: Bool
+    let topInset: CGFloat
+    @ViewBuilder let liveFrameStatus: () -> LiveFrameStatus
+
+    var body: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            ForEach(CallTopBannerStack.ordered(present), id: \.self) { banner in
+                content(banner)
+            }
+        }
+        .padding(.top, topInset)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var present: Set<CallTopBanner> {
+        var present: Set<CallTopBanner> = []
+        if screenShare.isSharing || screenShare.isRemoteSharing { present.insert(.screenShare) }
+        if recording.phase != .idle || recording.notice != nil { present.insert(.recording) }
+        if hasLiveFrameStatus { present.insert(.liveFrame) }
+        return present
+    }
+
+    @ViewBuilder
+    private func content(_ banner: CallTopBanner) -> some View {
+        switch banner {
+        case .screenShare:
+            CallScreenShareBanner(isSharing: screenShare.isSharing, remoteSharerName: screenShare.isRemoteSharing ? remoteName : nil, onStop: screenShare.stopSharing)
+                .equatable()
+                .callChromeVisibility(chrome.isVisible(.screenShareBanner))
+        case .recording:
+            CallRecordingOverlay(phase: recording.phase, notice: recording.notice, kind: recording.kind, requesterName: remoteName, onAnswer: { _ = recording.answer(accepted: $0) }, onStop: { _ = recording.stop() }, onDismiss: recording.dismissNotice, showsStatus: chrome.isVisible(.recordingStatus))
+                .equatable()
+        case .liveFrame:
+            liveFrameStatus()
+                .padding(.horizontal, MeeshySpacing.lg)
+        }
+    }
+}
