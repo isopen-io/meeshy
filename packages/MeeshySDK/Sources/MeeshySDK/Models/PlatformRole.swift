@@ -77,6 +77,12 @@ public enum PlatformRole: String, CaseIterable, Sendable, Comparable {
         isPrivileged
     }
 
+    /// L'ÉQUIPE de la plateforme (`isPlatformTeam`, #16623) : MODERATOR, ADMIN, BIGBOSS testent les features de cercle
+    /// entre eux, sans lien. AUDIT et ANALYST n'en sont pas.
+    public var isTeam: Bool {
+        level >= PlatformRole.moderator.level
+    }
+
     /// Administre la plateforme : ouvre la console (`isGlobalAdmin`).
     public var administers: Bool {
         self == .admin || self == .bigboss

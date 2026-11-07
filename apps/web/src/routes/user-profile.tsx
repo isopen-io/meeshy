@@ -306,13 +306,12 @@ export function UserProfileView({ username }: { readonly username: string }) {
                                     )
                                   }
                                 />
-                                {relation.kind === 'friend' ? (
-                                  <ProfileBringRow
-                                    language={language}
-                                    person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
-                                    onNotice={(message) => announce(message, 'error')}
-                                  />
-                                ) : null}
+                                <ProfileBringRow
+                                  language={language}
+                                  person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
+                                  friend={relation.kind === 'friend'}
+                                  onNotice={(message) => announce(message, 'error')}
+                                />
                               </Suspense>
                             ) : null
                           }
