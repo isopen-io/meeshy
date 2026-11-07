@@ -41,6 +41,9 @@ public struct RepostContent: Identifiable, Sendable {
     /// disait rien ; `[]` = elle affirme qu'il n'y en a aucune. Le renderer du
     /// texte cité s'appuie sur cette différence pour décider quoi linkifier.
     public let mentions: [PostReference]?
+    /// Les commentaires de la publication citée sont fermés (#16541) : la
+    /// republication l'est aussi (`FeedPost.commentsClosed`).
+    public var commentsDisabled: Bool = false
 
     /// Les pseudos que le texte cité a le droit de rendre cliquables — miroir
     /// exact de `FeedPost.validMentionUsernames`, même règle, même casse.
@@ -89,7 +92,7 @@ extension RepostContent: Codable {
         case id, author, authorId, authorUsername, authorAvatarURL, content, timestamp, likes, isQuote
         case type, originalLanguage, audioUrl, moodEmoji, storyEffects, media, translations
         case originalRepostOfId, visibility, expiresAt, location, mentions, authorRing
-        case translatedContent
+        case translatedContent, commentsDisabled
     }
 
     public init(from decoder: Decoder) throws {
@@ -125,6 +128,7 @@ extension RepostContent: Codable {
         mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
         authorRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .authorRing)
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
+        commentsDisabled = (try? c.decodeIfPresent(Bool.self, forKey: .commentsDisabled)) ?? false
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -153,6 +157,7 @@ extension RepostContent: Codable {
         try c.encodeIfPresent(mentions, forKey: .mentions)
         try c.encodeIfPresent(authorRing, forKey: .authorRing)
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
+        if commentsDisabled { try c.encode(commentsDisabled, forKey: .commentsDisabled) }
     }
 }
 

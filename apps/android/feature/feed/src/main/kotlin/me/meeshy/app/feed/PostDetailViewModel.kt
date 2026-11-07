@@ -33,7 +33,9 @@ import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.net.toContentFetchFailure
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.post.PostCommentSettingsRepository
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.model.PostCommentSettings
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
@@ -114,6 +116,7 @@ class PostDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val emojiUsageStore: EmojiUsageStore = InMemoryEmojiUsageStore(),
     private val reports: ReportRepository? = null,
+    private val commentSettings: PostCommentSettingsRepository? = null,
 ) : ViewModel() {
 
     private val _effects = Channel<PostDetailEffect>(Channel.BUFFERED)
@@ -563,6 +566,27 @@ class PostDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * #16541 — ferme ou rouvre les commentaires du post : le détail bascule avant le réseau (le menu, le composeur), la
+     * passerelle dit l'état appliqué, un refus le remet — sauf si une diffusion a dit autre chose entre-temps.
+     */
+    fun toggleComments() {
+        val shown = rawPost.value ?: return
+        val settings = commentSettings ?: return
+        val before = shown.commentsDisabled
+        val target = !before
+        rawPost.update { it?.copy(commentsDisabled = target) }
+        viewModelScope.launch {
+            when (val result = attempt { settings.setCommentsDisabled(shown.id, target) }) {
+                is NetworkResult.Success -> rawPost.update { it?.copy(commentsDisabled = result.data) }
+                else -> {
+                    rawPost.update { row -> row?.let { it.copy(commentsDisabled = PostCommentSettings.rolledBack(it.commentsDisabled, target, before)) } }
+                    status.update { it.copy(notice = FeedNotice.COMMENT_SETTINGS_FAILED) }
+                }
+            }
+        }
+    }
+
     /** Signale le post pour [reason] et dit l'issue. */
     fun report(reason: ReportReason) {
         val shown = rawPost.value ?: return
@@ -735,7 +759,7 @@ class PostDetailViewModel @Inject constructor(
     ): PostDetailUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
         val projected = post?.let(st.reposts::applyTo)?.let {
-            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, activeLanguageCode = active, currentUserId = user?.id)
+            FeedPostBuilder.build(it, prefs, config.apiBaseUrl, activeLanguageCode = active, currentUserId = user?.id, viewerRole = user?.role)
         }?.let { presentation ->
             presentation.copy(
                 commentCount = overlay.commentCount?.coerceAtLeast(0) ?: presentation.commentCount,

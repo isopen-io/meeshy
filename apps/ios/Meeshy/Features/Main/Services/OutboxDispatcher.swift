@@ -911,6 +911,10 @@ nonisolated struct CreatePostBody: Encodable {
     /// avant lui, sur le chemin que prend tout post/réel du meuble.
     let allowSoundExtraction: Bool?
 
+    /// La publication naît fermée aux commentaires (#16541) — le choix du
+    /// composer, relu par `PublicationCommentClosure`. `nil` omet la clé.
+    var commentsDisabled: Bool? = nil
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         if let content, !content.isEmpty { try container.encode(content, forKey: .content) }
@@ -958,6 +962,9 @@ nonisolated struct CreatePostBody: Encodable {
         if let allowSoundExtraction {
             try container.encode(allowSoundExtraction, forKey: .allowSoundExtraction)
         }
+        if let commentsDisabled {
+            try container.encode(commentsDisabled, forKey: .commentsDisabled)
+        }
     }
 
     enum CodingKeys: String, CodingKey {
@@ -967,6 +974,7 @@ nonisolated struct CreatePostBody: Encodable {
         case mediaCaption
         case mediaAlt
         case allowSoundExtraction
+        case commentsDisabled
     }
 }
 

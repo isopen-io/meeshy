@@ -236,6 +236,11 @@ struct ReelMoreOptionsMenu: View {
                 Label(MessageCardExportMenu.imageLabel, systemImage: MessageCardExportMenu.imageSymbol)
             }
         }
+        if CommentSettingsToggle.isOffered(authorId: reel.authorId) {
+            CommentSettingsMenuItem(commentsDisabled: reel.commentsDisabled) {
+                Task { await viewModel.toggleComments(reel.id) }
+            }
+        }
         if isOwnReel {
             Button {
                 Task { await viewModel.pinPost(reel.id) }

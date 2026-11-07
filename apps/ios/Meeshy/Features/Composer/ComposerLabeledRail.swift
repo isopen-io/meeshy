@@ -23,7 +23,7 @@ nonisolated enum ComposerLabeledRailLayout {
         let plus: [ComposerMoreMenuEntry]
     }
 
-    private static let keptBehindPlus: Set<ComposerMoreMenuEntry> = [.animation, .soundReuse, .clearAll]
+    private static let keptBehindPlus: Set<ComposerMoreMenuEntry> = [.animation, .soundReuse, .commentsOff, .clearAll]
 
     static func resolve(tools: [ComposerRestTool], moreEntries: [ComposerMoreMenuEntry],
                         availableHeight: CGFloat, rowHeight: CGFloat, spacing: CGFloat) -> Layout {
@@ -164,6 +164,7 @@ struct ComposerRailPlusActions {
     let onAnimation: () -> Void
     let onTimeline: () -> Void
     var soundReuseAllowed = true
+    var commentsDisabled = false
 }
 
 /// **La rangée libellée** : glyphe et mot, 44 pt au moins, surlignée quand son outil est ouvert.
@@ -269,7 +270,7 @@ struct ComposerLabeledRail: View {
                               onClearAll: actions.onClearAll, railLabel: ComposerLabeledRailCopy.plus) {
             ComposerSceneMoreMenuItems(entries: entries, isAnimated: actions.isAnimated, onEntry: onMore,
                                        onAnimation: actions.onAnimation, onTimeline: actions.onTimeline,
-                                       soundReuseAllowed: actions.soundReuseAllowed)
+                                       soundReuseAllowed: actions.soundReuseAllowed, commentsDisabled: actions.commentsDisabled)
         }
     }
 

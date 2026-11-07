@@ -49,8 +49,14 @@
  * Un rôle de plateforme MODERATOR, ADMIN ou BIGBOSS (`moderatesPlatformContent`,
  * `lib/view/content-removal.ts`) retire le post, le réel ou la story d'un
  * autre, avec un MOTIF dont l'auteur est prévenu. L'entrée précède « Signaler ».
+ *
+ * ## « DÉSACTIVER / RÉACTIVER LES COMMENTAIRES » (#16541)
+ *
+ * À l'AUTEUR (après « Modifier ») et à la modération de plateforme sur la
+ * publication d'un autre (avant « Retirer ») ; la passerelle garde la
+ * hiérarchie entre rôles (403), un refus se défait et s'annonce.
  */
-export type PostMenuEntry = 'open' | 'copyText' | 'share' | 'saveMedia' | 'imager' | 'save' | 'views' | 'pin' | 'edit' | 'delete' | 'remove' | 'report';
+export type PostMenuEntry = 'open' | 'copyText' | 'share' | 'saveMedia' | 'imager' | 'save' | 'views' | 'pin' | 'edit' | 'comments' | 'delete' | 'remove' | 'report';
 
 export function postMenuEntries(params: {
   readonly viewerId: string | null;
@@ -75,6 +81,8 @@ export function postMenuEntries(params: {
    * (`postImagingOf`). Absent ⇒ non.
    */
   readonly canImage?: boolean;
+  /** L'hôte sait fermer et rouvrir les commentaires (#16541). Absent ⇒ non. */
+  readonly canToggleComments?: boolean;
 }): readonly PostMenuEntry[] {
   const { viewerId, authorId, isDetail, hasText, canShare, canSave, viewerIsAdministrator } = params;
   const signedIn = viewerId !== null && viewerId !== '';
@@ -88,7 +96,9 @@ export function postMenuEntries(params: {
     ...(params.canImage === true ? (['imager'] as const) : []),
     ...(canSave && signedIn ? (['save'] as const) : []),
     ...(signedIn && viewerIsAdministrator ? (['views'] as const) : []),
-    ...(isOwn ? (['pin', 'edit', 'delete'] as const) : []),
+    ...(isOwn ? (['pin', 'edit'] as const) : []),
+    ...(signedIn && params.canToggleComments === true && (isOwn || params.viewerModerates === true) ? (['comments'] as const) : []),
+    ...(isOwn ? (['delete'] as const) : []),
     ...(signedIn && !isOwn && params.viewerModerates === true ? (['remove'] as const) : []),
     ...(signedIn && !isOwn ? (['report'] as const) : []),
   ];

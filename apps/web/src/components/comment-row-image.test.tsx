@@ -103,20 +103,28 @@ describe('le « … » d’un commentaire', () => {
     expect(document.querySelector('[data-comment-menu]')?.getAttribute('role')).toBe('menu');
   });
 
-  test('le commentaire d’un autre : copier, imager, signaler', async () => {
+  /** « IMAGER » VIT DANS LE RAIL (#16541) — l'icône seule, nommée pour le lecteur d'écran ; le « … » ne la répète pas. */
+  test('le commentaire d’un autre : copier, signaler — « Imager » n’est plus dans le « … »', async () => {
     const host = await mount(gestures([]));
     await openMenu(host);
-    expect(items()).toEqual(['copy', 'image', 'report']);
-    expect(item('image')?.textContent).toBe('Imager');
+    expect(items()).toEqual(['copy', 'report']);
     expect(item('copy')?.textContent).toBe('Copier le texte');
+  });
+
+  test('« Imager » est une ICÔNE du rail, sans libellé visible, mais nommée', async () => {
+    const host = await mount(gestures([]));
+    const rail = host.querySelector<HTMLButtonElement>('[data-comment-rail-image]');
+    expect(rail).not.toBeNull();
+    expect(rail?.textContent?.trim()).toBe('');
+    expect(rail?.getAttribute('aria-label')).toBe('Imager');
+    expect(rail?.getAttribute('title')).toBe('Imager');
   });
 
   test('« Imager » remet le commentaire et le texte servi par le Prisme', async () => {
     const journal: Journal = [];
     const host = await mount(gestures(journal));
-    await pick(host, 'image');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-rail-image]')?.click());
     expect(journal).toEqual(['image:c-image:Good morning:alone']);
-    expect(document.querySelector('[data-comment-menu]')).toBeNull();
   });
 
   test('« Copier » remet le texte AFFICHÉ, jamais l’original caché derrière', async () => {
@@ -150,6 +158,7 @@ describe('le « … » d’un commentaire', () => {
     const host = await mount(gestures([]), { ...baseComment, effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED, replyCount: 1 });
     await openMenu(host);
     expect(items()).toEqual(['report']);
+    expect(host.querySelector('[data-comment-rail-image]')).toBeNull();
   });
 
   test('Échap referme le menu et rend le focus au « … »', async () => {
@@ -166,5 +175,6 @@ describe('le « … » d’un commentaire', () => {
     const { onImage: _image, onCopy: _copy, onReport: _report, ...bare } = gestures([]);
     const host = await mount(bare);
     expect(host.querySelector('[data-comment-gesture="more"]')).toBeNull();
+    expect(host.querySelector('[data-comment-rail-image]')).toBeNull();
   });
 });

@@ -46,6 +46,7 @@ import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PostCommentSettings
 import me.meeshy.sdk.model.PostTranslationMerge
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.network.InMemoryNetworkMonitor
@@ -120,8 +121,17 @@ class PostCommentsViewModel @Inject constructor(
 
     private val offline = MutableStateFlow(false)
 
+    /** Les commentaires de la publication sont fermés (#16541) : l'hôte le sait du post, un refus `COMMENTS_DISABLED` aussi. */
+    private val closed = MutableStateFlow(false)
+
     /** Hors ligne : la feuille garde le fil lu et pose un bandeau discret, ou l'état « hors ligne » si rien n'est gardé. */
     val isOffline: StateFlow<Boolean> = offline.asStateFlow()
+
+    /** L'hôte dit ce que le post sert (#16541) : fermé, le composeur cède la place au bandeau ; rouvert, il revient. */
+    fun setCommentsClosed(isClosed: Boolean) {
+        closed.value = isClosed
+        if (isClosed) composer.value = null
+    }
 
     /** Appelé quand un commentaire ou une réponse de l'utilisateur est confirmé : l'hôte incrémente son compteur. */
     var onCommentSent: ((postId: String) -> Unit)? = null
@@ -213,6 +223,7 @@ class PostCommentsViewModel @Inject constructor(
                     onRoster = mentions::updateRoster,
                 )
             }.combine(attachments) { projected, tray -> projected.copy(attachments = tray) }
+                .combine(closed) { projected, isClosed -> projected.copy(commentsClosed = isClosed) }
                 .collect { projected -> _state.value = projected }
         }
         restoreUnsentComment()
@@ -589,7 +600,7 @@ class PostCommentsViewModel @Inject constructor(
         composerDraft.value.editing?.let { return submitEdit(it) }
         val content = composerDraft.value.text.trim()
         val tray = attachments.value
-        if (postId.isBlank() || status.value.isSubmitting) return
+        if (postId.isBlank() || status.value.isSubmitting || closed.value) return
         val gate = CommentSendGate.decide(content, tray.pieces.map { CommentSendGate.Piece(it.id, isReady = it.uploaded != null) }, hasPlace = false)
         if (gate !is CommentSendGate.Decision.Send) return
         val attachmentIds = tray.attachmentIds.takeIf { it.isNotEmpty() }
@@ -623,7 +634,7 @@ class PostCommentsViewModel @Inject constructor(
                     }
                     is NetworkResult.Failure -> {
                         thread.update { it.failed(tempId) }
-                        sendFailed(result.error.message, content, CommentNotice.SEND_FAILED, place)
+                        sendFailed(result.error.message, content, CommentNotice.SEND_FAILED, place, result.error.code)
                     }
                 }
             } catch (e: CancellationException) {
@@ -716,7 +727,7 @@ class PostCommentsViewModel @Inject constructor(
      * previous prefill via [ReplyMentionPrefill]. A blank post/comment id is inert.
      */
     fun beginReply(commentId: String) {
-        if (postId.isBlank() || commentId.isBlank()) return
+        if (postId.isBlank() || commentId.isBlank() || closed.value) return
         val comment = findComment(commentId)
         val parentId = comment?.parentId?.takeIf { it.isNotBlank() } ?: commentId
         val name = comment?.author?.let { it.displayName ?: it.username }?.takeIf { it.isNotBlank() }
@@ -831,6 +842,12 @@ class PostCommentsViewModel @Inject constructor(
         composerDraft.value = ComposerDraft()
     }
 
+    /** #16541 — un drapeau d'un VOCAL : la piste de cette langue joue (l'origine rend l'original) ; le retoucher rend le Prisme. */
+    fun onCommentAudioFlagTap(commentId: String, code: String) {
+        val tapped = code.trim().lowercase().takeIf { it.isNotEmpty() && commentId.isNotBlank() } ?: return
+        activeLanguages.update { current -> if (current[commentId] == tapped) current - commentId else current + (commentId to tapped) }
+    }
+
     /**
      * Tap on a comment's Prisme language-flag chip: switch that comment's displayed language, or
      * revert to the default resolution when the chip is already active. The override is keyed per
@@ -911,7 +928,7 @@ class PostCommentsViewModel @Inject constructor(
                     is NetworkResult.Failure -> {
                         replies.update { it.failedReply(parentId, tempId) }
                         thread.update { it.bumpReplyCount(parentId, -1) }
-                        sendFailed(result.error.message, content, CommentNotice.REPLY_FAILED, extras.place)
+                        sendFailed(result.error.message, content, CommentNotice.REPLY_FAILED, extras.place, result.error.code)
                     }
                 }
             } catch (e: CancellationException) {
@@ -935,8 +952,10 @@ class PostCommentsViewModel @Inject constructor(
      * A send the server refused: the localized notice, and the text goes back to the composer
      * (when the author has not started another one) — never lost (iOS `CommentUnsentBadge`).
      */
-    private fun sendFailed(message: String?, content: String, notice: CommentNotice, place: SharedPlace?) {
-        status.update { it.copy(isSubmitting = false, error = message, notice = notice) }
+    private fun sendFailed(message: String?, content: String, notice: CommentNotice, place: SharedPlace?, code: String? = null) {
+        val refusedAsClosed = PostCommentSettings.refusesComments(code)
+        if (refusedAsClosed) closed.value = true
+        status.update { it.copy(isSubmitting = false, error = message, notice = if (refusedAsClosed) null else notice) }
         if (composerDraft.value.text.isBlank()) composerDraft.update { it.copy(text = content) }
         if (place != null && composerDraft.value.place == null) composerDraft.update { it.copy(place = place) }
     }

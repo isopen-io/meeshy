@@ -283,7 +283,7 @@ extension StoryViewerView {
         ), author: AuthManager.shared.currentUser)
         Task {
             StoryInteractionService().noteComment(storyId: story.id)
-            if await !commentSession.deliver(payload, media: medias) {
+            if await !commentSession.deliver(payload, media: medias, onCommentsClosed: { StoryCommentSettings.noteClosed(storyId: story.id, in: viewModel) }) {
                 returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
             }
         }

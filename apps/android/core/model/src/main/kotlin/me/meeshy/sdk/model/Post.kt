@@ -142,6 +142,8 @@ data class ApiRepostOf(
     val authorRing: PostServedRing? = null,
     /** Échéance du post SOURCE (statut, story éphémère) ; `null` = ne s'éteint pas. Miroir de `RepostContent.expiresAt`. */
     val expiresAt: String? = null,
+    /** Le post SOURCE a fermé ses commentaires (#16541) : une republication hérite de la fermeture. Absent = ouverts. */
+    val commentsDisabled: Boolean = false,
 )
 
 /** A comment on a post — port of APIPostComment (PostModels.swift). */
@@ -260,6 +262,8 @@ data class ApiPost(
     val viewerPoints: Int? = null,
     /** Source de classement de cet élément dans la page qui l'a servi (#10501). */
     val rankingSource: String? = null,
+    /** L'auteur (ou la modération) a fermé les commentaires de CE post (#16541) ; absent d'une vieille passerelle = ouverts. */
+    val commentsDisabled: Boolean = false,
 )
 
 /** Les liens suivis servis : la carte hissée si non vide, sinon celle de `metadata`. */

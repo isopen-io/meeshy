@@ -477,7 +477,7 @@ struct PostDetailView: View {
                         )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                    composer.foldableComment(isReplying: viewModel.replyingTo != nil)
+                    composer.foldableComment(isReplying: viewModel.replyingTo != nil).replacedWhenCommentsClosed(viewModel.commentsClosed)
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
             }
@@ -513,6 +513,7 @@ struct PostDetailView: View {
                     save: { canSaveMedia ? requestSaveMedia() : toggleDetailBookmark() },
                     imager: displayPost.flatMap { PostSaveAction.imagerAction(for: $0, coordinator: mediaSaveCoordinator) }
                 )
+                CommentSettingsMenuItem.offered(for: displayPost) { Task { await viewModel.toggleComments() } }
                 if displayPost?.authorId == AuthManager.shared.currentUser?.id {
                     Button {
                         Task { await viewModel.pinPost(postId) }

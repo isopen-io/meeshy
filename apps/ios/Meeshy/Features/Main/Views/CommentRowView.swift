@@ -57,17 +57,14 @@ struct CommentRowView: View, Equatable {
     var post: FeedPost? = nil
 
     /// Le menu « … » — le MÊME que celui d'un commentaire de story (#8709) :
-    /// Copier, Imager (l'arbre de réponses compris), Modifier, Signaler,
-    /// Supprimer, Retirer (#11151), selon `CommentMenuPolicy`.
+    /// Copier, Modifier, Signaler, Supprimer, Retirer (#11151), selon
+    /// `CommentMenuPolicy`. « Imager » est l'icône de la rangée (#16541).
     private var moreMenu: some View {
         CommentMoreMenu(
             comment: comment,
             servedText: effectiveCommentContent,
             showOriginal: showOriginal,
             accentColor: accentColor,
-            root: threadRoot,
-            loadedReplies: threadReplies,
-            post: post,
             onEdit: onEditComment,
             onDelete: onDeleteComment,
             onRemove: onRemoveComment,

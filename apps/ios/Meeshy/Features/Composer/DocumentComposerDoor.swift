@@ -344,6 +344,7 @@ struct DocumentComposerDoor: View {
             // valeur au même rang.
             allowSoundExtraction: draft.allowSoundExtraction
         )
+        PublicationCommentClosure.record(intent.clientMutationId, disabled: draft.commentsDisabled)
         await viewModel.publish(intent)
 
         let issue = ComposerDocumentSendOutcome.reported(

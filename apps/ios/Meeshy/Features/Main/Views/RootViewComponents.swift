@@ -406,7 +406,8 @@ struct ThemedFeedOverlay: View {
             } : nil,
             onPin: isOwnPost ? { postId in
                 Task { await viewModel.pinPost(postId) }
-            } : nil
+            } : nil,
+            onToggleComments: CommentSettingsToggle.feedAction(for: post, in: viewModel)
         )
         // Marge latérale plus serrée que les posts standards (`FeedPostCard` = 16)
         // → la carte Réel est un peu plus large sur iPhone, tout en gardant une
@@ -416,7 +417,7 @@ struct ThemedFeedOverlay: View {
 
     // MARK: - Standard post card
 
-    private func standardFeedPostCardView(for post: FeedPost) -> FeedPostCard {
+    private func standardFeedPostCardView(for post: FeedPost) -> some View {
         FeedPostCard(
             post: post,
             onSeeNearby: { place in
@@ -490,6 +491,8 @@ struct ThemedFeedOverlay: View {
             // joue. Une élection tenue mais jamais servie ne se voit nulle part.
             reelAutoplay: reelAutoplay
         )
+        .equatable()
+        .environment(\.commentSettingsAction, CommentSettingsToggle.feedAction(for: post, in: viewModel))
     }
 
     var body: some View {
@@ -571,7 +574,6 @@ struct ThemedFeedOverlay: View {
                                 reelFeedCardView(for: post)
                             } else {
                                 standardFeedPostCardView(for: post)
-                                    .equatable()
                             }
                         }
                         .onAppear {

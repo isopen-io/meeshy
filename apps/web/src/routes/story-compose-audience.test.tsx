@@ -79,3 +79,22 @@ describe('la pastille', () => {
     expect(html).not.toContain('par défaut');
   });
 });
+
+/** « DÉSACTIVER LES COMMENTAIRES » (#16541) — une option de publication, posée sous l'audience, qui dit son état. */
+describe('la feuille d’audience — les commentaires', () => {
+  const withComments = (commentsDisabled: boolean) =>
+    renderToStaticMarkup(
+      <AudienceSheet lang="fr" repostOfId={null} value="PUBLIC" source="chosen" onChoose={noop} commentsDisabled={commentsDisabled} onCommentsDisabledChange={noop} onClose={noop} />,
+    );
+
+  test('un interrupteur nommé, à l’état servi', async () => {
+    await loadInterfaceCatalog('fr');
+    expect(withComments(false)).toMatch(/role="switch" aria-checked="false"[^>]*data-publish-comments-disabled/);
+    expect(withComments(true)).toMatch(/aria-checked="true"/);
+    expect(withComments(true)).toContain('Désactiver les commentaires');
+  });
+
+  test('sans hôte qui sache le faire, aucune rangée', () => {
+    expect(sheet()).not.toContain('data-publish-comments-disabled');
+  });
+});

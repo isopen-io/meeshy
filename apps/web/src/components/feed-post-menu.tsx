@@ -63,6 +63,8 @@ export type PostMenuHost = {
   /** RETIRER LA PUBLICATION D'UN AUTRE (#11150) — le motif nettoyé, saisi dans `ContentRemovalSheet`. Absent ⇒ aucune entrée. */
   readonly onRemove?: (postId: string, reason: string) => void;
   readonly onReport: (postId: string, reason: ReportReason) => void;
+  /** FERMER (`true`) OU ROUVRIR (`false`) LES COMMENTAIRES (#16541) — l'auteur ou la modération. Absent ⇒ aucune entrée. */
+  readonly onToggleComments?: (postId: string, disable: boolean) => void;
   /** LA FEUILLE DE SIGNALEMENT S'OUVRE (#10503) — un signal négatif, même sans motif choisi. */
   readonly onReportOpen?: (postId: string) => void;
   /** LE BROUILLON DE L'ÉDITION EN COURS (#8849, jumelle de #8848) — absent,
@@ -86,6 +88,7 @@ export function FeedPostMenu({
   originalText,
   originalLanguage,
   bookmarked,
+  commentsDisabled = false,
   studioEditable = false,
   sceneExport,
   imaging,
@@ -107,6 +110,8 @@ export function FeedPostMenu({
   /** La langue de `originalText` — le `lang` du champ d'édition. */
   readonly originalLanguage: string | undefined;
   readonly bookmarked: boolean;
+  /** LE RÉGLAGE PROPRE de la publication (#16541) — « Désactiver » ou « Réactiver les commentaires ». */
+  readonly commentsDisabled?: boolean;
   /** « MODIFIER » ROUVRE LE STUDIO (#9317) — la carte porte une scène ou un
    * média, et n'est pas une republication : sa modification se fait dans le
    * studio (`/posts/:id/edit`). Sinon, la feuille de texte (#7534). */
@@ -143,6 +148,7 @@ export function FeedPostMenu({
     viewerModerates: menu.viewerModerates === true && menu.onRemove !== undefined,
     canSaveScene: sceneExport?.scene !== undefined && labelsLoaded,
     canImage: imageRequest !== null && labelsLoaded,
+    canToggleComments: menu.onToggleComments !== undefined,
   });
 
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
@@ -226,6 +232,7 @@ export function FeedPostMenu({
             originalText={originalText}
             originalLanguage={originalLanguage}
             bookmarked={bookmarked}
+            commentsDisabled={commentsDisabled}
             studioEditable={studioEditable}
             sceneExport={sceneExport}
             imageRequest={imageRequest}
@@ -284,6 +291,7 @@ export function ModelPostMenu({
       originalText={model.text?.original}
       originalLanguage={model.text?.originalLanguage}
       bookmarked={model.viewer.bookmarked}
+      commentsDisabled={model.commentsDisabled === true}
       studioEditable={model.repostOf === undefined && (model.scene !== undefined || model.media.length > 0)}
       sceneExport={model.scene === undefined ? undefined : model}
       imaging={model}

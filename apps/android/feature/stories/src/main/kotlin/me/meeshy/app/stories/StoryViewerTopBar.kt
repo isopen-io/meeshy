@@ -95,7 +95,11 @@ internal fun StoryViewerTopBar(
                 TranslatedBadge()
             }
             if (state.currentStoryId != null) {
-                StoryOptionsMenu(state, chrome, videoExport, actions, mayRemove = viewModel.mayRemoveCurrentStory())
+                StoryOptionsMenu(
+                    state, chrome, videoExport, actions,
+                    mayRemove = viewModel.mayRemoveCurrentStory(),
+                    onToggleComments = viewModel::toggleCurrentStoryComments.takeIf { viewModel.mayToggleCurrentStoryComments() },
+                )
             }
         }
         slide?.backgroundAudio?.takeIf { it.showsMuteControl }?.let { announcement ->

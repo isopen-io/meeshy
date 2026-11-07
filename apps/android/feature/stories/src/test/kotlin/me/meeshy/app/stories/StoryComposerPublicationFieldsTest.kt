@@ -74,4 +74,16 @@ class StoryComposerPublicationFieldsTest {
         assertThat(request(StoryComposerDraft(text = "x", allowSoundExtraction = true)).allowSoundExtraction).isTrue()
         assertThat(request(StoryComposerDraft(text = "x", allowSoundExtraction = false)).allowSoundExtraction).isFalse()
     }
+
+    @Test
+    fun `closing comments is declared only when the author turned them off`() {
+        assertThat(request(StoryComposerDraft(text = "x")).commentsDisabled).isNull()
+        assertThat(request(StoryComposerDraft(text = "x", commentsDisabled = true)).commentsDisabled).isTrue()
+    }
+
+    @Test
+    fun `the comments switch survives the autosave round trip`() {
+        val draft = StoryComposerDraft(text = "x", commentsDisabled = true)
+        assertThat(StoryComposerDraft().withAnnotations(draft.annotations()).commentsDisabled).isTrue()
+    }
 }

@@ -2,6 +2,7 @@ package me.meeshy.sdk.model.composer
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.MobileTranscriptionPayload
+import me.meeshy.sdk.model.StoryVisibility
 import org.junit.Test
 
 class PublishIntentTest {
@@ -23,6 +24,13 @@ class PublishIntentTest {
         storyEffects = null, mediaCaptions = captions, mediaAlts = emptyMap(), mediaObjectIds = emptyMap(),
         allowSoundExtraction = null,
     )
+
+    @Test
+    fun `a document drafted with closed comments carries the closure, an open one says nothing`() {
+        val draft = ComposerDocumentDraft(format = ComposerFormat.POST, text = "x", visibility = StoryVisibility.PUBLIC, visibilityUserIds = null)
+        assertThat(draft.copy(commentsDisabled = true).toPublishIntent().commentsDisabled).isTrue()
+        assertThat(draft.toPublishIntent().commentsDisabled).isNull()
+    }
 
     @Test
     fun `a declared type wins over the deduced one`() {

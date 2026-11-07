@@ -63,6 +63,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import me.meeshy.ui.component.comments.CommentComposerBanner
+import me.meeshy.ui.component.comments.CommentsClosedBanner
 import me.meeshy.ui.component.comments.FoldableCommentBar
 import me.meeshy.ui.component.comments.KeepsReplyTargetInView
 import me.meeshy.ui.component.comments.ProvideCommentAnchors
@@ -181,6 +182,8 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
                     onFlagTap = viewModel::onCommentFlagTap,
                     onDelete = viewModel::deleteComment,
                     imaging = imaging,
+                    canReply = !state.commentsClosed,
+                    onAudioFlagTap = viewModel::onCommentAudioFlagTap,
                 )
                 ReplyThread(
                     comment = comment,
@@ -192,6 +195,8 @@ private fun CommentsColumn(state: PostCommentsUiState, viewModel: PostCommentsVi
                     onFlagTap = viewModel::onCommentFlagTap,
                     onDelete = viewModel::deleteComment,
                     imaging = imaging,
+                    canReply = !state.commentsClosed,
+                    onAudioFlagTap = viewModel::onCommentAudioFlagTap,
                 )
             }
         }
@@ -212,6 +217,10 @@ fun PostCommentsComposerBar(
     onPanelOpenChange: (Boolean) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    if (state.commentsClosed) {
+        CommentsClosedBanner(message = stringResource(R.string.feed_comments_closed_banner), modifier = modifier)
+        return
+    }
     val editPiece = rememberCommentPieceRetouch(onReplace = viewModel::replaceMedia)
     val quotation by viewModel.quotation.collectAsStateWithLifecycle()
     val haptics = rememberMeeshyHaptics()
@@ -264,6 +273,8 @@ private fun CommentRow(
     onFlagTap: (String, String) -> Unit,
     onDelete: (String) -> Unit,
     imaging: CommentImaging? = null,
+    canReply: Boolean = true,
+    onAudioFlagTap: (String, String) -> Unit = { _, _ -> },
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     val timeText = comment.createdAtIso?.let { detailRelativeTime(it) }
@@ -346,12 +357,17 @@ private fun CommentRow(
                     onChipTap = { code -> onFlagTap(comment.id, code) },
                 )
             }
+            val audioChips = comment.media.flatMap { it.audioChips }.distinctBy { it.code }
+            if (audioChips.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                CommentLanguageStrip(chips = audioChips, onChipTap = { code -> onAudioFlagTap(comment.id, code) })
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {
                 CommentLikeButton(comment = comment, onToggleLike = onToggleLike)
-                CommentReplyButton(comment = comment, onReply = onReply)
+                if (canReply) CommentReplyButton(comment = comment, onReply = onReply)
                 CommentMoreMenu(comment = comment, onDelete = onDelete, imaging = imaging)
             }
             CommentUnsentSlot(comment.id)
@@ -456,6 +472,8 @@ private fun ReplyThread(
     onFlagTap: (String, String) -> Unit,
     onDelete: (String) -> Unit,
     imaging: CommentImaging? = null,
+    canReply: Boolean = true,
+    onAudioFlagTap: (String, String) -> Unit = { _, _ -> },
 ) {
     val isExpanded = thread?.isExpanded == true
     val isPreview = thread?.isPreview == true
@@ -473,6 +491,8 @@ private fun ReplyThread(
                         onFlagTap = onFlagTap,
                         onDelete = onDelete,
                         imaging = imaging,
+                        canReply = canReply,
+                        onAudioFlagTap = onAudioFlagTap,
                     )
                 }
             }
@@ -540,6 +560,8 @@ private fun ReplyThread(
                         onFlagTap = onFlagTap,
                         onDelete = onDelete,
                         imaging = imaging,
+                        canReply = canReply,
+                        onAudioFlagTap = onAudioFlagTap,
                     )
                 }
             }

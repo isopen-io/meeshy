@@ -68,6 +68,7 @@ internal object StoryEditMerge {
             mediaIds = attach.takeIf { it.isNotEmpty() },
             mentions = state.draft.mentions.takeIf { mentionsChanged },
             allowSoundExtraction = state.draft.allowSoundExtraction,
+            commentsDisabled = state.draft.commentsDisabled.takeIf { it != opening.post.commentsDisabled },
             mediaAlt = MediaDescriptionLaw.wire(state.draft.mediaAlt, attach),
             mediaCaption = MediaDescriptionLaw.wire(state.draft.mediaCaption, attach),
         )
@@ -225,6 +226,7 @@ internal object StoryEditMerge {
             storyEffects = merged,
             media = opening.post.media.orEmpty().filter { it.id !in removed } + added,
             isViewedByMe = true,
+            commentsDisabled = request.commentsDisabled ?: opening.post.commentsDisabled,
         )
     }
 

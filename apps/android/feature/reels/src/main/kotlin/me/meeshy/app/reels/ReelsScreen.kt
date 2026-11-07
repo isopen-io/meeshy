@@ -251,6 +251,7 @@ fun ReelsScreen(
             serverCommentCount = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentCount,
             onDismiss = { commentsReelId = null },
             onCommentSent = viewModel::commentSent,
+            commentsClosed = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentsClosed,
             onOpenPost = {
                 commentsReelId = null
                 onOpenPost(openCommentsReelId)

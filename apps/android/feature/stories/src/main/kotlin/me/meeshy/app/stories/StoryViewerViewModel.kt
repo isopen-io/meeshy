@@ -45,6 +45,8 @@ import me.meeshy.sdk.model.StoryTextObjectTranslationMerge
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.PostCommentSettingsRepository
+import me.meeshy.sdk.model.PostCommentSettings
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
@@ -69,6 +71,7 @@ import me.meeshy.sdk.story.purgingDeadStories
 import me.meeshy.sdk.story.toStoryGroups
 import me.meeshy.sdk.story.toStoryItem
 import me.meeshy.feature.stories.R
+import me.meeshy.feature.feed.R as FeedR
 import me.meeshy.sdk.model.ContentRemovalPolicy
 import me.meeshy.sdk.model.ContentRemovalReason
 import me.meeshy.ui.component.FeedbackKind
@@ -92,6 +95,7 @@ class StoryViewerViewModel @Inject constructor(
     private val viewReporter: StoryViewReporting = StoryViewReporting { storyRepository.markViewed(it) },
     private val slideImpressions: StorySlideImpressions = StorySlideImpressions.None,
     private val viewedLedger: StoryViewedLedger = InMemoryStoryViewedLedger(),
+    private val commentSettings: PostCommentSettingsRepository? = null,
 ) : ViewModel() {
 
     private val userId: String = savedStateHandle.get<String>(USER_ID_ARG).orEmpty()
@@ -737,6 +741,8 @@ class StoryViewerViewModel @Inject constructor(
             groupCount = playback.groups.size,
             authorUserId = playback.currentGroup?.userId,
             authorPresence = playback.currentGroup?.authorPresence?.takeUnless { playback.currentGroup?.userId == sessionRepository.currentUserId },
+            commentsDisabled = currentItem?.commentsDisabled == true,
+            commentsClosed = currentItem?.commentsClosed == true,
         )
     }
 
@@ -902,6 +908,44 @@ class StoryViewerViewModel @Inject constructor(
     /** « Retirer » s'offre à la modération de la plateforme sur la story d'un autre, jamais sur la sienne. */
     fun mayRemoveCurrentStory(): Boolean =
         ContentRemovalPolicy.mayRemovePublication(_state.value.isOwnStory, sessionRepository.currentUser.value?.role)
+
+    /** « Désactiver / Réactiver les commentaires » s'offre à l'auteur et à la modération de la plateforme (#16541). */
+    fun mayToggleCurrentStoryComments(): Boolean =
+        commentSettings != null && _state.value.currentStoryId != null &&
+            PostCommentSettings.mayToggle(_state.value.isOwnStory, sessionRepository.currentUser.value?.role)
+
+    /**
+     * #16541 — ferme ou rouvre les commentaires de la story courante : la story bascule avant le réseau (le menu, le
+     * composeur épinglé), la passerelle dit l'état appliqué, un refus le remet — sauf si `story:updated` a dit autre chose.
+     */
+    fun toggleCurrentStoryComments() {
+        val settings = commentSettings ?: return
+        val storyId = _state.value.currentStoryId ?: return
+        val before = rawItems[storyId]?.commentsDisabled ?: return
+        val target = !before
+        setStoryCommentsDisabled(storyId) { target }
+        viewModelScope.launch {
+            val result = try {
+                settings.setCommentsDisabled(storyId, target)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (result is NetworkResult.Success) {
+                setStoryCommentsDisabled(storyId) { result.data }
+            } else {
+                setStoryCommentsDisabled(storyId) { current -> PostCommentSettings.rolledBack(current, target, before) }
+                toastChannel.trySend(FeedbackToastRequest(FeedR.string.feed_comment_settings_failed, FeedbackKind.Error))
+            }
+        }
+    }
+
+    private fun setStoryCommentsDisabled(storyId: String, next: (Boolean) -> Boolean) {
+        val item = rawItems[storyId] ?: return
+        rawItems[storyId] = item.copy(commentsDisabled = next(item.commentsDisabled))
+        emit()
+    }
 
     private fun retireCurrentStory(reason: String?) {
         val storyId = _state.value.currentStoryId ?: return

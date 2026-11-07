@@ -104,7 +104,7 @@ extension StoryCardView {
             // l'envoi (`sendComment` remet le binding à nil) ou à la
             // fermeture de la banner (spec user 2026-06-25).
             if !isOwnStory || replyingToStoryComment != nil {
-                composerBlock(geometry: geometry)
+                composerBlock(geometry: geometry).replacedWhenCommentsClosed(currentStory?.commentsClosed == true, tone: .overMedia)
                     .modifier(StoryComposerBlockMeasure())
             }
         }

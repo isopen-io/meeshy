@@ -29,6 +29,10 @@ struct CommentAuthorHeader<Author: View, Offer: View, Time: View>: View {
                                              showOriginal: $showOriginal, metrics: metrics)
                 }
             } else {
+                if let origin = comment.originalLanguage, !origin.isEmpty {
+                    separator
+                    CommentLanguageFlag(code: origin, metrics: metrics)
+                }
                 translationOffer()
             }
             separator
@@ -38,6 +42,21 @@ struct CommentAuthorHeader<Author: View, Offer: View, Time: View>: View {
 
     private var separator: some View {
         MetaSeparator().font(separatorFont).foregroundColor(separatorColor)
+    }
+}
+
+/// **The language a comment is served in, when nothing translates it** (#16541)
+/// — the Prism flag stays on every comment, as on a message bubble. Nothing to
+/// switch to, so it is a label, not a control: the pair of chips takes over as
+/// soon as a translation is served.
+struct CommentLanguageFlag: View {
+    let code: String
+    let metrics: LanguageFlagChip.Metrics
+
+    var body: some View {
+        Text(LanguageFlagChip.flag(for: code))
+            .font(metrics.flagFont(isActive: true))
+            .accessibilityLabel(LanguageFlagChip.spokenName(for: code))
     }
 }
 

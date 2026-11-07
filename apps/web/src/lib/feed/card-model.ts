@@ -254,6 +254,9 @@ export type FeedCardModel = {
    * original.
    */
   readonly viewerPoints?: number;
+  /** LES COMMENTAIRES FERMÉS PAR CETTE PUBLICATION (#16541) — son PROPRE réglage,
+   * celui que le menu « ⋯ » bascule ; présent seulement quand il est posé. */
+  readonly commentsDisabled?: true;
   /** Voir `FeedCardProtection` — absente : rien n'est déclaré. */
   readonly protection?: FeedCardProtection;
 };
@@ -564,6 +567,7 @@ export function resolveFeedCardModel(
     id: post.id,
     viewer: { liked: post.isLikedByMe === true, bookmarked: post.isBookmarkedByMe === true, reposted: post.isRepostedByMe === true },
     isReel,
+    ...(post.commentsDisabled === true ? { commentsDisabled: true as const } : {}),
     author: {
       name: authorName,
       initials: initialsOf(authorName),

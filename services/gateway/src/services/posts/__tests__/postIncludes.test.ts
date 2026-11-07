@@ -240,6 +240,8 @@ describe('posts/postIncludes — canonical shared selects', () => {
           'createdAt',
           'likeCount',
           'commentCount',
+          // #16541 — un original fermé ferme ses republications : le client le lit ici.
+          'commentsDisabled',
           'metadata',
           'viewCount',
           'repostCount',

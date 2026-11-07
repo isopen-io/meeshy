@@ -18,6 +18,7 @@ class PostEditPayloadTest {
         allowSoundExtraction = true,
         mediaAlt = mapOf("m2" to "a"),
         mediaCaption = mapOf("m2" to "c"),
+        commentsDisabled = true,
     )
 
     @Test
@@ -43,7 +44,7 @@ class PostEditPayloadTest {
 
     @Test
     fun `every draft field has a matching edit field`() {
-        assertThat(PostEditField.entries).hasSize(14)
+        assertThat(PostEditField.entries).hasSize(15)
     }
 
     private val reel = listOf(ReelComposition.MediaKind("video/mp4", 5000))
@@ -74,5 +75,12 @@ class PostEditPayloadTest {
         val verdict = PostEditTypeChoice.reelIsChoosable(null, image, removedAny = false)
         assertThat(verdict).isEqualTo(ReelChoosability.RefusedNotQualifying)
         assertThat(PostEditTypeChoice.selection("POST", verdict)).isEqualTo("POST")
+    }
+
+    @Test
+    fun `closing comments survives only when the surface declares it`() {
+        val draft = PostEditDraft(commentsDisabled = true)
+        assertThat(PostEditPayload.build(setOf(PostEditField.COMMENTS_DISABLED), draft).commentsDisabled).isTrue()
+        assertThat(PostEditPayload.build(setOf(PostEditField.CONTENT), draft).commentsDisabled).isNull()
     }
 }

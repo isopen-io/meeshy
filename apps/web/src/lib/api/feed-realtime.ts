@@ -5,9 +5,11 @@ import { togglePost, withServedCount } from '@/lib/feed/interactions';
 
 import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
 import { mergeServedPost, removeCardPost, replaceCardContent, updateCardPost, writeCardCache } from './card-caches';
+import { applyServedCommentSetting } from './comment-settings';
 import { FEED_QUERY_KEY } from './feed';
 import { bumpNewPostCount } from './feed-new-count';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
+import { STORY_TRAY_QUERY_KEY } from './stories';
 import { mergedTranslations, nonEmpty, translationDeliveryOf, type TranslationDelivery } from './translation-delivery';
 
 /**
@@ -139,6 +141,8 @@ export function applyPostUpdated(queryClient: QueryClient, payload: unknown): vo
   if (incoming === null) return;
 
   replaceCardContent(queryClient, incoming.id, (held) => mergeServedPost(incoming, held));
+  /* LE RÉGLAGE DES COMMENTAIRES (#16541) n'est pas un contenu neuf : il atteint aussi le fil gelé des Réels et les stories. */
+  applyServedCommentSetting(queryClient, incoming);
 }
 
 /**
@@ -423,4 +427,15 @@ export function applyMediaCaptionTranslation(queryClient: QueryClient, payload: 
     const captionTranslations = held === undefined ? null : mergedTranslations(held.captionTranslations, delivery);
     return captionTranslations === null ? post : { ...post, media: media.map((m) => (m === held ? { ...m, captionTranslations } : m)) };
   });
+}
+
+/**
+ * `story:*` / `status:updated` (#5652, #16541) — le plateau se relit (une
+ * invalidation, jamais une reconstruction locale du corpus, D-14), et le
+ * réglage des commentaires que porte la publication diffusée se pose partout.
+ */
+export function applyStoryChanged(queryClient: QueryClient, payload: unknown): void {
+  void queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
+  const event = objectOf(payload);
+  applyServedCommentSetting(queryClient, event?.story ?? event?.status);
 }

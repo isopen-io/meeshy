@@ -21,6 +21,8 @@ const SRC = join(__dirname, '..', '..', '..');
 const SHAPES = /\b(postInclude|storyPostInclude|statusPostSelect|trayStorySelect|postAuthorSelect|repostOfInclude|commentsPreviewInclude)\b/;
 
 const REVIEWED = [
+  // #16541 — la bascule des commentaires relit le post par `postInclude` et le diffuse par `withMentions(…, WIRE_BROADCAST)`.
+  'routes/posts/commentSettings.ts',
   'routes/posts/hashtag.ts',
   'routes/posts/nearby.ts',
   'services/PostCommentService.ts',

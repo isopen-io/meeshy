@@ -47,6 +47,26 @@ extension PostDetailViewModel {
         await PendingPublicationCancel.run(cmid, queue: offlineQueue)
     }
 
+    /// Ferme / rouvre les commentaires du post affiché (#16541). Rouvrir
+    /// efface aussi un refus local : la surface redevient ce que le serveur dit.
+    func toggleComments() async {
+        guard let post else { return }
+        await CommentSettingsToggle.run(postId: post.id, current: post.commentsDisabled, service: postService) { closed in
+            self.post?.commentsDisabled = closed
+            if !closed { commentsRefusedLocally = false }
+        }
+    }
+
+    /// Le composeur cède la place à la ligne « commentaires désactivés ».
+    var commentsClosed: Bool { (post?.commentsClosed ?? false) || commentsRefusedLocally }
+
+    /// Pose l'état servi par `post:updated` sur le post affiché.
+    func applyServedCommentClosure(_ served: APIPost) {
+        post?.commentsDisabled = served.commentsDisabled ?? false
+        post?.repost?.commentsDisabled = served.repostOf?.commentsDisabled ?? false
+        if !served.commentsClosed { commentsRefusedLocally = false }
+    }
+
     func pinPost(_ postId: String) async {
         do {
             try await postService.pinPost(postId: postId)

@@ -132,6 +132,8 @@ fun PostDetailScreen(
     viewModel: PostDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // #16541 — le fil du détail (le même magasin que sa section et son composeur) suit la fermeture que le post sert.
+    CommentsClosedEffect(hiltViewModel<PostCommentsViewModel>(), state.post?.commentsClosed)
     var viewersOpen by remember { mutableStateOf(false) }
     var authorChipShown by remember(viewModel) { mutableStateOf(false) }
     if (viewersOpen) state.post?.id?.let { id -> viewersSheet(id) { viewersOpen = false } }

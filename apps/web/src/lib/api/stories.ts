@@ -252,6 +252,8 @@ export type StoryFeedPost = {
    * pour savoir si le bouton « Commentaires » existe (`showsComments`,
    * `lib/stories/action-rail.ts`), SANS aucune requête. */
   readonly commentCount?: number | null;
+  /** LES COMMENTAIRES FERMÉS (#16541) — lus par `commentsClosed`. */
+  readonly commentsDisabled?: boolean | null;
   /** `unknown` (#6899, T8/T9) — un fond v1 (`{ background }`) OU un document
    * canvas v3 (`{ v: 3, scenes: […] }`) selon la négociation O17
    * (`storyEffectsV3.ts`, § 3 de la spécification `stories-lecteur`) : lu par
@@ -269,6 +271,7 @@ export type StoryFeedPost = {
     readonly media?: readonly StoryTrayMedia[] | null;
     /** L'auteur de la source : le crédit de l'en-tête (`storyRepostCredit`, #10524). */
     readonly author?: { readonly username?: string | null; readonly displayName?: string | null } | null;
+    readonly commentsDisabled?: boolean | null;
   } | null;
 };
 

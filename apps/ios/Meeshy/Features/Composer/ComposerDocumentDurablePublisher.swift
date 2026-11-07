@@ -83,6 +83,7 @@ enum ComposerDocumentDurablePublisher {
             allowSoundExtraction: draft.allowSoundExtraction
         )
 
+        PublicationCommentClosure.record(intent.clientMutationId, disabled: draft.commentsDisabled)
         do {
             _ = try await queue.enqueuePostMedia(
                 sourceMediaURLs: intent.localMediaURLs,

@@ -11,6 +11,7 @@ import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { PersonName } from '@/components/person-name';
 import { GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
+import { THREAD_MENU_GLYPHS } from '@/components/glyphs-thread-menu';
 import type {
   CommentGestureIssue,
   CommentGestureMessageKey,
@@ -19,18 +20,18 @@ import type {
 import { COMMENT_MAX_LENGTH, type PostComment } from '@/lib/api/publication-comments';
 import { servedRingOf } from '@/lib/profile-decor/served-ring';
 import type { ReportReason } from '@/lib/api/reports';
-import { resolveFeedText } from '@/lib/feed/text';
+import { commentPrism } from '@/lib/comments/comment-prism';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { STICKER_SIDE } from '@/lib/reading-mode/metrics';
 import { shortRelativeTime } from '@/lib/relative-time';
-import { commentMenuEntries, type CommentMenuEntry } from '@/lib/view/comment-menu';
+import { commentImageable, commentMenuEntries, type CommentMenuEntry } from '@/lib/view/comment-menu';
 import { commentStickerOf } from '@/lib/view/comment-sticker';
 import { replyTargetOf, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import { initialsOf } from '@/lib/view/conversation';
 import type { MentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
-import { PrismPastille } from './message-blocks';
+import { Flags, PrismPastille } from './message-blocks';
 import { StickerArtwork } from './message-body-blocks';
 import { RichText } from './rich-text';
 
@@ -172,6 +173,7 @@ function GestureBar({
   menuRef,
   onPick,
   onReply,
+  onImage,
 }: {
   readonly comment: PostComment;
   readonly language: InterfaceLanguage;
@@ -181,6 +183,8 @@ function GestureBar({
   readonly menuRef: { current: HTMLButtonElement | null };
   readonly onPick: (pick: CommentMenuPick) => void;
   readonly onReply: (() => void) | undefined;
+  /** « IMAGER » (#16541) — l'icône seule dans le rail ; absent ⇒ aucun bouton. */
+  readonly onImage: (() => void) | undefined;
 }) {
   const isLiked = comment.isLikedByMe === true;
   const likes = countOf(comment.likeCount);
@@ -251,6 +255,21 @@ function GestureBar({
           Modifier et Supprimer (l'auteur), Signaler (les autres). SUPPRIMER y
           coûte DEUX gestes, comme sur iOS : ouvrir, puis choisir le verbe
           rouge — le web le posait à découvert, à côté du verbe réversible. */}
+      {/* **« IMAGER », L'ICÔNE SEULE** (#16541) — à découvert dans le rail,
+          plus dans le « … » ; le libellé vit sur `aria-label` et `title`. */}
+      {onImage === undefined ? null : (
+        <button
+          type="button"
+          data-comment-rail-image=""
+          onClick={onImage}
+          aria-label={translate(language, 'comments.action.image')}
+          title={translate(language, 'comments.action.image')}
+          className={GESTURE_BUTTON}
+          style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-3)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          <GlyphSvg glyph={THREAD_MENU_GLYPHS.imageSquare} size={16} />
+        </button>
+      )}
       <CommentRowMenu entries={menuEntries} language={language} authorName={authorName} triggerRef={menuRef} onPick={onPick} />
     </div>
   );
@@ -422,12 +441,17 @@ function EditForm({
 export function CommentRow({ comment, language, preferredLanguages, locale, now, gestures, children }: CommentRowProps) {
   const [editing, setEditing] = useState(false);
   const name = displayName(comment.author);
-  const servi = resolveFeedText({
-    preferredLanguages,
-    originalLanguage: comment.originalLanguage,
-    translations: comment.translations,
-    content: comment.content,
-  });
+  /**
+   * **LA LANGUE QUE LE LECTEUR EXPLORE** (#7141, #16541) — `null` au repos :
+   * le Prisme sert sa descente. Un drapeau (ou la pastille) y pose une langue,
+   * qui prend la tête du prisme (`prismFor`) pour le TEXTE et pour le VOCAL.
+   */
+  const [displayLanguage, setDisplayLanguage] = useState<string | null>(null);
+  const prism = useMemo(
+    () => commentPrism({ comment, readerLanguages: preferredLanguages, displayLanguage }),
+    [comment, preferredLanguages, displayLanguage],
+  );
+  const naturel = useMemo(() => commentPrism({ comment, readerLanguages: preferredLanguages, displayLanguage: null }), [comment, preferredLanguages]);
   /**
    * **CE QUI EST RÉELLEMENT RENDU** (#7141) — le Prisme sert la traduction par
    * défaut (§ Automatisme) ; ce drapeau ne dit que le GESTE du lecteur, qui a
@@ -443,16 +467,18 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
    * que le `CLAUDE.md` racine décrit (cycle 123) : une surface qui ANNONCE une
    * langue sans la SERVIR est pire qu'une surface non câblée.
    */
-  const [showingOriginal, setShowingOriginal] = useState(false);
-  const originalLanguage = comment.originalLanguage ?? '';
+  const originalLanguage = prism.originalLanguage;
+  const showingOriginal = displayLanguage !== null && prism.servedLanguage === originalLanguage && naturel.servedLanguage !== originalLanguage;
   /* `marque` garde la règle d'ORIGINE — `lang` se pose parce que le texte est
      TRADUIT, jamais parce qu'il diffère de la langue d'interface (une rangée
      non traduite ne doit rien porter, sans quoi la voix ment). Montrer
      l'original ne se produit QUE sur une rangée traduite : la marque y vaut
      donc aussi, avec la langue de l'original. */
-  const lu = showingOriginal
-    ? { text: comment.content, language: originalLanguage, marque: originalLanguage !== '' }
-    : { text: servi.text, language: servi.language, marque: servi.translated && servi.language !== '' };
+  const lu = {
+    text: prism.text.text,
+    language: prism.text.language,
+    marque: prism.text.language !== '' && (prism.text.translated || (displayLanguage !== null && naturel.text.translated)),
+  };
   /* LA CARTE DES ADRESSES SUIVIES (#9074) — décodée une fois par commentaire. */
   const trackingLinks = useMemo(() => trackingLinksOf(comment), [comment]);
   /* LE STICKER (#9080) — peint par le MÊME rendu que la bulle d'un message ;
@@ -532,14 +558,18 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
           canRemove: actionable.onRemove !== undefined,
           ...(composed === null ? {} : { postComposition: { imageable: composed } }),
         });
+  const railImage =
+    actionable?.onImage !== undefined &&
+    commentImageable({ comment, servedText: lu.text, canImage: true, ...(composed === null ? {} : { postComposition: { imageable: composed } }) })
+      ? () => actionable.onImage?.(comment, lu.text, { withReplies: false, showsOriginal: showingOriginal })
+      : undefined;
   const pick = (choice: CommentMenuPick) => {
     switch (choice.entry) {
       case 'copy':
         actionable?.onCopy?.(lu.text);
         return;
-      case 'image':
       case 'imageWithReplies':
-        actionable?.onImage?.(comment, lu.text, { withReplies: choice.entry === 'imageWithReplies', showsOriginal: showingOriginal });
+        actionable?.onImage?.(comment, lu.text, { withReplies: true, showsOriginal: showingOriginal });
         return;
       case 'edit':
         setEditing(true);
@@ -606,14 +636,28 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
               {/* LA PASTILLE SE GARDE ELLE-MÊME : `servedLanguage === originalLanguage`
                   ⇒ elle rend `null`. Une rangée non traduite n'annonce donc rien, et
                   aucune condition n'est à tenir ici en double. */}
-              <PrismPastille
-                servedLanguage={servi.language}
-                originalLanguage={originalLanguage}
-                active={showingOriginal ? originalLanguage : null}
-                language={language}
-                subject="comment"
-                onToggle={() => setShowingOriginal((open) => !open)}
-              />
+              {/* **LES DRAPEAUX DU PRISME, COMME UN MESSAGE** (#16541, miroir
+                  `bubble.tsx`) — les autres langues disponibles, l'original en
+                  tête, texte ET vocal ; la pastille ne se pose que s'il n'y a
+                  aucun drapeau à offrir. */}
+              {prism.band.length === 0 ? (
+                <PrismPastille
+                  servedLanguage={naturel.servedLanguage}
+                  originalLanguage={originalLanguage}
+                  active={showingOriginal ? originalLanguage : null}
+                  language={language}
+                  subject="comment"
+                  onToggle={() => setDisplayLanguage((current) => (current === null ? originalLanguage : null))}
+                />
+              ) : (
+                <span data-comment-prism-flags="" className="shrink-0">
+                  <Flags
+                    languages={prism.band}
+                    active={prism.servedLanguage}
+                    onPick={(code) => setDisplayLanguage(code === naturel.servedLanguage ? null : code)}
+                  />
+                </span>
+              )}
             </div>
             {editing && actionable !== undefined ? (
               <EditForm
@@ -642,7 +686,9 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
                     {...(lu.marque ? { lang: lu.language } : {})}
                   />
                 ) : null}
-                {media.length > 0 ? <CommentMedia media={media} commentId={comment.id} authorUsername={comment.author.username} /> : null}
+                {media.length > 0 ? (
+                  <CommentMedia media={media} commentId={comment.id} authorUsername={comment.author.username} prism={prism.prism} fallbackLanguage={comment.originalLanguage ?? ''} />
+                ) : null}
               </CommentBody>
             )}
             {actionable !== undefined && !editing ? (
@@ -655,6 +701,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
                 menuRef={editRef}
                 onPick={pick}
                 onReply={reply}
+                onImage={railImage}
               />
             ) : null}
             {actionable !== undefined && failure !== undefined ? (

@@ -3,7 +3,7 @@ import { useStore } from 'zustand/react';
 
 import type { PostMenuHost } from '@/components/feed-post-menu';
 import { PostRepostConfirm } from '@/components/post-repost-confirm';
-import { deletePostAction, editPostAction, pinPostAction, postGestureAction, repostAction, reportPostAction } from '@/lib/api/query';
+import { commentSettingAction, deletePostAction, editPostAction, pinPostAction, postGestureAction, repostAction, reportPostAction } from '@/lib/api/query';
 import type { EditPostOutcome } from '@/lib/api/publication-actions';
 import { sessionStore } from '@/lib/api/session';
 import { draftStore } from '@/lib/send/draft-store';
@@ -94,6 +94,9 @@ type MenuNotice =
   | 'feed.post.edit_busy'
   | 'feed.post.deleted'
   | 'feed.post.delete_failed'
+  | 'feed.post.comments_off.done'
+  | 'feed.post.comments_on.done'
+  | 'feed.post.comments_toggle.failed'
   | 'moderation.remove.done'
   | 'moderation.remove.failed'
   | 'report.done'
@@ -232,6 +235,11 @@ export function usePostGesture(options?: {
         }),
       onDelete: (postId: string) => removeOptimistically(postId, undefined, ['feed.post.deleted', 'feed.post.delete_failed']),
       onRemove: (postId: string, reason: string) => removeOptimistically(postId, reason, ['moderation.remove.done', 'moderation.remove.failed']),
+      onToggleComments: (postId: string, disable: boolean) => {
+        void commentSettingAction(postId, disable).then((outcome) =>
+          say(outcome !== 'done' ? 'feed.post.comments_toggle.failed' : disable ? 'feed.post.comments_off.done' : 'feed.post.comments_on.done'),
+        );
+      },
       onReportOpen: (postId: string) => readingTelemetry.recordV2(negativeOf(postId, 'report_open')),
       onReport: (postId, reason) => {
         void reportPostAction(postId, reason).then((outcome) => {

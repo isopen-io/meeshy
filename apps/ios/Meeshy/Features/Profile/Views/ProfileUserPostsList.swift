@@ -337,7 +337,8 @@ struct ProfileUserPostsList: View {
             onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
             onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) },
             onReport: !isOwnPost ? { id in Task { await viewModel.report(id) } } : nil,
-            onPin: isOwnPost ? { id in Task { await viewModel.pinPost(id) } } : nil
+            onPin: isOwnPost ? { id in Task { await viewModel.pinPost(id) } } : nil,
+            onToggleComments: commentSettingsToggle(for: post)
         )
         .equatable()
         .padding(.horizontal, MeeshySpacing.md)
@@ -376,6 +377,13 @@ struct ProfileUserPostsList: View {
             onEdit: isOwnPost ? { post in editingPost = post } : nil
         )
         .equatable()
+        .environment(\.commentSettingsAction, commentSettingsToggle(for: post))
+    }
+
+    /// « Désactiver / Réactiver les commentaires » (#16541) : l'auteur et la modération.
+    private func commentSettingsToggle(for post: FeedPost) -> ((String) -> Void)? {
+        guard CommentSettingsToggle.isOffered(authorId: post.authorId) else { return nil }
+        return { [viewModel] id in Task { await viewModel.toggleComments(id) } }
     }
 
     private func selectFilter(_ tapped: ProfilePostsFilter) {

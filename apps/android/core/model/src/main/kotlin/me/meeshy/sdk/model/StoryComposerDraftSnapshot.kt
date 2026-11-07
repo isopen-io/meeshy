@@ -266,6 +266,8 @@ data class StoryDraftAnnotations(
     val mediaAlt: Map<String, String> = emptyMap(),
     val mediaCaption: Map<String, String> = emptyMap(),
     val allowSoundExtraction: Boolean? = null,
+    /** The author closed the comments of what they are composing (#16541) ; absent from an older blob = open. */
+    val commentsDisabled: Boolean = false,
 ) {
     /** The annotations that still describe [present] media: a description never outlives its media. */
     fun keepingMedia(present: Collection<String>): StoryDraftAnnotations = copy(

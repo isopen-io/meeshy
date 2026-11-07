@@ -39,6 +39,7 @@ internal object ScenePostRequest {
             visibilityUserIds = ComposerAudienceSelection.wireUserIds(draft.visibility, draft.visibilityUserIds),
             storyEffects = ScenePostDocument.effects(plans.map { it.request.storyEffects }, state.postLayout, state.format),
             allowSoundExtraction = draft.allowSoundExtraction,
+            commentsDisabled = draft.commentsDisabled.takeIf { it },
             mentions = mentions.ifEmpty { null },
             mediaCaption = MediaDescriptionLaw.wire(draft.mediaCaption, mediaIds),
             repostOfId = draft.repostOfId,

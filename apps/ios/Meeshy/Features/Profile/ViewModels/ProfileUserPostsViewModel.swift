@@ -439,6 +439,15 @@ final class ProfileUserPostsViewModel: ObservableObject {
         }
     }
 
+    /// Ferme / rouvre les commentaires d'une publication du profil (#16541).
+    func toggleComments(_ postId: String) async {
+        guard let current = posts.first(where: { $0.id == postId })?.commentsDisabled else { return }
+        await CommentSettingsToggle.run(postId: postId, current: current, service: postService) { closed in
+            guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+            posts[index].commentsDisabled = closed
+        }
+    }
+
     func pinPost(_ postId: String) async {
         do {
             try await postService.pinPost(postId: postId)
