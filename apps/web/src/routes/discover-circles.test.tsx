@@ -143,16 +143,18 @@ describe('les demandes de montée', () => {
 });
 
 describe('la fiche d’un lien', () => {
-  test('les réglages du jalon 2 sont MONTRÉS, désactivés, et l’écran dit pourquoi', async () => {
+  test('« Bloquer ses Bring » est ACTIF ; les réglages encore à venir sont MONTRÉS, désactivés, et l’écran dit pourquoi', async () => {
     await mount(<CircleLinkSheet language="fr" link={link()} person={ada} now={NOW} onClose={noop} />);
     const switches = [...document.querySelectorAll<HTMLInputElement>('[data-circle-setting]')];
     expect(switches.map((s) => s.getAttribute('data-circle-setting'))).toEqual([
+      'circles.settings.blockBring',
       'circles.settings.listening',
       'circles.settings.talkie',
-      'circles.settings.bring',
       'circles.settings.location',
     ]);
-    expect(switches.every((s) => s.disabled && !s.checked)).toBe(true);
+    const [bring, ...upcoming] = switches;
+    expect(bring?.disabled).toBe(false);
+    expect(upcoming.every((s) => s.disabled && !s.checked)).toBe(true);
     expect(document.body.textContent).toContain('Ces réglages arrivent avec la prochaine étape de Meeshy');
     expect(document.body.textContent).toContain('Ami');
   });

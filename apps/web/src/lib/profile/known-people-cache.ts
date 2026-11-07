@@ -36,25 +36,36 @@ const asRecord = (value: unknown): Loose | null => (value !== null && typeof val
 const asList = (value: unknown): readonly unknown[] => (Array.isArray(value) ? value : []);
 const filled = (value: unknown): string | null => (typeof value === 'string' && value.trim() !== '' ? value : null);
 
-export function knownPersonInConversations(client: QueryClient, handle: string): KnownPerson | null {
-  const key = handle.trim().toLowerCase();
-  if (key === '') return null;
+function participantsInConversations(client: QueryClient): readonly KnownPerson[] {
   const data = asRecord(client.getQueryData(CONVERSATIONS_QUERY_KEY));
-  for (const page of asList(data?.pages)) {
-    for (const conversation of asList(asRecord(page)?.conversations)) {
-      for (const entry of asList(asRecord(conversation)?.participants)) {
+  return asList(data?.pages).flatMap((page) =>
+    asList(asRecord(page)?.conversations).flatMap((conversation) =>
+      asList(asRecord(conversation)?.participants).flatMap((entry) => {
         const participant = asRecord(entry);
         const user = asRecord(participant?.user);
         const username = filled(user?.username);
-        if (username === null || username.toLowerCase() !== key) continue;
-        return {
-          username,
-          displayName: filled(user?.displayName) ?? filled(participant?.displayName),
-          avatar: filled(user?.avatar) ?? filled(participant?.avatar),
-          id: filled(user?.id) ?? filled(participant?.userId),
-        };
-      }
-    }
-  }
-  return null;
+        if (username === null) return [];
+        return [
+          {
+            username,
+            displayName: filled(user?.displayName) ?? filled(participant?.displayName),
+            avatar: filled(user?.avatar) ?? filled(participant?.avatar),
+            id: filled(user?.id) ?? filled(participant?.userId),
+          },
+        ];
+      }),
+    ),
+  );
+}
+
+export function knownPersonInConversations(client: QueryClient, handle: string): KnownPerson | null {
+  const key = handle.trim().toLowerCase();
+  if (key === '') return null;
+  return participantsInConversations(client).find((person) => person.username.toLowerCase() === key) ?? null;
+}
+
+/** La même lecture, par `User.id` : un événement qui ne nomme personne (le Bring, #13936) se nomme ainsi. */
+export function knownPersonByIdInConversations(client: QueryClient, userId: string): KnownPerson | null {
+  if (userId === '') return null;
+  return participantsInConversations(client).find((person) => person.id === userId) ?? null;
 }

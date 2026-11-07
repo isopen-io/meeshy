@@ -1,5 +1,5 @@
 import type { RelationRequestLevel } from '@meeshy/shared/types/relation';
-import { memo, type ReactNode } from 'react';
+import { memo, useState, type ReactNode } from 'react';
 
 import { Glyph } from '@/components/glyph';
 import { Sheet } from '@/components/sheet';
@@ -12,6 +12,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { progressSummary, raiseOffer, requestedLevelOf, type CircleLevel } from '@/lib/relations/circles';
 import { relationLevelIcon } from '@/lib/relations/level-labels';
 import { levelTitle, progressText } from '@/lib/relations/progress-text';
+import { CircleBringBlockSwitch } from '@/routes/circle-bring-block';
 import { PERSON_ROW_HEIGHT, PersonAvatar, PersonText } from '@/routes/discover-parts';
 
 /**
@@ -242,14 +243,16 @@ export function CirclesErrorBanner({ language, onRetry }: { readonly language: I
   );
 }
 
-const SETTINGS = ['circles.settings.listening', 'circles.settings.talkie', 'circles.settings.bring', 'circles.settings.location'] as const;
+const SETTINGS = ['circles.settings.listening', 'circles.settings.talkie', 'circles.settings.location'] as const;
 
 /**
  * La fiche d'un lien — `CircleLinkSheet` : la personne, son niveau, ce qui
  * manque pour monter, et les réglages PAR PERSONNE (écoute, talkie, Bring,
  * position), qui n'existent côté serveur qu'au jalon 2 (#14229). Ils sont
  * MONTRÉS désactivés et l'interface le DIT : ni cachés (on chercherait où ils
- * sont), ni simulés (un interrupteur sans effet est un mensonge).
+ * sont), ni simulés (un interrupteur sans effet est un mensonge). Le premier
+ * livré, « Bloquer ses Bring » (#13936), est ACTIF (`circle-bring-block.tsx`) ;
+ * son échec se dit dans la fiche.
  */
 export function CircleLinkSheet({
   language,
@@ -266,6 +269,7 @@ export function CircleLinkSheet({
 }) {
   const name = circlePersonName(language, person);
   const line = progressText(language, progressSummary(link, now));
+  const [notice, setNotice] = useState<string | null>(null);
   return (
     <Sheet title={name} presentation="bottom" bodyAs="div" closeLabel={translateCircles(language, 'circles.sheet.close')} dialogData={{ 'data-circle-sheet': link.userId }} onClose={onClose}>
       <div className="grid gap-4 px-5 pb-6">
@@ -285,6 +289,12 @@ export function CircleLinkSheet({
           <h3 id={`circle-settings-${link.userId}`} className="text-body font-bold" style={{ color: INK }}>
             {translateCircles(language, 'circles.sheet.settings.title')}
           </h3>
+          <CircleBringBlockSwitch language={language} userId={link.userId} level={link.effectiveLevel} onNotice={setNotice} />
+          {notice === null ? null : (
+            <p role="status" data-circle-setting-notice className="text-caption" style={{ color: 'var(--color-error)' }}>
+              {notice}
+            </p>
+          )}
           <p id={`circle-settings-note-${link.userId}`} className="text-caption" style={{ color: INK_2 }}>
             {translateCircles(language, 'circles.sheet.settings.unavailable')}
           </p>
