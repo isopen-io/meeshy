@@ -582,3 +582,35 @@ assert désormais les deux moitiés ensemble (rien en direct ET l'absent servi).
 - un témoin de coverage INVERSÉ avec sa raison (`stats.errors` sur une émission
   tombée), et la couverture du `catch` extérieur reprise sur un chemin qui y mène
   vraiment
+
+### Post-scriptum du lot H — la leçon du cliquet de budget s'est rejouée sur son auteur
+
+Deux lots plus tôt, ce cycle a écrit `tasks/lessons/2026-11-08-un-cliquet-de-budget-demande-ou-pas-si.md` :
+*un cliquet de budget ne demande pas « ton lot est-il juste ? » mais « est-il à
+sa PLACE ? », et la réponse n'est presque jamais dans le lot.*
+
+Le lot H l'a rejouée, à l'identique, sur le cliquet des SUITES cette fois :
+
+```
+socketio/__tests__/MeeshySocketIOManager.test.ts : 8158 → 8192
+```
+
+Et le premier réflexe a de nouveau été de raboter — compter les lignes de
+commentaire du témoin inversé pour repasser sous la barre. La réponse juste
+était la même que la première fois, et elle était écrite : **un fichier déjà
+hors budget est interdit d'ajout, on extrait d'abord.** Les deux témoins vivent
+désormais dans `deliverTextTranslation-outer-catch.test.ts`, sur le harnais
+PARTAGÉ — et le fichier d'origine a PERDU 51 lignes au lieu d'en gagner 34.
+
+Ce qui vaut d'être noté n'est pas la récidive, c'est **ce qui l'a produite** :
+l'extraction n'était pas visible depuis le lot. Elle demandait de savoir qu'un
+harnais partagé existe (`helpers/message-new-parity-mocks`), c'est-à-dire une
+information qui vit dans un AUTRE fichier que celui qu'on édite. La leçon
+disait déjà « la réponse est dans le fichier d'à côté qui n'existe pas encore » ;
+ici il existait, et ça n'a pas suffi à le voir.
+
+Corollaire opérationnel, à essayer au prochain lot qui ajoute des témoins :
+**lancer les deux cliquets de budget AVANT d'écrire le témoin, pas après.** Ils
+coûtent quelques secondes et répondent à la question « ce fichier a-t-il le
+droit de grossir ? » — laquelle ne se pose jamais spontanément quand on a un
+témoin à écrire.
