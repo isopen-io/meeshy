@@ -61,6 +61,8 @@ const ar = {
   'callControls.journal.live': 'العودة إلى البث المباشر',
   'callControls.journal.empty': 'لم يُنسخ شيء بعد. فعّل الترجمة النصية: كل جملة تُقال تظهر هنا مع ترجمتها طوال المكالمة.',
   'callControls.journal.original': 'الأصل',
+  'callControls.journal.translated': 'مترجم',
+  'callControls.journal.view': 'نسخة السجل',
   'callControls.camera.denied': 'تم رفض الوصول إلى الكاميرا',
   'callControls.camera.failed': 'تعذّر فتح الكاميرا',
   'callControls.camera.settings': 'الإعدادات',

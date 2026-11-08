@@ -65,6 +65,8 @@ const fr = {
   'callControls.journal.live': 'Revenir au direct',
   'callControls.journal.empty': 'Rien n’est encore transcrit. Activez les sous-titres : chaque phrase dite s’inscrit ici avec sa traduction, pour tout l’appel.',
   'callControls.journal.original': 'Original',
+  'callControls.journal.translated': 'Traduit',
+  'callControls.journal.view': 'Version du journal',
   'callControls.camera.denied': 'L’accès à la caméra est refusé',
   'callControls.camera.failed': 'La caméra n’a pas pu s’ouvrir',
   'callControls.camera.settings': 'Réglages',

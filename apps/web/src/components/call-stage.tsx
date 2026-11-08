@@ -3,7 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
 import { CallGrid, Portrait } from '@/components/call-grid';
-import { StreamVideo } from '@/components/call-media-elements';
+import { StageBleed, StreamVideo } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
@@ -112,6 +112,8 @@ type StageProps = {
   /** Le chrome est-il affiché (#9183) : en grille, décide ce que touche une tuile (la mettre à la une, ou juste rendre le chrome) ; en duo vidéo, chrome retiré, ma vignette passe à sa petite taille (#16663). Défaut `true`. */
   readonly chromeVisible?: boolean;
   readonly onRevealChrome?: () => void;
+  /** La largeur que la scène laisse à la colonne du journal (W1) : en duo vidéo, l'image de l'autre s'y prolonge en flou. Absent : 0. */
+  readonly bleedEnd?: number;
 };
 
 /** Le tempo d'un changement de coin : celui de l'ancienne transition. */
@@ -199,7 +201,7 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
   );
 }
 
-function VideoDuo({ call, language, self, chromeVisible = true }: Pick<StageProps, 'call' | 'language' | 'self' | 'chromeVisible'>) {
+function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: Pick<StageProps, 'call' | 'language' | 'self' | 'chromeVisible' | 'bleedEnd'>) {
   const swapped = self.full;
   const callId = call.callId ?? '';
   const scale = useStore(selfTileStore, (state) => selfTileScaleFor(state, callId));
@@ -272,6 +274,7 @@ function VideoDuo({ call, language, self, chromeVisible = true }: Pick<StageProp
   const glyphs = { plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> };
   return (
     <div role="group" aria-label={stageLabel} className="absolute inset-0" data-call-duo-stage="">
+      {mainOn && bleedEnd > 0 ? <StageBleed stream={main} mirrored={swapped && selfMirrored} width={bleedEnd} /> : null}
       {mainOn ? (
         <div className="absolute inset-0 overflow-hidden">
           <StreamVideo stream={main} mirrored={swapped && selfMirrored} className="absolute inset-0 size-full" label={swapped ? you : call.title} member={swapped ? undefined : firstPeer?.userId} self={swapped} />
@@ -346,7 +349,7 @@ function VideoDuo({ call, language, self, chromeVisible = true }: Pick<StageProp
   );
 }
 
-export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined }: StageProps) {
+export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   if (layout === 'grid') {
     return (
@@ -368,6 +371,6 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
     );
   }
   if (layout === 'screen') return <DuoScreen call={call} language={language} immersive={immersive} onToggleImmersive={onToggleImmersive} />;
-  if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} chromeVisible={chromeVisible} />;
+  if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} chromeVisible={chromeVisible} bleedEnd={bleedEnd} />;
   return null;
 }

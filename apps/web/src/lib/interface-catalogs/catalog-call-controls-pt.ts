@@ -61,6 +61,8 @@ const pt = {
   'callControls.journal.live': 'Voltar ao direto',
   'callControls.journal.empty': 'Ainda nada foi transcrito. Ative as legendas: cada frase dita aparece aqui com a sua tradução, durante toda a chamada.',
   'callControls.journal.original': 'Original',
+  'callControls.journal.translated': 'Traduzido',
+  'callControls.journal.view': 'Versão do diário',
   'callControls.camera.denied': 'O acesso à câmara foi recusado',
   'callControls.camera.failed': 'Não foi possível abrir a câmara',
   'callControls.camera.settings': 'Ajustes',

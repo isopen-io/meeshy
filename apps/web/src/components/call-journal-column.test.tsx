@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import { journalDocks, JOURNAL_COLUMN_MIN_VIEWPORT } from '@/lib/calls/call-journal-dock';
+import { journalDocks, JOURNAL_COLUMN_MIN_VIEWPORT, JOURNAL_COLUMN_RESERVE } from '@/lib/calls/call-journal-dock';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -167,6 +167,20 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     const reserved = [...view.host.querySelectorAll<HTMLElement>('[data-call-journal-reserve]')];
     expect(reserved.length).toBeGreaterThanOrEqual(2);
     expect(view.find('[data-call-header]')?.closest('[data-call-journal-reserve]')).toBeNull();
+    view.done();
+  });
+
+  test('en duo vidéo, l’image de l’autre se prolonge sous la colonne : le verre se lit sur la même scène, jamais sur une bande de fond', async () => {
+    const camera = { kind: 'video', readyState: 'live', getCapabilities: () => ({}), getSettings: () => ({}), applyConstraints: async () => undefined };
+    const remote = Object.assign(Object.create(MediaStream.prototype) as MediaStream, { getVideoTracks: () => [camera], getAudioTracks: () => [], getTracks: () => [camera] });
+    const view = mount({ remoteStreams: { 'u-awa': remote } }, true);
+    expect(view.find('[data-call-stage-bleed]')).toBeNull();
+    await openJournal(view);
+    const bleed = view.find('[data-call-stage-bleed]');
+    expect(bleed?.getAttribute('aria-hidden')).toBe('true');
+    expect(bleed?.style.insetInlineEnd).toBe(`-${JOURNAL_COLUMN_RESERVE}px`);
+    expect(bleed?.querySelector('video')).not.toBeNull();
+    expect(bleed?.querySelector('video[data-call-stream]')).toBeNull();
     view.done();
   });
 

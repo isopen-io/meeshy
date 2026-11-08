@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
+import { CallJournalViewSwitch, type JournalView } from '@/components/call-journal-view-switch';
 import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
 import { captionLanguageLabel, captionText, type CallCaption } from '@/lib/calls/call-captions';
 import { journalEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
@@ -55,12 +56,54 @@ type JournalProps = {
   readonly fill?: boolean;
 };
 
+type Clock = Intl.DateTimeFormat;
+
+function JournalNoteLine({ note, language, clock, colorOf }: { readonly note: CallJournalNote; readonly language: InterfaceLanguage; readonly clock: Clock; readonly colorOf: JournalProps['colorOf'] }) {
+  return (
+    <li className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 48px' }} data-call-journal-note={note.kind}>
+      <time className="text-mini" style={{ color: INK_2 }} dateTime={new Date(note.at).toISOString()}>
+        {clock.format(note.at)}
+      </time>
+      <span className="text-body" style={{ color: INK_2 }} dir={noteDirection(language)} data-call-journal-note-text="">
+        <JournalNoteSentence note={note} language={language} ink={{ style: { color: colorOf({ speakerId: note.userId ?? '', speakerName: note.name ?? '' }) } }} />
+      </span>
+    </li>
+  );
+}
+
+type CaptionLineProps = { readonly caption: CallCaption; readonly view: JournalView; readonly language: InterfaceLanguage; readonly clock: Clock; readonly speaker: string; readonly color: string };
+
+function JournalCaptionLine({ caption, view, language, clock, speaker, color }: CaptionLineProps) {
+  const served = captionText(caption, view);
+  const languages = captionLanguageLabel(caption, view);
+  return (
+    <li className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 64px', opacity: caption.isFinal ? 1 : 0.7 }} data-call-journal-entry={caption.mine ? 'mine' : 'peer'}>
+      <span className="text-mini" style={{ color: INK_2 }}>
+        <strong style={{ color }}>{speaker}</strong> · <time dateTime={new Date(caption.at).toISOString()}>{clock.format(caption.at)}</time>
+        {languages === null ? null : <span className="ms-1.5 text-check font-semibold tracking-wide">{languages}</span>}
+      </span>
+      <span className="text-body" style={{ color: served === caption.original ? INK : color }} dir="auto" data-call-journal-text="">
+        {served}
+      </span>
+      {served === caption.original ? null : (
+        <span className="text-mini" style={{ color: INK_2 }} data-call-journal-original="">
+          <span className="font-semibold">{t(language, 'callControls.journal.original')} · </span>
+          <span dir="auto" lang={caption.pair?.from}>
+            {caption.original}
+          </span>
+        </span>
+      )}
+    </li>
+  );
+}
+
 const atBottom = (list: HTMLElement): boolean => list.scrollHeight - list.scrollTop - list.clientHeight <= NEAR_BOTTOM;
 
 export function CallJournalPanel({ id, closeGlyph, language, onClose, back, captions, notes, colorOf, listening, onListen, fill = false }: JournalProps) {
   const list = useRef<HTMLOListElement>(null);
   const stuck = useRef(true);
   const [away, setAway] = useState(false);
+  const [view, setView] = useState<JournalView>('translated');
   const clock = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'message.author.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
   const last = captions.at(-1);
@@ -88,7 +131,17 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
   };
 
   return (
-    <CallPanelFrame id={id} title={t(language, 'callControls.journal')} closeLabel={t(language, 'callControls.close')} closeGlyph={closeGlyph} onClose={onClose} back={back} fill={fill} data={{ 'data-call-journal-panel': '' }}>
+    <CallPanelFrame
+      id={id}
+      title={t(language, 'callControls.journal')}
+      closeLabel={t(language, 'callControls.close')}
+      closeGlyph={closeGlyph}
+      onClose={onClose}
+      back={back}
+      fill={fill}
+      trailing={captions.some((caption) => !caption.mine && caption.translated !== null) ? <CallJournalViewSwitch language={language} view={view} onChange={setView} /> : null}
+      data={{ 'data-call-journal-panel': '' }}
+    >
       {entries.length === 0 ? (
         <div className="flex flex-col items-start gap-2 px-3 pb-2" data-call-journal-empty="">
           <p className="text-body" style={{ color: INK_2 }}>
@@ -112,44 +165,13 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
             data-call-journal=""
             data-panel-first=""
           >
-            {entries.map((entry) => {
-              if (entry.type === 'note') {
-                const { note } = entry;
-                return (
-                  <li key={note.id} className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 48px' }} data-call-journal-note={note.kind}>
-                    <time className="text-mini" style={{ color: INK_2 }} dateTime={new Date(note.at).toISOString()}>
-                      {clock.format(note.at)}
-                    </time>
-                    <span className="text-body" style={{ color: INK_2 }} dir={noteDirection(language)} data-call-journal-note-text="">
-                      <JournalNoteSentence note={note} language={language} ink={{ style: { color: colorOf({ speakerId: note.userId ?? '', speakerName: note.name ?? '' }) } }} />
-                    </span>
-                  </li>
-                );
-              }
-              const { caption } = entry;
-              const served = captionText(caption, 'translated');
-              const languages = captionLanguageLabel(caption, 'translated');
-              const color = colorOf(caption);
-              return (
-                <li key={caption.id} className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 64px', opacity: caption.isFinal ? 1 : 0.7 }} data-call-journal-entry={caption.mine ? 'mine' : 'peer'}>
-                  <span className="text-mini" style={{ color: INK_2 }}>
-                    <strong style={{ color }}>{speaker(caption)}</strong> · <time dateTime={new Date(caption.at).toISOString()}>{clock.format(caption.at)}</time>
-                    {languages === null ? null : <span className="ms-1.5 text-check font-semibold tracking-wide">{languages}</span>}
-                  </span>
-                  <span className="text-body" style={{ color: served === caption.original ? INK : color }} dir="auto" data-call-journal-text="">
-                    {served}
-                  </span>
-                  {served === caption.original ? null : (
-                    <span className="text-mini" style={{ color: INK_2 }} data-call-journal-original="">
-                      <span className="font-semibold">{t(language, 'callControls.journal.original')} · </span>
-                      <span dir="auto" lang={caption.pair?.from}>
-                        {caption.original}
-                      </span>
-                    </span>
-                  )}
-                </li>
-              );
-            })}
+            {entries.map((entry) =>
+              entry.type === 'note' ? (
+                <JournalNoteLine key={entry.note.id} note={entry.note} language={language} clock={clock} colorOf={colorOf} />
+              ) : (
+                <JournalCaptionLine key={entry.caption.id} caption={entry.caption} view={view} language={language} clock={clock} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} />
+              ),
+            )}
           </ol>
           {away ? (
             <button

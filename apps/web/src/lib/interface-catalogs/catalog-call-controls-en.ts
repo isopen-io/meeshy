@@ -61,6 +61,8 @@ const en = {
   'callControls.journal.live': 'Back to live',
   'callControls.journal.empty': 'Nothing transcribed yet. Turn on captions: every sentence spoken appears here with its translation, for the whole call.',
   'callControls.journal.original': 'Original',
+  'callControls.journal.translated': 'Translated',
+  'callControls.journal.view': 'Journal version',
   'callControls.camera.denied': 'Camera access is denied',
   'callControls.camera.failed': 'The camera couldn’t open',
   'callControls.camera.settings': 'Settings',

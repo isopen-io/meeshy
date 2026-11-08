@@ -61,6 +61,8 @@ const es = {
   'callControls.journal.live': 'Volver al directo',
   'callControls.journal.empty': 'Aún no hay nada transcrito. Activa los subtítulos: cada frase dicha aparece aquí con su traducción, durante toda la llamada.',
   'callControls.journal.original': 'Original',
+  'callControls.journal.translated': 'Traducido',
+  'callControls.journal.view': 'Versión del diario',
   'callControls.camera.denied': 'El acceso a la cámara está denegado',
   'callControls.camera.failed': 'No se pudo abrir la cámara',
   'callControls.camera.settings': 'Ajustes',

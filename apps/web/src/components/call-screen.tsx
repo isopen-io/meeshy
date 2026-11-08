@@ -505,6 +505,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       self={self}
       chromeVisible={visibility === 'shown'}
       onRevealChrome={revealChrome}
+      bleedEnd={column.shown ? JOURNAL_COLUMN_RESERVE : 0}
     />
   );
 

@@ -61,6 +61,8 @@ const it = {
   'callControls.journal.live': 'Torna alla diretta',
   'callControls.journal.empty': 'Ancora nulla di trascritto. Attiva i sottotitoli: ogni frase detta compare qui con la sua traduzione, per tutta la chiamata.',
   'callControls.journal.original': 'Originale',
+  'callControls.journal.translated': 'Tradotto',
+  'callControls.journal.view': 'Versione del diario',
   'callControls.camera.denied': 'L’accesso alla fotocamera è negato',
   'callControls.camera.failed': 'Impossibile aprire la fotocamera',
   'callControls.camera.settings': 'Impostazioni',

@@ -45,6 +45,8 @@ type FrameProps = {
   readonly back?: PanelBack | undefined;
   /** Le panneau prend toute la hauteur de son hôte (la colonne du journal sur grand écran, #16942). */
   readonly fill?: boolean;
+  /** Ce qui se pose dans l'en-tête, avant ✕ (la bascule Traduit / Original du journal, loi 7). */
+  readonly trailing?: ReactNode;
 };
 
 export type PanelBack = { readonly label: string; readonly onPress: () => void };
@@ -55,7 +57,7 @@ const chevron = (
   </svg>
 );
 
-export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, children, data, closeData = {}, back, fill = false }: FrameProps) {
+export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, children, data, closeData = {}, back, fill = false, trailing = null }: FrameProps) {
   const panel = useRef<HTMLDivElement>(null);
   const titleId = `${id}-title`;
   useLayoutEffect(() => {
@@ -88,6 +90,7 @@ export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, chi
         <h2 id={titleId} className="min-w-0 flex-1 truncate text-body font-semibold">
           {title}
         </h2>
+        {trailing}
         <button
           type="button"
           aria-label={closeLabel}

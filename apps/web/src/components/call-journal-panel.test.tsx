@@ -126,6 +126,28 @@ describe('CallJournalPanel', () => {
     view.done();
   });
 
+  test('loi 7 — la bascule « Traduit / Original » de l’en-tête s’applique à tout l’appel', () => {
+    const view = mount([caption({ id: 'a' }), caption({ id: 'b', original: 'See you', translated: 'À plus', at: 2_000 }), caption({ id: 'me', mine: true, speakerName: '', original: 'Salut', translated: null, pair: null, at: 3_000 })]);
+    const options = view.all('[data-call-journal-view] button') as HTMLButtonElement[];
+    expect(options.map((option) => option.textContent)).toEqual(['Traduit', 'Original']);
+    expect(options.map((option) => option.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
+    expect(view.find('[data-call-journal-view]')?.closest('[data-call-journal-panel] > div:first-child')).not.toBeNull();
+    act(() => options[1]?.click());
+    expect(view.all('[data-call-journal-text]').map((text) => text.textContent)).toEqual(['Hello everyone', 'See you', 'Salut']);
+    expect(view.all('[data-call-journal-original]')).toHaveLength(0);
+    expect(((view.all('[data-call-journal-text]')[0]) as HTMLElement).style.color).toBe('var(--color-on-media)');
+    expect((view.all('[data-call-journal-view] button') as HTMLButtonElement[]).map((option) => option.getAttribute('aria-pressed'))).toEqual(['false', 'true']);
+    act(() => (view.all('[data-call-journal-view] button')[0] as HTMLButtonElement).click());
+    expect(view.all('[data-call-journal-text]').map((text) => text.textContent)).toEqual(['Bonjour à tous', 'À plus', 'Salut']);
+    view.done();
+  });
+
+  test('loi 7 — rien de traduit, pas de bascule : il n’y a qu’une version à lire', () => {
+    const view = mount([caption({ id: 'raw', original: 'Same', translated: null, pair: null })]);
+    expect(view.find('[data-call-journal-view]')).toBeNull();
+    view.done();
+  });
+
   test('en bas, une phrase nouvelle m’y garde', () => {
     const view = mount(lines(3));
     const list = view.find('[data-call-journal]') as HTMLElement;

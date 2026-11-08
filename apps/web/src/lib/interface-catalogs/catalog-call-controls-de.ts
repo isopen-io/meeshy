@@ -61,6 +61,8 @@ const de = {
   'callControls.journal.live': 'Zurück zu live',
   'callControls.journal.empty': 'Noch nichts transkribiert. Schalte Untertitel ein: Jeder gesprochene Satz erscheint hier mit seiner Übersetzung, für den ganzen Anruf.',
   'callControls.journal.original': 'Original',
+  'callControls.journal.translated': 'Übersetzt',
+  'callControls.journal.view': 'Version des Protokolls',
   'callControls.camera.denied': 'Der Kamerazugriff wurde verweigert',
   'callControls.camera.failed': 'Die Kamera konnte nicht geöffnet werden',
   'callControls.camera.settings': 'Einstellungen',
