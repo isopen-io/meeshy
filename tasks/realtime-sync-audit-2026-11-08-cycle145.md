@@ -1,4 +1,18 @@
-# Cycle 143 — une langue perdue pour toujours, une population sans reconnexion, deux portes muettes, et la CI du SDK par terre
+# Cycle 145 — une langue perdue pour toujours, une population sans reconnexion, deux portes muettes, et la CI du SDK par terre
+
+> **Numéroté 145 à la fusion, après avoir été 143 puis 144.** Deux sessions
+> sœurs avaient déjà publié leur journal dans `dev` sous ces numéros :
+> `claude/exciting-planck-xdp7ig` (cycle 143) et `claude/exciting-planck-4nctmx`
+> (cycle 144). Chaque collision s'est lue add/add à la fusion ; les deux journaux
+> restent intacts à leur nom, celui-ci prend le suivant libre.
+>
+> C'est la collision d'ESPACE DE NOMS PARTAGÉ que le `CLAUDE.md` distingue de la
+> collision de fichier (#5102) : la doctrine de la branche poussée tôt réduit la
+> FENÊTRE sur un fichier, elle ne peut rien contre deux sessions qui choisissent
+> le même numéro — aucune des deux ne le lit chez l'autre, parce qu'il n'est
+> publié qu'à la fusion. **Un identifiant qui ne s'alloue pas collisionne** — ici
+> deux fois de suite —, et le remède n'est pas de regarder mieux : c'est de ne
+> pas numéroter à la main. Déposé en #16871.
 
 **Issues livrées** : #16751 (lot A, passerelle) · #16750 (lot B, SDK iOS) ·
 #16830 (lot C, passerelle) · #16837 (lot D, passerelle) · #16852 (lot E, CI) ·

@@ -1,362 +1,398 @@
-# Cycle 144 — une langue perdue pour toujours, une population sans reconnexion, deux portes muettes, et la CI du SDK par terre
+# Cycle 144 — la position en direct ne connaissait pas le blocage, et la garde du regard s'éteignait sur une panne
 
-> **Numéroté 144 et non 143, à la fusion.** La session sœur
-> `claude/exciting-planck-xdp7ig` avait déjà publié son
-> `realtime-sync-audit-2026-11-08-cycle143.md` dans `dev` quand ce journal y est
-> arrivé : add/add conflict sur le même chemin. Son journal reste intact à son
-> nom ; celui-ci prend le suivant.
->
-> C'est la collision d'ESPACE DE NOMS PARTAGÉ que le `CLAUDE.md` distingue de la
-> collision de fichier (#5102) : la doctrine de la branche poussée tôt réduit la
-> FENÊTRE sur un fichier, elle ne peut rien contre deux sessions qui choisissent
-> le même numéro — aucune des deux ne le lit chez l'autre, parce qu'il n'est
-> publié qu'à la fusion. **Un identifiant qui ne s'alloue pas collisionne**, et
-> le remède n'est pas de regarder mieux : c'est de ne pas numéroter à la main.
-> Déposé en #16871.
+**Issues livrées** : #16745 (lot A, `LocationHandler`) et #16752 (lot B,
+`ConversationViewingHandler`).
+**Branche** : `claude/exciting-planck-4nctmx`. **Milestone** : « Un blocage coupe
+TOUS les canaux temps réel, la position en direct comprise » (les deux issues y
+étaient déjà, posées par le cycle 142).
+**Issues ouvertes en chemin** : #16791 (perf, milestone #248) · #16794, #16796,
+#16797 (suites de l'audit, milestone #248) · #16795, #16798 (décisions produit,
+milestone #249).
 
-**Issues livrées** : #16751 (lot A, passerelle) · #16750 (lot B, SDK iOS) ·
-#16830 (lot C, passerelle) · #16837 (lot D, passerelle) · #16852 (lot E, CI) ·
-#16856 (lot F, passerelle).
-**Branche** : `claude/exciting-planck-zigx42`. **PR** : #16829.
-**Issues ouvertes en chemin** : #16838 (`décision-produit`), #16857, #16858.
+## Ce cycle a été RÉÉCRIT par son propre audit, et c'est le fait principal
 
-## Ce que ce cycle a cédé, et pourquoi c'est encore la première décision
+Le lot a d'abord été livré, poussé, et ouvert en PR #16793. L'audit adversarial
+exigé par le `CLAUDE.md` pour un lot de contrôle d'accès a rendu **BLOQUANT**, et
+il avait raison sur son point central : **la première version ouvrait une porte
+neuve, pire sur son axe que le défaut qu'elle fermait.**
 
-Le cycle 142 a déposé huit défauts. Trois ont été fermés par des sessions
-sœurs avant ce cycle (#16745, #16749, #16752) ; **#16688 est cédée pour la
-seconde fois** — ses deux fichiers (`offlineParticipantQueue.ts`,
-`MeeshySocketIOManager.ts`) sont écrits par `claude/exciting-planck-xdp7ig` et
-`claude/exciting-planck-4nctmx`. Le corollaire d'asymétrie tranche sans
-négociation : celui qui n'a rien écrit cède.
+Tout ce qui suit décrit la version RÉÉCRITE. Ce que la première version faisait
+est consigné, parce que c'est la partie instructive.
 
-Le relevé a été fait par la commande, pas par intuition — un `git diff
---name-only origin/dev...<branche>` sur les 45 branches touchées dans les douze
-dernières heures, filtré sur les chemins visés. Il a rendu **zéro contention**
-sur les fichiers des quatre lots retenus, et la réservation a été poussée avant
-la première ligne de logique.
+## Le périmètre, et pourquoi celui-là
 
-## La contrainte qui a décidé de la forme du cycle, à nouveau
+Le cycle 142 a déposé huit défauts vérifiés et en a livré deux. Au démarrage de
+celui-ci, la PR **#16769** (cycle 143, session sœur) portait #16706 et #16749 et
+réécrivait `offlineParticipantQueue.ts`, `RedisDeliveryQueue.ts`,
+`delivery-queue-registry.ts`, `OfflineQueue*.swift` et six autres fichiers de la
+file hors ligne. Trois des huit dépôts (#16688, #16747, #16748) exigent
+précisément ces fichiers.
 
-**Aucune chaîne Swift dans ce conteneur.** Un lot iOS n'est prouvable que par
-`sdk-tests.yml` (~40 min, `workflow_dispatch` avec `only_testing`) ; un lot
-passerelle se prouve sur place en quelques secondes. Trois des quatre lots sont
-donc côté passerelle, et le lot Swift est celui dont la preuve se construit
-PAR LECTURE : des gardes de source dont chaque prédicat a été **rejoué en
-Python sur les deux révisions**.
+Le corollaire d'asymétrie a tranché sans négociation : **celui qui n'a rien
+écrit cède.** Relevé au démarrage, sur les branches poussées dans les quatre
+derniers jours : aucune n'écrit `LocationHandler.ts` ni
+`ConversationViewingHandler.ts`. C'est ce qui a choisi les deux lots, et la
+cohérence du couple n'était pas prévue — elle est apparue en les instruisant.
 
-## Lot A — un doublon du bus faisait perdre une langue DÉFINITIVEMENT (#16751)
+Le squelette a été poussé AVANT la logique (#5243) : un commit de réservation
+nommant les quatre fichiers du lot.
 
-`triggerStoryTextTranslation` retirait son écouteur sur un COMPTEUR
-d'événements. Le bus relaie les doublons par conception : les deux `emit` de
-`ZmqTranslationClient.setupEventForwarding` sont INCONDITIONNELS (`settled ===
-null` ne gouverne que `retryCount.delete`), et le deadman de
-`sendTranslationRequest` redemande les langues manquantes **sous le même
-taskId**.
+## Les deux défauts étaient le même défaut, vu des deux bouts
 
-Audience `[fr, es, de]`, une langue lente-mais-vivante au passage du deadman
-de 30 s : `es` revient deux fois, le compteur atteint 3, l'écouteur part, et
-`de` arrive **sans écouteur**. `Post.translations.de` n'est jamais écrit. Aucune
-relance : le Prisme sert l'original, et aucun client ne refetche une traduction
-absente de la base. **Un lecteur germanophone voit la story dans la langue de
-l'auteur pour toujours.**
+Les deux issues portaient sur le blocage dans un signal de salon, et toutes deux
+le posaient comme une question d'ANNONCE, en proposant pour les chemins de
+retrait de rejouer la même garde fraîchement. Instruites ensemble, elles ont
+rendu une règle que ni l'une ni l'autre ne formulait — et la première version du
+lot s'est trompée sur la FORME de cette règle avant que l'audit ne la corrige.
 
-Le suivi porte désormais sur l'ENSEMBLE des langues ATTENDUES, dont on retire
-la langue servie. Insensible au doublon — et insensible de même à un événement
-portant une langue que cette story n'a pas demandée, qui retirait l'écouteur
-aussi sûrement qu'un doublon. C'est le second témoin qui l'a montré, et il
-n'était pas dans l'énoncé de l'issue.
+**Première version (fausse) :** « une rétractation exclut exactement ceux qui
+avaient été exclus de l'annonce ». Elle exigeait de connaître l'ensemble « qui
+n'a RIEN reçu », tenu sur la session et rafraîchi, plus une **rétractation
+CIBLÉE** vers qui entrait dans l'ensemble en cours de route.
 
-> Le consommateur FRÈRE du même événement scopé faisait déjà correct
-> (`call-transcription-relay.ts` monte un écouteur par langue). **Deux
-> consommateurs du même événement, un seul correct** — et le journal du site
-> fautif disait « all languages received » alors qu'il avait compté des
-> ÉVÉNEMENTS.
+**Ce que l'audit a mesuré :** cet ensemble ne PEUT PAS être juste. Il l'était
+faux sur quatre chemins — un re-départ de partage (`_openSession` n'écrit aucune
+rétractation), un `live-stop` sans partage (l'exclusion vient d'une session
+absente), deux appareils du même compte (l'union au lieu de l'intersection), et
+une émission ciblée perdue (l'ensemble est écrit AVANT l'émission, sans
+rollback). *Qui porte l'épingle* dépend de l'instant de chaque annonce, du nombre
+d'appareils, d'un rafraîchissement arrivé entre-temps.
 
-### Le cliquet de taille a eu raison, et il a changé le lot
+**Version retenue, et elle ne tient aucun état :**
 
-`PostService.ts` mesurait 2 225 lignes — hors budget, donc interdit d'ajout.
-La traduction du contenu d'une story est partie vers
-`services/posts/storyContentTranslation.ts` (195 lignes), où elle porte seule
-sa doctrine ; le fichier descend à 2 118. **Et son gel passe de 2 628 à 2 118** :
-les 403 lignes de marge que le gel portait sont rendues au dépôt, sans quoi un
-correctif pouvait grossir un fichier hors budget sans qu'aucun cliquet ne le
-voie. Un cliquet qui porte quatre cents lignes de marge ne garde rien.
+> **Les ANNONCES se filtrent. Les RÉTRACTATIONS non.**
 
-## Lot B — « pas de JWT » n'est pas « pas de session » (#16750)
+`started`, `updated`, `viewing:start`, l'instantané et `viewing:activity`
+excluent l'ensemble ; `stopped` et `viewing:stop` partent au salon. Une
+rétractation ne porte pas la donnée sensible (`{conversationId, userId,
+stoppedAt}`) et c'est le SEUL chemin qui retire ce qui est affiché :
 
-Les trois portes de reconnexion automatique de `MessageSocketManager` testaient
-`APIClient.shared.authToken != nil`. Un invité de lien partagé n'a pas de JWT :
-son identifiant VALIDE vit dans un champ distinct, et son transport est bâti
-par une autre porte.
-
-La passerelle coupe les sockets invité PAR CONCEPTION et sans code d'erreur
-(`guestLinkWatch` fail-close à la revérification), ce qu'une erreur Mongo
-transitoire suffit à déclencher sur un lien parfaitement valide. Le lecteur
-`.error` ne trouve rien de terminal, `SocketDisconnectPolicy.retries` rend
-`true` — donc Socket.IO ne réessaie PAS lui-même — et l'échelle rendait la
-main. **« Reconnexion… » définitif, plus rien en temps réel, pour seule
-échappatoire de mettre l'app en arrière-plan.**
-
-**Élargir le seul GARDE aurait été PIRE que le défaut.** `forceReconnect()`
-exécute `suspendTransport()` puis `establishTransport()`, qui ne savait bâtir
-qu'un transport d'INSCRIT : une échelle armée tuait une socket vivante sans
-rien rebâtir. C'est la RECONSTRUCTION qui apprend le credential —
-`APIClient.requestCredential`, dont le doc-comment décrit ce défaut d'avance :
-« un `String` nu oblige chaque appelant à SUPPOSER le protocole ».
-
-### Deux constats de l'audit ne tenaient PAS, et c'est le résultat le plus utile
-
-L'agent d'audit a rendu cinq sous-constats ; **deux sont faux**, et les avoir
-re-vérifiés a changé le lot :
-
-| constat | verdict |
+| posture du retrait | ce qu'elle coûte |
 |---|---|
-| `resumeFromBackground()` exclut les invités | **faux en FAIT** — l'app route une entrée sans compte vers `resumeWithoutSession()`. Le garde est élargi parce qu'il l'excluait en DROIT. |
-| les « jumeaux identiques » de `SocialSocketManager` sont le même défaut | **faux** — cette socket n'a AUCUN `connectAnonymous` (mesuré : zéro site), donc un invité n'en a aucune. Ses gardes `authToken` sont JUSTES. |
+| filtré | une épingle sur une position RÉELLE, jusqu'à 8 h, chez un bloqué |
+| **non filtré** | un événement sans position, une fois par partage, à un membre du fil |
 
-Le second aurait été une correction sans objet sur un sous-système entier. Une
-garde de source fige désormais l'asymétrie, pour qu'une prochaine passe ne la
-« corrige » pas par symétrie.
+Le gain n'est pas seulement le bon arbitrage : **plus rien à tenir à jour, rien à
+rejouer si une émission se perd, rien à recalculer au re-départ d'un partage, et
+rien à décider entre union et intersection.** Les quatre défauts ci-dessus
+disparaissent par construction, pas un par un.
 
-> **Une symétrie LEXICALE n'est pas une symétrie de propriété.** C'est la faute
-> du cycle 107 (« le miroir client→serveur ») rejouée par un autre, et elle se
-> rattrape de la même façon : en ouvrant les deux côtés plutôt qu'en transposant
-> la conclusion.
+Détail : `tasks/lessons/2026-11-08-une-liste-d-exclusion-inversee-en-liste-de-destinataires-change-de-perimetre.md`.
 
-### La cohésion a imposé une extraction, et l'extraction a fermé un défaut
+## Lot B — la garde du regard échouait OUVERT (#16752)
 
-Le correctif portait le type de 1 928 à 1 959 lignes en unité : EN HAUSSE,
-refusé par le cliquet. La configuration de transport est donc partie vers
-`SocketTransportFactory` — et pas pour gagner des lignes : le gestionnaire en
-portait **DEUX copies**, celle d'un inscrit et celle d'un invité, qui ne
-différaient que par leurs EN-TÊTES. Une option ajoutée à une copie manquait
-silencieusement à l'autre. Le type descend à 1 909.
+`blockRelatedOf` rendait un `Set` VIDE sur une levée. Un ensemble vide ne se lit
+pas « je ne sais pas » : il se lit **« personne à exclure »**. Une bascule de
+réplique de vingt secondes suffisait donc à publier `VIEWING_SNAPSHOT` — la
+liste NOMINATIVE des gens présents dans chacune des conversations du socket qui
+s'authentifie — aux pairs bloqués dans les deux sens.
 
-**Deux gardes de source ont dû suivre, et la seconde est une leçon.**
-`SocketCompressionSourceGuardTests` passe de 2 blocs à 1 (plus un test qui
-interdit au gestionnaire d'en reconstruire un chez lui — sans quoi une
-troisième copie reviendrait sans faire rougir le premier, qui ne lit plus ce
-fichier). Et `SocketTransportReplacementRetirementGuardTests` cherchait un nom
-de FABRIQUE (`manager = makeTransport(`) : il aurait cessé de voir ses sites
-**en silence**. Il cherche l'AFFECTATION (`manager = `), qui est ce qui relâche
-vraiment le transport.
+L'asymétrie était dans le MÊME fichier : `viewing:start` appelait la loi
+partagée **sans `catch`**, si bien qu'une levée remontait au `.catch` de `listen`
+et que rien ne partait. La même garde était donc fail-CLOSED sur un verbe et
+fail-OPEN sur deux autres. Une asymétrie interne à un fichier est le signe d'un
+oubli, pas d'un arbitrage.
 
-> **Chercher une forme fautive par le NOM de son helper, c'est manquer tous les
-> sites qui l'obtiennent autrement** — et, quand le helper est renommé, c'est
-> perdre les sites qu'on avait. Le discriminant juste est l'EFFET
-> (`manager = `), pas l'appelé. L'exclusion de `manager = nil` a été **mesurée**,
-> pas supposée : l'inclure portait le compte de 2 à 3 et faisait rougir la garde
-> sur la porte qui APPLIQUE la loi.
+Trois états, nommés (`ReadonlySet | null`), et deux postures :
 
-## Lot C — une garde de confidentialité ANNONCÉE à tous, APPLIQUÉE aux inscrits (#16830)
-
-`announceSwitch` promettait, dans son propre doc-comment, « la room personnelle
-de CHAQUE membre actif ». Son code posait un `flatMap` qui JETTE tout
-participant sans compte. La loi est `userId ?? id`, et c'est l'un des endroits
-où le `CLAUDE.md` dit de ne jamais la réécrire.
-
-**Et la projection était la seconde moitié du défaut — que le rapport d'audit
-n'avait pas relevée** : `REGIME_SELECT.participants.select` ne chargeait pas
-`id`. La room d'un invité n'était donc pas seulement non adressée, elle était
-**INADRESSABLE**. C'est la forme des dix-sept sites du cycle 124.
-
-Pire que silencieux : l'avis système part bien à la room de conversation, si
-bien que l'invité assis dans le fil **lisait « X a activé le chiffrement »
-pendant que son cache disait l'inverse**.
-
-> **Un témoin de comportement ne peut pas voir un `select`.** Le double Prisma
-> rend ses participants quel que soit la projection : les deux témoins de
-> comportement de ce lot passeraient au VERT sur une requête qui oublie `id`.
-> D'où un troisième, de PROJECTION, qui assert sur la REQUÊTE.
-
-## Lot D — deux portes d'arrivée sur trois n'annonçaient rien (#16837)
-
-| porte | annonçait l'arrivée ? |
+| site | posture |
 |---|---|
-| `POST …/participants` (ajout par un hôte) | **oui** |
-| `POST …/invite` | **non** |
-| jointure par LIEN (`performLinkJoin`, 3 routes) | **non** |
+| `start`, `emitRoomSnapshots` | une lecture qui ne conclut pas ⇒ **rien ne part** |
+| `retract`, `retractViewingForDepartedMember` | **aucune lecture** — l'ensemble retenu par l'annonce |
 
-Le web n'invalide la feuille des membres QUE sur cet événement ; iOS invalide
-son cache PERSISTÉ sur `conversation:joined` et écrit l'effectif ABSOLU de
-`conversation:participant-joined`. **L'effectif ne pouvait DÉRIVER QUE VERS LE
-BAS** : départ −1, bannissement −1, arrivée par lien rien.
+Le second n'est pas un repli sur panne : c'est le retrait de la lecture. Le
+fail-open se ferme par CONSTRUCTION, pas par un test de `null` qu'un site futur
+pourrait oublier. Et `retractViewingForDepartedMember` capture l'ensemble AVANT
+`untrack`, qui efface les entrées d'où il se lit.
 
-La forme du défaut est celle que le `CLAUDE.md` nomme : `sharing-invite.ts`
-**CITAIT sa jumelle** — « mirrors POST /conversations/:id/participants » — sur
-la ligne de l'auto-join. La jumelle avait été ouverte, lue, et à MOITIÉ
-reprise : la question posée était « comment rattacher les sockets ? », et la
-réponse trouvée y répondait exactement.
+Le long commentaire d'`activity` qui justifie un fail-**open** pour
+l'APPARTENANCE n'est pas touché : il est juste, et il parle d'autre chose — on
+ne retire pas quelqu'un d'un fil sur une panne, mais un blocage est une
+exclusion de confidentialité.
 
-Honnêteté de gravité : `…/invite` est un **piège armé, pas une panne mesurée**
-(le web appelle `…/participants`, et le point d'entrée iOS n'a aucun appelant).
-**La porte de LIEN est vivante**, et c'est là qu'est l'impact.
+## Lot A — la position en direct ne connaissait pas le blocage (#16745)
 
-### Trois choses mesurées qui ont changé le lot
+Cinq portes, zéro occurrence du mot `block`. Et la route de blocage ÉNUMÈRE les
+canaux temps réel qu'un blocage coupe — `cancelAutoAcquaintanceOnBlock`,
+`stopBringsAfterUserBlock`, `cutTalkiesOnBlock`, `refreshNowPlayingAfter`. La
+position en direct, le plus révélateur des cinq, n'y figurait pas.
 
-1. **Un invité ne peut pas être le SUJET de l'événement.** Le contrat déclare
-   `userId` et `displayName` NON optionnels et les décodeurs clients sont
-   stricts : une charge au `userId` nul ferait échouer le décodage de
-   l'événement ENTIER plutôt que d'annoncer un invité. Le contrat a été RELU,
-   pas supposé. Déposé en #16838 avec ses trois options — le précédent
-   `USER_PREFERENCES_COMMUNITY_REORDERED` dit qu'un nom NEUF coûte moins cher
-   qu'un élargissement. L'invité reste un DESTINATAIRE, et c'est
-   `differsOrUnset` qui le garde dedans.
-2. **Les 21 témoins de la porte conforme ont REFUSÉ ma clé d'exclusion**, et ils
-   avaient raison sur le fond : l'extraction employait `id: { not: … }`, quand
-   `differsOrUnset` existe précisément parce qu'un `NOT` nu perd les lignes sans
-   compte sous MongoDB. La clé TESTÉE est la bonne, et ces 21 verts sont la
-   preuve de non-régression de l'extraction.
-3. **`getManager()?.getIO()` faisait rendre 500 à trois suites de route.**
-   `getIO?.()` : l'éventail est ACCESSOIRE, et une adhésion déjà persistée ne
-   doit pas échouer pour lui.
+`LiveLocationSession.blockRelated` porte l'invariant, et il n'est pas nommé
+« cache » à dessein : **c'est l'ensemble des pairs qui n'ont PAS d'épingle.** Un
+nom qui annonce un cache invite à le rafraîchir ; un nom qui annonce un
+invariant invite à le TENIR. De lui découle la posture de chaque porte :
 
-### Le balayage, et l'erreur qui l'a rendu bon
+| porte | ce qu'elle fait |
+|---|---|
+| `live-started` | ANNONCE — exclut l'ensemble ; une lecture qui ne conclut pas **refuse le partage** |
+| `live-updated` | ANNONCE — exclut l'ensemble, rafraîchi par pas d'une minute |
+| `live-stopped` (×2 sites) | RÉTRACTATION — part au salon, **sans exclusion** |
+| rattrapage à la jonction | ANNONCE — lit l'ensemble de l'**ARRIVANT**, et ne rejoue rien s'il ne conclut pas |
 
-Un témoin par porte ne dit rien de la QUATRIÈME — celle qu'un lot futur
-ajoutera sans savoir que cette loi existe ; le voisin
-`conversation-new-member-rights-parity.test.ts` écrit déjà pourquoi. D'où
-`member-arrival-door-sweep.test.ts`, qui gèle les cinq sites créant une ligne
-`Participant` sans être une porte d'arrivée, chacun avec sa raison, et vérifie
-d'abord qu'il TROUVE quelque chose : une sonde vide resterait verte sans rien
-garder.
+Deux décisions valent d'être dites :
 
-> **Sa première version ne cherchait que `participant.create(` et manquait
-> `InitService`, qui emploie `createMany`.** Un balayage qui cherche UN idiome
-> mesure sa popularité, pas une propriété — cycle 107, retrouvé en écrivant le
-> cliquet. L'erreur commise en l'écrivant est le meilleur cas de test qu'il aura.
+- **Le rattrapage lit du côté de l'arrivant.** La question est par PAIRE, et
+  l'ensemble bidirectionnel du joignant y répond pour TOUS les partageurs d'un
+  coup : une lecture par jonction, jamais une par session, et seulement s'il y a
+  quelque chose à rejouer. Il devient asynchrone — d'où le `await` chez
+  `ConversationHandler`, dont le commentaire affirmait « ne peut pas jeter,
+  l'implémentation est synchrone et sans I/O ». Vrai quand il a été écrit ;
+  **un commentaire d'impossibilité ne rougit jamais** (cycle 108), et ce lot l'a
+  périmé, donc réécrit. Et parce qu'il devient asynchrone, il **revérifie
+  l'appartenance après son `await`** : `socket.emit` vise le SOCKET, pas la room,
+  donc une éviction concurrente ne le retiendrait pas (constat F12 de l'audit).
+- **L'UNIQUE composeur d'exclusion du fichier est `_fromSocketExcept`**, et il
+  n'a que deux appelants — les deux annonces. Son jumeau côté serveur
+  (`_roomExcept`) a été SUPPRIMÉ en même temps que la rétractation ciblée : il
+  n'existe plus aucune émission de ce handler qui filtre depuis `this.io`.
 
-## Lot E — la CI du SDK iOS était par terre sur TOUT le dépôt (#16852)
+### La porte que la première version ouvrait, et qui était PIRE
 
-Rencontré en cherchant la preuve du lot B, et c'est le lot le plus utile du
-cycle à tout le monde sauf à moi. `sdk-tests.yml` échouait à « Build SDK »,
-**avant toute compilation Swift**, sur `failed downloading … already exists in
-file system` (WebRTC, Lottie, SignalFfi). Mesuré : repo-WIDE depuis ~07:39 UTC,
-trois branches de sessions sœurs **et `dev` lui-même** (run 42463036975). Un
-`rerun_failed_jobs` rejoue la même collision.
+`getBlockRelatedUserIds` rend l'ensemble bidirectionnel ENTIER du partageur,
+**à l'échelle du dépôt et sans notion de conversation**. Son doc-comment dit
+pourquoi c'est sans danger, et sa phrase porte sa propre condition :
 
-**Donc aucun lot iOS n'était prouvable, et un rouge de CI sur une PR iOS ne
-disait RIEN de son code.**
+> « an id in this set that owns no socket contributes nothing to **AN EXCLUSION
+> LIST** »
 
-C'est #6545, mot pour mot, sur un autre workflow — et **le dépôt portait déjà sa
-réparation** : `scripts/ci/resolve-spm-packages.sh`, dont le doc-comment décrit
-ce cas exact (« Une collision se corrige en PURGEANT l'entrée en cause avant
-l'essai suivant — jamais en attendant »). `ios.yml` l'appelle ; `sdk-tests.yml`
-lançait `build-for-testing` à cru.
+La rétractation ciblée INVERSAIT cet ensemble en liste de DESTINATAIRES, servie
+par `io.to(socketId)` — donc hors room et hors appartenance. **Dave, qui n'est
+pas dans le fil et n'a aucun lien avec Alice, apprenait par son propre blocage
+l'existence d'un identifiant de conversation auquel il n'a pas accès, le fait
+qu'Alice y tenait un partage de position, et l'instant** — répétable à ~1
+coup/minute en débloquant et rebloquant, soit une sonde d'activité GPS déclenchée
+par le bloqueur.
 
-> **Un remède écrit, motivé, testé — et qui ne vaut que là où quelqu'un l'a
-> récité.** C'est la leçon 307 appliquée à un script de CI, et le coût s'est
-> mesuré en CI iOS à l'arrêt pour tout le dépôt. La garde qui l'aurait attrapé
-> existait aussi : `check-ios-spm-resolve-retry.mjs` vérifiait qu'**UN** workflow
-> appelle le script. Il en vérifie deux désormais, et c'est cette seconde
-> assertion qui est le correctif durable.
+> **Un ensemble a un périmètre, et ce périmètre dépend de l'usage qu'on en fait.
+> Soustraire tolère le large ; adresser ne le tolère pas.** C'est la leçon 275
+> retournée : on avait mesuré ce que la charge TRANSPORTE, pas à qui elle est
+> ADRESSÉE.
 
-Le script est GÉNÉRALISÉ, pas doublé — écrire une seconde boucle est exactement
-ce qu'il existe pour éviter. Il prenait un `-project`, et c'était la seule raison
-pour laquelle ce workflow ne l'appelait pas : `MeeshySDK-Package` est un PAQUET.
-Déréférencement par `${PROJECT_ARGS[@]+"${PROJECT_ARGS[@]}"}` : sous `set -u`, le
-bash 3.2 de macOS tue un script qui lit `"${vide[@]}"`.
+**Aucun des deux cliquets du lot ne pouvait la voir.** Le témoin de comportement
+couvrait les cinq portes existantes ; le cliquet de source cherchait les
+émissions adressées à un SALON, donc par construction il ne regardait pas celle
+qui ne l'était pas. Le lot part désormais avec un témoin qui assert la propriété
+STRUCTURELLE — aucune émission de ce handler n'est adressée à un id de socket —
+et pas seulement le symptôme.
 
-### Le premier témoin de la forme paquet NE POUVAIT PAS TOMBER
+### La forme conditionnelle n'est pas cosmétique
 
-Et c'est la leçon du lot. Avec l'ancien `-project "$PROJECT"` toujours en place,
-le garde restait **VERT** : un faux `xcodebuild` qui ignore ses arguments
-accepte `-project -` sans broncher. Le faux REFUSE désormais ce que le vrai
-refuse (un chemin de projet `-` n'existe pas), et le rouge est re-prouvé : deux
-défauts nommés, dont « a dormi (15,30,45,60s) au lieu de purger » — le symptôme
-de #6545 lui-même.
+`_roomExcept` / `_fromSocketExcept` posent `.except(...)` **seulement s'il y a
+quelqu'un à exclure** — la forme du voisin (`StatusHandler:385`). Sans blocage,
+la chaîne d'émission est EXACTEMENT celle d'avant le lot. C'est ce qui garde le
+correctif d'être trop large, et un témoin l'assert explicitement.
 
-> **Un double ment aussi par ce qu'il ACCEPTE** (cycle 112), et un faux
-> `xcodebuild` est le cas limite : il n'a aucune raison de regarder ses
-> arguments, donc il valide toutes les formes d'appel, y compris celles que le
-> vrai outil refuse. Un témoin de FORME D'APPEL exige un double qui lise ses
-> arguments.
+### Le cliquet, parce que le correctif de comportement est la moitié du lot
 
-## Lot F — la règle n'était appliquée que par celui qui l'avait écrite (#16856)
+Ce qui a tenu ce défaut en vie n'est pas une erreur de raisonnement : **rien
+n'obligeait à poser la question.** Chaque handler appliquait la règle chez lui,
+avec son commentaire chez lui, et un fichier qui ne mentionne pas une règle ne
+peut pas la mentionner de travers — **le silence n'a pas de place où rougir.**
 
-`PUT /user-preferences/communities/:communityId` upsertait depuis l'id d'URL
-sans AUCUNE vérification d'appartenance — pendant que son voisin du **même
-fichier**, vingt lignes plus bas, exige la règle en toutes lettres : « un lot
-non borné laisserait n'importe quel appelant authentifié fabriquer des lignes de
-préférences contre des ids arbitraires ». Et l'applique.
+Un témoin de comportement garde les sites qui EXISTENT ; le cliquet garde le
+SUIVANT. `socketio/__tests__/locationBlockExclusionSweep.ts` relève les ANNONCES
+`LOCATION_LIVE_STARTED` / `LOCATION_LIVE_UPDATED` dont la chaîne ne passe pas par
+`_fromSocketExcept`. Il ne regarde pas les rétractations, et **ce silence est une
+DÉCISION** : s'il les exigeait filtrées, il pousserait le prochain lot à reposer
+le défaut qu'on vient de retirer.
 
-> **Un commentaire ne documente que l'exemplaire qu'il touche** — avec la
-> circonstance aggravante que la jumelle est dans le MÊME fichier, et que c'est
-> le PUT qui **CRÉE** la ligne (le commentaire du réordonnancement le dit
-> lui-même). La règle manquait à son site le plus exposé.
+### La première version du cliquet n'en voyait qu'un SEPTIÈME, et l'audit l'a compté
 
-Borne de gravité vérifiée plutôt que supposée : `categoryId` est écrit sans
-contrôle lui aussi, mais il n'a aucune relation Prisma et la route ne fait aucun
-`include` de catégorie — c'est de la pollution de stockage, pas une fuite. Ce
-qui ne change rien au correctif, et tout au récit.
+Elle exigeait `.to(` ET une cible matchant `/^ROOMS\./`. Elle était donc aveugle
+à six formes qui compilent, exécutées sur le vrai module :
 
-Et le double de `community-preferences-broadcast.test.ts` a été **COMPLÉTÉ, pas
-contourné** : il n'exposait que `findMany` (le besoin du réordonnancement), donc
-le PUT y tombait sur un `findFirst` absent.
+| forme | visible ? |
+|---|---|
+| `const room = ROOMS.conversation(id); io.to(room).emit(…)` | **non** |
+| `io.in(ROOMS.conversation(id)).emit(…)` — `.in()` est l'alias de `.to()` | **non** |
+| `this._roomAll(ROOMS.conversation(id)).emit(…)` — tout helper neuf | **non** |
+| `const ev = SERVER_EVENTS.LOCATION_LIVE_STARTED; io.to(…).emit(ev, …)` | **non** |
+| `io.to(…).volatile.emit(…)` — opérateur plausible sur un flux GPS | **non** |
+| `const { conversation } = ROOMS; io.to(conversation(id)).emit(…)` | **non** |
+| `io.to(ROOMS.conversation(id)).emit(…)` | oui |
+
+**La première ligne est l'idiome DOMINANT du répertoire** — 15 sites
+`const room = ROOMS.conversation(…)` en production, dont le jumeau de référence
+lui-même (`StatusHandler`) et `ConversationHandler`. Un cliquet posé pour
+attraper « le site qu'un lot futur ajoutera » ne voyait pas ce site s'il était
+écrit dans le style de la maison.
+
+> **Un cliquet se règle sur la forme CONFORME, dont il n'y a qu'une, et traite
+> tout le reste comme à instruire.** Chercher la forme FAUTIVE, c'est énumérer —
+> et une énumération est en retard par construction. Le discriminant est
+> désormais inversé : toute chaîne d'annonce qui n'est pas produite par le
+> composeur est signalée, et seules deux formes sont exemptées (l'émission à un
+> socket nommé, et l'ACK), chacune avec son témoin de non-régression.
+
+Et il balaye **tout `services/gateway/src`**, hors arbres de témoins — l'autre
+reproche de l'audit, que le dépôt avait déjà payé : « `server-emit-door-sweep`
+balaye `src/` ENTIER : la huitième copie vivait dans `utils/socket-broadcast.ts`,
+à deux répertoires de la septième ».
+
+**Ce qui n'a PAS été fait, et c'est délibéré** : un balayage « ce handler cite-t-il
+la loi de blocage ? » sur les trois familles. C'est exactement ce qui a rendu
+sept faux positifs au cycle 107 — une recherche d'idiome mesure la popularité
+d'un idiome, jamais une propriété. Détail :
+`tasks/lessons/2026-11-08-une-famille-de-signal-se-compte-avant-d-affirmer-qu-elle-est-gardee.md`.
+
+## Ce que les doubles de test devaient apprendre
+
+Sept suites de `LocationHandler` sont devenues rouges : leurs doubles Prisma
+n'exposaient pas `prisma.user`, donc `getBlockRelatedUserIds` levait un
+`TypeError` que le `try` du handler traduisait en refus. Un double doit ACCEPTER
+ce que la production appelle.
+
+Une FABRIQUE (`socketio/__tests__/helpers/no-blocks.ts`), et non sept copies :
+un double dont la forme se retape à chaque site est un double qu'un site finira
+par ne pas avoir.
+
+Deux témoins existants ont demandé plus qu'un double :
+
+- **`LocationHandler.globalMinor`** portait DÉJÀ un `user.findUnique` (la date de
+  naissance de la règle 5). Les deux questions passent par la même méthode sous
+  deux `select` : le double rend les deux colonnes. Et son témoin
+  « *sans lire sa date de naissance* » comptait les APPELS — un proxy valide
+  tant que la date de naissance était la seule question posée à cette table.
+  Il assert désormais sur `select.birthDate`. **Mesuré** : sous la mutation qui
+  fait lire la règle 5 pour tout fil, le témoin réécrit TOMBE ; la version qui
+  comptait les appels serait au contraire restée verte le jour où une autre
+  lecture occupe le compteur.
+- **`LocationHandler.lifecycle`** appelait le rattrapage sans l'attendre : sept
+  `await` ajoutés, conséquence directe du changement de signature.
 
 ## Preuve
 
 | gate | résultat |
 |---|---|
 | `tsc --noEmit` gateway | **EXIT=0**, 0 ligne (lu HORS pipe) |
-| périmètre Post/story | **311 suites / 4 656 témoins verts** |
-| périmètre encryption/conversation | **243 suites / 3 675 témoins verts** |
-| périmètre participant/sharing/link/invite | **414 suites / 6 053 témoins verts** |
-| cliquet de taille gateway | vert ; `PostService.ts` 2 225 → 2 118, gel 2 628 → 2 118 |
-| cliquet de cohésion iOS | vert ; `MessageSocketManager` 1 928 → 1 909 |
-| rouge, lot A | 2 des 3 témoins tombent ; le 3e (non-régression) vert des deux côtés |
-| rouge, lot B | prédicats des gardes rejoués en Python sur les deux révisions : `authToken` lu 4 fois (attendu 0), 0 porte sur le credential (attendu 3), branche et signature absentes |
-| rouge, lot C | les 3 témoins tombent |
-| rouge, lot D | aucune des 3 portes ne contient `announceMemberArrival(` avant le lot |
-| rouge, lot E | garde rejoué contre la forme d'avant : 2 défauts nommés, dont « a dormi (15,30,45,60s) au lieu de purger » ; auto-test du garde vert (il retire la branche de purge et vérifie que le scénario l'attrape) |
-| rouge, lot F | 2 des 3 témoins tombent ; le 3e (un membre passe) vert des deux côtés |
-| garde SPM | **4/4 scénarios** verts (collision projet, collision paquet, panne réseau, échec permanent) |
-| preuve Swift | `workflow_dispatch` de `sdk-tests.yml`, débloqué par le lot E |
+| les 18 suites du périmètre (position, regard, jonction, cliquets) | **294 témoins verts** |
+| cliquet d'exclusion, réécrit | **15 verts** |
+| cliquets de taille (`gateway-file-size-budget`, variante tests) | **11 verts** |
+| cliquet d'entrée de journal | **18 verts** |
+| `server-emit-door-sweep`, `detached-promise-catch-sweep`, garde de présence | **21 verts** |
+| suite gateway COMPLÈTE | **2 528 suites / 39 772 témoins verts** ; 6 suites rouges, **toutes étrangères au lot** — mesurée sur la 1re version, et les 18 suites du périmètre revérifiées après réécriture |
+| **audit adversarial** | **BLOQUANT sur la 1re version** : 13 constats, 5 témoins rouges écrits contre elle |
+| rouge prouvé, lot A | **9 des 15 témoins tombent** sans le correctif ; 3 verts des deux côtés |
+| rouge prouvé, lot B | **5 des 8 témoins tombent** sans le correctif ; 3 verts des deux côtés |
+| rouge prouvé, le pouls du regard | tombe quand on fige son rafraîchissement |
+| rouge prouvé, cliquet | tombe sur **7 sources fabriquées** — dont les six formes que la 1re version ratait — et sur le fichier RÉEL muté **dans l'idiome de la maison**, en nommant fichier, ligne et forme |
 
-Les rouges du dépôt qui subsistent sont les **6 suites de codecs d'image**
-(HEIF, AVIF 10 bits, carte de gain HDR, orientation EXIF) — capacité libvips du
-conteneur, mesurée et documentée aux cycles 139 et 142, vertes en CI, étrangères
-aux quatre lots.
+**Les six témoins verts des deux côtés sont le second gate du lot.** Côté A :
+« le rattrapage sert bien un partageur NON bloqué », « sans blocage, aucune
+exclusion n'est posée », et le bloqueur ÉTRANGER qui ne reçoit rien. Côté B :
+« `viewing:start` ne partait déjà rien sur une levée » (la posture préexistante,
+par accident de forme), « un pair non bloqué reste servi », et « le pouls ne
+relit la base qu'une fois par pas ». Sans eux, rien n'aurait signalé qu'une
+resserre de confidentialité venait de couper le cas nominal — ni qu'elle venait
+de mettre la base sur le trajet d'un signal qui bat toutes les deux secondes.
+
+`LocationHandler.ts` passe de 681 à 916 lignes — dans le budget (plafond dur
+1200, seuil de découpage 1000), mais il s'en approche, et la majeure partie de
+l'ajout est du doc-comment.
+
+### Les rouges restants, et le septième qui était MIEN
+
+Les six rouges de la suite complète sont les suites de CODECS d'image (HEIF,
+AVIF 10 bits, carte de gain HDR, orientation EXIF) que les cycles 139 et 142
+ont mesurées et documentées : capacité libvips du conteneur, vertes en CI.
+**Remesurées ici sur un arbre PROPRE** (`git stash -u`, mêmes 5 suites, 15
+témoins) — elles tombent sans une ligne de ce lot. Ne pas hériter d'un verdict :
+un rouge attribué au cycle précédent se revérifie, sinon un rouge NEUF se cache
+derrière la réputation d'un ancien.
+
+Le septième était à moi, et il est réparé : `journal-one-file-per-entry-guard`
+exige d'une entrée de `tasks/lessons/` que sa PREMIÈRE ligne soit son titre
+`## ` et qu'elle ne porte **aucun autre titre** hors bloc de code. Les deux
+fichiers de leçons étaient écrits en `#` + sections `##`. Le cliquet a fait
+exactement son travail — et c'est un cliquet qu'une session qui écrit des leçons
+rencontre forcément, donc il valait d'être nommé ici : la forme d'une entrée est
+*un* titre `## `, le reste en prose et en amorces gras.
 
 ## Dimensions
 
-**Mûres** : 13 (Complétude — une langue ne disparaît plus ; une population
-entière n'est plus exclue de la reconnexion ; deux portes d'arrivée sur trois
-étaient muettes) · 11 (Maintenabilité — trois extractions, une configuration de
-transport au lieu de deux, un éventail d'arrivée au lieu d'un et deux silences,
-deux cliquets qui rendent leur marge) · 9 (Compatibilité — les invités de lien,
-deux fois) · 2 et 8 (plus de « Reconnexion… » définitif).
+**Mûres** : **1 (Sécurité / confidentialité)** — la troisième famille de signal
+de salon filtre enfin le blocage ; la garde de la deuxième ne s'éteint plus sur
+une panne ; son pouls d'activité cesse de nommer un lecteur à qui vient de le
+bloquer ; et aucune émission de ce lot n'est adressée hors du salon.
+**6 (Cohérence)** — même geste, même effet sur les trois signaux du même salon,
+et une règle unique annonce/rétractation partagée par les deux handlers.
+**11 (Maintenabilité)** — une posture par garde, deux requêtes de moins par
+rétractation, **aucun état ne porte le retrait** (c'est le gain structurel de la
+réécriture), et un cliquet réglé sur la forme conforme plutôt que sur une
+énumération. **13 (Complétude)** — les cinq portes de la position, les trois
+annonces du regard, et les deux moments de chacune.
 
-**Restantes, avec leur issue** : #16838 porte la décision produit de l'arrivée
-d'un invité ; `conversation:new` pour un inscrit entrant par lien reste à
-ouvrir ; et la recette sur appareil réel de #16750 revient au porteur (ouvrir un
-lien invité, couper la socket côté serveur, vérifier le retour du temps réel
-sans mise en arrière-plan).
+**Restantes, avec leur issue** :
 
-## Ce que ce cycle a déposé et n'a pas pris
-
-| issue | sujet | vérifié par la session ? |
+| issue | sujet | d'où elle vient |
 |---|---|---|
-| #16838 | l'arrivée d'un INVITÉ ne peut pas être annoncée sous le contrat actuel | **oui** — contrat relu |
-| #16857 | les communautés n'ont AUCUNE surface temps réel (rename, avatar, membres, rôles : invisible chez les autres ; aucun nom `community:*` au contrat) | **oui** — c'est un LOT, pas un correctif : il faut d'abord un contrat et ses trois décodeurs |
-| #16858 | iOS jette la portée COMMUNAUTÉ de `user:preferences-updated` (`category` non optionnel au décodeur) | **oui** — piège armé : aucun consommateur iOS aujourd'hui |
+| #16791 | une session dont la passerelle a perdu la trace relit la base à chaque point | relevé par la session ; **moitié préexistante** |
+| #16794 | un blocage ne coupe pas un partage EN COURS — jusqu'à 120 points partent encore, et le registre est par processus | audit, F8 + le point multi-instances |
+| #16795 | `location.live` est déclarée **SANG + consentement rituel** et appliquée NULLE PART | audit, F9 — **préexistant, et le plus gros** |
+| #16796 | une socket est dans les rooms avant d'être dans `userSockets` : fenêtre sans exclusion pendant sa propre authentification | audit, F11 — préexistant, partagé par les trois signaux |
+| #16797 | `live-start` rend deux verdicts contradictoires au même client | audit, F13 — préexistant |
+| #16798 | un blocage garde les COMPTES, pas les PERSONNES : un bloqué revient par un lien partagé | audit, F10 — limite de MODÈLE |
+| #16800 | les TROIS exclusions se composent depuis une carte PAR PROCESSUS | audit (son dernier doute) — **instruit et mesuré par la session** |
 
-Et, intacte du cycle 140 : **#16688**, cédée pour la seconde fois.
+**#16800 est le doute que l'auditeur a laissé ouvert, et la session l'a tranché.**
+Son rapport disait : « je n'ai pas vérifié si la production tourne en
+mono-instance — **si ce n'est pas le cas, c'est un défaut d'un rang au-dessus de
+tous ceux ci-dessus** ». Mesuré :
 
-## Méthode, confirmée une fois de plus
+| mesure | résultat |
+|---|---|
+| `REDIS_URL` dans `docker-compose.prod.yml` | **défini** — donc `@socket.io/redis-adapter` est MONTÉ |
+| instances de passerelle déclarées | **une** (`container_name: meeshy-gateway`, aucun `replicas`) |
+| source des trois listes d'exclusion | `userSockets`, une `Map` **par processus** |
 
-Les deux agents d'audit de ce cycle ont rendu **onze constats**. Les neuf
-re-vérifiés ligne à ligne ont tous tenu **sauf deux** (les deux du lot B), et la
-re-vérification a par ailleurs TROUVÉ ce que les rapports n'avaient pas vu : la
-projection manquante du lot C, et la limite de contrat du lot D. **Un rapport
-d'audit se reçoit comme une piste, pas comme un constat** — et la relecture ne
-sert pas seulement à écarter le faux, elle sert à trouver le reste.
+La diffusion traverse donc déjà les instances **par conception**, et une seule
+instance tourne. La garde est complète aujourd'hui, et elle deviendrait
+incomplète — en silence, sans qu'un témoin rougisse — à la deuxième instance,
+que la directive #9232 exige explicitement de pouvoir monter. **Le défaut est
+armé, pas actif, et il s'armera par une opération d'infrastructure, pas par un
+commit.** Les trois handlers portent désormais cette limite dans leur en-tête :
+un invariant annoncé plus fort qu'il n'est vaut moins que pas d'invariant.
 
-Et une leçon de forme, celle du lot E : **trois témoins de ce cycle ne pouvaient
-pas tomber tels qu'ils étaient d'abord écrits** — le témoin de projection du lot
-C (un double rend ses participants quel que soit le `select`), le balayage du lot
-D (il ne cherchait qu'un idiome sur trois), et le scénario paquet du lot E (le
-faux ignorait ses arguments). Dans les trois cas c'est en CHERCHANT le rouge,
-pas en relisant l'assertion, que le défaut du témoin est apparu. **Prouver le
-rouge n'est pas une formalité de clôture : c'est la seule mesure qui distingue
-un témoin d'une décoration.**
+**#16795 mérite d'être nommée à part.** `location.live` est déclarée au seuil le
+plus haut du produit (`BLOOD`) et parmi les features à consentement rituel ; la
+passerelle n'a **aucun** site d'application, et `LocationHandler` ne cite même pas
+`pairAccessAmong`. Une coordonnée GPS vivante part donc à tout participant non
+bloqué, `PUBLIC` compris, pendant que la FRAPPE du même salon est gardée à
+`ACQUAINTANCE`. Vérifié ligne à ligne par la session. Et l'audit relève le coût
+caché de notre propre lot : **invoquer `StatusHandler` comme « le jumeau conforme
+de référence » en n'en reprenant que la moitié rend l'écart restant MOINS visible
+qu'avant**, parce que le fichier a désormais l'air gardé.
+
+## Ce que l'audit adversarial a coûté et rapporté
+
+Il a tourné ~13 minutes et rendu **13 constats**, dont 5 avec un témoin rouge
+écrit contre le code livré. Bilan honnête de sa précision, après re-vérification
+ligne à ligne par la session :
+
+| verdict | constats |
+|---|---|
+| réels et INTRODUITS par le lot | F1 (la porte neuve), F2, F3, F5, F7, F12 |
+| réels et PRÉEXISTANTS | F4 (le pouls, dans le périmètre — corrigé), F9, F10, F11, F13 |
+| justes mais déjà assumés et chiffrés par la session | F8 (la fenêtre de 60 s) |
+| défaut de l'OUTILLAGE du lot | F6 (le cliquet aveugle à six formes) |
+
+Aucun constat ne s'est révélé faux. C'est la première fois dans cette série
+qu'un audit rend un verdict BLOQUANT sur un lot qui avait déjà `tsc` à zéro,
+2 528 suites vertes et son rouge prouvé dans les deux sens — et il avait raison.
+
+> **Ce qu'un audit adversarial attrape, c'est ce que les gardes du lot ne peuvent
+> pas voir PAR CONSTRUCTION.** Le témoin de comportement couvrait les portes qui
+> existaient ; le cliquet cherchait les émissions adressées à un SALON, donc il
+> ne regardait pas celle qui ne l'était pas. Les deux étaient verts, et la fuite
+> était dans l'angle exact que leur forme leur interdisait de couvrir. Un lot de
+> confidentialité qui s'autovalide valide son propre angle mort.
+
+## Ce qui reste du dépôt du cycle 142
+
+| issue | sujet | pris par |
+|---|---|---|
+| #16706, #16749 | clair d'un message détruit, relance d'un envoi en vol | PR #16769 (cycle 143) |
+| #16688, #16747, #16748 | convergence hors ligne, clair d'un message enfilé, deux flushers | **cédés** — fichiers de la PR #16769 |
+| #16750 | un invité de lien ne se reconnecte jamais | libre (SDK iOS, preuve par CI macOS) |
+| #16751 | la traduction d'une story compte les événements, pas les langues | libre (passerelle) |
+| #16753 | le rang 2 du registre de lecture n'a aucun appelant | libre (SDK iOS) |
