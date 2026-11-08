@@ -96,8 +96,6 @@
 
 import { createHash } from 'crypto';
 import type {
-  MessageHiddenForMeEventData,
-  MessageRestoredForMeEventData,
   MessageStarredEventData,
   PersonalMessageVisibilityRef,
 } from '@meeshy/shared/types/socketio-events';
@@ -106,7 +104,11 @@ import {
   getSharedPersonalMarkEnqueuer,
   type QueuedPersonalMarkEnqueuer,
 } from '../services/delivery-queue-registry';
-import { isAddressableConversationId, type PersonalMarkEventType } from './queuedEventContract';
+import {
+  isAddressableConversationId,
+  type PersonalMarkEventType,
+  type QueuedPayloadFor,
+} from './queuedEventContract';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'enqueuePersonalMessageMark' });
@@ -214,7 +216,14 @@ export async function enqueuePersonalVisibilityMark(
 
   for (const [conversationId, group] of groupByConversation(messages)) {
     const refs = group.map((m) => ({ messageId: m.messageId, conversationId: m.conversationId }));
-    const payload: MessageHiddenForMeEventData | MessageRestoredForMeEventData =
+    // Typé par le CONTRAT DE FILE, jamais par une assertion : `QueuedPayloadFor`
+    // dérive la charge de l'événement que `DRAINED_EVENT` associe à cet
+    // `eventType`, et son `Anonymized` est exactement ce qui la rend assignable
+    // au `Record<string, unknown>` que la file stocke. Un
+    // `as unknown as Record<string, unknown>` aurait compilé en effaçant la
+    // corrélation `(eventType, payload)` — c'est-à-dire la seule chose que ce
+    // contrat existe pour tenir.
+    const payload: QueuedPayloadFor<'hidden-for-me'> | QueuedPayloadFor<'restored-for-me'> =
       eventType === 'hidden-for-me'
         ? { userId, messages: refs, hiddenAt: at }
         : { userId, messages: refs, restoredAt: at };
@@ -228,7 +237,7 @@ export async function enqueuePersonalVisibilityMark(
         // journal par entrée du drain NOMME ce champ quand une remise échoue.
         messageId: refs[0].messageId,
         conversationId,
-        payload: payload as unknown as Record<string, unknown>,
+        payload,
         enqueuedAt: new Date().toISOString(),
         eventType,
         dedupKey: visibilityBatchDedupKey(eventType, conversationId, refs.map((r) => r.messageId)),
@@ -254,12 +263,15 @@ export type EnqueueStarMarkParams = PersonalMarkQueueOverride & {
  */
 export async function enqueueStarMark(params: EnqueueStarMarkParams): Promise<void> {
   const { userId, state } = params;
+  // Même raison que chez la jumelle : la charge est la forme que le CONTRAT
+  // associe à `'starred'`, pas un objet qu'on affirme compatible.
+  const payload: QueuedPayloadFor<'starred'> = state;
   await pushMarkEntry(
     userId,
     {
       messageId: state.messageId,
       conversationId: state.conversationId,
-      payload: state as unknown as Record<string, unknown>,
+      payload,
       enqueuedAt: new Date().toISOString(),
       eventType: 'starred',
     },
