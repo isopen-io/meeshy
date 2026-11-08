@@ -161,22 +161,21 @@ final class ComposerSceneCameraOverlayTests: XCTestCase {
         }
     }
 
-    /// **Les rails NE cèdent PAS**, et c'est vital : le viseur est borné au
-    /// dessin, donc il ne les atteint pas — et les cacher priverait l'auteur de
-    /// sa SORTIE autant que de ses portes.
-    func test_lesRails_neCèdentPas() {
-        for étape in ComposerSceneCameraStage.allCases {
-            XCTAssertTrue(ComposerSceneCameraOverlay.isServed(.rails, stage: étape))
-        }
+    /// **Les rails CÈDENT au viseur** (A8, #17109, loi 13 « pas de rail au
+    /// viseur ») : la caméra s'arme plein écran, sa sortie est « Quitter » dans
+    /// son en-tête. Scène rendue, les rails reviennent.
+    func test_lesRails_cèdentAuViseurArmé_etReviennentAvecLaScène() {
+        XCTAssertFalse(ComposerSceneCameraOverlay.isServed(.rails, stage: .armed))
+        XCTAssertFalse(ComposerSceneCameraOverlay.isServed(.rails, stage: .recording))
+        XCTAssertTrue(ComposerSceneCameraOverlay.isServed(.rails, stage: .off))
     }
 
-    /// **Trois meubles, trois réponses.** Une règle où tout céderait ne
-    /// déciderait rien — elle rendrait `stage != .off` en ignorant son premier
-    /// paramètre. Ce témoin garde qu'elle décide vraiment.
+    /// **Trois meubles, et la règle décide encore** : une règle où tout
+    /// céderait rendrait `stage != .off` en ignorant son premier paramètre.
     func test_laRègle_neCèdePasEnBloc() {
         let cèdent = ComposerSceneCameraOverlay.Furniture.allCases
             .filter { ComposerSceneCameraOverlay.yieldsToViewfinder($0) }
-        XCTAssertEqual(cèdent, [.description])
+        XCTAssertEqual(cèdent, [.description, .rails])
     }
 }
 
@@ -244,6 +243,12 @@ final class ComposerSceneCameraSizeTests: XCTestCase {
     func test_lesDeuxGlyphes_diffèrent() {
         XCTAssertNotEqual(ComposerSceneCameraSize.card.toggleSymbol,
                           ComposerSceneCameraSize.fullScreen.toggleSymbol)
+    }
+
+    /// **La caméra s'arme PLEIN ÉCRAN** (A8, #17109) : plus de carte où le
+    /// viseur rentrerait, plus de bouton carte ↔ plein écran.
+    func test_leViseur_sArmePleinEcran() {
+        XCTAssertEqual(ComposerSceneCameraSize.armed, .fullScreen)
     }
 
     // La croix « seulement en plein écran » est RÉVOQUÉE (#8653, porteur

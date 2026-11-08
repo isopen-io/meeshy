@@ -89,6 +89,55 @@ nonisolated enum StoryTrayActionResolver {
     }
 }
 
+// MARK: - La caméra d'abord (#17109)
+
+extension Notification.Name {
+    /// **La caméra autonome du tray des stories** : elle arme plein écran, prend,
+    /// puis remet sa prise au composer. Toute entrée « caméra d'abord » la poste ;
+    /// le cover unique de la racine (`StoryComposerCover`) la présente.
+    static let openStoryCamera = Notification.Name("openStoryCamera")
+}
+
+/// **Ce que la caméra d'abord décide** — pur, éprouvé sans monter de vue.
+nonisolated enum StoryCameraFirstRule {
+    /// Elle ne s'ouvre jamais par-dessus le composer, ni deux fois.
+    static func opens(composerShown: Bool, cameraShown: Bool) -> Bool {
+        !composerShown && !cameraShown
+    }
+
+    /// Une prise remise ouvre la porte SEMÉE (la prise est le fond, la caméra
+    /// ne se réarme pas) ; sans prise, la porte du tray, comme avant.
+    static func intent(carriesTake: Bool) -> ComposerIntent {
+        carriesTake ? .cameraTake : ComposerIntent(origin: .storyTray)
+    }
+}
+
+/// **La caméra d'abord** (A8–A10 hors du composer, #17109) : elle arme plein écran ; sa prise
+/// ouvre le composer, la prise en fond, sans réarmer la caméra. Quitter sans rien prendre ne
+/// laisse rien derrière.
+struct StoryCameraFirstCover: ViewModifier {
+    @Binding var composerShown: Bool
+    @Binding var takeSeed: StoryComposerSeed?
+    @State private var cameraFirst = false
+
+    func body(content: Content) -> some View {
+        content
+            .fullScreenCover(isPresented: $cameraFirst, onDismiss: {
+                if takeSeed != nil { composerShown = true }
+            }) {
+                ComposerViewfinder(initialMode: .photo,
+                                   recordingBudget: ComposerCaptureRecordingBudget.maxDuration(for: .story)) { prise in
+                    takeSeed = ComposerMediaSeeding.seed(forTake: prise)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openStoryCamera)) { _ in
+                guard StoryCameraFirstRule.opens(composerShown: composerShown, cameraShown: cameraFirst) else { return }
+                takeSeed = nil
+                cameraFirst = true
+            }
+    }
+}
+
 // MARK: - Chaînage déterministe de la sheet « Mes stories »
 
 /// Intention posée PENDANT qu'une sheet se ferme, exécutée à la fin réelle du
@@ -183,13 +232,18 @@ struct StoryComposerCover: ViewModifier {
     /// Aperçu monté DANS le cover du composer : il se superpose au composer et
     /// lui rend la main à la fermeture, sans démonter la session d'édition.
     @State private var previewAssets: StoryPreviewAssets?
+    /// La prise que la caméra autonome (#17109) remet au composer : elle en devient le
+    /// fond, et la porte s'ouvre semée (`ComposerIntent.cameraTake`).
+    @State private var takeSeed: StoryComposerSeed?
 
     func body(content: Content) -> some View {
-        content.fullScreenCover(isPresented: $viewModel.showStoryComposer, onDismiss: {
-            viewModel.pendingDraftId = nil
-        }) {
+        content.modifier(StoryCameraFirstCover(composerShown: $viewModel.showStoryComposer, takeSeed: $takeSeed))
+            .fullScreenCover(isPresented: $viewModel.showStoryComposer, onDismiss: {
+                viewModel.pendingDraftId = nil
+                takeSeed = nil
+            }) {
             MeeshyComposerHost(
-                intent: ComposerIntent(origin: .storyTray),
+                intent: StoryCameraFirstRule.intent(carriesTake: takeSeed != nil),
                 initialVisibility: viewModel.lastComposerVisibility,
                 draftId: viewModel.pendingDraftId,
                 onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
@@ -248,12 +302,8 @@ struct StoryComposerCover: ViewModifier {
                 // fait disparaître d'un site de republication, où son absence
                 // transformerait la republication en mood neuf, sans un mot.
                 moodSeed: nil,
-                // Ni média : la création part d'une ARDOISE. Ce que l'auteur y
-                // pose vient de la caméra, de la pellicule ou du presse-papier,
-                // par les fournisseurs que le meuble installe — jamais d'une
-                // graine. Écrit en toutes lettres, le paramètre n'ayant pas de
-                // défaut.
-                mediaSeed: nil,
+                // Une ARDOISE, sauf prise de la caméra autonome (#17109) ; écrit en toutes lettres, sans défaut.
+                mediaSeed: takeSeed,
                 onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
                     previewAssets = StoryPreviewAssets(
                         slides: slides,

@@ -218,3 +218,31 @@ enum ComposerSceneCameraCopy {
         }
     }
 }
+
+/// **Le vocabulaire de la caméra plein écran** (vues A8–A10, #17109), dans sa
+/// propre table `ComposerCamera.xcstrings` : « Quitter · ✓ Valider » comme
+/// tout mode plein écran (loi 9), et le libellé du cadenas.
+enum ComposerCameraCopy {
+    static let table = "ComposerCamera"
+
+    /// Le bouton de gauche de l'en-tête : rien n'est pris, la scène revient.
+    static var quit: String {
+        String(localized: "composer.camera.quit", defaultValue: "Quitter", table: table, bundle: .main)
+    }
+
+    /// Le bouton de droite : garder ce qui est pris et rendre la scène.
+    static var validate: String {
+        String(localized: "composer.camera.validate.mode", defaultValue: "Valider", table: table, bundle: .main)
+    }
+
+    /// Sous le cadenas, pendant la prise tenue (A9).
+    static var handsFree: String {
+        String(localized: "composer.camera.handsFree.label", defaultValue: "mains libres", table: table, bundle: .main)
+    }
+
+    /// Le bouton du retardateur, à la voix : son nom, puis son réglage.
+    static var selfTimerHint: String {
+        String(localized: "composer.camera.selfTimer.hint",
+               defaultValue: "Touchez pour passer à 3 s, 10 s ou désactivé", table: table, bundle: .main)
+    }
+}

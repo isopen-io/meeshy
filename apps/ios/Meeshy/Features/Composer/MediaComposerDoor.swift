@@ -110,6 +110,34 @@ enum ComposerMediaSeeding {
     }
 }
 
+// MARK: - La prise de la caméra autonome, semée dans le composer (#17109)
+
+extension ComposerMediaSeeding {
+
+    /// **La prise de la caméra autonome devient le FOND de la scène.** La photo
+    /// garde ses octets d'origine (EXIF, orientation) dans un fichier pour la
+    /// publication, et son bitmap pour le canvas ; la vidéo est copiée une fois,
+    /// comme toute graine vidéo. `nil` quand l'écriture échoue : l'appelant
+    /// n'ouvre alors rien plutôt qu'une scène vide.
+    @MainActor
+    static func seed(forTake take: CameraResult) -> StoryComposerSeed? {
+        switch take {
+        case .photo(let image, let originaux):
+            let (octets, suffixe) = ComposerCapturePayload.bytes(original: originaux, fallback: image)
+            guard let octets else { return nil }
+            let fichier = FileManager.default.temporaryDirectory
+                .appendingPathComponent("composer_camera_\(UUID().uuidString).\(suffixe)")
+            guard (try? octets.write(to: fichier)) != nil else { return nil }
+            return StoryComposerSeed(
+                payload: .image(image),
+                origin: StoryComposerSeed.Origin(fileURL: fichier,
+                                                 mimeType: ComposerCapturePayload.mime(for: suffixe)))
+        case .video(let url):
+            return StoryComposerSeed.video(copying: url, declaredMimeType: "video/quicktime")
+        }
+    }
+}
+
 // MARK: - Ce que la porte a besoin de savoir
 
 /// **L'état de présentation de la porte, qui ne peut pas exister sans quelque
