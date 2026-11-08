@@ -553,3 +553,9 @@ socket jusqu'au client.
 1. #16819 et #16820 : flush final de `stop()` vers des workers arrêtés, et clé de lot sans `conversation_id`. Ce sont des petits lots sur `connection_manager.py`, à grouper.
 2. #16822 : `{e}` brut et exception levée après le `pop` de l'accumulateur.
 3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 14 — 2026-11-08 (en cours)
+
+- **Base** : `origin/dev` @ `4fb1112cc`. Le cycle 13 (#16782, #16783) y est fusionné.
+- **Branche** : `claude/determined-volta-77he7d`.
+- **Objectif** : #16819 et #16820, piste 1 du cycle 13. À l'arrêt du traducteur, aucune tâche acceptée ne disparaît en silence, et un lot ne mélange plus des tâches « any » et des tâches de conversation.
