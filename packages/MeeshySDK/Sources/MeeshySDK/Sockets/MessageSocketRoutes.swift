@@ -21,6 +21,7 @@ enum MessageSocketRoutes {
             relations(manager),
             bring(manager),
             talkie(manager),
+            nowPlaying(manager),
             conversations(manager),
             notifications(manager, presentedToken: presentedToken),
             media(manager),

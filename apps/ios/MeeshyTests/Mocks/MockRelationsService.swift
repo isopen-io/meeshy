@@ -62,6 +62,14 @@ final class MockRelationsService: RelationsProviding, @unchecked Sendable {
         return try configResult.get()
     }
 
+    var nowPlayingResult: Result<[NowPlayingChanged], Error> = .success([])
+    var nowPlayingCallCount = 0
+
+    func nowPlaying() async throws -> [NowPlayingChanged] {
+        nowPlayingCallCount += 1
+        return try nowPlayingResult.get()
+    }
+
     func ritual(
         userId: String,
         phase: RelationRitualPhase,

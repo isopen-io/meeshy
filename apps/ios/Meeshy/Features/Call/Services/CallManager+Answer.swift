@@ -16,19 +16,6 @@ extension CallManager {
 
     // MARK: - Answer Call
 
-    /// « Répondre sans vidéo » (OPUS-5) : l'appel vidéo est décroché caméra
-    /// coupée. L'intention est posée AVANT toute réponse SDP ;
-    /// `answerBufferedOffer` retire ensuite la caméra avant `createAnswer`, de
-    /// sorte qu'aucune image ne part jamais au pair.
-    func answerCallWithoutVideo() {
-        guard case .ringing(isOutgoing: false) = callState, currentCallId != nil else { return }
-        if isVideoEnabled {
-            Logger.calls.info("[CALL] answering without video")
-            isVideoEnabled = false
-        }
-        answerCall()
-    }
-
     func answerCall() {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, let userId = remoteUserId else { return }
@@ -195,12 +182,11 @@ extension CallManager {
     func answerBufferedOffer(
         _ remoteOffer: SessionDescription, callId: String, userId: String, path: OfferAnswerPath
     ) async -> Bool {
-        // Phase 2 fix — Bug 2: wait for local media transceivers before
-        // createAnswer (emitCallJoin is decoupled from startLocalMedia). CallKit
-        // gives ample time for CXAnswerCallAction (10s+), so awaiting camera/mic
-        // warmup here is safe on that path too.
+        // Phase 2 fix — Bug 2: wait for local media transceivers before createAnswer
+        // (emitCallJoin is decoupled from startLocalMedia); CallKit allows 10s+ for
+        // CXAnswerCallAction, so awaiting camera/mic warmup is safe there too.
         await self.localMediaTask?.value
-        await self.withholdLocalVideoIfDeclined(callId: callId)
+        await CallAnswerWithoutVideo(call: self).withholdLocalVideoIfDeclined(callId: callId)
         guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
             guard self.currentCallId == callId else { return false }
             // Local SDP generation failure is invisible to the peer — without
@@ -220,27 +206,6 @@ extension CallManager {
         }
         await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
         return true
-    }
-
-    /// « Répondre sans vidéo » : la caméra ouverte à la sonnerie (vignette de
-    /// l'écran entrant) est retirée AVANT `createAnswer`, pour que la réponse
-    /// annonce la vidéo en réception seule et que rien ne parte au pair. Le
-    /// pair est prévenu (`call:media-toggled`) pour afficher notre avatar, et
-    /// CallKit range l'appel en audio. Sans effet quand la vidéo est voulue
-    /// ou qu'aucune caméra n'a démarré (appel audio, caméra refusée).
-    func withholdLocalVideoIfDeclined(callId: String) async {
-        guard !isVideoEnabled, webRTCService.localVideoTrack != nil, currentCallId == callId else { return }
-        _ = await webRTCService.downgradeFromVideo()
-        guard currentCallId == callId else { return }
-        hasLocalVideoTrack = webRTCService.hasLocalVideoTrack
-        audio.updateAudioSessionModeForCurrentVideoState()
-        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
-        if let uuid = activeCallUUID, callUsesCallKit {
-            let update = CXCallUpdate()
-            update.hasVideo = false
-            callProvider.reportCall(with: uuid, updated: update)
-        }
-        Logger.calls.info("[CALL] local video withheld before answer: \(callId)")
     }
 }
 
