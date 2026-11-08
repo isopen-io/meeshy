@@ -2,14 +2,14 @@ import Foundation
 
 /// Ce que propose l'écran d'appel entrant (OPUS-5) : quels boutons, et si la
 /// vignette de MA caméra s'affiche. Règle pure, testée sans vue.
-enum IncomingCallAction: Hashable, Sendable {
+nonisolated enum IncomingCallAction: Hashable, Sendable {
     case decline
     /// Décrocher caméra coupée : n'existe que pour un appel vidéo.
     case answerWithoutVideo
     case accept
 }
 
-enum IncomingCallChoices {
+nonisolated enum IncomingCallChoices {
     /// De gauche à droite : Refuser, (Sans vidéo), Accepter — Accepter reste
     /// au bord droit, sous le pouce, comme sur tout écran de sonnerie.
     static func actions(isVideoCall: Bool) -> [IncomingCallAction] {

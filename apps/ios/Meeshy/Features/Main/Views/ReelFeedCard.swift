@@ -557,9 +557,34 @@ struct ReelFeedCard: View, Equatable {
                        label: String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
                        hint: String(localized: "a11y.feed.post.save.hint", defaultValue: "Enregistre la publication dans vos favoris", bundle: .main),
                        participated: isBookmarked) { onBookmark(post.id) }
+            // « Imager » en accès direct (#16676), dernière action de la rangée
+            // comme sur la carte d'un post : la même action que l'entrée du menu.
+            if let imagerAction {
+                Spacer()
+                ImagerWandButton(
+                    hint: String(localized: "feed.post.imager.hint", defaultValue: "Fait de cette publication une carte image.", bundle: .main),
+                    glyphSize: 18,
+                    tint: .white,
+                    action: imagerAction,
+                    quick: imagerQuickAction
+                )
+                .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+            }
             // Partager et le menu « … » restent disponibles via `reelGlyph`
             // (coin haut-droit) — un seul trigger, pas de doublon en bas.
         }
+    }
+
+    private var imagerAction: (() -> Void)? {
+        PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator)
+    }
+
+    /// L'appui long de la baguette offre « Export rapide » quand un format par
+    /// défaut est choisi, comme sur la carte d'un post.
+    private var imagerQuickAction: (() -> Void)? {
+        MessageCardExportMenu.hasDefaultFormat
+            ? PostSaveAction.imagerAction(for: post, coordinator: mediaSaveCoordinator, quick: true)
+            : nil
     }
 
     /// Contenu partagé du menu « … » — déclenché uniquement par `reelGlyph`

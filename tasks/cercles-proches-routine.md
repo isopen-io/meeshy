@@ -196,3 +196,39 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Ce qui reste de l'écoute : `proche-sang-ecoute@ios` (émettre + afficher le même bandeau sur `MeeshyAvatar`),
   Android, la rangée de liste (avatar < 40 px : une autre forme à décider), le fantôme.
 - Prochain lot recommandé : `proche-sang-ecoute@ios`, sinon l'émission du talkie sur iOS.
+
+## 2026-11-08 — réveil 12 : l'écoute d'un Proche ou d'un Sang défile sur son avatar, iOS (#16755 ⊂ #13934)
+
+- Reprise : #16732 (écoute reçue sur le web) fusionnée dans `dev` ; aucune PR de la routine ouverte, aucune branche
+  vivante n'écrit `now-playing` côté iOS. Issue #16755 ouverte sous #13934 (milestone #215), branche
+  `claude/cercles-ecoute-ios` réservée avant toute écriture.
+- Lot : la RÉCEPTION iOS, iso du web. SDK : `Relations/NowPlaying.swift` (décodage borné au contrat : catégorie
+  connue, titre ≤ 200, origine ≤ 60, origine sans titre jetée, durée bornée au TTL ; un élément illisible du
+  rattrapage est écarté sans faire tomber le reste), routes `now-playing:changed|cleared`, `RelationsProviding.nowPlaying()`.
+  MeeshyUI : `AvatarListeningBand` (bandeau sur le bas du cercle, défilement de `AudioChipMarquee` RÉUTILISÉ, statique
+  sous Réduire les animations, rien sous 40 pt, dit à VoiceOver) et `AvatarListeningSource` (source opaque posée par
+  l'app, abonnée par personne, sans `AnyView`). App : `ListeningCenter` (iso `listening-live.ts`), posé sur la fiche
+  d'une personne et l'en-tête d'un direct (déplié et replié). `RelationsEndpoint.nowPlaying` sort des exceptions du
+  catalogue Swift mort (son appelant existe).
+- Ce qui reste de l'écoute : ÉMETTRE depuis iOS (avec l'écran d'accord de la catégorie), Android, la rangée de liste,
+  le fantôme.
+- PR #16757 vers `dev` ; projet Xcode régénéré par `[xcodegen]`, preuve iOS par `ios.yml` en `workflow_dispatch`.
+- Prochain lot recommandé : ÉMETTRE son écoute depuis iOS (source Meeshy d'abord, écran d'accord de la catégorie),
+  sinon la réception du talkie sur Android (#16675).
+
+## 2026-11-08 — réveil 13 : mener #16757 à la fusion
+
+- Reprise : #16757 (écoute reçue sur iOS, #16755) était ouverte sans réveil pour la suivre. Sa CI iOS sur l'avant-dernier
+  commit avait trois tranches rouges : les deux gardes d'isolement d'iOS 16/17 sur `ListeningCenter` (corrigées par le
+  réveil 12 en `@concurrent`), les clés mortes `video.filter.*` (soldées sur `dev`) et `test_show_autoDismissesAfterDelay`
+  (toast, hors lot).
+- Fait : `origin/dev` fusionné à la main. Un conflit, `cohesion-budget.json` (`CallManager` abaissé des deux côtés) :
+  après fusion le type mesure 2831, référence verrouillée à cette valeur. Gardes iOS texte relancées : règles maison,
+  cohésion, localisation, inscription des tests, cohérence et guillemets du pbxproj, toutes vertes. CI complète, iOS et
+  SDK relancées sur le dernier commit.
+- La branche porte aussi le correctif de `dev` rouge après OPUS-5 (#16743, autre session) qu'elle avait fusionné pour
+  verdir sa CI iOS.
+- Tranche 4 d'iOS rouge deux fois, de façon déterministe : `MessageAuthorRingTests` portait deux fois la clé
+  `Bring/BringRingView.swift` dans un littéral de dictionnaire (deux fusions de `dev`), ce qui piège à l'exécution.
+  `dev` était rouge du même défaut (ses push ne lancent pas les tests). Doublon retiré dans ce lot ; diagnostic du
+  réveil 12.

@@ -1,4 +1,5 @@
 import type { ApiResult } from './http';
+import type { CommunitySettingsBody } from './community-settings';
 import type { CommunityConversationPage, CommunityPage, CommunitySummary, CreateCommunityBody, MembershipGesture } from './communities';
 import { COMMUNITIES_PAGE_SIZE, searchTermOf } from './communities';
 import { VIEWER_ID } from './fixtures-base';
@@ -166,4 +167,27 @@ export function fixtureCreateCommunity(body: CreateCommunityBody): ApiResult<Com
   };
   state.communities = [created, ...state.communities];
   return { ok: true, data: created, status: 201 };
+}
+
+/** Régler / supprimer (#6377), avec les refus de la passerelle : 403 à qui ne l'a pas créée, 404 à une inconnue. */
+export function fixtureUpdateCommunity(communityId: string, body: CommunitySettingsBody): ApiResult<CommunitySummary> {
+  const mine = state.communities.find(sameCommunity(communityId));
+  if (mine === undefined) return { ok: false, status: 404, error: 'Community not found' };
+  if (mine.createdBy !== VIEWER_ID) return { ok: false, status: 403, error: 'Only community creator can update community', code: 'COMMUNITY_CREATOR_ONLY' };
+  const updated: CommunitySummary = {
+    ...mine,
+    ...(body.name === undefined ? {} : { name: body.name }),
+    ...(body.description === undefined ? {} : { description: body.description === '' ? null : body.description }),
+    ...(body.isPrivate === undefined ? {} : { isPrivate: body.isPrivate }),
+  };
+  state.communities = state.communities.map((community) => (community.id === mine.id ? updated : community));
+  return { ok: true, data: updated };
+}
+
+export function fixtureDeleteCommunity(communityId: string): ApiResult<null> {
+  const mine = state.communities.find(sameCommunity(communityId));
+  if (mine === undefined) return { ok: false, status: 404, error: 'Community not found' };
+  if (mine.createdBy !== VIEWER_ID) return { ok: false, status: 403, error: 'Only community creator can delete community', code: 'COMMUNITY_CREATOR_ONLY' };
+  state.communities = state.communities.filter((community) => community.id !== mine.id);
+  return { ok: true, data: null };
 }

@@ -13,7 +13,7 @@ import {
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized, sendNotFound, sendForbidden, sendConflict, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendForbidden, sendConflict, sendInternalError } from '../../utils/response.js';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { COMMUNITY_ACTIVE_COUNTS, flattenCommunityCounts } from './serialization';
 import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
@@ -56,6 +56,10 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
           description: 'Access denied - only the community creator can update the community',
           ...errorResponseSchema
         },
+        400: {
+          description: 'Invalid community fields',
+          ...errorResponseSchema
+        },
         404: {
           description: 'Community not found',
           ...errorResponseSchema
@@ -73,7 +77,11 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      const validatedData = UpdateCommunitySchema.parse(request.body);
+      const parsed = UpdateCommunitySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid community', { code: 'INVALID_COMMUNITY' });
+      }
+      const validatedData = parsed.data;
 
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
@@ -85,7 +93,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
 
       // Verifier que l'utilisateur est le createur de la communaute
       // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
-const community = await fastify.prisma.community.findFirst({
+      const community = await fastify.prisma.community.findFirst({
         where: { id, isActive: true },
         select: { createdBy: true, identifier: true, isPrivate: true }
       });
@@ -95,7 +103,7 @@ const community = await fastify.prisma.community.findFirst({
       }
 
       if (community.createdBy !== userId) {
-        return sendForbidden(reply, 'Only community creator can update community');
+        return sendForbidden(reply, 'Only community creator can update community', { code: 'COMMUNITY_CREATOR_ONLY' });
       }
 
       // Preparer les donnees de mise a jour
@@ -118,7 +126,7 @@ const community = await fastify.prisma.community.findFirst({
           });
 
           if (existingCommunity) {
-            return sendConflict(reply, `A community with identifier "${newIdentifier}" already exists`);
+            return sendConflict(reply, `A community with identifier "${newIdentifier}" already exists`, { code: 'COMMUNITY_IDENTIFIER_TAKEN' });
           }
         }
 
@@ -222,9 +230,10 @@ const community = await fastify.prisma.community.findFirst({
 
       const userId = authContext.userId;
 
-      // Verifier que l'utilisateur est le createur de la communaute
+      // #6377 — une communauté désactivée par l'administration n'existe plus
+      // pour son créateur (#8876) : la supprimer effacerait ce que l'équipe a retenu.
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
+        where: { id, isActive: true },
         select: { createdBy: true }
       });
 
@@ -233,7 +242,7 @@ const community = await fastify.prisma.community.findFirst({
       }
 
       if (community.createdBy !== userId) {
-        return sendForbidden(reply, 'Only community creator can delete community');
+        return sendForbidden(reply, 'Only community creator can delete community', { code: 'COMMUNITY_CREATOR_ONLY' });
       }
 
       await fastify.prisma.$transaction([
