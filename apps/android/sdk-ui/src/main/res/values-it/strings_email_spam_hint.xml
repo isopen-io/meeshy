@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- #16937 : la ligne « Rien reçu ? » sous chaque e-mail envoyé, texte du web (emailSent.checkSpam). -->
-    <string name="email_check_spam">Non è arrivata? Controlla anche la cartella spam o della posta indesiderata.</string>
-</resources>

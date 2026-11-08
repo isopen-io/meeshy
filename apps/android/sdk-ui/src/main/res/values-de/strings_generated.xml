@@ -186,6 +186,7 @@
     <string name="content_failure_unavailable_title">Dieser Inhalt ist nicht mehr verfügbar</string>
     <string name="document_card_pages">%1$d Seiten</string>
     <string name="document_delete_attachment">Anhang löschen</string>
+    <string name="email_check_spam">Nichts angekommen? Sieh auch in deinem Spam- oder Junk-Ordner nach.</string>
     <string name="emoji_category_activities">Aktivitäten</string>
     <string name="emoji_category_animals">Tiere</string>
     <string name="emoji_category_faces">Gesichter</string>

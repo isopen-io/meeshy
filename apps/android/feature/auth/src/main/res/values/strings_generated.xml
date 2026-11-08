@@ -36,8 +36,6 @@
     <string name="auth_magic_header">Your email address</string>
     <string name="auth_magic_how_label">How it works</string>
     <string name="auth_magic_invalid">Invalid or expired link</string>
-    <string name="auth_magic_nothing_label">Nothing received?</string>
-    <string name="auth_magic_nothing_text">Check your spam folder: the message may have landed there.</string>
     <string name="auth_magic_resend">Resend the link</string>
     <string name="auth_magic_resend_short">Resend</string>
     <string name="auth_magic_send">Get the link</string>
@@ -67,7 +65,6 @@
     <string name="email_verification_error_resend_failed">Couldn\'t resend the verification code</string>
     <string name="email_verification_error_too_many_attempts">Too many attempts. Try again in a few minutes.</string>
     <string name="email_verification_error_weak_password">This password is too weak. Choose a stronger one.</string>
-    <string name="email_verification_inbox_hint">Open your inbox, and remember to check your spam folder.</string>
     <string name="email_verification_nav_close">Close</string>
     <string name="email_verification_nav_title">Email verification</string>
     <string name="email_verification_no_code">Didn\'t get the code?</string>

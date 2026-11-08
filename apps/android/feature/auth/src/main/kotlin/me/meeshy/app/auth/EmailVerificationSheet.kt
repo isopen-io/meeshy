@@ -92,17 +92,7 @@ internal fun EmailVerificationSheet(
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = MeeshySpacing.md),
         )
-        if (state.lead.showsInboxHint) {
-            Text(
-                text = stringResource(R.string.email_verification_inbox_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = tokens.textSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        } else {
-            SpamFolderHint(textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-        }
+        SpamFolderHint(textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         EmailCodeEntry(
             code = state.code,
             gate = state.gate,
