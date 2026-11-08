@@ -43,11 +43,7 @@ final class ComposerSelectionMarkerWiringGuardTests: XCTestCase {
     /// qui ne contient rien de ce qu'elle interroge, dans un sens comme dans
     /// l'autre. Le fusible ci-dessous est ce qui distingue les deux.
     private func sceneSurfaceSource() throws -> String {
-        var racine = URL(fileURLWithPath: #filePath)
-        for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
-        let url = racine.appendingPathComponent(
-            "Meeshy/Features/Composer/ComposerSceneSurface.swift")
-        let brut = try String(contentsOf: url, encoding: .utf8)
+        let brut = try AppSourceGuard.composerSceneSurfaceSource()
         XCTAssertTrue(brut.contains("struct ComposerSceneSurface"),
                       "ce n'est pas la surface de scène — la garde lirait à côté")
         return AppSourceGuard.stripComments(brut)

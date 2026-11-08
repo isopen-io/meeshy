@@ -138,6 +138,10 @@ final class ComposerSceneBandTests: XCTestCase {
         if fichier == "MeeshyComposerHost.swift" {
             return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
         }
+        // La surface de scène est découpée par responsabilité de la même façon.
+        if fichier == "ComposerSceneSurface.swift" {
+            return AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
+        }
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -246,7 +250,7 @@ final class ComposerSceneBandTests: XCTestCase {
         let code = try source("ComposerSceneSurface.swift")
         // Le chrome de la scène vit dans `chromeLayer` depuis #8370 : le `body`
         // n'empile plus que les calques, et c'est là que la bande s'insère.
-        guard let corps = declarationBody(startingAt: "private var lowerFloors: some View", in: code) else {
+        guard let corps = declarationBody(startingAt: "var lowerFloors: some View", in: code) else {
             return XCTFail("Les étages du bas de la surface de scène sont introuvables")
         }
         let compacte = compact(corps)
@@ -254,7 +258,7 @@ final class ComposerSceneBandTests: XCTestCase {
         // aussi en carte flottante (#8532) : un seul montage, deux places.
         XCTAssertTrue(compacte.contains("bandView(ouverte)"),
                       "Le bloc lu n'est pas celui du body — la garde ne mesurerait RIEN")
-        XCTAssertTrue(compact(code).contains("privatefuncbandView(_ouverte:ComposerSceneBand)->someView{ComposerSceneBandView("),
+        XCTAssertTrue(compact(code).contains("funcbandView(_ouverte:ComposerSceneBand)->someView{ComposerSceneBandView("),
                       "Le montage unique de la bande est introuvable.")
         for interdit in [".transition(", "withAnimation", ".animation("] {
             XCTAssertFalse(compacte.contains(compact(interdit)),
@@ -442,11 +446,7 @@ final class ComposerLowZoneTests: XCTestCase {
     // MARK: - La source : la branche morte ne peut pas revenir
 
     private func surfaceSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneSurface.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
     }
 
     private func compact(_ t: String) -> String {

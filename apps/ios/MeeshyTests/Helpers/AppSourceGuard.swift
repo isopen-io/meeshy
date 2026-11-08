@@ -196,6 +196,7 @@ enum AppSourceGuard {
         "AudioPostComposerView.swift",
         "BubbleStandardLayout.swift",
         "ComposerMoodSurface.swift",
+        "ComposerSceneSurface.swift",
         "ConversationDashboardView.swift",
         "ConversationInfoSheet.swift",
         "ConversationListView.swift",
@@ -275,6 +276,16 @@ enum AppSourceGuard {
         // dans l'unité pour que les gardes négatives du meuble le balaient.
         "Meeshy/Features/Composer/ComposerExportProgressVeil.swift",
     ]
+
+    /// L'unité de la surface de scène : le type et ses extensions par
+    /// responsabilité (`ComposerSceneSurface+RestChrome`, `+Stage`, `+Floors`,
+    /// `+FreeZone`), par le glob de `unit(_:)`. Un témoin qui lit le seul fichier
+    /// principal ne voit plus le code qui a déménagé.
+    static let composerSceneSurfacePath = "Meeshy/Features/Composer/ComposerSceneSurface.swift"
+
+    static func composerSceneSurfaceSource() throws -> String {
+        try unit(composerSceneSurfacePath)
+    }
 
     static func composerHostURLs() -> [URL] {
         unitURLs(composerHostPath, alsoIncluding: composerHostCompanions)
