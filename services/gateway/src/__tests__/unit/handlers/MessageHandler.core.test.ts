@@ -1869,7 +1869,7 @@ describe('MessageHandler._updateUnreadCounts', () => {
     mockPostReplyToFromMetadata.mockReturnValue(null);
   });
 
-  it('returns early when senderId is null', async () => {
+  it('#16691 — compte les non-lus sans expéditeur : personne à EXCLURE, audience = les vivants', async () => {
     const io = makeMockIo();
     const participantFindMany = jest.fn(async () => [{ id: 'p1', userId: 'u1', joinedAt: new Date() }]);
     const prisma = makeMockPrisma({
@@ -1883,9 +1883,9 @@ describe('MessageHandler._updateUnreadCounts', () => {
     const msg = { id: 'msg-1', conversationId: 'conv-abc', senderId: null, content: 'hi', createdAt: new Date(), sender: null, attachments: [], translations: [] } as any;
     await handler.broadcastNewMessage(msg, 'conv-abc');
 
-    // unread count update participants query should not be called for unread counts (but conversation:updated will still call findMany)
-    // The key check: readStatusService.getUnreadCountsForParticipants should not be called with senderId=null
-    expect(readStatusService.getUnreadCountsForParticipants).not.toHaveBeenCalled();
+    const [lot, convId] = (readStatusService.getUnreadCountsForParticipants as any).mock.calls[0];
+    expect(lot).toEqual([{ id: 'p1', userId: 'u1', joinedAt: expect.any(Date) }]);
+    expect(convId).toBe('conv-normalized');
   });
 
   it('emits CONVERSATION_UNREAD_UPDATED per participant', async () => {

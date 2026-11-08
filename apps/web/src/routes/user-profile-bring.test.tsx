@@ -19,7 +19,7 @@ import { ProfileBringRow, ProfileBringRowView } from './user-profile-bring';
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-const { mount, unmountAll, click } = createActMounter();
+const { mount, unmountAll, click, settle } = createActMounter();
 
 beforeAll(async () => {
   ensureHappyDomRegistered();
@@ -96,12 +96,42 @@ function scripted(responses: Readonly<Record<string, ApiResult<unknown>>>) {
 
 const sent = { bringId: 'b9', toUserId: 'u-ada', sentAt: '2026-11-07T10:00:00.000Z', expiresAt: new Date(Date.now() + 120_000).toISOString(), perDay: 3, remainingToday: 1 };
 
+describe('proposer le Bring hors amitié (#16623)', () => {
+  const gate = (accessLevel: string) => ({ ok: true as const, data: { userId: 'u-ada', effectiveLevel: 'PUBLIC', accessLevel } });
+  const open = { ok: true as const, data: { userId: 'u-ada', available: true, perDay: 3, remainingToday: 3, resetsAt: '2026-11-08T00:00:00.000Z' } };
+
+  test('un collègue de l’équipe sans lien : la passerelle sert `accessLevel` Sang, la ligne demande le Bring et le propose', async () => {
+    const { deps, requests } = scripted({ 'GET /api/v1/relations/u-ada': gate('BLOOD'), 'GET /api/v1/bring/u-ada': open });
+    const node = await mount(<ProfileBringRow language="fr" person={ADA} friend={false} store={createBringStore()} deps={deps} onNotice={noop} />);
+    await settle();
+    await settle();
+    expect(requests.map((req) => `${req.method} ${req.path}`)).toContain('GET /api/v1/bring/u-ada');
+    expect(node.querySelector('[data-bring-send]')).not.toBeNull();
+  });
+
+  test('un inconnu : aucune demande de Bring, aucune ligne', async () => {
+    const { deps, requests } = scripted({ 'GET /api/v1/relations/u-ada': gate('PUBLIC'), 'GET /api/v1/bring/u-ada': open });
+    const node = await mount(<ProfileBringRow language="fr" person={ADA} friend={false} store={createBringStore()} deps={deps} onNotice={noop} />);
+    await settle();
+    await settle();
+    expect(requests.map((req) => `${req.method} ${req.path}`)).not.toContain('GET /api/v1/bring/u-ada');
+    expect(node.querySelector('[data-bring-row]')).toBeNull();
+  });
+
+  test('un ami : le Bring se demande sans attendre la porte du lien', async () => {
+    const { deps, requests } = scripted({ 'GET /api/v1/bring/u-ada': open });
+    await mount(<ProfileBringRow language="fr" person={ADA} friend store={createBringStore()} deps={deps} onNotice={noop} />);
+    await settle();
+    expect(requests.map((req) => `${req.method} ${req.path}`)).toEqual(['GET /api/v1/bring/u-ada']);
+  });
+});
+
 describe('envoyer un Bring', () => {
   test('confirmer fait sonner, suit le Bring et met le compteur à jour sans relire', async () => {
     appQueryClient.setQueryData(bringAvailabilityQueryKey('u-ada'), availability());
     const store = createBringStore();
     const { deps, requests } = scripted({ 'POST /api/v1/bring/u-ada': { ok: true, data: sent } });
-    const node = await mount(<ProfileBringRow language="fr" person={ADA} store={store} deps={deps} onNotice={noop} />);
+    const node = await mount(<ProfileBringRow language="fr" person={ADA} friend store={store} deps={deps} onNotice={noop} />);
     await click(node.querySelector<HTMLButtonElement>('[data-bring-send]'));
     expect(requests.filter((req) => req.method === 'POST')).toHaveLength(0);
     await click(document.querySelector<HTMLButtonElement>('[data-confirm-dialog="bring-send"] [data-confirm="confirm"]'));
@@ -115,7 +145,7 @@ describe('envoyer un Bring', () => {
     appQueryClient.setQueryData(bringAvailabilityQueryKey('u-ada'), availability());
     const notices: string[] = [];
     const { deps } = scripted({ 'POST /api/v1/bring/u-ada': { ok: false, status: 403, error: 'x', code: 'BRING_BLOCKED' } });
-    const node = await mount(<ProfileBringRow language="fr" person={ADA} store={createBringStore()} deps={deps} onNotice={(text) => notices.push(text)} />);
+    const node = await mount(<ProfileBringRow language="fr" person={ADA} friend store={createBringStore()} deps={deps} onNotice={(text) => notices.push(text)} />);
     await click(node.querySelector<HTMLButtonElement>('[data-bring-send]'));
     await click(document.querySelector<HTMLButtonElement>('[data-confirm-dialog="bring-send"] [data-confirm="confirm"]'));
     expect(node.querySelector('[data-bring-row]')).toBeNull();
@@ -126,7 +156,7 @@ describe('envoyer un Bring', () => {
     appQueryClient.setQueryData(bringAvailabilityQueryKey('u-ada'), availability());
     const notices: string[] = [];
     const { deps } = scripted({ 'POST /api/v1/bring/u-ada': { ok: false, status: 429, error: 'x', code: 'BRING_QUOTA_EXCEEDED' } });
-    const node = await mount(<ProfileBringRow language="fr" person={ADA} store={createBringStore()} deps={deps} onNotice={(text) => notices.push(text)} />);
+    const node = await mount(<ProfileBringRow language="fr" person={ADA} friend store={createBringStore()} deps={deps} onNotice={(text) => notices.push(text)} />);
     await click(node.querySelector<HTMLButtonElement>('[data-bring-send]'));
     await click(document.querySelector<HTMLButtonElement>('[data-confirm-dialog="bring-send"] [data-confirm="confirm"]'));
     expect(node.textContent).toContain('Plus de Bring aujourd’hui vers Ada');
@@ -138,7 +168,7 @@ describe('envoyer un Bring', () => {
     const store = createBringStore();
     store.getState().sent(sent);
     const { deps, requests } = scripted({ 'DELETE /api/v1/bring/b9': { ok: true, data: { bringId: 'b9', stopped: true } } });
-    const node = await mount(<ProfileBringRow language="fr" person={ADA} store={store} deps={deps} onNotice={noop} />);
+    const node = await mount(<ProfileBringRow language="fr" person={ADA} friend store={store} deps={deps} onNotice={noop} />);
     await click(node.querySelector<HTMLButtonElement>('[data-bring-cancel]'));
     expect(store.getState().outgoing).toEqual({});
     expect(requests.map((req) => `${req.method} ${req.path}`)).toContain('DELETE /api/v1/bring/b9');

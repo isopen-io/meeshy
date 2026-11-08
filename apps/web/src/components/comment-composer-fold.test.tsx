@@ -187,6 +187,49 @@ describe('CommentComposer — le repli ⌄ tout à droite, toujours visible (#91
     expect(document.activeElement).toBe(host.querySelector('[data-hote-fil]'));
   });
 
+  test('hôte `foldOnSend` : un envoi qui se confirme APRÈS la fermeture de la feuille ne retire pas le focus rendu ailleurs (#16762)', async () => {
+    container = document.createElement('div');
+    document.body.append(container);
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    let confirm: (result: CommentComposerResult) => void = () => undefined;
+    const node = (open: boolean) =>
+      open ? (
+        <section tabIndex={-1}>
+          <CommentComposer language="fr" canWrite foldOnSend onSend={() => new Promise<CommentComposerResult>((resolve) => (confirm = resolve))} />
+        </section>
+      ) : null;
+    root = createRoot(container);
+    await act(async () => root?.render(node(true)));
+    const host = container;
+    await act(async () => champ(host).focus());
+    await taper(host, 'belle vue');
+    await entree(host);
+    await act(async () => root?.render(node(false)));
+    opener.focus();
+    await act(async () => confirm({ ok: true }));
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
+
+  test('hôte `foldOnSend` : si le focus a quitté le composeur pendant l’envoi, la confirmation ne le déplace pas (#16762)', async () => {
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    let confirm: (result: CommentComposerResult) => void = () => undefined;
+    const host = await monter(
+      <section tabIndex={-1} data-hote-fil="">
+        <CommentComposer language="fr" canWrite foldOnSend onSend={() => new Promise<CommentComposerResult>((resolve) => (confirm = resolve))} />
+      </section>,
+    );
+    await act(async () => champ(host).focus());
+    await taper(host, 'belle vue');
+    await entree(host);
+    outside.focus();
+    await act(async () => confirm({ ok: true }));
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+
   test('hôte `foldOnSend` : un REFUS garde la rédaction — le texte revient au champ', async () => {
     const writes: boolean[] = [];
     const host = await monter(hote({ writes, foldOnSend: true, result: { ok: false, message: 'comment.send.error' } }));

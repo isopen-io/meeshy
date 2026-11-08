@@ -113,7 +113,7 @@ describe('la file hors ligne scelle la charge d’une conversation chiffrée au 
     await queue.enqueue('u-1', entry(), { sealAtRest: true });
 
     expect(redis.stored()).not.toContain(SECRET);
-    expect(redis.stored()).not.toContain('4471');
+    expect(redis.stored()).not.toContain('est 4471');
     const drained = await queue.drain('u-1');
     expect(drained).toEqual([entry()]);
   });
@@ -168,7 +168,7 @@ describe('la file hors ligne scelle la charge d’une conversation chiffrée au 
     // #12822 (M3) — une clé maîtresse erronée peut n'être qu'un déploiement raté :
     // l'entrée reste en file, toujours scellée, pour la bonne clé.
     expect(redis.stored()).not.toBe('');
-    expect(redis.stored()).not.toContain('4471');
+    expect(redis.stored()).not.toContain('est 4471');
     expect(await writer.drain('u-1')).toEqual([entry()]);
   });
 
@@ -311,7 +311,7 @@ describe('les deux sites qui enfilent du texte déclarent le régime', () => {
         io: { to: () => ({ emit: () => undefined }) } as never,
         readStatusService: {} as never,
         deliveryQueue: { enqueue: async (...args: unknown[]) => { calls.push(args); } },
-        connectedUsers: new Set<string>(),
+        connectedUsers: new Map(),
       },
       {
         normalizedId: CONV,

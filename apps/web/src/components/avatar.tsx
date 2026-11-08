@@ -18,6 +18,8 @@ import { railRingBox, railStroke } from '@/components/rail-tile';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
+import type { ListeningBand } from '@/lib/now-playing/listening-band';
+import { ListeningMarquee } from './listening-marquee';
 
 /**
  * L'AVATAR, avec sa geometrie derivee — les memes formules que
@@ -228,6 +230,13 @@ type AvatarProps = {
   ringRoom?: number;
   /** `false` : le contour sans ses films illustrés — la seule surface qui le retire est la cellule de frappe (#16114). */
   ringDecor?: boolean;
+  /**
+   * **CE QUE LA PERSONNE ÉCOUTE OU REGARDE** (#16729) — tel que le serveur l'a servi
+   * à ce lecteur (`useListeningBand`) : la catégorie pour un Proche, le titre et
+   * l'origine pour un Sang. Le bandeau DÉFILE sur le bas du cercle ; le lecteur
+   * d'écran l'entend avec le nom. Absent : rien.
+   */
+  listening?: ListeningBand;
 };
 
 /**
@@ -291,6 +300,7 @@ function renderAvatar({
   moodAuthorId,
   redundant,
   outOfTabOrder,
+  listening,
 }: Omit<AvatarProps, 'ring'>, storyRingSeparated = false) {
   const showsImage = src !== undefined && src !== '';
   const resolvedSrc = showsImage ? attachmentSrc(src) : undefined;
@@ -309,10 +319,11 @@ function renderAvatar({
   const moodOutline: MoodOutline | undefined = here ? 'here' : presence === 'online' ? 'online' : undefined;
   /* LE LECTEUR D'ÉCRAN ENTEND L'HUMEUR AVEC LE NOM (#10528) — la pastille est
      un dessin `aria-hidden` : sans cela, l'humeur n'existait que pour l'œil. */
-  const spoken =
+  const named =
     name === undefined || humeur === undefined
       ? name
       : translate(currentInterfaceLanguage(), 'a11y.avatar.mood', { name, mood: humeur });
+  const spoken = named === undefined || listening === undefined ? named : `${named}, ${listening.spoken}`;
 
   const corps = (
     /* `block` — et ce n'est pas décoratif : un `<span>` reste INLINE, et un
@@ -366,6 +377,7 @@ function renderAvatar({
       >
         {initials}
       </span>
+      {listening === undefined ? null : <ListeningMarquee band={listening} size={size} />}
       {humeur === undefined ? (
         /* `data-presence` — L'ANCRE de la pastille (revue #5935) : elle porte
            l'ÉTAT servi (`here`/`online`/`away`/`idle`), donc « point VERT » se

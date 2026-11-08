@@ -86,9 +86,30 @@ final class BringServiceTests: XCTestCase {
         XCTAssertTrue(served.bringBlocked)
     }
 
+    func test_setTalkieBlocked_putsOnlyThatField() async throws {
+        let (service, api) = makeSUT()
+        api.stub("/relations/u1/settings", result: APIResponse<RelationPersonSettings>(
+            success: true, data: RelationPersonSettings(userId: "u1", bringBlocked: false, talkieBlocked: true), error: nil))
+
+        let served = try await service.setReceptionBlocked(.talkie, userId: "u1", blocked: true)
+
+        XCTAssertEqual(api.lastRequest?.method, "PUT")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?.keys.sorted(), ["talkieBlocked"])
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["talkieBlocked"] as? Bool, true)
+        XCTAssertTrue(served.isBlocked(.talkie))
+        XCTAssertFalse(served.isBlocked(.bring))
+    }
+
+    func test_personSettings_readsTalkieBlocked() throws {
+        let decoded = try JSONDecoder().decode(
+            RelationPersonSettings.self, from: Data(#"{"userId":"u1","bringBlocked":false,"talkieBlocked":true}"#.utf8))
+        XCTAssertTrue(decoded.talkieBlocked)
+    }
+
     func test_personSettings_aMissingFieldIsTheDefault() throws {
         let decoded = try JSONDecoder().decode(RelationPersonSettings.self, from: Data(#"{"userId":"u1"}"#.utf8))
         XCTAssertFalse(decoded.bringBlocked)
+        XCTAssertFalse(decoded.talkieBlocked)
     }
 
     // MARK: - Pushes

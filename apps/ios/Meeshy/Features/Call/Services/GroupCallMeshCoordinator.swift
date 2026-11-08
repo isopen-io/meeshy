@@ -387,7 +387,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
             localUserId: local,
             remoteUserId: userId,
             iceServers: iceServers.isEmpty ? IceServer.defaultServers : iceServers,
-            isPolite: CallManager.isPolitePeer(localUserId: local, remoteUserId: userId),
+            isPolite: CallNegotiationRules.isPolitePeer(localUserId: local, remoteUserId: userId),
             sendsAudio: !host.isLocalMicMuted,
             sendsVideo: host.isLocalVideoEnabled
         )

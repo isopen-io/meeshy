@@ -74,3 +74,34 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Revue adversariale avant la PR : non bloquante ; corrigés dans le lot (salons clos, écriture groupée + annonces en arrière-plan). Ouvertes : #16711 (rattrapage d'une sortie perdue, entrée concurrente), #16712 (salon sans créateur).
 - Prochain lot recommandé : #16703 (débannir, rattacher, restaurer contournent la loi), puis la seconde moitié de #6376.
 
+
+## 2026-11-07 — réveil 9
+
+- Lot : #16703 (sécurité, préexistant). Les trois chemins qui REMETTENT quelqu'un dans un salon d'une communauté privée (ou désactivée) suivent la loi de #16695 :
+  - débannir (`leverBannissementDeParticipant`) : l'appartenance n'est rendue que si `planSalonEntry` admet la cible, l'appelant étant le modérateur ; sinon le bannissement est levé seul (`liftBanOnly`). Admise par un admin/modérateur de la communauté, la cible y redevient membre ;
+  - rattacher une conversation (`POST /communities/:id/conversations/:conversationId`) : ses participants actifs entrent dans la communauté (`planCommunityAdmission`), l'admission écrite AVANT le rattachement ; un compte qui ne peut pas entrer ⇒ 403 `COMMUNITY_PARTICIPANT_NOT_ADDABLE`, rien d'écrit ;
+  - restaurer un « supprimé pour moi » : `mayReturnToSalon` ; un ancien membre ⇒ 403 `COMMUNITY_MEMBERS_ONLY`.
+- `planCommunityAdmission` ne lit plus la base quand personne n'entre.
+- Passerelle seule. Un ancien client affiche une erreur générique sur les deux nouveaux 403 ; la réponse de `…/unban` ne dit pas encore `membershipRestored` (l'événement socket le dit).
+- Revue adversariale avant la PR : non bloquante ; corrigés dans le lot (ordre admission → rattachement, témoin d'ordre, témoins sur `communityId` et sur une communauté publique désactivée). Ouvertes, préexistantes : #16723 (passer une communauté en privée laisse les non-membres dans ses salons — prioritaire), #16724 (`ensureParticipantFromMember` crée un participant sans la loi). Fenêtres TOCTOU communes à toutes les portes : rejoignent #16711.
+- Prochain lot recommandé : #16723, puis la seconde moitié de #6376 (la création propose l'ajout de membres).
+
+## 2026-11-07 — réveil 10
+
+- Lot : #16723 (sécurité, préexistant). Les deux portes qui rendent une communauté publique privée (`PUT /communities/:id` du créateur, `PATCH /admin/communities/:id`) appliquent `services/conversations/communitySalonAdoption.ts` :
+  - AVANT d'écrire `isPrivate` : chaque occupant inscrit, actif et non banni d'un salon (clos compris) qui n'a JAMAIS été membre entre en `member`, sous l'autorité du créateur (compte vivant, aucun blocage avec lui) ; une panne laisse la communauté publique (500, rejouable) ;
+  - APRÈS : une seconde passe rattrape les retardataires, puis sortent des salons (loi de #16704) ceux qui ne peuvent pas entrer et les ANCIENS membres (partis, ou retirés quand la communauté était publique) — la bascule ne défait ni un départ ni un retrait.
+- Décision prise sur la lecture recommandée (carte posée au porteur) : les occupants deviennent membres plutôt que de sortir. Invités sans compte et bots : non touchés (→ #16739).
+- Revue adversariale avant la PR : un BLOQUANT corrigé dans le lot (la première version réactivait la ligne d'un membre retiré par l'équipe) ; corrigés aussi : participant banni, seconde passe contre la course admission → bascule. Ouvertes : #16739 (désactivation d'une communauté publique, invités), #16740 (sortie groupée, performance), #16741 (le nouveau membre n'est pas prévenu).
+- Passerelle seule ; aucun contrat d'API ne change.
+- Prochain lot recommandé : la seconde moitié de #6376 (la création propose l'ajout de membres), puis #16739.
+
+## 2026-11-08 — réveil 11
+
+- Lot : seconde moitié de #6376 (web). « Créer une communauté » propose « Ajouter des membres » comme iOS (`CommunityCreateScreen.memberSearchSection`) : rien avant la première lettre, les amis du cache persisté dès elle, la recherche de la passerelle à deux lettres ; on coche, une pastille retire (« Retirer X »). Les personnes choisies sont invitées APRÈS la création par le port de la feuille « Inviter » (`performCreateCommunityWithMembers` → `performInviteMembers`, donc la garde `isAddableUser`) ; une création refusée n'invite personne. Le détail ouvert dit une fois ce que l'invitation a donné (`handInviteStatus` / `takeInviteStatus`).
+- Une seule source des personnes proposées : `usePeopleCandidates` (`lib/communities/use-people-candidates.ts`), extrait de la feuille « Inviter », et une seule phrase d'issue : `inviteStatusOf` (`lib/communities/invite-status.ts`).
+- Données de démonstration : le créateur d'une communauté peut y inviter (`fixtureInviteMember`), comme la passerelle (il y est admin).
+- Gate navigateur `check-communities.mjs` étendu (clair/sombre, 390 et 320) : cocher, pastille nommée, cibles ≥ 44, le détail dit « 1 personne a rejoint la communauté. ». Catalogue `community-membership` remesuré : 5,87 Ko pour un plafond de 6 (inchangé) — le prochain ajout de clés devra ouvrir un second catalogue paresseux.
+- Gotcha : sous happy-dom, un champ texte se lit par `onInput` (convention du dépôt, `list-toolbar.tsx`) ; `onChange` n'y est jamais rappelé.
+- iOS et Android : rien à changer (iOS sert déjà l'écran ; Android : suivi #16153 et suivants).
+- Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités), puis #6377 (réglages du créateur, web).

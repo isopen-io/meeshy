@@ -24,7 +24,7 @@ enum CallTranscriptLoader {
         let localUserId = localUser?.id ?? ""
         let localName = localUser?.displayName ?? localUser?.username
             ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
-        let preferredLanguage = CallManager.preferredCallLanguage(for: localUser)
+        let preferredLanguage = CallLanguagePreference.preferredCallLanguage(for: localUser)
         let fetched = CallTranscript(
             callId: remote.callId,
             conversationId: remote.conversationId,

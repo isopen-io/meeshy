@@ -28,6 +28,8 @@ export type CommunityAdmissionRequest = {
   readonly admitActor?: boolean;
 };
 
+const NOTHING_TO_WRITE: CommunityAdmission = { kind: 'admitted', reactivations: [], creations: [] };
+
 const INVITING_ROLES: ReadonlySet<string> = new Set(['admin', 'moderator']);
 
 function mayAdmitOthers(request: CommunityAdmissionRequest): boolean {
@@ -88,6 +90,7 @@ export async function planCommunityAdmission(
   request: CommunityAdmissionRequest,
 ): Promise<CommunityAdmission> {
   const participantIds = [...new Set(request.participantIds)].filter((id) => id !== request.actorId);
+  if (participantIds.length === 0 && request.admitActor === false) return NOTHING_TO_WRITE;
   const userIds = [request.actorId, ...participantIds];
   const rows = await prisma.communityMember.findMany({
     where: { communityId: request.communityId, userId: { in: userIds } },
@@ -145,8 +148,6 @@ export async function applyCommunityAdmission(
     });
   }
 }
-
-const NOTHING_TO_WRITE: CommunityAdmission = { kind: 'admitted', reactivations: [], creations: [] };
 
 /** La communauté PRIVÉE et vivante qui héberge un salon, vue depuis celui qui y fait entrer. */
 export type SalonCommunity = {
@@ -224,4 +225,19 @@ export async function planSalonEntry(
       : { kind: 'refused', reason: 'invite-forbidden' };
   }
   return planCommunityAdmission(prisma, request);
+}
+
+/**
+ * Revenir dans un salon d'une communauté privée, c'est y entrer (#16703) :
+ * restaurer un « supprimé pour moi » n'est permis qu'à un membre actif de la
+ * communauté ou à son créateur — la loi de `planSalonEntry`, l'entrant étant
+ * son propre « appelant ».
+ */
+export async function mayReturnToSalon(
+  prisma: SalonCommunityPrisma,
+  salon: { readonly communityId: string | null | undefined; readonly userId: string },
+): Promise<boolean> {
+  const community = await loadSalonCommunity(prisma, { communityId: salon.communityId, actorId: salon.userId });
+  const entry = await planSalonEntry(prisma, community, { kind: 'registered', userId: salon.userId });
+  return entry.kind === 'admitted';
 }

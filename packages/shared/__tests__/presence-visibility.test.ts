@@ -150,3 +150,11 @@ describe('applyPresenceVisibility — projection sans mutation', () => {
     expect(out.id).toBe('u1');
   });
 });
+
+describe('resolvePresenceVisibility — l\'équipe face à un mineur déclaré (#16623)', () => {
+  it('un adulte de l\'équipe ne lit pas comme un Sang la présence d\'un collègue mineur déclaré', () => {
+    expect(resolvePresenceVisibility(inputFor({ viewerRole: 'ADMIN' as GlobalUserRoleType, targetRole: 'MODERATOR', relationLevel: 'PUBLIC' }))).toEqual(FULL);
+    expect(resolvePresenceVisibility(inputFor({ viewerRole: 'MODERATOR' as GlobalUserRoleType, targetRole: 'ADMIN', viewerMinor: 'adult', targetMinor: 'minor' }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(inputFor({ viewerRole: 'MODERATOR' as GlobalUserRoleType, targetRole: 'ADMIN', viewerMinor: 'adult', targetMinor: 'adult' }))).toEqual(FULL);
+  });
+});

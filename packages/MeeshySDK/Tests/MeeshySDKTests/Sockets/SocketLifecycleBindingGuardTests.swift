@@ -47,6 +47,7 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
         return try (routeFiles + [
             sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager+EventHandlers.swift"),
             sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager.swift"),
+            sdkSource("Sources/MeeshySDK/Sockets/FriendRequestRealtimeSync.swift"),
         ]).joined(separator: "\n")
     }
 

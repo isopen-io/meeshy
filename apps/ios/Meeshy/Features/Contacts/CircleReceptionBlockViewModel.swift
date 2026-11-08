@@ -2,16 +2,18 @@ import Foundation
 import MeeshySDK
 import MeeshyUI
 
-/// « Bloquer ses Bring », sur la fiche d'un lien (#13936, iso `circle-bring-block.tsx`). Le Bring est disponible par
-/// défaut dès Ami (D-3) : son réglage par personne est un BLOCAGE, des Brings que JE reçois de cette personne.
+/// Une préférence de RÉCEPTION posée pour une personne, sur la fiche d'un lien : « Bloquer ses Bring » (#13936, dès Ami)
+/// et « Couper son talkie » (#16673, dès Proche), iso `circle-reception-block.tsx`. Ouverte par défaut ; son réglage
+/// par personne est un BLOCAGE de ce que JE reçois de cette personne.
 ///
-/// - `GET|PUT /relations/:userId/settings { bringBlocked }`, corps strict.
+/// - `GET|PUT /relations/:userId/settings { bringBlocked | talkieBlocked }`, corps strict, un seul champ.
 /// - Optimiste : basculé au geste, rendu à l'état d'avant sur un refus, qui se dit.
-/// - L'autre n'en est pas prévenu : il lit seulement « Bring indisponible ».
+/// - L'autre n'en est pas prévenu.
 @MainActor
-final class CircleBringBlockViewModel: ObservableObject {
+final class CircleReceptionBlockViewModel: ObservableObject {
 
     let userId: String
+    let setting: RelationReceptionSetting
 
     @Published private(set) var blocked = false
     @Published private(set) var isSaving = false
@@ -21,14 +23,15 @@ final class CircleBringBlockViewModel: ObservableObject {
 
     nonisolated deinit {}
 
-    init(userId: String, service: BringProviding) {
+    init(userId: String, setting: RelationReceptionSetting, service: BringProviding) {
         self.userId = userId
+        self.setting = setting
         self.service = service
     }
 
     func load() async {
         guard let served = try? await service.personSettings(userId: userId) else { return }
-        blocked = served.bringBlocked
+        blocked = served.isBlocked(setting)
     }
 
     /// Instantané -> local -> réseau -> retour arrière.
@@ -40,7 +43,7 @@ final class CircleBringBlockViewModel: ObservableObject {
         isSaving = true
         defer { isSaving = false }
         do {
-            blocked = try await service.setBringBlocked(userId: userId, blocked: next).bringBlocked
+            blocked = try await service.setReceptionBlocked(setting, userId: userId, blocked: next).isBlocked(setting)
             return true
         } catch {
             blocked = before

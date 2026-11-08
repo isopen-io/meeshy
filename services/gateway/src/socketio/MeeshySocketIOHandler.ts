@@ -119,7 +119,7 @@ export class MeeshySocketIOHandler {
       prisma: this.prisma,
       io: manager.getIO() as never,
       deliveryQueue: new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma)),
-      connectedUsers: () => new Set(manager.getConnectedUsers()),
+      connectedUsers: () => manager.getReachability(),
       socialEvents: () => manager.getSocialEventsHandler(),
       leaseStore: getCacheStore(),
     };

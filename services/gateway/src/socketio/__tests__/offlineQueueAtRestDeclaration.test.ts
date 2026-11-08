@@ -58,7 +58,7 @@ const offlineDeps = () => {
     deps: {
       deliveryQueue: { enqueue },
       prisma: { participant: { findMany: async () => [{ id: 'p-off', userId: 'u-off' }] } } as never,
-      connectedUsers: new Set<string>(),
+      connectedUsers: new Map(),
     },
   };
 };
@@ -76,7 +76,7 @@ const attachmentWorld = (regime: (() => Promise<unknown>)) => {
         conversationShareLink: { findMany: async () => [] },
       } as never,
       deliveryQueue: { enqueue },
-      connectedUsers: new Set<string>(),
+      connectedUsers: new Map(),
       conversationId: CONV,
       messageId: MSG,
       attachment: {

@@ -48,6 +48,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "notification:read", "notification:read-bulk", "participant:rights-updated", "participant:role-updated",
         "presence:snapshot", "profile:decor-updated", "reaction:added", "reaction:removed", "read-status:updated",
         "relation:level-raised", "relation:ritual-completed", "relation:ritual-progress", "relation:ritual-started",
+        "talkie:chunk", "talkie:ended", "talkie:incoming",
         "translation:failed", "typing:start", "typing:stop", "user:preferences-reordered",
         "user:preferences-updated", "user:status", "user:updated", "viewing:activity", "viewing:snapshot",
         "viewing:start", "viewing:stop"

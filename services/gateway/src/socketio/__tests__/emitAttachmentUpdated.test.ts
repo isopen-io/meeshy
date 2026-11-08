@@ -208,3 +208,60 @@ describe('emitAttachmentUpdated — the offline audience', () => {
     expect(emitted).toHaveLength(1);
   });
 });
+
+/**
+ * #16687 — la porte de joignabilité vaut aussi sur CE transport, et c'est ici
+ * qu'elle était morte.
+ *
+ * `MeeshySocketIOHandler` alimentait les quatre chemins média
+ * (`startMediaReadyListener`, `gatewayLocalMediaRenderer`,
+ * `startGatewayPendingSweep`, `mediaReadyPorts().emitAttachmentUpdated`) avec
+ * `connectedUsers: () => new Set(manager.getConnectedUsers())`. Un
+ * `Set<string>` répond `has` et n'a pas `get` : le marqueur était illisible, et
+ * la file n'enfilait pas pour une socket pourtant absente de la room.
+ *
+ * Concrètement : Whisper finit la transcription d'un vocal, le
+ * `message:attachment-updated` part sur la room que le destinataire n'a pas pu
+ * rejoindre, et rien n'est enfilé. Ni émission vive, ni rejeu — le défaut même
+ * que #16687 nomme, sur le transport qu'il ne couvrait pas.
+ *
+ * Le contrat exige maintenant `get` (`ReachabilityView`), si bien que la forme
+ * `Set` ne compile plus ; ce témoin garde le COMPORTEMENT, le compilateur garde
+ * la FORME.
+ */
+describe('emitAttachmentUpdated — joignabilité par conversation (#16687)', () => {
+  it('enfile pour une socket connectée dont la room de CETTE conversation a échoué', async () => {
+    const { enqueued, deps } = makeDeps(THREE, ['user-B']);
+    (deps.connectedUsers as Map<string, unknown>).set('user-B', {
+      unreachableConversations: new Set(['conv-1']),
+    });
+
+    await emitAttachmentUpdated({
+      ...deps,
+      conversationId: 'conv-1',
+      messageId: 'msg-1',
+      attachment: ATTACHMENT as any,
+    });
+
+    // Pas d'exclusion d'acteur sur ce transport : un média qui devient prêt
+    // n'est le geste de personne, donc `user-A` est un destinataire comme un
+    // autre. Ce qui se juge ici est la présence de `user-B`, marqué injoignable.
+    expect(enqueued.map((e) => e.userId).sort()).toEqual(['participant-C', 'user-A', 'user-B']);
+  });
+
+  it("n'enfile PAS pour une socket dont une AUTRE conversation a échoué", async () => {
+    const { enqueued, deps } = makeDeps(THREE, ['user-B']);
+    (deps.connectedUsers as Map<string, unknown>).set('user-B', {
+      unreachableConversations: new Set(['conv-autre']),
+    });
+
+    await emitAttachmentUpdated({
+      ...deps,
+      conversationId: 'conv-1',
+      messageId: 'msg-1',
+      attachment: ATTACHMENT as any,
+    });
+
+    expect(enqueued.map((e) => e.userId).sort()).toEqual(['participant-C', 'user-A']);
+  });
+});

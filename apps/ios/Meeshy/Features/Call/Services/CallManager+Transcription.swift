@@ -38,7 +38,7 @@ extension CallManager {
         }
         guard let callId = currentCallId else { return }
         let localUser = AuthManager.shared.currentUser
-        let localLang = CallManager.preferredCallLanguage(for: localUser)
+        let localLang = CallLanguagePreference.preferredCallLanguage(for: localUser)
         let localUserId = localUser?.id ?? ""
         let localDisplayName = localUser?.displayName ?? localUser?.username ?? ""
         // Chemin P2P du journal : chaque segment final part aussi sur le data

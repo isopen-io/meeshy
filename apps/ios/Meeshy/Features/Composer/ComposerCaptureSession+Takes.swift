@@ -79,10 +79,8 @@ extension ComposerCaptureSession {
     /// cadrage ont besoin d'une géométrie : la vue les fait elle-même.
     func perform(_ action: ComposerCaptureAction, item: ComposerLookStripItem?) {
         switch action {
-        case .photoToEdit:
-            shootPhoto(intent: .edit)
-        case .photoToGallery:
-            shootPhoto(intent: frameIntent)
+        case .photoToEdit, .photoToGallery:
+            shootPhoto(intent: action == .photoToEdit ? .edit : frameIntent)
         case .filmSegment:
             beginHold()
         case .filmToGallery:
@@ -111,10 +109,12 @@ extension ComposerCaptureSession {
         endHold()
     }
 
-    /// L'intention voyage avec la demande ; l'obturateur la fige en partant.
+    /// L'intention voyage avec la demande ; le retardateur (CAM-4) la diffère.
     func shootPhoto(intent: ComposerTakeIntent) {
-        camera.noteShutterPress()
-        photographWhenReady(intent: intent)
+        selfTimer.run { [weak self] in
+            self?.camera.noteShutterPress()
+            self?.photographWhenReady(intent: intent)
+        }
     }
 
     /// L'appui long de la miniature : la tenue de la scène, vers la galerie —

@@ -104,6 +104,22 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Prochain lot recommandé : `proche-talkie@ios` (référence ; recevoir d'abord, prouvé par la CI iOS), sinon l'écoute
   (#13934) côté web avec le titre défilant sur l'avatar.
 
+## 2026-11-07 — réveil 6 : recevoir le talkie sur iOS (#16673)
+
+- Reprise : deux autres réveils menaient encore leur PR (#16624 écran du Bring iOS, #16644 réception du talkie sur le
+  web) ; ce réveil ne les a pas touchées et a pris le sous-lot iOS du talkie, que personne n'écrivait. Issue #16673
+  ouverte sous #13935 (milestone #215), branche réservée avant toute écriture, l'autre réveil prévenu.
+- Livré dans la PR #16674 : SDK (`Talkie.swift`, trois événements routés, fragment binaire lu en `Data` et passé par la
+  même file ordonnée que les charges décodées, `talkieBlocked` lu, `setReceptionBlocked` écrit un champ) ; app
+  (`TalkieCenter` iso `talkie-live.ts`, `TalkieVoicePlayer` par fragments planifiés sur l'horloge audio, silencieux
+  respecté, indicateur non modal « X vous parle · Couper », « Couper son talkie » actif dès Proche ;
+  `CircleBringBlock*` → `CircleReceptionBlock*`).
+- Gates locaux : `check_localization.py`, `check_house_rules.sh` (30 règles), `check_cohesion_budget.sh` verts ;
+  `vitest packages/shared/__tests__/ci` 122/122. iOS se prouve par la CI de la PR (`[xcodegen]` puis `ios.yml` en
+  `workflow_dispatch`).
+- Ce qui reste du talkie : Android (réception + couper), émission iOS / web (#16641) / Android, arrière-plan iOS
+  (PushToTalk ou NSE) et Android (FCM), décodeur continu iOS si la recette entend une couture entre fragments.
+- Prochain lot recommandé : réception du talkie sur Android (#16675, iso iOS), puis l’émission iOS.
 ## 2026-11-07 — réveil 7 : l'écoute partagée, côté serveur (`proche-sang-ecoute`, #16686 ⊂ #13934)
 
 - Reprise : #16674 (talkie reçu sur iOS) est menée par le réveil 6, #16624 (présence sur l'écran du Bring iOS) par le
@@ -163,3 +179,20 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   et l'iOS des appels). Gates locaux : `bun test` du web sur talkie, relations et composants 5558/5558, `tsc --noEmit`
   du web vert. CI complète relancée sur le dernier commit avant fusion.
 - Prochain lot recommandé : l'écoute sur le web (#13934 : réception + titre défilant sur l'avatar).
+
+## 2026-11-07 — réveil 11 : l'écoute d'un Proche ou d'un Sang défile sur son avatar, web (#16729 ⊂ #13934)
+
+- Reprise : aucune PR de la routine ouverte (#16700, #16674, #16694 fusionnées). #16650 (outils de cercle entre comptes
+  de l'équipe, #16623) est menée par une autre session et touche la loi d'accès, pas la réception de l'écoute.
+- Lot choisi : la réception web de l'écoute avec le titre DÉFILANT sur l'avatar (demande de Jacques du 2026-11-07).
+  Issue #16729 ouverte, rattachée à #13934 (milestone #215), branche `claude/cercles-ecoute-web` réservée avant toute
+  écriture. PR #16732 vers `dev`.
+- Livré : `lib/api/now-playing.ts` (décodeurs bornés au contrat, rattrapage `GET /relations/now-playing`),
+  `lib/now-playing/listening-live.ts` (store par personne : montée ⇒ titre sans recharger, baisse ⇒ titre retiré,
+  `cleared`, échéance locale bornée au TTL, rattrapage départagé par repère d'arrivée), `listening-band.ts`
+  (catégorie pour un Proche, titre · origine pour un Sang), `ListeningMarquee` + `Avatar.listening` (bandeau en boucle
+  sur le bas du cercle, arrêté sous `prefers-reduced-motion`, dit avec le nom), posé sur la fiche et l'en-tête d'un
+  direct ; hôte dans le chrome différé. `relations.nowPlaying` sort de `PENDING_CLIENT_ENTRIES`.
+- Ce qui reste de l'écoute : `proche-sang-ecoute@ios` (émettre + afficher le même bandeau sur `MeeshyAvatar`),
+  Android, la rangée de liste (avatar < 40 px : une autre forme à décider), le fantôme.
+- Prochain lot recommandé : `proche-sang-ecoute@ios`, sinon l'émission du talkie sur iOS.
