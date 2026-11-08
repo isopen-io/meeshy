@@ -261,9 +261,16 @@ struct ConversationPreviewLine: View {
             // et la liste n'annonce aucune capture : il reste dans la couche
             // sécurisée (annoncé OU noir, jamais en silence). Les autres
             // protections ne montrent qu'un libellé.
-            styledText(preview, at: now)
+            //
+            // #16975 — la ligne APPLIQUE l'effet du dernier message : voile,
+            // fini FIGÉ, entrée jouée une fois à l'arrivée d'un nouveau message.
+            effectBody(preview, at: now)
                 .lineLimit(lineLimit)
                 .captureShield(preview.icon == .ephemeral)
+                .modifier(ConversationPreviewEntranceModifier(
+                    messageId: conversation.lastMessageId,
+                    entrance: preview.effect?.entrance
+                ))
             if preview.offersJoin, let onJoin {
                 Button(action: onJoin) {
                     Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
@@ -281,17 +288,59 @@ struct ConversationPreviewLine: View {
         }
     }
 
+    /// Le corps selon l'effet appliqué (#16975) : voilé, fini figé, ou nu.
+    /// Aucun de ces rendus ne s'anime — seule l'entrée bouge, une fois.
+    @ViewBuilder
+    private func effectBody(_ preview: ConversationPreview, at now: Date) -> some View {
+        switch ConversationPreviewFinishStyle(effect: preview.effect) {
+        case .veiled:
+            veiledText(preview)
+        case .glow:
+            styledText(preview, at: now)
+                .shadow(color: accent.opacity(isDark ? 0.7 : 0.45), radius: 3)
+        case .rainbow:
+            styledText(preview, at: now, paintsBody: false)
+                .foregroundStyle(ConversationPreviewFinishStyle.rainbowGradient(isDark: isDark))
+        case .plain:
+            styledText(preview, at: now)
+        }
+    }
+
+    /// Un message flouté : le préfixe reste lisible, le reste se peint en
+    /// substitut voilé (le serveur n'envoie jamais le texte). VoiceOver lit le
+    /// libellé de la rangée (`spokenPreview`), inchangé.
+    private func veiledText(_ preview: ConversationPreview) -> some View {
+        HStack(spacing: 0) {
+            leadText(preview)
+                .font(font)
+                .layoutPriority(1)
+            Text(preview.segments.map(\.text).joined(separator: Self.segmentSeparator))
+                .font(font)
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
+                .redacted(reason: .placeholder)
+                .blur(radius: 1.5)
+                .accessibilityHidden(true)
+        }
+    }
+
     /// UN seul `Text` — auteur, glyphe et corps — pour que la troncature
     /// morde sur la fin du message, jamais sur une colonne d'auteur.
-    private func styledText(_ preview: ConversationPreview, at now: Date) -> Text {
+    /// `paintsBody: false` laisse le corps à l'encre de la vue (arc-en-ciel).
+    private func styledText(_ preview: ConversationPreview, at now: Date, paintsBody: Bool = true) -> Text {
+        let segments = segmentsText(preview.segments, at: now)
+        let content = paintsBody ? segments.foregroundColor(toneColor(preview.tone)) : segments
+        let styledBody = Self.isItalic(preview) ? content.italic() : content
+        return (leadText(preview) + styledBody).font(font)
+    }
+
+    /// Auteur, marque « non chiffré », glyphe et flèche d'appel — tout ce qui
+    /// précède le corps, et que le voile laisse lisible.
+    private func leadText(_ preview: ConversationPreview) -> Text {
         let strings = ConversationPreviewCatalog.strings()
         let author = preview.author.map { author -> Text in
             Text(Self.authorPrefix(of: preview, strings: strings))
                 .font(authorFont)
                 .foregroundColor(authorColor(author))
-        } ?? Text("")
-        let glyph = Self.symbol(for: preview.icon).map { symbol -> Text in
-            Text(Image(systemName: symbol)).foregroundColor(iconColor(preview)) + Text(" ")
         } ?? Text("")
         let unencrypted = Self.isUnencrypted(conversation)
             ? Text(Image(systemName: UnencryptedMessageCopy.symbol)) + Text(" ")
@@ -300,10 +349,20 @@ struct ConversationPreviewLine: View {
             Text(Image(systemName: direction == .outgoing ? "arrow.up.right" : "arrow.down.left"))
                 .foregroundColor(toneColor(preview.tone)) + Text(" ")
         } ?? Text("")
-        let content = segmentsText(preview.segments, at: now)
-            .foregroundColor(toneColor(preview.tone))
-        let styledBody = Self.isItalic(preview) ? content.italic() : content
-        return (author + unencrypted + glyph + direction + styledBody).font(font)
+        return author + unencrypted + glyphText(preview) + direction
+    }
+
+    /// L'icône de la ligne. `pulse` la peint à l'accent, appuyée ; `sparkle`
+    /// ajoute ✨ à l'accent quand l'icône n'en est pas déjà une. Rien ne bat.
+    private func glyphText(_ preview: ConversationPreview) -> Text {
+        let finish = preview.effect?.finish
+        let icon = Self.symbol(for: preview.icon).map { symbol -> Text in
+            let image = Text(Image(systemName: symbol))
+                .foregroundColor(finish == .pulse || finish == .sparkle ? accent : iconColor(preview))
+            return (finish == .pulse ? image.fontWeight(.bold) : image) + Text(" ")
+        } ?? Text("")
+        guard finish == .sparkle, preview.icon != .effect, let sparkles = Self.symbol(for: .effect) else { return icon }
+        return icon + Text(Image(systemName: sparkles)).foregroundColor(accent) + Text(" ")
     }
 
     /// Le corps de la ligne. Dans la dernière minute d'un éphémère, son

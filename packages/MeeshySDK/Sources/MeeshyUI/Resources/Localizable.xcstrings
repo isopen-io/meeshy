@@ -717,6 +717,53 @@
     "Lire la vidéo %@": {},
     "Location: %@": {},
     "Lu": {},
+    "emailSent.checkSpam": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يصلك شيء؟ تحقّق أيضًا من مجلد الرسائل غير المرغوب فيها أو البريد العشوائي."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts angekommen? Sieh auch in deinem Spam- oder Junk-Ordner nach."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing yet? Also check your spam or junk folder."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿No te ha llegado? Revisa también tu carpeta de spam o de correo no deseado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rien reçu ? Regardez aussi dans vos spams ou courriers indésirables."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è arrivata? Controlla anche la cartella spam o della posta indesiderata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não chegou? Confira também sua pasta de spam ou lixo eletrônico."
+          }
+        }
+      }
+    },
     "media.image.open.a11y": {
       "extractionState": "manual",
       "localizations": {

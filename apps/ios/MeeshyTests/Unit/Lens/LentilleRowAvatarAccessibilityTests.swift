@@ -112,10 +112,14 @@ final class LentilleRowAvatarAccessibilityTests: XCTestCase {
     /// L'avatar dessiné sort de la fusion de la ligne : son action par défaut
     /// ne s'y fond plus, et VoiceOver ne l'annonce pas deux fois.
     func test_bothRowAvatars_areHiddenFromVoiceOver_theProxySpeaksForThem() throws {
-        for path in [
-            "Meeshy/Features/Main/Views/ThemedConversationRow.swift",
-            "Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+        for (path, style) in [
+            ("Meeshy/Features/Main/Views/ThemedConversationRow.swift", "style: .classic"),
+            ("Meeshy/Features/Lens/Row/LentilleConversationRow.swift", "style: .lentille"),
         ] {
+            let row = normalizedCode(try source(at: path))
+            XCTAssertTrue(row.contains("ConversationRowAvatar( \(style),"), "\(path) monte l'avatar partagé avec son style")
+        }
+        for path in ["Meeshy/Features/Main/Views/ConversationRowAvatar.swift"] {
             let code = normalizedCode(try source(at: path))
             XCTAssertTrue(code.contains(".accessibilityHidden(true)"), path)
             XCTAssertTrue(code.contains("onTap: avatarRoute.opensProfile ? onViewProfile : onViewConversationInfo"), path)

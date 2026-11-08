@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.search
 
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.MessageEncryptionGuard
 
 /** Ce qui a fait correspondre un message : son contenu d'origine, ou l'une de ses traductions. */
 enum class SearchMatchType { CONTENT, TRANSLATION }
@@ -19,6 +20,8 @@ data class ConversationSearchResult(
     val senderName: String,
     val senderAvatar: String?,
     val createdAtIso: String?,
+    /** Flouté (#16957) : la ligne se voile, [content] et [matchedText] sont vides. */
+    val isVeiled: Boolean = false,
 )
 
 object ConversationSearchResults {
@@ -34,9 +37,11 @@ object ConversationSearchResults {
 
     /**
      * Le contenu est testé d'abord (c'est ce que la bulle rend), puis chaque traduction. Un hit que
-     * le serveur renvoie sans correspondance visible garde le contenu intact.
+     * le serveur renvoie sans correspondance visible garde le contenu intact. Un message flouté
+     * ne garde aucun texte : sa ligne se voile.
      */
     fun from(message: ApiMessage, query: String): ConversationSearchResult {
+        if (MessageEncryptionGuard.isVeiled(message)) return veiled(message)
         val needle = query.trim().lowercase()
         val sender = message.sender
         val contentMatches = message.content.lowercase().contains(needle)
@@ -49,11 +54,26 @@ object ConversationSearchResults {
             content = message.content,
             matchedText = translated?.translatedContent ?: message.content,
             matchType = if (translated != null) SearchMatchType.TRANSLATION else SearchMatchType.CONTENT,
-            senderName = sender?.displayName?.takeIf { it.isNotBlank() } ?: sender?.username?.takeIf { it.isNotBlank() } ?: "?",
+            senderName = senderNameOf(message),
             senderAvatar = sender?.avatar,
             createdAtIso = message.createdAt,
         )
     }
+
+    private fun veiled(message: ApiMessage): ConversationSearchResult = ConversationSearchResult(
+        id = message.id,
+        conversationId = message.conversationId,
+        content = "",
+        matchedText = "",
+        matchType = SearchMatchType.CONTENT,
+        senderName = senderNameOf(message),
+        senderAvatar = message.sender?.avatar,
+        createdAtIso = message.createdAt,
+        isVeiled = true,
+    )
+
+    private fun senderNameOf(message: ApiMessage): String =
+        message.sender?.displayName?.takeIf { it.isNotBlank() } ?: message.sender?.username?.takeIf { it.isNotBlank() } ?: "?"
 
     /** Fusion sans doublon : les ids locaux gardent leur ordre d'affichage, le serveur ajoute le reste. */
     fun mergeIds(local: List<String>, server: List<String>): List<String> = (local + server).distinct()

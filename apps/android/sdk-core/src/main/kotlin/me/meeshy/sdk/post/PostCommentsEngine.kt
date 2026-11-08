@@ -62,7 +62,7 @@ public class PostCommentsEngine(
             return try {
                 when (val result = send(request)) {
                     is NetworkResult.Success -> CommentEditOutcome.Confirmed(result.data)
-                    is NetworkResult.Failure -> CommentEditOutcome.Refused(result.error.message).also { applyEcho(thread, replies, target) }
+                    is NetworkResult.Failure -> CommentEditOutcome.Refused(result.error.message, result.error.code).also { applyEcho(thread, replies, target) }
                 }
             } catch (e: CancellationException) {
                 applyEcho(thread, replies, target)
@@ -85,8 +85,11 @@ public class PostCommentsEngine(
     }
 }
 
-/** L'issue d'une édition : la ligne du serveur, ou le refus (la ligne d'origine est déjà revenue). */
+/**
+ * L'issue d'une édition : la ligne du serveur, ou le refus (la ligne d'origine est déjà revenue). Le refus garde le
+ * [Refused.code] de la passerelle : `COMMENTS_DISABLED` dit un fil fermé, pas un échec (#16930).
+ */
 public sealed interface CommentEditOutcome {
     public data class Confirmed(val comment: ApiPostComment) : CommentEditOutcome
-    public data class Refused(val message: String?) : CommentEditOutcome
+    public data class Refused(val message: String?, val code: String? = null) : CommentEditOutcome
 }

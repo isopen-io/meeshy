@@ -19,6 +19,7 @@ class ListMessageSearchTest {
         isBlurred: Boolean? = null,
         expiresAt: String? = null,
         deletedAt: String? = null,
+        effectFlags: Int? = null,
     ) = ApiMessage(
         id = id,
         conversationId = "c1",
@@ -32,6 +33,7 @@ class ListMessageSearchTest {
         isBlurred = isBlurred,
         expiresAt = expiresAt,
         deletedAt = deletedAt,
+        effectFlags = effectFlags,
     )
 
     private fun french(text: String) = ApiTextTranslation(targetLanguage = "fr", translatedContent = text)
@@ -74,7 +76,6 @@ class ListMessageSearchTest {
         val prism = listOf("fr")
         assertThat(ListMessageSearch.hitOf(message(isEncrypted = true), prism)).isNull()
         assertThat(ListMessageSearch.hitOf(message(isViewOnce = true), prism)).isNull()
-        assertThat(ListMessageSearch.hitOf(message(isBlurred = true), prism)).isNull()
         assertThat(ListMessageSearch.hitOf(message(expiresAt = "2026-11-03T00:00:00Z"), prism)).isNull()
         assertThat(ListMessageSearch.hitOf(message(deletedAt = "2026-11-02T00:00:00Z"), prism)).isNull()
         assertThat(ListMessageSearch.hitOf(message(content = "  "), prism)).isNull()
@@ -198,5 +199,117 @@ class ListMessageSearchTest {
 
         assertThat(hit.content).isEqualTo("Bonjour")
         assertThat(hit.conversation?.title).isEqualTo("Ada")
+    }
+
+    private val wire = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; coerceInputValues = true; explicitNulls = false }
+
+    private fun decode(extra: String): GlobalMessageSearchHit = wire.decodeFromString(
+        GlobalMessageSearchHit.serializer(),
+        """{"id":"m1","conversationId":"c1","content":"Bonjour","originalContent":"Hello"$extra}""",
+    )
+
+    private fun served(
+        content: String = "Bonjour",
+        isBlurred: Boolean = false,
+        transcript: GlobalMessageSearchTranscript? = null,
+    ) = GlobalMessageSearchHit(
+        id = "m9",
+        conversationId = "c9",
+        content = content,
+        originalContent = content,
+        isBlurred = isBlurred,
+        match = if (transcript != null) "transcript" else "content",
+        transcript = transcript,
+    )
+
+    private fun transcript(kind: String = "audio", text: String = "on se voit demain") =
+        GlobalMessageSearchTranscript(attachmentId = "a1", mediaKind = kind, text = text, servedLanguage = "fr", durationMs = 4200)
+
+    @Test
+    fun `a blurred message stays findable on the device but its hit is veiled, without a readable character`() {
+        val prism = listOf("fr")
+
+        val byFlag = ListMessageSearch.hitOf(message(content = "secret plan", isBlurred = true), prism)
+        val byBit = ListMessageSearch.hitOf(message(content = "secret plan", effectFlags = me.meeshy.sdk.model.MessageEffectFlags.BLURRED.toInt()), prism)
+
+        listOf(byFlag, byBit).forEach { hit ->
+            assertThat(hit).isNotNull()
+            assertThat(hit?.isVeiled).isTrue()
+            assertThat(hit?.text).isEmpty()
+            assertThat(hit?.excerpt).isEqualTo(SearchExcerpt.Veiled(media = null))
+        }
+        assertThat(ListMessageSearch.hitOf(message(), prism)?.isVeiled).isFalse()
+    }
+
+    @Test
+    fun `a view once message stays out of the search even when it is also blurred`() {
+        assertThat(ListMessageSearch.hitOf(message(isViewOnce = true, isBlurred = true), listOf("fr"))).isNull()
+    }
+
+    @Test
+    fun `a blurred server hit is veiled and keeps none of its text`() {
+        val hit = ListMessageSearch.hitOf(served(content = "secret plan", isBlurred = true))
+
+        assertThat(hit?.isVeiled).isTrue()
+        assertThat(hit?.text).isEmpty()
+        assertThat(hit?.excerpt).isEqualTo(SearchExcerpt.Veiled(media = null))
+    }
+
+    @Test
+    fun `a hit found by a transcript paints the transcript behind the icon of its media`() {
+        val hit = ListMessageSearch.hitOf(served(content = "", transcript = transcript(kind = "audio")))
+
+        assertThat(hit?.text).isEqualTo("on se voit demain")
+        assertThat(hit?.transcriptMedia).isEqualTo(SearchMediaKind.AUDIO)
+        assertThat(hit?.excerpt).isEqualTo(SearchExcerpt.Shown(text = "on se voit demain", media = SearchMediaKind.AUDIO))
+        assertThat(ListMessageSearch.hitOf(served(transcript = transcript(kind = "video")))?.transcriptMedia).isEqualTo(SearchMediaKind.VIDEO)
+    }
+
+    @Test
+    fun `a blurred transcript is veiled the same way, its media icon kept`() {
+        val hit = ListMessageSearch.hitOf(served(content = "", isBlurred = true, transcript = transcript(kind = "video")))
+
+        assertThat(hit?.text).isEmpty()
+        assertThat(hit?.excerpt).isEqualTo(SearchExcerpt.Veiled(media = SearchMediaKind.VIDEO))
+    }
+
+    @Test
+    fun `a blank transcript falls back to the served content`() {
+        val hit = ListMessageSearch.hitOf(served(content = "Bonjour", transcript = transcript(text = " ")))
+
+        assertThat(hit?.text).isEqualTo("Bonjour")
+        assertThat(hit?.transcriptMedia).isNull()
+    }
+
+    @Test
+    fun `a server hit without the protection fields decodes as content, not blurred`() {
+        val hit = decode("")
+
+        assertThat(hit.isBlurred).isFalse()
+        assertThat(hit.matchKind).isEqualTo(SearchMatch.CONTENT)
+        assertThat(hit.transcript).isNull()
+        assertThat(decode(""","isBlurred":null,"match":null,"transcript":null""").isBlurred).isFalse()
+    }
+
+    @Test
+    fun `a server hit with the protection fields decodes them`() {
+        val hit = decode(
+            ""","isBlurred":true,"match":"transcript","transcript":{"attachmentId":"a1","mediaKind":"audio",
+            "text":"demain","servedLanguage":null,"durationMs":4200}""",
+        )
+
+        assertThat(hit.isBlurred).isTrue()
+        assertThat(hit.matchKind).isEqualTo(SearchMatch.TRANSCRIPT)
+        assertThat(hit.transcript?.text).isEqualTo("demain")
+        assertThat(hit.transcript?.durationMs).isEqualTo(4200L)
+        assertThat(SearchMediaKind.of(hit.transcript?.mediaKind)).isEqualTo(SearchMediaKind.AUDIO)
+    }
+
+    @Test
+    fun `an unknown match or media kind never breaks the decoding`() {
+        val hit = decode(""","match":"ocr","transcript":{"attachmentId":"a1","mediaKind":"hologram","text":"demain"}""")
+
+        assertThat(hit.matchKind).isEqualTo(SearchMatch.CONTENT)
+        assertThat(ListMessageSearch.hitOf(hit)?.transcriptMedia).isEqualTo(SearchMediaKind.DOCUMENT)
     }
 }

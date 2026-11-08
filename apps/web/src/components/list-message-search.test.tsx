@@ -26,6 +26,9 @@ const row: MessageSearchRowModel = {
   dateLabel: '1 nov., 10:00',
   excerpt: 'on se voit à la plage',
   translated: true,
+  veiled: false,
+  veilLength: 0,
+  mediaGlyph: null,
   conversationName: 'Plage',
   accent: '#6366f1',
 };
@@ -55,6 +58,24 @@ describe('la section « Messages » de la recherche de la liste', () => {
     expect(section({ rows: [], state: 'offline' })).toContain('Hors ligne');
     expect(section({ rows: [], state: 'loading' })).toContain('Recherche en cours');
     expect(section({ hasMore: true })).toContain('Afficher plus');
+  });
+});
+
+describe('#16957 / #16958 — une ligne voilée ou trouvée par sa transcription', () => {
+  test('une ligne voilée ne met aucun texte dans le DOM, se dit « Message flouté », et ouvre toujours le fil', () => {
+    const html = section({ rows: [{ ...row, excerpt: '', veiled: true, veilLength: 21, translated: false }] });
+    expect(html).toContain('data-search-veiled');
+    expect(html).toContain('Message flouté');
+    expect(html).not.toContain('plage</');
+    expect(html).toContain('href="/c/c1?message=m1"');
+  });
+
+  test('une transcription se peint avec l’icône de son média, sans bouton ni lecteur', () => {
+    const html = section({ rows: [{ ...row, excerpt: '…la plage demain', mediaGlyph: 'microphone' }] });
+    expect(html).toContain('data-search-media="microphone"');
+    expect(html).toContain('…la plage demain');
+    expect(html).not.toContain('<button');
+    expect(html).not.toContain('<audio');
   });
 });
 

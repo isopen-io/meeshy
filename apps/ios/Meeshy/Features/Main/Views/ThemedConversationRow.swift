@@ -185,13 +185,13 @@ struct ThemedConversationRow: View {
                     }
 
                     // Timestamp — layoutPriority(1) pour ne jamais être écrasé.
-                    // `RelativeTimestampText` fait ticker CE texte une fois par
+                    // `LiveRelativeTimestamp` fait ticker CE texte une fois par
                     // minute via `TimelineView` — le reste de la row reste gelé
                     // derrière `.equatable()` (aucune composante temporelle dans
                     // sa comparaison), donc sans ce wrapper l'horodatage relatif
                     // ne se rafraîchissait plus jamais après le montage initial
                     // (audit 2026-07-20, "Horodatages relatifs figés").
-                    RelativeTimestampText(date: conversation.lastMessageAt)
+                    LiveRelativeTimestamp(date: conversation.lastMessageAt)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))
                         .layoutPriority(1)
@@ -326,7 +326,8 @@ struct ThemedConversationRow: View {
     // MARK: - Avatar (extracted struct to avoid PAC issues with @State + escaping closures)
 
     private var avatarView: some View {
-        ConversationAvatarView(
+        ConversationRowAvatar(
+            style: .classic,
             conversation: conversation,
             palette: colorPalette,
             presenceState: presenceState,
@@ -400,39 +401,6 @@ struct ThemedConversationRow: View {
     /// badge (#991B1B) pour que le texte 11pt reste lisible en mode sombre.
     static func timestampColor(unreadCount: Int, accent: Color) -> Color {
         unreadCount > 0 ? MeeshyColors.error : accent
-    }
-
-    // MARK: - Relative Timestamp (live tick)
-
-    /// Wraps the relative-time label in a `TimelineView(.periodic)` so it
-    /// re-renders once a minute on its own schedule — independent of the
-    /// row's `.equatable()` gate (which deliberately has NO temporal
-    /// component in `ThemedConversationRow.==`, otherwise every row would
-    /// invalidate on every tick). Without this, a row's timestamp froze at
-    /// whatever relative string it showed on first mount ("5 min") until
-    /// something else forced the row to rebuild.
-    private struct RelativeTimestampText: View {
-        let date: Date
-
-        /// Le tick minute n'a de sens que tant que le libellé change à la
-        /// minute (« 3 min », « 47 min ») : au-delà d'une heure, chaque rangée
-        /// réalisée gardait quand même SA `TimelineView` — 15-20 réveils
-        /// par minute pour des libellés (« 2 h », « 3 mois ») qui ne bougeront
-        /// pas avant des heures (audit chauffe 2026-08-26). Une rangée
-        /// ancienne rend un texte STATIQUE, rafraîchi par le prochain passage
-        /// de body de la liste — largement plus fréquent que le changement
-        /// de son libellé.
-        static let liveTickWindow: TimeInterval = 3600
-
-        var body: some View {
-            if Date().timeIntervalSince(date) > Self.liveTickWindow {
-                Text(RelativeTimeFormatter.shortString(for: date))
-            } else {
-                TimelineView(.periodic(from: date, by: 60)) { _ in
-                    Text(RelativeTimeFormatter.shortString(for: date))
-                }
-            }
-        }
     }
 
     // MARK: - Typing Indicator
@@ -628,100 +596,6 @@ enum ConversationAvatarMenu {
     }
 
     private static let shareableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global, .broadcast]
-}
-
-// MARK: - Conversation Avatar View (extracted struct to avoid PAC issues with @State + escaping closures)
-
-private struct ConversationAvatarView: View {
-    let conversation: Conversation
-    let palette: ConversationColorPalette
-    let presenceState: PresenceState?
-    let isPeerHere: ConversationHere
-    let storyRingState: StoryRingState
-    let moodStatus: StatusEntry?
-    var onViewStory: (() -> Void)? = nil
-    var onViewProfile: (() -> Void)? = nil
-    var onViewConversationInfo: (() -> Void)? = nil
-    var onMoodBadgeTap: ((CGPoint) -> Void)? = nil
-    var onCreateShareLink: (() -> Void)? = nil
-    var avatarRoute: ConversationAvatarRoute = .info
-
-    @State private var showLastSeenTooltip = false
-
-    private var isDirect: Bool { conversation.type == .direct }
-
-    private var contextMenuItems: [AvatarContextMenuItem] {
-        ConversationAvatarMenu.roles(
-            type: conversation.type, opensProfile: avatarRoute.opensProfile, hasShareAction: onCreateShareLink != nil
-        ).map { menuItem(for: $0) }
-    }
-
-    private func menuItem(for role: AvatarMenuRole) -> AvatarContextMenuItem {
-        let action: (() -> Void)? = switch role {
-        case .conversationInfo: onViewConversationInfo
-        case .profile: onViewProfile
-        case .shareLink: onCreateShareLink
-        }
-        return AvatarContextMenuItem(label: role.label, icon: role.icon) { action?() }
-    }
-
-    var body: some View {
-        ZStack {
-            MeeshyAvatar(
-                name: conversation.name,
-                context: .conversationList,
-                accentColor: palette.primary,
-                secondaryColor: palette.secondary,
-                avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
-                storyState: storyRingState,
-                moodEmoji: moodStatus?.moodEmoji,
-                presenceState: isDirect ? presenceState : nil,
-                isHere: isDirect ? isPeerHere : .absent,
-                // LE CONTOUR DU PAIR (#10713) — l'avatar le pose dans son empreinte, l'anneau de
-                // story concentrique à l'intérieur (#10714) ; sans contour servi, l'avatar d'avant.
-                ring: isDirect ? conversation.participantRing : nil,
-                // Tap → story (si non lue) sinon ce que la loi décide (#15887) : le
-                //   profil du pair, sinon les détails — jamais rien. Le handler profil
-                //   passe par `onTap` (et NON `onViewProfile`) pour ne pas déclencher
-                //   l'auto-injection d'une entrée « Voir le profil » codée en dur par
-                //   MeeshyAvatar. L'entrée localisée vient de `contextMenuItems`.
-                onTap: avatarRoute.opensProfile ? onViewProfile : onViewConversationInfo,
-                onViewProfile: nil,
-                onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
-                onMoodTap: onMoodBadgeTap,
-                onOnlineTap: {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                        showLastSeenTooltip = true
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            showLastSeenTooltip = false
-                        }
-                    }
-                },
-                contextMenuItems: contextMenuItems
-            )
-
-            // Last seen tooltip
-            if showLastSeenTooltip, let text = conversation.lastSeenLabel {
-                Text(text)
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, MeeshySpacing.sm)
-                    .padding(.vertical, MeeshySpacing.xs)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(MeeshyOpacity.heavy))
-                    )
-                    .offset(x: 0, y: -34)
-                    .transition(.scale.combined(with: .opacity))
-                    .accessibilityHidden(true)
-            }
-        }
-        // Hors de la fusion VoiceOver de la ligne : l'élément frère posé par
-        // `ConversationRowItem` parle pour lui (#15887).
-        .accessibilityHidden(true)
-    }
 }
 
 // MARK: - ConversationTitleLabel (shared)

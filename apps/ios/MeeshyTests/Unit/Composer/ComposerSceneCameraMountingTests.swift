@@ -44,7 +44,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// Ce témoin tient les DEUX moitiés du correctif, parce qu'aucune ne vaut
     /// sans l'autre : la surface ne peint plus, et le meuble peint une fois.
     func test_laSurfacePublieSaGéométrie_etNeMonteAucunAperçu() throws {
-        let surface = compact(try source("ComposerSceneSurface.swift"))
+        let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource()))
         XCTAssertTrue(surface.contains("anchorPreference(key:ComposerSceneCameraFrameKey.self"),
                       "la surface doit publier OÙ elle dessine — c'est ce que le meuble ignore")
         XCTAssertTrue(surface.contains("aspectRatio(aspectRatio,contentMode:.fit)"),

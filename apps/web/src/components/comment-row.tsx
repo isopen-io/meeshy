@@ -73,6 +73,8 @@ export type CommentGestureHandlers = {
    * la caisse des réponses de sa racine. */
   readonly onLike: (commentId: string, on: boolean, parentId?: string) => void;
   readonly onEdit: (commentId: string, content: string, parentId?: string) => void;
+  /** LES COMMENTAIRES SONT FERMÉS (#16930) — « Modifier » quitte le « … » ; le cœur, Supprimer et Signaler restent. */
+  readonly commentsClosed?: boolean;
   readonly onDelete: (commentId: string, parentId?: string) => void;
   /**
    * RÉPONDRE (#8583) — le glissé vers la droite ET le bouton « Répondre »
@@ -556,6 +558,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
           canImage: actionable.onImage !== undefined,
           canReport: actionable.onReport !== undefined,
           canRemove: actionable.onRemove !== undefined,
+          commentsClosed: actionable.commentsClosed === true,
           ...(composed === null ? {} : { postComposition: { imageable: composed } }),
         });
   const railImage =

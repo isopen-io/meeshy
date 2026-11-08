@@ -39,6 +39,9 @@ final class ComposerSceneSurfaceTests: XCTestCase {
     // MARK: - Les sources
 
     private func source(_ fichier: String) throws -> String {
+        if fichier == "ComposerSceneSurface.swift" {
+            return AppSourceGuard.stripComments(try AppSourceGuard.composerSceneSurfaceSource())
+        }
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()

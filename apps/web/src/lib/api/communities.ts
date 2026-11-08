@@ -49,6 +49,8 @@ export const SEARCH_MIN_LENGTH = 2;
 export const communitiesQueryKey = (search: string) => ['communities', 'list', searchTermOf(search)] as const;
 export const communityQueryKey = (communityId: string) => ['communities', 'detail', communityId] as const;
 export const communityConversationsQueryKey = (communityId: string) => ['communities', 'conversations', communityId] as const;
+/** Les publications d'une communauté (#6379) — le registre des cartes (`card-caches.ts`) en recopie la racine. */
+export const communityPostsQueryKey = (communityId: string) => ['community-posts', communityId] as const;
 
 export type CommunitiesDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 

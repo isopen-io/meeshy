@@ -50,7 +50,7 @@ public struct MeeshyVideoThumbnail: View {
         self.videoUrlString = attachment.fileUrl
         self.accentColor = accentColor
         self.thumbnailColor = attachment.thumbnailColor
-        self.durationFormatted = attachment.duration.map { Self.formatDuration(milliseconds: $0) }
+        self.durationFormatted = attachment.duration.map { MediaFormat.duration($0 / 1000) }
         self.showPlayBadge = showPlayBadge
         self.showDurationBadge = showDurationBadge
         self.cornerRadius = cornerRadius
@@ -275,12 +275,6 @@ public struct MeeshyVideoThumbnail: View {
             throw VideoThumbnailError.undecodable
         }
         return image
-    }
-
-    // MARK: - Duration formatting
-
-    private static func formatDuration(milliseconds: Int) -> String {
-        MediaFormat.duration(milliseconds / 1000)
     }
 }
 

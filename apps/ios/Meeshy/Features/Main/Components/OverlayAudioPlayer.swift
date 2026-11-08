@@ -251,8 +251,8 @@ final class OverlayAudioPlayer: ObservableObject, AudiblyPlayingPlayer, Interrup
     }
 
     func timeLabel(attachmentDurationMs: Int?) -> String {
-        let current = formatTime(currentTime)
-        let total = formatTime(totalSeconds(attachmentDurationMs: attachmentDurationMs))
+        let current = MediaFormat.duration(currentTime)
+        let total = MediaFormat.duration(totalSeconds(attachmentDurationMs: attachmentDurationMs))
         return "\(current) / \(total)"
     }
 
@@ -270,10 +270,6 @@ final class OverlayAudioPlayer: ObservableObject, AudiblyPlayingPlayer, Interrup
     /// en secondes affichait « 0:00 / 565:55 » pour un vocal de 34 s (#9008).
     private func totalSeconds(attachmentDurationMs: Int?) -> TimeInterval {
         duration > 0 ? duration : TimeInterval(attachmentDurationMs ?? 0) / 1000
-    }
-
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        MediaFormat.duration(seconds)
     }
 
     private func setupTimeObserver() {

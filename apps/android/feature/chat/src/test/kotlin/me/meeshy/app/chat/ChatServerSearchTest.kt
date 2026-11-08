@@ -171,6 +171,40 @@ class ChatServerSearchTest {
     }
 
     @Test
+    fun `offline a blurred local match is served veiled, without its text`() {
+        val bubble = BubbleContent(
+            messageId = "local1", text = "hello secret", isOutgoing = false, isTranslated = false, originalText = null,
+            senderName = "Ada", showSenderName = false, isEdited = false, isDeleted = false, createdAtIso = null,
+            isBlurred = true,
+        )
+        val ui = ChatUiState(conversationId = "c1", messages = listOf(bubble), search = ChatSearchState(isActive = true, query = "hello", matchIds = listOf("local1")))
+        val r = rig(ui)
+        coEvery { r.repo.searchMessages(any(), any(), any(), any()) } throws MessageSearchException("down", unreachable = true)
+
+        r.controller.onQuery("hello")
+        r.scope.advanceUntilIdle()
+
+        val result = r.state.results.single()
+        assertThat(result.isVeiled).isTrue()
+        assertThat(result.content).isEmpty()
+        assertThat(result.matchedText).isEmpty()
+    }
+
+    @Test
+    fun `a blurred server hit is veiled, without its text`() {
+        val r = rig()
+        coEvery { r.repo.searchMessages("c1", "hello", null, 20) } returns
+            MessageSearchPage(listOf(hit("m1", content = "hello secret").copy(isBlurred = true)), null, false)
+
+        r.controller.onQuery("hello")
+        r.scope.advanceUntilIdle()
+
+        val result = r.state.results.single()
+        assertThat(result.isVeiled).isTrue()
+        assertThat(result.matchedText).isEmpty()
+    }
+
+    @Test
     fun `an empty answer shows the empty state and closing the panel keeps the query`() {
         val r = rig()
         coEvery { r.repo.searchMessages("c1", "zz", null, 20) } returns MessageSearchPage.EMPTY

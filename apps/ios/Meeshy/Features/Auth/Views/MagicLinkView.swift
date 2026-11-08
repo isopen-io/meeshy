@@ -71,7 +71,6 @@ struct MagicLinkView: View {
     /// champs de l'inscription.
     private enum Hint {
         case howItWorks
-        case nothingReceived
     }
 
     private var howItWorksHint: AuthInfoHint {
@@ -82,17 +81,6 @@ struct MagicLinkView: View {
                 bundle: .main
             ),
             buttonLabel: String(localized: "auth.magiclink.email.hintLabel", defaultValue: "Comment ça marche", bundle: .main)
-        )
-    }
-
-    private var nothingReceivedHint: AuthInfoHint {
-        AuthInfoHint(
-            text: String(
-                localized: "auth.magiclink.sent.spamHint",
-                defaultValue: "Regardez vos indésirables (spam) : le message peut y être tombé.",
-                bundle: .main
-            ),
-            buttonLabel: String(localized: "auth.magiclink.sent.hintLabel", defaultValue: "Rien reçu ?", bundle: .main)
         )
     }
 
@@ -317,8 +305,12 @@ struct MagicLinkView: View {
             }
             .accessibilityElement(children: .combine)
 
+            // #16937 — la ligne des spams, sous l'annonce et une seule fois :
+            // le champ de code qui suit se tait.
+            EmailSpamFolderHint()
+
             if let codeEntry {
-                EmailCodeEntry(viewModel: codeEntry)
+                EmailCodeEntry(viewModel: codeEntry, showsSpamFolderHint: false)
                     .onReceive(codeEntry.$verificationSuccess.filter { $0 }.first()) { _ in
                         handOff(codeEntry)
                     }
@@ -343,34 +335,18 @@ struct MagicLinkView: View {
                 }
             }
 
-            // Renvoyer, et à côté le (i) « Rien reçu ? » : il reste actif
-            // pendant le compte à rebours — c'est précisément quand le renvoi
-            // est bloqué que regarder les indésirables sert.
-            VStack(spacing: MeeshySpacing.xs) {
-                HStack(spacing: MeeshySpacing.xs) {
-                    Button(action: sendMagicLink) {
-                        HStack(spacing: MeeshySpacing.sm) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                            Text(String(localized: "auth.magiclink.resend", defaultValue: "Renvoyer", bundle: .main))
-                        }
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(countdownRemaining > 0 ? theme.textMuted : MeeshyColors.indigo400)
-                    }
-                    .accessibilityLabel(String(localized: "auth.magiclink.resendLabel",
-                                                defaultValue: "Renvoyer le lien", bundle: .main))
-                    .disabled(countdownRemaining > 0 || isLoading)
-
-                    AuthInfoHintButton(hint: nothingReceivedHint, isExpanded: expansion(of: .nothingReceived), tint: theme.textMuted)
+            Button(action: sendMagicLink) {
+                HStack(spacing: MeeshySpacing.sm) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                    Text(String(localized: "auth.magiclink.resend", defaultValue: "Renvoyer", bundle: .main))
                 }
-
-                AuthInfoHintText(
-                    hint: nothingReceivedHint,
-                    isExpanded: expandedHint == .nothingReceived,
-                    color: theme.textMuted,
-                    alignment: .center
-                )
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundColor(countdownRemaining > 0 ? theme.textMuted : MeeshyColors.indigo400)
             }
+            .accessibilityLabel(String(localized: "auth.magiclink.resendLabel",
+                                        defaultValue: "Renvoyer le lien", bundle: .main))
+            .disabled(countdownRemaining > 0 || isLoading)
             .padding(.top, MeeshySpacing.md)
 
             // Cancel button

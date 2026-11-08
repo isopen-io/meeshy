@@ -15,9 +15,9 @@ import { REELS_QUERY_ROOT } from './reels-query-key';
 /**
  * **LE REGISTRE DES CAISSES QUI PEIGNENT UNE CARTE DE PUBLICATION** (#7341).
  *
- * Six écrans montent la MÊME carte (`FeedPostCard`), et chacun la peint depuis
+ * Sept écrans montent la MÊME carte (`FeedPostCard`), et chacun la peint depuis
  * SA caisse : le Flux, les Réels, les enregistrées, la page d'un hashtag, les
- * publications d'un profil, et la fiche `/post/$post`. Tout ce qui change une
+ * publications d'un profil, celles d'une communauté, et la fiche `/post/$post`. Tout ce qui change une
  * carte — un cœur, un signet, un compteur, une modification, une suppression,
  * une traduction livrée en direct — doit atteindre CHACUNE de ces caisses, sans quoi l'écran qui lit la caisse
  * oubliée montre un contrôle inerte : la requête part, la carte ne bouge pas.
@@ -64,12 +64,21 @@ type CardList = {
   readonly frozen: boolean;
 };
 
+/* Les publications d'une communauté (#6379) : la racine est RECOPIÉE de
+   `communityPostsQueryKey` (`communities.ts`) au lieu d'être importée — importer
+   `communities.ts` ici le faisait précharger, avec `zod`, par chaque écran qui
+   tient une carte, au prix du premier affichage. Le témoin « la caisse d'une
+   communauté est au registre des cartes » (`community-posts.test.ts`) lie les
+   deux : une racine qui diverge le fait tomber. */
+const COMMUNITY_POSTS_QUERY_ROOT = ['community-posts'] as const;
+
 const CARD_LISTS: readonly CardList[] = [
   { queryKey: FEED_QUERY_KEY, exact: true, frozen: false },
   { queryKey: REELS_QUERY_ROOT, exact: false, frozen: true },
   { queryKey: BOOKMARKS_QUERY_KEY, exact: true, frozen: false },
   { queryKey: HASHTAG_QUERY_ROOT, exact: false, frozen: false },
   { queryKey: AUTHOR_POSTS_QUERY_ROOT, exact: false, frozen: false },
+  { queryKey: COMMUNITY_POSTS_QUERY_ROOT, exact: false, frozen: false },
 ];
 
 const UNFROZEN_LISTS = CARD_LISTS.filter((list) => !list.frozen);

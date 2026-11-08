@@ -212,3 +212,37 @@ describe('LensRow — ce que la ligne n’affiche pas (#7547)', () => {
     expect(html).not.toContain('data-lens-join');
   });
 });
+
+describe('LensRow applique l’effet du dernier message, figé (#16975)', () => {
+  const lineOf = (id: string) => renderCase(CASES.find((c) => c.id === id)!);
+  const visibleOf = (line: Element) => line.querySelector<HTMLElement>('[data-line2-visible]')!;
+
+  test('chaque cas du fichier commun porte, ou non, l’effet que le composeur décrit', () => {
+    for (const entry of CASES) {
+      const effect = composeConversationPreview(entry.input).effect;
+      const visible = visibleOf(renderCase(entry));
+      expect(visible.hasAttribute('data-preview-veil')).toBe(effect?.veil === true);
+      expect(visible.getAttribute('data-preview-finish')).toBe(effect?.finish ?? null);
+    }
+  });
+
+  test('un message flouté se peint voilé : la ligne est floutée, le lecteur d’écran lit toujours le libellé', () => {
+    const line = lineOf('blurred');
+    const veil = line.querySelector<HTMLElement>('[data-preview-veil] [data-preview-veiled]');
+    expect(veil?.getAttribute('style')).toContain('blur(');
+    expect(spokenTextOf(line)).toContain('Message masqué');
+  });
+
+  test('la lueur et l’arc-en-ciel se peignent sans aucune animation', () => {
+    const glow = visibleOf(lineOf('effect-finish-glow-entrance-shake')).querySelector<HTMLElement>('[data-preview-text]');
+    const rainbow = visibleOf(lineOf('effect-finish-rainbow')).querySelector<HTMLElement>('[data-preview-text]');
+    expect(glow?.getAttribute('style')).toContain('text-shadow');
+    expect(rainbow?.getAttribute('style')).toContain('linear-gradient');
+    for (const node of [glow, rainbow]) expect(node?.getAttribute('style') ?? '').not.toContain('animation');
+  });
+
+  test('un éphémère qui brille ne brille pas : la protection prime', () => {
+    const visible = visibleOf(lineOf('effect-under-ephemeral-not-applied'));
+    expect(visible.hasAttribute('data-preview-finish')).toBe(false);
+  });
+});

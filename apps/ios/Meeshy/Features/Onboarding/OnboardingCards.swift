@@ -141,6 +141,7 @@ struct OnboardingCardView: View {
                               systemImage: "envelope")
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                             .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
+                        EmailSpamFolderHint(alignment: .leading)
                     }
                     verificationStatus
                 }

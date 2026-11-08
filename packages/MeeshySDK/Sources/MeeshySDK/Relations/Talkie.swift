@@ -1,7 +1,8 @@
 import Foundation
 
 // LE TALKIE (#13935, décision porteur D-4, #13946) — un Proche appuie et parle, sa voix sort chez l'autre sans décrocher.
-// Le contrat est `packages/shared/types/talkie.ts` ; ce fichier en est la lecture Swift, côté RÉCEPTION (#16673). Le
+// Le contrat est `packages/shared/types/talkie.ts` ; ce fichier en est la lecture Swift, côté RÉCEPTION (#16673) ;
+// l'émission est `TalkieSending.swift` (#16927). Le
 // client ne recalcule AUCUNE règle (niveau, réception coupée, E2EE, appel, Ne pas déranger) : la passerelle a jugé.
 
 public enum TalkieContract {
@@ -9,6 +10,14 @@ public enum TalkieContract {
     public static let maxDuration: TimeInterval = 30
     /// Le seul encodage relayé au MVP : celui du vocal (AAC mono, trames ADTS lisibles dès la première).
     public static let codec = "aac-adts"
+    /// `TALKIE_MAX_CHUNK_BYTES` : le plafond d'un fragment.
+    public static let maxChunkBytes = 16_384
+    /// `TALKIE_MAX_TOTAL_BYTES` : le plafond d'une prise de parole entière.
+    public static let maxTotalBytes = 512_000
+    /// `TALKIE_MAX_CHUNKS` : le plafond du NOMBRE de fragments d'une prise de parole.
+    public static let maxChunks = 300
+    /// Un fragment part toutes les ~250 ms : assez court pour la voix « en direct », assez long pour peu d'événements.
+    public static let fragmentDuration: TimeInterval = 0.25
 }
 
 /// `talkie:incoming` — une prise de parole commence. Aucun nom ne voyage : l'écran l'hydrate par ses caches. Un

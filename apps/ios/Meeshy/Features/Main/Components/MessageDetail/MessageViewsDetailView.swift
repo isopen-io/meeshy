@@ -221,7 +221,7 @@ struct MessageViewsDetailView: View {
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(theme.textPrimary)
 
-                    Text(formatDateFR(message.createdAt))
+                    Text(formatDateTime(message.createdAt))
                         .font(.caption.weight(.medium))
                         .foregroundStyle(theme.textMuted)
                 }
@@ -263,7 +263,7 @@ struct MessageViewsDetailView: View {
 
                 if message.isEdited {
                     MessageViewsMetaDivider()
-                    MessageViewsMetaRow(icon: "pencil", label: String(localized: "message-detail.meta.modified", bundle: .main), value: formatDateTimeFR(message.updatedAt), accent: accent, valueColor: .yellow)
+                    MessageViewsMetaRow(icon: "pencil", label: String(localized: "message-detail.meta.modified", bundle: .main), value: formatDateTime(message.updatedAt), accent: accent, valueColor: .yellow)
                 }
 
                 if !message.attachments.isEmpty {
@@ -675,11 +675,7 @@ struct MessageViewsDetailView: View {
         )
     }
 
-    private func formatDateFR(_ date: Date) -> String {
-        date.formatted(.dateTime.day().month().year().hour().minute())
-    }
-
-    private func formatDateTimeFR(_ date: Date) -> String {
+    private func formatDateTime(_ date: Date) -> String {
         date.formatted(.dateTime.day().month().year().hour().minute())
     }
 

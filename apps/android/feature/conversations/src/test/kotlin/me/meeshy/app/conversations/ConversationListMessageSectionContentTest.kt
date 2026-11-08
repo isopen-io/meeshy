@@ -2,6 +2,8 @@ package me.meeshy.app.conversations
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.search.ListMessageHit
+import me.meeshy.sdk.model.search.SearchExcerpt
+import me.meeshy.sdk.model.search.SearchMediaKind
 import org.junit.Test
 
 class ConversationListMessageSectionContentTest {
@@ -61,5 +63,22 @@ class ConversationListMessageSectionContentTest {
         val shown = hit.asSearchHit(conversation = null)
 
         assertThat(shown.identity("u-me")).isEqualTo(MessageHitIdentity(title = "Ada", avatarUrl = "2026/11/ada.png"))
+    }
+
+    @Test
+    fun a_veiled_found_message_reaches_the_row_veiled_and_a_transcript_keeps_its_media() {
+        val veiled = ListMessageHit(
+            messageId = "m1",
+            conversationId = "c1",
+            createdAtMillis = 0L,
+            text = "",
+            senderName = "Ada",
+            isVeiled = true,
+            transcriptMedia = SearchMediaKind.VIDEO,
+        )
+        val voice = veiled.copy(messageId = "m2", text = "demain", isVeiled = false, transcriptMedia = SearchMediaKind.AUDIO)
+
+        assertThat(veiled.asSearchHit(conversation = null).excerpt).isEqualTo(SearchExcerpt.Veiled(media = SearchMediaKind.VIDEO))
+        assertThat(voice.asSearchHit(conversation = null).excerpt).isEqualTo(SearchExcerpt.Shown(text = "demain", media = SearchMediaKind.AUDIO))
     }
 }

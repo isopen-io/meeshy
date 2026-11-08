@@ -3,6 +3,7 @@ package me.meeshy.app.conversations
 import me.meeshy.sdk.model.LastMessageSummaryKind
 import me.meeshy.sdk.model.media.MediaKindLabel
 import me.meeshy.sdk.model.media.MediaKindStrings
+import me.meeshy.sdk.model.preview.PreviewEffect
 
 /**
  * Classifies how the row should summarize a conversation's last message —
@@ -37,6 +38,10 @@ typealias MessageSummaryKind = LastMessageSummaryKind
 data class SummaryLine(
     val text: String,
     val kind: MessageSummaryKind,
+    /** The effect line 2 APPLIES (#16975): veil, frozen finish, one-shot entrance; `null` = none. */
+    val effect: PreviewEffect? = null,
+    /** The last message id, which keys the one-shot entrance. */
+    val messageId: String? = null,
 )
 
 /**
