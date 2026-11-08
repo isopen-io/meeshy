@@ -221,29 +221,54 @@ final class OfflineQueueRetryClaimTests: XCTestCase {
         // RÉFÉRENCE, pas la valeur : il reste vrai si la constante change.
         //
         // Il ne lit que des lignes de CODE, et ce détail est ce qui le rend
-        // capable de TOMBER : le doc-comment de `retryItem` NOMME la constante
-        // sur deux lignes pour expliquer la décision. Un `contains` sur le
-        // fichier entier passerait au vert sur une recopie littérale de 1800 —
-        // un témoin qui ne peut pas tomber n'est pas un témoin. Même précaution,
-        // et pour la même raison, que `WireDateSourceGuardTests`.
-        let source = try String(
-            contentsOf: URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .appendingPathComponent("Sources/MeeshySDK/Persistence/OfflineQueue+Retry.swift"),
-            encoding: .utf8
-        )
-        let code = source
+        // capable de TOMBER : les doc-comments NOMMENT la constante pour
+        // expliquer la décision. Un `contains` sur le fichier entier passerait
+        // au vert sur une recopie littérale de 1800 — un témoin qui ne peut pas
+        // tomber n'est pas un témoin. Même précaution que `WireDateSourceGuardTests`.
+        //
+        // #16749, SECONDE VERSION — il lisait `OfflineQueue+Retry.swift`, et il
+        // est TOMBÉ EN CI quand le cliquet de cohésion a forcé l'extraction de
+        // `OutboxRetryAdmission` : la constante et le SQL ont changé de fichier,
+        // le témoin pointait l'ancien. Il a eu raison de tomber, et il désigne
+        // désormais le fichier qui PORTE la loi, plus une seconde assertion qui
+        // garde la structure — `OfflineQueue+Retry` DÉLÈGUE et ne réimplémente
+        // pas. Sans elle, remettre l'`UPDATE` en ligne dans l'appelant laisserait
+        // le témoin vert.
+        //
+        // > **Un témoin qui nomme un FICHIER est couplé à la structure, pas
+        // > seulement au comportement.** Un lot qui déplace du code doit relire
+        // > les témoins qui citent des chemins — et c'est exactement ce que ce
+        // > cycle a oublié de faire après une extraction qu'un cliquet imposait.
+        let admission = try source(of: "OutboxRetryAdmission.swift")
+        let caller = try source(of: "OfflineQueue+Retry.swift")
+
+        XCTAssertTrue(admission.contains("OutboxFlusher.staleInflightReclaimSeconds"),
+                      "l'admission borne sa péremption sur la constante du flusher, jamais sur un littéral")
+        XCTAssertTrue(admission.contains("status <> ?"),
+                      "la décision est prise par SQLite DANS la transaction, pas sur un instantané lu avant")
+        XCTAssertTrue(caller.contains("OutboxRetryAdmission.rearm"),
+                      "`retryItem` DÉLÈGUE l'admission ; il ne réimplémente pas l'UPDATE conditionnelle")
+        XCTAssertFalse(caller.contains("UPDATE outbox"),
+                       "aucune écriture d'outbox ne revient dans l'appelant — la loi vit à un seul endroit")
+    }
+
+    /// Les lignes de CODE d'un fichier du paquet, commentaires exclus.
+    ///
+    /// Les doc-comments de ce lot citent volontairement les identifiants que les
+    /// gardes cherchent ; les inclure rendrait toute garde de source incapable de
+    /// tomber.
+    private func source(of fileName: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Persistence/\(fileName)")
+        return try String(contentsOf: url, encoding: .utf8)
             .components(separatedBy: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.hasPrefix("//") }
             .joined(separator: "\n")
-
-        XCTAssertTrue(code.contains("OutboxFlusher.staleInflightReclaimSeconds"),
-                      "la relance borne sa péremption sur la constante du flusher, jamais sur un littéral")
-        XCTAssertTrue(code.contains("status <> ?"),
-                      "la décision est prise par SQLite DANS la transaction, pas sur un instantané lu avant")
     }
+
 }
