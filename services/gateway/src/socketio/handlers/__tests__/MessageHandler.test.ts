@@ -2907,21 +2907,76 @@ describe('MessageHandler', () => {
       }));
     });
 
-    it('omits clientMessageId from ACK when absent from response data (line 1152 false branch)', async () => {
+    /**
+     * #17058 — CE TÉMOIN A CHANGÉ DE SOURCE, et le changement est le lot.
+     *
+     * Il assertait « absent de la RÉPONSE ⇒ absent de l'accusé », c'est-à-dire
+     * qu'il dérivait le cid de l'accusé de la LIGNE. C'était une description
+     * exacte du comportement, et ce comportement était le défaut : sur un hit
+     * de déduplication par contenu la ligne est celle du PREMIER message, donc
+     * l'accusé de `cid_B` portait `cid_A`.
+     *
+     * « Absent » doit se lire **absent de la SOUMISSION**. Les deux témoins
+     * ci-dessous séparent les deux moitiés, parce qu'un seul ne pourrait pas :
+     * le cas nominal (les deux cids égaux) rend le même résultat sous la règle
+     * juste et sous le défaut.
+     */
+    it('#17058 — omet le cid quand le client n’en a pas SOUMIS', async () => {
+      mockValidateSocketEvent.mockReturnValue({
+        success: true,
+        data: makeValidSendData({ clientMessageId: undefined }),
+      });
       (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
         success: true,
         data: {
           id: 'msg-nocid', conversationId: VALID_CONV_ID,
           createdAt: new Date(), senderId: PARTICIPANT_ID,
-          // no clientMessageId
+        },
+      });
+
+      await handler.handleMessageSend(socket, makeValidSendData({ clientMessageId: undefined }), callback);
+
+      const arg = (callback.mock.calls[0] as [any])[0];
+      expect(arg.success).toBe(true);
+      expect(arg.data).not.toHaveProperty('clientMessageId');
+    });
+
+    it('#17058 — rend le cid SOUMIS même quand la ligne n’en porte aucun', async () => {
+      // C'est le cas NOMINAL du chemin socket, et celui dont le client a le
+      // plus besoin : sans son cid en retour, la réconciliation par cid ne peut
+      // pas promouvoir la ligne optimiste en `.sent`. L'ancien témoin le
+      // RETIRAIT dans cette situation.
+      (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
+        success: true,
+        data: {
+          id: 'msg-nocid', conversationId: VALID_CONV_ID,
+          createdAt: new Date(), senderId: PARTICIPANT_ID,
         },
       });
 
       await handler.handleMessageSend(socket, makeValidSendData(), callback);
 
       const arg = (callback.mock.calls[0] as [any])[0];
-      expect(arg.success).toBe(true);
-      expect(arg.data).not.toHaveProperty('clientMessageId');
+      expect(arg.data.clientMessageId).toBe(VALID_CID);
+    });
+
+    it('#17058 — sur un dédup, rend le cid SOUMIS et non celui de la ligne relue', async () => {
+      // La ligne rendue est celle du PREMIER message : elle porte un AUTRE cid.
+      (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
+        success: true,
+        data: {
+          id: 'msg-premier', conversationId: VALID_CONV_ID,
+          createdAt: new Date(), senderId: PARTICIPANT_ID,
+          clientMessageId: 'cid_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+          isDuplicate: true,
+        },
+      });
+
+      await handler.handleMessageSend(socket, makeValidSendData(), callback);
+
+      const arg = (callback.mock.calls[0] as [any])[0];
+      expect(arg.data.clientMessageId).toBe(VALID_CID);
+      expect(arg.data.clientMessageId).not.toBe('cid_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
     });
 
     it('omits createdAt from ACK when null in response (line 1154 falsy branch)', async () => {
