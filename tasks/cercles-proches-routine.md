@@ -215,3 +215,16 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - PR #16757 vers `dev` ; projet Xcode régénéré par `[xcodegen]`, preuve iOS par `ios.yml` en `workflow_dispatch`.
 - Prochain lot recommandé : ÉMETTRE son écoute depuis iOS (source Meeshy d'abord, écran d'accord de la catégorie),
   sinon la réception du talkie sur Android (#16675).
+
+## 2026-11-08 — réveil 13 : mener #16757 à la fusion
+
+- Reprise : #16757 (écoute reçue sur iOS, #16755) était ouverte sans réveil pour la suivre. Sa CI iOS sur l'avant-dernier
+  commit avait trois tranches rouges : les deux gardes d'isolement d'iOS 16/17 sur `ListeningCenter` (corrigées par le
+  réveil 12 en `@concurrent`), les clés mortes `video.filter.*` (soldées sur `dev`) et `test_show_autoDismissesAfterDelay`
+  (toast, hors lot).
+- Fait : `origin/dev` fusionné à la main. Un conflit, `cohesion-budget.json` (`CallManager` abaissé des deux côtés) :
+  après fusion le type mesure 2831, référence verrouillée à cette valeur. Gardes iOS texte relancées : règles maison,
+  cohésion, localisation, inscription des tests, cohérence et guillemets du pbxproj, toutes vertes. CI complète, iOS et
+  SDK relancées sur le dernier commit.
+- La branche porte aussi le correctif de `dev` rouge après OPUS-5 (#16743, autre session) qu'elle avait fusionné pour
+  verdir sa CI iOS.
