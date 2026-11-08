@@ -7,6 +7,8 @@ final class CameraRecordingClock {
     static let interval: TimeInterval = 0.5
     private var timer: Timer?
 
+    nonisolated deinit {}
+
     func start(onTick: @escaping @MainActor @Sendable () -> Void) {
         stop()
         timer = Timer.scheduledTimer(withTimeInterval: Self.interval, repeats: true) { _ in
