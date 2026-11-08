@@ -200,12 +200,17 @@ final class OfflineQueueRetryClaimTests: XCTestCase {
         let cmid = "cid_outcome_ok_\(UUID().uuidString)"
         let id = try await insertRow(status: .exhausted, updatedAt: Date(), cmid: cmid)
         await queue.publishOutcome(.exhausted(cmid: cmid))
-        XCTAssertNotNil(await queue.firedOutcome(for: cmid))
+        // L'`await` est HORS de l'assertion : `XCTAssert*` prend une autoclosure,
+        // qui ne porte pas la concurrence (« 'await' in an autoclosure that does
+        // not support concurrency »). Et `firedOutcome` est isolé à l'acteur, donc
+        // l'appel est implicitement asynchrone depuis l'extérieur.
+        let avant = await queue.firedOutcome(for: cmid)
+        XCTAssertNotNil(avant, "préalable du témoin : le tombstone est bien posé")
 
         try await queue.retryItem(id)
 
-        XCTAssertNil(await queue.firedOutcome(for: cmid),
-                     "une relance acceptée purge bien le tombstone périmé")
+        let apres = await queue.firedOutcome(for: cmid)
+        XCTAssertNil(apres, "une relance acceptée purge bien le tombstone périmé")
     }
 
     // MARK: - La borne est PARTAGÉE, pas recopiée
