@@ -171,6 +171,8 @@ internal fun ProfileSheetLoadedContent(
                                     plan = plan,
                                     isOpeningConversation = actionsState.isOpeningConversation,
                                     circle = actionsState.circle?.takeIf { actionsState.userId == profile.id },
+                                    receptions = actionsState.receptionsWithoutLink.takeIf { actionsState.userId == profile.id && it.isNotEmpty() }
+                                        ?.let { ProfileReceptionBlocks(profile.id, it) },
                                     isInteractionDisabled = isBlockedByMe || state.isBlockedByTarget,
                                     environment = environment,
                                     actions = actions,
@@ -238,6 +240,7 @@ private fun ProfileSheetTabContent(
     plan: ProfileActionPlan?,
     isOpeningConversation: Boolean,
     circle: ProfileCircle?,
+    receptions: ProfileReceptionBlocks?,
     isInteractionDisabled: Boolean,
     environment: ProfileSheetEnvironment,
     actions: ProfileActionCallbacks,
@@ -263,7 +266,7 @@ private fun ProfileSheetTabContent(
         ProfileTab.DETAILS -> ProfileDetailsTab(
             details = details,
             accent = accent,
-            actions = profileActionsSlot(plan, state.isSelf, header.displayName, isOpeningConversation, actions, circle),
+            actions = profileActionsSlot(plan, state.isSelf, header.displayName, isOpeningConversation, actions, circle, receptions),
         )
     }
 }
@@ -276,6 +279,7 @@ private fun profileActionsSlot(
     isOpeningConversation: Boolean,
     callbacks: ProfileActionCallbacks,
     circle: ProfileCircle?,
+    receptions: ProfileReceptionBlocks?,
 ): (@Composable () -> Unit)? {
     val shown = plan?.takeIf { !isSelf && it.layout != ProfileLayout.CLOSED } ?: return null
     return {
@@ -285,6 +289,7 @@ private fun profileActionsSlot(
             isOpeningConversation = isOpeningConversation,
             callbacks = callbacks,
             circle = circle,
+            receptions = receptions,
         )
     }
 }
