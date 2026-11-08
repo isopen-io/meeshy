@@ -30,7 +30,7 @@ nonisolated enum ConversationPreviewFinishStyle: Equatable, Sendable {
     /// fil (`RainbowLetters`, ≥ 4,5:1 contre le fond de chaque thème).
     static func rainbowGradient(isDark: Bool) -> LinearGradient {
         LinearGradient(
-            colors: RainbowLetters.paletteHex(isDark: isDark).map { Color(hex: $0) },
+            colors: RainbowLetters.palette(isDark: isDark),
             startPoint: .leading,
             endPoint: .trailing
         )
