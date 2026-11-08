@@ -105,6 +105,8 @@ const fr = {
   'circles.settings.blockTalkie': 'Couper son talkie',
   'circles.settings.blockTalkie.detail': 'Sa voix ne sortira plus directement chez vous : elle arrivera en message vocal. Cette personne n’en est pas prévenue.',
   'circles.settings.blockTalkie.failed': 'Le réglage n’a pas pu être enregistré',
+  'circles.settings.shareListening.detail': 'Quand Apple Music joue sur votre iPhone et que Meeshy y est ouvert, cette personne voit que vous écoutez de la musique ; le titre, seulement si vous le lui avez accordé au rituel du Sang. Vos messages vocaux ne sont jamais partagés.',
+  'circles.settings.shareListening.failed': 'Le partage n’a pas pu être enregistré',
   'talkie.send.explain': 'Maintenez et parlez : votre voix sort directement chez {name}, sans décrocher.',
   'talkie.send.hold': 'Maintenir pour parler',
   'talkie.send.hold.a11y': 'Maintenir pour parler à {name} — au clavier, gardez Espace enfoncé',

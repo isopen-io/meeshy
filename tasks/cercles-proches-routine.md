@@ -268,3 +268,21 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Ce qui reste du talkie : arrière-plan Android (FCM haute priorité + service au premier plan), émission iOS et
   Android, copie en message vocal (#16698), Safari/Firefox (#16699).
 - Prochain lot recommandé : émettre l'écoute depuis iOS (#16757 est fusionnée), sinon l'émission du talkie sur iOS.
+
+## 2026-11-08 — réveil 16 : accorder « Ce que j'écoute » depuis le web (#16831 ⊂ #13934)
+
+- Reprise : #16805 (émettre son écoute depuis iOS) fusionnée ; aucune PR de la routine ouverte. Branches vivantes des
+  autres sessions (`cercles-16733-ios`, `cercles-16642-serveur`, `cercles-16643-android`, `cercles-16623-serveur`)
+  n'écrivent pas la fiche d'un lien web. Issue #16831 ouverte sous #13934 (milestone #215), branche
+  `claude/cercles-ecoute-web-accorder` réservée avant toute écriture.
+- Lot : la fiche d'un lien web montrait « Ce que j'écoute » désactivé alors que le serveur (#16686) et iOS (#16805) le
+  tiennent. `CircleReceptionBlockSwitch` (web) porte désormais un troisième champ, `listeningCategoryShared`, un ACCORD
+  refusé par défaut, actif dès Proche, optimiste avec retour arrière dit ; le décodeur lit le champ absent d'un ancien
+  serveur « non accordé ». Texte d'aide en 7 langues (l'iPhone, Apple Music, le titre au rituel du Sang seulement,
+  jamais les vocaux). Seule « Position en direct » reste montrée désactivée.
+- Gates locaux : `bun test` des fichiers touchés 132/132, `tsc --noEmit` vert ; suite web complète 30041 verts, 1 rouge
+  préexistant sur `dev` (`act-leak-guard.test.ts`, rouge aussi sans ce lot dans ce conteneur, bun 1.4).
+- Ce qui reste de l'écoute : accorder depuis Android, interrupteur global des réglages de confidentialité, Spotify,
+  arrière-plan iOS, Android (émettre + recevoir), rangée de liste (#16733, autre session), fantôme.
+- Prochain lot recommandé : accorder « Ce que j'écoute » depuis Android (fiche d'un lien, `RelationReceptionSetting`),
+  sinon l'émission du talkie sur iOS.
