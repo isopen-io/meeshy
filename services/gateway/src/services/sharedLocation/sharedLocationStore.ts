@@ -17,7 +17,7 @@ import {
   type SharedLocationPosition,
   type SharedLocationPrecision,
 } from '@meeshy/shared/types/shared-location';
-import type { CacheStore } from '../CacheStore';
+import type { SharedLocationKv } from './sharedLocationKv';
 import { hasValidSecretsKey, isSealedSecret, openSecret, sealSecret } from '../../utils/secret-at-rest';
 
 export type SharedLocationRecipient = { readonly userId: string; readonly precision: SharedLocationPrecision };
@@ -31,13 +31,15 @@ export type SharedLocationState = {
   readonly expiresAt: string;
 };
 
-export type SharedLocationCache = Pick<CacheStore, 'get' | 'set' | 'del'>;
+export type SharedLocationCache = SharedLocationKv;
 
-const keyOf = (userId: string, sessionId: string): string => `shared-location:${userId.toLowerCase()}:${sessionId}`;
-const currentKeyOf = (userId: string, generation: string): string => `shared-location-current:${userId.toLowerCase()}:${generation}`;
-/** La génération d'un compte qui n'a jamais arrêté de partage. */
-const GENESIS = 'genesis';
+const tagOf = (userId: string): string => `{${userId.toLowerCase()}}`;
+const keyOf = (userId: string, sessionId: string): string => `shared-location:${tagOf(userId)}:${sessionId}`;
+const pointerKeyOf = (userId: string): string => `shared-location-current:${tagOf(userId)}`;
+/** Sans durée de vie : une génération ne revient jamais en arrière (une par compte). */
+const generationKeyOf = (userId: string): string => `shared-location-gen:${tagOf(userId)}`;
 const SESSION_ID = /^[0-9a-f-]{36}$/;
+const validSession = (value: string | null): string | null => (value !== null && SESSION_ID.test(value) ? value : null);
 const contextOf = (userId: string): string => `SharedLocation.state:${userId.toLowerCase()}`;
 
 const isPrecision = (value: unknown): value is SharedLocationPrecision =>
@@ -75,41 +77,52 @@ function parseState(raw: string): SharedLocationState | null {
 const ttlOf = (state: Pick<SharedLocationState, 'expiresAt'>, now: number): number =>
   Math.max(1, Math.ceil((Date.parse(state.expiresAt) - now) / 1000));
 
+const sealed = (userId: string, state: SharedLocationState): string => sealSecret(JSON.stringify(state), contextOf(userId));
+
+/** La génération courante : un arrêt l'avance, et un démarrage ne prend le pointeur que dans celle qu'il a lue. */
+export async function sharedLocationGeneration(cache: SharedLocationCache, userId: string): Promise<string> {
+  return (await cache.get(generationKeyOf(userId))) ?? '0';
+}
+
 /**
- * Range le partage COMPLET, scellé, jusqu'à son terme, sous la clé de SA session : un geste en vol
- * ne peut écrire que dans le partage qu'il a lu, jamais dans celui qui l'a remplacé. Sans clé de
- * scellement dans un environnement servi, LÈVE : rien n'est rangé en clair.
+ * Range le partage COMPLET, scellé, jusqu'à son terme, sous la clé de SA session, AVANT de le
+ * rendre courant. Sans clé de scellement dans un environnement servi, LÈVE : rien n'est rangé en clair.
  */
 export async function storeSharedLocation(cache: SharedLocationCache, userId: string, state: SharedLocationState, now: number): Promise<void> {
-  await cache.set(keyOf(userId, state.sessionId), sealSecret(JSON.stringify(state), contextOf(userId)), ttlOf(state, now));
+  await cache.set(keyOf(userId, state.sessionId), sealed(userId, state), ttlOf(state, now));
 }
 
-const stopKeyOf = (userId: string): string => `shared-location-stop:${userId.toLowerCase()}`;
-/** Le plus long partage : l'arrêt n'a pas à être retenu au-delà. */
-const STOP_MEMORY_SECONDS = 480 * 60;
-
-/**
- * La GÉNÉRATION du partage : la marque du dernier arrêt, unique par arrêt. Le pointeur de session
- * vit SOUS elle : un arrêt change de génération, et tout ce qu'un démarrage en vol écrit ensuite
- * sous l'ancienne n'est plus jamais lu — sans écriture conditionnelle, sans horloge.
- */
-export async function sharedLocationGeneration(cache: SharedLocationCache, userId: string): Promise<string> {
-  return (await cache.get(stopKeyOf(userId))) ?? GENESIS;
+/** Rend `state` courant si la génération est encore `generation` ; rend la session REMPLACÉE (atomique). */
+export async function claimSharedLocation(
+  cache: SharedLocationCache,
+  userId: string,
+  generation: string,
+  state: SharedLocationState,
+  now: number,
+): Promise<{ readonly claimed: boolean; readonly displaced: string | null }> {
+  const result = await cache.claim(
+    { generation: generationKeyOf(userId), pointer: pointerKeyOf(userId) },
+    { generation, session: state.sessionId, ttlSeconds: ttlOf(state, now) },
+  );
+  return { claimed: result.claimed, displaced: validSession(result.displaced) };
 }
 
-/** Rend `state` courant DANS la génération `generation` (lue avant l'écriture). */
-export async function claimSharedLocation(cache: SharedLocationCache, userId: string, generation: string, state: SharedLocationState, now: number): Promise<void> {
-  await cache.set(currentKeyOf(userId, generation), state.sessionId, ttlOf(state, now));
+/** Une nouvelle position, écrite SEULEMENT si sa session est encore courante (atomique). */
+export async function storeSharedLocationIfCurrent(cache: SharedLocationCache, userId: string, state: SharedLocationState, now: number): Promise<boolean> {
+  return cache.setIfCurrent(
+    { pointer: pointerKeyOf(userId), state: keyOf(userId, state.sessionId) },
+    { session: state.sessionId, value: sealed(userId, state), ttlSeconds: ttlOf(state, now) },
+  );
 }
 
-const sessionUnder = async (cache: SharedLocationCache, userId: string, generation: string): Promise<string | null> => {
-  const current = await cache.get(currentKeyOf(userId, generation));
-  return current !== null && SESSION_ID.test(current) ? current : null;
-};
+/** Arrête : la génération avance, le pointeur part, et la session qu'il désignait est rendue (atomique). */
+export async function advanceSharedLocationGeneration(cache: SharedLocationCache, userId: string): Promise<string | null> {
+  return validSession(await cache.advance({ generation: generationKeyOf(userId), pointer: pointerKeyOf(userId) }));
+}
 
-/** La session courante, ou `null` (aucune, arrêtée, illisible). */
+/** La session courante, ou `null`. */
 export async function currentSharedLocationSession(cache: SharedLocationCache, userId: string): Promise<string | null> {
-  return sessionUnder(cache, userId, await sharedLocationGeneration(cache, userId));
+  return validSession(await cache.get(pointerKeyOf(userId)));
 }
 
 /** L'état rangé de la session `sessionId`, courante ou non, ou `null` (absent, échu, illisible, scellé pour un autre compte). */
@@ -129,25 +142,6 @@ export async function readSharedLocationSession(cache: SharedLocationCache, user
 export async function readSharedLocation(cache: SharedLocationCache, userId: string, now: number): Promise<SharedLocationState | null> {
   const sessionId = await currentSharedLocationSession(cache, userId);
   return sessionId === null ? null : readSharedLocationSession(cache, userId, sessionId, now);
-}
-
-/**
- * Arrête : une génération NOUVELLE (`mark`, unique), puis l'effacement de ce que l'ancienne
- * portait — son pointeur et la session lue. Rend la session que le pointeur désignait APRÈS le
- * changement de génération quand ce n'est pas celle lue : un démarrage posé pendant l'arrêt,
- * dont l'appelant doit prévenir les destinataires avant de l'effacer.
- */
-export async function markSharedLocationStopped(cache: SharedLocationCache, userId: string, stopped: { readonly mark: string; readonly generation: string; readonly sessionId: string | null }): Promise<string | null> {
-  await cache.set(stopKeyOf(userId), stopped.mark, STOP_MEMORY_SECONDS);
-  const late = await sessionUnder(cache, userId, stopped.generation);
-  await cache.del(currentKeyOf(userId, stopped.generation));
-  if (stopped.sessionId !== null) await cache.del(keyOf(userId, stopped.sessionId));
-  return late !== null && late !== stopped.sessionId ? late : null;
-}
-
-/** Efface le pointeur d'une génération MORTE (un arrêt l'a remplacée) : plus rien ne s'y lira jamais. */
-export async function forgetSharedLocationGeneration(cache: SharedLocationCache, userId: string, generation: string): Promise<void> {
-  if ((await sharedLocationGeneration(cache, userId)) !== generation) await cache.del(currentKeyOf(userId, generation));
 }
 
 /** Efface l'état d'une session qui n'est plus (ou ne sera jamais) courante. */

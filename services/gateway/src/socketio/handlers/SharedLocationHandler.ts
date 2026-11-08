@@ -20,7 +20,7 @@ import {
   type SharedLocationRelayDeps,
 } from '../../services/sharedLocation/sharedLocationRelay';
 import { sharedLocationRelayDepsOf } from '../../services/sharedLocation/sharedLocationDeps';
-import { createCustomRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
+import { createCustomRateLimiter, rateLimitDisabled, type RateLimiter, type RateLimitInfo } from '../../utils/rate-limiter.js';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'SharedLocationHandler' });
@@ -36,7 +36,7 @@ type SharedLocationSocket = {
 export type SharedLocationHandlerDeps = {
   readonly relay: SharedLocationRelayDeps;
   readonly callerOf: (socketId: string) => { readonly userId: string; readonly isAnonymous: boolean } | null;
-  /** `true` dans le débit, `false` au-delà. Quand le limiteur partagé ne sait pas juger, un compteur local juge à sa place. */
+  /** `true` dans le débit, `false` au-delà (`sharedLocationWithinRate`). */
   readonly withinRate: (userId: string) => Promise<boolean>;
 };
 
@@ -86,22 +86,47 @@ const rateLimiter = (): RateLimiter => {
 };
 
 /**
- * Le repli du limiteur partagé quand il ne répond pas (magasin en panne, limitation coupée) :
- * une fenêtre fixe par compte, dans CE processus. Chaque position vise jusqu'à cinquante
- * destinataires et relit la loi : un débit sans borne n'est jamais la réponse à une panne.
+ * Le repli du limiteur partagé quand son magasin est en panne : une fenêtre fixe par compte,
+ * dans CE processus. Chaque position vise jusqu'à cinquante destinataires et relit la loi :
+ * un débit sans borne n'est jamais la réponse à une panne. Les fenêtres sont rangées dans
+ * l'ordre de leur ouverture, et les échues s'élaguent par la tête : jamais de balayage.
  */
 export function localSharedLocationRate(rate: { readonly max: number; readonly windowMs: number } = SHARED_LOCATION_RATE): (userId: string, now: number) => boolean {
   const windows = new Map<string, { readonly start: number; readonly count: number }>();
-  return (userId, now) => {
-    if (windows.size > 10_000) {
-      windows.forEach((window, id) => {
-        if (now - window.start >= rate.windowMs) windows.delete(id);
-      });
+  const prune = (now: number): void => {
+    for (const [id, window] of windows) {
+      if (now - window.start < rate.windowMs) return;
+      windows.delete(id);
     }
+  };
+  return (userId, now) => {
+    prune(now);
     const current = windows.get(userId);
-    const window = current && now - current.start < rate.windowMs ? { start: current.start, count: current.count + 1 } : { start: now, count: 1 };
-    windows.set(userId, window);
-    return window.count <= rate.max;
+    if (current && now - current.start < rate.windowMs) {
+      windows.set(userId, { start: current.start, count: current.count + 1 });
+      return current.count + 1 <= rate.max;
+    }
+    windows.delete(userId);
+    windows.set(userId, { start: now, count: 1 });
+    return 1 <= rate.max;
+  };
+}
+
+/**
+ * Le juge du débit : le limiteur partagé ; quand il ne juge pas, la limitation explicitement
+ * coupée hors production (`RATE_LIMIT_DISABLED`) laisse passer, et une panne du magasin
+ * passe la main au compteur local.
+ */
+export function sharedLocationWithinRate(params: {
+  readonly consume: (userId: string) => Promise<RateLimitInfo | null>;
+  readonly disabled: () => boolean;
+  readonly local: (userId: string, now: number) => boolean;
+  readonly now: () => number;
+}): (userId: string) => Promise<boolean> {
+  return async (userId) => {
+    if (params.disabled()) return true;
+    const info = await params.consume(userId);
+    return info === null ? params.local(userId, params.now()) : info.retryAfter === undefined;
   };
 }
 
@@ -111,7 +136,12 @@ export function sharedLocationHandlerDeps(params: {
   readonly socketToUser: ReadonlyMap<string, string>;
   readonly connectedUsers: ReadonlyMap<string, { readonly isAnonymous: boolean }>;
 }): SharedLocationHandlerDeps {
-  const localRate = localSharedLocationRate();
+  const withinRate = sharedLocationWithinRate({
+    consume: (userId) => rateLimiter().consume(userId, 1),
+    disabled: rateLimitDisabled,
+    local: localSharedLocationRate(),
+    now: () => Date.now(),
+  });
   return {
     relay: sharedLocationRelayDepsOf(params),
     callerOf: (socketId) => {
@@ -119,9 +149,6 @@ export function sharedLocationHandlerDeps(params: {
       const user = userId ? params.connectedUsers.get(userId) : undefined;
       return userId && user ? { userId, isAnonymous: user.isAnonymous } : null;
     },
-    withinRate: async (userId) => {
-      const info = await rateLimiter().consume(userId, 1);
-      return info === null ? localRate(userId, Date.now()) : info.retryAfter === undefined;
-    },
+    withinRate,
   };
 }

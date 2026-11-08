@@ -1,12 +1,13 @@
 /**
- * Le câblage du relais du partage temporaire de position (#14109, #16980) : le cache
- * partagé du processus, l'horloge, et la porte d'émission. Les routes qui changent un
+ * Le câblage du relais du partage temporaire de position (#14109, #16980) : le magasin
+ * Redis strict du processus, l'horloge, et la porte d'émission. Les routes qui changent un
  * lien ou un blocage rejouent la projection de la paire par
  * {@link refreshSharedLocationAfter} : un échec n'arrête jamais le geste, il est
  * seulement journalisé (sans charge).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
+import { redisSharedLocationKv, UNAVAILABLE_SHARED_LOCATION_KV, type SharedLocationKv } from './sharedLocationKv';
 import {
   captureSharedLocationAccess,
   refreshSharedLocationBetween,
@@ -15,11 +16,23 @@ import {
   type SharedLocationRelayDeps,
 } from './sharedLocationRelay';
 
-/** Le cache du processus, résolu à l'usage : brancher une socket n'ouvre aucune connexion. */
+/**
+ * Le magasin STRICT du processus, résolu à l'usage : brancher une socket n'ouvre aucune
+ * connexion. Sans client Redis, chaque opération échoue — jamais de repli mémoire, qui
+ * dirait « arrêté » à un seul processus pendant qu'un autre continue de diffuser.
+ */
+const kv = (): SharedLocationKv => {
+  const client = getCacheStore().getNativeClient();
+  return client ? redisSharedLocationKv(client) : UNAVAILABLE_SHARED_LOCATION_KV;
+};
+
 const lazyCache: SharedLocationRelayDeps['cache'] = {
-  get: (key) => getCacheStore().get(key),
-  set: (key, value, ttlSeconds) => getCacheStore().set(key, value, ttlSeconds),
-  del: (key) => getCacheStore().del(key),
+  get: (key) => kv().get(key),
+  set: (key, value, ttlSeconds) => kv().set(key, value, ttlSeconds),
+  del: (key) => kv().del(key),
+  claim: (keys, args) => kv().claim(keys, args),
+  setIfCurrent: (keys, args) => kv().setIfCurrent(keys, args),
+  advance: (keys) => kv().advance(keys),
 };
 
 export function sharedLocationRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined }): SharedLocationRelayDeps {

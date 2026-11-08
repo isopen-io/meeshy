@@ -60,7 +60,7 @@ export function isLocalIp(ip: string): boolean {
  * refuse la combinaison. Aucune adresse IP, aucun en-tête, aucune forme de
  * requête ne doit plus ouvrir cette porte.
  */
-function rateLimitDisabled(): boolean {
+export function rateLimitDisabled(): boolean {
   if (process.env.RATE_LIMIT_DISABLED !== 'true') return false;
   if (process.env.NODE_ENV === 'production') {
     logger.error(

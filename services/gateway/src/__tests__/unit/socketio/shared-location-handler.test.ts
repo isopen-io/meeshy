@@ -6,26 +6,22 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { listenSharedLocation, localSharedLocationRate, type SharedLocationHandlerDeps } from '../../../socketio/handlers/SharedLocationHandler';
+import { listenSharedLocation, localSharedLocationRate, sharedLocationWithinRate, type SharedLocationHandlerDeps } from '../../../socketio/handlers/SharedLocationHandler';
 import { messagingWorld } from '../../helpers/messaging-circle-world';
+import { sharedLocationKvEnMemoire } from '../../helpers/shared-location-kv';
 
 const MOI = '6300000000000000000000a1';
 const AMI = '6300000000000000000000a2';
 const DEMARRER = { recipients: [{ userId: AMI }], durationMinutes: 60, position: { latitude: 48.85, longitude: 2.35 } };
 
-const etats = (p: { readonly entries: Map<string, string> }): string[] => [...p.entries.keys()].filter((key) => key.startsWith(`shared-location:${MOI}`));
 
 function porte(options: { readonly isAnonymous?: boolean; readonly within?: boolean } = {}) {
-  const entries = new Map<string, string>();
+  const cache = sharedLocationKvEnMemoire();
   const world = messagingWorld({ users: [{ id: MOI }, { id: AMI }], links: [[MOI, AMI, 'FRIEND']] });
   const deps: SharedLocationHandlerDeps = {
     relay: {
       prisma: world.prisma as unknown as PrismaClient,
-      cache: {
-        get: async (key) => entries.get(key) ?? null,
-        set: async (key, value) => { entries.set(key, value); },
-        del: async (key) => { entries.delete(key); },
-      },
+      cache,
       io: undefined,
       now: () => Date.parse('2026-11-08T12:00:00.000Z'),
     },
@@ -36,7 +32,7 @@ function porte(options: { readonly isAnonymous?: boolean; readonly within?: bool
   listenSharedLocation({ id: 'sock', on: (event, listener) => { handlers.set(event, listener); } }, deps);
   const call = (event: string, payload: unknown) =>
     new Promise<Record<string, unknown>>((resolve) => handlers.get(event)!(payload, resolve));
-  return { entries, call };
+  return { cache, entries: cache.entries, etats: () => cache.etatsDe(MOI), call };
 }
 
 describe('SharedLocationHandler — la porte', () => {
@@ -49,7 +45,7 @@ describe('SharedLocationHandler — la porte', () => {
   it('un compte inscrit démarre : le partage est rangé et l\'accusé rend son terme', async () => {
     const p = porte();
     expect(await p.call('location:share-start', DEMARRER)).toEqual({ success: true, data: { expiresAt: '2026-11-08T13:00:00.000Z' } });
-    expect([...p.entries.keys()].map((key) => key.replace(/[0-9a-f-]{36}$/, '<session>')).sort()).toEqual(['shared-location-current:' + MOI + ':genesis', 'shared-location:' + MOI + ':<session>'].sort());
+    expect(p.cache.clesDe(MOI).map((key) => key.replace(/[0-9a-f-]{36}$/, '<session>')).sort()).toEqual([`shared-location-current:{${MOI}}`, `shared-location:{${MOI}}:<session>`].sort());
     expect(await p.call('location:share-update', { latitude: 48.86, longitude: 2.34 })).toMatchObject({ success: true });
   });
 
@@ -64,17 +60,17 @@ describe('SharedLocationHandler — la porte', () => {
     await p.call('location:share-start', DEMARRER);
     const limitee = porte({ within: false });
     p.entries.forEach((value, key) => limitee.entries.set(key, value));
-    expect(etats(limitee)).toHaveLength(1);
+    expect(limitee.etats()).toHaveLength(1);
     expect(await limitee.call('location:share-stop', {})).toEqual({ success: true });
-    expect(etats(limitee)).toEqual([]);
+    expect(limitee.etats()).toEqual([]);
   });
 
   it('arrêter retire le partage rangé', async () => {
     const p = porte();
     await p.call('location:share-start', DEMARRER);
-    expect(etats(p)).toHaveLength(1);
+    expect(p.etats()).toHaveLength(1);
     expect(await p.call('location:share-stop', {})).toEqual({ success: true });
-    expect(etats(p)).toEqual([]);
+    expect(p.etats()).toEqual([]);
   });
 });
 
@@ -84,5 +80,42 @@ describe('le repli du débit — un limiteur partagé muet ne laisse pas passer 
     expect([local(MOI, 0), local(MOI, 10), local(MOI, 20)]).toEqual([true, true, false]);
     expect(local(AMI, 20)).toBe(true);
     expect(local(MOI, 1_000)).toBe(true);
+  });
+
+  it('les fenêtres échues s\'élaguent par la tête : un compte revenu après sa fenêtre repart de zéro', () => {
+    const local = localSharedLocationRate({ max: 1, windowMs: 1_000 });
+    expect([local(MOI, 0), local(AMI, 500), local(MOI, 1_000), local(AMI, 1_000), local(AMI, 1_500)]).toEqual([true, true, true, false, true]);
+  });
+});
+
+describe('le juge du débit — désactivé par configuration, en panne, ou dans les clous', () => {
+  const juge = (options: { readonly disabled: boolean; readonly info: { readonly retryAfter?: number } | null }) => {
+    const consumed: string[] = [];
+    const within = sharedLocationWithinRate({
+      consume: async (userId) => {
+        consumed.push(userId);
+        return options.info === null ? null : { limit: 120, remaining: 0, reset: 0, ...options.info };
+      },
+      disabled: () => options.disabled,
+      local: localSharedLocationRate({ max: 1, windowMs: 60_000 }),
+      now: () => 0,
+    });
+    return { within, consumed };
+  };
+
+  it('limitation coupée par configuration : tout passe, ni le limiteur ni le compteur local ne jugent', async () => {
+    const { within, consumed } = juge({ disabled: true, info: null });
+    expect([await within(MOI), await within(MOI), await within(MOI)]).toEqual([true, true, true]);
+    expect(consumed).toEqual([]);
+  });
+
+  it('magasin du limiteur en panne : le compteur local juge', async () => {
+    const { within } = juge({ disabled: false, info: null });
+    expect([await within(MOI), await within(MOI)]).toEqual([true, false]);
+  });
+
+  it('le limiteur partagé juge quand il répond', async () => {
+    expect(await juge({ disabled: false, info: {} }).within(MOI)).toBe(true);
+    expect(await juge({ disabled: false, info: { retryAfter: 30 } }).within(MOI)).toBe(false);
   });
 });

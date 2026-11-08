@@ -325,6 +325,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `services/sharedLocation/` sur le patron de l'écoute (état complet scellé, TTL = temps restant, projection exacte /
   quartier / ville au centre d'une maille fixe, rayon de flou) ; `GET /relations/locations?bbox=` filtré sur la
   position SERVIE ; recalcul à la baisse, au blocage, au retrait de lien et à l'acceptation.
+- Audit avant fusion (porteur, deux passes « non fusionnable ») : la mise à jour écrivait sans condition, l'arrêt
+  dépendait de l'horloge, le limiteur muet laissait passer. Premier correctif par sessions + pointeur + génération,
+  sur `CacheStore` ; le contre-audit a montré que ce schéma supposait un magasin unique (A : `CacheStore` se replie en
+  mémoire d'instance, un arrêt pendant une coupure Redis répondait `success` puis le partage revenait), une génération
+  à durée de vie (B : retour à l'état initial au bout de 8 h) et une prise non atomique (C : un destinataire retiré
+  sans `ended`). Réponse : `sharedLocationKv.ts`, magasin Redis STRICT sur le client natif, sans repli (panne ⇒
+  `UNAVAILABLE`), trois scripts Lua (prise sous condition de génération rendant la session réellement remplacée,
+  écriture sous condition de session courante, arrêt par `INCR` sans TTL), clés étiquetées `{id}`. Le repli de débit
+  ne s'applique plus quand la limitation est coupée hors production et s'élague par la tête.
+- Leçon : un schéma de concurrence se juge sur la cohérence du MAGASIN qu'il suppose, pas seulement sur l'ordre des
+  gestes ; un cache à repli silencieux n'est pas une source de vérité pour un arrêt.
 - Gates locaux : voir la PR.
 - Ce qui reste de la position temporaire : iOS (#16983, émetteur + carte), web (#16984, carte en lecture), Android
   (#16985) ; « jusqu'à l'arrivée » (ETA, Live Activity, Live Update), fantôme (LOC-12), précision par niveau (RG-15).

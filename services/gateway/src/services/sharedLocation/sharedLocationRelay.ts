@@ -42,15 +42,15 @@ import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong, type PairAccessDb } from '../relations/pairAccess';
 import { randomUUID } from 'node:crypto';
 import {
+  advanceSharedLocationGeneration,
   claimSharedLocation,
   currentSharedLocationSession,
   dropSharedLocationSession,
-  forgetSharedLocationGeneration,
-  markSharedLocationStopped,
   readSharedLocation,
   readSharedLocationSession,
   sharedLocationGeneration,
   storeSharedLocation,
+  storeSharedLocationIfCurrent,
   type SharedLocationCache,
   type SharedLocationState,
 } from './sharedLocationStore';
@@ -211,22 +211,25 @@ async function reconcile(deps: SharedLocationRelayDeps, emitterId: string, serve
 }
 
 /**
- * Retire une session que le geste n'a pas lue (posée par un geste concurrent) : ceux qui la
- * VOYAIENT reçoivent ce que le partage courant leur doit ; qui ne la voyait pas n'apprend rien.
+ * Retire une session qui n'est plus courante : ceux qui la VOYAIENT reçoivent ce que le
+ * partage courant leur doit (sa projection, ou la fin) ; qui ne la voyait pas n'apprend rien,
+ * et qui vient de recevoir le partage courant (`alreadyServed`) n'est pas servi deux fois.
  */
-async function retireSession(deps: SharedLocationRelayDeps, emitterId: string, sessionId: string): Promise<void> {
+async function retireSession(deps: SharedLocationRelayDeps, emitterId: string, sessionId: string, alreadyServed: readonly string[] = []): Promise<void> {
   const orphan = await readSharedLocationSession(deps.cache, emitterId, sessionId, deps.now());
   await dropSharedLocationSession(deps.cache, emitterId, sessionId);
   if (!orphan) return;
   const access = await accessOf(deps, emitterId, orphan, recipientIdsOf(orphan));
-  const saw = [...access].filter(([, readerAccess]) => readerAccess !== 'none').map(([readerId]) => readerId);
+  const saw = [...access]
+    .filter(([readerId, readerAccess]) => readerAccess !== 'none' && !alreadyServed.includes(readerId))
+    .map(([readerId]) => readerId);
   await reconcile(deps, emitterId, saw);
 }
 
 /**
- * Démarre (ou remplace) le partage. Un destinataire qui VOYAIT le partage précédent et
- * ne le voit plus reçoit `ended` ; personne d'autre n'apprend rien. Un arrêt survenu
- * pendant le démarrage l'emporte : la marque d'arrêt lue avant l'écriture a changé.
+ * Démarre (ou remplace) le partage. La prise du pointeur est ATOMIQUE et conditionnée à la
+ * génération lue : un arrêt survenu pendant le démarrage l'emporte. Elle rend la session
+ * réellement remplacée, retirée en prévenant ceux qui la voyaient.
  */
 export async function startSharedLocation(deps: SharedLocationRelayDeps, emitterId: string, payload: unknown): Promise<SharedLocationAck> {
   const parsed = sharedLocationStartPayloadSchema.safeParse(payload);
@@ -242,45 +245,24 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     updatedAt: new Date(now).toISOString(),
     expiresAt: new Date(now + parsed.data.durationMinutes * 60_000).toISOString(),
   };
-  const lost = async (): Promise<boolean> =>
-    (await sharedLocationGeneration(deps.cache, emitterId)) !== generation ||
-    (await currentSharedLocationSession(deps.cache, emitterId)) !== state.sessionId;
 
-  let generation: string;
-  let previous: SharedLocationState | null;
-  let displaced: string | null = null;
+  let displaced: string | null;
   try {
-    generation = await sharedLocationGeneration(deps.cache, emitterId);
-    previous = await readSharedLocation(deps.cache, emitterId, now);
-  } catch {
-    return UNAVAILABLE;
-  }
-  const before = previous ? await accessOf(deps, emitterId, previous, recipientIdsOf(previous)) : new Map<string, SharedLocationReaderAccess>();
-  try {
+    const generation = await sharedLocationGeneration(deps.cache, emitterId);
     await storeSharedLocation(deps.cache, emitterId, state, now);
-    displaced = await currentSharedLocationSession(deps.cache, emitterId);
-    await claimSharedLocation(deps.cache, emitterId, generation, state, now);
-    if (await lost()) {
+    const claim = await claimSharedLocation(deps.cache, emitterId, generation, state, now);
+    if (!claim.claimed) {
       await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
-      await forgetSharedLocationGeneration(deps.cache, emitterId, generation);
-      if (displaced !== null && displaced !== previous?.sessionId && displaced !== (await currentSharedLocationSession(deps.cache, emitterId))) {
-        await retireSession(deps, emitterId, displaced);
-      }
       return STOPPED;
     }
-    if (previous) await dropSharedLocationSession(deps.cache, emitterId, previous.sessionId);
+    displaced = claim.displaced;
   } catch {
     return UNAVAILABLE;
   }
 
   const after = await fanOut(deps, emitterId, state);
-  before.forEach((access, readerId) => {
-    if (access !== 'none' && (after.access.get(readerId) ?? 'none') === 'none') unserve(deps.io, readerId, emitterId);
-  });
-  if (displaced !== null && displaced !== previous?.sessionId && displaced !== state.sessionId) await retireSession(deps, emitterId, displaced);
-  if (await lost()) {
-    await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
-    await forgetSharedLocationGeneration(deps.cache, emitterId, generation);
+  if (displaced !== null) await retireSession(deps, emitterId, displaced, after.served);
+  if ((await currentSharedLocationSession(deps.cache, emitterId)) !== state.sessionId) {
     await reconcile(deps, emitterId, after.served);
     return STOPPED;
   }
@@ -288,54 +270,46 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
 }
 
 /**
- * Une nouvelle position du partage en cours ; le terme ne bouge pas. L'écriture ne vise
- * que la session LUE : si le partage a été arrêté ou remplacé entre-temps, elle n'atteint
- * rien de courant, rien ne part, et la réponse est `NOT_SHARING`.
+ * Une nouvelle position du partage en cours ; le terme ne bouge pas. L'écriture est
+ * ATOMIQUE et conditionnée à la session lue : arrêté ou remplacé entre-temps, rien n'est
+ * écrit, rien ne part, et la réponse est `NOT_SHARING`.
  */
 export async function updateSharedLocation(deps: SharedLocationRelayDeps, emitterId: string, payload: unknown): Promise<SharedLocationAck> {
   const parsed = sharedLocationUpdatePayloadSchema.safeParse(payload);
   if (!parsed.success) return failed(SHARED_LOCATION_ERROR_CODES.INVALID, 'Position illisible');
 
   const now = deps.now();
-  const current = await readSharedLocation(deps.cache, emitterId, now);
-  if (!current) return failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
-  const state: SharedLocationState = { ...current, position: parsed.data, updatedAt: new Date(now).toISOString() };
-  const lost = async (): Promise<boolean> => (await currentSharedLocationSession(deps.cache, emitterId)) !== state.sessionId;
+  let current: SharedLocationState | null;
+  let state: SharedLocationState;
   try {
-    await storeSharedLocation(deps.cache, emitterId, state, now);
-    if (await lost()) {
-      await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
-      return STOPPED;
-    }
+    current = await readSharedLocation(deps.cache, emitterId, now);
+    if (!current) return failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
+    state = { ...current, position: parsed.data, updatedAt: new Date(now).toISOString() };
+    if (!(await storeSharedLocationIfCurrent(deps.cache, emitterId, state, now))) return STOPPED;
   } catch {
     return UNAVAILABLE;
   }
   const { served } = await fanOut(deps, emitterId, state, current);
-  if (await lost()) {
-    await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
+  if ((await currentSharedLocationSession(deps.cache, emitterId)) !== state.sessionId) {
     await reconcile(deps, emitterId, served);
     return STOPPED;
   }
   return { success: true, data: { expiresAt: state.expiresAt } };
 }
 
-/** Arrête le partage : il est effacé, et `ended` part vers ceux qui le voyaient, à eux seuls. */
+/**
+ * Arrête le partage : la génération avance et le pointeur part d'un seul geste atomique ;
+ * la session qu'il désignait (lue avant, ou posée pendant) est effacée, et `ended` part
+ * vers ceux qui la voyaient, à eux seuls. Une panne du magasin rend `UNAVAILABLE` : rien
+ * n'a changé, le client réessaie.
+ */
 export async function stopSharedLocation(deps: SharedLocationRelayDeps, emitterId: string): Promise<SharedLocationStopAck> {
-  const now = deps.now();
-  const generation = await sharedLocationGeneration(deps.cache, emitterId);
-  const had = await readSharedLocation(deps.cache, emitterId, now);
-  const seen = had ? await accessOf(deps, emitterId, had, recipientIdsOf(had)) : new Map<string, SharedLocationReaderAccess>();
-  let late: string | null;
   try {
-    late = await markSharedLocationStopped(deps.cache, emitterId, { mark: randomUUID(), generation, sessionId: had?.sessionId ?? null });
+    const stopped = await advanceSharedLocationGeneration(deps.cache, emitterId);
+    if (stopped !== null) await retireSession(deps, emitterId, stopped);
   } catch {
     return UNAVAILABLE;
   }
-  seen.forEach((access, readerId) => {
-    if (access !== 'none') unserve(deps.io, readerId, emitterId);
-  });
-  // L'arrêt a eu lieu : une panne en retirant le démarrage tardif ne le dément pas (la session échoit à son terme).
-  if (late !== null) await retireSession(deps, emitterId, late).catch(() => undefined);
   return { success: true };
 }
 
