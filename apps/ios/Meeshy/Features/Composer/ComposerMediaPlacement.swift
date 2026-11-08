@@ -204,21 +204,27 @@ nonisolated enum ComposerHeaderTiles {
     /// > La seconde condition ne se DÉDUIT pas de la première : une rangée
     /// > montée à une seule scène aurait une tuile courante, donc une corbeille,
     /// > et elle serait morte. C'est le modèle qui la donne, pas la vue.
-    static func showsDelete(sceneIndex: Int, currentIndex: Int, sceneCount: Int) -> Bool {
-        sceneCount > 1 && sceneIndex == currentIndex
+    ///
+    /// **Depuis #17111, la croix est celle du RÉORDONNANCEMENT** : l'appui long
+    /// l'arme sur chaque tuile, au repos aucune tuile n'en porte. Sans
+    /// réordonnancement armé (`isReordering` omis), la règle d'avant demeure.
+    static func showsDelete(sceneIndex: Int, currentIndex: Int, sceneCount: Int,
+                            isReordering: Bool? = nil) -> Bool {
+        guard sceneCount > 1 else { return false }
+        guard let isReordering else { return sceneIndex == currentIndex }
+        return isReordering
     }
 
-    /// **Le rail se monte dès qu'une scène EXISTE** (#5037 : « dès qu'une scène
-    /// existe » ; #5009 : créer une scène se VOIT).
+    /// **La rangée des scènes paraît à partir de DEUX scènes** (L2, L13 de la
+    /// vue finale validée (#17019) : « pas de rangée des scènes à une
+    /// scène »), ce qui remplace « dès qu'une scène existe » de #5037.
     ///
-    /// Il se taisait sous deux scènes, au motif qu'un rail d'un seul élément ne
-    /// navigue vers rien. C'était juste pour un rail de NAVIGATION ; depuis que
-    /// la tuile est la vignette de sa scène, une vignette seule est un APERÇU —
-    /// elle a quelque chose à dire. Une scène seule n'existe pour l'auteur que
-    /// si elle est MONTÉE : le document d'un post sans scène porte une slide
-    /// vide en mémoire, et une vignette noire y annoncerait une scène absente.
-    static func showsRail(sceneCount: Int, scenePresent: Bool) -> Bool {
-        sceneCount > 1 || (sceneCount == 1 && scenePresent)
+    /// Depuis #17111, une tuile seule ne serait plus un aperçu muet : elle
+    /// porterait (+), le double toucher et l'appui long — une rangée d'actions
+    /// au-dessus d'une scène qui n'a rien à ranger. La deuxième scène naît par
+    /// « Ajouter une scène » du ⋯, et la rangée paraît avec elle.
+    static func showsRail(sceneCount: Int) -> Bool {
+        sceneCount > 1
     }
 
     /// Les tuiles sont des BOUTONS à partir de deux scènes — seules, elles

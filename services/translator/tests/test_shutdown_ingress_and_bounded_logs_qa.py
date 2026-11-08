@@ -243,12 +243,6 @@ class TestSummaryLineIsBounded:
 
 
 class TestResidualFlushLoopCancellation:
-    @pytest.mark.xfail(strict=True, reason=(
-        "Réserve QA préexistante (déjà sur dev) : `stop()` annule la boucle de flush "
-        "pendant qu'elle remet un lot refusé (file pleine) au rappel ; le lot, déjà "
-        "retiré de l'accumulateur et compté dans pool_full_rejections, n'est jamais "
-        "signalé. Improbable avec un PUB zmq (send non bloquant), mais non garanti."
-    ))
     async def test_batch_refused_by_the_flush_loop_while_stop_cancels_it_is_still_signaled(self):
         mgr = _manager(normal_pool_size=1)
         cm = mgr.connection_manager

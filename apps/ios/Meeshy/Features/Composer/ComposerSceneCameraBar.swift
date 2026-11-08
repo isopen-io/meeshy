@@ -16,11 +16,11 @@ import MeeshyUI
 /// scène et la miniature choisie, en bas, prennent la photo et la vidéo ; le
 /// rail, en bas à gauche, ouvre les filtres et les cadres.
 ///
-/// **La croix en haut à GAUCHE, suivie de la puce du chrono ; à DROITE les
-/// contrôleurs de segment, le flash et, au bord, le retournement ; sous le
-/// flash — allumé, et 2 s après la dernière interaction — le curseur vertical
-/// de son intensité** (porteur 2026-10-05, 2026-10-07 #9566, 2026-10-09 #9753 —
-/// la disposition est la loi `ComposerCaptureTopRow`).
+/// **« Quitter » à GAUCHE, « ✓ Valider » à DROITE, le chrono au centre ; sous
+/// l'en-tête UNE capsule centrée Flash · Retardateur · Objectif · ⋯, et sous
+/// elle — flash allumé, 2 s après la dernière interaction — le curseur de son
+/// intensité ; en filmant, la barre en cases du maximum du format et le chrono
+/// seul** (vues A8–A9, #17109 — la disposition est la loi `ComposerCaptureTopRow`).
 struct ComposerSceneCameraBar: View {
 
     let stage: ComposerSceneCameraStage
@@ -46,6 +46,9 @@ struct ComposerSceneCameraBar: View {
     /// est une prise CLOSE, ceci une horloge qui court. Les additionner est la
     /// règle (`ComposerCaptureSegments.elapsed`).
     var liveDuration: TimeInterval = 0
+    /// La durée maximale d'une prise pour le format (A9) ; `nil` ⇒ la bande
+    /// proportionnelle des segments, sans cases.
+    var recordingBudget: TimeInterval?
     var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
     var onFlashIntensity: (Double) -> Void = { _ in }
     /// Une bascule d'objectif est en cours, ou la prise précédente se
@@ -96,30 +99,42 @@ struct ComposerSceneCameraBar: View {
 
     private var trailingItems: [ComposerCaptureTopItem] { ComposerCaptureTopRow.trailing(row) }
 
+    private var capsuleItems: [ComposerCaptureTopItem] { ComposerCaptureTopRow.capsule(row) }
+
     private var showsFlashSlider: Bool {
-        trailingItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode) && sliderTimer.visible
+        capsuleItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode) && sliderTimer.visible
+    }
+
+    /// La barre en cases (A9) : dès qu'une vidéo se prend, sous un maximum connu.
+    private var showsBudgetBar: Bool {
+        !editing && recordingBudget != nil && (stage == .recording || !segments.isEmpty)
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            if showsBudgetBar {
+                budgetBar
+            } else if !segments.isEmpty, !editing {
+                segmentBar
+            }
             topControls
-            if !segments.isEmpty, !editing { segmentBar }
+            if !capsuleItems.isEmpty {
+                controlCapsule
+                    .padding(.top, MeeshySpacing.sm)
+                    .transition(.opacity)
+            }
             if showsFlashSlider {
-                HStack {
-                    Spacer(minLength: 0)
-                    ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity,
-                                                 onInteraction: { sliderTimer.hold($0) })
-                }
-                .padding(.trailing, ComposerCaptureTopRow.flashSliderTrailingInset(
-                    trailingItems, tapTarget: MeeshyControlSize.tapTarget))
-                .padding(.top, MeeshySpacing.sm)
-                .transition(.opacity)
+                ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity,
+                                             onInteraction: { sliderTimer.hold($0) })
+                    .padding(.top, MeeshySpacing.sm)
+                    .transition(.opacity)
             }
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.top, MeeshySpacing.md)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsFlashSlider)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: trailingItems)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: capsuleItems)
         .adaptiveOnChange(of: flashMode) { _, mode in
             guard ComposerFlashIntensity.showsSlider(flash: mode) else { return sliderTimer.hide() }
             sliderTimer.touch()
@@ -133,25 +148,41 @@ struct ComposerSceneCameraBar: View {
 
     // MARK: - En tête de la carte
 
-    /// **La rangée haute, disposée par sa loi** (#9753) : (x) puis le chrono à
-    /// gauche ; à droite `[ ]`, les contrôleurs de segment, le flash et, au
-    /// bord, le retournement. **La croix est TOUJOURS là** (#8653 : « permettre
-    /// de quitter à tout moment »), pendant l'enregistrement compris.
+    /// **L'en-tête, disposé par sa loi** (A8, #17109) : « Quitter » à gauche,
+    /// « ✓ Valider » à droite, le chrono au centre dès qu'une vidéo se prend.
+    /// En filmant, l'en-tête se retire (`showsHeader`, A9) : le chrono reste
+    /// seul, centré, et la prise se clôt au déclencheur rouge.
     private var topControls: some View {
-        HStack(spacing: ComposerCaptureTopRow.spacing) {
-            ForEach(ComposerCaptureTopRow.leading(row), id: \.self) { control($0) }
-            Spacer(minLength: 0)
-            ForEach(trailingItems, id: \.self) { control($0) }
+        ZStack {
+            if ComposerCaptureTopRow.showsHeader(row) {
+                HStack(spacing: ComposerCaptureTopRow.spacing) {
+                    ForEach(ComposerCaptureTopRow.leading(row), id: \.self) { control($0) }
+                    Spacer(minLength: 0)
+                    ForEach(trailingItems, id: \.self) { control($0) }
+                }
+            }
+            if ComposerCaptureTopRow.showsChrono(row) { chronoChip }
         }
+        .frame(minHeight: MeeshyControlSize.tapTarget)
+    }
+
+    /// **UNE capsule de verre centrée : Flash · Retardateur · Objectif · ⋯**
+    /// (A8). Ses boutons n'ont pas de verre à eux : jamais de verre sur du verre.
+    private var controlCapsule: some View {
+        HStack(spacing: 0) {
+            ForEach(capsuleItems, id: \.self) { control($0) }
+        }
+        .padding(.horizontal, MeeshySpacing.xs)
+        .adaptiveLiquidGlass(in: Capsule())
     }
 
     @ViewBuilder
     private func control(_ item: ComposerCaptureTopItem) -> some View {
         switch item {
         case .close:
-            glassControl(symbol: "xmark",
-                         label: editing ? ComposerCaptureCopy.cancelEdit : ComposerSceneCameraCopy.disarmLabel,
-                         tint: .white, action: onDisarm)
+            textControl(editing ? ComposerCaptureCopy.cancelEdit : ComposerCameraCopy.quit,
+                        spoken: editing ? ComposerCaptureCopy.cancelEdit : ComposerSceneCameraCopy.disarmLabel,
+                        action: onDisarm)
         case .chrono:
             chronoChip
         case .size:
@@ -163,13 +194,14 @@ struct ComposerSceneCameraBar: View {
             glassControl(symbol: "delete.left", label: ComposerSceneCameraCopy.dropSegmentLabel,
                          tint: .white.opacity(0.9), action: onDropLastSegment)
         case .validate:
-            glassControl(symbol: "checkmark", label: ComposerSceneCameraCopy.validateLabel,
-                         tint: .white, action: onValidateSegments)
+            validateButton
         case .flash:
             flashCluster
+        case .selfTimer:
+            selfTimerButton
         case .flip:
-            glassControl(symbol: "arrow.triangle.2.circlepath.camera", label: ComposerSceneCameraCopy.flipLabel,
-                         tint: .white, action: onFlipCamera)
+            capsuleControl(symbol: "arrow.triangle.2.circlepath.camera", label: ComposerSceneCameraCopy.flipLabel,
+                           tint: .white, action: onFlipCamera)
                 .disabled(flipping)
         case .save:
             if let onSave { saveButton(onSave) }
@@ -181,10 +213,98 @@ struct ComposerSceneCameraBar: View {
     /// **Le flash.** Le toucher change son mode et, allumé, fait paraître le
     /// curseur d'intensité SOUS lui (#9566) pour 2 s (#9753).
     private var flashCluster: some View {
-        glassControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
-                     label: ComposerCameraFlash.label(for: flashMode),
-                     tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
-                     action: onCycleFlash)
+        capsuleControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
+                       label: ComposerCameraFlash.label(for: flashMode),
+                       tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
+                       action: onCycleFlash)
+    }
+
+    /// **Le retardateur, d'un toucher** (A8) : désactivé → 3 s → 10 s →
+    /// désactivé ; allumé, le glyphe jaunit et porte ses secondes.
+    private var selfTimerButton: some View {
+        let delai = ComposerCaptureSelfTimerDelay(stored: selfTimerDelay)
+        return Button {
+            selfTimerDelay = delai.next.rawValue
+            HapticFeedback.light()
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                capsuleGlyph(symbol: "timer", tint: delai == .off ? .white.opacity(0.75) : .yellow)
+                if delai != .off {
+                    Text(LocalizedNumber.exact(delai.rawValue))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(.yellow)
+                        .padding(.top, MeeshySpacing.xs)
+                        .padding(.trailing, MeeshySpacing.xxs)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+        .buttonStyle(ComposerBounceButtonStyle())
+        .accessibilityLabel(ComposerSceneCameraCopy.selfTimerLabel)
+        .accessibilityValue(ComposerSceneCameraCopy.selfTimerOption(delai))
+        .accessibilityHint(ComposerCameraCopy.selfTimerHint)
+    }
+
+    /// **« ✓ Valider »** (A8) : un disque blanc plein à coche sombre — le seul
+    /// bouton plein de l'en-tête. Il pose les segments, ou rend la scène.
+    private var validateButton: some View {
+        Button {
+            HapticFeedback.light()
+            onValidateSegments()
+        } label: {
+            Image(systemName: "checkmark")
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                .foregroundStyle(Color.black)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .frame(minHeight: 40)
+                .background(Capsule().fill(Color.white))
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(ComposerBounceButtonStyle())
+        .accessibilityLabel(segments.isEmpty ? ComposerCameraCopy.validate : ComposerSceneCameraCopy.validateLabel)
+    }
+
+    /// **« Quitter »** : un mot sur du verre, comme l'en-tête de tout mode plein écran.
+    private func textControl(_ title: String, spoken: String, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            HapticFeedback.light()
+        } label: {
+            Text(title)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .frame(minHeight: 40)
+                .adaptiveLiquidGlass(in: Capsule(), interactive: true)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(ComposerBounceButtonStyle())
+        .accessibilityLabel(spoken)
+    }
+
+    /// Un réglage de la capsule : la capsule porte le verre, le bouton non.
+    private func capsuleControl(symbol: String, label: String, tint: Color,
+                                action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            HapticFeedback.light()
+        } label: {
+            capsuleGlyph(symbol: symbol, tint: tint)
+        }
+        .buttonStyle(ComposerBounceButtonStyle())
+        .accessibilityLabel(label)
+    }
+
+    private func capsuleGlyph(symbol: String, tint: Color) -> some View {
+        Image(systemName: symbol)
+            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+            .contentShape(Rectangle())
     }
 
     /// **✓ Terminé, en haut à droite, aligné sur la croix** (porteur 2026-10-07,
@@ -264,15 +384,6 @@ struct ComposerSceneCameraBar: View {
                     Toggle(isOn: $gridEnabled) {
                         Label(ComposerSceneCameraCopy.gridLabel, systemImage: "grid")
                     }
-                case .selfTimer:
-                    Picker(selection: $selfTimerDelay) {
-                        ForEach(ComposerCaptureSelfTimerDelay.allCases, id: \.self) { delai in
-                            Text(ComposerSceneCameraCopy.selfTimerOption(delai)).tag(delai.rawValue)
-                        }
-                    } label: {
-                        Label(ComposerSceneCameraCopy.selfTimerLabel, systemImage: "timer")
-                    }
-                    .pickerStyle(.menu)
                 case .size:
                     Button(action: onToggleSize) {
                         Label(ComposerSceneCameraCopy.sizeLabel(size), systemImage: size.toggleSymbol)
@@ -280,7 +391,7 @@ struct ComposerSceneCameraBar: View {
                 }
             }
         } label: {
-            glassGlyph(symbol: "ellipsis", tint: .white)
+            capsuleGlyph(symbol: "ellipsis", tint: .white)
         }
         .accessibilityLabel(ComposerSceneCameraCopy.moreLabel)
     }
@@ -330,6 +441,27 @@ struct ComposerSceneCameraBar: View {
         }
         .frame(height: 3)
         .padding(.top, MeeshySpacing.smPlus)
+        .accessibilityHidden(true)
+    }
+
+    /// **La barre en cases** (A9) : le maximum du format découpé en cases
+    /// égales, remplies par la prise — segments clos et prise en cours.
+    private var budgetBar: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            ForEach(Array(ComposerCaptureRecordingBudget.slotFills(elapsed: elapsed, budget: recordingBudget)
+                .enumerated()), id: \.offset) { _, remplissage in
+                GeometryReader { case_ in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.3))
+                        Capsule().fill(Color.white)
+                            .frame(width: case_.size.width * remplissage)
+                    }
+                }
+            }
+        }
+        .frame(height: 4)
+        .padding(.bottom, MeeshySpacing.sm)
+        .animation(reduceMotion ? nil : .linear(duration: 0.2), value: elapsed)
         .accessibilityHidden(true)
     }
 

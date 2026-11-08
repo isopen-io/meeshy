@@ -33,6 +33,8 @@ nonisolated enum ComposerViewfinderRules {
 /// segments — puis le viseur se retire.
 struct ComposerViewfinder: View {
     let initialMode: CameraCaptureMode
+    /// La durée maximale d'une prise (A9) ; `nil` ⇒ sans limite ni barre en cases.
+    let recordingBudget: TimeInterval?
     let onCapture: (CameraResult) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -45,8 +47,10 @@ struct ComposerViewfinder: View {
     /// Le viseur naît ARMÉ, au mode que la porte a promis : posé dans un
     /// `.onAppear`, la barre annoncerait la photo une image avant de basculer.
     init(initialMode: CameraCaptureMode = .photo,
+         recordingBudget: TimeInterval? = nil,
          onCapture: @escaping (CameraResult) -> Void) {
         self.initialMode = initialMode
+        self.recordingBudget = recordingBudget
         self.onCapture = onCapture
         _capture = StateObject(wrappedValue: ComposerWarmCapture.session(
             stage: .armed, mode: ComposerViewfinderRules.sceneMode(for: initialMode)))
@@ -69,6 +73,7 @@ struct ComposerViewfinder: View {
                 ComposerCaptureCoverLife.reattach(capture, mode: ComposerViewfinderRules.sceneMode(for: initialMode))
             }
             camera.configure(filming: initialMode == .video)
+            capture.recordingBudget = recordingBudget
             capture.watchThermalState()
             // La porte qui promet la vidéo arme le micro À L'OUVERTURE : le
             // prompt n'arrive pas sous le doigt qui veut déjà filmer.

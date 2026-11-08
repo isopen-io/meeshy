@@ -262,8 +262,11 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
     }
 
     func test_placement_leBoutonDeTaille_resteOffertSousLeFlashDEcran_etSeTaitEnRetouche() {
-        XCTAssertTrue(ComposerCapturePlacement.offersSizeToggle(hostHasCard: true, screenFlash: false, editing: false))
+        XCTAssertFalse(ComposerCapturePlacement.offersSizeToggle(hostHasCard: true, screenFlash: false, editing: false),
+                       "A8 (#17109) : la caméra s'arme plein écran, sans bascule carte ↔ plein écran")
         XCTAssertFalse(ComposerCapturePlacement.offersSizeToggle(hostHasCard: false, screenFlash: false, editing: false))
+        XCTAssertTrue(ComposerCapturePlacement.offersSizeToggle(hostHasCard: true, screenFlash: true, editing: false),
+                      "le selfie éclairé du composer garde sa scène entourée de blanc")
         XCTAssertTrue(ComposerCapturePlacement.offersSizeToggle(hostHasCard: false, screenFlash: true, editing: false),
                       "le selfie éclairé peut toujours s'agrandir")
         XCTAssertFalse(ComposerCapturePlacement.offersSizeToggle(hostHasCard: true, screenFlash: true, editing: true))
