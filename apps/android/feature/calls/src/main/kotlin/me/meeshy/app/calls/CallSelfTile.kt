@@ -195,7 +195,7 @@ internal fun CallSelfTile(
         val pausedHint = stringResource(R.string.call_stage_video_paused_hint)
         val largerLabel = stringResource(R.string.call_stage_tile_larger)
         val smallerLabel = stringResource(R.string.call_stage_tile_smaller)
-        val rim = rimHex?.let(::hexColor)?.takeIf { it != Color.Unspecified }
+        val rim = rimHex?.let { hexColor(it) }?.takeIf { it != Color.Unspecified }
         val border = when {
             paused -> BorderStroke(1.dp, MeeshyTheme.tokens.warning.copy(alpha = PAUSED_BORDER_ALPHA))
             rim != null -> BorderStroke(RIM_WIDTH, rim)
