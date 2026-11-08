@@ -63,12 +63,12 @@ extension MeeshyComposerHost {
     /// fondateurs ne produirait aucun retour à la création d'une scène, tant
     /// qu'on ne lui a pas donné de photo.
     ///
-    /// Chaque tuile EST la vignette de sa scène ; le rail se
-    /// monte dès qu'une scène existe et est montée (`showsRail`) — une scène
-    /// neuve y paraît donc tout de suite, noire parce qu'elle est vide.
+    /// Chaque tuile EST la vignette de sa scène ; la rangée paraît à partir de
+    /// deux scènes (`showsRail`, L13) — une scène neuve y paraît donc tout de
+    /// suite, noire parce qu'elle est vide.
     var slideRailSlot: AnyView? {
         let scenes = ComposerHeaderTiles.tiles(for: viewModel.slides)
-        guard ComposerHeaderTiles.showsRail(sceneCount: scenes.count, scenePresent: sceneIsPresent) else {
+        guard ComposerHeaderTiles.showsRail(sceneCount: scenes.count) else {
             return nil
         }
         return AnyView(ComposerSlideRail(
