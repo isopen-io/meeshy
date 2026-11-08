@@ -11,7 +11,7 @@ Responsabilités:
 import asyncio
 import logging
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 from collections import defaultdict
 
 # Import local
@@ -19,6 +19,8 @@ from ..zmq_models import TranslationTask
 from ..task_privacy import is_live_call_caption
 
 logger = logging.getLogger(__name__)
+
+RejectedTasksHandler = Callable[[List[TranslationTask]], Awaitable[None]]
 
 
 class SignalingQueue(asyncio.Queue):
@@ -86,7 +88,8 @@ class ConnectionManager:
         self,
         normal_pool_size: int = 10000,
         any_pool_size: int = 10000,
-        fast_pool_size: int = 5000
+        fast_pool_size: int = 5000,
+        on_tasks_rejected: Optional[RejectedTasksHandler] = None
     ):
         """
         Initialize connection manager
@@ -95,7 +98,10 @@ class ConnectionManager:
             normal_pool_size: Taille max de la pool normale
             any_pool_size: Taille max de la pool "any"
             fast_pool_size: Taille max de la fast pool (textes courts)
+            on_tasks_rejected: rappel des tâches d'un lot refusé par une file
+                pleine (#16781). Sans rappel, le refus est compté et journalisé.
         """
+        self.on_tasks_rejected = on_tasks_rejected
         # Queues FIFO, toutes reliées au même drapeau « du travail est arrivé » (#16780)
         self.work_arrived = asyncio.Event()
         self.normal_pool = SignalingQueue(normal_pool_size, self.work_arrived)
@@ -210,15 +216,21 @@ class ConnectionManager:
                     self._batch_accumulator[batch_key].append(task)
 
                     # Flush immédiat si batch max atteint
+                    rejected: List[TranslationTask] = []
                     if len(self._batch_accumulator[batch_key]) >= self.batch_max_size:
                         tasks_to_flush = self._batch_accumulator.pop(batch_key)
-                        await self._enqueue_batch(tasks_to_flush)
+                        if not await self._enqueue_batch(tasks_to_flush):
+                            rejected = tasks_to_flush
                         logger.debug(
                             f"⚡ [BATCH] Max size reached, immediate flush of "
                             f"{len(tasks_to_flush)} tasks"
                         )
 
-                    return True
+                # #16781 — une tâche entrée dans l'accumulateur est ACCEPTÉE :
+                # son éventuel refus se dit par le rappel, jamais par ce retour,
+                # sinon la tâche déclenchante serait signalée deux fois.
+                await self._report_rejected(rejected)
+                return True
 
             # Fallback: pas de batching, enqueue directement
             return await self._enqueue_single_task(task)
@@ -268,10 +280,16 @@ class ConnectionManager:
 
         return True
 
-    async def _enqueue_batch(self, tasks: List[TranslationTask]):
-        """Enfile un batch de tâches comme une seule unité"""
+    async def _enqueue_batch(self, tasks: List[TranslationTask]) -> bool:
+        """
+        Enfile un batch de tâches comme une seule unité.
+
+        Returns:
+            False si la file est pleine : le lot est compté (une rejection par
+            tâche) et journalisé par ses task_id, jamais par son texte (#16781).
+        """
         if not tasks:
-            return
+            return True
 
         # Créer une tâche batch
         batch_task = TranslationTask(
@@ -288,15 +306,32 @@ class ConnectionManager:
         # Stocker les tâches originales
         batch_task._batch_tasks = tasks  # type: ignore
 
-        # Enqueue dans la pool appropriée
-        if tasks[0].conversation_id == "any":
-            if not self.any_pool.full():
-                await self.any_pool.put(batch_task)
-                self.stats['batches_created'] += 1
-        else:
-            if not self.normal_pool.full():
-                await self.normal_pool.put(batch_task)
-                self.stats['batches_created'] += 1
+        pool_name = "any" if tasks[0].conversation_id == "any" else "normal"
+        pool = self.any_pool if pool_name == "any" else self.normal_pool
+        if pool.full():
+            self.stats['pool_full_rejections'] += len(tasks)
+            logger.warning(
+                f"[TRANSLATOR] {pool_name} pool full, rejecting batch of {len(tasks)} "
+                f"tasks: {[t.task_id for t in tasks]}"
+            )
+            return False
+
+        await pool.put(batch_task)
+        self.stats['batches_created'] += 1
+        return True
+
+    async def _report_rejected(self, tasks: List[TranslationTask]) -> None:
+        """Remet les tâches refusées au rappel, appelé HORS du verrou de lot ;
+        un rappel qui lève est journalisé et n'interrompt rien."""
+        if not tasks or self.on_tasks_rejected is None:
+            return
+        try:
+            await self.on_tasks_rejected(tasks)
+        except Exception as e:
+            logger.error(
+                f"[TRANSLATOR] Rejection callback failed for {len(tasks)} tasks "
+                f"{[t.task_id for t in tasks]}: {type(e).__name__}"
+            )
 
     def _get_batch_key(self, task: TranslationTask) -> str:
         """
@@ -325,6 +360,7 @@ class ConnectionManager:
 
     async def _flush_batches(self):
         """Transfère les batches accumulés vers les queues de traitement"""
+        rejected_batches: List[List[TranslationTask]] = []
         async with self._batch_lock:
             if not self._batch_accumulator:
                 return
@@ -333,8 +369,9 @@ class ConnectionManager:
                 if not tasks:
                     continue
 
-                # Créer et enqueuer le batch
-                await self._enqueue_batch(tasks)
+                if not await self._enqueue_batch(tasks):
+                    rejected_batches.append(tasks)
+                    continue
                 logger.debug(
                     f"⚡ [BATCH] Flushed {len(tasks)} tasks to "
                     f"{'any' if tasks[0].conversation_id == 'any' else 'normal'} pool"
@@ -342,6 +379,9 @@ class ConnectionManager:
 
             # Vider l'accumulateur
             self._batch_accumulator.clear()
+
+        for tasks in rejected_batches:
+            await self._report_rejected(tasks)
 
     def get_stats(self) -> dict:
         """Retourne les statistiques des connexions"""
