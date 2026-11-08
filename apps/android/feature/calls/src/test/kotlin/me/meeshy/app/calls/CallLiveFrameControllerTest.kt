@@ -132,7 +132,7 @@ class CallLiveFrameControllerTest {
     }
 
     @Test
-    fun `l'appel passe a trois : le cadre tombe chez moi, avec la proposition en attente, sans rien emettre`() = run { controller ->
+    fun `l'appel passe a trois, le cadre tombe chez moi, avec la proposition en attente, sans rien emettre`() = run { controller ->
         controller.apply(frame)
         incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", other, CallLiveFrameTexts(name = "Bob")))
 
@@ -143,7 +143,7 @@ class CallLiveFrameControllerTest {
     }
 
     @Test
-    fun `apres le passage a trois, l'appel reste ecoute : un retour au duo peut recevoir un cadre`() = run { controller ->
+    fun `apres le passage a trois, l'appel reste ecoute, un retour au duo peut recevoir un cadre`() = run { controller ->
         controller.leaveDuo()
         incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", other, CallLiveFrameTexts(name = "Bob")))
 
