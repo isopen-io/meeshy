@@ -400,3 +400,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   manquantes côté serveur (#17022), préférence de réception (#17023), décision E2EE ouverte (#17011).
 - Prochain lot recommandé : « ensemble » sur iOS (recevoir, rejoindre, lecteur synchronisé, inviter depuis la fiche),
   sinon l'icône de position par cercle (#17013) quand les clients de la position temporaire auront fusionné.
+
+## 2026-11-08 — réveil 21 : regarder ou écouter ensemble sur iOS (#17097 ⊂ #17011)
+
+- Reprise : aucune PR de la routine ouverte ; `claude/cercles-16984-web` (carte des positions sur le web) est vivante
+  et tenue par un autre réveil, ce réveil ne la touche pas. Issue #17097 ouverte sous #17011 (milestone #215), branche
+  `claude/cercles-ensemble-ios` réservée avant toute écriture.

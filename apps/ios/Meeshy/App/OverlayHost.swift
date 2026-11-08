@@ -9,6 +9,7 @@ struct OverlayHost: ViewModifier {
             .feedbackToastOverlay()
             .ageGateOverlay()
             .modifier(TalkieOverlay(center: .shared))
+            .modifier(TogetherOverlay(center: .shared))
             .bringRingOverlay()
             .onAppear {
                 ListeningCenter.start()

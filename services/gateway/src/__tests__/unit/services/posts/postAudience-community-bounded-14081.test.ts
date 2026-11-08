@@ -46,7 +46,8 @@ function monde(options: { readonly down?: boolean } = {}) {
     friendRequest: { findMany: async () => [] },
     participant: { findMany: async () => [] },
     userRelation: { findMany: async () => [] },
-  } as unknown as Pick<PrismaClient, 'communityMember' | 'friendRequest' | 'participant' | 'userRelation'>;
+    user: { findMany: async () => [], findUnique: async () => null },
+  } as unknown as Pick<PrismaClient, 'communityMember' | 'friendRequest' | 'participant' | 'userRelation' | 'user'>;
   return { prisma, read };
 }
 

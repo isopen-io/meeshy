@@ -578,8 +578,14 @@ describe('MessageHandler — handleMessageDelete', () => {
 
     await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
 
+    // `deletedAt: null` dans le `where` est la garde OPTIMISTE du retrait
+    // (#17079) : sans elle, deux suppressions CONCURRENTES franchissaient
+    // toutes deux la lecture d'amont et appliquaient toutes deux les effets du
+    // retrait, dont un décompte NON idempotent. Ce témoin gelait la forme SANS
+    // garde — un `objectContaining` sur un `where` affirme autant sur ce qu'il
+    // ADMET que sur ce qu'il exige.
     expect(deps.prisma.message.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: VALID_MSG_ID },
+      where: { id: VALID_MSG_ID, deletedAt: null },
       data: expect.objectContaining({ deletedAt: expect.any(Date), translations: null }),
     }));
   });

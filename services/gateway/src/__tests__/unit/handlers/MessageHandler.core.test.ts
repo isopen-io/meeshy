@@ -4025,8 +4025,12 @@ describe('MessageHandler.handleMessageDelete', () => {
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
     await handler.handleMessageDelete(socket, makeDeleteData(), callback);
 
+    // `deletedAt: null` est la garde OPTIMISTE du retrait (#17079) : sans
+    // elle, deux suppressions CONCURRENTES franchissaient toutes deux la
+    // lecture d'amont et appliquaient toutes deux les effets du retrait, dont
+    // un décompte NON idempotent. Ce témoin gelait la forme SANS garde.
     expect(prisma.message.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: message.id },
+      where: { id: message.id, deletedAt: null },
       data: expect.objectContaining({ deletedAt: expect.any(Date) }),
     }));
     expect(io._emit).toHaveBeenCalledWith('message:deleted', expect.objectContaining({

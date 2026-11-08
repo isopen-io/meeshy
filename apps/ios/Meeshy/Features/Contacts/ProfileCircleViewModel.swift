@@ -82,6 +82,12 @@ final class ProfileCircleViewModel: ObservableObject {
         max(shownLevel ?? .public, toolLevel ?? .public) >= .close
     }
 
+    /// « Regarder ou écouter ensemble » se PROPOSE dès Proche (feature `together`, #17011), par le lien affiché ou par le
+    /// verdict servi. La passerelle rejuge à chaque invitation (#17097).
+    var offersTogether: Bool {
+        max(shownLevel ?? .public, toolLevel ?? .public) >= RelationFeature.together.minimumLevel
+    }
+
     /// Le cercle occupe l'emplacement de la fiche : un lien est montré, ou vient d'être annulé ici.
     var claimsTheSlot: Bool { shownLevel != nil || didUnlink }
 

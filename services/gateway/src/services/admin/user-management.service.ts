@@ -80,6 +80,12 @@ export type UserManagementServiceDeps = {
    */
   readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
   readonly notifyPasswordReset?: PasswordResetNotifier;
+  /**
+   * Oublie les cercles de l'équipe après une écriture qui change ce que la loi d'accès
+   * lit d'un compte — rôle, actif, désactivé, supprimé (#16623) : sans lui, un rôle
+   * retiré garde le privilège d'équipe le temps des caches (5 min).
+   */
+  readonly forgetTeamCircles?: (userId: string) => Promise<void>;
 };
 
 /**
@@ -442,6 +448,8 @@ export class UserManagementService {
       },
     });
 
+    await this.forgetTeamCirclesBestEffort(userId);
+
     return user as unknown as FullUser;
   }
 
@@ -462,8 +470,20 @@ export class UserManagementService {
     });
 
     if (!data.isActive) await this.revokeSessionsBestEffort(userId, 'deactivation');
+    await this.forgetTeamCirclesBestEffort(userId);
 
     return user as unknown as FullUser;
+  }
+
+  /** Best-effort, après l'écriture : un cache qui ne s'oublie pas ne rend pas l'opération. */
+  private async forgetTeamCirclesBestEffort(userId: string): Promise<void> {
+    const forget = this.deps.forgetTeamCircles;
+    if (!forget) return;
+    try {
+      await forget(userId);
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Team circles were not forgotten after a change of user ${userId}`, error);
+    }
   }
 
   /**
@@ -570,6 +590,7 @@ export class UserManagementService {
     });
 
     await this.revokeSessionsBestEffort(userId, 'deletion');
+    await this.forgetTeamCirclesBestEffort(userId);
 
     return user as unknown as FullUser;
   }
@@ -589,6 +610,8 @@ export class UserManagementService {
         updatedAt: new Date()
       },
     });
+
+    await this.forgetTeamCirclesBestEffort(userId);
 
     return user as unknown as FullUser;
   }

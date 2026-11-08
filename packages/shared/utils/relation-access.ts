@@ -28,12 +28,16 @@
  * ## L'équipe (directive porteur du 2026-11-07, #16623)
  *
  * Entre deux comptes de l'équipe (`isPlatformTeam`, les DEUX rôles lus), le niveau
- * effectif d'un outil vaut Sang, sans lien, dans les deux sens. Seul le NIVEAU
+ * effectif de TOUTE feature de cercle vaut Sang, sans lien, dans les deux sens (outils,
+ * audiences de contenu, notifications, relais — correction du 2026-11-08). Seul le NIVEAU
  * s'ouvre : les verdicts 1 à 3, le consentement et `NOBODY` restent entiers, et
  * le refus d'un rôle de cible absent ou inconnu est celui d'un inconnu. La raison
  * reste `level`, jamais `role` : un modérateur lit la présence d'un collègue sous
- * ses préférences, comme un Sang. Une audience de contenu reste au lien réel
- * (`RELATION_TEAM_CLOSED_FEATURES`), et le bouclier des mineurs n'est pas franchi.
+ * ses préférences, comme un Sang. Seule la Connaissance automatique reste au lien réel
+ * (`RELATION_TEAM_CLOSED_FEATURES`) : un rôle ne crée aucun lien. Le bouclier des
+ * mineurs n'est pas franchi : face à un mineur déclaré pour un outil, et entre un
+ * mineur et un majeur déclarés, dans les deux sens, pour une audience de contenu ou
+ * une notification d'entourage (`RELATION_TEAM_MINOR_APART_FEATURES`).
  *
  * ## Les mineurs (décision porteur, 2026-10-31)
  *
@@ -69,6 +73,7 @@ import {
   RELATION_MINOR_TARGET_MIN_LEVEL,
   RELATION_PRESENCE_FEATURES,
   RELATION_TEAM_CLOSED_FEATURES,
+  RELATION_TEAM_MINOR_APART_FEATURES,
   RELATION_TUNABLE_FEATURES,
   isRelationAudienceChoice,
   type RelationAudienceChoice,
@@ -161,12 +166,22 @@ const shieldedMinimum = (feature: RelationFeature, minimum: RelationLevel | null
   return maxRelationLevel(minimum, shield);
 };
 
+/**
+ * Le bouclier des mineurs face au privilège d'équipe : il protège la cible d'un outil,
+ * et les DEUX côtés d'une audience ou d'une notification d'entourage
+ * (`RELATION_TEAM_MINOR_APART_FEATURES`), où le viewer est le lecteur ou le destinataire.
+ */
+const minorShieldsTeam = (input: RelationAccessInput): boolean =>
+  RELATION_TEAM_MINOR_APART_FEATURES.has(input.feature)
+    ? declaresMinorApart(input.viewerMinor, input.targetMinor)
+    : facesDeclaredMinor(input);
+
 /** Le privilège d'équipe s'applique-t-il à cette paire, pour cette feature (#16623) ? */
 const teamOpens = (input: RelationAccessInput): boolean =>
   isPlatformTeam(input.viewerRole) &&
   isPlatformTeam(input.targetRole) &&
   !RELATION_TEAM_CLOSED_FEATURES.has(input.feature) &&
-  !facesDeclaredMinor(input);
+  !minorShieldsTeam(input);
 
 export const resolveRelationAccess = (input: RelationAccessInput): RelationAccess => {
   const level = teamOpens(input) ? 'BLOOD' : effectiveRelationLevel(input);
