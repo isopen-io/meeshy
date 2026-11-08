@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { logError } from '../../utils/logger';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 import {
   sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendInternalError,
@@ -147,6 +148,10 @@ export async function bloquer(
   // L'écoute partagée (#13934) : ce que chacun voyait de l'écoute de l'autre s'efface.
   refreshNowPlayingAfter(ecoute, { userA: moi, userB: cibleId, before: ecouteAvant })
     .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Now-playing not refreshed after block', error));
+  // La séance « ensemble » (#17012) : rejugée, elle s'arrête chez les deux.
+  const ensemble = { ...ecoute, report: (error: unknown) => logError(fastify.log, '[BLOCKS] Together not cut after block', error) };
+  rejudgeTogetherAfter(ensemble, { userA: moi, userB: cibleId })
+    .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Together not cut after block', error));
 
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une

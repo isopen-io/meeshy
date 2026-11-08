@@ -38,6 +38,7 @@ export const RELATION_FEATURES = [
   'listening.category',
   'listening.title',
   'talkie',
+  'together',
   'bring',
   'location.live',
   'location.history',
@@ -73,6 +74,7 @@ export const RELATION_FEATURE_MIN_LEVEL: Readonly<Record<RelationFeature, Relati
   'listening.category': 'CLOSE',
   'listening.title': 'BLOOD',
   talkie: 'CLOSE',
+  together: 'CLOSE',
   bring: 'FRIEND',
   'location.live': 'BLOOD',
   'location.history': 'BLOOD',
@@ -156,6 +158,7 @@ export const RELATION_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<R
 export const RELATION_DIRECTED_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
   'bring',
   'talkie',
+  'together',
   'acquaintance.auto',
   'dm.request',
   'call.ring',
