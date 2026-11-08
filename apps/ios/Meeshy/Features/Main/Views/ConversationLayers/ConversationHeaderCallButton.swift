@@ -187,8 +187,8 @@ struct ConversationHeaderCallButton: View {
     }
 
     /// Bouton d'appel unique : un `Menu` qui laisse choisir vocal ou vidéo. Le
-    /// glyphe adopte le verre adaptatif (Liquid Glass iOS 26, repli
-    /// `.ultraThinMaterial` en deçà) teinté à l'accent de la conversation.
+    /// glyphe est le gabarit partagé de l'en-tête (`ConversationHeaderGlassGlyph`,
+    /// #17095) : verre adaptatif interactif teinté à l'accent de la conversation.
     private var startCallButtons: some View {
         Menu {
             Button {
@@ -202,8 +202,7 @@ struct ConversationHeaderCallButton: View {
                 Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
             }
         } label: {
-            callGlyph("phone.fill")
-                .meeshyTapTarget()
+            ConversationHeaderGlassGlyph(systemName: "phone.fill", accentColor: accentColor, secondaryColor: secondaryColor)
         }
         .accessibilityLabel(isGroup
             ? String(localized: "call.group.start.menu", defaultValue: "Appeler le groupe", bundle: .main)
@@ -222,25 +221,6 @@ struct ConversationHeaderCallButton: View {
             return
         }
         Task { await CallManagerHost.shared.require().startGroupCall(conversationId: conversationId, title: calleeName, isVideo: isVideo) }
-    }
-
-    private func callGlyph(_ systemName: String) -> some View {
-        Image(systemName: systemName)
-            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-            )
-            // Même cercle que `expandedHeaderSearchButton` (28×28, police 13) :
-            // les deux boutons de l'en-tête se lisent à la même taille.
-            // `.adaptiveGlass` DOIT précéder `.meeshyTapTarget()` : le verre est
-            // un Circle dimensionné aux bornes COURANTES de la vue — appliqué
-            // après le `.frame(minWidth: 44…)` du tap target, il se dessinait à 44 pt.
-            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
-            .meeshyTapTarget()
     }
 }
 

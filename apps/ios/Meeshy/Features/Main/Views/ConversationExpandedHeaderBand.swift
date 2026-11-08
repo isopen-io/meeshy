@@ -421,7 +421,7 @@ struct ConversationHeaderSearchSlot: View {
 
     var body: some View {
         if previewMode {
-            ConversationHeaderOpenFullButton(accentColor: accentColor, onOpen: onOpenFull)
+            ConversationHeaderOpenFullButton(accentColor: accentColor, secondaryColor: secondaryColor, onOpen: onOpenFull)
         } else {
             ConversationHeaderSearchButton(accentColor: accentColor, secondaryColor: secondaryColor, action: onSearch)
         }
@@ -433,6 +433,7 @@ struct ConversationHeaderSearchSlot: View {
 /// volait ainsi le DÉFILEMENT à la liste.
 struct ConversationHeaderOpenFullButton: View {
     let accentColor: String
+    let secondaryColor: String
     let onOpen: () -> Void
 
     var body: some View {
@@ -440,7 +441,7 @@ struct ConversationHeaderOpenFullButton: View {
             HapticFeedback.light()
             onOpen()
         } label: {
-            HeaderOpenFullGlyph(accentColor: accentColor)
+            ConversationHeaderGlassGlyph(systemName: "arrow.up.left.and.arrow.down.right", accentColor: accentColor, secondaryColor: secondaryColor)
         }
         .accessibilityLabel(String(localized: "conversation.preview.openFull", defaultValue: "Ouvrir la conversation", bundle: .main))
         .accessibilityIdentifier("conversation.preview.openFull")

@@ -60,6 +60,30 @@ final class TalkieCenterTests: XCTestCase {
         XCTAssertEqual(rig.sink.played.map(\.data), [Data([0]), Data([1]), Data([3])])
     }
 
+    /// #17094 : la sortie se prépare dès l'annonce, pas devant le premier fragment ; une annonce refusée ne prépare rien.
+    func test_anIncoming_preparesTheOutput_beforeItsFirstChunk() {
+        let rig = makeRig()
+
+        rig.sut.open(incoming("t1"))
+        rig.sut.open(incoming("t2", codec: "opus"))
+        rig.sut.open(incoming("t3", from: "me"))
+
+        XCTAssertEqual(rig.sink.prepared, ["t1"])
+        XCTAssertTrue(rig.sink.played.isEmpty)
+    }
+
+    func test_theDelayBetweenTheIncomingAndItsFirstChunk_isMeasuredOnTheDeviceClock() {
+        let rig = makeRig()
+        rig.sut.open(incoming())
+
+        rig.clock.now = rig.clock.now.addingTimeInterval(0.3)
+        rig.sut.receive(chunk(0))
+        rig.clock.now = rig.clock.now.addingTimeInterval(0.5)
+        rig.sut.receive(chunk(1))
+
+        XCTAssertEqual(try XCTUnwrap(rig.sut.firstChunkDelay), 0.3, accuracy: 0.001)
+    }
+
     func test_aChunkWithoutItsIncoming_orFromAnotherSender_playsNothing() {
         let rig = makeRig()
 

@@ -78,6 +78,7 @@ function makePrisma(initial: Partial<Row> = {}, options: { readonly staleReads?:
 
 const revokeAllSessions = jest.fn(async (_userId: string) => undefined);
 const onAgeDeclared = jest.fn((_userId: string) => undefined);
+const forgetTeamCircles = jest.fn(async (_userId: string) => undefined);
 
 async function buildApp(prisma: ReturnType<typeof makePrisma>, options: { readonly withCors?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -87,7 +88,7 @@ async function buildApp(prisma: ReturnType<typeof makePrisma>, options: { readon
     const userId = req.headers['x-test-user-id'] as string | undefined;
     (req as { auth?: unknown }).auth = userId ? { userId, isAuthenticated: true } : undefined;
   });
-  await app.register(meBirthDateRoutes, { prefix: '/api/v1/me', now: () => NOW, revokeAllSessions, onAgeDeclared });
+  await app.register(meBirthDateRoutes, { prefix: '/api/v1/me', now: () => NOW, revokeAllSessions, onAgeDeclared, forgetTeamCircles });
   await app.register(meOnboardingRoutes, { prefix: '/api/v1/me', now: () => NOW });
   await app.ready();
   return app;
@@ -124,6 +125,25 @@ describe('PUT /me/birth-date (#9927)', () => {
     expect((await declare(app, '2010-05-05')).statusCode).toBe(200);
     expect((await declare(app, '1990-05-05')).statusCode).toBe(409);
     expect(onAgeDeclared.mock.calls).toEqual([[USER_ID]]);
+    await app.close();
+  });
+
+  it('#16623 — une date déclarée fait oublier les cercles de l\'équipe (le bouclier des mineurs se lit aussitôt) ; une date refusée (409) n\'oublie rien', async () => {
+    forgetTeamCircles.mockClear();
+    const prisma = makePrisma();
+    const app = await buildApp(prisma);
+    expect((await declare(app, '2010-05-05')).statusCode).toBe(200);
+    expect((await declare(app, '1990-05-05')).statusCode).toBe(409);
+    expect(forgetTeamCircles.mock.calls).toEqual([[USER_ID]]);
+    await app.close();
+  });
+
+  it('#16623 — un oubli des cercles de l\'équipe qui échoue ne fait pas échouer la déclaration', async () => {
+    forgetTeamCircles.mockImplementationOnce(async () => {
+      throw new Error('cache down');
+    });
+    const app = await buildApp(makePrisma());
+    expect((await declare(app, '2010-05-05')).statusCode).toBe(200);
     await app.close();
   });
 

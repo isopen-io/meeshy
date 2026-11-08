@@ -21,7 +21,8 @@
  *    tous ces cas : il ne dit rien qu'on ne voie déjà.
  *
  * Les étapes 2 et 3 ne se jugent qu'APRÈS la loi : un inconnu n'apprend ni le
- * chiffrement d'une paire, ni la disponibilité de quelqu'un.
+ * chiffrement d'une paire, ni la disponibilité de quelqu'un. Le chiffrement et la
+ * présence servie se LISENT ensemble ; le verdict, lui, garde l'ordre ci-dessus.
  *
  * Une lecture qui échoue FERME (`TALKIE_UNAVAILABLE`) : une voix ne part pas sur
  * un doute.
@@ -31,7 +32,7 @@ import { NOTIFICATION_PREFERENCE_DEFAULTS, type NotificationPreference } from '@
 import { TALKIE_ERROR_CODES, type TalkieErrorCode } from '@meeshy/shared/types/talkie';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
-import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
+import { resolveRelationAccess, type RelationAccessReason } from '@meeshy/shared/utils/relation-access';
 import { isBlockedBetween } from '../../utils/blocking';
 import { niveauEffectif } from '../friendship';
 import { SERVER_BLIND_REGIME_FILTER } from '../conversations/encryptionRegime';
@@ -43,16 +44,43 @@ export type TalkieGateDb = Pick<
   'user' | 'friendRequest' | 'userRelation' | 'relationFeatureSetting' | 'userPreferences' | 'participant' | 'callParticipant'
 >;
 
-export type TalkieRefusal = { readonly ok: false; readonly code: TalkieErrorCode; readonly message: string };
+/**
+ * La cause EXACTE d'un refus, pour le journal du serveur seulement (#17131) : le client ne
+ * reçoit que `code` et `message` (`talkieRelay.ts`), qui ne disent rien qu'on ne voie déjà.
+ */
+export type TalkieRefusalCause =
+  | 'account'
+  | `relation-${Exclude<RelationAccessReason, 'consent'>}`
+  | 'consent'
+  | 'e2ee'
+  | 'presence-masked'
+  | 'in-call'
+  | 'not-connected'
+  | 'dnd';
+
+export type TalkieRefusal = {
+  readonly ok: false;
+  readonly code: TalkieErrorCode;
+  readonly message: string;
+  readonly cause?: TalkieRefusalCause;
+};
 export type TalkieVerdict = { readonly ok: true } | TalkieRefusal;
 
 const OPEN: TalkieVerdict = { ok: true };
 const refuse = (code: TalkieErrorCode, message: string): TalkieRefusal => ({ ok: false, code, message });
+const because = (refusal: TalkieRefusal, cause: TalkieRefusalCause): TalkieRefusal => ({ ...refusal, cause });
 export const TALKIE_NOT_ALLOWED: TalkieRefusal = refuse(TALKIE_ERROR_CODES.NOT_ALLOWED, 'Talkie indisponible');
 const BLOCKED = refuse(TALKIE_ERROR_CODES.BLOCKED, 'Talkie indisponible');
 const E2EE = refuse(TALKIE_ERROR_CODES.E2EE_CONVERSATION, 'Le talkie n’est pas chiffré de bout en bout : il est indisponible dans une conversation chiffrée');
 const FALLBACK = refuse(TALKIE_ERROR_CODES.FALLBACK_VOICE, 'Envoie un message vocal');
 export const TALKIE_UNAVAILABLE: TalkieRefusal = refuse(TALKIE_ERROR_CODES.UNAVAILABLE, 'Talkie momentanément indisponible');
+
+/** Le repli vocal d'un destinataire indisponible, sa cause dans l'ordre où on la lit. */
+function unavailability(busy: boolean, connected: boolean, dnd: boolean): TalkieRefusalCause | null {
+  if (busy) return 'in-call';
+  if (!connected) return 'not-connected';
+  return dnd ? 'dnd' : null;
+}
 
 const PARTY_SELECT = { id: true, role: true, isActive: true, deletedAt: true, deactivatedAt: true, birthDate: true } as const;
 
@@ -118,7 +146,7 @@ export async function judgeTalkie(
     }),
     notificationPrefsOf(prisma, toUserId),
   ]);
-  if (!usable(sender) || !usable(recipient)) return TALKIE_NOT_ALLOWED;
+  if (!usable(sender) || !usable(recipient)) return because(TALKIE_NOT_ALLOWED, 'account');
 
   const now = deps.now();
   const receives = prefs.talkieEnabled !== false && !setting?.talkieBlockedAt;
@@ -136,15 +164,23 @@ export async function judgeTalkie(
     feature: 'talkie',
     consent: receives ? 'granted' : 'refused',
   });
-  if (!verdict.allowed) return verdict.reason === 'consent' ? BLOCKED : TALKIE_NOT_ALLOWED;
+  if (!verdict.allowed) {
+    return verdict.reason === 'consent' ? because(BLOCKED, 'consent') : because(TALKIE_NOT_ALLOWED, `relation-${verdict.reason}`);
+  }
 
-  if (await pairHasE2eeDirectConversation(prisma, fromUserId, toUserId)) return E2EE;
+  // Le chiffrement de la paire et la présence servie se lisent ENSEMBLE (#17094) : le
+  // verdict garde son ordre, l'ouverture n'attend plus la somme des deux lectures.
+  const [encrypted, presenceShown] = await Promise.all([
+    pairHasE2eeDirectConversation(prisma, fromUserId, toUserId),
+    deps.presenceServed({ userId: fromUserId, role: sender.role }, toUserId),
+  ]);
+  if (encrypted) return because(E2EE, 'e2ee');
 
   // La disponibilité (appel, Ne pas déranger, appareils connectés) n'est lue que si la
   // présence du destinataire est SERVIE à l'émetteur : sinon le même repli, quel que soit
   // l'état — le talkie ne devient pas un oracle de la présence que la cible a masquée.
-  if (!(await deps.presenceServed({ userId: fromUserId, role: sender.role }, toUserId))) return FALLBACK;
+  if (!presenceShown) return because(FALLBACK, 'presence-masked');
   const [busy, connected] = await Promise.all([inActiveCall(prisma, toUserId), deps.recipientConnected(toUserId)]);
-  if (busy || !connected || isWithinDnd(prefs, now)) return FALLBACK;
-  return OPEN;
+  const cause = unavailability(busy, connected, isWithinDnd(prefs, now));
+  return cause ? because(FALLBACK, cause) : OPEN;
 }

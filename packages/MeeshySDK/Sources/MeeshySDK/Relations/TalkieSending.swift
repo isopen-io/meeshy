@@ -187,3 +187,38 @@ public struct TalkieBudget: Sendable {
         return seq
     }
 }
+
+/// Les temps d'une prise de parole, comptés depuis l'appui (#17094) : micro prêt, accusé reçu, premier fragment parti.
+/// Le journal du talkie l'écrit, pour qu'une recette sur appareil dise où passe le temps.
+public struct TalkieLatency: Sendable, Equatable {
+    public enum Step: String, Sendable, CaseIterable {
+        case micReady
+        case opened
+        case firstChunk
+    }
+
+    public let pressedAt: Date
+    public private(set) var marks: [Step: TimeInterval] = [:]
+
+    public init(pressedAt: Date) {
+        self.pressedAt = pressedAt
+    }
+
+    /// La première marque d'une étape compte ; un instant antérieur à l'appui vaut zéro.
+    public mutating func mark(_ step: Step, at instant: Date) {
+        guard marks[step] == nil else { return }
+        marks[step] = max(0, instant.timeIntervalSince(pressedAt))
+    }
+
+    public func milliseconds(_ step: Step) -> Int? {
+        marks[step].map { Int(($0 * 1000).rounded()) }
+    }
+
+    /// `micro 312 ms · accusé 140 ms · premier fragment 455 ms` — une étape non atteinte se lit `—`.
+    public var summary: String {
+        let labels: [(Step, String)] = [(.micReady, "micro"), (.opened, "accusé"), (.firstChunk, "premier fragment")]
+        return labels
+            .map { step, label in "\(label) \(milliseconds(step).map { "\($0) ms" } ?? "—")" }
+            .joined(separator: " · ")
+    }
+}

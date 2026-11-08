@@ -84,11 +84,11 @@ describe('#16623 — l\'équipe a le talkie sans lien', () => {
   it('un compte de l\'équipe face à un utilisateur ordinaire : refusé comme un inconnu', async () => {
     const ordinaire = await juger({ recipient: { role: 'USER' } });
     expect((await juger({ sender: { role: 'ADMIN' }, recipient: { role: 'USER' } })).verdict).toEqual(ordinaire.verdict);
-    expect(ordinaire.verdict).toEqual(TALKIE_NOT_ALLOWED);
+    expect(ordinaire.verdict).toMatchObject(TALKIE_NOT_ALLOWED);
   });
 
   it('un rôle de cible inconnu n\'ouvre rien', async () => {
-    expect((await juger({ sender: { role: 'ADMIN' }, recipient: { role: 'SUPERADMIN' } })).verdict).toEqual(TALKIE_NOT_ALLOWED);
+    expect((await juger({ sender: { role: 'ADMIN' }, recipient: { role: 'SUPERADMIN' } })).verdict).toMatchObject(TALKIE_NOT_ALLOWED);
   });
 
   it('la réception reste celle du destinataire : le rôle ne franchit pas un talkie coupé', async () => {
@@ -97,7 +97,7 @@ describe('#16623 — l\'équipe a le talkie sans lien', () => {
   });
 
   it('le blocage ferme entre deux comptes de l\'équipe', async () => {
-    expect((await juger({ ...equipe, blocked: true })).verdict).toEqual(TALKIE_NOT_ALLOWED);
+    expect((await juger({ ...equipe, blocked: true })).verdict).toMatchObject(TALKIE_NOT_ALLOWED);
   });
 });
 
@@ -111,7 +111,8 @@ describe('#13935 — la loi : dès Proche', () => {
   });
 
   it('un blocage entre les deux : TALKIE_NOT_ALLOWED, indistinct d’un lien trop faible', async () => {
-    expect((await juger({ level: 'BLOOD', blocked: true })).verdict).toEqual((await juger({ level: 'FRIEND' })).verdict);
+    const visible = ({ verdict }: Awaited<ReturnType<typeof juger>>) => (verdict.ok ? verdict : { ok: verdict.ok, code: verdict.code, message: verdict.message });
+    expect(visible(await juger({ level: 'BLOOD', blocked: true }))).toEqual(visible(await juger({ level: 'FRIEND' })));
   });
 
   it.each([
@@ -174,5 +175,56 @@ describe('#13935 — repli en message vocal', () => {
     const { presenceServed } = await juger({ level: 'CLOSE' });
 
     expect(presenceServed).toHaveBeenCalledWith({ userId: MOI, role: 'USER' }, AUTRE);
+  });
+});
+
+describe('#17094 — l’ouverture ne fait pas attendre ce qui peut se lire ensemble', () => {
+  it('le chiffrement de la paire et la présence servie se lisent EN MÊME TEMPS, une fois la loi passée', async () => {
+    const prisma = db({ level: 'CLOSE' });
+    let releaseE2ee: () => void = () => undefined;
+    const e2eeHeld = new Promise<void>((resolve) => { releaseE2ee = resolve; });
+    const lookup = prisma.participant.findMany;
+    prisma.participant.findMany = ((args: { where: Record<string, unknown> }) =>
+      ('conversation' in args.where ? e2eeHeld.then(() => lookup(args)) : lookup(args))) as typeof lookup;
+    const presenceServed = jest.fn(async () => true);
+    const recipientConnected = jest.fn(async () => true);
+
+    const judging = judgeTalkie({ prisma: prisma as unknown as TalkieGateDb, now: () => NOW, recipientConnected, presenceServed }, MOI, AUTRE);
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+    expect(presenceServed).toHaveBeenCalledTimes(1);
+    releaseE2ee();
+    expect(await judging).toEqual({ ok: true });
+  });
+
+  it('une paire chiffrée garde son refus même quand la présence n’est pas servie', async () => {
+    expect((await juger({ level: 'BLOOD', directMode: 'e2ee', presenceServed: false })).verdict)
+      .toMatchObject({ ok: false, code: 'TALKIE_E2EE_CONVERSATION' });
+  });
+});
+
+describe('#17131 — chaque refus nomme sa cause exacte, pour le journal', () => {
+  it.each([
+    ['compte désactivé', { level: 'BLOOD', recipient: { isActive: false } }, 'account'],
+    ['lien trop faible', { level: 'FRIEND' }, 'relation-level'],
+    ['blocage', { level: 'BLOOD', blocked: true }, 'relation-blocked'],
+    ['talkie coupé pour moi', { level: 'BLOOD', talkieBlocked: true }, 'consent'],
+    ['paire chiffrée', { level: 'BLOOD', directMode: 'e2ee' }, 'e2ee'],
+    ['présence masquée', { level: 'BLOOD', presenceServed: false }, 'presence-masked'],
+    ['en appel', { level: 'BLOOD', inCall: true }, 'in-call'],
+    ['sans appareil connecté', { level: 'BLOOD', connected: false }, 'not-connected'],
+    ['en Ne pas déranger', { level: 'BLOOD', notification: { dndEnabled: true, dndStartTime: '00:00', dndEndTime: '23:59', dndDays: [] } }, 'dnd'],
+  ])('%s : la cause est nommée', async (_cas, options, cause) => {
+    expect((await juger(options as Options)).verdict).toMatchObject({ ok: false, cause });
+  });
+
+  it('les causes du repli vocal partagent UN code et UN message : le client n’en apprend rien de plus', async () => {
+    const verdicts = await Promise.all([
+      juger({ level: 'BLOOD', presenceServed: false }),
+      juger({ level: 'BLOOD', inCall: true }),
+      juger({ level: 'BLOOD', connected: false }),
+    ]);
+    const visibles = verdicts.map(({ verdict }) => (verdict.ok ? null : { code: verdict.code, message: verdict.message }));
+    expect(new Set(visibles.map((v) => JSON.stringify(v))).size).toBe(1);
   });
 });
