@@ -372,7 +372,14 @@ readonly SHARED_BASELINE=0
 # Seule l'ATTRIBUTION a survécu de ce côté-ci, et c'est elle qui manquait : la
 # convention de ce fichier veut qu'une baisse dise QUEL lot l'a gagnée, sans quoi le
 # prochain à la relire ne peut pas vérifier qu'elle était méritée.
-readonly GATEWAY_BASELINE=492
+#
+# 492 → 490 (#6379 et la traduction des stories) : `PostFeedService.ts` perd un `any`
+# quand les publications d'une communauté suivent la loi de son détail (86b46a539bd),
+# `PostService.ts` en perd un quand la traduction d'une story compte les langues
+# (a772a457246). Les deux ont fusionné dans `dev` sans baisser cette ligne : `dev`
+# rougissait ici (490 contre 492), et l'inscription vient de la première PR qui a buté
+# dessus (#16982).
+readonly GATEWAY_BASELINE=490
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO
