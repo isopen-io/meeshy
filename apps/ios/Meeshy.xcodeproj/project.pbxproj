@@ -2526,6 +2526,12 @@
 		8F068FA20199769A4DFDF945 /* AttachmentDownloaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3BACB1E81334F63A1993DC3 /* AttachmentDownloaderTests.swift */; };
 		8F0B9CF1A4F57BFB47B4B843 /* CallView+Panels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474CB3B508D8174FB55F39C /* CallView+Panels.swift */; };
 		8F2C9DF9EA53963988957FD3 /* TalkieCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E84B7805ED8F38A2037853FC /* TalkieCenter.swift */; };
+		CF75855E1324ECC9E8ECE867 /* ProfileTogetherRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F10757775CC3062C8E43FF /* ProfileTogetherRow.swift */; };
+		146D524F8AA4BAC7D95EC875 /* TogetherAVSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46A0A7A7F3E71A3FBF112456 /* TogetherAVSurface.swift */; };
+		FFF3A15EDECDC2205126611B /* TogetherCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B261E9AB88FF81DF95E070AC /* TogetherCenter.swift */; };
+		B14AA04C25B362D9F2388EF9 /* TogetherOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F50C789CAF481A3C1AA097 /* TogetherOverlay.swift */; };
+		9B9DF7C74BC31AE0295CEC40 /* TogetherPlaybackDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4AA0B5ED71207B3F0F64A82 /* TogetherPlaybackDriver.swift */; };
+		06A4B339162B766C68E5A1D8 /* TogetherPlayerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AA19A1D7B20EE8C090A5C9A /* TogetherPlayerCard.swift */; };
 		8F4549ABFDFB82EAEA463279 /* AssistTierVectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06A5E672AC960322589FA413 /* AssistTierVectorTests.swift */; };
 		8F65E2611628BABDEE0F3902 /* VisitorContentReachTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D7A747FB610F87C5B30E3F0 /* VisitorContentReachTests.swift */; };
 		8F8F64CC76B3799E98352ED5 /* ProfileOwnAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 287B33D5B5F5FE197571532D /* ProfileOwnAvatar.swift */; };
@@ -2985,6 +2991,8 @@
 		ABE9BFCD6E27BB91FBAE609D /* EmailVerificationGateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D3591E7031B544C5040C72 /* EmailVerificationGateController.swift */; };
 		ABFA4BBF3B16F5FE78DD1D40 /* CommentQuotationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 095F034B0CB27404251A608C /* CommentQuotationStore.swift */; };
 		AC0F9C3C14A9C13BC6DB4334 /* TalkieCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 461283F5DDE32AA7BECA0115 /* TalkieCenterTests.swift */; };
+		50006F3FA9D1E4EF49F92D82 /* TogetherCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA023644DA5E67D6FCDCF798 /* TogetherCenterTests.swift */; };
+		D4F1AA580A648B0710FB1E5C /* TogetherPlaybackDriverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68A4B8E8BC32B294A63BCC5D /* TogetherPlaybackDriverTests.swift */; };
 		AC23AA16945AEB1F978DEEF2 /* CallSignalingRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC24B9F2F4D6C3543FEA2048 /* CallSignalingRouterTests.swift */; };
 		AC28EC4936B652340A35F0DE /* PostDetailSheetRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 466967626DC6B9EDE3853652 /* PostDetailSheetRoutingTests.swift */; };
 		AC33E28CB4F2ABE433D5DE61 /* CallQualityIndicatorsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E66F2B22C2D0ABC25C0C9D2 /* CallQualityIndicatorsUITests.swift */; };
@@ -8931,6 +8939,14 @@
 		FFEBAA962A9728E3DEEF73B8 /* SyncPillDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillDestination.swift; sourceTree = "<group>"; };
 		FFF55A8CBE43DF973B016654 /* PrismPreviewVectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrismPreviewVectorTests.swift; sourceTree = "<group>"; };
 		FFFC803B0ED32FFFC97F7416 /* ConversationDashboardView+Sentiment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationDashboardView+Sentiment.swift"; sourceTree = "<group>"; };
+		18F10757775CC3062C8E43FF /* ProfileTogetherRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileTogetherRow.swift; sourceTree = "<group>"; };
+		46A0A7A7F3E71A3FBF112456 /* TogetherAVSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TogetherAVSurface.swift; sourceTree = "<group>"; };
+		B261E9AB88FF81DF95E070AC /* TogetherCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TogetherCenter.swift; sourceTree = "<group>"; };
+		24F50C789CAF481A3C1AA097 /* TogetherOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TogetherOverlay.swift; sourceTree = "<group>"; };
+		E4AA0B5ED71207B3F0F64A82 /* TogetherPlaybackDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TogetherPlaybackDriver.swift; sourceTree = "<group>"; };
+		4AA19A1D7B20EE8C090A5C9A /* TogetherPlayerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TogetherPlayerCard.swift; sourceTree = "<group>"; };
+		CA023644DA5E67D6FCDCF798 /* TogetherCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TogetherCenterTests.swift; sourceTree = "<group>"; };
+		68A4B8E8BC32B294A63BCC5D /* TogetherPlaybackDriverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TogetherPlaybackDriverTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -10597,6 +10613,7 @@
 				16E3F0CE0AEC0CAE0AB6830E /* SocialEvents */,
 				A00FE5D56417810B3F37B4B2 /* Stores */,
 				5083FD9E2F80799FCBA54364 /* Talkie */,
+				11EAD70906794FA2D30C6B4D /* Together */,
 				D431B818D9A1056ACF67B1B1 /* ViewModels */,
 				0D84F8ADB66F6FE7CE49623D /* Views */,
 				1A05BD6489C319E726C5AE7D /* Vitrine */,
@@ -14346,6 +14363,7 @@
 				D94415778412FDDC09E959AF /* Share */,
 				F552DBECFB54A3B826E8BFC3 /* Stories */,
 				77BBE684E16E8A4194338C58 /* Talkie */,
+				F0493778562A949895C90AB7 /* Together */,
 				B1536A9573605CB0DCE03FE4 /* Vitrine */,
 			);
 			path = Features;
@@ -14750,6 +14768,28 @@
 				AF4D15DD0969781B1C076D97 /* VoiceRecordingLiveActivityCoordinator.swift */,
 			);
 			path = LiveActivity;
+			sourceTree = "<group>";
+		};
+		F0493778562A949895C90AB7 /* Together */ = {
+			isa = PBXGroup;
+			children = (
+				18F10757775CC3062C8E43FF /* ProfileTogetherRow.swift */,
+				46A0A7A7F3E71A3FBF112456 /* TogetherAVSurface.swift */,
+				B261E9AB88FF81DF95E070AC /* TogetherCenter.swift */,
+				24F50C789CAF481A3C1AA097 /* TogetherOverlay.swift */,
+				E4AA0B5ED71207B3F0F64A82 /* TogetherPlaybackDriver.swift */,
+				4AA19A1D7B20EE8C090A5C9A /* TogetherPlayerCard.swift */,
+			);
+			path = Together;
+			sourceTree = "<group>";
+		};
+		11EAD70906794FA2D30C6B4D /* Together */ = {
+			isa = PBXGroup;
+			children = (
+				CA023644DA5E67D6FCDCF798 /* TogetherCenterTests.swift */,
+				68A4B8E8BC32B294A63BCC5D /* TogetherPlaybackDriverTests.swift */,
+			);
+			path = Together;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -17486,6 +17526,12 @@
 				EC81A5BEF3DA6082992609A1 /* SyncPillRotator.swift in Sources */,
 				30A6369B86CB19806D00A77C /* SyncPillViewModel.swift in Sources */,
 				8F2C9DF9EA53963988957FD3 /* TalkieCenter.swift in Sources */,
+				CF75855E1324ECC9E8ECE867 /* ProfileTogetherRow.swift in Sources */,
+				146D524F8AA4BAC7D95EC875 /* TogetherAVSurface.swift in Sources */,
+				FFF3A15EDECDC2205126611B /* TogetherCenter.swift in Sources */,
+				B14AA04C25B362D9F2388EF9 /* TogetherOverlay.swift in Sources */,
+				9B9DF7C74BC31AE0295CEC40 /* TogetherPlaybackDriver.swift in Sources */,
+				06A4B339162B766C68E5A1D8 /* TogetherPlayerCard.swift in Sources */,
 				21F20FAC0A0122D2AB9EEBE1 /* TalkieIndicator.swift in Sources */,
 				054A476AFC58EE478B68FBDB /* TalkieMicCapture.swift in Sources */,
 				27A93E809FC8B610E1C1A423 /* TalkieSender.swift in Sources */,
@@ -19465,6 +19511,8 @@
 				8E55ECCF1C9DAB655ED2DF0D /* SystemNoticeEngravedTimeTests.swift in Sources */,
 				1B62F5AE4FD676F53ED74106 /* TabNavigationTests.swift in Sources */,
 				AC0F9C3C14A9C13BC6DB4334 /* TalkieCenterTests.swift in Sources */,
+				50006F3FA9D1E4EF49F92D82 /* TogetherCenterTests.swift in Sources */,
+				D4F1AA580A648B0710FB1E5C /* TogetherPlaybackDriverTests.swift in Sources */,
 				82B5198B04E22AFEBBCEE245 /* TalkieSenderTests.swift in Sources */,
 				426CA0978E32656AACCE5C4A /* TaskTimeoutTests.swift in Sources */,
 				D65A84728025B13A7B0E642B /* TestGateCompiledClassesGuardTests.swift in Sources */,
