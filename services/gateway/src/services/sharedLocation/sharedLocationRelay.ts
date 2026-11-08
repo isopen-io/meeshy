@@ -10,7 +10,9 @@
  * son terme. Sinon rien ne part, pas même un effacement : il trahirait un partage.
  *
  * Le niveau, le blocage et l'âge passent par `pairAccessAmong` (site unique de la loi),
- * relus à CHAQUE émission, jamais mis en cache. Chaque émission vise la room
+ * relus à CHAQUE émission — et une fois encore APRÈS l'envoi, pour qu'un changement
+ * de lien écrit pendant l'éventail ne laisse pas un point derrière sa fin —, jamais mis
+ * en cache. Chaque émission vise la room
  * `user:<destinataire>` avec SA charge.
  *
  * Le partage DANS une conversation (`LocationHandler`, `location:live-*`) est un autre
@@ -234,9 +236,27 @@ async function fanOut(
     if (previous && sameServed(projection, projectSharedLocation(emitterId, previous, readerAccess, readerId))) return [];
     return [{ readerId, projection }];
   });
-  await markSharedLocationSeen(deps.cache, emitterId, state, deliveries.map((delivery) => delivery.readerId), deps.now());
+  const sent = deliveries.map((delivery) => delivery.readerId);
+  await markSharedLocationSeen(deps.cache, emitterId, state, sent, deps.now());
   deliveries.forEach((delivery) => serve(deps.io, delivery.readerId, delivery.projection));
-  return { access, served: deliveries.map((delivery) => delivery.readerId) };
+  const revoked = await revokedSince(deps, emitterId, state, sent);
+  return { access, served: sent.filter((readerId) => !revoked.includes(readerId)) };
+}
+
+/**
+ * La loi relue APRÈS l'envoi (#16987) : une baisse ou un blocage écrits pendant que
+ * l'éventail lisait l'accès ont pu effacer chez le lecteur AVANT que le point parte.
+ * Qui a perdu l'accès reçoit la fin APRÈS le point et cesse d'être un servi ; un
+ * changement écrit après cette relecture trouve le lecteur noté servi et l'efface lui-même.
+ */
+async function revokedSince(deps: SharedLocationRelayDeps, emitterId: string, state: SharedLocationState, sent: readonly string[]): Promise<readonly string[]> {
+  if (sent.length === 0) return [];
+  const confirmed = await accessOf(deps, emitterId, state, sent);
+  const revoked = sent.filter((readerId) => (confirmed.get(readerId) ?? 'none') === 'none');
+  if (revoked.length === 0) return [];
+  revoked.forEach((readerId) => unserve(deps.io, readerId, emitterId));
+  await unmarkSharedLocationSeen(deps.cache, emitterId, state.sessionId, revoked);
+  return revoked;
 }
 
 const STOPPED = failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Partage arrêté');

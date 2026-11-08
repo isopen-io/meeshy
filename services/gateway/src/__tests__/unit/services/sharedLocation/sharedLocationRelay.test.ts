@@ -845,3 +845,36 @@ describe('un compte qui part ne partage plus (#16987)', () => {
     expect(m.cache.pointeurDe(EMETTEUR)).not.toBeNull();
   });
 });
+
+describe('une position en vol pendant une baisse ne revient pas après la fin (#16987)', () => {
+  const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+  it('une mise à jour qui a lu l\'accès avant la baisse ne laisse pas le point chez qui a reçu la fin', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    m.suspendreProchaineLecture();
+    const enVol = updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN);
+    await tick();
+    const avant = await captureSharedLocationAccess(m.deps, { userA: EMETTEUR, userB: AMI });
+    await m.lier(EMETTEUR, AMI, 'ACQUAINTANCE');
+    await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: AMI, before: avant });
+    m.relacherLecture();
+    expect(await enVol).toMatchObject({ success: true });
+
+    expect(m.vers(AMI).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED);
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([]);
+  });
+
+  it('une mise à jour sans changement de lien sert chacun une fois, sans fin parasite', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    await updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN);
+
+    expect(m.vers(AMI).map((e) => e.event)).toEqual([SERVER_EVENTS.SHARED_LOCATION_CHANGED]);
+    expect(m.emissions.filter((e) => e.event === SERVER_EVENTS.SHARED_LOCATION_ENDED)).toEqual([]);
+  });
+});
