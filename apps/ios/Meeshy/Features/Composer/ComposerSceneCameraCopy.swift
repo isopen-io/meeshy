@@ -240,6 +240,11 @@ enum ComposerCameraCopy {
         String(localized: "composer.camera.handsFree.label", defaultValue: "mains libres", table: table, bundle: .main)
     }
 
+    /// L'entrée « caméra d'abord » du tray des stories : prendre, puis composer.
+    static var openCamera: String {
+        String(localized: "composer.camera.open", defaultValue: "Caméra", table: table, bundle: .main)
+    }
+
     /// Le bouton du retardateur, à la voix : son nom, puis son réglage.
     static var selfTimerHint: String {
         String(localized: "composer.camera.selfTimer.hint",

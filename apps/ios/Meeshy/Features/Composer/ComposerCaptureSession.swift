@@ -358,7 +358,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// caméra la fait partir DÉJÀ verrouillée ; la vidéo s'éclaire
     /// aussi, à l'intensité du curseur.
     func startFilming() {
-        guard stage == .armed, !controls.isSwitchingCamera else { return }
+        guard stage == .armed, !controls.isSwitchingCamera, ComposerCaptureRecordingBudget.allowsAnotherTake(after: self) else { return }
         mode = ComposerShutterGesture.mode(locked: holdPhase == .locked)
         let intent = noteRecordingStarted()
         stage = .recording

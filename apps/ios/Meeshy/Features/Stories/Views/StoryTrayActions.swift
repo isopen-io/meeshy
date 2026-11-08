@@ -112,6 +112,26 @@ nonisolated enum StoryCameraFirstRule {
     }
 }
 
+extension StoryCameraFirstRule {
+    /// **Les deux façons de créer, au menu de l'avatar « Moi »**, sur les deux
+    /// trails : « Ajouter une story » ouvre le composer, « Caméra » arme la
+    /// caméra d'abord — le seul émetteur de `.openStoryCamera`, que le cover
+    /// racine présente.
+    @MainActor
+    static func createItems(openComposer: @escaping () -> Void) -> [AvatarContextMenuItem] {
+        [
+            AvatarContextMenuItem(label: StoryTrayCopy.addStory, icon: "plus.circle.fill") {
+                openComposer()
+                HapticFeedback.medium()
+            },
+            AvatarContextMenuItem(label: ComposerCameraCopy.openCamera, icon: "camera.fill") {
+                NotificationCenter.default.post(name: .openStoryCamera, object: nil)
+                HapticFeedback.medium()
+            }
+        ]
+    }
+}
+
 /// **La caméra d'abord** (A8–A10 hors du composer, #17109) : elle arme plein écran ; sa prise
 /// ouvre le composer, la prise en fond, sans réarmer la caméra. Quitter sans rien prendre ne
 /// laisse rien derrière.
@@ -119,22 +139,35 @@ struct StoryCameraFirstCover: ViewModifier {
     @Binding var composerShown: Bool
     @Binding var takeSeed: StoryComposerSeed?
     @State private var cameraFirst = false
+    /// La prise brute, tenue le temps que le viseur se retire : la graine (fichier
+    /// d'origine + bitmap réduit) se fabrique après, hors du geste.
+    @State private var take: CameraResult?
 
     func body(content: Content) -> some View {
         content
-            .fullScreenCover(isPresented: $cameraFirst, onDismiss: {
-                if takeSeed != nil { composerShown = true }
-            }) {
+            .fullScreenCover(isPresented: $cameraFirst, onDismiss: handOver) {
                 ComposerViewfinder(initialMode: .photo,
                                    recordingBudget: ComposerCaptureRecordingBudget.maxDuration(for: .story)) { prise in
-                    takeSeed = ComposerMediaSeeding.seed(forTake: prise)
+                    take = prise
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .openStoryCamera)) { _ in
                 guard StoryCameraFirstRule.opens(composerShown: composerShown, cameraShown: cameraFirst) else { return }
+                take = nil
                 takeSeed = nil
                 cameraFirst = true
             }
+    }
+
+    /// Le viseur s'est retiré : une prise ouvre le composer semé, rien n'ouvre rien.
+    private func handOver() {
+        guard let prise = take else { return }
+        take = nil
+        Task { @MainActor in
+            guard let graine = await ComposerMediaSeeding.seed(forTake: prise), !composerShown else { return }
+            takeSeed = graine
+            composerShown = true
+        }
     }
 }
 

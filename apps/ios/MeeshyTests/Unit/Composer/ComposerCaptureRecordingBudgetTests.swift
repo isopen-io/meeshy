@@ -62,6 +62,20 @@ final class ComposerCaptureRecordingBudgetTests: XCTestCase {
         XCTAssertEqual(session.stage, .recording)
     }
 
+    func test_anExhaustedBudget_refusesAnotherTake_ratherThanAnEmptySegment() {
+        XCTAssertTrue(ComposerCaptureRecordingBudget.allowsAnotherTake(taken: 59, budget: 60))
+        XCTAssertFalse(ComposerCaptureRecordingBudget.allowsAnotherTake(taken: 60, budget: 60))
+        XCTAssertTrue(ComposerCaptureRecordingBudget.allowsAnotherTake(taken: 3600, budget: nil))
+
+        let session = ComposerCaptureSession()
+        session.stage = .armed
+        session.recordingBudget = 60
+        session.segments = [ComposerCaptureSegment(url: URL(fileURLWithPath: "/tmp/segment_\(UUID().uuidString).mov"),
+                                                   duration: 60)]
+        session.startFilming()
+        XCTAssertEqual(session.stage, .armed, "le maximum est atteint : aucune prise ne repart")
+    }
+
     func test_outsideATake_theBudgetDoesNothing() {
         let session = ComposerCaptureSession()
         session.stage = .armed

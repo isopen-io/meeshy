@@ -114,24 +114,35 @@ enum ComposerMediaSeeding {
 
 extension ComposerMediaSeeding {
 
+    /// **Une photo prise s'écrit UNE fois, octets d'origine compris** (EXIF,
+    /// orientation — directive porteur 2026-09-04). Le site unique de
+    /// l'écriture, que le viseur du composer et la caméra autonome partagent.
+    /// `nil` quand rien ne s'encode ou que l'écriture échoue.
+    static func writeCapturedPhoto(_ image: UIImage, original: Data?) -> (url: URL, mime: String, bytes: Data)? {
+        let (octets, suffixe) = ComposerCapturePayload.bytes(original: original, fallback: image)
+        guard let octets else { return nil }
+        let fichier = FileManager.default.temporaryDirectory
+            .appendingPathComponent("composer_camera_\(UUID().uuidString).\(suffixe)")
+        guard (try? octets.write(to: fichier)) != nil else { return nil }
+        return (fichier, ComposerCapturePayload.mime(for: suffixe), octets)
+    }
+
     /// **La prise de la caméra autonome devient le FOND de la scène.** La photo
-    /// garde ses octets d'origine (EXIF, orientation) dans un fichier pour la
-    /// publication, et son bitmap pour le canvas ; la vidéo est copiée une fois,
-    /// comme toute graine vidéo. `nil` quand l'écriture échoue : l'appelant
-    /// n'ouvre alors rien plutôt qu'une scène vide.
+    /// garde ses octets d'origine dans un fichier pour la publication, et le
+    /// canvas reçoit un bitmap réduit à 1080 px, comme toute graine image (le
+    /// 12 Mpx de l'objectif n'a rien à faire en mémoire du canvas) ; la vidéo
+    /// est copiée une fois, comme toute graine vidéo. `nil` quand l'écriture
+    /// échoue : l'appelant n'ouvre alors rien plutôt qu'une scène vide.
     @MainActor
-    static func seed(forTake take: CameraResult) -> StoryComposerSeed? {
+    static func seed(forTake take: CameraResult) async -> StoryComposerSeed? {
         switch take {
         case .photo(let image, let originaux):
-            let (octets, suffixe) = ComposerCapturePayload.bytes(original: originaux, fallback: image)
-            guard let octets else { return nil }
-            let fichier = FileManager.default.temporaryDirectory
-                .appendingPathComponent("composer_camera_\(UUID().uuidString).\(suffixe)")
-            guard (try? octets.write(to: fichier)) != nil else { return nil }
+            guard let photo = writeCapturedPhoto(image, original: originaux),
+                  let bitmap = await StoryMediaLoader.shared.loadImage(data: photo.bytes, maxDimension: 1080)
+            else { return nil }
             return StoryComposerSeed(
-                payload: .image(image),
-                origin: StoryComposerSeed.Origin(fileURL: fichier,
-                                                 mimeType: ComposerCapturePayload.mime(for: suffixe)))
+                payload: .image(bitmap),
+                origin: StoryComposerSeed.Origin(fileURL: photo.url, mimeType: photo.mime))
         case .video(let url):
             return StoryComposerSeed.video(copying: url, declaredMimeType: "video/quicktime")
         }

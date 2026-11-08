@@ -160,6 +160,12 @@ nonisolated enum ComposerCaptureRecordingBudget {
         guard let budget, budget > 0 else { return false }
         return elapsed >= budget
     }
+
+    /// Une nouvelle prise peut-elle commencer ? Pas quand les segments déjà pris
+    /// ont épuisé le maximum : elle se clôturerait aussitôt en un segment vide.
+    static func allowsAnotherTake(taken: TimeInterval, budget: TimeInterval?) -> Bool {
+        !reached(elapsed: taken, budget: budget)
+    }
 }
 
 extension ComposerCaptureRecordingBudget {
@@ -172,5 +178,12 @@ extension ComposerCaptureRecordingBudget {
         session.holdStartedAt = nil
         session.closeTake()
         return true
+    }
+
+    /// Les segments déjà pris, celui qui s'écrit compris, laissent-ils place à une prise de plus ?
+    @MainActor
+    static func allowsAnotherTake(after session: ComposerCaptureSession) -> Bool {
+        allowsAnotherTake(taken: ComposerCaptureSegments.totalDuration(session.segments) + session.pendingSegmentDuration,
+                          budget: session.recordingBudget)
     }
 }
