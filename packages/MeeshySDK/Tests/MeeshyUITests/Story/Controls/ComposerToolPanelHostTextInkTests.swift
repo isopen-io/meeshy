@@ -23,7 +23,7 @@ final class ComposerToolPanelHostTextInkTests: XCTestCase {
     }
 
     func test_textColorSwatch_consumesReadableInk() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Story/Controls/ComposerToolPanelHost.swift")
+        let source = try sdkSource("Sources/MeeshyUI/Story/Controls/ComposerTextItemRow.swift")
         XCTAssertTrue(
             source.contains(".foregroundColor(Color(hex: textHex).readableInk)"),
             "La pastille « Aa » doit consommer Color.readableInk (#5950) au lieu de comparer sa " +

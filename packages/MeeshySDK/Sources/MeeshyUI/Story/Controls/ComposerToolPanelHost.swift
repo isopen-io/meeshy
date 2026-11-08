@@ -300,54 +300,12 @@ struct ComposerToolPanelHost: View {
     // MARK: - Audio Panel
 
     private var audioPanel: some View {
-        VStack(spacing: MeeshySpacing.smPlus) {
-            HStack(spacing: MeeshySpacing.sm) {
-                if viewModel.canAddAudio {
-                    Button { showAudioDocumentPicker = true } label: {
-                        MediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module), destructive: false)
-                    }
-                    Button { showVoiceRecorderSheet = true } label: {
-                        MediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module), destructive: false)
-                    }
-                    Button { showSoundLibrary = true } label: {
-                        MediaPillLabel(icon: "music.note.list", text: String(localized: "story.composer.soundLibrary", defaultValue: "Bibliothèque", bundle: .module), destructive: false)
-                    }
-                }
-                Spacer()
-            }
-
-            if let audios = viewModel.currentEffects.audioPlayerObjects, !audios.isEmpty {
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: MeeshySpacing.xs) {
-                        ForEach(audios) { audio in
-                            StoryAudioCell(
-                                audio: audio,
-                                url: viewModel.loadedAudioURLs[audio.id],
-                                isBackground: viewModel.isBackground(id: audio.id),
-                                onToggleBackground: { viewModel.toggleBackground(id: audio.id) },
-                                onVolumeChanged: { viewModel.setAudioVolume(audioId: audio.id, volume: $0) },
-                                onDelete: { viewModel.deleteElement(id: audio.id) },
-                                onToggleMute: { viewModel.toggleAudioMute(id: audio.id) }
-                            )
-                        }
-                    }
-                    .padding(.horizontal, MeeshySpacing.md)
-                }
-                .frame(maxHeight: 150)
-            }
-        }
-        // Ouvrir l'outil Son sur une slide vierge déclenche directement le
-        // voice recorder — parité avec `textPanel.onAppear` qui ouvre
-        // l'éditeur de texte sans étape intermédiaire. Couvre les deux
-        // entrées : tap FAB son (band → audioPanel) et empty-state tile son.
-        // Si la slide a déjà au moins un audio, on respecte l'intent (l'user
-        // veut probablement gérer la liste existante).
-        .onAppear {
-            let isEmpty = (viewModel.currentEffects.audioPlayerObjects?.isEmpty ?? true)
-            if isEmpty && viewModel.canAddAudio && !showVoiceRecorderSheet {
-                showVoiceRecorderSheet = true
-            }
-        }
+        ComposerAudioToolPanel(
+            viewModel: viewModel,
+            showAudioDocumentPicker: $showAudioDocumentPicker,
+            showVoiceRecorderSheet: $showVoiceRecorderSheet,
+            showSoundLibrary: $showSoundLibrary
+        )
     }
 
     // MARK: - Media Panel
@@ -772,181 +730,19 @@ struct ComposerToolPanelHost: View {
         }
     }
 
-    @ViewBuilder
     private func textItemRow(_ text: StoryTextObject) -> some View {
-        let actionTint: Color = secondaryText
-        let rowBgFill: Color = colorScheme == .dark
-            ? Color.white.opacity(0.07)
-            : MeeshyColors.indigo950.opacity(0.05)
-        let preview: String = {
-            let trimmed = text.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty {
-                return String(
-                    localized: "story.composer.text.empty",
-                    defaultValue: "Texte vide",
-                    bundle: .module
-                )
-            }
-            return trimmed
-        }()
-        let textHex = text.textColor ?? "FFFFFF"
-        HStack(spacing: MeeshySpacing.sm) {
-            // Pastille couleur — rappelle la couleur courante du texte.
-            ZStack {
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(Color(hex: textHex))
-                Text("Aa")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: textHex).readableInk)
-            }
-            .frame(width: 32, height: 32)
-            .overlay(
-                RoundedRectangle(cornerRadius: 5)
-                    .stroke(Color.white.opacity(0.25), lineWidth: MeeshyBorder.hairline)
-            )
-
-            // Aperçu + style
-            VStack(alignment: .leading, spacing: 1) {
-                Text(preview)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(primaryText)
-                    .lineLimit(1)
-                Text((text.textStyle ?? "classic").capitalized)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(secondaryText)
-            }
-
-            Spacer(minLength: 4)
-
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                textActionBtn(icon: "pencil", color: actionTint, tip: "Éditer") {
-                    onEditText?(text.id)
-                }
-                textActionBtn(icon: "timeline.selection", color: actionTint, tip: "Timeline") {
-                    viewModel.selectedElementId = text.id
-                    onShowInTimeline?()
-                }
-                textActionBtn(icon: "doc.on.doc", color: actionTint, tip: "Dupliquer") {
-                    viewModel.duplicateElement(id: text.id)
-                }
-                textActionBtn(icon: "trash", color: .red.opacity(0.8), tip: "Supprimer") {
-                    HapticFeedback.medium()
-                    if let onDeleteText {
-                        onDeleteText(text.id)
-                    } else {
-                        viewModel.deleteElement(id: text.id)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.sm)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                .fill(rowBgFill)
+        ComposerTextItemRow(
+            text: text,
+            viewModel: viewModel,
+            primaryText: primaryText,
+            secondaryText: secondaryText,
+            onEditText: onEditText,
+            onShowInTimeline: onShowInTimeline,
+            onDeleteText: onDeleteText
         )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onEditText?(text.id)
-            HapticFeedback.light()
-        }
-    }
-
-    private func textActionBtn(
-        icon: String, color: Color, tip: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button {
-            action()
-            HapticFeedback.light()
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(color)
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(tip)
     }
 
     private var texturePanel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: MeeshySpacing.md) {
-                    ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
-                        let isSelected = viewModel.backgroundColor == "#\(hex)"
-                        Button {
-                            viewModel.backgroundColor = "#\(hex)"
-                            viewModel.hasBackgroundImage = false
-                            HapticFeedback.light()
-                        } label: {
-                            Circle().fill(Color(hex: hex))
-                                .frame(width: 44, height: 44)
-                                .overlay(
-                                    Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
-                                        .padding(MeeshySpacing.xxs)
-                                )
-                                .shadow(color: Color(hex: hex).opacity(isSelected ? 0.5 : 0), radius: 6)
-                        }
-                        .accessibilityLabel(String(localized: "story.background.swatch", defaultValue: "Couleur de fond", bundle: .module))
-                        .accessibilityValue("#\(hex)")
-                        .accessibilityHint(String(localized: "story.background.swatch.hint", defaultValue: "Touchez pour appliquer ce fond.", bundle: .module))
-                        .accessibilityAddTraits(isSelected ? .isSelected : [])
-                    }
-                    // C11 — la palette de dégradés (définie depuis l'origine
-                    // mais jamais offerte) rejoint la rangée : même format de
-                    // pastille, valeur sérialisée « gradient:HEX1:HEX2 »
-                    // (StoryBackgroundValue, rendue par les 3 renderers).
-                    ForEach(Array(StoryBackgroundPalette.gradients.enumerated()), id: \.offset) { _, pair in
-                        let serialized = StoryBackgroundValue.gradient(pair.0, pair.1).serialized
-                        let isSelected = viewModel.backgroundColor == serialized
-                        Button {
-                            viewModel.backgroundColor = serialized
-                            viewModel.hasBackgroundImage = false
-                            HapticFeedback.light()
-                        } label: {
-                            Circle()
-                                .fill(LinearGradient(
-                                    colors: [Color(hex: pair.0), Color(hex: pair.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ))
-                                .frame(width: 44, height: 44)
-                                .overlay(
-                                    Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
-                                        .padding(MeeshySpacing.xxs)
-                                )
-                                .shadow(color: Color(hex: pair.0).opacity(isSelected ? 0.5 : 0), radius: 6)
-                        }
-                        .accessibilityLabel(String(localized: "story.background.gradient",
-                                                   defaultValue: "Fond dégradé", bundle: .module))
-                        .accessibilityValue("\(pair.0) → \(pair.1)")
-                        .accessibilityAddTraits(isSelected ? .isSelected : [])
-                    }
-                }
-                .padding(.horizontal, MeeshySpacing.xxs)
-                .padding(.vertical, MeeshySpacing.mdPlus)
-            }
-
-            // C1 — l'animation d'ouverture du slide devient accessible par
-            // GESTE (FAB Fond → band → chips ; swipe-down pour fermer), plus
-            // seulement via le menu ⋯ → sheet Transitions. Même source de
-            // vérité (viewModel.openingEffect) et même persistance
-            // (granularCanvasSync) que la sheet — cf. OpeningEffectChips.
-            Text(String(
-                localized: "story.composer.openingTitle",
-                defaultValue: "Ouverture du slide",
-                bundle: .module
-            ))
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundColor(mutedText)
-            .padding(.horizontal, MeeshySpacing.xxs)
-            .padding(.bottom, MeeshySpacing.sm)
-
-            OpeningEffectChips(selection: viewModel.openingEffect) { effect in
-                viewModel.openingEffect = effect
-            }
-        }
+        ComposerTexturePanel(viewModel: viewModel, mutedText: mutedText)
     }
 }
