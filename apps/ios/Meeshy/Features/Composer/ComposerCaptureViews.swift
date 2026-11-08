@@ -206,6 +206,8 @@ struct ComposerCaptureChrome: View {
     /// Sous un cadre, le chrome blanc se pose sur un voile qui lui garde 4,5:1 (#9777),
     /// réglé sur la luminance mesurée de la bande du cadre qu'il couvre.
     @State private var chromeBands: ComposerCaptureChromeBands?
+    /// Le chrome au repos retombe à 35 % (CAM-8).
+    @State private var chromeRest: Double = 1
 
     private var framed: Bool { session.look.frame != ComposerPhotoFrame.none }
 
@@ -268,17 +270,16 @@ struct ComposerCaptureChrome: View {
             cropPresets
             ComposerEditTextLayer(session: session, board: session.retouchTexts)
             VStack(spacing: 0) {
-                // Toujours montée, jamais retirée de l'arbre : une rangée insérée
-                // et retirée au gré des outils peut rester peinte le temps d'une
-                // transition, et porte la croix qui présente l'alerte.
-                topRow.opacity(showsTopRow ? 1 : 0)
+                // Toujours montée : une rangée retirée peut rester peinte le temps
+                // d'une transition, et porte la croix qui présente l'alerte.
+                topRow.opacity(showsTopRow ? chromeRest : 0)
                     .allowsHitTesting(showsTopRow)
                     .accessibilityHidden(!showsTopRow)
                 Spacer(minLength: 0)
                 // En retouche, le bas suit le chrome (#10930) : la prise garde
                 // tout l'écran, les outils se posent par-dessus.
                 if !session.phase.isEditing || session.editChromeShown {
-                    ComposerCaptureBottomRow(session: session, context: context)
+                    ComposerCaptureBottomRow(session: session, context: context, railOpacity: chromeRest)
                         .allowsHitTesting(!finishing)
                         .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeilBottom))
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -297,6 +298,7 @@ struct ComposerCaptureChrome: View {
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsTopRow)
+        .modifier(ComposerCaptureChromeRestWatch(session: session, timer: session.selfTimer, opacity: $chromeRest))
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editChromeShown)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
         .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))

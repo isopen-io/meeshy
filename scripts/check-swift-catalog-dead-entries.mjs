@@ -586,7 +586,7 @@ const PENDING_CLIENT_ENTRIES = {
   'RelationsEndpoint.locations': { issue: 16983, reason: 'GET /relations/locations?bbox= — les positions qu’on me partage, lues par la carte iOS' },
 };
 
-const BASELINE_DEAD_ENTRIES = 329;
+const BASELINE_DEAD_ENTRIES = 328;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

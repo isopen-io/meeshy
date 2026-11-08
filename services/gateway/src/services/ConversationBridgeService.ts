@@ -109,7 +109,7 @@ import {
   loadPersonalHistoryHidingByUser,
   type PersonalHistoryHiding,
 } from './personalHistoryFilter';
-import { resolveAttachmentType } from './ConversationMessageStatsService';
+import { resolveAttachmentType } from './conversations/messageStatsAggregate';
 import { withOrphanedSenderRepair } from './messaging/withOrphanedSenderRepair';
 import { logger } from '../utils/logger';
 
