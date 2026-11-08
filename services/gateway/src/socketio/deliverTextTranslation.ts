@@ -6,6 +6,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { buildTranslationEvent } from './buildTranslationEvent';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import type { OfflineParticipantQueueParams } from './offlineParticipantQueue';
+import { safeBroadcast } from './serverEmit';
 import { translationReaders, type TranslationReaders } from './translationReaders';
 import type { MeeshyIOServer } from './typed-socket';
 
@@ -139,20 +140,28 @@ export async function deliverTextTranslation(
       // L'émission vivante ne peut pas emporter l'enfilage qui la SUIT : c'est
       // la règle du cycle 116 (charger → enfiler → cosmétique), et elle valait
       // ici contre la seule étape que personne n'avait gardée.
-      try {
-        if (readers.kind === 'room') {
-          deps.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
-        } else if (readers.rooms.length > 0) {
-          deps.io.to([...readers.rooms]).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
-        }
-      } catch (error) {
-        logger.warn('message:translation live emission failed — offline replay unaffected', {
+      // Le compteur ne s'incrémente QUE si l'émission a eu lieu : sinon il
+      // affirmerait avoir servi `clientCount` clients qui n'ont rien reçu. Avant
+      // ce lot, le `catch` de fin de méthode l'en empêchait par accident ; le
+      // garder juste est à notre charge depuis qu'on le court-circuite.
+      let served = false;
+      safeBroadcast(
+        'message:translation',
+        () => {
+          if (readers.kind === 'room') {
+            deps.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
+          } else if (readers.rooms.length > 0) {
+            deps.io.to([...readers.rooms]).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
+          }
+          served = true;
+        },
+        (error) => logger.warn('message:translation live emission failed — offline replay unaffected', {
           messageId: result.messageId,
           targetLanguage,
           error,
-        });
-      }
-      deps.stats.translations_sent += clientCount;
+        }),
+      );
+      if (served) deps.stats.translations_sent += clientCount;
 
       // Troisième audience, la seule que rien ne servait : les participants
       // HORS LIGNE à l'instant où NLLB répond. La room ne contient que des

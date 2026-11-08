@@ -614,3 +614,104 @@ Corollaire opérationnel, à essayer au prochain lot qui ajoute des témoins :
 coûtent quelques secondes et répondent à la question « ce fichier a-t-il le
 droit de grossir ? » — laquelle ne se pose jamais spontanément quand on a un
 témoin à écrire.
+
+### Sixième tour — l'audit adversarial du lot H, et ce qu'il a trouvé de mon cliquet
+
+Verdict reçu : **BLOQUANT**, deux constats bloquants, tous deux prouvés par
+exécution. L'auditeur a aussi mesuré quatre angles sans rien y trouver, et
+c'est de l'information : `'unavailable'` n'est collapsé nulle part, aucune
+exception avalée ne portait d'information nécessaire, le guard d'audience est
+bien fail-closed, et le témoin inversé a du mordant.
+
+#### Le huitième site, puis le neuvième
+
+`AttachmentReactionHandler.ts` : `emitServerEvent(io.to(room), …)` cinq lignes
+au-dessus de `_enqueueOfflineAttachmentReactionEvent`, même `try`. Ce qui se
+perdait est le `reactionSummary` par pièce jointe d'un absent, que seul un
+rechargement complet répare — son propre doc-comment le dit.
+
+Et **la règle était écrite vingt lignes plus bas, dans le même `try`**, pour
+l'autre canal latéral : « ni emporter l'entrée de file hors ligne qui la
+précède ». Troisième fois dans ce cycle qu'une règle garde l'exemplaire où elle
+est écrite et pas son voisin immédiat.
+
+En renforçant le cliquet, un **neuvième** est apparu : le `senderSocket.emit`
+de `MeeshySocketIOManager`. Piège armé, pas panne — aucun appelant de
+production ne passe `senderSocket` — enrobé quand même (cycle 84).
+
+#### Le constat qui compte : mon cliquet certifiait propres les sites du lot
+
+Mesuré par l'auditeur, en annulant un site à la fois :
+
+| version du cliquet | sites vus |
+|---|---|
+| celle que j'ai livrée | **3 sur 7** |
+| après correction | **9 sur 9** |
+
+Trois causes, et la première est la chère :
+
+1. **L'émission par HELPER était invisible.** Le balayage ne cherchait que
+   `.emit(` TEXTUEL, et `emitServerEvent` / `emitMessageNew` /
+   `emitEditedToReaders` / `emitToConversationParticipants` n'en portent aucun
+   au site d'appel — c'est **l'idiome dominant du dépôt**. Mon doc-comment
+   déclarait bien une limite, et elle ne parlait que de l'ENFILAGE. *La limite
+   la plus coûteuse n'était pas écrite.*
+2. **`unitStart` s'arrêtait à l'accolade englobante**, pas à une frontière de
+   fonction : un enfilage dans un `if (…) {}` voyait sa fenêtre commencer à
+   l'accolade du `if`, et l'émission au-dessus du `if` sortait du périmètre.
+3. **`ENQUEUE_CALLS` affirmait « les quatre du dépôt ».** Il y en a onze —
+   relevé mécaniquement. Leçon 261 appliquée à mon propre cliquet, dans le
+   cycle qui publiait cette leçon.
+
+> **Un cliquet qui SURDÉCLARE sa portée coûte plus qu'un cliquet absent**,
+> parce qu'on cesse de chercher. Et la mesure qui l'attrape n'est pas « est-il
+> vert sur l'arbre réparé ? » mais **« tombe-t-il sur chaque site, un à la
+> fois ? »**. Je n'avais fait la première.
+
+Corollaire de méthode, appliqué : le témoin de couverture a été réécrit pour
+interroger le balayage LUI-MÊME (`sweepReach`). Le précédent utilisait une
+autre regex, un autre prédicat de fichier et ne dépouillait pas les
+commentaires — il comptait sept fichiers où le nom n'apparaît que dans un
+commentaire, et ne pouvait donc pas tomber quand le balayage cesse d'atteindre
+quoi que ce soit. **Exactement le piège dont il se prévalait.**
+
+#### Et j'avais écrit une JUMELLE
+
+`socketio/serverEmit.ts` portait déjà `safeBroadcast(label, emit)` — même
+corps, six appelants de production, né d'un incident de 2026-08-25. J'ai écrit
+`emitLiveBestEffort` sans la voir. Les deux raisons (protéger la RÉPONSE de
+l'appelant / protéger ce qui SUIT dans l'unité) n'ont jamais justifié deux
+helpers, et un cliquet qui doit reconnaître deux noms d'enrobage en manquera
+un. `emitLiveBestEffort` est supprimé ; `safeBroadcast` gagne un `onError`
+optionnel et la seconde raison dans son doc-comment.
+
+> « Cette entité a-t-elle une JUMELLE ? » se pose **au moment où l'on écrit**.
+> Je l'ai posée sur les sites que je corrigeais et pas sur le helper que je
+> créais.
+
+#### Les deux correctifs de GRANULARITÉ, que je n'avais pas instruits
+
+- **Par CIBLE, pas autour de la boucle.** Les trois boucles de remise par
+  lecteur étaient enrobées en bloc : une cible qui lève privait toutes les
+  suivantes, et la file ne les compense pas (elle saute les CONNECTÉS). Or la
+  charge DIFFÈRE par lecteur (`signFor`, `payloadForKey`), donc un encodeur en
+  défaut échoue par cible. J'avais instruit l'ORDRE et pas la granularité.
+- **`onError` REQUIS.** Les deux wrappers de plan le déclaraient optionnel, et
+  le compilateur a nommé **quatre** appelants qui l'omettaient — deux de plus
+  que l'audit n'en avait trouvés. *Rendre un paramètre obligatoire est un
+  meilleur inventaire qu'une relecture.*
+
+#### Un compteur qui s'est mis à mentir
+
+`stats.translations_sent += clientCount` s'exécutait désormais même quand
+l'émission avait levé : le `catch` de fin de méthode l'en empêchait par
+accident, et court-circuiter ce `catch` me rendait ce compteur à charge. Il
+n'est incrémenté que si l'émission a eu lieu.
+
+#### Suivis ouverts plutôt que bâclés
+
+#17066 (l'accusé qui passe de `false` à `true` retire un retry — à MESURER
+chez les trois clients avant de décider), #17067 (les deux fichiers hors
+budget grossissent sous la marge de leur dette : +15 et +17 après avoir
+déplacé la justification au site unique, et c'est du code, pas du
+commentaire), #17068 (les trois pièges armés du balayage textuel).

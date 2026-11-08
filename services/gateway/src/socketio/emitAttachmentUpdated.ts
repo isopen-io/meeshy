@@ -8,6 +8,7 @@ import {
 } from './emitToConversationParticipants';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueDeps } from './offlineParticipantQueue';
 import { readerSignedPlanForMessageIdBestEffort } from './readerSignedDelivery';
+import { safeBroadcast } from './serverEmit';
 import { serializeAttachmentForSocket, type SocketAttachmentRow } from './serializeAttachmentForSocket';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { queuedEventSealsAtRest } from '../services/messaging/serverAtRest';
@@ -92,7 +93,11 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
   // transcription et les pistes TTS arrivent après l'envoi) part par
   // destinataire, ses adresses signées pour chacun ; la diffusion chaînée
   // ci-dessous reste celle de toute autre pièce.
-  const plan = await readerSignedPlanForMessageIdBestEffort(prisma, { conversationId, messageId, attachments: [payload.attachment] });
+  const plan = await readerSignedPlanForMessageIdBestEffort(
+    prisma,
+    { conversationId, messageId, attachments: [payload.attachment] },
+    (error) => logger.error('reader-signed plan failed (attachment enrichment) — no live per-reader delivery', { conversationId, messageId, error }),
+  );
 
   // #17026 — « Best-effort side channel — never throws » était FAUX de cette
   // unité : les deux branches d'émission ci-dessous le font, `emit` levant dès
@@ -107,10 +112,16 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
       // Rien en direct : voir `readerSignedPlanForMessageIdBestEffort`.
     } else if (plan) {
       for (const target of plan.targets) {
-        io.to(target.room).emit(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, {
-          ...payload,
-          attachment: plan.signAttachment(payload.attachment, target.participantId),
-        });
+        // Par CIBLE (audit adversarial de #17026) : une cible qui lève
+        // priverait toutes les suivantes de la pièce enrichie, et la file ne
+        // compense pas les comptes connectés.
+        safeBroadcast(
+          'attachment-updated (per reader)',
+          () => io.to(target.room).emit(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, {
+            ...payload,
+            attachment: plan.signAttachment(payload.attachment, target.participantId),
+          }),
+        );
       }
     } else {
       emitToConversationParticipants({

@@ -278,11 +278,19 @@ export type ReaderSignedPlanOutcome = ReaderSignedPlan | null | 'unavailable';
  * méthode : une lecture tombée y annulait l'enfilage hors ligne du message,
  * c'est-à-dire la SEULE voie par laquelle un destinataire absent l'apprend
  * jamais. Rien ne rejoue, et aucun client ne refetch spontanément.
+ *
+ * `onError` est REQUIS, et il l'était d'abord optionnel — ce qui est la forme
+ * exacte du défaut que `editedAudience.ts` décrit pour son propre `onError` :
+ * « l'appelant NOMME la panne chez lui ; sans cela, une remise définitivement
+ * perdue ne laissait qu'un `warn` d'un module que la route ne regarde pas ».
+ * Les deux appelants qui ne le passaient pas étaient ceux où la perte coûte le
+ * plus cher. Un paramètre dont l'absence dégrade une garde ne doit pas être
+ * optionnel (audit adversarial de #17026).
  */
 export async function readerSignedPlanBestEffort(
   prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink'>,
   input: { readonly conversationId: string; readonly message: object; readonly attachments: unknown },
-  onError?: (error: unknown) => void,
+  onError: (error: unknown) => void,
 ): Promise<ReaderSignedPlanOutcome> {
   try {
     return await readerSignedPlan(prisma, input);
@@ -291,7 +299,7 @@ export async function readerSignedPlanBestEffort(
       conversationId: input.conversationId,
       error,
     });
-    onError?.(error);
+    onError(error);
     return 'unavailable';
   }
 }
@@ -305,7 +313,7 @@ export async function readerSignedPlanBestEffort(
 export async function readerSignedPlanForMessageIdBestEffort(
   prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>,
   input: { readonly conversationId: string; readonly messageId: string; readonly attachments: unknown },
-  onError?: (error: unknown) => void,
+  onError: (error: unknown) => void,
 ): Promise<ReaderSignedPlanOutcome> {
   try {
     return await readerSignedPlanForMessageId(prisma, input);
@@ -315,7 +323,7 @@ export async function readerSignedPlanForMessageIdBestEffort(
       messageId: input.messageId,
       error,
     });
-    onError?.(error);
+    onError(error);
     return 'unavailable';
   }
 }

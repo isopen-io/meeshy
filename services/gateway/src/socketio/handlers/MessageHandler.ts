@@ -71,7 +71,7 @@ import { agentMayReadMessage, agentReadableMessage, notifyAgentOfMessage } from 
 import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import { isServerAtRestMode, isServerAtRestUnavailable, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
-import { emitLiveBestEffort } from '../emitLiveBestEffort';
+import { safeBroadcast } from '../serverEmit';
 import { emitMessageNewBestEffort } from '../messageNewEmission';
 import { readerSignedPlanBestEffort, readerSignedPlanForMessageIdBestEffort } from '../readerSignedDelivery';
 import { editReadership, blockedEditKeys, emitEditedToReaders } from '../editedAudience';
@@ -969,19 +969,15 @@ export class MessageHandler {
       // Le site de la loi est UNIQUE (`editedAudience.ts`), partagé avec l'autre
       // transport : une règle retapée à chaque site est une règle qu'un site
       // finira par ne pas avoir.
-      //
-      // CINQUIÈME site de la famille #17026, que l'issue n'énumérait pas : la
-      // lecture du plan et l'émission qui la suit précédaient l'enfilage
-      // durable de la ligne 1010 dans le MÊME `try`, dont le `catch` journalise
-      // « message:edit failed » et rend une erreur au client. Une édition déjà
-      // PERSISTÉE n'atteignait alors ni les pairs en ligne, ni les absents —
-      // et l'éditeur lisait « échec » sur un geste réussi. Une énumération de
-      // sites porte deux affirmations, et seule la première se vérifie
-      // (leçon 261) : celle-ci s'est trouvée en relisant ce que l'import
-      // partagé touchait, pas en cherchant le site.
-      const editPlan = await readerSignedPlanForMessageIdBestEffort(this.prisma, { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments });
+      // 5e site #17026 : l'édition est déjà PERSISTÉE ici, et le `catch` de fin
+      // de méthode rend en plus « échec » au client. Raison : `safeBroadcast`.
+      const editPlan = await readerSignedPlanForMessageIdBestEffort(
+        this.prisma,
+        { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments },
+        (error) => handlerLogger.error('reader-signed plan failed (socket edit) — no live per-reader delivery', { conversationId: message.conversationId, messageId: validated.messageId, error }),
+      );
       if (editReaders.kind !== 'unknown') {
-        emitLiveBestEffort(() => emitEditedToReaders({
+        safeBroadcast('message:edited', () => emitEditedToReaders({
           io: this.io,
           conversationId: message.conversationId,
           payload: editedPayload,
@@ -1167,9 +1163,8 @@ export class MessageHandler {
         messageId: validated.messageId,
         conversationId: message.conversationId,
       };
-      // Septième site de la famille #17026, et c'est le CLIQUET qui l'a trouvé,
-      // pas la relecture : l'enfilage durable vit dans le même `try`.
-      emitLiveBestEffort(() => this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload),
+      // 7e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
+      safeBroadcast('message:deleted', () => this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload),
         (error) => handlerLogger.error('message:deleted live emission failed — offline replay unaffected', { messageId: validated.messageId, error }));
 
       // Fan a conversation:updated preview refresh to list-screen participants
@@ -1411,13 +1406,8 @@ export class MessageHandler {
       // (`SOCKET_LANG_FILTER`) ou, pour un message dont une pièce se lit par
       // lecteur, remise par destinataire avec ses adresses signées (#9646) —
       // vit dans `messageNewEmission.ts`, partagée avec le chemin REST/ZMQ.
-      //
-      // L'émission est BEST-EFFORT, et la lecture du plan AUSSI (#17026) : les
-      // deux précédaient l'enfilage durable ci-dessous dans le MÊME `try`, dont
-      // le `catch` est en fin de méthode. Une diffusion ou une lecture tombée
-      // annulait donc le rejeu de TOUS les absents — voir le § « Sa PLACE fait
-      // partie de la garantie » juste en dessous, qui énonçait déjà la règle
-      // pour les deux synchros cosmétiques et pas pour ce qui la PRÉCÈDE.
+      // Émission et lecture de plan BEST-EFFORT : raison au site unique,
+      // `safeBroadcast` (#17026).
       emitMessageNewBestEffort({
         io: this.io,
         room,
@@ -1431,7 +1421,11 @@ export class MessageHandler {
         emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
           ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
           : null,
-        readerSigned: await readerSignedPlanBestEffort(this.prisma, { conversationId: normalizedId, message, attachments: peerPayload.attachments }),
+        readerSigned: await readerSignedPlanBestEffort(
+          this.prisma,
+          { conversationId: normalizedId, message, attachments: peerPayload.attachments },
+          (error) => handlerLogger.error('reader-signed plan failed (socket send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
+        ),
       }, (error) => handlerLogger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }));
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 

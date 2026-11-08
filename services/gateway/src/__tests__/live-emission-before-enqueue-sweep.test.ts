@@ -13,28 +13,29 @@ import { describe, it, expect } from '@jest/globals';
 
 import {
   sweepUnguardedLiveEmissions,
+  sweepReach,
   FROZEN_UNGUARDED_LIVE_EMISSIONS,
   GATEWAY_SRC,
 } from './live-emission-before-enqueue-sweep';
 
 describe('#17026 — une émission vivante ne précède pas un enfilage durable sans garde', () => {
-  it("le balayage ATTEINT les unités qui enfilent — sans quoi son vert ne dit rien", () => {
-    // La condition minimale pour que ce cliquet puisse tomber : il doit voir
-    // les fichiers où la règle s'applique. On l'interroge sur sa propre
-    // couverture plutôt que de la supposer.
-    const { readFileSync } = require('fs') as typeof import('fs');
-    const { walk } = require('./detached-promise-catch-sweep') as typeof import('./detached-promise-catch-sweep');
-    const enfileurs = walk(GATEWAY_SRC).filter(
-      (file) =>
-        file.endsWith('.ts') &&
-        !file.includes('__tests__') &&
-        !file.endsWith('.test.ts') &&
-        /enqueueForOfflineParticipants|_enqueueOfflineEventForParticipants|enqueueOfflineMessageMutation/.test(
-          readFileSync(file, 'utf8'),
-        ),
-    );
+  it("le balayage ATTEINT les unités qui enfilent — mesuré par le balayage LUI-MÊME", () => {
+    // La première version de ce témoin interrogeait une AUTRE regex, un AUTRE
+    // prédicat de fichier, et ne dépouillait pas les commentaires : il comptait
+    // sept fichiers où le nom d'enfilage n'apparaît que dans un commentaire, et
+    // ne pouvait donc pas tomber quand le balayage cesse d'atteindre quoi que
+    // ce soit. Un témoin de couverture doit interroger le MÊME code que ce
+    // qu'il couvre.
+    const reach = sweepReach(GATEWAY_SRC);
 
-    expect(enfileurs.length).toBeGreaterThanOrEqual(10);
+    // Les trois quantités dont dépend la capacité du cliquet à rendre un
+    // constat. Elles sont volontairement BASSES : un plancher qui suit la
+    // valeur du jour se casse au premier lot qui ajoute un enfilage, et ce
+    // n'est pas ce qu'on garde ici — on garde « le balayage voit encore
+    // quelque chose ».
+    expect(reach.files).toBeGreaterThanOrEqual(8);
+    expect(reach.enqueuePositions).toBeGreaterThanOrEqual(14);
+    expect(reach.emitCandidates).toBeGreaterThanOrEqual(10);
   });
 
   it("l'inventaire est VIDE, et le reste", () => {

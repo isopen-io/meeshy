@@ -3,6 +3,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { translationReaders, type TranslationReaders } from './translationReaders';
+import { safeBroadcast } from './serverEmit';
 import type { ServerEmitIO, ServerEmitTarget } from './serverEmit';
 import type { ServerEventPayload } from './serverEmit';
 
@@ -170,7 +171,13 @@ export function emitEditedToReaders<P extends ServerEventPayload<typeof SERVER_E
   if (plan) {
     for (const target of plan.targets) {
       if (blocked.has(target.key)) continue;
-      io.to(target.room).emit(SERVER_EVENTS.MESSAGE_EDITED, plan.signFor(params.sealedVariant(payload, target.key), target.participantId));
+      // Par CIBLE, jamais autour de la boucle : une cible qui lève priverait
+      // toutes les suivantes, que la file hors ligne ne compense pas (elle
+      // saute les connectés) — audit adversarial de #17026.
+      safeBroadcast(
+        'message:edited (per reader)',
+        () => io.to(target.room).emit(SERVER_EVENTS.MESSAGE_EDITED, plan.signFor(params.sealedVariant(payload, target.key), target.participantId)),
+      );
     }
     return;
   }

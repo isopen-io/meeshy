@@ -29,7 +29,7 @@
  */
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
-import { emitLiveBestEffort } from './emitLiveBestEffort';
+import { safeBroadcast } from './serverEmit';
 
 import type { ServerEventPayload } from './serverEmit';
 import type { ReaderSignedPlan, ReaderSignedPlanOutcome } from './readerSignedDelivery';
@@ -114,13 +114,24 @@ function emitPerReader<P extends MessageNewPayload>(input: MessageNewEmission<P>
   for (const target of readerSigned.targets) {
     const isSender = target.participantId === input.senderParticipantId || target.room === senderRoom;
     const base = isSender ? input.senderPayload : hidden.has(target.key) ? input.payloadForKey(target.key) : input.peerPayload;
-    input.io.to(target.room).emit(SERVER_EVENTS.MESSAGE_NEW, readerSigned.signFor(base, target.participantId));
+    // L'enrobage est PAR CIBLE, et c'est la GRANULARITÉ qui compte ici (audit
+    // adversarial de #17026). Un enrobage autour de la boucle entière garde
+    // bien ce qui la suit, mais une cible qui lève prive TOUTES les suivantes :
+    // la file hors ligne ne les compense pas, puisqu'elle saute les comptes
+    // CONNECTÉS. Et la charge DIFFÈRE par lecteur (`signFor`, `payloadForKey`),
+    // donc un encodeur en défaut échoue par cible, pas globalement. Le coût
+    // d'un `try` par itération est nul au regard de « tous les suivants perdus ».
+    safeBroadcast(
+      'message:new (per reader)',
+      () => input.io.to(target.room).emit(SERVER_EVENTS.MESSAGE_NEW, readerSigned.signFor(base, target.participantId)),
+    );
   }
 }
 
 /**
  * `emitMessageNew` dont l'échec ne peut pas emporter ce qui SUIT chez
- * l'appelant (#17026).
+ * l'appelant (#17026) — une projection de `safeBroadcast`, le site UNIQUE de
+ * cet enrobage.
  *
  * `io.to(room).emit(...)` LÈVE quand l'adaptateur ou l'encodeur est en défaut —
  * c'est une affirmation du dépôt, écrite là où il s'en garde
@@ -145,5 +156,5 @@ export function emitMessageNewBestEffort<P extends MessageNewPayload>(
   input: MessageNewEmission<P>,
   onError: (error: unknown) => void,
 ): void {
-  emitLiveBestEffort(() => emitMessageNew(input), onError);
+  safeBroadcast('message:new', () => emitMessageNew(input), onError);
 }
