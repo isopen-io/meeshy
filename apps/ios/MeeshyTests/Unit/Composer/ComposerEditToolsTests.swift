@@ -783,8 +783,10 @@ final class ComposerEditToolsTests: XCTestCase {
     func test_theFinalRender_carriesTheGain_throughTheSingleRecipe() throws {
         let edition = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureSession+Edit.swift")
         XCTAssertTrue(edition.contains("let gain = takeSound.effectiveGain"))
-        XCTAssertTrue(edition.contains("declaredSpaceName: espace, audioGain: gain, overlay: calque)"),
+        XCTAssertTrue(edition.contains("declaredSpaceName: espace, audioGain: gain, overlay: calque,"),
                       "« Terminé » et ⬇︎ exportent par la même recette, son compris")
+        XCTAssertTrue(edition.contains("cropChosen: recadree)"),
+                      "la même recette emporte le recadrage choisi (CAM-14)")
         XCTAssertEqual(edition.components(separatedBy: "ComposerLookVideoExporter.export(").count - 1, 1,
                        "une seule recette de rendu vidéo")
         let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerLookVideoExporter.swift")
