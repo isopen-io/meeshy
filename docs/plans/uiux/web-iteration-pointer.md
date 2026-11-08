@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-k0hf3y` |
+| Branche de travail de la session courante | `claude/practical-fermat-9e6ean` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -44,7 +44,19 @@ normal.
 | **77w** | 2026-10-31 | `claude/practical-fermat-95xnj5` | → `dev` | ✅ mergé |
 | **78w** | 2026-11-01 | `claude/practical-fermat-0tzqfi` | [#14198](https://github.com/isopen-io/meeshy/pull/14198) → `dev` | ✅ mergé |
 | **79w** | 2026-11-02 | `claude/practical-fermat-js1tyc` | → `dev` | ✅ mergé |
-| **80w** | 2026-11-07 | `claude/practical-fermat-k0hf3y` | → `dev` | ⏳ ouverte |
+| **80w** | 2026-11-07 | `claude/practical-fermat-k0hf3y` | → `dev` | ✅ mergé |
+| **81w** | 2026-11-08 | `claude/practical-fermat-9e6ean` | → `dev` | ⏳ ouverte |
+
+**81w** — maintenabilité / cohérence (périmètre du gate d'harmonie) : l'art GÉNÉRÉ
+`components/screen-wait-art.ts` (SVG baké du sticker Mee/Meo « On danse », byte-identique
+à sa source `lib/mee/screen-wait-art-source` DÉJÀ exemptée) était compté comme du chrome —
+**70 des 92 violations du gate (76 %), tous des faux positifs** noyant les 22 vraies cibles.
+Nouvelle entrée `EXEMPT_PATHS` (préfixe serré `components/screen-wait-art`, raison motivée),
+posée à côté de l'entrée `lib/mee/` dont elle est le prolongement ; le composant hôte
+`screen-wait.tsx` reste du chrome scanné. Témoin : `check-design-harmony.test.ts` describe
+« l'art d'attente baké » (RED→GREEN), 20→21. Gate **92 → 22 violations**, **9 → 8 fichiers**.
+Housekeeping : 80w confirmée mergée (`DEFAULT_AUTHOR_ACCENT` sur `dev`) ; appariement
+analyses↔plans 1:1 revérifié (45w→80w). Analyse : `docs/analyses/uiux/2026-11-08-iteration-81w.md`.
 
 **80w** — cohérence / maintenabilité (classe harmonie, héritée 76w→79w) : l'indigo de
 marque `#6366F1` était réécrit EN DUR sur TROIS surfaces web comme accent de repli de
@@ -112,6 +124,8 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **80w**
-Revue fraîche `apps/web` — voir les pistes 80w+ en pied de
-`docs/analyses/uiux/2026-11-02-iteration-79w.md`.
+## Prochaine itération : **82w**
+Revue fraîche `apps/web` — voir les pistes 82w+ en pied de
+`docs/analyses/uiux/2026-11-08-iteration-81w.md` (gate d'harmonie enfin lisible à
+22/8 : `mood-page.tsx` (13), `message-menu`/`message-edit-composer`,
+`comment-compose-bar`, letterbox admin ; + axe épuration).
