@@ -82,12 +82,12 @@ final class PhotoCaptureProcessingGuardTests: XCTestCase {
             code(of: url).map { code in Self.captureMarkers.contains(where: code.contains) } ?? false
         }
         // Le viseur de l'app et la caméra avant du moment photo du jeu (#9382, qui n'enregistre rien dans Photos).
-        XCTAssertEqual(Set(sites.map(\.lastPathComponent)), ["CameraModel.swift", "GamePhotoCamera.swift"],
+        XCTAssertEqual(Set(sites.map(\.lastPathComponent)), ["CameraModel.swift", "CameraModel+PhotoDelegate.swift", "GamePhotoCamera.swift"],
                        "Un NOUVEAU site de prise photo : le brancher sur \(Self.processorName), puis mettre cette liste à jour.")
     }
 
     func test_cameraDelegate_publishesTheProcessedPhoto() throws {
-        let url = try XCTUnwrap(swiftSources().first { $0.lastPathComponent == "CameraModel.swift" })
+        let url = try XCTUnwrap(swiftSources().first { $0.lastPathComponent == "CameraModel+PhotoDelegate.swift" })
         let code = try XCTUnwrap(code(of: url))
         let start = try XCTUnwrap(code.range(of: "didFinishProcessingPhoto"))
         let body = String(code[start.upperBound...].prefix(1500))

@@ -325,10 +325,10 @@ final class CameraRecordingInterruptionTests: XCTestCase {
 
     /// Une photo sans données ne sort plus en silence.
     func test_unePhotoSansDonnees_seDit() throws {
-        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
-        let fn = corps(modele, de: "didFinishProcessingPhoto photo:", a: "let nom = ComposerPhotoEncoding")
+        let delegue = try source("Meeshy/Features/Main/Components/CameraModel+PhotoDelegate.swift")
+        let fn = corps(delegue, de: "didFinishProcessingPhoto photo:", a: "let nom = ComposerPhotoEncoding")
         XCTAssertEqual(fn.components(separatedBy: "self.photoWasLost()").count - 1, 2)
-        let perte = corps(modele, de: "func photoWasLost()", a: "/// Le tic du cadre")
+        let perte = corps(delegue, de: "func photoWasLost()", a: "nonisolated func photoOutput")
         XCTAssertTrue(perte.contains("CameraTakeNotice.announceLostPhoto()"))
     }
 
