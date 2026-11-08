@@ -160,7 +160,14 @@ const MAX_LINES = 1000;
  * 1204 → 1199 (#7406, 2026-09-22) : les humeurs lisent `statusPostSelect`.
  *
  * `services/PostService.ts` : entrée 2663 → 2628 (#7406, 2026-09-22) — le like
- * et le retrait ne réécrivent plus le Json legacy `Post.reactions`.
+ * et le retrait ne réécrivent plus le Json legacy `Post.reactions`. Puis
+ * 2628 → 2118 (#16751, 2026-11-08) : la traduction du CONTENU d'une story est
+ * partie vers `services/posts/storyContentTranslation.ts`, avec la doctrine
+ * qu'elle porte seule (le jeu des langues encore attendues, le doublon du bus
+ * ZMQ, le retrait de l'écouteur). Le fichier MESURAIT 2225 avant le lot — le
+ * gel portait 403 lignes de marge, rendues au dépôt par ce rabaissement, comme
+ * aux découpages précédents : sans quoi le correctif pouvait grossir un fichier
+ * hors budget sans qu'aucun cliquet ne le voie.
  *
  * `services/MentionService.ts` : SORTI (1235 → 687, #7852, 2026-09-25). Les
  * suggestions d'autocomplete sont parties vers `services/mentions/`, avec la
@@ -188,7 +195,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/message-translation/MessageTranslationService.ts': 3303,
   'services/MessageReadStatusService.ts': 3194,
   'services/CallService.ts': 3049,
-  'services/PostService.ts': 2628,
+  'services/PostService.ts': 2118,
   'socketio/handlers/MessageHandler.ts': 2269,
   'server.ts': 1406,
   'services/PostFeedService.ts': 1199,

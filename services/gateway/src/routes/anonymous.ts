@@ -262,6 +262,10 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
       const result = await performLinkJoin({
         prisma: fastify.prisma,
         key: linkId,
+        // Porte des INVITÉS, et d'eux seuls : l'identité vient de la créance,
+        // qui est ici absente par construction. Pas d'`arrivalIO` (#16837) —
+        // l'éventail d'arrivée a un compte pour SUJET, et aucune arrivée de
+        // cette route n'en a un. Y câbler l'émetteur serait du code mort.
         authContext: undefined,
         requestIp: resolveClientIp(request),
         requestUserAgent: extractUserAgent(request),

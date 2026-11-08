@@ -85,7 +85,10 @@ export const SITE_UNIQUE = ['recipientLanguage', 'recipientLanguages'] as const;
  * tomber dans un silence.
  */
 export const EXEMPTIONS: Readonly<Record<string, string>> = {
-  'routes/conversations/link-admission.ts': [
+  // #16837 — la création de la ligne d'un invité a quitté `link-admission.ts`
+  // pour `link-admission-guest.ts` (celui-là est resté la DÉCISION). L'exemption
+  // suit le producteur, pas le chemin.
+  'routes/conversations/link-admission-guest.ts': [
     "l'invité de lien partagé n'a AUCUNE ligne `User` — il n'existe donc aucun",
     "prisme à descendre. `profile.language` vient du CORPS de la requête, seul",
     'signal de langue que cette porte possède, et le schéma Zod le normalise',

@@ -136,8 +136,12 @@ struct ComposerTrimTrack: View {
     /// Seule la longueur change : l'export copie les échantillons et coupe à l'image clé.
     private var cutsOnKeyframe: Bool {
         guard let plage = ComposerTrimRule.timeRange(session.trim, duration: duration) else { return false }
+        let recadre = session.loopPlayer.map {
+            ComposerLookVideoExporter.reshapes(upright: $0.uprightSize, aspect: session.editAspect ?? session.canvasAspect,
+                                               chosen: session.editAspect != session.openingAspect)
+        } ?? false
         let plan = ComposerLookVideoExporter.plan(look: session.look, framing: session.framing, timeRange: plage,
-                                                  audioGain: session.takeSound.effectiveGain)
+                                                  audioGain: session.takeSound.effectiveGain, reshapes: recadre)
         return plan == .trimOnly(plage)
     }
 
