@@ -308,6 +308,12 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   (`ProfileTalkieRow`, retirée sur `TALKIE_NOT_ALLOWED`). Treize libellés `talkie.send.*` en sept langues.
 - Ce qui reste du talkie : copie en message vocal (#16698 web, iOS à suivre), émission Android, arrière-plan iOS
   (PushToTalk) et Android, Safari/Firefox (#16699).
+- PR #16928, fusionnée dans `dev` par Jacques le 2026-11-08 à 15:15 (9e7aa1b10), #16927 fermée. Gates locaux verts
+  (règles maison, cohésion, localisation, couleurs en dur, parité `SocketEvent`, inscription des témoins 1909/1909,
+  cliquet `any`). Quatre rouges hérités de `dev` levés en chemin : cliquet `any` et `LocationHandler.blocking` par
+  refusion de `dev` ; `.foregroundColor(` (2299 > 2294) et `Color(hex:)` sur variable inconnue (476 > 475) corrigés au
+  site fautif (`RainbowLetters.palette(isDark:)`), sans relever de référence. Les runs iOS, SDK et CI dispatchés sur le
+  dernier commit ont été annulés par la fusion : la preuve de compilation iOS/SDK se lit sur les runs `push` de `dev`.
 - Prochain lot recommandé : accorder « Ce que j'écoute » depuis Android quand #16643 aura fusionné, sinon l'émission du
   talkie sur Android.
 
