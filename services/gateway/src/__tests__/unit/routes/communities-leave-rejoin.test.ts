@@ -71,7 +71,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     user: {
-      findFirst: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
+      findFirst: jest.fn<any>(async ({ where }: any) => (where?.OR ? null : { id: OTHER_USER_ID })),
     },
     ...overrides,
   } as any;
@@ -199,7 +199,7 @@ describe('POST /communities/:id/invite — réactive une ligne laissée par un d
       id: COMM_ID, isPrivate: false, createdBy: USER_ID,
       members: [{ role: 'admin' }],
     });
-    prisma.user.findFirst.mockResolvedValue({ id: OTHER_USER_ID });
+    prisma.user.findFirst.mockImplementation(async ({ where }: any) => (where?.OR ? null : { id: OTHER_USER_ID }));
     prisma.communityMember.findFirst.mockResolvedValue({
       id: MEMBER_ID, communityId: COMM_ID, userId: OTHER_USER_ID, isActive: false, role: 'moderator',
     });
@@ -237,7 +237,7 @@ describe('POST /communities/:id/members — réactive avec le rôle demandé', (
       createdBy: USER_ID,
       members: [{ role: 'admin' }],
     });
-    prisma.user.findFirst.mockResolvedValue({ id: OTHER_USER_ID });
+    prisma.user.findFirst.mockImplementation(async ({ where }: any) => (where?.OR ? null : { id: OTHER_USER_ID }));
     prisma.communityMember.findFirst.mockResolvedValue({
       id: MEMBER_ID, communityId: COMM_ID, userId: OTHER_USER_ID, isActive: false,
     });

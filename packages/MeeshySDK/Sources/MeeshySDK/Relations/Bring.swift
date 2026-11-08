@@ -167,32 +167,47 @@ public enum BringSendOutcome: Sendable, Equatable {
     }
 }
 
-/// `GET|PUT /relations/:userId/settings` — les réglages que JE pose pour l'autre. Seul `bringBlocked` est lu à ce
-/// lot ; les autres réglages arrivent avec leur lot, et un champ absent vaut sa valeur par défaut.
+/// `GET|PUT /relations/:userId/settings` — les réglages que JE pose pour l'autre. Seules les deux préférences de
+/// RÉCEPTION sont lues à ce jour (`bringBlocked`, #13936 ; `talkieBlocked`, #13935) ; les autres réglages arrivent
+/// avec leur lot, et un champ absent vaut sa valeur par défaut (ouvert).
 public struct RelationPersonSettings: Decodable, Sendable, Equatable {
     public let userId: String
     public let bringBlocked: Bool
+    public let talkieBlocked: Bool
 
-    public init(userId: String, bringBlocked: Bool) {
+    public init(userId: String, bringBlocked: Bool, talkieBlocked: Bool = false) {
         self.userId = userId
         self.bringBlocked = bringBlocked
+        self.talkieBlocked = talkieBlocked
     }
 
-    private enum CodingKeys: String, CodingKey { case userId, bringBlocked }
+    private enum CodingKeys: String, CodingKey { case userId, bringBlocked, talkieBlocked }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         userId = try c.decode(String.self, forKey: .userId)
         bringBlocked = (try? c.decodeIfPresent(Bool.self, forKey: .bringBlocked)) ?? false
+        talkieBlocked = (try? c.decodeIfPresent(Bool.self, forKey: .talkieBlocked)) ?? false
     }
+
+    public func isBlocked(_ setting: RelationReceptionSetting) -> Bool {
+        switch setting {
+        case .bring: return bringBlocked
+        case .talkie: return talkieBlocked
+        }
+    }
+}
+
+/// Une préférence de RÉCEPTION posée pour une personne : ouverte par défaut, coupée par un blocage que l'autre ne
+/// voit pas. `rawValue` est le champ du corps de `PUT /relations/:userId/settings`, écrit seul (corps strict).
+public enum RelationReceptionSetting: String, Sendable, Equatable, CaseIterable {
+    case bring = "bringBlocked"
+    case talkie = "talkieBlocked"
 }
 
 /// Les instants ISO 8601 du contrat, avec ou sans millisecondes.
 public enum BringInstant {
     public static func parse(_ value: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: value) { return date }
-        return ISO8601DateFormatter().date(from: value)
+        WireDate.date(from: value)
     }
 }

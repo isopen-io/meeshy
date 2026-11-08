@@ -22,8 +22,7 @@ import MeeshySDK
 @MainActor
 final class ComposerCaptureSession: ObservableObject {
 
-    /// Le modèle est construit MUET : `CameraModel` n'ouvre sa session qu'à la
-    /// demande.
+    /// Construit MUET : `CameraModel` n'ouvre sa session qu'à la demande.
     let camera: CameraModel
     /// Les COMMANDES de l'objectif — `camera` en temps normal, une
     /// doublure dans les témoins ; les vues lisent `camera`.
@@ -31,6 +30,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// Le pont toucher → capteur de l'aperçu partagé : l'aperçu s'y
     /// accroche, le toucher du chrome le lit.
     let focusPoints = CameraPreviewFocusPoints()
+    let selfTimer = ComposerCaptureSelfTimer()
 
     /// L'étape du viseur — la loi est dans `ComposerSceneCamera`. Le guet des
     /// trames la suit : la bande peint dès le viseur armé.
@@ -344,11 +344,11 @@ final class ComposerCaptureSession: ObservableObject {
         photoIsRamping = true
         screenFlashBurst = true
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.brightnessRamp * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(ComposerFrontFlash.brightnessRamp))
             photoIsRamping = false
             guard stage == .armed else { return }
             controls.takePhoto(flash: .off)
-            try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.photoHold * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(ComposerFrontFlash.photoHold))
             screenFlashBurst = false
             guard stage == .armed else { return }
             ComposerScreenFlash.shared.restore()

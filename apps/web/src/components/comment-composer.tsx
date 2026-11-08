@@ -224,9 +224,14 @@ export function CommentComposer({
   /* RENDRE LA LECTURE (un envoi réussi chez un hôte `foldOnSend`, ou le ⌄) :
      le focus quitte le composeur pour le FIL qui le porte (sa racine
      `tabIndex=-1`), jamais pour `<body>` — au clavier, on repartirait du haut
-     du document. */
+     du document. Le focus ne se rend que s'il est ENCORE dans le composeur :
+     un envoi confirmé après la fermeture de la feuille, ou après que le
+     lecteur est allé ailleurs, ne retire plus le focus que l'hôte a rendu
+     (#16762). */
   const release = useCallback(() => {
-    const thread = formRef.current?.parentElement?.closest<HTMLElement>('[tabindex="-1"]') ?? null;
+    const form = formRef.current;
+    if (form === null || !form.contains(document.activeElement)) return;
+    const thread = form.parentElement?.closest<HTMLElement>('[tabindex="-1"]') ?? null;
     if (thread !== null) thread.focus();
     else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }, []);

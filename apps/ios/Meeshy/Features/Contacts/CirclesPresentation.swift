@@ -42,10 +42,33 @@ nonisolated enum CirclePersonSetting: String, CaseIterable, Identifiable, Sendab
         }
     }
 
+    /// La préférence de RÉCEPTION que ce réglage pose, quand son lot est livré ; `nil` ⇒ encore derrière son drapeau.
+    var receptionSetting: RelationReceptionSetting? {
+        switch self {
+        case .blockBring: return .bring
+        case .talkie: return .talkie
+        case .listening, .liveLocation: return nil
+        }
+    }
+
+    /// Ce que le réglage fait, dit sous l'interrupteur quand il ne s'explique pas seul.
+    var detail: String? {
+        switch self {
+        case .talkie:
+            return String(
+                localized: "circles.settings.blockTalkie.detail",
+                defaultValue: "Sa voix ne sortira plus directement chez vous : elle arrivera en message vocal. Cette personne n’en est pas prévenue.",
+                bundle: .main
+            )
+        case .blockBring, .listening, .liveLocation:
+            return nil
+        }
+    }
+
     var title: String {
         switch self {
         case .blockBring: return String(localized: "circles.settings.blockBring", defaultValue: "Bloquer ses Bring", bundle: .main)
-        case .talkie: return String(localized: "circles.settings.talkie", defaultValue: "Talkie", bundle: .main)
+        case .talkie: return String(localized: "circles.settings.blockTalkie", defaultValue: "Couper son talkie", bundle: .main)
         case .listening: return String(localized: "circles.settings.listening", defaultValue: "Ce que j'écoute", bundle: .main)
         case .liveLocation: return String(localized: "circles.settings.location", defaultValue: "Position en direct", bundle: .main)
         }

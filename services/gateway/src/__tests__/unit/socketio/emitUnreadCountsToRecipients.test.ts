@@ -5,6 +5,7 @@
  * @jest-environment node
  */
 
+import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 import { describe, it, expect, jest } from '@jest/globals';
 
 import { emitUnreadCountsToRecipients } from '../../../socketio/emitUnreadCountsToRecipients';
@@ -138,12 +139,75 @@ describe('emitUnreadCountsToRecipients — exclusion de l\'expéditeur', () => {
     expect(to).not.toHaveBeenCalled();
   });
 
-  it('ne fait rien sans auteur — aucun destinataire n\'est déductible', async () => {
-    const { io, to } = makeIO();
+  /**
+   * #16691 — la prémisse du témoin précédent (« ne fait rien sans auteur —
+   * aucun destinataire n'est déductible ») était FAUSSE dans le sens qui
+   * compte : sans auteur, aucun destinataire n'est à RETIRER. L'ensemble
+   * correct est « tous les participants vivants », jamais ∅ — le gate ne
+   * protégeait rien, il VIDAIT l'audience.
+   *
+   * Un message d'agent ou système arrivé par le chemin REST/ZMQ sans
+   * `senderId` dans l'objet JS déclenchait `message:new`, l'enfilage hors
+   * ligne ET `conversation:updated` — mais `conversation:unread-updated` ne
+   * partait pour PERSONNE, et la liste web (`staleTime: Infinity` sur ce
+   * cache) gardait la pastille précédente jusqu'à une relecture complète.
+   *
+   * #3614 avait retiré exactement ce gate de l'enfilage hors ligne et l'avait
+   * laissé sur la pastille : un lot ferme une classe dans SA langue.
+   */
+  it('sans auteur, la pastille part à TOUS les participants vivants', async () => {
+    const { io, to, emit } = makeIO();
     const prisma = makePrisma([sender(), peer()]);
 
     await emitUnreadCountsToRecipients({
       io,
+      prisma: prisma as any,
+      readStatusService: makeReadStatusService({ [SENDER_PART_ID]: 2, [PEER_PART_ID]: 5 }),
+      conversationId: CONV_ID,
+      senderId: null,
+    });
+
+    expect(prisma.participant.findMany).toHaveBeenCalled();
+    expect(to).toHaveBeenCalledWith(`user:${SENDER_USER_ID}`);
+    expect(to).toHaveBeenCalledWith(`user:${PEER_USER_ID}`);
+    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONV_ID,
+      unreadCount: 5,
+    });
+  });
+
+  /**
+   * Le piège voisin, et c'est celui qu'un retrait NAÏF du gate aurait armé :
+   * l'exclusion s'écrit `p.userId !== senderId`. Avec `senderId` nul, un
+   * participant ANONYME (`userId: null`) satisfait `p.userId === senderId` et
+   * se ferait exclure — soit exactement la population des liens de partage,
+   * silencieusement privée de pastille par le correctif censé la servir.
+   *
+   * L'exclusion ne tourne donc pas du tout quand il n'y a pas d'auteur.
+   */
+  it('sans auteur, un participant ANONYME reste destinataire', async () => {
+    const { io, to, emit } = makeIO();
+
+    await emitUnreadCountsToRecipients({
+      io,
+      prisma: makePrisma([{ id: ANON_PART_ID, userId: null, joinedAt: null }]) as any,
+      readStatusService: makeReadStatusService({ [ANON_PART_ID]: 3 }),
+      conversationId: CONV_ID,
+      senderId: null,
+    });
+
+    expect(to).toHaveBeenCalledWith(`user:${ANON_PART_ID}`);
+    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONV_ID,
+      unreadCount: 3,
+    });
+  });
+
+  it('sans io, il n\'y a rien pour émettre — le gate qui RESTE', async () => {
+    const prisma = makePrisma([sender(), peer()]);
+
+    await emitUnreadCountsToRecipients({
+      io: null as any,
       prisma: prisma as any,
       readStatusService: makeReadStatusService(),
       conversationId: CONV_ID,
@@ -151,7 +215,6 @@ describe('emitUnreadCountsToRecipients — exclusion de l\'expéditeur', () => {
     });
 
     expect(prisma.participant.findMany).not.toHaveBeenCalled();
-    expect(to).not.toHaveBeenCalled();
   });
 });
 
@@ -179,7 +242,23 @@ describe('emitUnreadCountsToRecipients — participants anonymes', () => {
 });
 
 describe('emitUnreadCountsToRecipients — source des participants', () => {
-  it('ne lit que les participants actifs de la conversation', async () => {
+  /**
+   * #16690 — la pastille s'adresse à l'appartenance VIVANTE, par la même
+   * constante que les portes d'accès (`PARTICIPATION_VIVANTE`) : une ligne
+   * `isActive: true, bannedAt ≠ null` existe en base, et sa room `user:<id>`
+   * est rejointe inconditionnellement.
+   *
+   * **Ce témoin assert la REQUÊTE, et c'est sa limite** : il ne peut pas voir
+   * ce que la clause FAIT, et c'est précisément sous cette forme que le défaut
+   * a vécu — l'assertion portait sur `isActive: true` et passait au vert sur
+   * une audience qui servait un banni. L'effet est gardé chez son voisin, par
+   * un double qui ÉVALUE le `where`
+   * (`socketio/__tests__/living-participation-audience.test.ts`). Celui-ci
+   * garde ce que l'autre ne voit pas : la PROJECTION, qu'aucun témoin d'effet
+   * ne peut attester (une audience dont le `select` ne ramène pas `id` n'ignore
+   * pas la room de repli, elle ne la lit jamais).
+   */
+  it('lit les participants à l’appartenance VIVANTE de la conversation', async () => {
     const { io } = makeIO();
     const prisma = makePrisma([sender(), peer()]);
 
@@ -193,7 +272,7 @@ describe('emitUnreadCountsToRecipients — source des participants', () => {
 
     expect(prisma.participant.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { conversationId: CONV_ID, isActive: true },
+        where: { conversationId: CONV_ID, ...PARTICIPATION_VIVANTE },
         select: { id: true, userId: true, joinedAt: true },
       })
     );

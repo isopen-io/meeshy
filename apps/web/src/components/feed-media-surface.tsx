@@ -179,6 +179,13 @@ export function FeedMediaSurface({ media, playable = false }: { readonly media: 
              Sans texte d'accessibilité, l'image est DÉCORATIVE (`alt=""`) —
              c'est la forme juste quand rien n'en décrit le contenu. */
           alt={media.altText ?? ''}
+          /* LA LANGUE DU TEXTE SERVI (#7392) — `lang` sur une image gouverne la
+             VOIX dont un lecteur d'écran prononce son `alt`. C'est la moitié
+             « qui l'AFFICHE » du Prisme (cycle 122), et c'est la seule où elle
+             est audible. Posé seulement quand il y a un texte ET une langue :
+             sur une image décorative il ne qualifierait rien, et sur un texte
+             de langue inconnue il mentirait. */
+          {...(media.altText !== undefined && media.altTextLanguage !== undefined ? { lang: media.altTextLanguage } : {})}
           loading="lazy"
           onLoad={() => setLoaded(true)}
           className="absolute inset-0 size-full object-cover transition-opacity duration-300"

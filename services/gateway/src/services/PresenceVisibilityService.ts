@@ -1,15 +1,19 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { RelationLevel } from '@meeshy/shared/types/relation';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { isGlobalAdmin, isPlatformTeam } from '@meeshy/shared/types/role-types';
 import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import { declaredAgeClass, type DeclaredAgeClass } from '@meeshy/shared/utils/age';
+import { ACCOUNT_STATE_SELECT, lawRoleOf } from './relations/usableAccount';
 import { PrivacyPreferencesService } from './PrivacyPreferencesService';
 import { amisAcceptes, niveauEffectif, niveauxParmi } from './friendship';
 import { getBlockedUserIdsAmong, isBlockedBetween } from '../utils/blocking';
 
 export type PresenceViewer = { readonly userId: string; readonly role: GlobalUserRoleType } | null;
 export type PresenceTarget = { readonly id: string; readonly deactivatedAt?: Date | null };
+
+type TeamPerson = { readonly role: string | null; readonly age: DeclaredAgeClass };
 
 const HIDDEN: PresenceVisibility = { showOnline: false, showLastSeenTimestamp: false };
 const FULL: PresenceVisibility = { showOnline: true, showLastSeenTimestamp: true };
@@ -26,7 +30,9 @@ const FULL: PresenceVisibility = { showOnline: true, showLastSeenTimestamp: true
  * partage d'une conversation n'en est plus une non plus (voir la directive
  * gravée dans `resolvePresenceVisibility` et `services/gateway/decisions.md`).
  * Le bypass suit désormais `isGlobalAdmin` (ADMIN/BIGBOSS) — MODERATOR a
- * perdu son accès privilégié.
+ * perdu son accès privilégié. Il lit toutefois un collègue de l'équipe comme un
+ * Sang, sous ses préférences (#16623) : la loi le décide sur les deux rôles, et
+ * le rôle de la cible n'est lu que pour un lecteur de l'équipe.
  *
  * @see docs/superpowers/specs/2026-06-30-profile-last-seen-visibility-design.md
  */
@@ -35,6 +41,19 @@ export class PresenceVisibilityService {
     private readonly prisma: PrismaClient,
     private readonly privacy: PrivacyPreferencesService,
   ) {}
+
+  /**
+   * Rôle et âge déclaré des deux côtés, lus ensemble pour un lecteur de l'équipe :
+   * un collègue mineur déclaré éteint le privilège (#16623).
+   */
+  private async teamPeople(ids: readonly string[]): Promise<ReadonlyMap<string, TeamPerson>> {
+    const now = new Date();
+    const rows = await this.prisma.user.findMany({
+      where: { id: { in: [...ids] } },
+      select: { id: true, role: true, birthDate: true, ...ACCOUNT_STATE_SELECT },
+    });
+    return new Map(rows.map((row) => [row.id, { role: lawRoleOf(row), age: declaredAgeClass(row.birthDate ?? null, now) }]));
+  }
 
   async resolveForTarget(viewer: PresenceViewer, target: PresenceTarget): Promise<PresenceVisibility> {
     if (target.deactivatedAt) return HIDDEN;
@@ -45,12 +64,18 @@ export class PresenceVisibilityService {
 
     if (await isBlockedBetween(this.prisma, viewer.userId, target.id)) return HIDDEN;
 
-    const relationLevel = await niveauEffectif(this.prisma, viewer.userId, target.id);
-    const prefs = await this.privacy.getPreferences(target.id);
+    const [relationLevel, prefs, people] = await Promise.all([
+      niveauEffectif(this.prisma, viewer.userId, target.id),
+      this.privacy.getPreferences(target.id),
+      isPlatformTeam(viewer.role) ? this.teamPeople([viewer.userId, target.id]) : new Map<string, TeamPerson>(),
+    ]);
 
     return resolvePresenceVisibility({
       isSelf: false,
       viewerRole: viewer.role,
+      targetRole: people.get(target.id)?.role,
+      viewerMinor: people.get(viewer.userId)?.age,
+      targetMinor: people.get(target.id)?.age,
       relationLevel,
       targetShowOnlineStatus: prefs.showOnlineStatus,
       targetShowLastSeen: prefs.showLastSeen,
@@ -73,10 +98,16 @@ export class PresenceVisibilityService {
       return result;
     }
 
+    const team = isPlatformTeam(viewer.role);
     const targetRows = await this.prisma.user.findMany({
-      where: { id: { in: uniqueIds } },
-      select: { id: true, deactivatedAt: true },
+      where: { id: { in: team ? [...new Set([...uniqueIds, viewer.userId])] : uniqueIds } },
+      select: { id: true, role: true, birthDate: true, ...ACCOUNT_STATE_SELECT },
     });
+    const now = new Date();
+    const roles = new Map(targetRows.map((r) => [r.id, lawRoleOf(r)]));
+    const ages = new Map(
+      targetRows.map((r: { id: string; birthDate?: Date | null }) => [r.id, team ? declaredAgeClass(r.birthDate ?? null, now) : 'unknown'] as const),
+    );
     const deactivated = new Set(
       targetRows.filter((r: { deactivatedAt: Date | null }) => r.deactivatedAt != null).map((r: { id: string }) => r.id),
     );
@@ -108,6 +139,9 @@ export class PresenceVisibilityService {
         resolvePresenceVisibility({
           isSelf: id === viewerId,
           viewerRole: viewer.role,
+          targetRole: roles.get(id),
+          viewerMinor: ages.get(viewerId),
+          targetMinor: ages.get(id),
           relationLevel: levels.get(id) ?? 'PUBLIC',
           targetShowOnlineStatus: prefs?.showOnlineStatus ?? true,
           targetShowLastSeen: prefs?.showLastSeen ?? true,

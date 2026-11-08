@@ -39,10 +39,19 @@ export async function translationSourceOf<T extends AtRestReadableRow>(row: T, k
 /**
  * #12822 — le texte que le translator lit d'une ligne `Message` : son clair,
  * ouvert par la passerelle quand la ligne est scellée au repos ; `null` quand
- * il n'y a rien à traduire (texte vide, ligne qu'aucune clé n'ouvre). La ligne
- * fait foi, jamais le texte qu'un appelant affirme être le sien.
+ * il n'y a rien à traduire (texte vide, ligne qu'aucune clé n'ouvre, message
+ * rappelé). La ligne fait foi, jamais le texte qu'un appelant affirme être le
+ * sien.
+ *
+ * #16557 — tout chemin vers le traducteur passe ici, et les transports de
+ * suppression gardent `content` : c'est le seul endroit où un rappel arrête
+ * TOUTES les retraductions, quel que soit celui qui les a demandées.
  */
-export async function translatableTextOf(row: AtRestReadableRow, keyring: AtRestKeyring): Promise<string | null> {
+export async function translatableTextOf(
+  row: AtRestReadableRow & { readonly deletedAt?: Date | null },
+  keyring: AtRestKeyring,
+): Promise<string | null> {
+  if (row.deletedAt) return null;
   const source = await translationSourceOf(row, keyring);
   if (!source.readable) return null;
   const text = source.row.content;

@@ -7,6 +7,7 @@
 const arCallScreen = {
   'call.screen.share': 'مشاركة الشاشة',
   'call.screen.stop': 'إيقاف مشاركة الشاشة',
+  'call.screen.stopShort': 'إيقاف',
   'call.screen.sharing': 'أنت تشارك شاشتك',
   'call.screen.peerSharing': '{name} يشارك شاشته',
   'call.more': 'مزيد من الإجراءات',

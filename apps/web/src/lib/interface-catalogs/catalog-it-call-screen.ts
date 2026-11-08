@@ -7,6 +7,7 @@
 const itCallScreen = {
   'call.screen.share': 'Condividi schermo',
   'call.screen.stop': 'Interrompi condivisione schermo',
+  'call.screen.stopShort': 'Interrompi',
   'call.screen.sharing': 'Stai condividendo lo schermo',
   'call.screen.peerSharing': '{name} sta condividendo lo schermo',
   'call.more': 'Altre azioni',

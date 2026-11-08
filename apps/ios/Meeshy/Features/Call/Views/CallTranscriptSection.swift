@@ -24,7 +24,7 @@ enum CallTranscriptLoader {
         let localUserId = localUser?.id ?? ""
         let localName = localUser?.displayName ?? localUser?.username
             ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
-        let preferredLanguage = CallManager.preferredCallLanguage(for: localUser)
+        let preferredLanguage = CallLanguagePreference.preferredCallLanguage(for: localUser)
         let fetched = CallTranscript(
             callId: remote.callId,
             conversationId: remote.conversationId,
@@ -127,8 +127,9 @@ struct CallTranscriptSection: View {
     private func transcriptRow(_ segment: CallTranscriptSegment, callStartedAt: Date) -> some View {
         let elapsed = segment.capturedAt.timeIntervalSince(callStartedAt)
         let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
-        let speakerColor = segment.isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
-        let displayText = segment.isLocal ? segment.text : (showOriginalText ? segment.text : (segment.translatedText ?? segment.text))
+        let speakerColor = Color(hex: CallSpeakerColor.hex(for: segment.speakerId, mode: theme.mode))
+        let servesTranslation = !segment.isLocal && !showOriginalText && segment.translatedText != nil
+        let displayText = servesTranslation ? (segment.translatedText ?? segment.text) : segment.text
         return VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Text(segment.speakerName)
@@ -141,7 +142,7 @@ struct CallTranscriptSection: View {
             }
             Text(displayText)
                 .font(.callout)
-                .foregroundStyle(theme.textPrimary)
+                .foregroundStyle(servesTranslation ? speakerColor : theme.textPrimary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(segment.speakerName), \(elapsedLabel) : \(displayText)")

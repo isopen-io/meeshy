@@ -537,6 +537,7 @@ struct ComposerLookStrip: View {
 
     private func perform(_ zone: ComposerCaptureZone, _ geste: ComposerCaptureGestureKind,
                          item: ComposerLookStripItem? = nil) {
+        if geste == .longPress { session.selfTimer.cancel() }
         session.perform(ComposerCaptureGesture.action(zone: zone, gesture: geste, context: context), item: item)
     }
 
@@ -576,7 +577,7 @@ struct ComposerLookStrip: View {
         if !scrolling { scrolling = true }
         settle.task?.cancel()
         settle.task = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
             scrolling = false
             rest(reader: reader)

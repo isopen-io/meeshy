@@ -183,7 +183,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
         // #13132 — RELOCALISATION pure : le conteneur de glissé des bulles a quitté `MessageListView.swift` avec ses deux glyphes.
         "Features/Main/Views/BubbleSwipeContainer.swift",
-        "Features/Call/Views/CallEffectsOverlay.swift",
         // #8276 — `CallView.swift` découpé : ses glyphes figés ont suivi leurs
         // surfaces (tous dans un cercle ou un cadre fixe — doctrine 82i/86i).
         // #8394 : la pilule remplace la barre ; le glyphe de ses boutons est

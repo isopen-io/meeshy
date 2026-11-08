@@ -44,7 +44,7 @@ function makeDeps(options: {
         },
       },
     } as unknown as OfflineParticipantQueueDeps['prisma'],
-    connectedUsers: { has: (key: string) => connected.has(key) },
+    connectedUsers: new Map([...connected].map((k) => [k, {}])),
   };
 }
 

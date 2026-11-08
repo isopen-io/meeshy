@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { logError } from '../../utils/logger';
+import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { relationIoOf } from '../../socketio/relationEvents';
 import {
   sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendInternalError,
 } from '../../utils/response.js';
@@ -103,6 +105,9 @@ export async function bloquer(
   });
 
   const dejaBloque = courant?.blockedUserIds.includes(cibleId) ?? false;
+  // #13934 — ce que chacun voit de l'écoute de l'autre, capturé AVANT : seul qui voyait reçoit l'effacement.
+  const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, '[BLOCKS] Now playing not cleared after block', error) };
+  const ecouteAvant = dejaBloque ? new Map() : await captureNowPlayingBefore(ecoute, { userA: moi, userB: cibleId });
 
   if (!dejaBloque) {
     // Le `MutationLog` enregistre l'id de la CIBLE : un blocage ne produit
@@ -139,6 +144,9 @@ export async function bloquer(
   // Le talkie (#13935) : une voix qui passe entre les deux est coupée, sans rien apprendre au bloqué.
   const couper = async () => cutTalkiesOnBlock(talkieCutDepsOf(), { blockerId: moi, blockedId: cibleId, scope: 'user' });
   couper().catch((error: unknown) => logError(fastify.log, '[BLOCKS] Talkie not cut after block', error));
+  // L'écoute partagée (#13934) : ce que chacun voyait de l'écoute de l'autre s'efface.
+  refreshNowPlayingAfter(ecoute, { userA: moi, userB: cibleId, before: ecouteAvant })
+    .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Now-playing not refreshed after block', error));
 
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une

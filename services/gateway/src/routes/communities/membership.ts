@@ -21,6 +21,8 @@ import {
   sendInternalError
 } from '../../utils/response.js';
 import { CommunityRole } from './types';
+import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
+import { isAddableUser } from './addable-user';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
@@ -330,7 +332,7 @@ export async function registerMembershipRoutes(
 
       const community = await fastify.prisma.community.findFirst({
         where: { id },
-        select: { id: true, createdBy: true }
+        select: { id: true, createdBy: true, isPrivate: true, isActive: true }
       });
 
       if (!community) {
@@ -353,10 +355,21 @@ export async function registerMembershipRoutes(
         return sendNotFound(reply, 'You are not a member of this community');
       }
 
+      const leftAt = new Date();
       await fastify.prisma.communityMember.update({
         where: { id: activeMembership.id },
-        data: { isActive: false, leftAt: new Date() }
+        data: { isActive: false, leftAt }
       });
+
+      // #16704 — n'être plus membre d'une communauté qui garde ses salons,
+      // c'est n'en être plus occupant : sans cette sortie, l'ancien membre
+      // continuait de lire ce que la communauté réserve à ses membres.
+      if (communityGuardsItsSalons(community)) {
+        await exitCommunitySalons(
+          { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler },
+          { communityId: community.id, userId, now: leftAt },
+        );
+      }
 
       return sendSuccess(reply, { message: 'Successfully left community' });
     } catch (error) {
@@ -467,12 +480,9 @@ export async function registerMembershipRoutes(
         }
       }
 
-      const userToInvite = await fastify.prisma.user.findFirst({
-        where: { id: inviteeId },
-        select: { id: true }
-      });
-
-      if (!userToInvite) {
+      // #6376 — l'invitation AJOUTE la personne, sans son accord : un compte
+      // vivant, sans blocage (`isAddableUser`, partagé avec POST …/members).
+      if (!(await isAddableUser(fastify.prisma, userId, inviteeId))) {
         return sendNotFound(reply, 'User to invite not found');
       }
 

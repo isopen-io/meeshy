@@ -210,6 +210,22 @@ const communityScreen = () =>
     import('@/lib/i18n-community-membership-catalog').then((m) => m.loadCommunityMembershipCatalog(currentInterfaceLanguage())),
   ]).then(([screen]) => screen);
 
+/* LES MEMBRES D'UNE COMMUNAUTÉ (#6375) — même catalogue que le détail
+   (`community.members.*` vit avec `community.membership.*`). */
+const communityMembersScreen = () =>
+  Promise.all([
+    import('@/routes/community-members'),
+    import('@/lib/i18n-community-membership-catalog').then((m) => m.loadCommunityMembershipCatalog(currentInterfaceLanguage())),
+  ]).then(([screen]) => screen);
+
+/* LA CRÉATION D'UNE COMMUNAUTÉ (#6376) — « Ajouter des membres » parle avec
+   le catalogue de l'invitation (`community.create.members.*`, `community.invite.*`). */
+const communityNewScreen = () =>
+  Promise.all([
+    import('@/routes/community-new'),
+    import('@/lib/i18n-community-membership-catalog').then((m) => m.loadCommunityMembershipCatalog(currentInterfaceLanguage())),
+  ]).then(([screen]) => screen);
+
 /* LA CONFIRMATION D'UN LIEN DE CONNEXION (« Se connecter en tant que @x ? », 8da83d255f) — le lien magique et la
    vérification d'adresse la montrent : leur chunk ET le catalogue `signInLink.confirm.*`, en parallèle — le
    catalogue d'interface est à son plafond, et `translateSignInLink` lève sur un catalogue non chargé. */
@@ -585,7 +601,10 @@ export const ROUTES = {
      que le legacy sert (`apps/web/app/(connected)/communities/[id]`, D-5).
      L'ORDRE compte : le routeur rend la PREMIÈRE adresse qui correspond, et
      `new` serait sinon lu comme l'identifiant d'une communauté. */
-  communityNew: { pattern: '/communities/new', screen: () => import('@/routes/community-new') },
+  communityNew: { pattern: '/communities/new', screen: communityNewScreen },
+  /* LES MEMBRES (#6375) — miroir `Route.communityMembers` ; AVANT le détail,
+     comme `communityNew`, pour que l'ordre ne dépende pas du routeur. */
+  communityMembers: { pattern: '/communities/$community/members', screen: communityMembersScreen },
   community: { pattern: '/communities/$community', screen: communityScreen },
   settings: { pattern: '/settings', screen: () => import('@/routes/settings') },
   profile: { pattern: '/me', screen: () => import('@/routes/profile') },

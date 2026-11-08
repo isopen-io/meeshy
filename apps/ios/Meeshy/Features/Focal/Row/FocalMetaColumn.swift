@@ -110,7 +110,20 @@ struct FocalMetaColumn: View, Equatable {
             && lhs.sendStartedAt == rhs.sendStartedAt
     }
 
+    /// **Une largeur FIXE, jamais un minimum (#16672).** La grille d'une photo
+    /// se calcule pour cette réserve : une colonne plus large faisait déborder
+    /// la rangée, que SwiftUI recentrait — la photo sautait de 20 pt à la
+    /// confirmation de l'envoi. Ce qui ne tient pas sur une ligne (l'anneau
+    /// « 0 % » à côté de l'heure) passe sous l'heure.
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            row(stacksDelivery: false)
+            row(stacksDelivery: true)
+        }
+        .frame(width: FocalMetrics.MetaColumn.reservedWidth, alignment: .trailing)
+    }
+
+    private func row(stacksDelivery: Bool) -> FocalMetaRow {
         FocalMetaRow(
             isMe: isMe,
             timeString: timeString,
@@ -125,8 +138,8 @@ struct FocalMetaColumn: View, Equatable {
             // de 29 pt appartient à la bulle, qui est l'autre colonne.
             fillsWidth: false,
             pinsPendingDelivery: pinsPendingDelivery,
-            sendStartedAt: sendStartedAt
+            sendStartedAt: sendStartedAt,
+            stacksDelivery: stacksDelivery
         )
-        .frame(minWidth: FocalMetrics.MetaColumn.reservedWidth, alignment: .trailing)
     }
 }

@@ -109,7 +109,7 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
         let vue = try Self.code("Meeshy/Features/Composer/ComposerFlashIntensitySlider.swift")
         XCTAssertTrue(vue.contains("ComposerFlashIntensity.level(atY:"), "le doigt le règle de haut en bas")
         XCTAssertTrue(vue.contains("accessibilityAdjustableAction"), "VoiceOver le règle")
-        for fichier in ["ComposerCaptureViews.swift", "ComposerCaptureStage.swift", "ComposerCaptureSession.swift",
+        for fichier in ["ComposerCaptureStage.swift", "ComposerCaptureSession.swift",
                         "ComposerCaptureSession+Switch.swift"] {
             let code = try Self.code("Meeshy/Features/Composer/\(fichier)")
             XCTAssertFalse(code.contains("xposure"), "\(fichier) ne règle plus de luminosité")

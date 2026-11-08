@@ -42,6 +42,8 @@ import { announcementToneOf } from '@/lib/view/announcement-tone';
 const ProfileCircleRow = lazy(() => import('@/routes/user-profile-circle').then((m) => ({ default: m.ProfileCircleRow })));
 /* Le Bring (#13936) : son propre chunk, chargé avec le cercle — le serveur dit s'il existe. */
 const ProfileBringRow = lazy(() => import('@/routes/user-profile-bring').then((m) => ({ default: m.ProfileBringRow })));
+/* Le talkie (#16641) : son propre chunk, dès Proche — le niveau vient du cache des liens. */
+const ProfileTalkieRow = lazy(() => import('@/routes/user-profile-talkie').then((m) => ({ default: m.ProfileTalkieRow })));
 
 /**
  * **LE PROFIL PUBLIC DE QUELQU'UN** (#7032, complété par #7083) — `/u/$username`,
@@ -307,12 +309,18 @@ export function UserProfileView({ username }: { readonly username: string }) {
                                   }
                                 />
                                 {relation.kind === 'friend' ? (
-                                  <ProfileBringRow
+                                  <ProfileTalkieRow
                                     language={language}
                                     person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
                                     onNotice={(message) => announce(message, 'error')}
                                   />
                                 ) : null}
+                                <ProfileBringRow
+                                  language={language}
+                                  person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
+                                  friend={relation.kind === 'friend'}
+                                  onNotice={(message) => announce(message, 'error')}
+                                />
                               </Suspense>
                             ) : null
                           }

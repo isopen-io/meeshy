@@ -28,6 +28,7 @@ import { unsetOrNull } from '../utils/prisma-unset';
 import { SERVER_EVENTS, type ConversationRestoredEventData } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
 import { announceConversationLanguageChange } from '../services/message-translation/conversationLanguageChanges';
+import { mayReturnToSalon } from '../services/conversations/communityMembershipSync';
 // #4332 — la corbeille de conversations (delete-for-me / restore-for-me /
 // deleted-conversations) est réalignée sur le geste que la route CANONIQUE
 // (`/api/v1/conversations/:id/delete-for-me`, ci-dessous importée) écrit
@@ -398,7 +399,7 @@ export default async function userDeletionsRoutes(
             deletedForMe: true,
             bannedAt: true,
             language: true,
-            conversation: { select: { isActive: true } },
+            conversation: { select: { isActive: true, communityId: true } },
           },
         });
 
@@ -426,6 +427,8 @@ export default async function userDeletionsRoutes(
         if (!participant.conversation.isActive) {
           return sendBadRequest(reply, 'Conversation is closed and cannot be restored');
         }
+
+        if (!(await mayReturnToSalon(prisma, { communityId: participant.conversation.communityId, userId }))) return sendForbidden(reply, 'Only members of this community can return to its conversations', { code: 'COMMUNITY_MEMBERS_ONLY' });
 
         // La garde est AUSSI dans le `where` : un bannissement tombé entre la
         // lecture ci-dessus et cette écriture ne doit pas être rallumé. La

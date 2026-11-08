@@ -46,13 +46,21 @@ function makePrisma(guests: Guest[], remaining: unknown[] = [], inactive: Guest[
   return {
     calls,
     participant: {
+      // Le discriminant est `type: 'anonymous'` — la marque des requêtes
+      // d'INVITÉS (`shareLinkGuestsWhere`) — et non la présence d'une clé `OR`
+      // (#16690). L'effectif restant lit désormais `PARTICIPATION_VIVANTE`, qui
+      // répand précisément un `OR` : discriminer là-dessus rangeait la requête
+      // d'effectif parmi les requêtes d'invités, et le double rendait la
+      // mauvaise liste. **Un double qui discrimine sur une propriété
+      // INCIDENTELLE se trompe au premier lot qui touche la clause.**
       findMany: jest.fn<any>(async (args: any) => {
-        if (args?.where?.isActive === true && args?.where?.OR) {
+        const guestQuery = args?.where?.type === 'anonymous';
+        if (guestQuery && args?.where?.isActive === true) {
           calls.push('find-guests');
           return guests;
         }
         // #10472 — les invités du lien DÉJÀ inactifs, que chaque passe évince.
-        if (args?.where?.isActive === false && args?.where?.OR) {
+        if (guestQuery && args?.where?.isActive === false) {
           calls.push('find-inactive');
           return inactive;
         }
@@ -292,8 +300,9 @@ describe('revokeShareLinkGuests', () => {
     ];
     const prisma = {
       participant: {
+        // Même discriminant que ci-dessus, et pour la même raison (#16690).
         findMany: jest.fn<any>(async (args: any) =>
-          args?.where?.OR
+          args?.where?.type === 'anonymous'
             ? rows.filter(row => row.isActive === args.where.isActive).map(({ id, conversationId, displayName }) => ({ id, conversationId, displayName }))
             : []
         ),
@@ -476,8 +485,15 @@ describe('revokeShareLinkGuests', () => {
     const pick = ({ id, conversationId, displayName }: Row) => ({ id, conversationId, displayName });
     return {
       participant: {
+        // Discriminant `type: 'anonymous'`, et non la présence d'un `OR` (#16690) :
+        // l'effectif restant répand `PARTICIPATION_VIVANTE`, donc un `OR`, et
+        // prenait la première branche — si bien que `failRemaining` n'était
+        // jamais atteint et que le témoin du chemin d'ERREUR passait au vert par
+        // le chemin NOMINAL. C'est la règle « changer la méthode Prisma qu'un
+        // handler appelle oblige à repointer les témoins d'erreur », ici sur la
+        // clause plutôt que sur la méthode.
         findMany: jest.fn<any>(async ({ where }: any) => {
-          if (where?.OR) {
+          if (where?.type === 'anonymous') {
             if (where.isActive === false && faults.failInactive) throw new Error('inactive read failed');
             return rows.filter(row => row.isActive === where.isActive).map(pick);
           }

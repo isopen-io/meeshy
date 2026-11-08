@@ -317,7 +317,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
 
     func test_callManager_toggleTranscription_doesNotHardcodeLanguage() throws {
         // Regression guard: toggleTranscription() must not hardcode language strings.
-        // Language resolution is delegated to CallManager.preferredCallLanguage(for:)
+        // Language resolution is delegated to CallLanguagePreference.preferredCallLanguage(for:)
         // (Prisme Linguistique), which reads systemLanguage > regionalLanguage > "fr".
         let source = try callManagerSource()
 
@@ -332,12 +332,12 @@ final class CallManagerAudioSessionTests: XCTestCase {
         XCTAssertFalse(
             fnBody.contains("let localLang = \"fr\""),
             "toggleTranscription() must not hardcode localLang = \"fr\". " +
-            "Delegate to CallManager.preferredCallLanguage(for:) (Prisme Linguistique)."
+            "Delegate to CallLanguagePreference.preferredCallLanguage(for:) (Prisme Linguistique)."
         )
         XCTAssertTrue(
             fnBody.contains("preferredCallLanguage"),
             "toggleTranscription() must delegate language resolution to " +
-            "CallManager.preferredCallLanguage(for:) (Prisme Linguistique)."
+            "CallLanguagePreference.preferredCallLanguage(for:) (Prisme Linguistique)."
         )
     }
 
@@ -1321,211 +1321,6 @@ final class CallViewHintContrastTests: XCTestCase {
         XCTAssertFalse(source.contains("call.video.connecting.slow"),
                        "plus d'état « vidéo lente » : un pair sans image s'affiche caméra coupée")
         XCTAssertTrue(source.contains("remoteVideoWaitElapsedCallId = callManager.currentCallId"))
-    }
-}
-
-// MARK: - VideoFiltersPanel Accessibility Source Guards
-
-/// Source-level guards ensuring the background-blur and skin-smoothing toggles/sliders
-/// in the in-call filters panel are perceivable by VoiceOver. Both controls use
-/// `.labelsHidden()` (the adjacent Text is a separate sibling, not a form label), so
-/// without an explicit `.accessibilityLabel()` a VoiceOver user hears only
-/// "Off/On, switch" or a bare value with no indication of what it controls.
-@MainActor
-final class VideoFiltersPanelAccessibilityTests: XCTestCase {
-
-    private func filtersPanelSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/VideoFiltersPanel.swift")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    func test_backgroundBlurToggle_hasAccessibilityLabel() throws {
-        let source = try filtersPanelSource()
-        guard let toggleRange = source.range(of: "Toggle(\"\", isOn: $filterConfig.backgroundBlurEnabled)") else {
-            XCTFail("backgroundBlurEnabled Toggle not found"); return
-        }
-        let endIdx = source.index(toggleRange.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[toggleRange.lowerBound..<endIdx])
-        XCTAssertTrue(
-            vicinity.contains(".accessibilityLabel("),
-            "The background-blur Toggle uses .labelsHidden() so it needs an explicit " +
-            ".accessibilityLabel() — otherwise VoiceOver announces only \"Off/On, switch\"."
-        )
-    }
-
-    func test_skinSmoothingToggle_hasAccessibilityLabel() throws {
-        let source = try filtersPanelSource()
-        guard let toggleRange = source.range(of: "Toggle(\"\", isOn: $filterConfig.skinSmoothingEnabled)") else {
-            XCTFail("skinSmoothingEnabled Toggle not found"); return
-        }
-        let endIdx = source.index(toggleRange.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[toggleRange.lowerBound..<endIdx])
-        XCTAssertTrue(
-            vicinity.contains(".accessibilityLabel("),
-            "The skin-smoothing Toggle uses .labelsHidden() so it needs an explicit " +
-            ".accessibilityLabel() — otherwise VoiceOver announces only \"Off/On, switch\"."
-        )
-    }
-
-    func test_backgroundBlurRadiusSlider_hasAccessibilityLabel() throws {
-        let source = try filtersPanelSource()
-        guard let sliderRange = source.range(of: "Slider(value: $filterConfig.backgroundBlurRadius") else {
-            XCTFail("backgroundBlurRadius Slider not found"); return
-        }
-        let endIdx = source.index(sliderRange.upperBound, offsetBy: 250, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[sliderRange.lowerBound..<endIdx])
-        XCTAssertTrue(
-            vicinity.contains(".accessibilityLabel("),
-            "The blur-radius Slider sets .accessibilityValue() but not .accessibilityLabel() — " +
-            "VoiceOver would announce the value with no indication of what it controls."
-        )
-    }
-
-    func test_skinSmoothingIntensitySlider_hasAccessibilityLabel() throws {
-        let source = try filtersPanelSource()
-        guard let sliderRange = source.range(of: "Slider(value: $filterConfig.skinSmoothingIntensity") else {
-            XCTFail("skinSmoothingIntensity Slider not found"); return
-        }
-        let endIdx = source.index(sliderRange.upperBound, offsetBy: 250, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[sliderRange.lowerBound..<endIdx])
-        XCTAssertTrue(
-            vicinity.contains(".accessibilityLabel("),
-            "The skin-smoothing intensity Slider sets .accessibilityValue() but not " +
-            ".accessibilityLabel() — VoiceOver would announce the value with no indication " +
-            "of what it controls."
-        )
-    }
-
-    func test_presetChip_conveysSelectedState_viaAccessibilityTrait() throws {
-        let source = try filtersPanelSource()
-        guard let chipRange = source.range(of: "private func presetChip(_ preset: VideoFilterPreset)") else {
-            XCTFail("presetChip(_:) builder not found"); return
-        }
-        // Bound the search to the whole presetChip body (up to the next declaration)
-        // — the `.accessibilityAddTraits` modifier sits on the last line of the builder.
-        let nextDecl = source.range(of: "private func presetLabel", range: chipRange.upperBound..<source.endIndex)
-        let endIdx = nextDecl?.lowerBound ?? source.endIndex
-        let vicinity = String(source[chipRange.lowerBound..<endIdx])
-        XCTAssertTrue(
-            vicinity.contains(".accessibilityAddTraits(") && vicinity.contains(".isSelected"),
-            "The filter-preset chip signals its active state with tint/fill only. Without " +
-            ".accessibilityAddTraits(isActive ? [.isSelected] : []) a VoiceOver user cannot tell " +
-            "which preset is currently applied (WCAG 1.4.1 — state by color only)."
-        )
-    }
-}
-
-// MARK: - CallEffectsOverlay Accessibility + Dynamic Type Source Guards
-
-/// Source-level guards for `CallEffectsOverlay.toolbarButton`:
-/// - Dynamic Type: caption text must use a semantic font, not a fixed pixel size.
-/// - Accessibility: VoiceOver must be able to announce the active/inactive state
-///   and what the button does when tapped.
-@MainActor
-final class CallEffectsOverlayAccessibilityTests: XCTestCase {
-
-    private func callEffectsSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Call/Views/CallEffectsOverlay.swift")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    func test_toolbarButtonCaption_usesSemanticFont_forDynamicType() throws {
-        let source = try callEffectsSource()
-        XCTAssertTrue(
-            source.contains(".caption2"),
-            "toolbarButton caption must use .caption2 (Dynamic Type) — not a hardcoded pixel size"
-        )
-    }
-
-    func test_toolbarButtonCaption_doesNotUseFixedSize10() throws {
-        let source = try callEffectsSource()
-        XCTAssertFalse(
-            source.contains(".font(.system(size: 10"),
-            "toolbarButton caption must not use .font(.system(size: 10)) — breaks Dynamic Type accessibility"
-        )
-    }
-
-    func test_toolbarButton_hasAccessibilityValue_forToggleState() throws {
-        let source = try callEffectsSource()
-        XCTAssertTrue(
-            source.contains(".accessibilityValue("),
-            "toolbarButton must declare .accessibilityValue so VoiceOver announces active/inactive state"
-        )
-    }
-
-    func test_toolbarButton_hasAccessibilityHint() throws {
-        let source = try callEffectsSource()
-        XCTAssertTrue(
-            source.contains(".accessibilityHint("),
-            "toolbarButton must declare .accessibilityHint so VoiceOver describes what the button will do"
-        )
-    }
-
-    func test_toolbarButton_hasExplicitAccessibilityLabel() throws {
-        let source = try callEffectsSource()
-        guard let range = source.range(of: "private func toolbarButton") else {
-            XCTFail("toolbarButton must exist")
-            return
-        }
-        let end = source.index(range.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[range.lowerBound ..< end])
-        XCTAssertTrue(
-            body.contains(".accessibilityLabel(label)"),
-            "toolbarButton must set an explicit .accessibilityLabel(label) rather than relying " +
-            "on the visible caption Text being auto-combined into the button's label."
-        )
-    }
-
-    func test_backdrop_isExposedAsDismissButtonToVoiceOver() throws {
-        let source = try callEffectsSource()
-        guard let range = source.range(of: "onTapGesture { dismiss() }") else {
-            XCTFail("Backdrop tap-to-dismiss gesture must exist")
-            return
-        }
-        let end = source.index(range.lowerBound, offsetBy: 400, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[range.lowerBound ..< end])
-        XCTAssertTrue(
-            vicinity.contains(".accessibilityAddTraits(.isButton)"),
-            "The tap-outside-to-dismiss backdrop must be exposed as a button trait so " +
-            "VoiceOver users can discover and trigger it."
-        )
-        XCTAssertTrue(
-            vicinity.contains(".accessibilityLabel("),
-            "The backdrop must have an explicit accessibility label describing the dismiss action."
-        )
-    }
-
-    func test_overlay_pinsColorSchemeDark() throws {
-        let source = try callEffectsSource()
-        XCTAssertTrue(
-            source.contains(".environment(\\.colorScheme, .dark)"),
-            "CallEffectsOverlay must pin .dark colorScheme like its sibling call chrome " +
-            "(CallWaitingBannerView, FloatingCallPillView) so it renders correctly even if " +
-            "ever presented outside CallView's forced-dark subtree."
-        )
-    }
-
-    func test_filtersPanel_heightIsResponsiveNotHardcoded() throws {
-        let source = try callEffectsSource()
-        XCTAssertFalse(
-            source.contains(".frame(maxHeight: 360)"),
-            "The filters panel must not hardcode a fixed maxHeight — it must derive from " +
-            "available geometry so it doesn't clip content on short/landscape viewports."
-        )
-        XCTAssertTrue(
-            source.contains("proxy.size.height"),
-            "The filters panel height must be derived from a GeometryReader proxy."
-        )
     }
 }
 

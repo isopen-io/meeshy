@@ -1,3 +1,4 @@
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import {
@@ -16,12 +17,41 @@ const logger = enhancedLogger.child({ module: 'offlineParticipantQueue' });
  * the manager, the REST broadcasters and test doubles can all supply them
  * without importing each other.
  */
+/**
+ * #16687 — ce que la file doit pouvoir demander de `connectedUsers`. Les sites
+ * qui la consomment DÉRIVENT ce type au lieu de redéclarer une forme étroite :
+ * les deux redéclarations du dépôt (`emitAttachmentUpdated`, `ready-listener`)
+ * sont exactement celles où la garde était morte.
+ */
+export type ReachabilityView = {
+  has(key: string): boolean;
+  get(key: string): { readonly unreachableConversations?: ReadonlySet<string> } | undefined;
+};
+
 export interface OfflineParticipantQueueDeps {
   deliveryQueue: {
     enqueue(userId: string, entry: QueuedMessagePayload, options?: { readonly sealAtRest?: boolean }): Promise<void>;
   } | null | undefined;
   prisma: Pick<PrismaClient, 'participant'>;
-  connectedUsers: { has(key: string): boolean };
+  /**
+   * #16687 — la porte de joignabilité. `has` répond « cette clé a-t-elle une
+   * socket ? » ; `get` pose la question JUSTE : « cette socket est-elle
+   * joignable pour CETTE conversation ? ».
+   *
+   * **`get` est REQUIS**, et il l'est par mesure, pas par goût. Il a d'abord
+   * été écrit OPTIONNEL « par décision, fail-OPEN » — un double réduit à `has`
+   * gardait alors le comportement d'avant le lot. L'audit adversarial a montré
+   * que ce n'était pas un double mais un CONSOMMATEUR DE PRODUCTION :
+   * `MeeshySocketIOHandler` passait `new Set(manager.getConnectedUsers())`, un
+   * `Set<string>` qui a `has` et n'a pas `get`, sur les QUATRE chemins média de
+   * `message:attachment-updated`. La porte y était morte en silence.
+   *
+   * Un contrat optionnel ne se mesure pas : il se contente. Requis, le
+   * compilateur NOMME les sites à moitié livrés — c'est la seule forme de cette
+   * garde qui ne puisse pas se reperdre. L'arbitrage fail-open appartient à une
+   * ENTRÉE de file, jamais à un contrat de dépendance.
+   */
+  connectedUsers: ReachabilityView;
 }
 
 /**
@@ -228,7 +258,7 @@ export async function enqueueForOfflineParticipants(
     // sa projection à deux colonnes.
     const participants: OfflineQueueParticipant[] = restrictToLanguage
       ? await prisma.participant.findMany({
-          where: { conversationId, isActive: true },
+          where: { conversationId, ...PARTICIPATION_VIVANTE },
           select: {
             id: true,
             userId: true,
@@ -245,7 +275,7 @@ export async function enqueueForOfflineParticipants(
         })
       : params.participants ??
         (await prisma.participant.findMany({
-          where: { conversationId, isActive: true },
+          where: { conversationId, ...PARTICIPATION_VIVANTE },
           select: { id: true, userId: true },
         }));
     for (const p of participants) {
@@ -256,7 +286,16 @@ export async function enqueueForOfflineParticipants(
       const isActor =
         (actorParticipantId != null && p.id === actorParticipantId) ||
         (actorUserId != null && p.userId === actorUserId);
-      if (isActor || connectedUsers.has(queueKey) || params.excludedQueueKeys?.has(queueKey)) continue;
+      // #16687 — « connecté » ne vaut pas « joignable POUR CETTE
+      // conversation ». Une socket dont la room de cette conversation n'a pas
+      // pu être rejointe après réessais est inscrite dans `connectedUsers`
+      // (l'échec n'est que journalisé) : la tenir pour joignable DÉSARMAIT la
+      // file, alors que le `io.to(ROOMS.conversation(...))` ne l'atteint pas
+      // davantage — message perdu, et sans rejeu puisque rien n'a été écrit.
+      const reachableHere =
+        connectedUsers.has(queueKey) &&
+        !connectedUsers.get(queueKey)?.unreachableConversations?.has(conversationId);
+      if (isActor || reachableHere || params.excludedQueueKeys?.has(queueKey)) continue;
       if (restrictToLanguage !== null) {
         // Échec OUVERT sur prisme vide : un participant dont aucune langue n'est
         // résoluble reçoit l'entrée, exactement comme avant ce filtre. Le pire

@@ -1,3 +1,4 @@
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
@@ -84,7 +85,7 @@ export async function emitConversationActivityUpdate(
       update.call && conversation.activeCallId
         ? prisma.callSession.findUnique({ where: { id: conversation.activeCallId }, select: ACTIVE_CALL_SELECT })
         : null,
-      prisma.participant.findMany({ where: { conversationId, isActive: true }, select: PREVIEW_PARTICIPANT_SELECT }),
+      prisma.participant.findMany({ where: { conversationId, ...PARTICIPATION_VIVANTE }, select: PREVIEW_PARTICIPANT_SELECT }),
     ]);
     // Le rang ne dépend pas du lecteur : un plancher d'historique illisible
     // retient l'extrait de la réaction, jamais la remontée de la ligne.

@@ -40,7 +40,7 @@ export type MediaReadyListenerDeps = {
   readonly prisma: PrismaClient;
   readonly io: ConversationRoomEmitter & ServerEmitIO;
   readonly deliveryQueue: OfflineParticipantQueueDeps['deliveryQueue'];
-  readonly connectedUsers: () => { has(key: string): boolean };
+  readonly connectedUsers: () => OfflineParticipantQueueDeps['connectedUsers'];
   readonly socialEvents: () => Pick<SocialEventsHandler, 'broadcastPostUpdated' | 'broadcastStoryUpdated'> | null;
   /** Le magasin Redis de la passerelle, qui porte le bail de l'écoute. */
   readonly leaseStore: LeaseClient;

@@ -64,23 +64,77 @@ export function decodeCursor(cursor: string): CursorData | null {
   }
 }
 
+/** Le côté d'un curseur dans l'ordre total : les valeurs plus PETITES, ou plus GRANDES. */
+export type KeysetSide = 'lower' | 'higher';
+
+/** La clé de RUPTURE de l'ordre total — l'identifiant, seul champ UNIQUE d'une ligne. */
+export const KEYSET_TIE_BREAK_FIELD = 'id' as const;
+
+export type KeysetPosition = {
+  /** La colonne que la requête TRIE. `'createdAt'` pour une liste antichronologique. */
+  readonly field: string;
+  readonly side: KeysetSide;
+  /** La valeur du curseur sur cette colonne. `null` ⇒ aucune clause (voir plus bas). */
+  readonly value: Date | null;
+  readonly id: string;
+};
+
 /**
- * « Strictement APRÈS ce curseur », dans l'ordre `(createdAt desc, id desc)`.
+ * « Strictement d'un CÔTÉ de ce curseur », dans l'ordre total `(field, id)` :
  *
- * Les deux branches sont indissociables : la première avance sur le temps, la
- * seconde départage les ex æquo à la milliseconde — sans elle, deux lignes nées
- * dans la même milliseconde se re-servent l'une l'autre indéfiniment, ou se
- * sautent. L'ordre `id desc` est celui d'un ObjectId, dont la comparaison
+ * ```
+ * field < v   OU   (field = v ET id < curseur)        — côté 'lower'
+ * field > v   OU   (field = v ET id > curseur)        — côté 'higher'
+ * ```
+ *
+ * Les deux branches sont indissociables : la première avance sur la clé de tri,
+ * la seconde départage les ex æquo à la milliseconde — sans elle, deux lignes
+ * nées dans la même milliseconde se re-servent l'une l'autre indéfiniment, ou se
+ * sautent. L'ordre `id` est celui d'un ObjectId, dont la comparaison
  * lexicographique est une comparaison chronologique.
  *
  * L'appelant DOIT trier par ce même couple : une clause de reprise posée sur un
  * ordre qu'elle ne gouverne pas saute des lignes en silence.
+ *
+ * ## Pourquoi la COLONNE est un paramètre depuis #16684
+ *
+ * La loi était écrite pour `createdAt`, la clé des listes antichronologiques —
+ * et une vue peut trier sur une AUTRE colonne. `GET …/messages?view=pinned`
+ * trie par date d'ÉPINGLE (`pinnedAt`) : un curseur qui borne `createdAt` n'y
+ * pagine pas la collection qu'il trie, et perd des lignes **sans qu'aucune
+ * égalité de milliseconde soit nécessaire**. La colonne se LIT donc dans le
+ * `orderBy` de l'appelant au lieu d'être écrite ici.
+ *
+ * **Une valeur `null` ne rend AUCUNE clause** : un curseur qui désigne une ligne
+ * sans valeur sur la clé triée (un message NON épinglé sous `view=pinned`)
+ * bornerait la collection sur une valeur qu'elle ne porte pas. L'appelant sert
+ * alors sa page sans fenêtre — le comportement déjà documenté d'un curseur
+ * inconnu.
+ */
+export function keysetClause(position: KeysetPosition): KeysetWhereClause | null {
+  const { field, side, value, id } = position;
+  if (value === null) return null;
+  const operator = side === 'lower' ? 'lt' : 'gt';
+  return {
+    OR: [{ [field]: { [operator]: value } }, { [field]: value, [KEYSET_TIE_BREAK_FIELD]: { [operator]: id } }],
+  };
+}
+
+/** La forme que Prisma reçoit — une branche par moitié de l'ordre total. */
+export type KeysetWhereClause = {
+  readonly OR: ReadonlyArray<Record<string, unknown>>;
+};
+
+/**
+ * « Strictement APRÈS ce curseur » dans l'ordre `(createdAt desc, id desc)` — la
+ * PROJECTION de {@link keysetClause} pour les listes antichronologiques, qui
+ * sont la majorité. Son type de retour reste exact pour ses appelants.
  */
 export function keysetBeforeClause(cursor: CursorData): {
   OR: Array<{ createdAt: { lt: Date } } | { createdAt: Date; id: { lt: string } }>;
 } {
   const createdAt = new Date(cursor.createdAt);
-  return {
-    OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: cursor.id } }],
+  return keysetClause({ field: 'createdAt', side: 'lower', value: createdAt, id: cursor.id }) as {
+    OR: Array<{ createdAt: { lt: Date } } | { createdAt: Date; id: { lt: string } }>;
   };
 }

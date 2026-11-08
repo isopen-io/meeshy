@@ -14,6 +14,7 @@ final class MockBringService: BringProviding, @unchecked Sendable {
     private(set) var sentTo: [String] = []
     private(set) var stopped: [String] = []
     private(set) var blockedWrites: [Bool] = []
+    private(set) var blockedSettings: [RelationReceptionSetting] = []
 
     func availability(userId: String) async throws -> BringAvailability {
         try availabilityResult.get()
@@ -33,7 +34,8 @@ final class MockBringService: BringProviding, @unchecked Sendable {
         try settingsResult.get()
     }
 
-    func setBringBlocked(userId: String, blocked: Bool) async throws -> RelationPersonSettings {
+    func setReceptionBlocked(_ setting: RelationReceptionSetting, userId: String, blocked: Bool) async throws -> RelationPersonSettings {
+        blockedSettings.append(setting)
         blockedWrites.append(blocked)
         return try setBlockedResult.get()
     }
@@ -49,4 +51,22 @@ final class FakeBringRinger: BringRinging {
 
     func startRinging() { starts += 1 }
     func stopRinging() { stops += 1 }
+}
+
+@MainActor
+final class FakeTalkieSink: TalkieSink {
+    struct Played: Equatable {
+        let talkieId: String
+        let data: Data
+    }
+
+    private(set) var played: [Played] = []
+    private(set) var silenced: [String] = []
+    private(set) var released: [String] = []
+
+    nonisolated deinit {}
+
+    func play(_ talkieId: String, _ data: Data) { played.append(Played(talkieId: talkieId, data: data)) }
+    func silence(_ talkieId: String) { silenced.append(talkieId) }
+    func release(_ talkieId: String) { released.append(talkieId) }
 }

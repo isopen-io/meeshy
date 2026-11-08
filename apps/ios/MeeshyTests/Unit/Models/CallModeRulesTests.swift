@@ -259,4 +259,50 @@ final class CallModeRulesTests: XCTestCase {
         XCTAssertNotEqual(arabic, "1:15")
         XCTAssertTrue(arabic.contains("١"), arabic)
     }
+
+    // MARK: - OPUS-4 : Effets avant la connexion
+
+    func test_preConnect_effectsModeShowsWhileAnOutgoingVideoCallWaits() {
+        for state: CallState in [.ringing(isOutgoing: true), .offering, .connecting, .reconnecting(attempt: 1)] {
+            XCTAssertTrue(
+                CallPreConnectEffectsRule.showsMode(.effects, state: state, isVideoEnabled: true, showsConnectedLayout: false),
+                "\(state)"
+            )
+        }
+    }
+
+    func test_preConnect_effectsModeNeverShowsOnTheIncomingRing() {
+        XCTAssertFalse(CallPreConnectEffectsRule.showsMode(.effects, state: .ringing(isOutgoing: false), isVideoEnabled: true, showsConnectedLayout: false))
+    }
+
+    func test_preConnect_effectsModeLeavesToTheConnectedCall() {
+        XCTAssertFalse(CallPreConnectEffectsRule.showsMode(.effects, state: .connected, isVideoEnabled: true, showsConnectedLayout: true))
+        XCTAssertFalse(CallPreConnectEffectsRule.showsMode(.effects, state: .reconnecting(attempt: 1), isVideoEnabled: true, showsConnectedLayout: true))
+    }
+
+    func test_preConnect_nothingShowsWithoutVideoOrOnceTheCallIsOver() {
+        XCTAssertFalse(CallPreConnectEffectsRule.showsMode(.effects, state: .connecting, isVideoEnabled: false, showsConnectedLayout: false))
+        XCTAssertFalse(CallPreConnectEffectsRule.showsMode(.effects, state: .ended(reason: .local), isVideoEnabled: true, showsConnectedLayout: false))
+        XCTAssertFalse(CallPreConnectEffectsRule.showsMode(.effects, state: .idle, isVideoEnabled: true, showsConnectedLayout: false))
+    }
+
+    func test_preConnect_onlyTheEffectsModeOpensBeforeTheConnection() {
+        XCTAssertFalse(CallPreConnectEffectsRule.showsMode(.montage, state: .connecting, isVideoEnabled: true, showsConnectedLayout: false))
+        XCTAssertFalse(CallPreConnectEffectsRule.showsMode(nil, state: .connecting, isVideoEnabled: true, showsConnectedLayout: false))
+    }
+
+    func test_preConnect_noCaptureAndNoCompanionsUntilTheCallIsEstablished() {
+        XCTAssertFalse(CallPreConnectEffectsRule.capturesMyImage(showsConnectedLayout: false))
+        XCTAssertTrue(CallPreConnectEffectsRule.capturesMyImage(showsConnectedLayout: true))
+        XCTAssertFalse(CallPreConnectEffectsRule.showsCompanions(showsConnectedLayout: false))
+        XCTAssertTrue(CallPreConnectEffectsRule.showsCompanions(showsConnectedLayout: true))
+    }
+
+    /// Un mode Effets ouvert pendant la sonnerie reste ouvert au décroché tant
+    /// que l'appel établi offre Effets ; un repli audio le referme.
+    func test_preConnect_openModeSurvivesTheConnectionOnlyIfEffectsStayOffered() {
+        let open = CallScreenLayer.idle.entering(.effects)
+        XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: true, hasSelectableCameras: false, isConnected: true, mayRecord: false, canPictureInPicture: false, showsVideo: true))), open)
+        XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: false, hasSelectableCameras: false, isConnected: true, mayRecord: false, canPictureInPicture: false, showsVideo: false))), .idle)
+    }
 }

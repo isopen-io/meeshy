@@ -17,11 +17,18 @@
  * - `raiseBlockedUntil` : réservé, toujours `null` pour la même raison. Un
  *   client qui le lit non nul et futur masque « Promouvoir ».
  *
+ * - `accessLevel` (#16623) : le niveau auquel la loi JUGE les outils de cercle de
+ *   cette paire. Il vaut `effectiveLevel`, sauf entre deux comptes de l'équipe,
+ *   où il vaut `BLOOD` : c'est le verdict que le client lit pour PROPOSER le
+ *   Bring, sans jamais apprendre un rôle. `effectiveLevel` reste le LIEN réel
+ *   (le logo d'une story exportée, la montée, la baisse s'y lisent). Absent chez
+ *   une passerelle plus ancienne : le client retombe sur `effectiveLevel`.
+ *
  * Sous Connaissance (`PUBLIC`, bloqué, inconnu), la réponse ne dit que
  * l'absence de lien : une vue vide, `canRaise: false`, aucun cool-down.
  */
 import { z } from 'zod';
-import { RELATION_LEVELS, type RelationLinkView } from './relation.js';
+import { RELATION_LEVELS, type RelationLevel, type RelationLinkView } from './relation.js';
 
 export const relationLevelResponseSchema = z.object({
   userId: z.string(),
@@ -38,6 +45,7 @@ export const relationLevelResponseSchema = z.object({
   eligibleFor: z.enum(['CLOSE', 'BLOOD']).nullable().optional(),
   canRaise: z.boolean().optional(),
   raiseBlockedUntil: z.string().nullable().optional(),
+  accessLevel: z.enum(RELATION_LEVELS).optional(),
 });
 
 export type RelationLevelResponse = z.infer<typeof relationLevelResponseSchema>;
@@ -46,4 +54,5 @@ export type RelationLevelResponse = z.infer<typeof relationLevelResponseSchema>;
 export type RelationLinkDetail = RelationLinkView & {
   readonly canRaise: boolean;
   readonly raiseBlockedUntil: string | null;
+  readonly accessLevel: RelationLevel;
 };

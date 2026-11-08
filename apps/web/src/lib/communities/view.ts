@@ -77,3 +77,10 @@ export function membershipActionOf(community: CommunitySummary, viewerId: string
   if (community.viewerRole === null) return community.isPrivate ? 'none' : 'join';
   return 'leave';
 }
+
+/** Qui peut inviter (#6376) — la règle de `POST /communities/:id/invite` : un membre invite ; dans une communauté privée, administrateurs et modérateurs seulement. */
+export function canInviteOf(community: CommunitySummary): boolean {
+  const role = community.viewerRole;
+  if (role === null || role === undefined) return false;
+  return !community.isPrivate || role === 'admin' || role === 'moderator';
+}

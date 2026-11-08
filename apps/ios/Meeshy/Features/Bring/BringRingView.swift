@@ -22,13 +22,16 @@ struct BringRingView: View {
     var body: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Spacer(minLength: MeeshySpacing.xl)
-            MeeshyAvatar(
-                name: name,
-                context: .profileSheet,
-                accentColor: DynamicColorGenerator.colorForName(name),
-                avatarURL: incoming.avatarURL,
-                isDark: isDark
-            )
+            LivePresence {
+                MeeshyAvatar(
+                    name: name,
+                    context: .profileSheet,
+                    accentColor: DynamicColorGenerator.colorForName(name),
+                    avatarURL: incoming.avatarURL,
+                    presenceState: PresenceManager.shared.knownPresenceState(for: incoming.ring.fromUserId),
+                    isDark: isDark
+                )
+            }
             .scaleEffect(pulsing ? 1.06 : 1)
             .accessibilityHidden(true)
             Text(verbatim: "🔔")

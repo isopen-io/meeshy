@@ -35,6 +35,17 @@ class RelationsApiRoutesTest {
     }
 
     @Test
+    fun `le niveau des outils de cercle est lu quand il est servi, absent sinon (#16623)`() = runTest {
+        val team = RecordingHttp(
+            responseBody = """{"success":true,"data":{"userId":"u","effectiveLevel":"PUBLIC","accessLevel":"BLOOD"}}""",
+        )
+        val older = RecordingHttp(responseBody = """{"success":true,"data":{"userId":"u","effectiveLevel":"FRIEND"}}""")
+
+        assertThat(team.serve(RelationsApi::class.java).byUserId("u").data!!.accessLevel).isEqualTo("BLOOD")
+        assertThat(older.serve(RelationsApi::class.java).byUserId("u").data!!.accessLevel).isNull()
+    }
+
+    @Test
     fun `mes cercles appellent relations et lisent chaque lien`() = runTest {
         val http = RecordingHttp(
             responseBody = """{"success":true,"data":[{"userId":"u","effectiveLevel":"FRIEND","grantedByMe":"FRIEND",
@@ -120,5 +131,21 @@ class RelationsApiRoutesTest {
         assertThat(served.raiseBlockedUntil).isEqualTo("2026-12-01T00:00:00.000Z")
         val legacy = RecordingHttp(responseBody = """{"success":true,"data":{"userId":"u","effectiveLevel":"FRIEND"}}""")
         assertThat(legacy.serve(RelationsApi::class.java).byUserId("u").data!!.raiseBlockedUntil).isNull()
+    }
+
+    @Test
+    fun `l'ecoute de mes liens appelle relations now-playing et lit la charge tronquee`() = runTest {
+        val http = RecordingHttp(
+            responseBody = """{"success":true,"data":{"items":[""" +
+                """{"userId":"u1","category":"music","updatedAt":"2026-11-07T12:00:00.000Z","expiresAt":"2026-11-07T12:15:00.000Z"},""" +
+                """{"userId":"u2","category":"video","title":"Un film","source":"Meeshy","updatedAt":"2026-11-07T12:00:00.000Z","expiresAt":"2026-11-07T12:15:00.000Z"}]}}""",
+        )
+
+        val served = http.serve(RelationsApi::class.java).nowPlaying().data!!
+
+        assertThat(http.only.method).isEqualTo("GET")
+        assertThat(http.only.path).isEqualTo("/api/v1/relations/now-playing")
+        assertThat(served.items.map { Triple(it.category, it.title, it.source) })
+            .containsExactly(Triple("music", null, null), Triple("video", "Un film", "Meeshy")).inOrder()
     }
 }

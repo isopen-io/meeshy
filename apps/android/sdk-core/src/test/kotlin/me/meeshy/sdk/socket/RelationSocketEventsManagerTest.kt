@@ -89,4 +89,17 @@ class RelationSocketEventsManagerTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `l'arret d'un Bring atteint son flux, pour que l'expediteur cesse d'annoncer la sonnerie`() = runTest {
+        val (manager, handlers) = wired()
+        manager.bringStopped.test {
+            handlers.deliver(
+                SocketEventNames.BRING_STOPPED,
+                """{"bringId":"b1","fromUserId":"me","toUserId":"u2","reason":"recipient","stoppedAt":"2026-11-07T10:00:00Z"}""",
+            )
+            assertThat(awaitItem().bringId).isEqualTo("b1")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

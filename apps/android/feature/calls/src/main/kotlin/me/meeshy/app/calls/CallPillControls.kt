@@ -1,6 +1,10 @@
 package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -13,9 +17,12 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -23,6 +30,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.ui.theme.MeeshyPalette
@@ -71,6 +79,29 @@ internal fun CallPillControls(
         ) {
             Icon(Icons.Filled.CallEnd, contentDescription = null, tint = Color.White)
         }
+    }
+}
+
+/** The one control of the sharing capsule (#16664): stop the share, without reopening the call. */
+@Composable
+internal fun CallPillStopShare(onStop: () -> Unit) {
+    val label = stringResource(R.string.call_screen_share_stop)
+    Box(
+        modifier = Modifier
+            .defaultMinSize(minWidth = PILL_BUTTON, minHeight = PILL_BUTTON)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.22f), CircleShape)
+            .clickable(onClickLabel = label, role = Role.Button, onClick = onStop)
+            .semantics { contentDescription = label }
+            .padding(horizontal = MeeshySpacing.md),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = stringResource(R.string.call_screen_share_stop_caption),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+        )
     }
 }
 
