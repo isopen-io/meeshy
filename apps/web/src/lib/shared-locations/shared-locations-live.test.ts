@@ -115,7 +115,7 @@ describe('bindSharedLocationsLive', () => {
   test('changed pose la position, ended la retire, détacher libère les écouteurs', () => {
     const { socket, fire, count } = fakeSocket();
     const store = storeAt();
-    const unbind = bindSharedLocationsLive({ socket, store, now: () => NOW });
+    const unbind = bindSharedLocationsLive({ socket, store });
     fire(SHARED_LOCATION_SERVER_EVENTS.SHARED_LOCATION_CHANGED, position());
     expect(Object.keys(store.getState().byUser)).toEqual(['ami']);
     fire(SHARED_LOCATION_SERVER_EVENTS.SHARED_LOCATION_ENDED, { userId: 'ami' });
@@ -127,7 +127,7 @@ describe('bindSharedLocationsLive', () => {
   test('une charge illisible est ignorée, rien n’est fabriqué', () => {
     const { socket, fire } = fakeSocket();
     const store = storeAt();
-    bindSharedLocationsLive({ socket, store, now: () => NOW });
+    bindSharedLocationsLive({ socket, store });
     fire(SHARED_LOCATION_SERVER_EVENTS.SHARED_LOCATION_CHANGED, { userId: 'ami', latitude: 'ici' });
     expect(store.getState().byUser).toEqual({});
   });
