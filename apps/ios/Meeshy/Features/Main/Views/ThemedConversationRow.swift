@@ -257,7 +257,7 @@ struct ThemedConversationRow: View {
         // que la chaîne du catalogue contient `%lld` : VoiceOver énonçait donc
         // le spécificateur brut, et répétait une information déjà annoncée.
         .accessibilityLabel(conversationAccessibilityLabel)
-        .accessibilityHint(String(localized: "accessibility.opens_conversation", bundle: .main))
+        .modifier(ConversationRowListeningSpeech(userId: listenedUserId))
         .accessibilityAddTraits(.isButton)
         // iPad/macOS split-view : la ligne active est signalée par le VISUEL seul
         // (teinte accent + barre latérale + bordure) — invisible pour VoiceOver.
@@ -340,7 +340,12 @@ struct ThemedConversationRow: View {
             onCreateShareLink: onCreateShareLink,
             avatarRoute: avatarRoute
         )
+        .overlay {
+            AvatarListeningOverlay(userId: listenedUserId, avatarSize: AvatarContext.conversationList.size)
+        }
     }
+
+    private var listenedUserId: String? { ConversationRowListening.userId(for: conversation) }
 
     // MARK: - Type Badge
     private var typeBadge: some View {
