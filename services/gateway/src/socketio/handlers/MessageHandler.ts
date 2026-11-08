@@ -73,6 +73,7 @@ import { isServerAtRestMode, isServerAtRestUnavailable, queuedEventSealsAtRest }
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
 import { emitMessageNew } from '../messageNewEmission';
 import { readerSignedPlan, readerSignedPlanForMessageId } from '../readerSignedDelivery';
+import { editReadership, blockedEditKeys, emitEditedToReaders } from '../editedAudience';
 import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
 import { admitLoadedMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
@@ -132,6 +133,9 @@ import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import type { QueuedVariantFor } from '../queuedEventContract';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { messageRefusesPlainErasure, SIGNAL_CHANNEL_REFUSAL } from '../../services/e2ee/e2ee-signal-channel';
+
+/** Ce transport ne résout aucune audience de citation scellée (#8562). */
+const NO_SEALED_EDIT: ReadonlyMap<string, Date> = new Map();
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -906,12 +910,22 @@ export class MessageHandler {
       this.translationService.retranslateMessageAsync(validated.messageId, retranslationPayload)
         .catch((err: unknown) => handlerLogger.warn('retranslation failed after socket edit', { messageId: validated.messageId, error: err }));
 
+      // QUI a le droit de LIRE ce message — résolu UNE fois, et partagé par les
+      // deux sorties qui portent le texte édité : la mention ci-dessous et
+      // `message:edited` plus bas. Les résoudre séparément serait deux lectures
+      // pour la même question, et surtout deux occasions de n'en garder qu'une.
+      const editReaders = await editReadership(this.prisma, message.conversationId, validated.messageId, (err) =>
+        handlerLogger.error('edit readership unresolvable — edit not delivered live nor queued', { messageId: validated.messageId, error: err }),
+      );
+      const editBlocked = blockedEditKeys(editReaders);
+
       // `mention:created` aux ENTRANTS, dans leur salon PERSONNEL : quelqu'un
       // que l'édition vient de nommer n'est pas forcément dans
       // ROOMS.conversation(id), et `message:edited` ne fan que là. Parité avec
       // le chemin d'envoi (`broadcastNewMessage`), à ceci près qu'ici les
       // `User.id` sont déjà résolus — inutile de repasser par les usernames.
       emitMentionCreated({
+        blockedReaders: editBlocked,
         io: this.io,
         newlyMentionedUserIds: await withoutPendingMessageRequests(this.prisma, message.conversationId, editedMentions.newlyMentionedUserIds),
         messageId: message.id,
@@ -946,11 +960,27 @@ export class MessageHandler {
         attachments: message.attachments.map((att) => serializeAttachmentForSocket(att)),
       };
 
-      // #9646 — un message protégé : par destinataire, adresses signées.
-      const room = ROOMS.conversation(message.conversationId);
+      // #9646 — un message protégé : par destinataire, adresses signées. Et
+      // depuis le cycle 147, sous le PLANCHER D'HISTORIQUE : ce transport est le
+      // SECOND de l'édition, et la garde posée sur `broadcastMessageMutation` ne
+      // le couvrait pas — toute socket authentifiée pouvait donc servir le texte
+      // édité d'un message écrit avant l'arrivée d'un invité sans historique.
+      // Le site de la loi est UNIQUE (`editedAudience.ts`), partagé avec l'autre
+      // transport : une règle retapée à chaque site est une règle qu'un site
+      // finira par ne pas avoir.
       const editPlan = await readerSignedPlanForMessageId(this.prisma, { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments });
-      if (editPlan) for (const t of editPlan.targets) this.io.to(t.room).emit(SERVER_EVENTS.MESSAGE_EDITED, editPlan.signFor(editedPayload, t.participantId));
-      else this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+      if (editReaders.kind !== 'unknown') {
+        emitEditedToReaders({
+          io: this.io,
+          conversationId: message.conversationId,
+          payload: editedPayload,
+          plan: editPlan,
+          sealed: NO_SEALED_EDIT,
+          blocked: editBlocked,
+          sealedVariant: (payload) => payload,
+          sealedForAll: (payload) => payload,
+        });
+      }
 
       // Fan a conversation:updated preview refresh to participants sitting on
       // the conversation list (in user:<id> but not conversation:<id>) so an
@@ -972,14 +1002,21 @@ export class MessageHandler {
       // seul exclu. `userId` est l'éditeur, et c'est un `User.id` réel :
       // l'anonyme est refusé en tête de ce handler. Jumeau du même correctif
       // dans `handleMessageDelete`.
-      this._enqueueOfflineEventForParticipants({
-        conversationId: message.conversationId,
-        actorUserId: userId,
-        eventType: 'edited',
-        messageId: validated.messageId,
-        payload: editedPayload,
-        atRest: queuedEventSealsAtRest(message),
-      }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
+      // La file est la TROISIÈME sortie de la même charge, et elle PERSISTE
+      // 48 h : sans cette exclusion, le texte d'un message hors du plancher d'un
+      // invité l'attendait dans Redis sous sa clé. Sur `'unknown'` rien n'entre
+      // — on ne sait NI qui est bloqué, NI qui est autorisé.
+      if (editReaders.kind !== 'unknown') {
+        this._enqueueOfflineEventForParticipants({
+          conversationId: message.conversationId,
+          actorUserId: userId,
+          eventType: 'edited',
+          messageId: validated.messageId,
+          payload: editedPayload,
+          atRest: queuedEventSealsAtRest(message),
+          ...(editBlocked.size > 0 ? { excludedQueueKeys: editBlocked } : {}),
+        }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
+      }
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
       handlerLogger.debug('message:edit processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
@@ -1637,6 +1674,8 @@ export class MessageHandler {
     /** `User.id` de l'acteur. Les deux espaces d'id ne se croisent jamais. */
     actorUserId?: string | null;
     messageId: string;
+    /** Les clés que le plancher d'historique écarte (`editedAudience.ts`). */
+    excludedQueueKeys?: ReadonlySet<string>;
   } & QueuedVariantFor<'edited' | 'deleted'>): Promise<void> {
     await enqueueForOfflineParticipants(
       { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },

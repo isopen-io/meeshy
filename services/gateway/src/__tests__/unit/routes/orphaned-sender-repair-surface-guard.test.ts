@@ -182,6 +182,23 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   // #12822 — relit le seul régime du message enrichi (`encryptionMode`, et
   // celui de sa conversation) pour sceller son entrée de file hors ligne.
   'emitAttachmentUpdated.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #16964 suite — relit `createdAt`, et rien d'autre, pour savoir quels
+  // lecteurs le PLANCHER D'HISTORIQUE écarte du texte d'une édition. Jamais
+  // `sender` : il n'y a aucun expéditeur à réparer sur cette lecture.
+  //
+  // Déclaré sur `editedAudience.ts` et non sur ses appelants : la loi a été
+  // extraite là quand un audit adversarial a montré qu'elle manquait au SECOND
+  // transport de l'édition (le socket). Une règle retapée à chaque site est une
+  // règle qu'un site finira par ne pas avoir — et son unique lecture avec elle.
+  //
+  // C'est la SECONDE lecture de la même ligne quand le message porte des
+  // pièces jointes (`readerSignedDelivery` relit ses cinq colonnes de
+  // protection). Les fusionner serait tentant et serait faux : les deux
+  // lectures n'ont pas le même repli — une protection illisible FERME
+  // (`{}`, la pièce est signée), une date illisible fait lire le plancher de
+  // tous. Les garder séparées est ce qui permet à chacune d'échouer dans son
+  // sens.
+  'editedAudience.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 };
 
 /** `services/` — même règle, troisième racine. */

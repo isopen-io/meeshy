@@ -45,7 +45,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 import { broadcastMessageMutation } from '../broadcastMessageMutation';
@@ -71,12 +71,23 @@ const invite = (overrides: MongoDocument = {}): MongoDocument => ({
 
 type Emission = { rooms: string[]; excepts: string[]; event: string; payload: any };
 
-function monde(options: { participants: MongoDocument[]; messageCreatedAt?: Date | null }) {
+function monde(options: {
+  participants: MongoDocument[];
+  messageCreatedAt?: Date | null;
+  /** Rend la pièce LIÉE AU LECTEUR, donc fait exister un plan signé. */
+  vueUnique?: boolean;
+  /** Le harnais n'expose PAS `except` : simule une cible qui ne sait pas exclure. */
+  sansExcept?: boolean;
+}) {
   const emissions: Emission[] = [];
   const chain = (rooms: string[], excepts: string[]): any => ({
     to: (room: string) => chain([...rooms, room], excepts),
-    except: (room: string | string[]) =>
-      chain(rooms, [...excepts, ...(Array.isArray(room) ? room : [room])]),
+    ...(options.sansExcept
+      ? {}
+      : {
+          except: (room: string | string[]) =>
+            chain(rooms, [...excepts, ...(Array.isArray(room) ? room : [room])]),
+        }),
     emit: (event: string, payload: unknown) => { emissions.push({ rooms, excepts, event, payload }); },
   });
   const io = { to: (room: string) => chain([room], []) };
@@ -84,9 +95,18 @@ function monde(options: { participants: MongoDocument[]; messageCreatedAt?: Date
   const enfile: any[] = [];
   const prisma = {
     message: {
+      // Le double ignore le `select`, donc il rend le SUPERSET : les cinq
+      // colonnes de protection que `readerSignedPlanForMessageId` demande ET
+      // le `createdAt` que la loi du plancher demande. Les deux lectures
+      // portent sur la MÊME ligne.
       findUnique: jest.fn(async () => ({
         conversationId: CONV,
         senderId: 'p-hote',
+        isViewOnce: options.vueUnique === true,
+        isBlurred: false,
+        effectFlags: 0,
+        ephemeralDuration: null,
+        expiresAt: null,
         ...(options.messageCreatedAt === null ? {} : { createdAt: options.messageCreatedAt ?? ECRIT }),
       })),
       findFirst: jest.fn(async () => null),
@@ -110,7 +130,7 @@ function monde(options: { participants: MongoDocument[]; messageCreatedAt?: Date
     emitUnreadCountsToRecipients: jest.fn(async () => undefined),
   };
 
-  const editer = () =>
+  const editer = (extra: Record<string, unknown> = {}) =>
     broadcastMessageMutation({
       prisma: prisma as never,
       manager: manager as never,
@@ -119,14 +139,55 @@ function monde(options: { participants: MongoDocument[]; messageCreatedAt?: Date
       messageId: MSG,
       eventType: 'edited',
       atRest: false,
-      payload: { id: MSG, conversationId: CONV, content: 'SECRET APRÈS ÉDITION' } as never,
-    });
+      payload: {
+        id: MSG,
+        conversationId: CONV,
+        content: 'SECRET APRÈS ÉDITION',
+        ...(options.vueUnique ? { attachments: [PIECE] } : {}),
+      } as never,
+      ...extra,
+    } as never);
 
   const editions = () => emissions.filter((e) => e.event === SERVER_EVENTS.MESSAGE_EDITED);
   return { emissions, enfile, editer, editions };
 }
 
 const ROOM_INVITE = ROOMS.user('p-invite');
+
+/** Une pièce dont la protection du message fait une pièce LIÉE AU LECTEUR. */
+const PIECE = {
+  id: 'aaaaaaaaaaaaaaaaaaaaaaa1',
+  fileUrl: '2026/10/68f2a81417a557e8ce4ddfc1/photo_8b1f0c1e.jpg',
+  isViewOnce: false,
+  isBlurred: false,
+  effectFlags: 0,
+};
+
+/**
+ * Toute émission qui ATTEINT une room donnée — par adressage direct, ou par une
+ * diffusion de room qui ne l'exclut pas.
+ *
+ * Écrit émission par émission, et c'est le correctif d'un témoin FAIBLE : aplatir
+ * `rooms` et `excepts` sur TOUTES les émissions laissait une diffusion de room
+ * qui exclut l'invité masquer une émission DIRECTE vers sa room personnelle.
+ */
+const atteint = (emissions: Emission[], room: string) =>
+  emissions.filter(
+    (e) =>
+      (e.rooms.includes(room) || e.rooms.includes(ROOMS.conversation(CONV))) && !e.excepts.includes(room),
+  );
+
+// La clé de signature est POSÉE ici, jamais héritée de l'environnement : sans
+// elle `readerSignedPlanForMessageId` rend `null` sans aucune requête, et le
+// témoin du chemin du PLAN SIGNÉ passerait par la diffusion de room en croyant
+// tenir la boucle par lecteur. Même discipline que
+// `broadcastMessageMutation.readerSigned.test.ts`.
+beforeEach(() => {
+  process.env.ATTACHMENT_URL_SIGNING_KEY = Buffer.alloc(32, 9).toString('base64');
+});
+afterEach(() => {
+  delete process.env.ATTACHMENT_URL_SIGNING_KEY;
+});
 
 describe('le texte d’une édition ne part qu’à ceux qui peuvent lire le message', () => {
   it('un invité SANS historique, entré après le message, ne reçoit pas le texte édité', async () => {
@@ -175,6 +236,66 @@ describe('le texte d’une édition ne part qu’à ceux qui peuvent lire le mes
     expect(m.enfile).toHaveLength(1);
     const exclues: ReadonlySet<string> | undefined = m.enfile[0]?.excludedQueueKeys;
     expect(exclues && [...exclues]).toContain('p-invite');
+  });
+
+  /**
+   * ─── Les TROIS chemins par lecteur ───────────────────────────────────────
+   *
+   * Un audit adversarial a mesuré que les trois gardes par lecteur ne pouvaient
+   * pas tomber : neutralisées en `if (false && …)`, 139 suites et 2 392 témoins
+   * restaient VERTS. Les témoins ci-dessus n'atteignaient que la diffusion de
+   * room — la charge ne portait pas d'`attachments` (donc aucun plan signé),
+   * le harnais exposait toujours `except`, et aucun cas ne posait
+   * `sealedQuoteAudience`.
+   *
+   * Les trois qui suivent prennent chacun un de ces chemins, et le chemin du
+   * plan signé est celui que la production désigne elle-même comme le plus
+   * dangereux : il s'autorise sur l'admission de lecture de FICHIER, qui ne
+   * regarde NI `joinedAt` NI `historyVisibleFrom`.
+   */
+  it('chemin du PLAN SIGNÉ — la remise par lecteur saute l’invité sous plancher', async () => {
+    const m = monde({ participants: [hote, invite()], vueUnique: true });
+
+    await m.editer();
+
+    // Le plan existe bien : la remise est par lecteur, pas en room.
+    expect(m.editions().flatMap((e) => e.rooms)).not.toContain(ROOMS.conversation(CONV));
+    expect(atteint(m.emissions.filter((e) => e.event === SERVER_EVENTS.MESSAGE_EDITED), ROOM_INVITE)).toEqual([]);
+    // Et l'hôte, lui, est servi — la garde retire un lecteur, pas le canal.
+    expect(atteint(m.editions(), ROOMS.user('u-hote')).length).toBeGreaterThan(0);
+  });
+
+  it('chemin de la CITATION SCELLÉE — l’invité sous plancher ne reçoit aucune variante', async () => {
+    const m = monde({ participants: [hote, invite()] });
+
+    // L'invité est DANS l'audience scellée : sceller une citation ne l'autorise
+    // pas à lire le message porteur.
+    await m.editer({ sealedQuoteAudience: new Map([['p-invite', new Date()]]) });
+
+    expect(atteint(m.editions(), ROOM_INVITE)).toEqual([]);
+    expect(atteint(m.editions(), ROOMS.user('u-hote')).length).toBeGreaterThan(0);
+  });
+
+  it('cible qui ne sait pas EXCLURE — rien ne part plutôt que de servir qui n’y a pas droit', async () => {
+    const m = monde({ participants: [hote, invite()], sansExcept: true });
+
+    await m.editer();
+
+    // La porte échoue en montrant MOINS : aucune édition en direct. La file
+    // hors ligne sert les absents, la relecture de la page les présents.
+    expect(m.editions()).toEqual([]);
+  });
+
+  it('cible sans EXCLUSION mais sans lecteur bloqué — la diffusion de room est intacte', async () => {
+    const m = monde({
+      participants: [hote, invite({ joinedAt: new Date('2026-10-02T00:00:00Z') })],
+      sansExcept: true,
+    });
+
+    await m.editer();
+
+    // Le repli « rien ne part » ne vaut QUE s'il y a quelqu'un à retenir.
+    expect(m.editions().flatMap((e) => e.rooms)).toContain(ROOMS.conversation(CONV));
   });
 
   /**

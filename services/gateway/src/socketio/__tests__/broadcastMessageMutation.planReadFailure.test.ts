@@ -55,11 +55,15 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 import { broadcastMessageMutation } from '../broadcastMessageMutation';
 import { checkReaderFileToken, readSigningKeys } from '../../services/attachments/readerFileSignature';
+import { matchesMongoWhere, type MongoDocument } from '../../__tests__/helpers/mongo-where';
 
 const KEY = '2026/10/68f2a81417a557e8ce4ddfc1/photo_8b1f0c1e.jpg';
 const A = { id: 'cccccccccccccccccccccc01', userId: 'bbbbbbbbbbbbbbbbbbbbbb01' };
 const B = { id: 'cccccccccccccccccccccc02', userId: 'bbbbbbbbbbbbbbbbbbbbbb02' };
 const piece = { id: 'aaaaaaaaaaaaaaaaaaaaaaa1', fileUrl: KEY, isViewOnce: false, isBlurred: false, effectFlags: 0 };
+
+const ECRIT = new Date('2026-10-08T10:00:00Z');
+const AVANT = new Date('2026-10-01T00:00:00Z');
 
 /** Un message PROTÉGÉ : c'est lui qui met la remise sur le chemin du plan signé. */
 const PROTECTED_ROW = { isViewOnce: true, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null };
@@ -74,17 +78,27 @@ function setup(fails: Failure) {
     except: () => target(room),
   });
   const enqueueOfflineMessageMutation = jest.fn(async () => undefined);
+  // Le double ÉVALUE le `where` (`matchesMongoWhere`) : sans cela, la requête
+  // des lecteurs TARDIFS du plancher d'historique rendait A et B comme
+  // suspects, et le témoin passait par une branche qu'il ne nomme pas. Les deux
+  // lignes portent un `joinedAt` ANTÉRIEUR au message, donc aucune n'est
+  // tardive et la loi du plancher rend `{ kind: 'room' }` : ce fichier mesure
+  // la panne du PLAN SIGNÉ, pas celle de l'audience.
+  const rows: MongoDocument[] = [
+    { ...A, conversationId: 'conv-1', isActive: true, role: 'member', joinedAt: AVANT, shareLinkId: null, historyVisibleFrom: null, permissions: null, anonymousSession: null, user: { role: 'USER' } },
+    { ...B, conversationId: 'conv-1', isActive: true, role: 'member', joinedAt: AVANT, shareLinkId: null, historyVisibleFrom: null, permissions: null, anonymousSession: null, user: { role: 'USER' } },
+  ];
   const prisma = {
     participant: {
-      findMany: jest.fn(async () => {
+      findMany: jest.fn(async (args: any) => {
         if (fails === 'recipients-read') throw new Error('mongo down (recipients)');
-        return [A, B];
+        return rows.filter((row) => matchesMongoWhere(row, args?.where ?? {}));
       }),
     },
     message: {
       findUnique: jest.fn(async () => {
         if (fails === 'protection-read') throw new Error('mongo down (protection)');
-        return PROTECTED_ROW;
+        return { ...PROTECTED_ROW, createdAt: ECRIT };
       }),
       findFirst: jest.fn(async () => null),
     },
