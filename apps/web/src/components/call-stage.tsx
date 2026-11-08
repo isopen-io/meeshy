@@ -80,6 +80,8 @@ export type SelfView = {
   readonly local?: LocalZoom;
   /** Ce que la capsule de capture prend sous l'en-tête (R1) : ma vignette et ses commandes descendent d'autant. Absent : 0. */
   readonly topInset?: number;
+  /** Ma vignette se retire : un cadre en direct me compose dans sa case (#16943, comme `duoOverlays` iOS). */
+  readonly tileHidden?: boolean;
 };
 
 const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallSelfCamera })));
@@ -227,6 +229,8 @@ function VideoDuo({ call, language, self, chromeVisible = true }: Pick<StageProp
   const cornerStream = swapped ? remoteStream : call.localStream;
   const mainOn = swapped ? call.cameraOn : remoteVideoOn;
   const cornerShown = swapped || call.cameraOn;
+  /* Ma vignette composée dans un cadre en direct (#16943) reste montée, invisible et intouchable : sa vidéo est la source de ma case. */
+  const composed = self.tileHidden === true && !swapped;
   const cornerVideo = swapped ? remoteVideoOn : call.cameraOn;
   const screen = viewport();
   const compact = !chromeVisible;
@@ -296,9 +300,11 @@ function VideoDuo({ call, language, self, chromeVisible = true }: Pick<StageProp
       {cornerShown ? (
         <div
           ref={cornerFrame}
-          className="absolute z-10"
+          className={`absolute z-10 ${composed ? 'pointer-events-none opacity-0' : ''}`}
           style={{ ...cornerPlace(corner, size, topInset), width: size.width, height: size.height, transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
+          {...(composed ? { 'aria-hidden': true, inert: true } : {})}
           data-call-corner-frame=""
+          data-call-self-tile-composed={composed ? '' : undefined}
           data-call-self-tile-corner={corner}
           data-call-self-tile-compact={compact ? '' : undefined}
           data-call-self-tile-dragging={offset === null ? undefined : ''}

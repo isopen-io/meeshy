@@ -75,6 +75,16 @@ const pt = {
   'callControls.selfTile.corner.bottom-right': 'Minha miniatura: embaixo à direita',
   'callControls.spotlight.self': 'Destacar minha imagem',
   'callControls.screenZoom.hint': 'Tela compartilhada: pince ou Ctrl + roda para ampliar, toque duas vezes para vê-la inteira',
+  'callControls.liveFrame.proposal': '{name} sugere a moldura «{frame}»',
+  'callControls.liveFrame.proposal.anonymous': 'A outra pessoa sugere a moldura «{frame}»',
+  'callControls.liveFrame.accept': 'Aplicar',
+  'callControls.liveFrame.decline': 'Não, obrigado',
+  'callControls.liveFrame.answer.accepted': '{name} aplicou a sua moldura',
+  'callControls.liveFrame.answer.accepted.anonymous': 'A outra pessoa aplicou a sua moldura',
+  'callControls.liveFrame.answer.declined': '{name} mantém a própria visualização',
+  'callControls.liveFrame.answer.declined.anonymous': 'A outra pessoa mantém a própria visualização',
+  'callControls.liveFrame.notProposed': 'A moldura está aplicada do seu lado, mas não foi possível sugeri-la',
+  'callControls.liveFrame.surface': 'Moldura {frame} em volta dos dois vídeos',
 } satisfies CallControlsCatalog;
 
 export default pt;

@@ -93,7 +93,12 @@ type ModeProps = {
   readonly circleOf?: CircleOf;
   /** Les ambiances installées (#10169) : seules leurs puces se proposent. */
   readonly loadShelf?: ShelfLoader;
+  /** L'interrupteur « Cadre » du cadre en direct (#16943, loi 16) : sans lui, le Montage ne fait que capturer. */
+  readonly hold?: LiveFrameHold;
 };
+
+/** Le cadre en direct tel que le Montage le voit : celui que je garde, s'il est offert (à deux, en vidéo), et le geste. */
+export type LiveFrameHold = { readonly heldFrameId: string | null; readonly offered: boolean; readonly toggle: (frameId: string) => void };
 
 const NO_AUDIO = (): readonly MediaStream[] => [];
 
@@ -118,6 +123,13 @@ function paint(canvas: HTMLCanvasElement | null, stage: Element | null, style: M
   drawMontage(context, montageLayout({ style, count: tiles.length, size, onScreen: tiles.map((tile) => tile.onScreen) }), tiles, text);
 }
 
+const holdGlyph = (
+  <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <rect x="12" y="11" width="6" height="5" rx="1" />
+  </svg>
+);
+
 const facesGlyph = (
   <svg aria-hidden viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <circle cx="8" cy="9" r="3" />
@@ -126,7 +138,7 @@ const facesGlyph = (
   </svg>
 );
 
-export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf }: ModeProps) {
+export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold }: ModeProps) {
   const [style, setStyle] = useState<MontageStyle>('grid');
   const [frameId, setFrameId] = useState<string | null>(null);
   const { studio: frames, circle } = useMontageFrames({ loadFrames, call, circleOf, language, loadShelf });
@@ -308,6 +320,20 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
     setFrameId(next?.id ?? null);
   };
 
+  /* C1 : un cadre du DIRECT, à deux en vidéo, se garde pendant tout l'appel et se propose à l'autre. */
+  const holdable = hold !== undefined && hold.offered && frame !== null && frames !== null && frames.servesCall(frame) ? { hold, frame } : null;
+  const holdOption =
+    holdable === null ? null : (
+      <ModeOption
+        label={t(language, 'callStudio.liveFrame.hold')}
+        hint={t(language, 'callStudio.liveFrame.hint')}
+        glyph={holdGlyph}
+        pressed={holdable.hold.heldFrameId === holdable.frame.id}
+        onPress={() => holdable.hold.toggle(holdable.frame.id)}
+        data={{ 'data-call-live-frame-hold': holdable.frame.id }}
+      />
+    );
+
   const previewLabel = frame === null ? t(language, 'callStudio.capture.preview', { style: t(language, `callStudio.montage.${style}`) }) : t(language, 'callStudio.capture.framePreview', { name: frameDisplayName(frame, language) });
 
   return (
@@ -340,7 +366,12 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
         <CallModeBar
           quit={{ label: t(language, 'callStudio.mode.quit'), glyph: quitGlyph, onPress: onExit, data: { 'data-call-mode-quit': '' } }}
           center={<KeyboardRecord language={language} recording={studio.recording} onPress={() => void (studio.recording ? studio.stop() : studio.record())} />}
-          options={<ModeOption label={t(language, 'callStudio.capture.facesLabel')} glyph={facesGlyph} onPress={() => void faces()} data={{ 'data-call-capture-faces': '' }} />}
+          options={
+            <>
+              {holdOption}
+              <ModeOption label={t(language, 'callStudio.capture.facesLabel')} glyph={facesGlyph} onPress={() => void faces()} data={{ 'data-call-capture-faces': '' }} />
+            </>
+          }
         />
       </div>
       {studio.flashing ? <CaptureFlash onDone={studio.endFlash} /> : null}

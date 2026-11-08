@@ -74,6 +74,8 @@ const es = {
   'callStudio.frames.mood.feerique': 'Mágico',
   'callStudio.mode.pickFrame': 'Elegir un marco',
   'callStudio.capture.framePreview': 'Vista previa del marco {name}',
+  'callStudio.liveFrame.hold': 'Marco en directo',
+  'callStudio.liveFrame.hint': 'Mantiene este marco alrededor de los dos vídeos durante toda la llamada y se lo propone a la otra persona',
 } satisfies CallStudioCatalog;
 
 export default es;

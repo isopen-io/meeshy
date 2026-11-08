@@ -75,6 +75,16 @@ const en = {
   'callControls.selfTile.corner.bottom-right': 'My thumbnail: bottom right',
   'callControls.spotlight.self': 'Show my video in the spotlight',
   'callControls.screenZoom.hint': 'Shared screen: pinch or Ctrl + scroll to zoom, double-tap to see it whole again',
+  'callControls.liveFrame.proposal': '{name} suggests the “{frame}” frame',
+  'callControls.liveFrame.proposal.anonymous': 'The other person suggests the “{frame}” frame',
+  'callControls.liveFrame.accept': 'Apply',
+  'callControls.liveFrame.decline': 'No thanks',
+  'callControls.liveFrame.answer.accepted': '{name} applied your frame',
+  'callControls.liveFrame.answer.accepted.anonymous': 'The other person applied your frame',
+  'callControls.liveFrame.answer.declined': '{name} keeps their own view',
+  'callControls.liveFrame.answer.declined.anonymous': 'The other person keeps their own view',
+  'callControls.liveFrame.notProposed': 'The frame is applied on your side but couldn\'t be offered',
+  'callControls.liveFrame.surface': '{frame} frame around both videos',
 } satisfies CallControlsCatalog;
 
 export default en;

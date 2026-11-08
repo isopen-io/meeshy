@@ -74,6 +74,8 @@ const de = {
   'callStudio.frames.mood.feerique': 'Märchenhaft',
   'callStudio.mode.pickFrame': 'Rahmen wählen',
   'callStudio.capture.framePreview': 'Vorschau des Rahmens {name}',
+  'callStudio.liveFrame.hold': 'Live-Rahmen',
+  'callStudio.liveFrame.hint': 'Behält diesen Rahmen während des ganzen Anrufs um beide Videos und schlägt ihn deinem Gegenüber vor',
 } satisfies CallStudioCatalog;
 
 export default de;

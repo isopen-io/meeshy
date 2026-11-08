@@ -75,6 +75,16 @@ const de = {
   'callControls.selfTile.corner.bottom-right': 'Mein Vorschaubild: unten rechts',
   'callControls.spotlight.self': 'Mein Bild hervorheben',
   'callControls.screenZoom.hint': 'Geteilter Bildschirm: zum Zoomen zusammenziehen oder Strg + Mausrad, zweimal tippen für die ganze Ansicht',
+  'callControls.liveFrame.proposal': '{name} schlägt dir den Rahmen „{frame}“ vor',
+  'callControls.liveFrame.proposal.anonymous': 'Dein Gegenüber schlägt dir den Rahmen „{frame}“ vor',
+  'callControls.liveFrame.accept': 'Übernehmen',
+  'callControls.liveFrame.decline': 'Nein, danke',
+  'callControls.liveFrame.answer.accepted': '{name} hat deinen Rahmen übernommen',
+  'callControls.liveFrame.answer.accepted.anonymous': 'Dein Gegenüber hat deinen Rahmen übernommen',
+  'callControls.liveFrame.answer.declined': '{name} behält die eigene Ansicht',
+  'callControls.liveFrame.answer.declined.anonymous': 'Dein Gegenüber behält die eigene Ansicht',
+  'callControls.liveFrame.notProposed': 'Der Rahmen ist bei dir aktiv, konnte aber nicht vorgeschlagen werden',
+  'callControls.liveFrame.surface': 'Rahmen {frame} um beide Videos',
 } satisfies CallControlsCatalog;
 
 export default de;

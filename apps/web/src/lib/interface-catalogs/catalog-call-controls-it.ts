@@ -75,6 +75,16 @@ const it = {
   'callControls.selfTile.corner.bottom-right': 'La mia miniatura: in basso a destra',
   'callControls.spotlight.self': 'Metti in evidenza la mia immagine',
   'callControls.screenZoom.hint': 'Schermo condiviso: pizzica o Ctrl + rotellina per ingrandire, tocca due volte per vederlo intero',
+  'callControls.liveFrame.proposal': '{name} ti propone la cornice «{frame}»',
+  'callControls.liveFrame.proposal.anonymous': 'L\'altra persona ti propone la cornice «{frame}»',
+  'callControls.liveFrame.accept': 'Applica',
+  'callControls.liveFrame.decline': 'No, grazie',
+  'callControls.liveFrame.answer.accepted': '{name} ha applicato la tua cornice',
+  'callControls.liveFrame.answer.accepted.anonymous': 'L\'altra persona ha applicato la tua cornice',
+  'callControls.liveFrame.answer.declined': '{name} mantiene la propria vista',
+  'callControls.liveFrame.answer.declined.anonymous': 'L\'altra persona mantiene la propria vista',
+  'callControls.liveFrame.notProposed': 'La cornice è applicata da te, ma non è stato possibile proporla',
+  'callControls.liveFrame.surface': 'Cornice {frame} intorno ai due video',
 } satisfies CallControlsCatalog;
 
 export default it;

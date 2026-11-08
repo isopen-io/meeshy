@@ -79,6 +79,16 @@ const fr = {
   'callControls.selfTile.corner.bottom-right': 'Ma vignette : en bas à droite',
   'callControls.spotlight.self': 'Mettre mon image à la une',
   'callControls.screenZoom.hint': 'Écran partagé : pincez ou Ctrl + molette pour zoomer, touchez deux fois pour le revoir entier',
+  'callControls.liveFrame.proposal': '{name} vous propose le cadre « {frame} »',
+  'callControls.liveFrame.proposal.anonymous': 'Votre correspondant vous propose le cadre « {frame} »',
+  'callControls.liveFrame.accept': 'Appliquer',
+  'callControls.liveFrame.decline': 'Non merci',
+  'callControls.liveFrame.answer.accepted': '{name} a appliqué votre cadre',
+  'callControls.liveFrame.answer.accepted.anonymous': 'Votre correspondant a appliqué votre cadre',
+  'callControls.liveFrame.answer.declined': '{name} garde son affichage',
+  'callControls.liveFrame.answer.declined.anonymous': 'Votre correspondant garde son affichage',
+  'callControls.liveFrame.notProposed': 'Le cadre est appliqué chez vous, mais n\'a pas pu être proposé',
+  'callControls.liveFrame.surface': 'Cadre {frame} autour des deux vidéos',
 } as const;
 
 export default fr;

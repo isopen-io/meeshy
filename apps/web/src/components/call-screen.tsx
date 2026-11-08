@@ -5,6 +5,7 @@ import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
 import { CallButton } from '@/components/call-glass-button';
 import { CallJournalColumn } from '@/components/call-journal-column';
+import { CallLiveFrameStatusSlot, CallLiveFrameSurfaceSlot, liveFrameHold, liveFrameShown, useLiveFrameState } from '@/components/call-live-frame-slots';
 import { Portrait } from '@/components/call-grid';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
 import { CALL_CAPTURE_ROW_CLEARANCE, CallCaptureAlerts, CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
@@ -352,6 +353,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const stageRef = useRef<HTMLDivElement>(null);
   const myPreview = useRef<HTMLVideoElement | null>(null);
   const moderation = useCallModeration(call);
+  const liveFrame = useLiveFrameState();
   const phase = call.phase.kind;
   const joined = phase === 'connected' || phase === 'reconnecting';
   const statusKey = callStatusKey(call);
@@ -373,7 +375,8 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const support = useEffectsSupport(call.localStream, effectsSupport);
   const cameraSwitch = useCameraSwitch(call.cameraOn);
   const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), cameraSwitch, canPip: shouldOfferPip(call, browserPipSupport()), videoScene });
-  const place = spotlight !== null && spotlight.featured === null ? 'top' : selfControlsPlace({ layout, selfFull, selfTileShown: call.cameraOn });
+  const framed = liveFrameShown(call, liveFrame, live && layer.kind !== 'mode');
+  const place = spotlight !== null && spotlight.featured === null ? 'top' : selfControlsPlace({ layout, selfFull, selfTileShown: call.cameraOn && !framed });
   const local = useLocalZoom(call.callId, call.facing);
   const offer: LayerOffer = {
     effects: set.mine.includes('effects'),
@@ -504,6 +507,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const self: SelfView = {
     topInset: captureShown ? CALL_CAPTURE_ROW_CLEARANCE : 0,
     full: selfFull,
+    tileHidden: framed && !selfFull,
     onToggle: () => setSelfFull((full) => !full),
     controls: chrome.selfControls,
     mine: set.mine,
@@ -645,7 +649,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         audio={callAudio}
       />
     ) : chrome.mode === 'montage' ? (
-      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} onWheel={onRowWheel} audio={callAudio} call={call} loadFrames={loadFrameStudio} />
+      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} onWheel={onRowWheel} audio={callAudio} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} />
     ) : null;
   /* Le fondu ne retire JAMAIS le doigt à un bouton encore visible (#8735) :
      rangées d'un toucher, les commandes deviennent `invisible` à la FIN du
@@ -676,6 +680,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           {stage}
         </div>
       ) : null}
+      <CallLiveFrameSurfaceSlot shown={framed} state={liveFrame} language={language} call={call} stage={() => stageRef.current} load={loadFrameStudio} />
       <CallControlFeedbackSlot language={language} nameOf={nameOf} live={live} />
       <div className="relative flex min-h-0 flex-1 flex-col gap-4">
         {chrome.header ? (
@@ -684,6 +689,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           </div>
         ) : null}
         {captureRow}
+        {live ? <CallLiveFrameStatusSlot language={language} state={liveFrame} load={loadFrameStudio} /> : null}
         {layout === 'grid' ? (
           <>
             {immersive || chrome.mode !== null ? null : (

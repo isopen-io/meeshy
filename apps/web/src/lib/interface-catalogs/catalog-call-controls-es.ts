@@ -75,6 +75,16 @@ const es = {
   'callControls.selfTile.corner.bottom-right': 'Mi miniatura: abajo a la derecha',
   'callControls.spotlight.self': 'Destacar mi imagen',
   'callControls.screenZoom.hint': 'Pantalla compartida: pellizca o Ctrl + rueda para hacer zoom, toca dos veces para verla entera',
+  'callControls.liveFrame.proposal': '{name} te propone el marco «{frame}»',
+  'callControls.liveFrame.proposal.anonymous': 'La otra persona te propone el marco «{frame}»',
+  'callControls.liveFrame.accept': 'Aplicar',
+  'callControls.liveFrame.decline': 'No, gracias',
+  'callControls.liveFrame.answer.accepted': '{name} aplicó tu marco',
+  'callControls.liveFrame.answer.accepted.anonymous': 'La otra persona aplicó tu marco',
+  'callControls.liveFrame.answer.declined': '{name} mantiene su vista',
+  'callControls.liveFrame.answer.declined.anonymous': 'La otra persona mantiene su vista',
+  'callControls.liveFrame.notProposed': 'El marco se aplica en tu pantalla, pero no se pudo proponer',
+  'callControls.liveFrame.surface': 'Marco {frame} alrededor de los dos vídeos',
 } satisfies CallControlsCatalog;
 
 export default es;

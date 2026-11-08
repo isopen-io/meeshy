@@ -75,6 +75,16 @@ const ar = {
   'callControls.selfTile.corner.bottom-right': 'صورتي المصغرة: أسفل اليمين',
   'callControls.spotlight.self': 'إبراز صورتي',
   'callControls.screenZoom.hint': 'الشاشة المشتركة: اضغط بإصبعين أو Ctrl + عجلة الفأرة للتكبير، والمس مرتين لرؤيتها كاملة',
+  'callControls.liveFrame.proposal': 'يقترح {name} الإطار «{frame}»',
+  'callControls.liveFrame.proposal.anonymous': 'يقترح الطرف الآخر الإطار «{frame}»',
+  'callControls.liveFrame.accept': 'تطبيق',
+  'callControls.liveFrame.decline': 'لا، شكرًا',
+  'callControls.liveFrame.answer.accepted': 'طبّق {name} إطارك',
+  'callControls.liveFrame.answer.accepted.anonymous': 'طبّق الطرف الآخر إطارك',
+  'callControls.liveFrame.answer.declined': 'يحتفظ {name} بعرضه',
+  'callControls.liveFrame.answer.declined.anonymous': 'يحتفظ الطرف الآخر بعرضه',
+  'callControls.liveFrame.notProposed': 'تم تطبيق الإطار لديك، لكن تعذّر اقتراحه',
+  'callControls.liveFrame.surface': 'إطار {frame} حول الفيديوهين',
 } satisfies CallControlsCatalog;
 
 export default ar;

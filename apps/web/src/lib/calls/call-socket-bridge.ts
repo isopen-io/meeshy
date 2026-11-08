@@ -62,6 +62,9 @@ export function bridgeCallEvents(socket: SocketClient): () => void {
     socket.on(event, handler);
     return [event, handler] as const;
   });
+  /* Le cadre en direct (#16943), chargé par `import()` : il n'écoute qu'un
+     appel à deux déjà connecté, donc jamais avant que son chunk soit là. */
+  const liveFrame = import('./call-live-frame-live').then(({ attachCallLiveFrame }) => attachCallLiveFrame(socket));
   /* `call:check-active` à CHAQUE authentification, la première comprise : la
      passerelle rejoue alors `call:initiated` pour un appel qui sonne encore
      (onglet rouvert, coupure pendant la sonnerie) — miroir iOS au `.connect`. */
@@ -76,6 +79,7 @@ export function bridgeCallEvents(socket: SocketClient): () => void {
   if (socket.connected) onAuthenticated();
   return () => {
     for (const [event, handler] of [...handlers, ...recordingHandlers]) socket.off(event, handler);
+    void liveFrame.then((detach) => detach());
     socket.off(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
     binding.detach();
   };

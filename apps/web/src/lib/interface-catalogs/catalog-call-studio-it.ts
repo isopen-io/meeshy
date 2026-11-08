@@ -74,6 +74,8 @@ const it = {
   'callStudio.frames.mood.feerique': 'Fiabesco',
   'callStudio.mode.pickFrame': 'Scegli una cornice',
   'callStudio.capture.framePreview': 'Anteprima della cornice {name}',
+  'callStudio.liveFrame.hold': 'Cornice dal vivo',
+  'callStudio.liveFrame.hint': 'Mantiene questa cornice attorno ai due video per tutta la chiamata e la propone all\'altra persona',
 } satisfies CallStudioCatalog;
 
 export default it;
