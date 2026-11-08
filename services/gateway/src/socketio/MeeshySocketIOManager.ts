@@ -473,6 +473,10 @@ export class MeeshySocketIOManager {
       prisma: this.prisma,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
+      // La liste d'exclusion d'un blocage (#16745) : un ensemble d'ids de
+      // comptes s'y traduit en ids de sockets, comme chez `StatusHandler` et
+      // `ConversationViewingHandler`, les deux autres signaux de ce salon.
+      userSockets: this.userSockets,
       normalizeConversationId: (id: string) => this.normalizeConversationId(id),
     });
 
@@ -618,6 +622,8 @@ export class MeeshySocketIOManager {
       // du départ : sans ce rejeu, l'épingle d'un pair qui partage déjà reste
       // invisible pour toute la session de l'arrivant. `locationHandler` est
       // construit plus haut dans ce même constructeur.
+      // Asynchrone depuis #16745 : le rattrapage lit le blocage du côté de
+      // l'ARRIVANT avant de lui servir la position d'un partageur.
       replayLiveLocations: (socket, conversationId) =>
         this.locationHandler.replayLiveLocationsTo(socket, conversationId),
       // La liste nominative `onlineUsers` de `conversation:stats` est projetée

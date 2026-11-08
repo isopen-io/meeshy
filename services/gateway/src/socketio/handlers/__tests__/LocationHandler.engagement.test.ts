@@ -26,6 +26,7 @@ jest.mock('../../../utils/socket-rate-limiter.js', () => ({
 
 import { LocationHandler } from '../LocationHandler';
 import type { Socket } from 'socket.io';
+import { noBlocksUserSurface } from '../../__tests__/helpers/no-blocks';
 
 const SOCKET_ID = 'socket-sharer';
 const USER_ID = '507f1f77bcf86cd799439001';
@@ -46,8 +47,10 @@ function build(options: { anonymous?: boolean; member?: boolean; closed?: boolea
           options.closed ? { isActive: false, closedAt: new Date() } : { isActive: true, closedAt: null },
         ),
       },
+      user: noBlocksUserSurface(),
     } as any,
     connectedUsers: new Map(),
+    userSockets: new Map(),
     socketToUser: new Map([[SOCKET_ID, USER_ID]]),
     normalizeConversationId: async (id: string) => id,
     engagement,
