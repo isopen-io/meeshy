@@ -52,8 +52,9 @@ final class NotificationAudioPlayer: ObservableObject, NotificationAudioPlayerPr
 
     func play() {
         logger.info("play at \(self.elapsed, privacy: .public)")
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        // La session se pose hors du fil principal (#17038) ; le son part une
+        // fois posée, sauf pause entre-temps.
+        MediaSessionCoordinator.shared.activatePlaybackSync(mode: .spokenAudio, options: [])
         // Rejouer un vocal ÉCOUTÉ repart du début. L'état est tenu ici plutôt
         // que déduit de `currentTime() >= duration`, qui ne tombe pas juste à
         // la fin d'un flux (mesuré : la relecture restait bloquée à 0:04).
@@ -62,8 +63,11 @@ final class NotificationAudioPlayer: ObservableObject, NotificationAudioPlayerPr
             elapsed = 0
             player.seek(to: .zero)
         }
-        player.playImmediately(atRate: rate)
         isPlaying = true
+        MediaSessionCoordinator.shared.whenSessionSettled { [weak self] in
+            guard let self, self.isPlaying else { return }
+            self.player.playImmediately(atRate: self.rate)
+        }
     }
 
     func pause() {
@@ -94,7 +98,7 @@ final class NotificationAudioPlayer: ObservableObject, NotificationAudioPlayerPr
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         endObserver = nil
         scopedURL?.stopAccessingSecurityScopedResource()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        MediaSessionCoordinator.shared.deactivatePlaybackSync()
     }
 
     private func observe() {

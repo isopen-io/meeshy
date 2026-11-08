@@ -10,15 +10,17 @@
  * @jest-environment node
  */
 import { describe, it, expect, afterEach } from '@jest/globals';
+import { togetherPairKey } from '../../../../services/together/togetherStore';
 import { relationPairKey } from '@meeshy/shared/types/relation';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { TOGETHER_ERROR_CODES, TOGETHER_INVITE_TTL_SECONDS, TOGETHER_SESSION_TTL_SECONDS } from '@meeshy/shared/types/together';
+import { TOGETHER_ERROR_CODES, TOGETHER_INVITE_TTL_SECONDS, TOGETHER_SESSION_TTL_SECONDS, togetherInvitePayloadSchema, togetherSessionPayloadSchema, togetherSyncPayloadSchema } from '@meeshy/shared/types/together';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sealSecret } from '../../../../utils/secret-at-rest';
 import {
   inviteTogether,
   joinTogether,
   leaveTogether,
+  endTogetherOf,
   rejudgeTogetherBetween,
   syncTogether,
   type TogetherRelayDeps,
@@ -54,15 +56,24 @@ const LIENS: readonly CircleLink[] = [
 
 type Emission = { readonly room: string; readonly event: string; readonly data: Record<string, unknown> };
 
-function cacheEnMemoire() {
-  const entries = new Map<string, { value: string; ttl?: number }>();
-  const hooks: { onSessionWrite: (() => Promise<void>) | null } = { onSessionWrite: null };
+function cacheEnMemoire(clock: () => number) {
+  const entries = new Map<string, { value: string; ttl?: number; until: number }>();
+  const hooks: { onSessionWrite: (() => Promise<void>) | null; onSessionRead: (() => Promise<void>) | null } = { onSessionWrite: null, onSessionRead: null };
   return {
     entries,
     hooks,
-    get: (key: string) => Promise.resolve(entries.get(key)?.value ?? null),
+    get: async (key: string) => {
+      const entry = entries.get(key);
+      const value = entry && entry.until > clock() ? entry.value : null;
+      const read = key.startsWith('together:session:') ? hooks.onSessionRead : null;
+      if (read) {
+        hooks.onSessionRead = null;
+        await read();
+      }
+      return value;
+    },
     set: async (key: string, value: string, ttl?: number) => {
-      entries.set(key, { value, ttl });
+      entries.set(key, { value, ttl, until: clock() + (ttl ?? 3600) * 1000 });
       const hook = key.startsWith('together:session:') ? hooks.onSessionWrite : null;
       hooks.onSessionWrite = hook ? null : hooks.onSessionWrite;
       if (hook) await hook();
@@ -113,8 +124,8 @@ function monde(options: { readonly participants?: readonly Row[] } = {}) {
     piece(AILLEURS, 'video/mp4', { conversationId: AUTRE_CONV }),
   ]);
   const emissions: Emission[] = [];
-  const cache = cacheEnMemoire();
   let now = T0;
+  const cache = cacheEnMemoire(() => now);
   let ids = 0;
   const deps: TogetherRelayDeps = {
     prisma: { ...world.prisma, messageAttachment } as unknown as PrismaClient,
@@ -144,7 +155,7 @@ const inviter = (m: ReturnType<typeof monde>, toUserId = PROCHE, attachmentId = 
 const REFUS = { success: false, error: expect.any(String), code: TOGETHER_ERROR_CODES.NOT_ALLOWED };
 const INTROUVABLE = { success: false, error: expect.any(String), code: TOGETHER_ERROR_CODES.NOT_FOUND };
 const sessionValues = (m: ReturnType<typeof monde>) =>
-  [...m.cache.entries.entries()].filter(([key]) => !key.startsWith('together:ended:')).map(([, entry]) => entry);
+  [...m.cache.entries.entries()].filter(([key]) => !key.startsWith('together:ended:') && !key.startsWith('together:user:')).map(([, entry]) => entry);
 const KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
 
 afterEach(() => {
@@ -364,12 +375,10 @@ describe('synchroniser — lecture, pause et déplacement arrivent chez l\'autre
     expect(sessionValues(m)).toEqual([]);
   });
 
-  it('une synchronisation prolonge la séance', async () => {
+  it('une synchronisation juste avant le plafond de 4 h passe encore', async () => {
     const m = await seance();
     m.avancer(TOGETHER_SESSION_TTL_SECONDS * 1000 - 1_000);
-    await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 0 });
-    m.avancer(2_000);
-    expect(await syncTogether(m.deps, PROCHE, { sessionId: SESSION_ID, playing: false, positionMs: 1 })).toMatchObject({ success: true });
+    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 0 })).toMatchObject({ success: true });
   });
 });
 
@@ -440,9 +449,9 @@ describe('au repos — la séance est scellée, jamais en clair', () => {
     const autre = 'fedcba9876543210fedcba9876543210';
     const forgee = {
       sessionId: autre, hostId: HOTE, guestId: PROCHE, conversationId: CONV, attachmentId: VIDEO, media: 'video',
-      joined: false, playback: { playing: false, positionMs: 0, at: T0, rev: 0, byUserId: HOTE }, expiresAt: T0 + 60_000,
+      joined: false, playback: { playing: false, positionMs: 0, at: T0, rev: 0, byUserId: HOTE }, createdAt: T0, expiresAt: T0 + 60_000,
     };
-    m.cache.entries.set(`together:session:${autre}`, { value: sealSecret(JSON.stringify(forgee), `Together.session:${SESSION_ID}`) });
+    m.cache.entries.set(`together:session:${autre}`, { value: sealSecret(JSON.stringify(forgee), `Together.session:${SESSION_ID}`), until: Infinity });
     expect(await joinTogether(m.deps, PROCHE, { sessionId: autre })).toEqual(INTROUVABLE);
   });
 
@@ -471,5 +480,196 @@ describe('une lecture en panne ferme', () => {
       code: TOGETHER_ERROR_CODES.UNAVAILABLE,
     });
     expect(m.emissions).toEqual([]);
+  });
+});
+
+describe('#17043 — une invitation rejugée après son écriture', () => {
+  it('un blocage posé pendant l\'écriture : aucune invitation ne part vers le bloqueur, rien ne reste', async () => {
+    const m = monde();
+    m.cache.hooks.onSessionWrite = async () => {
+      await m.world.users.updateMany({ where: { id: PROCHE }, data: { blockedUserIds: [HOTE] } });
+    };
+
+    expect(await inviter(m)).toEqual(REFUS);
+    expect(m.emissions).toEqual([]);
+    expect(sessionValues(m)).toEqual([]);
+  });
+});
+
+describe('#17043 — une séance par paire, même sous invitations simultanées', () => {
+  const ID_A = 'a'.repeat(32);
+  const ID_B = 'b'.repeat(32);
+
+  it('deux invitations de la même paire en course : une seule séance vit, l\'autre est coupée sans orphelin', async () => {
+    const m = monde();
+    const ids = [ID_A, ID_B];
+    const attente = () => new Promise<void>((resolve) => setImmediate(resolve));
+    const index = new Map<string, string>();
+    const deps: TogetherRelayDeps = {
+      ...m.deps,
+      newSessionId: () => ids.shift() as string,
+      claimPair: async (key, sessionId) => {
+        const previous = index.get(key) ?? null;
+        index.set(key, sessionId);
+        m.cache.entries.set(key, { value: sessionId, until: Infinity });
+        await attente();
+        return previous;
+      },
+    };
+
+    const [a, b] = await Promise.all([
+      inviteTogether(deps, HOTE, { toUserId: PROCHE, conversationId: CONV, attachmentId: VIDEO }),
+      inviteTogether(deps, PROCHE, { toUserId: HOTE, conversationId: CONV, attachmentId: AUDIO }).catch(() => null),
+    ]);
+
+    expect([a, b].filter((ack) => ack?.success === true)).toHaveLength(1);
+    const vivantes = [...m.cache.entries.keys()].filter((key) => key.startsWith('together:session:'));
+    expect(vivantes).toHaveLength(1);
+    const survivante = vivantes[0].replace('together:session:', '');
+    expect(index.get([...index.keys()][0])).toBe(survivante);
+  });
+
+  it('une prise qui échoue (Redis absent) n\'écrit rien : l\'invitation est indisponible', async () => {
+    const m = monde();
+    const deps: TogetherRelayDeps = { ...m.deps, claimPair: () => Promise.reject(new Error('redis down')) };
+    expect(await inviteTogether(deps, HOTE, { toUserId: PROCHE, conversationId: CONV, attachmentId: VIDEO })).toMatchObject({
+      success: false,
+      code: TOGETHER_ERROR_CODES.UNAVAILABLE,
+    });
+    expect(m.emissions).toEqual([]);
+    expect(sessionValues(m)).toEqual([]);
+  });
+});
+
+describe('#17043 — la durée maximale se compte depuis la création', () => {
+  it('une synchronisation prolonge la séance, jamais au-delà de 4 h depuis l\'invitation', async () => {
+    const m = monde();
+    await inviter(m);
+    await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
+    const horsPlafond = TOGETHER_SESSION_TTL_SECONDS * 1000;
+
+    m.avancer(horsPlafond - 60_000);
+    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 1 })).toMatchObject({ success: true });
+    expect(sessionValues(m).map((e) => e.ttl)).toEqual([60, 60]);
+
+    m.avancer(61_000);
+    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 2 })).toEqual(INTROUVABLE);
+  });
+});
+
+describe('#17043 — la fin à la déconnexion', () => {
+  it('la dernière socket d\'un compte fermée : sa séance finit chez les deux, comme un départ', async () => {
+    const m = monde();
+    await inviter(m);
+    await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
+    m.emissions.length = 0;
+
+    await endTogetherOf(m.deps, PROCHE);
+
+    const fin = { sessionId: SESSION_ID, reason: 'left', endedAt: new Date(T0).toISOString() };
+    expect(m.emissions).toEqual([
+      { room: ROOMS.user(HOTE), event: SERVER_EVENTS.TOGETHER_ENDED, data: fin },
+      { room: ROOMS.user(PROCHE), event: SERVER_EVENTS.TOGETHER_ENDED, data: fin },
+    ]);
+    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 1 })).toEqual(INTROUVABLE);
+    expect(sessionValues(m)).toEqual([]);
+  });
+
+  it('une invitation en attente se refuse quand l\'invité disparaît ; un autre compte n\'est pas touché', async () => {
+    const m = monde();
+    await inviter(m);
+    m.emissions.length = 0;
+
+    await endTogetherOf(m.deps, SANG);
+    expect(m.emissions).toEqual([]);
+
+    await endTogetherOf(m.deps, PROCHE);
+    expect(m.emissions.map((e) => (e.data as { reason: string }).reason)).toEqual(['declined', 'declined']);
+  });
+});
+
+describe('#17043 — les charges inconnues sont refusées', () => {
+  it.each([
+    [togetherInvitePayloadSchema, { toUserId: HOTE, conversationId: CONV, attachmentId: VIDEO, extra: 1 }],
+    [togetherSessionPayloadSchema, { sessionId: SESSION_ID, userId: HOTE }],
+    [togetherSyncPayloadSchema, { sessionId: SESSION_ID, playing: true, positionMs: 1, rev: 3 }],
+  ])('une clé en trop est refusée', (schema, charge) => {
+    expect(schema.safeParse(charge).success).toBe(false);
+  });
+});
+
+describe('#17043 (audit) — l\'index par compte vit autant que la séance', () => {
+  it('après la durée de l\'invitation, la déconnexion coupe encore la séance', async () => {
+    const m = monde();
+    await inviter(m);
+    await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
+    const index = [...m.cache.entries.entries()].filter(([key]) => key.startsWith('together:user:'));
+    expect(index.map(([, e]) => e.ttl)).toEqual([TOGETHER_SESSION_TTL_SECONDS, TOGETHER_SESSION_TTL_SECONDS]);
+
+    m.avancer((TOGETHER_INVITE_TTL_SECONDS + 80) * 1000);
+    m.emissions.length = 0;
+    await endTogetherOf(m.deps, PROCHE);
+
+    expect(m.emissions.map((e) => e.event)).toEqual([SERVER_EVENTS.TOGETHER_ENDED, SERVER_EVENTS.TOGETHER_ENDED]);
+  });
+});
+
+describe('#17043 (audit) — une écriture en vol ne reprend pas l\'index d\'une invitation plus récente', () => {
+  it('une synchronisation lue avant la prise de B n\'efface pas l\'index de B : il désigne la séance survivante', async () => {
+    const m = monde();
+    await inviter(m);
+    await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
+    let secondeId = '';
+    m.cache.hooks.onSessionRead = async () => {
+      const ack = await inviter(m, PROCHE, AUDIO);
+      secondeId = ack.success ? ack.data.sessionId : '';
+    };
+
+    expect(await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 1 })).toEqual(INTROUVABLE);
+
+    expect(secondeId).not.toBe('');
+    expect(m.cache.entries.get(togetherPairKey(HOTE, PROCHE))?.value).toBe(secondeId);
+    expect(await joinTogether(m.deps, PROCHE, { sessionId: secondeId })).toMatchObject({ success: true });
+  });
+});
+
+describe('#17043 (contre-audit) — réserves levées', () => {
+  it('R1 : une seconde séance du même compte ne raccourcit pas l\'index de la première', async () => {
+    const m = monde();
+    await inviter(m);
+    await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
+    await inviter(m, SANG, AUDIO);
+    const indexHote = m.cache.entries.get([...m.cache.entries.keys()].find((key) => key.startsWith('together:user:') && JSON.parse(m.cache.entries.get(key)!.value).length === 2)!);
+    expect(indexHote?.ttl).toBe(TOGETHER_SESSION_TTL_SECONDS);
+
+    m.avancer(200_000);
+    m.emissions.length = 0;
+    await endTogetherOf(m.deps, HOTE);
+
+    expect(m.vers(PROCHE).map((e) => e.event)).toEqual([SERVER_EVENTS.TOGETHER_ENDED]);
+  });
+
+  it('R2 : l\'index de paire expiré avant la prolongation est recréé, le rejugement retrouve la séance', async () => {
+    const m = monde();
+    await inviter(m);
+    await joinTogether(m.deps, PROCHE, { sessionId: SESSION_ID });
+    m.cache.entries.delete(togetherPairKey(HOTE, PROCHE));
+
+    await syncTogether(m.deps, HOTE, { sessionId: SESSION_ID, playing: true, positionMs: 1 });
+    expect(m.cache.entries.get(togetherPairKey(HOTE, PROCHE))?.value).toBe(SESSION_ID);
+
+    await m.world.users.updateMany({ where: { id: PROCHE }, data: { blockedUserIds: [HOTE] } });
+    m.emissions.length = 0;
+    await rejudgeTogetherBetween(m.deps, { userA: HOTE, userB: PROCHE });
+    expect(m.emissions.map((e) => e.event)).toEqual([SERVER_EVENTS.TOGETHER_ENDED, SERVER_EVENTS.TOGETHER_ENDED]);
+  });
+
+  it('R2 bis : la fin libère l\'index par la libération gardée, jamais par un get puis del', async () => {
+    const m = monde();
+    const released: Array<[string, string]> = [];
+    const deps: TogetherRelayDeps = { ...m.deps, releasePair: async (key, id) => void released.push([key, id]) };
+    await inviteTogether(deps, HOTE, { toUserId: PROCHE, conversationId: CONV, attachmentId: VIDEO });
+    await leaveTogether(deps, HOTE, { sessionId: SESSION_ID });
+    expect(released).toEqual([[togetherPairKey(HOTE, PROCHE), SESSION_ID]]);
   });
 });

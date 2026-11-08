@@ -17,7 +17,10 @@ final class CallAudioSessionController: CallAudioSessionControllerProviding {
     nonisolated deinit {}
 
     private weak var call: CallManager?
-    let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
+    /// La file série UNIQUE de la session audio (#17038) : celle du
+    /// coordinateur média. Les écritures d'un appel et celles des lecteurs
+    /// s'exécutent dans l'ordre de leurs demandes, jamais en parallèle.
+    let audioSessionQueue = MediaSessionCoordinator.shared.sessionQueue
     /// One-shot stuck-muted fallback (§RC-2): armed when `.connected` is
     /// reached on iPhone/iPad before CallKit delivered `provider:didActivate:`.
     private var audioActivationFallbackTask: Task<Void, Never>?
@@ -63,9 +66,15 @@ final class CallAudioSessionController: CallAudioSessionControllerProviding {
         )
         let activation = CallAudioSessionPolicy.activation(usesCallKit: call.callUsesCallKit)
         if activation == true { audioSessionSelfActivated = true }
+        // Posé ICI, à la demande : une fin d'appel demandée juste après le
+        // remet à faux, et la configuration en file ne le relève plus.
+        CallManager.isAudioSessionExpectedActive = true
 
-        audioSessionQueue.sync {
-            CallManager.isAudioSessionExpectedActive = true
+        // #17038 — sur la file audio, sans que l'interface attende : la
+        // configuration est un aller-retour SYNCHRONE au serveur audio
+        // (1,69 s mesuré sur le fil principal). File série : `provider(_:didActivate:)`,
+        // la reprise d'interruption et la fin d'appel passent après elle.
+        audioSessionQueue.async {
             let session = RTCAudioSession.sharedInstance()
             Logger.calls.info("[AUDIO_SESS] lockForConfiguration")
             session.lockForConfiguration()
@@ -276,7 +285,8 @@ final class CallAudioSessionController: CallAudioSessionControllerProviding {
     /// fires, so this `[AUDIO_FALLBACK]` IS the activation path.
     func activateAudioSessionWithoutCallKit() {
         Logger.calls.warning("[AUDIO_FALLBACK] Mac (no CallKit didActivate) — activation manuelle de RTCAudioSession")
-        audioSessionQueue.sync {
+        // #17038 — sur la file audio, jamais le fil principal.
+        audioSessionQueue.async {
             let rtc = RTCAudioSession.sharedInstance()
             rtc.lockForConfiguration()
             do {

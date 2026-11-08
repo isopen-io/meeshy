@@ -23,6 +23,7 @@ function socketAvec(deps: Partial<TogetherHandlerDeps> & { caller?: { userId: st
   const listeners = new Map<string, Listener>();
   const socket = { id: 's1', on: (event: string, listener: Listener) => listeners.set(event, listener) };
   const calls: Array<[string, string, unknown]> = [];
+  const gone: string[] = [];
   const relayed = (name: string) => async (userId: string, data: unknown) => {
     calls.push([name, userId, data]);
     return { success: true } as never;
@@ -34,13 +35,34 @@ function socketAvec(deps: Partial<TogetherHandlerDeps> & { caller?: { userId: st
     join: deps.join ?? relayed('join'),
     sync: deps.sync ?? relayed('sync'),
     leave: deps.leave ?? relayed('leave'),
+    userGone: deps.userGone ?? (async (userId) => void gone.push(userId)),
   });
   const emit = (event: string, data: unknown) =>
     new Promise<unknown>((resolve) => listeners.get(event)!(data, resolve));
-  return { emit, calls };
+  const disconnect = () => listeners.get('disconnect')!();
+  return { emit, calls, gone, disconnect };
 }
 
 describe('la porte socket de « ensemble »', () => {
+  it('#17043 — un limiteur qui ne répond pas (null) ferme en « indisponible », jamais en « trop de gestes » ; aucun relais atteint ; quitter reste libre', async () => {
+    const s = socketAvec({ withinRate: async () => null });
+    for (const event of [CLIENT_EVENTS.TOGETHER_INVITE, CLIENT_EVENTS.TOGETHER_JOIN, CLIENT_EVENTS.TOGETHER_SYNC]) {
+      expect(await s.emit(event, {})).toMatchObject({ success: false, code: TOGETHER_ERROR_CODES.UNAVAILABLE });
+    }
+    expect(s.calls).toEqual([]);
+    expect(await s.emit(CLIENT_EVENTS.TOGETHER_LEAVE, {})).toEqual({ success: true });
+  });
+
+  it('#17043 — la fermeture d\'une socket de compte inscrit prévient le relais, pas celle d\'un invité', async () => {
+    const inscrit = socketAvec({});
+    inscrit.disconnect();
+    await Promise.resolve();
+    expect(inscrit.gone).toEqual([MOI]);
+    const invite = socketAvec({ caller: { userId: MOI, isAnonymous: true } });
+    invite.disconnect();
+    expect(invite.gone).toEqual([]);
+  });
+
   it.each([
     [CLIENT_EVENTS.TOGETHER_INVITE, 'invite'],
     [CLIENT_EVENTS.TOGETHER_JOIN, 'join'],

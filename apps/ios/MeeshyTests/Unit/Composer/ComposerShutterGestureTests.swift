@@ -93,3 +93,57 @@ final class ComposerShutterGestureTests: XCTestCase {
         XCTAssertEqual(ComposerShutterGesture.mode(locked: true), .handsFree)
     }
 }
+
+/// CAM-6 — les boutons de volume et le bouton Action déclenchent comme le rond.
+final class ComposerHardwareShutterTests: XCTestCase {
+    private func next(_ event: ComposerHardwareShutter.Event, _ press: ComposerHardwareShutter.Press,
+                      stage: ComposerSceneCameraStage = .armed, editing: Bool = false,
+                      allowsPhoto: Bool = true, allowsVideo: Bool = true)
+        -> (step: ComposerHardwareShutter.Step, press: ComposerHardwareShutter.Press) {
+        ComposerHardwareShutter.next(event, press: press, stage: stage, editing: editing,
+                                     allowsPhoto: allowsPhoto, allowsVideo: allowsVideo)
+    }
+
+    func test_shortPress_takesAPhoto() {
+        let appui = next(.pressed, .none)
+        XCTAssertEqual(appui.step, .nothing)
+        XCTAssertEqual(appui.press, .waiting)
+        let levee = next(.released, appui.press)
+        XCTAssertEqual(levee.step, .photo)
+        XCTAssertEqual(levee.press, .none)
+    }
+
+    func test_heldPress_filmsUntilReleased() {
+        let tenue = next(.heldLong, .waiting)
+        XCTAssertEqual(tenue.step, .film)
+        XCTAssertEqual(tenue.press, .filming)
+        XCTAssertEqual(next(.released, .filming, stage: .recording).step, .release)
+        XCTAssertEqual(next(.cancelled, .filming, stage: .recording).step, .release,
+                       "une interruption ferme la prise comme une levée")
+    }
+
+    func test_pressDuringALockedTake_stopsIt_andItsReleaseTakesNothing() {
+        let appui = next(.pressed, .none, stage: .recording)
+        XCTAssertEqual(appui.step, .stop)
+        XCTAssertEqual(next(.released, appui.press).step, .nothing,
+                       "la levée de l'appui qui a arrêté ne prend pas de photo")
+    }
+
+    func test_outsideAnArmedViewfinder_buttonsDoNothing() {
+        XCTAssertFalse(ComposerHardwareShutter.isActive(stage: .off, editing: false))
+        XCTAssertFalse(ComposerHardwareShutter.isActive(stage: .armed, editing: true))
+        XCTAssertTrue(ComposerHardwareShutter.isActive(stage: .armed, editing: false))
+        XCTAssertTrue(ComposerHardwareShutter.isActive(stage: .recording, editing: false))
+        XCTAssertEqual(next(.pressed, .none, editing: true).press, .spent)
+        XCTAssertEqual(next(.released, .spent, editing: true).step, .nothing)
+    }
+
+    func test_hostRefusingVideoOrPhoto_isRespected() {
+        XCTAssertEqual(next(.heldLong, .waiting, allowsVideo: false).step, .nothing)
+        XCTAssertEqual(next(.released, .waiting, allowsPhoto: false).step, .nothing)
+    }
+
+    func test_holdDelay_isTheOnScreenShutters() {
+        XCTAssertEqual(ComposerHardwareShutter.holdDelay, ComposerShutterGesture.holdToFilm)
+    }
+}

@@ -80,16 +80,13 @@ final class TalkieVoicePlayer: TalkieSink {
         releaseSessionIfIdle()
     }
 
+    /// Hors du fil principal (#17038) : la file de session du coordinateur.
     private func prepareSession() {
-        let session = AVAudioSession.sharedInstance()
-        if session.category == .soloAmbient {
-            try? session.setCategory(.ambient)
-        }
-        try? session.setActive(true)
+        MediaSessionCoordinator.shared.activateMixableVoicePlayback()
     }
 
     private func releaseSessionIfIdle() {
-        guard queues.isEmpty, AVAudioSession.sharedInstance().category == .ambient else { return }
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        guard queues.isEmpty else { return }
+        MediaSessionCoordinator.shared.releaseMixableVoicePlayback()
     }
 }

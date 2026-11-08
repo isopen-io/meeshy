@@ -8,6 +8,7 @@ import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { attachmentMediaSelect, attachmentProtectionSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
+import { editReadership } from '../socketio/editedAudience';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import { mergeTrackingLinksIntoMetadata } from '../services/messaging/messageLinks';
 import {
@@ -356,7 +357,18 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       // `mention:created` aux seuls ENTRANTS, dans leur salon PERSONNEL : la
       // diffusion qui suit ne fan qu'à `conversation:<id>`, où quelqu'un que
       // cette édition vient de nommer n'est pas forcément assis.
+      // Le PLANCHER D'HISTORIQUE. Ce site avait été OMIS au premier essai sur
+      // la foi d'un « c'est un chemin d'envoi, donc personne n'est sous
+      // plancher » — faux, et contredit par le commentaire quinze lignes plus
+      // haut : c'est la route que le client iOS emploie réellement pour
+      // ÉDITER. Elle appelle `reconcileEditedMentions` et
+      // `broadcastMessageMutation({ eventType: 'edited' })` dans le MÊME
+      // gestionnaire, si bien qu'elle avait son `message:edited` gardé et son
+      // `mention:created` nu.
       emitMentionCreated({
+        readership: await editReadership(prisma, message.conversationId, messageId, (err) =>
+          logger.error('Edit - edit readership unresolvable, mention withheld', err as Error),
+        ),
         io: socketIOHandler?.getManager()?.getIO(),
         newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
         messageId,

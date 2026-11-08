@@ -6,7 +6,10 @@
 
 /** Une invitation non acceptée s'éteint au bout de 2 minutes. */
 export const TOGETHER_INVITE_TTL_SECONDS = 120;
-/** Une séance rejointe dure au plus 4 heures, prolongée à chaque synchronisation. */
+/**
+ * Une séance dure au plus 4 heures DEPUIS SA CRÉATION (l'invitation) : chaque synchronisation
+ * la prolonge, jamais au-delà de ce plafond.
+ */
 export const TOGETHER_SESSION_TTL_SECONDS = 4 * 60 * 60;
 /** Une position de lecture au-delà de 24 h n'est pas un média de conversation. */
 export const TOGETHER_MAX_POSITION_MS = 24 * 60 * 60 * 1000;
