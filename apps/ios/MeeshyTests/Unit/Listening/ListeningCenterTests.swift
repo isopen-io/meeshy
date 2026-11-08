@@ -55,10 +55,10 @@ final class ListeningCenterTests: XCTestCase {
     func test_band_readOffTheMainActor_deliversTheServedBand() async {
         let rig = makeRig()
         rig.sut.receive(served(title: "Clair de lune", source: "Spotify"))
-        nonisolated(unsafe) let band = rig.sut.band(for: "alice")
+        let band = OffMainPublisher(publisher: rig.sut.band(for: "alice"))
 
         let first = await Task.detached { () -> AvatarListening? in
-            for await value in band.values { return value }
+            for await value in band.publisher.values { return value }
             return nil
         }.value
 
@@ -218,4 +218,9 @@ final class ListeningCenterTests: XCTestCase {
         XCTAssertTrue(AvatarListeningBand.isShown(avatarSize: AvatarContext.conversationHeaderExpanded.size))
         XCTAssertTrue(AvatarListeningBand.isShown(avatarSize: AvatarContext.profileSheet.size))
     }
+}
+
+/// Le publisher du centre n'est pas `Sendable` ; le témoin le remet à une tâche détachée pour le lire hors du fil principal.
+private struct OffMainPublisher: @unchecked Sendable {
+    let publisher: AnyPublisher<AvatarListening?, Never>
 }
