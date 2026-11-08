@@ -41,8 +41,8 @@ enum TextEditLabels {
         case .neonPink:    return String(localized: "story.textEdit.effect.neonPink", defaultValue: "Néon rose", bundle: .module)
         case .neonCyan:    return String(localized: "story.textEdit.effect.neonCyan", defaultValue: "Néon cyan", bundle: .module)
         case .neonViolet:  return String(localized: "story.textEdit.effect.neonViolet", defaultValue: "Néon violet", bundle: .module)
-        case .gold:        return String(localized: "story.textEdit.effect.gold", defaultValue: "Doré", bundle: .module)
-        case .fire:        return String(localized: "story.textEdit.effect.fire", defaultValue: "Braise", bundle: .module)
+        case .gold:        return String(localized: "story.textEdit.effect.gold", defaultValue: "Or", bundle: .module)
+        case .fire:        return String(localized: "story.textEdit.effect.flame", defaultValue: "Flamme", bundle: .module)
         case .halo:        return String(localized: "story.textEdit.effect.halo", defaultValue: "Auréole", bundle: .module)
         case .outline:     return String(localized: "story.textEdit.effect.outline", defaultValue: "Contour", bundle: .module)
         case .outlineLight: return String(localized: "story.textEdit.effect.outlineLight", defaultValue: "Contour clair", bundle: .module)
@@ -183,7 +183,7 @@ public struct TextEditToolOptions: View {
         case .fonts:              styleFamilyRow
         case .effects:            effectOptions
         case .colors:             colorOptions
-        case .weight:             weightSlider
+        case .weight:             weightSegments
         case .alignment:          alignRow
         case .language:           languageOptions
         case .backgrounds:        backgroundOptions
@@ -226,27 +226,35 @@ public struct TextEditToolOptions: View {
         }
     }
 
-    private var weightSlider: some View {
-        HStack(spacing: 10) {
-            Text("A")
-                .font(.system(size: 13, weight: .thin))
-                .foregroundStyle(.secondary)
-            Slider(
-                value: Binding(
-                    get: { Self.weightSliderValue(for: textObject) },
-                    set: { Self.applyingWeightSliderValue($0, to: &textObject) }
-                ),
-                in: 0...Double(StoryTextWeight.allCases.count - 1), step: 1
-            )
-            .tint(MeeshyColors.brandPrimary)
-            Text("A")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(.secondary)
-            Text(TextEditLabels.title(for: textObject.parsedFontWeight ?? .normal))
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 52)
+    /// **La graisse est un contrôle SEGMENTÉ** (#17112, panneau Aa de la vue
+    /// finale) : quatre crans nommés se lisent d'un regard et se choisissent
+    /// d'un tap, là où un curseur à quatre arrêts demandait de glisser à
+    /// l'aveugle. Le nom de chaque segment est ce que VoiceOver annonce.
+    private var weightSegments: some View {
+        Picker(String(localized: "story.textEdit.weight.title", defaultValue: "Graisse", bundle: .module),
+               selection: Binding(
+                   get: { Self.weightSegment(for: textObject) },
+                   set: { weight in
+                       Self.applyingWeightSegment(weight, to: &textObject)
+                       HapticFeedback.light()
+                   })) {
+            ForEach(StoryTextWeight.allCases, id: \.self) { weight in
+                Text(TextEditLabels.title(for: weight)).tag(weight)
+            }
         }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+    }
+
+    /// Le segment courant — « normal » quand le texte n'en porte pas, la même
+    /// valeur de repli que le curseur historique.
+    nonisolated static func weightSegment(for text: StoryTextObject) -> StoryTextWeight {
+        text.parsedFontWeight ?? .normal
+    }
+
+    nonisolated static func applyingWeightSegment(_ weight: StoryTextWeight,
+                                                  to text: inout StoryTextObject) {
+        text.fontWeight = weight.rawValue
     }
 
     /// **Grille chez l'hôte qui la demande, rangée partout ailleurs** (#5244).
@@ -306,7 +314,7 @@ public struct TextEditToolOptions: View {
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(StoryTextEffect.allCases, id: \.self) { effect in
+                    ForEach(StoryTextEffect.pickerChoices(keeping: textObject.parsedTextEffect), id: \.self) { effect in
                         effectChip(effect)
                     }
                 }

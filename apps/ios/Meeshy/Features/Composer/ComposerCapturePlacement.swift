@@ -53,9 +53,11 @@ nonisolated enum ComposerCapturePlacement {
         return framed ? ComposerSceneCameraFrame.cardRadius : 0
     }
 
-    /// Le bouton de taille : offert par un hôte à carte, et à tout selfie
-    /// éclairé par l'écran ; la retouche n'a qu'une taille.
+    /// Le bouton de taille : la caméra s'arme plein écran (A8, #17109), donc
+    /// seul le selfie éclairé par l'écran le garde — pour se réduire en scène
+    /// entourée de blanc, ou s'agrandir (#9566) ; la retouche n'a qu'une taille.
+    /// `hostHasCard` ne décide plus de son offre, seulement du rectangle.
     static func offersSizeToggle(hostHasCard: Bool, screenFlash: Bool, editing: Bool) -> Bool {
-        !editing && (hostHasCard || screenFlash)
+        !editing && screenFlash
     }
 }

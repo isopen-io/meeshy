@@ -21,6 +21,11 @@ jest.mock('../../../socketio/disconnectRevokedSessions', () => ({
   disconnectRevokedSessions: jest.fn(async () => 0),
 }));
 
+const cutTogetherWhere = jest.fn(async (_scope: unknown) => undefined);
+jest.mock('../../../services/together/togetherDeps', () => ({
+  cutTogetherWhere: (scope: unknown) => cutTogetherWhere(scope),
+}));
+
 jest.mock('../../../utils/password-hash', () => ({
   hashPassword: jest.fn(async () => '$2b$12$hash-de-test'),
 }));
@@ -195,6 +200,8 @@ describe('POST … /resolve — les effets', () => {
     // quatre catégories promises par `privacy.json` sont donc purgées.
     expect(res.json().data.dataPurged).toBe(true);
     expect(res.json().data.status).toBe('COMPLETED');
+    // #17022 — le compte n'existe plus : ses séances « ensemble » s'arrêtent dans ce geste.
+    expect(cutTogetherWhere).toHaveBeenCalledWith({ userId: expect.any(String) });
 
     await app.close();
   });
