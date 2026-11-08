@@ -21,7 +21,8 @@
  *    tous ces cas : il ne dit rien qu'on ne voie déjà.
  *
  * Les étapes 2 et 3 ne se jugent qu'APRÈS la loi : un inconnu n'apprend ni le
- * chiffrement d'une paire, ni la disponibilité de quelqu'un.
+ * chiffrement d'une paire, ni la disponibilité de quelqu'un. Le chiffrement et la
+ * présence servie se LISENT ensemble ; le verdict, lui, garde l'ordre ci-dessus.
  *
  * Une lecture qui échoue FERME (`TALKIE_UNAVAILABLE`) : une voix ne part pas sur
  * un doute.
@@ -138,12 +139,18 @@ export async function judgeTalkie(
   });
   if (!verdict.allowed) return verdict.reason === 'consent' ? BLOCKED : TALKIE_NOT_ALLOWED;
 
-  if (await pairHasE2eeDirectConversation(prisma, fromUserId, toUserId)) return E2EE;
+  // Le chiffrement de la paire et la présence servie se lisent ENSEMBLE (#17094) : le
+  // verdict garde son ordre, l'ouverture n'attend plus la somme des deux lectures.
+  const [encrypted, presenceShown] = await Promise.all([
+    pairHasE2eeDirectConversation(prisma, fromUserId, toUserId),
+    deps.presenceServed({ userId: fromUserId, role: sender.role }, toUserId),
+  ]);
+  if (encrypted) return E2EE;
 
   // La disponibilité (appel, Ne pas déranger, appareils connectés) n'est lue que si la
   // présence du destinataire est SERVIE à l'émetteur : sinon le même repli, quel que soit
   // l'état — le talkie ne devient pas un oracle de la présence que la cible a masquée.
-  if (!(await deps.presenceServed({ userId: fromUserId, role: sender.role }, toUserId))) return FALLBACK;
+  if (!presenceShown) return FALLBACK;
   const [busy, connected] = await Promise.all([inActiveCall(prisma, toUserId), deps.recipientConnected(toUserId)]);
   if (busy || !connected || isWithinDnd(prefs, now)) return FALLBACK;
   return OPEN;

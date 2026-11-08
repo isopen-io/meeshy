@@ -176,3 +176,28 @@ describe('#13935 — repli en message vocal', () => {
     expect(presenceServed).toHaveBeenCalledWith({ userId: MOI, role: 'USER' }, AUTRE);
   });
 });
+
+describe('#17094 — l’ouverture ne fait pas attendre ce qui peut se lire ensemble', () => {
+  it('le chiffrement de la paire et la présence servie se lisent EN MÊME TEMPS, une fois la loi passée', async () => {
+    const prisma = db({ level: 'CLOSE' });
+    let releaseE2ee: () => void = () => undefined;
+    const e2eeHeld = new Promise<void>((resolve) => { releaseE2ee = resolve; });
+    const lookup = prisma.participant.findMany;
+    prisma.participant.findMany = ((args: { where: Record<string, unknown> }) =>
+      ('conversation' in args.where ? e2eeHeld.then(() => lookup(args)) : lookup(args))) as typeof lookup;
+    const presenceServed = jest.fn(async () => true);
+    const recipientConnected = jest.fn(async () => true);
+
+    const judging = judgeTalkie({ prisma: prisma as unknown as TalkieGateDb, now: () => NOW, recipientConnected, presenceServed }, MOI, AUTRE);
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+    expect(presenceServed).toHaveBeenCalledTimes(1);
+    releaseE2ee();
+    expect(await judging).toEqual({ ok: true });
+  });
+
+  it('une paire chiffrée garde son refus même quand la présence n’est pas servie', async () => {
+    expect((await juger({ level: 'BLOOD', directMode: 'e2ee', presenceServed: false })).verdict)
+      .toMatchObject({ ok: false, code: 'TALKIE_E2EE_CONVERSATION' });
+  });
+});
