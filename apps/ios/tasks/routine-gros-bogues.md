@@ -73,7 +73,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : `apps/ios/tasks/routine-appels.md` (APP-6), #8480 (aperçu avant décroché).
 
 ## OPUS-6 — Aucune grille des tiers pour cadrer au viseur
-- Statut : rendu à la routine caméra (CAM-2, #16734), décision prise
+- Statut : fait (#16734)
 - Signalé par : routine caméra, le 2026-11-07
 - Point d'origine : CAM-2 (audit B4)
 - Constat : le viseur ne peint ni grille ni niveau. Le réglage demandé n'a nulle part où vivre : la rangée haute est pleine (`Meeshy/Features/Composer/ComposerCaptureTopRow.swift:36-38`, « la rangée tient alors sept contrôles, et la largeur d'un iPhone n'en porte pas huit »), le viseur n'a ni menu ni `⋯` (aucun `Menu`/`confirmationDialog` de réglage dans `ComposerCapture*`, `ComposerSceneCamera*`, `ComposerCamera*`), et l'app n'a pas d'écran de réglages caméra. Les seules préférences du viseur sont l'intensité du flash (`ComposerCaptureSession.swift:210`, `:642`) et l'astuce vue (`ComposerCaptureBottomRow.swift:33`).
