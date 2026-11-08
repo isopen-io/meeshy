@@ -193,24 +193,20 @@ export const RELATION_PRESENCE_FEATURES: ReadonlySet<RelationFeature> = new Set<
 ]);
 
 /**
- * CE QUE LE PRIVILÈGE D'ÉQUIPE N'OUVRE PAS (#16623). Entre deux comptes de l'équipe
- * (`isPlatformTeam`), le niveau effectif d'un OUTIL vaut Sang sans lien à construire.
- * Une AUDIENCE, elle, reste au lien réel : ces features diffusent du contenu ou font
- * naître un lien, et un rôle n'y fait entrer personne.
+ * CE QUE LE PRIVILÈGE D'ÉQUIPE N'OUVRE PAS (#16623, correction porteur 2026-11-08).
+ * Entre deux comptes de l'équipe (`isPlatformTeam`), le niveau effectif de TOUTE
+ * feature de cercle vaut Sang sans lien à construire : outils, audiences de contenu,
+ * notifications d'entourage et relais. Une seule reste fermée :
  *
- * - `audience.*` : une publication « Proches » ne part pas chez un collègue ;
- * - `notify.newContent`, `relay.*` : aucune notification d'entourage vers l'équipe ;
- * - `acquaintance.auto` : un rôle ne crée aucun lien.
+ * - `acquaintance.auto` : ce n'est pas une feature qu'on utilise, c'est la création
+ *   automatique d'un lien ; un rôle ne crée aucun lien.
+ *
+ * Le blocage, soi-même, `NOBODY`, le consentement et le bouclier des mineurs
+ * déclarés restent entiers, hors de ce privilège.
  *
  * Écrite en LITTÉRAL : les miroirs Swift et Kotlin relisent cette liste dans ce fichier.
  */
 export const RELATION_TEAM_CLOSED_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
-  'notify.newContent',
-  'relay.commentersOnMyPosts',
-  'relay.myCommentsElsewhere',
-  'audience.acquaintances',
-  'audience.close',
-  'audience.blood',
   'acquaintance.auto',
 ]);
 
