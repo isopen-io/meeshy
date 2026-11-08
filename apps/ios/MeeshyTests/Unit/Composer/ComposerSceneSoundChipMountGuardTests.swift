@@ -25,7 +25,7 @@ final class ComposerSceneSoundChipMountGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent("Meeshy/Features/Composer/\(chemin)")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     private var surface: String {

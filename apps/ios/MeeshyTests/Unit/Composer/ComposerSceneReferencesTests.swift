@@ -115,7 +115,7 @@ final class ComposerSceneReferencesTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Composer/\(chemin)")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     /// **Une vue sans consommateur n'a aucun site où rougir** (leçon 483). Les

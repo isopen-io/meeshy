@@ -215,6 +215,7 @@ enum AppSourceGuard {
         "StoryViewerView+Content.swift",
         "StoryTrayView.swift",
         "StoryViewerView.swift",
+        "ComposerSceneSurface.swift",
     ]
 
     /// Lit un fichier ; un type de `splitUnits` se lit comme son UNITÉ

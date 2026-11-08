@@ -47,7 +47,7 @@ final class ComposerSelectionMarkerWiringGuardTests: XCTestCase {
         for _ in 0..<4 { racine = racine.deletingLastPathComponent() }
         let url = racine.appendingPathComponent(
             "Meeshy/Features/Composer/ComposerSceneSurface.swift")
-        let brut = try String(contentsOf: url, encoding: .utf8)
+        let brut = try AppSourceGuard.text(at: url)
         XCTAssertTrue(brut.contains("struct ComposerSceneSurface"),
                       "ce n'est pas la surface de scène — la garde lirait à côté")
         return AppSourceGuard.stripComments(brut)

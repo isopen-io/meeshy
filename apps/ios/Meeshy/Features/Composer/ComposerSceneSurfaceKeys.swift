@@ -24,3 +24,10 @@ struct ComposerLowerFloorsHeightKey: PreferenceKey {
         value = max(value, nextValue())
     }
 }
+
+/// Le coin haut-gauche de la scène DESSINÉE, dans la fenêtre : le 9:16 de la
+/// couche, à l'échelle et au décalage où la levée le pose.
+struct ComposerSceneDrawnOriginKey: PreferenceKey {
+    static let defaultValue: CGPoint? = nil
+    static func reduce(value: inout CGPoint?, nextValue: () -> CGPoint?) { value = nextValue() ?? value }
+}
