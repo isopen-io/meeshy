@@ -38,7 +38,8 @@ extension CommentsSheetView {
     /// d'insertion — même id), rollback complet si le serveur refuse.
     /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
     /// La langue de la pastille est DÉCLARÉE au serveur (#6600), lue avant que
-    /// le champ vidé ne ramène la pastille au défaut.
+    /// le champ vidé ne ramène la pastille au défaut. Un refus
+    /// `COMMENTS_DISABLED` (#16930) ferme la feuille au lieu d'une erreur.
     func submitCommentEdit(_ target: FeedComment, text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !target.media.isEmpty else { return }
@@ -76,7 +77,10 @@ extension CommentsSheetView {
             } catch {
                 liveComments = snapshotComments
                 repliesMap = snapshotReplies
-                FeedbackToastManager.shared.showError(
+                // #16930 — le fil a été fermé entre-temps : la feuille se ferme
+                // tout de suite, comme après un envoi refusé.
+                let closed = closure.noteRefusal(error)
+                FeedbackToastManager.shared.showError(closed ? CommentsClosedNotice.text :
                     String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
             }
         }

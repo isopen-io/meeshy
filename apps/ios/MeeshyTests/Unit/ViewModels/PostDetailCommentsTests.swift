@@ -603,6 +603,42 @@ final class PostDetailCommentsTests: PostDetailViewModelTestCase {
         XCTAssertEqual(sut.comments.first?.content, "Avant", "refus serveur → rollback complet")
     }
 
+    /// #16930 — la passerelle refuse le PATCH d'un commentaire quand le fil est
+    /// fermé (`403 COMMENTS_DISABLED`) : la ligne revient, et la page se ferme
+    /// tout de suite, comme après un envoi refusé — sans attendre `post:updated`.
+    func test_updateComment_refusedBecauseCommentsAreClosed_rollsBackAndClosesThePage() async {
+        let mock = MockPostService()
+        mock.updateCommentResult = .failure(MeeshyError.forbidden(
+            reason: "Les commentaires sont désactivés",
+            body: Data(#"{"success":false,"error":"Les commentaires sont désactivés","code":"COMMENTS_DISABLED"}"#.utf8)))
+        let (sut, _) = makeSUT(postService: mock)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Avant")
+        sut.comments = [original]
+        XCTAssertFalse(sut.commentsClosed)
+
+        await sut.updateComment(original, content: "Après", effectFlags: 0, originalLanguage: nil)
+
+        XCTAssertEqual(sut.comments.first?.content, "Avant")
+        XCTAssertTrue(sut.commentsClosed)
+    }
+
+    func test_updateComment_refusedForAnotherReason_leavesThePageOpen() async {
+        let mock = MockPostService()
+        mock.updateCommentResult = .failure(MeeshyError.forbidden(reason: nil, body: nil))
+        let (sut, _) = makeSUT(postService: mock)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Avant")
+        sut.comments = [original]
+
+        await sut.updateComment(original, content: "Après", effectFlags: 0, originalLanguage: nil)
+
+        XCTAssertEqual(sut.comments.first?.content, "Avant")
+        XCTAssertFalse(sut.commentsClosed)
+    }
+
     /// #6600 — la langue de la pastille traverse le ViewModel jusqu'au service :
     /// corriger un commentaire la DÉCLARE, la passerelle ne la remet plus à null.
     func test_updateComment_withDeclaredLanguage_forwardsItToTheService() async {
