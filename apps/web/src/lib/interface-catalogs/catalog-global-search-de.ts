@@ -25,6 +25,7 @@ const de = {
   'type.reel': 'Reel',
   'type.story': 'Story',
   'translated': 'Übersetzt',
+  'message.blurred': 'Verschwommene Nachricht',
 } as const satisfies GlobalSearchCatalog;
 
 export default de;

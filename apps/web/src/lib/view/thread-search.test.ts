@@ -83,6 +83,17 @@ describe('searchHitOf — miroir de `buildSearchResult` iOS', () => {
     expect(hit.snippet).toEqual({ before: '', match: 'Bonjour', after: ' le matin' });
   });
 
+  test('#16957 — un message flouté sort VOILÉ : aucun caractère de son texte, seulement sa longueur', () => {
+    const hit = searchHitOf(row({ content: 'Bonjour à tous', isBlurred: true }), 'bonjour');
+    expect(hit).toMatchObject({ veiled: true, veilLength: 'Bonjour à tous'.length, snippet: { before: '', match: '', after: '' } });
+    expect(JSON.stringify(hit)).not.toContain('onjour');
+  });
+
+  test('#16957 — le bit BLURRED voile aussi, et un message ordinaire ne l’est pas', () => {
+    expect(searchHitOf(row({ content: 'Bonjour', effectFlags: 2 }), 'bonjour').veiled).toBe(true);
+    expect(searchHitOf(row({ content: 'Bonjour' }), 'bonjour')).toMatchObject({ veiled: false, veilLength: 0 });
+  });
+
   test('le nom retombe sur le compte quand le participant n’en porte pas', () => {
     const anonymous = { id: 'p-x', displayName: '', user: { id: 'u-x', username: 'xavier' } } as unknown as Participant;
     expect(searchHitOf(row({ content: 'salut', sender: anonymous }), 'sa').senderName).toBe('xavier');

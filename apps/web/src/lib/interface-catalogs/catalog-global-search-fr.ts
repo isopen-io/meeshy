@@ -23,6 +23,7 @@ const fr = {
   'type.reel': 'Réel',
   'type.story': 'Story',
   'translated': 'Traduit',
+  'message.blurred': 'Message flouté',
 } as const;
 
 export default fr;

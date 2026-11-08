@@ -25,6 +25,7 @@ const ar = {
   'type.reel': 'ريل',
   'type.story': 'قصة',
   'translated': 'مترجم',
+  'message.blurred': 'رسالة مموّهة',
 } as const satisfies GlobalSearchCatalog;
 
 export default ar;
