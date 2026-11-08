@@ -453,6 +453,7 @@ export class UserManagementService {
     userId: string,
     data: UpdateStatusDTO
   ): Promise<FullUser> {
+    if (data.isActive) await this.withdrawLeftoverRitualSharesBeforeReturn(userId);
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -498,6 +499,21 @@ export class UserManagementService {
     } catch (error) {
       logWarn(logger, `[UserManagement] Ritual shares not withdrawn after ${reason} of user ${userId}`, error);
     }
+  }
+
+  /**
+   * #14924 — le retrait au départ est best-effort : un compte qui REVIENT (réactivation,
+   * restauration) le rejoue d'abord, et une panne refuse le retour plutôt que de rendre
+   * un compte aux partages encore allumés. Un compte déjà actif n'est pas touché.
+   */
+  private async withdrawLeftoverRitualSharesBeforeReturn(userId: string): Promise<void> {
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true, deactivatedAt: true, deletedAt: true },
+    });
+    const away = current?.isActive === false || Boolean(current?.deactivatedAt) || Boolean(current?.deletedAt);
+    if (!away) return;
+    await withdrawRitualSharesOfUser(this.prisma, { userId });
   }
 
   /**
@@ -593,6 +609,7 @@ export class UserManagementService {
    * trois champs qu'elle pose sont effacés, pas seulement `isActive`.
    */
   async restoreUser(userId: string): Promise<FullUser> {
+    await this.withdrawLeftoverRitualSharesBeforeReturn(userId);
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
