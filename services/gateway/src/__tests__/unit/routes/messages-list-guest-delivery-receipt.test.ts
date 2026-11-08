@@ -1,241 +1,182 @@
 /**
- * #17077 — `GET …/messages` doit poser l'accusé de LIVRAISON d'un invité de
- * lien comme il le fait pour un inscrit.
+ * `GET /conversations/:id/messages` — **l'accusé de LIVRAISON d'un invité de
+ * lien partagé** (#17077).
  *
- * Le gate était `!authContext.isAnonymous`, et il ne protégeait RIEN :
- * `currentParticipantId` est résolu correctement pour les deux identités vingt
+ * Le rattrapage REST posait `markMessagesAsReceived` sous un
+ * `!authRequest.authContext.isAnonymous`. Ce gate ne protégeait RIEN :
+ * `currentParticipantId` est résolu correctement pour les DEUX identités vingt
  * lignes plus haut (`isAnonymousUser ? authContext.participantId :
  * currentParticipant?.id`), et `markMessagesAsReceived` prend un
- * `Participant.id`, pas un `User.id`. Le gate retirait donc la population des
- * invités de lien d'un des trois transports du même fait, sans une ligne pour
- * le justifier.
+ * `Participant.id`, pas un `User.id`. Il retirait simplement la population des
+ * invités de lien d'un des trois transports du même fait, **sans une ligne de
+ * commentaire pour le justifier**.
  *
  * C'est le cas de référence que le `CLAUDE.md` du gateway interdit nommément :
  * « Ne JAMAIS enterrer l'incomplétude sous un `if (!isAnonymous)` au site
- * d'appel : le gate donne l'omission pour une règle produit ». Cas réel cité
- * là-bas : `_emitUnreadCountsSnapshot` (cycle 61), qui a privé de pastille
- * exacte TOUTE cette population pendant des mois.
+ * d'appel : le gate donne l'omission pour une règle produit […] Cas réel :
+ * `_emitUnreadCountsSnapshot` (cycle 61) ».
  *
- * ─── Pourquoi le témoin doit être ANONYME ────────────────────────────────────
+ * PIÈGE ARMÉ, et il faut le dire : les deux AUTRES transports couvrent bien les
+ * sans-compte (`autoDeliverToOnlineRecipients`, et le drain de reconnexion, qui
+ * branchent tous deux sur les deux colonnes). Reste découvert l'invité qui lit
+ * l'historique par REST **sans socket authentifiée vivante** — page de lien
+ * avant l'authentification socket, coque en reprise : l'expéditeur reste à une
+ * seule coche pour lui. La précondition qui l'arme vraiment : le jour où l'un
+ * des deux chemins socket change de forme, cette porte est la SEULE REST, et
+ * elle est fermée aux invités.
  *
- * Écrit avec un JWT, il ne peut pas tomber : la branche inscrite passait déjà.
- * C'est la règle du rang (leçon 261) — un témoin se pose là où les deux formes
- * divergent, et ici elles ne divergent que sur l'identité sans compte.
- *
- * ─── Et l'accusé est DÉTACHÉ ─────────────────────────────────────────────────
- *
- * Le site est un `void (async () => …)().catch(…)`, délibérément
- * fire-and-forget (l'awaiter coûtait 50-130 ms sur l'endpoint le plus appelé).
- * Le témoin doit donc franchir la phase « check » de la boucle d'événements
- * après la réponse, sans quoi il mesure l'instant d'avant le dispatch — c'est
- * le patron que le `CLAUDE.md` du gateway donne pour les promesses détachées.
+ * **Un témoin écrit avec un JWT ne peut pas tomber** : l'inscrit passait déjà.
  *
  * @jest-environment node
  */
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import Fastify, { type FastifyInstance } from 'fastify';
 
-// Typé avec SES paramètres : sans eux, `jest.fn(async () => 1)` se déclare à
-// zéro argument et `toHaveBeenCalledWith(id, conv)` devient une erreur de
-// typecheck — invisible sous ts-jest (qui transpile sans types) et visible au
-// cliquet `tsc-never-loaded-tests-ratchet`, qui passe `tsconfig.test.json` sur
-// TOUS les fichiers de test. Et le type est ce qui dit ce qu'on assert : la clé
-// est un `Participant.id`, la seconde un `conversationId`.
-const markMessagesAsReceived = jest.fn(
-  async (_participantId: string, _conversationId: string): Promise<number> => 1,
-);
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import Fastify, { FastifyInstance } from 'fastify';
 
+jest.mock('../../../services/messaging/captureNoticeVisibility', () => ({
+  ...(jest.requireActual('../../../services/messaging/captureNoticeVisibility') as object),
+  hidingServedTo: async (_prisma: unknown, params: { hiding: unknown }) => params.hiding,
+  hidingServedToReader: async (_prisma: unknown, params: { hiding: unknown }) => params.hiding,
+}));
+jest.mock('../../../utils/logger-enhanced', () => ({
+  enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
+  performanceLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
+}));
+
+const mockResolveConversationId = jest.fn();
+jest.mock('../../../utils/conversation-id-cache', () => ({
+  resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
+}));
+
+const mockCanAccessConversation = jest.fn();
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
+
+jest.mock('../../../services/MentionService', () => ({
+  resolveMentionedUsers: jest.fn().mockResolvedValue([]),
+}));
+jest.mock('../../../services/message-translation/MessageTranslationService', () => ({
+  MessageTranslationService: jest.fn().mockImplementation(() => ({})),
+}));
+jest.mock('../../../services/messaging/MessagingService', () => ({
+  MessagingService: jest.fn().mockImplementation(() => ({})),
+}));
+jest.mock('../../../services/TrackingLinkService', () => ({
+  TrackingLinkService: jest.fn().mockImplementation(() => ({})),
+}));
+jest.mock('../../../services/attachments', () => ({
+  AttachmentService: jest.fn().mockImplementation(() => ({})),
+}));
+jest.mock('../../../services/PrivacyPreferencesService', () => ({
+  PrivacyPreferencesService: jest.fn().mockImplementation(() => ({})),
+}));
+
+const mockMarkMessagesAsReceived = jest.fn<any>().mockResolvedValue(undefined);
 jest.mock('../../../services/MessageReadStatusService', () => ({
-  MessageReadStatusService: class {
-    markMessagesAsReceived = markMessagesAsReceived;
+  MessageReadStatusService: jest.fn().mockImplementation(() => ({
+    markMessagesAsReceived: (...args: any[]) => mockMarkMessagesAsReceived(...args),
+  })),
+}));
+
+import { registerMessagesRoutes } from '../../../routes/conversations/messages';
+
+const CONV_ID = '507f1f77bcf86cd799439011';
+/** L'invité de lien : un `Participant.id`, et AUCUNE ligne `User`. */
+const GUEST_PARTICIPANT_ID = '507f1f77bcf86cd799439055';
+const REGISTERED_USER_ID = '507f1f77bcf86cd799439022';
+const REGISTERED_PARTICIPANT_ID = '507f1f77bcf86cd799439023';
+
+const message = () => ({
+  id: '507f1f77bcf86cd799439099',
+  conversationId: CONV_ID,
+  senderId: 'p-other',
+  content: 'Bonjour',
+  originalLanguage: 'fr',
+  messageType: 'text',
+  createdAt: new Date('2026-11-01T08:00:00Z'),
+  updatedAt: new Date('2026-11-01T08:00:00Z'),
+  attachments: [],
+  validatedMentions: null,
+  _count: { attachments: 0 },
+  sender: {
+    id: 'p-other', userId: null, displayName: 'Alice', avatar: null,
+    type: 'anonymous', role: 'member', language: 'fr', user: null, anonymousSession: null,
   },
-}));
+});
 
-// La PORTE d'accès est doublée — son propre comportement a ses témoins
-// ailleurs, et ce fichier mesure ce qui se passe APRÈS elle. C'est le patron
-// que le dépôt emploie déjà (`conversation-participants-decor-10713.test.ts`).
-jest.mock('../../../routes/conversations/utils/conversation-read-gate', () => ({
-  ouvrirConversationLisible: async () => 'aaaaaaaaaaaaaaaaaaaaaaaa',
-  REFUS_DE_LECTURE: {},
-}));
+async function read(identity: 'guest' | 'registered'): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  (app as any).socketIOHandler = { getManager: () => null };
+  (app as any).notificationService = null;
 
-const CONV = 'aaaaaaaaaaaaaaaaaaaaaaaa';
-const GUEST_PARTICIPANT = 'cccccccccccccccccccccccc';
-const MSG = 'bbbbbbbbbbbbbbbbbbbbbbbb';
-const REGISTERED_USER = 'eeeeeeeeeeeeeeeeeeeeeeee';
-const REGISTERED_PARTICIPANT = 'ffffffffffffffffffffffff';
-
-/** Le drain de la phase « check » : le dispatch détaché a eu lieu après elle. */
-const drainDetached = () => new Promise((resolve) => setImmediate(resolve));
-
-function makePrisma() {
-  const participantRow = {
-    id: GUEST_PARTICIPANT,
-    userId: null,
-    conversationId: CONV,
-    isActive: true,
-    role: 'member',
-    joinedAt: new Date('2026-01-01T00:00:00Z'),
-    shareLinkId: null,
-    historyVisibleFrom: null,
-    permissions: null,
-    anonymousSession: { rights: null },
-    user: null,
-  };
-  const messageRow = {
-    id: MSG,
-    conversationId: CONV,
-    senderId: 'dddddddddddddddddddddddd',
-    content: 'bonjour',
-    originalLanguage: 'fr',
-    messageType: 'text',
-    createdAt: new Date('2026-02-01T00:00:00Z'),
-    updatedAt: new Date('2026-02-01T00:00:00Z'),
-    isEdited: false,
-    deletedAt: null,
-    translations: {},
-    attachments: [],
-    sender: { id: 'dddddddddddddddddddddddd', userId: null, displayName: 'Hôte', avatar: null, role: 'creator' },
-  };
-  return {
-    conversation: {
-      findFirst: jest.fn(async () => ({ id: CONV, isActive: true, type: 'group' })),
-      findUnique: jest.fn(async () => ({ id: CONV, isActive: true, type: 'group' })),
-    },
+  const prisma: any = {
     participant: {
-      findFirst: jest.fn(async () => participantRow),
-      findMany: jest.fn(async () => [participantRow]),
-    },
-    conversationShareLink: {
-      findFirst: jest.fn(async () => null),
-      findMany: jest.fn(async () => []),
+      findFirst: jest.fn().mockResolvedValue(
+        identity === 'registered'
+          ? { id: REGISTERED_PARTICIPANT_ID, userId: REGISTERED_USER_ID, isActive: true }
+          : null,
+      ),
     },
     message: {
-      findFirst: jest.fn(async () => null),
-      findMany: jest.fn(async () => [messageRow]),
-      count: jest.fn(async () => 1),
+      count: jest.fn().mockResolvedValue(1),
+      findMany: jest.fn().mockResolvedValue([message()]),
     },
-    user: { findFirst: jest.fn(async () => null) },
-    conversationPreference: { findMany: jest.fn(async () => []) },
-    userConversationPreferences: { findFirst: jest.fn(async () => null) },
+    user: { findFirst: jest.fn().mockResolvedValue(null) },
   };
-}
 
-async function buildApp(
-  prisma: ReturnType<typeof makePrisma>,
-  identity: 'guest' | 'registered' = 'guest',
-): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
-  // `optionalAuth` est le hook que la route reçoit : on y pose l'identité SANS
-  // COMPTE exactement comme le middleware unifié le fait pour un invité de lien
-  // (`authContext.userId` porte alors un `Participant.id`).
-  const optionalAuth = async (request: Record<string, unknown>) => {
-    request.authContext = identity === 'guest'
+  const auth = async (req: any) => {
+    req.authContext = identity === 'guest'
       ? {
           type: 'anonymous',
+          isAuthenticated: true,
           isAnonymous: true,
-          participantId: GUEST_PARTICIPANT,
-          userId: GUEST_PARTICIPANT,
-          hasFullAccess: false,
+          userId: GUEST_PARTICIPANT_ID,
+          participantId: GUEST_PARTICIPANT_ID,
         }
       : {
           type: 'registered',
+          isAuthenticated: true,
           isAnonymous: false,
-          userId: REGISTERED_USER,
-          registeredUser: { id: REGISTERED_USER },
-          hasFullAccess: true,
+          userId: REGISTERED_USER_ID,
+          registeredUser: { id: REGISTERED_USER_ID, role: 'USER' },
         };
   };
-  const { registerMessagesListRoute } = await import('../../../routes/conversations/messages-list');
-  registerMessagesListRoute(app as never, prisma as never, optionalAuth);
+
+  registerMessagesRoutes(app, prisma, {} as any, auth, auth);
   await app.ready();
+  const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/messages` });
+  expect(res.statusCode).toBe(200);
+  // L'accusé est en fire-and-forget : il part APRÈS la réponse.
+  await new Promise((resolve) => setImmediate(resolve));
   return app;
 }
 
-describe('#17077 — l’accusé de livraison d’un invité de lien sur `GET …/messages`', () => {
-  let prisma: ReturnType<typeof makePrisma>;
-
+describe("l'accusé de livraison du rattrapage REST atteint aussi les invités (#17077)", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    markMessagesAsReceived.mockImplementation(async () => 1);
-    prisma = makePrisma();
+    mockMarkMessagesAsReceived.mockClear();
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
   });
 
-  it('pose l’accusé pour le `Participant.id` de l’invité', async () => {
-    const app = await buildApp(prisma);
-
-    const res = await app.inject({
-      method: 'GET',
-      url: `/conversations/${CONV}/messages`,
-      headers: { 'x-session-token': 'tok-invite' },
-    });
-
-    expect(res.statusCode).toBe(200);
-    await drainDetached();
-
-    // La clé est un `Participant.id` — jamais un `User.id`, que cet invité n'a
-    // pas. C'est précisément ce que le gate retiré rendait inatteignable.
-    expect(markMessagesAsReceived).toHaveBeenCalledWith(GUEST_PARTICIPANT, CONV);
-
-    await app.close();
+  it("un invité de lien marque ses messages reçus, sous son `Participant.id`", async () => {
+    const app = await read('guest');
+    try {
+      expect(mockMarkMessagesAsReceived).toHaveBeenCalledWith(GUEST_PARTICIPANT_ID, CONV_ID);
+    } finally {
+      await app.close();
+    }
   });
 
-  /**
-   * NON-RÉGRESSION, et elle n'est pas décorative : sans elle, le témoin
-   * ci-dessus ne distingue pas « les invités sont servis » de « l'accusé part
-   * pour n'importe qui ». C'est la branche qui marchait DÉJÀ, et le lot ne doit
-   * pas l'avoir déplacée.
-   */
-  it('sert toujours l’inscrit, sous son propre `Participant.id`', async () => {
-    (prisma.participant.findFirst as jest.Mock<any>).mockImplementation(async () => ({
-      id: REGISTERED_PARTICIPANT,
-      userId: REGISTERED_USER,
-      conversationId: CONV,
-      isActive: true,
-      role: 'member',
-      joinedAt: new Date('2026-01-01T00:00:00Z'),
-      shareLinkId: null,
-      historyVisibleFrom: null,
-      permissions: null,
-      anonymousSession: null,
-      user: { role: 'USER' },
-    }));
-    const app = await buildApp(prisma, 'registered');
-
-    const res = await app.inject({
-      method: 'GET',
-      url: `/conversations/${CONV}/messages`,
-      headers: { authorization: 'Bearer jeton' },
-    });
-
-    expect(res.statusCode).toBe(200);
-    await drainDetached();
-
-    // Sous le `Participant.id` de l'inscrit, pas son `User.id` : les deux
-    // espaces d'ids ne se croisent jamais, et c'est la ligne `Participant` que
-    // l'accusé référence.
-    expect(markMessagesAsReceived).toHaveBeenCalledWith(REGISTERED_PARTICIPANT, CONV);
-
-    await app.close();
-  });
-
-  it('n’enfile aucun accusé quand la page est VIDE', async () => {
-    (prisma.message.findMany as jest.Mock<any>).mockImplementation(async () => []);
-    const app = await buildApp(prisma);
-
-    const res = await app.inject({
-      method: 'GET',
-      url: `/conversations/${CONV}/messages`,
-      headers: { 'x-session-token': 'tok-invite' },
-    });
-
-    expect(res.statusCode).toBe(200);
-    await drainDetached();
-
-    // `messages.length > 0` est la seule condition qui reste, et elle doit
-    // rester : un accusé sur une page vide n'accuse rien.
-    expect(markMessagesAsReceived).not.toHaveBeenCalled();
-
-    await app.close();
+  // NÉGATIF, vert des deux côtés : l'inscrit passait déjà. Il est ici pour
+  // qu'un correctif ne puisse pas se payer en déplaçant le trou.
+  it('un inscrit marque les siens, sous son `Participant.id` à lui', async () => {
+    const app = await read('registered');
+    try {
+      expect(mockMarkMessagesAsReceived).toHaveBeenCalledWith(REGISTERED_PARTICIPANT_ID, CONV_ID);
+    } finally {
+      await app.close();
+    }
   });
 });

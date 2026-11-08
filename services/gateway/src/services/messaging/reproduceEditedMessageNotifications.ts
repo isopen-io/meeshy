@@ -250,11 +250,33 @@ export async function reproduceEditedMessageNotifications(
     // L'édition PURGE `Message.translations` (le pipeline retraduit le nouveau
     // texte). La traduction embarquée ici décrit donc l'ANCIEN texte — et c'est
     // elle que le Prisme affiche EN PRIORITÉ, si bien que la laisser
-    // remplacerait le nouveau message par l'ancien, traduit. La purge vise ces
-    // deux clés seulement ; le reste du contexte (conversation, pièces jointes,
-    // horodatage) décrit le message et non son texte.
+    // remplacerait le nouveau message par l'ancien, traduit.
     delete context['translatedContent'];
     delete context['translatedLanguage'];
+
+    // #17082 — et le TEXTE d'avant, que la purge laissait. Le commentaire
+    // ci-dessus affirmait jusqu'ici que « le reste du contexte (conversation,
+    // pièces jointes, horodatage) décrit le message et NON SON TEXTE » : c'était
+    // vrai quand il a été écrit, et le cycle 124 l'a rendu faux en ajoutant
+    // `messageContent` + `messageOriginalLanguage` — le contenu ORIGINAL
+    // pré-enregistré pour la bulle que la NSE grave au démarrage à froid
+    // (`prePersistedMessageFields`).
+    //
+    // **C'est le commentaire qui rendait l'autre moitié invisible** : on ne
+    // cherche pas un champ de texte dans un contexte dont on vient de lire
+    // qu'il n'en porte pas. Un commentaire qui ÉNONCE une contrainte est une
+    // AFFIRMATION, et se vérifie comme telle.
+    //
+    // Ce que la laisser coûtait : la ligne `Notification` gardait indéfiniment
+    // le texte que l'auteur avait précisément édité pour le retirer. Aucun
+    // client ne lit ce champ par REST aujourd'hui — c'est donc une RÉTENTION,
+    // pas une fuite servie, et un piège pour le prochain lot qui le câblera.
+    //
+    // Les deux partent ENSEMBLE : une étiquette de langue sans son texte
+    // décrirait la langue d'un contenu absent, ce qui est pire qu'inutile pour
+    // un lecteur qui en déduirait une langue d'origine.
+    delete context['messageContent'];
+    delete context['messageOriginalLanguage'];
 
     // #14309 — le corps est une SYNTHÈSE : seule la longueur du texte change,
     // et l'aperçu persisté (que les clients in-app préfèrent au corps) le suit.

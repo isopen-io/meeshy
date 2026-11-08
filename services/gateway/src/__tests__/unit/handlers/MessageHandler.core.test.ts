@@ -4026,7 +4026,7 @@ describe('MessageHandler.handleMessageDelete', () => {
     await handler.handleMessageDelete(socket, makeDeleteData(), callback);
 
     expect(prisma.message.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: message.id },
+      where: { id: message.id, deletedAt: null },
       data: expect.objectContaining({ deletedAt: expect.any(Date) }),
     }));
     expect(io._emit).toHaveBeenCalledWith('message:deleted', expect.objectContaining({

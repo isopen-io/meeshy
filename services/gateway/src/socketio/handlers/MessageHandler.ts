@@ -109,6 +109,7 @@ import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmiss
 import { writeGuardedMessageEdit } from '../../services/messaging/messageEditWrite';
 import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
+import { softDeleteMessage } from '../../services/messaging/softDeleteMessage';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -1138,11 +1139,16 @@ export class MessageHandler {
         );
       }
 
-      // Soft delete: atomically clear translations and set deletedAt in one write
-      await this.prisma.message.update({
-        where: { id: validated.messageId },
-        data: { translations: null, deletedAt: new Date() },
-      });
+      // #17079 — le retrait et sa garde OPTIMISTE, par leur site unique.
+      // L'audit ne nommait que le transport REST ; celui-ci portait le même
+      // trou, et c'est le transport que le dépôt appelle « primaire ». Deux
+      // suppressions CONCURRENTES franchissaient toutes deux la lecture
+      // d'amont et appliquaient toutes deux les effets du retrait, dont un
+      // décompte NON idempotent.
+      if (await softDeleteMessage(this.prisma, validated.messageId, { translations: null, deletedAt: new Date() }) === 'already-deleted') {
+        this._sendGenericError(callback, 'Message not found', socket);
+        return;
+      }
 
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
       // désactivation des `/l/<token>` que ce message emporte. La liste vit

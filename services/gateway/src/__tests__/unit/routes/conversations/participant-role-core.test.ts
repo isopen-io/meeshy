@@ -135,6 +135,116 @@ beforeEach(() => {
   mockResolveConversationId.mockReset().mockResolvedValue(CONV_ID);
 });
 
+/**
+ * **Reposer le MÊME rang n'est pas un geste** (#17078).
+ *
+ * Le noyau n'a jamais comparé le rang demandé au rang courant : un `PATCH`
+ * rejoué écrivait une ligne identique, diffusait `participant:role-updated` à
+ * toute la salle **sans delta**, et poussait une notification dont
+ * `previousRole === newRole` — « X vous a nommé administrateur » pour un geste
+ * qui n'a rien changé.
+ *
+ * La garde d'idempotence existe sur la jumelle la plus proche
+ * (`participant-ban-core` refuse 400 « déjà banni ») et pas ici : « une garde
+ * posée sur un chemin se lit comme posée sur le SUJET ».
+ *
+ * ─── Pourquoi un 200 IDEMPOTENT et non le 400 de la jumelle ─────────────────
+ *
+ * Un bannissement est un acte de MODÉRATION : son refus informe l'acteur que
+ * quelqu'un d'autre l'a déjà fait, ce qui est une information utile. Un rang
+ * déjà au rang demandé est l'ÉTAT QUE L'APPELANT A DEMANDÉ : lui rendre une
+ * erreur ferait échouer un geste réussi — et le rejeu vient d'un retry après
+ * délai, d'un drain d'outbox ou d'un double tap, jamais d'une intention de
+ * conflit.
+ *
+ * **Les témoins portent le REJEU** : au rang nominal (un vrai changement), la
+ * forme juste et le défaut rendent le MÊME verdict.
+ */
+describe('reposer le même rang n\'écrit, ne diffuse et ne notifie rien (#17078)', () => {
+  const avis = () => ({ createMemberRoleChangedNotification: jest.fn<any>().mockResolvedValue(undefined) });
+
+  it('un rejeu n\'écrit pas, ne diffuse pas, ne notifie pas — et répond quand même', async () => {
+    const prisma = fabriquerPrisma({
+      cible: {
+        id: CIBLE_PART_ID, userId: CIBLE_USER_ID, role: 'moderator', isActive: true,
+        leftAt: null, bannedAt: null, displayName: 'Bob', shareLinkId: null,
+      },
+    });
+    const socket = fabriquerSocket();
+    const notifications = avis();
+
+    const verdict = await changerRangDeParticipant({
+      prisma: prisma as any,
+      conversationIdentifier: CONV_ID,
+      targetKey: CIBLE_USER_ID,
+      role: 'moderator',
+      currentUserId: ACTEUR_ID,
+      viewer: null,
+      socketIO: socket.passerelle as any,
+      notifications: notifications as any,
+    });
+
+    expect(verdict.genre).toBe('ok');
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+    expect(socket.emissions).toEqual([]);
+    expect(notifications.createMemberRoleChangedNotification).not.toHaveBeenCalled();
+  });
+
+  it('la casse du rang demandé ne fabrique pas un faux changement', async () => {
+    // `member` → `MEMBER` : la casse seule change. Un rang PLUS ÉLEVÉ se
+    // heurterait à la règle d'autorité entre pairs, qui est une AUTRE règle et
+    // rendrait un refus — donc un témoin qui ne verrait rien de l'idempotence.
+    const prisma = fabriquerPrisma({
+      cible: {
+        id: CIBLE_PART_ID, userId: CIBLE_USER_ID, role: 'member', isActive: true,
+        leftAt: null, bannedAt: null, displayName: 'Bob', shareLinkId: null,
+      },
+    });
+    const socket = fabriquerSocket();
+
+    const verdict = await changerRangDeParticipant({
+      prisma: prisma as any,
+      conversationIdentifier: CONV_ID,
+      targetKey: CIBLE_USER_ID,
+      role: 'MEMBER',
+      currentUserId: ACTEUR_ID,
+      viewer: null,
+      socketIO: socket.passerelle as any,
+      notifications: null,
+    });
+
+    expect(verdict.genre).toBe('ok');
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+    expect(socket.emissions).toEqual([]);
+  });
+
+  // NÉGATIF, vert des deux côtés : un vrai changement écrit, diffuse et
+  // notifie. Il ne peut pas voir le défaut — c'est pourquoi les deux témoins
+  // ci-dessus portent le rejeu — et il interdit que le correctif se paie en
+  // supprimant le geste.
+  it('un changement RÉEL écrit, diffuse et notifie', async () => {
+    const prisma = fabriquerPrisma();
+    const socket = fabriquerSocket();
+    const notifications = avis();
+
+    const verdict = await changerRangDeParticipant({
+      prisma: prisma as any,
+      conversationIdentifier: CONV_ID,
+      targetKey: CIBLE_USER_ID,
+      role: 'moderator',
+      currentUserId: ACTEUR_ID,
+      viewer: null,
+      socketIO: socket.passerelle as any,
+      notifications: notifications as any,
+    });
+
+    expect(verdict.genre).toBe('ok');
+    expect(prisma.participant.update).toHaveBeenCalledTimes(1);
+    expect(socket.emissions.map((e) => e.event)).toContain('participant:role-updated');
+    expect(notifications.createMemberRoleChangedNotification).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('changerRangDeParticipant — appelé DIRECTEMENT, sans Fastify (#4713)', () => {
   it('refuse un rang inconnu par un 400, avant toute lecture', async () => {
     const prisma = fabriquerPrisma();

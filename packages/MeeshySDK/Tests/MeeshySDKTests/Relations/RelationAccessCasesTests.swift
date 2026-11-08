@@ -165,6 +165,12 @@ struct RelationAccessCasesTests {
         #expect(Set(RelationFeature.allCases.filter(\.isClosedToTeam).map(\.rawValue)) == closed)
     }
 
+    @Test func theTeamMinorApartSetIsTheOneOfTheTypeScriptTable() throws {
+        let apart = try featureSet(named: "RELATION_TEAM_MINOR_APART_FEATURES")
+        #expect(!apart.isEmpty)
+        #expect(Set(RelationFeature.allCases.filter(\.isMinorApartForTeam).map(\.rawValue)) == apart)
+    }
+
     @Test func theTeamIsModeratorAdminAndBigboss_neverAuditNorAnalyst() {
         #expect(Set(PlatformRole.allCases.filter(\.isTeam)) == [.moderator, .admin, .bigboss])
     }
