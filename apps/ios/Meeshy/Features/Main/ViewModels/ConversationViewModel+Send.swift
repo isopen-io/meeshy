@@ -458,7 +458,7 @@ extension ConversationViewModel {
         do {
             try await offlineQueue.retryByClientMessageId(messageId)
             await sendCoordinator.markRetrying(localId: messageId)
-        } catch OfflineQueueError.itemInFlight { await sendCoordinator.markRetrying(localId: messageId) } catch { // #16749 — un dispatcher porte DÉJÀ la ligne : l'envoi part, donc la bulle le dit au lieu d'inviter à retaper, le geste même qui doublait le téléversement. Sur UNE ligne parce que cette unité est à 2,6× son plafond de cohésion et que le dépôt interdit d'y ajouter.
+        } catch OfflineQueueError.itemInFlight { await sendCoordinator.markRetrying(localId: messageId) } catch { // #16749
             Logger.messages.error("retryMessage outbox reset failed: \(error.localizedDescription)")
         }
         await OutboxFlushTrigger.flushNow()
