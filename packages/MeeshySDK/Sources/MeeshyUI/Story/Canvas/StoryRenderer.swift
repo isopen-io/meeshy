@@ -680,27 +680,15 @@ extension StoryRenderer {
         if let background = slide.effects.background {
             switch StoryBackgroundValue.parse(background) {
             case .gradient(let a, let b):
-                if let c1 = uiColor(fromHex: a), let c2 = uiColor(fromHex: b) {
+                if let c1 = HexColor(hex: a)?.uiColor, let c2 = HexColor(hex: b)?.uiColor {
                     return .gradient(colors: [c1, c2], direction: .topLeftToBottomRight)
                 }
             case .hex(let hex):
-                if let color = uiColor(fromHex: hex) {
+                if let color = HexColor(hex: hex)?.uiColor {
                     return .solidColor(color)
                 }
             }
         }
         return .solidColor(.black)
-    }
-
-    // MARK: Private helpers
-
-    private static func uiColor(fromHex hex: String) -> UIColor? {
-        var s = hex
-        if s.hasPrefix("#") { s.removeFirst() }
-        guard let v = UInt32(s, radix: 16), s.count == 6 else { return nil }
-        let r = CGFloat((v >> 16) & 0xff) / 255
-        let g = CGFloat((v >> 8) & 0xff) / 255
-        let b = CGFloat(v & 0xff) / 255
-        return UIColor(red: r, green: g, blue: b, alpha: 1)
     }
 }

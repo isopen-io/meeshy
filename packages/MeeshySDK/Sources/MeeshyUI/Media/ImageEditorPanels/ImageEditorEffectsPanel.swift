@@ -1,16 +1,13 @@
 import MeeshySDK
 import SwiftUI
 
-// MARK: - Effects Panel
-
 struct ImageEditorEffectsPanel: View {
     @ObservedObject var viewModel: ImageEditorViewModel
-    let accentColor: String
+    let accent: Color
 
     @ResolvedThemePalette private var theme
 
     private var isDark: Bool { theme.mode.isDark }
-    private var accent: Color { Color(hex: accentColor) }
 
     var body: some View {
         let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]

@@ -1,13 +1,11 @@
 import MeeshySDK
 import SwiftUI
 
-// MARK: - Crop Panel
-
 struct ImageEditorCropPanel: View {
-    let mode: ImageEditorMode
+    let isPro: Bool
     let accentColor: String
     @Binding var cropRatio: CropRatio
-    @Binding var cropDirty: Bool
+    let onRatioPicked: () -> Void
     let onRotate: (Bool) -> Void
     let onFlip: (Bool) -> Void
 
@@ -33,7 +31,7 @@ struct ImageEditorCropPanel: View {
                                label: String(localized: "media.editor.rotateRight", defaultValue: "Pivoter \u{00E0} droite", bundle: .module)) {
                     onRotate(true)
                 }
-                if mode.isPro {
+                if isPro {
                     geometryButton("arrow.left.arrow.right",
                                    label: String(localized: "media.editor.flipH", defaultValue: "Miroir horizontal", bundle: .module)) {
                         onFlip(true)
@@ -54,7 +52,7 @@ struct ImageEditorCropPanel: View {
     }
 
     private var cropRatios: [CropRatio] {
-        mode.isPro
+        isPro
             ? [.free, .square, .ratio4x3, .ratio16x9, .ratio9x16]
             : [.free, .square, .ratio4x3, .ratio16x9]
     }
@@ -63,7 +61,7 @@ struct ImageEditorCropPanel: View {
         let isSelected = cropRatio == ratio
         return Button {
             HapticFeedback.light()
-            cropDirty = true
+            onRatioPicked()
             withAnimation(.spring(response: 0.26, dampingFraction: 0.82)) {
                 cropRatio = ratio
             }

@@ -434,7 +434,10 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // `CallTranscriptSection.swift` (1) peint le nom du locuteur dans le fil d'après l'appel (`CallSpeakerColor.hex(for:mode:)`).
 // C'est l'identité d'une PERSONNE, dérivée de son identifiant (même graine que le liseré de sa vignette), pas la
 // couleur d'une conversation : `accentColor` n'en dit rien. Valeur MESURÉE le 2026-11-07 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 475;
+// 475 -> 469 (2026-11-08, #16901) : `StorySlideRenderer.swift` (6) ne décode plus ses fonds et sa couleur de texte par
+// son `UIColor(hex:)` privé (que ce scanner compte comme `Color(hex:`) mais par `HexColor(hex:)?.uiColor`, la source
+// unique du SDK. Aucune couleur en dur n'est ajoutée ailleurs. Valeur MESURÉE le 2026-11-08 en local.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 469;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

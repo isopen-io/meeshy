@@ -1,16 +1,11 @@
 import MeeshySDK
 import SwiftUI
-import UIKit
-
-// MARK: - Filters Panel
 
 struct ImageEditorFiltersPanel: View {
     @ObservedObject var viewModel: ImageEditorViewModel
-    let accentColor: String
+    let accent: Color
 
     @ResolvedThemePalette private var theme
-
-    private var accent: Color { Color(hex: accentColor) }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {

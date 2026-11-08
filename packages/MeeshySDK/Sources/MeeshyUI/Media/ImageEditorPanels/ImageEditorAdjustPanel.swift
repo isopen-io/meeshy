@@ -1,15 +1,11 @@
 import MeeshySDK
 import SwiftUI
 
-// MARK: - Adjust Panel
-
 struct ImageEditorAdjustPanel: View {
     @ObservedObject var viewModel: ImageEditorViewModel
-    let accentColor: String
+    let accent: Color
 
     @ResolvedThemePalette private var theme
-
-    private var accent: Color { Color(hex: accentColor) }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {

@@ -200,7 +200,7 @@ public struct MeeshyImageEditorView: View {
     private func cropCanvas(in size: CGSize) -> some View {
         let backdrop = cropBackdrop ?? viewModel.working
         let area = CGSize(width: max(size.width - 32, 80), height: max(size.height - 32, 80))
-        let displayRect = Self.fittedRect(for: backdrop.size, in: area)
+        let displayRect = ImageEditorCropGeometry.fittedRect(for: backdrop.size, in: area)
 
         return ZStack {
             Image(uiImage: backdrop)
@@ -363,100 +363,20 @@ public struct MeeshyImageEditorView: View {
     // MARK: - Controller Panel
 
     private func controllerPanel(for tool: EditorTool) -> some View {
-        VStack(spacing: MeeshySpacing.md) {
-            controllerHandle
-            controllerHeader(for: tool)
+        ImageEditorControllerPanel(
+            tool: tool,
+            mode: viewModel.mode,
+            canUndo: viewModel.canUndo,
+            canRedo: viewModel.canRedo,
+            accentColor: accentColor,
+            drag: $controllerDrag,
+            onSelect: { selectTool($0) },
+            onUndo: { viewModel.undo() },
+            onRedo: { viewModel.redo() },
+            onClose: { closeController() }
+        ) {
             toolContent(for: tool)
         }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.sm)
-        .padding(.bottom, MeeshySpacing.mdPlus)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
-                        .strokeBorder(accent.opacity(0.18), lineWidth: MeeshyBorder.hairline)
-                )
-                .shadow(color: .black.opacity(isDark ? 0.45 : 0.16), radius: 16, y: -4)
-        )
-        .padding(.horizontal, MeeshySpacing.sm)
-        .padding(.bottom, MeeshySpacing.sm)
-        .frame(maxWidth: 620)
-        .frame(maxWidth: .infinity)
-        .offset(y: max(controllerDrag, 0))
-    }
-
-    private var controllerHandle: some View {
-        Capsule()
-            .fill(theme.textMuted.opacity(0.6))
-            .frame(width: 40, height: 5)
-            .frame(maxWidth: .infinity)
-            .frame(height: 18)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onChanged { controllerDrag = $0.translation.height }
-                    .onEnded { value in
-                        if value.translation.height > 70 {
-                            closeController()
-                        }
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            controllerDrag = 0
-                        }
-                    }
-            )
-    }
-
-    private func controllerHeader(for tool: EditorTool) -> some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            ForEach(EditorTool.rail(for: viewModel.mode)) { candidate in
-                toolChip(candidate, isActive: candidate == tool)
-            }
-
-            Spacer(minLength: 4)
-
-            headerIcon("arrow.uturn.backward", enabled: viewModel.canUndo) { viewModel.undo() }
-            headerIcon("arrow.uturn.forward", enabled: viewModel.canRedo) { viewModel.redo() }
-            headerIcon("xmark", enabled: true) { closeController() }
-        }
-    }
-
-    private func toolChip(_ tool: EditorTool, isActive: Bool) -> some View {
-        Button {
-            if !isActive { selectTool(tool) }
-        } label: {
-            Image(systemName: tool.icon)
-                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                .foregroundColor(isActive ? .white : theme.textSecondary)
-                .frame(width: 38, height: 34)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                        .fill(isActive
-                              ? AnyShapeStyle(theme.buttonGradient(color: accentColor))
-                              : AnyShapeStyle(theme.inputBackground))
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(tool.label))
-        .accessibilityAddTraits(isActive ? [.isSelected] : [])
-    }
-
-    private func headerIcon(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            guard enabled else { return }
-            HapticFeedback.light()
-            action()
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: MeeshyIconSize.xs, weight: .bold))
-                .foregroundColor(enabled ? theme.textPrimary : theme.textMuted)
-                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-                .background(Circle().fill(theme.inputBackground.opacity(enabled ? 1 : 0.5)))
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
     }
 
     @ViewBuilder
@@ -464,16 +384,19 @@ public struct MeeshyImageEditorView: View {
         switch tool {
         case .crop:
             ImageEditorCropPanel(
-                mode: viewModel.mode,
+                isPro: viewModel.mode.isPro,
                 accentColor: accentColor,
                 cropRatio: $cropRatio,
-                cropDirty: $cropDirty,
+                onRatioPicked: { cropDirty = true },
                 onRotate: { rotate(clockwise: $0) },
                 onFlip: { flip(horizontal: $0) }
             )
-        case .filters: ImageEditorFiltersPanel(viewModel: viewModel, accentColor: accentColor)
-        case .adjust: ImageEditorAdjustPanel(viewModel: viewModel, accentColor: accentColor)
-        case .effects: ImageEditorEffectsPanel(viewModel: viewModel, accentColor: accentColor)
+        case .filters:
+            ImageEditorFiltersPanel(viewModel: viewModel, accent: accent)
+        case .adjust:
+            ImageEditorAdjustPanel(viewModel: viewModel, accent: accent)
+        case .effects:
+            ImageEditorEffectsPanel(viewModel: viewModel, accent: accent)
         }
     }
 
@@ -592,72 +515,34 @@ public struct MeeshyImageEditorView: View {
 
     private func ensureCropInitialized(_ displayRect: CGRect) {
         guard !cropInitialized, displayRect.width > 1, displayRect.height > 1 else { return }
-        if let norm = viewModel.state.cropNormalized {
-            cropRect = CGRect(
-                x: displayRect.minX + norm.minX * displayRect.width,
-                y: displayRect.minY + norm.minY * displayRect.height,
-                width: norm.width * displayRect.width,
-                height: norm.height * displayRect.height
-            )
-        } else if let ratio = cropRatio.aspectRatio {
-            cropRect = Self.centeredRect(aspect: ratio, in: displayRect, fill: 0.92)
-        } else {
-            cropRect = displayRect
-        }
+        cropRect = ImageEditorCropGeometry.initialCrop(
+            normalized: viewModel.state.cropNormalized,
+            ratio: cropRatio.aspectRatio,
+            in: displayRect
+        )
         cropDisplayRect = displayRect
         cropInitialized = true
     }
 
     private func adjustCrop(toRatio ratio: Double?, in displayRect: CGRect) {
-        guard displayRect.width > 1, displayRect.height > 1 else { return }
-        guard let ratio else {
-            if cropRect.width < 40 || cropRect.height < 40 {
-                cropRect = displayRect
-            }
+        guard let adjusted = ImageEditorCropGeometry.crop(cropRect, adjustedTo: ratio, in: displayRect) else { return }
+        guard ratio != nil else {
+            cropRect = adjusted
             return
         }
-        let centerX = cropRect.midX
-        let centerY = cropRect.midY
-        let maxWidth = min(cropRect.width, displayRect.width * 0.95)
-        let maxHeight = min(cropRect.height, displayRect.height * 0.95)
-        let width: CGFloat
-        let height: CGFloat
-        if maxWidth / ratio <= maxHeight {
-            width = maxWidth
-            height = maxWidth / ratio
-        } else {
-            height = maxHeight
-            width = maxHeight * ratio
-        }
-        let proposed = CGRect(
-            x: centerX - width / 2,
-            y: centerY - height / 2,
-            width: width,
-            height: height
-        )
         withAnimation(.spring(response: 0.26, dampingFraction: 0.85)) {
-            cropRect = proposed.intersection(displayRect)
+            cropRect = adjusted
         }
     }
 
     private func bakeCrop() {
         guard cropDirty || viewModel.state.cropNormalized != nil else { return }
-        let displayRect = cropDisplayRect
-        guard displayRect.width > 1, displayRect.height > 1,
-              cropRect.width > 1, cropRect.height > 1 else { return }
-
-        let raw = CGRect(
-            x: (cropRect.minX - displayRect.minX) / displayRect.width,
-            y: (cropRect.minY - displayRect.minY) / displayRect.height,
-            width: cropRect.width / displayRect.width,
-            height: cropRect.height / displayRect.height
-        )
-        let normalized = raw.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
-        guard normalized.width > 0.02, normalized.height > 0.02 else { return }
-
-        let isFullFrame = normalized.minX < 0.006 && normalized.minY < 0.006
-            && normalized.width > 0.988 && normalized.height > 0.988
-        let target: CGRect? = isFullFrame ? nil : normalized
+        guard let baked = ImageEditorCropGeometry.bake(cropRect: cropRect, in: cropDisplayRect) else { return }
+        let target: CGRect?
+        switch baked {
+        case .fullFrame: target = nil
+        case .region(let region): target = region
+        }
 
         viewModel.perform(String(localized: "media.editor.crop.applied", defaultValue: "Recadrage", bundle: .module)) {
             $0.cropNormalized = target
@@ -701,48 +586,5 @@ public struct MeeshyImageEditorView: View {
     private func cancelEditing() {
         onCancel?()
         dismiss()
-    }
-
-    // MARK: - Geometry helpers
-
-    static func fittedRect(for imageSize: CGSize, in container: CGSize) -> CGRect {
-        guard imageSize.width > 0, imageSize.height > 0,
-              container.width > 0, container.height > 0 else {
-            return CGRect(x: 0, y: 0, width: max(container.width, 1), height: max(container.height, 1))
-        }
-        let imageAspect = imageSize.width / imageSize.height
-        let containerAspect = container.width / container.height
-        let size: CGSize
-        if imageAspect > containerAspect {
-            size = CGSize(width: container.width, height: container.width / imageAspect)
-        } else {
-            size = CGSize(width: container.height * imageAspect, height: container.height)
-        }
-        return CGRect(
-            x: (container.width - size.width) / 2,
-            y: (container.height - size.height) / 2,
-            width: size.width,
-            height: size.height
-        )
-    }
-
-    static func centeredRect(aspect ratio: Double, in bounds: CGRect, fill: CGFloat) -> CGRect {
-        let maxWidth = bounds.width * fill
-        let maxHeight = bounds.height * fill
-        let width: CGFloat
-        let height: CGFloat
-        if maxWidth / ratio <= maxHeight {
-            width = maxWidth
-            height = maxWidth / ratio
-        } else {
-            height = maxHeight
-            width = maxHeight * ratio
-        }
-        return CGRect(
-            x: bounds.midX - width / 2,
-            y: bounds.midY - height / 2,
-            width: width,
-            height: height
-        )
     }
 }
