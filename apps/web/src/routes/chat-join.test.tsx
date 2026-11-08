@@ -828,6 +828,18 @@ describe('chaque refus est un bandeau qui dit la cause et garde une sortie', () 
     expect(recorded.order).toEqual([]);
   });
 
+  /* #7816 — un salon d'une communauté privée refuse qui n'en est pas membre :
+     un 403 est une RÉPONSE, rejouer le lien ne la change pas. La phrase dit
+     la cause, et « Rejoindre » s'en va. */
+  test('à la jonction — un salon réservé aux membres de sa communauté le dit et retire « Rejoindre »', async () => {
+    signIn();
+    const { deps } = depsWith({ join: async () => failure(403, 'COMMUNITY_MEMBERS_ONLY') });
+    const el = await mount(deps);
+    await click(joinButton(el));
+    expect(text(el.querySelector('[role="alert"]'))).toContain('réservée aux membres de sa communauté');
+    expect(joinButton(el)).toBeNull();
+  });
+
   test('à la jonction — un refus PASSAGER (429) laisse rejoindre à nouveau', async () => {
     signIn();
     const { deps } = depsWith({ join: async () => failure(429, undefined) });

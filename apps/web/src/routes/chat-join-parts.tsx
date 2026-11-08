@@ -94,6 +94,7 @@ const REFUSAL_KEY: Readonly<Record<LinkRefusal, Extract<InviteCatalogKey, `invit
   banned: 'invite.refusal.banned',
   region: 'invite.refusal.region',
   'account-required': 'invite.refusal.account-required',
+  'members-only': 'invite.refusal.members-only',
   'session-expired': 'invite.refusal.session-expired',
   'rate-limited': 'invite.refusal.rate-limited',
   offline: 'invite.refusal.offline',
