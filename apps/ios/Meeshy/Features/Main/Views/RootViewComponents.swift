@@ -40,6 +40,33 @@ struct ThemedFeedOverlay: View {
         guard router.consumePendingFeedComposer() else { return }
         showFullComposer = true
     }
+
+    /// Le fil retenu est-il à l'écran (#16676) ? Caché, il n'élit aucun réel.
+    @Environment(\.feedIsShown) private var feedIsShown
+
+    /// Le fil se cache SANS se démonter (#16676) : rien ne joue derrière
+    /// l'écran qui le recouvre, et la lecture comptée s'arrête là — ce que
+    /// faisait sa disparition quand le cacher le détruisait.
+    private func feedDidHide() {
+        reelAutoplay.clear()
+        Task { await impressions.flushNow() }
+        ListingScrollTracker.feed.finish()
+    }
+
+    /// Le fil quitte vraiment l'écran (un plein écran par-dessus, le démontage) :
+    /// la salle du fil est quittée, et la lecture comptée s'arrête.
+    private func feedDidDisappear() {
+        viewModel.unsubscribeFromSocketEvents()
+        Task { await impressions.flushNow() }
+        ListingScrollTracker.feed.finish()
+    }
+
+    /// Lu plus bas que sa tête, ou caché, le fil TIENT sa tête : ce qui arrive
+    /// en haut attend que le lecteur y remonte (`FeedHeadHold`).
+    private func holdFeedHead(_ holds: Bool) {
+        guard let shown = viewModel.headHold.settingHolding(holds, over: viewModel.posts) else { return }
+        viewModel.posts = shown
+    }
     @State private var quoteOriginalPost: FeedPost?
     /// Offset de défilement relayé au header SANS invalider ce body :
     /// `@State` retient la référence sans s'y abonner, et seul le
@@ -596,7 +623,7 @@ struct ThemedFeedOverlay: View {
                 }
                 .onPreferenceChange(ReelVisibilityPreferenceKey.self) { frames in
                     reelAutoplay.update(
-                        frames: frames,
+                        frames: feedIsShown ? frames : [],
                         viewportMinY: viewportFrame.minY,
                         viewportMaxY: viewportFrame.maxY
                     )
@@ -708,11 +735,7 @@ struct ThemedFeedOverlay: View {
                 postLikedIds.remove(event.postId)
             }
         }
-        .onDisappear {
-            viewModel.unsubscribeFromSocketEvents()
-            Task { await impressions.flushNow() }
-            ListingScrollTracker.feed.finish()
-        }
+        .modifier(FeedRetentionHooks(relay: scrollRelay, onHidden: feedDidHide, onGone: feedDidDisappear, onHoldingHead: holdFeedHead))
         .sheet(item: $shareableLink) { link in
             // Same TrackingLink share sheet as FeedView — every external
             // touchpoint funnels through `meeshy.me/l/<token>`.

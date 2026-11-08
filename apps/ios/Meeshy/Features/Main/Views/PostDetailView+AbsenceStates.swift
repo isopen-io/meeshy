@@ -68,7 +68,7 @@ extension PostDetailView {
             .buttonStyle(.borderedProminent)
             Button {
                 HapticFeedback.light()
-                router.pop()
+                router.closePostDetail()
             } label: {
                 Text(String(localized: "feed.post.detail.unavailable.back",
                             defaultValue: "Retour", bundle: .main))
@@ -96,7 +96,7 @@ extension PostDetailView {
         ReelOpenFailureView(
             failure: .notFound,
             onRetry: {},
-            onClose: { router.pop() }
+            onClose: { router.closePostDetail() }
         )
     }
 }

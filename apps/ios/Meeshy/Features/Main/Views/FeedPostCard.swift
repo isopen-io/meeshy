@@ -786,7 +786,7 @@ struct FeedPostCard: View {
                 }, dependencies: .live
             )
             .presentationDetents([.large, .medium])
-            .presentationDragIndicator(.visible)
+            .presentationDragIndicator(.visible).closesForConversationOpening(.sheet)
         }
         .fullScreenCover(item: $fullscreenPlace) { item in
             // Même surface plein écran que la bulle de message : carte +
