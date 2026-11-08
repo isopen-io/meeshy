@@ -33,6 +33,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 }));
 
 import { relationsRoutes } from '../../../../routes/relations';
+import { lowerPair } from '../../../../services/relations/userRelationWriter';
 import {
   AUTRE, DAY, MOI, NOW, TIERS, buildRelationApp, demande, freezeClock, lien, semaineActive, thawClock,
   type AppOptions, type TestApp,
@@ -364,5 +365,30 @@ describe('#13933 — la double confirmation et le consentement feature par featu
 
     expect(app.notifier.createSystemNotification).not.toHaveBeenCalled();
     expect(app.notifier.createFriendAcceptedNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('#14924 — course rituel ↔ baisse : un Sang qui tombe pendant l’écriture des consentements ne laisse aucun partage', () => {
+  it('le lien tombe sous le Sang entre le scellement et l’écriture des consentements : les partages sont éteints', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    const upsert = app.prisma.relationFeatureSetting.upsert as (args: unknown) => Promise<unknown>;
+    let dropped = false;
+    app.prisma.relationFeatureSetting.upsert = async (args: unknown) => {
+      if (!dropped) {
+        dropped = true;
+        await lowerPair(app.store.prisma, { userA: MOI, userB: AUTRE, level: 'CLOSE', at: new Date(Date.now()) });
+      }
+      return upsert(args);
+    };
+    await moi(app, { phase: 'confirm', token, consents: TOUS });
+    const fin = await autre(app, { phase: 'confirm', token, consents: TOUS });
+    await app.close();
+
+    expect(fin.status).toBe(200);
+    expect(dropped).toBe(true);
+    const lignes = app.reglages();
+    expect(lignes).toHaveLength(2);
+    lignes.forEach((ligne) => expect(ligne).toMatchObject({ listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false }));
   });
 });
