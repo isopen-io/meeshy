@@ -3,13 +3,13 @@ import MeeshySDK
 
 /// Un morceau qui JOUE sur cet iPhone, tel que la source l'a lu. Rien d'autre n'en sort : ni l'album, ni la durée,
 /// ni la position de lecture.
-struct ListeningTrack: Equatable, Sendable {
+nonisolated struct ListeningTrack: Equatable, Sendable {
     let title: String
     let artist: String?
 }
 
 /// Ce que l'émetteur doit faire, et rien de plus : la loi ne voit jamais la socket.
-enum ListeningBroadcastAction: Equatable, Sendable {
+nonisolated enum ListeningBroadcastAction: Equatable, Sendable {
     case none
     case publish(NowPlayingUpdate)
     case clear
@@ -26,7 +26,7 @@ enum ListeningBroadcastAction: Equatable, Sendable {
 ///   peut plus voir) et le retrait du choix effacent l'état serveur — une fois, seulement s'il existe.
 /// - Un envoi perdu (hors ligne, débit) se rejoue au prochain pas ; un envoi REFUSÉ ne se rejoue pas avant le
 ///   prochain changement ou le prochain rafraîchissement.
-struct ListeningBroadcastLaw: Equatable, Sendable {
+nonisolated struct ListeningBroadcastLaw: Equatable, Sendable {
 
     static let refreshInterval: TimeInterval = 600
     static let appleMusicSource = "Apple Music"
