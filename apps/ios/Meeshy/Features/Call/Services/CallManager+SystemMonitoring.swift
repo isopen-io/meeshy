@@ -17,23 +17,11 @@ extension CallManager {
     // MARK: - Haptic Helpers
 
     func playHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        switch style {
-        case .light: HapticFeedback.light()
-        case .medium: HapticFeedback.medium()
-        case .heavy: HapticFeedback.heavy()
-        case .rigid: HapticFeedback.rigid()
-        case .soft: UIImpactFeedbackGenerator(style: style).impactOccurred()
-        @unknown default: UIImpactFeedbackGenerator(style: style).impactOccurred()
-        }
+        HapticFeedback.impact(style)
     }
 
     func playNotificationHaptic(_ type: UINotificationFeedbackGenerator.FeedbackType) {
-        switch type {
-        case .success: HapticFeedback.success()
-        case .warning: HapticFeedback.warning()
-        case .error: HapticFeedback.error()
-        @unknown default: UINotificationFeedbackGenerator().notificationOccurred(type)
-        }
+        HapticFeedback.notification(type)
     }
 
     /// C3 — unique porte d'entrée du signal `call:toggle-video` lié à la vie de

@@ -62,8 +62,8 @@ final class BackgroundTaskManager {
             return Self.normalSyncInterval
         }
         syncFailureCount += 1
-        let exp = pow(2.0, Double(min(syncFailureCount, 8)))
-        return min(Self.baseRetryInterval * exp, Self.maxRetryInterval)
+        return RetryPolicy(maxAttempts: nil, firstDelay: Self.baseRetryInterval, maxDelay: Self.maxRetryInterval)
+            .delay(afterFailure: min(syncFailureCount, 8) + 1, jitterSample: 0)
     }
 
     func registerTasks() {

@@ -666,7 +666,7 @@ public struct UserProfileSheet: View {
     // MARK: - Helpers
 
     func formatRegistrationDate(_ date: Date) -> String {
-        date.formatted(.dateTime.year().month(.wide).day().locale(Locale(identifier: "fr_FR")))
+        date.formatted(.dateTime.year().month(.wide).day())
     }
 
     /// Sans image, rien ne s'ouvre : un plein écran de l'avatar à initiales n'a rien à montrer.

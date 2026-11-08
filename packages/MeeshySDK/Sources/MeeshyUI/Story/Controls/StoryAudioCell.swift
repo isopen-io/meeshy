@@ -167,7 +167,7 @@ struct StoryAudioCell: View {
     }
 
     private var durationLabel: some View {
-        Text(formatDuration(playback.duration))
+        Text(MediaFormat.duration(playback.duration, rounding: .toNearestOrAwayFromZero))
             .font(.system(size: MeeshyFont.captionSize, weight: .medium, design: .monospaced))
             .foregroundColor(secondaryText)
             .frame(minWidth: 32)
@@ -270,9 +270,5 @@ struct StoryAudioCell: View {
             // URL distante : on délègue à WaveformCache qui résoudra via le cache audio.
             waveform.analyze(url: url, barCount: 40)
         }
-    }
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        MediaFormat.duration(seconds, rounding: .toNearestOrAwayFromZero)
     }
 }
