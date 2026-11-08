@@ -28,7 +28,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { togetherHandlerDeps } from '../../../../socketio/handlers/TogetherHandler';
 import { togetherRelayDepsOf } from '../../../../services/together/togetherDeps';
-import { indexTogetherUsers, readTogether, storeTogether, type TogetherSession } from '../../../../services/together/togetherStore';
+import { indexTogether, readTogether, storeTogether, type TogetherSession } from '../../../../services/together/togetherStore';
 
 const HOTE = '6300000000000000000000a1';
 const PROCHE = '6300000000000000000000c1';
@@ -73,7 +73,7 @@ function monde(wait: () => Promise<void>) {
 const poser = async () => {
   const cache = togetherRelayDepsOf({ prisma: {} as PrismaClient, io: undefined }).cache;
   await storeTogether(cache, seance(), 3600);
-  await indexTogetherUsers(cache, seance());
+  await indexTogether(cache, seance());
   return cache;
 };
 
