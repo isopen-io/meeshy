@@ -8,6 +8,7 @@ import { bringAvailabilityQueryKey } from '@/lib/bring/bring-api';
 import { translateCircles } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import {
+  decodeReceptionSettings,
   loadReceptionSettings,
   personSettingsQueryKey,
   setReceptionBlocked,
@@ -73,9 +74,7 @@ export const receptionBlocksFor = (level: RelationLevel): readonly ReceptionBloc
   (Object.keys(SPECS) as ReceptionBlock[]).filter((block) => reaches(level, SPECS[block].minLevel));
 
 const withBlock = (settings: ReceptionSettings | undefined, block: ReceptionBlock, value: boolean): ReceptionSettings => ({
-  bringBlocked: settings?.bringBlocked ?? false,
-  talkieBlocked: settings?.talkieBlocked ?? false,
-  listeningCategoryShared: settings?.listeningCategoryShared ?? false,
+  ...decodeReceptionSettings(settings),
   [block]: value,
 });
 

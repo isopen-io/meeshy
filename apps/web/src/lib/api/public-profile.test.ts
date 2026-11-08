@@ -59,6 +59,12 @@ describe('decodePublicProfile', () => {
     });
   });
 
+  test('le rôle SERVI entre dans l’identité (la fiche d’un collègue de l’équipe, #16864) ; absent, il n’est pas inventé', () => {
+    expect(decodePublicProfile({ ...WIRE_THIRD_PARTY, role: 'ADMIN' })?.role).toBe('ADMIN');
+    expect('role' in (decodePublicProfile({ ...WIRE_THIRD_PARTY, role: '' }) ?? {})).toBe(false);
+    expect('role' in (decodePublicProfile(WIRE_THIRD_PARTY) ?? {})).toBe(false);
+  });
+
   test('une bannière VIDE est `null`, jamais une chaîne à peindre', () => {
     expect(decodePublicProfile({ ...WIRE_THIRD_PARTY, banner: '' })?.banner).toBeNull();
     expect(decodePublicProfile({ ...WIRE_THIRD_PARTY, banner: null })?.banner).toBeNull();

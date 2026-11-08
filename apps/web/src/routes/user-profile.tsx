@@ -39,6 +39,7 @@ import { ProfileBodySkeleton, ProfileFailureNotice, ProfileOfflineBanner, Profil
 import { announcementToneOf } from '@/lib/view/announcement-tone';
 
 /* LA LIGNE DU CERCLE (#13940) — chargée à la demande : elle ne pèse sur la fiche que là où un lien peut exister. */
+const ProfileTeamShares = lazy(() => import('@/routes/profile-team-shares').then((m) => ({ default: m.ProfileTeamShares })));
 const ProfileCircleRow = lazy(() => import('@/routes/user-profile-circle').then((m) => ({ default: m.ProfileCircleRow })));
 /* Le Bring (#13936) : son propre chunk, chargé avec le cercle — le serveur dit s'il existe. */
 const ProfileBringRow = lazy(() => import('@/routes/user-profile-bring').then((m) => ({ default: m.ProfileBringRow })));
@@ -328,6 +329,12 @@ export function UserProfileView({ username }: { readonly username: string }) {
                                   language={language}
                                   person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
                                   friend={relation.kind === 'friend'}
+                                  onNotice={(message) => announce(message, 'error')}
+                                />
+                                <ProfileTeamShares
+                                  language={language}
+                                  person={{ id: person.id, username: person.username, displayName: person.displayName }}
+                                  targetRole={person.role}
                                   onNotice={(message) => announce(message, 'error')}
                                 />
                               </Suspense>

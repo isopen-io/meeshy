@@ -52,6 +52,8 @@ const ar = {
   'circles.settings.talkie': 'جهاز اللاسلكي',
   'circles.settings.bring': 'Bring',
   'circles.settings.location': 'الموقع المباشر',
+  'circles.team.title': 'بين زملاء الفريق: ما أشاركه مع {name}',
+  'circles.team.failed': 'تعذّر حفظ المشاركة',
   'circles.ritual.title': 'طقس الدم',
   'circles.ritual.consent.intro': 'قبل الختم، اختر ما تشاركه مع {name}. يمكن رفض كل مشاركة، ويمكنك العودة إليها لاحقًا.',
   'circles.ritual.consent.listeningTitle': 'عنوان ما أستمع إليه',

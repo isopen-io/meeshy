@@ -52,6 +52,8 @@ const it = {
   'circles.settings.talkie': 'Walkie-talkie',
   'circles.settings.bring': 'Bring',
   'circles.settings.location': 'Posizione in tempo reale',
+  'circles.team.title': 'Tra colleghi: ciò che condivido con {name}',
+  'circles.team.failed': 'Non è stato possibile salvare la condivisione',
   'circles.ritual.title': 'Il rito del Sangue',
   'circles.ritual.consent.intro': 'Prima di suggellare, scegli cosa condividi con {name}. Ogni condivisione si può rifiutare, e potrai cambiarla in seguito.',
   'circles.ritual.consent.listeningTitle': 'Il titolo di ciò che ascolto',

@@ -52,6 +52,8 @@ const en = {
   'circles.settings.talkie': 'Walkie-talkie',
   'circles.settings.bring': 'Bring',
   'circles.settings.location': 'Live location',
+  'circles.team.title': 'Between teammates: what I share with {name}',
+  'circles.team.failed': 'The share couldn’t be saved',
   'circles.ritual.title': 'The Blood ritual',
   'circles.ritual.consent.intro': 'Before sealing, choose what you share with {name}. Every share can be refused, and you can change your mind later.',
   'circles.ritual.consent.listeningTitle': 'The title of what I’m listening to',

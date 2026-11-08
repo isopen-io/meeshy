@@ -54,6 +54,8 @@ const fr = {
   'circles.settings.talkie': 'Talkie',
   'circles.settings.bring': 'Bring',
   'circles.settings.location': 'Position en direct',
+  'circles.team.title': 'Entre collègues : ce que je partage avec {name}',
+  'circles.team.failed': 'Le partage n’a pas pu être enregistré',
   'circles.ritual.title': 'Le rituel du Sang',
   'circles.ritual.consent.intro': 'Avant de sceller, choisissez ce que vous partagez avec {name}. Chaque partage est refusable, et vous pourrez y revenir.',
   'circles.ritual.consent.listeningTitle': 'Le titre de ce que j’écoute',

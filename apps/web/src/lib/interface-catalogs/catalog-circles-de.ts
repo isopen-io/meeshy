@@ -52,6 +52,8 @@ const de = {
   'circles.settings.talkie': 'Walkie-Talkie',
   'circles.settings.bring': 'Bring',
   'circles.settings.location': 'Live-Standort',
+  'circles.team.title': 'Unter Kolleginnen und Kollegen: was ich mit {name} teile',
+  'circles.team.failed': 'Die Freigabe konnte nicht gespeichert werden',
   'circles.ritual.title': 'Das Blutritual',
   'circles.ritual.consent.intro': 'Wähle vor dem Besiegeln, was du mit {name} teilst. Jede Freigabe kann abgelehnt werden, und du kannst sie später ändern.',
   'circles.ritual.consent.listeningTitle': 'Der Titel dessen, was ich höre',

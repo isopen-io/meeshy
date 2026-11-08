@@ -74,6 +74,8 @@ export type PublicProfile = {
   readonly banner: string | null;
   readonly bio: string | null;
   readonly createdAt: string | null;
+  /** Le rôle SERVI (`role` du profil public) : il ne sert qu'à savoir si la personne est de l'équipe (#16864) ; absent = non servi. */
+  readonly role?: string;
   /** Le contour et la bannière de design équipés (#10632) ; absent = ancien serveur, rendu inchangé. */
   readonly decor?: ServedProfileDecor;
 };
@@ -161,6 +163,7 @@ const WireProfile = z.object({
   banner: optionalText,
   bio: optionalText,
   createdAt: optionalText,
+  role: optionalText,
 });
 
 const decorOf = (raw: unknown): { readonly decor?: ServedProfileDecor } => {
@@ -176,7 +179,8 @@ const textOrNull = (value: string | null | undefined): string | null =>
 export function decodePublicProfile(raw: unknown): PublicProfile | null {
   const parsed = WireProfile.safeParse(raw);
   if (!parsed.success) return null;
-  const { id, username, displayName, avatar, banner, bio, createdAt } = parsed.data;
+  const { id, username, displayName, avatar, banner, bio, createdAt, role } = parsed.data;
+  const servedRole = textOrNull(role);
   return {
     id,
     username,
@@ -185,6 +189,7 @@ export function decodePublicProfile(raw: unknown): PublicProfile | null {
     banner: textOrNull(banner),
     bio: textOrNull(bio),
     createdAt: textOrNull(createdAt),
+    ...(servedRole === null ? {} : { role: servedRole }),
     ...decorOf(raw),
   };
 }

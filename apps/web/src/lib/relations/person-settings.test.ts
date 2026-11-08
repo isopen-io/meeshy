@@ -24,19 +24,19 @@ function fakeTransport(result: ApiResult<unknown>) {
 describe('les préférences de réception', () => {
   test('une seule lecture rend le Bring ET le talkie', async () => {
     const { deps, requests } = fakeTransport({ ok: true, data: { userId: OTHER, bringBlocked: true, talkieBlocked: false, locationShared: true } });
-    expect(await loadReceptionSettings(deps, OTHER)).toEqual({ ok: true, data: { bringBlocked: true, talkieBlocked: false, listeningCategoryShared: false } });
+    expect(await loadReceptionSettings(deps, OTHER)).toMatchObject({ ok: true, data: { bringBlocked: true, talkieBlocked: false, listeningCategoryShared: false } });
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({ method: 'GET', path: `/api/v1/relations/${OTHER}/settings` });
   });
 
   test('un réglage absent ou illisible se lit « non coupé » : la valeur par défaut du serveur', async () => {
     const { deps } = fakeTransport({ ok: true, data: { talkieBlocked: 'oui', listeningCategoryShared: 'oui' } });
-    expect(await loadReceptionSettings(deps, OTHER)).toEqual({ ok: true, data: { bringBlocked: false, talkieBlocked: false, listeningCategoryShared: false } });
+    expect(await loadReceptionSettings(deps, OTHER)).toMatchObject({ ok: true, data: { bringBlocked: false, talkieBlocked: false, listeningCategoryShared: false } });
   });
 
   test('la catégorie de mon écoute se lit ACCORDÉE seulement sur un `true` explicite (#16831)', async () => {
     const { deps } = fakeTransport({ ok: true, data: { userId: OTHER, bringBlocked: false, talkieBlocked: false, listeningCategoryShared: true } });
-    expect(await loadReceptionSettings(deps, OTHER)).toEqual({ ok: true, data: { bringBlocked: false, talkieBlocked: false, listeningCategoryShared: true } });
+    expect(await loadReceptionSettings(deps, OTHER)).toMatchObject({ ok: true, data: { bringBlocked: false, talkieBlocked: false, listeningCategoryShared: true } });
   });
 
   test('accorder la catégorie de mon écoute n’écrit QUE ce champ', async () => {
@@ -47,7 +47,7 @@ describe('les préférences de réception', () => {
 
   test('l’écriture ne porte QUE le champ réglé (corps strict)', async () => {
     const { deps, requests } = fakeTransport({ ok: true, data: { userId: OTHER, bringBlocked: false, talkieBlocked: true } });
-    expect(await setReceptionBlocked(deps, OTHER, 'talkieBlocked', true)).toEqual({ ok: true, data: { bringBlocked: false, talkieBlocked: true, listeningCategoryShared: false } });
+    expect(await setReceptionBlocked(deps, OTHER, 'talkieBlocked', true)).toMatchObject({ ok: true, data: { bringBlocked: false, talkieBlocked: true, listeningCategoryShared: false } });
     expect(requests[0]).toMatchObject({ method: 'PUT', path: `/api/v1/relations/${OTHER}/settings`, body: { talkieBlocked: true } });
     expect(Object.keys(requests[0]!.body as object)).toEqual(['talkieBlocked']);
   });

@@ -52,6 +52,8 @@ const es = {
   'circles.settings.talkie': 'Walkie-talkie',
   'circles.settings.bring': 'Bring',
   'circles.settings.location': 'Ubicación en directo',
+  'circles.team.title': 'Entre compañeros: lo que comparto con {name}',
+  'circles.team.failed': 'No se pudo guardar el permiso',
   'circles.ritual.title': 'El ritual de Sangre',
   'circles.ritual.consent.intro': 'Antes de sellar, elige lo que compartes con {name}. Cada cosa compartida se puede rechazar, y podrás cambiarlo después.',
   'circles.ritual.consent.listeningTitle': 'El título de lo que escucho',
