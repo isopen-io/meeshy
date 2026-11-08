@@ -1076,7 +1076,7 @@
       "kb": {
         "value": 5,
         "status": "MESUREE PAR BUILD LOCAL LE 2026-11-08 -- A CONFIRMER PAR LE PORTEUR",
-        "source": "RELEVE 2026-11-08 (#6377) -- `bun run build` puis gzip -9 des sept fichiers : 4,20 Ko pour les SEPT catalogues des reglages d une communaute (vingt-trois cles `community.settings.*` : titre, sections, nom, description, Enregistrer, l issue, les refus, la zone dangereuse et la confirmation de la suppression), charges avec la route `communitySettings` (`routes/route-table.tsx`) et jamais au demarrage ni avec le detail -- celui de l adhesion est a 5,67 Ko pour un plafond de 6 et n en recoit qu une cle (« Reglages »). Arrondi au Ko SUPERIEUR (5)."
+        "source": "RELEVE 2026-11-08 (#6377) -- `bun run build` puis gzip -9 des sept fichiers : 4,20 Ko pour les SEPT catalogues des reglages d une communaute (vingt-trois cles `community.settings.*` : titre, sections, nom, description, Enregistrer, l issue, les refus, la zone dangereuse et la confirmation de la suppression), charges avec la route `communitySettings` (`routes/route-table.tsx`) et jamais au demarrage ni avec le detail -- celui de l adhesion est a 5,67 Ko pour un plafond de 6 et n en recoit qu une cle (« Reglages »). Arrondi au Ko SUPERIEUR (5). -- Remesure du 2026-11-08 (#6377, seconde moitie, meme methode) : 4,81 Ko apres sept cles `community.settings.*` de l avatar et de la banniere (changer, modifier, envoi en cours, pretes, echec). Plafond inchange (5) ; le prochain ajout devra ouvrir un second catalogue paresseux."
       }
     },
     "interface_catalogs_sign_in_link": {
