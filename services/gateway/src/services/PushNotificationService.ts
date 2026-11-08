@@ -114,8 +114,8 @@ export interface PushResult {
 export interface SendPushOptions {
   userId: string;
   payload: PushNotificationPayload;
-  // Optional: target specific token types
-  types?: ('apns' | 'fcm' | 'voip')[];
+  // Optional: target specific token types. `pushtotalk` (#17142) is never a default: only the talkie wake asks for it.
+  types?: ('apns' | 'fcm' | 'voip' | 'pushtotalk')[];
   // Optional: target specific platforms
   platforms?: ('ios' | 'android' | 'web')[];
   // Skip the DND-hours/days check in `isPushAllowed` — for call-management
@@ -398,9 +398,10 @@ export class PushNotificationService {
       },
     });
 
-    // #10267 — un type neuf ne part que vers les appareils qui savent l'ouvrir (`push-type-routing.ts`).
+    // #10267 — un type neuf ne part que vers les appareils qui savent l'ouvrir (`push-type-routing.ts`). Un jeton
+    // PushToTalk (#17142) n'est enregistré QUE par un client qui sait le traiter : il porte sa capacité.
     const pushType = effectivePayload.data?.type;
-    const tokens = activeTokens.filter((token) => tokenRoutesPushType(token, pushType));
+    const tokens = activeTokens.filter((token) => token.type === 'pushtotalk' || tokenRoutesPushType(token, pushType));
 
     if (tokens.length === 0) {
       pushLogger.debug('No active tokens found for user', { userId, pushType, excluded: activeTokens.length });
@@ -424,6 +425,8 @@ export class PushNotificationService {
             result = await this.sendViaAPNS(tokenRecord, effectivePayload, false);
           } else if (tokenRecord.type === 'voip') {
             result = await this.sendViaAPNS(tokenRecord, effectivePayload, true);
+          } else if (tokenRecord.type === 'pushtotalk') {
+            result = await this.sendViaPushToTalk(tokenRecord, effectivePayload);
           } else {
             result = { success: false, tokenId: tokenRecord.id, error: `Unknown token type: ${tokenRecord.type}` };
           }
@@ -835,6 +838,49 @@ export class PushNotificationService {
         errorMessage: error?.message
       });
       return { success: false, tokenId: tokenRecord.id, error: error.message || 'APNS error' };
+    }
+  }
+
+  /**
+   * Le réveil PushToTalk (#17142) : `apns-push-type: pushtotalk`, topic `<bundle>.voip-ptt`, priorité 10,
+   * expiration 0 (une voix périmée ne réveille personne), ni alerte ni son — le framework PushToTalk rend
+   * lui-même l'orateur actif à partir des clés de `data`.
+   */
+  private async sendViaPushToTalk(
+    tokenRecord: { id: string; token: string; bundleId?: string | null; apnsEnvironment?: string | null },
+    payload: PushNotificationPayload,
+  ): Promise<PushResult> {
+    const env = tokenRecord.apnsEnvironment === 'development' ? 'sandbox' : 'production';
+    const client = env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction;
+    if (!client) {
+      return { success: false, tokenId: tokenRecord.id, error: `APNS ${env} client not initialized` };
+    }
+    try {
+      const apn = await import('@parse/node-apn');
+      const notification = new apn.Notification();
+      notification.alert = undefined as never;
+      notification.sound = undefined as never;
+      notification.badge = undefined as never;
+      notification.topic = `${tokenRecord.bundleId || config.apns.bundleId}.voip-ptt`;
+      notification.pushType = 'pushtotalk';
+      notification.priority = 10;
+      notification.expiry = 0;
+      notification.payload = { ...(payload.data ?? {}) };
+      const corr = { tokenId: tokenRecord.id, apnsEnv: env, topic: notification.topic, pushType: 'pushtotalk' };
+      const result = await this.apnsCircuitBreaker.execute(() =>
+        performanceLogger.withTiming('push.sendViaPushToTalk', () => this.sendApnsWithRetry(client, notification, tokenRecord.token, corr), corr)
+      );
+      if (result.failed.length > 0) {
+        const reason = result.failed[0].response?.reason || 'APNS delivery failed';
+        pushLogger.warn('push.sendViaPushToTalk.failure', { ...corr, reason, statusCode: result.failed[0].status });
+        return { success: false, tokenId: tokenRecord.id, error: reason, transient: isTransientApnsReason(reason) };
+      }
+      pushLogger.info('push.sendViaPushToTalk.success', corr);
+      return { success: true, tokenId: tokenRecord.id };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'APNS error';
+      pushLogger.warn('push.sendViaPushToTalk.failure', { tokenId: tokenRecord.id, apnsEnv: env, errorMessage: message });
+      return { success: false, tokenId: tokenRecord.id, error: message };
     }
   }
 
