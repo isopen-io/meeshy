@@ -14,6 +14,7 @@
  * servirait, et dater la baisse qu'on lui a tue (RG-07, audit #14910).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { RelationLevel } from '@meeshy/shared/types/relation';
 import {
   RELATION_RITUAL_SHARES,
   RELATION_RITUAL_SHARE_WITHDRAWN_AT,
@@ -102,4 +103,21 @@ export async function withdrawListeningCategoryBetween(
       data: { listeningCategoryShared: false },
     }),
   ]);
+}
+
+/**
+ * Le lien vient de tomber, par le geste de `actorId`, au niveau effectif `level` — baisse
+ * (`POST /relations/:userId/level`) ou rupture d'une demande acceptée : site UNIQUE de ce qui
+ * ne tient plus. Sous le Sang, les partages du rituel s'éteignent ; sous Proche, la catégorie
+ * d'écoute aussi. Rejouable sans condition : un retrait échoué se solde au rejeu.
+ */
+export async function withdrawSharesAfterDrop(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly actorId: string; readonly otherId: string; readonly level: RelationLevel; readonly at: Date },
+): Promise<void> {
+  if (params.level === 'BLOOD') return;
+  const pair = { actorId: params.actorId, otherId: params.otherId, at: params.at };
+  await withdrawRitualSharesBetween(prisma, pair);
+  if (params.level === 'CLOSE') return;
+  await withdrawListeningCategoryBetween(prisma, pair);
 }

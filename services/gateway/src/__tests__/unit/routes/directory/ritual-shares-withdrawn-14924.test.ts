@@ -62,12 +62,18 @@ const authenticate = async (req: object) => {
   });
 };
 
-async function rompreLeSang() {
+const PROCHE = { ...SANG, grantedByLow: 'CLOSE', grantedByHigh: 'CLOSE' };
+const CATEGORIE_PARTAGEE = [
+  { ownerId: MOI, otherId: AUTRE, listeningCategoryShared: true },
+  { ownerId: AUTRE, otherId: MOI, listeningCategoryShared: true },
+];
+
+async function rompreLeSang(niveau: { targetLevel: string; relation: typeof SANG; partages: typeof PARTAGES | typeof CATEGORIE_PARTAGEE } = { targetLevel: 'BLOOD', relation: SANG, partages: PARTAGES }) {
   const links = relationStore({
-    friendRequests: [{ id: FR_ID, senderId: AUTRE, receiverId: MOI, status: 'accepted', targetLevel: 'BLOOD' }],
-    relations: [SANG],
+    friendRequests: [{ id: FR_ID, senderId: AUTRE, receiverId: MOI, status: 'accepted', targetLevel: niveau.targetLevel }],
+    relations: [niveau.relation],
   });
-  const reglages = ritualSharesStore(PARTAGES);
+  const reglages = ritualSharesStore(niveau.partages);
   const prisma = {
     user: { findUnique: jest.fn(async () => ({ id: MOI, blockedUserIds: [], deactivatedAt: null })), findFirst: jest.fn(async () => null) },
     friendRequest: links.prisma.friendRequest,
@@ -145,6 +151,26 @@ describe('#14924 — la rupture d’une demande de Sang acceptée éteint les pa
     const { partages } = await rompreLeSang();
 
     expect(partage(partages, MOI)).toHaveProperty('bringBlockedAt', null);
+  });
+});
+
+describe('#14924 audit — la rupture d’une demande Proche acceptée éteint la catégorie d’écoute, comme la baisse', () => {
+  it('le lien retombe à Ami : la catégorie d’écoute s’éteint dans les deux sens, datée chez l’acteur seul', async () => {
+    const { status, partages } = await rompreLeSang({ targetLevel: 'CLOSE', relation: PROCHE, partages: CATEGORIE_PARTAGEE });
+
+    expect(status).toBe(200);
+    expect(partage(partages, MOI)).toMatchObject({ listeningCategoryShared: false, listeningCategoryWithdrawnAt: expect.any(Date) });
+    expect(partage(partages, AUTRE)).toMatchObject({ listeningCategoryShared: false });
+    expect(partage(partages, AUTRE)).not.toHaveProperty('listeningCategoryWithdrawnAt');
+  });
+
+  it('une rupture du Sang retombe à Proche : la catégorie d’écoute, donnée à un Proche, reste accordée', async () => {
+    const { partages } = await rompreLeSang({
+      targetLevel: 'BLOOD', relation: SANG, partages: CATEGORIE_PARTAGEE,
+    });
+
+    expect(partage(partages, MOI)).toMatchObject({ listeningCategoryShared: true });
+    expect(partage(partages, AUTRE)).toMatchObject({ listeningCategoryShared: true });
   });
 });
 

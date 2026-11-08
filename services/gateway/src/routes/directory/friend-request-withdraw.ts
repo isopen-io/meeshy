@@ -10,7 +10,7 @@ import {
 } from '@meeshy/shared/types/relation';
 import { backfillFriendship, cooldownEnd, lowerPair } from '../../services/relations/userRelationWriter';
 import { niveauEffectif } from '../../services/friendship';
-import { withdrawRitualSharesBetween } from '../../services/relations/ritualShareWithdrawal';
+import { withdrawSharesAfterDrop } from '../../services/relations/ritualShareWithdrawal';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
 import { forgetFriends } from '../../services/relations/relationCaches';
 import { refuserEnSilence, type DemandeARepondre } from './friend-request-answer';
@@ -66,8 +66,9 @@ async function rompreLien(
     at: now,
     cooldownFor: { userId: autre, until: cooldownEnd(now, thresholdsNow().cooldownDays) },
   });
-  // #14924 — le lien tombe sous le Sang : les partages du rituel s'éteignent, datés chez l'acteur.
-  await withdrawRitualSharesBetween(fastify.prisma, { actorId: acteurId, otherId: autre, at: now });
+  // #14924 — le lien tombe : ce qui ne tient plus au niveau effectif s'éteint, daté chez l'acteur — la même règle que la baisse.
+  const niveauApres = await niveauEffectif(fastify.prisma, acteurId, autre);
+  await withdrawSharesAfterDrop(fastify.prisma, { actorId: acteurId, otherId: autre, level: niveauApres, at: now });
   await forgetFriends(fastify, [demande.senderId, demande.receiverId]);
   // #13934 — le lien rompu : l'écoute s'efface chez qui la voyait.
   await refreshNowPlayingAfter(ecoute, { userA: demande.senderId, userB: demande.receiverId, before: ecouteAvant });

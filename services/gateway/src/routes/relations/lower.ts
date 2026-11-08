@@ -10,7 +10,7 @@ import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWr
 import { loadRelationLink } from '../../services/relations/relationLinks';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
 import { forgetFriends } from '../../services/relations/relationCaches';
-import { withdrawListeningCategoryBetween, withdrawRitualSharesBetween } from '../../services/relations/ritualShareWithdrawal';
+import { withdrawSharesAfterDrop } from '../../services/relations/ritualShareWithdrawal';
 import { asseoirLienHerite, retirerDemandesAuDessus } from '../directory/friend-request-withdraw';
 import { errorResponses, otherUserOf, relationLimiter, relationLinkSchema, sendCoded, userIdParams } from './shared';
 
@@ -70,12 +70,9 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       await retirerDemandesAuDessus(fastify.prisma, viewerId, otherId);
       if (outcome === 'lowered') await forgetFriends(fastify, [viewerId, otherId]);
       const link = await loadRelationLink(fastify.prisma, { viewerId, otherId, now });
-      // Rejoué sans condition, comme le retrait des demandes : sous le Sang, aucun partage du rituel ne reste allumé.
-      if (link.effectiveLevel !== 'BLOOD') await withdrawRitualSharesBetween(fastify.prisma, { actorId: viewerId, otherId, at: now });
-      // #13934 — sous Proche, l'accord de la catégorie d'écoute s'éteint aussi ; l'écoute s'efface chez qui la voyait.
-      if (link.effectiveLevel !== 'BLOOD' && link.effectiveLevel !== 'CLOSE') {
-        await withdrawListeningCategoryBetween(fastify.prisma, { actorId: viewerId, otherId, at: now });
-      }
+      // Rejoué sans condition, comme le retrait des demandes : sous le Sang, aucun partage du rituel ;
+      // sous Proche (#13934), aucun accord de catégorie d'écoute. L'écoute s'efface chez qui la voyait.
+      await withdrawSharesAfterDrop(fastify.prisma, { actorId: viewerId, otherId, level: link.effectiveLevel, at: now });
       await refreshNowPlayingAfter(ecoute, { userA: viewerId, userB: otherId, before: ecouteAvant });
       return sendSuccess(reply, link);
     } catch (error) {
