@@ -3,9 +3,11 @@ import type { CacheStore } from './CacheStore';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import {
   DELIVERY_QUEUE_MAX_PER_USER,
+  DELIVERY_QUEUE_MESSAGE_INDEX_PREFIX,
   DELIVERY_QUEUE_PREFIX,
   DELIVERY_QUEUE_TTL_SECONDS,
 } from '@meeshy/shared/types/delivery-queue';
+import { carriesMessageText } from '../socketio/queuedEventContract';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import type { DeliveryQueueSealer } from './deliveryQueueSealing';
 import { ServerAtRestUnreadableError } from './messaging/serverAtRest';
@@ -61,11 +63,38 @@ return entries
 // costs this bounds. The supersede path needs no trim — it removes one entry
 // and pushes one, leaving the length unchanged.
 //
+// #16706 — l'INDEX INVERSE `messageId -> clés de file` s'écrit ICI, dans le
+// MÊME script, et c'est tout l'argument de cette piste : le tableau de coûts de
+// l'issue la chiffrait à « une écriture Redis de plus par destinataire hors
+// ligne, sur le chemin le plus chaud », ce qui est vrai d'une COMMANDE et faux
+// d'un ALLER-RETOUR. Deux `redis.call` de plus dans un script déjà en vol ne
+// coûtent pas une latence réseau ; un `sadd` séparé en coûterait une, et
+// DOUBLERAIT le chemin d'enfilage, qui fait déjà une passe par destinataire.
+//
+// Il n'est écrit que pour les familles qui portent du TEXTE (ARGV[6] === '1',
+// décidé par `carriesMessageText` côté TypeScript) : une suppression, une
+// épingle ou une réaction n'a pas de clair à purger, donc rien à indexer.
+//
+// Il est écrit sur les TROIS issues, y compris le dédoublonnage (`return 0`) où
+// rien d'autre n'est écrit. Ce n'est pas une symétrie décorative : la seule
+// chose que `return 0` prouve est que l'entrée EST déjà en file, et un index qui
+// aurait expiré pendant que son entrée survit est exactement l'état où le clair
+// redevient introuvable. Deux commandes sur un chemin rare achètent la seule
+// propriété qui compte — l'index ne meurt pas avant ce qu'il désigne.
+//
 // Returns 1 when pushed as a new entry, 0 when an identical 'new' was deduped,
 // 2 when a mutable entry was superseded.
-// KEYS[1] = queue key, ARGV[1] = serialized entry, ARGV[2] = dedup id,
-// ARGV[3] = TTL, ARGV[4] = normalized eventType, ARGV[5] = max entries per user
+// KEYS[1] = queue key, KEYS[2] = message index key,
+// ARGV[1] = serialized entry, ARGV[2] = dedup id,
+// ARGV[3] = TTL, ARGV[4] = normalized eventType, ARGV[5] = max entries per user,
+// ARGV[6] = '1' when the entry carries message text, ARGV[7] = queue key (index member)
 const ENQUEUE_DEDUP_LUA = `
+local function indexHolder()
+  if ARGV[6] == '1' then
+    redis.call('SADD', KEYS[2], ARGV[7])
+    redis.call('EXPIRE', KEYS[2], tonumber(ARGV[3]))
+  end
+end
 local entries = redis.call('LRANGE', KEYS[1], 0, -1)
 for i, entry in ipairs(entries) do
   local ok, decoded = pcall(cjson.decode, entry)
@@ -75,11 +104,13 @@ for i, entry in ipairs(entries) do
       local decodedEventType = decoded.eventType or 'new'
       if decodedEventType == ARGV[4] then
         if ARGV[4] == 'new' then
+          indexHolder()
           return 0
         end
         redis.call('LREM', KEYS[1], 1, entry)
         redis.call('RPUSH', KEYS[1], ARGV[1])
         redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+        indexHolder()
         return 2
       end
     end
@@ -88,6 +119,7 @@ end
 redis.call('RPUSH', KEYS[1], ARGV[1])
 redis.call('LTRIM', KEYS[1], -tonumber(ARGV[5]), -1)
 redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+indexHolder()
 return 1
 `.trim();
 
@@ -147,10 +179,53 @@ function queueKey(userId: string): string {
   return `${DELIVERY_QUEUE_PREFIX}${userId}`;
 }
 
+/**
+ * La clé de l'index inverse d'un message (#16706).
+ *
+ * Son préfixe est DÉLIBÉRÉMENT hors de `DELIVERY_QUEUE_PREFIX` : `cleanup()`
+ * balaie `SCAN MATCH ${DELIVERY_QUEUE_PREFIX}*` et fait un `LRANGE` sur chaque
+ * clé appariée. Un `SET` y répondrait `WRONGTYPE`, l'exception tomberait dans le
+ * `catch` du balayage, et le nettoyage de TOUTES les files s'arrêterait — un
+ * index posé pour empêcher le clair de survivre 48 h aurait désarmé la seule
+ * unité qui le fait expirer. Détail : `DELIVERY_QUEUE_MESSAGE_INDEX_PREFIX`.
+ */
+function messageIndexKey(messageId: string): string {
+  return `${DELIVERY_QUEUE_MESSAGE_INDEX_PREFIX}${messageId}`;
+}
+
+/**
+ * Cette ligne brute est-elle une copie PORTEUSE DE TEXTE de ce message ?
+ *
+ * Les deux conditions sont indissociables. `messageId` seul purgerait aussi
+ * l'annonce de mort qu'on vient d'enfiler pour le même message — c'est-à-dire
+ * le seul événement qui dit au client de retirer la bulle, et la purge
+ * laisserait alors le message affiché pour toujours chez l'absent : le défaut
+ * que `carriesMessageText` existe pour empêcher du côté de la REMISE
+ * (#16685), rejoué du côté du STOCKAGE.
+ *
+ * Une ligne ILLISIBLE rend `false`, et le sens est instruit. On ne peut pas
+ * prouver qu'elle porte ce message, donc la détruire reviendrait à effacer un
+ * inconnu sur une homonymie supposée. Et ce qu'on laisse n'est pas remis :
+ * `parseRawEntries` jette déjà toute ligne informe au drain, et `cleanup()`
+ * la retire à son échéance. La fenêtre est bornée, la destruction ne l'est pas.
+ */
+function isTextBearingCopyOf(raw: string, messageId: string): boolean {
+  try {
+    const entry = JSON.parse(raw) as QueuedMessagePayload;
+    return entry.messageId === messageId && carriesMessageText(entry.eventType);
+  } catch {
+    return false;
+  }
+}
+
 // Parse a Redis LRANGE result into typed entries, dropping (not throwing on)
 // any value that fails to decode so one corrupt entry can never poison a whole
-// drain/peek. `context` names the caller for the diagnostic log line.
-function parseRawEntries(raw: string[], userId: string, context: 'drain' | 'peek'): QueuedMessagePayload[] {
+// drain. `context` names the caller for the diagnostic log line.
+//
+// #16706 — `'peek'` a quitté cette union avec la méthode qui la portait. La
+// garder « au cas où » aurait fait du type une documentation d'un lecteur qui
+// n'existe plus, et c'est exactement ce que le retrait de `peek` corrige.
+function parseRawEntries(raw: string[], userId: string, context: 'drain'): QueuedMessagePayload[] {
   return raw.flatMap(entry => {
     try {
       return [JSON.parse(entry) as QueuedMessagePayload];
@@ -376,10 +451,15 @@ export class RedisDeliveryQueue {
     if (redis) {
       try {
         const key = queueKey(userId);
+        // `carriesMessageText` décide de l'indexation, et c'est le MÊME
+        // prédicat que la garde de vivacité du drain (#16685) : ce qui doit
+        // être revérifié avant d'être REMIS est exactement ce qui doit pouvoir
+        // être retrouvé pour être PURGÉ. Un second prédicat aurait divergé.
+        const indexed = carriesMessageText(entry.eventType);
         const pushed = await redis.eval(
-          ENQUEUE_DEDUP_LUA, 1, key,
+          ENQUEUE_DEDUP_LUA, 2, key, messageIndexKey(entry.messageId),
           serialized, dedupId, String(DELIVERY_QUEUE_TTL_SECONDS), normalizedEventType(entry),
-          String(DELIVERY_QUEUE_MAX_PER_USER)
+          String(DELIVERY_QUEUE_MAX_PER_USER), indexed ? '1' : '0', userId
         );
         if (pushed === 0) {
           logger.debug('Delivery queue dedup: dedup id already queued', { userId, dedupId, messageId: entry.messageId });
@@ -442,14 +522,108 @@ export class RedisDeliveryQueue {
     this.memoryQueue.set(userId, withNew.filter((_, index) => !evictIndices.has(index)));
   }
 
+  /**
+   * Retire de la file TOUTE copie porteuse de texte d'un message, sur toutes
+   * les files qui en gardaient une (#16706).
+   *
+   * ## Le défaut qu'elle ferme, et pourquoi il n'est pas celui de #16685
+   *
+   * #16685 a fermé la REMISE : le drain interroge la vivacité du message avant
+   * d'émettre, donc un message brûlé, rappelé ou échu ne se rejoue plus. Il
+   * n'avait rien changé au STOCKAGE, délibérément. Or
+   * `enqueueForOfflineParticipants` écrit `payload: body` VERBATIM, et quand
+   * `ExpiredMessagesCleanupService._burn` détruit la ligne — `content: ''`,
+   * `encryptedContent: null`, `translations: null`, `metadata: null`, fichiers
+   * supprimés — la copie enfilée RESTAIT, en clair, dans
+   * `delivery:queue:<userId>` et dans les sauvegardes AOF de Redis, jusqu'au
+   * prochain drain de ce destinataire ou à l'expiration du TTL : **48 h**.
+   *
+   * L'invariant que `_burn` revendique dans son propre commentaire — « le
+   * contenu est détruit, c'est l'invariant qui compte » — tenait donc dans
+   * Mongo et pas ici. Les conversations `server-at-rest` sont scellées à
+   * l'enfilage (#12822) : ce sous-ensemble, et lui seul, était atténué.
+   *
+   * ## Ce qu'elle ne prétend PAS être
+   *
+   * Elle est best-effort, et les deux moitiés sont indépendantes PAR
+   * CONSTRUCTION. Une entrée que l'index a perdue — Redis indisponible à
+   * l'enfilage, repli mémoire, index expiré, entrée évincée par le `LTRIM` —
+   * reste refusée à la remise par la garde du drain, qui ne lit que la base.
+   * L'une empêche de GARDER, l'autre de REMETTRE, et aucune ne suppose l'autre :
+   * c'est ce qui fait que l'échec de celle-ci n'ouvre pas de fuite de
+   * livraison, et que l'échec de celle-là n'ouvre pas de fuite au repos.
+   *
+   * Elle ne touche pas non plus les familles sans texte. L'annonce de mort
+   * (`deleted` / `expired`) qui DÉCLENCHE cette purge est elle-même en file pour
+   * les mêmes destinataires : la purger retirerait le seul événement qui dit au
+   * client de retirer la bulle, et l'absent garderait un message détruit affiché
+   * pour toujours — le défaut EXACT que le cadrage de `carriesMessageText`
+   * existe pour empêcher, rejoué à l'envers.
+   *
+   * Rend le nombre d'entrées effectivement retirées, les deux tranches
+   * confondues.
+   */
+  async purgeMessage(messageId: string): Promise<number> {
+    // La tranche MÉMOIRE d'abord, et sans condition : elle ne dépend pas de
+    // Redis, c'est précisément là que vivent les entrées écrites PENDANT une
+    // panne Redis, et un `return` anticipé sur `!redis` les laisserait derrière.
+    let removed = this.purgeMemorySlice(messageId);
+
+    const redis = this.getRedis();
+    if (!redis) return removed;
+
+    const indexKey = messageIndexKey(messageId);
+    try {
+      const holders = await redis.smembers(indexKey);
+      for (const holder of holders) {
+        const key = queueKey(holder);
+        const raw = await redis.lrange(key, 0, -1);
+        const doomed = raw.filter((entry) => isTextBearingCopyOf(entry, messageId));
+        if (doomed.length === 0) continue;
+        // `PRUNE_STALE_LUA` retire par VALEUR BRUTE exacte, et c'est ce qui rend
+        // la purge sûre contre la course que le commentaire de `DRAIN_LUA`
+        // décrit : une entrée enfilée APRÈS notre `LRANGE` est une autre valeur,
+        // donc jamais touchée. Un `DEL` + réécriture du reste perdrait ce qui est
+        // arrivé entre la lecture et l'écriture — l'erreur que `cleanup()` a déjà
+        // commise une fois.
+        const pruned = await redis.eval(PRUNE_STALE_LUA, 1, key, ...doomed);
+        removed += typeof pruned === 'number' ? pruned : doomed.length;
+      }
+      await redis.del(indexKey);
+    } catch (error) {
+      // Best-effort, comme tout ce module : la destruction en base a déjà eu
+      // lieu, et la garde de vivacité du drain tient la remise. Lever ici
+      // transformerait une suppression réussie en erreur rendue à l'appelant.
+      logger.warn('Delivery queue purge failed for a destroyed message', { messageId, error });
+    }
+
+    return removed;
+  }
+
+  /**
+   * La tranche en mémoire, balayée par USAGE et non par index : elle ne porte
+   * aucune clé Redis, donc l'index inverse ne la désigne pas. Son coût est borné
+   * par `MEMORY_QUEUE_MAX_USERS` × `MEMORY_QUEUE_MAX_PER_USER`, et elle n'est
+   * peuplée que pendant une panne Redis.
+   */
+  private purgeMemorySlice(messageId: string): number {
+    let removed = 0;
+    for (const [userId, entries] of this.memoryQueue.entries()) {
+      const kept = entries.filter(
+        (entry) => !(entry.messageId === messageId && carriesMessageText(entry.eventType)),
+      );
+      if (kept.length === entries.length) continue;
+      removed += entries.length - kept.length;
+      if (kept.length === 0) this.memoryQueue.delete(userId);
+      else this.memoryQueue.set(userId, kept);
+    }
+    return removed;
+  }
+
   async drain(userId: string): Promise<QueuedMessagePayload[]> {
     const { replay, retry } = await this.openedForReplay(userId, await this.drainStored(userId));
     if (retry.length > 0) await this.restoreForRetry(userId, retry);
     return replay;
-  }
-
-  async peek(userId: string, limit?: number): Promise<QueuedMessagePayload[]> {
-    return (await this.openedForReplay(userId, await this.peekStored(userId, limit))).replay;
   }
 
   private async drainStored(userId: string): Promise<QueuedMessagePayload[]> {
@@ -485,56 +659,6 @@ export class RedisDeliveryQueue {
     // replay a re-added reaction (or a later edit) BEFORE an intervening remove,
     // converging the reconnecting offline user to a state the sender never had.
     return [...memoryEntries].sort(byEnqueuedAt);
-  }
-
-  private async peekStored(userId: string, limit?: number): Promise<QueuedMessagePayload[]> {
-    const redis = this.getRedis();
-    const memoryEntries = this.memoryQueue.get(userId) ?? [];
-
-    if (redis) {
-      try {
-        const key = queueKey(userId);
-
-        // Fast path: no memory-fallback entries, so the Redis slice IS the whole
-        // queue. Full-read (0, -1) and sort by enqueuedAt exactly like drain()
-        // BEFORE applying the limit. Slot order now tracks ARRIVAL order at
-        // Redis (ENQUEUE_DEDUP_LUA re-pushes a superseded entry at the tail
-        // rather than rewriting its slot), but arrival order and `enqueuedAt`
-        // are still two different clocks — entries are stamped by whichever
-        // gateway instance enqueued them. drain() orders by `enqueuedAt`, so
-        // peek() must too, or it would preview a replay order drain() never
-        // produces. A bounded lrange(0, limit-1) would slice before that sort.
-        if (memoryEntries.length === 0) {
-          const rawEntries = await redis.lrange(key, 0, -1);
-          const sorted = parseRawEntries(rawEntries, userId, 'peek').sort(byEnqueuedAt);
-          return limit ? sorted.slice(0, limit) : sorted;
-        }
-
-        // Mixed state: memory-fallback entries queued during a transient Redis
-        // outage coexist with the Redis-backed slice after recovery. Merge and
-        // order by enqueuedAt exactly like drain() so the preview reflects true
-        // replay order (a memory entry can sort ahead of a Redis one), then
-        // apply the limit across the merged set. Without this, peek() would omit
-        // the memory-fallback entries entirely — the very orphaning drain()
-        // guards against.
-        const rawEntries = await redis.lrange(key, 0, -1);
-        const merged = collapseCrossSliceDuplicates(
-          [...memoryEntries, ...parseRawEntries(rawEntries, userId, 'peek')].sort(byEnqueuedAt)
-        );
-        return limit ? merged.slice(0, limit) : merged;
-      } catch (error) {
-        logger.warn('Redis peek failed, falling back to memory', { userId, error });
-      }
-    }
-
-    // Sort by enqueuedAt before applying the limit, exactly like drain()'s
-    // memory path (and peek()'s Redis fast/mixed paths above): an in-place
-    // supersede (see enqueue()) keeps an entry's original array slot while
-    // stamping a NEWER enqueuedAt, so raw slot order can disagree with
-    // chronological order. Returning slot order here would preview a first
-    // entry — and, under `limit`, a slice — that drain() never replays.
-    const entries = [...(this.memoryQueue.get(userId) ?? [])].sort(byEnqueuedAt);
-    return limit ? entries.slice(0, limit) : entries;
   }
 
   async size(userId: string): Promise<number> {
