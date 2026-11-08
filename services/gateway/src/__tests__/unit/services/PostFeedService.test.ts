@@ -209,6 +209,13 @@ beforeEach(() => {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
     } as unknown as PrismaClient['postMention'],
+    community: {
+      findFirst: jest.fn().mockResolvedValue({ isPrivate: false, createdBy: 'creator-1' }),
+    } as unknown as PrismaClient['community'],
+    communityMember: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    } as unknown as PrismaClient['communityMember'],
   } as unknown as PrismaClient;
 });
 
