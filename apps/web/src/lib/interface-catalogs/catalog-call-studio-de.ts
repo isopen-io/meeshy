@@ -75,6 +75,7 @@ const de = {
   'callStudio.mode.pickFrame': 'Rahmen wählen',
   'callStudio.capture.framePreview': 'Vorschau des Rahmens {name}',
   'callStudio.liveFrame.hold': 'Live-Rahmen',
+  'callStudio.liveFrame.short': 'Rahmen',
   'callStudio.liveFrame.hint': 'Behält diesen Rahmen während des ganzen Anrufs um beide Videos und schlägt ihn deinem Gegenüber vor',
 } satisfies CallStudioCatalog;
 

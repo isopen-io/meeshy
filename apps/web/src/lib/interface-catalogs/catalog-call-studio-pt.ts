@@ -75,6 +75,7 @@ const pt = {
   'callStudio.mode.pickFrame': 'Escolher uma moldura',
   'callStudio.capture.framePreview': 'Pré-visualização da moldura {name}',
   'callStudio.liveFrame.hold': 'Moldura ao vivo',
+  'callStudio.liveFrame.short': 'Moldura',
   'callStudio.liveFrame.hint': 'Mantém esta moldura em volta dos dois vídeos durante toda a chamada e a sugere à outra pessoa',
 } satisfies CallStudioCatalog;
 

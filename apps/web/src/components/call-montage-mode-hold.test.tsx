@@ -115,6 +115,7 @@ describe('CallMontageMode — l’interrupteur du cadre en direct', () => {
     expect(option?.getAttribute('aria-label')).toBe('Cadre en direct');
     expect(option?.getAttribute('title')).toBe("Garde ce cadre autour des deux vidéos pendant tout l'appel, et le propose à votre correspondant");
     expect(option?.getAttribute('aria-pressed')).toBe('false');
+    expect(option?.textContent).toBe('Cadre');
     await view.press('[data-call-live-frame-hold]');
     expect(toggled).toEqual(['jovial.direct.duo']);
     view.done();

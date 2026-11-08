@@ -75,6 +75,7 @@ const en = {
   'callStudio.mode.pickFrame': 'Choose a frame',
   'callStudio.capture.framePreview': 'Preview of the {name} frame',
   'callStudio.liveFrame.hold': 'Live frame',
+  'callStudio.liveFrame.short': 'Frame',
   'callStudio.liveFrame.hint': 'Keeps this frame around both videos for the whole call, and offers it to the other person',
 } satisfies CallStudioCatalog;
 

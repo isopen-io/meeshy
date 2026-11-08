@@ -80,6 +80,7 @@ const fr = {
   'callStudio.mode.pickFrame': 'Choisir un cadre',
   'callStudio.capture.framePreview': 'Aperçu du cadre {name}',
   'callStudio.liveFrame.hold': 'Cadre en direct',
+  'callStudio.liveFrame.short': 'Cadre',
   'callStudio.liveFrame.hint': 'Garde ce cadre autour des deux vidéos pendant tout l\'appel, et le propose à votre correspondant',
 } as const;
 
