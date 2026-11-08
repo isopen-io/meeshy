@@ -175,7 +175,7 @@ export function emitEditedToReaders<P extends ServerEventPayload<typeof SERVER_E
       // toutes les suivantes, que la file hors ligne ne compense pas (elle
       // saute les connectés) — audit adversarial de #17026.
       safeBroadcast(
-        'message:edited (per reader)',
+        `message:edited (per reader ${target.room})`,
         () => io.to(target.room).emit(SERVER_EVENTS.MESSAGE_EDITED, plan.signFor(params.sealedVariant(payload, target.key), target.participantId)),
       );
     }

@@ -715,3 +715,72 @@ chez les trois clients avant de décider), #17067 (les deux fichiers hors
 budget grossissent sous la marge de leur dette : +15 et +17 après avoir
 déplacé la justification au site unique, et c'est du code, pas du
 commentaire), #17068 (les trois pièges armés du balayage textuel).
+
+### Septième tour — second passage de l'audit : NON BLOQUANT, et une correction d'un token
+
+Verdict : **fusionnable en l'état**. L'auditeur a refait sa mesure site par site
+avec sa PROPRE boucle de mutations — pas la mienne — et confirmé **9 sur 9** (dix
+mutations, dix constats). Il a re-dérivé `ENQUEUE_CALLS` mécaniquement et le
+trouve juste, vérifié que `broadcastToUser` et `safely()` sont bien auto-gardés
+(mes exclusions tenaient), et cherché un dixième site sous une AUTRE définition
+de « durable » — le push APNs/FCM — où il précède toute émission sur les deux
+chemins. Rien à trouver.
+
+#### La seule chose qu'il a demandée dans le lot, et elle était juste
+
+`emitPerReader` : `base` — donc `payloadForKey` — était calculé **une ligne
+au-dessus** de la garde que mon propre commentaire justifiait *par lui*. Prouvé
+par exécution : trois cibles dont une masquée, un `payloadForKey` qui lève pour
+elle ⇒ `servis = ["user:r1"]`, la troisième perdue, l'exception hors de la
+boucle. Le lecteur concerné est celui d'un transfert refusé ou d'une citation
+d'éphémère scellée (#8562) — la population la plus protégée du chemin.
+
+> Un commentaire qui ÉNONCE une contrainte est une AFFIRMATION, et celui-ci
+> disait faux de la ligne juste au-dessus de lui. Le déplacement coûte un token.
+
+#### Les deux défauts LATENTS de mon cliquet, prouvés sur jumelles et corrigés
+
+| | ce qui se passait | fixture |
+|---|---|---|
+| **`exitsBeforeEnqueue`** testait `return`/`throw` sur le corps ENTIER du bloc | un `return` dans une branche IMBRIQUÉE masquait une émission dont le flot retombe pourtant sur l'enfilage | `fx/a` rendait 0 au lieu de 1 |
+| **`BLOCK_KEYWORD`** exigeait `\([^()]*\)` | il échouait sur `if (rows.filter((r) => r).length > 0) {`, après quoi `FUNCTION_HEAD` matchait le `)` de la CONDITION et `unitStart` s'arrêtait sur l'accolade du `if` — **la panne même que ce lot venait de corriger**, réintroduite pour toute condition non triviale | `fx/c` rendait 0 au lieu de 1 |
+
+Corrigés (`exitsAtOwnLevel`, `headBeforeBrace`), et vérifiés contre les cinq
+fixtures de l'auditeur : `a` et `c` passent de 0 à **1**, les contrôles `b` et
+`d` restent à 1. La cinquième (`e`, le faux positif de fermeture) reste à 1 —
+c'est une limite, pas un défaut, et elle est désormais ÉCRITE.
+
+#### Les limites du cliquet sont écrites AVEC LEUR CHIFFRE
+
+`EMIT_HELPERS` couvre **4 des 24** helpers qui émettent sans se garder (40
+fonctions exportées émettent, 24 ne portent ni `try`, ni `safeBroadcast`, ni
+`safely`). Les vingt autres n'apparaissent dans aucune fenêtre d'enfilage
+aujourd'hui, donc aucun site n'échappe — mais le rapport est d'un sixième, et
+**ce n'est pas réparable par un meilleur inventaire : c'est la limite de
+l'outil.**
+
+> « Un inventaire à la main » sans ordre de grandeur ne dit pas s'il manque un
+> nom ou vingt. C'est l'omission de cette limite — la première version ne
+> déclarait que celle de l'ENFILAGE — qui a fait certifier propres quatre des
+> sept sites du lot.
+
+Et le témoin de couverture assert désormais l'**ÉCART** entre le balayage et sa
+version aveugle aux helpers (`sweepReach(dir, { helpersBlind: true })`), pas un
+plancher absolu : avec helpers 14 candidats, sans 9. La marge du plancher était
+d'UNE unité et fortuite — le premier `.emit(` direct ajouté ailleurs l'aurait
+restaurée en silence. L'écart, lui, tombe quand on retire un helper de
+l'inventaire : prouvé (`>= 4` reçoit 3).
+
+#### Ce qui part en issue plutôt que d'être bâclé
+
+**#17086** — le chemin NOMINAL de `message:new` porte QUATRE émissions
+indépendantes sous un seul enrobage, et la diffusion de room qui lève emporte la
+bulle de l'expéditeur (seule charge à porter `clientMessageId`) et tous les
+lecteurs masqués (qui n'ont QUE leur room personnelle). Mesuré :
+`servis = []`. J'avais appliqué le raisonnement par cible au chemin par LECTEUR
+et pas au plus fréquenté des deux.
+
+Et ce que l'auditeur signale sans que ce soit un défaut : passer `onError`
+SUPPRIME le `[broadcast] …` par défaut, donc sur `deliverTextTranslation` la
+sévérité du signal a baissé deux fois (ERROR + `stats.errors++` → WARN). C'est
+cohérent avec mon arbitrage de diagnostic, et ça se dit.

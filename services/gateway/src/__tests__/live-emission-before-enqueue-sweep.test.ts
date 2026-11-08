@@ -36,6 +36,14 @@ describe('#17026 — une émission vivante ne précède pas un enfilage durable 
     expect(reach.files).toBeGreaterThanOrEqual(8);
     expect(reach.enqueuePositions).toBeGreaterThanOrEqual(14);
     expect(reach.emitCandidates).toBeGreaterThanOrEqual(10);
+
+    // Et surtout : l'ÉCART avec la version AVEUGLE aux helpers. Un plancher
+    // absolu ne gardait la reconnaissance des helpers que par une marge
+    // fortuite d'UNE unité (14 contre 9) — le premier `.emit(` direct ajouté
+    // en amont d'un enfilage l'aurait restaurée en silence. L'écart, lui, ne
+    // peut pas être restauré par accident : il mesure la propriété elle-même.
+    const blind = sweepReach(GATEWAY_SRC, { helpersBlind: true });
+    expect(reach.emitCandidates - blind.emitCandidates).toBeGreaterThanOrEqual(4);
   });
 
   it("l'inventaire est VIDE, et le reste", () => {

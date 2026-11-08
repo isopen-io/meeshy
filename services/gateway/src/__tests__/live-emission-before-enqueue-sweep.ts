@@ -30,11 +30,35 @@ import { blankOutNonCode, walk } from './detached-promise-catch-sweep';
  * ─── Ce que l'outil peut dire, et ce qu'il ne peut pas ───────────────────────
  *
  * Il est TEXTUEL. Il voit les appels d'enfilage par leur NOM, l'unité par
- * appariement d'accolades, et la garde par la position relative des blocs. Il ne
- * suit aucun alias, aucune indirection, aucun appel de méthode qui enfile pour
- * le compte d'un autre. Un site qui enfile par un helper d'un nom inconnu de
- * {@link ENQUEUE_CALLS} lui échappe, et c'est la limite à redire avant de lire
- * son vert comme une preuve.
+ * appariement d'accolades, et la garde par la position relative des blocs. Ses
+ * limites sont données avec leur CHIFFRE, parce qu'« un inventaire à la main »
+ * sans ordre de grandeur ne dit pas s'il manque un nom ou vingt :
+ *
+ * 1. **{@link EMIT_HELPERS} couvre 4 des 24 helpers qui émettent sans se
+ *    garder.** Mesuré au second passage de l'audit : 40 fonctions exportées du
+ *    gateway émettent, 24 ne portent ni `try`, ni `safeBroadcast`, ni `safely`.
+ *    Les vingt autres n'apparaissent dans AUCUNE fenêtre d'enfilage
+ *    aujourd'hui — donc aucun site n'échappe pour l'instant — mais le rapport
+ *    est d'un sixième, et l'inventaire sera faux le premier jour où l'une
+ *    d'elles est appelée en amont d'un enfilage. **Ce n'est pas réparable par un
+ *    meilleur inventaire : c'est la limite de l'outil.**
+ * 2. Un site qui enfile par un helper d'un nom inconnu de
+ *    {@link ENQUEUE_CALLS} lui échappe. Le délégué
+ *    `syncConversationListOnNewMessage` y figure pour cette raison ; un futur
+ *    délégué n'y figurera pas tout seul.
+ * 3. **Une FERMETURE définie avant l'enfilage est un faux positif.** Un
+ *    `const later = () => io.to(r).emit(…)` suivi d'un enfilage puis d'un
+ *    `setTimeout(later, …)` est signalé, alors que l'émission n'est en amont
+ *    que dans le TEXTE. Aucune instance vivante. Devant un constat, vérifier
+ *    que l'émission est dans le FLOT et pas seulement au-dessus dans le
+ *    fichier.
+ * 4. Il ne voit pas du tout la moitié « LECTURE non gardée » de la famille
+ *    (#17026 en nommait quatre sites) : seules les ÉMISSIONS sont balayées.
+ *
+ * Ces quatre limites sont la raison pour laquelle son vert n'est pas une preuve
+ * d'absence. Elles sont écrites ici parce que la première version n'en
+ * déclarait qu'une — la 2 — et que l'omission de la 1 lui a fait certifier
+ * propres quatre des sept sites que son propre lot venait de corriger.
  *
  * Il se TAIT en revanche, par construction, sur les deux formes de garde
  * légitimes — un `try` qui n'englobe PAS l'enfilage, et un enrobage
@@ -179,7 +203,38 @@ function spansAfter(source: string, re: RegExp, open: string, close: string): Ar
  * `catch`, `else` ou de bloc nu n'en est pas une, et on continue de remonter.
  */
 const FUNCTION_HEAD = /(?:function\b[^{};]*|=>|\)\s*(?::\s*[^{};]*)?)\s*$/;
-const BLOCK_KEYWORD = /\b(?:if|for|while|switch|try|catch|finally|else|do)\s*(?:\([^()]*\))?\s*$/;
+const BLOCK_KEYWORD = /\b(?:if|for|while|switch|try|catch|finally|else|do)\s*$/;
+
+/**
+ * Le texte qui précède une accolade, son groupe de parenthèses APPARIÉ retiré.
+ *
+ * Sans ce retrait, `BLOCK_KEYWORD` exigeait `\([^()]*\)` et échouait donc sur
+ * toute condition qui contient un appel — `if (rows.filter((r) => r).length)
+ * {` — après quoi `FUNCTION_HEAD` matchait le `)` FINAL DE LA CONDITION et
+ * `unitStart` s'arrêtait sur l'accolade du `if`. C'est-à-dire **la panne même
+ * que ce lot venait de corriger**, réintroduite pour toute condition non
+ * triviale, et le second passage de l'audit l'a prouvée sur jumelles.
+ *
+ * L'ordre compte autant que le retrait : on ne laisse jamais `FUNCTION_HEAD`
+ * arbitrer un `)` qui appartient à une condition.
+ */
+function headBeforeBrace(source: string, brace: number): string {
+  let end = brace - 1;
+  while (end >= 0 && /\s/.test(source[end] as string)) end -= 1;
+  if (source[end] === ')') {
+    let depth = 0;
+    for (; end >= 0; end -= 1) {
+      if (source[end] === ')') depth += 1;
+      else if (source[end] === '(') {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    end -= 1;
+    while (end >= 0 && /\s/.test(source[end] as string)) end -= 1;
+  }
+  return source.slice(Math.max(0, end - 400), end + 1);
+}
 
 function unitStart(source: string, offset: number): number {
   let depth = 0;
@@ -190,9 +245,10 @@ function unitStart(source: string, offset: number): number {
         depth -= 1;
         continue;
       }
-      const head = source.slice(Math.max(0, cursor - 400), cursor);
-      if (BLOCK_KEYWORD.test(head)) continue;
-      if (FUNCTION_HEAD.test(head)) return cursor;
+      // Le mot-clé se lit PARENTHÈSES RETIRÉES, et il se lit AVANT
+      // `FUNCTION_HEAD` — voir {@link headBeforeBrace}.
+      if (BLOCK_KEYWORD.test(headBeforeBrace(source, cursor))) continue;
+      if (FUNCTION_HEAD.test(source.slice(Math.max(0, cursor - 400), cursor))) return cursor;
       // Accolade de bloc nu ou de littéral d'objet : on continue de remonter.
     }
   }
@@ -246,8 +302,31 @@ function innermostBlock(source: string, offset: number): readonly [number, numbe
 function exitsBeforeEnqueue(source: string, emitAt: number, enqueueAt: number): boolean {
   const block = innermostBlock(source, emitAt);
   if (!block || block[1] >= enqueueAt) return false;
-  const body = source.slice(block[0], block[1]);
-  return /\b(?:return|throw)\b/.test(body);
+  return exitsAtOwnLevel(source, block);
+}
+
+/**
+ * Le bloc porte-t-il un `return` / `throw` À SON PROPRE NIVEAU ?
+ *
+ * Tester le corps ENTIER masquait un VRAI site, et le second passage de l'audit
+ * l'a prouvé sur jumelles : un `return` dans une branche imbriquée — ou dans un
+ * `.map()` du même bloc — faisait écarter une émission dont le flot retombe
+ * pourtant sur l'enfilage. Seul un `return` au niveau du bloc prouve que le
+ * chemin SORT.
+ */
+function exitsAtOwnLevel(source: string, [open, close]: readonly [number, number]): boolean {
+  let depth = 0;
+  const exit = /^(?:return|throw)\b/;
+  for (let cursor = open + 1; cursor < close; cursor += 1) {
+    const char = source[cursor];
+    if (char === '{' || char === '(' || char === '[') depth += 1;
+    else if (char === '}' || char === ')' || char === ']') depth -= 1;
+    else if (depth === 0 && (char === 'r' || char === 't')) {
+      const before = source[cursor - 1] ?? ' ';
+      if (!/[A-Za-z0-9_$.]/.test(before) && exit.test(source.slice(cursor, cursor + 6))) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -315,7 +394,7 @@ export function sweepUnguardedLiveEmissions(srcDir: string): UnguardedLiveEmissi
  * d'émissions candidates examinées — les deux quantités dont dépend la capacité
  * du cliquet à rendre un constat.
  */
-export function sweepReach(srcDir: string): {
+export function sweepReach(srcDir: string, options: { readonly helpersBlind?: boolean } = {}): {
   readonly files: number;
   readonly enqueuePositions: number;
   readonly emitCandidates: number;
@@ -333,6 +412,11 @@ export function sweepReach(srcDir: string): {
     if (!ENQUEUE_CALLS.some((name) => raw.includes(name.split('.')[0] as string))) continue;
 
     const code = blankOutNonCode(raw);
+    // `helpersBlind` rejoue la PREMIÈRE version du balayage — `.emit(` textuel
+    // seul. Le témoin de couverture compare les deux : c'est l'ÉCART qui garde
+    // la reconnaissance des helpers, là où un plancher absolu la laissait
+    // repasser au vert dès qu'un `.emit(` direct est ajouté ailleurs.
+    const emitSource = options.helpersBlind ? '\\.\\s*emit\\s*\\(' : EMIT_RE.source;
     const enqueues = new RegExp(ENQUEUE_RE.source, 'g');
     let enqueue: RegExpExecArray | null;
     let seenHere = 0;
@@ -340,7 +424,7 @@ export function sweepReach(srcDir: string): {
       if (DECLARATION_BEFORE.test(code.slice(Math.max(0, enqueue.index - 24), enqueue.index))) continue;
       seenHere += 1;
       const start = unitStart(code, enqueue.index);
-      const emits = new RegExp(EMIT_RE.source, 'g');
+      const emits = new RegExp(emitSource, 'g');
       emits.lastIndex = start;
       let emit: RegExpExecArray | null;
       while ((emit = emits.exec(code)) !== null && emit.index < enqueue.index) emitCandidates += 1;

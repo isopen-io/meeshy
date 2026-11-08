@@ -116,7 +116,7 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
         // priverait toutes les suivantes de la pièce enrichie, et la file ne
         // compense pas les comptes connectés.
         safeBroadcast(
-          'attachment-updated (per reader)',
+          `attachment-updated (per reader ${target.room})`,
           () => io.to(target.room).emit(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, {
             ...payload,
             attachment: plan.signAttachment(payload.attachment, target.participantId),

@@ -85,4 +85,8 @@ de site le dit maintenant en autant de mots, parce que la première version que
 j'avais écrite se lisait comme un correctif de durabilité, et ne l'était pas.
 
 Détail : `services/gateway/src/__tests__/live-emission-before-enqueue-sweep.ts`,
-`services/gateway/src/socketio/emitLiveBestEffort.ts`.
+et `safeBroadcast` dans `services/gateway/src/socketio/serverEmit.ts` — l'enrobage
+est celui qui existait DÉJÀ. Le lot avait d'abord écrit un second helper
+(`emitLiveBestEffort`) sans voir celui-ci ; il a été supprimé, et cette ligne
+pointait encore son chemin. Un document qui dit vrai sur le principe et faux sur
+le chemin est plus coûteux qu'un document absent (#4455).

@@ -113,17 +113,36 @@ function emitPerReader<P extends MessageNewPayload>(input: MessageNewEmission<P>
   const senderRoom = input.senderUserId ? ROOMS.user(input.senderUserId) : null;
   for (const target of readerSigned.targets) {
     const isSender = target.participantId === input.senderParticipantId || target.room === senderRoom;
-    const base = isSender ? input.senderPayload : hidden.has(target.key) ? input.payloadForKey(target.key) : input.peerPayload;
     // L'enrobage est PAR CIBLE, et c'est la GRANULARITÉ qui compte ici (audit
     // adversarial de #17026). Un enrobage autour de la boucle entière garde
     // bien ce qui la suit, mais une cible qui lève prive TOUTES les suivantes :
     // la file hors ligne ne les compense pas, puisqu'elle saute les comptes
     // CONNECTÉS. Et la charge DIFFÈRE par lecteur (`signFor`, `payloadForKey`),
-    // donc un encodeur en défaut échoue par cible, pas globalement. Le coût
-    // d'un `try` par itération est nul au regard de « tous les suivants perdus ».
+    // donc un encodeur en défaut échoue par cible, pas globalement.
+    //
+    // `payloadForKey` est DANS la fermeture, et c'est le second passage de
+    // l'audit qui l'a exigé : il vivait une ligne AU-DESSUS de la garde que ce
+    // commentaire justifie par lui. Mesuré sur trois cibles dont une masquée
+    // et un `payloadForKey` qui lève pour elle : une seule cible servie, les
+    // suivantes perdues, et l'exception hors de la boucle. Le lecteur concerné
+    // est celui d'un transfert refusé ou d'une citation d'éphémère scellée
+    // (#8562) — la population la plus protégée du chemin. Un commentaire qui
+    // ÉNONCE une contrainte est une AFFIRMATION, et celui-ci disait faux de la
+    // ligne juste au-dessus de lui.
+    //
+    // Le `label` nomme la ROOM : sur une panne par cible, l'identité de la
+    // cible est la seule information utile, et c'était le seul endroit du lot
+    // où elle n'était pas journalisée.
     safeBroadcast(
-      'message:new (per reader)',
-      () => input.io.to(target.room).emit(SERVER_EVENTS.MESSAGE_NEW, readerSigned.signFor(base, target.participantId)),
+      `message:new (per reader ${target.room})`,
+      () => {
+        const base = isSender
+          ? input.senderPayload
+          : hidden.has(target.key)
+            ? input.payloadForKey(target.key)
+            : input.peerPayload;
+        input.io.to(target.room).emit(SERVER_EVENTS.MESSAGE_NEW, readerSigned.signFor(base, target.participantId));
+      },
     );
   }
 }
