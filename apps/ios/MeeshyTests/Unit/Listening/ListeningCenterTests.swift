@@ -110,6 +110,16 @@ final class ListeningCenterTests: XCTestCase {
         XCTAssertNil(ListeningBandText.band(for: rig.sut.byUser["alice"]))
     }
 
+    func test_aClearedForSomeoneNotShown_changesNothingElse() {
+        let rig = makeRig()
+        rig.sut.receive(served("bob", title: "Nocturne"))
+
+        rig.sut.clear("alice")
+
+        XCTAssertEqual(rig.sut.byUser["bob"]?.title, "Nocturne")
+        XCTAssertNil(rig.sut.byUser["alice"])
+    }
+
     func test_withoutANewSend_theStateFadesAtItsDeadline_countedOnTheDeviceClock() {
         let rig = makeRig()
         rig.sut.receive(served(at: -3_600, lifetime: 120))
