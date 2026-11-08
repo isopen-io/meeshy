@@ -196,6 +196,8 @@ fun CallScreen(
             }
             val liveFrame: CallLiveFrameViewModel = hiltViewModel()
             val liveFrameState by liveFrame.controller.state.collectAsStateWithLifecycle()
+            // Loi 16 : le cadre en direct est un habit du DUO ; il tombe dès que l'appel passe à trois.
+            LaunchedEffect(groupShown) { if (groupShown) liveFrame.controller.leaveDuo() }
             val framed = CallLiveFrameStage.framesTheDuo(
                 frameId = liveFrameState.frameId,
                 isVideoCall = state.isVideoCall,
