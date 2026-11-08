@@ -672,6 +672,10 @@ async function afficher(payload) {
     await traiterAppel(data);
     return;
   }
+  if (texte(data.type) === TALKIE_PUSH_TYPE) {
+    await annoncerTalkie(data);
+    return;
+  }
 
   /* Démarré EN PARALLÈLE de la logique de bannière, jamais attendu avant —
      un accusé de remise ne doit pas retarder ce que le lecteur VOIT. Le
@@ -711,6 +715,85 @@ async function afficher(payload) {
   } finally {
     await accuse;
   }
+}
+
+/**
+ * LE TALKIE D'URGENCE, ONGLET FERMÉ (#17141, #17144) — un Proche parle pendant
+ * que personne ne regarde : la passerelle pousse `talkie_incoming` (titre et
+ * corps localisés, `talkieId`, `fromUserId`, nom de l'émetteur, et parfois
+ * l'audio `audioUrl`). La notification dit « X vous parle » ; la toucher ouvre
+ * (ou focalise) l'app, qui rattrape la voix par `talkie:join`.
+ *
+ * C'est la SEULE notification de Meeshy qui porte une action de LECTURE
+ * (directive porteur 2026-11-08) : « Écouter » ({@link TALKIE_LISTEN_ACTION})
+ * fait jouer la voix par un onglet déjà ouvert SANS le mettre au premier plan
+ * — un worker ne joue pas de son lui-même ; sans onglet, elle ouvre l'app sur
+ * le talkie. Aucune autre notification ne la porte : `sw-push-talkie.test.ts`
+ * en est le témoin. D-11 vaut ici aussi : un onglet visible l'entend déjà.
+ */
+const TALKIE_PUSH_TYPE = 'talkie_incoming';
+const TALKIE_TAG_PREFIX = 'talkie:';
+const TALKIE_LISTEN_ACTION = 'talkie-listen';
+/** JUMEAUX de `TALKIE_PARAM`, `TALKIE_AUDIO_PARAM` et `TALKIE_WAKE_MESSAGE` (`src/lib/talkie/talkie-wake-intent.ts`). */
+const TALKIE_PARAM = 'talkie';
+const TALKIE_AUDIO_PARAM = 'talkieAudio';
+const TALKIE_WAKE_MESSAGE = 'TALKIE_WAKE';
+/** Le libellé d'« Écouter » quand la passerelle n'en sert pas : le worker ne charge aucun catalogue. */
+const TALKIE_LISTEN_LABELS = { fr: 'Écouter', en: 'Listen', es: 'Escuchar', de: 'Anhören', it: 'Ascolta', pt: 'Ouvir', ar: 'استماع' };
+const TALKIE_TALKS_LABELS = { fr: ' vous parle', en: ' is talking to you', es: ' te está hablando', de: ' spricht mit dir', it: ' ti sta parlando', pt: ' está falando com você', ar: ' يتحدث إليك' };
+
+function langueDuNavigateur() {
+  const langue = texte(self.navigator && self.navigator.language).slice(0, 2).toLowerCase();
+  return Object.prototype.hasOwnProperty.call(TALKIE_LISTEN_LABELS, langue) ? langue : 'en';
+}
+
+function audioDuTalkie(valeur) {
+  const brute = texte(valeur);
+  return brute.indexOf('https://') === 0 ? brute : '';
+}
+
+async function annoncerTalkie(data) {
+  const talkieId = texte(data.talkieId);
+  const nom = texte(data.fromName) || texte(data.senderName);
+  const langue = langueDuNavigateur();
+  const titre = texte(data.title) || (nom === '' ? '' : nom + TALKIE_TALKS_LABELS[langue]);
+  if (talkieId === '' || texte(data.fromUserId) === '' || titre === '') return;
+
+  const ouvertes = await fenetres();
+  if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
+
+  await self.registration.showNotification(titre, {
+    body: texte(data.body),
+    tag: TALKIE_TAG_PREFIX + talkieId,
+    renotify: true,
+    requireInteraction: true,
+    icon: BANNER_ICON,
+    badge: BANNER_BADGE,
+    actions: [{ action: TALKIE_LISTEN_ACTION, title: texte(data.listenLabel) || TALKIE_LISTEN_LABELS[langue] }],
+    data: { type: TALKIE_PUSH_TYPE, talkieId: talkieId, audioUrl: audioDuTalkie(data.audioUrl) },
+  });
+}
+
+async function ouvrirTalkie(data, action) {
+  const talkieId = texte(data.talkieId);
+  if (talkieId === '') return;
+  const ecouter = action === TALKIE_LISTEN_ACTION;
+  const audioUrl = ecouter ? audioDuTalkie(data.audioUrl) : '';
+  const ouvertes = await fenetres();
+  const client = ouvertes[0];
+  if (client === undefined) {
+    const query = new URLSearchParams();
+    query.set(TALKIE_PARAM, talkieId);
+    if (audioUrl !== '') query.set(TALKIE_AUDIO_PARAM, audioUrl);
+    await self.clients.openWindow(PUSH_ROUTE_PATTERNS.notifications + '?' + query.toString());
+    return;
+  }
+  if (!ecouter) {
+    await Promise.resolve()
+      .then(() => client.focus())
+      .catch(() => undefined);
+  }
+  client.postMessage({ type: TALKIE_WAKE_MESSAGE, talkieId: talkieId, ...(audioUrl !== '' ? { audioUrl: audioUrl } : {}) });
 }
 
 /**
@@ -1033,7 +1116,9 @@ self.addEventListener('notificationclick', (evenement) => {
   evenement.waitUntil(
     Promise.all([
       ouverture,
-      texte(data.type) === CALL_PUSH_TYPE
+      texte(data.type) === TALKIE_PUSH_TYPE
+        ? ouvrirTalkie(data, action)
+        : texte(data.type) === CALL_PUSH_TYPE
         ? ouvrirAppel(data, action)
         : action === CALL_BACK_ACTION
           ? rappeler(data)
