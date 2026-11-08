@@ -1,3 +1,5 @@
+import { isPlatformTeam } from '@meeshy/shared/types/role-types';
+
 /**
  * Un compte qui peut agir ou recevoir : actif, ni supprimé, ni désactivé. Le talkie
  * l'exigeait seul ; le privilège d'équipe (#16623) l'exige partout où il lit un rôle,
@@ -20,3 +22,11 @@ export const isUsableAccount = <T extends AccountState>(account: T | null | unde
  */
 export const lawRoleOf = (account: (AccountState & { readonly role: string | null }) | null | undefined): string | null =>
   isUsableAccount(account) ? account.role : null;
+
+/**
+ * Un compte UTILISABLE de l'équipe (MODERATOR, ADMIN, BIGBOSS) : celui qui, face à un autre
+ * compte de l'équipe, a les outils de cercle sans lien (#16623). Ce n'est jamais un accès —
+ * la loi juge chaque paire — mais ce qui dit où chercher hors des liens (#16642).
+ */
+export const isUsableTeamAccount = (account: (AccountState & { readonly role: string | null }) | null | undefined): boolean =>
+  isPlatformTeam(lawRoleOf(account));
