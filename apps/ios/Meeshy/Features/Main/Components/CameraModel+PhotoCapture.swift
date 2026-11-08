@@ -124,14 +124,3 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         }
     }
 }
-
-// MARK: - Video Delegate
-
-extension CameraModel: AVCaptureFileOutputRecordingDelegate {
-    nonisolated func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL,
-                                from connections: [AVCaptureConnection], error: Error?) {
-        Task { @MainActor in
-            await self.handleSegmentFinished(url: outputFileURL, error: error)
-        }
-    }
-}
