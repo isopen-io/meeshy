@@ -25,15 +25,20 @@ jest.mock('../../../routes/conversations/utils/access-control', () => ({
   canAccessConversation: (...a: any[]) => mockCanAccessConversation(...a),
 }));
 
+const mockGetStatsUnderFloor = jest.fn<any>();
 const mockGetStats = jest.fn<any>().mockResolvedValue({
   totalMessages: 42,
   participantStats: {},
   dailyActivity: {},
   languageDistribution: {},
 });
+// `getStatsUnderFloor` figure ici même si aucun témoin de cette suite ne le
+// déclenche (#17076) : un double qui énumère les méthodes à la main retient en
+// silence chaque méthode ajoutée en amont.
 jest.mock('../../../services/ConversationMessageStatsService', () => ({
   conversationMessageStatsService: {
     getStats: (...a: any[]) => mockGetStats(...a),
+    getStatsUnderFloor: (...a: any[]) => mockGetStatsUnderFloor(...a),
   },
 }));
 
@@ -49,12 +54,34 @@ const CONV_RESOLVED_ID = 'conv-resolved-id';
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
+/**
+ * Le lecteur de ces témoins est un membre NOMMÉ : il n'est entré par aucun lien
+ * de partage, donc `historyFloorFor` tranche « aucun plancher » sans lire quoi
+ * que ce soit de plus, et la route sert la ligne agrégée.
+ *
+ * La ligne est posée ICI plutôt que remplacée par `findFirst: () => null`
+ * (#17076) : un `null` dirait « ce lecteur n'est pas membre », ce que ces
+ * témoins contredisent à chaque assertion. Un double qui répond faux pour
+ * obtenir le bon verdict gèle le verdict, pas la règle.
+ */
+const MEMBRE_SANS_PLANCHER = {
+  role: 'member',
+  joinedAt: new Date('2024-01-01T00:00:00.000Z'),
+  shareLinkId: null,
+  historyVisibleFrom: null,
+  permissions: null,
+  anonymousSession: null,
+  user: { role: 'USER' },
+};
+
 function makePrisma(overrides: any = {}) {
   return {
     user: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       ...overrides.user,
     },
+    participant: { findFirst: jest.fn<any>().mockResolvedValue(MEMBRE_SANS_PLANCHER) },
+    conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
     ...overrides,
   };
 }

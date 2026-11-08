@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -146,7 +147,28 @@ export function registerStatsRoutes(
         return refuserCommeIntrouvable(reply);
       }
 
-      const stats = await conversationMessageStatsService.getStats(prisma, conversationId);
+      // **LE PLANCHER DU LECTEUR BORNE L'AGRÉGAT** (#17076). La ligne
+      // `ConversationMessageStats` couvre toute la vie de la conversation ;
+      // servie telle quelle, elle disait à un inscrit entré par un lien
+      // `allowViewHistory: false` quand la conversation a commencé, qui a écrit
+      // combien, et le volume de chaque journée — l'historique exact que le
+      // fil, la recherche, les fils de réponses et les traductions partagées
+      // lui refusent tous, message par message.
+      //
+      // Fail-CLOSED : `loadReaderHistoryFloor` PROPAGE ses erreurs, et le
+      // `catch` de fin de route en fait un 500. C'est l'inverse de la posture
+      // de `personalHistoryFilter` (« cacher est une courtoisie, montrer est le
+      // produit »), et c'est voulu : ce plancher-ci n'est pas une courtoisie,
+      // c'est la confidentialité de l'historique. Une porte de confidentialité
+      // échoue en montrant moins.
+      const floor = await loadReaderHistoryFloor(prisma, {
+        conversationId,
+        reader: historyReaderFromAuthContext(authContext),
+      });
+
+      const stats = floor
+        ? await conversationMessageStatsService.getStatsUnderFloor(prisma, conversationId, floor)
+        : await conversationMessageStatsService.getStats(prisma, conversationId);
 
       const participantStats = (stats.participantStats ?? {}) as Record<string, unknown>;
       const participantIds = Object.keys(participantStats);
