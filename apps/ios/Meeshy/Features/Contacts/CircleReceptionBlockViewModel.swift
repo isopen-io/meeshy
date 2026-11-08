@@ -6,8 +6,8 @@ import MeeshyUI
 /// corps strict) :
 /// - une préférence de RÉCEPTION, ouverte par défaut, dont l'interrupteur allumé est un BLOCAGE : « Bloquer ses
 ///   Bring » (#13936, dès Ami), « Couper son talkie » (#16673, dès Proche) ;
-/// - un PARTAGE de mon activité, refusé par défaut, dont l'interrupteur allumé est un ACCORD : « Partager ce que
-///   j'écoute » (#16803, dès Proche).
+/// - un PARTAGE de mon activité, refusé par défaut, dont l'interrupteur allumé est un ACCORD : « Ce que j'écoute »
+///   (#16803, dès Proche).
 nonisolated enum CirclePersonSwitch: Equatable, Sendable {
     case reception(RelationReceptionSetting)
     case share(RelationShareGrant)
