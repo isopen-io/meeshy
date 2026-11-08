@@ -458,3 +458,38 @@ socket jusqu'au client.
    traducteur (chemin batch, désormais sous `batch_scope`).
 3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en
    de #16613.
+
+## Cycle 11 — 2026-11-08
+
+- **Base** : `origin/dev` @ `fa0281356` (le cycle 10, #16768, y est fusionné).
+- **Branche** : `claude/determined-volta-huumhr`.
+- **Changement d'axe** : on quitte la vie privée des journaux pour la latence.
+- **Piste 3 instruite, écartée pour l'instant** : un segment final à N langues envoie N requêtes ZMQ. Dans le traducteur, l'inférence est sérialisée par le verrou du modèle (`process_single_translation`, commentaire en tête de boucle). N requêtes ne se parallélisent donc pas, et une requête multi-langues ne ferait gagner que le surcoût ZMQ et la file, de l'ordre de la milliseconde. Elle obligerait en plus le relais à démultiplexer par langue sous un seul taskId. Ratio trop faible.
+- **Objectif** : #16780. Un sous-titre d'appel est pris par un worker dès son arrivée.
+- **Constat** :
+  - `_get_next_task` regardait la voie rapide une seule fois, puis bloquait jusqu'à 1 s sur la file ordinaire. Au repos, une tâche courte, c'est-à-dire la plupart des sous-titres, attendait **~969 ms** avant d'être prise.
+  - Un sous-titre de 100 caractères ou plus passait par l'accumulateur de lots (~19 ms), puis par `normal_pool`.
+- **Livré** (seul le traducteur change : ni le protocole ZMQ, ni la passerelle, ni la forme des résultats) :
+  - `SignalingQueue` : les trois files lèvent un `asyncio.Event` partagé à chaque dépôt.
+  - `take_next_task` : le worker baisse le drapeau, lit les files dans l'ordre, puis attend le drapeau. Il n'attend jamais un `get()`, donc une annulation ne consomme rien.
+  - `_enqueue_live_caption` : un sous-titre (`is_live_call_caption`) prend la voie rapide quelle que soit sa longueur, ne passe jamais par un lot et ne dépend plus de `utils.performance`. Si la voie rapide est pleine, il va dans la file régulière directe, et son refus se compte.
+- **Tests** : `tests/test_call_caption_fast_lane.py` (10) et `tests/test_call_caption_fast_lane_qa.py` (2, ajoutés par la QA).
+  - **Rouge sur le code d'avant** : 5 sur 10.
+  - **Vert** : 12/12. Suites `zmq_pool`, `translation_processor` et `call_caption` : 298 passés et 6 sautés, relancé par moi. La QA a relevé 219 passés sur son propre sous-ensemble.
+  - **Mutation** : remettre l'échéance à zéro à chaque réveil fait tomber le témoin QA.
+- **Mesure** (`BENCHMARKS.md`) : prise d'une tâche de la voie rapide au repos, **p50 968,98 ms avant, 0,15 ms après**. Pour un sous-titre long, **18,91 ms avant, 0,15 ms après**.
+- **QA** : favorable avec réserves. R1 → #16782, R2 → #16783. R3 est notée ci-dessous.
+- **Trouvé en chemin** : `_enqueue_batch` jette en silence un lot refusé par une file pleine. → #16781.
+
+### Limites connues
+
+- La voie rapide passe toujours en premier, sans quota : les tâches longues ordinaires peuvent être affamées sous forte charge. → #16782.
+- Un sous-titre qui déborde de la voie rapide perd sa priorité sans signal. → #16783.
+- R3 : `stop_workers` attend encore jusqu'à 1 s par worker au repos, comme avant. Il suffirait d'y lever `work_arrived`. C'est optionnel.
+- Le temps d'inférence NLLB n'est pas mesuré ici.
+
+### Cycle suivant : par où reprendre
+
+1. #16781 : perte silencieuse d'un lot refusé (fiabilité, petit lot sur le même fichier).
+2. #16782 avec #16783 : quota de la voie rapide et compteur de débordement, groupés parce qu'ils touchent le même site.
+3. Toujours : lire `call_caption_translation_seconds` sur le staging. Ce cycle doit en baisser le p50 d'environ 0,5 à 1 s quand le traducteur est au repos. Faire aussi la recette fr↔en de #16613.
