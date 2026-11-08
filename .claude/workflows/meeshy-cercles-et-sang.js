@@ -44,6 +44,9 @@ const CONFORMITE = A.conformite !== false
 const PRIORITAIRES = Array.isArray(A.prioritaires) ? A.prioritaires : [16623]
 const SEULEMENT = new Set(Array.isArray(A.seulement) ? A.seulement : [])
 const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter : [])
+// Une autre session (la routine « Cercles proches — un lot par réveil », journal tasks/cercles-proches-routine.md sur ses branches
+// claude/cercles-{talkie,ecoute,bring}-*) tient l'écoute, le talkie et le Bring : ce workflow ne les prend JAMAIS (porteur, 2026-11-08).
+const ROUTINE = new Set([13934, 13935, 13936, 16803, 16836, 16927, 16619, 16588, 16609, 16698, 16699, ...(Array.isArray(A.routine) ? A.routine : [])])
 const CHAINES = ['serveur', 'ios', 'web', 'android']
 const WT = Object.fromEntries(CHAINES.map((c) => [c, `${RUN}/${c}`]))
 const SPEC = `${REPO}/docs/superpowers/specs/2026-10-31-cercles-et-mode-sang-design.md`
@@ -331,7 +334,10 @@ TA MISSION — PRÉPARER LES QUATRE WORKTREES DE CHAÎNE ET RELEVER CE QUE TIENN
 5. Relevé : branches poussées depuis moins de 3 h (\`git -C ${REPO} for-each-ref --sort=-committerdate refs/remotes/origin --format='%(committerdate:iso) %(refname:short)' | head -60\`)
    et PR ouvertes (\`gh api "repos/${GH}/pulls?state=open&per_page=100"\`) qui touchent les cercles (relation, presence, friend, fanout,
    postAudience, Bring, talkie, now-playing, location, consent, cercles) — SAUF les branches claude/cercles-<n>-<chaîne> de CE workflow :
-   rends-les dans tenus_ailleurs avec les numéros d'issue qu'elles servent.`,
+   rends-les dans tenus_ailleurs avec les numéros d'issue qu'elles servent.${tour > 1 ? `
+6. La ROUTINE d'une autre session tient l'écoute, le talkie et le Bring : ses branches claude/cercles-talkie-*, claude/cercles-ecoute-*,
+   claude/cercles-bring-* et les issues nommées dans son journal (git -C ${REPO} log origin --since=1.day --all -- tasks/cercles-proches-routine.md,
+   puis lis ce fichier sur la branche la plus récente) sont toujours tenues ailleurs : rends leurs numéros d'issue.` : ''}`,
     { label: `synchroniser:tour-${tour}`, phase: 'Synchroniser', model: 'sonnet', effort: 'medium', schema: SYNCHRO })
   if (!synchro || !synchro.pret) { log(`ARRÊT — synchronisation impossible : ${synchro ? synchro.etat.slice(0, 300) : '(aucun rapport)'}`); break }
   const tenus = new Set((synchro.tenus_ailleurs || []).flatMap((t) => t.issues || []))
@@ -363,7 +369,7 @@ Mets en tête les prioritaires : ${PRIORITAIRES.join(', ')}. Sois factuel et COU
   issues.filter((i) => i.verdict === 'recette-appareil').forEach((i) => bilan.recettes.add(`#${i.n}`))
   const livrees = issues.filter((i) => i.verdict === 'deja-livre')
   const aFaire = issues
-    .filter((i) => i.verdict === 'a-faire' && !tenus.has(i.n) && !SAUTER.has(i.n) && (!SEULEMENT.size || SEULEMENT.has(i.n)))
+    .filter((i) => i.verdict === 'a-faire' && !tenus.has(i.n) && !ROUTINE.has(i.n) && !(i.depend || []).some((d) => ROUTINE.has(d)) && !SAUTER.has(i.n) && (!SEULEMENT.size || SEULEMENT.has(i.n)))
     .sort((a, b) => (PRIORITAIRES.includes(b.n) ? 1 : 0) - (PRIORITAIRES.includes(a.n) ? 1 : 0))
   log(`recensement : ${issues.length} ouvertes — ${aFaire.length} à faire, ${livrees.length} déjà livrées, ${bilan.decisions.size} décisions sans défaut, ${bilan.porteur.size} actions du porteur`)
 
