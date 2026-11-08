@@ -252,3 +252,28 @@ désormais le site unique du prédicat, employé par les deux éventails).
 > Avant de conclure qu'une garde coûterait une requête, regarder ce que le site
 > lit déjà. C'était écrit dans le dépôt depuis le cycle 127 ; ce lot est le
 > troisième à le vérifier.
+
+## Un défaut introduit et corrigé dans le cycle (lot F)
+
+Le prédicat partagé du lot F a d'abord vécu dans `MentionService`, à côté de
+son jumeau qui interroge la base — l'endroit évident. **Une suite
+d'intégration E2EE à deux appareils, qui ne parle ni de mentions ni de demandes
+de message, a cessé de voir AUCUNE notification.**
+
+Sa cause : ce fichier remplace `MentionService` par un double qui ÉNUMÈRE cinq
+méthodes à la main. L'import s'est résolu en `undefined`, l'appel a levé dans le
+`try` best-effort de l'éventail — qui ne lève jamais, par contrat — et rien
+n'est parti.
+
+> La règle « un double PARTIEL perd en silence tout ce que le module GAGNE » est
+> écrite dans le dépôt, avec trois exemplaires. Ce qu'elle ne disait pas : **le
+> risque est une propriété du module qu'on AGRANDIT.** Un module lourd est
+> précisément celui que les suites remplacent ; y ajouter une fonction, c'est la
+> placer derrière tous les doubles existants, dont on ne sait pas combien il y
+> en a. Avant d'ajouter une fonction à un module, demander : *combien de suites
+> le REMPLACENT ?*
+
+Réparé aux deux niveaux — le prédicat part dans un module FEUILLE (rien à
+doubler, donc rien à oublier de doubler), et le double est PROLONGÉ plutôt que
+remplacé. Détail :
+`tasks/lessons/2026-11-08-un-predicat-pur-appartient-a-un-module-feuille.md`.
