@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 
 /**
  * Le RETRAIT d'un message, avec sa garde OPTIMISTE — et le site unique qui dit
@@ -37,6 +37,29 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
  * Toute autre erreur est RELEVÉE : une base en défaut n'est pas une course
  * perdue, et la confondre avec elle ferait disparaître un retrait réellement
  * échoué sous un « quelqu'un d'autre l'a fait ».
+ *
+ * ─── Pourquoi l'appelant compose `data`, et ne le reçoit pas d'ici (#9899) ───
+ *
+ * Parce qu'écrire `translations: null` engage autre chose que cette écriture :
+ * `Message.translations` porte les traductions du SERVEUR, `SharedTranslation`
+ * les versions SCELLÉES que les appareils des membres se passent, et **vider la
+ * première sans effacer la seconde laisse le texte d'un message retiré lisible
+ * pour qui détient la clé** — les deux tables n'ayant aucune relation, aucune
+ * cascade ne le rattrape. Le cliquet du dépôt exige donc que l'effacement
+ * voisin soit appelé DANS le fichier qui écrit `translations: null`, « parce que
+ * c'est le geste d'écriture qui se copie ».
+ *
+ * Il a rougi sur la première version de cette unité, qui portait le littéral —
+ * et il avait raison : un appelant futur aurait hérité de la moitié du geste. La
+ * réponse n'est pas d'effacer ICI (l'unité d'effets de chaque transport le fait
+ * déjà juste après, et doubler l'effacement doublait un appel RÉSEAU au
+ * translator, ce qu'un témoin de comptage du dépôt a immédiatement vu) : c'est
+ * de laisser `data` à l'appelant, pour que le littéral vive là où son
+ * effacement est appelé.
+ *
+ * Ce que cette unité garde est donc exactement ce qui manquait aux deux
+ * transports, et rien de plus : **la garde optimiste, et l'interprétation de son
+ * échec.** L'ATOMICITÉ reste acquise — un seul `update`, composé par l'appelant.
  */
 export type SoftDeleteOutcome = 'deleted' | 'already-deleted';
 
@@ -46,17 +69,23 @@ const isMissingRecord = (error: unknown): boolean =>
 export async function softDeleteMessage(
   prisma: Pick<PrismaClient, 'message'>,
   messageId: string,
-  now: Date = new Date(),
+  /**
+   * Ce que le retrait écrit — composé par l'appelant, et dans UNE écriture : le
+   * dépôt l'annonce déjà (« atomically clear translations and set deletedAt in
+   * one write »), parce que deux écritures laisseraient une fenêtre où le
+   * message est supprimé et ses traductions encore là, ou l'inverse.
+   *
+   * Le type est DÉRIVÉ de l'entrée Prisma plutôt qu'écrit à la main, et pas
+   * seulement par goût : énoncer `translations: null` ici, même en position de
+   * TYPE, faisait de ce fichier un « écrivain » aux yeux du cliquet de #9899 —
+   * dont le balayage retire les commentaires mais pas les annotations. Le
+   * dériver dit la même contrainte sans que ce fichier prétende écrire quoi que
+   * ce soit.
+   */
+  data: Pick<Prisma.MessageUpdateInput, 'translations' | 'deletedAt'>,
 ): Promise<SoftDeleteOutcome> {
   try {
-    await prisma.message.update({
-      // `translations: null` dans la MÊME écriture : le dépôt l'annonce déjà
-      // (« atomically clear translations and set deletedAt in one write »),
-      // parce que deux écritures laisseraient une fenêtre où le message est
-      // supprimé et ses traductions encore là, ou l'inverse.
-      where: { id: messageId, deletedAt: null },
-      data: { translations: null, deletedAt: now },
-    });
+    await prisma.message.update({ where: { id: messageId, deletedAt: null }, data });
     return 'deleted';
   } catch (error) {
     if (isMissingRecord(error)) return 'already-deleted';
