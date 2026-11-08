@@ -252,6 +252,7 @@ extension ComposerCaptureSession {
         takeSave = Self.noTakeSave
         editRawSave = nil
         retouchTexts.reset()
+        followTheDay()
     }
 
     // MARK: - ⬇︎ Enregistrer dans Photos (#9684, #10284)
