@@ -72,6 +72,18 @@ export type MessageNewEmission<P extends MessageNewPayload> = {
    * nue d'une pièce peut-être protégée).
    */
   readonly readerSigned?: ReaderSignedPlanOutcome;
+  /**
+   * La panne d'UNE audience, NOMMÉE chez l'appelant (#17086). Elle ne remonte
+   * plus par un `throw` : chaque audience est enrobée pour SA part, donc une
+   * exception qui sortirait d'ici n'aurait plus l'identité de ce qui a été
+   * perdu. `undefined` ⇒ `safeBroadcast` journalise lui-même.
+   *
+   * Le SECOND paramètre est l'étiquette de l'audience — « NOMMÉE » ne veut rien
+   * dire sans elle, et le premier état de ce lot la jetait : quatre audiences
+   * perdues rendaient quatre journaux identiques, et le chemin par lecteur
+   * perdait l'identité de cible qu'il publiait avant. Constat C1/C2 de l'audit.
+   */
+  readonly onEmissionError?: (error: unknown, label: string) => void;
 };
 
 export function emitMessageNew<P extends MessageNewPayload>(input: MessageNewEmission<P>): void {
@@ -82,26 +94,52 @@ export function emitMessageNew<P extends MessageNewPayload>(input: MessageNewEmi
   }
 
   const { io, room, senderPayload, peerPayload, senderUserId, senderSocket } = input;
+  const onError = input.onEmissionError;
   const hiddenKeys = [...input.hiddenKeys];
   const hiddenRooms = hiddenKeys.map((key) => ROOMS.user(key));
   const byLanguage = hiddenRooms.length === 0 ? input.emitByLanguage ?? null : null;
 
+  // L'enrobage est PAR AUDIENCE, pour la raison du régime par lecteur, sur le
+  // chemin qui est cette fois le NOMINAL (#17086) : ces émissions ne dépendent
+  // PAS l'une de l'autre, et un enrobage unique les perd ensemble. Ce qu'on
+  // perdait, mesuré : la bulle de l'expéditeur — sa charge est la SEULE à
+  // porter `clientMessageId`, donc la seule voie de promotion d'une ligne
+  // optimiste — et les lecteurs MASQUÉS, qui n'ont QUE leur room personnelle
+  // (la diffusion de room les exclut par construction) et que la file hors
+  // ligne ne rattrape pas puisqu'elle saute les CONNECTÉS.
   if (senderUserId) {
-    if (byLanguage) byLanguage(peerPayload, { excludeUserId: senderUserId });
-    else io.to(room).except([ROOMS.user(senderUserId), ...hiddenRooms]).emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
-    io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
+    safeBroadcast(byLanguage ? 'message:new (room par langue)' : `message:new (room ${room})`, () => {
+      if (byLanguage) byLanguage(peerPayload, { excludeUserId: senderUserId });
+      else io.to(room).except([ROOMS.user(senderUserId), ...hiddenRooms]).emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
+    }, onError);
+    safeBroadcast(`message:new (expéditeur ${ROOMS.user(senderUserId)})`, () => {
+      io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
+    }, onError);
   } else if (senderSocket) {
-    if (byLanguage) byLanguage(peerPayload, { excludeSocketId: senderSocket.id });
-    else exceptHidden(senderSocket.broadcast.to(room), hiddenRooms).emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
-    senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
+    safeBroadcast(byLanguage ? 'message:new (room par langue)' : `message:new (room ${room})`, () => {
+      if (byLanguage) byLanguage(peerPayload, { excludeSocketId: senderSocket.id });
+      else exceptHidden(senderSocket.broadcast.to(room), hiddenRooms).emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
+    }, onError);
+    safeBroadcast(`message:new (expéditeur socket ${senderSocket.id})`, () => {
+      senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
+    }, onError);
   } else if (byLanguage) {
-    byLanguage(peerPayload, {});
+    safeBroadcast('message:new (room par langue)', () => byLanguage(peerPayload, {}), onError);
   } else {
-    exceptHidden(io.to(room), hiddenRooms).emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
+    safeBroadcast(`message:new (room ${room})`, () => {
+      exceptHidden(io.to(room), hiddenRooms).emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
+    }, onError);
   }
 
   for (const key of hiddenKeys) {
-    io.to(ROOMS.user(key)).emit(SERVER_EVENTS.MESSAGE_NEW, input.payloadForKey(key));
+    const hiddenRoom = ROOMS.user(key);
+    // `payloadForKey` est DANS la fermeture : la variante d'un masqué se
+    // CALCULE, et un calcul qui lève pour un lecteur privait tous les suivants.
+    // C'est le constat que le second passage de l'audit a exigé sur le chemin
+    // par lecteur ; il valait mot pour mot ici.
+    safeBroadcast(`message:new (masqué ${hiddenRoom})`, () => {
+      io.to(hiddenRoom).emit(SERVER_EVENTS.MESSAGE_NEW, input.payloadForKey(key));
+    }, onError);
   }
 }
 
@@ -143,6 +181,7 @@ function emitPerReader<P extends MessageNewPayload>(input: MessageNewEmission<P>
             : input.peerPayload;
         input.io.to(target.room).emit(SERVER_EVENTS.MESSAGE_NEW, readerSigned.signFor(base, target.participantId));
       },
+      input.onEmissionError,
     );
   }
 }
@@ -173,7 +212,7 @@ function emitPerReader<P extends MessageNewPayload>(input: MessageNewEmission<P>
  */
 export function emitMessageNewBestEffort<P extends MessageNewPayload>(
   input: MessageNewEmission<P>,
-  onError: (error: unknown) => void,
+  onError: (error: unknown, label: string) => void,
 ): void {
-  safeBroadcast('message:new', () => emitMessageNew(input), onError);
+  safeBroadcast('message:new', () => emitMessageNew({ ...input, onEmissionError: input.onEmissionError ?? onError }), onError);
 }
