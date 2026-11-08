@@ -1,4 +1,4 @@
-# Un test de joignabilité posé sur le COMPTE ne dit rien d'un événement dont l'ACTEUR est ce compte
+## 2026-11-08 — Un test de joignabilité posé sur le COMPTE ne dit rien d'un événement dont l'ACTEUR est ce compte (#16688)
 
 **Cycle 146, #16688.** La file de rejeu hors ligne décide son audience par
 `connectedUsers.has(queueKey)`, où la clé est le COMPTE — indexée pour TOUTES
@@ -12,7 +12,7 @@ fournit donc toujours la socket que le prédicat cherche : la réponse est
 toujours OUI, et **aucune entrée n'a jamais été écrite** pour l'autre appareil
 du même compte, resté éteint.
 
-## Pourquoi c'est plus discret qu'un no-op ordinaire
+### Pourquoi c'est plus discret qu'un no-op ordinaire
 
 C'est la famille « une garde conditionnée à ce qu'elle garde est un no-op »,
 déplacée d'une GARDE vers une AUDIENCE. Et le déplacement la rend invisible :
@@ -27,7 +27,7 @@ déplacée d'une GARDE vers une AUDIENCE. Et le déplacement la rend invisible :
 Elle marchait — à condition que les deux appareils soient allumés **en même
 temps**, ce qu'aucun des trois endroits ne dit.
 
-## La question à poser
+### La question à poser
 
 Devant tout prédicat d'audience, demander **qui RENSEIGNE la valeur qu'il
 lit** :
@@ -40,7 +40,7 @@ faut une autre porte. Chercher les événements dont l'acteur et le destinataire
 sont la même entité : ils sont rares, et c'est précisément pourquoi la règle
 générale leur est appliquée sans qu'on y pense.
 
-## Corollaire de méthode — un recours se MESURE famille par famille
+### Corollaire de méthode — un recours se MESURE famille par famille
 
 Le premier jet de ce lot annonçait les trois familles comme également perdues.
 Le relevé a rendu trois recours DIFFÉRENTS : l'étoile n'en avait aucun (zéro

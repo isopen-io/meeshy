@@ -1,4 +1,4 @@
-# Un cliquet qui rougit sur un lot JUSTE n'est pas un faux positif : c'est une question
+## 2026-11-08 — Un cliquet qui rougit sur un lot JUSTE n'est pas un faux positif : c'est une question (#16688, #16948)
 
 **Cycle 146.** Trois cliquets du dépôt ont rougi sur six lots corrects. Aucun
 n'avait tort, et les trois réponses ont ajouté au dépôt ce qu'aucun des lots
@@ -10,7 +10,7 @@ n'aurait écrit de lui-même.
 | `findMany` non bornés sous `routes/` | un site neuf | **une entrée avec sa raison**, à côté de ses trois jumelles gelées pour la même forme |
 | typecheck des tests (plafond 76) | 77 | **trancher les trois verdicts manquants**, jamais monter le plafond |
 
-## Les trois réflexes à ne pas avoir
+### Les trois réflexes à ne pas avoir
 
 1. **Monter le plafond.** Le cliquet de typecheck existe pour descendre ; le
    remonter solde une dette en la renommant. Ici l'erreur en trop était la plus
@@ -30,7 +30,7 @@ n'aurait écrit de lui-même.
    sait servir. Ce qui n'est pas une audience neuve est un transport, et un
    transport délègue.
 
-## La forme de la question
+### La forme de la question
 
 Quand un cliquet tombe sur un lot dont on est sûr, la question n'est pas
 « comment le faire taire ? » mais **« quelle propriété garde-t-il, et mon lot

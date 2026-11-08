@@ -1,4 +1,4 @@
-# Un double ment aussi par ce qu'il FOURNIT — et un `as never` empêche de le savoir
+## 2026-11-08 — Un double mente aussi par ce qu'il FOURNIT — et un `as never` empêche de le savoir (#16948)
 
 **Cycle 146, #16948.** Le dépôt connaît « un double mente par ce qu'il ACCEPTE »
 (cycle 112 : un faux `xcodebuild` valide toutes les formes d'appel, y compris
@@ -14,7 +14,7 @@ C'est le pire des rouges, parce qu'il ressemble au bon. On le corrige en
 touchant la production, on le voit repasser au vert, et on a gelé une forme que
 personne ne sert.
 
-## Ce qui l'a permis : le cast au site d'appel
+### Ce qui l'a permis : le cast au site d'appel
 
 ```ts
 await endGuestSession({ prisma: h.prisma as never, io: h.io as never, manager: h.manager as never });
@@ -26,7 +26,7 @@ seule garde qui sache que le collaborateur a changé de forme** — et un témoi
 est le dernier endroit où l'on croit en avoir besoin, puisqu'« il n'y a que des
 doubles ».
 
-## La règle
+### La règle
 
 Avant d'écrire un double, **lire l'interface que la production EXIGE**, pas
 celle qu'on imagine depuis le nom de l'opération. `socketsLeave` est l'API de
@@ -35,7 +35,7 @@ appelle. Et quand un témoin rougit, **vérifier qu'il rougit pour le motif qu'i
 nomme** avant de toucher la production : relire le message d'échec, et demander
 si la ligne qui a levé est bien celle du défaut.
 
-## Comment les deux se sont vus
+### Comment les deux se sont vus
 
 **En cherchant le rouge**, pas en relisant l'assertion — la discipline que
 `2026-11-08-un-temoin-qui-ne-peut-pas-tomber-se-trouve-en-chassant-le-rouge.md`
