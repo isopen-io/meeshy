@@ -452,20 +452,11 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // masqué : deux lectures, une seule application TEXTUELLE.
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 1 },
 
-  // #17076 — ce fichier porte désormais les DEUX régimes, et c'est ce cliquet
-  // qui l'a imposé : le `why` ci-dessous ne décrivait que l'un des deux.
-  //
-  //  - `recompute()` écrit la ligne PARTAGÉE. Son exemption est intacte, et sa
-  //    raison est celle qui suit : une valeur stockée une fois et lue par tout
-  //    le monde ne se déplace pas pour le masquage d'un seul lecteur.
-  //  - `aggregateFloored()` calcule la fenêtre d'UN lecteur, ne la persiste pas,
-  //    et la jette dans le seau de cache de ce lecteur. L'exemption ne la couvre
-  //    pas — un compte qui ne correspond pas au fil qu'il peut dérouler serait un
-  //    compte faux pour lui — donc elle APPLIQUE.
-  //
-  // Le `kind` d'un fichier est celui de ce qu'il fait de PLUS : `applies` avec
-  // deux lectures et une application dit exactement cela, et ferait rougir le
-  // cliquet si la seconde perdait sa garde.
+  // #17076 — DEUX régimes dans un fichier : `recompute()` écrit la ligne
+  // PARTAGÉE (exempt, cf. son doc-comment), `aggregateFloored()` calcule la
+  // fenêtre d'UN lecteur et APPLIQUE. `kind` est celui de ce que le fichier fait
+  // de PLUS. La raison vit chez le code — `ConversationMessageStatsService.ts`
+  // § `aggregateFloored` —, pas en double ici.
   'ConversationMessageStatsService.ts': { kind: 'applies', reads: 2, applications: 1 },
   'conversationCard.ts': {
     kind: 'exempt',
