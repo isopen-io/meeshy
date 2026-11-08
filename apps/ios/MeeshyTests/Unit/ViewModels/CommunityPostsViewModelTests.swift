@@ -113,6 +113,20 @@ final class CommunityPostsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.phase, .loaded)
     }
 
+    func test_load_expiredCache_offline_paintsTheLastKnownPosts() async {
+        let cache = InMemoryFeedPostsCache(
+            seed: [CommunityPostsViewModel.cacheKey(communityId: "c1"): Self.cachedPosts(["p1"])],
+            freshness: .expired
+        )
+        let (sut, service, _) = makeSUT(cache: cache)
+        service.getCommunityPostsResultsQueue = [.failure(URLError(.notConnectedToInternet))]
+
+        await sut.load()
+
+        XCTAssertEqual(sut.posts.map(\.id), ["p1"])
+        XCTAssertEqual(sut.phase, .loaded)
+    }
+
     // MARK: - Échec et hors-ligne sur un cache vide
 
     func test_load_emptyCache_offline_saysOffline() async {
@@ -211,7 +225,7 @@ actor InMemoryFeedPostsCache: MutableCacheStore {
     typealias Key = String
     typealias Value = FeedPost
 
-    enum Freshness: Sendable { case fresh, stale }
+    enum Freshness: Sendable { case fresh, stale, expired }
 
     nonisolated let policy: CachePolicy = .feedPosts
     private var entries: [String: [FeedPost]]
@@ -229,7 +243,12 @@ actor InMemoryFeedPostsCache: MutableCacheStore {
         switch freshness {
         case .fresh: return .fresh(items, age: 1)
         case .stale: return .stale(items, age: 600)
+        case .expired: return .expired
         }
+    }
+
+    func loadIgnoringExpiry(for key: String) async -> (items: [FeedPost], age: TimeInterval)? {
+        entries[key].map { ($0, 864_000) }
     }
 
     func invalidate(for key: String) async { entries[key] = nil }
