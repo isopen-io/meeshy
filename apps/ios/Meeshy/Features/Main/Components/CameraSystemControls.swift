@@ -41,7 +41,7 @@ nonisolated enum CameraSystemControlsHost {
 /// Le délégué des contrôles de session : la session l'exige pour les servir,
 /// et le viseur n'a rien à faire quand ils paraissent ou disparaissent.
 @available(iOS 18.0, *)
-nonisolated final class CameraSystemControls: NSObject, AVCaptureSessionControlsDelegate, @unchecked Sendable {
+nonisolated final class CameraSystemControls: NSObject, AVCaptureSessionControlsDelegate, Sendable {
 
     static let delegate = CameraSystemControls()
     private static let queue = DispatchQueue(label: "me.meeshy.camera.controls")
