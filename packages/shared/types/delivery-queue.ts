@@ -106,7 +106,29 @@ export type QueuedMessagePayload = {
    * would collapse them into a single entry, keeping only the first language.
    * Supersede-in-place (latest payload wins) is right per language — a
    * re-translation of the same (message, language) replaces the previous text.
-   * Never a delivery receipt: a translation is not a message arriving. */
+   * Never a delivery receipt: a translation is not a message arriving.
+   *
+   * #16688 — 'starred', 'hidden-for-me' et 'restored-for-me' sont les MARQUES
+   * PERSONNELLES du lecteur : un état par (lecteur, message) qui ne concerne
+   * que les AUTRES APPAREILS de ce même compte. Les trois sont les seules
+   * familles de cette file dont l'ACTEUR est le destinataire — c'est pourquoi
+   * le test de joignabilité d'`enqueueForOfflineParticipants`
+   * (« ce compte a-t-il une socket ? ») ne peut rien en dire : l'appareil qui
+   * agit en fournit toujours une, donc la réponse est toujours OUI et aucune
+   * entrée n'était jamais écrite. Voir `enqueuePersonalMessageMark`.
+   *
+   * Aucune des trois ne porte de TEXTE de message (des identifiants, un
+   * booléen, une date) : elles ne déclarent donc pas de régime au repos et
+   * n'entrent pas dans l'index de purge. Aucune n'est une ARRIVÉE : jamais
+   * d'accusé de remise — une étoile n'est pas un message qui arrive.
+   *
+   * Dédup : 'starred' porte l'état ABSOLU du message, donc `messageId` seul est
+   * la bonne identité — un `starred:false` qui arrive après un `starred:true`
+   * SUPPLANTE le premier (le dernier état gagne), ce qui est exactement ce
+   * qu'un appareil absent doit relire. Les deux familles de visibilité
+   * groupent, elles, par CONVERSATION et portent une `dedupKey` qui nomme leur
+   * LOT : superposer deux lots qui se recouvrent sous la seule clé du premier
+   * message perdrait les messages du lot supplanté. */
   readonly eventType?:
     | 'new'
     | 'edited'
@@ -120,7 +142,10 @@ export type QueuedMessagePayload = {
     | 'unpinned'
     | 'link-message'
     | 'attachment-updated'
-    | 'translation';
+    | 'translation'
+    | 'starred'
+    | 'hidden-for-me'
+    | 'restored-for-me';
   /** Overrides the identity used for enqueue-time dedup (default: messageId).
    * messageId+eventType alone is correct for edits/deletes/pins (at most one
    * relevant transition matters per message), but reactions need a finer key:
