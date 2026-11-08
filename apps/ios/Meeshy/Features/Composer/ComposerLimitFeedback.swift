@@ -115,7 +115,9 @@ final class ComposerLimitCapsule: ObservableObject {
     private var generation = 0
     private let sleep: @Sendable (Duration) async -> Void
 
-    init(sleep: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }) {
+    init(sleep: @escaping @Sendable (Duration) async -> Void = { duration in
+        do { try await Task.sleep(for: duration) } catch { return }
+    }) {
         self.sleep = sleep
     }
 
@@ -141,7 +143,11 @@ final class ComposerLimitCapsule: ObservableObject {
 /// La capsule posée au-dessus de la pilule : verre sombre, texte blanc, muette pour
 /// VoiceOver (l'annonce est déjà faite), et elle ne prend aucun doigt.
 struct ComposerLimitCapsuleView: View {
-    @ObservedObject var capsule: ComposerLimitCapsule = .shared
+    @ObservedObject var capsule: ComposerLimitCapsule
+
+    init(capsule: ComposerLimitCapsule = .shared) {
+        self.capsule = capsule
+    }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {

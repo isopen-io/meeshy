@@ -216,7 +216,7 @@ nonisolated enum ComposerHeaderTiles {
     }
 
     /// **La rangée des scènes paraît à partir de DEUX scènes** (L2, L13 de la
-    /// vue finale validée le 2026-11-08 : « pas de rangée des scènes à une
+    /// vue finale validée : « pas de rangée des scènes à une
     /// scène »), ce qui remplace « dès qu'une scène existe » de #5037.
     ///
     /// Depuis #17111, une tuile seule ne serait plus un aperçu muet : elle
