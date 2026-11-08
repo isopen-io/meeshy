@@ -225,6 +225,14 @@ public enum AccountStoreRegistry {
         owners.withLock { $0[normalized(databasePath)] = key }
     }
 
+    /// Retire une inscription — l'INVERSE de `register`, qui manquait (#16813).
+    /// Sans elle, une base temporaire restait déclarée « la base de X » pour
+    /// tout le processus, y compris après la suppression de son fichier.
+    @_spi(AccountStore)
+    public static func unregister(databasePath: String) {
+        owners.withLock { $0[normalized(databasePath)] = nil }
+    }
+
     public static func owner(ofDatabaseAt path: String) -> String? {
         key(ofDatabaseAt: path)?.userId
     }
