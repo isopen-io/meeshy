@@ -341,9 +341,6 @@ struct ThemedConversationRow: View {
             onCreateShareLink: onCreateShareLink,
             avatarRoute: avatarRoute
         )
-        .overlay {
-            AvatarListeningOverlay(userId: listenedUserId, avatarSize: AvatarContext.conversationList.size)
-        }
     }
 
     private var listenedUserId: String? { ConversationRowListening.userId(for: conversation) }

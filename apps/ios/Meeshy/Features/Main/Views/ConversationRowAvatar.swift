@@ -60,6 +60,8 @@ struct ConversationRowAvatar: View {
 
     private var isDirect: Bool { conversation.type == .direct }
 
+    private var listenedUserId: String? { ConversationRowListening.userId(for: conversation) }
+
     private var servedPresenceState: PresenceState? {
         style.presenceOnlyForDirect && !isDirect ? nil : presenceState
     }
@@ -125,6 +127,8 @@ struct ConversationRowAvatar: View {
                 onOnlineTap: onlineTapAction,
                 contextMenuItems: contextMenuItems
             )
+            // Ce qu'écoute le pair d'un direct (#16733), sur les DEUX rangs : le bandeau que le serveur a servi.
+            .overlay { AvatarListeningOverlay(userId: listenedUserId, avatarSize: style.context.size) }
 
             if showLastSeenTooltip, let text = conversation.lastSeenLabel {
                 Text(text)

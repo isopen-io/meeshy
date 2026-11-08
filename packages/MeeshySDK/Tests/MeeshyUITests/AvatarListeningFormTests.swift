@@ -3,6 +3,7 @@ import XCTest
 
 /// La forme de l'écoute selon la taille de l'avatar (#16733) : le bandeau défilant tant que son texte est lisible,
 /// sinon le seul glyphe de la catégorie — l'écoute ne se tait jamais à l'oeil, quelle que soit la taille.
+@MainActor
 final class AvatarListeningFormTests: XCTestCase {
 
     func test_form_atOrAboveMinimum_isBand() {
