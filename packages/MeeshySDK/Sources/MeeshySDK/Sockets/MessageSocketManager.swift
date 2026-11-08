@@ -285,6 +285,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         Task { @MainActor in self.connectionState = .connecting }
 
+        // #16744 — le transport PÉRIMÉ qu'on remplace part par la porte de la
+        // loi, comme à `suspendTransport()`. Le garde-fou d'entrée ne couvre que
+        // `.connected || .connecting` : un socket coupé par la passerelle
+        // (expiration de JWT) arrive ici non-nil et `.disconnected`, avec ses
+        // `emitWithAck` EN VOL. Socket.IO n'en tient qu'une référence FAIBLE —
+        // le relâcher sans retraite, c'est ni réponse ni expiration, donc un
+        // envoi suspendu pour toujours et jamais replié sur REST.
+        transportRetirement.retire(manager)
         manager = makeTransport(url: url, token: token)
 
         socket = manager?.defaultSocket
