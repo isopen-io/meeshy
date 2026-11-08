@@ -1,8 +1,8 @@
-# Un témoin qui ne peut pas tomber se trouve en CHASSANT le rouge, jamais en relisant l'assertion
+## Un témoin qui ne peut pas tomber se trouve en CHASSANT le rouge, jamais en relisant l'assertion
 
 **2026-11-08** — cycle 145 de l'audit temps réel (#16751, #16750, #16830, #16837, #16852, #16856).
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 **Trois témoins de ce cycle ne pouvaient pas tomber tels qu'ils étaient d'abord
 écrits.** Les trois étaient bien intentionnés, bien nommés, et assertaient
@@ -19,7 +19,7 @@ Dans les **trois** cas, le défaut du témoin est apparu au moment de **prouver 
 rouge** — en remettant la production fautive et en constatant que le témoin
 restait VERT.
 
-## La règle
+### La règle
 
 **Prouver le rouge n'est pas une formalité de clôture : c'est la seule mesure
 qui distingue un témoin d'une décoration.** Le dépôt l'écrit déjà
@@ -29,7 +29,7 @@ construction, un témoin dont l'assertion est JUSTE. Il n'y a rien à repérer e
 le relisant. Ce qui manque n'est pas dans l'assertion, c'est dans ce que le
 HARNAIS laisse passer.
 
-## Les trois formes, pour les reconnaître
+### Les trois formes, pour les reconnaître
 
 1. **Le double répond trop** — il rend ce qu'on lui a dit de rendre, sans égard
    pour la requête. Un témoin de PROJECTION (qui assert sur la requête) est
@@ -44,7 +44,7 @@ HARNAIS laisse passer.
    vrai outil refuse. **Un témoin de FORME D'APPEL exige un double qui lise ses
    arguments** (cycle 112, « un double mentait aussi par ce qu'il ACCEPTE »).
 
-## Le geste
+### Le geste
 
 Après avoir écrit un témoin, **remettre la production fautive et le relancer.**
 S'il reste vert, le défaut est dans le harnais : demander laquelle des trois
