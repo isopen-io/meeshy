@@ -48,8 +48,9 @@ nonisolated final class NSETokenRedirectGuard: NSObject, URLSessionTaskDelegate,
         _ session: URLSession,
         task: URLSessionTask,
         willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest
-    ) async -> URLRequest? {
-        NotificationDetailPolicy.mayCarrySessionToken(request.url, apiBaseURL: apiBaseURL) ? request : nil
+        newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        completionHandler(NotificationDetailPolicy.mayCarrySessionToken(request.url, apiBaseURL: apiBaseURL) ? request : nil)
     }
 }
