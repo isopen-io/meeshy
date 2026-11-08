@@ -37,7 +37,7 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
     /// (`UNNotificationExtensionCategory`) — une par cas ci-dessus.
     static let categoryIdentifiers: [String] = [
         NotificationDetailPolicy.audioCategory, "MEESHY_LOCATION", "MEESHY_CONTACT",
-        NotificationDetailPolicy.ephemeralCategory,
+        NotificationDetailPolicy.ephemeralCategory, NotificationDetailPolicy.talkieCategory,
     ]
 
     /// `resolveURL` résout l'adresse de la piste contre l'origine API de

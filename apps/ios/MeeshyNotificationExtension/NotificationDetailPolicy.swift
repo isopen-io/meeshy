@@ -62,6 +62,18 @@ nonisolated enum NotificationDetailPolicy {
 
     static let audioCategory = "MEESHY_AUDIO"
 
+    /// #17143 — la notification de réveil d'un talkie (`talkie_incoming`, `TalkieWakeContract` du SDK) : la SEULE
+    /// catégorie dont la VOIX se joue depuis la notification, par le lecteur déjà existant de la notification déployée
+    /// (#8859) — la piste que la passerelle y attache voyage sous les clés d'un vocal (`attachmentUrl`,
+    /// `attachmentMimeType`, `attachmentDurationMs`), que la NSE télécharge et attache comme tout média.
+    static let talkieCategory = "MEESHY_TALKIE"
+    static let talkiePushType = "talkie_incoming"
+
+    /// La catégorie du talkie pour ce `type` de push, `nil` pour tout autre.
+    static func talkieCategory(forType type: String) -> String? {
+        type == talkiePushType ? talkieCategory : nil
+    }
+
     /// #7455 — un message éphémère : la notification DÉPLOYÉE montre son
     /// décompte vivant (`MeeshyNotificationContentExtension`).
     static let ephemeralCategory = "MEESHY_EPHEMERAL"

@@ -34,6 +34,10 @@ typealias TalkieDeadlineScheduler = @MainActor (TimeInterval, @escaping @MainAct
 /// - La durée maximale SERVIE ferme seule ; les plafonds d'octets et de fragments aussi, AVANT que le serveur ne coupe.
 /// - Un `talkie:ended` qui porte MON `talkieId` (limite, coupure) arrête le micro. Un blocage posé par le destinataire
 ///   ne prévient PAS l'émetteur : ses fragments se perdent en silence, et c'est voulu.
+/// - **Repli** (`voice`, #17141) : ce n'est plus une erreur. Le micro continue tant que le doigt tient, puis la voix
+///   captée part en message vocal dans la conversation la plus récente avec le destinataire (`TalkieVoiceCopying`).
+/// - **Réveil** (`delivery: waking`) : le destinataire n'est pas connecté ; la passerelle le réveille et lui rejoue la
+///   voix. L'émetteur parle comme d'habitude, l'écran dit « Réveil de X… ».
 @MainActor
 final class TalkieSender: ObservableObject {
 
@@ -41,11 +45,15 @@ final class TalkieSender: ObservableObject {
         case idle
         case starting(toUserId: String)
         case talking(toUserId: String, talkieId: String)
+        /// Le talkie n'a pas pu passer : la voix s'enregistre pour partir en message vocal.
+        case recordingCopy(toUserId: String)
     }
 
     @Published private(set) var phase: Phase = .idle
     /// Ce qu'il faut dire d'une prise de parole qui n'a pas abouti ; l'écran le remet à `nil` une fois dit.
     @Published var notice: TalkieSendOutcome?
+    /// La prise de parole en cours réveille son destinataire (`delivery: waking`).
+    @Published private(set) var waking = false
     /// Les temps de la dernière prise de parole dont un fragment est parti.
     private(set) var lastLatency: TalkieLatency?
 
@@ -58,6 +66,8 @@ final class TalkieSender: ObservableObject {
         var accepting = true
         var released = false
         var finishing = false
+        var copying = false
+        var copied: [Data] = []
         var queue: [TalkieFragment] = []
         var fragmenter = TalkieFragmenter()
         var budget = TalkieBudget()
@@ -72,10 +82,12 @@ final class TalkieSender: ObservableObject {
         nonisolated deinit {}
 
         var queuedBytes: Int { queue.reduce(0) { $0 + $1.data.count } }
+        var copiedBytes: Int { copied.reduce(0) { $0 + $1.count } }
     }
 
     private let emitter: TalkieEmitting
     private let capture: TalkieCapturing
+    private let copier: TalkieVoiceCopying
     private let now: () -> Date
     private let schedule: TalkieDeadlineScheduler
     private var session: Session?
@@ -86,12 +98,14 @@ final class TalkieSender: ObservableObject {
     init(
         emitter: TalkieEmitting = TalkieSocketEmitter.shared,
         capture: TalkieCapturing? = nil,
+        copier: TalkieVoiceCopying? = nil,
         endedEvents: AnyPublisher<TalkieEnded, Never> = TalkieEvents.ended,
         now: @escaping () -> Date = { Date() },
         schedule: @escaping TalkieDeadlineScheduler = TalkieSender.sleepingDeadline
     ) {
         self.emitter = emitter
         self.capture = capture ?? TalkieMicCapture()
+        self.copier = copier ?? TalkieVoiceCopySender()
         self.now = now
         self.schedule = schedule
         let lane = OrderedEventLane()
@@ -141,6 +155,10 @@ final class TalkieSender: ObservableObject {
     func release() async {
         guard let current = session, !current.released else { return }
         current.released = true
+        guard !current.copying else {
+            await finishCopy(current)
+            return
+        }
         guard current.opened == nil else {
             await finish(current, outcome: nil)
             return
@@ -177,6 +195,10 @@ final class TalkieSender: ObservableObject {
 
     private func conclude(_ current: Session, verdict: TalkieStartVerdict, micReady: Bool) async {
         switch verdict {
+        case .refused(.voice) where micReady:
+            await startCopy(current)
+        case .refused(.voice):
+            await refuse(current, .micDenied)
         case .refused(let outcome):
             await refuse(current, outcome)
         case .opened(let opened) where !micReady:
@@ -192,6 +214,7 @@ final class TalkieSender: ObservableObject {
         current.fragmenter.maxChunkBytes = opened.maxChunkBytes
         guard !current.finishing else { return }
         phase = .talking(toUserId: current.toUserId, talkieId: opened.talkieId)
+        waking = opened.delivery == .waking
         current.cancelDeadline = schedule(opened.maxDuration) { [weak self] in
             Task { await self?.finish(current, outcome: .limit) }
         }
@@ -203,6 +226,10 @@ final class TalkieSender: ObservableObject {
 
     private func frame(_ current: Session, _ data: Data, _ duration: TimeInterval) {
         guard current.accepting, !data.isEmpty else { return }
+        guard !current.copying else {
+            if current.copiedBytes + data.count <= TalkieContract.maxTotalBytes { current.copied.append(data) }
+            return
+        }
         current.fragmenter.append(data, duration: duration, at: now()).forEach { dispatch(current, $0) }
     }
 
@@ -264,12 +291,38 @@ final class TalkieSender: ObservableObject {
         settle(current, outcome)
     }
 
+    /// Le repli : ce qui est déjà capté rejoint la copie, et le micro continue jusqu'au relâchement ou à la durée
+    /// maximale.
+    private func startCopy(_ current: Session) async {
+        current.copying = true
+        current.copied = current.queue.map(\.data) + [current.fragmenter.flush()?.data].compactMap { $0 }
+        current.queue = []
+        guard !current.released else {
+            await finishCopy(current)
+            return
+        }
+        phase = .recordingCopy(toUserId: current.toUserId)
+        current.cancelDeadline = schedule(TalkieContract.maxDuration) { [weak self] in
+            Task { await self?.finishCopy(current) }
+        }
+    }
+
+    private func finishCopy(_ current: Session) async {
+        guard !current.finishing else { return }
+        current.finishing = true
+        current.cancelDeadline?()
+        await stopMic(current)
+        let sent = await copier.send(current.copied, toUserId: current.toUserId)
+        settle(current, sent ? .voice : .failed)
+    }
+
     private func settle(_ current: Session, _ outcome: TalkieSendOutcome?) {
         current.cancelDeadline?()
         current.cancelDeadline = nil
         if session === current {
             session = nil
             phase = .idle
+            waking = false
         }
         if let outcome { notice = outcome }
     }

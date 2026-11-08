@@ -308,6 +308,10 @@ class NotificationService: UNNotificationServiceExtension {
             }
             category = callCategory
 
+        // #17143 — le réveil d'un talkie : sa catégorie dédiée, la seule dont la voix se joue sur place.
+        case NotificationDetailPolicy.talkiePushType:
+            category = NotificationDetailPolicy.talkieCategory
+
         default:
             // Unknown / new server-side type: stay quiet and show the default
             // system banner with no actions. Do NOT fall back to MESSAGE — the

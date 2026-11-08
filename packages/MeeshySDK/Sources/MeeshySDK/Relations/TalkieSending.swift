@@ -36,11 +36,14 @@ public struct TalkieOpened: Sendable, Equatable {
     public let talkieId: String
     public let maxDuration: TimeInterval
     public let maxChunkBytes: Int
+    /// `waking` : le destinataire n'est pas connecté, la passerelle le réveille par un push et lui rejoue la voix.
+    public let delivery: TalkieDelivery
 
-    public init(talkieId: String, maxDuration: TimeInterval, maxChunkBytes: Int) {
+    public init(talkieId: String, maxDuration: TimeInterval, maxChunkBytes: Int, delivery: TalkieDelivery = .live) {
         self.talkieId = talkieId
         self.maxDuration = maxDuration
         self.maxChunkBytes = maxChunkBytes
+        self.delivery = delivery
     }
 }
 
@@ -49,6 +52,7 @@ struct TalkieOpenedWire: Decodable, Sendable, Equatable {
     let talkieId: String
     let maxDurationMs: Double?
     let maxChunkBytes: Int?
+    let delivery: String?
 }
 
 /// Le verdict de `talkie:start` : ouverte, ou refusée avec ce qu'il faut en dire.
@@ -62,7 +66,8 @@ public enum TalkieStartVerdict: Sendable, Equatable {
             return .opened(TalkieOpened(
                 talkieId: wire.talkieId,
                 maxDuration: bounded(wire.maxDurationMs.map { $0 / 1000 }, ceiling: TalkieContract.maxDuration),
-                maxChunkBytes: Int(bounded(wire.maxChunkBytes.map(Double.init), ceiling: Double(TalkieContract.maxChunkBytes)))
+                maxChunkBytes: Int(bounded(wire.maxChunkBytes.map(Double.init), ceiling: Double(TalkieContract.maxChunkBytes))),
+                delivery: wire.delivery.flatMap(TalkieDelivery.init(rawValue:)) ?? .live
             ))
         case .accepted, .acceptedWithoutPayload, .undecodable:
             return .refused(.failed)

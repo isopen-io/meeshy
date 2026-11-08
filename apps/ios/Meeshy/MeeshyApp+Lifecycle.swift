@@ -163,6 +163,7 @@ extension MeeshyApp {
             Task { await CacheCoordinator.shared.stop() }
         case .unregisterVoIP:
             Task { await VoIPPushManager.shared.unregisterAndClearToken() }
+            Task { await TalkiePushToTalkChannel.shared.leave() }
         case .endActiveCall:
             CallManager.shared.endCall()
         case .disconnectSockets:

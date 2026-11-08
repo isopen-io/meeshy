@@ -195,6 +195,7 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case talkieEnd = "talkie:end"
     case talkieEnded = "talkie:ended"
     case talkieIncoming = "talkie:incoming"
+    case talkieJoin = "talkie:join"
     case talkieSendChunk = "talkie:send-chunk"
     case talkieStart = "talkie:start"
     case togetherEnded = "together:ended"

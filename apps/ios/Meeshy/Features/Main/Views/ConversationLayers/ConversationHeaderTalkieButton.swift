@@ -71,14 +71,21 @@ struct ConversationHeaderTalkieButton: View {
                     .transition(.scale.combined(with: .opacity))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(ProfileTalkieWording.holdA11y(name: peerName))
-                    .accessibilityValue(look == .live ? ProfileTalkieWording.talking(name: peerName) : "")
+                    .accessibilityValue(look == .live ? liveValue : "")
                     .accessibilityHint(ProfileTalkieWording.holdHint)
                     .accessibilityAddTraits([.isButton, .updatesFrequently])
                     .accessibilityIdentifier("conversation.header.talkie")
+                TalkieInfoButton(tint: accent)
+                    .transition(.opacity)
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: offer.offered)
         .task(id: userId) { await offer.load() }
+        .adaptiveOnChange(of: sender.waking) { _, waking in
+            // L'en-tête n'a pas de libellé : le réveil d'un destinataire hors ligne se dit dans un bandeau neutre.
+            guard waking else { return }
+            FeedbackToastManager.shared.show(ProfileTalkieWording.waking(name: peerName), type: .info)
+        }
         .adaptiveOnChange(of: sender.notice) { _, new in
             guard let new else { return }
             sender.notice = nil
@@ -86,11 +93,19 @@ struct ConversationHeaderTalkieButton: View {
                 withdrawn = true
                 return
             }
-            FeedbackToastManager.shared.showError(ProfileTalkieWording.notice(new))
+            ProfileTalkieWording.present(new)
         }
     }
 
     private var accent: Color { Color(hex: accentColor) }
+
+    private var liveValue: String {
+        switch sender.phase {
+        case .recordingCopy: ProfileTalkieWording.recordingCopy
+        case .talking where sender.waking: ProfileTalkieWording.waking(name: peerName)
+        default: ProfileTalkieWording.talking(name: peerName)
+        }
+    }
 
     private var glyph: some View {
         ZStack {
