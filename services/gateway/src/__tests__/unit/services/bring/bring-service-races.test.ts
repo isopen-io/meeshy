@@ -10,7 +10,7 @@ import { sendBring, stopBringsOnBlock, type BringDeps } from '../../../../servic
 import { AUTRE, MOI, NOW, lien } from '../../../helpers/relation-app';
 
 const user = (id: string) => ({
-  id, deactivatedAt: null, timezone: null, birthDate: null, displayName: 'X', username: 'x', avatar: null,
+  id, isActive: true, deletedAt: null, deactivatedAt: null, timezone: null, birthDate: null, displayName: 'X', username: 'x', avatar: null,
   systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
 });
 

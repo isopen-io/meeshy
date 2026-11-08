@@ -123,16 +123,26 @@ export function relationLinksQueryOptions(deps: RelationDeps) {
  * `null` aujourd'hui : le cool-down ne se dit qu'au refus, RG-07). Une passerelle
  * d'avant ne sert ni l'un ni l'autre : `null` laisse la loi locale décider.
  */
-export type RaiseGate = { readonly canRaise: boolean | null; readonly raiseBlockedUntil: string | null };
+/**
+ * `accessLevel` (#16623) : le niveau auquel la passerelle JUGE les outils de cercle de la
+ * paire — le lien réel, sauf entre deux comptes de l'équipe. Une passerelle d'avant ne le
+ * sert pas : il retombe sur `effectiveLevel`, et une valeur illisible vaut `PUBLIC`.
+ */
+export type RaiseGate = {
+  readonly canRaise: boolean | null;
+  readonly raiseBlockedUntil: string | null;
+  readonly accessLevel: RelationLevel;
+};
 
 export const relationRaiseGateQueryKey = (userId: string) => [...RELATION_LINKS_QUERY_KEY, 'raise-gate', userId] as const;
 
 export async function loadRelationRaiseGate(deps: RelationDeps & { readonly signal?: AbortSignal }, userId: string): Promise<ApiResult<RaiseGate>> {
-  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: { canRaise: null, raiseBlockedUntil: null } };
+  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: { canRaise: null, raiseBlockedUntil: null, accessLevel: 'PUBLIC' } };
   const result = await deps.transport.request<unknown>({ method: 'GET', path: relationsEndpoints.byUserId(userId), ...withSignal(deps.signal) });
   if (!result.ok) return result;
   const wire = objectOf(result.data);
-  return { ok: true, data: { canRaise: flagOf(wire?.canRaise), raiseBlockedUntil: textOf(wire?.raiseBlockedUntil) } };
+  const accessLevel = wire !== null && 'accessLevel' in wire ? levelOf(wire.accessLevel) : levelOf(wire?.effectiveLevel);
+  return { ok: true, data: { canRaise: flagOf(wire?.canRaise), raiseBlockedUntil: textOf(wire?.raiseBlockedUntil), accessLevel } };
 }
 
 export function relationRaiseGateQueryOptions(deps: RelationDeps, userId: string) {

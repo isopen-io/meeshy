@@ -45,14 +45,16 @@ public enum class RelationFeature(
      * face à un mineur DÉCLARÉ ; `null` = la feature n'est pas bouclée.
      */
     public val minorTargetMinimum: RelationLevel? = null,
+    /** Ce que le privilège d'équipe n'ouvre pas (`RELATION_TEAM_CLOSED_FEATURES`, #16623) : une audience reste au lien réel. */
+    public val isClosedToTeam: Boolean = false,
 ) {
     PRESENCE_ONLINE("presence.online", RelationLevel.FRIEND, isPresence = true),
     PRESENCE_DETAILED("presence.detailed", RelationLevel.CLOSE, isPresence = true),
     GAME_BASIC("game.basic", RelationLevel.FRIEND),
     GAME_SPARKS_GLORY("game.sparksGlory", RelationLevel.CLOSE),
-    NOTIFY_NEW_CONTENT("notify.newContent", RelationLevel.CLOSE),
-    RELAY_COMMENTERS_ON_MY_POSTS("relay.commentersOnMyPosts", RelationLevel.CLOSE),
-    RELAY_MY_COMMENTS_ELSEWHERE("relay.myCommentsElsewhere", RelationLevel.BLOOD),
+    NOTIFY_NEW_CONTENT("notify.newContent", RelationLevel.CLOSE, isClosedToTeam = true),
+    RELAY_COMMENTERS_ON_MY_POSTS("relay.commentersOnMyPosts", RelationLevel.CLOSE, isClosedToTeam = true),
+    RELAY_MY_COMMENTS_ELSEWHERE("relay.myCommentsElsewhere", RelationLevel.BLOOD, isClosedToTeam = true),
     DM_DIRECT("dm.direct", RelationLevel.ACQUAINTANCE),
     DM_REQUEST("dm.request", RelationLevel.PUBLIC, isDirected = true, minorTargetMinimum = RelationLevel.ACQUAINTANCE),
     DM_READ_RECEIPTS("dm.readReceipts", RelationLevel.ACQUAINTANCE),
@@ -60,9 +62,9 @@ public enum class RelationFeature(
     PRESENCE_DND("presence.dnd", RelationLevel.ACQUAINTANCE),
     CALL_RING("call.ring", RelationLevel.PUBLIC, isDirected = true, minorTargetMinimum = RelationLevel.FRIEND),
     VIEWS_IDENTITY("views.identity", RelationLevel.COMMUNITY),
-    AUDIENCE_ACQUAINTANCES("audience.acquaintances", RelationLevel.ACQUAINTANCE),
-    AUDIENCE_CLOSE("audience.close", RelationLevel.CLOSE),
-    AUDIENCE_BLOOD("audience.blood", RelationLevel.BLOOD),
+    AUDIENCE_ACQUAINTANCES("audience.acquaintances", RelationLevel.ACQUAINTANCE, isClosedToTeam = true),
+    AUDIENCE_CLOSE("audience.close", RelationLevel.CLOSE, isClosedToTeam = true),
+    AUDIENCE_BLOOD("audience.blood", RelationLevel.BLOOD, isClosedToTeam = true),
     LISTENING_CATEGORY("listening.category", RelationLevel.CLOSE, requiresConsent = true),
     LISTENING_TITLE("listening.title", RelationLevel.BLOOD, requiresConsent = true),
     TALKIE("talkie", RelationLevel.CLOSE, requiresConsent = true, isDirected = true),
@@ -70,7 +72,7 @@ public enum class RelationFeature(
     LOCATION_LIVE("location.live", RelationLevel.BLOOD, requiresConsent = true),
     LOCATION_HISTORY("location.history", RelationLevel.BLOOD, requiresConsent = true),
     LOCATION_PROXIMITY("location.proximity", RelationLevel.BLOOD, requiresConsent = true),
-    ACQUAINTANCE_AUTO("acquaintance.auto", RelationLevel.PUBLIC, isDirected = true),
+    ACQUAINTANCE_AUTO("acquaintance.auto", RelationLevel.PUBLIC, isDirected = true, isClosedToTeam = true),
     ;
 
     /** Le minimum de la matrice, relevé par le bouclier quand un viewer non mineur s'adresse à un mineur déclaré — jamais abaissé. */
@@ -124,6 +126,8 @@ public data class RelationAccessInput(
     val feature: RelationFeature,
     /** `null` = inconnu : une feature à consentement reste fermée. */
     val consent: RelationConsent?,
+    /** Le rôle de la cible : `null` (absent ou inconnu), le privilège d'équipe reste fermé (#16623). */
+    val targetRole: PlatformRole? = null,
 )
 
 /**
@@ -132,7 +136,8 @@ public data class RelationAccessInput(
  *
  * Le miroir ne décide d'AUCUN accès : le serveur reste l'autorité. Il sert à ne pas PROPOSER une action qu'il refusera.
  * Pur, sans état, sans I/O. Ordre des verdicts : blocage, identité absente, soi, rôle (présence seule), âge (Connaissance
- * automatique seule), niveau (relevé par le bouclier des mineurs, refus dit `level`), consentement.
+ * automatique seule), niveau (relevé par le bouclier des mineurs, refus dit `level`), consentement. Entre deux comptes de
+ * l'équipe, le niveau d'un outil vaut Sang (#16623), sauf face à un mineur déclaré.
  */
 public data class RelationAccess(
     val allowed: Boolean,
@@ -152,8 +157,19 @@ public data class RelationAccess(
             return if (granted == RelationLevel.PUBLIC && sharesCommunity) RelationLevel.COMMUNITY else granted
         }
 
+        /** Le privilège d'équipe s'applique-t-il à cette paire, pour cette feature (`teamOpens`) ? */
+        internal fun teamOpens(input: RelationAccessInput): Boolean =
+            input.viewerRole?.isTeam == true &&
+                input.targetRole?.isTeam == true &&
+                !input.feature.isClosedToTeam &&
+                !(input.targetMinor == AgeClass.MINOR && input.viewerMinor != AgeClass.MINOR)
+
         public fun resolve(input: RelationAccessInput): RelationAccess {
-            val level = combinedLevel(input.grantedByViewer, input.grantedByTarget, input.sharesCommunity)
+            val level = if (teamOpens(input)) {
+                RelationLevel.BLOOD
+            } else {
+                combinedLevel(input.grantedByViewer, input.grantedByTarget, input.sharesCommunity)
+            }
             val feature = input.feature
 
             if (input.blockedEitherWay) return denied(RelationAccessReason.BLOCKED)
