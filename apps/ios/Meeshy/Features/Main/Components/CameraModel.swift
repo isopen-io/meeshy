@@ -151,7 +151,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     @Published private(set) var switchCover: CGImage?
     /// La bascule en cours : une couverture peinte après la sienne ne se pose pas.
     private var switchGeneration = 0
-    private var recordingTimer: Timer?
+    private let recordingClock = CameraRecordingClock()
     /// Le guet de la scène après un toucher — `nil` hors session.
     /// `nonisolated(unsafe)` : la deinit, non isolée, le retire ; il n'est
     /// écrit que sur le fil principal.
@@ -282,7 +282,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                                                   prepared: self.preparedInputs,
                                                   previewWanted: self.previewMirroring.isWanted,
                                                   photoPlan: { self.adoptLens($0) })
-            let audio = micro && Self.addAudioInput(to: self.session)
+            let audio = micro && CameraAudioInput.add(to: self.session)
             self.session.commitConfiguration()
             if let device = installe?.device { CameraPhotoTuning.confirm(self.photoOutput, in: self.session, for: device) }
             DispatchQueue.main.async {
@@ -318,7 +318,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         sessionQueue.perform { [weak self] in
             guard let self else { return }
             self.session.beginConfiguration()
-            let audio = Self.addAudioInput(to: self.session)
+            let audio = CameraAudioInput.add(to: self.session)
             self.session.commitConfiguration()
             guard audio else { return }
             DispatchQueue.main.async { MainActor.assumeIsolated { self.hasAudioInput = true } }
@@ -331,9 +331,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         sessionQueue.perform { [weak self] in
             guard let self else { return }
             self.session.beginConfiguration()
-            self.session.inputs.compactMap { $0 as? AVCaptureDeviceInput }
-                .filter { $0.device.hasMediaType(.audio) }
-                .forEach(self.session.removeInput)
+            CameraAudioInput.remove(from: self.session)
             self.session.commitConfiguration()
         }
     }
@@ -419,7 +417,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             guard let self else { return false }
             self.session.beginConfiguration()
             defer { self.session.commitConfiguration() }
-            return Self.addAudioInput(to: self.session)
+            return CameraAudioInput.add(to: self.session)
         }
     }
 
@@ -458,24 +456,6 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                 }
             }
         }
-    }
-
-    /// Branche le micro DANS une configuration ouverte par l'appelant, sur la
-    /// file de la session. `true` ⇒ la session a son micro.
-    nonisolated private static func addAudioInput(to session: AVCaptureSession) -> Bool {
-        let present = session.inputs.contains { ($0 as? AVCaptureDeviceInput)?.device.hasMediaType(.audio) == true }
-        guard !present else { return true }
-        guard let audioDevice = AVCaptureDevice.default(for: .audio) else { return false }
-        let audioInput: AVCaptureDeviceInput
-        do {
-            audioInput = try AVCaptureDeviceInput(device: audioDevice)
-        } catch {
-            Logger.media.error("Failed to create audio capture input: \(error.localizedDescription, privacy: .public)")
-            return false
-        }
-        guard session.canAddInput(audioInput) else { return false }
-        session.addInput(audioInput)
-        return true
     }
 
     /// Les sorties dont chaque entrée neuve redresse et miroite la connexion.
@@ -581,15 +561,10 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     self.publishLens(installe)
-                    func ms(_ a: CFTimeInterval, _ b: CFTimeInterval) -> Int {
-                        ComposerCameraSwitchTiming.milliseconds(from: a, to: b)
-                    }
-                    let fin = CACurrentMediaTime()
-                    let validee = installe?.committedAt ?? posee
-                    let phases = ComposerCameraSwitchPhases(queue: ms(debut, file), frame: ms(file, couverte),
-                                                            commit: ms(couverte, validee), settle: ms(validee, posee),
-                                                            main: ms(posee, fin))
-                    let rapport = ComposerCameraSwitchTiming.report(to: position, total: ms(debut, fin), phases: phases)
+                    let marks = ComposerCameraSwitchMarks(start: debut, dequeued: file, covered: couverte,
+                                                          committed: installe?.committedAt ?? posee,
+                                                          placed: posee, end: CACurrentMediaTime())
+                    let rapport = marks.report(to: position)
                     Logger.media.info("\(rapport, privacy: .public)")
                     self.endSwitch()
                     then()
@@ -712,9 +687,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             recordingDuration = 0
             isRecordingVideo = true
             recordingId = UUID().uuidString
-            recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-                Task { @MainActor [weak self] in self?.recordingDuration += 0.5 }
-            }
+            recordingClock.start { [weak self] in self?.recordingDuration += CameraRecordingClock.interval }
             return
         }
         #endif
@@ -737,15 +710,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             recordingSession.finish(handingBackSession: false)
             return closeRecordingToken(recordingId)
         }
-        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.recordingDuration += 0.5
-            }
-        }
+        recordingClock.start { [weak self] in self?.recordingDuration += CameraRecordingClock.interval }
     }
 
     /// Starts (or restarts, after a mid-recording camera switch) recording to a
-    /// fresh temp file. Does not touch `recordingDuration`/`recordingTimer` so a
+    /// fresh temp file. Does not touch `recordingDuration`/`recordingClock` so a
     /// segment restart is invisible to the recording-duration UI.
     ///
     /// **Rend son verdict** : `false` ⇒ AVFoundation n'aurait pas pu écrire, et
@@ -781,8 +750,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         switchFollower = nil
         isRecordingVideo = false
         setSmoothFocus(false)
-        recordingTimer?.invalidate()
-        recordingTimer = nil
+        recordingClock.stop()
         for segment in recordedSegmentURLs {
             FileManager.default.removeItemLogging(at: segment,
                                                   context: "discarded recording segment",
@@ -800,8 +768,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         if let fixture {
             guard isRecordingVideo, !stopIsRequested else { return }
             stopIsRequested = true
-            recordingTimer?.invalidate()
-            recordingTimer = nil
+            recordingClock.stop()
             deliverFixtureMovie(fixture)
             return
         }
@@ -912,8 +879,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         recordingSession.finish(handingBackSession: false)
         isRecordingVideo = false
         setSmoothFocus(false)
-        recordingTimer?.invalidate()
-        recordingTimer = nil
+        recordingClock.stop()
 
         let segments = recordedSegmentURLs
         recordedSegmentURLs = []

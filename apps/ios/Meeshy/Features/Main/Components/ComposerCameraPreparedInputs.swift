@@ -76,6 +76,29 @@ nonisolated struct ComposerCameraSwitchPhases: Equatable, Sendable {
     var main = 0
 }
 
+/// Les six instants d'une bascule, relevés par `CACurrentMediaTime()` : le
+/// toucher, la prise de la file, la trame de couverture, la validation de la
+/// configuration, l'objectif posé, et la publication sur le fil principal.
+nonisolated struct ComposerCameraSwitchMarks: Sendable {
+    let start: CFTimeInterval
+    let dequeued: CFTimeInterval
+    let covered: CFTimeInterval
+    let committed: CFTimeInterval
+    let placed: CFTimeInterval
+    let end: CFTimeInterval
+
+    /// La ligne de console de cette bascule vers `position`.
+    func report(to position: AVCaptureDevice.Position) -> String {
+        func ms(_ a: CFTimeInterval, _ b: CFTimeInterval) -> Int {
+            ComposerCameraSwitchTiming.milliseconds(from: a, to: b)
+        }
+        let phases = ComposerCameraSwitchPhases(queue: ms(start, dequeued), frame: ms(dequeued, covered),
+                                                commit: ms(covered, committed), settle: ms(committed, placed),
+                                                main: ms(placed, end))
+        return ComposerCameraSwitchTiming.report(to: position, total: ms(start, end), phases: phases)
+    }
+}
+
 /// **Le temps de la bascule, mesuré** (#9753) : du toucher à l'objectif publié,
 /// en millisecondes — relevé dans la console (`Logger.media`, « camera switch »)
 /// sur l'appareil, là où il se juge ; ses phases disent où il passe (#9778).

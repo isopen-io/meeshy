@@ -632,54 +632,13 @@ struct ComposerSceneSurface: View {
         .statusBarHidden(true)
     }
 
-    /// **Le SOL de la scène : le thumbhash de son propre résultat** (directive
-    /// porteur : « la scène doit avoir un sol peint en thumbhash du
-    /// résultat de la scène »).
-    ///
-    /// Une scène 9:16 est moins haute qu'un iPhone, et elle se cadre entre la
-    /// barre haute et le socle : ce qu'elle laisse du viewport n'est pas un
-    /// plateau, c'est son SOL — la loi du lecteur (`SceneBackdropView`,
-    /// `.thumbHash`), peinte du hachage du COMPOSITE de la slide, ce que la
-    /// publication emportera. Le composer et le lecteur posent ainsi la même
-    /// scène sur le même sol.
-    ///
-    /// Tapable comme le fond du canvas, dont il prolonge l'apparence ; inerte
-    /// pendant un tracé, qui possède l'écran entier.
+    /// Le sol de la scène : `ComposerSceneFloor`.
     private var sceneLetterbox: some View {
-        // **Le sol est BORNÉ par un calque neutre** : en dessin, les
-        // contrôleurs ne doivent pas « s'étirer et sortir » du viewport.
-        // `SceneBackdropView` peint le thumbhash en `.scaledToFill()` et laisse
-        // l'hôte clipper : une image en fill ANNONCE la taille de son
-        // remplissage, plus large que l'écran dès que son rapport diffère —
-        // et le calque de la surface s'élargissait d'autant, emportant la
-        // croix, la carte et les pinceaux hors de l'écran. `Color.clear`
-        // prend la taille proposée ; l'`overlay` ne peut plus la changer.
-        Color.clear
-            .overlay {
-                if let teinte = ComposerSceneFloorRules.backdropColor(slide: slide) {
-                    teinte
-                } else {
-                    SceneBackdropView(backdrop: .thumbHash, thumbHash: floorHash)
-                }
-            }
-            .clipped()
-            .ignoresSafeArea()
-            .contentShape(Rectangle())
-            .onTapGesture { onBackgroundTapped?() }
-            .allowsHitTesting(drawingSurface == nil && timelinePanel == nil)
-            .modifier(ComposerIntakeVeil(veiled: intakeBlocks, dims: false))
-            .task(id: ComposerSceneFloorRules.key(slide: slide, imagesVersion: sceneImagesVersion)) {
-                // Anti-rebond : un geste de cadrage change la clé à chaque image,
-                // et le sol n'a pas à suivre le doigt — il suit la COMPOSITION.
-                try? await Task.sleep(for: .milliseconds(200))
-                guard !Task.isCancelled else { return }
-                floorHash = StorySlideRenderer.computeThumbHash(slide: slide,
-                                                                bgImage: nil,
-                                                                loadedImages: sceneImages)
-            }
+        ComposerSceneFloor(slide: slide, images: sceneImages, imagesVersion: sceneImagesVersion,
+                           intakeBlocks: intakeBlocks, takesTaps: drawingSurface == nil && timelinePanel == nil,
+                           onTap: onBackgroundTapped)
     }
 
-    @State private var floorHash: String?
     @State private var keyboard = ComposerSceneKeyboard()
 
     /// **La scène est le plus grand 9:16 de la zone** (#13839) : ni carte ni
@@ -989,11 +948,4 @@ struct ComposerSceneSurface: View {
     // `description` et `descriptionPlaceholder` restent au contrat : la porte
     // est servie par le meuble, qui possède le texte. Les retirer obligerait
     // chaque site de montage à re-prouver qu'il n'en a pas besoin.
-}
-
-/// Le coin haut-gauche de la scène DESSINÉE, dans la fenêtre : le 9:16 de la
-/// couche, à l'échelle et au décalage où la levée le pose.
-private struct ComposerSceneDrawnOriginKey: PreferenceKey {
-    static let defaultValue: CGPoint? = nil
-    static func reduce(value: inout CGPoint?, nextValue: () -> CGPoint?) { value = nextValue() ?? value }
 }
