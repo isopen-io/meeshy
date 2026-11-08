@@ -22,17 +22,13 @@ import {
 } from './retractMessageNotifications';
 import { loadQuoteCascadeAudience } from './quoteCascade';
 import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
-import { MESSAGE_FANOUT_CONCURRENCY } from '../notifications/fanout-concurrency';
+// La borne — et la mesure qui la justifie — vit avec le COÛT qu'elle borne
+// (`createNotification`), pas avec l'éventail qui l'a mesurée la première
+// (#17081). Elle n'est PAS réexportée d'ici : un ré-export ne traverse pas un
+// double qui énumère ses clés à la main, et ce module est doublé partout.
+import { NOTIFICATION_FANOUT_CONCURRENCY } from '../notifications/notificationFanOutBudget';
 import { pendingRequestUserIds } from './pendingMessageRequests';
 
-/**
- * La borne de débit d'un éventail vit désormais chez le service qui porte son
- * COÛT — `notifications/fanout-concurrency.ts` — parce qu'elle gouverne DEUX
- * éventails depuis #17081, et que le site qui avait eu la mesure n'est pas le
- * site où la règle s'applique. Réexportée ici, et SEULEMENT réexportée : les
- * appelants historiques (dont le témoin de #10819) la lisent à cette adresse.
- */
-export { MESSAGE_FANOUT_CONCURRENCY } from '../notifications/fanout-concurrency';
 
 export type { NotificationActorProfile };
 
@@ -809,8 +805,8 @@ export async function notifyMessageRecipients(params: {
       // `allSettled` et non `all` : le destinataire dont la lecture de contexte
       // hoquette ne doit pas emporter le compte rendu de ses voisins, dont les
       // notifications sont déjà parties.
-      // Débit BORNÉ (#10819) : cf. `MESSAGE_FANOUT_CONCURRENCY`.
-      const results = await settleWithConcurrency(regularRecipients, MESSAGE_FANOUT_CONCURRENCY, recipientUserId =>
+      // Débit BORNÉ (#10819) : cf. `NOTIFICATION_FANOUT_CONCURRENCY`.
+      const results = await settleWithConcurrency(regularRecipients, NOTIFICATION_FANOUT_CONCURRENCY, recipientUserId =>
         notificationService.createMessageNotification({
           recipientUserId,
           senderId: sender.actorId,

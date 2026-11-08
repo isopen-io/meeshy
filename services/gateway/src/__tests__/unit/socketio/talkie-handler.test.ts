@@ -7,8 +7,9 @@
  */
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
+const mockLogger = { error: jest.fn(), info: jest.fn(), warn: jest.fn(), debug: jest.fn() };
 jest.mock('../../../utils/logger-enhanced', () => ({
-  enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn(), debug: jest.fn() }) },
+  enhancedLogger: { child: () => mockLogger },
 }));
 
 const cacheState = { available: true, client: 'redis-A' as unknown, cut: null as string | null };
@@ -34,9 +35,10 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
 }));
 
 type GateDeps = { presenceServed: (viewer: { userId: string; role: string }, targetId: string) => Promise<boolean> };
-const judgeTalkie = jest.fn(async (deps: GateDeps) => {
+type GateVerdict = { ok: true } | { ok: false; code: string; message: string; cause: string };
+const judgeTalkie = jest.fn(async (deps: GateDeps): Promise<GateVerdict> => {
   await deps.presenceServed({ userId: FROM, role: 'ADMIN' }, TO);
-  return { ok: true } as const;
+  return { ok: true };
 });
 jest.mock('../../../services/talkie/talkieGate', () => ({
   ...(jest.requireActual('../../../services/talkie/talkieGate') as object),
@@ -152,5 +154,29 @@ describe('TalkieHandler — le câblage', () => {
 
     expect(resolveForTarget).toHaveBeenCalledWith({ userId: FROM, role: 'ADMIN' }, { id: TO });
     deps.relay.dispose();
+  });
+});
+
+describe('#17131 — un refus de la porte laisse une ligne de journal', () => {
+  it('le refus est journalisé avec son code, sa cause et la paire ; la cause ne part pas au client', async () => {
+    judgeTalkie.mockResolvedValueOnce({ ok: false, code: 'TALKIE_FALLBACK_VOICE', message: 'Envoie un message vocal', cause: 'not-connected' });
+    const { io } = fakeIo();
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, depsFor(io, { [FROM]: { isAnonymous: false } }));
+
+    const ack = await socket.start({ toUserId: TO, codec: 'aac-adts' });
+
+    expect(ack).toEqual({ success: false, error: 'Envoie un message vocal', code: 'TALKIE_FALLBACK_VOICE' });
+    expect(mockLogger.info).toHaveBeenCalledWith('[TALKIE_REFUSED]', { code: 'TALKIE_FALLBACK_VOICE', cause: 'not-connected', fromUserId: FROM, toUserId: TO });
+  });
+
+  it('une porte ouverte ne journalise aucun refus', async () => {
+    const { io } = fakeIo();
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, depsFor(io, { [FROM]: { isAnonymous: false } }));
+
+    await socket.start({ toUserId: TO, codec: 'aac-adts' });
+
+    expect(mockLogger.info).not.toHaveBeenCalledWith('[TALKIE_REFUSED]', expect.anything());
   });
 });

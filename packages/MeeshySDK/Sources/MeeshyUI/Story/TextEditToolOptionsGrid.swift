@@ -165,7 +165,7 @@ extension TextEditToolOptions {
 
     var effectGrid: some View {
         LazyVGrid(columns: gridColumns, spacing: TextEditOptionsGridMetrics.rowSpacing) {
-            ForEach(StoryTextEffect.allCases, id: \.self) { effect in
+            ForEach(StoryTextEffect.pickerChoices(keeping: textObject.parsedTextEffect), id: \.self) { effect in
                 effectGridCell(effect)
             }
         }

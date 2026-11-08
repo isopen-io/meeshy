@@ -1,383 +1,546 @@
 /**
- * #17076 — `GET /conversations/:id/stats` servait l'historique AGRÉGÉ, NOMMÉ et
- * DATÉ sans plancher d'historique.
+ * `GET /conversations/:id/stats` (#17076) — **l'agrégat est borné par le
+ * PLANCHER du lecteur**.
  *
  * La route n'avait que deux gardes — `resolveConversationId`, puis
- * `canAccessConversation` — et aucune occurrence de `historyFloor`,
- * `personalHistoryFilter` ni d'un plancher de rang. Ce qu'elle servait, pour
- * toute la vie de la conversation : `dailyActivity` (une ligne par jour depuis
- * la création), et `participantStats` enrichi NOMINALEMENT (username,
- * displayName, avatar) portant par personne son volume, son `firstMessageAt` et
- * son `lastMessageAt`.
+ * `canAccessConversation` — et servait ensuite la ligne
+ * `ConversationMessageStats`, qui agrège TOUTE la vie de la conversation. Un
+ * inscrit entré aujourd'hui par un lien `allowViewHistory: false` y lisait donc
+ * ce que le fil, la recherche, les fils de réponses et les traductions
+ * partagées lui refusent tous : **quand la conversation a commencé** (le
+ * `firstMessageAt` de chacun), **qui a écrit combien** (`participantStats`,
+ * enrichi NOMINALEMENT) et **le volume de chaque journée passée**
+ * (`dailyActivity`).
  *
- * Un inscrit entré aujourd'hui par un lien `allowViewHistory: false` a un
- * plancher d'historique à son arrivée, que le fil, la recherche, les fils de
- * réponses et les traductions partagées respectent TOUS. Cette porte-ci lui
- * disait **quand la conversation a commencé, qui a écrit combien, et le volume
- * de chaque journée passée.** Fuite ACTIVE, et deux clients livrés l'ouvrent
- * (`ConversationAnalysisService.byIdStats` du SDK iOS,
- * `ConversationStatsViewModel` sur Android).
+ * ─── Pourquoi un agrégat PLAFONNÉ n'était pas une option ─────────────────────
  *
- * > Le dépôt admet qu'« un agrégat sans identité (« N en ligne ») n'est pas
- * > visé ». Ces chiffres-ci sont NOMMÉS, DATÉS et ATTRIBUÉS : ils décrivent
- * > exactement l'historique qu'on refuse de servir message par message.
+ * Aucun champ de cette charge n'est sûr sous plancher : `totalMessages` compte
+ * l'avant, `dailyActivity` le date, `participantStats` l'attribue, les deux
+ * distributions l'agrègent. Servir « le total, mais plafonné » laisserait
+ * déduire le reste par soustraction dès que le lecteur connaît sa propre
+ * fenêtre — ce qui est son cas par construction.
  *
- * Deux niveaux, parce que le défaut vit entre les deux :
+ * ─── Et pourquoi pas un REFUS ────────────────────────────────────────────────
  *
- *  1. la ROUTE résout-elle le plancher du lecteur et le passe-t-elle ? Un témoin
- *     posé sur le 200 ou sur la charge d'un créateur ne peut pas tomber — au
- *     rang nominal (pas de plancher) l'ancienne règle et la nouvelle rendent le
- *     même verdict (§ un témoin de rang s'écrit sur un rang AUTRE que le
- *     premier) ;
- *  2. le SERVICE agrège-t-il vraiment sur la fenêtre du lecteur ? C'est là que
- *     « plafonner » et « recalculer » se séparent : un agrégat plafonné
- *     laisserait déduire le reste par soustraction.
+ * Parce que la fenêtre d'un lecteur à plancher EST sa fenêtre de lecture : les
+ * mêmes messages que `GET …/messages` lui sert déjà. Recalculer dessus ne
+ * publie rien de neuf, et garde la feature pour cette population (dimension 13)
+ * au lieu de la lui retirer.
+ *
+ * ─── Le témoin au rang nominal ne peut pas tomber ────────────────────────────
+ *
+ * Sans plancher, la règle juste et le défaut rendent le même verdict. Le témoin
+ * qui MESURE est donc celui du lecteur planchéisé ; celui du créateur est le
+ * témoin NÉGATIF, vert des deux côtés, et son rôle est d'interdire qu'on paie
+ * le correctif en retirant la route à tout le monde.
  *
  * @jest-environment node
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 
 const mockResolveConversationId = jest.fn<any>();
-const mockCanAccessConversation = jest.fn<any>();
-const mockGetStats = jest.fn<any>();
-
 jest.mock('../../../../utils/conversation-id-cache', () => ({
-  resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
+  resolveConversationId: (...args: unknown[]) => mockResolveConversationId(...args),
 }));
 
+const mockCanAccessConversation = jest.fn<any>();
 jest.mock('../../../../routes/conversations/utils/access-control', () => ({
   ...(jest.requireActual('../../../../routes/conversations/utils/access-control') as Record<string, unknown>),
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
-
-jest.mock('../../../../services/ConversationMessageStatsService', () => ({
-  ...(jest.requireActual('../../../../services/ConversationMessageStatsService') as Record<string, unknown>),
-  conversationMessageStatsService: { getStats: (...args: any[]) => mockGetStats(...args) },
+  canAccessConversation: (...args: unknown[]) => mockCanAccessConversation(...args),
 }));
 
 import { registerStatsRoutes } from '../../../../routes/conversations/stats';
-import { ConversationMessageStatsService } from '../../../../services/ConversationMessageStatsService';
+import { conversationMessageStatsService } from '../../../../services/ConversationMessageStatsService';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const CONV_ID = '507f1f77bcf86cd799439022';
-const OLD_TIMER_ID = '507f1f77bcf86cd799439033';
+const OTHER_USER = '507f1f77bcf86cd799439033';
+const PARTICIPANT_ID = '507f1f77bcf86cd799439044';
+
+/** Le plancher du lecteur : il est arrivé ce jour-là, et le lien lui refuse l'avant. */
 const FLOOR = new Date('2026-11-08T00:00:00.000Z');
-const CLEARED_BEFORE = new Date('2026-11-08T06:00:00.000Z');
-const HIDDEN_MSG_ID = '507f1f77bcf86cd799439077';
+const BEFORE_FLOOR = new Date('2026-03-04T09:15:00.000Z');
+const AFTER_FLOOR = new Date('2026-11-08T10:20:00.000Z');
 
-// ── 1. La ROUTE résout le plancher du lecteur ─────────────────────────────
+type FloorRow = {
+  joinedAt: Date;
+  historyVisibleFrom: Date | null;
+  shareLinkId: string | null;
+  role?: string;
+  permissions?: { canViewHistory?: boolean } | null;
+  user?: { role?: string } | null;
+} | null;
 
-function makeRoutePrisma(participantRow: Record<string, unknown> | null) {
+/**
+ * Les messages que la conversation PORTE — l'avant-plancher et l'après. Le
+ * double de `message.findMany` applique lui-même la borne `createdAt.gte` que
+ * la route passe : un double qui rendrait tout quelle que soit la requête
+ * ferait passer le témoin sur une borne jamais envoyée (§ « un témoin de
+ * projection assert sur la REQUÊTE »).
+ */
+const ALL_MESSAGES = [
+  {
+    id: '507f1f77bcf86cd79943aa01',
+    content: 'les tout débuts',
+    senderId: OTHER_USER,
+    createdAt: BEFORE_FLOOR,
+    originalLanguage: 'fr',
+    messageType: 'text',
+    sender: { userId: OTHER_USER },
+    attachments: [],
+  },
+  {
+    id: '507f1f77bcf86cd79943aa02',
+    content: 'bonjour à toi',
+    senderId: OTHER_USER,
+    createdAt: AFTER_FLOOR,
+    originalLanguage: 'fr',
+    messageType: 'text',
+    sender: { userId: OTHER_USER },
+    attachments: [],
+  },
+];
+
+function makePrisma(floorRow: FloorRow) {
+  const findMany = jest.fn<any>().mockImplementation(async (args: any) => {
+    const gte: Date | undefined = args?.where?.createdAt?.gte;
+    const rows = gte ? ALL_MESSAGES.filter((m) => m.createdAt.getTime() >= gte.getTime()) : ALL_MESSAGES;
+    // Le double PAGINE comme la vraie requête : le pli planchéisé avance par
+    // curseur d'`id`, et un double qui ignorerait `cursor`/`take` rendrait la
+    // même page indéfiniment — une boucle infinie que le témoin verrait comme
+    // un gel, pas comme un défaut.
+    const after = args?.cursor?.id as string | undefined;
+    const start = after ? rows.findIndex((m) => m.id === after) + 1 : 0;
+    return rows.slice(start, start + (args?.take ?? rows.length));
+  });
+
   return {
-    user: { findMany: jest.fn<any>().mockResolvedValue([]) },
-    participant: { findFirst: jest.fn<any>().mockResolvedValue(participantRow) },
-    conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    // Les deux tables du masquage PERSONNEL — chargées SEULEMENT sous plancher.
-    userConversationPreferences: {
-      findFirst: jest.fn<any>().mockResolvedValue({ clearHistoryBefore: CLEARED_BEFORE }),
+    prisma: {
+      participant: { findFirst: jest.fn<any>().mockResolvedValue(floorRow) },
+      conversationShareLink: {
+        // `expiresAt: null` = lien VIVANT. La porte le lit, le plancher lit
+        // `allowViewHistory` : une seule ligne répond aux deux questions, et un
+        // double qui n'en porterait qu'une ferait passer la porte pour absente.
+        findUnique: jest.fn<any>().mockResolvedValue({ id: 'lien', allowViewHistory: false, expiresAt: null }),
+        findMany: jest.fn<any>().mockResolvedValue([{ id: 'lien', allowViewHistory: false, expiresAt: null }]),
+      },
+      userConversationPreferences: { findFirst: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+      userMessageDeletion: { findMany: jest.fn<any>().mockResolvedValue([]) },
+      conversationMessageStats: {
+        findUnique: jest.fn<any>().mockResolvedValue({
+          conversationId: CONV_ID,
+          totalMessages: 2,
+          totalWords: 6,
+          totalCharacters: 29,
+          textMessages: 2,
+          imageCount: 0,
+          audioCount: 0,
+          videoCount: 0,
+          fileCount: 0,
+          locationCount: 0,
+          participantStats: {
+            [OTHER_USER]: {
+              messageCount: 2,
+              wordCount: 6,
+              characterCount: 29,
+              imageCount: 0,
+              audioCount: 0,
+              videoCount: 0,
+              firstMessageAt: BEFORE_FLOOR.toISOString(),
+              lastMessageAt: AFTER_FLOOR.toISOString(),
+            },
+          },
+          dailyActivity: { '2026-03-04': 1, '2026-11-08': 1 },
+          hourlyDistribution: { '9': 1, '10': 1 },
+          languageDistribution: { fr: 2 },
+          updatedAt: AFTER_FLOOR,
+        }),
+      },
+      message: { findMany },
+      user: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { id: OTHER_USER, username: 'alix', displayName: 'Alix', avatar: null },
+        ]),
+      },
     },
-    userMessageDeletion: { findMany: jest.fn<any>().mockResolvedValue([{ messageId: HIDDEN_MSG_ID }]) },
+    findMany,
   };
 }
 
-async function buildApp(prisma: unknown): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
+async function buildApp(floorRow: FloorRow): Promise<{ app: FastifyInstance; findMany: jest.Mock<any> }> {
+  const { prisma, findMany } = makePrisma(floorRow);
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   const requiredAuth = async (req: FastifyRequest) => {
     (req as any).authContext = {
+      type: 'user',
       isAuthenticated: true,
-      type: 'registered',
+      isAnonymous: false,
       userId: USER_ID,
       registeredUser: { id: USER_ID, role: 'USER' },
     };
   };
   registerStatsRoutes(app, prisma as any, requiredAuth as any);
   await app.ready();
+  return { app, findMany };
+}
+
+
+/** Monte la route sur un double déjà composé — pour les témoins qui le bricolent. */
+async function buildAppOn(prisma: any, authContext: Record<string, unknown>): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  registerStatsRoutes(app, prisma as any, (async (req: FastifyRequest) => {
+    (req as any).authContext = authContext;
+  }) as any);
+  await app.ready();
+  conversationMessageStatsService.invalidate(CONV_ID);
   return app;
 }
 
-describe('GET …/stats — la route passe le plancher du LECTEUR (#17076)', () => {
-  beforeEach(() => {
-    // `mock.calls[0]` est lu par chaque témoin : sans remise à zéro, le second
-    // inspecte l'appel du PREMIER et atteste un verdict qui n'est pas le sien.
-    mockResolveConversationId.mockReset();
-    mockCanAccessConversation.mockReset();
-    mockGetStats.mockReset();
-    mockResolveConversationId.mockResolvedValue(CONV_ID);
-    mockCanAccessConversation.mockResolvedValue(true);
-    mockGetStats.mockResolvedValue({ conversationId: CONV_ID, totalMessages: 0, participantStats: {} });
-  });
+const AS_USER = { type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID };
 
-  it('un participant BORNÉ par `historyVisibleFrom` fait agréger sur SA fenêtre', async () => {
-    const app = await buildApp(
-      makeRoutePrisma({
-        role: 'member',
-        joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-        shareLinkId: null,
-        historyVisibleFrom: FLOOR,
-        permissions: null,
-        anonymousSession: null,
-        user: { role: 'USER' },
-      })
-    );
-
-    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/stats` });
-
-    expect(res.statusCode).toBe(200);
-    expect(mockGetStats).toHaveBeenCalledTimes(1);
-    expect(mockGetStats.mock.calls[0][2]).toEqual({
-      historyFloor: FLOOR,
-      // Sous plancher, la passe est déjà POUR UN LECTEUR : son masquage
-      // personnel y entre, sans quoi son compte ne correspondrait pas au fil
-      // qu'il peut dérouler.
-      hiding: { clearHistoryBefore: CLEARED_BEFORE, hiddenMessageIds: [HIDDEN_MSG_ID] },
-    });
-    await app.close();
-  });
-
-  it('un membre SANS plancher agrège tout, comme avant', async () => {
-    // Mode d'échec du correctif : un plancher inventé priverait de statistiques
-    // toute la population nominale, et aucun témoin de rang 1 ne le verrait.
-    const app = await buildApp(
-      makeRoutePrisma({
-        role: 'creator',
-        joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-        shareLinkId: null,
-        historyVisibleFrom: null,
-        permissions: null,
-        anonymousSession: null,
-        user: { role: 'USER' },
-      })
-    );
-
-    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/stats` });
-
-    expect(res.statusCode).toBe(200);
-    expect(mockGetStats.mock.calls[0][2]).toEqual({
-      historyFloor: null,
-      hiding: { clearHistoryBefore: null, hiddenMessageIds: [] },
-    });
-    await app.close();
-  });
-
-  it('sans plancher, le masquage personnel n\'est même pas LU', async () => {
-    // L'asymétrie est voulue, et elle est une mesure : sans plancher la réponse
-    // est la ligne PARTAGÉE, dont le seau sert tout le monde — deux lectures de
-    // plus par appel sur le chemin nominal seraient un coût sans objet.
-    const prisma = makeRoutePrisma({
-      role: 'creator',
-      joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-      shareLinkId: null,
-      historyVisibleFrom: null,
-      permissions: null,
-      anonymousSession: null,
-      user: { role: 'USER' },
-    });
-    const app = await buildApp(prisma);
-
-    await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/stats` });
-
-    expect(prisma.userConversationPreferences.findFirst).not.toHaveBeenCalled();
-    expect(prisma.userMessageDeletion.findMany).not.toHaveBeenCalled();
-    await app.close();
-  });
-
-  it('un plancher ILLISIBLE ne sert rien — fail-CLOSED', async () => {
-    // `loadReaderHistoryFloor` PROPAGE ses erreurs, et `historyFloor.ts` écrit
-    // pourquoi : « un plancher illisible est un CONTRÔLE D'ACCÈS illisible, et la
-    // seule dégradation sûre est de ne rien servir ». Un `catch` qui servirait
-    // l'agrégat complet ferait de la panne la porte la plus ouverte du dépôt.
-    const prisma = makeRoutePrisma(null);
-    prisma.participant.findFirst.mockRejectedValue(new Error('mongo down'));
-    const app = await buildApp(prisma);
-
-    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/stats` });
-
-    expect(res.statusCode).toBe(500);
-    expect(mockGetStats).not.toHaveBeenCalled();
-    await app.close();
-  });
-});
-
-// ── 2. Le SERVICE agrège sur la fenêtre, il ne plafonne pas ───────────────
+const url = `/conversations/${CONV_ID}/stats`;
 
 /**
- * Deux journées, deux auteurs : l'une AVANT le plancher, l'autre après. Un
- * agrégat « plafonné » servirait les deux et retrancherait un total ; celui-ci
- * ne doit JAMAIS avoir vu la première.
+ * Le lecteur planchéisé — **par son LIEN**, et c'est la seule forme qui
+ * exerce le cas de l'issue.
+ *
+ * La première version de cette fixture portait `historyVisibleFrom: FLOOR`.
+ * C'était vert, et c'était un témoin qui ne mesurait pas ce qu'il disait :
+ * `historyVisibleFrom` est le rang (iii) de `settleBeforeLink`, qui tranche
+ * AVANT toute lecture de lien. La branche `link-decides` — un `shareLinkId`
+ * plus `allowViewHistory: false`, exactement la population que l'issue décrit
+ * — n'était exercée par aucun témoin, et le double de
+ * `conversationShareLink.findUnique` était du code que rien ne pouvait
+ * atteindre.
+ *
+ * Un octroi par DATE reste couvert, par la fixture `FLOORED_BY_GRANT` plus
+ * bas : les deux chemins mènent au même plancher, et un seul des deux était
+ * testé.
  */
-const NEWCOMER_HIDDEN_ID = '507f1f77bcf86cd799439088';
+const FLOORED: FloorRow = {
+  joinedAt: FLOOR,
+  historyVisibleFrom: null,
+  shareLinkId: 'lien',
+  role: 'member',
+  permissions: null,
+  user: { role: 'USER' },
+};
 
-const MESSAGES = [
-  {
-    id: '507f1f77bcf86cd799439087',
-    content: 'le secret de la fondation',
-    senderId: 'p-old',
-    createdAt: new Date('2026-03-04T09:00:00.000Z'),
-    originalLanguage: 'fr',
-    messageType: 'text',
-    sender: { userId: OLD_TIMER_ID },
-    attachments: [],
-  },
-  {
-    id: NEWCOMER_HIDDEN_ID,
-    content: 'bonjour, je viens d arriver',
-    senderId: 'p-new',
-    createdAt: new Date('2026-11-08T09:00:00.000Z'),
-    originalLanguage: 'fr',
-    messageType: 'text',
-    sender: { userId: USER_ID },
-    attachments: [],
-  },
-];
+/** Le MÊME plancher, octroyé par date plutôt que par le lien (rang iii). */
+const FLOORED_BY_GRANT: FloorRow = { ...FLOORED, historyVisibleFrom: FLOOR, shareLinkId: null };
 
-function makeServicePrisma() {
-  // Le double applique les DEUX clauses que la production émet — la borne basse
-  // de `createdAt` et le `notIn` des ids masqués. Un double qui ignore une clause
-  // rend vert un filtre que la base n'aurait jamais appliqué.
-  const findMany = jest.fn<any>().mockImplementation(({ where }: any) =>
-    Promise.resolve(
-      MESSAGES.filter((m) => {
-        const gte = where?.createdAt?.gte as Date | undefined;
-        const notIn = (where?.id?.notIn ?? []) as string[];
-        if (gte && m.createdAt < gte) return false;
-        return !notIn.includes(m.id);
-      })
-    )
-  );
-  return {
-    message: { findMany },
-    conversationMessageStats: {
-      findUnique: jest.fn<any>().mockResolvedValue(null),
-      upsert: jest.fn<any>().mockImplementation((args: any) => ({ conversationId: CONV_ID, ...args.create })),
-    },
-    participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
-  } as any;
-}
-
-describe('ConversationMessageStatsService — agrégation BORNÉE par le plancher', () => {
-  it('sous plancher, rien d\'antérieur n\'est nommé, daté ni compté', async () => {
-    const service = new (ConversationMessageStatsService as any)();
-    const prisma = makeServicePrisma();
-
-    const stats = await service.getStats(prisma, CONV_ID, { historyFloor: FLOOR });
-
-    // Le total est celui de la FENÊTRE, pas un plafond sur le total réel.
-    expect(stats.totalMessages).toBe(1);
-
-    // L'auteur d'avant n'existe pas pour ce lecteur : ni son nom, ni son volume.
-    expect(Object.keys(stats.participantStats)).toEqual([USER_ID]);
-    expect(stats.participantStats[OLD_TIMER_ID]).toBeUndefined();
-
-    // Aucune date antérieure au plancher, nulle part dans la charge servie.
-    expect(Object.keys(stats.dailyActivity)).toEqual(['2026-11-08']);
-    expect(JSON.stringify(stats)).not.toContain('2026-03-04');
-    expect(JSON.stringify(stats)).not.toContain('secret de la fondation');
-
-    // Et `firstMessageAt` est le premier message VISIBLE, jamais le vrai premier.
-    expect(stats.participantStats[USER_ID].firstMessageAt)
-      .toBe('2026-11-08T09:00:00.000Z');
-
-    // La requête elle-même est bornée — un témoin sur la seule sortie passerait
-    // au vert sur un filtre appliqué APRÈS avoir tout lu (§ le `where` dit qui SORT).
-    expect(prisma.message.findMany.mock.calls[0][0].where.createdAt).toEqual({ gte: FLOOR });
+describe('l’agrégat de statistiques est borné par le plancher du lecteur (#17076)', () => {
+  beforeEach(() => {
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
+    conversationMessageStatsService.invalidate(CONV_ID);
   });
 
-  it('sous plancher, l\'agrégat n\'est PAS persisté — la ligne partagée reste complète', async () => {
-    // Un `upsert` sous plancher écraserait les compteurs de TOUT LE MONDE avec la
-    // vue partielle d'un seul lecteur : la fuite se changerait en corruption.
-    const service = new (ConversationMessageStatsService as any)();
-    const prisma = makeServicePrisma();
+  it('un lecteur à plancher ne lit AUCUNE date antérieure à son arrivée', async () => {
+    const { app } = await buildApp(FLOORED);
+    try {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(200);
+      const { data } = res.json();
 
-    await service.getStats(prisma, CONV_ID, { historyFloor: FLOOR });
-
-    expect(prisma.conversationMessageStats.upsert).not.toHaveBeenCalled();
+      const dates = [
+        ...data.dailyActivity.map((d: { date: string }) => d.date),
+        ...data.participantStats.flatMap((p: { firstMessageAt: string | null; lastMessageAt: string | null }) =>
+          [p.firstMessageAt, p.lastMessageAt].filter(Boolean),
+        ),
+      ];
+      const floorDay = FLOOR.toISOString().slice(0, 10);
+      expect(dates.filter((d: string) => d.slice(0, 10) < floorDay)).toEqual([]);
+    } finally {
+      await app.close();
+    }
   });
 
-  it('sans plancher, le chemin NOMINAL est inchangé : ligne partagée et persistance', async () => {
-    const service = new (ConversationMessageStatsService as any)();
-    const prisma = makeServicePrisma();
-
-    const stats = await service.getStats(prisma, CONV_ID, { historyFloor: null });
-
-    expect(stats.totalMessages).toBe(2);
-    expect(prisma.conversationMessageStats.upsert).toHaveBeenCalledTimes(1);
-    expect(prisma.message.findMany.mock.calls[0][0].where.createdAt).toBeUndefined();
+  it('ses compteurs ne comptent que sa fenêtre — pas de total plafonné dont on déduirait l’avant', async () => {
+    const { app } = await buildApp(FLOORED);
+    try {
+      const { data } = (await app.inject({ method: 'GET', url })).json();
+      expect(data.totalMessages).toBe(1);
+      expect(data.participantStats).toHaveLength(1);
+      expect(data.participantStats[0].messageCount).toBe(1);
+      expect(data.languageDistribution).toEqual([{ language: 'fr', count: 1 }]);
+    } finally {
+      await app.close();
+    }
   });
 
-  it('deux lecteurs de MÊME plancher ne relisent pas deux fois ; deux planchers DIFFÉRENTS, si', async () => {
-    // Le cache est par (conversation, plancher) : la clé nue servirait à un
-    // lecteur borné l'agrégat complet d'un lecteur qui ne l'est pas — la fuite
-    // par le cache, qu'aucune garde de route ne verrait.
-    const service = new (ConversationMessageStatsService as any)();
-    const prisma = makeServicePrisma();
+  it('la borne est bien passée à la REQUÊTE, pas appliquée après coup', async () => {
+    const { app, findMany } = await buildApp(FLOORED);
+    try {
+      await app.inject({ method: 'GET', url });
+      expect(findMany).toHaveBeenCalled();
+      const [args] = findMany.mock.calls[0] as [{ where: { conversationId: string; deletedAt: null; createdAt?: { gte?: Date } } }];
+      expect(args.where.createdAt?.gte?.toISOString()).toBe(FLOOR.toISOString());
+      expect(args.where).toMatchObject({ conversationId: CONV_ID, deletedAt: null });
+    } finally {
+      await app.close();
+    }
+  });
 
-    await service.getStats(prisma, CONV_ID, { historyFloor: FLOOR });
-    await service.getStats(prisma, CONV_ID, { historyFloor: new Date(FLOOR) });
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(1);
+  it('une lecture planchéisée n’ÉCRIT rien — la ligne autoritative reste celle de tous', async () => {
+    const { prisma } = makePrisma(FLOORED);
+    const upsert = jest.fn<any>();
+    (prisma.conversationMessageStats as any).upsert = upsert;
+    (prisma.conversationMessageStats as any).update = jest.fn<any>();
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    registerStatsRoutes(app, prisma as any, (async (req: FastifyRequest) => {
+      (req as any).authContext = { type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID };
+    }) as any);
+    await app.ready();
+    try {
+      conversationMessageStatsService.invalidate(CONV_ID);
+      await app.inject({ method: 'GET', url });
+      expect(upsert).not.toHaveBeenCalled();
+      expect((prisma.conversationMessageStats as any).update).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
 
-    const other = await service.getStats(prisma, CONV_ID, {
-      historyFloor: new Date('2026-01-01T00:00:00.000Z'),
+  /**
+   * Témoin NÉGATIF — vert des DEUX côtés par construction, et c'est dit ici
+   * pour qu'on ne le lise pas comme une mesure : sans plancher, le défaut et la
+   * règle juste rendent la même charge. Son rôle est d'interdire qu'on paie le
+   * correctif en retirant la route à tout le monde, ou en la faisant passer par
+   * un recalcul pour un lecteur qui n'en a pas besoin.
+   */
+  it('sans plancher, la charge reste celle de la ligne agrégée, sans recalcul', async () => {
+    const { app, findMany } = await buildApp(null);
+    try {
+      const { data } = (await app.inject({ method: 'GET', url })).json();
+      expect(data.totalMessages).toBe(2);
+      expect(data.participantStats[0].firstMessageAt).toBe(BEFORE_FLOOR.toISOString());
+      expect(findMany).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  /**
+   * Fail-CLOSED, et c'est l'inverse de la posture de `personalHistoryFilter`
+   * (« cacher est une courtoisie, montrer est le produit ») : ici le plancher
+   * est une garde de CONFIDENTIALITÉ. Un plancher illisible ne doit pas servir
+   * l'agrégat de tous — la route échoue en montrant MOINS.
+   */
+  it('un plancher illisible ne sert RIEN — 500, jamais l’agrégat complet', async () => {
+    const { prisma } = makePrisma(FLOORED);
+    prisma.participant.findFirst = jest.fn<any>().mockRejectedValue(new Error('participant illisible'));
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    registerStatsRoutes(app, prisma as any, (async (req: FastifyRequest) => {
+      (req as any).authContext = { type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID };
+    }) as any);
+    await app.ready();
+    try {
+      conversationMessageStatsService.invalidate(CONV_ID);
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(500);
+      expect(res.json().data).toBeUndefined();
+    } finally {
+      await app.close();
+    }
+  });
+
+  /**
+   * Le lecteur SANS COMPTE se trouve par `Participant.id`, jamais par la
+   * colonne `userId` — le `CLAUDE.md` de la passerelle en fait une règle, et le
+   * symptôme d'une erreur de colonne est une liste VIDE, donc un plancher NUL,
+   * donc l'agrégat de tous servi au lecteur le plus restreint. La route est en
+   * `allowAnonymous: false`, mais un `authContext` anonyme y arrive par un
+   * invité INSCRIT dont le middleware porte un `participantId`.
+   */
+  it('le plancher d’un lecteur adressé par participantId est cherché sur la bonne COLONNE', async () => {
+    const { prisma } = makePrisma(FLOORED);
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    registerStatsRoutes(app, prisma as any, (async (req: FastifyRequest) => {
+      (req as any).authContext = {
+        type: 'anonymous',
+        isAuthenticated: true,
+        isAnonymous: true,
+        userId: PARTICIPANT_ID,
+        participantId: PARTICIPANT_ID,
+      };
+    }) as any);
+    await app.ready();
+    try {
+      conversationMessageStatsService.invalidate(CONV_ID);
+      await app.inject({ method: 'GET', url });
+      const [args] = (prisma.participant.findFirst as jest.Mock<any>).mock.calls[0] as [{ where: Record<string, unknown> }];
+      expect(args.where).toMatchObject({ id: PARTICIPANT_ID, conversationId: CONV_ID });
+      expect(args.where).not.toHaveProperty('userId');
+    } finally {
+      await app.close();
+    }
+  });
+
+  /**
+   * **LA PORTE, et pas seulement le PLANCHER.** Le lien répond à DEUX questions
+   * sur la même ligne : qui peut lire (la porte) et depuis quand (le plancher).
+   * La première version de ce lot n'en posait qu'une.
+   *
+   * Ce qui rend l'écart exploitable est écrit dans `shareLinkGuestsWhere` : la
+   * révocation d'un lien ne touche que les participations ANONYMES. Un inscrit
+   * admis par lien n'est jamais révoqué, sa ligne reste active, et
+   * `canAccessConversation` continue de l'accepter — si bien que cette surface
+   * était la SEULE que l'expiration ne fermait pas, pendant que le fil, la
+   * recherche, les fils de réponses et les épinglés lui rendaient 403.
+   */
+  it('un lien ÉCHU ferme la route, comme le fil et la recherche', async () => {
+    const { prisma } = makePrisma(FLOORED);
+    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue({
+      id: 'lien',
+      allowViewHistory: false,
+      expiresAt: new Date('2026-11-01T00:00:00.000Z'),
     });
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
-    expect(other.totalMessages).toBe(2);
-
-    // Et un lecteur SANS plancher ne lit pas dans le seau d'un lecteur borné.
-    const full = await service.getStats(prisma, CONV_ID, { historyFloor: null });
-    expect(full.totalMessages).toBe(2);
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().code).toBe('SHARE_LINK_EXPIRED');
+      expect(res.json().data).toBeUndefined();
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
   });
 
-  it('le masquage PERSONNEL du lecteur borne aussi sa fenêtre', async () => {
-    // Ce cliquet-ci est né d'un AUTRE : `personal-history-hiding-surface-guard`
-    // a refusé la passe bornée sous l'exemption de `recompute()`, dont la raison
-    // écrite — « une valeur stockée une fois et lue par tout le monde » — ne la
-    // décrit pas. Un compte qui ne correspond pas au fil que ce lecteur peut
-    // dérouler est un compte faux POUR LUI.
-    const service = new (ConversationMessageStatsService as any)();
-    const prisma = makeServicePrisma();
-
-    const stats = await service.getStats(prisma, CONV_ID, {
-      historyFloor: FLOOR,
-      hiding: { clearHistoryBefore: null, hiddenMessageIds: [NEWCOMER_HIDDEN_ID] },
-    });
-
-    expect(stats.totalMessages).toBe(0);
-    expect(prisma.message.findMany.mock.calls[0][0].where.id).toEqual({ notIn: [NEWCOMER_HIDDEN_ID] });
-    // Et la borne du plancher SURVIT à la fusion : les deux se composent.
-    expect(prisma.message.findMany.mock.calls[0][0].where.createdAt).toEqual({ gte: FLOOR });
+  /** Le MÊME plancher par l'autre chemin : un octroi par date (rang iii). */
+  it('un plancher octroyé par date borne la fenêtre comme celui d’un lien', async () => {
+    const { prisma } = makePrisma(FLOORED_BY_GRANT);
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      const { data } = (await app.inject({ method: 'GET', url })).json();
+      expect(data.totalMessages).toBe(1);
+      expect(prisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
   });
 
-  it('deux lecteurs de même plancher mais de MASQUAGES différents ne partagent pas de seau', async () => {
-    // Sinon le seau du premier servirait au second ce que le premier a effacé
-    // pour lui — la même fuite par le cache, d'un cran plus fin.
-    const service = new (ConversationMessageStatsService as any)();
-    const prisma = makeServicePrisma();
-
-    const open = await service.getStats(prisma, CONV_ID, {
-      historyFloor: FLOOR,
-      hiding: { clearHistoryBefore: null, hiddenMessageIds: [] },
-    });
-    const masked = await service.getStats(prisma, CONV_ID, {
-      historyFloor: FLOOR,
-      hiding: { clearHistoryBefore: null, hiddenMessageIds: [NEWCOMER_HIDDEN_ID] },
-    });
-
-    expect(open.totalMessages).toBe(1);
-    expect(masked.totalMessages).toBe(0);
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
+  /**
+   * Le bypass PLATEFORME (#3892, #11217) — un rôle privilégié lit tout, y
+   * compris quand sa propre ligne porte un lien sans historique. Sans ce
+   * témoin, un correctif qui planchéiserait « tout ce qui a un `shareLinkId` »
+   * retirerait silencieusement la modération.
+   */
+  it('un rôle de plateforme privilégié lit l’agrégat COMPLET malgré son lien', async () => {
+    const { prisma } = makePrisma({ ...FLOORED, user: { role: 'ADMIN' } });
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      const { data } = (await app.inject({ method: 'GET', url })).json();
+      expect(data.totalMessages).toBe(2);
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
   });
 
-  it('invalider une conversation vide TOUS ses seaux, bornés compris', async () => {
-    // Sinon un message neuf rafraîchit le seau nu et laisse les seaux bornés
-    // servir un compte périmé pendant cinq minutes.
-    const service = new (ConversationMessageStatsService as any)();
-    const prisma = makeServicePrisma();
+  /** Le droit FIGÉ au join, qui tranche avant le lien et dans les deux sens. */
+  it('un `canViewHistory: false` figé borne, et un `true` figé ouvre', async () => {
+    const refuse = makePrisma({ ...FLOORED, permissions: { canViewHistory: false } });
+    const admet = makePrisma({ ...FLOORED, permissions: { canViewHistory: true } });
+    const appRefuse = await buildAppOn(refuse.prisma, AS_USER);
+    try {
+      expect((await appRefuse.inject({ method: 'GET', url })).json().data.totalMessages).toBe(1);
+    } finally {
+      await appRefuse.close();
+    }
+    const appAdmet = await buildAppOn(admet.prisma, AS_USER);
+    try {
+      expect((await appAdmet.inject({ method: 'GET', url })).json().data.totalMessages).toBe(2);
+    } finally {
+      await appAdmet.close();
+    }
+  });
 
-    await service.getStats(prisma, CONV_ID, { historyFloor: FLOOR });
-    service.invalidate(CONV_ID);
-    await service.getStats(prisma, CONV_ID, { historyFloor: FLOOR });
+  /**
+   * Le masquage PERSONNEL du lecteur s'applique aussi à SA fenêtre. Un agrégat
+   * par lecteur est le régime où `clear-history` et `delete-for-me` veulent
+   * dire quelque chose : compter ce que le lecteur a effacé de sa vue
+   * contredirait la vue que toutes les autres surfaces lui servent.
+   */
+  it('ce que le lecteur a effacé pour lui ne compte pas dans SA fenêtre', async () => {
+    const { prisma } = makePrisma(FLOORED);
+    prisma.userConversationPreferences.findFirst = jest.fn<any>().mockResolvedValue({
+      clearHistoryBefore: new Date('2026-11-08T12:00:00.000Z'),
+    });
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      await app.inject({ method: 'GET', url });
+      const [args] = prisma.message.findMany.mock.calls[0] as [{ where: { createdAt?: { gte?: Date } } }];
+      // La borne la plus STRICTE gagne : le masquage personnel ne peut que
+      // rétrécir, donc il ne peut jamais desserrer le plancher.
+      expect(args.where.createdAt?.gte?.toISOString()).toBe('2026-11-08T12:00:00.000Z');
+    } finally {
+      await app.close();
+    }
+  });
 
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
+  /**
+   * Le pli planchéisé PAGINE (la fenêtre d'un lecteur entré il y a deux ans
+   * n'entre pas en mémoire), donc il recolle. Un recollement qui se tromperait
+   * rendrait un nombre PLAUSIBLE — c'est le seul endroit du lot où une erreur
+   * serait silencieuse.
+   */
+  it('le pli recolle ses pages sans perdre ni compter deux fois', async () => {
+    const page = 500;
+    const rows = Array.from({ length: page + 7 }, (_, index) => ({
+      id: `507f1f77bcf86cd79943${String(index).padStart(4, '0')}`,
+      content: 'mot',
+      senderId: OTHER_USER,
+      createdAt: new Date(AFTER_FLOOR.getTime() + index * 1000),
+      originalLanguage: index % 2 === 0 ? 'fr' : 'en',
+      messageType: 'text',
+      sender: { userId: OTHER_USER },
+      attachments: [],
+    }));
+    const { prisma } = makePrisma(FLOORED);
+    prisma.message.findMany = jest.fn<any>().mockImplementation(async (args: any) => {
+      const after = args?.cursor?.id as string | undefined;
+      const start = after ? rows.findIndex((r) => r.id === after) + 1 : 0;
+      return rows.slice(start, start + args.take);
+    });
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      const { data } = (await app.inject({ method: 'GET', url })).json();
+      expect(data.totalMessages).toBe(rows.length);
+      expect(data.participantStats[0].messageCount).toBe(rows.length);
+      expect(data.languageDistribution.reduce((sum: number, l: { count: number }) => sum + l.count, 0)).toBe(rows.length);
+      expect(data.participantStats[0].firstMessageAt).toBe(rows[0].createdAt.toISOString());
+      expect(data.participantStats[0].lastMessageAt).toBe(rows[rows.length - 1].createdAt.toISOString());
+      expect((prisma.message.findMany as jest.Mock<any>).mock.calls.length).toBe(2);
+    } finally {
+      await app.close();
+    }
+  });
+
+  /**
+   * Une fenêtre VIDE est le cas NOMINAL d'un plancher récent — quelqu'un qui
+   * vient d'entrer et à qui personne n'a encore écrit — pas un cas d'erreur.
+   * Le pli par pages ne reçoit alors AUCUNE page, et son recollement doit rendre
+   * les compteurs à zéro plutôt que lever : une levée ici serait un 500 pour
+   * toute une population, le jour de son arrivée.
+   */
+  it('une fenêtre VIDE sert des compteurs à zéro, pas une erreur', async () => {
+    const { prisma } = makePrisma(FLOORED);
+    prisma.message.findMany = jest.fn<any>().mockResolvedValue([]);
+    const app = await buildAppOn(prisma, AS_USER);
+    try {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(200);
+      const { data } = res.json();
+      expect(data.totalMessages).toBe(0);
+      expect(data.participantStats).toEqual([]);
+      expect(data.dailyActivity).toEqual([]);
+      expect(data.contentTypes).toEqual({ text: 0, image: 0, audio: 0, video: 0, file: 0, location: 0 });
+    } finally {
+      await app.close();
+    }
   });
 });

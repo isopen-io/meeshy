@@ -52,37 +52,49 @@ struct ComposerSlideRail: View {
     /// médias portait cette croix ; ma rangée de scènes ne l'avait pas reprise
     /// — une capacité perdue au passage d'un lot.
     let onDelete: ((Int) -> Void)?
+    /// **(+) en DERNIER** (#17111) : la rangée se termine par la scène à venir.
+    var canAdd: Bool = false
+    var onAdd: (() -> Void)?
+    /// **Le double toucher DUPLIQUE la scène** (`duplicateSlide`).
+    var onDuplicate: ((Int) -> Void)?
+    /// **L'appui long arme le RÉORDONNANCEMENT** : les croix paraissent, et
+    /// glisser une tuile la déplace (`moveSlide`) — l'ordre de la rangée est
+    /// celui de la publication.
+    var onMove: ((Int, Int) -> Void)?
 
     private static let height: CGFloat = 44
+    private static let pitch: CGFloat = height * SceneShape.aspect + MeeshySpacing.sm
 
     @State private var deletion = ComposerSceneDeletionPrompt()
+    @State private var isReordering = false
+    @State private var dragged: ComposerSlideRowDrag?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Le rail se monte dès qu'une scène existe (`ComposerHeaderTiles.showsRail`,
-    /// décidé par l'hôte) ; une vignette SEULE est un aperçu, pas un bouton —
-    /// elle ne navigue vers rien (loi 4).
+    /// La rangée est un OVERLAY sans cadre (#17111) : aucune bande ni fond, les
+    /// tuiles flottent sur la scène. Une vignette SEULE reste un aperçu tant
+    /// qu'aucun geste ne la sert.
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: MeeshySpacing.sm) {
-                ForEach(Array(slides.enumerated()), id: \.element.id) { index, slide in
-                    if ComposerHeaderTiles.tilesNavigate(sceneCount: slides.count) {
-                        Button { onSelect(index) } label: {
-                            tuile(slide, index: index)
-                        }
-                        .buttonStyle(.plain)
-                        .overlay(alignment: .topTrailing) { corbeille(index) }
-                        .accessibilityLabel(Text(ComposerSlideRailCopy.position(
-                            index: index + 1, total: slides.count)))
-                        .accessibilityAddTraits(index == currentIndex ? .isSelected : [])
-                    } else {
-                        tuile(slide, index: index)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(Text(ComposerSlideRailCopy.position(
-                                index: index + 1, total: slides.count)))
-                            .accessibilityAddTraits([.isImage, .isSelected])
-                    }
+                // Identifiées par la SCÈNE, pas par la place : une tuile déplacée
+                // glisse vers sa nouvelle place au lieu de se repeindre.
+                ForEach(Array(slides.enumerated()), id: \.element.id) { index, _ in
+                    sceneTile(index)
                 }
+                if ComposerSlideRowGrammar.items(sceneCount: slides.count,
+                                                 canAdd: canAdd && onAdd != nil).last == .add {
+                    addTile
+                }
+                if isReordering { doneButton }
             }
             .padding(.vertical, MeeshySpacing.xxs)
+            .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82), value: slides.map(\.id))
+        }
+        .scrollDisabled(isReordering)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(ComposerSlideRailCopy.rail))
+        .adaptiveOnChange(of: slides.count) { _, count in
+            if count < 2 { isReordering = false }
         }
         .confirmationDialog(ComposerSlideRailCopy.deleteConfirmTitle,
                             isPresented: Binding(get: { deletion.isPresented },
@@ -99,14 +111,141 @@ struct ComposerSlideRail: View {
         }
     }
 
-    /// La corbeille — sur la tuile COURANTE, et jamais sous deux scènes. La
-    /// règle vit dans `ComposerHeaderTiles.showsDelete`, où elle s'éprouve ;
-    /// cette vue la consulte, elle ne la refait pas.
+    @ViewBuilder
+    private func sceneTile(_ index: Int) -> some View {
+        if slides.indices.contains(index) {
+            let slide = slides[index]
+            let label = Text(ComposerSlideRailCopy.position(index: index + 1, total: slides.count))
+            tuile(slide, index: index)
+                .overlay(alignment: .topTrailing) { corbeille(index) }
+                .scaleEffect(dragged?.source == index ? 1.12 : 1)
+                .offset(x: dragged?.source == index ? dragged?.translation ?? 0 : 0)
+                .zIndex(dragged?.source == index ? 1 : 0)
+                .modifier(ComposerSlideRowJiggle(isOn: isReordering && !reduceMotion))
+                .onTapGesture(count: 2) { perform(.doubleTap, on: index) }
+                .onTapGesture { perform(.tap, on: index) }
+                .simultaneousGesture(liftAndMove(index))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(label)
+                .accessibilityAddTraits(index == currentIndex ? [.isButton, .isSelected] : .isButton)
+                .accessibilityAction { perform(.tap, on: index) }
+                .accessibilityActions { sceneActions(index) }
+        }
+    }
+
+    @ViewBuilder
+    private func sceneActions(_ index: Int) -> some View {
+        if onDuplicate != nil, canAdd {
+            Button(ComposerSlideRailCopy.duplicate) { onDuplicate?(index) }
+        }
+        if let onMove, index > 0 {
+            Button(ComposerSlideRailCopy.moveEarlier) { onMove(index, index - 1) }
+        }
+        if let onMove, index < slides.count - 1 {
+            Button(ComposerSlideRailCopy.moveLater) { onMove(index, index + 2) }
+        }
+        if onDelete != nil, slides.count > 1 {
+            Button(ComposerSlideRailCopy.delete(index: index + 1)) { deletion = deletion.asking(index: index) }
+        }
+    }
+
+    private func perform(_ geste: ComposerSlideRowGrammar.Gesture, on index: Int) {
+        switch ComposerSlideRowGrammar.effect(geste, onScene: index, sceneCount: slides.count,
+                                              isReordering: isReordering,
+                                              canDuplicate: canAdd && onDuplicate != nil) {
+        case .select(let cible)?:
+            onSelect(cible)
+        case .duplicate(let cible)?:
+            HapticFeedback.light()
+            onDuplicate?(cible)
+        case .beginReordering?:
+            HapticFeedback.medium()
+            isReordering = true
+        case nil:
+            break
+        }
+    }
+
+    /// **Appui long puis glisser, d'UN seul geste** (L2) : la tuile se
+    /// soulève à l'appui long et suit le doigt sans qu'il faille la relâcher.
+    /// Le réordonnancement déjà armé, elle se soulève dès le toucher.
+    private func liftAndMove(_ index: Int) -> some Gesture {
+        LongPressGesture(minimumDuration: isReordering ? 0.01 : 0.4)
+            .sequenced(before: DragGesture(minimumDistance: 0))
+            .onChanged { valeur in
+                guard case .second(true, let glisse) = valeur else { return }
+                if !isReordering { perform(.longPress, on: index) }
+                if let glisse { track(index, translation: glisse.translation.width) }
+            }
+            .onEnded { valeur in
+                defer { dragged = nil }
+                guard case .second(true, let glisse?) = valeur else { return }
+                drop(index, translation: glisse.translation.width)
+            }
+    }
+
+    private func track(_ index: Int, translation: CGFloat) {
+        guard isReordering else { return }
+        let avant = dragged.flatMap { ComposerSlideRowGrammar.targetIndex(from: index, translation: $0.translation,
+                                                                           pitch: Self.pitch, count: slides.count) }
+        dragged = ComposerSlideRowDrag(source: index, translation: translation)
+        let apres = ComposerSlideRowGrammar.targetIndex(from: index, translation: translation,
+                                                        pitch: Self.pitch, count: slides.count)
+        if avant != apres { HapticFeedback.rigid() }
+    }
+
+    private func drop(_ index: Int, translation: CGFloat) {
+        guard isReordering,
+              let destination = ComposerSlideRowGrammar.destination(from: index, translation: translation,
+                                                                    pitch: Self.pitch,
+                                                                    count: slides.count) else { return }
+        onMove?(index, destination)
+    }
+
+    private var addTile: some View {
+        Button {
+            onAdd?()
+        } label: {
+            Image(systemName: "plus")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: Self.height * SceneShape.aspect, height: Self.height)
+                .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xxs),
+                               tint: Color.black.opacity(ComposerSceneRoundGlyph.veil), interactive: true)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(ComposerMoreMenuCopy.label(.addSlide)))
+        .accessibilityIdentifier("composer.slide.rail.add")
+    }
+
+    private var doneButton: some View {
+        Button {
+            isReordering = false
+            HapticFeedback.light()
+        } label: {
+            Text(ComposerSlideRailCopy.reorderDone)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .frame(height: Self.height)
+                // Sans cadre, la rangée flotte sur n'importe quelle scène : le
+                // libellé garde son contraste sur une photo claire (L4).
+                .adaptiveGlass(in: Capsule(), tint: Color.black.opacity(ComposerSceneRoundGlyph.veil),
+                               interactive: true)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("composer.slide.rail.done")
+    }
+
+    /// La croix paraît sur CHAQUE tuile tant que le réordonnancement est armé,
+    /// jamais sous deux scènes (`ComposerHeaderTiles.showsDelete`), et la
+    /// suppression se confirme toujours.
     @ViewBuilder
     private func corbeille(_ index: Int) -> some View {
         if onDelete != nil, ComposerHeaderTiles.showsDelete(sceneIndex: index,
                                            currentIndex: currentIndex,
-                                           sceneCount: slides.count) {
+                                           sceneCount: slides.count,
+                                           isReordering: isReordering) {
             Button { deletion = deletion.asking(index: index) } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(8, weight: .bold))
@@ -115,8 +254,6 @@ struct ComposerSlideRail: View {
                     .background(Circle().fill(Color.black.opacity(0.55)))
             }
             .buttonStyle(.plain)
-            // La CIBLE reste visible sans déborder de la tuile : la corbeille
-            // est un contrôle secondaire, la sélection reste le geste premier.
             .offset(x: 4, y: -4)
             .accessibilityLabel(Text(ComposerSlideRailCopy.delete(index: index + 1)))
         }
@@ -138,6 +275,82 @@ struct ComposerSlideRail: View {
                               : Color.white.opacity(0.25),
                               lineWidth: index == currentIndex ? 1.5 : 0.5)
         )
+    }
+}
+
+/// Le glissé en cours : quelle tuile, et de combien.
+nonisolated struct ComposerSlideRowDrag: Equatable, Sendable {
+    let source: Int
+    let translation: CGFloat
+}
+
+/// Le léger balancement des tuiles en réordonnancement, coupé sous Reduce Motion.
+struct ComposerSlideRowJiggle: ViewModifier {
+    let isOn: Bool
+    @State private var phase = false
+
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(isOn ? (phase ? 1.5 : -1.5) : 0))
+            .animation(isOn ? .easeInOut(duration: 0.14).repeatForever(autoreverses: true) : .default, value: phase)
+            .onAppear { phase = isOn }
+            .adaptiveOnChange(of: isOn) { _, on in phase = on }
+    }
+}
+
+/// **La rangée des scènes, en overlay** (#17111) : ce que chaque geste fait,
+/// hors de la vue.
+nonisolated enum ComposerSlideRowItem: Hashable, Sendable {
+    case scene(Int)
+    case add
+}
+
+nonisolated enum ComposerSlideRowGrammar {
+
+    enum Gesture: Equatable, Sendable {
+        case tap
+        case doubleTap
+        case longPress
+    }
+
+    enum Effect: Equatable, Sendable {
+        case select(Int)
+        case duplicate(Int)
+        case beginReordering
+    }
+
+    /// Les scènes dans leur ordre — celui de la publication —, puis (+) en
+    /// dernier quand une scène de plus est permise.
+    static func items(sceneCount: Int, canAdd: Bool) -> [ComposerSlideRowItem] {
+        (0..<max(sceneCount, 0)).map(ComposerSlideRowItem.scene) + (canAdd ? [.add] : [])
+    }
+
+    static func effect(_ gesture: Gesture, onScene index: Int, sceneCount: Int,
+                       isReordering: Bool, canDuplicate: Bool) -> Effect? {
+        guard (0..<sceneCount).contains(index) else { return nil }
+        switch gesture {
+        case .tap:
+            return isReordering ? nil : .select(index)
+        case .doubleTap:
+            return !isReordering && canDuplicate ? .duplicate(index) : nil
+        case .longPress:
+            return sceneCount > 1 && !isReordering ? .beginReordering : nil
+        }
+    }
+
+    /// La place que la tuile glissée vise : un pas par tuile, bornée à la rangée.
+    static func targetIndex(from source: Int, translation: CGFloat, pitch: CGFloat, count: Int) -> Int? {
+        guard (0..<count).contains(source), pitch > 0, translation.isFinite else { return nil }
+        let pas = Int((translation / pitch).rounded())
+        return min(max(source + pas, 0), count - 1)
+    }
+
+    /// La destination au sens de `moveSlide(from:to:)` (un décalage de
+    /// `Array.move(fromOffsets:toOffset:)`) ; `nil` quand la tuile revient à sa place.
+    static func destination(from source: Int, translation: CGFloat, pitch: CGFloat, count: Int) -> Int? {
+        guard let cible = targetIndex(from: source, translation: translation, pitch: pitch, count: count),
+              cible != source else { return nil }
+        return cible > source ? cible + 1 : cible
     }
 }
 
@@ -277,6 +490,26 @@ enum ComposerSlideRailCopy {
     static var deleteCancel: String {
         String(localized: "composer.slide.rail.deleteConfirm.cancel",
                defaultValue: "Annuler", bundle: .main)
+    }
+
+    static var duplicate: String {
+        String(localized: "composer.shell.duplicate", defaultValue: "Dupliquer la scène",
+               table: "ComposerShell", bundle: .main)
+    }
+
+    static var moveEarlier: String {
+        String(localized: "composer.shell.moveEarlier", defaultValue: "Déplacer avant",
+               table: "ComposerShell", bundle: .main)
+    }
+
+    static var moveLater: String {
+        String(localized: "composer.shell.moveLater", defaultValue: "Déplacer après",
+               table: "ComposerShell", bundle: .main)
+    }
+
+    static var reorderDone: String {
+        String(localized: "composer.shell.reorder.done", defaultValue: "Terminé",
+               table: "ComposerShell", bundle: .main)
     }
 
     static func position(index: Int, total: Int) -> String {

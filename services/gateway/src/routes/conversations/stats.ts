@@ -4,6 +4,7 @@ import { conversationMessageStatsService } from '../../services/ConversationMess
 import { canAccessConversation, refuserCommeIntrouvable } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
+import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
 import { loadPersonalHistoryHiding, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendInternalError } from '../../utils/response';
@@ -148,45 +149,57 @@ export function registerStatsRoutes(
         return refuserCommeIntrouvable(reply);
       }
 
-      // #17076 — le plancher du LECTEUR, la même loi que le fil, la recherche,
-      // les fils de réponses et les traductions partagées appliquent déjà.
+      // **LE PLANCHER DU LECTEUR BORNE L'AGRÉGAT** (#17076). La ligne
+      // `ConversationMessageStats` couvre toute la vie de la conversation ;
+      // servie telle quelle, elle disait à un inscrit entré par un lien
+      // `allowViewHistory: false` quand la conversation a commencé, qui a écrit
+      // combien, et le volume de chaque journée — l'historique exact que le
+      // fil, la recherche, les fils de réponses et les traductions partagées
+      // lui refusent tous, message par message.
       //
-      // Cette porte n'avait que ses deux gardes d'ACCÈS, et ce qu'elle sert
-      // décrit l'historique message par message : `dailyActivity` (une ligne par
-      // jour depuis la création) et `participantStats`, NOMMÉ, DATÉ et ATTRIBUÉ.
-      // Un inscrit entré par un lien `allowViewHistory: false` y lisait quand la
-      // conversation a commencé, qui a écrit combien, et le volume de chaque
-      // journée passée.
-      //
-      // `loadReaderHistoryFloor` PROPAGE ses erreurs, et c'est voulu : « un
-      // plancher illisible est un CONTRÔLE D'ACCÈS illisible, et la seule
-      // dégradation sûre est de ne rien servir » (`services/historyFloor.ts`). Le
-      // `catch` de cette route rend donc 500 — jamais l'agrégat complet, qui
-      // ferait de la panne la porte la plus ouverte du dépôt.
-      const historyFloor = await loadReaderHistoryFloor(prisma, {
-        conversationId,
-        reader: historyReaderFromAuthContext(authContext),
-      });
+      // Fail-CLOSED : `loadReaderHistoryFloor` PROPAGE ses erreurs, et le
+      // `catch` de fin de route en fait un 500. C'est l'inverse de la posture
+      // de `personalHistoryFilter` (« cacher est une courtoisie, montrer est le
+      // produit »), et c'est voulu : ce plancher-ci n'est pas une courtoisie,
+      // c'est la confidentialité de l'historique. Une porte de confidentialité
+      // échoue en montrant moins.
+      const reader = historyReaderFromAuthContext(authContext);
 
-      // Le masquage PERSONNEL n'est chargé que si un plancher borne déjà ce
-      // lecteur, et l'asymétrie est voulue : sans plancher, la réponse est la
-      // ligne PARTAGÉE — « une valeur stockée une fois et lue par tout le
-      // monde », que le masquage d'un lecteur n'a pas à déplacer, et dont le
-      // seau de cache sert tout le monde. Sous plancher, la passe est déjà POUR
-      // UN LECTEUR : un compte qui ne correspond pas au fil qu'il peut dérouler
-      // serait un compte faux pour lui. Deux lectures de plus sur un chemin qui
-      // agrège déjà sa fenêtre entière.
-      const hiding = historyFloor
+      // **LA PORTE, avant le PLANCHER** — le lien répond à DEUX questions sur
+      // la même ligne, et cette route n'en posait qu'une. Un lien ÉCHU ferme la
+      // lecture ; le fil, la recherche, les fils de réponses et les épinglés
+      // posent tous cette porte, avec ce helper et ce lecteur.
+      //
+      // Elle manquait ICI, et l'asymétrie qui rend ça exploitable est écrite
+      // dans `shareLinkGuestsWhere` : la révocation d'un lien ne touche que les
+      // participations ANONYMES (`type: 'anonymous'`). Un inscrit admis par un
+      // lien n'est donc jamais révoqué — sa ligne reste active, et seule la
+      // porte par route l'arrête. Sans elle, cette surface était la SEULE que
+      // l'expiration ne fermait pas : l'agrégat planchéisé y continuait de
+      // servir, indéfiniment, l'activité des jours POSTÉRIEURS à l'expiration.
+      if (await readerShareLinkHasExpired(prisma, { conversationId, reader })) {
+        return refuseExpiredShareLink(reply);
+      }
+
+      const floor = await loadReaderHistoryFloor(prisma, { conversationId, reader });
+
+      // **Le masquage PERSONNEL ne concerne que la fenêtre par lecteur.** Le
+      // chemin non planchéisé sert une ligne PARTAGÉE, précalculée pour toute
+      // la conversation : rien n'y est par lecteur, donc il n'y a rien à y
+      // masquer — et c'est une asymétrie ASSUMÉE, pas un oubli. Elle ne cache
+      // ni ne révèle : `clear-history` et `delete-for-me` sont des gestes de
+      // CONFORT, dont le dépôt écrit que « cacher est une courtoisie, montrer
+      // est le produit ».
+      const hiding = floor
         ? await loadPersonalHistoryHiding(prisma, {
-            userId: authContext.type === 'anonymous' ? null : authContext.userId,
+            userId: reader?.kind === 'user' ? reader.userId : null,
             conversationId,
           })
         : NO_PERSONAL_HIDING;
 
-      const stats = await conversationMessageStatsService.getStats(prisma, conversationId, {
-        historyFloor,
-        hiding,
-      });
+      const stats = floor
+        ? await conversationMessageStatsService.getStatsUnderFloor(prisma, conversationId, floor, hiding)
+        : await conversationMessageStatsService.getStats(prisma, conversationId);
 
       const participantStats = (stats.participantStats ?? {}) as Record<string, unknown>;
       const participantIds = Object.keys(participantStats);

@@ -38,6 +38,8 @@ import {
 } from '@meeshy/shared/types/preferences';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { isNotificationTypeEnabledByPreference } from './type-preference';
+import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
+import { NOTIFICATION_FANOUT_CONCURRENCY } from './notificationFanOutBudget';
 import {
   resolveUserLanguage,
   resolveUserLanguagesOrdered,
@@ -82,8 +84,6 @@ import {
   truncateMessage,
   envelopeMayTravelUnder,
 } from './notification-preview';
-import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
-import { MESSAGE_FANOUT_CONCURRENCY } from './fanout-concurrency';
 import type { FanoutDependencies } from './fanout/dependencies';
 import {
   getStoryNotificationRecipients,
@@ -1863,22 +1863,19 @@ export class NotificationService {
     // le verrou de protection n'est jamais arrivé jusqu'ici.
     const { senderId, messageContent, ...banner } = commonData;
 
-    // Débit BORNÉ (#17081). `Promise.all(…​.map(…))` lâchait jusqu'à
-    // `MAX_MENTIONS_PER_MESSAGE = 50` créations d'un coup, quand l'éventail
-    // `regular` est borné à seize depuis #10819 — avec la mesure qui l'a fixé.
-    // Le coût n'est pas propre à `createMessageNotification` : il vient de
-    // `createNotification` → `computeConversationUnreadBadge` (« 2 requêtes +
-    // une par conversation NON MUETTE du destinataire »), que ce chemin paie à
-    // l'identique, plus quatre lectures parallèles par destinataire. Une annonce
-    // qui nomme l'équipe lâchait donc 2 500 à 5 000 lectures dans la file que
-    // partagent TOUTES les routes HTTP.
+    // Débit BORNÉ (#17081), comme l'éventail `regular` depuis #10819 : ce lot
+    // paie le MÊME coût par destinataire — `createNotification` et son badge
+    // non lu, « 2 requêtes + une par conversation non muette » — et il en
+    // lançait jusqu'à `MAX_MENTIONS_PER_MESSAGE` (50) d'un coup, soit trois
+    // fois le débit que la mesure de #10819 a jugé fatal pour TOUTES les
+    // routes de la passerelle.
     //
-    // `settleWithConcurrency` et non `Promise.all` : le réservoir relance dès
-    // qu'une place se libère (une tranche attendrait son membre le plus lent), et
-    // il SETTLE. Le rejet d'un seul mentionné emportait le compte rendu de ses
-    // quarante-neuf voisins, dont les bannières étaient DÉJÀ parties — c'est la
-    // raison écrite du lot `regular`, et elle vaut mot pour mot ici.
-    const results = await settleWithConcurrency(eligibleUserIds, MESSAGE_FANOUT_CONCURRENCY, userId =>
+    // Le réservoir règle une SECONDE chose, et elle ne se mesure pas en
+    // requêtes : `Promise.all` REJETTE au premier échec, donc un seul
+    // destinataire en défaut emportait le lot entier — y compris le compte
+    // rendu de ceux qui avaient abouti. `settleWithConcurrency` est
+    // `allSettled` par construction.
+    const results = await settleWithConcurrency(eligibleUserIds, NOTIFICATION_FANOUT_CONCURRENCY, userId =>
       this.createMentionNotification({
         ...banner,
         mentionedUserId: userId,
@@ -1890,6 +1887,10 @@ export class NotificationService {
 
     // Un signalement pour tout le lot, pas un par destinataire : sur une mention
     // de masse, une panne commune produirait autant de lignes que de mentionnés.
+    // `allSettled` rend le lot survivant — et, seul, rend ses pertes MUETTES :
+    // quarante échecs sur cinquante ne laisseraient qu'un compte plus petit, que
+    // personne ne compare à rien. L'éventail `regular` journalise la sienne
+    // depuis #10819, dans les mêmes termes.
     const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
     if (rejected.length > 0) {
       notificationLogger.error('Mention fan-out lost recipients', {
@@ -1901,7 +1902,7 @@ export class NotificationService {
       });
     }
 
-    return results.filter(r => r.status === 'fulfilled' && Boolean(r.value)).length;
+    return results.filter((result) => result.status === 'fulfilled' && !!result.value).length;
   }
 
   // ==============================================

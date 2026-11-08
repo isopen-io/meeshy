@@ -20,6 +20,7 @@
  * seul le tableau `attachments` est recopié par lecteur.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PLAN_UNAVAILABLE, type PlanOutcome } from './planOutcome';
 
 import {
   attachmentIsReaderBound,
@@ -267,7 +268,7 @@ export async function readerSignedPlanForMessageId(
  * évite. C'est la leçon `[]`-vs-`undefined` du cycle 116 portée au plan signé —
  * une ignorance qui ne peut pas se dire devient une affirmation.
  */
-export type ReaderSignedPlanOutcome = ReaderSignedPlan | null | 'unavailable';
+export type ReaderSignedPlanOutcome = PlanOutcome<ReaderSignedPlan>;
 
 /**
  * {@link readerSignedPlan} dont l'échec ne peut pas emporter ce qui SUIT
@@ -300,7 +301,7 @@ export async function readerSignedPlanBestEffort(
       error,
     });
     onError(error);
-    return 'unavailable';
+    return PLAN_UNAVAILABLE;
   }
 }
 
@@ -324,6 +325,6 @@ export async function readerSignedPlanForMessageIdBestEffort(
       error,
     });
     onError(error);
-    return 'unavailable';
+    return PLAN_UNAVAILABLE;
   }
 }

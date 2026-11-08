@@ -47,7 +47,9 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
     case neonViolet
     /// Halo doré, plus serré : le lettrage chaud d'une affiche.
     case gold
-    /// Braise — un halo orangé légèrement tombant, comme une lueur de feu.
+    /// **Flamme** (#17112) — des flammes animées sur les lettres, au-dessus
+    /// d'un halo orangé. La valeur du fil reste `fire` : les clients qui ne
+    /// l'animent pas encore rendent la braise de la table.
     case fire
 
     // MARK: Contours — l'encre SOMBRE, sans décalage
@@ -95,6 +97,28 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
     case echo
     /// L'écho poussé loin et presque effacé — la trace, pas le double.
     case ghost
+
+    // MARK: Le sélecteur — quatre effets (#17112, L10)
+
+    /// **Ce que le sélecteur OFFRE : Néon · Or · Ombre · Flamme, plus « aucun ».**
+    ///
+    /// Les vingt autres valeurs restent dans l'énuméré et se rendent toujours :
+    /// la production, le web et Android en ont publié, et un texte ne perd pas
+    /// son effet parce que le sélecteur ne le propose plus. La Flamme n'ajoute
+    /// AUCUNE valeur au fil : elle est `fire`, que les clients qui ne savent pas
+    /// encore l'animer rendent par la lueur orangée de la table.
+    public static let pickerChoices: [StoryTextEffect] = [.none, .neon, .gold, .shadow, .fire]
+
+    /// Les choix offerts, plus l'effet que le texte PORTE s'il n'en fait pas
+    /// partie — ajouté en dernier, pour rester visible et sélectionné.
+    public static func pickerChoices(keeping current: StoryTextEffect) -> [StoryTextEffect] {
+        pickerChoices.contains(current) ? pickerChoices : pickerChoices + [current]
+    }
+
+    /// **L'effet brûle** : des flammes animées naissent des lettres et montent
+    /// au-dessus d'elles. Seule la Flamme brûle ; son ombre de table reste la
+    /// braise qui l'entoure.
+    public var burns: Bool { self == .fire }
 
     /// La géométrie de l'ombre que cet effet pose, ou `nil` pour `.none`.
     ///

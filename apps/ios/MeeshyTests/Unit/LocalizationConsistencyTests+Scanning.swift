@@ -329,7 +329,10 @@ extension LocalizationConsistencyTests {
             }
 
             let segment = ns.substring(with: NSRange(location: found.location, length: end - found.location + 1))
-            if let key = firstKey(in: segment) {
+            // Un appel qui nomme sa TABLE (`table: "MediaTrim"`, #17110) se mesure
+            // contre elle, pas contre `Localizable` : sa garde est
+            // `LocalizationTableCatalogGuardTests`.
+            if let key = firstKey(in: segment), !segment.contains("table:") {
                 calls.append(LocalizedCall(
                     key: key,
                     hasDefaultValue: segment.contains("defaultValue:"),

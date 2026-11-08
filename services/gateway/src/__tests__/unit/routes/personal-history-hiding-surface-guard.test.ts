@@ -452,11 +452,12 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // masqué : deux lectures, une seule application TEXTUELLE.
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 1 },
 
-  // #17076 — DEUX régimes dans un fichier : `recompute()` écrit la ligne
-  // PARTAGÉE (exempt, cf. son doc-comment), `aggregateFloored()` calcule la
-  // fenêtre d'UN lecteur et APPLIQUE. `kind` est celui de ce que le fichier fait
-  // de PLUS. La raison vit chez le code — `ConversationMessageStatsService.ts`
-  // § `aggregateFloored` —, pas en double ici.
+  // #17076 — la raison d'exemption d'avant (« une valeur stockée une fois et lue
+  // par tout le monde ») est devenue à moitié fausse : ce fichier a désormais
+  // DEUX lectures de régimes opposés. `recompute()` reconstruit la ligne
+  // PARTAGÉE — rien n'y est par lecteur, donc rien à masquer.
+  // `foldFlooredWindow` plie la fenêtre d'UN lecteur, et c'est le régime où
+  // `clear-history` et `delete-for-me` veulent dire quelque chose : il applique.
   'ConversationMessageStatsService.ts': { kind: 'applies', reads: 2, applications: 1 },
   'conversationCard.ts': {
     kind: 'exempt',

@@ -2,9 +2,14 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import {
   conversationMessageStatsService,
-  resolveAttachmentType,
   statsAuthorKey,
 } from '../ConversationMessageStatsService';
+// La table MIME → compteur vient du module du PLI, jamais du service (#17076).
+// Les témoins de cette unité DOUBLENT le service pour observer le décompte ;
+// importée de là, la table traversait ce double, et un double qui l'omet rend
+// `.map(undefined)` — une levée avalée par le `catch` du décompte, donc un
+// compteur silencieusement jamais débité.
+import { resolveAttachmentType } from '../conversations/messageStatsAggregate';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import {
   getSharedDeliveryQueue,
@@ -23,6 +28,7 @@ import { withoutCaptureNotices } from './captureNoticeVisibility';
 import { boundCaptureNoticesNaming } from './captureNoticeRetention';
 import { eraseSharedTranslations } from './sharedTranslationErasure';
 import { purgeTranslationCacheFor } from '../message-translation/translationCacheRegistry';
+import { cutTogetherWhere } from '../together/togetherDeps';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -392,4 +398,13 @@ export async function applyMessageRemovalEffects(
   } catch (err) {
     log.warn('message removal: capture notices not expired', { messageId: message.id, err });
   }
+
+  // Une séance « ensemble » qui lisait une pièce de ce message s'arrête chez les deux
+  // (#17022). Rejuger la conversation suffit : la porte refuse un message supprimé, et les
+  // séances des autres pièces continuent. Ne rejette jamais.
+  if (message.attachmentMimeTypes.some(isPlayableTogether)) {
+    await cutTogetherWhere({ conversationId: message.conversationId });
+  }
 }
+
+const isPlayableTogether = (mimeType: string): boolean => /^(audio|video)\//i.test(mimeType);

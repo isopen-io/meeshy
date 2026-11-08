@@ -1,17 +1,24 @@
 import { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { withOrphanedSenderRepair } from './messaging/withOrphanedSenderRepair';
-import { applyPersonalHistoryHiding, NO_PERSONAL_HIDING, type PersonalHistoryHiding } from './personalHistoryFilter';
-
-interface ParticipantStatEntry {
-  messageCount: number;
-  wordCount: number;
-  characterCount: number;
-  imageCount: number;
-  audioCount: number;
-  videoCount: number;
-  firstMessageAt: string | null;
-  lastMessageAt: string | null;
-}
+import {
+  applyPersonalHistoryHiding,
+  hidingFingerprint,
+  NO_PERSONAL_HIDING,
+  type PersonalHistoryHiding,
+} from './personalHistoryFilter';
+import {
+  FLOORED_FOLD_PAGE,
+  mergeFoldedStats,
+  type FoldedMessageStats,
+  countCharacters,
+  countWords,
+  foldMessageStats,
+  FOLDABLE_MESSAGE_SELECT,
+  pruneDailyActivity,
+  shapeMessageStats,
+  type FoldableMessage,
+  type ParticipantStatEntry,
+} from './conversations/messageStatsAggregate';
 
 interface CacheEntry {
   data: Record<string, unknown>;
@@ -28,11 +35,6 @@ const ATTACHMENT_TYPE_FIELDS: Record<string, string> = {
   video: 'videoCount',
   file: 'fileCount',
 };
-
-function countWords(content: string): number {
-  if (!content || !content.trim()) return 0;
-  return content.trim().split(/\s+/).length;
-}
 
 // A message counts as "text" for stats iff it has no attachments AND its
 // messageType is 'text'. This mirrors the authoritative recompute()
@@ -58,10 +60,6 @@ function isLocationMessageStat(messageType?: string): boolean {
   return messageType === 'location';
 }
 
-function countCharacters(content: string): number {
-  return content ? content.length : 0;
-}
-
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -70,158 +68,28 @@ function currentHour(): string {
   return String(new Date().getUTCHours());
 }
 
-function pruneDailyActivity(daily: Record<string, number>): Record<string, number> {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 90);
-  const cutoffKey = cutoff.toISOString().slice(0, 10);
-
-  const pruned: Record<string, number> = {};
-  for (const [key, value] of Object.entries(daily)) {
-    if (key >= cutoffKey) {
-      pruned[key] = value;
-    }
-  }
-  return pruned;
-}
-
-/** Ce qu'une passe d'agrégation produit — la forme des colonnes de la ligne. */
-type AggregatedCounters = {
-  totalMessages: number;
-  totalWords: number;
-  totalCharacters: number;
-  textMessages: number;
-  imageCount: number;
-  audioCount: number;
-  videoCount: number;
-  fileCount: number;
-  locationCount: number;
-  participantStats: Record<string, ParticipantStatEntry>;
-  dailyActivity: Record<string, number>;
-  hourlyDistribution: Record<string, number>;
-  languageDistribution: Record<string, number>;
-};
-
-/** Ce qu'il faut d'un message pour l'agréger. */
-type AggregableMessage = {
-  content: string | null;
-  senderId: string;
-  createdAt: Date;
-  originalLanguage: string | null;
-  messageType: string | null;
-  sender: { userId: string | null } | null;
-  attachments: ReadonlyArray<{ mimeType: string }>;
-};
-
-/**
- * La boucle d'agrégation, et la SEULE (#17076).
- *
- * Elle était inline dans `recompute()`, le seul chemin qui agrégeait. Il y en a
- * deux depuis que la lecture d'un participant BORNÉ par son plancher
- * d'historique ne peut plus passer par la ligne partagée : la recopier aurait
- * fait diverger la vue d'un lecteur borné de celle de tout le monde — sur les
- * mêmes messages, par deux boucles jumelles.
- *
- * Pure : la FENÊTRE est choisie par l'appelant (son `where`), jamais ici. C'est
- * ce qui rend les deux chemins comparables message par message.
- */
-function aggregateMessages(messages: readonly AggregableMessage[]): AggregatedCounters {
-  const counters: AggregatedCounters = {
-    totalMessages: 0,
-    totalWords: 0,
-    totalCharacters: 0,
-    textMessages: 0,
-    imageCount: 0,
-    audioCount: 0,
-    videoCount: 0,
-    fileCount: 0,
-    locationCount: 0,
-    participantStats: {},
-    dailyActivity: {},
-    hourlyDistribution: {},
-    languageDistribution: {},
-  };
-
-  for (const msg of messages) {
-    counters.totalMessages += 1;
-    const words = countWords(msg.content ?? '');
-    const chars = countCharacters(msg.content ?? '');
-    counters.totalWords += words;
-    counters.totalCharacters += chars;
-
-    const userId = msg.sender?.userId || msg.senderId;
-
-    if (!counters.participantStats[userId]) {
-      counters.participantStats[userId] = {
-        messageCount: 0,
-        wordCount: 0,
-        characterCount: 0,
-        imageCount: 0,
-        audioCount: 0,
-        videoCount: 0,
-        firstMessageAt: null,
-        lastMessageAt: null,
-      };
-    }
-    const entry = counters.participantStats[userId];
-    entry.messageCount += 1;
-    entry.wordCount += words;
-    entry.characterCount += chars;
-
-    const msgTime = msg.createdAt.toISOString();
-    if (!entry.firstMessageAt || msgTime < entry.firstMessageAt) {
-      entry.firstMessageAt = msgTime;
-    }
-    if (!entry.lastMessageAt || msgTime > entry.lastMessageAt) {
-      entry.lastMessageAt = msgTime;
-    }
-
-    const msgType = msg.messageType || 'text';
-    if (msgType === 'text' && msg.attachments.length === 0) {
-      counters.textMessages += 1;
-    }
-
-    for (const att of msg.attachments) {
-      const resolved = resolveAttachmentType(att.mimeType);
-      if (resolved === 'image') { counters.imageCount += 1; entry.imageCount += 1; }
-      else if (resolved === 'audio') { counters.audioCount += 1; entry.audioCount += 1; }
-      else if (resolved === 'video') { counters.videoCount += 1; entry.videoCount += 1; }
-      else if (resolved === 'file') { counters.fileCount += 1; }
-    }
-
-    if (msgType === 'location') {
-      counters.locationCount += 1;
-    }
-
-    const day = msg.createdAt.toISOString().slice(0, 10);
-    counters.dailyActivity[day] = (counters.dailyActivity[day] || 0) + 1;
-
-    const hour = String(msg.createdAt.getUTCHours());
-    counters.hourlyDistribution[hour] = (counters.hourlyDistribution[hour] || 0) + 1;
-
-    if (msg.originalLanguage) {
-      counters.languageDistribution[msg.originalLanguage] =
-        (counters.languageDistribution[msg.originalLanguage] || 0) + 1;
-    }
-  }
-
-  return counters;
-}
-
-/** Les colonnes que `aggregateMessages` a besoin de lire. */
-const AGGREGABLE_MESSAGE_SELECT = {
-  content: true,
-  senderId: true,
-  createdAt: true,
-  originalLanguage: true,
-  messageType: true,
-  sender: { select: { userId: true } },
-  attachments: { select: { mimeType: true } },
-} as const;
-
 export class ConversationMessageStatsService {
   private static instance: ConversationMessageStatsService | null = null;
   private readonly cache = new Map<string, CacheEntry>();
+  /**
+   * Les agrégats PLANCHÉISÉS, dans un seau à part — `conversationId` puis
+   * plancher (#17076).
+   *
+   * **Deux niveaux, et c'est ce qui garde `invalidate` en O(1).** Une clé
+   * composite dans la carte d'origine aurait obligé chaque nouveau message à
+   * balayer la carte pour trouver ses variantes ; un seau par conversation
+   * s'efface d'un `delete`, donc un lecteur planchéisé n'est jamais plus
+   * périmé qu'un lecteur ordinaire.
+   *
+   * **Et le seau ne peut pas servir une fenêtre pour une autre** : la clé EST
+   * la fenêtre (plancher + masquage personnel). Mettre un agrégat planchéisé
+   * dans la carte d'origine l'aurait servi à toute la conversation — la fuite
+   * inverse de celle qu'on ferme.
+   */
+  private readonly flooredCache = new Map<string, Map<string, CacheEntry>>();
   private readonly ttlMs = 5 * 60 * 1000;
+  /** Fenêtres distinctes gardées par conversation — cf. `getStatsUnderFloor`. */
+  private readonly maxFlooredWindows = 32;
 
   private constructor() {}
 
@@ -232,44 +100,9 @@ export class ConversationMessageStatsService {
     return this.instance;
   }
 
-  /**
-   * Tous les seaux de cette conversation, BORNÉS COMPRIS (#17076).
-   *
-   * La clé nue ne suffit plus : un lecteur borné par son plancher d'historique a
-   * son propre seau (`conversationId#<instant>`), et ne pas le vider laisserait
-   * un message neuf rafraîchir le seau partagé pendant que les bornés servent un
-   * compte périmé jusqu'au bout du TTL.
-   */
   invalidate(conversationId: string): void {
     this.cache.delete(conversationId);
-    const prefix = `${conversationId}#`;
-    for (const key of [...this.cache.keys()]) {
-      if (key.startsWith(prefix)) this.cache.delete(key);
-    }
-  }
-
-  /**
-   * Le seau d'un lecteur. Deux lecteurs de MÊME plancher le partagent ; un
-   * lecteur borné ne lit JAMAIS dans celui d'un lecteur qui ne l'est pas — ce
-   * serait la fuite de #17076 par le cache, qu'aucune garde de route ne verrait.
-   */
-  private cacheKey(
-    conversationId: string,
-    historyFloor: Date | null,
-    hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING
-  ): string {
-    if (!historyFloor) return conversationId;
-    // Le masquage PERSONNEL entre dans la clé : deux lecteurs de même plancher
-    // mais de masquages différents ne voient pas le même compte, et partager leur
-    // seau servirait à l'un ce que l'autre a effacé pour lui — la même fuite par
-    // le cache, d'un cran plus fin.
-    const mask = hiding.clearHistoryBefore
-      ? `${hiding.clearHistoryBefore.getTime()}`
-      : '0';
-    const hidden = hiding.hiddenMessageIds.length > 0
-      ? `:${[...hiding.hiddenMessageIds].sort().join(',')}`
-      : '';
-    return `${conversationId}#${historyFloor.getTime()}@${mask}${hidden}`;
+    this.flooredCache.delete(conversationId);
   }
 
   private isValid(entry?: CacheEntry | null): entry is CacheEntry {
@@ -517,63 +350,10 @@ export class ConversationMessageStatsService {
     this.invalidate(conversationId);
   }
 
-  /**
-   * Les statistiques TELLES QUE CE LECTEUR a le droit de les voir (#17076).
-   *
-   * Sans plancher — le cas nominal : la ligne pré-agrégée partagée, inchangée.
-   *
-   * Avec plancher, la ligne partagée est inutilisable : elle décrit TOUTE la vie
-   * de la conversation, et ses champs sont NOMMÉS (`participantStats` porte le
-   * profil), DATÉS (`firstMessageAt`, `dailyActivity`) et ATTRIBUÉS. Un inscrit
-   * entré par un lien `allowViewHistory: false` y lisait quand la conversation a
-   * commencé, qui a écrit combien, et le volume de chaque journée passée — soit
-   * exactement l'historique que le fil, la recherche, les fils de réponses et les
-   * traductions partagées lui refusent message par message.
-   *
-   * **Recalculé, jamais PLAFONNÉ.** Servir l'agrégat complet avec un total borné
-   * laisserait déduire le reste par soustraction ; décider champ par champ
-   * laisserait `firstMessageAt` de quelqu'un d'autre vouloir dire quelque chose.
-   * Agréger sur la fenêtre répond pour TOUS les champs d'un coup : sous plancher,
-   * `firstMessageAt` est le premier message VISIBLE, ce qui ne nomme rien
-   * d'antérieur.
-   *
-   * Le coût est borné par le plancher lui-même — un lecteur borné lit MOINS que
-   * ce que `recompute()` lit pour tout le monde — et son seau de cache est le
-   * sien (`cacheKey`), partagé avec les lecteurs de même plancher.
-   *
-   * Et la passe bornée ne PERSISTE rien : un `upsert` écraserait les compteurs de
-   * tout le monde avec la vue partielle d'un seul lecteur, changeant la fuite en
-   * corruption.
-   */
-  async getStats(
-    prisma: PrismaClient,
-    conversationId: string,
-    options?: {
-      readonly historyFloor?: Date | null;
-      /**
-       * Le masquage PERSONNEL du lecteur, qui n'a de sens que sur la passe
-       * BORNÉE — voir `aggregateFloored`. La ligne partagée ne le reçoit jamais.
-       */
-      readonly hiding?: PersonalHistoryHiding;
-    }
-  ): Promise<Record<string, unknown>> {
-    const historyFloor = options?.historyFloor ?? null;
-    const key = this.cacheKey(conversationId, historyFloor, options?.hiding ?? NO_PERSONAL_HIDING);
-
-    const cached = this.cache.get(key);
+  async getStats(prisma: PrismaClient, conversationId: string): Promise<Record<string, unknown>> {
+    const cached = this.cache.get(conversationId);
     if (this.isValid(cached)) {
       return cached.data;
-    }
-
-    if (historyFloor) {
-      const shaped = await this.aggregateFloored(
-        prisma,
-        conversationId,
-        historyFloor,
-        options?.hiding ?? NO_PERSONAL_HIDING
-      );
-      this.setCache(key, shaped);
-      return shaped;
     }
 
     const row = await prisma.conversationMessageStats.findUnique({
@@ -586,53 +366,120 @@ export class ConversationMessageStatsService {
     }
 
     const shaped = this.shapeResponse(row);
-    this.setCache(key, shaped);
+    this.setCache(conversationId, shaped);
     return shaped;
   }
 
   /**
-   * L'agrégation d'un lecteur BORNÉ — même boucle que `recompute()`
-   * (`aggregateMessages`), autre fenêtre, et AUCUNE écriture.
+   * L'agrégat d'un lecteur à PLANCHER (#17076) — la même charge, bornée à sa
+   * fenêtre de lecture.
    *
-   * `updatedAt` est l'instant du CALCUL, et c'est la seule valeur vraie : cette
-   * vue n'a pas de ligne, donc pas d'horodatage de ligne à servir.
+   * Il ne passe NI par la ligne `ConversationMessageStats`, NI par
+   * `recompute()`, et les deux refus sont du même ordre : la ligne agrège
+   * l'avant-plancher, et l'`upsert` de `recompute` remplacerait la ligne de
+   * TOUS par la fenêtre d'UN seul. Le pli est partagé ; l'écriture, non.
+   *
+   * Ce que ça coûte, et c'est écrit parce que ça se décide : une lecture par
+   * requête sur la fenêtre du lecteur, là où un lecteur sans plancher ne paie
+   * qu'un `findUnique`. La fenêtre d'un lecteur planchéisé est par construction
+   * celle que `GET …/messages` lui sert déjà — on ne lit donc rien de plus que
+   * ce qu'il a le droit de lire — et le seau de cache ci-dessus la garde cinq
+   * minutes, comme celui de tout le monde.
    */
-  private async aggregateFloored(
+  async getStatsUnderFloor(
     prisma: PrismaClient,
     conversationId: string,
-    historyFloor: Date,
-    hiding: PersonalHistoryHiding
+    floor: Date,
+    hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING,
   ): Promise<Record<string, unknown>> {
-    // Le masquage PERSONNEL s'applique ICI et nulle part ailleurs dans ce
-    // service, et l'asymétrie est la raison même du lot.
-    //
-    // `recompute()` écrit la ligne PARTAGÉE : y appliquer un masquage personnel
-    // poserait la vue d'un lecteur dans le compteur de tous. Son exemption est
-    // juste, et elle le dit — « une valeur stockée une fois et lue par tout le
-    // monde ». Cette passe-ci n'est ni stockée ni partagée : elle est calculée
-    // POUR UN LECTEUR, sur sa fenêtre, et jetée dans son seau. L'exemption ne la
-    // couvre donc pas, et un compte qui ne correspond pas au fil que ce lecteur
-    // peut dérouler serait un compte faux pour lui.
-    //
-    // `applyPersonalHistoryHiding` sait fusionner son plancher avec le nôtre
-    // (`mergeCreatedAtLowerBound`) : les deux bornes se composent, la plus haute
-    // gagne.
-    const messages = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () =>
-      prisma.message.findMany({
-        where: applyPersonalHistoryHiding(
-          { conversationId, deletedAt: null, createdAt: { gte: historyFloor } },
-          hiding
-        ),
-        select: AGGREGABLE_MESSAGE_SELECT,
-      })
+    // **La clé porte TOUT ce qui borne la fenêtre**, pas seulement le plancher :
+    // deux lecteurs peuvent partager un plancher et masquer personnellement des
+    // choses différentes (`clear-history`, `delete-for-me`). Une clé qui ne
+    // nommerait que le plancher servirait l'agrégat de l'un à l'autre — plus
+    // étroit, donc jamais une fuite, mais faux, et faux d'une façon qu'aucun
+    // témoin ne verrait.
+    const windowKey = `${floor.toISOString()}|${hidingFingerprint(hiding)}`;
+    const bucket = this.flooredCache.get(conversationId);
+    const cached = bucket?.get(windowKey);
+    if (this.isValid(cached)) {
+      return cached.data;
+    }
+
+    const shaped = await this.foldFlooredWindow(prisma, conversationId, floor, hiding);
+
+    const target = bucket ?? new Map<string, CacheEntry>();
+    // Le seau est BORNÉ. Sans plafond, une conversation sans nouveau message
+    // garderait une entrée par fenêtre distincte pour la vie du processus,
+    // chacune portant un `participantStats` complet — et `invalidate` est le
+    // seul chemin de sortie. La plus ancienne part : l'ordre d'insertion d'une
+    // `Map` est celui de l'arrivée.
+    if (!target.has(windowKey) && target.size >= this.maxFlooredWindows) {
+      const oldest = target.keys().next();
+      if (!oldest.done) target.delete(oldest.value);
+    }
+    target.set(windowKey, { data: shaped, expiresAt: Date.now() + this.ttlMs });
+    this.flooredCache.set(conversationId, target);
+    return shaped;
+  }
+
+  /**
+   * La fenêtre PLANCHÉISÉE, lue page par page et repliée.
+   *
+   * Quatre propriétés, et chacune a son témoin dans
+   * `stats-history-floor.test.ts` :
+   *
+   * 1. **la borne part dans la REQUÊTE** (`createdAt.gte`), jamais en filtrage
+   *    après coup — un pli sur tout puis un masque laisserait les totaux
+   *    parler ;
+   * 2. **le masquage PERSONNEL du lecteur s'applique aussi.** Un agrégat par
+   *    lecteur est précisément le régime où `clear-history` et `delete-for-me`
+   *    veulent dire quelque chose : compter ce que le lecteur a effacé de SA vue
+   *    contredirait la vue que toutes les autres surfaces lui servent. Il ne
+   *    peut que RÉTRÉCIR (`applyPersonalHistoryHiding` fusionne borne par
+   *    borne), donc il ne peut pas desserrer le plancher ;
+   * 3. **elle n'ÉCRIT rien.** Elle ne peut pas emprunter `recompute()`, dont
+   *    l'`upsert` remplacerait la ligne de TOUS par la fenêtre d'UN seul ;
+   * 4. **elle ne répare pas les expéditeurs orphelins**, et c'est la conséquence
+   *    de (3) : la réparation est une ÉCRITURE. `recompute()` la porte parce
+   *    qu'elle est le chemin AUTORITATIF ; ici un orphelin retombe sur
+   *    `senderId` — un `Participant.id` que l'enrichissement nominal de la route
+   *    ne trouvera pas — exactement comme une réparation qui échoue.
+   *
+   * La pagination est par `id` croissant plutôt que par `createdAt` : deux
+   * messages peuvent partager une date à la milliseconde, et un curseur sur une
+   * valeur non unique saute ou répète une ligne à chaque frontière de page.
+   */
+  private async foldFlooredWindow(
+    prisma: PrismaClient,
+    conversationId: string,
+    floor: Date,
+    hiding: PersonalHistoryHiding,
+  ): Promise<Record<string, unknown>> {
+    const where = applyPersonalHistoryHiding(
+      { conversationId, deletedAt: null, createdAt: { gte: floor } },
+      hiding,
     );
 
-    const counters = aggregateMessages(messages as unknown as AggregableMessage[]);
+    const pages: FoldedMessageStats[] = [];
+    let cursor: string | null = null;
 
-    return this.shapeResponse({
+    for (;;) {
+      const page = await prisma.message.findMany({
+        where,
+        select: { id: true, ...FOLDABLE_MESSAGE_SELECT },
+        orderBy: { id: 'asc' },
+        take: FLOORED_FOLD_PAGE,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      });
+      if (page.length === 0) break;
+      pages.push(foldMessageStats(page as unknown as readonly FoldableMessage[]));
+      if (page.length < FLOORED_FOLD_PAGE) break;
+      cursor = (page[page.length - 1] as { id: string }).id;
+    }
+
+    return shapeMessageStats({
       conversationId,
-      ...counters,
-      dailyActivity: pruneDailyActivity(counters.dailyActivity),
+      ...mergeFoldedStats(pages),
       updatedAt: new Date(),
     });
   }
@@ -664,63 +511,34 @@ export class ConversationMessageStatsService {
   async recompute(prisma: PrismaClient, conversationId: string): Promise<Record<string, unknown>> {
     const messages = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
       where: { conversationId, deletedAt: null },
-      select: AGGREGABLE_MESSAGE_SELECT,
+      select: FOLDABLE_MESSAGE_SELECT,
     }));
 
-    // La MÊME boucle que la passe bornée d'un lecteur sous plancher (#17076) :
-    // deux exemplaires feraient diverger la vue d'un lecteur borné de celle de
-    // tout le monde, sur les mêmes messages.
-    const {
-      totalMessages,
-      totalWords,
-      totalCharacters,
-      textMessages,
-      imageCount,
-      audioCount,
-      videoCount,
-      fileCount,
-      locationCount,
-      participantStats,
-      dailyActivity,
-      hourlyDistribution,
-      languageDistribution,
-    } = aggregateMessages(messages as unknown as AggregableMessage[]);
+    // Le PLI est partagé avec la fenêtre planchéisée (#17076) : c'est lui qui
+    // définit ce que chaque compteur veut dire, et la fenêtre de 90 jours de
+    // `dailyActivity` en fait partie. Ce chemin-ci est le seul qui ÉCRIT.
+    const folded = foldMessageStats(messages as unknown as readonly FoldableMessage[]);
 
-    const prunedDaily = pruneDailyActivity(dailyActivity);
+    const columns = {
+      totalMessages: folded.totalMessages,
+      totalWords: folded.totalWords,
+      totalCharacters: folded.totalCharacters,
+      textMessages: folded.textMessages,
+      imageCount: folded.imageCount,
+      audioCount: folded.audioCount,
+      videoCount: folded.videoCount,
+      fileCount: folded.fileCount,
+      locationCount: folded.locationCount,
+      participantStats: folded.participantStats as unknown as Prisma.InputJsonValue,
+      dailyActivity: folded.dailyActivity as unknown as Prisma.InputJsonValue,
+      hourlyDistribution: folded.hourlyDistribution as unknown as Prisma.InputJsonValue,
+      languageDistribution: folded.languageDistribution as unknown as Prisma.InputJsonValue,
+    };
 
     const row = await prisma.conversationMessageStats.upsert({
       where: { conversationId },
-      create: {
-        conversationId,
-        totalMessages,
-        totalWords,
-        totalCharacters,
-        textMessages,
-        imageCount,
-        audioCount,
-        videoCount,
-        fileCount,
-        locationCount,
-        participantStats: participantStats as unknown as Prisma.InputJsonValue,
-        dailyActivity: prunedDaily as unknown as Prisma.InputJsonValue,
-        hourlyDistribution: hourlyDistribution as unknown as Prisma.InputJsonValue,
-        languageDistribution: languageDistribution as unknown as Prisma.InputJsonValue,
-      },
-      update: {
-        totalMessages,
-        totalWords,
-        totalCharacters,
-        textMessages,
-        imageCount,
-        audioCount,
-        videoCount,
-        fileCount,
-        locationCount,
-        participantStats: participantStats as unknown as Prisma.InputJsonValue,
-        dailyActivity: prunedDaily as unknown as Prisma.InputJsonValue,
-        hourlyDistribution: hourlyDistribution as unknown as Prisma.InputJsonValue,
-        languageDistribution: languageDistribution as unknown as Prisma.InputJsonValue,
-      },
+      create: { conversationId, ...columns },
+      update: columns,
     });
 
     const shaped = this.shapeResponse(row);
@@ -729,54 +547,11 @@ export class ConversationMessageStatsService {
   }
 
   private shapeResponse(row: Record<string, unknown>): Record<string, unknown> {
-    return {
-      conversationId: row.conversationId,
-      totalMessages: row.totalMessages,
-      totalWords: row.totalWords,
-      totalCharacters: row.totalCharacters,
-      contentTypes: {
-        text: row.textMessages,
-        image: row.imageCount,
-        audio: row.audioCount,
-        video: row.videoCount,
-        file: row.fileCount,
-        location: row.locationCount,
-      },
-      participantStats: typeof row.participantStats === 'string'
-        ? JSON.parse(row.participantStats as string)
-        : row.participantStats,
-      dailyActivity: typeof row.dailyActivity === 'string'
-        ? JSON.parse(row.dailyActivity as string)
-        : row.dailyActivity,
-      hourlyDistribution: typeof row.hourlyDistribution === 'string'
-        ? JSON.parse(row.hourlyDistribution as string)
-        : row.hourlyDistribution,
-      languageDistribution: typeof row.languageDistribution === 'string'
-        ? JSON.parse(row.languageDistribution as string)
-        : row.languageDistribution,
-      updatedAt: row.updatedAt,
-    };
+    return shapeMessageStats(row);
   }
+
 }
 
-/**
- * La table MIME → compteur, et la SEULE. `recompute()` — l'autorité, puisque
- * c'est elle qui reconstruit la ligne depuis les messages — l'applique déjà ;
- * les chemins incrémentaux en portaient chacun leur copie inline (handler
- * socket, route de suppression), et une copie qui dérive fait diverger le
- * compteur incrémental de son propre recalcul.
- *
- * Exportée pour que les deux unités partagées d'effets (`messagePostSaveEffects`,
- * `messageRemovalEffects`) traduisent les MIME avec cette table-ci et pas une
- * jumelle.
- */
-export function resolveAttachmentType(mimeType: string): string {
-  if (!mimeType) return 'file';
-  if (mimeType.startsWith('image/')) return 'image';
-  if (mimeType.startsWith('audio/')) return 'audio';
-  if (mimeType.startsWith('video/')) return 'video';
-  return 'file';
-}
 
 /**
  * La clé sous laquelle un message est crédité puis débité dans

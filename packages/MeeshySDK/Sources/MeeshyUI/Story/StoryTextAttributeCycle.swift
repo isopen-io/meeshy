@@ -75,8 +75,12 @@ nonisolated enum StoryTextAttributeCycle {
     /// doit pouvoir se RETIRER d'un tap, pas seulement se changer. Et « aucun »
     /// s'écrit `nil`, jamais `"none"` : un texte sans effet garde le JSON
     /// qu'il avait.
+    ///
+    /// La rotation parcourt les quatre effets OFFERTS (#17112) : un effet
+    /// historique que le texte porte encore n'en fait pas partie, son index
+    /// manque, et le tap suivant mène au premier effet offert.
     private static func advanceEffect(on text: inout StoryTextObject) {
-        let steps = StoryTextEffect.allCases
+        let steps = StoryTextEffect.pickerChoices
         let index = steps.firstIndex(of: text.parsedTextEffect) ?? 0
         let next = steps[(index + 1) % steps.count]
         text.textEffect = next == StoryTextEffect.none ? nil : next.rawValue
