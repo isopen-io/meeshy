@@ -147,3 +147,27 @@ final class ComposerHardwareShutterTests: XCTestCase {
         XCTAssertEqual(ComposerHardwareShutter.holdDelay, ComposerShutterGesture.holdToFilm)
     }
 }
+
+/// CAM-7 — la grammaire haptique de la prise : un retour par événement.
+final class ComposerCaptureHapticTests: XCTestCase {
+    func test_eachTakeEvent_hasItsOwnFeedback() {
+        XCTAssertEqual(ComposerCaptureHaptic.photoTaken.feedback, .rigid)
+        XCTAssertEqual(ComposerCaptureHaptic.recordingStarted.feedback, .medium)
+        XCTAssertEqual(ComposerCaptureHaptic.recordingEnded.feedback, .doubleLightTick)
+        XCTAssertEqual(ComposerCaptureHaptic.locked.feedback, .success)
+        XCTAssertEqual(ComposerCaptureHaptic.zoomStep.feedback, .selection)
+    }
+
+    func test_timer_ticksOnlyOnItsLastThreeSeconds() {
+        XCTAssertEqual(ComposerCaptureHaptic.timerTick(secondsLeft: 10).feedback, .none)
+        XCTAssertEqual(ComposerCaptureHaptic.timerTick(secondsLeft: 4).feedback, .none)
+        XCTAssertEqual(ComposerCaptureHaptic.timerTick(secondsLeft: 3).feedback, .selection)
+        XCTAssertEqual(ComposerCaptureHaptic.timerTick(secondsLeft: 1).feedback, .selection)
+        XCTAssertEqual(ComposerCaptureHaptic.timerTick(secondsLeft: 0).feedback, .none)
+    }
+
+    func test_startAndEndOfAVideo_feelDifferent() {
+        XCTAssertNotEqual(ComposerCaptureHaptic.recordingStarted.feedback,
+                          ComposerCaptureHaptic.recordingEnded.feedback)
+    }
+}

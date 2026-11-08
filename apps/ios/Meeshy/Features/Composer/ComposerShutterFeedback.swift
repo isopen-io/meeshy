@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 /// **La prise se SENT au moment où elle part** (#16482, porteur :
 /// « lorsqu'on prend la photo il faut une animation sur le cadre, un flash, ou
@@ -86,6 +87,51 @@ struct ComposerShutterPulse: ViewModifier {
         Task { @MainActor in
             _ = await cancellableSleep(for: .milliseconds(70))
             withAnimation(.spring(response: 0.28, dampingFraction: 0.6)) { pressed = false }
+        }
+    }
+}
+
+/// **La grammaire haptique de la prise** (CAM-7) : chaque événement a SON retour,
+/// au lieu d'un même tic léger partout. La table est pure ; `play` la joue.
+nonisolated enum ComposerCaptureHaptic: Equatable {
+    case photoTaken
+    case recordingStarted
+    case recordingEnded
+    case locked
+    case zoomStep
+    case timerTick(secondsLeft: Int)
+
+    enum Feedback: Equatable { case rigid, medium, doubleLightTick, success, selection, none }
+
+    /// Le retardateur ne tique que sur ses trois dernières secondes.
+    static let timerTickWindow = 3
+    static let doubleTickGap: Duration = .milliseconds(90)
+
+    var feedback: Feedback {
+        switch self {
+        case .photoTaken: .rigid
+        case .recordingStarted: .medium
+        case .recordingEnded: .doubleLightTick
+        case .locked: .success
+        case .zoomStep: .selection
+        case .timerTick(let reste): (1...Self.timerTickWindow).contains(reste) ? .selection : .none
+        }
+    }
+
+    @MainActor
+    static func play(_ event: ComposerCaptureHaptic) {
+        switch event.feedback {
+        case .rigid: HapticFeedback.rigid()
+        case .medium: HapticFeedback.medium()
+        case .doubleLightTick:
+            HapticFeedback.light()
+            Task { @MainActor in
+                guard await cancellableSleep(for: doubleTickGap) else { return }
+                HapticFeedback.light()
+            }
+        case .success: HapticFeedback.success()
+        case .selection: UISelectionFeedbackGenerator().selectionChanged()
+        case .none: break
         }
     }
 }
