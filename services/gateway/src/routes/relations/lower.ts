@@ -6,6 +6,7 @@ import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/resp
 import { logError } from '../../utils/logger';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
 import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
+import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWriter';
 import { loadRelationLink } from '../../services/relations/relationLinks';
@@ -82,6 +83,8 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       await refreshNowPlayingAfter(ecoute, { userA: viewerId, userB: otherId, before: ecouteAvant });
       // #16980 — sous Ami, la position partagée s'efface chez qui la voyait.
       await refreshSharedLocationAfter(position, { userA: viewerId, userB: otherId, before: positionAvant });
+      // #17012 — sous Proche, la séance « ensemble » de la paire s'arrête chez les deux.
+      await rejudgeTogetherAfter(ecoute, { userA: viewerId, userB: otherId });
       return sendSuccess(reply, link);
     } catch (error) {
       if (error instanceof z.ZodError) return sendBadRequest(reply, 'Donnees invalides');

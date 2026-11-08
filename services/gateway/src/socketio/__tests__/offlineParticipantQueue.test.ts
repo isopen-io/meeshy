@@ -88,6 +88,37 @@ describe('enqueueForOfflineParticipants — the audience', () => {
     expect(sink.map(e => e.userId).sort()).toEqual(['participant-C', 'user-B']);
   });
 
+  /**
+   * #16687 suite — le drapeau « injoignable pour TOUTES, liste inconnue », posé
+   * quand la LECTURE des conversations du compte tombe au handshake. La socket
+   * n'a alors rejoint AUCUNE room, et un ensemble de rooms ne peut pas dire
+   * cela : le `catch` de `_joinUserConversations` rendait `[]`, qui AFFIRME
+   * « rien n'a échoué ». La file tenait donc la socket pour joignable et
+   * n'enfilait rien, pour toute la vie de cette socket, pendant qu'aucune
+   * diffusion de room ne l'atteignait — et sans recours, puisque ce qui n'est
+   * pas enfilé n'existe nulle part à la reconnexion suivante.
+   *
+   * Le témoin vit ICI autant que chez `AuthHandler` : un champ que personne ne
+   * LIT n'a corrigé personne (cycle 122).
+   */
+  it("enfile pour une socket qui se déclare injoignable pour TOUTES ses conversations", async () => {
+    const { sink, deps } = makeDeps(THREE, ['user-B']);
+    deps.connectedUsers.set('user-B', { allConversationRoomsUnreachable: true });
+
+    await enqueueForOfflineParticipants(deps, { ...base, actorParticipantId: 'participant-A' });
+
+    expect(sink.map(e => e.userId).sort()).toEqual(['participant-C', 'user-B']);
+  });
+
+  it("le drapeau à false ne change rien — seule l'affirmation `true` arme la file", async () => {
+    const { sink, deps } = makeDeps(THREE, ['user-B']);
+    deps.connectedUsers.set('user-B', { allConversationRoomsUnreachable: false });
+
+    await enqueueForOfflineParticipants(deps, { ...base, actorParticipantId: 'participant-A' });
+
+    expect(sink.map(e => e.userId)).toEqual(['participant-C']);
+  });
+
   it("n'enfile PAS pour une socket dont une AUTRE conversation a échoué", async () => {
     const { sink, deps } = makeDeps(THREE, ['user-B']);
     deps.connectedUsers.set('user-B', { unreachableConversations: new Set(['conv-autre']) });

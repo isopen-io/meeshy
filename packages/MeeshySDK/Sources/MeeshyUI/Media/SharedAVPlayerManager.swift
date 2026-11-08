@@ -337,8 +337,15 @@ public final class SharedAVPlayerManager: ObservableObject {
             Self.playbackAudibility(effectiveMuted: effectiveMuted)
         )
         noteSessionSignal(.userStartedPlayback)
-        player.play()
-        player.rate = Float(playbackSpeed.rawValue)
+        // UNE commande de débit, ou aucune (#17035) : chacune est un
+        // aller-retour synchrone vers le serveur média sur la file du lecteur,
+        // que le fil principal attend dès qu'AVFoundation y relit
+        // `loadedTimeRanges`. Jamais `play()` puis `rate`.
+        if let rate = PlaybackStartRateLaw.rateToSet(
+            currentRate: player.rate, speed: Float(playbackSpeed.rawValue)
+        ) {
+            player.rate = rate
+        }
         isPlaying = true
         wantsPlayback = true
         if watchStartTime == nil { watchStartTime = Date() }

@@ -39,6 +39,7 @@
  * laisserait chercher partout.
  */
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { matchesMongoWhere, type MongoDocument } from '../../../__tests__/helpers/mongo-where';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 
@@ -174,19 +175,39 @@ function makeSocket(overrides: Partial<Socket> = {}): jest.Mocked<Socket> {
 
 function makeIO(): jest.Mocked<SocketIOServer> {
   const emitsByRoom = new Map<string, any[][]>();
-  const chain = (rooms: readonly string[]): any => ({
-    to: jest.fn((room: string) => chain([...rooms, room])),
-    except: jest.fn(() => chain(rooms)),
+  const sent: Array<{ rooms: readonly string[]; excepts: readonly string[]; args: any[] }> = [];
+  // `except` RETIENT, il n'avale plus. Un double qui le laissait tomber
+  // enregistrait une diffusion de room comme si elle atteignait TOUT LE MONDE,
+  // y compris les lecteurs qu'elle venait d'exclure : aucun témoin d'exclusion
+  // ne pouvait s'y écrire — un double mente aussi par ce qu'il ACCEPTE.
+  const chain = (rooms: readonly string[], excepts: readonly string[]): any => ({
+    to: jest.fn((room: string) => chain([...rooms, room], excepts)),
+    except: jest.fn((room: string | string[]) =>
+      chain(rooms, [...excepts, ...(Array.isArray(room) ? room : [room])]),
+    ),
     emit: jest.fn((...args: any[]) => {
+      sent.push({ rooms, excepts, args });
       for (const room of rooms) emitsByRoom.set(room, [...(emitsByRoom.get(room) ?? []), args]);
       return true;
     }),
   });
   return {
-    to: jest.fn((room: string) => chain([room])),
+    to: jest.fn((room: string) => chain([room], [])),
     sockets: { adapter: { rooms: new Map() } },
     __emitsByRoom: emitsByRoom,
+    __sent: sent,
   } as unknown as jest.Mocked<SocketIOServer>;
+}
+
+/** Les émissions d'un événement qui ATTEIGNENT réellement une room donnée. */
+function reaching(io: SocketIOServer, event: string, room: string): any[] {
+  const sent = (io as unknown as { __sent: Array<{ rooms: readonly string[]; excepts: readonly string[]; args: any[] }> }).__sent;
+  return sent.filter(
+    (s) =>
+      s.args[0] === event &&
+      (s.rooms.includes(room) || s.rooms.includes(ROOMS.conversation(VALID_CONV_ID))) &&
+      !s.excepts.includes(room),
+  );
 }
 
 function emitsTo(io: SocketIOServer, room: string): any[][] {
@@ -369,5 +390,140 @@ describe('message:edited — le transport socket sert le contrat que le décodeu
     expect(payload.sender).toEqual(
       expect.objectContaining({ id: PARTICIPANT_ID, userId: USER_ID, displayName: 'Alice' })
     );
+  });
+});
+
+/**
+ * Le PLANCHER D'HISTORIQUE sur ce transport — le second de l'édition.
+ *
+ * Un audit adversarial l'a prouvé ROUGE : la garde du cycle 147 avait été
+ * posée sur `broadcastMessageMutation` (le chemin REST) et pas ici, alors que
+ * deux doc-comments du dépôt nomment celui-ci « le transport d'édition
+ * PRIMAIRE ». `CLIENT_EVENTS.MESSAGE_EDIT` est enregistré, validé Zod et
+ * rate-limité : toute socket authentifiée l'atteint. Et #9223 exige qu'un
+ * ancien client continue de fonctionner — c'est précisément l'ancien web qui
+ * l'émettait.
+ *
+ * Les témoins vivent dans CE fichier, et non dans un nouveau : son harnais
+ * porte déjà les seize doubles de module du gestionnaire, et en recopier une
+ * partie est le « double partiel » que le dépôt documente trois fois (il ne se
+ * signale qu'au moment où le module grandit).
+ *
+ * Le double de participants ÉVALUE le `where` : la requête des lecteurs
+ * TARDIFS doit pouvoir ne rien rendre, sans quoi chaque participant est tenu
+ * pour suspect et l'audience se restreint dans tous les témoins du fichier.
+ */
+describe('message:edited — le transport socket respecte le PLANCHER D\'HISTORIQUE', () => {
+  let handler: MessageHandler;
+  let deps: ReturnType<typeof makeDeps>;
+  let socket: jest.Mocked<Socket>;
+  let callback: jest.Mock<any>;
+
+  const HOTE: MongoDocument = {
+    id: PARTICIPANT_ID, userId: USER_ID, conversationId: VALID_CONV_ID, isActive: true,
+    role: 'creator', joinedAt: new Date(CREATED_AT.getTime() - 86_400_000),
+    shareLinkId: null, historyVisibleFrom: null, permissions: null,
+    anonymousSession: null, user: { role: 'USER' },
+  };
+
+  /** Entré APRÈS le message, et son lien REFUSE l'historique. */
+  const invite = (overrides: MongoDocument = {}): MongoDocument => ({
+    id: 'p-invite', userId: null, conversationId: VALID_CONV_ID, isActive: true,
+    role: 'member', joinedAt: new Date(CREATED_AT.getTime() + 60_000),
+    shareLinkId: 'lnk-ferme', historyVisibleFrom: null, permissions: null,
+    anonymousSession: { rights: null }, user: null, ...overrides,
+  });
+
+  const ROOM_INVITE = ROOMS.user('p-invite');
+
+  function armer(participants: MongoDocument[]): void {
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockImplementation(async (args: any) =>
+      participants.filter((row) => matchesMongoWhere(row, args?.where ?? {})),
+    );
+    (deps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue({ createdAt: CREATED_AT });
+    (deps.prisma as unknown as Record<string, unknown>).conversationShareLink = {
+      findMany: jest.fn(async () => [
+        { id: 'lnk-ferme', allowViewHistory: false },
+        { id: 'lnk-ouvert', allowViewHistory: true },
+      ]),
+    };
+  }
+
+  const editer = () =>
+    handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'SECRET APRÈS ÉDITION' }, callback);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockCheckLimit.mockResolvedValue(true);
+    mockGetRateLimitInfo.mockReturnValue({ resetIn: 30000 });
+    mockValidateSocketEvent.mockReturnValue({
+      success: true,
+      data: { messageId: VALID_MSG_ID, content: 'SECRET APRÈS ÉDITION' },
+    });
+    mockGetCacheStore.mockReturnValue({ get: mockCacheGet, set: mockCacheSet });
+    mockCacheGet.mockResolvedValue(null);
+    mockCacheSet.mockResolvedValue(undefined);
+    mockNormalizeConversationId.mockResolvedValue(VALID_CONV_ID);
+    mockResolveMentionedUsers.mockResolvedValue([]);
+
+    deps = makeDeps();
+    handler = new MessageHandler(deps);
+    socket = makeSocket();
+    callback = jest.fn();
+
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, {
+      id: USER_ID, socketId: 'socket-1', isAnonymous: false,
+      language: 'fr', resolvedLanguages: ['fr'], userId: USER_ID, participantId: PARTICIPANT_ID,
+    });
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.mention.findMany as jest.Mock<any>).mockResolvedValue([]);
+  });
+
+  it('un invité SANS historique, entré après le message, ne reçoit pas le texte édité', async () => {
+    armer([HOTE, invite()]);
+
+    await editer();
+
+    // Ni par sa room personnelle, ni par une diffusion de room qui l'inclut.
+    expect(reaching(deps.io, SERVER_EVENTS.MESSAGE_EDITED, ROOM_INVITE)).toEqual([]);
+  });
+
+  it("l'hôte reçoit bien son édition — la porte échoue en montrant moins, pas rien", async () => {
+    armer([HOTE, invite()]);
+
+    await editer();
+
+    const versHote = reaching(deps.io, SERVER_EVENTS.MESSAGE_EDITED, ROOMS.user(USER_ID));
+    expect(versHote.length).toBeGreaterThan(0);
+    expect(JSON.stringify(versHote)).toContain('SECRET APRÈS ÉDITION');
+  });
+
+  it('cas nominal — personne n’est arrivé après le message : la room entière', async () => {
+    armer([HOTE, invite({ joinedAt: new Date(CREATED_AT.getTime() - 3_600_000) })]);
+
+    await editer();
+
+    const versRoom = emitsTo(deps.io, ROOMS.conversation(VALID_CONV_ID)).filter(
+      (c) => c[0] === SERVER_EVENTS.MESSAGE_EDITED,
+    );
+    expect(versRoom.length).toBe(1);
+  });
+
+  it('un invité entré après le message mais par un lien OUVERT reçoit son édition', async () => {
+    armer([HOTE, invite({ shareLinkId: 'lnk-ouvert' })]);
+
+    await editer();
+
+    const versRoom = emitsTo(deps.io, ROOMS.conversation(VALID_CONV_ID)).filter(
+      (c) => c[0] === SERVER_EVENTS.MESSAGE_EDITED,
+    );
+    expect(versRoom.length).toBe(1);
   });
 });

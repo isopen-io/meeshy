@@ -345,6 +345,36 @@ function isStillLive(entry: QueuedMessagePayload, now: number): boolean {
   return Number.isFinite(millis) && now - millis < DELIVERY_QUEUE_TTL_SECONDS * 1000;
 }
 
+/**
+ * Une entrée a-t-elle dépassé la fenêtre de rétention ? Le troisième lecteur de
+ * `enqueuedAt`, et le dernier à traiter une date ILLISIBLE.
+ *
+ * `new Date('…').getTime()` rend `NaN` sur une date informe, et `NaN <= cutoff`
+ * est FALSE : `cleanup()` jugeait donc l'entrée FRAÎCHE, et elle le restait à
+ * chaque passage. Le TTL de la clé ne la sauve pas — `EXPIRE` est rejoué à
+ * CHAQUE enfilage, donc la clé d'un compte actif ne vient jamais à échéance — et
+ * les deux autres filets dépendent d'un événement qui peut ne jamais venir (le
+ * drain exige une reconnexion ; la purge par message, un index qui expire lui
+ * aussi par TTL). `cleanup()` est le seul qui tourne tout seul : le CLAIR d'un
+ * message pouvait donc rester ici, et dans les sauvegardes AOF, au-delà des
+ * 48 h que le doc-comment d'`isTextBearingCopyOf` revendique comme borne.
+ *
+ * Non finie ⇒ PÉRIMÉE, soit l'arbitrage d'`isStillLive` ci-dessus, et non
+ * celui d'`enqueuedAtMillis`, qui RANGE une entrée non datée plutôt que de la
+ * jeter. Les deux ne se contredisent pas, ils répondent à deux questions : le
+ * tri décide d'un ORDRE dans un drain qui a lieu maintenant, celui-ci décide
+ * d'une ÉCHÉANCE. Une entrée dont on ne peut pas montrer qu'elle est dans la
+ * fenêtre ne peut pas servir d'appui à une affirmation de borne.
+ *
+ * Cohérence interne, au passage : une ligne non-JSON est DÉJÀ jetée (le `catch`
+ * de `cleanup`). Garder une ligne JSON dont la date ne se lit pas traitait la
+ * plus lisible des deux avec plus d'indulgence.
+ */
+function isPastRetention(entry: QueuedMessagePayload, cutoff: number): boolean {
+  const millis = new Date(entry.enqueuedAt).getTime();
+  return !Number.isFinite(millis) || millis <= cutoff;
+}
+
 type ReplayPlan = { readonly replay: QueuedMessagePayload[]; readonly retry: QueuedMessagePayload[] };
 
 /** #12822 — `sealAtRest` : la charge appartient à une conversation chiffrée au repos. */
@@ -514,8 +544,16 @@ export class RedisDeliveryQueue {
     const evictCount = withNew.length - MEMORY_QUEUE_MAX_PER_USER;
     const evictIndices = new Set(
       withNew
-        .map((e, index) => ({ ts: new Date(e.enqueuedAt).getTime(), index }))
-        .sort((a, b) => a.ts - b.ts)
+        // `enqueuedAtMillis`, pas `new Date(...).getTime()` : une date illisible
+        // rendait `NaN`, et un comparateur qui rend `NaN` laisse l'ordre
+        // INDÉFINI — on évinçait alors une entrée arbitraire, dont la plus
+        // fraîche. C'est exactement le défaut que `byEnqueuedAt` a fermé pour le
+        // drain, et que le commentaire ci-dessus nomme déjà comme la même
+        // divergence. L'arbitrage du helper vaut ici : une entrée non datée se
+        // range à la FIN, donc ne s'évince pas — son message est toujours en
+        // base, et le drain est la seule occasion de le rejouer.
+        .map((e, index) => ({ ts: enqueuedAtMillis(e), index }))
+        .sort((a, b) => (a.ts === b.ts ? 0 : a.ts - b.ts))
         .slice(0, evictCount)
         .map(({ index }) => index),
     );
@@ -713,7 +751,7 @@ export class RedisDeliveryQueue {
             const stale = entries.filter(raw => {
               try {
                 const parsed = JSON.parse(raw) as QueuedMessagePayload;
-                return new Date(parsed.enqueuedAt).getTime() <= cutoff;
+                return isPastRetention(parsed, cutoff);
               } catch {
                 logger.error('RedisDeliveryQueue: malformed entry in cleanup, dropping', { key, raw: raw.substring(0, 120) });
                 return true;
@@ -736,7 +774,11 @@ export class RedisDeliveryQueue {
     // on schedule even after Redis recovers (drain() reads both, but cleanup
     // must not let them sit unbounded until then).
     for (const [userId, entries] of this.memoryQueue.entries()) {
-      const fresh = entries.filter(e => new Date(e.enqueuedAt).getTime() > cutoff);
+      // Le MÊME prédicat que la branche Redis. Il rendait déjà le bon verdict
+      // ici, mais par accident de la négation (`NaN > cutoff` est faux, donc
+      // l'entrée n'était pas gardée) : un jour où quelqu'un inverse le test
+      // pour le lire plus facilement, le défaut revient en silence.
+      const fresh = entries.filter(e => !isPastRetention(e, cutoff));
       const removed = entries.length - fresh.length;
       totalRemoved += removed;
 

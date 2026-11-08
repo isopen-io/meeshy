@@ -3,6 +3,7 @@ import { apiPath } from '@meeshy/shared/api/prefix';
 import { logError } from '../../utils/logger';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
 import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
+import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 import {
   sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendInternalError,
@@ -154,6 +155,10 @@ export async function bloquer(
   // La position partagée (#16980) : ce que chacun voyait de la position de l'autre s'efface.
   refreshSharedLocationAfter(position, { userA: moi, userB: cibleId, before: positionAvant })
     .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Shared location not refreshed after block', error));
+  // La séance « ensemble » (#17012) : rejugée, elle s'arrête chez les deux.
+  const ensemble = { ...ecoute, report: (error: unknown) => logError(fastify.log, '[BLOCKS] Together not cut after block', error) };
+  rejudgeTogetherAfter(ensemble, { userA: moi, userB: cibleId })
+    .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Together not cut after block', error));
 
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une

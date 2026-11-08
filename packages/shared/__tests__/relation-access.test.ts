@@ -117,6 +117,7 @@ describe('resolveRelationAccess — la matrice niveau -> feature', () => {
     ['listening.category', 'CLOSE'],
     ['listening.title', 'BLOOD'],
     ['talkie', 'CLOSE'],
+    ['together', 'CLOSE'],
     ['bring', 'FRIEND'],
     ['location.live', 'BLOOD'],
     ['location.temporary', 'FRIEND'],
@@ -151,6 +152,7 @@ describe('resolveRelationAccess — soi et rôle', () => {
   it('refuse à soi-même une action dirigée vers un autre (bring, talkie)', () => {
     expect(access({ targetId: USER_A, feature: 'bring' })).toMatchObject({ allowed: false, reason: 'self' });
     expect(access({ targetId: USER_A, feature: 'talkie' })).toMatchObject({ allowed: false, reason: 'self' });
+    expect(access({ targetId: USER_A, feature: 'together' })).toMatchObject({ allowed: false, reason: 'self' });
   });
 
   it.each(['ADMIN', 'BIGBOSS'] as const)('%s lit la présence, et seulement la présence', (viewerRole) => {

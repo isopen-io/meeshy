@@ -68,6 +68,7 @@ public enum class RelationFeature(
     LISTENING_CATEGORY("listening.category", RelationLevel.CLOSE, requiresConsent = true),
     LISTENING_TITLE("listening.title", RelationLevel.BLOOD, requiresConsent = true),
     TALKIE("talkie", RelationLevel.CLOSE, requiresConsent = true, isDirected = true),
+    TOGETHER("together", RelationLevel.CLOSE, isDirected = true),
     BRING("bring", RelationLevel.FRIEND, requiresConsent = true, isDirected = true),
     LOCATION_LIVE("location.live", RelationLevel.BLOOD, requiresConsent = true),
     LOCATION_TEMPORARY("location.temporary", RelationLevel.FRIEND, requiresConsent = true),

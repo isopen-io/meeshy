@@ -16,6 +16,7 @@ import { refuserEnSilence, type DemandeARepondre } from './friend-request-answer
 import type { Resultat } from './friend-request-parties';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
 import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
+import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 
 type DemandeRetirable = DemandeARepondre & { readonly status?: string };
@@ -73,6 +74,8 @@ async function rompreLien(
   await refreshNowPlayingAfter(ecoute, { userA: demande.senderId, userB: demande.receiverId, before: ecouteAvant });
   // #16980 — et la position partagée, sous Ami.
   await refreshSharedLocationAfter(position, { userA: demande.senderId, userB: demande.receiverId, before: positionAvant });
+  // #17012 — le lien rompu : la séance « ensemble » de la paire est rejugée.
+  await rejudgeTogetherAfter(ecoute, { userA: demande.senderId, userB: demande.receiverId });
 }
 
 type DemandesDb = Pick<PrismaClient, 'friendRequest' | 'userRelation'>;

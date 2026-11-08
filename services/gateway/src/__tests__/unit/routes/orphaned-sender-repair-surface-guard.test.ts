@@ -182,6 +182,23 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   // #12822 — relit le seul régime du message enrichi (`encryptionMode`, et
   // celui de sa conversation) pour sceller son entrée de file hors ligne.
   'emitAttachmentUpdated.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #16964 suite — relit `createdAt`, et rien d'autre, pour savoir quels
+  // lecteurs le PLANCHER D'HISTORIQUE écarte du texte d'une édition. Jamais
+  // `sender` : il n'y a aucun expéditeur à réparer sur cette lecture.
+  //
+  // Déclaré sur `editedAudience.ts` et non sur ses appelants : la loi a été
+  // extraite là quand un audit adversarial a montré qu'elle manquait au SECOND
+  // transport de l'édition (le socket). Une règle retapée à chaque site est une
+  // règle qu'un site finira par ne pas avoir — et son unique lecture avec elle.
+  //
+  // C'est la SECONDE lecture de la même ligne quand le message porte des
+  // pièces jointes (`readerSignedDelivery` relit ses cinq colonnes de
+  // protection). Les fusionner serait tentant et serait faux : les deux
+  // lectures n'ont pas le même repli — une protection illisible FERME
+  // (`{}`, la pièce est signée), une date illisible fait lire le plancher de
+  // tous. Les garder séparées est ce qui permet à chacune d'échouer dans son
+  // sens.
+  'editedAudience.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 };
 
 /** `services/` — même règle, troisième racine. */
@@ -198,10 +215,18 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #7377 — la liste des favoris de message charge `sender` pour chaque ligne
   // servie ; sa portée est connue (les conversations des étoiles de la page).
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 1 },
-  // #14619 — la recherche de la liste des conversations : ses deux lectures
-  // (contenu, traductions) chargent `sender` pour la ligne de résultat, et un
-  // seul `withOrphanedSenderRepair` les enveloppe via `Promise.all`, portée =
-  // les conversations du lecteur.
+  // #14619 — la recherche de la liste des conversations : ses lectures
+  // chargent `sender` pour la ligne de résultat, et un seul
+  // `withOrphanedSenderRepair` les enveloppe via `Promise.all`, portée = les
+  // conversations du lecteur.
+  //
+  // TROIS depuis #16574 (`cb3e6d2ab`), qui a ajouté la recherche dans les
+  // TRANSCRIPTIONS à côté du contenu et des traductions. Le lot n'a pas
+  // redéclaré son compte ici : ce cliquet est resté ROUGE sur `dev`, et c'est
+  // exactement la question qu'il est fait pour poser — « une lecture de plus,
+  // est-elle enveloppée ? ». Elle l'est : les trois partagent le même
+  // `Promise.all` sous l'unique `withOrphanedSenderRepair`, donc une seule
+  // application pour trois lectures.
   'search/globalMessageSearch.ts': { kind: 'applies', reads: 3, applications: 1 },
 
   // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire

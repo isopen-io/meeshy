@@ -26,6 +26,7 @@ import { SESSION_SERVER_EVENTS } from './session-event-names.js';
 import { TALKIE_CLIENT_EVENTS, TALKIE_SERVER_EVENTS } from './talkie-event-names.js';
 import { NOW_PLAYING_CLIENT_EVENTS, NOW_PLAYING_SERVER_EVENTS } from './now-playing-event-names.js';
 import { SHARED_LOCATION_CLIENT_EVENTS, SHARED_LOCATION_SERVER_EVENTS } from './shared-location-event-names.js';
+import { TOGETHER_CLIENT_EVENTS, TOGETHER_SERVER_EVENTS } from './together-event-names.js';
 import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-names.js';
 
 // ===== ROOM HELPERS =====
@@ -190,6 +191,7 @@ export const SERVER_EVENTS = {
   ...TALKIE_SERVER_EVENTS,
   ...NOW_PLAYING_SERVER_EVENTS,
   ...SHARED_LOCATION_SERVER_EVENTS,
+  ...TOGETHER_SERVER_EVENTS,
   ...E2EE_SERVER_EVENTS,
   ERROR: 'error',
   NOTIFICATION_NEW: 'notification:new',
@@ -714,6 +716,7 @@ export const CLIENT_EVENTS = {
   ...TALKIE_CLIENT_EVENTS,
   ...NOW_PLAYING_CLIENT_EVENTS,
   ...SHARED_LOCATION_CLIENT_EVENTS,
+  ...TOGETHER_CLIENT_EVENTS,
   // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un
   // événement SERVEUR→client (`SERVER_EVENTS.USER_STATUS`, écouté par
   // `presence.service.ts`, `websocket.service.ts`, iOS `PresenceManager`), et
