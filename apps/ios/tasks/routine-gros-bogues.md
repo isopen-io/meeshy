@@ -34,7 +34,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Relu le 2026-11-08 (audit 09) : la recette de #16506 doit aussi couvrir OPUS-14 (effets de visage en paysage), une vidéo qui change de tenue entre deux segments (mise en bandes sur la toile du premier, `CameraSegmentOrientation.swift:44-60`) et, pour #16505, l'écart de teinte d'un même look entre l'aperçu (trames vidéo) et la photo (traitement photo).
 
 ## OPUS-2 — Le catalogue de filtres est trop mince pour dépasser le marché
-- Statut : décision attendue
+- Statut : en cours (#17000) — les huit ambiances (Naturel, Doré, Pellicule, Nuit douce, Clair, Velours, Ciel, Noir et blanc) livrées en cube 3D au viseur et en appel ; restent le pavé 2D chaleur/contraste, le curseur d'intensité et la recette sur peaux claires et foncées sur iPhone
 - Signalé par : audit, le 2026-11-06
 - Point d'origine : audit B3
 - Constat : `VideoFilterPreset` (`Main/Services/VideoFilterPipeline.swift:74`) n'a que 5 couleurs (Naturel, Chaud, Froid, Vif, Doux) partagées par l'appel et le viseur ; `CallFaceEffect` 4 effets stylisés.

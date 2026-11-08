@@ -49,7 +49,7 @@ struct RecentMediaCell: View {
                         HStack {
                             Image(systemName: "video.fill")
                                 .font(.caption2)
-                            Text(formatDuration(asset.duration))
+                            Text(MediaFormat.duration(asset.duration))
                                 .font(.caption2.weight(.semibold))
                             Spacer()
                         }
@@ -182,9 +182,5 @@ struct RecentMediaCell: View {
             }
             Spacer()
         }
-    }
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        MediaFormat.duration(seconds)
     }
 }

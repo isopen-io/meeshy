@@ -26,7 +26,8 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Components/CameraModel.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        let video = url.deletingLastPathComponent().appendingPathComponent("CameraModel+Video.swift")
+        return try String(contentsOf: url, encoding: .utf8) + "\n" + String(contentsOf: video, encoding: .utf8)
     }
 
     private func body(from startMarker: String, to endMarker: String, in source: String) throws -> String {
@@ -39,7 +40,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_switchCamera_whileRecording_doesNotReconfigureInputInPlace() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "func switchCamera() {", to: "private func performCameraSwitch", in: source)
+        let fn = try body(from: "func switchCamera() {", to: "func performCameraSwitch", in: source)
 
         XCTAssertTrue(
             fn.contains("if isRecordingVideo"),
@@ -61,7 +62,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_switchCamera_guardsReentrancyWhileAlreadySwitching() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "func switchCamera() {", to: "private func performCameraSwitch", in: source)
+        let fn = try body(from: "func switchCamera() {", to: "func performCameraSwitch", in: source)
         XCTAssertTrue(
             fn.contains("guard !isSwitchingCameraDuringRecording else { return }"),
             "switchCamera() must no-op while a previous switch is still settling — " +
@@ -72,7 +73,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_stopRecording_queuesRequestWhenCalledMidSwitch() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "func stopRecording() {", to: "func stop() {", in: source)
+        let fn = try body(from: "func stopRecording() {", to: "private func handleSegmentFinished", in: source)
         XCTAssertTrue(
             fn.contains("pendingStopRequested = true"),
             "stopRecording() called while a camera switch is mid-flight must " +
@@ -97,7 +98,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_handleSegmentFinished_onlyMergesWhenMoreThanOneSegment() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "private func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
+        let fn = try body(from: "func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
         XCTAssertTrue(
             fn.contains("segments.count > 1 ? await Self.mergeSegments(segments) : segments.first"),
             "The fast path (no camera switch occurred, exactly one segment) must " +
@@ -109,7 +110,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_handleSegmentFinished_midSwitch_neverTogglesIsRecordingVideoFalse() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "private func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
+        let fn = try body(from: "func handleSegmentFinished", to: "nonisolated static func mergeSegments", in: source)
         guard let switchBranchStart = fn.range(of: "if isSwitchingCameraDuringRecording {") else {
             XCTFail("Could not locate the mid-switch branch in handleSegmentFinished"); return
         }
@@ -307,7 +308,8 @@ final class CameraRecordingInterruptionTests: XCTestCase {
 
     func test_laFinDeSegmentLitLErreurAuLieuDeLaJeter() throws {
         let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
-        let fn = corps(modele, de: "private func handleSegmentFinished", a: "private func resumeRecordingAfterSwitch")
+            + "\n" + source("Meeshy/Features/Main/Components/CameraModel+Video.swift")
+        let fn = corps(modele, de: "func handleSegmentFinished", a: "private func resumeRecordingAfterSwitch")
         XCTAssertFalse(fn.isEmpty)
         XCTAssertFalse(fn.contains("guard error == nil"),
                        "Une erreur n'est pas une perte : AVFoundation livre un fichier valide après une interruption.")
@@ -317,6 +319,7 @@ final class CameraRecordingInterruptionTests: XCTestCase {
 
     func test_laPriseInterrompueEstAnnoncee() throws {
         let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+            + "\n" + source("Meeshy/Features/Main/Components/CameraModel+Video.swift")
         let fn = corps(modele, de: "private func deliverInterruptedRecording", a: "private func deliverRecording")
         XCTAssertTrue(fn.contains("await deliverRecording(token: token)"))
         XCTAssertTrue(fn.contains("CameraTakeNotice.announceInterruptedRecording()"),
@@ -325,7 +328,7 @@ final class CameraRecordingInterruptionTests: XCTestCase {
 
     /// Une photo sans données ne sort plus en silence.
     func test_unePhotoSansDonnees_seDit() throws {
-        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let modele = try source("Meeshy/Features/Main/Components/CameraModel+PhotoCapture.swift")
         let fn = corps(modele, de: "didFinishProcessingPhoto photo:", a: "let nom = ComposerPhotoEncoding")
         XCTAssertEqual(fn.components(separatedBy: "self.photoWasLost()").count - 1, 2)
         let perte = corps(modele, de: "func photoWasLost()", a: "/// Le tic du cadre")
@@ -335,6 +338,7 @@ final class CameraRecordingInterruptionTests: XCTestCase {
     /// Un assemblage raté garde le dernier segment ; les autres ne restent pas dans `tmp/`.
     func test_assemblageRate_neLaissePasDeSegmentsOrphelins() throws {
         let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+            + "\n" + source("Meeshy/Features/Main/Components/CameraModel+Video.swift")
         let fn = corps(modele, de: "private func deliverRecording", a: "nonisolated static func mergeSegments")
         XCTAssertTrue(fn.contains("for segment in segments.dropLast()"))
     }

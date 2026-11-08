@@ -153,7 +153,7 @@ final class ComposerCameraSwitchFreezeTests: XCTestCase {
     }
 
     func test_resumeAfterSwitch_waitsForTheConnection_beforeReopeningTheSegment() throws {
-        let modele = AppSourceGuard.stripComments(try Self.code("Meeshy/Features/Main/Components/CameraModel.swift"))
+        let modele = AppSourceGuard.stripComments(try Self.code("Meeshy/Features/Main/Components/CameraModel+Video.swift"))
         let debut = try XCTUnwrap(modele.range(of: "private func resumeRecordingAfterSwitch()"))
         let fin = try XCTUnwrap(modele.range(of: "private func reopenSegmentAfterSwitch()",
                                              range: debut.upperBound..<modele.endIndex))

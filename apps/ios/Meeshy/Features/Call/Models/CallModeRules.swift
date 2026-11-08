@@ -132,7 +132,7 @@ enum CallEffectsCategory: String, CaseIterable, Sendable {
 
 enum CallEffectsModeRule {
     static let faces: [CallFaceEffect] = CallFaceEffect.allCases
-    static let colors: [VideoFilterPreset] = VideoFilterPreset.allCases
+    static let colors: [VideoFilterPreset] = VideoFilterPreset.catalog
 
     static func colorSelection(of config: VideoFilterConfig) -> VideoFilterPreset {
         config.activePreset ?? .natural

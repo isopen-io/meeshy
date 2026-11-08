@@ -111,7 +111,7 @@ final class VideoFilterPresetTests: XCTestCase {
     }
 
     func test_allCases_returnsAllPresets() {
-        XCTAssertEqual(VideoFilterPreset.allCases.count, 5)
+        XCTAssertEqual(VideoFilterPreset.allCases.count, 12)
     }
 
     func test_presetPreservesAdvancedFilters() {

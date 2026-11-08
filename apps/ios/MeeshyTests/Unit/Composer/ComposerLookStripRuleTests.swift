@@ -7,7 +7,7 @@ final class ComposerLookStripRuleTests: XCTestCase {
 
     func test_items_filters_startWithNone() {
         XCTAssertEqual(ComposerLookStripRule.items(.filters).first, .filter(.natural))
-        XCTAssertEqual(ComposerLookStripRule.items(.filters).count, VideoFilterPreset.allCases.count)
+        XCTAssertEqual(ComposerLookStripRule.items(.filters).count, VideoFilterPreset.catalog.count)
     }
 
     func test_items_frames_noneThenClassicsThenCatalog_withoutDuplicates() {
