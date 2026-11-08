@@ -201,4 +201,20 @@ final class ListeningCenterTests: XCTestCase {
         XCTAssertTrue(AvatarListeningBand.isShown(avatarSize: AvatarContext.conversationHeaderExpanded.size))
         XCTAssertTrue(AvatarListeningBand.isShown(avatarSize: AvatarContext.profileSheet.size))
     }
+
+    /// Le SDK parcourt `band(for:).values` depuis une tâche hors du MainActor : la demande remonte le flux et y exécute
+    /// ses `map`. Isolées au MainActor, elles arrêtaient l'app à l'ouverture d'un direct (EXC_BREAKPOINT,
+    /// `dispatch_assert_queue`, 2026-11-08, #17069).
+    func test_theBandStream_isReadableOffTheMainActor() async {
+        let rig = makeRig()
+        rig.sut.receive(served())
+        nonisolated(unsafe) let stream = rig.sut.band(for: "alice")
+
+        let first = await Task.detached { () -> AvatarListening?? in
+            for await value in stream.values { return value }
+            return nil
+        }.value
+
+        XCTAssertEqual(first??.text, ListeningBandText.categoryLabel(.music))
+    }
 }

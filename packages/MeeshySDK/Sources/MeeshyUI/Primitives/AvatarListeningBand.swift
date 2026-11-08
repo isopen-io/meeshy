@@ -9,7 +9,7 @@ import SwiftUI
 
 /// Ce que l'app remet au bandeau : le glyphe de la catégorie (décoratif), le texte qui défile, et la phrase que
 /// VoiceOver entend.
-public struct AvatarListening: Equatable, Sendable {
+nonisolated public struct AvatarListening: Equatable, Sendable {
     public let glyph: String
     public let text: String
     public let spoken: String
