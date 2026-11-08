@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,8 +49,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.IncomingCallAction
+import me.meeshy.sdk.model.call.IncomingCallChoices
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -59,7 +64,8 @@ import me.meeshy.ui.theme.MeeshySpacing
  * ([onAccept] est déjà l'accepter-sous-permissions). L'arrivée est annoncée à TalkBack. Un appel vidéo
  * 1:1 propose au-dessus des actions « Activer le son » de l'aperçu avant décroché ([preview]). Sur un
  * écran court ou en grande police, les actions gardent leur place et l'identité se compacte
- * ([IncomingCallIdentity]).
+ * ([IncomingCallIdentity]). Un appel vidéo offre aussi « Sans vidéo » entre les deux ([IncomingCallChoices], vue P17) :
+ * décrocher sans jamais ouvrir ma caméra ([onAcceptWithoutVideo]).
  */
 @Composable
 internal fun IncomingCallScreen(
@@ -72,6 +78,7 @@ internal fun IncomingCallScreen(
     onDeclineWithMessage: ((String) -> Unit)? = null,
     preview: CallPreviewUi = CallPreviewUi(),
     onTogglePreviewSound: () -> Unit = {},
+    onAcceptWithoutVideo: () -> Unit = onAccept,
 ) {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
@@ -138,29 +145,26 @@ internal fun IncomingCallScreen(
                 )
                 Spacer(Modifier.height(spacing.actionGap))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(60.dp), verticalAlignment = Alignment.Top) {
-                IncomingAction(
-                    icon = Icons.Filled.CallEnd,
-                    tint = CallPalette.Decline,
-                    caption = stringResource(R.string.call_incoming_decline),
-                    description = stringResource(R.string.call_action_decline),
-                    hint = stringResource(R.string.call_incoming_decline_hint),
-                    onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onDecline()
-                    },
-                )
-                IncomingAction(
-                    icon = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
-                    tint = CallPalette.Accept,
-                    caption = stringResource(R.string.call_incoming_accept),
-                    description = stringResource(R.string.call_action_accept),
-                    hint = stringResource(R.string.call_incoming_accept_hint),
-                    onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onAccept()
-                    },
-                )
+            val actions = IncomingCallChoices.actions(state.isVideoCall)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(IncomingCallChoices.buttonSpacingDp(actions.size).dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                actions.forEach { action ->
+                    IncomingChoice(
+                        action = action,
+                        isVideoCall = state.isVideoCall,
+                        compact = actions.size > 2,
+                        onPerform = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            when (action) {
+                                IncomingCallAction.Decline -> onDecline()
+                                IncomingCallAction.AnswerWithoutVideo -> onAcceptWithoutVideo()
+                                IncomingCallAction.Accept -> onAccept()
+                            }
+                        },
+                    )
+                }
             }
         }
     }
@@ -259,6 +263,43 @@ private fun DeclineWithMessageButton(onClick: () -> Unit) {
     }
 }
 
+/** Un bouton de l'écran entrant, tel que la règle le nomme : Refuser (rouge), Sans vidéo (verre neutre, glyphe vert), Répondre. */
+@Composable
+private fun IncomingChoice(action: IncomingCallAction, isVideoCall: Boolean, compact: Boolean, onPerform: () -> Unit) {
+    // Trois boutons doivent tenir sur 320 dp, même en très grande police : chaque légende tient alors sur une ligne bornée.
+    val width = if (compact) Modifier.widthIn(max = COMPACT_ACTION_MAX_WIDTH) else Modifier
+    when (action) {
+        IncomingCallAction.Decline -> IncomingAction(
+            icon = Icons.Filled.CallEnd,
+            tint = CallPalette.Decline,
+            caption = stringResource(R.string.call_incoming_decline),
+            description = stringResource(R.string.call_action_decline),
+            hint = stringResource(R.string.call_incoming_decline_hint),
+            onClick = onPerform,
+            modifier = width,
+        )
+        IncomingCallAction.AnswerWithoutVideo -> IncomingAction(
+            icon = Icons.Filled.VideocamOff,
+            tint = CallPalette.Accept,
+            caption = stringResource(R.string.call_incoming_answer_no_video),
+            description = stringResource(R.string.call_incoming_answer_no_video_label),
+            hint = stringResource(R.string.call_incoming_answer_no_video_hint),
+            onClick = onPerform,
+            prominent = false,
+            modifier = width,
+        )
+        IncomingCallAction.Accept -> IncomingAction(
+            icon = if (isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
+            tint = CallPalette.Accept,
+            caption = stringResource(R.string.call_incoming_accept),
+            description = stringResource(R.string.call_action_accept),
+            hint = stringResource(R.string.call_incoming_accept_hint),
+            onClick = onPerform,
+            modifier = width,
+        )
+    }
+}
+
 @Composable
 private fun IncomingAction(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -267,13 +308,17 @@ private fun IncomingAction(
     description: String,
     hint: String,
     onClick: () -> Unit,
+    prominent: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        // Non proéminent : un verre neutre teinté par son seul glyphe, pour se lire comme une variante de Répondre.
         CallCircleButton(
             icon = icon,
-            background = tint,
+            background = if (prominent) tint else CallGlassTone.OverPicture.neutralFill,
             contentDescription = "$description. $hint",
             onClick = onClick,
+            glyph = if (prominent) Color.White else tint,
         )
         Spacer(Modifier.height(MeeshySpacing.smPlus))
         Text(
@@ -281,7 +326,11 @@ private fun IncomingAction(
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,
             color = tint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.clearAndSetSemantics { },
         )
     }
 }
+
+private val COMPACT_ACTION_MAX_WIDTH = 80.dp

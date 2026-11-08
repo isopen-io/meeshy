@@ -518,10 +518,24 @@ class CallViewModel @Inject constructor(
         }
     }
 
+    /**
+     * « Sans vidéo » (vue P17, iOS `CallAnswerWithoutVideo`) : décrocher un appel vidéo sans jamais ouvrir ma caméra. La
+     * réponse n'annonce la vidéo qu'en réception : je vois l'autre, il voit mon avatar, et rien ne part de ma caméra.
+     * Allumer ma caméra ensuite passe par l'escalade ([localCameraPending]). Sur un appel audio, c'est [accept].
+     */
+    fun acceptWithoutVideo() {
+        if (config.isVideo && callState == CallState.Ringing(isOutgoing = false)) {
+            localCameraPending = true
+            media = media.copy(isCameraOn = false)
+        }
+        accept()
+    }
+
     /** Local user accepts an incoming call — answer the FSM, join the room, open the media. */
     fun accept() {
         dispatch(CallEvent.LocalAnswer)
         if (callId.isBlank()) return
+        val opensCamera = config.isVideo && !localCameraPending
         coordinator.holdIncomingSignals(viewModelScope, callId)
         // Join WITH the ACK (iOS emitCallJoinWithAck parity): it confirms this socket
         // is in the room AND carries the ICE servers, so media opens straight away.
@@ -530,10 +544,11 @@ class CallViewModel @Inject constructor(
             when (val result = signalManager.emitJoinAwaitingAck(callId)) {
                 is CallJoinResult.Success -> {
                     coordinator.startIncoming(
-                        viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo,
+                        viewModelScope, callId, result.iceServers, config.peerId, selfId, opensCamera,
                         ::onMediaConnected, ::onMediaStalled, speakerOn = media.isSpeakerOn,
                         conversationId = config.conversationId,
                     )
+                    if (config.isVideo && !opensCamera) emitIfIdentified { signalManager.emitToggleVideo(it, enabled = false) }
                     if (callState.isActive) turnCredentials.afterConfigure(callId, result.iceServers)
                 }
                 is CallJoinResult.Failure -> {

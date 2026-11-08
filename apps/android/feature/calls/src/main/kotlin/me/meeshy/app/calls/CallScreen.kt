@@ -310,6 +310,10 @@ fun CallScreen(
                     },
                     preview = preview,
                     onTogglePreviewSound = viewModel::togglePreviewSound,
+                    // « Sans vidéo » (P17) : seul le micro est demandé, et ma caméra ne s'ouvre jamais.
+                    onAcceptWithoutVideo = {
+                        permissionGate.answerIncoming(isVideo = false) { answer -> answerWithoutVideo(viewModel, answer) }
+                    },
                 )
                 state.status == CallStatus.OUTGOING_RINGING -> CallOutgoingRingingScreen(
                     state = state,
@@ -446,6 +450,10 @@ fun CallScreen(
 }
 
 /** Ce que « Accepter » devient une fois les permissions tranchées (micro refusé ⇒ raccrocher, caméra refusée ⇒ audio). */
+private fun answerWithoutVideo(viewModel: CallViewModel, answer: IncomingCallAnswer) {
+    if (answer == IncomingCallAnswer.HangUp) viewModel.decline() else viewModel.acceptWithoutVideo()
+}
+
 private fun answerIncoming(viewModel: CallViewModel, answer: IncomingCallAnswer) {
     when (answer) {
         IncomingCallAnswer.HangUp -> viewModel.decline()
