@@ -35,7 +35,15 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import Fastify, { type FastifyInstance } from 'fastify';
 
-const markMessagesAsReceived = jest.fn(async () => 1);
+// Typé avec SES paramètres : sans eux, `jest.fn(async () => 1)` se déclare à
+// zéro argument et `toHaveBeenCalledWith(id, conv)` devient une erreur de
+// typecheck — invisible sous ts-jest (qui transpile sans types) et visible au
+// cliquet `tsc-never-loaded-tests-ratchet`, qui passe `tsconfig.test.json` sur
+// TOUS les fichiers de test. Et le type est ce qui dit ce qu'on assert : la clé
+// est un `Participant.id`, la seconde un `conversationId`.
+const markMessagesAsReceived = jest.fn(
+  async (_participantId: string, _conversationId: string): Promise<number> => 1,
+);
 
 jest.mock('../../../services/MessageReadStatusService', () => ({
   MessageReadStatusService: class {
