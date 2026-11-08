@@ -225,10 +225,10 @@ final class ListeningCenterTests: XCTestCase {
     func test_theBandStream_isReadableOffTheMainActor() async {
         let rig = makeRig()
         rig.sut.receive(served())
-        nonisolated(unsafe) let stream = rig.sut.band(for: "alice")
+        let stream = OffMainPublisher(publisher: rig.sut.band(for: "alice"))
 
         let first = await Task.detached { () -> AvatarListening?? in
-            for await value in stream.values { return value }
+            for await value in stream.publisher.values { return value }
             return nil
         }.value
 
