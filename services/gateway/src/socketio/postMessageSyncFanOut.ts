@@ -188,9 +188,10 @@ export async function syncConversationListOnNewMessage(
     // inline qui vivait ici n'excluait l'expéditeur que par `Participant.id`,
     // correct sur CE chemin mais faux pour tout appelant portant un `User.id`.
     // La liste déjà chargée lui est passée — pas de seconde requête. Un
-    // `senderId` absent fait no-op (`emitUnreadCountsToRecipients` retourne
-    // tôt sans lui) — pas d'exclusion à faire, jamais une raison de sauter
-    // l'enfilage ci-dessus.
+    // `senderId` absent ne fait PLUS no-op (#16691) : il n'y a pas d'exclusion
+    // à faire, donc l'audience est l'ensemble des participants vivants et la
+    // pastille part. Cette phrase décrivait le gate `!senderId` que #3614
+    // avait retiré de l'enfilage ci-dessus en le laissant sur la pastille.
     await emitUnreadCountsToRecipients({
       io: ctx.io,
       prisma: ctx.prisma,

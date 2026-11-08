@@ -16,6 +16,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendForbidden, sendConflict, sendInternalError } from '../../utils/response.js';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { COMMUNITY_ACTIVE_COUNTS, flattenCommunityCounts } from './serialization';
+import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
 
 const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
 
@@ -86,7 +87,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
 const community = await fastify.prisma.community.findFirst({
         where: { id, isActive: true },
-        select: { createdBy: true, identifier: true }
+        select: { createdBy: true, identifier: true, isPrivate: true }
       });
 
       if (!community) {
@@ -124,6 +125,13 @@ const community = await fastify.prisma.community.findFirst({
         updateData.identifier = newIdentifier;
       }
 
+      // #16723 — passer en privée fait entrer les occupants des salons AVANT la
+      // bascule ; ceux qui ne peuvent pas entrer en sortent APRÈS.
+      const closesSalons = isBecomingPrivate({ before: community.isPrivate, requested: validatedData.isPrivate });
+      const outsiders = closesSalons
+        ? await admitSalonOccupants(fastify.prisma, { communityId: id, createdBy: community.createdBy })
+        : [];
+
       const updatedCommunity = await fastify.prisma.community.update({
         where: { id },
         data: updateData,
@@ -139,6 +147,12 @@ const community = await fastify.prisma.community.findFirst({
           _count: { select: COMMUNITY_ACTIVE_COUNTS }
         }
       });
+      if (closesSalons) {
+        await closeSalonsAfterSwitch(
+          { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler },
+          { communityId: id, createdBy: community.createdBy, outsiders, now: new Date() },
+        );
+      }
 
       return sendSuccess(reply, flattenCommunityCounts(updatedCommunity));
     } catch (error) {

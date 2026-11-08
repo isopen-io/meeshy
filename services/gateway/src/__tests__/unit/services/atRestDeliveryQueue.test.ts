@@ -311,7 +311,7 @@ describe('les deux sites qui enfilent du texte déclarent le régime', () => {
         io: { to: () => ({ emit: () => undefined }) } as never,
         readStatusService: {} as never,
         deliveryQueue: { enqueue: async (...args: unknown[]) => { calls.push(args); } },
-        connectedUsers: new Set<string>(),
+        connectedUsers: new Map(),
       },
       {
         normalizedId: CONV,

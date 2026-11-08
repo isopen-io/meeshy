@@ -200,7 +200,7 @@ describe.each(['server', 'hybrid'])('#12822 (H2) — la file hors ligne d’un m
     const queue = new RedisDeliveryQueue(redis.cacheStore, deliveryQueueSealer(async () => service));
 
     await enqueueForOfflineParticipants(
-      { deliveryQueue: queue, prisma: offlineParticipant as never, connectedUsers: new Set<string>() },
+      { deliveryQueue: queue, prisma: offlineParticipant as never, connectedUsers: new Map() },
       { ...queued, eventType: 'link-message' } as OfflineParticipantQueueParams,
     );
 

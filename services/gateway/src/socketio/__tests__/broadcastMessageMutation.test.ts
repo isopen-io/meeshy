@@ -396,3 +396,81 @@ describe('broadcastMessageMutation — message:edited d’une réponse dont la c
     expect(JSON.stringify(edited[0].payload)).not.toContain('4271');
   });
 });
+
+/**
+ * #16689 — l'HYGIÈNE DE CHAMP de la charge diffusée, pas son audience.
+ *
+ * `clientMessageId` est l'id OPTIMISTE de l'auteur. Les quatre chemins d'ENVOI
+ * le retirent déjà de la charge des pairs (`stripClientMessageId`), avec leur
+ * raison écrite à `routes/links/messages.ts:85` : « un rejeu portant le
+ * `clientMessageId` de l'auteur ferait fuiter son espace d'ids optimistes dans
+ * celui d'un autre utilisateur ».
+ *
+ * Les trois transports REST d'ÉDITION étalent la ligne Prisma BRUTE
+ * (`...withServedEditAttribution(updatedMessage, …)`), donc TOUS les scalaires,
+ * `clientMessageId` compris. Et le type ne pouvait pas le voir :
+ * `MessageEditedMutationPayload` déclare le NOYAU étroit, mais le contrôle des
+ * propriétés excédentaires est invisible à travers un SPREAD (§ CLAUDE.md,
+ * cycle 106) — ce que ces témoins reproduisent en passant une VARIABLE, comme
+ * la production, et non un littéral frais.
+ *
+ * Le piège est armé côté web : `realtime-apply.ts:244-246` pose comme INVARIANT
+ * qu'un écho de pair ne porte jamais de cid — « sa présence PROUVE que cet écho
+ * est le nôtre ». Un pair prend donc l'édition d'un autre pour la confirmation
+ * de son propre envoi optimiste.
+ */
+describe('broadcastMessageMutation — hygiène de champ (#16689)', () => {
+  const authored = {
+    id: 'msg-1',
+    conversationId: 'conv-1',
+    senderId: 'user-A',
+    content: 'édité',
+    messageType: 'text',
+    createdAt: new Date('2026-11-07T10:00:00Z'),
+    clientMessageId: 'cid-de-l-auteur',
+  };
+
+  it("ne diffuse PAS le clientMessageId de l'auteur à la room", async () => {
+    const emitted: Emitted[] = [];
+
+    await broadcastMessageMutation({
+      prisma: makePrisma(),
+      manager: makeManager(emitted),
+      ...base,
+      eventType: 'edited',
+      payload: authored as any,
+    });
+
+    const toRoom = emitted.find(
+      (e) => e.event === SERVER_EVENTS.MESSAGE_EDITED && e.room === 'conversation:conv-1'
+    );
+    expect(toRoom).toBeDefined();
+    expect(toRoom!.payload).not.toHaveProperty('clientMessageId');
+    // Et la charge n'est pas TRONQUÉE pour autant : le reste du noyau survit.
+    expect(toRoom!.payload).toMatchObject({
+      id: 'msg-1',
+      conversationId: 'conv-1',
+      senderId: 'user-A',
+      content: 'édité',
+      messageType: 'text',
+    });
+  });
+
+  it("ne PERSISTE PAS le clientMessageId de l'auteur dans la file hors ligne", async () => {
+    const emitted: Emitted[] = [];
+    const enqueue = jest.fn(async (_params: any) => {});
+
+    await broadcastMessageMutation({
+      prisma: makePrisma(),
+      manager: makeManager(emitted, { enqueue }),
+      ...base,
+      eventType: 'edited',
+      payload: authored as any,
+    });
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    const queued = (enqueue.mock.calls[0][0] as any).payload;
+    expect(queued).not.toHaveProperty('clientMessageId');
+    expect(queued).toMatchObject({ id: 'msg-1', content: 'édité' });
+  });
+});

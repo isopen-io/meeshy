@@ -412,8 +412,8 @@ export class AuthHandler {
     // #3706 — la room de l'appareil E2EE lié à CETTE session : ses seules enveloppes y arrivent.
     await joinE2EEDeviceRoom(socket, this.prisma, { userId: user.id, sessionId: decoded.sid });
 
-    await this._joinUserConversations(socket, user.id, false);
-
+    const failedRooms = await this._joinUserConversations(socket, user.id, false);
+    if (failedRooms.length > 0) socketUser.unreachableConversations = new Set(failedRooms);
     const isFirstSocket = this._registerUser(user.id, socketUser, socket);
     scheduleTokenExpiry(socket, decoded.exp);
     // #10440 — le socket n'est plus celui d'un invité : le minuteur de lien
@@ -631,6 +631,7 @@ export class AuthHandler {
       });
     }
 
+    if (guestJoinFailed.length > 0) socketUser.unreachableConversations = new Set(guestJoinFailed);
     const isFirstSocket = this._registerUser(participant.id, socketUser, socket);
     this.guestLinkWatch.schedule(socket, participant, linkExpiresAt);
 
@@ -953,7 +954,7 @@ export class AuthHandler {
     return pending;
   }
 
-  private async _joinUserConversations(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
+  private async _joinUserConversations(socket: Socket, userId: string, isAnonymous: boolean): Promise<string[]> {
     try {
       let conversations: { conversationId: string }[] = [];
 
@@ -989,8 +990,10 @@ export class AuthHandler {
         });
       }
       logger.debug('user joined conversation rooms', { userId, count: conversationIds.length - stillFailed.length });
+      return stillFailed;
     } catch (error) {
       logger.error('error joining conversations for user', { userId, error });
+      return [];
     }
   }
 }

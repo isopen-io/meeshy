@@ -11,8 +11,9 @@ import { ProfileImageButton, useProfileImageViewer } from '@/components/profile-
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { PublicProfile } from '@/lib/api/public-profile';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useDecorDesigns } from '@/lib/profile-decor/use-decor-designs';
+import { useListeningBand } from '@/lib/now-playing/listening-band';
 import type { ProfilePresenceLine } from '@/lib/profile/presence-line';
 import type { ProfileActionKind, ProfileRelation } from '@/lib/profile/relation';
 import { initialsOf } from '@/lib/view/conversation';
@@ -73,6 +74,8 @@ export const ProfileHero = memo(function ProfileHero({
   /* LE DÉCOR D'UN AUTRE (#10632) — servi avec son profil ; absent (ancien serveur) = le rendu d'avant, à l'octet. */
   const designs = useDecorDesigns(profile.decor);
   const scheme = useScheme();
+  /* CE QU'IL ÉCOUTE OU REGARDE (#16729) — au détail que son cercle ouvre, tel que servi. */
+  const listening = useListeningBand(profile.id, currentInterfaceLanguage());
   const ringExtra = designs.ring === null ? 0 : (ringBoxSize(90) - 90) / 2;
   /* Le film d'un cadre illustré déborde au-dessus sur la bannière, et le nom passe dessous (#15157). */
   const decorSpill = ringDecorSpill(designs.ring, ringBoxSize(90));
@@ -85,6 +88,7 @@ export const ProfileHero = memo(function ProfileHero({
       {...(profile.avatar === null ? {} : { src: profile.avatar })}
       {...(presence === null ? {} : { presence: presence.status })}
       {...(mood === undefined ? {} : { mood })}
+      {...(listening === undefined ? {} : { listening })}
     />
   );
   const paint = bannerPaint({ image: profile.banner, design: designs.banner });

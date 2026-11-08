@@ -156,7 +156,18 @@ export async function emitUnreadCountsToRecipients(params: {
   onError?: (error: unknown) => void;
 }): Promise<void> {
   const { io, prisma, readStatusService, conversationId, senderId, participants, bridgeService, onError } = params;
-  if (!io || !senderId) return;
+  // #16691 — le gate `!senderId` a été RETIRÉ, le gate `!io` reste.
+  //
+  // Sans auteur il n'y a personne à EXCLURE : l'ensemble correct des
+  // destinataires est « tous les participants vivants », jamais ∅. Le gate ne
+  // protégeait rien, il VIDAIT l'audience — un message d'agent ou système
+  // (`Message.senderId` absent de l'objet JS reçu par le transport REST/ZMQ)
+  // déclenchait `message:new`, l'enfilage hors ligne et `conversation:updated`,
+  // et aucune pastille ne partait pour personne. #3614 avait retiré ce MÊME
+  // gate de l'enfilage hors ligne en le laissant ici.
+  //
+  // `!io`, lui, se garde : il n'y a rien pour émettre.
+  if (!io) return;
 
   try {
     const all =
@@ -166,7 +177,14 @@ export async function emitUnreadCountsToRecipients(params: {
         select: { id: true, userId: true, joinedAt: true },
       }));
 
-    const recipients = all.filter((p) => p.id !== senderId && p.userId !== senderId);
+    // L'exclusion ne tourne PAS quand il n'y a pas d'auteur, et ce n'est pas
+    // une micro-optimisation : `p.userId !== senderId` est FAUX pour un
+    // participant ANONYME dès que `senderId` est nul (`null !== null`). Laisser
+    // le filtre tourner à vide exclurait donc exactement la population des
+    // liens de partage — la pastille du correctif retirée à ceux qu'il sert.
+    const recipients = senderId
+      ? all.filter((p) => p.id !== senderId && p.userId !== senderId)
+      : all;
     // A single-participant conversation is common right after a share link is
     // created, and the count service costs up to two queries.
     if (recipients.length === 0) return;
