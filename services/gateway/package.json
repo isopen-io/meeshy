@@ -46,7 +46,7 @@
     "@prisma/client": "^6.19.3",
     "@signalapp/libsignal-client": "0.106.1",
     "@socket.io/redis-adapter": "^8.3.0",
-    "@tus/file-store": "^2.1.1",
+    "@tus/file-store": "^2.1.2",
     "@tus/server": "^2.4.7",
     "axios": "^1.21.0",
     "bcrypt": "^6.0.0",
