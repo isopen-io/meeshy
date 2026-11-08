@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
+import { currentSessionOf } from '../../services/auth/current-session';
 import { processTalkieRelay } from '../../services/talkie/talkieCut';
 import { verifyTalkieAudioToken } from '../../services/talkie/talkieAudioToken';
 import { TALKIE_AUDIO_MIME } from '../../services/talkie/talkiePush';
@@ -118,9 +119,8 @@ export async function talkieRoutes(fastify: FastifyInstance): Promise<void> {
     const body = parsed.data;
     try {
       const registeredAt = new Date();
-      await fastify.prisma.pushToken.updateMany({
-        where: { isActive: true, token: body.token, type: 'pushtotalk', userId: { not: userId } },
-        data: { isActive: false },
+      await fastify.prisma.pushToken.deleteMany({
+        where: { token: body.token, type: 'pushtotalk', userId: { not: userId } },
       });
       const fields = {
         platform: 'ios',
@@ -131,6 +131,7 @@ export async function talkieRoutes(fastify: FastifyInstance): Promise<void> {
         apnsEnvironment: body.apnsEnvironment ?? 'production',
         isActive: true,
         registeredAt,
+        sessionId: currentSessionOf(request).sessionId,
       };
       const saved = await fastify.prisma.pushToken.upsert({
         where: { userId_token_type: { userId, token: body.token, type: 'pushtotalk' } },

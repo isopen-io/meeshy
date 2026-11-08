@@ -122,6 +122,8 @@ export type TalkieRelayDeps = {
   readonly wake?: (params: { readonly talkieId: string; readonly fromUserId: string; readonly toUserId: string; readonly channel: TalkieWakeChannel }) => Promise<void>;
   /** Le push de suivi d'une voix réveillée finie sans que personne l'ait rejointe : il porte l'audio. */
   readonly followUp?: (params: TalkieFollowUp) => Promise<void>;
+  /** La conversation la plus récente de la paire, où le client émetteur enverra la copie vocale d'un repli (#17141). */
+  readonly fallbackConversation?: (fromUserId: string, toUserId: string) => Promise<string | null>;
   readonly trace?: (event: '[TALKIE_WAKING]' | '[TALKIE_JOINED]', fields: Readonly<Record<string, unknown>>) => void;
 };
 
@@ -236,6 +238,15 @@ export class TalkieRelay {
     };
   }
 
+  private async withFallbackConversation(ack: TalkieStartAck, fromUserId: string, toUserId: string): Promise<TalkieStartAck> {
+    if (ack.success || ack.code !== TALKIE_ERROR_CODES.FALLBACK_VOICE || !this.deps.fallbackConversation) return ack;
+    const conversationId = await this.deps.fallbackConversation(fromUserId, toUserId).catch((error: unknown) => {
+      this.deps.report('Talkie fallback conversation failed', error);
+      return null;
+    });
+    return conversationId ? { ...ack, conversationId } : ack;
+  }
+
   private wakeRecipient(session: Session, channel: TalkieWakeChannel): void {
     const pair = { talkieId: session.talkieId, fromUserId: session.fromUserId, toUserId: session.toUserId };
     this.deps.trace?.('[TALKIE_WAKING]', { channel, ...pair });
@@ -252,7 +263,7 @@ export class TalkieRelay {
       if (!rate) return RATE_LIMITED;
 
       const verdict = await this.deps.judge(fromUserId, toUserId);
-      if (verdict.ok === false) return refusal(verdict);
+      if (verdict.ok === false) return this.withFallbackConversation(refusal(verdict), fromUserId, toUserId);
 
       const cut = await this.deps.cutAt(fromUserId, toUserId);
       return cut !== null && cut >= cutFrom ? refusal(TALKIE_NOT_ALLOWED) : verdict;

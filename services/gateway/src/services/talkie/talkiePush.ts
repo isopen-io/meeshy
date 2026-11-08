@@ -35,6 +35,7 @@ import type { PushNotificationService, SendPushOptions } from '../PushNotificati
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import type { TalkieWakeChannel } from './talkieGate';
 import { talkieAudioUrl } from './talkieAudioToken';
+import { retireOrphanPushToTalkTokens, type PushToTalkPrisma } from './pushToTalkTokens';
 
 export const TALKIE_PUSH_CATEGORY = 'TALKIE';
 /** Une voix réveillée vit au plus le temps d'une prise de parole et de sa fenêtre de rattrapage. */
@@ -44,12 +45,14 @@ export const TALKIE_AUDIO_MIME = 'audio/aac';
 
 const WAKE_TOKEN_TYPES = ['pushtotalk', 'apns', 'fcm'] as const;
 
-/** Le canal de réveil du destinataire : PushToTalk d'abord, sinon tout jeton APNs ou FCM actif, sinon `null`. */
+/** Le canal de réveil du destinataire : PushToTalk d'abord (session encore valide), sinon tout jeton APNs ou FCM actif, sinon `null`. */
 export async function talkieWakeChannel(
-  prisma: { readonly pushToken: Pick<PrismaClient['pushToken'], 'findMany'> },
+  prisma: PushToTalkPrisma,
   userId: string,
+  now: Date = new Date(),
 ): Promise<TalkieWakeChannel | null> {
   if (process.env.ENABLE_PUSH_NOTIFICATIONS === 'false') return null;
+  await retireOrphanPushToTalkTokens(prisma, userId, now);
   const tokens = await prisma.pushToken.findMany({
     where: { userId, isActive: true, type: { in: [...WAKE_TOKEN_TYPES] } },
     select: { type: true },

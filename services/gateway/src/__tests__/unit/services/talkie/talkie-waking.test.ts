@@ -326,3 +326,65 @@ describe('#17142 — la voix lisible sans socket (extension de notification) et 
     t.relay.dispose();
   });
 });
+
+describe('#17141 — le repli informe, et dit où partira la copie vocale', () => {
+  it('TALKIE_FALLBACK_VOICE porte la conversation la plus récente avec le destinataire', async () => {
+    const fallbackConversation = jest.fn(async (_from: string, _to: string) => 'd'.repeat(24));
+    const t = relayWith({ judge: async () => ({ ok: false, code: 'TALKIE_FALLBACK_VOICE', message: 'm' }), fallbackConversation });
+
+    const ack = await t.relay.start(SENDER_SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' });
+
+    expect(ack).toEqual({ success: false, error: 'm', code: 'TALKIE_FALLBACK_VOICE', conversationId: 'd'.repeat(24) });
+    expect(fallbackConversation).toHaveBeenCalledWith(FROM, TO);
+  });
+
+  it('aucune conversation, ou une lecture qui échoue : le repli sans conversationId', async () => {
+    const none = relayWith({ judge: async () => ({ ok: false, code: 'TALKIE_FALLBACK_VOICE', message: 'm' }), fallbackConversation: async () => null });
+    const broken = relayWith({ judge: async () => ({ ok: false, code: 'TALKIE_FALLBACK_VOICE', message: 'm' }), fallbackConversation: async () => { throw new Error('mongo'); } });
+
+    expect(await none.relay.start(SENDER_SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' })).toEqual({ success: false, error: 'm', code: 'TALKIE_FALLBACK_VOICE' });
+    expect(await broken.relay.start(SENDER_SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' })).toEqual({ success: false, error: 'm', code: 'TALKIE_FALLBACK_VOICE' });
+  });
+
+  it('un autre refus ne cherche aucune conversation', async () => {
+    const fallbackConversation = jest.fn(async () => 'd'.repeat(24));
+    const t = relayWith({ judge: async () => ({ ok: false, code: 'TALKIE_NOT_ALLOWED', message: 'm' }), fallbackConversation });
+
+    expect(await t.relay.start(SENDER_SOCKET, FROM, { toUserId: TO, codec: 'aac-adts' })).toEqual({ success: false, error: 'm', code: 'TALKIE_NOT_ALLOWED' });
+    expect(fallbackConversation).not.toHaveBeenCalled();
+  });
+});
+
+describe('#17141 — la conversation la plus récente de la paire', () => {
+  const participants = [
+    { userId: FROM, conversationId: 'c-direct', isActive: true },
+    { userId: TO, conversationId: 'c-direct', isActive: true },
+    { userId: FROM, conversationId: 'c-groupe', isActive: true },
+    { userId: TO, conversationId: 'c-groupe', isActive: true },
+    { userId: FROM, conversationId: 'c-sans-lui', isActive: true },
+    { userId: TO, conversationId: 'c-quitte', isActive: false },
+    { userId: FROM, conversationId: 'c-quitte', isActive: true },
+  ];
+  const conversations = [
+    { id: 'c-direct', lastMessageAt: 1, isActive: true },
+    { id: 'c-groupe', lastMessageAt: 5, isActive: true },
+    { id: 'c-quitte', lastMessageAt: 9, isActive: true },
+    { id: 'c-sans-lui', lastMessageAt: 10, isActive: true },
+  ];
+  const prisma = {
+    participant: {
+      findMany: async (args: { where: { userId: string; isActive: boolean; conversationId?: { in: string[] } } }) =>
+        participants.filter((p) => p.userId === args.where.userId && p.isActive && (!args.where.conversationId || args.where.conversationId.in.includes(p.conversationId))),
+    },
+    conversation: {
+      findFirst: async (args: { where: { id: { in: string[] } } }) =>
+        conversations.filter((c) => args.where.id.in.includes(c.id)).sort((x, y) => y.lastMessageAt - x.lastMessageAt)[0] ?? null,
+    },
+  };
+
+  it('la plus récente des conversations où les DEUX sont actifs, pas forcément la directe', async () => {
+    const { mostRecentSharedConversation } = await import('../../../../services/talkie/talkieFallback');
+    expect(await mostRecentSharedConversation(prisma as never, FROM, TO)).toBe('c-groupe');
+    expect(await mostRecentSharedConversation(prisma as never, FROM, INTRUS)).toBeNull();
+  });
+});

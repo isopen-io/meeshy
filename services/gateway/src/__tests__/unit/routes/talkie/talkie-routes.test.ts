@@ -53,7 +53,7 @@ async function app(prisma = prismaDouble()) {
   a.decorate('authenticate', async (request: { headers: Record<string, unknown> }, reply: { code: (n: number) => { send: (b: unknown) => void } }) => {
     const user = request.headers['x-user'];
     if (typeof user !== 'string') return reply.code(401).send({ success: false, error: 'auth' });
-    Object.assign(request, { authContext: { isAuthenticated: true, userId: user, registeredUser: { id: user } } });
+    Object.assign(request, { authContext: { isAuthenticated: true, userId: user, registeredUser: { id: user }, sessionId: 'sess-1' } });
   });
   await a.register(talkieRoutes, { prefix: '/api/v1' });
   return { a, prisma };
@@ -136,14 +136,14 @@ describe('#17142 — la capacité de lecture', () => {
 });
 
 describe('#17142 — le jeton PushToTalk', () => {
-  it('POST enregistre un jeton pushtotalk iOS dans le modèle existant, détaché des autres comptes', async () => {
+  it('POST enregistre un jeton pushtotalk iOS dans le modèle existant, RATTACHÉ à la session appelante, et le retire à tout autre compte', async () => {
     const { a, prisma } = await app();
     const res = await a.inject({ method: 'POST', url: '/api/v1/users/me/push-to-talk-token', headers: { 'x-user': TO }, payload: { token: 'ptt-token-0123456789', apnsEnvironment: 'development' } });
     await a.close();
 
     expect(res.statusCode).toBe(200);
-    expect(prisma.rows[0]).toMatchObject({ userId: TO, token: 'ptt-token-0123456789', type: 'pushtotalk', platform: 'ios', apnsEnvironment: 'development', isActive: true });
-    expect(prisma.pushToken.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ token: 'ptt-token-0123456789', type: 'pushtotalk', userId: { not: TO } }) }));
+    expect(prisma.rows[0]).toMatchObject({ userId: TO, token: 'ptt-token-0123456789', type: 'pushtotalk', platform: 'ios', apnsEnvironment: 'development', isActive: true, sessionId: 'sess-1' });
+    expect(prisma.pushToken.deleteMany).toHaveBeenCalledWith({ where: { token: 'ptt-token-0123456789', type: 'pushtotalk', userId: { not: TO } } });
   });
 
   it('POST sans jeton lisible : 400 ; sans session : 401', async () => {
