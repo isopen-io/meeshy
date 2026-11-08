@@ -102,6 +102,29 @@ public enum ConversationPreviewSegment: Sendable, Hashable {
     }
 }
 
+/// L'EFFET APPLIQUÉ À LA LIGNE 2 (#16975) — miroir de `PreviewEffect` : une
+/// DESCRIPTION, jamais un rendu. `veil` peint un substitut voilé (message
+/// flouté) ; `finish` est l'effet persistant, peint FIGÉ ; `entrance` l'effet
+/// d'apparition, joué une fois quand le message ARRIVE sur une ligne visible.
+public struct ConversationPreviewEffect: Sendable, Hashable {
+    public enum Finish: String, Sendable, Hashable { case glow, pulse, rainbow, sparkle }
+    public enum Entrance: String, Sendable, Hashable { case shake, pop }
+
+    /// Durée maximale d'une entrée — `PREVIEW_ENTRANCE_MAX_MS`.
+    public static let entranceMaxMilliseconds = 450
+    public static let veiled = ConversationPreviewEffect(veil: true, finish: nil, entrance: nil)
+
+    public let veil: Bool
+    public let finish: Finish?
+    public let entrance: Entrance?
+
+    public init(veil: Bool, finish: Finish?, entrance: Entrance?) {
+        self.veil = veil
+        self.finish = finish
+        self.entrance = entrance
+    }
+}
+
 public struct ConversationPreview: Sendable, Hashable {
     public enum Direction: String, Sendable, Hashable { case incoming, outgoing }
 
@@ -116,6 +139,8 @@ public struct ConversationPreview: Sendable, Hashable {
     /// `true` ⇒ la ligne porte le bouton Rejoindre (appel en cours).
     public let offersJoin: Bool
     public let direction: Direction?
+    /// Présent ⇒ la ligne APPLIQUE l'effet du dernier message (#16975).
+    public let effect: ConversationPreviewEffect?
 
     public init(
         kind: ConversationPreviewKind,
@@ -125,7 +150,8 @@ public struct ConversationPreview: Sendable, Hashable {
         segments: [ConversationPreviewSegment],
         liveUntil: Date? = nil,
         offersJoin: Bool = false,
-        direction: Direction? = nil
+        direction: Direction? = nil,
+        effect: ConversationPreviewEffect? = nil
     ) {
         self.kind = kind
         self.tone = tone
@@ -135,5 +161,6 @@ public struct ConversationPreview: Sendable, Hashable {
         self.liveUntil = liveUntil
         self.offersJoin = offersJoin
         self.direction = direction
+        self.effect = effect
     }
 }
