@@ -427,9 +427,12 @@ class ConnectionManager:
         Returns:
             Clé unique pour ce type de tâche
         """
-        # Clé: source_lang + target_langs (triées) + model_type
+        # Clé: file (any | normal) + source_lang + target_langs (triées) + model_type.
+        # #16820 — la file d'un lot se lit sur sa première tâche : la clé sépare
+        # donc « any » des conversations ordinaires, sans fragmenter par conversation.
+        lane = "any" if task.conversation_id == "any" else "normal"
         target_key = "_".join(sorted(task.target_languages))
-        return f"{task.source_language}_{target_key}_{task.model_type}"
+        return f"{lane}_{task.source_language}_{target_key}_{task.model_type}"
 
     async def _batch_flush_loop(self):
         """Boucle qui flush les batches accumulés périodiquement"""
