@@ -42,6 +42,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Piste de correction : 8 à 12 looks signés Meeshy en LUT 3D (`CIColorCube`, coût constant), intensité réglable, validés sur peaux claires et foncées, même catalogue appel et viseur.
 - Critères d'acceptation : liste validée par Jacques ; coût ≤ budget de 4 ms GPU/image (doc 00 du projet) ; vignettes vivantes dans le rail et le carrousel.
 - Liens : #9500.
+- Proposition détaillée (2026-11-08) : six à huit « Ambiances » en LUT, pavé 2D sous le pouce dans la miniature, protection des teints de peau, looks réversibles ; planche de rendus à valider par Jacques avant code. Voir `/mnt/project-files/frames/08-sota-camera-optimisations.md` § R6.
 
 ## OPUS-3 — Tickets caméra et appel ouverts qui demandent un fil dédié
 - Statut : à faire (un fil par ticket)
@@ -105,3 +106,25 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Piste de correction : à trancher avec OPUS-6 (un même `⋯` pourrait porter Grille et Retardateur). Ensuite : état pur `ComposerCaptureTimer` (off / 3 s / 10 s, compte qui décroît, annulé par un toucher, par (x), par la sortie du viseur ou par le passage en arrière-plan), testé ; grand chiffre au centre du viseur en police dynamique, sans animation sous Reduce Motion ; chaque seconde annoncée à VoiceOver (`AccessibilityNotification.Announcement`) ; le déclenchement réutilise le chemin du déclencheur existant (`ComposerCaptureSession` photo), pas de nouvelle commande caméra.
 - Critères d'acceptation : tests de l'état (décompte, annulations) ; la photo part à 3 s et 10 s ; un toucher annule ; VoiceOver annonce le décompte ; textes traduits.
 - Liens : `/mnt/project-files/frames/07-audit-ui-ux-camera-appels.md` § B5, `tasks/routine-camera.md` CAM-4.
+
+## OPUS-9 — Le bouton Camera Control des iPhone 16 et 17 ne règle rien dans Meeshy
+- Statut : à faire
+- Signalé par : audit, le 2026-11-08
+- Point d'origine : doc 08 § R7 (recherche état de l'art)
+- Constat : aucun `AVCaptureControl` n'est ajouté à la session (`grep AVCaptureSlider\|AVCaptureIndexPicker\|AVCaptureSystemZoomSlider` vide dans `apps/ios`) ; le bouton latéral ouvre au mieux l'app sans rien piloter.
+- Reproduction : iPhone 16, viseur du composeur ouvert, glisser sur Camera Control : rien ne se passe.
+- Pourquoi la routine ne l'a pas fait : touche `AVCaptureSession` (`addControl`, délégué des contrôles) dans `CameraModel` ; recette sur iPhone 16 obligatoire.
+- Piste de correction : `AVCaptureSystemZoomSlider` et `AVCaptureSystemExposureBiasSlider` sur l'objectif en place, plus un `AVCaptureIndexPicker` « Ambiance » qui fait défiler les looks du viseur (ceux du rail Filtres) ; contrôles recréés à chaque bascule d'objectif ; `supportsControls` vérifié ; délégué sur la file de la session.
+- Critères d'acceptation : zoom, exposition et look pilotables au bouton sur iPhone 16 ; rien ne change sur un iPhone sans bouton ; pas de délai ajouté à l'ouverture du viseur.
+- Liens : CAM-6 (boutons de volume, côté interface).
+
+## OPUS-10 — Vidéo du viseur : stabilisation, cadence et basse lumière laissées au hasard
+- Statut : à faire
+- Signalé par : audit, le 2026-11-08
+- Point d'origine : doc 08 § R9 et R10
+- Constat : ni `preferredVideoStabilizationMode`, ni cadence choisie (`activeVideoMinFrameDuration`), ni `isLowLightBoostEnabled` dans `Main/Components/` ; le système décide, souvent sans stabilisation en caméra avant.
+- Reproduction : filmer en marchant, objectif arrière puis avant ; filmer dans une pièce sombre.
+- Pourquoi la routine ne l'a pas fait : session caméra et format actif (`CameraModel`, `CameraInputInstaller`), chauffe à mesurer sur iPhone réel.
+- Piste de correction : `cinematicExtended` en arrière quand le format le sert, `standard` en avant ; 30 i/s par défaut, 60 i/s proposé dans le menu `⋯` ; `isLowLightBoostEnabled` en vidéo quand supporté ; ne pas couper l'exposition pilotée par le visage après un toucher sans visage.
+- Critères d'acceptation : vidéo stable en marchant (arrière), recadrage avant acceptable, latence d'aperçu inchangée, `thermalState` ≤ fair sur 5 min de vidéo, rendu plus clair en basse lumière.
+- Liens : OPUS-1, #16482.
