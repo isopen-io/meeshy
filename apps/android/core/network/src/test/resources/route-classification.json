@@ -375,8 +375,7 @@
     "PUT /api/v1/me/starred-messages/:messageId",
     "PUT /api/v1/me/terms",
     "PUT /api/v1/messages/:messageId",
-    "PUT /api/v1/user-preferences/communities/:communityId",
-    "GET /api/v1/relations/locations"
+    "PUT /api/v1/user-preferences/communities/:communityId"
    ]
   },
   {

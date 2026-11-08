@@ -127,10 +127,8 @@ class RouteManifestRatchetTest {
          * `BringApi.stop`.
          * 124 : moins `GET|POST /bring/:userId` et `GET|PUT /relations/:userId/settings` (#16617 : faire sonner un ami depuis
          * sa fiche, et bloquer ses Bring depuis la fiche d'un lien), que portent `BringApi` et `RelationsApi`.
-         * 125 : plus `GET /relations/locations` (#16980 : les positions qu'on me partage, par emprise), servie par la
-         * passerelle ; Android la portera avec sa carte (#16985).
          */
-        const val TO_PORT_CEILING = 125
+        const val TO_PORT_CEILING = 124
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
