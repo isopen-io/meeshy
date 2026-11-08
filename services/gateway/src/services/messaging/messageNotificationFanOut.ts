@@ -4,6 +4,7 @@ import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import {
   maskedAttachment,
   protectedPreview,
+  envelopeMayTravelUnder,
   type NotificationActorProfile,
   type NotificationAttachmentSummary,
   type PreviewPrismBasis,
@@ -545,6 +546,30 @@ export async function notifyMessageRecipients(params: {
     // (`contentTypeIcon`), si bien que le corps ne perd rien à ce silence.
     const mediaMayTravel = protectedOverride === null && !maskedAttachment(first);
 
+    // L'enveloppe de l'appareil — le chiffré que la NSE déchiffre pour composer
+    // le corps — et le TROISIÈME verrou de la famille du cycle 124 : le corps
+    // (124), le média (125), et celui-ci.
+    //
+    // Deux défauts d'un coup, et ils sont le même lot (#17080) :
+    //
+    //  - elle ne partait que sur l'éventail `regular`, si bien qu'une RÉPONSE ou
+    //    une MENTION en conversation chiffrée restait « 🔒 💬 » à vie : la NSE ne
+    //    remplace le corps par le clair que si la clé est non vide. Elle ne
+    //    compose AUCUNE chaîne — c'est la charge que le LECTEUR déchiffre — donc
+    //    les cycles 125 bis à 128, qui cherchaient « qui compose ce corps ? »,
+    //    ne pouvaient pas la trouver ;
+    //  - et elle voyageait sous le seul `showPreview`, hors du verrou qui retient
+    //    déjà le média : le texte ENTIER d'un message à vue unique, éphémère ou
+    //    flouté s'affichait sur l'écran verrouillé sous « 👁️ 🖼️ ».
+    //
+    // La garde ne peut PAS être celle du média (`protectedOverride === null`) :
+    // en `e2ee` tout message est protégé, donc elle retirerait l'enveloppe au cas
+    // NOMINAL. `envelopeMayTravelUnder` tranche sur la clé PRODUITE — le
+    // chiffrement seul laisse passer, toute protection plus forte retient.
+    const deviceEnvelope = envelopeMayTravelUnder(notificationLocKey)
+      ? deviceEnvelopeForPush(message, conversation.encryptionMode)
+      : undefined;
+
     // Cycle 125 bis — ce que le média donne au CORPS d'une bannière, et que les
     // TROIS éventails doivent recevoir : `buildMessageNotificationBodyI18n`
     // remplace un texte ABSENT par le libellé détaillé de la première pièce
@@ -723,6 +748,9 @@ export async function notifyMessageRecipients(params: {
             // localisation cliente du placeholder et le second verrou de
             // `createNotification`.
             notificationLocKey,
+            // #17080 — la MÊME enveloppe que le message simple, sous le MÊME
+            // verrou. Cf. `deviceEnvelope`.
+            encryptedContent: deviceEnvelope,
           });
           return created != null;
         })
@@ -754,6 +782,9 @@ export async function notifyMessageRecipients(params: {
               // Cycle 126 — cf. `createReplyNotification` : la clé de protection
               // qualifie l'aperçu que ce lot vient de recevoir.
               notificationLocKey,
+              // #17080 — cf. `createReplyNotification` : l'enveloppe que le
+              // lecteur déchiffre, sous le verrou de `deviceEnvelope`.
+              encryptedContent: deviceEnvelope,
             },
             memberIds
           )
@@ -790,7 +821,7 @@ export async function notifyMessageRecipients(params: {
           messageId: message.id,
           conversationId,
           messagePreview: notificationPreviewForPush,
-          encryptedContent: deviceEnvelopeForPush(message, conversation.encryptionMode),
+          encryptedContent: deviceEnvelope,
           notificationLocKey,
           // La transcription d'un vocal n'est PAS `Message.content` : ses
           // traductions vivent sur `MessageAttachment.translations`. Le cycle 122

@@ -80,6 +80,7 @@ import {
   UNKNOWN_BANNER_SOURCE,
   MESSAGE_CONTENT_BASIS,
   truncateMessage,
+  envelopeMayTravelUnder,
 } from './notification-preview';
 import type { FanoutDependencies } from './fanout/dependencies';
 import {
@@ -1098,7 +1099,21 @@ export class NotificationService {
                   // Android #10641), sous le SECOND VERROU du cycle 125 :
                   // `push-media-fields.ts`.
                   ...pushMediaFields(params.context),
-                  encryptedContent: params.context.encryptedContent || '',
+                  // #17080 — le TROISIÈME verrou de la famille du cycle 124,
+                  // après le corps (124) et le média (125). `applyBodyRewrites`
+                  // (NSE iOS) écrit `content.body = decrypted` SANS regarder
+                  // `notificationLocKey` — sa branche `locKey` n'est qu'un repli
+                  // pour l'échec de déchiffrement —, si bien que le texte entier
+                  // d'un message à vue unique, éphémère ou flouté s'affichait sur
+                  // l'écran verrouillé sous une bannière disant « 👁️ 🖼️ ».
+                  //
+                  // La clé ne peut pas servir de verrou NU ici : en `e2ee` elle
+                  // est TOUJOURS posée, et le chiffrement seul est précisément le
+                  // cas où l'enveloppe doit partir. `envelopeMayTravelUnder` porte
+                  // cette distinction, une fois, pour les deux sites qui la posent.
+                  encryptedContent: envelopeMayTravelUnder(params.context.notificationLocKey)
+                    ? (params.context.encryptedContent || '')
+                    : '',
                   // #8857 — le détail du contenu, sous le MÊME second verrou que le média.
                   ...(params.context.notificationLocKey ? {} : contentDetailPushFields(params.context.contentDetail)),
                   // Cycle 124 — le couple que la NSE PRÉ-ENREGISTRE. Les DEUX
@@ -1626,6 +1641,22 @@ export class NotificationService {
      * second verrou de `createNotification`.
      */
     notificationLocKey?: string;
+    /**
+     * L'enveloppe de l'appareil — le chiffré que la NSE déchiffre pour composer
+     * le corps, en `e2ee` SEULEMENT (#17080).
+     *
+     * Elle ne compose aucune chaîne et n'en qualifie aucune : c'est la charge
+     * que le LECTEUR ouvre. C'est ce qui l'a tenue hors des lots 125 bis à 128,
+     * qui faisaient converger le TEXTE des trois bannières et ce qui le
+     * QUALIFIE — et ce qui laissait une réponse ou une mention sur « 🔒 💬 » à
+     * vie, `createNotification` lisant `context.encryptedContent || ''` et la
+     * NSE ne réécrivant le corps que sur une valeur non vide.
+     *
+     * L'éventail décide seul si elle a le droit de partir
+     * (`envelopeMayTravelUnder`) ; `createNotification` repose le verrou pour
+     * l'appelant solo.
+     */
+    encryptedContent?: string;
     /** Cf. `createMessageNotification.contentDetail` — #8857. */
     contentDetail?: NotificationContentDetail;
   }): Promise<Notification | null> {
@@ -1739,6 +1770,9 @@ export class NotificationService {
         // unique producteur, donc sa présence DÉCLARE la protection là où une
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
+        // #17080 — l'enveloppe que le lecteur déchiffre. Sans elle, la NSE
+        // n'a AUCUNE source de clair sur ces deux éventails.
+        encryptedContent: params.encryptedContent,
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         ...this.messageClockFields(prismSource),
       },
@@ -1773,6 +1807,8 @@ export class NotificationService {
       previewBasis?: PreviewPrismBasis;
       /** Cf. `createMentionNotification.notificationLocKey`. */
       notificationLocKey?: string;
+      /** Cf. `createMentionNotification.encryptedContent` — #17080. */
+      encryptedContent?: string;
       /** Cf. `createMessageNotification.contentDetail` — #8857. */
       contentDetail?: NotificationContentDetail;
       /** Cf. `createMentionNotification.attachments` — cycle 125 bis. */
@@ -2307,6 +2343,22 @@ export class NotificationService {
      * second verrou de `createNotification`.
      */
     notificationLocKey?: string;
+    /**
+     * L'enveloppe de l'appareil — le chiffré que la NSE déchiffre pour composer
+     * le corps, en `e2ee` SEULEMENT (#17080).
+     *
+     * Elle ne compose aucune chaîne et n'en qualifie aucune : c'est la charge
+     * que le LECTEUR ouvre. C'est ce qui l'a tenue hors des lots 125 bis à 128,
+     * qui faisaient converger le TEXTE des trois bannières et ce qui le
+     * QUALIFIE — et ce qui laissait une réponse ou une mention sur « 🔒 💬 » à
+     * vie, `createNotification` lisant `context.encryptedContent || ''` et la
+     * NSE ne réécrivant le corps que sur une valeur non vide.
+     *
+     * L'éventail décide seul si elle a le droit de partir
+     * (`envelopeMayTravelUnder`) ; `createNotification` repose le verrou pour
+     * l'appelant solo.
+     */
+    encryptedContent?: string;
     /** Cf. `createMessageNotification.contentDetail` — #8857. */
     contentDetail?: NotificationContentDetail;
   }): Promise<Notification | null> {
@@ -2405,6 +2457,9 @@ export class NotificationService {
         // unique producteur, donc sa présence DÉCLARE la protection là où une
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
+        // #17080 — l'enveloppe que le lecteur déchiffre. Sans elle, la NSE
+        // n'a AUCUNE source de clair sur ces deux éventails.
+        encryptedContent: params.encryptedContent,
         ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         ...this.messageClockFields(prismSource),
       },

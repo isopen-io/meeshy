@@ -324,4 +324,22 @@ describe.each(runners)('%s — l\'enveloppe atteint le fil APNs', (_name, run) =
 
     expect(servedPushData(sendToUser)?.encryptedContent).toBe('');
   });
+
+  it('la RETIENT sous une protection plus forte, même si l\'appelant la passe', async () => {
+    // Le SECOND VERROU, et il n'est pas redondant avec celui de l'éventail : un
+    // appelant SOLO (édition, rejeu, script) n'a pas traversé
+    // `notifyMessageRecipients`. Cf. cycle 125 — « le second verrou se pose sur
+    // la clé qui DÉCLARE », et `protectedPreview` en est l'unique producteur.
+    const { service, sendToUser } = makeService();
+
+    await run(service, {
+      encryptedContent: ENVELOPE,
+      notificationLocKey: 'notification.view_once_message',
+      messagePreview: '👁️ 💬',
+    });
+
+    const data = servedPushData(sendToUser);
+    expect(data?.encryptedContent).toBe('');
+    expect(JSON.stringify(data)).not.toContain(ENVELOPE);
+  });
 });

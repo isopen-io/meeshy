@@ -174,6 +174,53 @@ const PROTECTION_ICON = Object.freeze({
   encrypted: '🔒',
 } as const);
 
+/**
+ * Les quatre clés de localisation que `protectedPreview` produit — nommées
+ * parce que DEUX gardes les comparent désormais, et qu'une chaîne recopiée au
+ * site de comparaison serait une loi de plus (§ « Cette entité a-t-elle une
+ * JUMELLE ? »).
+ *
+ * L'ordre déclaré est celui de la PRÉSÉANCE de `protectedPreview` :
+ * `encrypted` est la moins restrictive, et c'est la seule sous laquelle le
+ * contenu a encore le droit d'atteindre son destinataire — par l'enveloppe que
+ * son appareil déchiffre.
+ */
+export const PROTECTION_LOC_KEY = Object.freeze({
+  ephemeral: 'notification.ephemeral_message',
+  viewOnce:  'notification.view_once_message',
+  blurred:   'notification.hidden_message',
+  encrypted: 'notification.encrypted_message',
+} as const);
+
+/**
+ * L'enveloppe de l'appareil (`encryptedContent`) a-t-elle le droit de voyager
+ * sous ce placeholder ?
+ *
+ * C'est le TROISIÈME verrou de la famille ouverte au cycle 124, après le corps
+ * (cycle 124) et le média (cycle 125), et il manquait pour une raison qui n'est
+ * pas un oubli : l'enveloppe est le seul des trois dont la présence est
+ * NOMINALE sous une protection. En `e2ee`, tout message est `isEncrypted`, donc
+ * `protectedPreview` rend toujours une clé — une garde formulée
+ * « `protectedOverride === null` », celle du média, retirerait l'enveloppe à
+ * TOUTE conversation chiffrée, c'est-à-dire la feature entière.
+ *
+ * Le discriminant n'est donc pas « ce message est-il protégé ? » mais « la
+ * protection est-elle le CHIFFREMENT SEUL ? ». L'enveloppe EST le mécanisme par
+ * lequel un message chiffré se montre à son destinataire légitime ; elle n'est
+ * pas celui par lequel un message à VUE UNIQUE, ÉPHÉMÈRE ou FLOUTÉ se montre à
+ * un écran verrouillé — et `applyBodyRewrites` (NSE iOS) écrit
+ * `content.body = decrypted` **sans jamais regarder cette clé**, sa branche
+ * `locKey` n'étant qu'un repli pour l'échec de déchiffrement.
+ *
+ * Fail-CLOSED sur l'inconnu : une clé qui n'est pas celle du chiffrement retient
+ * l'enveloppe, y compris une clé qu'un lot futur ajouterait sans relire ce site.
+ * Une bannière appauvrie se rattrape ; un secret poussé, non.
+ */
+export function envelopeMayTravelUnder(locKey: string | null | undefined): boolean {
+  if (!locKey) return true;
+  return locKey === PROTECTION_LOC_KEY.encrypted;
+}
+
 const CONTENT_TYPE_ICON = Object.freeze({
   text:     '💬',
   audio:    '🎵',
@@ -291,16 +338,16 @@ export function protectedPreview(input: {
     const preview = duration
       ? `${PROTECTION_ICON.ephemeral} ${icon} ${duration}`
       : `${PROTECTION_ICON.ephemeral} ${icon}`;
-    return { preview, locKey: 'notification.ephemeral_message' };
+    return { preview, locKey: PROTECTION_LOC_KEY.ephemeral };
   }
   if (isViewOnce) {
-    return { preview: `${PROTECTION_ICON.viewOnce} ${icon}`, locKey: 'notification.view_once_message' };
+    return { preview: `${PROTECTION_ICON.viewOnce} ${icon}`, locKey: PROTECTION_LOC_KEY.viewOnce };
   }
   if (isBlurred) {
-    return { preview: `${PROTECTION_ICON.blurred} ${icon}`, locKey: 'notification.hidden_message' };
+    return { preview: `${PROTECTION_ICON.blurred} ${icon}`, locKey: PROTECTION_LOC_KEY.blurred };
   }
   // isEncrypted (last branch — least restrictive flag)
-  return { preview: `${PROTECTION_ICON.encrypted} ${icon}`, locKey: 'notification.encrypted_message' };
+  return { preview: `${PROTECTION_ICON.encrypted} ${icon}`, locKey: PROTECTION_LOC_KEY.encrypted };
 }
 
 /**
