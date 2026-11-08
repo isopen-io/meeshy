@@ -45,10 +45,10 @@ import {
   claimSharedLocation,
   currentSharedLocationSession,
   dropSharedLocationSession,
+  forgetSharedLocationGeneration,
   markSharedLocationStopped,
   readSharedLocation,
-  releaseSharedLocationSession,
-  sharedLocationStopMark,
+  sharedLocationGeneration,
   storeSharedLocation,
   type SharedLocationCache,
   type SharedLocationState,
@@ -229,13 +229,13 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     expiresAt: new Date(now + parsed.data.durationMinutes * 60_000).toISOString(),
   };
   const lost = async (): Promise<boolean> =>
-    (await sharedLocationStopMark(deps.cache, emitterId)) !== stopMark ||
+    (await sharedLocationGeneration(deps.cache, emitterId)) !== generation ||
     (await currentSharedLocationSession(deps.cache, emitterId)) !== state.sessionId;
 
-  let stopMark: string | null;
+  let generation: string;
   let previous: SharedLocationState | null;
   try {
-    stopMark = await sharedLocationStopMark(deps.cache, emitterId);
+    generation = await sharedLocationGeneration(deps.cache, emitterId);
     previous = await readSharedLocation(deps.cache, emitterId, now);
   } catch {
     return UNAVAILABLE;
@@ -243,9 +243,10 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
   const before = previous ? await accessOf(deps, emitterId, previous, recipientIdsOf(previous)) : new Map<string, SharedLocationReaderAccess>();
   try {
     await storeSharedLocation(deps.cache, emitterId, state, now);
-    await claimSharedLocation(deps.cache, emitterId, state, now);
+    await claimSharedLocation(deps.cache, emitterId, generation, state, now);
     if (await lost()) {
-      await releaseSharedLocationSession(deps.cache, emitterId, state.sessionId);
+      await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
+      await forgetSharedLocationGeneration(deps.cache, emitterId, generation);
       return STOPPED;
     }
     if (previous) await dropSharedLocationSession(deps.cache, emitterId, previous.sessionId);
@@ -258,6 +259,8 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     if (access !== 'none' && (after.access.get(readerId) ?? 'none') === 'none') unserve(deps.io, readerId, emitterId);
   });
   if (await lost()) {
+    await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
+    await forgetSharedLocationGeneration(deps.cache, emitterId, generation);
     await reconcile(deps, emitterId, after.served);
     return STOPPED;
   }
@@ -299,10 +302,11 @@ export async function updateSharedLocation(deps: SharedLocationRelayDeps, emitte
 /** Arrête le partage : il est effacé, et `ended` part vers ceux qui le voyaient, à eux seuls. */
 export async function stopSharedLocation(deps: SharedLocationRelayDeps, emitterId: string): Promise<SharedLocationStopAck> {
   const now = deps.now();
+  const generation = await sharedLocationGeneration(deps.cache, emitterId);
   const had = await readSharedLocation(deps.cache, emitterId, now);
   const seen = had ? await accessOf(deps, emitterId, had, recipientIdsOf(had)) : new Map<string, SharedLocationReaderAccess>();
   try {
-    await markSharedLocationStopped(deps.cache, emitterId, { mark: randomUUID(), sessionId: had?.sessionId ?? null });
+    await markSharedLocationStopped(deps.cache, emitterId, { mark: randomUUID(), generation, sessionId: had?.sessionId ?? null });
   } catch {
     return UNAVAILABLE;
   }
@@ -340,8 +344,11 @@ export async function captureSharedLocationAccess(
 /**
  * Rejoue la projection d'une paire dans les DEUX sens après un changement de lien ou de
  * blocage. `changed` part vers un destinataire dont l'accès est ouvert et a changé ;
- * `ended` SEULEMENT vers un destinataire qui voyait AVANT (`before`) et ne voit plus
- * rien. Sans `before` (une montée), rien n'est jamais effacé.
+ * `ended` vers un destinataire qui voyait AVANT (`before`) et ne voit plus rien — ou,
+ * après une baisse ou un blocage, vers un destinataire DÉSIGNÉ qui ne voit plus rien :
+ * un geste servi pendant la baisse a pu lui livrer une position que `before` ignore.
+ * Sans `before` (une montée), rien n'est jamais effacé. Une session remplacée ou
+ * arrêtée pendant le rejeu est réconciliée, comme un geste qui a perdu la course.
  */
 export async function refreshSharedLocationBetween(
   deps: SharedLocationRelayDeps,
@@ -354,8 +361,10 @@ export async function refreshSharedLocationBetween(
     const after = (await accessOf(deps, emitterId, state, [readerId])).get(readerId) ?? 'none';
     const before = params.before?.get(directionKey(emitterId, readerId)) ?? 'none';
     const served = projectSharedLocation(emitterId, state, after);
+    const designated = state.recipients.some((recipient) => recipient.userId === readerId.toLowerCase());
     if (served && after !== before) serve(deps.io, readerId, served);
-    else if (!served && before !== 'none') unserve(deps.io, readerId, emitterId);
+    else if (!served && (before !== 'none' || (params.before !== undefined && designated))) unserve(deps.io, readerId, emitterId);
+    if (served && (await currentSharedLocationSession(deps.cache, emitterId)) !== state.sessionId) await reconcile(deps, emitterId, [readerId]);
   }
 }
 
@@ -382,7 +391,8 @@ export async function sharedLocationSnapshotFor(
     states.map(async ([emitterId, state]) => {
       if (!state) return null;
       const access = (await accessOf(deps, emitterId, state, [readerId])).get(readerId) ?? 'none';
-      return projectSharedLocation(emitterId, state, access);
+      const projection = projectSharedLocation(emitterId, state, access);
+      return projection && (await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId ? projection : null;
     }),
   );
   return { items: served.filter((item): item is SharedLocationChangedEventData => item !== null && within(item, options.bbox)) };

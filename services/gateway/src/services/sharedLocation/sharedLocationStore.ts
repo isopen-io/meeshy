@@ -34,8 +34,9 @@ export type SharedLocationState = {
 export type SharedLocationCache = Pick<CacheStore, 'get' | 'set' | 'del'>;
 
 const keyOf = (userId: string, sessionId: string): string => `shared-location:${userId.toLowerCase()}:${sessionId}`;
-const currentKeyOf = (userId: string): string => `shared-location-current:${userId.toLowerCase()}`;
-const STOPPED = 'stopped';
+const currentKeyOf = (userId: string, generation: string): string => `shared-location-current:${userId.toLowerCase()}:${generation}`;
+/** La génération d'un compte qui n'a jamais arrêté de partage. */
+const GENESIS = 'genesis';
 const SESSION_ID = /^[0-9a-f-]{36}$/;
 const contextOf = (userId: string): string => `SharedLocation.state:${userId.toLowerCase()}`;
 
@@ -83,15 +84,32 @@ export async function storeSharedLocation(cache: SharedLocationCache, userId: st
   await cache.set(keyOf(userId, state.sessionId), sealSecret(JSON.stringify(state), contextOf(userId)), ttlOf(state, now));
 }
 
-/** Rend `state` courant : le partage précédent cesse d'être lu, quelle que soit l'écriture en vol qui le vise. */
-export async function claimSharedLocation(cache: SharedLocationCache, userId: string, state: SharedLocationState, now: number): Promise<void> {
-  await cache.set(currentKeyOf(userId), state.sessionId, ttlOf(state, now));
+const stopKeyOf = (userId: string): string => `shared-location-stop:${userId.toLowerCase()}`;
+/** Le plus long partage : l'arrêt n'a pas à être retenu au-delà. */
+const STOP_MEMORY_SECONDS = 480 * 60;
+
+/**
+ * La GÉNÉRATION du partage : la marque du dernier arrêt, unique par arrêt. Le pointeur de session
+ * vit SOUS elle : un arrêt change de génération, et tout ce qu'un démarrage en vol écrit ensuite
+ * sous l'ancienne n'est plus jamais lu — sans écriture conditionnelle, sans horloge.
+ */
+export async function sharedLocationGeneration(cache: SharedLocationCache, userId: string): Promise<string> {
+  return (await cache.get(stopKeyOf(userId))) ?? GENESIS;
 }
+
+/** Rend `state` courant DANS la génération `generation` (lue avant l'écriture). */
+export async function claimSharedLocation(cache: SharedLocationCache, userId: string, generation: string, state: SharedLocationState, now: number): Promise<void> {
+  await cache.set(currentKeyOf(userId, generation), state.sessionId, ttlOf(state, now));
+}
+
+const sessionUnder = async (cache: SharedLocationCache, userId: string, generation: string): Promise<string | null> => {
+  const current = await cache.get(currentKeyOf(userId, generation));
+  return current !== null && SESSION_ID.test(current) ? current : null;
+};
 
 /** La session courante, ou `null` (aucune, arrêtée, illisible). */
 export async function currentSharedLocationSession(cache: SharedLocationCache, userId: string): Promise<string | null> {
-  const current = await cache.get(currentKeyOf(userId));
-  return current !== null && SESSION_ID.test(current) ? current : null;
+  return sessionUnder(cache, userId, await sharedLocationGeneration(cache, userId));
 }
 
 /** Le partage en cours, ou `null` (absent, arrêté, échu, illisible, scellé pour un autre compte). */
@@ -109,33 +127,25 @@ export async function readSharedLocation(cache: SharedLocationCache, userId: str
   }
 }
 
-const stopKeyOf = (userId: string): string => `shared-location-stop:${userId.toLowerCase()}`;
-/** Le plus long partage : l'arrêt n'a pas à être retenu au-delà. */
-const STOP_MEMORY_SECONDS = 480 * 60;
-
-/** La marque du dernier arrêt (une valeur unique par arrêt), ou `null`. Un démarrage la lit AVANT d'écrire. */
-export async function sharedLocationStopMark(cache: SharedLocationCache, userId: string): Promise<string | null> {
-  return cache.get(stopKeyOf(userId));
+/**
+ * Arrête : une génération NOUVELLE (`mark`, unique), puis l'effacement de ce que l'ancienne
+ * portait — son pointeur et la session qu'il désigne, relue APRÈS le changement de génération
+ * pour attraper aussi un démarrage qui s'y serait posé pendant l'arrêt.
+ */
+export async function markSharedLocationStopped(cache: SharedLocationCache, userId: string, stopped: { readonly mark: string; readonly generation: string; readonly sessionId: string | null }): Promise<void> {
+  await cache.set(stopKeyOf(userId), stopped.mark, STOP_MEMORY_SECONDS);
+  const late = await sessionUnder(cache, userId, stopped.generation);
+  await cache.del(currentKeyOf(userId, stopped.generation));
+  const sessions = new Set([stopped.sessionId, late].filter((id): id is string => id !== null));
+  await Promise.all([...sessions].map((sessionId) => cache.del(keyOf(userId, sessionId))));
 }
 
-/**
- * Arrête : une marque NOUVELLE (un démarrage parti avant l'arrêt la voit changer et s'éteint), le
- * pointeur retombe sur « arrêté », et l'état de la session arrêtée est effacé. Aucune horloge :
- * un arrêt et un démarrage dans la même milliseconde se rangent par leur ordre réel.
- */
-export async function markSharedLocationStopped(cache: SharedLocationCache, userId: string, stopped: { readonly mark: string; readonly sessionId: string | null }): Promise<void> {
-  await cache.set(stopKeyOf(userId), stopped.mark, STOP_MEMORY_SECONDS);
-  await cache.set(currentKeyOf(userId), STOPPED, STOP_MEMORY_SECONDS);
-  if (stopped.sessionId !== null) await cache.del(keyOf(userId, stopped.sessionId));
+/** Efface le pointeur d'une génération MORTE (un arrêt l'a remplacée) : plus rien ne s'y lira jamais. */
+export async function forgetSharedLocationGeneration(cache: SharedLocationCache, userId: string, generation: string): Promise<void> {
+  if ((await sharedLocationGeneration(cache, userId)) !== generation) await cache.del(currentKeyOf(userId, generation));
 }
 
 /** Efface l'état d'une session qui n'est plus (ou ne sera jamais) courante. */
 export async function dropSharedLocationSession(cache: SharedLocationCache, userId: string, sessionId: string): Promise<void> {
   await cache.del(keyOf(userId, sessionId));
-}
-
-/** Retombe sur « arrêté » si `sessionId` est encore le pointeur : un démarrage qui cède ne laisse rien de courant. */
-export async function releaseSharedLocationSession(cache: SharedLocationCache, userId: string, sessionId: string): Promise<void> {
-  if ((await cache.get(currentKeyOf(userId))) === sessionId) await cache.set(currentKeyOf(userId), STOPPED, STOP_MEMORY_SECONDS);
-  await dropSharedLocationSession(cache, userId, sessionId);
 }

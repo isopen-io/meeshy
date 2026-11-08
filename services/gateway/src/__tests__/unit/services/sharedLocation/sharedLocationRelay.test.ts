@@ -91,8 +91,28 @@ function monde() {
   const emissions: Emission[] = [];
   const cache = cacheEnMemoire();
   let now = T0;
+  let pauseLecture: Promise<void> | null = null;
+  let relacherLecture = (): void => undefined;
+  const users = world.prisma.user as unknown as { findMany: (args: unknown) => Promise<unknown> };
+  const prisma = new Proxy(world.prisma, {
+    get: (target, prop) =>
+      prop === 'user'
+        ? new Proxy(target.user, {
+            get: (userTarget, userProp) =>
+              userProp === 'findMany'
+                ? async (args: unknown) => {
+                    const attente = pauseLecture;
+                    pauseLecture = null;
+                    const rows = await users.findMany(args);
+                    if (attente) await attente;
+                    return rows;
+                  }
+                : Reflect.get(userTarget, userProp),
+          })
+        : Reflect.get(target, prop),
+  });
   const deps: SharedLocationRelayDeps = {
-    prisma: world.prisma as unknown as PrismaClient,
+    prisma: prisma as unknown as PrismaClient,
     cache,
     io: { to: (room: string) => ({ emit: (event: string, data: Record<string, unknown>) => emissions.push({ room, event, data }) }) } as unknown as SharedLocationRelayDeps['io'],
     now: () => now,
@@ -101,6 +121,13 @@ function monde() {
     deps,
     cache,
     emissions,
+    /** La prochaine lecture des comptes (l'accès d'un lecteur) attend `relacherLecture()`. */
+    suspendreProchaineLecture: () => {
+      pauseLecture = new Promise<void>((resolve) => {
+        relacherLecture = resolve;
+      });
+    },
+    relacherLecture: () => relacherLecture(),
     avancer: (ms: number) => {
       now += ms;
     },
@@ -260,9 +287,9 @@ describe('le repos — la position complète est gardée SCELLÉE, jamais en cla
     process.env.SECRETS_AT_REST_KEY = KEY;
     const m = monde();
     await demarrer(m);
-    const session = m.cache.entries.get(`shared-location-current:${EMETTEUR}`)!;
+    const session = m.cache.entries.get(`shared-location-current:${EMETTEUR}:genesis`)!;
     const entry = m.cache.entries.get(`shared-location:${EMETTEUR}:${session.value}`)!;
-    m.cache.entries.set(`shared-location-current:${PROCHE}`, session);
+    m.cache.entries.set(`shared-location-current:${PROCHE}:genesis`, session);
     m.cache.entries.set(`shared-location:${PROCHE}:${session.value}`, entry);
 
     expect(await readSharedLocation(m.cache, PROCHE, T0)).toBeNull();
@@ -408,6 +435,90 @@ describe('les gestes qui se croisent — un partage arrêté ne revient jamais t
 
     expect(await enVol).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.NOT_SHARING });
     expect(await readSharedLocation(m.cache, EMETTEUR, T0)).toMatchObject({ position: PARIS, recipients: [{ userId: AMI }] });
+  });
+});
+
+describe('les rejeux en vol — un rejeu ou un rattrapage lus avant un geste ne le contredisent pas', () => {
+  const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+  it('un rejeu de lien en vol pendant un nouveau partage sans le lecteur ne lui rend pas la position', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    m.suspendreProchaineLecture();
+    const enVol = refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: PROCHE });
+    await tick();
+    await demarrer(m, [{ userId: AMI, precision: 'exact' }]);
+    m.relacherLecture();
+    await enVol;
+
+    expect(m.vers(PROCHE).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED);
+  });
+
+  it('un rattrapage en vol pendant l\'arrêt ne rend pas le partage arrêté', async () => {
+    const m = monde();
+    await demarrer(m);
+
+    m.suspendreProchaineLecture();
+    const enVol = sharedLocationSnapshotFor(m.deps, SANG, {});
+    await tick();
+    await stopSharedLocation(m.deps, EMETTEUR);
+    m.relacherLecture();
+
+    expect((await enVol).items).toEqual([]);
+  });
+
+  it('un démarrage parti avant l\'arrêt n\'éteint pas le partage démarré APRÈS l\'arrêt', async () => {
+    const m = monde();
+    await demarrer(m);
+
+    m.cache.suspendreProchaineEcriture();
+    const enVol = demarrer(m);
+    await tick();
+    await stopSharedLocation(m.deps, EMETTEUR);
+    expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }])).toMatchObject({ success: true });
+    m.cache.relacher();
+
+    expect(await enVol).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.NOT_SHARING });
+    expect((await readSharedLocation(m.cache, EMETTEUR, T0))?.recipients.map((r) => r.userId)).toEqual([AMI]);
+    expect([...m.cache.entries.keys()].filter((key) => key.startsWith(`shared-location:${EMETTEUR}:`))).toHaveLength(1);
+  });
+
+  it('un démarrage qui perd contre l\'arrêt ne laisse aucun état en cache', async () => {
+    const m = monde();
+    await demarrer(m);
+
+    m.cache.suspendreProchaineEcriture();
+    const enVol = demarrer(m);
+    await tick();
+    await stopSharedLocation(m.deps, EMETTEUR);
+    m.cache.relacher();
+    await enVol;
+
+    expect([...m.cache.entries.keys()].filter((key) => key.startsWith('shared-location:') || key.startsWith('shared-location-current:'))).toEqual([]);
+  });
+
+  it('une baisse sous Ami efface chez un destinataire DÉSIGNÉ même si la capture d\'avant ne l\'a pas vu servi', async () => {
+    const m = monde();
+    const avant = await captureSharedLocationAccess(m.deps, { userA: EMETTEUR, userB: PROCHE });
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    await m.lier(EMETTEUR, PROCHE, 'ACQUAINTANCE');
+    await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: PROCHE, before: avant });
+
+    expect(m.vers(PROCHE).map((e) => e.event)).toEqual([SERVER_EVENTS.SHARED_LOCATION_ENDED]);
+  });
+
+  it('une montée ne dit jamais rien à qui ne voit rien', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+
+    await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: CONNAISSANCE });
+
+    expect(m.vers(CONNAISSANCE)).toEqual([]);
   });
 });
 
