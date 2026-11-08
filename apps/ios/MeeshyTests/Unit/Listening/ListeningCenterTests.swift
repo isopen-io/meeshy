@@ -220,6 +220,78 @@ final class ListeningCenterTests: XCTestCase {
     }
 }
 
+/// La ligne de liste ne montre l'écoute que du pair d'un direct (#16733) : un groupe n'a pas UN pair, un direct sans
+/// pair connu n'a personne à écouter. Ce qui s'affiche reste ce que le serveur a servi (le centre d'écoute juge).
+final class ConversationRowListeningTests: XCTestCase {
+
+    private func conversation(type: MeeshyConversation.ConversationType, peer: String?) -> MeeshyConversation {
+        MeeshyConversation(id: "c1", identifier: "c1", type: type, participantUserId: peer)
+    }
+
+    func test_listenedUserId_direct_isThePeer() {
+        XCTAssertEqual(ConversationRowListening.userId(for: conversation(type: .direct, peer: "alice")), "alice")
+    }
+
+    func test_listenedUserId_group_isNil() {
+        XCTAssertNil(ConversationRowListening.userId(for: conversation(type: .group, peer: "alice")))
+    }
+
+    func test_listenedUserId_directWithoutPeer_isNil() {
+        XCTAssertNil(ConversationRowListening.userId(for: conversation(type: .direct, peer: nil)))
+        XCTAssertNil(ConversationRowListening.userId(for: conversation(type: .direct, peer: "")))
+    }
+}
+
+/// Les DEUX formes de liste montrent l'écoute (#16733) : la Lentille est la forme par défaut (`LentilleFeatureFlag`
+/// allumé sans clé), le rang historique reste choisissable dans les Réglages. Le bandeau se pose dans l'avatar PARTAGÉ
+/// des deux rangs, et chaque rang dit l'écoute à VoiceOver par sa valeur — sans quoi la liste par défaut se taisait.
+@MainActor
+final class ConversationRowListeningWiringTests: XCTestCase {
+
+    private func code(_ repoRelativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent(repoRelativePath), encoding: .utf8)
+        return AppSourceGuard.stripComments(source)
+    }
+
+    func test_sharedRowAvatar_paintsListening_atItsOwnSize() throws {
+        let avatar = try code("apps/ios/Meeshy/Features/Main/Views/ConversationRowAvatar.swift")
+        XCTAssertTrue(avatar.contains("AvatarListeningOverlay(userId: listenedUserId, avatarSize: style.context.size)"),
+                      "l'avatar partagé des deux rangs pose le bandeau, à la taille de SON contexte (52 ou 44)")
+    }
+
+    func test_bothRows_speakListening_inTheirValue() throws {
+        for path in [
+            "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",
+            "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+        ] {
+            XCTAssertTrue(try code(path).contains(".modifier(ConversationRowListeningSpeech("),
+                          "\(path) : la ligne dit l'écoute du pair dans sa valeur VoiceOver")
+        }
+    }
+
+    func test_noRow_paintsASecondBand() throws {
+        for path in [
+            "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",
+            "apps/ios/Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+        ] {
+            XCTAssertFalse(try code(path).contains("AvatarListeningOverlay("),
+                           "\(path) : un seul site peint le bandeau d'une ligne, l'avatar partagé")
+        }
+    }
+
+    func test_bothListForms_carryTheBand_notTheGlyph() {
+        XCTAssertEqual(AvatarListeningBand.form(avatarSize: ConversationRowAvatar.Style.classic.context.size), .band)
+        XCTAssertEqual(AvatarListeningBand.form(avatarSize: ConversationRowAvatar.Style.lentille.context.size), .band)
+    }
+}
+
 /// Le publisher du centre n'est pas `Sendable` ; le témoin le remet à une tâche détachée pour le lire hors du fil principal.
 private struct OffMainPublisher: @unchecked Sendable {
     let publisher: AnyPublisher<AvatarListening?, Never>
