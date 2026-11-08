@@ -102,6 +102,29 @@ export interface LinkJoinParams {
    */
   readonly arrivalIO?: ConversationRoomEmitter | null;
   /**
+   * Ce qui met les sockets DÉJÀ CONNECTÉES de l'arrivant dans la room de la
+   * conversation. Fourni par les deux portes depuis
+   * `fastify.socketIOHandler?.getManager()`.
+   *
+   * Pourquoi c'est ici, dans le cœur, et non chez une route : `message:new`
+   * part sur la room de conversation SEULE, et les rooms de participation ne se
+   * rejoignent qu'à l'AUTHENTIFICATION. Un compte dont la socket vivait déjà au
+   * moment de sa jointure n'était donc dans aucune audience du fil qu'il venait
+   * de rejoindre, pour toute la durée de cette socket — et dans l'état que
+   * `AuthHandler` nomme le pire : `connectedUsers` le dit joignable, donc tout
+   * expéditeur SAUTE la file hors ligne pour lui. Aucun message, aucun rejeu.
+   *
+   * La porte DÉPRÉCIÉE portait le geste depuis le 2026-08-30, la CANONIQUE —
+   * celle que le web appelle — ne l'a jamais eu. Une règle qui doit être
+   * retapée à chaque porte est une règle qu'une porte finira par ne pas avoir :
+   * la copie locale de `sharing.ts` est retirée, et ce paramètre est ce qui
+   * rend la règle inoubliable pour une troisième porte.
+   *
+   * Absent : rien n'est joint, et la jointure aboutit quand même — c'est un
+   * canal latéral, pas la jointure.
+   */
+  readonly arrivalRooms?: ConversationRoomAdmission | null;
+  /**
    * Un `Authorization: Bearer` a été PRÉSENTÉ et n'a pas authentifié (#6741) —
    * la porte `optionalAuth` retombe alors sur un `authContext` anonyme,
    * INDISCERNABLE d'une requête sans aucune créance. Sans ce signal,
@@ -115,6 +138,16 @@ export interface LinkJoinParams {
   /** `social.conversation_link_joined` (#8959) — le moteur partagé par défaut, un double en test. */
   readonly engagement?: LinkJoinEngagement;
 }
+
+/**
+ * La seule capacité que l'admission demande à la couche socket : faire entrer
+ * les sockets d'un compte dans une room de conversation. Structurelle, pour que
+ * le cœur n'importe pas le gestionnaire et qu'un double de test soit un objet à
+ * une méthode.
+ */
+export type ConversationRoomAdmission = {
+  joinUserToConversationRoom(userId: string, conversationId: string): Promise<void>;
+};
 
 export type LinkJoinOutcome =
   | { readonly kind: 'not-found' }
@@ -414,6 +447,22 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
     // #16837 — l'arrivée s'annonce aux autres membres. Un invité ne peut pas
     // en être le SUJET (contrat strict, #16838) ; il en reste DESTINATAIRE.
     const arrivingUserId = outcome.participant.userId;
+    // L'admission dans la room, AVANT l'annonce : l'une sert l'arrivant, l'autre
+    // parle de lui aux autres, et c'est la première qui décide s'il recevra quoi
+    // que ce soit du fil. Un INVITÉ n'en a pas besoin — sa socket naît de cette
+    // réponse, et elle rejoindra ses rooms à son authentification ; c'est la
+    // même condition que l'annonce, pour une raison différente, et c'est
+    // pourquoi elles sont écrites séparément.
+    if (arrivingUserId && params.arrivalRooms) {
+      try {
+        await params.arrivalRooms.joinUserToConversationRoom(arrivingUserId, shareLink.conversationId);
+      } catch (error) {
+        logError(
+          `link join could not admit the account into the conversation room (conversation ${shareLink.conversationId})`,
+          error,
+        );
+      }
+    }
     if (arrivingUserId) {
       await announceMemberArrival({
         prisma,
@@ -705,6 +754,7 @@ export function registerLinkAdmissionRoutes(
           authContext,
           // `getIO?.()` : l'éventail est ACCESSOIRE (#16837).
           arrivalIO: fastify.socketIOHandler?.getManager()?.getIO?.(),
+          arrivalRooms: fastify.socketIOHandler?.getManager() ?? null,
           requestIp: resolveClientIp(request),
           requestUserAgent: extractUserAgent(request),
           rejectedCredential,
