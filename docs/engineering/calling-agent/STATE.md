@@ -493,3 +493,33 @@ socket jusqu'au client.
 1. #16781 : perte silencieuse d'un lot refusé (fiabilité, petit lot sur le même fichier).
 2. #16782 avec #16783 : quota de la voie rapide et compteur de débordement, groupés parce qu'ils touchent le même site.
 3. Toujours : lire `call_caption_translation_seconds` sur le staging. Ce cycle doit en baisser le p50 d'environ 0,5 à 1 s quand le traducteur est au repos. Faire aussi la recette fr↔en de #16613.
+
+## Cycle 12 — 2026-11-08
+
+- **Base** : `origin/dev` @ `9d802fcdc` (le cycle 11, #16780, y est fusionné).
+- **Branche** : `claude/determined-volta-mh6bq1`.
+- **Objectif** : #16781 (piste 1 du cycle 11). Quand une file pleine refuse un lot de traductions, aucune tâche ne doit disparaître en silence.
+- **Constat** : quand la file était pleine, `ConnectionManager._enqueue_batch` jetait le lot sans journal, sans compteur et sans valeur de retour. Ses trois appelants (flush immédiat, boucle des 50 ms, `stop()`) croyaient donc la tâche acceptée. La passerelle n'avait ni traduction ni erreur et attendait son délai. Les messages ordinaires passent par ce chemin. Les sous-titres d'appel n'y passent plus depuis #16780.
+- **Livré** (seul le traducteur change : ni la passerelle, ni le protocole ZMQ, ni la forme de `translation_error`) :
+  - `_enqueue_batch` rend un bool. Un lot refusé compte une unité de `pool_full_rejections` par tâche. Il est journalisé par ses task_id et sa taille, jamais par son texte.
+  - Rappel optionnel `on_tasks_rejected`, appelé hors de `_batch_lock`. Un rappel qui lève est absorbé et seul le type de l'exception est journalisé. Les trois chemins le passent. Une tâche entrée dans l'accumulateur est acceptée : `enqueue_task` rend `True`, et son refus éventuel ne se dit que par le rappel. Il n'y a donc jamais de double erreur.
+  - `TranslationPoolManager.set_rejection_handler`. Le `TranslationHandler` le branche lui-même sur `publish_pool_full`, qui publie une `translation_error` par tâche. Sa forme est identique, octet pour octet, à celle du refus direct, et elle est construite en un seul site, `_pool_full_error`.
+  - R1 de la QA, corrigée dans le cycle : une tâche signalée « pool full » libère sa réserve en vol (`release_inflight`). Avant, les relances de la passerelle à 30 s et 60 s étaient ignorées comme « déjà en vol » (réserve de 75 s au moins). Pour un texte long, la tâche n'était jamais traduite. Une tâche acceptée garde sa réserve.
+- **Tests** : `tests/test_batch_pool_full_rejection.py` (10) et `tests/test_batch_pool_full_rejection_qa.py` (10, ajoutés par la QA : concurrence 6×60, ré-enfilage sans interblocage, any/normal, sous-titres, forme JSON, PUB absent ou en échec).
+  - **Rouge sur le code d'avant** : 6 sur 7, puis 2 sur 10 pour R1.
+  - **Vert** : 37/37 sur les témoins, la déduplication et la voie rapide, relancé par moi.
+  - **Suites voisines** : 448 passés, 7 sautés et 4 erreurs. Les 4 erreurs sont préexistantes (`test_23_translation_api.py::TestBatchTranslateEndpoint`, reproduites sur `origin/dev`).
+- **QA** : favorable avec réserves. R1 est corrigée dans le cycle. R2 → #16819, R3 → #16820, R4 et R5 → #16822.
+
+### Limites connues
+
+- Les tâches acceptées au flush final de `stop()` tombent dans des files dont les workers sont déjà arrêtés. → #16819.
+- La clé de lot ignore `conversation_id`, donc un lot peut mélanger any et normal. → #16820.
+- Le `{e}` brut d'`enqueue_task` / `_handle_translation_request`, et une exception levée après le `pop` de l'accumulateur. → #16822.
+- `pool_full_rejections` compte désormais des tâches, pas des lots, ce qui peut faire monter les tableaux de bord sous saturation.
+
+### Cycle suivant : par où reprendre
+
+1. #16782 avec #16783 : quota de la voie rapide et compteur de débordement des sous-titres (même site, `connection_manager.py`).
+2. #16819 et #16820 : petits lots du même fichier, à grouper.
+3. Toujours : lire `call_caption_translation_seconds` sur le staging, et faire la recette fr↔en de #16613.
