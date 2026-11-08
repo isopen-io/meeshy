@@ -118,6 +118,10 @@ const fr = {
   'talkie.send.failed': 'Le talkie n’a pas pu partir.',
   'talkie.send.micDenied': 'Autorisez le micro pour parler en talkie.',
   'talkie.send.limit': 'Trente secondes au plus : la prise de parole s’est arrêtée.',
+  'listening.category.music': 'Écoute de la musique',
+  'listening.category.video': 'Regarde une vidéo',
+  'listening.category.browsing': 'Navigue',
+  'listening.spoken': 'En ce moment : {activity}',
 } as const;
 
 export default fr;

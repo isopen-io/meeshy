@@ -116,6 +116,10 @@ const ar = {
   'talkie.send.failed': 'تعذّر إرسال جهاز اللاسلكي.',
   'talkie.send.micDenied': 'اسمح باستخدام الميكروفون لاستعمال جهاز اللاسلكي.',
   'talkie.send.limit': 'ثلاثون ثانية كحد أقصى: توقفت المداخلة.',
+  'listening.category.music': 'يستمع إلى الموسيقى',
+  'listening.category.video': 'يشاهد فيديو',
+  'listening.category.browsing': 'يتصفح',
+  'listening.spoken': 'الآن: {activity}',
 } as const satisfies CirclesCatalog;
 
 export default ar;

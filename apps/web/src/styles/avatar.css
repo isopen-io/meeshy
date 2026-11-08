@@ -209,3 +209,35 @@
 img[data-loaded] ~ [data-avatar-initials] {
   visibility: hidden;
 }
+
+/**
+ * L'ÉCOUTE QUI DÉFILE SUR L'AVATAR (#16729) — un bandeau sur le bas du cercle, dont
+ * le texte passe en boucle : la piste porte DEUX copies du texte et glisse de
+ * moitié, si bien que la boucle ne saute jamais. `prefers-reduced-motion` l'arrête
+ * sur la première copie, tronquée : l'information reste, le mouvement part.
+ */
+@keyframes listening-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+[data-listening-track] {
+  animation: listening-marquee var(--listening-duration, 8s) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-listening-track] {
+    animation: none;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  [data-listening-track] > [data-listening-copy='1'] {
+    display: none;
+  }
+}

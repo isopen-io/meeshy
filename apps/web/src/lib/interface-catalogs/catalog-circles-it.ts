@@ -116,6 +116,10 @@ const it = {
   'talkie.send.failed': 'Il walkie-talkie non è potuto partire.',
   'talkie.send.micDenied': 'Consenti il microfono per usare il walkie-talkie.',
   'talkie.send.limit': 'Trenta secondi al massimo: l’intervento si è fermato.',
+  'listening.category.music': 'Ascolta musica',
+  'listening.category.video': 'Guarda un video',
+  'listening.category.browsing': 'Naviga',
+  'listening.spoken': 'In questo momento: {activity}',
 } as const satisfies CirclesCatalog;
 
 export default it;
