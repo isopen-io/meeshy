@@ -3,6 +3,7 @@ import type { MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 import { participationEstVivante } from '../../routes/conversations/utils/access-control';
 import { MAX_MENTIONS_PER_MESSAGE } from '../../validation/mention-list.js';
 import { protectedPreview } from '../notifications/notification-preview';
+import { editReadership, blockedEditKeys } from '../../socketio/editedAudience';
 
 /**
  * Le masque servi quand la relecture des drapeaux ne conclut pas — message
@@ -40,7 +41,18 @@ export interface MentionTargetMessage {
  * délégués générés portent des surcharges que rien de recopié à la main ne
  * satisfait.
  */
-export type MentionPrisma = Pick<PrismaClient, 'participant' | 'user' | 'message' | 'mention'>;
+/**
+ * `conversationShareLink` n'est pas décoratif : la loi du plancher
+ * d'historique le lit pour savoir si le lien d'entrée d'un participant
+ * autorise l'historique (`editedAudience.ts` → `translationReaders`). Une
+ * projection trop ÉTROITE rend la descente impossible EN AVAL sans qu'aucun
+ * témoin ne rougisse — c'est la leçon du cycle 124, où dix-sept sites avaient
+ * sauté la forme du `select` plutôt que l'appel.
+ */
+export type MentionPrisma = Pick<
+  PrismaClient,
+  'participant' | 'user' | 'message' | 'mention' | 'conversationShareLink'
+>;
 
 /**
  * L'identité UTILISATEUR derrière le participant expéditeur.
@@ -412,8 +424,35 @@ async function notifyNewlyMentioned(
     // notifier, cas rare sur le chemin d'édition.
     const protection = await loadMessageProtection(prisma, message.id, onError);
 
+    // Le PLANCHER D'HISTORIQUE, relu ICI pour la raison que le paragraphe
+    // ci-dessus donne déjà : « une garde de confidentialité qui dépend du
+    // câblage de l'appelant échoue en montrant PLUS ».
+    //
+    // `loadMessageProtection` couvre la vue unique, le flou, l'éphémère et le
+    // chiffré — jamais le plancher. Un INSCRIT entré par un lien sans
+    // historique recevait donc sur son écran verrouillé le texte intégral d'un
+    // message écrit avant son arrivée, dès qu'une édition l'y nommait, pendant
+    // que `GET …/messages` et `/sync` le lui refusent. Même raisonnement que le
+    // cycle 123 bis au paragraphe précédent — « ce sont des TIERS » — sur la
+    // dimension qu'il ne couvrait pas.
+    //
+    // Sur un message NEUF personne n'est sous plancher (son `createdAt` est
+    // postérieur à tout plancher), donc la loi rend `{ kind: 'room' }` sans
+    // restreindre : le chemin d'envoi ne paie qu'une requête qui ne rend rien.
+    const readership = await editReadership(prisma, message.conversationId, message.id, onError);
+    // `'unknown'` ⇒ on ne sait NI qui est bloqué, NI qui est autorisé, et la
+    // bannière est une sortie de CONTENU : elle se tait, comme `message:edited`
+    // au même instant. Lire l'ensemble de clés au lieu du verdict rendait ici
+    // un ensemble VIDE, donc poussait le texte à TOUS les nommés exactement
+    // quand l'autre sortie se fermait — une ignorance collapsée en affirmation
+    // (leçon `[]`-vs-`undefined`, cycle 116).
+    if (readership.kind === 'unknown') return;
+    const blocked = blockedEditKeys(readership);
+    const admitted = newlyMentionedUserIds.filter((userId) => !blocked.has(userId));
+    if (admitted.length === 0) return;
+
     await notificationService.createMentionNotificationsBatch(
-      [...newlyMentionedUserIds],
+      [...admitted],
       {
         senderId: editorUserId,
         senderProfile: sender,
