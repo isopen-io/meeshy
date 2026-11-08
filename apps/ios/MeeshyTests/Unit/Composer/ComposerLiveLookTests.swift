@@ -337,7 +337,7 @@ final class ComposerLiveLookTests: XCTestCase {
     }
 
     func test_laCamera_guetteSesTrames() throws {
-        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift") + Self.code("Meeshy/Features/Main/Components/CameraModel+Switch.swift")
         XCTAssertTrue(camera.contains("setSampleBufferDelegate(self.liveFeed, queue: self.liveFeed.queue)"),
                       "le guet se branche sur la file de la session (#9464)")
         XCTAssertTrue(camera.contains("liveFeed.setPosition(installe.position)"),

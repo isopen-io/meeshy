@@ -52,13 +52,20 @@ final class PhotoCaptureProcessingGuardTests: XCTestCase {
         .map { root.appendingPathComponent($0) }
         .flatMap { dir -> [URL] in
             guard let walker = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: nil) else { return [] }
-            return walker.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+            return walker.compactMap { $0 as? URL }.filter {
+                $0.pathExtension == "swift" && $0.lastPathComponent != Self.cameraPhotoDelegateName
+            }
         }
     }
 
+    private static let cameraPhotoDelegateName = "CameraModel+PhotoDelegate.swift"
+
     private func code(of url: URL) -> String? {
         guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-        return AppSourceGuard.stripComments(raw)
+        guard url.lastPathComponent == "CameraModel.swift" else { return AppSourceGuard.stripComments(raw) }
+        let delegate = url.deletingLastPathComponent().appendingPathComponent(Self.cameraPhotoDelegateName)
+        guard let rawDelegate = try? String(contentsOf: delegate, encoding: .utf8) else { return nil }
+        return AppSourceGuard.stripComments(raw + "\n" + rawDelegate)
     }
 
     func test_swiftSources_scanFindsTheSdkService() {

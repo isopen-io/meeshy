@@ -71,7 +71,9 @@ final class ComposerPhotoEncodingTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let camera = AppSourceGuard.stripComments(try String(contentsOf: racine.appendingPathComponent(
-            "Meeshy/Features/Main/Components/CameraModel.swift"), encoding: .utf8))
+            "Meeshy/Features/Main/Components/CameraModel.swift"), encoding: .utf8)
+            + String(contentsOf: racine.appendingPathComponent(
+            "Meeshy/Features/Main/Components/CameraModel+PhotoDelegate.swift"), encoding: .utf8))
         XCTAssertTrue(camera.contains("PhotoLibraryManager.shared.saveImageFile(data"),
                       "le brut part octets tels quels : saveImage(_ data:) repasse par UIImage et perd l'EXIF")
     }

@@ -27,6 +27,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Components/CameraModel.swift")
         return try String(contentsOf: url, encoding: .utf8)
+            + String(contentsOf: url.deletingLastPathComponent().appendingPathComponent("CameraModel+Switch.swift"), encoding: .utf8)
     }
 
     private func body(from startMarker: String, to endMarker: String, in source: String) throws -> String {
@@ -39,7 +40,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_switchCamera_whileRecording_doesNotReconfigureInputInPlace() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "func switchCamera() {", to: "private func performCameraSwitch", in: source)
+        let fn = try body(from: "func switchCamera() {", to: "func performCameraSwitch", in: source)
 
         XCTAssertTrue(
             fn.contains("if isRecordingVideo"),
@@ -61,7 +62,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
 
     func test_switchCamera_guardsReentrancyWhileAlreadySwitching() throws {
         let source = try cameraViewSource()
-        let fn = try body(from: "func switchCamera() {", to: "private func performCameraSwitch", in: source)
+        let fn = try body(from: "func switchCamera() {", to: "func performCameraSwitch", in: source)
         XCTAssertTrue(
             fn.contains("guard !isSwitchingCameraDuringRecording else { return }"),
             "switchCamera() must no-op while a previous switch is still settling — " +
@@ -325,7 +326,7 @@ final class CameraRecordingInterruptionTests: XCTestCase {
 
     /// Une photo sans données ne sort plus en silence.
     func test_unePhotoSansDonnees_seDit() throws {
-        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        let modele = try source("Meeshy/Features/Main/Components/CameraModel.swift") + source("Meeshy/Features/Main/Components/CameraModel+PhotoDelegate.swift")
         let fn = corps(modele, de: "didFinishProcessingPhoto photo:", a: "let nom = ComposerPhotoEncoding")
         XCTAssertEqual(fn.components(separatedBy: "self.photoWasLost()").count - 1, 2)
         let perte = corps(modele, de: "func photoWasLost()", a: "/// Le tic du cadre")

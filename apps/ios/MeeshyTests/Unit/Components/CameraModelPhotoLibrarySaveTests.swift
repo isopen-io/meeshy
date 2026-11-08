@@ -28,7 +28,8 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Components/CameraModel.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try String(contentsOf: url.deletingLastPathComponent().appendingPathComponent("CameraModel+PhotoDelegate.swift"), encoding: .utf8)
+            + String(contentsOf: url, encoding: .utf8)
     }
 
     private func body(from startMarker: String, to endMarker: String, in source: String) throws -> String {

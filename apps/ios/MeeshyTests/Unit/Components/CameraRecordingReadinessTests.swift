@@ -86,6 +86,7 @@ final class CameraRecordingReadinessTests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Components/CameraModel.swift")
         return try String(contentsOf: url, encoding: .utf8)
+            + String(contentsOf: url.deletingLastPathComponent().appendingPathComponent("CameraModel+Photo.swift"), encoding: .utf8)
     }
 
     /// **La règle est CONSULTÉE, et le seul appel à `startRecording(to:` en

@@ -71,7 +71,7 @@ final class ComposerCameraSwitchCoverTests: XCTestCase {
     }
 
     func test_theCameraModel_paintsTheCoverBesideTheSwap_neverBeforeIt() throws {
-        let modele = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        let modele = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift") + Self.code("Meeshy/Features/Main/Components/CameraModel+Switch.swift")
         XCTAssertTrue(modele.contains("ComposerCameraSwitchRule.coverFrame(latest: self.liveFeed.latestImage())"))
         XCTAssertFalse(modele.contains(".flatMap(ComposerCameraSwitchRule.cover(from:))"),
                        "le flou ne se peint plus sur la file de la session, devant la bascule")

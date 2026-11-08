@@ -21,7 +21,7 @@ final class CameraSystemControlsTests: XCTestCase {
     }
 
     func test_camera_installsTheControls_atEachLens() throws {
-        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift") + Self.code("Meeshy/Features/Main/Components/CameraModel+Switch.swift")
         XCTAssertEqual(camera.components(separatedBy: "photoPlan: { self.adoptLens($0) }").count - 1, 2,
                        "la préparation ET la bascule d'objectif posent les curseurs")
         XCTAssertTrue(camera.contains("CameraSystemControlsHost.install(in: session, for: device)"))
