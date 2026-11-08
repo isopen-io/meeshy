@@ -1,7 +1,14 @@
 package me.meeshy.app.calls
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.Color
 import me.meeshy.sdk.call.CallSpeakerColor
 import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.ui.theme.MeeshyBorder
+import me.meeshy.ui.theme.hexColor
+
+private const val NEUTRAL_RIM_ALPHA = 0.3f
+private const val PAUSED_RIM_ALPHA = 0.8f
 
 /**
  * Le liseré d'une vignette d'appel porte la couleur de la personne qu'elle MONTRE (`docs/product/appels-vue-finale.md`
@@ -19,4 +26,17 @@ internal object CallTileRim {
 
     /** Le fond d'avatar du pair hors de l'écran d'appel (l'appel réduit) : la couleur de son PROFIL, l'identifiant primant. */
     fun peerAvatar(peerUserId: String, peerName: String): String = DynamicColorGenerator.profileAccentHex(peerUserId, peerName)
+
+    /**
+     * Le trait de la vignette du duo (P1 : `border: 2px var(--moi)`) : l'ambre de la pause prime, puis la couleur de qui
+     * elle montre au trait fort ; sans couleur lisible, le liseré blanc et fin déjà livré.
+     */
+    fun selfTileBorder(paused: Boolean, rimHex: String?, warning: Color): BorderStroke {
+        val rim = rimHex?.let { hexColor(it) }?.takeIf { it != Color.Unspecified }
+        return when {
+            paused -> BorderStroke(MeeshyBorder.regular, warning.copy(alpha = PAUSED_RIM_ALPHA))
+            rim != null -> BorderStroke(MeeshyBorder.strong, rim)
+            else -> BorderStroke(MeeshyBorder.regular, Color.White.copy(alpha = NEUTRAL_RIM_ALPHA))
+        }
+    }
 }

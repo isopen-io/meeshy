@@ -1,6 +1,10 @@
 package me.meeshy.app.calls
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.ui.theme.MeeshyBorder
 import me.meeshy.sdk.call.CallSpeakerColor
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import org.junit.Test
@@ -37,5 +41,21 @@ class CallTileRimTest {
     fun `l'avatar de l'appel reduit se teinte par l'identifiant du pair, le nom n'etant qu'un repli`() {
         assertThat(CallTileRim.peerAvatar(peerUserId = "u-awa", peerName = "Awa")).isEqualTo(DynamicColorGenerator.colorForName("u-awa"))
         assertThat(CallTileRim.peerAvatar(peerUserId = "", peerName = "Awa")).isEqualTo(DynamicColorGenerator.colorForName("Awa"))
+    }
+
+    @Test
+    fun `le lisere a ma couleur prend l'epaisseur forte du jeton de bordure`() {
+        assertThat(CallTileRim.selfTileBorder(paused = false, rimHex = "#FF0000", warning = Color.Yellow))
+            .isEqualTo(BorderStroke(MeeshyBorder.strong, Color.Red))
+    }
+
+    @Test
+    fun `en pause l'ambre prime sur ma couleur, et sans couleur le lisere reste blanc et fin`() {
+        assertThat(CallTileRim.selfTileBorder(paused = true, rimHex = "#FF0000", warning = Color.Yellow))
+            .isEqualTo(BorderStroke(MeeshyBorder.regular, Color.Yellow.copy(alpha = 0.8f)))
+        assertThat(CallTileRim.selfTileBorder(paused = false, rimHex = null, warning = Color.Yellow))
+            .isEqualTo(BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)))
+        assertThat(CallTileRim.selfTileBorder(paused = false, rimHex = "pas-une-couleur", warning = Color.Yellow))
+            .isEqualTo(BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)))
     }
 }
