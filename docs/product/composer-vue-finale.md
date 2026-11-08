@@ -27,7 +27,9 @@
    - Publier est le seul bouton plein, à la couleur de marque. Il n'existe que si la scène porte quelque chose : sur une scène vide, la pilule est (…) · Texte · Média.
    - Le ▾ choisit ce qui part (story, post, réel, cases combinables, et la disposition du post) ; seul Publier envoie.
    - Un bouton actif est un disque blanc plein à icône sombre ; un inactif n'a pas de fond. Jamais de verre posé sur du verre.
-2. **L'en-tête ne porte que ce qui sert maintenant.** ✕ à gauche. ↶ ↷ à droite, seulement s'il y a un historique. La rangée des scènes au centre, seulement à partir de deux scènes. L'audience est une puce de l'en-tête, sous ✕, dès que Publier existe.
+2. **L'en-tête ne porte que ce qui sert maintenant.** ✕ à gauche. ↶ ↷ à droite, seulement s'il y a un historique. L'audience est une puce de l'en-tête, sous ✕, dès que Publier existe.
+   - **La rangée des scènes flotte en SURIMPRESSION, sans cadre ni verre**, en haut de la scène, à partir de deux scènes ; « + » est toujours en dernier.
+   - Toucher une vignette = aller à la scène ; **double toucher = la dupliquer** ; **appui long = une croix apparaît dessus (supprimer, confirmé) et la vignette se soulève pour aller à une autre place**. En post, la même rangée range l'ordre de publication des médias.
 3. **(…) fait sortir les actions, et les range.** Deux rails verticaux sortent vers les bords, centrés.
    - **Gauche = ce qu'on pose** : Sticker · Son · Dessin · Caméra · Mention · Lieu.
    - **Droite = la scène et la publication** : Fond · Scène + · Animation · Durée · Légende (en story) ou Texte du post (en post et réel) · Hashtags · Plus.
@@ -37,7 +39,7 @@
 5. **Un toucher sur la scène à vide range tout, un autre toucher rend tout.**
    - Sur une scène vierge, le premier toucher arme la caméra (rien d'autre n'y a de sens).
    - Avec un objet sélectionné, le toucher désélectionne d'abord.
-   - Rangé : il ne reste que la scène et un fin repère de ses bords. Il n'y a pas de minuterie.
+   - Rangé : **la scène prend tout l'écran en gardant ses proportions**, avec un peu de noir en haut et en bas, ou à gauche et à droite, selon l'écran. Plus aucun contrôle. Il n'y a pas de minuterie.
 6. **Toucher un objet le sélectionne, et la pilule devient celle de l'objet : ‹ · Modifier · Dupliquer · Temps · Retirer.**
    - L'objet passe devant. Aucun cadre ni poignée ne s'affiche ; un léger halo dit la sélection, les repères d'aimantation n'apparaissent que pendant le geste.
    - Les rails et l'en-tête se retirent, ↶ ↷ restent.
@@ -49,7 +51,7 @@
    - L'en-tête devient Quitter (à gauche) et Valider (à droite) ; les réglages de l'outil vivent dans une plaque de verre en bas.
    - Quitter rend l'objet d'avant ; Valider garde et fait UN pas d'annulation.
    - Dans un mode, la scène reste manipulable au doigt : glisser, pincer, tourner l'objet modifié (#8535).
-10. **Écrire colle la barre au clavier : Aa · ● · ≡ · ▣ · OK.** La pilule et les rails disparaissent. Aa = police, taille, graisse, effet, langue du texte ; ● = couleur et contour ; ≡ = alignement ; ▣ = fond et cadre. Le panneau prend la hauteur du clavier.
+10. **Écrire colle la barre au clavier : Aa · ● · ≡ · ▣ · OK.** La pilule et les rails disparaissent. Aa = police, taille, graisse, effet, langue du texte ; **quatre effets seulement, soignés : Néon, Or, Ombre et Flamme, où le texte brûle littéralement (flammes animées)** ; ● = couleur et contour ; ≡ = alignement ; ▣ = fond et cadre. Le panneau prend la hauteur du clavier.
 11. **Importer plusieurs médias crée une scène par média** (#8533), jusqu'à 10. Le premier remplit la scène vierge. Chaque scène en cours d'ajout porte son fantôme (préparation, envoi, réessayer) ; le passage à l'adresse téléversée est imperceptible (#8534).
 12. **Un refus se dit sur place, jamais dans une alerte.** Un format indisponible reste visible et grisé dans le ▾, avec sa raison en une ligne (« Demande une vidéo, un son ou deux photos »). Un plafond atteint (10 scènes, 50 objets d'une famille, 1000 caractères, 2 h) se dit en une capsule au-dessus de la pilule, avec un retour haptique et une annonce VoiceOver.
 13. **Ce qui ne doit pas s'afficher ne s'affiche pas.**
@@ -168,6 +170,7 @@ Le tableau des vues et leurs captures est généré avec la planche (voir l'inde
 | Sélection sans cadre, pilule de l'objet | Cadre pointillé blanc, barre Modifier · Dupliquer · Temps · Retirer à la place de la colonne | O1 |
 | Fond, Durée, Transitions dans la pilule | Feuilles ancrées « Fond », « Durée de la diapo » | S1, S5 |
 | Modifier en mode Quitter · Réglages · Valider | Rail Modifier dans la colonne, propriétés en plaque basse | O3 |
-| Réordonner et dupliquer une scène par appui long sur sa vignette | `moveSlide` / `duplicateSlide` sans appelant | R6 |
+| Rangée des scènes en surimpression ; double toucher duplique, appui long croix + glisser | Rangée dans un cadre ; `moveSlide` / `duplicateSlide` sans appelant | R5, R6 |
+| Quatre effets de texte, dont Flamme animée | 24 effets + Aucun (`StoryTextEffect`) | A2 |
+| Rangé = scène plein écran, proportions gardées | Pas d'état rangé | R4 |
 | Verrouiller un objet depuis la pilule de l'objet | `isLocked` respecté, aucune bascule dans l'UI | O2 |
-| Un toucher range tout | Toucher la scène désélectionne ou arme la caméra | R4 |
