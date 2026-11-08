@@ -169,7 +169,7 @@ final class ReelInstantSwitchTests: XCTestCase {
                            "\(file.lastPathComponent) élit une langue LUE sur les défauts de composition : ReaderPrism.resolve(for:)")
         }
 
-        let wired = ["Main/Views/ReelsPlayerView.swift", "Main/Views/ReelsPlayerView+Scene.swift", "Main/Views/ReelFeedCard.swift",
+        let wired = ["Main/Views/ReelPageView.swift", "Main/Views/ReelsPlayerView+Scene.swift", "Main/Views/ReelFeedCard.swift",
                      "Main/Views/ReelPrewarm.swift", "Main/ViewModels/ReelsViewModel.swift", "Navigation/ReelNotificationOpener.swift"]
         for path in wired {
             let source = try String(contentsOf: appRoot.appendingPathComponent(path), encoding: .utf8)
@@ -324,7 +324,7 @@ final class ReelElectionPathSourceGuardTests: XCTestCase {
     }
 
     func test_sceneAndAudio_engageOnlyOnceSettled() throws {
-        let player = try source("ReelsPlayerView.swift")
+        let player = try source("ReelPageView.swift")
         XCTAssertTrue(player.contains("ReelSceneView(reel: reel, document: document, isActive: isEngaged,"),
                       "la scène (canvas, calques, mixer) ne démarre qu'une fois posée")
         XCTAssertTrue(player.contains(".adaptiveOnChange(of: isEngaged)"),

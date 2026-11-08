@@ -122,6 +122,7 @@ final class ReelSceneRoutingTests: XCTestCase {
     /// servent que le réel dont le son EST le média.
     func test_theReelPlayer_audioControl_isForThePrincipalAudioOnly() throws {
         let player = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+            + MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ReelPageView.swift")
 
         XCTAssertTrue(player.contains("var audioMedia: FeedMedia? { reel.reelPrincipalAudioMedia }"))
         XCTAssertFalse(player.contains("guard let media = reel.primaryReelDisplayMedia, media.type == .audio"))

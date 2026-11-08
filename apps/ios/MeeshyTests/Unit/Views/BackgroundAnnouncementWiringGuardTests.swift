@@ -50,6 +50,7 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
             "Meeshy/Features/Main/Views/FeedPostCard.swift",
             "Meeshy/Features/Main/Views/FeedPostCard+Header.swift",
             "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
+            "Meeshy/Features/Main/Views/ReelPageView.swift",
             "Meeshy/Features/Main/Views/ReelPageView+Info.swift",
         ]
         for path in surfaces {

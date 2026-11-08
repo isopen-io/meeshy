@@ -35,7 +35,7 @@ final class SocialMediaGalleryReachGuardTests: XCTestCase {
         ("détail d'un post",    "Meeshy/Features/Main/Views/PostDetailView.swift"),
         ("média d'un commentaire", "Meeshy/Features/Main/Views/CommentMediaView.swift"),
         ("fil de conversation", "Meeshy/Features/Main/Views/ConversationView+MediaGallery.swift"),
-        ("plein écran réel",    "Meeshy/Features/Main/Views/ReelsPlayerView.swift"),
+        ("plein écran réel",    "Meeshy/Features/Main/Views/ReelPageView.swift"),
     ]
 
     /// Les deux formes acceptées : le site unique (`socialMediaGallery`) et le
@@ -89,7 +89,7 @@ final class SocialMediaGalleryReachGuardTests: XCTestCase {
     /// points, élus par `ReelMediaIndicator` (que `ReelMediaIndicatorTests`
     /// éprouve), plus une pastille « n / M ».
     func test_laPastilleDuReelNApparaitQuAvecPlusieursMedias() throws {
-        let code = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        let code = try source("Meeshy/Features/Main/Views/ReelPageView.swift")
 
         XCTAssertTrue(code.contains("if case let .galleryDots(total, currentIndex) = mediaIndicator {"),
                       "les points se montent sous condition de l'indicateur élu")
