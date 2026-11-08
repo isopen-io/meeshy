@@ -330,6 +330,76 @@ function exitsAtOwnLevel(source: string, [open, close]: readonly [number, number
 }
 
 /**
+ * Les fenêtres de `try` qui GARDENT vraiment — celles dont le `catch` absorbe.
+ *
+ * La version d'avant #17068 ne regardait que la POSITION des blocs, jamais s'il
+ * existe un `catch`, ni ce qu'il fait. Deux formes étaient donc comptées comme
+ * des gardes sans en être :
+ *
+ * ```ts
+ * try { emit(); } finally { … }          // aucune absorption
+ * try { emit(); } catch (e) { throw e; } // re-levée
+ * ```
+ *
+ * Dans les deux cas l'exception remonte et emporte l'enfilage, exactement comme
+ * sans `try`. Mesuré sur fixtures : les deux étaient TUES par le balayage.
+ *
+ * Un `return` dans le `catch` ABSORBE — le chemin sort, l'enfilage n'est pas
+ * atteint, et il n'y a rien à signaler. Seul `throw` au niveau du `catch`
+ * disqualifie, d'où un prédicat distinct d'`exitsAtOwnLevel`, qui compte les
+ * deux.
+ *
+ * Mesuré : aucune des deux formes n'existait dans les fichiers balayés — ce lot
+ * ferme un piège, il ne corrige pas un défaut vivant (cycle 84).
+ */
+function absorbingTries(code: string): Array<readonly [number, number]> {
+  return spansAfter(code, /\btry\s*\{/, '{', '}').filter(([, close]) => {
+    const after = code.slice(close + 1);
+    const catchAt = /^\s*catch\s*(?:\([^)]*\)\s*)?\{/.exec(after);
+    if (!catchAt) return false;
+    const open = close + 1 + catchAt[0].length - 1;
+    const body = matchingBlock(code, open);
+    return body !== null && !rethrowsAtOwnLevel(code, body);
+  });
+}
+
+/** La fenêtre du bloc dont l'accolade ouvrante est à `open`. */
+function matchingBlock(source: string, open: number): readonly [number, number] | null {
+  let depth = 0;
+  for (let cursor = open; cursor < source.length; cursor += 1) {
+    if (source[cursor] === '{') depth += 1;
+    else if (source[cursor] === '}') {
+      depth -= 1;
+      if (depth === 0) return [open, cursor] as const;
+    }
+  }
+  return null;
+}
+
+/**
+ * Le bloc porte-t-il un `throw` À SON PROPRE NIVEAU ?
+ *
+ * Jumelle d'`exitsAtOwnLevel`, et la différence est le POINT : celle-ci ne
+ * compte PAS `return`. Un `catch` qui rend la main absorbe ; un `catch` qui
+ * re-lève ne garde rien. Un `throw` dans une branche imbriquée du `catch`
+ * (`if (fatal) throw error;`) laisse un chemin qui absorbe, et ce chemin suffit
+ * à ce que l'enfilage soit atteint — la garde compte donc comme réelle.
+ */
+function rethrowsAtOwnLevel(source: string, [open, close]: readonly [number, number]): boolean {
+  let depth = 0;
+  for (let cursor = open + 1; cursor < close; cursor += 1) {
+    const char = source[cursor];
+    if (char === '{' || char === '(' || char === '[') depth += 1;
+    else if (char === '}' || char === ')' || char === ']') depth -= 1;
+    else if (depth === 0 && char === 't') {
+      const before = source[cursor - 1] ?? ' ';
+      if (!/[A-Za-z0-9_$.]/.test(before) && /^throw\b/.test(source.slice(cursor, cursor + 6))) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Balaie `srcDir` et rend les émissions vivantes non gardées en amont d'un
  * enfilage durable. Les fichiers de test sont hors périmètre : un double a le
  * droit d'être permissif.
@@ -346,7 +416,7 @@ export function sweepUnguardedLiveEmissions(srcDir: string): UnguardedLiveEmissi
     if (!ENQUEUE_CALLS.some((name) => raw.includes(name.split('.')[0] as string))) continue;
 
     const code = blankOutNonCode(raw);
-    const tries = spansAfter(code, /\btry\s*\{/, '{', '}');
+    const tries = absorbingTries(code);
     const wrappers = spansAfter(code, WRAPPER_RE, '(', ')');
 
     const enqueues = new RegExp(ENQUEUE_RE.source, 'g');
