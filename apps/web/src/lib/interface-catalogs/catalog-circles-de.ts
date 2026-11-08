@@ -103,6 +103,8 @@ const de = {
   'circles.settings.blockTalkie': 'Talkie stummschalten',
   'circles.settings.blockTalkie.detail': 'Die Stimme wird nicht mehr direkt bei dir abgespielt, sondern kommt als Sprachnachricht an. Die Person wird nicht benachrichtigt.',
   'circles.settings.blockTalkie.failed': 'Die Einstellung konnte nicht gespeichert werden',
+  'circles.settings.shareListening.detail': 'Wenn Apple Music auf deinem iPhone läuft und Meeshy dort geöffnet ist, sieht diese Person, dass du Musik hörst; den Titel nur, wenn du ihn ihr im Blut-Ritual gewährt hast. Deine Sprachnachrichten werden nie geteilt.',
+  'circles.settings.shareListening.failed': 'Die Freigabe konnte nicht gespeichert werden',
   'talkie.send.explain': 'Gedrückt halten und sprechen: Deine Stimme ist bei {name} sofort zu hören, ohne Abheben.',
   'talkie.send.hold': 'Zum Sprechen halten',
   'talkie.send.hold.a11y': 'Gedrückt halten, um mit {name} zu sprechen — per Tastatur die Leertaste halten',

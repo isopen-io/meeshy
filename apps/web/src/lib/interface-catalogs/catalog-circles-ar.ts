@@ -103,6 +103,8 @@ const ar = {
   'circles.settings.blockTalkie': 'كتم التوكي الخاص به',
   'circles.settings.blockTalkie.detail': 'لن يُسمع صوته مباشرةً على جهازك بعد الآن: سيصلك كرسالة صوتية. لن يتم إعلام هذا الشخص.',
   'circles.settings.blockTalkie.failed': 'تعذّر حفظ الإعداد',
+  'circles.settings.shareListening.detail': 'عندما يعمل Apple Music على iPhone الخاص بك ويكون Meeshy مفتوحًا عليه، يرى هذا الشخص أنك تستمع إلى الموسيقى؛ والعنوان فقط إذا منحته إياه في طقس الدم. لا تتم مشاركة رسائلك الصوتية أبدًا.',
+  'circles.settings.shareListening.failed': 'تعذّر حفظ المشاركة',
   'talkie.send.explain': 'اضغط مطولًا وتحدّث: يخرج صوتك مباشرةً لدى {name} دون الحاجة إلى الرد.',
   'talkie.send.hold': 'اضغط مطولًا للتحدث',
   'talkie.send.hold.a11y': 'اضغط مطولًا للتحدث إلى {name} — من لوحة المفاتيح، أبقِ مفتاح المسافة مضغوطًا',

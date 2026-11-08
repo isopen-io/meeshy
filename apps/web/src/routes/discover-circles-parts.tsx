@@ -243,7 +243,7 @@ export function CirclesErrorBanner({ language, onRetry }: { readonly language: I
   );
 }
 
-const SETTINGS = ['circles.settings.listening', 'circles.settings.location'] as const;
+const SETTINGS = ['circles.settings.location'] as const;
 
 /**
  * La fiche d'un lien — `CircleLinkSheet` : la personne, son niveau, ce qui
