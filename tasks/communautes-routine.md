@@ -137,3 +137,10 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Suite : même ramené à zéro (le panneau d'onglet est posé par `community.tsx`, l'onglet paresseux n'importe plus `community-tabs.tsx`, et l'index est identique octet pour octet à celui de dev), la PR reste rouge parce que **dev lui-même dépasse** : 96,07 Ko en CI depuis `@tanstack/react-query` 5.106.1 (+0,10 Ko dans `core`). Les mesures locales qui disaient 95,94 venaient d'un `node_modules` antérieur à la vague dependabot : **refaire `bun install --ignore-scripts` après tout `fetch` qui touche `bun.lock` avant de mesurer**, puis restaurer `bun.lock` (bun 1.4.4 le réécrit au format 3). Décision demandée au porteur, issue #16931 (épingler react-query, ou remesurer le plafond).
 - iOS : l'onglet « Feed » est un état vide FIXE (aucune lecture) → #16878. Android → #16879.
 - Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités — décision à prendre), sinon #6381 (vérification connectée sur staging) ou #16878.
+
+## 2026-11-08 — réveil 17
+
+- Run consacré à mener #16895 (#6379) à la fusion. Le blocage de la première peinture est levé sur `dev` (`2ef0031a6` : plafond 96 → 97 Ko, #16931). `origin/dev` intégré sans conflit (56 fichiers, chemins disjoints).
+- Gates locaux sur la fusion : passerelle `src/__tests__/unit/routes` + `PostFeedService` 857/857 suites, `tsc --noEmit` vert ; web `bun test` 30 063 verts, 1 rouge (`act-leak-guard.test.ts`, connu en conteneur), typecheck vert, `measure-weight` vert (96,10 Ko / 97 ; `community_detail` 5,03, `community_posts` 2,01).
+- Preuve : `workflow_dispatch` de `ci.yml` sur la dernière tête (aucun chemin iOS touché).
+- Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités), sinon #16878 (l'onglet Feed iOS lit enfin les publications) ou #6381.
