@@ -906,7 +906,15 @@ export function registerLinkAdmissionRoutes(
           return;
         }
 
-        const result = await endGuestSession({ prisma, sessionToken });
+        // #16948 — la sortie annonce son départ et sort le partant du fil. Les
+        // deux capacités sont des canaux latéraux : un gestionnaire absent ne
+        // compromet pas la fin de session.
+        const result = await endGuestSession({
+          prisma,
+          sessionToken,
+          io: fastify.socketIOHandler?.getManager()?.getIO?.(),
+          manager: fastify.socketIOHandler?.getManager() ?? null,
+        });
         if (result.kind === 'not-found') {
           sendNotFound(reply, 'Session introuvable');
           return;
