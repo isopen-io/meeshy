@@ -1,6 +1,7 @@
 package me.meeshy.app.conversations
 
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -18,10 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
+import me.meeshy.sdk.model.preview.PreviewFinish
 import me.meeshy.ui.component.media.rememberMediaKindStrings
 import me.meeshy.ui.theme.LentilleMetrics
 import me.meeshy.ui.theme.MeeshyPalette
@@ -35,6 +38,11 @@ import me.meeshy.ui.theme.MeeshyTheme
  * kind icon and a muted or accent tint that mirrors iOS
  * `ThemedConversationRow.lastMessagePreviewView`. Ephemeral-active shows the same
  * body text with a leading timer badge so a still-readable ephemeral is obvious.
+ *
+ * The last message's applied effect (#16975, [RowPreview.effect]) paints here, FROZEN: a veil of
+ * bars with no character for a blurred message, a static glow / gradient / ✨ / accent dot for a
+ * persistent effect, and a one-shot shake or pop when a new last message lands on a composed row
+ * ([rememberPreviewEntrance]).
  *
  * Compose glue — the kind classification (pure) is covered by [MessageSummaryKindTest]
  * / [MessageSummaryLineTest] / [ConversationRowPreviewKindTest]; the visual mapping
@@ -90,7 +98,12 @@ internal fun ConversationRowPreviewLine(
         )
     }
 
-    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+    val effect = preview.effect
+    val entrance = rememberPreviewEntrance(preview.messageId, effect?.entrance)
+    val finish = effect?.finish
+    val isDark = MeeshyTheme.isDark
+
+    Row(modifier = modifier.then(entrance), verticalAlignment = Alignment.CenterVertically) {
         preview.draftLabel?.let { label ->
             Text(
                 text = label,
@@ -110,14 +123,40 @@ internal fun ConversationRowPreviewLine(
                     .padding(end = MeeshySpacing.xs),
             )
         }
-        Text(
-            text = preview.text,
-            style = bodySmall,
-            color = tint,
-            fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (effect?.veil == true) {
+            PreviewVeil(color = tint)
+        } else {
+            PreviewFinishMark(finish = finish, accent = primaryAccent)
+            PreviewText(
+                text = preview.text,
+                style = bodySmall.copy(fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal),
+                color = tint,
+                finish = finish,
+                accent = primaryAccent,
+                isDark = isDark,
+            )
+        }
+    }
+}
+
+/**
+ * The line's text with its FROZEN finish. Rainbow goes through [BasicText]: Material `Text` merges a
+ * solid colour into the style, and a solid colour replaces the brush.
+ */
+@Composable
+private fun PreviewText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    finish: PreviewFinish?,
+    accent: Color,
+    isDark: Boolean,
+) {
+    val finished = style.withPreviewFinish(finish, accent = accent, isDark = isDark)
+    if (finish == PreviewFinish.RAINBOW) {
+        BasicText(text = text, style = finished, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    } else {
+        Text(text = text, style = finished, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
