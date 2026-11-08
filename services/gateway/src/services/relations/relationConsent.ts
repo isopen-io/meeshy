@@ -12,6 +12,7 @@
  * consentement dans la passerelle.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { RelationRitualShare } from '@meeshy/shared/types/relation-person-settings';
 
 export const RITUAL_CONSENT_FEATURES = ['listening.title', 'location.live', 'location.history', 'location.proximity'] as const;
 export type RitualConsentFeature = (typeof RITUAL_CONSENT_FEATURES)[number];
@@ -30,6 +31,11 @@ const COLUMN = {
   'location.history': 'locationHistoryShared',
   'location.proximity': 'proximityShared',
 } as const satisfies Record<ShareConsentFeature, string>;
+
+/** Le partage (colonne) que chaque feature du rituel consulte : l'inverse de la table ci-dessus, pour l'accord hors rituel (#16642). */
+export const RITUAL_SHARE_FEATURE = Object.fromEntries(
+  RITUAL_CONSENT_FEATURES.map((feature) => [COLUMN[feature], feature]),
+) as Readonly<Record<RelationRitualShare, RitualConsentFeature>>;
 
 export type RelationConsent = 'granted' | 'refused';
 
