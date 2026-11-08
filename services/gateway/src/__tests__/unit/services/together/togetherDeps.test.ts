@@ -30,7 +30,7 @@ describe('cutTogetherWhere — le relais du processus, pour les sites qui ne tie
   });
 
   it('une panne du cache ne fait jamais échouer le geste de l\'appelant', async () => {
-    shareTogetherCuts({ prisma: {} as PrismaClient, io: { to: () => ({ emit: () => true }) } as never });
+    shareTogetherCuts({ prisma: {} as PrismaClient, io: () => ({ to: () => ({ emit: () => true }) }) as never });
     await expect(cutTogetherWhere({ conversationId: 'c' })).resolves.toBeUndefined();
     await expect(cutTogetherWhere({ userId: 'a' })).resolves.toBeUndefined();
     shareTogetherCuts(undefined);
