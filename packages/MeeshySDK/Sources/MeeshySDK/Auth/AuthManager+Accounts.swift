@@ -213,6 +213,9 @@ extension AuthManager {
             return
         }
 
+        // #17143 — ce qui se défait sous la session sortante (jetons de push d'appareil) part AVANT tout effacement.
+        if endingIt { await SessionEndingHooks.shared.runAll() }
+
         // P1 D-7 — SessionSnapshot wipe en PREMIER : si l'app crash ici, les
         // extensions (NSE, Widget) ne re-lisent pas les credentials sortants.
         SessionSnapshotStore.wipe()

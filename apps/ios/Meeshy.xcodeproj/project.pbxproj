@@ -1566,6 +1566,7 @@
 		57884E1F450A395F56C96E2C /* SendPlaceTileLawTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6118E7AA41651262816204DE /* SendPlaceTileLawTests.swift */; };
 		578C25893418CC339CEDB41A /* ConversationWarmupCoversEveryPublishedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03356A2922A8503E0B58FDAD /* ConversationWarmupCoversEveryPublishedTests.swift */; };
 		579896DBC034D29975CC05FE /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 646FE8DD58BA92CB11D8FC9C /* TermsOfServiceView.swift */; };
+		57A1EBBBEF0CF4739A6794BB /* TalkiePushToTalkChannelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2455AF97E389B4AB205E000E /* TalkiePushToTalkChannelTests.swift */; };
 		57B17C97BB9B0D36ED5945BF /* CameraModel+Video.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B64DE2147BCFA3473C5F14 /* CameraModel+Video.swift */; };
 		57D2D7F0D9920214A8266C6B /* CallFrameCatalogue+Futuriste.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BFBD7E0F7E4946ACA0E0DB /* CallFrameCatalogue+Futuriste.swift */; };
 		57D53571CCE7CCB937CDAE63 /* ConversationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6422296A75D6084218CAB62E /* ConversationViewModel.swift */; };
@@ -5218,6 +5219,7 @@
 		242721645B0D1CC1E3F390DA /* ReelFeedSoundIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelFeedSoundIntentTests.swift; sourceTree = "<group>"; };
 		24462E9B4213CCDBDEBB313F /* ComposerSceneArrangementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneArrangementTests.swift; sourceTree = "<group>"; };
 		245547500570F35666B7A849 /* ThreadHeadClearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadHeadClearance.swift; sourceTree = "<group>"; };
+		2455AF97E389B4AB205E000E /* TalkiePushToTalkChannelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkiePushToTalkChannelTests.swift; sourceTree = "<group>"; };
 		2459C9439C3ECBA9783BCF63 /* iPadRootView+Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Navigation.swift"; sourceTree = "<group>"; };
 		246419010E6710FB77A38740 /* ConversationAudioCallSuspensionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAudioCallSuspensionTests.swift; sourceTree = "<group>"; };
 		246CC37D502A7F2904DECE86 /* GameCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCopyTests.swift; sourceTree = "<group>"; };
@@ -11358,6 +11360,7 @@
 				B3393ED1234D3FB753C56A38 /* TalkieHeaderTests.swift */,
 				DE83A06614AE37445672CF92 /* TalkieNotificationTests.swift */,
 				AEA23D3ED3B080D7231023FC /* TalkieOutputPlanTests.swift */,
+				2455AF97E389B4AB205E000E /* TalkiePushToTalkChannelTests.swift */,
 				3388F82086611EF7610470CC /* TalkieSenderTests.swift */,
 				F5480160447F284B3A9AAE3E /* TalkieVoiceCopyTests.swift */,
 				A1C23E5659EC81641F3F0480 /* TalkieWakeJoinerTests.swift */,
@@ -19572,6 +19575,7 @@
 				69D7403D391A2C1D1169CAD0 /* TalkieHeaderTests.swift in Sources */,
 				232B0413210E6963748CBBC1 /* TalkieNotificationTests.swift in Sources */,
 				A4F74CA5E3460D104E4C501C /* TalkieOutputPlanTests.swift in Sources */,
+				57A1EBBBEF0CF4739A6794BB /* TalkiePushToTalkChannelTests.swift in Sources */,
 				82B5198B04E22AFEBBCEE245 /* TalkieSenderTests.swift in Sources */,
 				B0E9EDA8953E870DB279186D /* TalkieVoiceCopyTests.swift in Sources */,
 				54E60F1294DEBEEA02EF1004 /* TalkieWakeJoinerTests.swift in Sources */,

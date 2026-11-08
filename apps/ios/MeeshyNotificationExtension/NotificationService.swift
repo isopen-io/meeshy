@@ -72,7 +72,12 @@ class NotificationService: UNNotificationServiceExtension {
         case .sealLockedConversation:
             content.userInfo = NSEAttachmentPolicy.sealingLockedConversation(content.userInfo, isLocked: true)
         case .applyCategory:
-            applyCategory(to: content)
+            // #17143 — le réveil d'un talkie : sa catégorie dédiée, la seule dont la voix se joue sur place.
+            if let talkie = NotificationDetailPolicy.talkieCategory(forType: content.userInfo["type"] as? String ?? "") {
+                content.categoryIdentifier = talkie
+            } else {
+                applyCategory(to: content)
+            }
             // #12655 — verrouillée, scellée ou inconnue : aucune action rapide.
             content.categoryIdentifier = NSEAttachmentPolicy.category(
                 content.categoryIdentifier, under: lock, userInfo: content.userInfo
@@ -307,10 +312,6 @@ class NotificationService: UNNotificationServiceExtension {
                 return
             }
             category = callCategory
-
-        // #17143 — le réveil d'un talkie : sa catégorie dédiée, la seule dont la voix se joue sur place.
-        case NotificationDetailPolicy.talkiePushType:
-            category = NotificationDetailPolicy.talkieCategory
 
         default:
             // Unknown / new server-side type: stay quiet and show the default

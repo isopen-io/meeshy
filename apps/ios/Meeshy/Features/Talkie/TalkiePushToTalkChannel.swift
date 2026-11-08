@@ -14,20 +14,23 @@ private extension Logger {
 ///
 /// - Le canal se rejoint au PREMIER PLAN, sur un geste (l'activation du talkie) : c'est la règle du framework, et un
 ///   canal rejoint affiche l'interface système du talkie — on ne l'impose à personne qui ne s'en sert pas.
-/// - Son jeton éphémère part sur `POST /api/v1/users/me/push-to-talk-token` ; quitter le canal le retire.
+/// - Son jeton éphémère part sur `POST /api/v1/users/me/push-to-talk-token`, et se garde sur l'appareil. À la
+///   déconnexion du compte, il est retiré du serveur AVANT l'effacement des identifiants (`SessionEndingHooks`), le
+///   canal est quitté et son identifiant renouvelé : le compte suivant n'hérite d'aucun réveil.
 /// - Sans l'entitlement `com.apple.developer.push-to-talk`, l'instanciation échoue proprement : rien ne se rejoint, et
 ///   le réveil passe par la notification time-sensitive `talkie_incoming`.
 @MainActor
 protocol TalkiePushToTalkChanneling: AnyObject {
     /// Rejoint le canal s'il ne l'est pas déjà. À appeler sur un geste, app au premier plan.
     func activate() async
-    /// Quitte le canal et retire le jeton (déconnexion du compte).
-    func leave() async
+    /// Déconnexion du compte : retire le jeton du serveur (attendu), quitte le canal, renouvelle son identifiant.
+    func endSession() async
 }
 
 /// Les décisions du canal, sans le framework : de quoi les éprouver.
 nonisolated enum TalkiePushToTalkRules {
     static let channelDefaultsKey = "talkie.pushToTalk.channelUUID"
+    static let tokenDefaultsKey = "talkie.pushToTalk.token"
 
     /// L'identifiant STABLE du canal : relu, sinon créé et gardé — iOS restaure le canal sous ce même identifiant.
     static func channelUUID(in defaults: UserDefaults) -> UUID {
@@ -75,13 +78,19 @@ nonisolated struct APITalkiePushToTalkTokenRegistrar: TalkiePushToTalkTokenRegis
     }
 }
 
-/// Le canal réel. Le délégué du framework est appelé hors du fil principal : son état partagé est sous verrou, et le
-/// travail repasse sur l'acteur principal.
+/// Le canal réel. Le délégué du framework est appelé hors du fil principal : il ne garde que l'état de la réception,
+/// sous verrou, et repasse tout le reste sur l'acteur principal.
 @MainActor
 final class TalkiePushToTalkChannel: TalkiePushToTalkChanneling {
-    static let shared = TalkiePushToTalkChannel()
+    static let shared: TalkiePushToTalkChannel = {
+        let channel = TalkiePushToTalkChannel()
+        SessionEndingHooks.shared.add { [weak channel] in await channel?.endSession() }
+        return channel
+    }()
 
-    private let delegate: TalkiePushToTalkDelegate
+    private let registrar: TalkiePushToTalkTokenRegistering
+    private let defaults: UserDefaults
+    private var delegate: TalkiePushToTalkDelegate?
     private var manager: PTChannelManager?
     private var instantiating = false
 
@@ -91,21 +100,36 @@ final class TalkiePushToTalkChannel: TalkiePushToTalkChanneling {
         registrar: TalkiePushToTalkTokenRegistering = APITalkiePushToTalkTokenRegistrar(),
         defaults: UserDefaults = .standard
     ) {
-        delegate = TalkiePushToTalkDelegate(
-            registrar: registrar,
-            channelUUID: TalkiePushToTalkRules.channelUUID(in: defaults),
-            fallbackName: String(localized: "talkie.incoming.someone", defaultValue: "Quelqu’un", bundle: .main)
-        )
+        self.registrar = registrar
+        self.defaults = defaults
     }
+
+    /// L'identifiant du canal de CE compte.
+    var channelUUID: UUID { TalkiePushToTalkRules.channelUUID(in: defaults) }
+
+    /// Le jeton gardé sur l'appareil, celui qu'une déconnexion retire.
+    var storedToken: String? { defaults.string(forKey: TalkiePushToTalkRules.tokenDefaultsKey) }
 
     func activate() async {
         guard let manager = await managerIfAvailable(), manager.activeChannelUUID == nil else { return }
-        manager.requestJoinChannel(channelUUID: delegate.channelUUID, descriptor: delegate.descriptor)
+        manager.requestJoinChannel(channelUUID: channelUUID, descriptor: TalkiePushToTalkDelegate.descriptor)
     }
 
-    func leave() async {
-        guard let manager, let channel = manager.activeChannelUUID else { return }
-        manager.leaveChannel(channelUUID: channel)
+    func endSession() async {
+        let token = storedToken
+        defaults.removeObject(forKey: TalkiePushToTalkRules.tokenDefaultsKey)
+        defaults.removeObject(forKey: TalkiePushToTalkRules.channelDefaultsKey)
+        if let token {
+            do {
+                try await registrar.unregister(token: token)
+            } catch {
+                Logger.talkiePTT.error("talkie · jeton PushToTalk non retiré : \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        if let manager, let channel = manager.activeChannelUUID {
+            manager.leaveChannel(channelUUID: channel)
+        }
+        delegate?.reset()
     }
 
     /// iOS demande de restaurer le canal au lancement : l'instancier tôt garde le réveil vivant après un redémarrage.
@@ -113,17 +137,43 @@ final class TalkiePushToTalkChannel: TalkiePushToTalkChanneling {
         _ = await managerIfAvailable()
     }
 
+    func tokenReceived(_ token: String) async {
+        defaults.set(token, forKey: TalkiePushToTalkRules.tokenDefaultsKey)
+        do {
+            try await registrar.register(token: token)
+        } catch {
+            Logger.talkiePTT.error("talkie · jeton PushToTalk non enregistré : \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Le canal a été quitté depuis l'interface système, compte toujours ouvert : son jeton ne réveille plus rien.
+    func channelLeft() async {
+        guard let token = storedToken else { return }
+        defaults.removeObject(forKey: TalkiePushToTalkRules.tokenDefaultsKey)
+        try? await registrar.unregister(token: token)
+    }
+
+    private func makeDelegate() -> TalkiePushToTalkDelegate {
+        TalkiePushToTalkDelegate(
+            fallbackName: String(localized: "talkie.incoming.someone", defaultValue: "Quelqu’un", bundle: .main),
+            onToken: { token in Task { @MainActor in await TalkiePushToTalkChannel.shared.tokenReceived(token) } },
+            onLeft: { Task { @MainActor in await TalkiePushToTalkChannel.shared.channelLeft() } }
+        )
+    }
+
     private func managerIfAvailable() async -> PTChannelManager? {
         if let manager { return manager }
         guard !instantiating else { return nil }
         instantiating = true
         defer { instantiating = false }
+        let delegate = self.delegate ?? makeDelegate()
+        self.delegate = delegate
         do {
             let created = try await PTChannelManager.channelManager(delegate: delegate, restorationDelegate: delegate)
             manager = created
-            let channel = delegate.channelUUID
-            TalkieVoicePlayer.onSystemSessionIdle = { [weak created] in
-                created?.setActiveRemoteParticipant(nil, channelUUID: channel) { _ in }
+            TalkieVoicePlayer.onSystemSessionIdle = { [weak created, weak self] in
+                guard let self else { return }
+                created?.setActiveRemoteParticipant(nil, channelUUID: self.channelUUID) { _ in }
             }
             return created
         } catch {
@@ -133,22 +183,30 @@ final class TalkiePushToTalkChannel: TalkiePushToTalkChanneling {
     }
 }
 
-/// Le délégué du framework PushToTalk.
-nonisolated final class TalkiePushToTalkDelegate: NSObject, PTChannelManagerDelegate, PTChannelRestorationDelegate, @unchecked Sendable {
-    let channelUUID: UUID
-    private let registrar: TalkiePushToTalkTokenRegistering
-    private let fallbackName: String
-    private let lock = NSLock()
-    private var token: String?
-    private var pending: TalkieWakePush?
+/// Le délégué du framework PushToTalk : l'état de la réception sous verrou, le reste confié à l'acteur principal.
+nonisolated final class TalkiePushToTalkDelegate: NSObject, PTChannelManagerDelegate, PTChannelRestorationDelegate, Sendable {
+    static var descriptor: PTChannelDescriptor { PTChannelDescriptor(name: "Meeshy", image: nil) }
 
-    init(registrar: TalkiePushToTalkTokenRegistering, channelUUID: UUID, fallbackName: String) {
-        self.registrar = registrar
-        self.channelUUID = channelUUID
+    /// Le réveil annoncé par `incomingPushResult`, que `didActivate` rejoint une fois la session audio levée.
+    private let pending = OSAllocatedUnfairLock<TalkieWakePush?>(initialState: nil)
+    private let fallbackName: String
+    private let onToken: @Sendable (String) -> Void
+    private let onLeft: @Sendable () -> Void
+
+    init(
+        fallbackName: String,
+        onToken: @escaping @Sendable (String) -> Void,
+        onLeft: @escaping @Sendable () -> Void
+    ) {
         self.fallbackName = fallbackName
+        self.onToken = onToken
+        self.onLeft = onLeft
     }
 
-    var descriptor: PTChannelDescriptor { PTChannelDescriptor(name: "Meeshy", image: nil) }
+    /// La session du compte finit : un réveil annoncé pour lui ne se rejoint plus.
+    func reset() {
+        pending.withLock { $0 = nil }
+    }
 
     // MARK: Canal
 
@@ -157,33 +215,18 @@ nonisolated final class TalkiePushToTalkDelegate: NSObject, PTChannelManagerDele
     }
 
     func channelManager(_ channelManager: PTChannelManager, didLeaveChannel channelUUID: UUID, reason: PTChannelLeaveReason) {
-        let previous = lock.withLock { () -> String? in
-            defer { token = nil }
-            return token
-        }
-        guard let previous else { return }
-        let registrar = registrar
-        Task { try? await registrar.unregister(token: previous) }
+        onLeft()
     }
 
     func channelManager(_ channelManager: PTChannelManager, receivedEphemeralPushToken pushToken: Data) {
-        let hex = TalkiePushToTalkRules.hex(pushToken)
-        lock.withLock { token = hex }
-        let registrar = registrar
-        Task {
-            do {
-                try await registrar.register(token: hex)
-            } catch {
-                Logger.talkiePTT.error("talkie · jeton PushToTalk non enregistré : \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        onToken(TalkiePushToTalkRules.hex(pushToken))
     }
 
     // MARK: Réception
 
     func incomingPushResult(channelManager: PTChannelManager, channelUUID: UUID, pushPayload: [String: Any]) -> PTPushResult {
         let push = TalkieWakePush(pushToTalkPayload: pushPayload)
-        lock.withLock { pending = push }
+        pending.withLock { $0 = push }
         if push != nil {
             Task { @MainActor in TalkieWakeJoiner.shared.prepareConnection() }
         }
@@ -192,9 +235,9 @@ nonisolated final class TalkiePushToTalkDelegate: NSObject, PTChannelManagerDele
     }
 
     func channelManager(_ channelManager: PTChannelManager, didActivate audioSession: AVAudioSession) {
-        let push = lock.withLock { () -> TalkieWakePush? in
-            defer { pending = nil }
-            return pending
+        let push = pending.withLock { current -> TalkieWakePush? in
+            defer { current = nil }
+            return current
         }
         Task { @MainActor in
             TalkieVoicePlayer.systemActivatedSession = true
@@ -217,6 +260,6 @@ nonisolated final class TalkiePushToTalkDelegate: NSObject, PTChannelManagerDele
     // MARK: Restauration
 
     func channelDescriptor(restoredChannelUUID channelUUID: UUID) -> PTChannelDescriptor {
-        descriptor
+        Self.descriptor
     }
 }

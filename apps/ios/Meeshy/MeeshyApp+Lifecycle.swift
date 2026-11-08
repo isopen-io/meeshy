@@ -136,6 +136,7 @@ extension MeeshyApp {
         case .reRegisterPushTokens:
             PushNotificationManager.shared.reRegisterTokenIfNeeded()
             VoIPPushManager.shared.forceReregister()
+            Task { await TalkiePushToTalkChannel.shared.restoreIfJoined() }
         case .startEndToEnd(let userId):
             // #3707 — plus aucun bundle hérité (`/signal/keys`) n'est publié : l'annuaire
             // libsignal par appareil le remplace, et les anciens clients le lisent encore.
@@ -163,7 +164,6 @@ extension MeeshyApp {
             Task { await CacheCoordinator.shared.stop() }
         case .unregisterVoIP:
             Task { await VoIPPushManager.shared.unregisterAndClearToken() }
-            Task { await TalkiePushToTalkChannel.shared.leave() }
         case .endActiveCall:
             CallManager.shared.endCall()
         case .disconnectSockets:

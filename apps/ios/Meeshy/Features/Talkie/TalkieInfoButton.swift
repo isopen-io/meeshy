@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Le (i) à côté de chaque bouton talkie (#17141, demande du porteur du 2026-11-08) : il dit à qui le talkie est
+/// Le (i) à côté de chaque bouton talkie (#17141, demande du porteur) : il dit à qui le talkie est
 /// destiné et quand s'en servir — il réveille l'autre même quand Meeshy est en arrière-plan.
 struct TalkieInfoButton: View {
     var tint: Color = MeeshyColors.brandPrimary

@@ -107,8 +107,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // reach the OS before `PKPushRegistry` exists. Regression:
         // `AppInitWireupTests.test_app_init_registersVoIPPushSynchronously`.
         VoIPPushManager.shared.register()
-        // #17143 — un canal PushToTalk déjà rejoint se restaure au lancement, même réveillé en arrière-plan.
-        Task { await TalkiePushToTalkChannel.shared.restoreIfJoined() }
 
         // Masquer le spinner natif d'iOS pour les pull-to-refresh
         // SwiftUI `.refreshable`. `.tint(.clear)` au site d'utilisation

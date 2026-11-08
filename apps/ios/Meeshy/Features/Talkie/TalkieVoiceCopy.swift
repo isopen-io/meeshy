@@ -7,7 +7,7 @@ private extension Logger {
     nonisolated static let talkieCopy = MeeshyLog.logger(.audioRecorder)
 }
 
-/// Ce qui fait partir la COPIE VOCALE d'un talkie qui n'a pas pu passer (#17141, précision du porteur du 2026-11-08) :
+/// Ce qui fait partir la COPIE VOCALE d'un talkie qui n'a pas pu passer (#17141, précision du porteur) :
 /// la voix captée devient un message vocal dans la conversation la plus RÉCENTE avec ce destinataire.
 @MainActor
 protocol TalkieVoiceCopying: AnyObject {
