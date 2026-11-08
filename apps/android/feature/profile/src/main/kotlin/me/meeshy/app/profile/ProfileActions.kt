@@ -85,7 +85,7 @@ internal data class ProfileActionCallbacks(
     val onLower: () -> Unit = {},
 )
 
-/** Les blocages de réception d'une personne sans lien (#16643) : à qui, et lesquels le niveau d'outils servi ouvre. */
+/** Les blocages de réception que la fiche porte (#16643) : à qui, et ceux que le niveau d'outils servi ouvre au-delà du lien. */
 internal data class ProfileReceptionBlocks(val userId: String, val settings: List<RelationReceptionSetting>)
 
 /**
@@ -137,10 +137,10 @@ internal fun ProfileActionsSection(
                         allowPromote = group.actions.isEmpty(),
                     )
                     ProfileBringRow(userId = circle.link.userId, displayName = displayName)
-                } else {
-                    if (group.showsConnected) ConnectedPill()
-                    receptions?.let { ReceptionBlockSection(userId = it.userId, settings = it.settings) }
+                } else if (group.showsConnected) {
+                    ConnectedPill()
                 }
+                receptions?.let { ReceptionBlockSection(userId = it.userId, settings = it.settings) }
             }
         }
         if (plan.canBlock) {

@@ -52,11 +52,16 @@ data class ProfileActionsState(
     val toolLevel: RelationLevel? = null,
 ) {
     /**
-     * Les blocages de réception que la fiche propose SANS lien (#16643) : un collègue de l'équipe, Sang sans lien. Avec un
-     * lien, ils vivent sur la fiche du lien ; sans niveau servi, rien.
+     * Les blocages de réception que la FICHE propose (#16643) : ceux que le niveau d'outils servi ouvre au-delà du lien —
+     * un collègue de l'équipe, Sang sans lien ou sous son lien réel. Quand le lien les ouvre tous, ils vivent sur la fiche du
+     * lien ; sans niveau servi, rien.
      */
-    val receptionsWithoutLink: List<RelationReceptionSetting>
-        get() = if (circle != null) emptyList() else toolLevel?.let(CirclePersonSetting::receptionAt).orEmpty()
+    val receptionsOnProfile: List<RelationReceptionSetting>
+        get() {
+            val opened = toolLevel?.let(CirclePersonSetting::receptionAt).orEmpty()
+            val byLink = circle?.let { CirclePersonSetting.receptionAt(it.level) }.orEmpty()
+            return if (opened.any { it !in byLink }) opened else emptyList()
+        }
 }
 
 /** Outcome of a profile gesture that is not a connection gesture (those come from the shared controller). */
@@ -161,9 +166,8 @@ class ProfileActionsViewModel @Inject constructor(
             val pendingNow = _state.value.circle?.pending
             val gate = quietly { circles.raiseGate(userId) }
             val blocked = gate?.blocks(System.currentTimeMillis()) ?: false
-            applyToolLevel(userId, gate?.accessLevel)
             val fresh = ProfileCircle.of(userId, served, sent)
-            applyCircle(userId, fresh?.copy(pending = fresh.pending ?: pendingNow, raiseBlocked = blocked))
+            applyCircle(userId, fresh?.copy(pending = fresh.pending ?: pendingNow, raiseBlocked = blocked), gate?.accessLevel)
         }
     }
 
@@ -177,29 +181,27 @@ class ProfileActionsViewModel @Inject constructor(
         val target = before.lowering ?: return@withTarget
         if (lowerJob?.isActive == true) return@withTarget
         circleJob?.cancel()
-        _state.update { it.copy(circle = before.lowered()) }
+        val toolBefore = _state.value.toolLevel
+        _state.update { it.copy(circle = before.lowered(), toolLevel = toolBefore?.let { level -> minOf(level, target) }) }
         lowerJob = viewModelScope.launch {
             when (val result = quietly { circles.lower(id, target) }) {
                 is NetworkResult.Success -> applyCircle(
                     id,
                     ProfileCircle.of(id, listOf(result.data), emptyList())?.copy(raiseBlocked = before.raiseBlocked),
+                    quietly { circles.raiseGate(id) }?.accessLevel ?: _state.value.toolLevel,
                 )
                 else -> {
-                    applyCircle(id, before)
+                    applyCircle(id, before, toolBefore)
                     _events.emit(ProfileActionEvent.Toast(ProfileActionFeedback.LowerFailed))
                 }
             }
         }
     }
 
-    private fun applyToolLevel(userId: String, level: RelationLevel?) {
+    /** Le cercle et le niveau d'outils en UNE écriture : la fiche ne peint jamais l'un sans l'autre (#16643). */
+    private fun applyCircle(userId: String, circle: ProfileCircle?, toolLevel: RelationLevel? = _state.value.toolLevel) {
         if (target.value?.userId != userId) return
-        _state.update { it.copy(toolLevel = level) }
-    }
-
-    private fun applyCircle(userId: String, circle: ProfileCircle?) {
-        if (target.value?.userId != userId) return
-        _state.update { it.copy(circle = circle) }
+        _state.update { it.copy(circle = circle, toolLevel = toolLevel) }
     }
 
     /** Instantané → local → file durable → retour arrière si la file y renonce (iso `ProfileCircleViewModel.requestRaise`). */

@@ -171,7 +171,7 @@ internal fun ProfileSheetLoadedContent(
                                     plan = plan,
                                     isOpeningConversation = actionsState.isOpeningConversation,
                                     circle = actionsState.circle?.takeIf { actionsState.userId == profile.id },
-                                    receptions = actionsState.receptionsWithoutLink.takeIf { actionsState.userId == profile.id && it.isNotEmpty() }
+                                    receptions = actionsState.receptionsOnProfile.takeIf { actionsState.userId == profile.id && it.isNotEmpty() }
                                         ?.let { ProfileReceptionBlocks(profile.id, it) },
                                     isInteractionDisabled = isBlockedByMe || state.isBlockedByTarget,
                                     environment = environment,
