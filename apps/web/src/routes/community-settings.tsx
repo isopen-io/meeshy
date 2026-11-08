@@ -132,7 +132,7 @@ export default function CommunitySettingsScreen() {
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (community === undefined || draft === null || saving) return;
+    if (community === undefined || draft === null || saving || deleting) return;
     setSaving(true);
     setNotice(null);
     const outcome = await performUpdateCommunitySettings({ community, draft, deps });
@@ -143,7 +143,7 @@ export default function CommunitySettingsScreen() {
 
   const remove = async () => {
     setConfirmingDelete(false);
-    if (community === undefined || deleting) return;
+    if (community === undefined || deleting || saving) return;
     setDeleting(true);
     setNotice(null);
     const outcome = await performDeleteCommunity({ community, deps });

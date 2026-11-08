@@ -99,12 +99,38 @@ const LIST_PREFIX = [...COMMUNITIES_QUERY_PREFIX, 'list'] as const;
 const isCommunitySummary = (value: unknown): value is CommunitySummary =>
   typeof value === 'object' && value !== null && 'id' in value && 'memberCount' in value;
 
-const snapshotOf = (queryClient: QueryClient): readonly CacheEntry[] => [
-  ...queryClient.getQueriesData({ queryKey: DETAIL_PREFIX }),
-  ...queryClient.getQueriesData({ queryKey: LIST_PREFIX }),
-];
+/**
+ * Ce qu'un refus rend : les SEULES entrées de cette communauté — sa fiche (par
+ * id et par identifiant) et sa ligne dans chaque liste, à sa place. Une liste
+ * relue ou une autre communauté rejointe pendant l'aller-retour ne recule pas.
+ */
+type ListSlot = { readonly key: readonly unknown[]; readonly page: number; readonly index: number; readonly row: CommunitySummary };
+type Snapshot = { readonly details: readonly CacheEntry[]; readonly slots: readonly ListSlot[] };
 
-const restore = (queryClient: QueryClient, snapshot: readonly CacheEntry[]) => snapshot.forEach(([key, data]) => queryClient.setQueryData(key, data));
+const snapshotOf = (queryClient: QueryClient, communityId: string): Snapshot => ({
+  details: queryClient.getQueriesData({ queryKey: DETAIL_PREFIX }).filter(([, data]) => isCommunitySummary(data) && data.id === communityId),
+  slots: queryClient.getQueriesData<Lists>({ queryKey: LIST_PREFIX }).flatMap(([key, data]) =>
+    (data?.pages ?? []).flatMap((page, pageIndex) =>
+      page.communities.flatMap((row, index) => (row.id === communityId ? [{ key, page: pageIndex, index, row }] : [])),
+    ),
+  ),
+});
+
+const restore = (queryClient: QueryClient, snapshot: Snapshot) => {
+  snapshot.details.forEach(([key, data]) => queryClient.setQueryData(key, data));
+  snapshot.slots.forEach(({ key, page, index, row }) => {
+    const current = queryClient.getQueryData<Lists>(key);
+    if (current === undefined || current.pages[page] === undefined) return;
+    queryClient.setQueryData<Lists>(key, {
+      ...current,
+      pages: current.pages.map((each, pageIndex) => {
+        if (pageIndex !== page) return each;
+        const others = each.communities.filter((other) => other.id !== row.id);
+        return { ...each, communities: [...others.slice(0, index), row, ...others.slice(index)] };
+      }),
+    });
+  });
+};
 
 const patchEverywhere = (queryClient: QueryClient, communityId: string, patch: (community: CommunitySummary) => CommunitySummary) => {
   queryClient.getQueriesData({ queryKey: DETAIL_PREFIX }).forEach(([key, data]) => {
@@ -164,7 +190,7 @@ export async function performUpdateCommunitySettings({
   if (!deps.isOnline()) return { status: 'offline' };
 
   const { queryClient } = deps;
-  const snapshot = snapshotOf(queryClient);
+  const snapshot = snapshotOf(queryClient, community.id);
   patchEverywhere(queryClient, community.id, applyBody(changes.body));
 
   const result = await updateCommunity(deps, community.id, changes.body);
@@ -186,7 +212,7 @@ export async function performDeleteCommunity({
 }): Promise<DeleteCommunityOutcome> {
   if (!deps.isOnline()) return { status: 'offline' };
   const { queryClient } = deps;
-  const snapshot = snapshotOf(queryClient);
+  const snapshot = snapshotOf(queryClient, community.id);
   removeEverywhere(queryClient, community.id);
 
   const result = await deleteCommunity(deps, community.id);

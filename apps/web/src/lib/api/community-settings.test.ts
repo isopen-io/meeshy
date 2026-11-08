@@ -189,3 +189,42 @@ describe('performDeleteCommunity', () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe('ce qu’un enregistrement rend, et ce qu’un refus ne touche pas', () => {
+  test('un nom servi échappé (« A &amp; B ») se lit à sa lettre : il ne s’abîme pas d’un enregistrement à l’autre', async () => {
+    const { deps, queryClient } = depsReplying({
+      status: 200,
+      body: { success: true, data: { id: 'm-club', identifier: 'mshy_club', name: 'Tom &amp; Jerry &lt;3', description: 'Le jeudi', isPrivate: true } },
+    });
+    seed(queryClient, summary());
+    await performUpdateCommunitySettings({ community: summary(), draft: { ...settingsDraftOf(summary()), name: 'Tom & Jerry <3' }, deps });
+    expect(queryClient.getQueryData<CommunitySummary>(communityQueryKey('m-club'))?.name).toBe('Tom & Jerry <3');
+  });
+
+  test('un refus ne rend que cette communauté : une autre ligne changée entre-temps reste changée', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { deps, queryClient } = depsReplying({ status: 500, body: { success: false, error: 'boom' } }, true, gate);
+    seed(queryClient, summary());
+    const pending = performUpdateCommunitySettings({ community: summary(), draft: { ...settingsDraftOf(summary()), name: 'Club de lecture' }, deps });
+    await Promise.resolve();
+    const list = queryClient.getQueryData<InfiniteData<CommunityPage, number>>(communitiesQueryKey(''));
+    queryClient.setQueryData<InfiniteData<CommunityPage, number>>(communitiesQueryKey(''), {
+      pages: [{ communities: [...(list?.pages[0]?.communities ?? []).map((c) => (c.id === 'm-autre' ? { ...c, name: 'Autre renommée' } : c))], nextOffset: null }],
+      pageParams: [0],
+    });
+    release();
+    expect(await pending).toEqual({ status: 'error' });
+    expect(listNames(queryClient)).toEqual(['Club', 'Autre renommée']);
+  });
+
+  test('une suppression refusée remet la communauté À SA PLACE dans la liste', async () => {
+    const { deps, queryClient } = depsReplying({ status: 500, body: { success: false, error: 'boom' } });
+    queryClient.setQueryData<InfiniteData<CommunityPage, number>>(communitiesQueryKey(''), {
+      pages: [{ communities: [summary({ id: 'm-a', name: 'A' }), summary(), summary({ id: 'm-b', name: 'B' })], nextOffset: null }],
+      pageParams: [0],
+    });
+    expect(await performDeleteCommunity({ community: summary(), deps })).toEqual({ status: 'error' });
+    expect(listNames(queryClient)).toEqual(['A', 'Club', 'B']);
+  });
+});
