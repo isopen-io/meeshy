@@ -5,8 +5,10 @@
       "resDir": "sdk-ui/src/main/res",
       "entries": [
         {
+          "catalog": "ui",
+          "iosKey": "emailSent.checkSpam",
           "androidName": "email_check_spam",
-          "status": "android-only"
+          "status": "adopted"
         }
       ]
     }

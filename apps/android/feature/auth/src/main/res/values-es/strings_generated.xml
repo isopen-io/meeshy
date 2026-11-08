@@ -36,8 +36,6 @@
     <string name="auth_magic_header">Tu dirección de correo</string>
     <string name="auth_magic_how_label">Cómo funciona</string>
     <string name="auth_magic_invalid">Enlace no válido o caducado</string>
-    <string name="auth_magic_nothing_label">¿No has recibido nada?</string>
-    <string name="auth_magic_nothing_text">Revisa tu carpeta de spam: el mensaje puede haber llegado allí.</string>
     <string name="auth_magic_resend">Reenviar el enlace</string>
     <string name="auth_magic_resend_short">Reenviar</string>
     <string name="auth_magic_send">Recibir el enlace</string>
@@ -67,7 +65,6 @@
     <string name="email_verification_error_resend_failed">No se ha podido reenviar el código de verificación</string>
     <string name="email_verification_error_too_many_attempts">Demasiados intentos. Vuelve a intentarlo en unos minutos.</string>
     <string name="email_verification_error_weak_password">Esta contraseña es demasiado débil. Elige una más segura.</string>
-    <string name="email_verification_inbox_hint">Abre tu bandeja de entrada y revisa también la carpeta de correo no deseado.</string>
     <string name="email_verification_nav_close">Cerrar</string>
     <string name="email_verification_nav_title">Verificación del correo</string>
     <string name="email_verification_no_code">¿No has recibido el código?</string>
