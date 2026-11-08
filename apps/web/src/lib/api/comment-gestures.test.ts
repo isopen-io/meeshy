@@ -15,6 +15,7 @@ import { postQueryKey } from './publication-detail';
 import { reelsQueryKey } from './reels';
 import {
   COMMENT_DELETE_FAILED_MESSAGE,
+  COMMENT_EDIT_CLOSED_MESSAGE,
   COMMENT_EDIT_FAILED_MESSAGE,
   COMMENT_GESTURE_PENDING_MESSAGE,
   COMMENT_GESTURE_UNCONFIRMED_MESSAGE,
@@ -394,6 +395,32 @@ describe('performCommentEdit — le texte change AVANT la réponse, et REVIENT a
       reason: 'comment.refused.right',
     });
     expect(cached(queryClient)?.content).toBe('Superbe photo');
+  });
+
+  /** LE FIL S'EST FERMÉ ENTRE-TEMPS (#16930) — la passerelle refuse la modification d'un commentaire
+   * sur une publication aux commentaires fermés : le texte d'origine revient, la publication passe
+   * fermée dans ses caisses (même écriture que l'envoi refusé), et la rangée DIT pourquoi. */
+  test('403 COMMENTS_DISABLED ⇒ le texte d’ORIGINE revient, la publication passe fermée, et « commentaires désactivés » se dit', async () => {
+    const queryClient = seeded([[comment({ content: 'Superbe photo' })]]);
+    queryClient.setQueryData<FeedPost>(postQueryKey('p1'), { id: 'p1', type: 'POST', createdAt: '2026-09-19T11:00:00.000Z', commentsDisabled: false });
+    const { transport } = scripted(async () => ({ ok: false, status: 403, error: 'Comments are disabled', code: 'COMMENTS_DISABLED' }));
+
+    const result = await performCommentEdit({ postId: 'p1', commentId: 'cm1', content: 'Autre chose', deps: gatewayDeps(queryClient, transport) });
+
+    expect(result).toEqual({ ok: false, message: COMMENT_EDIT_CLOSED_MESSAGE, issue: 'refused' });
+    expect(COMMENT_EDIT_CLOSED_MESSAGE).toBe('comments.closed');
+    expect(cached(queryClient)?.content).toBe('Superbe photo');
+    expect(queryClient.getQueryData<FeedPost>(postQueryKey('p1'))?.commentsDisabled).toBe(true);
+  });
+
+  test('un AUTRE 403 ne ferme rien — seul le code COMMENTS_DISABLED dit que le fil est fermé', async () => {
+    const queryClient = seeded([[comment({ content: 'Superbe photo' })]]);
+    queryClient.setQueryData<FeedPost>(postQueryKey('p1'), { id: 'p1', type: 'POST', createdAt: '2026-09-19T11:00:00.000Z', commentsDisabled: false });
+    const { transport } = scripted(async () => ({ ok: false, status: 403, error: 'Not authorized', code: 'FORBIDDEN' }));
+
+    await performCommentEdit({ postId: 'p1', commentId: 'cm1', content: 'Autre chose', deps: gatewayDeps(queryClient, transport) });
+
+    expect(queryClient.getQueryData<FeedPost>(postQueryKey('p1'))?.commentsDisabled).toBe(false);
   });
 
   test('un texte VIDE n’est pas un appel — la passerelle refuserait en 400 sans rien dire de précis', async () => {

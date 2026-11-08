@@ -91,6 +91,32 @@ describe('commentMenuEntries — « Retirer » le commentaire d’un autre (#111
   });
 });
 
+/**
+ * **UN FIL FERMÉ NE SE RÉÉCRIT PLUS** (#16930, décision porteur 2026-11-08) —
+ * la passerelle refuse le `PATCH` d'un commentaire quand la publication a fermé
+ * ses commentaires (`403 COMMENTS_DISABLED`) : offrir « Modifier » serait un
+ * contrôle qui ment (loi 4). Copier, Supprimer (l'auteur) et Signaler (les
+ * autres) restent : seul le geste d'ÉCRITURE se retire.
+ */
+describe('commentMenuEntries — des commentaires FERMÉS (#16930)', () => {
+  const closed = (target: PostComment, extra: { readonly canRemove?: boolean } = {}) =>
+    commentMenuEntries({ comment: target, viewerId: VIEWER, servedText: 'x', canCopy: true, canImage: true, canReport: true, commentsClosed: true, ...extra });
+
+  test('le SIEN : copier et supprimer — plus « Modifier »', () => {
+    expect(closed(mine())).toEqual(['copy', 'delete']);
+  });
+
+  test('celui d’un AUTRE : « Signaler » reste offert, « Retirer » aussi pour la modération', () => {
+    expect(closed(comment())).toEqual(['copy', 'report']);
+    expect(closed(comment(), { canRemove: true })).toEqual(['copy', 'remove', 'report']);
+  });
+
+  test('ouverts (ou non dit), « Modifier » est là comme avant', () => {
+    expect(commentMenuEntries({ comment: mine(), viewerId: VIEWER, servedText: 'x', canCopy: true, canImage: true, canReport: true, commentsClosed: false })).toEqual(['copy', 'edit', 'delete']);
+    expect(entries(mine())).toEqual(['copy', 'edit', 'delete']);
+  });
+});
+
 /** « IMAGER » VIT DANS LE RAIL DE LA RANGÉE (#16541) — même garde que la carte, plus jamais au « … ». */
 describe('commentImageable — l’icône « Imager » du rail', () => {
   const imageable = (target: PostComment, servedText = 'C’est où ?', options: { readonly canImage?: boolean; readonly postComposition?: { readonly imageable: boolean } } = {}) =>
