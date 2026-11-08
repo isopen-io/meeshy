@@ -95,6 +95,7 @@ import type {
   AudioTranslationFailedEventData,
   TranscriptionFailedEventData,
   AudioTranslationEventData,
+  SocketIOMessage,
 } from '@meeshy/shared/types/socketio-events';
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
@@ -2684,18 +2685,19 @@ export class MeeshySocketIOManager {
    */
   private _emitMessageNewByLanguage(
     room: string,
-    payload: Record<string, unknown>,
-    opts: { excludeUserId?: string; excludeSocketId?: string } = {}
+    payload: SocketIOMessage,
+    opts: { excludeUserId?: string; excludeSocketId?: string } = {},
+    onEmissionError?: (error: unknown, label: string) => void
   ): void {
     emitMessageNewByLanguage({
       io: this.io,
       room,
-      payload: payload as never,
+      payload,
       exclusion: opts,
       socketToUser: (sid) => this.socketToUser.get(sid),
       resolveLanguages: (uid) => this.connectedUsers.get(uid)?.resolvedLanguages,
       userLanguage: (uid) => this.connectedUsers.get(uid)?.language,
-      onEmissionError: (error) => logger.error('message:new par langue — audience perdue', { room, error }),
+      onEmissionError,
     });
   }
 
@@ -3106,6 +3108,10 @@ export class MeeshySocketIOManager {
       // Émission et lecture de plan BEST-EFFORT : raison au site unique,
       // `safeBroadcast` (#17026). L'enfilage est délégué plus bas à
       // `syncConversationListOnNewMessage`, dans ce même `try`.
+      // UN seul rapporteur de panne pour les deux chemins (constat C3) : la
+      // délégation par langue posait le SIEN, qui ne connaît que la `room`.
+      const onLiveEmissionError = (error: unknown, audience: string) =>
+        logger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, audience, error });
       emitMessageNewBestEffort({
         io: this.io,
         room,
@@ -3117,14 +3123,14 @@ export class MeeshySocketIOManager {
         hiddenKeys: sealedKeys,
         payloadForKey: (key) => sealedQuoteVariant(sealedQuote, key, broadcastPayload),
         emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
-          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
+          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion, onLiveEmissionError)
           : null,
         readerSigned: await readerSignedPlanBestEffort(
           this.prisma,
           { conversationId: normalizedId, message, attachments: broadcastPayload.attachments },
           (error) => logger.error('reader-signed plan failed (REST/ZMQ send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
         ),
-      }, (error) => logger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }));
+      }, onLiveEmissionError);
 
       // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore).
       // Il reçoit le payload cid-aware : c'est SON socket, et c'est lui qui doit

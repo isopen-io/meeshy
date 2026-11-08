@@ -77,8 +77,13 @@ export type MessageNewEmission<P extends MessageNewPayload> = {
    * plus par un `throw` : chaque audience est enrobée pour SA part, donc une
    * exception qui sortirait d'ici n'aurait plus l'identité de ce qui a été
    * perdu. `undefined` ⇒ `safeBroadcast` journalise lui-même.
+   *
+   * Le SECOND paramètre est l'étiquette de l'audience — « NOMMÉE » ne veut rien
+   * dire sans elle, et le premier état de ce lot la jetait : quatre audiences
+   * perdues rendaient quatre journaux identiques, et le chemin par lecteur
+   * perdait l'identité de cible qu'il publiait avant. Constat C1/C2 de l'audit.
    */
-  readonly onEmissionError?: (error: unknown) => void;
+  readonly onEmissionError?: (error: unknown, label: string) => void;
 };
 
 export function emitMessageNew<P extends MessageNewPayload>(input: MessageNewEmission<P>): void {
@@ -207,7 +212,7 @@ function emitPerReader<P extends MessageNewPayload>(input: MessageNewEmission<P>
  */
 export function emitMessageNewBestEffort<P extends MessageNewPayload>(
   input: MessageNewEmission<P>,
-  onError: (error: unknown) => void,
+  onError: (error: unknown, label: string) => void,
 ): void {
   safeBroadcast('message:new', () => emitMessageNew({ ...input, onEmissionError: input.onEmissionError ?? onError }), onError);
 }

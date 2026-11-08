@@ -82,13 +82,16 @@ describe('#17086 — émission par langue : chaque groupe survit à la perte des
     expect(served.map((s) => s.rooms)).toEqual([[ROOM], ['s2']]);
   });
 
-  it("la panne est NOMMÉE à l'appelant, une fois par audience perdue", () => {
+  it("la panne est NOMMÉE à l'appelant avec son audience, une fois par perte", () => {
     const { io } = ioWith(['s1', 's2'], [ROOM, 's2']);
-    const onEmissionError = jest.fn();
+    const labels: string[] = [];
 
-    emitMessageNewByLanguage({ ...base, io, onEmissionError });
+    emitMessageNewByLanguage({ ...base, io, onEmissionError: (_e, label) => labels.push(label) });
 
-    expect(onEmissionError).toHaveBeenCalledTimes(2);
+    expect(labels).toEqual([
+      `message:new (langue · nœuds distants ${ROOM})`,
+      'message:new (langue es,fr · 1 socket(s))',
+    ]);
   });
 
   it("NOMINAL : une diffusion inter-nœuds excepté les sockets LOCAUX et l'expéditeur, puis une émission élaguée par groupe", () => {
@@ -107,7 +110,13 @@ describe('#17086 — émission par langue : chaque groupe survit à la perte des
 
     emitMessageNewByLanguage({ ...base, io, exclusion: { excludeSocketId: 's1' } });
 
-    expect(served[0]).toMatchObject({ rooms: [ROOM], except: ['s1', 's2', 's1'] });
+    // L'assertion porte sur l'INTENTION — les deux sockets locaux et celui de
+    // l'expéditeur sont exceptés — et non sur la forme exacte du tableau, qui
+    // porte `s1` deux fois (il est déjà dans `[...localSocketIds]`). Geler le
+    // doublon ferait tomber ce témoin pour une non-raison le jour où quelqu'un
+    // dédoublonne `exceptForRemote` (constat C12 de l'audit).
+    expect(served[0]?.rooms).toEqual([ROOM]);
+    expect(new Set(served[0]?.except)).toEqual(new Set(['s1', 's2']));
     expect(served.slice(1).map((s) => s.rooms)).toEqual([['s2']]);
   });
 

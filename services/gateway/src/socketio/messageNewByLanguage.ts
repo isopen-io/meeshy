@@ -90,8 +90,12 @@ export type MessageNewByLanguageInput<P extends MessageNewPayload> = {
   readonly socketToUser: (socketId: string) => string | undefined;
   readonly resolveLanguages: (userId: string) => readonly string[] | undefined;
   readonly userLanguage: (userId: string) => string | undefined;
-  /** La panne d'UNE audience, nommée chez l'appelant ; sinon journalisée ici. */
-  readonly onEmissionError?: (error: unknown) => void;
+  /**
+   * La panne d'UNE audience, nommée chez l'appelant ; sinon journalisée ici.
+   * Le second paramètre est l'étiquette de l'audience perdue : sans elle,
+   * « nommée » est un mot (constat C1 de l'audit de #17086).
+   */
+  readonly onEmissionError?: (error: unknown, label: string) => void;
 };
 
 export function emitMessageNewByLanguage<P extends MessageNewPayload>(input: MessageNewByLanguageInput<P>): void {
@@ -122,6 +126,11 @@ export function emitMessageNewByLanguage<P extends MessageNewPayload>(input: Mes
   });
 
   for (const group of groups) {
+    // `groupSocketsByLanguage` ne crée un groupe qu'en y poussant un socket :
+    // cette garde est donc INATTEIGNABLE aujourd'hui, et elle est reportée des
+    // deux jumelles. Gardée — mais dite — parce qu'un groupe vide ferait
+    // `io.to(undefined)` deux lignes plus bas, et que la non-vacuité est une
+    // propriété du GROUPEUR, pas de ce site (constat C11 de l'audit).
     if (group.socketIds.length === 0) continue;
     // L'élagage est DANS la fermeture : il COMPOSE la charge de ce groupe, et
     // une composition qui lève pour un jeu de langues privait tous les groupes
@@ -145,6 +154,19 @@ export function emitMessageNewByLanguage<P extends MessageNewPayload>(input: Mes
  * La mesure du gain de bande passante (#5.3) — debug, GATÉE : elle sert à
  * prouver la réduction en staging avant un passage en production, et son coût
  * est nul quand le drapeau est OFF.
+ *
+ * Ce qu'elle coûte quand il est ON, et c'est écrit parce que l'extraction l'a
+ * étendu au producteur REST/ZMQ (constat C9) : DEUX sérialisations complètes de
+ * la charge par groupe de langue et par message. Le drapeau est le seul gate —
+ * `enhancedLogger.child()` n'expose pas `isLevelEnabled`, donc ce module ne
+ * peut pas savoir si la ligne `debug` sera retenue, et les deux chaînes sont
+ * construites avant de l'appeler. Sous `SOCKET_LANG_FILTER=true` AVEC un niveau
+ * de log au-dessus de `debug`, le calcul est donc pure perte.
+ *
+ * Arbitrage assumé : le drapeau n'existe QUE pour cette mesure, l'allumer sans
+ * vouloir la lire est une mauvaise configuration, et le vrai correctif — exposer
+ * `isLevelEnabled` sur le logger enfant pour que tout appelant puisse surseoir
+ * à un calcul de journal — n'appartient pas à ce module. Il a son issue : #17136.
  */
 function measureFilterGain(payload: object, filtered: object, languages: readonly string[], originalLanguage: string): void {
   if (process.env.SOCKET_LANG_FILTER !== 'true') return;

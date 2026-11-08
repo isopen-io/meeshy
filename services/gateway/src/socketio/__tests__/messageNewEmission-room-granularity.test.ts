@@ -103,7 +103,12 @@ describe('#17086 — chemin de room : chaque audience survit à la perte des aut
     expect(served.map((s) => s.room)).toEqual([CONVERSATION, `user:${SENDER_USER}`, `user:${H2}`]);
   });
 
-  it("le filtre par langue qui lève laisse l'expéditeur servi", () => {
+  // C7 — `emitByLanguage` est une fonction INJECTÉE, et son type permet qu'elle
+  // lève ; la délégation de production, elle, ne lève plus (elle enrobe par
+  // groupe). Ce témoin garde donc le CONTRAT du point d'injection, pas un
+  // comportement de notre implémentation — dit comme tel, parce qu'un témoin
+  // dont on croit qu'il garde la production atteste en fait son harnais.
+  it("un `emitByLanguage` injecté qui lève laisse l'expéditeur servi (contrat du point d'injection)", () => {
     const { io, served } = ioThrowingOn([]);
     const emitByLanguage = jest.fn((_payload: never, _exclusion: { excludeUserId?: string; excludeSocketId?: string }) => {
       throw new Error('émission par langue en défaut');
@@ -135,13 +140,58 @@ describe('#17086 — chemin de room : chaque audience survit à la perte des aut
     expect(served.map((s) => s.room)).toEqual([`user:${H1}`]);
   });
 
-  it("la panne est NOMMÉE à l'appelant, une fois par audience perdue, avec sa room", () => {
+  // Ces deux témoins assertent l'ARGUMENT, jamais le nombre d'appels. C'est le
+  // constat C5 de l'audit, et il était juste : leur première version disait
+  // « NOMMÉE … avec sa room » dans son TITRE et ne vérifiait que
+  // `toHaveBeenCalledTimes(2)`. Mesuré par mutation : remplacer les ONZE
+  // étiquettes du lot par la constante `'MUTANT'` laissait 46/46 témoins verts.
+  // Un titre n'est pas une assertion.
+  it("la panne est NOMMÉE à l'appelant avec SA room, une fois par audience perdue", () => {
     const { io } = ioThrowingOn([CONVERSATION, `user:${H1}`]);
-    const onError = jest.fn();
+    const labels: string[] = [];
 
-    emitMessageNew({ ...base, io, senderUserId: SENDER_USER, hiddenKeys: [H1, H2], onEmissionError: onError });
+    emitMessageNew({ ...base, io, senderUserId: SENDER_USER, hiddenKeys: [H1, H2], onEmissionError: (_e, label) => labels.push(label) });
 
-    expect(onError).toHaveBeenCalledTimes(2);
+    expect(labels).toEqual([`message:new (room ${CONVERSATION})`, `message:new (masqué user:${H1})`]);
+  });
+
+  it("deux audiences perdues ne rendent pas DEUX FOIS la même phrase", () => {
+    const { io } = ioThrowingOn([`user:${SENDER_USER}`, `user:${H1}`]);
+    const labels: string[] = [];
+
+    emitMessageNew({ ...base, io, senderUserId: SENDER_USER, hiddenKeys: [H1], onEmissionError: (_e, label) => labels.push(label) });
+
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(labels).toEqual([`message:new (expéditeur user:${SENDER_USER})`, `message:new (masqué user:${H1})`]);
+  });
+
+  // C6 — la ligne que le lot AJOUTE à `emitPerReader` n'était couverte par
+  // RIEN : la retirer laissait 1072/1072 témoins verts sur 29 suites. Elle
+  // l'est par celui-ci, qui tombe si elle disparaît.
+  it("le chemin PAR LECTEUR nomme la cible perdue à l'appelant", () => {
+    const { io, served } = ioThrowingOn(['user:r2']);
+    const labels: string[] = [];
+    const plan = {
+      targets: [
+        { room: 'user:r1', key: 'r1', participantId: 'p1' },
+        { room: 'user:r2', key: 'r2', participantId: 'p2' },
+        { room: 'user:r3', key: 'r3', participantId: 'p3' },
+      ],
+      signFor: <P extends object>(payload: P) => payload,
+      signAttachment: <A extends object>(attachment: A) => attachment,
+    };
+
+    emitMessageNew({
+      ...base,
+      io,
+      senderUserId: SENDER_USER,
+      hiddenKeys: [],
+      readerSigned: plan as never,
+      onEmissionError: (_e, label) => labels.push(label),
+    });
+
+    expect(served.map((s) => s.room)).toEqual(['user:r1', 'user:r3']);
+    expect(labels).toEqual(['message:new (per reader user:r2)']);
   });
 
   it('le cas NOMINAL sert exactement une charge par audience, et ne distingue pas les deux granularités', () => {

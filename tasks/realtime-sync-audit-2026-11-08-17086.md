@@ -49,7 +49,7 @@ portait quatre émissions indépendantes sous l'unique `safeBroadcast` de
 | audience | ce que sa perte coûte |
 |---|---|
 | room de conversation, sauf l'expéditeur | le message, pour les présents |
-| room personnelle de l'expéditeur | **la promotion de sa bulle optimiste** — sa charge est la SEULE à porter `clientMessageId` |
+| room personnelle de l'expéditeur | la promotion de la bulle optimiste sur ses AUTRES appareils, et sur la voie REST |
 | boucle sur `hiddenKeys` | **tout** : un masqué n'a QUE sa room personnelle, la diffusion de room l'exclut par construction (#8562), et la file hors ligne saute les CONNECTÉS |
 | `_emitMessageNewByLanguage` | la diffusion inter-nœuds **et** tous les groupes de langue |
 
@@ -104,3 +104,78 @@ un chemin dormant. Il est fait dans le même geste **pour ne pas laisser une
 moitié**, et parce que l'extraction était de toute façon la condition de K1.
 Dire qu'il corrige une panne vécue serait faux — c'est un piège armé, et la
 distinction se mesure, elle ne se suppose pas.
+
+## 6. Ce que l'audit adversarial a cassé — et il a cassé la moitié dont je me félicitais
+
+Verdict : **non bloquant sur la moitié qui REMET, bloquant sur la moitié que le
+lot déclarait livrer en plus.** La granularité de remise a été prouvée par
+COMPTAGE (quatre sockets locaux dont deux appareils de l'expéditeur, un
+destinataire sur un autre nœud, un appareil distant de l'expéditeur : exactement
+un `message:new` chacun, la bonne charge, les locaux élagués, le distant
+entier). L'extraction a été confrontée ligne à ligne aux deux anciens corps :
+composition et ORDRE d'`exceptForRemote`, retour anticipé, repli `|| 'fr'`,
+passage d'`excludeSocketIds`, chaînage `.to(sid)` — identiques.
+
+**Ce qui ne marchait pas, et c'est exactement ce que le §4 ci-dessus
+revendiquait** :
+
+`safeBroadcast(label, emit, onError)` faisait `if (onError) onError(error); else
+logger.error(\`[broadcast] ${label}\`, error)`. **Le label n'atteignait jamais
+l'appelant.** Les deux appelants de production passent un `onError` : mes onze
+étiquettes étaient donc mortes en production, et quatre audiences perdues
+rendaient quatre journaux IDENTIQUES et anonymes — un opérateur ne pouvait pas
+distinguer « un masqué perdu » de « personne n'a rien reçu ».
+
+Pire : le chemin PAR LECTEUR (#17026) passait `safeBroadcast(label, fn)` SANS
+`onError`, donc tombait dans le `else` et publiait `[broadcast] message:new
+(per reader user:<id>)`. **Lui donner un `onError` a supprimé la seule
+information que ce chemin publiait.** Le lot qui prétendait ne rien perdre en
+observabilité faisait régresser le lot d'avant.
+
+Et les deux témoins qui gardaient cette propriété **ne pouvaient pas tomber** :
+leur TITRE disait « NOMMÉE … avec sa room », leur assertion était
+`toHaveBeenCalledTimes(2)`. Mesuré par mutation : remplacer les onze étiquettes
+par la constante `'MUTANT'` laissait **46/46 témoins verts**. Et la ligne que ce
+lot AJOUTAIT à `emitPerReader` (`input.onEmissionError`) n'était couverte par
+rien — la retirer laissait **1072/1072 verts sur 29 suites**.
+
+> **« NOMMÉE » est un mot jusqu'à ce qu'une assertion porte sur l'ARGUMENT.**
+> Un témoin dont le titre énonce la propriété et dont l'assertion compte les
+> appels est la forme la plus crédible d'un témoin qui n'atteste rien : le titre
+> fait le travail de conviction, et personne ne relit l'assertion. C'est la
+> famille « un commentaire qui ÉNONCE une contrainte est une AFFIRMATION »
+> (cycle 94), appliquée à l'intitulé d'un `it(...)`.
+
+Réparé, et les deux mutations tombent maintenant : `'MUTANT'` fait tomber 4
+témoins, et retirer `input.onEmissionError` d'`emitPerReader` en fait tomber 1.
+`safeBroadcast` remet le label en SECOND argument — élargir un callback est sans
+risque pour ses ~24 appelants, une fonction à un paramètre acceptant d'être
+appelée avec deux.
+
+Trois autres constats réparés dans le même geste :
+
+- **le chemin par langue était devenu muet pour le site qui tient le
+  `messageId`** : chaque délégation posait SON `onEmissionError`, qui ne connaît
+  que la `room`. Un seul rapporteur désormais, celui de l'appelant, pour les deux
+  chemins ;
+- **deux `payload as never`** — dont un parfaitement inutile (`SocketIOMessage`
+  EST `ServerEventPayload<'message:new'>`) et l'autre évitable. Mesuré : les deux
+  compilent sans cast. Un `as never` n'affaiblit pas un contrat, il l'ANNULE, et
+  aucun balayage du dépôt ne connaît cette forme — le lot avait fermé la porte en
+  remplaçant `Record<string, any>` par un contrat dérivé, puis l'avait rouverte
+  deux lignes plus bas ;
+- **un témoin qui gelait une verrue** (`except: ['s1','s2','s1']`) assert
+  désormais l'INTENTION, pour ne pas tomber le jour où quelqu'un dédoublonne.
+
+Et deux dits plutôt que corrigés, parce que les corriger n'appartient pas à ce
+module : la garde de groupe vide est inatteignable (propriété du GROUPEUR, pas
+de ce site) et `measureFilterGain` ne peut pas surseoir à son calcul faute
+d'`isLevelEnabled` sur le logger enfant.
+
+> **Ce que l'audit a mesuré de plus utile n'est pas un défaut, c'est une
+> asymétrie de confiance.** La moitié difficile — quatre audiences disjointes,
+> fidélité d'une extraction entre deux jumelles divergentes — était juste. La
+> moitié facile, celle ajoutée « en plus » et dont le journal se félicitait,
+> était fausse de bout en bout : une étiquette jetée, une régression, deux
+> témoins inertes. **Le code qu'on écrit en bonus n'est pas relu comme le code
+> qu'on écrit sous contrainte.**
