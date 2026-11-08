@@ -229,6 +229,22 @@ jobs:
       # active architecture, so ARCHS=arm64 keeps xcodebuild from compiling
       # x86_64 too (macos-15 runners are Apple Silicon). Its `.xctestrun` runs
       # on any arm64 simulator — the shards below do exactly that.
+      # #16852 — la résolution passe par le script de reprise, comme `ios.yml`.
+      # Sans lui, `build-for-testing` résolvait à cru : une COLLISION du cache
+      # d'artefacts SwiftPM du runner (« already exists in file system » sur
+      # WebRTC, Lottie, SignalFfi) était alors définitive, et elle a mis TOUTE
+      # la CI du SDK par terre le 2026-11-08, `dev` compris — avant la moindre
+      # compilation, donc sans rien dire du Swift de la PR. Une collision se
+      # purge, elle ne s'attend pas ; le remède existait déjà dans le dépôt
+      # (#6545) et ce workflow était le seul à ne pas le réciter.
+      #
+      # `-` et non un chemin de projet : c'est un PAQUET Swift.
+      - name: Resolve SPM packages (purge une collision, retente une panne réseau)
+        working-directory: packages/MeeshySDK
+        run: |
+          "$GITHUB_WORKSPACE/scripts/ci/resolve-spm-packages.sh" \
+            - MeeshySDK-Package "$RUNNER_TEMP/DerivedData" "$RUNNER_TEMP/spm"
+
       - name: Build for testing
         working-directory: packages/MeeshySDK
         run: |
@@ -237,6 +253,7 @@ jobs:
             -scheme MeeshySDK-Package \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
             COMPILER_INDEX_STORE_ENABLE=NO \
             ARCHS=arm64 \
             -quiet 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log"
