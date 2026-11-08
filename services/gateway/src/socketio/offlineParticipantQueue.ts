@@ -409,11 +409,15 @@ export async function enqueueForOfflineParticipants(
       // des conversations du compte est tombée au handshake : la socket n'a
       // alors rejoint aucune room, et la tenir pour joignable DÉSARMAIT la file
       // pour toute sa vie.
-      const socketState = connectedUsers.get(queueKey);
+      // `has` D'ABORD, et `get` seulement ensuite : l'ordre fait partie du
+      // contrat. Un appelant peut passer une carte dont `get` n'est pas
+      // appelable pour une clé absente, et le court-circuit est ce qui le
+      // garantit — hisser le `get` au-dessus du `has` a cassé le scellement au
+      // repos de toute la file le temps d'une révision.
       const reachableHere =
         connectedUsers.has(queueKey) &&
-        socketState?.allConversationRoomsUnreachable !== true &&
-        !socketState?.unreachableConversations?.has(conversationId);
+        connectedUsers.get(queueKey)?.allConversationRoomsUnreachable !== true &&
+        !connectedUsers.get(queueKey)?.unreachableConversations?.has(conversationId);
       if (isActor || reachableHere || params.excludedQueueKeys?.has(queueKey)) continue;
       if (restrictToLanguage !== null) {
         // Échec OUVERT sur prisme vide : un participant dont aucune langue n'est

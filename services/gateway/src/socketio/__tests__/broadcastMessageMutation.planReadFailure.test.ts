@@ -166,15 +166,41 @@ describe('#16965 — une lecture de plan qui tombe et le pair EN LIGNE', () => {
     expect(errors.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('l’enfilage hors ligne survit aux deux pannes — il est hors du `try` d’émission', async () => {
-    for (const mode of ['protection-read', 'recipients-read'] as const) {
-      const { errors, prisma, manager, enqueueOfflineMessageMutation } = setup(mode);
-      await run(prisma, manager, errors);
-      expect({ mode, enqueued: enqueueOfflineMessageMutation.mock.calls.length > 0 }).toEqual({
-        mode,
-        enqueued: true,
-      });
-    }
+  it('l’enfilage hors ligne survit à la panne de PROTECTION — il est hors du `try` d’émission', async () => {
+    const { errors, prisma, manager, enqueueOfflineMessageMutation } = setup('protection-read');
+
+    await run(prisma, manager, errors);
+
+    expect(enqueueOfflineMessageMutation.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * La panne des DESTINATAIRES retient désormais les DEUX canaux, et c'est un
+   * resserrement DÉLIBÉRÉ de ce lot-ci, pas une régression de #16965.
+   *
+   * La raison est que la même lecture — `prisma.participant.findMany` — sert
+   * deux questions, et que l'une est une question de DROIT : « qui a le droit
+   * de lire ce message ? » (le plancher d'historique). Quand elle ne répond
+   * pas, on ne sait NI qui est bloqué, NI qui est autorisé — et la file
+   * PERSISTE la charge 48 h dans Redis sous la clé de chaque destinataire.
+   * Enfiler pour « tout le monde » reviendrait à y déposer le texte d'un
+   * message qu'un invité entré par un lien sans historique n'a le droit de lire
+   * par aucune route.
+   *
+   * Entre une remise perdue et un contenu persisté chez qui n'y a pas droit, ce
+   * lot choisit la première : le recours est la relecture de la page, qui
+   * applique le plancher côté serveur et sert le texte édité à qui peut le
+   * lire. En pratique l'écart est étroit — `enqueueForOfflineParticipants` fait
+   * sa PROPRE requête de participants, qui tombe dans les mêmes conditions —
+   * mais il est écrit ici parce qu'il se décide, il ne se constate pas.
+   */
+  it('la panne des DESTINATAIRES retient les DEUX canaux — décision de ce lot', async () => {
+    const { emitted, errors, prisma, manager, enqueueOfflineMessageMutation } = setup('recipients-read');
+
+    await run(prisma, manager, errors);
+
+    expect(live(emitted)).toEqual([]);
+    expect(enqueueOfflineMessageMutation.mock.calls).toEqual([]);
   });
 
   it('sans aucune panne, la remise par lecteur est inchangée (non-régression)', async () => {
