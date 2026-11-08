@@ -2,9 +2,9 @@
 
 Témoins de COMPORTEMENT : ce que voit la publication (régime, cache), ce qui
 part dans les journaux, et ce qui reste du régime après le lot. Le dernier
-témoin est marqué `xfail(strict=True)` : il décrit une fuite par la chaîne
-`__context__` qui reste ouverte (réserve QA), et tombera en XPASS le jour où
-elle sera fermée.
+témoin décrit la fuite par la chaîne `__context__` relevée par la QA : une
+publication d'erreur faite dans le bloc `except` d'un lot mixte rattachait
+l'exception du lot, qui cite le sous-titre.
 """
 
 import asyncio
@@ -160,7 +160,6 @@ async def test_the_ordinary_batch_published_payload_keeps_its_keys():
 
 
 @pytest.mark.unit
-@pytest.mark.xfail(strict=True, reason="réserve QA #16735 : la trace d'une publication ordinaire ratée dans un lot mixte joint, par __context__, l'exception du lot qui cite le sous-titre")
 async def test_a_failed_ordinary_publish_in_a_mixed_batch_never_chains_the_caption_exception(caplog):
     caplog.set_level(logging.DEBUG)
     handler = TranslationHandler(pool_manager=MagicMock(), pub_socket=MagicMock())

@@ -312,10 +312,13 @@ async def _process_batch(
                     translations_completed += 1
 
             except Exception as e:
-                logger.error(f"[BATCH] Translation error for {target_lang}: {shown(str(e))}")
-                for task in tasks:
-                    error_result = _create_error_result(task, target_lang, str(e))
-                    await _publish_under_task_regime(publish_func, task, error_result, target_lang)
+                failure = shown(str(e))
+                logger.error(f"[BATCH] Translation error for {target_lang}: {failure}")
+            else:
+                continue
+            for task in tasks:
+                error_result = _create_error_result(task, target_lang, failure)
+                await _publish_under_task_regime(publish_func, task, error_result, target_lang)
 
         batch_time = (time.time() - batch_start) * 1000
         logger.info(
