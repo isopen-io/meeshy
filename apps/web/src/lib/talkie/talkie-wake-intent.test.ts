@@ -142,7 +142,8 @@ describe('le téléchargement de l’audio est plafonné', () => {
   });
 
   test('un corps annoncé ou reçu au-delà du plafond est refusé', async () => {
-    await expect(fetchTalkieAudio(AUDIO, answer(10, TALKIE_AUDIO_MAX_BYTES + 1))).rejects.toThrow();
-    await expect(fetchTalkieAudio(AUDIO, answer(TALKIE_AUDIO_MAX_BYTES + 1))).rejects.toThrow();
+    const refused = async (fetchImpl: typeof fetch): Promise<boolean> => fetchTalkieAudio(AUDIO, fetchImpl).then(() => false, () => true);
+    expect(await refused(answer(10, TALKIE_AUDIO_MAX_BYTES + 1))).toBe(true);
+    expect(await refused(answer(TALKIE_AUDIO_MAX_BYTES + 1))).toBe(true);
   });
 });
