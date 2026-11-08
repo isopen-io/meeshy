@@ -886,6 +886,8 @@
 		323517498AE1C4B270E6CF0D /* TwoFactorSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C85F543BCF155928ABBC2CFE /* TwoFactorSetupView.swift */; };
 		323E36F347AC87958BBDBC87 /* MessageOverlayPreviewKindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEA6FE2F16D7A552A860F6D6 /* MessageOverlayPreviewKindTests.swift */; };
 		323F9B0611BEB439D6F0F301 /* ReelInstantSwitchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 939BA207D30DC29C7ADEB212 /* ReelInstantSwitchTests.swift */; };
+		9F6F2B4A4D77FD4AE8DC346F /* SheetKeyboardDismissalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FAE70ACA81ADA22B1B0553C /* SheetKeyboardDismissalTests.swift */; };
+		F7E6A9CBCFA73CD8C963C81B /* MessageSwipeClaimTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD5708E9F1779A713001488 /* MessageSwipeClaimTests.swift */; };
 		325BF16C46909E641355A3DE /* ImagerWandButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2AE6F111D03FD32FAFF718 /* ImagerWandButton.swift */; };
 		327A11505FC51D5C2A6A8783 /* CameraZoomControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99CD03FCF06ACEA38FF6FBB8 /* CameraZoomControllerTests.swift */; };
 		327E95AB349E1E23890D8FEA /* AnchoredPickerWiringGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E50347EF5F9802696A12F28 /* AnchoredPickerWiringGuardTests.swift */; };
@@ -7077,6 +7079,8 @@
 		936B6A1D29460930F92F33C7 /* GameSeasonViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSeasonViews.swift; sourceTree = "<group>"; };
 		9386D07724CD1D763A8A5322 /* MockStatusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockStatusService.swift; sourceTree = "<group>"; };
 		939BA207D30DC29C7ADEB212 /* ReelInstantSwitchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelInstantSwitchTests.swift; sourceTree = "<group>"; };
+		8FAE70ACA81ADA22B1B0553C /* SheetKeyboardDismissalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetKeyboardDismissalTests.swift; sourceTree = "<group>"; };
+		6DD5708E9F1779A713001488 /* MessageSwipeClaimTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageSwipeClaimTests.swift; sourceTree = "<group>"; };
 		93B28F6D2A0CB0C03DBC41E3 /* LentilleFocusElectionHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleFocusElectionHost.swift; sourceTree = "<group>"; };
 		93BF6AC5E10E6C007424327E /* CommentSheetBanners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentSheetBanners.swift; sourceTree = "<group>"; };
 		93C1183BEE74B0EFCED05234 /* ShareLinkEntryResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkEntryResolver.swift; sourceTree = "<group>"; };
@@ -9451,6 +9455,8 @@
 				7A08AFF02448CB49DF948813 /* ReelFeedSoundButtonWiringGuardTests.swift */,
 				242721645B0D1CC1E3F390DA /* ReelFeedSoundIntentTests.swift */,
 				939BA207D30DC29C7ADEB212 /* ReelInstantSwitchTests.swift */,
+				8FAE70ACA81ADA22B1B0553C /* SheetKeyboardDismissalTests.swift */,
+				6DD5708E9F1779A713001488 /* MessageSwipeClaimTests.swift */,
 				820867BADBFBD333CC60AF3C /* ReelMediaIndicatorTests.swift */,
 				DD67F5E7DAF15376ED79BA60 /* ReelNotificationOpenerTests.swift */,
 				091CAF8CD327E727352E4662 /* ReelPosterFitGuardTests.swift */,
@@ -18979,6 +18985,8 @@
 				BFB695B94F56666159A3649B /* ReelFeedSoundButtonWiringGuardTests.swift in Sources */,
 				7803D5EC53019877B61497D4 /* ReelFeedSoundIntentTests.swift in Sources */,
 				323F9B0611BEB439D6F0F301 /* ReelInstantSwitchTests.swift in Sources */,
+				9F6F2B4A4D77FD4AE8DC346F /* SheetKeyboardDismissalTests.swift in Sources */,
+				F7E6A9CBCFA73CD8C963C81B /* MessageSwipeClaimTests.swift in Sources */,
 				5737FB115F4D1B21F3745258 /* ReelMediaIndicatorTests.swift in Sources */,
 				4106408C7E41FA33623C72CA /* ReelNotificationOpenerTests.swift in Sources */,
 				025915120DD6D9E87CD54205 /* ReelPosterFitGuardTests.swift in Sources */,
