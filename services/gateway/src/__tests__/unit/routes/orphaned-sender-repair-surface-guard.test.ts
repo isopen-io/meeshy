@@ -202,7 +202,7 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // (contenu, traductions) chargent `sender` pour la ligne de résultat, et un
   // seul `withOrphanedSenderRepair` les enveloppe via `Promise.all`, portée =
   // les conversations du lecteur.
-  'search/globalMessageSearch.ts': { kind: 'applies', reads: 2, applications: 1 },
+  'search/globalMessageSearch.ts': { kind: 'applies', reads: 3, applications: 1 },
 
   // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
   // `conversationId`) et la garde d'admission d'écriture de
