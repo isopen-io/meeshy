@@ -98,8 +98,7 @@ final class MessageAuthorRingTests: XCTestCase {
         let surfaces = [
             "Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",
             "Meeshy/Features/Focal/Row/FocalIdentityHeader.swift",
-            "Meeshy/Features/Main/Views/ThemedConversationRow.swift",
-            "Meeshy/Features/Lens/Row/LentilleConversationRow.swift",
+            "Meeshy/Features/Main/Views/ConversationRowAvatar.swift",
             "Meeshy/Features/Main/Views/ParticipantsView.swift",
             "Meeshy/Features/Main/Components/ConversationInfoSheet.swift",
             "Meeshy/Features/Profile/Views/ProfileDecorSheet.swift",
