@@ -64,6 +64,23 @@ export async function withdrawRitualSharesBetween(
   ]);
 }
 
+const SHARES_OFF_DATA = Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, false])) as Record<RelationRitualShare, false>;
+
+/**
+ * Un compte part (désactivation, suppression) : tout partage du rituel qu'il avait consenti
+ * ou qu'on lui avait consenti s'éteint (#14924), sans date — ce n'est le geste de personne.
+ * Aucune ligne n'est créée ; une réactivation ne rallume rien.
+ */
+export async function withdrawRitualSharesOfUser(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly userId: string },
+): Promise<void> {
+  await prisma.relationFeatureSetting.updateMany({
+    where: { OR: [{ ownerId: params.userId }, { otherId: params.userId }] },
+    data: SHARES_OFF_DATA,
+  });
+}
+
 /**
  * Le lien est tombé sous Proche (#13934, #16686) : l'accord de la CATÉGORIE d'écoute
  * s'éteint dans les deux sens — il a été donné à un Proche, pas au cercle d'en dessous,

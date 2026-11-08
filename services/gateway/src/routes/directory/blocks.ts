@@ -13,6 +13,7 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { getCacheStore } from '../../services/CacheStore';
 import { blockCacheKey } from '../../utils/block-cache';
 import { cancelAutoAcquaintanceOnBlock } from '../../services/relations/autoAcquaintance';
+import { withdrawRitualSharesBetween } from '../../services/relations/ritualShareWithdrawal';
 import { stopBringsAfterUserBlock } from '../bring';
 import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkieCut';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
@@ -135,6 +136,9 @@ export async function bloquer(
   // passer les messages de la personne bloquée, et un second appel est
   // justement ce que fait quelqu'un dont le premier n'a « rien fait ».
   try { await getCacheStore().del(blockCacheKey(moi, cibleId)); } catch { /* best-effort */ }
+
+  // #14924 — un blocage coupe le lien : les partages du rituel s'éteignent, rejoué même sur un blocage déjà posé.
+  await withdrawRitualSharesBetween(fastify.prisma, { actorId: moi, otherId: cibleId, at: new Date() });
 
   // Les cercles (#13932) : un blocage annule la Connaissance née toute seule.
   cancelAutoAcquaintanceOnBlock(fastify.prisma, { blockerId: moi, blockedId: cibleId });

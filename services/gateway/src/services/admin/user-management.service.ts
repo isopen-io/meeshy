@@ -8,6 +8,7 @@ import {
   UpdateStatusDTO,
   ResetPasswordDTO
 } from '@meeshy/shared/types';
+import { withdrawRitualSharesOfUser } from '../relations/ritualShareWithdrawal';
 import { hashPassword } from '../../utils/password-hash';
 import { normalizeEmail } from '../../utils/normalize';
 import { AdminIdentifierTakenError, rethrowIdentifierTaken } from './admin-identifier-taken';
@@ -461,7 +462,10 @@ export class UserManagementService {
       },
     });
 
-    if (!data.isActive) await this.revokeSessionsBestEffort(userId, 'deactivation');
+    if (!data.isActive) {
+      await this.revokeSessionsBestEffort(userId, 'deactivation');
+      await this.withdrawRitualSharesBestEffort(userId, 'deactivation');
+    }
 
     return user as unknown as FullUser;
   }
@@ -484,6 +488,15 @@ export class UserManagementService {
       await revoke(userId);
     } catch (error) {
       logWarn(logger, `[UserManagement] Session revocation failed after ${reason} of user ${userId}`, error);
+    }
+  }
+
+  /** #14924 — un compte parti ne garde aucun partage du rituel ; un retrait qui échoue ne défait pas le geste. */
+  private async withdrawRitualSharesBestEffort(userId: string, reason: string): Promise<void> {
+    try {
+      await withdrawRitualSharesOfUser(this.prisma, { userId });
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Ritual shares not withdrawn after ${reason} of user ${userId}`, error);
     }
   }
 
@@ -570,6 +583,7 @@ export class UserManagementService {
     });
 
     await this.revokeSessionsBestEffort(userId, 'deletion');
+    await this.withdrawRitualSharesBestEffort(userId, 'deletion');
 
     return user as unknown as FullUser;
   }
