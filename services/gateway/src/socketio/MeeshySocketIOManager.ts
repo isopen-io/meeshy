@@ -15,7 +15,6 @@ import { Server as HTTPServer } from 'http';
 import { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
-import { filterMessagePayloadForLanguages, groupSocketsByLanguage } from './utils/message-payload-filter';
 import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
 import { MaintenanceService } from '../services/MaintenanceService';
 import { disconnectRevokedSessions } from './disconnectRevokedSessions';
@@ -47,6 +46,7 @@ import { AttachmentService } from '../services/attachments';
 import { attachmentSocketSelect } from '../services/attachments/attachmentIncludes';
 import { serializeMessageAttachmentsForSocket } from './serializeAttachmentForSocket';
 import { emitMessageNewBestEffort } from './messageNewEmission';
+import { emitMessageNewByLanguage } from './messageNewByLanguage';
 import { readerSignedPlanBestEffort } from './readerSignedDelivery';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
@@ -2676,72 +2676,27 @@ export class MeeshySocketIOManager {
   }
 
   /**
-   * Phase B1 — emit `message:new` to a conversation room grouped by each
-   * recipient's preferred language, sending a translation-trimmed payload once
-   * per distinct language. Recipients whose language is unknown fall back to the
-   * message's original language. Opt-in via `SOCKET_LANG_FILTER=true` (OFF by
-   * default). Pure trimming is
-   * delegated to `filterMessagePayloadForLanguages` (unit-tested).
+   * Phase B1 — `message:new` groupé PAR LANGUE, délégué au site unique
+   * `messageNewByLanguage.ts` (#17086). La doctrine multi-nœud, l'ordre des
+   * deux étapes et l'enrobage PAR AUDIENCE y sont écrits une fois ; cette
+   * méthode ne fournit que ce que SEUL ce porteur sait — ses cartes de sockets.
+   * Opt-in par `SOCKET_LANG_FILTER=true` (OFF par défaut).
    */
   private _emitMessageNewByLanguage(
     room: string,
-    payload: Record<string, any>,
-    opts: { excludeUserId?: string } = {}
+    payload: Record<string, unknown>,
+    opts: { excludeUserId?: string; excludeSocketId?: string } = {}
   ): void {
-    // `adapter.rooms` + `connectedUsers`/`socketToUser` only see THIS node's
-    // sockets. On a multi-node deployment (the 100k+ msg/s topology runs the
-    // Socket.IO Redis adapter) a recipient on another gateway node is never
-    // enumerated here, so the per-language loop below — which can only resolve
-    // locally-connected sockets — would silently never deliver `message:new` to
-    // them. Broadcast the FULL payload to the room across the cluster first (the
-    // Redis adapter propagates `io.to(room)`), excepting every LOCAL room socket
-    // (each served a trimmed copy by the loop). Remote sockets get exactly one
-    // (unfiltered) message:new; local sockets get exactly one trimmed copy. On a
-    // single node every room socket is local, so the except-set covers the whole
-    // room and this broadcast reaches nobody — behavior unchanged.
-    //
-    // `excludeUserId` retire en plus la room personnelle de l'expéditeur : elle
-    // reçoit le payload cid-aware par une émission séparée, et une copie
-    // cid-strippée ici lui en ferait recevoir deux (miroir exact de
-    // `MessageHandler._emitMessageNewByLanguage`).
-    const localSocketIds = this.io.sockets.adapter.rooms.get(room);
-    const exceptForRemote: string[] = localSocketIds ? [...localSocketIds] : [];
-    if (opts.excludeUserId) exceptForRemote.push(ROOMS.user(opts.excludeUserId));
-    const remoteEmitter: ReturnType<SocketIOServer['to']> = this.io
-      .to(room)
-      .except(exceptForRemote);
-    remoteEmitter.emit(SERVER_EVENTS.MESSAGE_NEW, payload);
-
-    if (!localSocketIds || localSocketIds.size === 0) return;
-
-    // Delegate the per-recipient language grouping to the shared, unit-tested
-    // `groupSocketsByLanguage` helper — exactly like `MessageHandler`'s twin
-    // path. The helper normalizes every recipient language AND the original via
-    // the shared `normalizeLanguageCode` SSOT (`'pt-BR' → 'pt'`), so a stored
-    // translation keyed on the 2-letter code is never pruned for an anonymous
-    // recipient carrying a raw BCP-47 `language` (Prisme Linguistique). The
-    // previous inline grouping only `.toLowerCase()`d the language, leaving
-    // `'pt-br'` un-matched against the `'pt'` translation key — a silent Prisme
-    // regression on this REST/ZMQ broadcast path that the socket `message:send`
-    // path (already delegating) never had.
-    const originalLanguage = String(payload.originalLanguage || 'fr');
-    const groups = groupSocketsByLanguage({
-      socketIds: localSocketIds,
-      originalLanguage,
-      excludeUserId: opts.excludeUserId,
+    emitMessageNewByLanguage({
+      io: this.io,
+      room,
+      payload: payload as never,
+      exclusion: opts,
       socketToUser: (sid) => this.socketToUser.get(sid),
       resolveLanguages: (uid) => this.connectedUsers.get(uid)?.resolvedLanguages,
       userLanguage: (uid) => this.connectedUsers.get(uid)?.language,
+      onEmissionError: (error) => logger.error('message:new par langue — audience perdue', { room, error }),
     });
-
-    for (const group of groups) {
-      if (group.socketIds.length === 0) continue;
-      const filtered = filterMessagePayloadForLanguages(payload, group.languages);
-      const [firstSid, ...restSids] = group.socketIds;
-      let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
-      for (const socketId of restSids) emitter = emitter.to(socketId);
-      emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
-    }
   }
 
   /**
