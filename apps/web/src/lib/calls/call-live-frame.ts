@@ -81,116 +81,132 @@ export type LiveFrameDeps = {
   readonly myName: () => string;
 };
 
-export function createCallLiveFrame(deps: LiveFrameDeps) {
-  const state = (): CallLiveFrameState => deps.store.getState();
-  const patch = (next: Partial<CallLiveFrameState>): void => deps.store.setState(next);
-  const pairCallId = (): string | null => {
-    const call = deps.calls.getState().call;
-    return liveFramePair(call) ? call.callId : null;
-  };
-  let pendingReply: Promise<void> = Promise.resolve();
-
-  const send = async (payload: Record<string, unknown>): Promise<boolean> => {
-    const transport = deps.transport();
-    if (transport === null) return false;
-    const ack = await transport.request(CLIENT_EVENTS.CALL_FRAME_SELECT, payload, ACK_TIMEOUT_MS).catch(() => null);
-    return decodeControlAck(ack).ok;
-  };
-
-  const texts = (): { readonly texts?: { readonly name: string } } => {
-    const name = deps.myName().trim().slice(0, CALL_LIVE_FRAME_TEXT_MAX);
-    return name === '' ? {} : { texts: { name } };
-  };
-
-  const sendReply = async (callId: string, frameId: string, reply: CallLiveFrameReply): Promise<void> => {
-    await send({ callId, frameId, ...texts(), reply });
-  };
-
+/** Ce que les étapes de la session partagent : ses dépendances, et la lecture / l'écriture de son état. */
+type LiveFrameContext = {
+  readonly deps: LiveFrameDeps;
+  readonly state: () => CallLiveFrameState;
+  readonly patch: (next: Partial<CallLiveFrameState>) => void;
+  /** L'appel à deux en cours, ou `null`. */
+  readonly pairCallId: () => string | null;
   /** Un autre appel, ou plus d'appel à deux : tout s'efface, sans rien envoyer. */
-  const follow = (callId: string | null): void => {
-    if (callId === state().callId) return;
-    deps.store.setState({ ...NO_LIVE_FRAME, callId }, true);
-  };
+  readonly follow: (callId: string | null) => void;
+};
 
-  const apply = async (id: string | null): Promise<void> => {
-    const callId = pairCallId();
-    if (callId === null || (id !== null && !isLiveFrameId(id))) return;
-    follow(callId);
-    const { sentProposal, peerFrameId } = state();
-    patch({ frameId: id, answer: null, notice: null });
-    if (id === null) {
-      if (sentProposal === null) return;
-      patch({ sentProposal: null });
-      await send({ callId, frameId: null });
-      return;
-    }
-    if (id === peerFrameId) return;
-    patch({ sentProposal: id });
-    const proposed = await send({ callId, frameId: id, ...texts() });
-    if (proposed || state().callId !== callId || state().sentProposal !== id) return;
-    patch({ sentProposal: null, notice: 'not-proposed' });
-  };
-
-  const accept = async (): Promise<void> => {
-    const { proposal, callId } = state();
-    if (proposal === null || callId === null) return;
-    patch({ proposal: null, frameId: proposal.frameId, peerFrameId: proposal.frameId });
-    await sendReply(callId, proposal.frameId, 'accepted');
-  };
-
-  const decline = async (): Promise<void> => {
-    const { proposal, callId } = state();
-    if (proposal === null || callId === null) return;
-    patch({ proposal: null });
-    await sendReply(callId, proposal.frameId, 'declined');
-  };
-
-  const receiveReply = (reply: CallLiveFrameReply, answered: string | null): void => {
-    const { sentProposal, remoteSharedName } = state();
-    if (answered === null || answered !== sentProposal) return;
-    patch({ sentProposal: null, answer: { frameId: answered, reply, from: remoteSharedName }, ...(reply === 'accepted' ? { peerFrameId: answered } : {}) });
-  };
-
-  const receive = (event: string, payload: unknown): void => {
-    if (event !== SERVER_EVENTS.CALL_FRAME_SELECTED) return;
-    const decoded = decodeLiveFrameSelected(payload);
-    const callId = pairCallId();
-    if (decoded === null || callId === null || decoded.callId !== callId) return;
-    follow(callId);
-    if (decoded.name !== null) patch({ remoteSharedName: decoded.name });
-    if (decoded.reply !== null) {
-      receiveReply(decoded.reply, decoded.frameId);
-      return;
-    }
-    const id = decoded.frameId;
-    patch({ peerFrameId: id });
-    if (id === null) {
-      patch({ proposal: null });
-      return;
-    }
-    if (id === state().frameId) {
-      patch({ proposal: null });
-      pendingReply = sendReply(callId, id, 'accepted');
-      return;
-    }
-    patch({ proposal: { frameId: id, from: state().remoteSharedName } });
-  };
-
-  let unsubscribe: (() => void) | null = null;
-
+function liveFrameContext(deps: LiveFrameDeps): LiveFrameContext {
+  const state = (): CallLiveFrameState => deps.store.getState();
   return {
-    apply,
-    accept,
-    decline,
-    receive,
+    deps,
+    state,
+    patch: (next) => deps.store.setState(next),
+    pairCallId: () => {
+      const call = deps.calls.getState().call;
+      return liveFramePair(call) ? call.callId : null;
+    },
+    follow: (callId) => {
+      if (callId === state().callId) return;
+      deps.store.setState({ ...NO_LIVE_FRAME, callId }, true);
+    },
+  };
+}
+
+async function sendFrameSelect(deps: LiveFrameDeps, payload: Record<string, unknown>): Promise<boolean> {
+  const transport = deps.transport();
+  if (transport === null) return false;
+  const ack = await transport.request(CLIENT_EVENTS.CALL_FRAME_SELECT, payload, ACK_TIMEOUT_MS).catch(() => null);
+  return decodeControlAck(ack).ok;
+}
+
+/** Le prénom que je partage, borné ; vide, rien ne part. */
+function sharedTexts(deps: LiveFrameDeps): { readonly texts?: { readonly name: string } } {
+  const name = deps.myName().trim().slice(0, CALL_LIVE_FRAME_TEXT_MAX);
+  return name === '' ? {} : { texts: { name } };
+}
+
+async function sendReply(deps: LiveFrameDeps, callId: string, frameId: string, reply: CallLiveFrameReply): Promise<void> {
+  await sendFrameSelect(deps, { callId, frameId, ...sharedTexts(deps), reply });
+}
+
+/** Mon cadre s'applique chez moi tout de suite, et part à l'autre comme une proposition ; `null` le retire. */
+async function applyFrame(ctx: LiveFrameContext, id: string | null): Promise<void> {
+  const { deps, state, patch } = ctx;
+  const callId = ctx.pairCallId();
+  if (callId === null || (id !== null && !isLiveFrameId(id))) return;
+  ctx.follow(callId);
+  const { sentProposal, peerFrameId } = state();
+  patch({ frameId: id, answer: null, notice: null });
+  if (id === null) {
+    if (sentProposal === null) return;
+    patch({ sentProposal: null });
+    await sendFrameSelect(deps, { callId, frameId: null });
+    return;
+  }
+  if (id === peerFrameId) return;
+  patch({ sentProposal: id });
+  const proposed = await sendFrameSelect(deps, { callId, frameId: id, ...sharedTexts(deps) });
+  if (proposed || state().callId !== callId || state().sentProposal !== id) return;
+  patch({ sentProposal: null, notice: 'not-proposed' });
+}
+
+async function answerProposal(ctx: LiveFrameContext, reply: CallLiveFrameReply): Promise<void> {
+  const { proposal, callId } = ctx.state();
+  if (proposal === null || callId === null) return;
+  ctx.patch(reply === 'accepted' ? { proposal: null, frameId: proposal.frameId, peerFrameId: proposal.frameId } : { proposal: null });
+  await sendReply(ctx.deps, callId, proposal.frameId, reply);
+}
+
+function receiveReply(ctx: LiveFrameContext, reply: CallLiveFrameReply, answered: string | null): void {
+  const { sentProposal, remoteSharedName } = ctx.state();
+  if (answered === null || answered !== sentProposal) return;
+  ctx.patch({ sentProposal: null, answer: { frameId: answered, reply, from: remoteSharedName }, ...(reply === 'accepted' ? { peerFrameId: answered } : {}) });
+}
+
+/** Le cadre que l'autre montre : une proposition, sauf s'il est déjà le mien (acceptée d'office, la réponse est rendue). */
+function receivePeerFrame(ctx: LiveFrameContext, callId: string, id: string | null): Promise<void> | null {
+  ctx.patch({ peerFrameId: id });
+  if (id === null) {
+    ctx.patch({ proposal: null });
+    return null;
+  }
+  if (id === ctx.state().frameId) {
+    ctx.patch({ proposal: null });
+    return sendReply(ctx.deps, callId, id, 'accepted');
+  }
+  ctx.patch({ proposal: { frameId: id, from: ctx.state().remoteSharedName } });
+  return null;
+}
+
+/** `call:frame-selected` : une réponse à ma proposition, ou le cadre de l'autre. Rend la réponse envoyée d'office, s'il y en a une. */
+function receiveFrameSelected(ctx: LiveFrameContext, event: string, payload: unknown): Promise<void> | null {
+  if (event !== SERVER_EVENTS.CALL_FRAME_SELECTED) return null;
+  const decoded = decodeLiveFrameSelected(payload);
+  const callId = ctx.pairCallId();
+  if (decoded === null || callId === null || decoded.callId !== callId) return null;
+  ctx.follow(callId);
+  if (decoded.name !== null) ctx.patch({ remoteSharedName: decoded.name });
+  if (decoded.reply === null) return receivePeerFrame(ctx, callId, decoded.frameId);
+  receiveReply(ctx, decoded.reply, decoded.frameId);
+  return null;
+}
+
+export function createCallLiveFrame(deps: LiveFrameDeps) {
+  const ctx = liveFrameContext(deps);
+  let pendingReply: Promise<void> = Promise.resolve();
+  let unsubscribe: (() => void) | null = null;
+  return {
+    apply: (id: string | null): Promise<void> => applyFrame(ctx, id),
+    accept: (): Promise<void> => answerProposal(ctx, 'accepted'),
+    decline: (): Promise<void> => answerProposal(ctx, 'declined'),
+    receive: (event: string, payload: unknown): void => {
+      pendingReply = receiveFrameSelected(ctx, event, payload) ?? pendingReply;
+    },
     /** Attend la réponse que la session envoie d'elle-même. */
     settle: (): Promise<void> => pendingReply,
-    dismissAnswer: (): void => patch({ answer: null }),
-    dismissNotice: (): void => patch({ notice: null }),
+    dismissAnswer: (): void => ctx.patch({ answer: null }),
+    dismissNotice: (): void => ctx.patch({ notice: null }),
     /** Suit l'appel : un autre appel, ou un appel qui n'est plus à deux, efface le cadre. */
     start: (): void => {
-      unsubscribe ??= deps.calls.subscribe(() => follow(pairCallId()));
-      follow(pairCallId());
+      unsubscribe ??= deps.calls.subscribe(() => ctx.follow(ctx.pairCallId()));
+      ctx.follow(ctx.pairCallId());
     },
     stop: (): void => {
       unsubscribe?.();
