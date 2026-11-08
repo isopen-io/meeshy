@@ -103,4 +103,61 @@ final class IncomingCallChoicesTests: XCTestCase {
         XCTAssertFalse(IncomingCallChoices.showsSelfPreview(isVideoCall: true, hasLocalVideoTrack: true, cameraChosen: false))
         XCTAssertTrue(IncomingCallChoices.showsSelfPreview(isVideoCall: true, hasLocalVideoTrack: true, cameraChosen: true))
     }
+    // MARK: - La disposition de la vue P17, l'écran audio livré inchangé (#16945)
+
+    func test_layout_videoCall_isThePreviewLayout_audioCall_keepsTheShippedOne() {
+        XCTAssertEqual(IncomingCallLayout.of(isVideoCall: true), .videoPreview)
+        XCTAssertEqual(IncomingCallLayout.of(isVideoCall: false), .audio)
+    }
+
+    func test_layout_preview_putsTheTypeChipAboveTheName_withoutTheGreyLineNorTheBadge() {
+        XCTAssertTrue(IncomingCallLayout.videoPreview.showsTypeChipAboveName)
+        XCTAssertFalse(IncomingCallLayout.videoPreview.showsTypeLineAndBadge)
+    }
+
+    func test_layout_audio_keepsTheGreyLineAndTheBadgeUnderTheName() {
+        XCTAssertFalse(IncomingCallLayout.audio.showsTypeChipAboveName)
+        XCTAssertTrue(IncomingCallLayout.audio.showsTypeLineAndBadge)
+    }
+
+    func test_layout_preview_answers_withWhiteCaptions() {
+        XCTAssertEqual(IncomingCallLayout.videoPreview.acceptCaption, .answer)
+        XCTAssertTrue(IncomingCallLayout.videoPreview.whiteCaptions)
+    }
+
+    func test_layout_audio_keepsAccept_andItsTintedCaptions() {
+        XCTAssertEqual(IncomingCallLayout.audio.acceptCaption, .accept)
+        XCTAssertFalse(IncomingCallLayout.audio.whiteCaptions)
+    }
+
+    func test_callerDisc_hiddenWhileTheCallerVideoPlays_shownOtherwise() {
+        XCTAssertFalse(IncomingCallChoices.showsCallerDisc(previewPlaysVideo: true))
+        XCTAssertTrue(IncomingCallChoices.showsCallerDisc(previewPlaysVideo: false))
+    }
+
+    func test_acceptGlyph_followsTheRoute() {
+        XCTAssertEqual(IncomingCallChoices.acceptGlyph(isVideoCall: true, route: .asOffered), "video.fill")
+        XCTAssertEqual(IncomingCallChoices.acceptGlyph(isVideoCall: true, route: .withoutVideo), "phone.fill")
+        XCTAssertEqual(IncomingCallChoices.acceptGlyph(isVideoCall: false, route: .asOffered), "phone.fill")
+    }
+
+    // MARK: - Le bouton Caméra dit ce que la phrase dit
+
+    func test_cameraFilms_chosenButNotYetLive_isFalse() {
+        XCTAssertFalse(IncomingPreAnswer().cameraFilms(isVideoCall: true, hasLocalVideoTrack: false))
+    }
+
+    func test_cameraFilms_chosenAndLive_isTrue() {
+        XCTAssertTrue(IncomingPreAnswer().cameraFilms(isVideoCall: true, hasLocalVideoTrack: true))
+    }
+
+    func test_cameraFilms_turnedOff_isFalse_evenWithALiveTrack() {
+        XCTAssertFalse(IncomingPreAnswer().togglingCamera().cameraFilms(isVideoCall: true, hasLocalVideoTrack: true))
+    }
+
+    func test_cameraFilms_agreesWithTheSentence_whileTheCameraStarts() {
+        let choice = IncomingPreAnswer()
+        XCTAssertFalse(choice.cameraFilms(isVideoCall: true, hasLocalVideoTrack: false))
+        XCTAssertEqual(choice.exposure(isVideoCall: true, hasLocalVideoTrack: false), .heardOnly)
+    }
 }

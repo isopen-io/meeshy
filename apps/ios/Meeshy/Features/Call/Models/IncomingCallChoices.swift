@@ -35,8 +35,20 @@ nonisolated enum IncomingCallChoices {
     /// La graine de MA couleur sur ma vignette (loi 4) : mon identifiant,
     /// jamais mon nom. Pas d'identifiant ⇒ pas de couleur inventée.
     static func selfColorKey(userId: String?) -> String? {
-        guard let userId, !userId.isEmpty else { return nil }
-        return userId
+        CallSelfTileStroke.colorKey(showsLocal: true, myId: userId, peerId: nil)
+    }
+
+    /// Le disque de l'appelant (avatar et anneaux) ne se pose pas sur son
+    /// visage : dès que sa vidéo joue derrière la sonnerie, elle le remplace
+    /// (vue P17).
+    static func showsCallerDisc(previewPlaysVideo: Bool) -> Bool {
+        !previewPlaysVideo
+    }
+
+    /// Le glyphe de « Répondre » annonce ce qui partira : caméra coupée dans
+    /// la barre ⇒ un téléphone, puisque la réponse part sans vidéo.
+    static func acceptGlyph(isVideoCall: Bool, route: IncomingPreAnswer.Route) -> String {
+        isVideoCall && route == .asOffered ? "video.fill" : "phone.fill"
     }
 
     /// Espace entre les boutons ronds de 70 pt : trois boutons doivent tenir
@@ -44,6 +56,33 @@ nonisolated enum IncomingCallChoices {
     static func buttonSpacing(for count: Int) -> CGFloat {
         count > 2 ? 36 : 60
     }
+}
+
+/// La disposition de l'écran entrant : la vue P17 pour un appel vidéo, l'écran
+/// livré (#8480) pour un appel audio, que la planche ne redessine pas.
+nonisolated enum IncomingCallLayout: Equatable, Sendable {
+    case audio
+    case videoPreview
+
+    enum AcceptCaption: Equatable, Sendable {
+        case accept
+        case answer
+    }
+
+    static func of(isVideoCall: Bool) -> IncomingCallLayout {
+        isVideoCall ? .videoPreview : .audio
+    }
+
+    /// P17 : la puce de verre « Appel vidéo entrant » AU-DESSUS du nom.
+    var showsTypeChipAboveName: Bool { self == .videoPreview }
+
+    /// L'écran audio garde sa ligne grise et son badge SOUS le nom.
+    var showsTypeLineAndBadge: Bool { self == .audio }
+
+    /// P17 : les légendes des boutons ronds sont blanches.
+    var whiteCaptions: Bool { self == .videoPreview }
+
+    var acceptCaption: AcceptCaption { self == .videoPreview ? .answer : .accept }
 }
 
 /// Ce que je choisis AVANT de décrocher (vue P17, #16945) : un état local de
@@ -78,10 +117,17 @@ nonisolated struct IncomingPreAnswer: Equatable, Sendable {
         IncomingPreAnswer(microphoneOn: microphoneOn, cameraOn: !cameraOn)
     }
 
+    /// Ma caméra filme vraiment : choisie ET vivante. Tant qu'elle démarre
+    /// (ou si elle est refusée), ni la phrase ni le bouton ne promettent une
+    /// image.
+    func cameraFilms(isVideoCall: Bool, hasLocalVideoTrack: Bool) -> Bool {
+        isVideoCall && hasLocalVideoTrack && cameraOn
+    }
+
     /// « Vous verra » n'est promis que si une caméra tourne vraiment :
     /// caméra refusée ou absente ⇒ l'autre ne verra que mon avatar.
     func exposure(isVideoCall: Bool, hasLocalVideoTrack: Bool) -> Exposure {
-        let seen = isVideoCall && hasLocalVideoTrack && cameraOn
+        let seen = cameraFilms(isVideoCall: isVideoCall, hasLocalVideoTrack: hasLocalVideoTrack)
         switch (seen, microphoneOn) {
         case (true, true): return .seenAndHeard
         case (false, true): return .heardOnly

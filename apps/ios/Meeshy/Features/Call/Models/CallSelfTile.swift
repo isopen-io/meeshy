@@ -90,3 +90,16 @@ final class CallSelfTileMemory: CallSelfTileRemembering {
         stored = scale
     }
 }
+
+/// Loi 4 — le liseré de la vignette porte la couleur de la personne qu'elle
+/// montre : la mienne, ou celle de l'autre quand les flux sont permutés.
+/// Pas d'identifiant ⇒ pas de couleur inventée.
+nonisolated enum CallSelfTileStroke {
+    static let lineWidth: CGFloat = 2
+
+    static func colorKey(showsLocal: Bool, myId: String?, peerId: String?) -> String? {
+        let key = showsLocal ? myId : peerId
+        guard let key, !key.isEmpty else { return nil }
+        return key
+    }
+}

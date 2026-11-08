@@ -122,7 +122,40 @@ final class AnswerWithoutVideoSourceGuardTests: XCTestCase {
     func test_incomingView_wiresThePreAnswerBar_andMyColor() {
         XCTAssertTrue(Self.view.contains("IncomingPreAnswerBar("))
         XCTAssertTrue(Self.view.contains("cameraChosen: preAnswer.cameraOn"), "Caméra coupée ⇒ ma vignette s'efface.")
-        XCTAssertTrue(Self.view.contains("CallSpeakerColor.color(for: key)"), "Le liseré de ma vignette porte MA couleur (loi 4).")
+        XCTAssertTrue(Self.view.contains("CallSelfTileStroke.color(forKey: IncomingCallChoices.selfColorKey(userId: AuthManager.shared.currentUser?.id))"), "Le liseré de ma vignette porte MA couleur (loi 4).")
+        XCTAssertTrue(Self.view.contains("CallTileNameplate(title:"), "La plaque « Vous » est celle de la tuile de groupe.")
+    }
+
+    func test_incomingView_followsTheP17Hierarchy_andKeepsTheAudioScreen() {
+        guard let video = slice(Self.view, from: "private var videoHeader: some View {", to: "private var callerNameText: some View {") else { return }
+        guard let chip = video.range(of: "typeChip"),
+              let name = video.range(of: "callerNameText"),
+              let sound = video.range(of: "CallPreviewSoundButton(preview: .shared)"),
+              let tile = video.range(of: "selfPreview") else {
+            XCTFail("P17 : puce de type, nom, « Activer le son », puis ma vignette"); return
+        }
+        XCTAssertLessThan(chip.lowerBound, name.lowerBound)
+        XCTAssertLessThan(name.lowerBound, sound.lowerBound)
+        XCTAssertLessThan(sound.lowerBound, tile.lowerBound, "Ma vignette se pose SOUS « Activer le son ».")
+        XCTAssertTrue(video.contains("CallPreviewCallerDisc(preview: .shared)"), "Le disque de l'appelant s'efface quand sa vidéo joue.")
+        XCTAssertFalse(video.contains("callTypeBadge"), "Pas de badge « Vidéo » redondant sur P17.")
+
+        guard let audio = slice(Self.view, from: "private var audioHeader: some View {", to: "private var videoHeader: some View {") else { return }
+        XCTAssertTrue(audio.contains("callTypeBadge\n            .padding(.bottom, 60)"), "L'écran audio livré garde ses espacements.")
+        XCTAssertFalse(audio.contains("selfPreview"))
+    }
+
+    func test_answerButton_glyphFollowsTheChosenRoute() {
+        XCTAssertTrue(Self.view.contains("IncomingCallChoices.acceptGlyph("))
+        XCTAssertTrue(Self.view.contains("route: preAnswer.route(isVideoCall: callManager.isVideoEnabled)"))
+        XCTAssertTrue(Self.view.contains("call.incoming.answer\""), "P17 : le bouton principal dit « Répondre ».")
+    }
+
+    func test_cameraButton_lightsOnlyWhenTheCameraReallyFilms() {
+        let bar = Self.source("Meeshy/Features/Call/Views/IncomingPreAnswerBar.swift")
+        XCTAssertTrue(bar.contains("kind: cameraFilms ? .active : .normal"))
+        XCTAssertTrue(bar.contains("toggleState: cameraFilms"))
+        XCTAssertTrue(Self.view.contains("cameraFilms: preAnswer.cameraFilms("))
     }
 
     func test_answerWithoutVideo_alsoGuardsTheMicrophone() {
