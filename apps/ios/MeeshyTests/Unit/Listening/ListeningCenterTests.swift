@@ -225,14 +225,17 @@ final class ListeningCenterTests: XCTestCase {
     func test_theBandStream_isReadableOffTheMainActor() async {
         let rig = makeRig()
         rig.sut.receive(served())
-        nonisolated(unsafe) let stream = rig.sut.band(for: "alice")
-
-        let first = await Task.detached { () -> AvatarListening?? in
-            for await value in stream.values { return value }
-            return nil
-        }.value
+        let first = await Self.firstValueOffMainActor(rig.sut.band(for: "alice"))
 
         XCTAssertEqual(first??.text, ListeningBandText.categoryLabel(.music))
+    }
+
+    @concurrent
+    nonisolated private static func firstValueOffMainActor(
+        _ stream: sending AnyPublisher<AvatarListening?, Never>
+    ) async -> AvatarListening?? {
+        for await value in stream.values { return value }
+        return nil
     }
 }
 

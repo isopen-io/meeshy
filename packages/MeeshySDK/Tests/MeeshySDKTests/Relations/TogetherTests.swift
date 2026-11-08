@@ -29,7 +29,7 @@ struct TogetherTests {
         TogetherStarted(
             sessionId: Self.sessionId, hostUserId: host, guestUserId: guest,
             conversationId: Self.conversation, attachmentId: Self.attachment, media: .video,
-            playback: playback(rev: rev, at: at)
+            playback: playback(at: at, rev: rev)
         )
     }
 
