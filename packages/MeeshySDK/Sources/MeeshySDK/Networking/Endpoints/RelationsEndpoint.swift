@@ -17,6 +17,7 @@ public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
     case byUserIdRitual(userId: String)
     case byUserIdSettings(userId: String)
     case config
+    case locations
     case nowPlaying
     case root
 
@@ -27,6 +28,7 @@ public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
         case .byUserIdRitual(let userId): return "/api/v1/relations/\(userId)/ritual"
         case .byUserIdSettings(let userId): return "/api/v1/relations/\(userId)/settings"
         case .config: return "/api/v1/relations/config"
+        case .locations: return "/api/v1/relations/locations"
         case .nowPlaying: return "/api/v1/relations/now-playing"
         case .root: return "/api/v1/relations"
         }

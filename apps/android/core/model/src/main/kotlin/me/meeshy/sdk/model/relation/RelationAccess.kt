@@ -71,6 +71,7 @@ public enum class RelationFeature(
     TOGETHER("together", RelationLevel.CLOSE, isDirected = true),
     BRING("bring", RelationLevel.FRIEND, requiresConsent = true, isDirected = true),
     LOCATION_LIVE("location.live", RelationLevel.BLOOD, requiresConsent = true),
+    LOCATION_TEMPORARY("location.temporary", RelationLevel.FRIEND, requiresConsent = true),
     LOCATION_HISTORY("location.history", RelationLevel.BLOOD, requiresConsent = true),
     LOCATION_PROXIMITY("location.proximity", RelationLevel.BLOOD, requiresConsent = true),
     ACQUAINTANCE_AUTO("acquaintance.auto", RelationLevel.PUBLIC, isDirected = true, isClosedToTeam = true),

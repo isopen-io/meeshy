@@ -41,6 +41,7 @@ export const RELATION_FEATURES = [
   'together',
   'bring',
   'location.live',
+  'location.temporary',
   'location.history',
   'location.proximity',
   'acquaintance.auto',
@@ -77,6 +78,7 @@ export const RELATION_FEATURE_MIN_LEVEL: Readonly<Record<RelationFeature, Relati
   together: 'CLOSE',
   bring: 'FRIEND',
   'location.live': 'BLOOD',
+  'location.temporary': 'FRIEND',
   'location.history': 'BLOOD',
   'location.proximity': 'BLOOD',
   'acquaintance.auto': 'PUBLIC',
@@ -135,6 +137,7 @@ export const RELATION_EMITTER_CONSENT_FEATURES: ReadonlySet<RelationFeature> = n
   'listening.category',
   'listening.title',
   'location.live',
+  'location.temporary',
   'location.history',
   'location.proximity',
 ]);
@@ -150,6 +153,7 @@ export const RELATION_CONSENT_FEATURES: ReadonlySet<RelationFeature> = new Set<R
   'listening.category',
   'listening.title',
   'location.live',
+  'location.temporary',
   'location.history',
   'location.proximity',
 ]);
