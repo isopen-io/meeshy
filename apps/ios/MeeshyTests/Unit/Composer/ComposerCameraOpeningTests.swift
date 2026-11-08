@@ -8,10 +8,13 @@ final class ComposerCameraOpeningTests: XCTestCase {
 
     // MARK: - Les cadres d'emblée, « Aucun » choisi
 
-    func test_arm_opensTheFramesBand() {
+    /// A8 (#17109, revient sur #10307) : le viseur s'arme sur son déclencheur à
+    /// anneau blanc ; la plaque des looks ne s'ouvre qu'à la demande (A10).
+    func test_arm_showsTheShutter_withTheLookPlaqueClosed() {
         let session = ComposerCaptureSession()
         session.arm(mode: .photo)
-        XCTAssertEqual(session.openFamily, .frames, "la bande des cadres est là dès l'ouverture")
+        XCTAssertNil(session.openFamily, "aucune bande ouverte : le déclencheur est à l'écran")
+        XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: session.look, editing: false), .shutter)
         session.disarm()
     }
 
@@ -31,7 +34,7 @@ final class ComposerCameraOpeningTests: XCTestCase {
 
     func test_openingLook_isUntouched() {
         XCTAssertTrue(ComposerCaptureSession.openingLook.isUntouched)
-        XCTAssertEqual(ComposerCaptureSession.openingFamily, .frames)
+        XCTAssertNil(ComposerCaptureSession.openingFamily)
     }
 
     // MARK: - La session préparée avant d'être montrée

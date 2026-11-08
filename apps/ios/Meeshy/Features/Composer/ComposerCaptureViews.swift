@@ -269,6 +269,7 @@ struct ComposerCaptureChrome: View {
             if !finishing, session.offersEditPlayback { editPlayback }
             cropPresets
             ComposerEditTextLayer(session: session, board: session.retouchTexts)
+            ComposerCaptureGestureHint(session: session)
             VStack(spacing: 0) {
                 // Toujours montée : une rangée retirée peut rester peinte le temps
                 // d'une transition, et porte la croix qui présente l'alerte.
@@ -300,8 +301,7 @@ struct ComposerCaptureChrome: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsTopRow)
         .modifier(ComposerCaptureChromeRestWatch(session: session, timer: session.selfTimer, opacity: $chromeRest))
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editChromeShown)
-        .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
-        .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
+        .modifier(ComposerCaptureDismissAndBudget(session: session))
         .alert(ComposerSceneCameraCopy.discardTitle(photo: session.discardPrompt.request?.photo ?? false),
                isPresented: Binding(get: { session.discardPrompt.isPresented },
                                     set: { montree in
@@ -380,8 +380,9 @@ struct ComposerCaptureChrome: View {
             offersSizeToggle: offersSizeToggle,
             segments: session.segments,
             onDropLastSegment: { session.dropLastSegment() },
-            onValidateSegments: onValidateSegments,
+            onValidateSegments: { validate() },
             liveDuration: session.camera.recordingDuration,
+            recordingBudget: session.recordingBudget,
             flashIntensity: session.barCapture.flashIntensity,
             onFlashIntensity: { session.setFlashIntensity($0) },
             flipping: session.barCapture.flipping,
@@ -408,6 +409,13 @@ struct ComposerCaptureChrome: View {
                 .position(x: rangee.midX, y: rangee.midY)
         }
         .transition(.opacity)
+    }
+
+    /// **« ✓ Valider »** (A8, #17109) : des segments en attente se posent ;
+    /// sans prise, rien ne se perd et la scène revient tout de suite.
+    private func validate() {
+        guard ComposerCaptureSegments.canValidate(session.segments) else { return onDisarm() }
+        onValidateSegments()
     }
 
     /// La croix et le glissé de rangement passent par ici : un enregistrement
@@ -666,6 +674,22 @@ struct ComposerCaptureChrome: View {
 
 /// **Le soleil d'exposition** (OPUS-5) : glisser vers le haut éclaircit, vers
 /// le bas assombrit. La zone de toucher fait 44 pt, le dessin moins.
+/// Le glissé de rangement déplace le chrome, et **le maximum du format clôt la prise** (A9,
+/// #17109) : la durée vue par le chrono, segments compris.
+private struct ComposerCaptureDismissAndBudget: ViewModifier {
+    @ObservedObject var session: ComposerCaptureSession
+
+    func body(content: Content) -> some View {
+        content
+            .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
+            .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
+            .adaptiveOnChange(of: session.camera.recordingDuration) { _, duree in
+                ComposerCaptureRecordingBudget.enforce(on: session, elapsed: ComposerCaptureSegments.elapsed(
+                    segments: session.segments, live: duree, recording: session.stage == .recording))
+            }
+    }
+}
+
 private struct ComposerCaptureExposureSun: View {
     let bias: Float
 
