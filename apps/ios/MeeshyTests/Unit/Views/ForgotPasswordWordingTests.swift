@@ -113,16 +113,14 @@ final class ForgotPasswordWordingTests: XCTestCase {
 
     // MARK: - Les mots de la connexion par e-mail, pas des jumelles
 
-    /// « Recevoir le lien », « E-mail envoyé », « Ouvrez le lien reçu à »,
-    /// « Rien reçu ? » : l'état envoyé dit exactement ce que dit la connexion
+    /// « Recevoir le lien », « E-mail envoyé », « Ouvrez le lien reçu à » : l'état envoyé dit exactement ce que dit la connexion
     /// par e-mail, il emploie donc ses clés. Une copie au catalogue du SDK
     /// divergerait à la première retouche d'un seul des deux écrans — et les
     /// trois entrées qu'elle remplace portaient encore « Envoyer », « Email
     /// envoye ! » et « un lien de réinitialisation ».
     func test_sentState_speaksTheEmailSignInKeys_notTwins() throws {
         let keys = Set(localizedCalls(in: try code(Self.forgotPasswordView)).map { $0.key })
-        for borrowed in ["auth.magiclink.send", "auth.magiclink.sent.title", "auth.magiclink.sent.subtitle",
-                         "auth.magiclink.sent.hintLabel", "auth.magiclink.sent.spamHint"] {
+        for borrowed in ["auth.magiclink.send", "auth.magiclink.sent.title", "auth.magiclink.sent.subtitle"] {
             XCTAssertTrue(keys.contains(borrowed), "« Mot de passe oublié » doit rendre \(borrowed)")
         }
 

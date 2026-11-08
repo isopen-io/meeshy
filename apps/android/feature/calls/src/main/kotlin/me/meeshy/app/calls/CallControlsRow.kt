@@ -19,6 +19,7 @@ internal fun CallCircleButton(
     background: Color,
     contentDescription: String,
     onClick: () -> Unit,
+    glyph: Color = Color.White,
 ) {
     IconButton(
         onClick = onClick,
@@ -27,6 +28,6 @@ internal fun CallCircleButton(
             .clip(CircleShape)
             .background(background),
     ) {
-        Icon(imageVector = icon, contentDescription = contentDescription, tint = Color.White)
+        Icon(imageVector = icon, contentDescription = contentDescription, tint = glyph)
     }
 }

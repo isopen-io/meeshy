@@ -129,6 +129,9 @@
     <string name="call_history_retry">Tentar novamente</string>
     <string name="call_history_title">Chamadas</string>
     <string name="call_history_yesterday">Ontem</string>
+    <string name="call_incoming_answer_no_video">Sem vídeo</string>
+    <string name="call_incoming_answer_no_video_hint">Atende com a câmera desligada: quem liga vê seu avatar</string>
+    <string name="call_incoming_answer_no_video_label">Atender sem vídeo</string>
     <string name="call_invite_declined">%1$s recusou</string>
     <string name="call_invite_failed">Não foi possível convidar esta pessoa</string>
     <string name="call_invite_ringing">Chamando…</string>

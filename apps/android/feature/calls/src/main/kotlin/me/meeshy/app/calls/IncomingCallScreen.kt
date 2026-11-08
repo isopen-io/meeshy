@@ -31,10 +31,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,8 +44,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.IncomingCallAction
+import me.meeshy.sdk.model.call.IncomingCallChoices
 import me.meeshy.ui.theme.MeeshySpacing
 
 /**
@@ -59,7 +59,8 @@ import me.meeshy.ui.theme.MeeshySpacing
  * ([onAccept] est déjà l'accepter-sous-permissions). L'arrivée est annoncée à TalkBack. Un appel vidéo
  * 1:1 propose au-dessus des actions « Activer le son » de l'aperçu avant décroché ([preview]). Sur un
  * écran court ou en grande police, les actions gardent leur place et l'identité se compacte
- * ([IncomingCallIdentity]).
+ * ([IncomingCallIdentity]). Un appel vidéo offre aussi « Sans vidéo » entre les deux ([IncomingCallChoices], vue P17) :
+ * décrocher sans jamais ouvrir ma caméra ([onAcceptWithoutVideo]).
  */
 @Composable
 internal fun IncomingCallScreen(
@@ -72,6 +73,7 @@ internal fun IncomingCallScreen(
     onDeclineWithMessage: ((String) -> Unit)? = null,
     preview: CallPreviewUi = CallPreviewUi(),
     onTogglePreviewSound: () -> Unit = {},
+    onAcceptWithoutVideo: () -> Unit = onAccept,
 ) {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
@@ -138,29 +140,26 @@ internal fun IncomingCallScreen(
                 )
                 Spacer(Modifier.height(spacing.actionGap))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(60.dp), verticalAlignment = Alignment.Top) {
-                IncomingAction(
-                    icon = Icons.Filled.CallEnd,
-                    tint = CallPalette.Decline,
-                    caption = stringResource(R.string.call_incoming_decline),
-                    description = stringResource(R.string.call_action_decline),
-                    hint = stringResource(R.string.call_incoming_decline_hint),
-                    onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onDecline()
-                    },
-                )
-                IncomingAction(
-                    icon = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
-                    tint = CallPalette.Accept,
-                    caption = stringResource(R.string.call_incoming_accept),
-                    description = stringResource(R.string.call_action_accept),
-                    hint = stringResource(R.string.call_incoming_accept_hint),
-                    onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onAccept()
-                    },
-                )
+            val actions = IncomingCallChoices.actions(state.isVideoCall)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(IncomingCallChoices.buttonSpacingDp(actions.size).dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                actions.forEach { action ->
+                    IncomingChoice(
+                        action = action,
+                        isVideoCall = state.isVideoCall,
+                        compact = actions.size > 2,
+                        onPerform = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            when (action) {
+                                IncomingCallAction.Decline -> onDecline()
+                                IncomingCallAction.AnswerWithoutVideo -> onAcceptWithoutVideo()
+                                IncomingCallAction.Accept -> onAccept()
+                            }
+                        },
+                    )
+                }
             }
         }
     }
@@ -259,29 +258,64 @@ private fun DeclineWithMessageButton(onClick: () -> Unit) {
     }
 }
 
+/** Un bouton de l'écran entrant, tel que la règle le nomme ; son aspect vient de [IncomingChoiceLooks] (vue P17). */
+@Composable
+private fun IncomingChoice(action: IncomingCallAction, isVideoCall: Boolean, compact: Boolean, onPerform: () -> Unit) {
+    val look = IncomingChoiceLooks.of(action, isVideoCall)
+    val (caption, description, hint) = when (action) {
+        IncomingCallAction.Decline -> Triple(R.string.call_incoming_decline, R.string.call_action_decline, R.string.call_incoming_decline_hint)
+        IncomingCallAction.AnswerWithoutVideo -> Triple(
+            R.string.call_incoming_answer_no_video,
+            R.string.call_incoming_answer_no_video_label,
+            R.string.call_incoming_answer_no_video_hint,
+        )
+        IncomingCallAction.Accept -> Triple(R.string.call_incoming_accept, R.string.call_action_accept, R.string.call_incoming_accept_hint)
+    }
+    IncomingAction(
+        look = look,
+        caption = stringResource(caption),
+        description = stringResource(description),
+        hint = stringResource(hint),
+        onClick = onPerform,
+        compact = compact,
+    )
+}
+
+/**
+ * Un disque et sa légende. Trois boutons doivent tenir sur 320 dp, même en très grande police : en [compact], la largeur
+ * se borne et la légende passe sur deux lignes centrées au plus ; à deux boutons, la légende garde toute sa place.
+ */
 @Composable
 private fun IncomingAction(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    tint: androidx.compose.ui.graphics.Color,
+    look: IncomingChoiceLook,
     caption: String,
     description: String,
     hint: String,
     onClick: () -> Unit,
+    compact: Boolean,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    val width = if (compact) Modifier.widthIn(max = COMPACT_ACTION_MAX_WIDTH) else Modifier
+    Column(width, horizontalAlignment = Alignment.CenterHorizontally) {
         CallCircleButton(
-            icon = icon,
-            background = tint,
+            icon = look.icon,
+            background = look.fill,
             contentDescription = "$description. $hint",
             onClick = onClick,
+            glyph = look.glyph,
         )
         Spacer(Modifier.height(MeeshySpacing.smPlus))
         Text(
             text = caption,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,
-            color = tint,
+            color = look.caption,
+            textAlign = TextAlign.Center,
+            maxLines = if (compact) COMPACT_CAPTION_MAX_LINES else Int.MAX_VALUE,
+            overflow = if (compact) TextOverflow.Ellipsis else TextOverflow.Clip,
             modifier = Modifier.clearAndSetSemantics { },
         )
     }
 }
+
+private val COMPACT_ACTION_MAX_WIDTH = 80.dp
+private const val COMPACT_CAPTION_MAX_LINES = 2
