@@ -19,7 +19,12 @@ import XCTest
 /// after a restore — gives up silently without telling the realtime layer.
 final class SocketReconnectArmingTests: XCTestCase {
 
-    private var savedToken: String?
+    /// La PAIRE, pas le seul JWT (#16750). Les deux jetons sont des champs
+    /// distincts, et depuis que la reconstruction route sur le credential, un
+    /// `anonymousSessionToken` laissé par une suite voisine ferait de
+    /// « sans session » un invité — ces témoins cesseraient de dire ce que leur
+    /// intitulé promet, sans rien signaler.
+    private var savedTokens: (auth: String?, anon: String?) = (nil, nil)
 
     /// A syntactically valid JWT whose `exp` is far in the past, so
     /// `isJWTExpired` takes the "expired" branch — the post-outage state this
@@ -36,12 +41,12 @@ final class SocketReconnectArmingTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        savedToken = APIClient.shared.authToken
+        savedTokens = APIClient.shared.currentTokens()
         MessageSocketManager.shared.isCallActiveGuard = nil
         SocialSocketManager.shared.isCallActiveGuard = nil
         MessageSocketManager.shared.disconnect()
         SocialSocketManager.shared.disconnect()
-        APIClient.shared.authToken = Self.expiredJWT()
+        APIClient.shared.setTokens(auth: Self.expiredJWT(), anonymous: nil)
     }
 
     override func tearDown() {
@@ -49,7 +54,7 @@ final class SocketReconnectArmingTests: XCTestCase {
         // leaves a self-rescheduling task running into the next suite.
         MessageSocketManager.shared.disconnect()
         SocialSocketManager.shared.disconnect()
-        APIClient.shared.authToken = savedToken
+        APIClient.shared.setTokens(auth: savedTokens.auth, anonymous: savedTokens.anon)
         super.tearDown()
     }
 
@@ -62,8 +67,12 @@ final class SocketReconnectArmingTests: XCTestCase {
         )
     }
 
-    func test_establishTransport_withoutToken_reportsNotArmed() {
-        APIClient.shared.authToken = nil
+    /// Sans AUCUN credential. La paire se pose d'un seul tenant (#16750) : un
+    /// `anonymousSessionToken` résiduel ferait de ce témoin un témoin d'INVITÉ,
+    /// qui bâtit un transport et rendrait `.armed` — vert ou rouge selon
+    /// l'ordre des suites, ce qui est pire que les deux.
+    func test_establishTransport_withoutAnyCredential_reportsNotArmed() {
+        APIClient.shared.setTokens(auth: nil, anonymous: nil)
         XCTAssertEqual(MessageSocketManager.shared.establishTransport(), .notArmed)
     }
 
@@ -98,7 +107,10 @@ final class SocketReconnectArmingTests: XCTestCase {
     /// The retry ladder must not spin on a session the server already invalidated:
     /// `requireReauthentication` clears the token, and only a fresh login helps.
     func test_forceReconnect_withoutSession_doesNotArmRetry() {
-        APIClient.shared.authToken = nil
+        // AUCUN credential : ni compte, ni invité. C'est ce que « sans session »
+        // veut dire, et le poser explicitement est ce qui garde ce témoin de
+        // dériver vers « sans JWT » (#16750).
+        APIClient.shared.setTokens(auth: nil, anonymous: nil)
         let sut = MessageSocketManager.shared
 
         sut.forceReconnect()

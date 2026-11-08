@@ -7,6 +7,11 @@ import { ZMQSingleton } from '../ZmqSingleton';
 import { translationTargetId } from '../zmq-translation/utils/zmq-helpers';
 import { resolveServerTargetLanguages } from '../message-translation/serverTargetLanguages';
 
+/**
+ * Le module de journal reste `PostService` : les lignes `StoryTranslation: …`
+ * sont cherchées sous cette étiquette par l'exploitation, et une extraction de
+ * fichier n'est pas une raison de leur faire changer d'adresse.
+ */
 const log = enhancedLogger.child({ module: 'PostService' });
 
 /**
@@ -15,9 +20,8 @@ const log = enhancedLogger.child({ module: 'PostService' });
  * (`translations.<langue>`), que `prisma.post.update` ne sait pas exprimer.
  * Le `targetLanguage` est validé contre `/^[a-z]{2,5}$/` AVANT d'y entrer.
  */
-const rawCommand = (prisma: PrismaClient) =>
-  (command: unknown): Promise<unknown> =>
-    (prisma as unknown as { $runCommandRaw: (cmd: unknown) => Promise<unknown> }).$runCommandRaw(command);
+const runRawCommand = (prisma: PrismaClient, command: unknown): Promise<unknown> =>
+  (prisma as unknown as { $runCommandRaw: (cmd: unknown) => Promise<unknown> }).$runCommandRaw(command);
 
 export type StoryContentTranslationParams = {
   readonly prisma: PrismaClient;
@@ -135,7 +139,7 @@ export async function translateStoryContent(params: StoryContentTranslationParam
       }
 
       try {
-        await rawCommand(params.prisma)({
+        await runRawCommand(params.prisma, {
           update: 'Post',
           updates: [{
             q: { _id: { $oid: postId }, originalLanguage: { $ne: event.targetLanguage } },
