@@ -42,6 +42,13 @@ enum CallEffectsCopy {
         case .cool: return String(localized: "video.filter.preset.cool", defaultValue: "Froid", bundle: .main)
         case .vivid: return String(localized: "video.filter.preset.vivid", defaultValue: "Vif", bundle: .main)
         case .muted: return String(localized: "video.filter.preset.muted", defaultValue: "Doux", bundle: .main)
+        case .golden: return String(localized: "video.filter.preset.golden", defaultValue: "Doré", bundle: .main)
+        case .film: return String(localized: "video.filter.preset.film", defaultValue: "Pellicule", bundle: .main)
+        case .softNight: return String(localized: "video.filter.preset.softNight", defaultValue: "Nuit douce", bundle: .main)
+        case .bright: return String(localized: "video.filter.preset.bright", defaultValue: "Clair", bundle: .main)
+        case .velvet: return String(localized: "video.filter.preset.velvet", defaultValue: "Velours", bundle: .main)
+        case .sky: return String(localized: "video.filter.preset.sky", defaultValue: "Ciel", bundle: .main)
+        case .monochrome: return String(localized: "video.filter.preset.monochrome", defaultValue: "Noir et blanc", bundle: .main)
         }
     }
 
@@ -52,6 +59,13 @@ enum CallEffectsCopy {
         case .cool: return "snowflake"
         case .vivid: return "sparkles"
         case .muted: return "cloud"
+        case .golden: return "sun.horizon"
+        case .film: return "film"
+        case .softNight: return "moon.stars"
+        case .bright: return "sun.min"
+        case .velvet: return "sparkle"
+        case .sky: return "cloud.sun"
+        case .monochrome: return "circle.lefthalf.filled"
         }
     }
 }
