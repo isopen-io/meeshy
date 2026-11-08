@@ -11,6 +11,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-07 | Créer une conversation dans une communauté n'y fait plus entrer que ce que l'appelant peut admettre (passerelle) | #16697 | #16639 | fusionnée dans dev |
 | 2026-11-07 | Un salon d'une communauté privée n'accueille que ce que la communauté admet — inviter, ajouter, lien (passerelle) | #16705 | #16695 | fusionnée dans dev |
 | 2026-11-07 | Retiré ou parti d'une communauté privée, on ne lit plus ses salons (passerelle) | #16710 | #16704 | voir réveil 8 |
+| 2026-11-08 | La création d'une communauté propose l'ajout de membres (web) ; Échap pendant un envoi de commentaire garde le focus rendu (web, débloque la CI) | #16761 + #16777 | #6376, #16762 | voir réveil 12 |
 
 ## 2026-11-07 — lot 1
 
@@ -105,3 +106,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gotcha : sous happy-dom, un champ texte se lit par `onInput` (convention du dépôt, `list-toolbar.tsx`) ; `onChange` n'y est jamais rappelé.
 - iOS et Android : rien à changer (iOS sert déjà l'écran ; Android : suivi #16153 et suivants).
 - Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités), puis #6377 (réglages du créateur, web).
+
+## 2026-11-08 — réveil 12
+
+- Run consacré à mener #16761 à la fusion. Elle était bloquée par un rouge de `check-reels.mjs` présent sur `dev` (#16762), et non par son propre diff.
+- Cause réelle de #16762, mesurée au navigateur en instrumentant `focusin`/`focusout` et `blur()` : ce n'était pas la latence de l'effet de l'hôte. Échap ferme la feuille pendant que l'envoi du commentaire est en vol, la feuille rend le focus à « Commenter », puis la réponse arrive et `CommentComposer.release` (hôte `foldOnSend`), ne trouvant plus son formulaire, fait `blur()` sur l'élément actif hors du composeur. Correctif : `release` n'agit que si le focus est encore dans le composeur. PR #16777 (deux témoins rouges puis verts ; `check-reels` rouge 5/5 avant, vert 5/5 après).
+- Gotcha : un `useLayoutEffect` à la place de l'effet de l'hôte ne changeait rien ; les tests happy-dom tournent sous React (pas Preact) et ne distinguent pas les deux. Pour un focus perdu, instrumenter `HTMLElement.prototype.focus/blur` dans une copie du gate.
+- Prochain lot recommandé : #16739 (désactivation d'une communauté publique, invités), puis #6377 (réglages du créateur, web).
+
