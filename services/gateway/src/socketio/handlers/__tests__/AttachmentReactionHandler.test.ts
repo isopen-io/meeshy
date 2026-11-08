@@ -480,6 +480,46 @@ describe('AttachmentReactionHandler', () => {
       }));
     });
 
+    /**
+     * #17026 — HUITIÈME site de la famille, trouvé par l'audit adversarial.
+     *
+     * `emitServerEvent(io.to(room), …)` précédait
+     * `_enqueueOfflineAttachmentReactionEvent` dans le MÊME `try`, dont le
+     * `catch` journalise « post-success side-effects failed ». Une diffusion
+     * tombée — `emitServerEvent` fait un `.emit()` NU, et `serverEmit.ts`
+     * documente lui-même l'incident de production du 2026-08-25 où il levait
+     * sur quatorze sites — annulait donc l'enfilage, et le `reactionSummary`
+     * par pièce jointe d'un participant hors ligne était perdu
+     * DÉFINITIVEMENT : le doc-comment de l'enfilage dit que seul « an
+     * unrelated full refetch » le répare.
+     *
+     * La règle était écrite VINGT LIGNES PLUS BAS, dans ce même `try`, pour
+     * l'autre canal latéral (« ni emporter l'entrée de file hors ligne qui la
+     * précède ») — et la jumelle REST `broadcastReactionMutation` appliquait
+     * déjà la bonne forme. Ni l'issue, ni ma relecture, ni mon cliquet ne l'ont
+     * vu : le cliquet était AVEUGLE à l'émission par helper, qui est l'idiome
+     * dominant du dépôt.
+     */
+    it('#17026 — une diffusion vivante qui LÈVE n’emporte pas l’enfilage de la réaction', async () => {
+      const prisma = prismaWithParticipants();
+      const deliveryQueue = makeDeliveryQueue();
+      const io = makeIo();
+      // `emit` lève : adaptateur ou encodeur en défaut, ce que `serverEmit.ts`
+      // affirme sur mesure de production.
+      (io as unknown as { _toRoom: { emit: jest.Mock } })._toRoom.emit.mockImplementation(() => {
+        throw new Error('adapter down');
+      });
+      const { handler } = makeHandler({ io, prisma, deliveryQueue });
+      const socket = makeSocket();
+
+      await handler.handleAdd(socket, validData, jest.fn());
+
+      // Le pair EN LIGNE a perdu sa diffusion — il n'y a rien à y faire. Le
+      // pair ABSENT a sa file, et c'est sa seule voie.
+      expect(deliveryQueue.enqueue).toHaveBeenCalledTimes(1);
+      expect(deliveryQueue.enqueue.mock.calls[0][0]).toBe(OFFLINE_USER);
+    });
+
     it('enqueues attachment-reaction-removed on remove', async () => {
       const prisma = prismaWithParticipants();
       const deliveryQueue = makeDeliveryQueue();
