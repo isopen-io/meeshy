@@ -1,13 +1,12 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { memo, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { memo, useState } from 'react';
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
-import { flattenMediaHubPages, mediaHubInfiniteOptions, type MediaHubData } from '@/lib/api/conversation-media-hub';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { PersonSummary } from '@/lib/api/friend-requests';
 import { relationLinksQueryOptions, type RelationDeps } from '@/lib/api/relations';
-import type { Attachment, Message } from '@/lib/api/types';
 import { watchRealtime, type WatchRealtime } from '@/lib/api/watch-realtime';
 import { translateCircles, type CirclesCatalogKey } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -26,8 +25,8 @@ import { BRAND, BRAND_FILL, FOCUS, INK, INK_2 } from './user-profile-style';
  * - **Présent dès Proche** : le niveau vient du MÊME cache que la ligne du cercle
  *   (`GET /relations`). Sous Proche, rien. Le serveur rejuge à chaque invitation ;
  *   un `TOGETHER_NOT_ALLOWED` se dit d'une phrase neutre, jamais par sa raison.
- * - **Les médias** sont ceux de l'index de la conversation (`mediaHubInfiniteOptions`,
- *   la même clé de cache que l'écran « Médias »), les plus récents d'abord.
+ * - **Les médias** sont ceux de la galerie de la conversation, servie par la passerelle
+ *   au seul membre, les plus récents d'abord.
  * - Sans conversation directe connue, ou sans média : une phrase qui invite à en
  *   envoyer un, jamais une liste vide.
  */
@@ -43,32 +42,44 @@ const OUTCOME_NOTICE = {
   failed: 'together.outcome.failed',
 } as const satisfies Readonly<Record<TogetherInviteOutcome, CirclesCatalogKey>>;
 
-export type TogetherPiece = { readonly attachment: Attachment; readonly media: 'video' | 'audio'; readonly at: number };
+/** Une pièce telle que la galerie de la conversation la sert (`GET /conversations/:id/attachments`). */
+export type ListedAttachment = {
+  readonly id: string;
+  readonly originalName: string;
+  readonly mimeType: string;
+  readonly createdAt?: string;
+  readonly isViewOnce?: boolean;
+  readonly isBlurred?: boolean;
+  readonly isEncrypted?: boolean;
+};
 
-const mediaOf = (attachment: Attachment): 'video' | 'audio' | null => {
+export type TogetherPiece = { readonly attachment: ListedAttachment; readonly media: 'video' | 'audio'; readonly at: number };
+
+const mediaOf = (attachment: ListedAttachment): 'video' | 'audio' | null => {
   const mime = attachment.mimeType.toLowerCase();
   if (mime.startsWith('video/')) return 'video';
   if (mime.startsWith('audio/')) return 'audio';
   return null;
 };
 
+const isListed = (raw: unknown): raw is ListedAttachment => {
+  const candidate = raw as Partial<ListedAttachment> | null;
+  return typeof candidate === 'object' && candidate !== null && typeof candidate.id === 'string' && typeof candidate.originalName === 'string' && typeof candidate.mimeType === 'string';
+};
+
 /** Les vidéos et audios lisibles ensemble, les plus récents d'abord, dédoublonnés. */
-export function togetherPieces(messages: readonly Message[]): readonly TogetherPiece[] {
+export function togetherPieces(attachments: readonly ListedAttachment[]): readonly TogetherPiece[] {
   const seen = new Set<string>();
-  return messages
-    .flatMap((message) =>
-      (message.attachments ?? []).flatMap((attachment): readonly TogetherPiece[] => {
-        const media = mediaOf(attachment);
-        if (media === null || seen.has(attachment.id) || attachment.isViewOnce === true || attachment.isEncrypted === true) return [];
-        seen.add(attachment.id);
-        return [{ attachment, media, at: new Date(message.createdAt).getTime() || 0 }];
-      }),
-    )
+  return attachments
+    .flatMap((attachment): readonly TogetherPiece[] => {
+      const media = mediaOf(attachment);
+      if (media === null || seen.has(attachment.id) || attachment.isViewOnce === true || attachment.isEncrypted === true) return [];
+      seen.add(attachment.id);
+      return [{ attachment, media, at: new Date(attachment.createdAt ?? 0).getTime() || 0 }];
+    })
     .sort((left, right) => right.at - left.at)
     .slice(0, SHOWN);
 }
-
-const selectMessages = (data: MediaHubData): readonly Message[] => flattenMediaHubPages(data);
 
 export const ProfileTogetherRowView = memo(function ProfileTogetherRowView({
   language,
@@ -131,15 +142,35 @@ export const ProfileTogetherRowView = memo(function ProfileTogetherRowView({
   );
 });
 
+/**
+ * Les vidéos et audios de la conversation directe, par la galerie que la passerelle
+ * sert (`GET /conversations/:id/attachments?type=…`, membre seulement) : les plus
+ * récents de chaque genre.
+ */
+async function loadDirectPieces(deps: ConversationsDeps, conversationId: string): Promise<readonly TogetherPiece[]> {
+  if (deps.source !== 'gateway') return [];
+  const listed = async (type: 'video' | 'audio'): Promise<readonly ListedAttachment[]> => {
+    const result = await deps.transport.request<{ readonly attachments?: readonly unknown[] }>({
+      method: 'GET',
+      path: `${conversationsEndpoints.byConversationIdAttachments(conversationId)}?type=${type}&limit=${SHOWN}`,
+    });
+    return result.ok ? (result.data?.attachments ?? []).filter(isListed) : [];
+  };
+  const [videos, audios] = await Promise.all([listed('video'), listed('audio')]);
+  return togetherPieces([...videos, ...audios]);
+}
+
 function useDirectPieces(deps: ConversationsDeps, conversationId: string | undefined): readonly TogetherPiece[] | null {
-  const enabled = conversationId !== undefined;
-  const visual = useInfiniteQuery({ ...mediaHubInfiniteOptions(deps, conversationId ?? '', 'visual', null), select: selectMessages, enabled }, appQueryClient);
-  const audio = useInfiniteQuery({ ...mediaHubInfiniteOptions(deps, conversationId ?? '', 'audio', null), select: selectMessages, enabled }, appQueryClient);
-  return useMemo(() => {
-    if (!enabled) return null;
-    if (visual.data === undefined && audio.data === undefined) return null;
-    return togetherPieces([...(visual.data ?? []), ...(audio.data ?? [])]);
-  }, [enabled, visual.data, audio.data]);
+  const pieces = useQuery(
+    {
+      queryKey: ['together-pieces', conversationId ?? ''],
+      queryFn: () => loadDirectPieces(deps, conversationId ?? ''),
+      enabled: conversationId !== undefined,
+      staleTime: 60_000,
+    },
+    appQueryClient,
+  );
+  return pieces.data ?? null;
 }
 
 export function ProfileTogetherRow({

@@ -541,7 +541,7 @@ const PENDING_CLIENT_ENTRIES = {
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et
 // `.byIdMembersByMemberIdRole` ont leur appelant web (l'écran Membres d'une communauté).
-const BASELINE_DEAD_ENTRIES = 270;
+const BASELINE_DEAD_ENTRIES = 269;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

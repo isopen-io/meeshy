@@ -3,12 +3,10 @@ import { act } from 'react';
 
 import { TOGETHER_CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events/together-event-names';
 
-import { mediaHubQueryKey } from '@/lib/api/conversation-media-hub';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import type { HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
 import { RELATION_LINKS_QUERY_KEY, type RelationLink } from '@/lib/api/relations';
-import type { Message } from '@/lib/api/types';
 import type { WatchRealtime } from '@/lib/api/watch-realtime';
 import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
 import type { SocketClient } from '@/lib/net/socket';
@@ -71,14 +69,16 @@ const piece = (id: string, mimeType: string, overrides: Readonly<Record<string, 
   ...overrides,
 });
 
-const message = (id: string, createdAt: string, attachments: readonly unknown[]) => ({ id, conversationId: CONV, senderId: PROCHE, content: '', createdAt, attachments }) as unknown as Message;
 
 describe('togetherPieces', () => {
   test('ne garde que les vidéos et les audios lisibles, les plus récents d’abord, sans doublon', () => {
     const pieces = togetherPieces([
-      message('a', '2026-11-08T09:00:00.000Z', [piece('photo', 'image/jpeg'), piece('vieux', 'video/mp4')]),
-      message('b', '2026-11-08T11:00:00.000Z', [piece('vocal', 'audio/mp4'), piece('unique', 'video/mp4', { isViewOnce: true }), piece('chiffre', 'audio/mp4', { isEncrypted: true })]),
-      message('c', '2026-11-08T11:00:00.000Z', [piece('vocal', 'audio/mp4')]),
+      piece('photo', 'image/jpeg', { createdAt: '2026-11-08T09:00:00.000Z' }),
+      piece('vieux', 'video/mp4', { createdAt: '2026-11-08T09:00:00.000Z' }),
+      piece('vocal', 'audio/mp4', { createdAt: '2026-11-08T11:00:00.000Z' }),
+      piece('unique', 'video/mp4', { isViewOnce: true }),
+      piece('chiffre', 'audio/mp4', { isEncrypted: true }),
+      piece('vocal', 'audio/mp4', { createdAt: '2026-11-08T11:00:00.000Z' }),
     ]);
     expect(pieces.map((entry) => [entry.attachment.id, entry.media])).toEqual([
       ['vocal', 'audio'],
@@ -104,7 +104,15 @@ function harness(ack: unknown) {
     },
   };
   const watch: WatchRealtime = (watcher) => watcher(socket);
-  const transport = { request: (async () => ({ ok: true, data: appQueryClient.getQueryData(RELATION_LINKS_QUERY_KEY) ?? [] })) as HttpTransport['request'] } as HttpTransport;
+  const requested: string[] = [];
+  const transport = {
+    request: (async ({ path }: { readonly path: string }) => {
+      requested.push(path);
+      if (path.includes('/attachments?type=video')) return { ok: true, data: { attachments: [piece('film', 'video/mp4')] } };
+      if (path.includes('/attachments?type=audio')) return { ok: true, data: { attachments: [] } };
+      return { ok: true, data: appQueryClient.getQueryData(RELATION_LINKS_QUERY_KEY) ?? [] };
+    }) as unknown as HttpTransport['request'],
+  } as HttpTransport;
   const notices: Array<{ readonly message: string; readonly failed: boolean }> = [];
   const store = createTogetherStore();
   const row = (
@@ -118,7 +126,7 @@ function harness(ack: unknown) {
       store={store}
     />
   );
-  return { row, emitted, notices, store };
+  return { row, emitted, notices, store, requested };
 }
 
 const settle = async () => {
@@ -132,9 +140,6 @@ const seedDirect = (): void => {
     pages: [{ conversations: [{ id: CONV, type: 'direct', participants: [{ userId: PROCHE }], createdAt: '2026-11-01T00:00:00.000Z' }] }],
     pageParams: [undefined],
   });
-  const page = (messages: readonly unknown[]) => ({ pages: [{ messages, hasOlder: false, nextCursor: null }], pageParams: [undefined] });
-  appQueryClient.setQueryData(mediaHubQueryKey(CONV, 'visual', null), page([message('v', '2026-11-08T10:00:00.000Z', [piece('film', 'video/mp4')])]));
-  appQueryClient.setQueryData(mediaHubQueryKey(CONV, 'audio', null), page([]));
 };
 
 describe('ProfileTogetherRow', () => {
@@ -149,9 +154,11 @@ describe('ProfileTogetherRow', () => {
   test('dès Proche : la liste des médias de la conversation, puis un toucher invite', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
     seedDirect();
-    const { row, emitted, notices, store } = harness({ success: true, data: { sessionId: '0123456789abcdef0123456789abcdef', expiresAt: '2026-11-08T18:02:00.000Z', media: 'video' } });
+    const { row, emitted, notices, store, requested } = harness({ success: true, data: { sessionId: '0123456789abcdef0123456789abcdef', expiresAt: '2026-11-08T18:02:00.000Z', media: 'video' } });
     const node = await mount(row);
     await settle();
+    await settle();
+    expect(requested).toContain(`/api/v1/conversations/${CONV}/attachments?type=video&limit=6`);
     await click(node.querySelector<HTMLButtonElement>('[data-together-open]'));
     const film = node.querySelector<HTMLButtonElement>('[data-together-piece="film"]');
     expect(film?.getAttribute('aria-label')).toBe('Inviter Ada à lire film-nom ensemble');
@@ -167,6 +174,7 @@ describe('ProfileTogetherRow', () => {
     seedDirect();
     const { row, notices } = harness({ success: false, error: 'x', code: 'TOGETHER_NOT_ALLOWED' });
     const node = await mount(row);
+    await settle();
     await settle();
     await click(node.querySelector<HTMLButtonElement>('[data-together-open]'));
     await click(node.querySelector<HTMLButtonElement>('[data-together-piece="film"]'));
