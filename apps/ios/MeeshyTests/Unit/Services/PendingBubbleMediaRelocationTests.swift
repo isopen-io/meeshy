@@ -105,7 +105,7 @@ final class PendingBubbleMediaRelocationTests: XCTestCase {
         let base = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: base)
         await OfflineQueue.shared.configure(pool: base)
-        defer { if let saved { Task { await OfflineQueue.shared.configure(pool: saved) } } }
+        defer { Task { await OfflineQueue.shared.configure(pool: saved) } }
         let copy = FileManager.default.temporaryDirectory.appendingPathComponent(
             ImportedCopyName.copyName(of: "On fait comme ça.m4a", through: .conversationFile))
         try Data("octets".utf8).write(to: copy)

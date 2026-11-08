@@ -37,6 +37,23 @@ final class ComposerCaptureMirrorRuleTests: XCTestCase {
         XCTAssertTrue(camera.contains("videoRotationAngle = ComposerCaptureMirrorRule.portraitAngle"))
     }
 
+    func test_stabilization_movieOnly_standardWhenServed() {
+        XCTAssertEqual(ComposerCaptureStabilizationRule.preferred(.movie, supportsStandard: true), .standard)
+        XCTAssertEqual(ComposerCaptureStabilizationRule.preferred(.movie, supportsStandard: false), .off)
+    }
+
+    func test_stabilization_photoAndFramesNever_theirDelayWouldShowInTheViewfinder() {
+        XCTAssertEqual(ComposerCaptureStabilizationRule.preferred(.photo, supportsStandard: true), .off)
+        XCTAssertEqual(ComposerCaptureStabilizationRule.preferred(.frames, supportsStandard: true), .off)
+    }
+
+    func test_camera_stabilizesEachNewInput_andBoostsLowLight() throws {
+        let installeur = try Self.code("Meeshy/Features/Main/Components/CameraInputInstaller.swift")
+        XCTAssertTrue(installeur.contains("stabilize(outputs, on: device)"))
+        XCTAssertTrue(installeur.contains("ComposerCaptureStabilizationRule.preferred("))
+        XCTAssertTrue(installeur.contains("automaticallyEnablesLowLightBoostWhenAvailable = true"))
+    }
+
     func test_horizonAngle_followsHowTheDeviceIsHeld() {
         XCTAssertEqual(ComposerCaptureHorizonRule.angle(for: .portrait), 90)
         XCTAssertEqual(ComposerCaptureHorizonRule.angle(for: .landscapeLeft), 0)
