@@ -587,9 +587,11 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/spm
-          key: ios-spm-${{ hashFiles('apps/ios/Meeshy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          # `v2` : le run 42466274659 a sauvé sous la clé v1 un arbre SANS
+          # artefacts binaires (sauvegarde après une résolution en échec).
+          key: ios-spm-v2-${{ hashFiles('apps/ios/Meeshy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            ios-spm-
+            ios-spm-v2-
 
       # #5084 — the `xc26_1_1` prefix names the Xcode *marketing* version, not
       # the SDK build inside it. The runner image was republished without that
@@ -678,7 +680,16 @@ jobs:
       # (#6545). The retry logic lives in its own script — rather than inline
       # here — so `check-ios-spm-resolve-retry.mjs` can exercise it (fake
       # `xcodebuild`/`sleep` on PATH) without a macOS runner.
+      #
+      # TROISIÈME cas (2026-11-08, runs 42466274659 et suivants) : un
+      # téléchargement REFUSÉ (réponse non-200 sur une release GitHub) se
+      # déguise en collision, et l'entrée purgée réapparaît à chaque essai.
+      # Le script précharge alors l'artefact lui-même (`gh`, authentifié par
+      # GH_TOKEN) dans le cache que SwiftPM consulte.
       - name: Resolve SPM packages (retry on transient network)
+        id: spm-resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           scripts/ci/resolve-spm-packages.sh \
             apps/ios/Meeshy.xcodeproj Meeshy \
@@ -693,11 +704,13 @@ jobs:
       # if it later times out compiling — run N+1 then starts warm and is far
       # likelier to finish the build, which in turn seeds the DerivedData cache.
       - name: Save SPM cache
-        if: always() && steps.spm-restore.outputs.cache-hit != 'true'
+        # Seulement après une résolution RÉUSSIE : sauver un arbre en échec
+        # empoisonne la clé exacte, et le run suivant le restaure en « hit ».
+        if: always() && steps.spm-resolve.outcome == 'success' && steps.spm-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/spm
-          key: ios-spm-${{ hashFiles('apps/ios/Meeshy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: ios-spm-v2-${{ hashFiles('apps/ios/Meeshy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
 
       # Compile separately from running so DerivedData can be banked the moment
       # the (expensive) build finishes — see "Save DerivedData build cache".

@@ -25,6 +25,17 @@ final class RouterCommands {
         router?.popToRoot()
     }
 
+    /// Le disque de tête du détail d'un post : ✕ sur la feuille, « Retour »
+    /// dans le panneau de l'iPad (#16676).
+    var postDetailHeaderGlyph: CollapsibleHeaderBackGlyph {
+        router?.presentsPostDetailAsSheet == false ? .back : .close
+    }
+
+    /// Ferme le détail d'un post : sa feuille, ou sa page hors feuille (#16676).
+    func closePostDetail() {
+        router?.closePostDetail()
+    }
+
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
         router?.navigateToConversation(conversation, highlightMessageId: highlightMessageId)
     }

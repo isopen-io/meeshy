@@ -99,7 +99,7 @@ extension FeedViewModel {
                 // Des pages déjà chargées restent derrière la tête relue : leur
                 // curseur reste le bon, celui de la page 1 les redemanderait.
                 let keepsLoadedTail = merged.count > head.count
-                posts = merged
+                posts = keepingLoadedPages ? headHold.admitting(head: merged, over: posts) : merged
                 let pending = await FeedPendingEngagement.load(from: feedPersistence)
                 posts = pending.reapplied(to: posts)
                 if !keepsLoadedTail {

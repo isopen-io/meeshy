@@ -151,6 +151,21 @@ class NavBackChromeTest {
         }.toSet()
     }
 
+    /** #16676 — directive porteur du 2026-11-07 : le détail d'un post s'ouvre en feuille, plus jamais empilé. */
+    @Test
+    fun `the post detail is a sheet with its cross, as on iOS`() {
+        val post = NavBackChrome.entries.single { it.source == "Routes.POST_DETAIL" }
+        assertThat(post.viaSheetHost).isTrue()
+        assertThat(post.ios).isEqualTo(IosPresentation.SHEET)
+        assertThat(post.chrome).isEqualTo(BackChrome.MODAL)
+        assertThat(sheetHostedRoutes()).contains("Routes.POST_DETAIL")
+        assertThat(coverHostedRoutes()).doesNotContain("Routes.POST_DETAIL")
+        assertThat(NavBackChrome.edgeSwipeBackEnabled(Routes.POST_DETAIL)).isFalse()
+        val screen = File(androidRoot, checkNotNull(post.evidence)).readText()
+        assertThat(screen).contains("leadingNavigationIcon()")
+        assertThat(screen).doesNotContain("MeeshyIcons.Back")
+    }
+
     @Test
     fun `the sheet host presents full screen exactly the routes iOS presents as a cover`() {
         val iosCovers = NavBackChrome.entries.filter { it.viaSheetHost && it.ios == IosPresentation.COVER }.map { it.source }

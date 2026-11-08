@@ -60,11 +60,7 @@ extension FeedViewModel {
                     self.debouncedCacheSave()
                     return
                 }
-                if !self.posts.contains(where: { $0.id == feedPost.id }) {
-                    self.posts.insert(feedPost, at: 0)
-                    self.newPostsCount += 1
-                    self.debouncedCacheSave()
-                }
+                if let shown = self.headHold.admitting(feedPost, over: self.posts) { self.posts = shown; self.newPostsCount += 1; self.debouncedCacheSave() }
             }
             .store(in: &socketCancellables)
 
@@ -88,6 +84,7 @@ extension FeedViewModel {
         socialSocket.postDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] postId in
+                self?.headHold.forgetting(postId)
                 self?.posts.removeAll { $0.id == postId }
                 self?.debouncedCacheSave()
             }
@@ -152,11 +149,7 @@ extension FeedViewModel {
                 // `getFeed` ne sert que `[POST, REEL]` — meme partage ici.
                 guard !data.repost.belongsToStoryTray else { return }
                 let repostFeedPost = data.repost.toFeedPost(preferredLanguages: self.preferredLanguages)
-                if !self.posts.contains(where: { $0.id == repostFeedPost.id }) {
-                    self.posts.insert(repostFeedPost, at: 0)
-                    self.newPostsCount += 1
-                    self.debouncedCacheSave()
-                }
+                if let shown = self.headHold.admitting(repostFeedPost, over: self.posts) { self.posts = shown; self.newPostsCount += 1; self.debouncedCacheSave() }
             }
             .store(in: &socketCancellables)
 

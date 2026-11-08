@@ -458,7 +458,7 @@ extension ConversationViewModel {
         do {
             try await offlineQueue.retryByClientMessageId(messageId)
             await sendCoordinator.markRetrying(localId: messageId)
-        } catch {
+        } catch OfflineQueueError.itemInFlight { await sendCoordinator.markRetrying(localId: messageId) } catch { // #16749
             Logger.messages.error("retryMessage outbox reset failed: \(error.localizedDescription)")
         }
         await OutboxFlushTrigger.flushNow()

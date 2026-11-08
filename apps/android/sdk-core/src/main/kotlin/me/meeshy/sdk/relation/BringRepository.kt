@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.relation.BringAvailability
 import me.meeshy.sdk.model.relation.BringBlockBody
+import me.meeshy.sdk.model.relation.RelationReceptionSetting
+import me.meeshy.sdk.model.relation.TalkieBlockBody
 import me.meeshy.sdk.model.relation.BringSent
 import me.meeshy.sdk.model.relation.BringStoppedEvent
 import me.meeshy.sdk.model.relation.RelationPersonSettings
@@ -77,8 +79,11 @@ interface BringGateway {
 
     suspend fun personSettings(userId: String): RelationPersonSettings?
 
-    /** Les réglages servis après l'écriture, ou `null` sur un refus : l'appelant rend l'état d'avant. */
-    suspend fun setBringBlocked(userId: String, blocked: Boolean): RelationPersonSettings?
+    /**
+     * Bloque (ou rouvre) une préférence de réception pour cette personne : une source pour le Bring et le talkie. Rend les
+     * réglages servis après l'écriture, ou `null` sur un refus : l'appelant rend l'état d'avant.
+     */
+    suspend fun setReceptionBlocked(userId: String, setting: RelationReceptionSetting, blocked: Boolean): RelationPersonSettings?
 }
 
 @Singleton
@@ -124,8 +129,18 @@ class BringRepository internal constructor(
     override suspend fun personSettings(userId: String): RelationPersonSettings? =
         (apiCall { relations.settings(userId) } as? NetworkResult.Success)?.data
 
-    override suspend fun setBringBlocked(userId: String, blocked: Boolean): RelationPersonSettings? =
-        (apiCall { relations.setBringBlocked(userId, BringBlockBody(blocked)) } as? NetworkResult.Success)?.data
+    override suspend fun setReceptionBlocked(
+        userId: String,
+        setting: RelationReceptionSetting,
+        blocked: Boolean,
+    ): RelationPersonSettings? = (
+        apiCall {
+            when (setting) {
+                RelationReceptionSetting.BRING -> relations.setBringBlocked(userId, BringBlockBody(blocked))
+                RelationReceptionSetting.TALKIE -> relations.setTalkieBlocked(userId, TalkieBlockBody(blocked))
+            }
+        } as? NetworkResult.Success
+        )?.data
 
     private fun track(userId: String, sent: BringSent) {
         _outgoing.update { it + (userId to sent) }

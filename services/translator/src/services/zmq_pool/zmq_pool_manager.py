@@ -23,7 +23,7 @@ except ImportError:  # pragma: no cover
 
 # Import des modules internes
 from .worker_pool import WorkerPool, configure_pytorch_threads, calculate_optimal_workers
-from .connection_manager import ConnectionManager, take_next_task
+from .connection_manager import ConnectionManager, RejectedTasksHandler, take_next_task
 
 # Import local
 from ..zmq_models import TranslationTask
@@ -183,6 +183,10 @@ class TranslationPoolManager:
             True si enfilée avec succès
         """
         return await self.connection_manager.enqueue_task(task)
+
+    def set_rejection_handler(self, handler: Optional[RejectedTasksHandler]) -> None:
+        """Branche le rappel des tâches d'un lot refusé par une file pleine (#16781)."""
+        self.connection_manager.on_tasks_rejected = handler
 
     async def start_workers(self) -> List[asyncio.Task]:
         """Démarre tous les workers et services"""

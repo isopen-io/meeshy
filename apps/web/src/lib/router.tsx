@@ -64,13 +64,30 @@ const subscribers = new Set<() => void>();
 let currentLocation: Location =
   typeof window === 'undefined' ? { path: '/', search: '' } : readLocation();
 
-function notify(): void {
+/**
+ * L'ADRESSE SE RELIT AU RENDU, PAS SEULEMENT A L'IMPORT (#16867). Ce module
+ * s'évalue dans son propre morceau, AVANT le corps de l'entrée qui ramène
+ * l'alias d'un lien d'e-mail à son adresse canonique par un `replaceState`
+ * muet (`links/email-link-boot.ts`) : figée à l'import, l'adresse restait
+ * l'alias, et le premier écran était « Cette adresse n'existe pas ».
+ * L'IDENTITE de l'objet ne change que si l'URL change reellement :
+ * `useSyncExternalStore` compare par reference et re-rendrait sinon.
+ */
+function syncLocation(): boolean {
+  if (typeof window === 'undefined') return false;
   const next = readLocation();
-  // L'IDENTITE de l'objet ne doit changer que si l'URL change reellement :
-  // `useSyncExternalStore` compare par reference et re-rendrait a chaque
-  // evenement sinon.
-  if (next.path === currentLocation.path && next.search === currentLocation.search) return;
+  if (next.path === currentLocation.path && next.search === currentLocation.search) return false;
   currentLocation = next;
+  return true;
+}
+
+function snapshot(): Location {
+  syncLocation();
+  return currentLocation;
+}
+
+function notify(): void {
+  if (!syncLocation()) return;
   for (const subscriber of subscribers) subscriber();
 }
 
@@ -147,7 +164,7 @@ export function hasNavigatedInApp(): boolean {
 export function useIsCurrentPath(path: string): boolean {
   return useSyncExternalStore(
     subscriber,
-    () => currentLocation.path === path,
+    () => snapshot().path === path,
     () => false,
   );
 }
@@ -394,7 +411,7 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
      */
     skeleton: ReactNode;
   }) {
-    const location = useSyncExternalStore(subscriber, () => currentLocation, () => currentLocation);
+    const location = useSyncExternalStore(subscriber, snapshot, () => currentLocation);
 
     const resolved = useMemo(() => {
       for (const entry of entries) {

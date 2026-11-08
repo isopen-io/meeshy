@@ -60,6 +60,30 @@
         },
         {
           "catalog": "app",
+          "iosKey": "call.capture.journal.callRecordingStarted",
+          "androidName": "call_capture_journal_call_recording_started",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.journal.callRecordingStopped",
+          "androidName": "call_capture_journal_call_recording_stopped",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.journal.recording",
+          "androidName": "call_capture_journal_recording",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.capture.journal.screenshot",
+          "androidName": "call_capture_journal_screenshot",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "call.a11y.ended",
           "androidName": "call_ended",
           "status": "adopted"
@@ -215,8 +239,10 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.capture.alert",
           "androidName": "call_peer_screen_capturing",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "call_pill_ongoing",

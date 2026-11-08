@@ -1,7 +1,9 @@
 import { useState } from 'react';
 
-import { captionLanguageLabel, captionText, overlayCaptions, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
-import type { ActiveCall } from '@/lib/calls/call-store';
+import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
+import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
+import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
+import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -25,6 +27,11 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * révision y est `aria-hidden` — un lecteur d'écran annonce la phrase dite, pas
  * chaque mot corrigé. Tout texte dit porte `dir="auto"` : une phrase arabe se
  * lit de droite à gauche même sous une interface française.
+ *
+ * Une capture d'écran y passe à son heure (#16665, vue R1) : « Karim · a
+ * capturé l'écran · 12:40 » — le pseudo à sa couleur, le reste à l'encre
+ * secondaire, l'heure de l'appel au bout ; de même le début et la fin de
+ * l'enregistrement consenti, sans pseudo.
  */
 
 /** L'encre d'une phrase ORIGINALE : seule une traduction prend la couleur de son auteur (`docs/product/appels-vue-finale.md` loi 4). */
@@ -41,7 +48,16 @@ export type CaptionsSurface = 'glass' | 'inset';
  * plutôt qu'importée : ce chunk à part n'importe rien de statique du chunk de
  * l'écran d'appel (`budgets.json` › `call_overlay.dynamic_only`).
  */
-export type SpeakerColorOf = (caption: CallCaption) => string;
+export type SpeakerColorOf = (who: Pick<CallCaption, 'speakerId' | 'speakerName'>) => string;
+
+function NoteLine({ note, language, color, clock }: { readonly note: CallJournalNote; readonly language: InterfaceLanguage; readonly color: string; readonly clock: string | null }) {
+  return (
+    <p className="py-1" dir={noteDirection(language)} style={{ color: INK_2 }} data-call-caption-note={note.kind}>
+      <JournalNoteCaption note={note} language={language} ink={{ style: { color } }} />
+      {clock === null ? null : ` · ${clock}`}
+    </p>
+  );
+}
 
 function CaptionLine({
   caption,
@@ -97,7 +113,8 @@ function CaptionLine({
 export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass' }: { readonly call: ActiveCall; readonly language: InterfaceLanguage; readonly colorOf: SpeakerColorOf; readonly surface?: CaptionsSurface }) {
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
   const mode = call.captionsMode;
-  const lines = overlayCaptions(call.captions);
+  const lines = overlayEntries(call.captions, call.journalNotes ?? [], CAPTIONS_OVERLAY_LINES);
+  const clockOf = (at: number): string | null => (call.connectedAt === null ? null : formatCallClock((at - call.connectedAt) / 1000));
   const note = call.transcription === 'idle' ? null : NOTE_KEY[call.transcription];
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'message.author.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
   const toggle = (id: string) => () => setUnfolded((current) => (current.has(id) ? new Set([...current].filter((entry) => entry !== id)) : new Set([...current, id])));
@@ -113,7 +130,13 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass' }
         {lines.length === 0 ? (
           <p style={{ color: INK_2 }}>{translate(language, 'callCaptions.waiting')}</p>
         ) : (
-          lines.map((caption) => <CaptionLine key={caption.id} caption={caption} mode={mode} speaker={speaker(caption)} color={colorOf(caption)} open={unfolded.has(caption.id)} onToggle={toggle(caption.id)} />)
+          lines.map((entry) =>
+            entry.type === 'note' ? (
+              <NoteLine key={entry.note.id} note={entry.note} language={language} color={colorOf({ speakerId: entry.note.userId ?? '', speakerName: entry.note.name ?? '' })} clock={clockOf(entry.at)} />
+            ) : (
+              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={unfolded.has(entry.caption.id)} onToggle={toggle(entry.caption.id)} />
+            ),
+          )
         )}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-3 text-mini" style={{ color: INK_2 }}>

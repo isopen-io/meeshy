@@ -171,6 +171,10 @@
     <string name="tab_calls">Chiamate</string>
     <string name="tab_feed">Feed</string>
     <string name="tab_profile">Profilo</string>
+    <string name="talkie_incoming_mute">Silenzia</string>
+    <string name="talkie_incoming_mute_named">Silenzia la voce di %1$s</string>
+    <string name="talkie_incoming_someone">Qualcuno</string>
+    <string name="talkie_incoming_title">%1$s ti sta parlando</string>
     <string name="upgrade_required_action">Aggiorna</string>
     <string name="upgrade_required_message">Questa versione di Meeshy non può più comunicare con il server. Installa l\'ultima versione per continuare.</string>
     <string name="upgrade_required_min_version">Versione minima: %1$s</string>

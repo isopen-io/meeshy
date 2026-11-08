@@ -398,7 +398,6 @@ missing-key :feature:calls ar call_panel_close
 missing-key :feature:calls ar call_peer_camera_off
 missing-key :feature:calls ar call_peer_muted
 missing-key :feature:calls ar call_peer_quality_degraded
-missing-key :feature:calls ar call_peer_screen_capturing
 missing-key :feature:calls ar call_pill_ongoing
 missing-key :feature:calls ar call_pill_reopen
 missing-key :feature:calls ar call_projection_channel_name
@@ -502,7 +501,6 @@ missing-key :feature:calls de call_panel_close
 missing-key :feature:calls de call_peer_camera_off
 missing-key :feature:calls de call_peer_muted
 missing-key :feature:calls de call_peer_quality_degraded
-missing-key :feature:calls de call_peer_screen_capturing
 missing-key :feature:calls de call_pill_ongoing
 missing-key :feature:calls de call_pill_reopen
 missing-key :feature:calls de call_projection_channel_name
@@ -606,7 +604,6 @@ missing-key :feature:calls it call_panel_close
 missing-key :feature:calls it call_peer_camera_off
 missing-key :feature:calls it call_peer_muted
 missing-key :feature:calls it call_peer_quality_degraded
-missing-key :feature:calls it call_peer_screen_capturing
 missing-key :feature:calls it call_pill_ongoing
 missing-key :feature:calls it call_pill_reopen
 missing-key :feature:calls it call_projection_channel_name

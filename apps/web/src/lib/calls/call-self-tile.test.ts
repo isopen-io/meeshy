@@ -103,6 +103,7 @@ describe('selfTileBox — les quatre coins de repos', () => {
 
   test('chaque coin à 16 px de son bord, la rangée tenant au-dessus comme en dessous', () => {
     expect(selfTileBox({ corner: 'top-left', size, viewport: phone })).toEqual({ x: 16, y: 128, width: 112, height: 160 });
+    expect(selfTileBox({ corner: 'top-left', size, viewport: phone, topInset: 56 })).toEqual({ x: 16, y: 184, width: 112, height: 160 });
     expect(selfTileBox({ corner: 'bottom-left', size, viewport: phone })).toEqual({ x: 16, y: 844 - 176 - 160, width: 112, height: 160 });
     expect(selfTileBox({ corner: 'bottom-right', size, viewport: phone })).toEqual({ x: 262, y: 844 - 176 - 160, width: 112, height: 160 });
   });

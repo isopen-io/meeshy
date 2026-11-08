@@ -292,3 +292,31 @@ describe('createRouter().preload — un écran préchargé s’ouvre sans attent
     expect(counts.target).toBe(1);
   });
 });
+
+/**
+ * #16867 — L'ADRESSE SERVIE EST CELLE DU MONTAGE, PAS CELLE DE L'IMPORT. Le
+ * lien d'e-mail arrive sur un ALIAS (`/auth/email-link/magic-link`) que
+ * `email-link-boot.ts` ramène à l'adresse canonique par `replaceState`, sans
+ * rien notifier. En production, le morceau du routeur s'évalue AVANT ce
+ * nettoyage : le routeur figeait l'alias, qu'aucune route ne déclare, et
+ * peignait « Cette adresse n'existe pas » à la place de la validation.
+ */
+describe('createRouter() — une adresse réécrite avant le montage est celle que le routeur sert (#16867)', () => {
+  test('replaceState sans notification, puis montage : l’écran de la nouvelle adresse', async () => {
+    const table = {
+      list: { pattern: '/', screen: () => Promise.resolve({ default: () => <p data-screen="list">Liste</p> }) },
+      magic: { pattern: '/auth/magic-link', screen: () => Promise.resolve({ default: () => <p data-screen="magic">Lien</p> }) },
+    } as const;
+    const { Router, navigate: go } = createRouter(table, () => <p data-not-found>Inconnue</p>);
+    act(() => go('/auth/email-link/magic-link', true));
+    window.history.replaceState(null, '', '/auth/magic-link?returnUrl=%2Fconversations');
+
+    const el = mount(<Router wrap={(screen) => screen} skeleton={<p data-skeleton>Attente</p>} />);
+    await act(async () => {
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+
+    expect(el.querySelector('[data-not-found]')).toBeNull();
+    expect(el.querySelector('[data-screen="magic"]')).not.toBeNull();
+  });
+});

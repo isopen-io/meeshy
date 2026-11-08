@@ -281,7 +281,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             let installe = CameraInputInstaller.installVideoInput(in: self.session, position: .back, outputs: self.orientedOutputs,
                                                   prepared: self.preparedInputs,
                                                   previewWanted: self.previewMirroring.isWanted,
-                                                  photoPlan: { CameraPhotoTuning.adopt(for: $0, on: self.photoOutput) })
+                                                  photoPlan: { self.adoptLens($0) })
             let audio = micro && Self.addAudioInput(to: self.session)
             self.session.commitConfiguration()
             if let device = installe?.device { CameraPhotoTuning.confirm(self.photoOutput, in: self.session, for: device) }
@@ -537,9 +537,19 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         let installe = CameraInputInstaller.installVideoInput(in: session, position: position, outputs: orientedOutputs,
                                                   prepared: preparedInputs,
                                                   previewWanted: previewMirroring.isWanted,
-                                                  photoPlan: { CameraPhotoTuning.adopt(for: $0, on: self.photoOutput) })
+                                                  photoPlan: { self.adoptLens($0) })
         if let device = installe?.device { CameraPhotoTuning.confirm(photoOutput, in: session, for: device) }
         return installe
+    }
+
+    /// Ce que reçoit chaque objectif installé, dans sa transaction : le plan
+    /// photo, et les curseurs du bouton Camera Control (OPUS-9).
+    nonisolated private func adoptLens(_ device: AVCaptureDevice) {
+        CameraPhotoTuning.adopt(for: device, on: photoOutput)
+        CameraSystemControlsHost.install(in: session, for: device) { [weak self] facteur in
+            guard let self else { return }
+            self.zoomFactor = self.zoomScale.displayed(facteur)
+        }
     }
 
     private func publishLens(_ installe: CameraInputInstaller.InstalledCamera?) {
@@ -822,13 +832,19 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// final stop. See `recordedSegmentURLs`'s doc-comment for the overall design.
     private func handleSegmentFinished(url: URL, error: Error?) async {
         let jeton = segmentTokens.removeValue(forKey: url) ?? recordingId
-        guard error == nil else {
-            // A genuine recording error (not a deliberate mid-switch stop, which
-            // always completes with error == nil) — end cleanly, discard segments.
-            endRecordingWithoutOutput(token: jeton)
-            return
+        // Un appel, l'arrière-plan, Siri, la durée ou le disque closent la prise
+        // AVEC une erreur et un fichier valide (OPUS-11) : ce qui est filmé reste.
+        let fin = CameraRecordingEnding.of(error)
+        if fin.keepsFile {
+            recordedSegmentURLs.append(url)
+        } else {
+            FileManager.default.removeItemLogging(at: url, context: "unusable recording segment", logger: .media)
         }
-        recordedSegmentURLs.append(url)
+        switch fin.next(keptSegments: recordedSegmentURLs.count) {
+        case .asUsual: break
+        case .nothingToKeep: return endRecordingWithoutOutput(token: jeton)
+        case .keepWhatWasFilmed: return await deliverInterruptedRecording(token: jeton)
+        }
 
         if isSwitchingCameraDuringRecording {
             // La bascule se fait sur la file de la session : le segment suivant
@@ -878,6 +894,19 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
     }
 
+    /// **Le système a clos la prise** : la bascule en vol s'oublie, ce qui a
+    /// été filmé part comme une prise arrêtée, et l'auteur l'apprend.
+    private func deliverInterruptedRecording(token: String?) async {
+        isSwitchingCameraDuringRecording = false
+        pendingSwitchPosition = nil
+        pendingStopRequested = false
+        isSwitchingCamera = false
+        switchCover = nil
+        switchFollower = nil
+        await deliverRecording(token: token)
+        CameraTakeNotice.announceInterruptedRecording()
+    }
+
     /// La prise est close : les segments se rassemblent et partent.
     private func deliverRecording(token: String?) async {
         recordingSession.finish(handingBackSession: false)
@@ -893,6 +922,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             // Merge failed (or there was nothing to merge) — fail soft to the
             // last recorded segment rather than losing the whole capture.
             if let lastSegment = segments.last {
+                for segment in segments.dropLast() {
+                    FileManager.default.removeItemLogging(at: segment, context: "unmergeable recording segment", logger: .media)
+                }
                 capturedVideoURL = lastSegment
                 librarySave = savesOriginal()
                     ? Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) } }
@@ -938,6 +970,12 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         HapticFeedback.light()
     }
 
+    /// AVFoundation n'a rendu aucune image : le déclencheur se libère, et le dit.
+    func photoWasLost() {
+        isTakingPhoto = false
+        CameraTakeNotice.announceLostPhoto()
+    }
+
     /// Le tic du cadre, et le délai toucher → obturateur, signpost et console.
     func noteShutterFired() {
         shutterCount += 1
@@ -946,13 +984,13 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
 
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         guard let original = photo.fileDataRepresentation() else {
-            Task { @MainActor in self.isTakingPhoto = false }
+            Task { @MainActor in self.photoWasLost() }
             return
         }
         let processed = photoProcessor.process(encoded: original, settings: .capture)
         let data = processed?.data ?? original
         guard let image = processed.map({ UIImage(cgImage: $0.image) }) ?? UIImage(data: original) else {
-            Task { @MainActor in self.isTakingPhoto = false }
+            Task { @MainActor in self.photoWasLost() }
             return
         }
         // Persist the processed encoded bytes AS-IS (HEIC/JPEG, EXIF kept):

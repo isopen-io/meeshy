@@ -7,10 +7,15 @@ import XCTest
 /// liste d'options, TOUTES les trames iOS voyagent non compressées et la
 /// configuration serveur reste inerte.
 ///
-/// La configuration est construite dans le CORPS de `connect()` /
-/// `connectAnonymous()` / `armConnection()` : aucune surface publique ne la
-/// rend lisible, donc la garde est une garde de SOURCE — motif déjà présent au
-/// dépôt (`CallEmitSourceGuardTests`).
+/// La configuration est construite dans le CORPS de `SocketTransportFactory` /
+/// `armConnection()` : aucune surface publique ne la rend lisible, donc la
+/// garde est une garde de SOURCE — motif déjà présent au dépôt
+/// (`CallEmitSourceGuardTests`).
+///
+/// #16750 — la socket de message en portait DEUX blocs, celui d'un inscrit et
+/// celui d'un invité, qui ne différaient que par leurs en-têtes. Ils n'en font
+/// plus qu'UN, dans `SocketTransportFactory` : le compte attendu descend de 2 à
+/// 1, et c'est un RENFORCEMENT — une option ne peut plus manquer à une copie.
 ///
 /// Elle vise les BLOCS `SocketManager(socketURL: … config: [ … ])`, jamais le
 /// fichier : un `.compress` écrit ailleurs (commentaire, autre appel) ne doit
@@ -51,22 +56,36 @@ final class SocketCompressionSourceGuardTests: XCTestCase {
 
     // MARK: - Les trois blocs réels
 
-    func test_messageSocketManagerConfigBlocks_declareCompressOption() throws {
-        let source = try sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+    func test_socketTransportFactoryConfigBlock_declaresCompressOption() throws {
+        let source = try sdkSource("Sources/MeeshySDK/Sockets/SocketTransportFactory.swift")
         let blocks = socketManagerConfigBlocks(in: source)
 
         XCTAssertEqual(
-            blocks.count, 2,
-            "MessageSocketManager construit exactement deux SocketManager (connect + connectAnonymous) — " +
-            "un bloc de plus doit faire rougir cette garde tant qu'il n'est pas couvert"
+            blocks.count, 1,
+            "SocketTransportFactory est la configuration UNIQUE des deux poignées de main de la socket de " +
+            "message (inscrit + invité, #16750) — un bloc de plus doit faire rougir cette garde tant qu'il " +
+            "n'est pas couvert"
         )
         for (index, block) in blocks.enumerated() {
             XCTAssertTrue(
                 block.contains(".compress"),
-                "Le bloc de configuration #\(index + 1) de MessageSocketManager doit déclarer `.compress` : " +
+                "Le bloc de configuration #\(index + 1) de SocketTransportFactory doit déclarer `.compress` : " +
                 "sans lui, Starscream ne négocie pas permessage-deflate et le `perMessageDeflate` du gateway reste inerte"
             )
         }
+    }
+
+    /// Le corollaire du précédent : le gestionnaire ne RECONSTRUIT plus de
+    /// configuration chez lui. Une troisième copie y reviendrait sans faire
+    /// rougir le test ci-dessus, qui ne lit plus ce fichier.
+    func test_messageSocketManager_buildsNoSocketManagerConfigurationOfItsOwn() throws {
+        let source = try sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+
+        XCTAssertEqual(
+            socketManagerConfigBlocks(in: source).count, 0,
+            "MessageSocketManager passe par `SocketTransportFactory` : une configuration écrite chez lui " +
+            "rouvrirait la divergence que #16750 a fermée (une option négociée par l'inscrit et pas par l'invité)"
+        )
     }
 
     func test_socialSocketManagerConfigBlock_declaresCompressOption() throws {

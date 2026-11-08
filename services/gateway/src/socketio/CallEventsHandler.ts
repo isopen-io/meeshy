@@ -46,6 +46,7 @@ import { departedMemberParticipantWhere, participantKeyWhere } from './departed-
 import { registerCallControlEvents } from './call-controls';
 import { CallRecordingService } from '../services/calls/callRecording';
 import { callRosterFrom, prismaCallRecordingRepository } from '../services/calls/callRecordingRepository';
+import { prismaCallCaptureJournal, type CallCaptureJournal } from '../services/calls/callCaptureJournal';
 import { buildCallInitiatedEvent, pushIncomingCall, ringCalleeSockets } from './call-ring';
 import {
   type CallParticipantResolverDeps,
@@ -134,6 +135,7 @@ export class CallEventsHandler {
   private callService: CallService;
   private notificationService: NotificationService | null = null;
   private readonly callRecording: CallRecordingService;
+  private readonly captureJournal: CallCaptureJournal;
   private pushService: PushNotificationService | null = null;
   private readonly callInvitations: CallInvitationLifecycle;
   private zmqClient: ZmqTranslationClient | null = null;
@@ -303,6 +305,7 @@ export class CallEventsHandler {
   constructor(private prisma: PrismaClient, callService?: CallService) {
     this.callService = callService ?? new CallService(prisma);
     this.callInvitations = createCallInvitationLifecycle({ prisma, pushService: () => this.pushService, notificationService: () => this.notificationService });
+    this.captureJournal = prismaCallCaptureJournal(prisma);
     this.callRecording = new CallRecordingService({ repository: prismaCallRecordingRepository(prisma), roster: callRosterFrom(this.callService), now: () => new Date() });
     // Defensive TTL sweep: runs every 60s to evict stale offer entries whose
     // call ended via a path that skipped clearBufferedOffer (error branches,
@@ -1559,6 +1562,7 @@ export class CallEventsHandler {
       resolveActiveCallParticipant: (userId, callId) => this.resolveActiveCallParticipant(userId, callId),
       resolveActiveCallParticipantId: (userId, callId) => this.resolveActiveCallParticipantId(userId, callId),
       resolveEverCallParticipantId: (userId, callId) => this.resolveEverCallParticipantId(userId, callId),
+      captureJournal: this.captureJournal,
     };
   }
 
@@ -2216,7 +2220,7 @@ export class CallEventsHandler {
             iceServers: remoteIceServers
           });
         }
-        announceRecordingArrival({ io, authority: this.callRecording }, callSession.id, userId).catch((error: unknown) => logger.error('call-recording arrival failed', { error }));
+        announceRecordingArrival({ io, authority: this.callRecording, journal: this.captureJournal }, callSession.id, userId).catch((error: unknown) => logger.error('call-recording arrival failed', { error }));
 
         // §4.6 — replay a buffered offer to the joining participant. If the
         // caller's offer arrived before this socket was in the room (PushKit
@@ -3838,7 +3842,7 @@ export class CallEventsHandler {
     // `call-client-reports.ts` (#7632) ; leur doctrine commune — le
     // `participantId` du client n'est jamais cru sur parole — y est écrite.
     registerCallClientReportEvents(this.clientReportDependencies(), socket, { getUserId, rememberAuth });
-    registerCallRecordingEvents({ io, authority: this.callRecording, rateLimiter: this.rateLimiter }, socket, getUserId);
+    registerCallRecordingEvents({ io, authority: this.callRecording, rateLimiter: this.rateLimiter, journal: this.captureJournal }, socket, getUserId);
     registerCallControlEvents({ io, prisma: this.prisma, callService: this.callService, rateLimiter: this.rateLimiter, pushService: () => this.pushService, invitations: this.callInvitations }, socket, getUserId);
 
     /**

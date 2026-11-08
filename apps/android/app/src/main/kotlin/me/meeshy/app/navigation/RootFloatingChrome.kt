@@ -71,7 +71,8 @@ internal fun MeeshyFloatingChrome(
         floatingAvatarProfileRoute(currentUser?.id)?.let { route -> navController.navigateToTopLevel(route) }
     }
 
-    BackHandler(enabled = menuExpanded) { menuExpanded = false }
+    // Monte a l'ouverture, donc le dernier inscrit : le retour referme l'echelle avant de quitter le Flux (#16676).
+    if (menuExpanded) BackHandler { menuExpanded = false }
 
     val itemHint = stringResource(R.string.a11y_menu_item_hint)
     MeeshyFloatingButtons(
@@ -154,15 +155,6 @@ private fun FeedButtonFace(feedOpen: Boolean) {
                 modifier = Modifier.size(MeeshyIconSize.xxl),
             )
         }
-    }
-}
-
-/** Les destinations de premier niveau gardent leur etat (meme semantique que les onglets d'avant). */
-private fun NavController.navigateToTopLevel(route: String) {
-    navigate(route) {
-        popUpTo(graph.startDestinationId) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
     }
 }
 

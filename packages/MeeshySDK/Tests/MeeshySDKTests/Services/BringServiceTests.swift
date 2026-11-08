@@ -100,6 +100,30 @@ final class BringServiceTests: XCTestCase {
         XCTAssertFalse(served.isBlocked(.bring))
     }
 
+    func test_grantListeningCategory_putsOnlyThatField() async throws {
+        let (service, api) = makeSUT()
+        api.stub("/relations/u1/settings", result: APIResponse<RelationPersonSettings>(
+            success: true, data: RelationPersonSettings(userId: "u1", bringBlocked: false, listeningCategoryShared: true), error: nil))
+
+        let served = try await service.setShareGranted(.listeningCategory, userId: "u1", granted: true)
+
+        XCTAssertEqual(api.lastRequest?.method, "PUT")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?.keys.sorted(), ["listeningCategoryShared"])
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["listeningCategoryShared"] as? Bool, true)
+        XCTAssertTrue(served.isGranted(.listeningCategory))
+    }
+
+    func test_personSettings_readsTheListeningShares_andAnOldServerRefusesThem() throws {
+        let served = try JSONDecoder().decode(RelationPersonSettings.self, from: Data(
+            #"{"userId":"u1","bringBlocked":false,"talkieBlocked":false,"listeningCategoryShared":true,"listeningTitleShared":true}"#.utf8))
+        XCTAssertTrue(served.listeningCategoryShared)
+        XCTAssertTrue(served.listeningTitleShared)
+
+        let old = try JSONDecoder().decode(RelationPersonSettings.self, from: Data(#"{"userId":"u1","bringBlocked":false}"#.utf8))
+        XCTAssertFalse(old.isGranted(.listeningCategory))
+        XCTAssertFalse(old.listeningTitleShared)
+    }
+
     func test_personSettings_readsTalkieBlocked() throws {
         let decoded = try JSONDecoder().decode(
             RelationPersonSettings.self, from: Data(#"{"userId":"u1","bringBlocked":false,"talkieBlocked":true}"#.utf8))

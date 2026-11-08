@@ -30,6 +30,7 @@ import me.meeshy.sdk.model.relation.CirclePerson
 import me.meeshy.sdk.model.relation.CirclePersonSetting
 import me.meeshy.sdk.model.relation.CircleProgressSummary
 import me.meeshy.sdk.model.relation.RelationLink
+import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.sdk.model.relation.RelationsConfig
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
@@ -44,7 +45,7 @@ import me.meeshy.ui.theme.hexColor
 /**
  * Les réglages PAR PERSONNE — blocage du Bring, talkie, écoute, position, selon ce que le cercle ouvre
  * ([CirclePersonSetting]) — arrivent chacun avec son lot du jalon 2 (`PUT /relations/:userId/settings`, #14229).
- * « Bloquer ses Bring » est ACTIF depuis le sien (#16617, [CircleBringBlockToggle]). Tant qu'un réglage n'est pas
+ * « Bloquer ses Bring » (#16617) et « Couper son talkie » (#16675) sont ACTIFS ([CircleReceptionBlockToggle]). Tant qu'un réglage n'est pas
  * livré, la fiche le MONTRE désactivé et DIT pourquoi :
  * ni cachés (on chercherait où ils sont), ni simulés (un interrupteur sans effet est un mensonge). Miroir du drapeau iOS
  * `circle_person_settings`, fermé.
@@ -118,7 +119,7 @@ internal fun CircleLinkSheet(
                     color = tokens.textMuted,
                 )
             } else {
-                if (!CIRCLE_PERSON_SETTINGS_ENABLED && settings.any { it != CirclePersonSetting.BLOCK_BRING }) {
+                if (!CIRCLE_PERSON_SETTINGS_ENABLED && settings.any { it.receptionSetting() == null }) {
                     Text(
                         text = stringResource(R.string.circles_sheet_settings_unavailable),
                         style = MaterialTheme.typography.bodySmall,
@@ -126,8 +127,14 @@ internal fun CircleLinkSheet(
                     )
                 }
                 settings.forEach { setting ->
-                    if (setting == CirclePersonSetting.BLOCK_BRING) {
-                        CircleBringBlockToggle(userId = link.userId, title = stringResource(setting.titleRes()))
+                    val reception = setting.receptionSetting()
+                    if (reception != null) {
+                        CircleReceptionBlockToggle(
+                            userId = link.userId,
+                            setting = reception,
+                            title = stringResource(setting.titleRes()),
+                            detail = setting.detailRes()?.let { stringResource(it) },
+                        )
                     } else {
                         SettingRow(stringResource(setting.titleRes()))
                     }
@@ -140,9 +147,19 @@ internal fun CircleLinkSheet(
 
 private fun CirclePersonSetting.titleRes(): Int = when (this) {
     CirclePersonSetting.BLOCK_BRING -> R.string.circles_settings_block_bring
-    CirclePersonSetting.TALKIE -> R.string.circles_settings_talkie
+    CirclePersonSetting.TALKIE -> R.string.circles_settings_block_talkie
     CirclePersonSetting.LISTENING -> R.string.circles_settings_listening
     CirclePersonSetting.LIVE_LOCATION -> R.string.circles_settings_location
+}
+
+private fun CirclePersonSetting.detailRes(): Int? =
+    if (this == CirclePersonSetting.TALKIE) R.string.circles_settings_block_talkie_detail else null
+
+/** Les réglages déjà livrés, ACTIFS sur la fiche : les préférences de réception (Bring dès Ami, talkie dès Proche). */
+private fun CirclePersonSetting.receptionSetting(): RelationReceptionSetting? = when (this) {
+    CirclePersonSetting.BLOCK_BRING -> RelationReceptionSetting.BRING
+    CirclePersonSetting.TALKIE -> RelationReceptionSetting.TALKIE
+    CirclePersonSetting.LISTENING, CirclePersonSetting.LIVE_LOCATION -> null
 }
 
 @Composable

@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SocketIO
 
 // L'écoute partagée (#13934, #16755) sur la socket de messages : `now-playing:changed` et `now-playing:cleared`, sur la
 // room `user:<id>` (`packages/shared/types/socketio-events/now-playing-event-names.ts`). Chaque charge est déjà
@@ -35,5 +36,50 @@ extension MessageSocketRoutes {
                 NotificationCenter.default.post(name: .nowPlayingCleared, object: event)
             },
         ]
+    }
+}
+
+// MARK: - Émettre (#16803)
+
+/// Qui publie MON écoute : `now-playing:update` (état complet) et `now-playing:clear`. L'app ne voit pas la socket.
+public protocol NowPlayingEmitting: AnyObject, Sendable {
+    func publishNowPlaying(_ update: NowPlayingUpdate) async -> NowPlayingPublishOutcome
+    func clearNowPlaying() async
+}
+
+/// L'émission de l'écoute sur la socket de messages : un type à part, qui ne fait que porter deux événements et lire
+/// leur accusé — la socket de messages n'en grossit pas.
+public final class NowPlayingSocketEmitter: NowPlayingEmitting {
+    public static let shared = NowPlayingSocketEmitter(manager: .shared)
+
+    private let manager: MessageSocketManager
+
+    init(manager: MessageSocketManager) {
+        self.manager = manager
+    }
+
+    public func publishNowPlaying(_ update: NowPlayingUpdate) async -> NowPlayingPublishOutcome {
+        guard let socket = manager.socket, socket.status == .connected else { return .offline }
+        let ack = await socket.emitWithAck(
+            .nowPlayingUpdate, update.wirePayload, as: SocketAckNoPayload.self, payloadAt: .none, timingOutAfter: 10
+        )
+        return Self.outcome(ack)
+    }
+
+    public func clearNowPlaying() async {
+        guard let socket = manager.socket, socket.status == .connected else { return }
+        _ = await socket.emitWithAck(
+            .nowPlayingClear, [String: String](), as: SocketAckNoPayload.self, payloadAt: .none, timingOutAfter: 10
+        )
+    }
+
+    /// L'accusé lu : seul `{ success: true }` est un envoi accepté ; l'échéance de l'accusé vaut hors ligne.
+    static func outcome(_ ack: SocketAck<SocketAckNoPayload>) -> NowPlayingPublishOutcome {
+        switch ack {
+        case .accepted, .acceptedWithoutPayload: return .accepted
+        case .timedOut: return .offline
+        case .refused(let refusal): return refusal.code == "NOW_PLAYING_RATE_LIMITED" ? .rateLimited : .refused
+        case .undecodable: return .refused
+        }
     }
 }

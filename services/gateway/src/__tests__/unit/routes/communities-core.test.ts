@@ -29,7 +29,10 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 // toute assertion sur ce `user` passait pour la mauvaise raison.
 
 jest.mock('../../../routes/communities/types', () => ({
-  CreateCommunitySchema: { parse: (data: any) => ({ isPrivate: true, ...data }) },
+  CreateCommunitySchema: {
+    parse: (data: any) => ({ isPrivate: true, ...data }),
+    safeParse: (data: any) => ({ success: true, data: { isPrivate: true, ...data } }),
+  },
   UpdateCommunitySchema: { parse: (data: any) => data },
   CommunityRole: { ADMIN: 'admin', MODERATOR: 'moderator', MEMBER: 'member' },
   generateIdentifier: jest.fn<any>().mockReturnValue('mshy_test-community'),

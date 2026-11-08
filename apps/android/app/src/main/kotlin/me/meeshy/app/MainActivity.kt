@@ -66,6 +66,8 @@ import me.meeshy.ui.component.video.VideoPictureInPictureCoordinator
 import me.meeshy.ui.profile.LocalProfileGameSlot
 import me.meeshy.ui.theme.MeeshyTheme
 import javax.inject.Inject
+import me.meeshy.app.calls.AppScreenshotSignals
+import me.meeshy.app.capture.ScreenCaptureWatcher
 import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.media.MediaDownloadPreferencesStore
 import me.meeshy.sdk.media.NetworkConditionMonitor
@@ -143,6 +145,10 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var mediaDownloadPreferences: MediaDownloadPreferencesStore
 
+    /** #16665 — les captures d'écran prises pendant que l'activité est visible, relayées à l'appel en cours. */
+    @Inject
+    lateinit var screenshotSignals: AppScreenshotSignals
+
     private val gameSlot = gameProfileSlot()
 
     private var launchRoute by mutableStateOf<String?>(null)
@@ -157,6 +163,13 @@ class MainActivity : ComponentActivity() {
     private var callLink by mutableStateOf<CallLinkRequest?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
     private val languageViewModel: LanguageViewModel by viewModels()
+
+    /** #16665 — API 34+ : chaque capture d'écran va à l'appel en cours ; sous l'API 34, rien n'est inscrit. */
+    private fun watchScreenshots() {
+        val watcher = ScreenCaptureWatcher.forActivity(this)
+        lifecycle.addObserver(watcher)
+        lifecycleScope.launch { watcher.captures.collect { screenshotSignals.report() } }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Must run BEFORE super.onCreate — installs the system pre-Compose splash
@@ -173,6 +186,7 @@ class MainActivity : ComponentActivity() {
         LaunchLinkAdoption.adopt(intent, linkDispatcher, restored)?.let { if (warmDeepLink == null) warmDeepLink = it }
         // Restaurée, l'activité relit l'intent ORIGINAL : la demande d'appel a déjà été présentée, elle ne revient pas.
         callLink = callLinkOf(intent).takeUnless { restored }
+        watchScreenshots()
         callPictureInPicture.attachActivity(
             owner = this,
             supportsPip = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),

@@ -17,7 +17,7 @@ import {
 import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
@@ -317,6 +317,10 @@ export async function registerCoreRoutes(
             data: communitySchema
           }
         },
+        400: {
+          description: 'Invalid community (INVALID_COMMUNITY) — e.g. an avatar that is not an identity image reference',
+          ...errorResponseSchema
+        },
         401: {
           description: 'User not authenticated',
           ...errorResponseSchema
@@ -333,7 +337,11 @@ export async function registerCoreRoutes(
     }
   }, async (request, reply) => {
     try {
-      const validatedData = CreateCommunitySchema.parse(request.body);
+      const parsed = CreateCommunitySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid community', { code: 'INVALID_COMMUNITY' });
+      }
+      const validatedData = parsed.data;
 
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;

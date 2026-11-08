@@ -6,7 +6,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.navigation.NavDeepLinkRequest
 import androidx.navigation.NavHostController
-import androidx.navigation.navOptions
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -69,12 +68,7 @@ class DeepLinkDispatcher @Inject constructor(
     }
 
     private fun navigate(navController: NavHostController, route: String) {
-        surfaces.clearForConversation {
-            navController.navigate(route) {
-                launchSingleTop = true
-                popUpTo(Routes.CONVERSATIONS) { inclusive = false }
-            }
-        }
+        surfaces.clearForConversation { navController.navigateOverConversations(route) }
     }
 
     private fun draftUri(action: DeepLinkAction.OpenDraft): Uri =
@@ -82,15 +76,7 @@ class DeepLinkDispatcher @Inject constructor(
 
     private fun navigateUri(navController: NavHostController, uri: Uri) {
         surfaces.clearForConversation {
-            runCatching {
-                navController.navigate(
-                    NavDeepLinkRequest.Builder.fromUri(uri).build(),
-                    navOptions {
-                        launchSingleTop = true
-                        popUpTo(Routes.CONVERSATIONS) { inclusive = false }
-                    },
-                )
-            }
+            runCatching { navController.navigateOverConversations(NavDeepLinkRequest.Builder.fromUri(uri).build()) }
         }
     }
 

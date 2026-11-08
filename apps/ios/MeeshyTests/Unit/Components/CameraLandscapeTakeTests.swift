@@ -130,6 +130,19 @@ final class CameraLandscapeTakeTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(session.editAspect), 16.0 / 9.0, accuracy: 0.0001)
     }
 
+    func test_saveFrameTake_rightAfterALandscapeTake_rendersItLandscape() async throws {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        session.canvasAspect = Self.viseur
+        session.beginEditing(photo: Self.photo(CGSize(width: 400, height: 300)))
+        session.saveFrameTake(awaitingRaw: nil)
+        await ComposerCaptureTakesTests.waitUntil { galerie.saveImageCount == 1 }
+        let sortie = try XCTUnwrap(galerie.lastSavedImageData.flatMap { UIImage(data: $0) })
+        XCTAssertGreaterThan(sortie.size.width, sortie.size.height,
+                             "la prise par le cadre part avant que la vue ne recopie les proportions : elle ne se rogne pas en portrait")
+        XCTAssertEqual(session.captureFormat, String(format: "%.3f", 16.0 / 9.0))
+    }
+
     func test_gallerySave_turnsTheAspectToTheTake() throws {
         let code = try source("Meeshy/Features/Composer/ComposerCaptureSession+Takes.swift")
         XCTAssertTrue(code.contains("ComposerTakeAspect.aspect(canvas: canvasAspect, take: image.size)"),

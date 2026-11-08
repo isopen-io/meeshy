@@ -32,6 +32,7 @@ import me.meeshy.app.game.progression.ProgressionScreen
 import me.meeshy.app.game.progression.ProgressionSection
 import me.meeshy.app.game.progression.ProgressionSectionScreen
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.backToConversations
 import me.meeshy.sdk.model.game.GameTarget
 import me.meeshy.sdk.model.game.pages.GamePage
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
@@ -107,7 +108,7 @@ class GameDestinations @Inject constructor() : NavGraphContributor {
                 onOpenRules = { navController.navigate(GameRoutes.RULES_TOP) },
                 onOpenNotebook = { navController.navigate(GameRoutes.NOTEBOOK) },
                 onOpenConversations = {
-                    if (!navController.popBackStack(Routes.CONVERSATIONS, inclusive = false)) navController.navigate(Routes.CONVERSATIONS)
+                    if (!navController.backToConversations()) navController.navigate(Routes.CONVERSATIONS)
                 },
             )
         }

@@ -113,3 +113,44 @@ public struct NowPlayingSnapshot: Decodable, Sendable, Equatable {
         }
     }
 }
+
+/// `now-playing:update` — MON état courant, COMPLET, envoyé une fois (#16803). Le serveur le garde scellé et le
+/// tronque lecteur par lecteur : ce n'est pas à l'émetteur de choisir qui voit quoi. Les bornes du contrat sont
+/// appliquées ICI, avant l'envoi : un titre trop long est raccourci, un texte vide disparaît, une origine sans titre
+/// ne part pas — le serveur refuserait la charge entière (`NOW_PLAYING_INVALID`) plutôt que d'en garder une partie.
+public struct NowPlayingUpdate: Sendable, Equatable {
+    public let category: NowPlayingCategory
+    public let title: String?
+    public let source: String?
+
+    public init(category: NowPlayingCategory, title: String? = nil, source: String? = nil) {
+        let boundedTitle = Self.clipped(title, max: NowPlayingContract.titleMax)
+        self.category = category
+        self.title = boundedTitle
+        self.source = boundedTitle == nil ? nil : Self.clipped(source, max: NowPlayingContract.sourceMax)
+    }
+
+    /// La charge de la socket : les clés absentes n'existent pas (le schéma serveur est strict).
+    public var wirePayload: [String: String] {
+        var payload = ["category": category.rawValue]
+        if let title { payload["title"] = title }
+        if let source { payload["source"] = source }
+        return payload
+    }
+
+    private static func clipped(_ value: String?, max: Int) -> String? {
+        guard let text = value?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        guard text.count > max else { return text }
+        let cut = String(text.prefix(max)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return cut.isEmpty ? nil : cut
+    }
+}
+
+/// Ce que la passerelle a répondu à `now-playing:update`. Un refus n'est jamais rejoué tel quel : l'émetteur attend
+/// le prochain changement.
+public enum NowPlayingPublishOutcome: Sendable, Equatable {
+    case accepted
+    case rateLimited
+    case refused
+    case offline
+}

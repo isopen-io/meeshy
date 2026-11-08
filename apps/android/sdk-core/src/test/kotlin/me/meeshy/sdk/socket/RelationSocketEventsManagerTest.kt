@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.sdk.model.relation.RelationRitualStage
+import me.meeshy.sdk.model.relation.TalkieEvent
 import me.meeshy.sdk.model.socket.SocketEventNames
 import org.json.JSONObject
 import org.junit.Test
@@ -99,6 +100,40 @@ class RelationSocketEventsManagerTest {
                 """{"bringId":"b1","fromUserId":"me","toUserId":"u2","reason":"recipient","stoppedAt":"2026-11-07T10:00:00Z"}""",
             )
             assertThat(awaitItem().bringId).isEqualTo("b1")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `le talkie recu arrive sur un seul flux, dans l'ordre du fil, le fragment avec son binaire natif`() = runTest {
+        val (manager, handlers) = wired()
+        manager.talkie.test {
+            handlers.getValue(SocketEventNames.TALKIE_INCOMING).invoke(
+                arrayOf(JSONObject("""{"talkieId":"t1","fromUserId":"u2","codec":"aac-adts","startedAt":"2026-11-08T05:00:00Z","maxDurationMs":30000}""")),
+            )
+            handlers.getValue(SocketEventNames.TALKIE_CHUNK).invoke(
+                arrayOf(JSONObject().put("talkieId", "t1").put("fromUserId", "u2").put("seq", 0).put("data", byteArrayOf(7, 8))),
+            )
+            handlers.getValue(SocketEventNames.TALKIE_ENDED).invoke(
+                arrayOf(JSONObject("""{"talkieId":"t1","fromUserId":"u2","toUserId":"me","reason":"cut","endedAt":"x"}""")),
+            )
+            scheduler.advanceUntilIdle()
+
+            assertThat((awaitItem() as TalkieEvent.Opened).incoming.isPlayable).isTrue()
+            val chunk = (awaitItem() as TalkieEvent.Spoken).chunk
+            assertThat(chunk.seq).isEqualTo(0)
+            assertThat(chunk.data.toList()).containsExactly(7.toByte(), 8.toByte()).inOrder()
+            assertThat((awaitItem() as TalkieEvent.Closed).ended.silencesNow).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `un fragment sans son binaire ne se publie pas`() = runTest {
+        val (manager, handlers) = wired()
+        manager.talkie.test {
+            handlers.deliver(SocketEventNames.TALKIE_CHUNK, """{"talkieId":"t1","fromUserId":"u2","seq":0,"data":"AAEC"}""")
+            expectNoEvents()
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -73,19 +73,20 @@ const onTop = (corner: SelfTileCorner): boolean => corner.startsWith('top');
 
 const onLeft = (corner: SelfTileCorner): boolean => corner.endsWith('left');
 
-type BoxInput = { readonly corner: SelfTileCorner; readonly size: TileSize; readonly viewport: TileSize };
+type BoxInput = { readonly corner: SelfTileCorner; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number };
 
-export function selfTileBox({ corner, size, viewport }: BoxInput): TileBox {
+export function selfTileBox({ corner, size, viewport, topInset = 0 }: BoxInput): TileBox {
+  const top = SELF_TILE_TOP + topInset;
   const x = onLeft(corner) ? SELF_TILE_MARGIN : viewport.width - SELF_TILE_MARGIN - size.width;
-  const y = onTop(corner) ? SELF_TILE_TOP : Math.max(SELF_TILE_TOP, viewport.height - SELF_TILE_BOTTOM - size.height);
+  const y = onTop(corner) ? top : Math.max(top, viewport.height - SELF_TILE_BOTTOM - size.height);
   return { x, y, width: size.width, height: size.height };
 }
 
-type NearestInput = { readonly center: { readonly x: number; readonly y: number }; readonly size: TileSize; readonly viewport: TileSize };
+type NearestInput = { readonly center: { readonly x: number; readonly y: number }; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number };
 
-export function nearestSelfCorner({ center, size, viewport }: NearestInput): SelfTileCorner {
+export function nearestSelfCorner({ center, size, viewport, topInset = 0 }: NearestInput): SelfTileCorner {
   const away = (corner: SelfTileCorner): number => {
-    const box = selfTileBox({ corner, size, viewport });
+    const box = selfTileBox({ corner, size, viewport, topInset });
     return Math.hypot(center.x - (box.x + box.width / 2), center.y - (box.y + box.height / 2));
   };
   return SELF_CORNERS.reduce((best, corner) => (away(corner) < away(best) ? corner : best), DEFAULT_SELF_CORNER);

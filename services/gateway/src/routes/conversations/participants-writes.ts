@@ -5,7 +5,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
-import { differsOrUnset } from '../../utils/prisma-unset';
+import { announceMemberArrival } from './memberArrivalFanOut';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import { noticeActor } from '../../services/conversations/conversationNotice';
 import type { NoticeActor } from '@meeshy/shared/utils/conversation-notice';
@@ -15,7 +15,6 @@ import {
   type ParticipantRightName,
 } from '../../services/participantRights';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
   resolveConversationEntry,
@@ -393,47 +392,20 @@ export function registerParticipantWriteRoutes(
       // pourquoi son effectif ne pouvait que DÉRIVER VERS LE BAS (départ −1,
       // bannissement −1, ajout rien).
       //
-      // D'où l'événement dédié, symétrique de `conversation:participant-left`
-      // jusque dans son payload, et adressé comme lui aux rooms PERSONNELLES :
-      // le compteur se lit sur l'écran de liste, que ses lecteurs regardent
-      // précisément quand ils ne sont pas dans la room de conversation.
-      //
-      // Le nouvel arrivant est ÉCARTÉ de l'éventail : il reçoit
-      // `CONVERSATION_NEW` ci-dessous, dont l'effectif vient du serveur et le
-      // compte DÉJÀ. L'incrémenter en plus le mettrait en trop.
-      const audience = await prisma.participant.findMany({
-        where: { conversationId, isActive: true, ...differsOrUnset('userId', userId) },
-        // `role` et `user.role` en plus : les deux titres qui ouvrent
-        // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
-        // connaître PAR DESTINATAIRE — un broadcast ne portait qu'une
-        // présentation, et c'était la plafonnée, pour tout le monde.
-        select: { id: true, userId: true, role: true, user: { select: { role: true } } },
-      });
-      // Compte ABSOLU plutôt qu'un delta : un client qui incrémente ne se
-      // rattrape jamais d'un événement manqué (hors ligne, trou de
-      // reconnexion), et les deux clients PERSISTENT la dérive (cache disque
-      // iOS, `staleTime: Infinity` web). Un total se rattrape au suivant.
-      //
-      // `+ 1` parce que l'éventail ÉCARTE l'arrivant : il est actif depuis
-      // l'écriture juste au-dessus, donc il compte, mais il ne figure pas dans
-      // `audience`. Une seconde requête ne rendrait rien de plus.
-      //
-      // Deux chaînes disjointes : « 199+ » pour la room, l'effectif ENTIER
-      // pour les lecteurs autorisés. Un broadcast unique ne portait que la
-      // présentation plafonnée, et écrasait donc chez l'admin du groupe la
-      // valeur exacte que le REST venait de lui servir.
-      emitConversationMemberCountEvent({
+      // D'où l'événement dédié, désormais par son site UNIQUE
+      // (`announceMemberArrival`, #16837) : cette porte était la SEULE des
+      // trois à l'émettre, et la règle qu'il faut retaper à chaque site est
+      // celle qu'un site finit par ne pas avoir.
+      await announceMemberArrival({
+        prisma,
         io,
         conversationId,
-        participants: audience,
-        event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED,
-        payload: {
-          conversationId,
+        arrival: {
           userId,
           displayName: addedMemberFields.displayName,
-          joinedAt: joinedAt.toISOString(),
+          joinedAt,
         },
-        memberCount: audience.length + 1,
+        onError: (error) => logger.warn('member arrival fan-out failed', { userId, conversationId, err: error }),
       });
     }
     // Auto-join the added user's currently-connected sockets to the conversation

@@ -171,6 +171,10 @@
     <string name="tab_calls">المكالمات</string>
     <string name="tab_feed">التدفق</string>
     <string name="tab_profile">الملف الشخصي</string>
+    <string name="talkie_incoming_mute">كتم</string>
+    <string name="talkie_incoming_mute_named">كتم صوت %1$s</string>
+    <string name="talkie_incoming_someone">شخص ما</string>
+    <string name="talkie_incoming_title">%1$s يتحدث إليك</string>
     <string name="upgrade_required_action">تحديث</string>
     <string name="upgrade_required_message">لم يعد بإمكان هذا الإصدار من Meeshy الاتصال بالخادم. ثبّت أحدث إصدار للمتابعة.</string>
     <string name="upgrade_required_min_version">الحد الأدنى للإصدار: %1$s</string>

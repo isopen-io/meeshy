@@ -96,7 +96,7 @@ extension MessageListViewController {
             guard let self else { return }
             self.onLongPress?(tappedId, self.cellFrameInWindow(messageId: tappedId))
         }
-        let quotedAuthorTapHandler: (ReplyReference) -> Void = { [weak self] ref in
+        let quotedAuthorTapHandler: (ReplyReference) -> Void = MessageSwipeClaim.guarded { [weak self] ref in
             self?.openQuotedAuthorProfile(ref)
         }
         let quotedMediaTapHandler: (ReplyReference) -> Void = { [weak self] ref in
@@ -115,13 +115,13 @@ extension MessageListViewController {
                 guard let self else { return }
                 self.onLongPressPiece?(messageId, pieceId, self.cellFrameInWindow(messageId: messageId))
             },
-            openParticipantProfile: { [weak self] participantId in
+            openParticipantProfile: MessageSwipeClaim.guarded { [weak self] participantId in
                 self?.router.participantProfileTarget = ParticipantProfileTarget(
                     conversationId: conversationId,
                     participantId: participantId
                 )
             },
-            openProfile: { [weak self] user in
+            openProfile: MessageSwipeClaim.guarded { [weak self] user in
                 self?.router.openProfile(user, inConversation: conversationId)
             },
             scrollToMessage: { [weak self] targetId in
@@ -150,7 +150,7 @@ extension MessageListViewController {
     func messageCellCallbacks() -> MessageCellCallbacks {
         MessageCellCallbacks(
             storyReply: onStoryReplyTap,
-            viewSenderStory: onViewSenderStory,
+            viewSenderStory: onViewSenderStory.map { MessageSwipeClaim.guarded($0) },
             swipeReply: onSwipeReply,
             swipeForward: onSwipeForward,
             toggleReaction: onToggleReaction,
