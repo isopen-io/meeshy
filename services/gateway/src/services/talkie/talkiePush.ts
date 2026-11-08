@@ -10,12 +10,14 @@
  *   `time-sensitive`, FCM data-only haute priorité sur Android, notification du
  *   service worker sur le web.
  *
- * Mêmes clés partout (`TalkieWakePushData`), plus `audioUrl` : la lecture authentifiée
- * du tampon en mémoire (`routes/talkie-audio.ts`), qui laisse l'extension de
- * notification jouer la voix sans socket. Quand la prise de parole finit sans que
- * personne l'ait rejointe, un push de SUIVI, même catégorie et même `collapse-id`,
- * remplace la bannière : `phase: 'ended'` et la même `audioUrl`, lisible jusqu'à
- * `availableUntil`.
+ * Mêmes clés partout (`TalkieWakePushData`), plus `audioUrl` : la lecture du tampon en
+ * mémoire par capacité signée (`talkieAudioToken.ts`, `routes/talkie-audio.ts`). C'est la
+ * SEULE notification dont la voix se joue depuis la notification : quand la prise de
+ * parole finit sans que personne l'ait rejointe, un push de SUIVI, même catégorie et même
+ * `collapse-id`, remplace la bannière et PORTE l'audio au format des autres pièces jointes
+ * (`attachmentUrl`, `attachmentMimeType: 'audio/aac'` — mime complet, jamais l'extension
+ * nue —, taille, durée), que la NSE télécharge et que le lecteur existant joue. Le
+ * réveil en direct ne porte pas de pièce jointe : à cet instant rien n'est encore dit.
  *
  * Le nom de l'émetteur suit `notification.showSenderName` du destinataire, les libellés
  * sa langue de CADRAGE (`recipient-language.ts`). Les préférences de livraison
@@ -32,12 +34,13 @@ import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import type { PushNotificationService, SendPushOptions } from '../PushNotificationService';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import type { TalkieWakeChannel } from './talkieGate';
+import { talkieAudioUrl } from './talkieAudioToken';
 
 export const TALKIE_PUSH_CATEGORY = 'TALKIE';
 /** Une voix réveillée vit au plus le temps d'une prise de parole et de sa fenêtre de rattrapage. */
 export const TALKIE_WAKE_TTL_MS = TALKIE_MAX_DURATION_MS + TALKIE_JOIN_WINDOW_MS;
-
-export const talkieAudioPath = (talkieId: string): string => `/api/v1/talkie/${talkieId}/audio`;
+/** Le mime COMPLET des trames ADTS : la NSE ne reconnaît un audio qu'au préfixe `audio/`. */
+export const TALKIE_AUDIO_MIME = 'audio/aac';
 
 const WAKE_TOKEN_TYPES = ['pushtotalk', 'apns', 'fcm'] as const;
 
@@ -57,7 +60,7 @@ export async function talkieWakeChannel(
 
 export type TalkieWakePhase =
   | { readonly phase: 'live'; readonly channel: TalkieWakeChannel }
-  | { readonly phase: 'ended'; readonly availableUntil: Date };
+  | { readonly phase: 'ended'; readonly availableUntil: Date; readonly bytes: number; readonly durationMs: number };
 
 export type TalkieWakePushInput = {
   readonly talkieId: string;
@@ -66,13 +69,37 @@ export type TalkieWakePushInput = {
   /** `null` quand le destinataire masque le nom de l'expéditeur : titre neutre. */
   readonly fromName: string | null;
   readonly language: string | undefined;
+  /** L'adresse signée de la voix gardée (`talkieAudioUrl`). */
+  readonly audioUrl: string;
 } & TalkieWakePhase;
+
+type TalkieAttachmentFields = {
+  readonly attachmentUrl: string;
+  readonly attachmentMimeType: string;
+  readonly attachmentDurationMs: string;
+  readonly attachmentFileSize: string;
+  readonly attachmentId: string;
+  readonly attachmentLanguage: string;
+};
 
 export type TalkieWakePushPayloadData = TalkieWakePushData & {
   readonly phase: 'live' | 'ended';
   readonly audioUrl: string;
   readonly availableUntil?: string;
-};
+} & Partial<TalkieAttachmentFields>;
+
+const attachmentOf = (input: TalkieWakePushInput): Partial<TalkieAttachmentFields> =>
+  input.phase === 'ended'
+    ? {
+        availableUntil: input.availableUntil.toISOString(),
+        attachmentUrl: input.audioUrl,
+        attachmentMimeType: TALKIE_AUDIO_MIME,
+        attachmentDurationMs: String(input.durationMs),
+        attachmentFileSize: String(input.bytes),
+        attachmentId: input.talkieId,
+        attachmentLanguage: '',
+      }
+    : {};
 
 export function buildTalkieWakePushes(input: TalkieWakePushInput): SendPushOptions[] {
   const title = input.fromName === null
@@ -87,8 +114,8 @@ export function buildTalkieWakePushes(input: TalkieWakePushInput): SendPushOptio
     title,
     body,
     phase: input.phase,
-    audioUrl: talkieAudioPath(input.talkieId),
-    ...(input.phase === 'ended' ? { availableUntil: input.availableUntil.toISOString() } : {}),
+    audioUrl: input.audioUrl,
+    ...attachmentOf(input),
   };
   const collapseId = `talkie-${input.talkieId}`;
   const ttlMs = TALKIE_WAKE_TTL_MS;
@@ -115,6 +142,7 @@ export function buildTalkieWakePushes(input: TalkieWakePushInput): SendPushOptio
 export type TalkieWakeDeps = {
   readonly prisma: Pick<PrismaClient, 'user' | 'userPreferences'>;
   readonly push: Pick<PushNotificationService, 'sendToUser'>;
+  readonly now: () => Date;
 };
 
 /** Résout le nom affichable et la langue du destinataire, puis envoie le réveil (ou son suivi). */
@@ -129,10 +157,12 @@ export async function sendTalkieWake(
   ]);
   const notification = (prefs?.notification ?? {}) as Record<string, unknown>;
   const showName = notification.showSenderName !== false && sender !== null;
+  const expiresAt = params.phase === 'ended' ? params.availableUntil : new Date(deps.now().getTime() + TALKIE_WAKE_TTL_MS);
   const pushes = buildTalkieWakePushes({
     ...params,
     fromName: showName ? sender.displayName || sender.username : null,
     language: recipientLanguage(recipient, 'fr'),
+    audioUrl: talkieAudioUrl({ talkieId: params.talkieId, toUserId: params.toUserId, expiresAt }),
   });
   await Promise.all(pushes.map((push) => deps.push.sendToUser(push)));
 }

@@ -90,9 +90,10 @@ import { buildTalkieWakePushes, sendTalkieWake, talkieWakeChannel, TALKIE_WAKE_T
 
 const originalEnv = { ...process.env };
 const TALKIE = 'c'.repeat(24);
+const AUDIO = `https://gate.test/api/v1/talkie/${'c'.repeat(24)}/audio?e=1&t=x`;
 
 const wake = (channel: 'pushtotalk' | 'push', fromName: string | null = 'Awa') =>
-  buildTalkieWakePushes({ talkieId: TALKIE, toUserId: 'u-to', fromUserId: 'u-from', fromName, language: 'fr', phase: 'live', channel });
+  buildTalkieWakePushes({ talkieId: TALKIE, toUserId: 'u-to', fromUserId: 'u-from', fromName, language: 'fr', phase: 'live', channel, audioUrl: AUDIO });
 
 async function service() {
   process.env = {
@@ -139,7 +140,8 @@ describe('#17142 — le réveil du talkie au chokepoint', () => {
     expect(note).toMatchObject({ pushType: 'pushtotalk', topic: 'me.meeshy.app.voip-ptt', priority: 10, expiry: 0 });
     expect(note.alert).toBeUndefined();
     expect(note.sound).toBeUndefined();
-    expect(note.payload).toMatchObject({ type: 'talkie_incoming', talkieId: TALKIE, fromUserId: 'u-from', fromName: 'Awa', audioUrl: `/api/v1/talkie/${TALKIE}/audio` });
+    expect(note.payload).toMatchObject({ type: 'talkie_incoming', talkieId: TALKIE, fromUserId: 'u-from', fromName: 'Awa', audioUrl: AUDIO });
+    expect(note.payload.attachmentUrl).toBeUndefined();
     expect(mockApnsSend.mock.calls[0][1]).toBe('ptt-tok');
   });
 
@@ -195,13 +197,19 @@ describe('#17142 — le réveil du talkie au chokepoint', () => {
     expect(push.payload.data).toMatchObject({ fromName: '' });
   });
 
-  it('le suivi d’une voix finie sans être rejointe : même catégorie, même collapse-id, phase ended et la date limite', () => {
+  it('le suivi d’une voix finie sans être rejointe PORTE l’audio au format des pièces jointes : même catégorie, même collapse-id', () => {
     const until = new Date('2026-11-08T10:01:00Z');
-    const pushes = buildTalkieWakePushes({ talkieId: TALKIE, toUserId: 'u-to', fromUserId: 'u-from', fromName: 'Awa', language: 'fr', phase: 'ended', availableUntil: until });
+    const pushes = buildTalkieWakePushes({
+      talkieId: TALKIE, toUserId: 'u-to', fromUserId: 'u-from', fromName: 'Awa', language: 'fr', phase: 'ended', availableUntil: until, bytes: 4200, durationMs: 3100, audioUrl: AUDIO,
+    });
 
     expect(pushes.map((p) => p.types)).toEqual([['apns'], ['fcm']]);
     expect(pushes[0].payload).toMatchObject({ category: 'TALKIE', collapseId: `talkie-${TALKIE}` });
-    expect(pushes[0].payload.data).toMatchObject({ type: 'talkie_incoming', phase: 'ended', audioUrl: `/api/v1/talkie/${TALKIE}/audio`, availableUntil: until.toISOString() });
+    expect(pushes[0].payload.data).toMatchObject({
+      type: 'talkie_incoming', phase: 'ended', audioUrl: AUDIO, availableUntil: until.toISOString(),
+      attachmentUrl: AUDIO, attachmentMimeType: 'audio/aac', attachmentFileSize: '4200', attachmentDurationMs: '3100', attachmentId: TALKIE, attachmentLanguage: '',
+    });
+    expect(pushes[1].payload.data).toEqual(pushes[0].payload.data);
   });
 });
 
@@ -233,10 +241,12 @@ describe('#17142 — l’envoi du réveil résout le nom et la langue du destina
       userPreferences: { findUnique: jest.fn(async () => null) },
     };
 
-    await sendTalkieWake({ prisma: prisma as never, push: { sendToUser } }, { talkieId: TALKIE, fromUserId: 'u-from', toUserId: 'u-to', phase: 'live', channel: 'push' });
+    await sendTalkieWake({ prisma: prisma as never, push: { sendToUser }, now: () => new Date('2026-11-08T10:00:00Z') }, { talkieId: TALKIE, fromUserId: 'u-from', toUserId: 'u-to', phase: 'live', channel: 'push' });
 
     expect(sendToUser).toHaveBeenCalledTimes(2);
     expect((sendToUser.mock.calls[0] as unknown[])[0]).toMatchObject({ payload: { title: 'Awa is talking to you' } });
+    const { audioUrl } = ((sendToUser.mock.calls[0] as unknown[])[0] as { payload: { data: { audioUrl: string } } }).payload.data;
+    expect(audioUrl).toMatch(new RegExp(`^https?://.+/api/v1/talkie/${TALKIE}/audio\\?e=\\d+&t=[A-Za-z0-9_-]+$`));
   });
 
   it('showSenderName coupé : titre neutre', async () => {
@@ -246,7 +256,7 @@ describe('#17142 — l’envoi du réveil résout le nom et la langue du destina
       userPreferences: { findUnique: jest.fn(async () => ({ notification: { showSenderName: false } })) },
     };
 
-    await sendTalkieWake({ prisma: prisma as never, push: { sendToUser } }, { talkieId: TALKIE, fromUserId: 'u-from', toUserId: 'u-to', phase: 'live', channel: 'pushtotalk' });
+    await sendTalkieWake({ prisma: prisma as never, push: { sendToUser }, now: () => new Date('2026-11-08T10:00:00Z') }, { talkieId: TALKIE, fromUserId: 'u-from', toUserId: 'u-to', phase: 'live', channel: 'pushtotalk' });
 
     expect((sendToUser.mock.calls[0] as unknown[])[0]).toMatchObject({ payload: { title: 'Un proche vous parle', data: { fromName: '' } } });
   });

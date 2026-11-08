@@ -32,6 +32,9 @@ export const registerProcessTalkieRelay = (relay: TalkieRelay | null): void => {
   processRelay = relay;
 };
 
+/** Le relais de ce processus, ou `null` tant que les sockets ne sont pas montées (la lecture de la voix gardée, #17142). */
+export const processTalkieRelay = (): TalkieRelay | null => processRelay;
+
 export const talkieCutDepsOf = (): TalkieCutDeps => ({
   cache: getCacheStore(),
   relay: processRelay,
