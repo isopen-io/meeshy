@@ -238,6 +238,34 @@ describe('purgeMessage — tranche Redis', () => {
   });
 });
 
+describe('purgeMessage — entrée SCELLÉE (#12822)', () => {
+  it('retire une entrée scellée : `messageId` et `eventType` restent à la racine', async () => {
+    // Le sous-ensemble au repos est le plus sensible du module, et AUCUN témoin
+    // du lot ne l'exerçait — relevé par l'audit adversarial (A12). `seal` rend
+    // `{ ...plain, payload: {}, sealedPayload }` : les deux champs sur lesquels
+    // `isTextBearingCopyOf` se prononce survivent au scellement, donc la purge
+    // voit l'entrée. Si un jour le sceau enveloppait la racine, ce témoin tombe —
+    // et c'est exactement ce qu'on veut qu'il fasse.
+    const redis = fakeRedis();
+    const sealer = {
+      seal: async (e: QueuedMessagePayload) => ({
+        ...e,
+        payload: {},
+        sealedPayload: { v: 1, cipher: 'OPAQUE-CIPHERTEXT' } as never,
+      }),
+      open: async (e: QueuedMessagePayload) => e,
+    };
+    const queue = new RedisDeliveryQueue(redis.cacheStore, sealer as never);
+
+    await queue.enqueue('u-1', entry(), { sealAtRest: true });
+
+    expect(redis.bytes()).not.toContain(SECRET);
+    expect([...(redis.sets.get(`delivery:msg-queues:${DOOMED}`) ?? [])]).toEqual(['u-1']);
+    expect(await queue.purgeMessage(DOOMED)).toBe(1);
+    expect(redis.lists.get('delivery:queue:u-1')).toEqual([]);
+  });
+});
+
 describe('purgeMessage — tranche mémoire', () => {
   it('retire le texte du message détruit et garde celui des autres', async () => {
     const { cacheStore, queue } = memoryQueue();
