@@ -1,9 +1,9 @@
 export const meta = {
   name: 'meeshy-issues-dev',
   description:
-    "Développe d'un coup une liste d'issues depuis une session cloud, au moindre coût, jusqu'à une PR prête par lot, SANS la fusionner (le porteur fusionne dans dev quand il veut tester). Tous les lots partent en parallèle ; un lot qui dépend d'un autre part de la branche de son prédécesseur. Par lot : cadrage contre dev vivant, branche poussée tôt, TDD rouge→vert, gates locaux, revue-correction opus, audit adversarial si sensible, preuve CI par workflow_dispatch (CI des PR gelée), PR vers dev, consignes de recette appareil dans l'issue. dev est refusionné dans chaque branche au début de chaque étape, avant chaque push et toutes les ~10 minutes. Ni recette sur appareil (S8, iPhone, simulateur), ni fusion dans dev.",
+    "Développe d'un coup une liste d'issues depuis une session cloud, au moindre coût, jusqu'à une PR prête par lot, SANS la fusionner (le porteur fusionne dans dev quand il veut tester). Tous les lots partent en parallèle ; un lot qui dépend d'un autre part de la branche de son prédécesseur. Par lot : cadrage contre dev vivant, branche poussée tôt, TDD rouge→vert, gates locaux, revue-correction opus, audit adversarial si sensible, preuve CI par workflow_dispatch (CI des PR gelée), PR vers dev, consignes de recette appareil dans l'issue. dev est refusionné dans chaque branche au début de chaque étape, avant chaque push et toutes les ~10 minutes. Chaque lot travaille dans SON worktree (au plus « worktrees » lots à la fois, 3 par défaut, jamais plus de 4) et le range à la fin. Ni recette sur appareil (S8, iPhone, simulateur), ni fusion dans dev.",
   whenToUse:
-    "Développer d'un coup une liste d'issues depuis une session cloud (sans Xcode ni SDK Android), jusqu'aux PR prêtes. Args, tous optionnels : { issues ([{ n, plateforme: 'android'|'ios'|'web'|'serveur', cle, branche?, apres?: cle, notes? }] — défaut : #16168, #14702 (suite), #16133, #16134, #16275 ×3), attribution (lignes de pied de commit ; défaut AUCUNE), repo ('/home/user/meeshy'), base ('dev'), essais (2), sauter [cles], seulement [cles] }.",
+    "Développer d'un coup une liste d'issues depuis une session cloud (sans Xcode ni SDK Android), jusqu'aux PR prêtes. Args, tous optionnels : { issues ([{ n, plateforme: 'android'|'ios'|'web'|'serveur', cle, branche?, apres?: cle, notes? }] — défaut : #16168, #14702 (suite), #16133, #16134, #16275 ×3), attribution (lignes de pied de commit ; défaut AUCUNE), repo ('/home/user/meeshy'), racineWorktrees (dossier parent du clone), worktrees (lots simultanés, 3, plafond 4), base ('dev'), essais (2), sauter [cles], seulement [cles] }.",
   phases: [
     { title: 'Développer', detail: 'sync dev, cadrage, branche poussée tôt, témoin rouge, vert, gates locaux', model: 'sonnet' },
     { title: 'Relire', detail: 'revue-correction contre l’issue et les règles du dépôt', model: 'opus' },
@@ -11,6 +11,7 @@ export const meta = {
     { title: 'Prouver', detail: 'sync dev puis workflow_dispatch android.yml / ios.yml, ou gates web complets', model: 'sonnet' },
     { title: 'Corriger', detail: 'cause racine des rouges, au plus « essais » tours', model: 'sonnet' },
     { title: 'PR', detail: 'sync dev, PR prête vers dev (non fusionnée), preuve et recette appareil dans l’issue', model: 'sonnet' },
+    { title: 'Ranger', detail: 'retire le worktree du lot s’il est propre et poussé, le signale sinon', model: 'sonnet' },
   ],
 }
 
@@ -25,7 +26,11 @@ const ESSAIS = Number.isInteger(A.essais) && A.essais >= 0 ? A.essais : 2
 const ATTR = typeof A.attribution === 'string' ? A.attribution.trim() : ''
 const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter : [])
 const SEULEMENT = new Set(Array.isArray(A.seulement) ? A.seulement : [])
-const GARDES_ANDROID = `bash ${REPO}/.claude/workflows/meeshy-dev-vert-android.gardes/run.sh`
+const GARDES_ANDROID = 'bash .claude/workflows/meeshy-dev-vert-android.gardes/run.sh (lancé depuis la racine du worktree du lot)'
+const RACINE_WT = typeof A.racineWorktrees === 'string' && A.racineWorktrees ? A.racineWorktrees : REPO.replace(/\/[^/]+$/, '')
+const ESPACES = Number.isInteger(A.worktrees) && A.worktrees > 0 ? Math.min(A.worktrees, 4) : 3
+const WT = l => `${RACINE_WT}/wt-${l.cle}`
+const brancheDe = l => l.branche || `claude/${l.cle}`
 
 const LOTS_PAR_DEFAUT = [
   {
@@ -102,6 +107,14 @@ DÉPÔT ${GH}, clone ${REPO}, base ${BASE}. Session CLOUD : pas d'Xcode, pas de 
 pas d'appareil. La recette sur S8, iPhone ou simulateur N'EST PAS de ton ressort : elle se fera après, sur une autre
 machine — tu la PRÉPARES (étapes précises), tu ne la simules pas et tu ne prétends jamais l'avoir faite.
 TU NE FUSIONNES RIEN DANS ${BASE} NI DANS main : le porteur fusionne lui-même les PR quand il veut tester.
+
+ISOLATION (plusieurs lots tournent en même temps : le 2026-11-05, un clone partagé leur a fait perdre leurs commits, #16935)
+- Ton lot a SON worktree, nommé plus bas. TOUTE commande s'y exécute : chaque appel Bash commence par « cd <worktree> »,
+  ou passe par « git -C <worktree> ».
+- Interdit dans ${REPO} et dans le worktree d'un autre lot : checkout, switch, merge, commit, reset, stash, add.
+  Lire l'arbre vivant par git -C ${REPO} fetch / show / log reste permis.
+- Jamais de « git stash » nu (la pile est partagée entre worktrees) : un commit temporaire à la place.
+- Seule l'étape Développer crée le worktree (git worktree add), seule l'étape Ranger le retire.
 
 SYNCHRONISATION AVEC ${BASE} (obligatoire — ne jamais travailler en déphasage)
 - Au DÉBUT de ton étape, AVANT CHAQUE push, et toutes les ~10 minutes d'un travail long :
@@ -190,11 +203,20 @@ const PR = {
   },
   required: ['pr', 'url', 'sha'],
 }
+const RANGE = {
+  type: 'object',
+  properties: {
+    retire: { type: 'boolean', description: 'vrai si le worktree n’existe plus' },
+    raison: { type: 'string', description: 'si gardé : fichiers modifiés, commits non poussés ; vide sinon' },
+  },
+  required: ['retire', 'raison'],
+}
 
 // ---------------------------------------------------------------------------
 // ÉTAPES D'UN LOT
 // ---------------------------------------------------------------------------
 const titre = l => `#${l.n} ${l.cle}`
+const ici = l => `WORKTREE DU LOT : ${WT(l)} (branche ${brancheDe(l)}). Commence chaque commande par « cd ${WT(l)} ».`
 
 const developper = (l, depart) => agent(`${SOCLE}
 LOT ${titre(l)} — plateforme ${l.plateforme}.
@@ -204,10 +226,14 @@ ${l.notes || '(aucune)'}
    (chemins, symboles, comportement). Si le travail est déjà fait sur ${BASE}, dis-le dans bloque et arrête.
    Si une branche vivante d'une autre session écrit déjà ces chemins (git log origin --since=2.hours -- <chemins>),
    cède : bloque = « cédé à <branche> ».
-3. Branche « ${l.branche || `claude/${l.cle}`} » ${depart
-    ? `créée depuis origin/${depart.branche} (lot ${depart.cle}, dont celui-ci dépend), puis git merge origin/${BASE}`
-    : `créée depuis origin/${BASE} (ou reprise si elle existe, puis git merge origin/${BASE})`}.
-   Pousse dans les 15 minutes (le témoin rouge suffit).
+3. Ouvre le worktree du lot, ${WT(l)}, sur la branche « ${brancheDe(l)} » (git -C ${REPO} fetch origin d'abord) :
+   - s'il existe déjà (reprise) : réutilise-le, puis git merge origin/${BASE} ;
+   - sinon, si origin/${brancheDe(l)} existe : git -C ${REPO} worktree add -B ${brancheDe(l)} ${WT(l)} origin/${brancheDe(l)},
+     puis git merge origin/${BASE} ;
+   - sinon : git -C ${REPO} worktree add -b ${brancheDe(l)} ${WT(l)} origin/${depart ? depart.branche : BASE}${depart
+    ? `, depuis la branche du lot ${depart.cle} dont celui-ci dépend, puis git merge origin/${BASE}` : ''}.
+   Si le hook worktree-limit refuse : ne contourne rien, bloque = « limite de worktrees atteinte ».
+   Tout le reste du lot se fait dans ${WT(l)}. Pousse dans les 15 minutes (le témoin rouge suffit).
 4. TDD : témoin(s) de COMPORTEMENT rouge(s) d'abord, commit et push du rouge seul ; puis le minimum pour le vert ;
    puis refactorer si cela apporte. Règles du dépôt à tenir : fichier ≤ 1200 lignes (aucun ajout à un fichier
    hors budget : extraire d'abord), fonction ≤ 80 lignes, pas de any, immuabilité, une seule source de vérité,
@@ -219,6 +245,7 @@ ${l.notes || '(aucune)'}
   { label: `dev ${l.cle}`, phase: 'Développer', model: 'sonnet', effort: 'medium', schema: DEV })
 
 const relire = (l, d) => agent(`${SOCLE}
+${ici(l)}
 REVUE-CORRECTION du lot ${titre(l)}, branche ${d.branche} (tête ${d.sha}).
 Tu n'approuves pas : tu cherches ce qui casse. Sync ${BASE} d'abord, puis git diff origin/${BASE}...HEAD.
 - Le critère de fin de l'issue #${l.n} est-il atteint, cas par cas ? Les témoins testent-ils le COMPORTEMENT, et
@@ -231,14 +258,15 @@ Tu n'approuves pas : tu cherches ce qui casse. Sync ${BASE} d'abord, puis git di
   { label: `revue ${l.cle}`, phase: 'Relire', model: 'opus', effort: 'high', schema: REVUE })
 
 const auditer = (l, r, d) => agent(`Audit adversarial du lot ${titre(l)} : branche ${d.branche} (tête ${r.sha}),
-dépôt ${REPO}, diff contre origin/${BASE}. Cherche à casser : fuite de données, contournement, migration non
+worktree ${WT(l)} (lecture seule : tu n'y écris rien), diff contre origin/${BASE}. Cherche à casser : fuite de données, contournement, migration non
 réversible, ancien client cassé. Rends « bloquant » avec constats reproductibles, ou « acceptable ».
 Tu ne fusionnes rien.`,
   { label: `audit ${l.cle}`, phase: 'Auditer', agentType: 'auditeur-adversarial', schema: AUDIT })
 
 const prouver = (l, branche) => agent(`${SOCLE}
+${ici(l)}
 PREUVE du lot ${titre(l)}, branche ${branche}.
-1. git fetch ; git checkout ${branche} ; sync ${BASE} (conflit : résous, gates locaux, commit) ; push.
+1. cd ${WT(l)} ; git fetch ; sync ${BASE} (conflit : résous, gates locaux, commit) ; push.
 2. ${l.plateforme === 'android' ? 'workflow_dispatch android.yml sur la branche, au SHA poussé.'
     : l.plateforme === 'ios' ? 'workflow_dispatch ios.yml sur la branche, au SHA poussé.'
     : 'Gates LOCAUX complets de la plateforme (web : bun test complet depuis apps/web + tsc ; serveur : test:coverage complet + tsc). run = « local ».'}
@@ -247,6 +275,7 @@ PREUVE du lot ${titre(l)}, branche ${branche}.
   { label: `preuve ${l.cle}`, phase: 'Prouver', model: 'sonnet', effort: 'low', schema: PREUVE })
 
 const corriger = (l, branche, p, tour) => agent(`${SOCLE}
+${ici(l)}
 CORRECTION (tour ${tour}/${ESSAIS}) du lot ${titre(l)}, branche ${branche}, preuve rouge ${p.run} au SHA ${p.sha} :
 ${p.echecs.map(e => `- ${e}`).join('\n')}
 Sync ${BASE} d'abord (le rouge est peut-être déjà réparé sur ${BASE}). Pour chaque échec du lot : cause racine (pas de
@@ -256,6 +285,7 @@ localement (la preuve CI sera rejouée).`,
   { label: `correction ${l.cle} #${tour}`, phase: 'Corriger', model: 'sonnet', effort: 'medium', schema: PREUVE })
 
 const ouvrirPR = (l, d, p, r, depart) => agent(`${SOCLE}
+${ici(l)}
 PR du lot ${titre(l)}, branche ${d.branche}. Preuve : ${p.vert ? `verte (${p.run} au SHA ${p.sha})` : `ROUGE après ${ESSAIS} corrections (${p.run}) — échecs : ${p.echecs.join(' ; ')}`}.
 1. Sync ${BASE}, push.
 2. PR vers ${BASE}, PRÊTE (pas en brouillon) — réutilise celle de la branche si elle existe. Titre = résultat attendu ;
@@ -268,6 +298,27 @@ PR du lot ${titre(l)}, branche ${d.branche}. Preuve : ${p.vert ? `verte (${p.run
 ${d.recette.map(s => `   - ${s}`).join('\n')}
    L'issue reste OUVERTE.`,
   { label: `PR ${l.cle}`, phase: 'PR', model: 'sonnet', effort: 'low', schema: PR })
+
+const ranger = l => agent(`Ranger le worktree du lot ${titre(l)} : ${WT(l)}. Toutes les commandes passent par git -C.
+- S'il n'existe pas (git -C ${REPO} worktree list ne le cite pas) : retire = vrai.
+- S'il est propre (git -C ${WT(l)} status --porcelain vide) ET que rien n'y attend d'être poussé (aucun commit dans
+  git -C ${WT(l)} log --oneline @{u}..HEAD, ou aucun commit du tout depuis sa création) :
+  git -C ${REPO} worktree remove ${WT(l)} puis git -C ${REPO} worktree prune ; retire = vrai.
+- Sinon NE RETIRE RIEN : retire = faux, raison = ce qui reste (fichiers modifiés, commits non poussés).
+Tu ne pousses, ne commites, ne stashes et ne supprimes rien d'autre, et tu n'utilises jamais --force.`,
+  { label: `ranger ${l.cle}`, phase: 'Ranger', model: 'sonnet', effort: 'low', schema: RANGE })
+
+// ---------------------------------------------------------------------------
+// PLACES : au plus ESPACES lots ont un worktree en même temps (hook worktree-limit : 4, toutes sessions confondues)
+// ---------------------------------------------------------------------------
+const enAttente = []
+let libres = ESPACES
+const prendrePlace = () => (libres > 0 ? (libres -= 1, Promise.resolve()) : new Promise(r => enAttente.push(r)))
+const rendrePlace = () => {
+  const suivant = enAttente.shift()
+  if (suivant) suivant()
+  else libres += 1
+}
 
 // ---------------------------------------------------------------------------
 // UN LOT, de bout en bout jusqu'à sa PR
@@ -301,7 +352,7 @@ async function lot(l, depart) {
 // TOUT D'UN COUP — chaque lot part aussitôt ; un lot dépendant attend la PR de son prédécesseur
 // et part de sa branche (PR empilée, « Dépend de #… »)
 // ---------------------------------------------------------------------------
-log(`${LOTS.length} lots en parallèle : ${LOTS.map(l => l.cle).join(', ')}${SAUTER.size ? ` — sautés : ${[...SAUTER].join(', ')}` : ''}`)
+log(`${LOTS.length} lots, ${ESPACES} à la fois (un worktree chacun sous ${RACINE_WT}) : ${LOTS.map(l => l.cle).join(', ')}${SAUTER.size ? ` — sautés : ${[...SAUTER].join(', ')}` : ''}`)
 
 const enCours = {}
 const lancer = l => {
@@ -312,8 +363,18 @@ const lancer = l => {
     if (depart && !depart.branche) {
       return { cle: l.cle, lot: titre(l), etat: 'non lancé', raison: `prédécesseur ${pred.cle} bloqué : ${depart.raison}` }
     }
-    const r = await lot(l, depart)
-    log(`${r.lot} : ${r.etat}${r.pr ? ` (PR #${r.pr})` : ''}`)
+    await prendrePlace()
+    let r = null
+    try {
+      r = await lot(l, depart)
+    } finally {
+      const rangement = await ranger(l)
+      rendrePlace()
+      const garde = !rangement || !rangement.retire
+      r = { ...(r || { cle: l.cle, lot: titre(l), etat: 'bloqué', raison: 'lot interrompu' }),
+        worktreeGarde: garde ? { chemin: WT(l), raison: rangement ? rangement.raison : 'rangement perdu' } : null }
+    }
+    log(`${r.lot} : ${r.etat}${r.pr ? ` (PR #${r.pr})` : ''}${r.worktreeGarde ? ` — worktree gardé : ${r.worktreeGarde.chemin}` : ''}`)
     return r
   })()
   return enCours[l.cle]
@@ -329,6 +390,7 @@ return {
     const pred = l && l.apres ? resultats.find(x => x.cle === l.apres) : null
     return pred && pred.pr ? `#${r.pr} après #${pred.pr}` : `#${r.pr}`
   }),
+  worktreesGardes: resultats.filter(r => r.worktreeGarde).map(r => ({ lot: r.lot, ...r.worktreeGarde })),
   recetteAppareil: resultats
     .filter(r => r.recette && r.recette.length)
     .map(r => ({ lot: r.lot, pr: r.pr, etapes: r.recette })),

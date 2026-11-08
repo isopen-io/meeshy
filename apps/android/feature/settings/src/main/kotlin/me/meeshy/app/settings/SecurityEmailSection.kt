@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.account.ContactVerificationBadge
+import me.meeshy.ui.component.auth.SpamFolderHint
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.modifier.autofill
@@ -61,31 +62,33 @@ internal fun SecurityEmailSection(state: AccountContactUiState, viewModel: Accou
                 onCancel = viewModel::cancelEditEmail,
                 onSubmit = viewModel::submitEmailChange,
             )
-            state.emailSent -> Row(
-                modifier = Modifier.padding(top = MeeshySpacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.account_contact_email_sent),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MeeshyPalette.Success,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(
-                    onClick = {
-                        haptics.light()
-                        viewModel.resendEmailVerification()
-                    },
-                    enabled = state.canResendEmail,
+            state.emailSent -> Column(modifier = Modifier.padding(top = MeeshySpacing.md)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        if (state.canResendEmail) {
-                            stringResource(R.string.account_contact_email_resend)
-                        } else {
-                            stringResource(R.string.account_contact_email_resend_cooldown, state.resendCooldown?.remaining ?: 0)
-                        },
+                        stringResource(R.string.account_contact_email_sent),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyPalette.Success,
+                        modifier = Modifier.weight(1f),
                     )
+                    TextButton(
+                        onClick = {
+                            haptics.light()
+                            viewModel.resendEmailVerification()
+                        },
+                        enabled = state.canResendEmail,
+                    ) {
+                        Text(
+                            if (state.canResendEmail) {
+                                stringResource(R.string.account_contact_email_resend)
+                            } else {
+                                stringResource(R.string.account_contact_email_resend_cooldown, state.resendCooldown?.remaining ?: 0)
+                            },
+                        )
+                    }
                 }
+                SpamFolderHint()
             }
             else -> SecurityEditVerifyRow(
                 showVerify = !state.user?.email.isNullOrBlank() && state.user?.emailVerifiedAt == null,

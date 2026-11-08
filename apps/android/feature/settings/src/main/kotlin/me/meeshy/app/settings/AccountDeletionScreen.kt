@@ -65,6 +65,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.auth.SpamFolderHint
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
@@ -402,6 +403,7 @@ private fun EmailSentBlock(onDone: () -> Unit) {
             color = MeeshyTheme.tokens.textSecondary,
             textAlign = TextAlign.Center,
         )
+        SpamFolderHint(textAlign = TextAlign.Center)
         Button(
             onClick = onDone,
             modifier = Modifier
