@@ -124,6 +124,46 @@ describe('les écritures qui rallument une participation sont toutes inventorié
     });
   });
 
+  /**
+   * #17072 — ce balayage ne posait qu'UNE question : « cette écriture peut-elle
+   * rallumer un BANNI ? ». La langue de l'inventaire était *banni*, et
+   * `deletedForMe` n'y était pas un mot — si bien qu'il est resté VERT pendant
+   * que l'état de rentrée partagé rallumait des lignes en laissant cette
+   * colonne posée, fabriquant une appartenance vivante pour le service et
+   * absente de `GET /conversations`.
+   *
+   * La seconde question est donc écrite ici : **une écriture qui rallume
+   * efface-t-elle les colonnes de DÉPART qu'elle a le droit d'effacer ?** Elle
+   * se répond soit en répandant l'état partagé (dont le verdict par colonne est
+   * gardé par `rejoin-clears-departure-columns.test.ts`), soit en nommant la
+   * colonne dans sa propre charge.
+   *
+   * `unban.data` est exempté, et c'est la raison même de son existence : il
+   * lève un bannissement, pas un départ ni une suppression pour soi — il n'a
+   * aucune raison de toucher `deletedForMe`, et le faire effacerait la
+   * suppression personnelle de quelqu'un au passage.
+   *
+   * > **Un lot ferme une classe dans SA langue.** Devant un inventaire de
+   * > sites, demander : *ce que je viens de nommer est-il la propriété, ou
+   * > seulement le mot par lequel je l'ai trouvée ?*
+   */
+  it('une écriture qui rallume efface aussi `deletedForMe` — par l’état partagé ou en le nommant', () => {
+    const silent = GUARDED.filter((entry) => entry.marker !== 'unban.data').filter(({ file, marker }) => {
+      const written = callBodies(readFileSync(join(SRC, file), 'utf8')).map(writtenPart);
+      const reactivations = written.filter((body) => body.includes(marker));
+      return !reactivations.every(
+        (body) => body.includes('REJOIN_PARTICIPANT_STATE') || body.includes('deletedForMe'),
+      );
+    });
+
+    expect(silent.map(key)).toEqual([]);
+  });
+
+  it('l’état de rentrée partagé est bien le porteur de cet effacement', () => {
+    const admission = readFileSync(join(SRC, 'services/conversations/conversationEntryAdmission.ts'), 'utf8');
+    expect(admission).toContain('deletedForMe: null');
+  });
+
   it('restore-for-me ne rallume que sous unsetOrNull(bannedAt)', () => {
     const source = readFileSync(join(SRC, 'routes/conversations/restore-for-me.ts'), 'utf8');
     const restore = callBodies(source).filter((body) => writtenPart(body).includes('isActive: true'));
