@@ -158,8 +158,9 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
     }
 
     private func refreshLocalAppearance(communityId: String) {
-        localColor = UserDefaults.standard.string(forKey: "community.color.\(communityId)")
-        localEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(communityId)")
+        let appearance = CommunityLocalAppearance.read(communityId: communityId)
+        localColor = appearance.color
+        localEmoji = appearance.emoji
     }
 
     private func dismissHost() {
@@ -250,6 +251,11 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 bannerView(community, color: color)
                     .frame(height: 190)
                     .clipped()
+
+                if let localEmoji {
+                    CommunityEmojiMark(emoji: localEmoji)
+                        .frame(height: 190)
+                }
 
                 // Gradient overlay en bas pour lisibilité du header
                 LinearGradient(
