@@ -1,8 +1,8 @@
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import * as communitiesEndpoints from '@meeshy/shared/api/endpoints/communities';
 
-import type { CommunitySummary } from './communities';
-import type { CommunityActionDeps } from './community-actions';
+import type { CommunityDraft, CommunitySummary } from './communities';
+import { performCreateCommunity, type CommunityActionDeps, type CreateCommunityOutcome } from './community-actions';
 import { DETAIL_PREFIX, patchMembers, shiftDetailCount } from './community-member-actions';
 import { communityMembersQueryKey, decodeCommunityMember, type CommunityMember, type CommunityMemberPage } from './community-members';
 import type { PersonSummary } from './friend-requests';
@@ -133,4 +133,32 @@ export async function performInviteMembers({
   }
   const count = (verdicts: readonly Verdict[]) => settled.filter((verdict) => verdicts.includes(verdict)).length;
   return { status: 'done', invited: count(['invited']), already: count(['already']), refused: count(['refused']), failed: count(['failed']) };
+}
+
+export type CreateWithMembersOutcome =
+  | Exclude<CreateCommunityOutcome, { readonly status: 'created' }>
+  | { readonly status: 'created'; readonly community: CommunitySummary; readonly invited: InviteOutcome | null };
+
+/**
+ * **CRÉER PUIS AJOUTER** (#6376) — miroir `CommunityCreateViewModel.createCommunity`
+ * (iOS) : la communauté d'abord, puis chaque personne choisie par le MÊME port
+ * que la feuille « Inviter » (`performInviteMembers`), donc par la même garde
+ * de la passerelle (`isAddableUser` : compte vivant, aucun blocage, 404 sans
+ * dire pourquoi). Une création refusée n'invite personne ; sans personne
+ * choisie, rien d'autre ne part. Une invitation refusée ne défait pas la
+ * création : l'issue la compte, l'écran la dit.
+ */
+export async function performCreateCommunityWithMembers({
+  draft,
+  people,
+  deps,
+}: {
+  readonly draft: CommunityDraft;
+  readonly people: readonly PersonSummary[];
+  readonly deps: CommunityActionDeps;
+}): Promise<CreateWithMembersOutcome> {
+  const created = await performCreateCommunity({ draft, deps });
+  if (created.status !== 'created') return created;
+  const invited = people.length === 0 ? null : await performInviteMembers({ community: created.community, people, deps });
+  return { ...created, invited };
 }

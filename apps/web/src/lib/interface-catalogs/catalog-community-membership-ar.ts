@@ -54,6 +54,9 @@ const arCommunityMembership = {
   'community.invite.partial': 'تعذّرت إضافة بعض الأشخاص.',
   'community.invite.failed': 'فشلت الدعوة. حاول مرة أخرى.',
   'community.invite.refused': 'لم يعد بإمكانك الدعوة إلى هذا المجتمع.',
+  'community.create.members.title': 'إضافة أعضاء',
+  'community.create.members.search': 'ابحث بالاسم أو اسم المستخدم…',
+  'community.create.members.remove': 'إزالة {name}',
 } as const satisfies CommunityMembershipCatalog;
 
 export default arCommunityMembership;

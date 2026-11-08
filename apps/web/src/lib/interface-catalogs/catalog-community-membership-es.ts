@@ -54,6 +54,9 @@ const esCommunityMembership = {
   'community.invite.partial': 'Algunas personas no se pudieron añadir.',
   'community.invite.failed': 'La invitación falló. Inténtalo de nuevo.',
   'community.invite.refused': 'Ya no puedes invitar a esta comunidad.',
+  'community.create.members.title': 'Añadir miembros',
+  'community.create.members.search': 'Buscar por nombre o usuario…',
+  'community.create.members.remove': 'Quitar a {name}',
 } as const satisfies CommunityMembershipCatalog;
 
 export default esCommunityMembership;

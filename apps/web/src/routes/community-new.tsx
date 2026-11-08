@@ -2,9 +2,12 @@ import { useState, type FormEvent } from 'react';
 
 import { Field } from '@/components/field';
 import type { CommunityDraft } from '@/lib/api/communities';
-import { performCreateCommunity, type CreateCommunityOutcome } from '@/lib/api/community-actions';
+import type { CommunityActionDeps } from '@/lib/api/community-actions';
+import { performCreateCommunityWithMembers, type CreateWithMembersOutcome } from '@/lib/api/community-invite';
 import { apiDeps } from '@/lib/api/deps';
+import type { PersonSummary } from '@/lib/api/friend-requests';
 import { appQueryClient } from '@/lib/api/query-client';
+import { handInviteStatus, inviteStatusOf } from '@/lib/communities/invite-status';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
@@ -16,6 +19,7 @@ import {
   PrivacyToggle,
   SubmitButton,
 } from '@/routes/communities-parts';
+import { CommunityNewMembers } from '@/routes/community-new-members';
 import { href, navigate } from '@/routes/route-table';
 
 /**
@@ -24,10 +28,13 @@ import { href, navigate } from '@/routes/route-table';
  * « Créer la communauté ». Créée, elle REMPLACE cet écran par son détail — le
  * retour arrière ramène à la liste, comme `router.pop()` puis `push(detail)`.
  *
- * **Deux absences assumées** (D-60). Le choix d'emoji d'iOS ne part nulle part
+ * **Une absence assumée** (D-60). Le choix d'emoji d'iOS ne part nulle part
  * (`selectedEmoji` n'est ni envoyé ni stocké) : c'est un contrôle sans effet,
- * suivi côté iOS (#6380). L'ajout de membres à la création est porté par
- * l'invitation (#6376).
+ * suivi côté iOS (#6380).
+ *
+ * **Ajouter des membres** (#6376), comme iOS : les personnes choisies sont
+ * invitées APRÈS la création, par le port de la feuille « Inviter » ; le
+ * détail ouvert dit ensuite combien sont entrées.
  *
  * Un refus se pose SOUS son champ (409 : l'identifiant) ; hors ligne, le bouton
  * est désactivé et l'écran le dit — rien ne part, rien n'est simulé.
@@ -52,7 +59,7 @@ const FIELD_ERRORS: Readonly<Record<TextField, FeedbackKey>> = {
   description: 'community.create.error.description',
 };
 
-function feedbackOf(outcome: Exclude<CreateCommunityOutcome, { readonly status: 'created' }>): Feedback {
+function feedbackOf(outcome: Exclude<CreateWithMembersOutcome, { readonly status: 'created' }>): Feedback {
   if (outcome.status === 'conflict') return { field: 'identifier', key: 'community.create.error.conflict' };
   if (outcome.status === 'offline') return { field: null, key: 'community.create.error.offline' };
   if (outcome.status === 'invalid' && outcome.field !== 'isPrivate') return { field: outcome.field, key: FIELD_ERRORS[outcome.field] };
@@ -69,6 +76,16 @@ export default function CommunityNewScreen() {
   const [focused, setFocused] = useState<TextField | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [chosen, setChosen] = useState<ReadonlyMap<string, PersonSummary>>(new Map());
+  const [deps] = useState<CommunityActionDeps>(() => ({ ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine }));
+
+  const toggle = (person: PersonSummary) =>
+    setChosen((current) => {
+      const next = new Map(current);
+      if (next.has(person.id)) next.delete(person.id);
+      else next.set(person.id, person);
+      return next;
+    });
 
   const edit = (field: TextField, value: string) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -80,11 +97,9 @@ export default function CommunityNewScreen() {
     if (submitting) return;
     setSubmitting(true);
     setFeedback(null);
-    const outcome = await performCreateCommunity({
-      draft,
-      deps: { ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine },
-    });
+    const outcome = await performCreateCommunityWithMembers({ draft, people: [...chosen.values()], deps });
     if (outcome.status === 'created') {
+      if (outcome.invited !== null) handInviteStatus(outcome.community.id, inviteStatusOf(language, outcome.invited));
       navigate(href('community', { community: outcome.community.id }), true);
       return;
     }
@@ -189,6 +204,7 @@ export default function CommunityNewScreen() {
             </Field>
           </div>
           <PrivacyToggle language={language} isPrivate={draft.isPrivate} onToggle={(isPrivate) => setDraft((current) => ({ ...current, isPrivate }))} />
+          <CommunityNewMembers deps={deps} language={language} chosen={chosen} onToggle={toggle} />
           <SubmitButton language={language} submitting={submitting} disabled={disabled} />
           <p role="status" aria-live="polite" data-community-notice className="text-center text-caption empty:hidden" style={{ color: 'var(--ios-error)' }}>
             {general ?? ''}

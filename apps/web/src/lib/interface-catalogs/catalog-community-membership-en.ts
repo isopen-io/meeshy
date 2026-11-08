@@ -54,6 +54,9 @@ const enCommunityMembership = {
   'community.invite.partial': 'Some people could not be added.',
   'community.invite.failed': 'The invitation failed. Try again.',
   'community.invite.refused': 'You can no longer invite to this community.',
+  'community.create.members.title': 'Add members',
+  'community.create.members.search': 'Search by name or username…',
+  'community.create.members.remove': 'Remove {name}',
 } as const satisfies CommunityMembershipCatalog;
 
 export default enCommunityMembership;

@@ -85,7 +85,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : `/mnt/project-files/frames/07-audit-ui-ux-camera-appels.md` § B4, `tasks/routine-camera.md` CAM-2.
 
 ## OPUS-7 — Pas de compensation d'exposition après le toucher de mise au point
-- Statut : à faire
+- Statut : fait (#16653)
 - Signalé par : routine caméra, le 2026-11-07
 - Point d'origine : CAM-3 (audit)
 - Constat : le toucher vise netteté et exposition (`Meeshy/Features/Composer/ComposerCaptureFocus.swift:65-80`, `ComposerCaptureSession+Tap.swift:44-53`) puis montre l'anneau (`ComposerCaptureViews.swift:238-244`), mais rien ne règle le biais d'exposition. Le protocole des commandes d'objectif n'a pas de méthode pour ça (`Meeshy/Features/Main/Components/ComposerCaptureCamera.swift:7-28` : zoom, torche, photo, mise au point seulement), et `CameraModel` n'appelle jamais `setExposureTargetBias` (aucune occurrence dans le dépôt).
@@ -96,7 +96,7 @@ Un problème va ici quand il touche la session caméra (`CameraModel`, `CameraIn
 - Liens : `tasks/routine-camera.md` CAM-3, OPUS-1.
 
 ## OPUS-8 — Pas de retardateur pour une photo posée ou de groupe
-- Statut : rendu à la routine caméra (CAM-4), décision prise
+- Statut : fait (#16760)
 - Signalé par : routine caméra, le 2026-11-07
 - Point d'origine : CAM-4 (audit B5)
 - Constat : aucun retardateur au viseur. La rangée haute ne peut pas prendre de huitième contrôle (`Meeshy/Features/Composer/ComposerCaptureTopRow.swift:36-38`, `:56-63`) et l'audit laisse deux emplacements possibles (« sous le flash ou dans un appui long »).

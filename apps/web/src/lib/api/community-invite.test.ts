@@ -4,7 +4,7 @@ import { QueryClient, type InfiniteData } from '@tanstack/react-query';
 import { communityQueryKey, type CommunitySummary } from './communities';
 import { canInviteOf } from '@/lib/communities/view';
 
-import { performInviteMembers } from './community-invite';
+import { performCreateCommunityWithMembers, performInviteMembers } from './community-invite';
 import { communityMembersQueryKey, type CommunityMember, type CommunityMemberPage } from './community-members';
 import type { PersonSummary } from './friend-requests';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
@@ -176,5 +176,53 @@ describe('inviter, optimiste', () => {
     const stored = JSON.stringify(rows());
     expect(stored).not.toContain('lastActiveAt');
     expect(stored).not.toContain('x@y.z');
+  });
+});
+
+describe('créer avec des membres (#6376, miroir `CommunityCreateViewModel.createCommunity`)', () => {
+  const draft = (name: string) => ({ name, identifier: '', description: '', isPrivate: true });
+
+  function gateway({ created }: { readonly created: ApiResult<unknown> }) {
+    const queryClient = new QueryClient();
+    const sent: HttpRequest[] = [];
+    const transport = {
+      request: async (request: HttpRequest) => {
+        sent.push(request);
+        return request.path.endsWith('/invite') ? { ok: true, status: 201, data: servedRow((request.body as { userId: string }).userId) } : created;
+      },
+    } as unknown as HttpTransport;
+    return { deps: { source: 'gateway' as const, transport, queryClient, isOnline: () => true }, sent };
+  }
+
+  const servedCommunity = { id: 'c-new', identifier: 'mshy_club', name: 'Club', isPrivate: true, createdBy: 'u-me', _count: { members: 1, Conversation: 0 } };
+
+  test('la communauté est créée PUIS chaque personne choisie y est invitée, par le port de l’invitation', async () => {
+    const { deps, sent } = gateway({ created: { ok: true, status: 201, data: servedCommunity } });
+    const outcome = await performCreateCommunityWithMembers({ draft: draft('Club'), people: [person('u-ann'), person('u-cy')], deps });
+    expect(outcome.status).toBe('created');
+    expect(sent.map((request) => request.path)).toEqual(['/api/v1/communities', '/api/v1/communities/c-new/invite', '/api/v1/communities/c-new/invite']);
+    expect(sent.slice(1).map((request) => request.body)).toEqual([{ userId: 'u-ann' }, { userId: 'u-cy' }]);
+    expect(outcome.status === 'created' ? outcome.invited : null).toEqual({ status: 'done', invited: 2, already: 0, refused: 0, failed: 0 });
+  });
+
+  test('sans personne choisie, seule la création part', async () => {
+    const { deps, sent } = gateway({ created: { ok: true, status: 201, data: servedCommunity } });
+    const outcome = await performCreateCommunityWithMembers({ draft: draft('Club'), people: [], deps });
+    expect(sent).toHaveLength(1);
+    expect(outcome.status === 'created' ? outcome.invited : 'absent').toBeNull();
+  });
+
+  test('une création refusée n’invite personne', async () => {
+    const { deps, sent } = gateway({ created: { ok: false, status: 409, error: 'exists' } });
+    const outcome = await performCreateCommunityWithMembers({ draft: draft('Club'), people: [person('u-ann')], deps });
+    expect(outcome).toEqual({ status: 'conflict', field: 'identifier' });
+    expect(sent).toHaveLength(1);
+  });
+
+  test('sur les données de démonstration, le créateur invite dans sa communauté privée toute neuve', async () => {
+    const queryClient = new QueryClient();
+    const deps = { source: 'fixtures' as const, transport: {} as HttpTransport, queryClient, isOnline: () => true };
+    const outcome = await performCreateCommunityWithMembers({ draft: draft('Cercle des créateurs'), people: [person('u-amina')], deps });
+    expect(outcome.status === 'created' ? outcome.invited : null).toEqual({ status: 'done', invited: 1, already: 0, refused: 0, failed: 0 });
   });
 });

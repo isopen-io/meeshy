@@ -537,6 +537,7 @@ struct ComposerLookStrip: View {
 
     private func perform(_ zone: ComposerCaptureZone, _ geste: ComposerCaptureGestureKind,
                          item: ComposerLookStripItem? = nil) {
+        if geste == .longPress { session.selfTimer.cancel() }
         session.perform(ComposerCaptureGesture.action(zone: zone, gesture: geste, context: context), item: item)
     }
 
