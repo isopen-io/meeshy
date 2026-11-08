@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
+import me.meeshy.sdk.model.call.CallCaptureKind
 import me.meeshy.sdk.model.call.CallDetailParticipantRow
 import me.meeshy.sdk.model.call.CallTranscriptLine
 import me.meeshy.sdk.model.call.CallTranscriptState
@@ -176,7 +177,10 @@ private fun TranscriptLines(state: CallTranscriptState.Ready, accentHex: String,
                 .padding(MeeshySpacing.md),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),
         ) {
-            state.lines.forEach { line -> TranscriptRow(line, showOriginal) }
+            state.lines.forEach { line ->
+                val kind = line.captureKind
+                if (kind == null) TranscriptRow(line, showOriginal) else CaptureRow(line, kind)
+            }
         }
         TranscriptDisclaimer()
         TranscriptDeletion(onDelete)
@@ -264,6 +268,17 @@ private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean) {
             ?.let { hexColor(it, MeeshyTheme.tokens.textPrimary) } ?: MeeshyTheme.tokens.textPrimary
         Text(text, style = MaterialTheme.typography.bodyMedium, color = textColor)
     }
+}
+
+/**
+ * #16665 — « Awa · a capturé l'écran » : the name (and its dot) in the author's colour,
+ * the phrase in secondary ink, never coloured; a call-recording bound names nobody.
+ */
+@Composable
+private fun CaptureRow(line: CallTranscriptLine, kind: CallCaptureKind) {
+    val scheme = if (isSystemInDarkTheme()) DynamicColorGenerator.ThemeMode.DARK else DynamicColorGenerator.ThemeMode.LIGHT
+    val nameColor = hexColor(CallSpeakerColor.hex(line.speakerId.ifBlank { line.speakerName }, scheme), MeeshyTheme.tokens.textPrimary)
+    CallCaptureLine(name = line.speakerName, nameColor = nameColor, kind = kind, elapsed = line.elapsedLabel, ink = MeeshyTheme.tokens.textSecondary)
 }
 
 private const val TRANSCRIPT_TINT_ALPHA = 0.08f

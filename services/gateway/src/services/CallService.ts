@@ -45,6 +45,8 @@ import { callEngagementCrediter } from './calls/callEngagementCredits';
 import { guardedTimeout } from '../utils/guarded-timer';
 import { KeyedMutex } from '../utils/keyed-mutex';
 import { accountParticipantIds, LIVE_CALL_PARTICIPATION } from './calls/liveCallParticipations';
+import { prismaCallCaptureJournal, toTranscriptCaptures } from './calls/callCaptureJournal';
+import type { CallTranscriptCapture } from '@meeshy/shared/types/call-capture';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -1964,6 +1966,7 @@ export class CallService {
       capturedAtMs: number;
       translations: Array<{ targetLanguage: string; translatedText: string }>;
     }>;
+    captures: CallTranscriptCapture[];
     total: number;
     hasMore: boolean;
   }> {
@@ -1988,7 +1991,7 @@ export class CallService {
     // avec ses traductions : le `findMany` nu rendait le journal ENTIER a
     // chaque ouverture du replay. La borne est posee DANS la requete ; un
     // `slice` apres coup aurait paye le chargement avant de le cacher.
-    const [rows, total] = await Promise.all([
+    const [rows, total, captureRows] = await Promise.all([
       this.prisma.transcription.findMany({
         where: { callSessionId: callId },
         include: { translations: true },
@@ -1996,7 +1999,8 @@ export class CallService {
         skip: offset,
         take: limit
       }),
-      this.prisma.transcription.count({ where: { callSessionId: callId } })
+      this.prisma.transcription.count({ where: { callSessionId: callId } }),
+      prismaCallCaptureJournal(this.prisma).list(callId)
     ]);
 
     const participantsById = new Map(
@@ -2009,6 +2013,7 @@ export class CallService {
       callStartedAt: call.startedAt,
       total,
       hasMore: offset + rows.length < total,
+      captures: toTranscriptCaptures(captureRows, participantsById),
       segments: rows.map((row) => {
         const participant = participantsById.get(row.participantId);
         return {

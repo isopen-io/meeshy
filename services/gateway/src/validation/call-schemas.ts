@@ -432,6 +432,12 @@ export const socketCallScreenCaptureDetectedSchema = z.object({
   callId: objectIdSchema,
   participantId: z.string().min(1),
   isCapturing: z.boolean(),
+  /**
+   * #16665 — absent chez un client d'avant, ou inconnu chez un client d'après :
+   * la passerelle le lit `recording` (`screenCaptureKindOf`). Refuser une sorte
+   * inconnue ferait taire l'alerte de confidentialité d'un client plus récent.
+   */
+  kind: z.string().max(32).optional(),
 });
 export type SocketCallScreenCaptureDetectedInput = z.infer<typeof socketCallScreenCaptureDetectedSchema>;
 

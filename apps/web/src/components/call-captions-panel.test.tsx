@@ -12,7 +12,7 @@ import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-b
 
 import { CallCaptionsPanel } from './call-captions-panel';
 
-const colorOf = (line: CallCaption): string => speakerColor(line.speakerId, line.speakerName);
+const colorOf = (line: Pick<CallCaption, 'speakerId' | 'speakerName'>): string => speakerColor(line.speakerId, line.speakerName);
 
 /**
  * LE BANDEAU DES SOUS-TITRES (#8393) — un verre d'appel sombre, une couleur
@@ -100,6 +100,44 @@ describe('le bandeau', () => {
 
   test('une ligne en révision n’est pas annoncée', () => {
     expect(panel({ captions: [caption({ isFinal: false })] })).toContain('aria-hidden="true"');
+  });
+});
+
+describe('#16665 — la capture dans le bandeau (R1)', () => {
+  const karim = speakerColor('u-karim', 'Karim');
+
+  test('« Karim · a capturé l’écran · 12:40 » : le pseudo à sa couleur, le reste à l’encre secondaire, l’heure de l’appel au bout', () => {
+    const html = panel({ captions: [caption({ at: 700_000 })], journalNotes: [{ id: 'n1', kind: 'screenshot', userId: 'u-karim', name: 'Karim', at: 760_000 }] });
+    expect(html).toContain('Bonjour à tous');
+    expect(html).toContain(`<p class="py-1" dir="ltr" style="color:var(--color-on-media-3)" data-call-caption-note="screenshot"><strong style="color:${karim}" data-call-journal-note-name=""><bdi>Karim</bdi> · </strong>a capturé l’écran · 12:40</p>`);
+  });
+
+  test('en arabe, la note suit la direction de l’interface et isole le pseudo latin', async () => {
+    await loadInterfaceCatalog('ar');
+    const html = renderToStaticMarkup(<CallCaptionsPanel call={call({ captions: [], journalNotes: [{ id: 'n1', kind: 'screenshot', userId: 'u-karim', name: 'Karim', at: 760_000 }] })} language="ar" colorOf={colorOf} />);
+    expect(html).toMatch(/<p class="py-1" dir="rtl"[^>]*data-call-caption-note="screenshot"><strong[^>]*><bdi>Karim<\/bdi> · <\/strong>/);
+  });
+
+  test('la phrase traduite garde sa couleur et son étiquette « EN → FR » à côté de la capture', () => {
+    const html = panel({ captions: [caption({ at: 700_000 })], journalNotes: [{ id: 'n1', kind: 'screenshot', userId: 'u-karim', name: 'Karim', at: 760_000 }] });
+    expect(html).toContain(`<span dir="auto" style="color:${speakerColor('u-nadia', 'Nadia')}">Bonjour à tous</span>`);
+    expect(html).toContain('EN → FR');
+  });
+
+  test('le bandeau ne garde que les deux dernières entrées, phrases et captures mêlées', () => {
+    const html = panel({
+      captions: [caption({ id: 'old', original: 'Old', translated: 'Vieux', at: 1_000 }), caption({ id: 'new', original: 'New', translated: 'Neuf', at: 3_000 })],
+      journalNotes: [{ id: 'n1', kind: 'recording', userId: 'u-karim', name: 'Karim', at: 2_000 }],
+    });
+    expect(html).not.toContain('Vieux');
+    expect(html).toContain('enregistre l’écran');
+    expect(html).toContain('Neuf');
+  });
+
+  test('l’enregistrement consenti : une phrase sans pseudo, à l’encre secondaire', () => {
+    const html = panel({ captions: [], journalNotes: [{ id: 'r', kind: 'call-recording-stopped', userId: null, name: null, at: 60_000 }] });
+    expect(html).toMatch(/data-call-caption-note="call-recording-stopped"[^>]*>L’enregistrement de l’appel s’est arrêté · 1:00<\/p>/);
+    expect(html).not.toContain('Les sous-titres s’affichent ici');
   });
 });
 

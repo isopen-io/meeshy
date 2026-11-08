@@ -251,3 +251,54 @@ describe('DELETE /communities/:id — DB error', () => {
     await app.close();
   });
 });
+
+// ─── #16788 — l'avatar et la bannière suivent la loi des images d'identité ────
+
+describe('PUT /communities/:id — avatar et bannière (#16788)', () => {
+  const creatorPrisma = () => {
+    const prisma = makePrisma();
+    prisma.community.findFirst = jest.fn<any>().mockResolvedValue({
+      id: COMMUNITY_ID, createdBy: USER_ID, identifier: 'mshy_test', isPrivate: false,
+    });
+    return prisma;
+  };
+
+  it.each([
+    ['le chemin de stockage que rend un téléversement', '2026/11/65f0c0ffee/community_avatar.webp'],
+    ['une adresse https', 'https://gate.meeshy.me/api/v1/attachments/file/2026/11/a.webp'],
+    ["un chemin d'API", '/api/v1/attachments/file/2026/11/a.webp'],
+  ])('accepte %s et l\'écrit', async (_label, url) => {
+    const prisma = creatorPrisma();
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PUT', url: `/communities/${COMMUNITY_ID}`,
+      payload: { avatar: url, banner: url },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.community.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ avatar: url, banner: url }) }),
+    );
+    await app.close();
+  });
+
+  it.each([
+    ['javascript:', 'javascript:alert(document.cookie)'],
+    ['data:', 'data:image/png;base64,iVBORw0KGgo='],
+    ['un autre schéma', 'ftp://exemple.org/a.png'],
+    ['un chemin protocole-relatif', '//evil.example/a.png'],
+    ['une remontée de dossier', '2026/../../etc/passwd'],
+  ])('refuse %s en 400 INVALID_COMMUNITY sans rien écrire', async (_label, url) => {
+    for (const field of ['avatar', 'banner'] as const) {
+      const prisma = creatorPrisma();
+      const { app } = await buildApp({ prisma });
+      const res = await app.inject({
+        method: 'PUT', url: `/communities/${COMMUNITY_ID}`,
+        payload: { [field]: url },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('INVALID_COMMUNITY');
+      expect(prisma.community.update).not.toHaveBeenCalled();
+      await app.close();
+    }
+  });
+});

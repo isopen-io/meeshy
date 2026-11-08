@@ -123,7 +123,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallHeartbeat(callId: String) {}
     func emitCallBackgrounded(callId: String, participantId: String) {}
     func emitCallForegrounded(callId: String, participantId: String) {}
-    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool, kind: CallScreenCaptureKind) {}
     func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {}
     func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?, sticker: MessageSticker?) async -> MessageSocketManager.SendMessageAck? { nil }
 }

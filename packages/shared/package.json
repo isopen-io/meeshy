@@ -144,10 +144,10 @@
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
-    "@vitest/coverage-v8": "^5.0.5",
+    "@vitest/coverage-v8": "^5.1.0",
     "prisma": "^6.15.0",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   },
   "engines": {
     "node": ">=22.19.0"

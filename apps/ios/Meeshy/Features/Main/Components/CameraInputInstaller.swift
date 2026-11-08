@@ -44,6 +44,7 @@ nonisolated enum CameraInputInstaller {
             ComposerPreviewMirroring.align(session.connections, wanted: previewWanted)
             guard issue == .swapped, let device = nouvelle?.device, let echelle else { return }
             openLens(device, opening: echelle.opening)
+            stabilize(outputs, on: device)
             photoPlan(device)
         }
         let validee = CACurrentMediaTime()
@@ -65,6 +66,7 @@ nonisolated enum CameraInputInstaller {
             device.videoZoomFactor = openingZoom(of: device, opening)
             device.setExposureTargetBias(0, completionHandler: nil)
             CameraFocusControl.openContinuously(device)
+            if device.isLowLightBoostSupported { device.automaticallyEnablesLowLightBoostWhenAvailable = true }
         } catch {
             Logger.media.error("Lens opening failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -102,6 +104,20 @@ nonisolated enum CameraInputInstaller {
             guard connection.isVideoMirroringSupported else { continue }
             connection.automaticallyAdjustsVideoMirroring = false
             connection.isVideoMirrored = ComposerCaptureMirrorRule.mirrors(sorte, position: position)
+        }
+    }
+
+    /// La stabilisation de chaque sortie, pour l'objectif qui vient d'entrer :
+    /// une connexion neuve repart sans stabilisation (OPUS-10).
+    private static func stabilize(_ outputs: [(AVCaptureOutput, ComposerCaptureMirrorRule.Output)],
+                                  on device: AVCaptureDevice) {
+        let servi = device.activeFormat.isVideoStabilizationModeSupported(.standard)
+        for (output, sorte) in outputs {
+            guard let connection = output.connection(with: .video), connection.isVideoStabilizationSupported else { continue }
+            switch ComposerCaptureStabilizationRule.preferred(sorte, supportsStandard: servi) {
+            case .standard: connection.preferredVideoStabilizationMode = .standard
+            case .off: connection.preferredVideoStabilizationMode = .off
+            }
         }
     }
 

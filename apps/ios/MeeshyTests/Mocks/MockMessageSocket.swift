@@ -308,7 +308,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callForegroundedCallCount += 1
     }
 
-    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool, kind: CallScreenCaptureKind) {
         callScreenCaptureDetectedCallCount += 1
     }
 

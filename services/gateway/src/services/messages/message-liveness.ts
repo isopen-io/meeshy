@@ -37,7 +37,7 @@
 export type MessageLiveness = 'live' | 'gone' | 'unknown';
 
 /**
- * Les deux colonnes que la loi interroge, et elles seules.
+ * Les TROIS colonnes que la loi interroge, et elles seules.
  *
  * Tout consommateur doit les `select` — c'est le piège que
  * `utils/recipient-language.ts` documente pour le Prisme, dans les mêmes
@@ -46,16 +46,44 @@ export type MessageLiveness = 'live' | 'gone' | 'unknown';
  * `select`, donc un témoin passe au vert sur un site dont la requête ne ramène
  * pas les colonnes de la loi, et la garde est morte en production.
  */
-export const MESSAGE_LIVENESS_SELECT = { deletedAt: true, expiresAt: true } as const;
+export const MESSAGE_LIVENESS_SELECT = {
+  deletedAt: true,
+  expiresAt: true,
+  viewOnceBurnedAt: true,
+} as const;
 
 /** La forme minimale sur laquelle la loi se prononce. */
 export type MessageLivenessRow = {
   readonly deletedAt?: Date | null;
   readonly expiresAt?: Date | null;
+  readonly viewOnceBurnedAt?: Date | null;
 };
 
-/** Ce qui PROUVE la mort — nommé, parce que les deux causes ne se journalisent pas pareil. */
-export type MessageDeathCause = 'soft-deleted' | 'expired';
+/**
+ * Ce qui PROUVE la mort — nommé, parce que les trois causes ne se journalisent
+ * pas pareil.
+ *
+ * `view-once-burned` a rejoint la loi au cycle 143 bis, et le chemin par lequel
+ * elle manquait mérite d'être dit : le lot #16706 a DIAGNOSTIQUÉ que
+ * `purgeViewOnceContent` détruit le contenu sans écrire `deletedAt`, l'a écrit
+ * dans son propre commentaire — « la garde ne pouvait pas le voir : elle n'a
+ * rien à lire » — et a conclu en ajoutant une purge de STOCKAGE sans ajouter la
+ * colonne à la loi de REMISE. Tant qu'elle manquait, toute entrée porteuse de
+ * texte enfilée APRÈS la purge (une traduction en vol, une transcription) était
+ * REMISE : le drain lisait `deletedAt` et `expiresAt`, tous deux nuls, et
+ * rendait `live` sur un message dont le serveur avait détruit le contenu.
+ *
+ * > **Diagnostiquer qu'une garde est aveugle à une preuve n'est pas la rendre
+ * > voyante.** Un lot qui écrit « cette garde ne peut pas voir X » doit, dans le
+ * > même lot, soit lui donner X, soit dire pourquoi elle ne doit pas l'avoir.
+ * > Le constat posé et laissé tel quel se relit comme une décision instruite.
+ *
+ * Comme `deletedAt`, elle se lit en VÉRACITÉ : son unique producteur est
+ * `purgeViewOnceContent.writePurge`, qui l'écrit dans la MÊME écriture que
+ * l'effacement du contenu. Sa présence est donc une DÉCLARATION que le clair
+ * n'existe plus, jamais un indice.
+ */
+export type MessageDeathCause = 'soft-deleted' | 'expired' | 'view-once-burned';
 
 /**
  * Le verdict, avec sa CAUSE quand il y en a une.
@@ -97,5 +125,9 @@ export function messageLivenessOf(
   if (message.expiresAt instanceof Date && message.expiresAt.getTime() <= now.getTime()) {
     return { liveness: 'gone', cause: 'expired' };
   }
+  // Troisième preuve, et elle se lit en VÉRACITÉ comme `deletedAt` : la bulle
+  // d'une vue unique SURVIT à sa purge (c'est la raison d'être du module), donc
+  // rien d'autre dans la ligne ne dit que son contenu est parti.
+  if (message.viewOnceBurnedAt) return { liveness: 'gone', cause: 'view-once-burned' };
   return { liveness: 'live' };
 }

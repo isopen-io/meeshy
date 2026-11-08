@@ -63,6 +63,10 @@ updates:
     # next 16 casse Turbopack contre @meeshy/shared transpilé (cf. PR #1542, #1676) —
     # bloquer les majeures tant que la migration n'est pas vetée manuellement
     ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "next"
         update-types: ["version-update:semver-major"]
       # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
@@ -119,6 +123,13 @@ updates:
       - dependency-type: "indirect"
     versioning-strategy: increase
     ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # libsignal est en 0.x : chaque mineure casse l'API et l'ABI natives.
+      - dependency-name: "@signalapp/libsignal-client"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
       # Prisma v7 désactivé jusqu'à la prise en compte de MongoDB
       # (Prisma 7 retire `datasource url` du schema → P1012 ; migration vers prisma.config.ts + adapter requise)
       - dependency-name: "prisma"
@@ -179,6 +190,14 @@ updates:
       - dependency-type: "direct"
       - dependency-type: "indirect"
     ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # Épinglés à la main, jamais par Dependabot : numpy<1.24.0 (ESPnet 202412 +
+      # chatterbox-tts, voir espnet ci-dessous) et httpcore 0.17.3 (Prisma Python).
+      - dependency-name: "numpy"
+      - dependency-name: "httpcore"
       # espnet 202509+/202511 exigent numpy>=2.0, incompatible avec le pin
       # numpy<1.24.0 (ESPnet 202412 + chatterbox-tts). Un bump casse le build
       # Docker translator (cf. #1539 → CI Docker #2074). Rester sur 202412.
@@ -244,6 +263,13 @@ updates:
       - dependency-type: "indirect"
     versioning-strategy: increase
     ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # libsignal est en 0.x : chaque mineure casse l'API et l'ABI natives.
+      - dependency-name: "@signalapp/libsignal-client"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
       # Prisma v7 désactivé jusqu'à la prise en compte de MongoDB
       # (Prisma 7 retire `datasource url` du schema → P1012 ; migration vers prisma.config.ts + adapter requise)
       - dependency-name: "prisma"
@@ -285,6 +311,10 @@ updates:
       - dependency-type: "indirect"
     versioning-strategy: increase
     ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
       # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
       # manuellement la version Node de CI (cf. PR #2493 recréée malgré ignore)
       - dependency-name: "@types/node"
@@ -336,6 +366,11 @@ updates:
       include: "scope"
     reviewers:
       - "isopen-io/meeshy-maintainers"
+    ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # ===========================================================================
   # GITHUB ACTIONS - Workflows CI/CD
@@ -366,6 +401,11 @@ updates:
         patterns:
           - "*test*"
           - "*coverage*"
+    ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # ===========================================================================
   # DOCKER - Images de base
@@ -388,6 +428,11 @@ updates:
       include: "scope"
     reviewers:
       - "isopen-io/meeshy-maintainers"
+    ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/services/gateway"
@@ -406,6 +451,11 @@ updates:
       include: "scope"
     reviewers:
       - "isopen-io/meeshy-maintainers"
+    ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/services/translator"
@@ -424,6 +474,11 @@ updates:
       include: "scope"
     reviewers:
       - "isopen-io/meeshy-maintainers"
+    ignore:
+      # Aucune montée MAJEURE automatique (directive porteur 2026-11-08) : elles
+      # cassent l'API ou l'ABI. Une majeure se fait à la main, avec son issue.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
 # =============================================================================
 # CONFIGURATION NOTES

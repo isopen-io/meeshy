@@ -70,6 +70,7 @@ const check = (ok, what) => {
 };
 
 const TAP_FLOOR = 44;
+const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 /** Le lecteur des fixtures (`fixtures-base.ts` › `VIEWER_ID`), créateur d'« Équipe déploiement ». */
 const SESSION = {
@@ -447,6 +448,22 @@ try {
       const settingsFaibles = Object.entries(settingsInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
       check(settingsFaibles.length === 0, `${label} : chaque texte des réglages tient AA — ${JSON.stringify(settingsInks)}`);
       await capture(page, `communaute-reglages-${slug}`);
+      // L'AVATAR ET LA BANNIÈRE (#6377, seconde moitié) : deux boutons nommés ouvrent le
+      // sélecteur ; l'image choisie se dit prête, rend « Enregistrer » actif, et le détail la
+      // porte après l'enregistrement.
+      check(
+        (await page.getAttribute('[data-community-settings-pick="banner"]', 'aria-label')) === 'Changer la bannière' &&
+          (await page.getAttribute('[data-community-settings-pick="avatar"]', 'aria-label')) === 'Changer l’avatar',
+        `${label} : la bannière et l'avatar se changent par deux boutons nommés`,
+      );
+      const picks = await page.$$eval('[data-community-settings-pick]', (els) => els.map((el) => { const r = el.getBoundingClientRect(); return Math.min(Math.round(r.width), Math.round(r.height)); }));
+      check(picks.length === 2 && picks.every((side) => side >= TAP_FLOOR), `${label} : chaque bouton d'image fait au moins 44 — ${JSON.stringify(picks)}`);
+      await page.setInputFiles('[data-community-settings-file="banner"]', { name: 'banniere.png', mimeType: 'image/png', buffer: Buffer.from(TINY_PNG, 'base64') });
+      await page.waitForSelector('[data-community-settings-notice="community.settings.banner.uploaded"]');
+      check((await textOf(page, '[data-community-settings-notice]')) === 'Bannière prête : enregistrez pour la publier.', `${label} : la bannière choisie se dit prête`);
+      check((await page.getAttribute('[data-community-settings-save]', 'aria-disabled')) === 'false', `${label} : une image posée rend « Enregistrer » actif`);
+      check((await page.$('[data-community-settings-images] img')) !== null, `${label} : la bannière choisie s'affiche dans les réglages`);
+      await capture(page, `communaute-reglages-images-${slug}`);
       await page.fill('#community-settings-name', 'Équipe mise en ligne');
       check((await page.getAttribute('[data-community-settings-save]', 'aria-disabled')) === 'false', `${label} : un nom changé rend « Enregistrer » actif`);
       await page.click('[data-community-settings-save]');
@@ -455,6 +472,7 @@ try {
       await page.click('[data-community-settings-back]');
       await page.waitForSelector('[data-community-hero]');
       check((await textOf(page, '[data-community-title]')) === 'Équipe mise en ligne', `${label} : le détail porte le nouveau nom`);
+      check((await page.$('[data-community-hero] img')) !== null, `${label} : et la nouvelle bannière`);
       await page.click('[data-community-settings-link]');
       await page.waitForSelector('[data-community-settings-delete]');
       await page.click('[data-community-settings-delete]');

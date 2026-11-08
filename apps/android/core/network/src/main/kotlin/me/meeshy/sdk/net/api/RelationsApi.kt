@@ -3,6 +3,7 @@ package me.meeshy.sdk.net.api
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.relation.BringBlockBody
+import me.meeshy.sdk.model.relation.TalkieBlockBody
 import me.meeshy.sdk.model.relation.NowPlayingSnapshotWire
 import me.meeshy.sdk.model.relation.RelationPersonSettings
 import me.meeshy.sdk.model.relation.RelationLinkWire
@@ -63,13 +64,17 @@ interface RelationsApi {
     @POST(ApiRoutesRelations.BY_USER_ID_LEVEL)
     suspend fun lower(@Path("userId") userId: String, @Body body: RelationLowerBody): ApiResponse<RelationLinkWire>
 
-    /** Les réglages que JE pose pour l'autre (#13936) : ce lot lit `bringBlocked`. */
+    /** Les réglages que JE pose pour l'autre (#13936, #13935) : `bringBlocked` et `talkieBlocked`. */
     @GET(ApiRoutesRelations.BY_USER_ID_SETTINGS)
     suspend fun settings(@Path("userId") userId: String): ApiResponse<RelationPersonSettings>
 
     /** Bloquer (ou non) les Bring de cette personne vers moi ; l'autre n'en est pas prévenu. Rend les réglages servis. */
     @PUT(ApiRoutesRelations.BY_USER_ID_SETTINGS)
     suspend fun setBringBlocked(@Path("userId") userId: String, @Body body: BringBlockBody): ApiResponse<RelationPersonSettings>
+
+    /** Couper (ou non) le talkie de cette personne vers moi (#16675) : sa voix arrive alors en message vocal. */
+    @PUT(ApiRoutesRelations.BY_USER_ID_SETTINGS)
+    suspend fun setTalkieBlocked(@Path("userId") userId: String, @Body body: TalkieBlockBody): ApiResponse<RelationPersonSettings>
 
     /** Le rituel du Sang : `start` ouvre ou rejoint, `hold` se rejoue tant qu'on tient l'écran, `confirm` scelle. */
     @POST(ApiRoutesRelations.BY_USER_ID_RITUAL)

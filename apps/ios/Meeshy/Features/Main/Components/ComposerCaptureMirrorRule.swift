@@ -33,6 +33,28 @@ nonisolated enum ComposerCaptureMirrorRule {
     }
 }
 
+/// **La vidéo filmée en marchant reste posée** (OPUS-10, doc 08 § R9).
+///
+/// Sans réglage, la connexion du fichier vidéo n'est pas stabilisée. Le mode
+/// `standard` est retenu des deux côtés : c'est celui qui recadre le moins et
+/// ajoute le moins de délai, donc la vidéo garde le cadrage que l'aperçu
+/// montrait. Les modes `cinematic` recadrent davantage sans que l'aperçu le
+/// montre : ils attendent une recette sur iPhone. La photo n'est jamais
+/// stabilisée par la connexion, et les trames du look en direct non plus : leur
+/// délai se verrait dans le viseur.
+nonisolated enum ComposerCaptureStabilizationRule {
+
+    enum Mode: Equatable, Sendable {
+        case off
+        case standard
+    }
+
+    static func preferred(_ output: ComposerCaptureMirrorRule.Output, supportsStandard: Bool) -> Mode {
+        guard output == .movie, supportsStandard else { return .off }
+        return .standard
+    }
+}
+
 /// **Une photo sort à l'HORIZON, comme l'appareil était tenu** — jamais couchée.
 ///
 /// La connexion photo restait figée debout (`portraitAngle`) : un appareil tenu

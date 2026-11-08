@@ -75,6 +75,7 @@ import { backfillSearchTokens } from './jobs/backfill-search-tokens';
 import { demarrerSondeDeTypage, type SondeDeTypage } from './services/schema-drift.service';
 import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
+import { setSharedDeliveryQueue } from './services/delivery-queue-registry';
 import { gatewayDeliveryQueueSealer } from './services/deliveryQueueSealing';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ExpiredMessagesCleanupService } from './services/ExpiredMessagesCleanupService';
@@ -268,6 +269,14 @@ class MeeshyServer {
 
     // Initialiser la delivery queue Redis
     this.deliveryQueue = new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma));
+    // #16706 — l'instance VIVANTE est celle-ci : c'est elle que
+    // `manager.setDeliveryQueue` fait descendre jusqu'aux quatre handlers qui
+    // enfilent, donc la seule dont la tranche MÉMOIRE porte des entrées de
+    // message. Les sites qui détruisent un contenu la retrouvent par le registre
+    // (`applyMessageRemovalEffects`, la purge de vue unique) : aucun d'eux ne
+    // reçoit la file en paramètre, et une purge qu'un appelant peut omettre
+    // n'est pas une purge.
+    setSharedDeliveryQueue(this.deliveryQueue);
 
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();

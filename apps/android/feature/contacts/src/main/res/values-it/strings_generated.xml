@@ -1,5 +1,7 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="circles_settings_block_talkie">Silenzia il suo talkie</string>
+    <string name="circles_settings_block_talkie_detail">La sua voce non verrà più riprodotta direttamente sul tuo dispositivo: arriverà come messaggio vocale. Questa persona non viene avvisata.</string>
     <string name="contacts_back">Indietro</string>
     <string name="contacts_blocked_empty">Nessun utente bloccato</string>
     <string name="contacts_blocked_unblock">Sblocca</string>

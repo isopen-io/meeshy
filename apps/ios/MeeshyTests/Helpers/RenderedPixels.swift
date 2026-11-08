@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import XCTest
+import MeeshyUI
 @testable import Meeshy
 
 /// **LES PIXELS RENDUS — la seule preuve qu'une peinture atteint l'écran.**
@@ -115,10 +116,20 @@ final class RenderedPixels {
         // reproduit `RootThemedBackground` — sans lui, la composition serait
         // l'enfant RACINE, et SwiftUI étendrait alors son premier fond dans
         // l'encart système, peignant la bande à la place de la bande.
+        //
+        // Condition 8 : la racine PUBLIE ses marges, comme chaque racine de
+        // fenêtre de l'app. Depuis #12470, `TopChromeBand` (et tout lecteur de
+        // `WindowInsets`) ne lit plus la fenêtre pendant `body` mais
+        // `\.sceneSafeAreaInsets`, sinon `RememberedSceneInsets.last`, sinon 0.
+        // Sans publication ici, la bande ne tenait sa hauteur que d'un témoin
+        // ANTÉRIEUR du même processus qui avait posé
+        // `publishingSceneWindowSize()` : verte ou blanche selon l'ordre des
+        // tranches.
         let racine = ZStack {
             RenderedPixels.fondVide.ignoresSafeArea()
             vue
         }
+        .publishingSceneWindowSize()
         let host = UIHostingController(rootView: racine)
         window.rootViewController = host
         window.backgroundColor = UIColor(RenderedPixels.fondVide)

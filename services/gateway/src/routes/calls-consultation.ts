@@ -15,6 +15,7 @@ import { sendSuccess, sendError, sendNotFound, sendUnauthorized, sendInternalErr
 import { toCallSessionResponse } from '../utils/call-session-response.js';
 import { validatePagination } from '../utils/pagination.js';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
+import { CALL_CAPTURE_EVENT_KINDS } from '@meeshy/shared/types/call-capture';
 import {
   getCallSchema,
   getActiveCallSchema,
@@ -172,6 +173,22 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
                 callStartedAt: { type: 'string', format: 'date-time' },
                 total: { type: 'number' },
                 hasMore: { type: 'boolean' },
+                captures: {
+                  type: 'array',
+                  description: 'Screen captures and consented-recording moments kept in the call journal (#16665). Author fields are null for a recording stop nobody requested.',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      participantId: { type: 'string', nullable: true },
+                      userId: { type: 'string', nullable: true },
+                      displayName: { type: 'string', nullable: true },
+                      kind: { type: 'string', enum: [...CALL_CAPTURE_EVENT_KINDS] },
+                      offsetMs: { type: 'number' },
+                      at: { type: 'string', format: 'date-time' }
+                    }
+                  }
+                },
                 segments: {
                   type: 'array',
                   items: {

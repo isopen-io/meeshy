@@ -127,7 +127,7 @@ export function CommunitiesHeader({ language }: { readonly language: InterfaceLa
   );
 }
 
-function CommunityBanner({ accent, banner }: { readonly accent: string; readonly banner: string | null }) {
+export function CommunityBanner({ accent, banner }: { readonly accent: string; readonly banner: string | null }) {
   return (
     <>
       <span aria-hidden="true" className="absolute inset-0" style={{ background: bannerBackground(accent) }} />
@@ -313,7 +313,7 @@ export function CommunitiesOfflineNotice({ language }: { readonly language: Inte
  * charge. `key` : une nouvelle adresse repart d'une `<img>` neuve, jamais du
  * `display:none` d'un échec précédent.
  */
-function EntityAvatar({ name, avatar, accent }: { readonly name: string; readonly avatar: string | null; readonly accent: string }) {
+export function EntityAvatar({ name, avatar, accent }: { readonly name: string; readonly avatar: string | null; readonly accent: string }) {
   const src = avatar === null ? undefined : attachmentSrc(avatar);
   return (
     <span
