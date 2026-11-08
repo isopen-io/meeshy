@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation.graph
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -29,6 +30,7 @@ import me.meeshy.app.navigation.Routes
 import me.meeshy.app.navigation.LegacyStoryComposerRedirect
 import me.meeshy.app.navigation.storyDoor
 import me.meeshy.app.navigation.navigateKeepingSheet
+import me.meeshy.app.navigation.setFeedAside
 import me.meeshy.app.navigation.sheetComposable
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.stories.MyStoriesScreen
@@ -49,6 +51,9 @@ internal fun NavGraphBuilder.feedNavGraph(
         exitTransition = { FeedOverlayTransition.exit(this) },
         popExitTransition = { FeedOverlayTransition.popExit(this) },
     ) {
+        // Le retour système quitte le Flux comme le bouton Flux : mis de côté avec son état, il revient à la même
+        // place au prochain toucher (#16676). Inscrit avant l'écran : ses propres retours (feuilles, visionneuse) passent d'abord.
+        BackHandler(enabled = remember { navController.previousBackStackEntry != null }) { navController.setFeedAside() }
         val arrival: FeedArrivalViewModel = hiltViewModel()
         LaunchedEffect(arrival) {
             if (arrival.consumeComposerRequest()) Routes.composer(ComposerOrigin.FeedComposer)?.let(navController::navigate)
