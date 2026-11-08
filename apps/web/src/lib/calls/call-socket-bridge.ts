@@ -41,7 +41,16 @@ export const CALL_SERVER_EVENTS: readonly string[] = [
   SERVER_EVENTS.CALL_PREVIEW_SIGNAL,
 ];
 
-export function bridgeCallEvents(socket: SocketClient): () => void {
+type LiveFrameModule = { readonly attachCallLiveFrame: (socket: SocketClient) => () => void };
+
+type BridgeOptions = {
+  /** Le chunk du cadre en direct (#16943) ; imposé par les témoins. */
+  readonly loadLiveFrame?: () => Promise<LiveFrameModule>;
+};
+
+const noDetach = (): void => undefined;
+
+export function bridgeCallEvents(socket: SocketClient, { loadLiveFrame = () => import('./call-live-frame-live') }: BridgeOptions = {}): () => void {
   if (__SHELL__) void import('./shell-call-runtime').then(({ startShellCall }) => startShellCall());
   void import('./call-wake-lock').then(({ startCallWakeLock }) => startCallWakeLock());
   const binding = bindCallTransport({
@@ -63,12 +72,25 @@ export function bridgeCallEvents(socket: SocketClient): () => void {
     return [event, handler] as const;
   });
   /* Le cadre en direct (#16943), chargé par `import()` : il n'écoute qu'un
-     appel à deux déjà connecté, donc jamais avant que son chunk soit là. */
-  const liveFrame = import('./call-live-frame-live').then(({ attachCallLiveFrame }) => attachCallLiveFrame(socket));
+     appel à deux déjà connecté, donc jamais avant que son chunk soit là. Un
+     chunk qui ne se charge pas (réseau, déploiement qui a retiré l'ancien
+     hash) ne laisse aucun rejet : il se redemande à la reconnexion. */
+  let liveFrame: Promise<() => void> | null = null;
+  const attachLiveFrame = (): void => {
+    liveFrame ??= loadLiveFrame().then(
+      ({ attachCallLiveFrame }) => attachCallLiveFrame(socket),
+      () => {
+        liveFrame = null;
+        return noDetach;
+      },
+    );
+  };
+  attachLiveFrame();
   /* `call:check-active` à CHAQUE authentification, la première comprise : la
      passerelle rejoue alors `call:initiated` pour un appel qui sonne encore
      (onglet rouvert, coupure pendant la sonnerie) — miroir iOS au `.connect`. */
   const onAuthenticated = (): void => {
+    attachLiveFrame();
     socket.emit(CLIENT_EVENTS.CALL_CHECK_ACTIVE);
     binding.authenticated();
   };
@@ -79,8 +101,8 @@ export function bridgeCallEvents(socket: SocketClient): () => void {
   if (socket.connected) onAuthenticated();
   return () => {
     for (const [event, handler] of [...handlers, ...recordingHandlers]) socket.off(event, handler);
-    void liveFrame.then((detach) => detach());
     socket.off(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
+    void liveFrame?.then((detach) => detach());
     binding.detach();
   };
 }

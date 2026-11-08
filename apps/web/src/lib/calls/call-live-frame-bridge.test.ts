@@ -88,4 +88,35 @@ describe('le pont du cadre en direct', () => {
     await settled();
     expect(callLiveFrameStore.getState().proposal).toBeNull();
   });
+
+  test('un chunk du cadre qui ne se charge pas ne laisse aucun rejet : le pont réessaie à la reconnexion, et se détache sans erreur', async () => {
+    callStore.setState({ call: duo });
+    const { socket, fire } = fakeSocket();
+    const rejected: unknown[] = [];
+    const onRejection = (event: PromiseRejectionEvent): void => {
+      rejected.push(event.reason);
+      event.preventDefault();
+    };
+    globalThis.addEventListener?.('unhandledrejection', onRejection as EventListener);
+    let attempts = 0;
+    const load = () => {
+      attempts += 1;
+      return attempts === 1 ? Promise.reject(new Error('chunk perdu')) : import('./call-live-frame-live');
+    };
+    const detach = bridgeCallEvents(socket, { loadLiveFrame: load });
+    await settled();
+    fire(SERVER_EVENTS.CALL_FRAME_SELECTED, { callId: CALL, userId: 'u-awa', frameId: 'jovial.confettis', texts: { name: 'Awa' }, at: '2026-11-08T12:00:00.000Z' });
+    await settled();
+    expect(callLiveFrameStore.getState().proposal).toBeNull();
+    fire(SERVER_EVENTS.AUTHENTICATED, {});
+    await settled();
+    fire(SERVER_EVENTS.CALL_FRAME_SELECTED, { callId: CALL, userId: 'u-awa', frameId: 'jovial.confettis', texts: { name: 'Awa' }, at: '2026-11-08T12:00:02.000Z' });
+    await settled();
+    expect(attempts).toBe(2);
+    expect(callLiveFrameStore.getState().proposal).toEqual({ frameId: 'jovial.confettis', from: 'Awa' });
+    detach();
+    await settled();
+    globalThis.removeEventListener?.('unhandledrejection', onRejection as EventListener);
+    expect(rejected).toEqual([]);
+  });
 });
